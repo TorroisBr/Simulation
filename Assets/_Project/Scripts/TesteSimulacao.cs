@@ -20,11 +20,14 @@ public class TesteSimulacao : MonoBehaviour
 
     private void Simulate()
     {
-        npcRuntimeList.Add( new NpcRuntime(npcList[0]));
+        npcRuntimeList.Add( new NpcRuntime(npcList[0])); //Testando um usario por ser mais facil
         
         for (int i = 0; i < daysToSimulate; i++)
         {
-            
+            foreach (NpcRuntime npcRuntime in npcRuntimeList)
+            {
+                
+            }
         }
     }
 }
@@ -39,5 +42,6 @@ public class NpcRuntime
     public NpcRuntime(NpcData npcDataData)
     {
         this.npcDataData = npcDataData;
+        currentStatus.AddRange(npcDataData.statusPadrao);
     }
 }
