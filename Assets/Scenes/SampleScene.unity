@@ -349,7 +349,6 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1939153414}
-  - component: {fileID: 1939153413}
   - component: {fileID: 1939153415}
   m_Layer: 0
   m_Name: GameObject
@@ -358,20 +357,6 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &1939153413
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1939153412}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 52259f2515c8d344da667eb4316564c1, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::WorldSimulationDemo
-  seed: 42
-  daysToSimulate: 1
 --- !u!4 &1939153414
 Transform:
   m_ObjectHideFlags: 0
@@ -399,16 +384,17 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 233a8c96efd43654083bec207c819665, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TesteSimulaccao
-  npc:
+  daysToSimulate: 1
+  npcList:
   - {fileID: 11400000, guid: 6a0d3bb70f1f27647a263088c511fbf7, type: 2}
   - {fileID: 11400000, guid: 80a4772466a41c741ab4002313a098e5, type: 2}
-  npcStatus:
+  npcStatusList:
   - {fileID: 11400000, guid: eca2bf6a80787ae408a8ba919dbaea36, type: 2}
   - {fileID: 11400000, guid: 922e799608934f4469cb8c77bfc6c32e, type: 2}
   - {fileID: 11400000, guid: 92d24d793f1ff2a419b49fbe2da81d63, type: 2}
   - {fileID: 11400000, guid: 39ec54928a091684d8daf631dfe56d67, type: 2}
-  - {fileID: 11400000, guid: 39ec54928a091684d8daf631dfe56d67, type: 2}
-  npcAction:
+  - {fileID: 11400000, guid: 29c5c615986357c4d9fca5a45e3946c2, type: 2}
+  npcActionList:
   - {fileID: 11400000, guid: 1e4507e7ee6cc804ea0be9238c0784f0, type: 2}
   - {fileID: 11400000, guid: 41a7cbb01d5dfb447835a8786c2b0991, type: 2}
   - {fileID: 11400000, guid: 5865aac66a0f87344bf73e5d71f94fdb, type: 2}

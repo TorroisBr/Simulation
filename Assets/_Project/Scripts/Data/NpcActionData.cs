@@ -2,13 +2,13 @@ using UnityEngine;
 using System.Collections.Generic;
 
 [CreateAssetMenu(menuName = "World Simulation/Action")]
-public class NPCActionSO : ScriptableObject
+public class NpcActionData : ScriptableObject
 {
-	public List<NPCStatusSO> statusNecessariosParaFazerAcao = new List<NPCStatusSO>();
+	public List<NpcStatusData> statusNecessariosParaFazerAcao = new List<NpcStatusData>();
 	public string actionName;
 
 	[Range(0,REFERENCIASPARAREMOVERNOFUTURO.PESO_VALOR_MAX)]
-	public float baseWeight = 1f;
+	public float baseUtility = 1f;
 
 	public List<StatusWeightModifier> statusModifiers;
 }
@@ -16,7 +16,7 @@ public class NPCActionSO : ScriptableObject
 [System.Serializable]
 public class StatusWeightModifier
 {
-	public NPCStatusSO status;
+	public NpcStatusData status;
 
 	// Quanto esse status influencia essa ação
 	public float multiplier = 1f;
