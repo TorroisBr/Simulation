@@ -399,9 +399,19 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 233a8c96efd43654083bec207c819665, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TesteSimulaccao
-  npc: {fileID: 0}
-  npcStatus: []
-  npcAction: []
+  npc:
+  - {fileID: 11400000, guid: 6a0d3bb70f1f27647a263088c511fbf7, type: 2}
+  - {fileID: 11400000, guid: 80a4772466a41c741ab4002313a098e5, type: 2}
+  npcStatus:
+  - {fileID: 11400000, guid: eca2bf6a80787ae408a8ba919dbaea36, type: 2}
+  - {fileID: 11400000, guid: 922e799608934f4469cb8c77bfc6c32e, type: 2}
+  - {fileID: 11400000, guid: 92d24d793f1ff2a419b49fbe2da81d63, type: 2}
+  - {fileID: 11400000, guid: 39ec54928a091684d8daf631dfe56d67, type: 2}
+  - {fileID: 11400000, guid: 39ec54928a091684d8daf631dfe56d67, type: 2}
+  npcAction:
+  - {fileID: 11400000, guid: 1e4507e7ee6cc804ea0be9238c0784f0, type: 2}
+  - {fileID: 11400000, guid: 41a7cbb01d5dfb447835a8786c2b0991, type: 2}
+  - {fileID: 11400000, guid: 5865aac66a0f87344bf73e5d71f94fdb, type: 2}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
