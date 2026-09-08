@@ -2,14 +2,17 @@
 
 public class NpcRuntime
 {
-	NpcData npcDataData;
+	private NpcData npcData;
+	private List<NpcStatusData> currentStatus = new List<NpcStatusData>();
+	private NpcActionData currentAction;
 
-	List<NpcStatusData> currentStatus;
-	NpcActionData currentAction;
-
-	public NpcRuntime(NpcData npcDataData)
+    public NpcData NpcData => npcData;
+    public List<NpcStatusData> CurrentStatus => currentStatus;
+    public NpcActionData CurrentAction => currentAction;
+    
+	public NpcRuntime(NpcData npcData)
 	{
-		this.npcDataData = npcDataData;
-		currentStatus.AddRange(npcDataData.statusPadrao);
+		this.npcData = npcData;
+		currentStatus.AddRange(npcData.statusPadrao);
 	}
 }

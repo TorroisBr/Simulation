@@ -26,8 +26,39 @@ public class TesteSimulacao : MonoBehaviour
         {
             foreach (NpcRuntime npcRuntime in npcRuntimeList)
             {
-                
+                EvaluateStatus(npcRuntime);
+                EvaluateAction(npcRuntime);
             }
         }
+    }
+
+    private void EvaluateStatus(NpcRuntime npcRuntime)
+    {
+        
+    }
+
+    private void EvaluateAction(NpcRuntime npcRuntime)
+    {
+        List<NpcActionData> validActions = GetAllValidActions(npcRuntime.CurrentStatus);
+    }
+    
+    private List<NpcActionData> GetAllValidActions(List<NpcStatusData> npcCurrentStatus)
+    {
+        List<NpcActionData> npcActionDataList = new List<NpcActionData>();
+        foreach (NpcActionData npcActionData in npcActionList)
+        {
+            foreach (NpcStatusData npcStatusData in npcCurrentStatus)
+            {
+                if (npcActionData.statusNecessariosParaFazerAcao.Contains(npcStatusData) == false)
+                {
+                    continue;
+                }
+                
+                npcActionDataList.Add(npcActionData);
+                break;
+            }
+        }
+        
+        return npcActionDataList;
     }
 }
