@@ -35,6 +35,7 @@ public class TesteSimulacao : MonoBehaviour
             {
                 EvaluateStatus(npcRuntime);
                 EvaluateAction(npcRuntime);
+                ExecuteAction(npcRuntime);
             }
         }
     }
@@ -47,12 +48,32 @@ public class TesteSimulacao : MonoBehaviour
     private void EvaluateAction(NpcRuntime npcRuntime)
     {
         List<NpcActionData> validActions = GetAllValidActions(npcRuntime.CurrentStatus);
-        Dictionary<NpcActionData, float> utilities = CalculateUtilities(npcRuntime, validActions);
+        Dictionary<NpcActionData, float> utilities = CalculateActionUtilities(npcRuntime, validActions);
         NpcActionData chosenAction = ChooseAction(utilities);
         npcRuntime.SetCurrentAction(chosenAction);
     }
 
-    private Dictionary<NpcActionData, float> CalculateUtilities(NpcRuntime npcRuntime, List<NpcActionData> validActions)
+    private void ExecuteAction(NpcRuntime npcRuntime)
+    {
+        NpcActionData action = npcRuntime.CurrentAction;
+
+        if (action == null)
+        {
+            return;
+        }
+
+        foreach (NpcStatusData status in action.statusToRemove)
+        {
+            npcRuntime.RemoveStatus(status);
+        }
+
+        foreach (NpcStatusData status in action.statusToAdd)
+        {
+            npcRuntime.AddStatus(status);
+        }
+    }
+    
+    private Dictionary<NpcActionData, float> CalculateActionUtilities(NpcRuntime npcRuntime, List<NpcActionData> validActions)
     {
         Dictionary<NpcActionData, float> utilities = new Dictionary<NpcActionData, float>();
 

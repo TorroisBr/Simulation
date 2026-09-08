@@ -13,6 +13,9 @@ public class NpcActionData : ScriptableObject
 	public float baseUtility = 1f;
 
 	public List<StatusWeightModifier> statusModifiers;
+    
+    public List<NpcStatusData> statusToAdd = new List<NpcStatusData>();
+    public List<NpcStatusData> statusToRemove = new List<NpcStatusData>();
 }
 
 [System.Serializable]

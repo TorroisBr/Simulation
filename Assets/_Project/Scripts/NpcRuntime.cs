@@ -23,4 +23,17 @@ public class NpcRuntime
     {
         currentAction = action;
     }
+    
+    public void AddStatus(NpcStatusData status)
+    {
+        if (currentStatus.Contains(status) == false)
+        {
+            currentStatus.Add(status);
+        }
+    }
+
+    public void RemoveStatus(NpcStatusData status)
+    {
+        currentStatus.Remove(status);
+    }
 }
