@@ -15,6 +15,8 @@ MonoBehaviour:
   id: JOBSON
   name: Jobson the begger
   job: {fileID: 11400000, guid: 2f36aefb1c7112b409570151e05d7cd8, type: 2}
-  acoesPadrao: []
+  acoesPadrao:
+  - action: {fileID: 11400000, guid: 41a7cbb01d5dfb447835a8786c2b0991, type: 2}
+    baseUtility: 1
   statusPadrao:
   - {fileID: 11400000, guid: 922e799608934f4469cb8c77bfc6c32e, type: 2}

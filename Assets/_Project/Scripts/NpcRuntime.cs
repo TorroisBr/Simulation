@@ -1,10 +1,13 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
+using UnityEngine;
 
+[Serializable]
 public class NpcRuntime
 {
-	private NpcData npcData;
-	private List<NpcStatusData> currentStatus = new List<NpcStatusData>();
-	private NpcActionData currentAction;
+	[SerializeField]private NpcData npcData;
+	[SerializeField]private List<NpcStatusData> currentStatus = new List<NpcStatusData>();
+	[SerializeField]private NpcActionData currentAction;
 
     public NpcData NpcData => npcData;
     public List<NpcStatusData> CurrentStatus => currentStatus;
@@ -15,4 +18,9 @@ public class NpcRuntime
 		this.npcData = npcData;
 		currentStatus.AddRange(npcData.statusPadrao);
 	}
+    
+    public void SetCurrentAction(NpcActionData action)
+    {
+        currentAction = action;
+    }
 }

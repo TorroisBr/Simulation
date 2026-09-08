@@ -12,6 +12,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9b962bf2f9e6cab419e52899b98127c0, type: 3}
   m_Name: Job-Mendigo
   m_EditorClassIdentifier: Assembly-CSharp::NpcJobSO
-  jobName: Mercador
+  jobName: Mendigo
   workAction: {fileID: 11400000, guid: 41a7cbb01d5dfb447835a8786c2b0991, type: 2}
   workUtility: 60

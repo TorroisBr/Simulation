@@ -1,5 +1,7 @@
+using System;
 using UnityEngine;
 using System.Collections.Generic;
+[Serializable]
 
 [CreateAssetMenu(menuName = "World Simulation/Action")]
 public class NpcActionData : ScriptableObject
