@@ -1,6 +1,6 @@
 using UnityEngine;
 
-public class MerchantSystem
+public class MerchantSystem : INpcActionProvider
 {
     private const int MaxUnprofitablePlanWaitDays = 3;
 
@@ -23,8 +23,7 @@ public class MerchantSystem
         }
 
         return action.actionType == NpcActionType.BuyGoods
-            || action.actionType == NpcActionType.SellGoods
-            || action.actionType == NpcActionType.Travel;
+            || action.actionType == NpcActionType.SellGoods;
     }
 
     public NpcActionRuntime CreateAction(NpcRuntime npcRuntime, NpcActionData action, ref float utility)
@@ -45,16 +44,31 @@ public class MerchantSystem
             return CreateSellGoodsAction(npcRuntime, action, ref utility);
         }
 
-        if (action.actionType == NpcActionType.Travel)
-        {
-            return CreateTravelAction(npcRuntime, action, ref utility);
-        }
-
         utility = 0f;
         return null;
     }
 
-    public bool TryExecuteBuyGoods(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime)
+    public NpcActionResult TryExecuteAction(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime)
+    {
+        if (actionRuntime == null || actionRuntime.Action == null)
+        {
+            return NpcActionResult.Failed();
+        }
+
+        if (actionRuntime.Action.actionType == NpcActionType.BuyGoods)
+        {
+            return TryExecuteBuyGoods(npcRuntime, actionRuntime) == true ? NpcActionResult.Succeeded() : NpcActionResult.Failed();
+        }
+
+        if (actionRuntime.Action.actionType == NpcActionType.SellGoods)
+        {
+            return TryExecuteSellGoods(npcRuntime, actionRuntime) == true ? NpcActionResult.Succeeded() : NpcActionResult.Failed();
+        }
+
+        return NpcActionResult.Failed();
+    }
+
+    private bool TryExecuteBuyGoods(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime)
     {
         if (npcRuntime == null || npcRuntime.CurrentCity == null || actionRuntime == null || actionRuntime.TargetItem == null || actionRuntime.TargetCity == null)
         {
@@ -73,7 +87,7 @@ public class MerchantSystem
         return true;
     }
 
-    public bool TryExecuteSellGoods(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime)
+    private bool TryExecuteSellGoods(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime)
     {
         if (npcRuntime == null || npcRuntime.CurrentCity == null || actionRuntime == null || actionRuntime.TargetItem == null)
         {
@@ -168,43 +182,6 @@ public class MerchantSystem
 
         utility = Mathf.Max(utility, 25f + localSale.Score);
         return new NpcActionRuntime(action, npcRuntime.CurrentCity, localSale.Item, localSale.Amount, localSale.SellPrice);
-    }
-
-    private NpcActionRuntime CreateTravelAction(NpcRuntime npcRuntime, NpcActionData action, ref float utility)
-    {
-        if (IsMerchant(npcRuntime) == false || npcRuntime.CurrentCity == null)
-        {
-            utility = 0f;
-            return null;
-        }
-
-        NormalizeTradePlan(npcRuntime);
-
-        MerchantTradePlanRuntime plan = npcRuntime.MerchantTradePlan;
-
-        if (plan.IsActive == false || plan.TargetCity == null || plan.TargetCity == npcRuntime.CurrentCity)
-        {
-            utility = 0f;
-            return null;
-        }
-
-        int travelDays = travelSystem != null ? travelSystem.GetTravelDays(npcRuntime.CurrentCity, plan.TargetCity) : -1;
-
-        if (travelDays <= 0 && TryRedirectPlanToConnectedDestination(npcRuntime, plan) == true)
-        {
-            travelDays = travelSystem != null ? travelSystem.GetTravelDays(npcRuntime.CurrentCity, plan.TargetCity) : -1;
-        }
-
-        if (travelDays <= 0)
-        {
-            plan.RedirectTo(npcRuntime.CurrentCity);
-            Debug.Log($"{npcRuntime.NpcName} nao encontrou rota para o destino do plano e vai reavaliar venda local.");
-            utility = 0f;
-            return null;
-        }
-
-        utility = Mathf.Max(utility, 70f);
-        return new NpcActionRuntime(action, plan.TargetCity, plan.Item, plan.RemainingAmount, 0f);
     }
 
     private NpcActionRuntime CreatePlannedSellGoodsAction(NpcRuntime npcRuntime, NpcActionData action, ref float utility)

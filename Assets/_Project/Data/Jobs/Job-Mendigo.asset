@@ -13,5 +13,6 @@ MonoBehaviour:
   m_Name: Job-Mendigo
   m_EditorClassIdentifier: Assembly-CSharp::NpcJobSO
   jobName: Mendigo
+  jobType: 0
   workAction: {fileID: 11400000, guid: 41a7cbb01d5dfb447835a8786c2b0991, type: 2}
   workUtility: 60

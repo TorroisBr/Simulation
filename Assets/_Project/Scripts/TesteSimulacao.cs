@@ -1,26 +1,21 @@
-using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
 public class TesteSimulacao : MonoBehaviour
 {
+    [SerializeField] private SimulationConfigData simulationConfig;
     [SerializeField] private int daysToSimulate = 1;
     [SerializeField] private int maxMerchantTradeAmount = 5;
     [SerializeField] private float minimumProfitPerItem = 1f;
 
-    [SerializeField] private List<NpcData> npcList = new List<NpcData>();
-    [SerializeField] private List<NpcStatusData> npcStatusList = new List<NpcStatusData>();
-    [SerializeField] private List<NpcActionData> npcActionList = new List<NpcActionData>();
-    [SerializeField] private List<CityData> cityList = new List<CityData>();
-    [SerializeField] private List<NpcStartingCityConfig> npcStartingCities = new List<NpcStartingCityConfig>();
+    private List<NpcRuntime> npcRuntimeList = new List<NpcRuntime>();
+    private List<CityRuntime> cityRuntimeList = new List<CityRuntime>();
 
-    [SerializeField] private List<NpcRuntime> npcRuntimeList = new List<NpcRuntime>();
-    [SerializeField] private List<CityRuntime> cityRuntimeList = new List<CityRuntime>();
-
+    private readonly List<INpcActionProvider> actionProviders = new List<INpcActionProvider>();
     private Dictionary<CityData, CityRuntime> cityRuntimeByData = new Dictionary<CityData, CityRuntime>();
+    private SimulationModuleSet enabledModules;
     private NpcDecisionSystem npcDecisionSystem;
-    private MerchantSystem merchantSystem;
     private TravelSystem travelSystem;
     private int currentDay;
 
@@ -40,56 +35,16 @@ public class TesteSimulacao : MonoBehaviour
     private void InitializeSimulation()
     {
         currentDay = 0;
+        enabledModules = new SimulationModuleSet(simulationConfig);
+
         CityRuntimeList.Clear();
         cityRuntimeByData.Clear();
-
-        if (cityList != null)
-        {
-            foreach (CityData cityData in cityList)
-            {
-                if (cityData == null)
-                {
-                    continue;
-                }
-
-                CityRuntime cityRuntime = new CityRuntime(cityData);
-                CityRuntimeList.Add(cityRuntime);
-                cityRuntimeByData[cityData] = cityRuntime;
-            }
-        }
+        CreateCityRuntimes();
 
         RebuildSystems();
 
         NpcRuntimeList.Clear();
-
-        if (npcList == null)
-        {
-            return;
-        }
-
-        foreach (NpcData npcData in npcList)
-        {
-            if (npcData == null)
-            {
-                continue;
-            }
-
-            NpcStartingCityConfig startingConfig = NpcStartingCities.Find(x => x != null && x.npc == npcData);
-            CityRuntime startingCity = null;
-            float initialMoney = 0f;
-
-            if (startingConfig != null)
-            {
-                startingCity = GetCityRuntime(startingConfig.startingCity);
-                initialMoney = startingConfig.initialMoney;
-            }
-            else if (CityRuntimeList.Count > 0)
-            {
-                startingCity = CityRuntimeList[0];
-            }
-
-            NpcRuntimeList.Add(new NpcRuntime(npcData, startingCity, initialMoney));
-        }
+        CreateNpcRuntimes();
     }
 
     private void Simulate(int daysToSimulate)
@@ -101,25 +56,9 @@ public class TesteSimulacao : MonoBehaviour
             currentDay++;
             Debug.Log($"Dia {currentDay}");
 
-            foreach (CityRuntime cityRuntime in CityRuntimeList)
+            if (enabledModules.IsEnabled(SimulationModule.Economy) == true)
             {
-                if (cityRuntime == null)
-                {
-                    continue;
-                }
-
-                cityRuntime.SimulateProductionDay();
-            }
-
-            foreach (CityRuntime cityRuntime in CityRuntimeList)
-            {
-                if (cityRuntime == null)
-                {
-                    continue;
-                }
-
-                cityRuntime.SimulateConsumptionDay();
-                cityRuntime.UpdateMarketPrices();
+                SimulateEconomyDay();
             }
 
             foreach (NpcRuntime npcRuntime in NpcRuntimeList)
@@ -164,24 +103,121 @@ public class TesteSimulacao : MonoBehaviour
         }
     }
 
-    private List<NpcStartingCityConfig> NpcStartingCities
+    private List<NpcActionData> ConfiguredActions
     {
         get
         {
-            if (npcStartingCities == null)
+            if (simulationConfig == null)
             {
-                npcStartingCities = new List<NpcStartingCityConfig>();
+                return null;
             }
 
-            return npcStartingCities;
+            return simulationConfig.Actions;
+        }
+    }
+
+    private void CreateCityRuntimes()
+    {
+        if (simulationConfig == null)
+        {
+            Debug.LogWarning("Nenhum SimulationConfigData configurado. A simulacao iniciara sem cidades nem NPCs.");
+            return;
+        }
+
+        foreach (CityData cityData in simulationConfig.Cities)
+        {
+            if (cityData == null)
+            {
+                continue;
+            }
+
+            CityRuntime cityRuntime = new CityRuntime(cityData);
+            CityRuntimeList.Add(cityRuntime);
+            cityRuntimeByData[cityData] = cityRuntime;
+        }
+    }
+
+    private void CreateNpcRuntimes()
+    {
+        if (simulationConfig == null)
+        {
+            return;
+        }
+
+        foreach (NpcSimulationConfig npcConfig in simulationConfig.Npcs)
+        {
+            if (npcConfig == null || npcConfig.npc == null)
+            {
+                continue;
+            }
+
+            CityRuntime startingCity = GetCityRuntime(npcConfig.startingCity);
+            NpcRuntime npcRuntime = new NpcRuntime(npcConfig.npc, startingCity, npcConfig.initialMoney);
+            ApplyInitialInventory(npcRuntime, npcConfig);
+            NpcRuntimeList.Add(npcRuntime);
+        }
+    }
+
+    private void ApplyInitialInventory(NpcRuntime npcRuntime, NpcSimulationConfig npcConfig)
+    {
+        if (npcRuntime == null || npcConfig == null)
+        {
+            return;
+        }
+
+        foreach (NpcInitialInventoryItemConfig inventoryConfig in npcConfig.InitialInventory)
+        {
+            if (inventoryConfig == null)
+            {
+                continue;
+            }
+
+            npcRuntime.Inventory.AddItem(inventoryConfig.item, inventoryConfig.amount, inventoryConfig.averageUnitCost);
         }
     }
 
     private void RebuildSystems()
     {
+        enabledModules = new SimulationModuleSet(simulationConfig);
         travelSystem = new TravelSystem(GetCityRuntime);
-        merchantSystem = new MerchantSystem(maxMerchantTradeAmount, minimumProfitPerItem, travelSystem);
-        npcDecisionSystem = new NpcDecisionSystem(merchantSystem);
+        actionProviders.Clear();
+        actionProviders.Add(new TravelActionProvider(travelSystem));
+
+        if (enabledModules.IsEnabled(SimulationModule.Merchant) == true)
+        {
+            actionProviders.Add(new MerchantSystem(maxMerchantTradeAmount, minimumProfitPerItem, travelSystem));
+        }
+
+        if (enabledModules.IsEnabled(SimulationModule.GuardCrime) == true && simulationConfig != null)
+        {
+            actionProviders.Add(new GuardSystem(simulationConfig.wantedStatus, simulationConfig.arrestedStatus));
+        }
+
+        npcDecisionSystem = new NpcDecisionSystem(actionProviders);
+    }
+
+    private void SimulateEconomyDay()
+    {
+        foreach (CityRuntime cityRuntime in CityRuntimeList)
+        {
+            if (cityRuntime == null)
+            {
+                continue;
+            }
+
+            cityRuntime.SimulateProductionDay();
+        }
+
+        foreach (CityRuntime cityRuntime in CityRuntimeList)
+        {
+            if (cityRuntime == null)
+            {
+                continue;
+            }
+
+            cityRuntime.SimulateConsumptionDay();
+            cityRuntime.UpdateMarketPrices();
+        }
     }
 
     private void EvaluateStatus(NpcRuntime npcRuntime)
@@ -190,7 +226,7 @@ public class TesteSimulacao : MonoBehaviour
 
     private void EvaluateAction(NpcRuntime npcRuntime)
     {
-        NpcActionRuntime chosenAction = npcDecisionSystem.ChooseAction(npcRuntime, npcActionList);
+        NpcActionRuntime chosenAction = npcDecisionSystem.ChooseAction(npcRuntime, ConfiguredActions);
         npcRuntime.SetCurrentActionRuntime(chosenAction);
     }
 
@@ -204,51 +240,111 @@ public class TesteSimulacao : MonoBehaviour
             return;
         }
 
-        bool actionSucceeded = TryExecuteAction(npcRuntime, actionRuntime, action);
+        LogChosenTargetAction(npcRuntime, actionRuntime);
+        NpcActionResult actionResult = TryExecuteAction(npcRuntime, actionRuntime, action);
 
-        if (actionSucceeded == true)
+        if (actionResult != null && string.IsNullOrEmpty(actionResult.Message) == false)
         {
-            ApplySuccessStatusChanges(npcRuntime, action);
+            Debug.Log(actionResult.Message);
+        }
+
+        if (actionResult != null && actionResult.Success == true)
+        {
+            ApplySuccessStatusChanges(npcRuntime, actionRuntime, action);
         }
     }
 
-    private bool TryExecuteAction(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime, NpcActionData action)
+    private NpcActionResult TryExecuteAction(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime, NpcActionData action)
     {
-        if (action.actionType == NpcActionType.BuyGoods)
+        if (RollActionSuccess(action) == false)
         {
-            return merchantSystem.TryExecuteBuyGoods(npcRuntime, actionRuntime);
+            return NpcActionResult.Failed(CreateFailureMessage(npcRuntime, actionRuntime, action));
         }
 
-        if (action.actionType == NpcActionType.SellGoods)
+        if (action.actionType == NpcActionType.Normal)
         {
-            return merchantSystem.TryExecuteSellGoods(npcRuntime, actionRuntime);
+            return NpcActionResult.Succeeded();
         }
 
-        if (action.actionType == NpcActionType.Travel)
+        INpcActionProvider actionProvider = npcDecisionSystem.GetProviderForAction(action);
+
+        if (actionProvider == null)
         {
-            return travelSystem.TryStartTravel(npcRuntime, actionRuntime);
+            return NpcActionResult.Failed();
         }
 
-        return true;
+        return actionProvider.TryExecuteAction(npcRuntime, actionRuntime);
     }
 
-    private void ApplySuccessStatusChanges(NpcRuntime npcRuntime, NpcActionData action)
+    private bool RollActionSuccess(NpcActionData action)
     {
-        if (action.statusToRemove != null)
+        if (action == null || action.canFail == false)
         {
-            foreach (NpcStatusData status in action.statusToRemove)
+            return true;
+        }
+
+        return Random.value <= Mathf.Clamp01(action.baseSuccessChance);
+    }
+
+    private void ApplySuccessStatusChanges(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime, NpcActionData action)
+    {
+        ApplyStatusChanges(npcRuntime, action.statusToRemove, action.statusToAdd);
+
+        if (actionRuntime != null && actionRuntime.TargetNpc != null)
+        {
+            ApplyStatusChanges(actionRuntime.TargetNpc, action.targetStatusToRemove, action.targetStatusToAdd);
+        }
+    }
+
+    private void ApplyStatusChanges(NpcRuntime npcRuntime, List<NpcStatusData> statusToRemove, List<NpcStatusData> statusToAdd)
+    {
+        if (npcRuntime == null)
+        {
+            return;
+        }
+
+        if (statusToRemove != null)
+        {
+            foreach (NpcStatusData status in statusToRemove)
             {
                 npcRuntime.RemoveStatus(status);
             }
         }
 
-        if (action.statusToAdd != null)
+        if (statusToAdd != null)
         {
-            foreach (NpcStatusData status in action.statusToAdd)
+            foreach (NpcStatusData status in statusToAdd)
             {
                 npcRuntime.AddStatus(status);
             }
         }
+    }
+
+    private void LogChosenTargetAction(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime)
+    {
+        if (npcRuntime == null || actionRuntime == null || actionRuntime.Action == null || actionRuntime.TargetNpc == null)
+        {
+            return;
+        }
+
+        Debug.Log($"{npcRuntime.NpcName} escolheu {GetActionName(actionRuntime.Action)} {actionRuntime.TargetNpc.NpcName}.");
+    }
+
+    private string CreateFailureMessage(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime, NpcActionData action)
+    {
+        string actorName = npcRuntime != null ? npcRuntime.NpcName : "NPC desconhecido";
+        string targetName = actionRuntime != null && actionRuntime.TargetNpc != null ? $" {actionRuntime.TargetNpc.NpcName}" : string.Empty;
+        return $"{actorName} tentou {GetActionName(action)}{targetName}, mas falhou.";
+    }
+
+    private string GetActionName(NpcActionData action)
+    {
+        if (action == null)
+        {
+            return "acao desconhecida";
+        }
+
+        return string.IsNullOrEmpty(action.actionName) == false ? action.actionName : action.actionType.ToString();
     }
 
     private CityRuntime GetCityRuntime(CityData cityData)
@@ -261,12 +357,4 @@ public class TesteSimulacao : MonoBehaviour
         cityRuntimeByData.TryGetValue(cityData, out CityRuntime cityRuntime);
         return cityRuntime;
     }
-}
-
-[Serializable]
-public class NpcStartingCityConfig
-{
-    public NpcData npc;
-    public CityData startingCity;
-    public float initialMoney = 100f;
 }

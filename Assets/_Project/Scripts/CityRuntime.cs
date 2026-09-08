@@ -32,7 +32,7 @@ public class CityRuntime
 
         foreach (CityProductionConfig production in cityData.productionConfigs)
         {
-            if (production.item == null || production.amountPerDay <= 0)
+            if (production == null || production.item == null || production.amountPerDay <= 0)
             {
                 continue;
             }
@@ -51,7 +51,7 @@ public class CityRuntime
 
         foreach (MarketItemConfig config in cityData.marketItems)
         {
-            if (config.item == null || config.consumptionPer1000Population <= 0f)
+            if (config == null || config.item == null || config.consumptionPer1000Population <= 0f)
             {
                 continue;
             }

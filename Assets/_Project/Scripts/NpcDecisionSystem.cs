@@ -3,21 +3,32 @@ using UnityEngine;
 
 public class NpcDecisionSystem
 {
-    private readonly MerchantSystem merchantSystem;
+    private readonly List<INpcActionProvider> actionProviders = new List<INpcActionProvider>();
 
-    public NpcDecisionSystem(MerchantSystem merchantSystem)
+    public NpcDecisionSystem(List<INpcActionProvider> actionProviders)
     {
-        this.merchantSystem = merchantSystem;
+        if (actionProviders == null)
+        {
+            return;
+        }
+
+        foreach (INpcActionProvider actionProvider in actionProviders)
+        {
+            if (actionProvider != null)
+            {
+                this.actionProviders.Add(actionProvider);
+            }
+        }
     }
 
-    public NpcActionRuntime ChooseAction(NpcRuntime npcRuntime, List<NpcActionData> npcActionList)
+    public NpcActionRuntime ChooseAction(NpcRuntime npcRuntime, List<NpcActionData> availableActions)
     {
         if (npcRuntime == null)
         {
             return null;
         }
 
-        List<NpcActionData> validActions = GetAllValidActions(npcRuntime.CurrentStatus, npcActionList);
+        List<NpcActionData> validActions = GetAllValidActions(npcRuntime.CurrentStatus, availableActions);
         Dictionary<NpcActionRuntime, float> utilities = CalculateActionUtilities(npcRuntime, validActions);
         return ChooseWeightedAction(utilities);
     }
@@ -105,24 +116,50 @@ public class NpcDecisionSystem
 
     private NpcActionRuntime CreateRuntimeAction(NpcRuntime npcRuntime, NpcActionData action, ref float utility)
     {
-        if (merchantSystem != null && merchantSystem.HandlesAction(action) == true)
+        if (action.actionType == NpcActionType.Normal)
         {
-            return merchantSystem.CreateAction(npcRuntime, action, ref utility);
+            return new NpcActionRuntime(action);
         }
 
-        return new NpcActionRuntime(action);
+        INpcActionProvider actionProvider = GetProviderForAction(action);
+
+        if (actionProvider == null)
+        {
+            utility = 0f;
+            return null;
+        }
+
+        return actionProvider.CreateAction(npcRuntime, action, ref utility);
     }
 
-    private List<NpcActionData> GetAllValidActions(List<NpcStatusData> npcCurrentStatus, List<NpcActionData> npcActionList)
+    public INpcActionProvider GetProviderForAction(NpcActionData action)
+    {
+        if (action == null)
+        {
+            return null;
+        }
+
+        foreach (INpcActionProvider actionProvider in actionProviders)
+        {
+            if (actionProvider.HandlesAction(action) == true)
+            {
+                return actionProvider;
+            }
+        }
+
+        return null;
+    }
+
+    private List<NpcActionData> GetAllValidActions(List<NpcStatusData> npcCurrentStatus, List<NpcActionData> availableActions)
     {
         List<NpcActionData> validActions = new List<NpcActionData>();
 
-        if (npcActionList == null)
+        if (availableActions == null)
         {
             return validActions;
         }
 
-        foreach (NpcActionData action in npcActionList)
+        foreach (NpcActionData action in availableActions)
         {
             if (action == null || HasAllRequiredStatus(action, npcCurrentStatus) == false)
             {

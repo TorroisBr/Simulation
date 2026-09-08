@@ -14,5 +14,6 @@ public class NpcJobData : ScriptableObject
 public enum NpcJobType
 {
     None,
-    Merchant
+    Merchant,
+    Guard
 }

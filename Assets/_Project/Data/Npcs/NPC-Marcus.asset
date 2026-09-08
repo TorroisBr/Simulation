@@ -10,12 +10,13 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: b8bd1275207b6b745bbc7bff8e99284b, type: 3}
-  m_Name: NPC-Jobson
-  m_EditorClassIdentifier: Assembly-CSharp::NPC
-  id: JOBSON
-  name: Jobson
-  job: {fileID: 0}
-  acoesPadrao: []
+  m_Name: NPC-Marcus
+  m_EditorClassIdentifier: Assembly-CSharp::NpcData
+  id: MARCUS
+  name: Marcus
+  job: {fileID: 11400000, guid: 6e6fe1f0766480141bc9187ff8175e29, type: 2}
+  acoesPadrao:
+  - action: {fileID: 11400000, guid: ce9236aab15e40c79d18e7cfc7cac14b, type: 2}
+    baseUtility: 70
   statusPadrao:
   - {fileID: 11400000, guid: 922e799608934f4469cb8c77bfc6c32e, type: 2}
-  - {fileID: 11400000, guid: fd104bc4e7844760bfea57b9522141cd, type: 2}

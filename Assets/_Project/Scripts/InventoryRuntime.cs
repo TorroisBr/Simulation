@@ -71,7 +71,7 @@ public class InventoryRuntime
 
     public InventoryItemRuntime GetItem(ItemData item)
     {
-        return Items.Find(x => x.Item == item);
+        return Items.Find(x => x != null && x.Item == item);
     }
 
     public int GetAmount(ItemData item)
@@ -130,7 +130,7 @@ public class InventoryRuntime
     {
         foreach (InventoryItemRuntime item in Items)
         {
-            if (item.Amount > 0)
+            if (item != null && item.Amount > 0)
             {
                 return false;
             }

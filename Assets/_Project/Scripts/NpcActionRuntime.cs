@@ -23,6 +23,12 @@ public class NpcActionRuntime
         this.action = action;
     }
 
+    public NpcActionRuntime(NpcActionData action, NpcRuntime targetNpc)
+    {
+        this.action = action;
+        this.targetNpc = targetNpc;
+    }
+
     public NpcActionRuntime(NpcActionData action, CityRuntime targetCity, ItemData targetItem, int amount, float expectedUnitPrice)
     {
         this.action = action;
@@ -30,6 +36,35 @@ public class NpcActionRuntime
         this.targetItem = targetItem;
         this.amount = amount;
         this.expectedUnitPrice = expectedUnitPrice;
+    }
+}
+
+public enum NpcActionResultType
+{
+    Success,
+    Failure
+}
+
+public class NpcActionResult
+{
+    public NpcActionResultType ResultType { get; }
+    public string Message { get; }
+    public bool Success => ResultType == NpcActionResultType.Success;
+
+    private NpcActionResult(NpcActionResultType resultType, string message)
+    {
+        ResultType = resultType;
+        Message = message;
+    }
+
+    public static NpcActionResult Succeeded(string message = null)
+    {
+        return new NpcActionResult(NpcActionResultType.Success, message);
+    }
+
+    public static NpcActionResult Failed(string message = null)
+    {
+        return new NpcActionResult(NpcActionResultType.Failure, message);
     }
 }
 

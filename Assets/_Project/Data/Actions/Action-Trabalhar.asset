@@ -15,5 +15,12 @@ MonoBehaviour:
   statusNecessariosParaFazerAcao:
   - {fileID: 11400000, guid: 922e799608934f4469cb8c77bfc6c32e, type: 2}
   actionName: TRABALHAR
-  baseWeight: 1
+  actionType: 0
+  baseUtility: 1
   statusModifiers: []
+  canFail: 0
+  baseSuccessChance: 1
+  statusToAdd: []
+  statusToRemove: []
+  targetStatusToAdd: []
+  targetStatusToRemove: []

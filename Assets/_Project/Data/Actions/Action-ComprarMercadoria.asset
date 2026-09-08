@@ -18,5 +18,9 @@ MonoBehaviour:
   actionType: 1
   baseUtility: 10
   statusModifiers: []
+  canFail: 0
+  baseSuccessChance: 1
   statusToAdd: []
   statusToRemove: []
+  targetStatusToAdd: []
+  targetStatusToRemove: []

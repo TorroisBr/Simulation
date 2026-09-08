@@ -91,7 +91,7 @@ public class MarketRuntime
 
     public MarketItemRuntime GetItem(ItemData item)
     {
-        return Items.Find(x => x.Item == item);
+        return Items.Find(x => x != null && x.Item == item);
     }
 
     public int GetAmount(ItemData item)
@@ -159,7 +159,10 @@ public class MarketRuntime
     {
         foreach (MarketItemRuntime item in Items)
         {
-            item.UpdatePrice();
+            if (item != null)
+            {
+                item.UpdatePrice();
+            }
         }
     }
 

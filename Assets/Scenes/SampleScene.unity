@@ -384,26 +384,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 233a8c96efd43654083bec207c819665, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TesteSimulacao
+  simulationConfig: {fileID: 11400000, guid: ba87bf49ee034da6bda3daeef8e40c3f, type: 2}
   daysToSimulate: 8
   maxMerchantTradeAmount: 5
   minimumProfitPerItem: 1
-  npcList:
-  - {fileID: 11400000, guid: 80a4772466a41c741ab4002313a098e5, type: 2}
-  npcStatusList:
-  - {fileID: 11400000, guid: 922e799608934f4469cb8c77bfc6c32e, type: 2}
-  npcActionList:
-  - {fileID: 11400000, guid: 2fd0b05dba9748444891d218e424fc1c, type: 2}
-  - {fileID: 11400000, guid: 5041bea373640e64b817c6d64f4dd131, type: 2}
-  - {fileID: 11400000, guid: 5865aac66a0f87344bf73e5d71f94fdb, type: 2}
-  cityList:
-  - {fileID: 11400000, guid: eabd01569d86fa84bb8117495a6dfb5e, type: 2}
-  - {fileID: 11400000, guid: ca4ded573f6d79a4b8bc96de1114b659, type: 2}
-  npcStartingCities:
-  - npc: {fileID: 11400000, guid: 80a4772466a41c741ab4002313a098e5, type: 2}
-    startingCity: {fileID: 11400000, guid: ca4ded573f6d79a4b8bc96de1114b659, type: 2}
-    initialMoney: 200
-  npcRuntimeList: []
-  cityRuntimeList: []
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

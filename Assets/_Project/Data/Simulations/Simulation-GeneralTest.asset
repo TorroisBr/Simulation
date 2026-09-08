@@ -1,0 +1,49 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3474883101d4499e9e45247304cbd4c5, type: 3}
+  m_Name: Simulation-GeneralTest
+  m_EditorClassIdentifier: Assembly-CSharp::SimulationConfigData
+  simulationName: General Test
+  enabledModules:
+  - 0
+  - 1
+  - 2
+  cities:
+  - {fileID: 11400000, guid: eabd01569d86fa84bb8117495a6dfb5e, type: 2}
+  - {fileID: 11400000, guid: ca4ded573f6d79a4b8bc96de1114b659, type: 2}
+  npcs:
+  - npc: {fileID: 11400000, guid: 80a4772466a41c741ab4002313a098e5, type: 2}
+    startingCity: {fileID: 11400000, guid: ca4ded573f6d79a4b8bc96de1114b659, type: 2}
+    initialMoney: 200
+    initialInventory: []
+  - npc: {fileID: 11400000, guid: 90c1203295614d02841133d25b2db0ab, type: 2}
+    startingCity: {fileID: 11400000, guid: eabd01569d86fa84bb8117495a6dfb5e, type: 2}
+    initialMoney: 0
+    initialInventory: []
+  - npc: {fileID: 11400000, guid: 6a0d3bb70f1f27647a263088c511fbf7, type: 2}
+    startingCity: {fileID: 11400000, guid: eabd01569d86fa84bb8117495a6dfb5e, type: 2}
+    initialMoney: 0
+    initialInventory: []
+  actions:
+  - {fileID: 11400000, guid: 2fd0b05dba9748444891d218e424fc1c, type: 2}
+  - {fileID: 11400000, guid: 5041bea373640e64b817c6d64f4dd131, type: 2}
+  - {fileID: 11400000, guid: 5865aac66a0f87344bf73e5d71f94fdb, type: 2}
+  - {fileID: 11400000, guid: ce9236aab15e40c79d18e7cfc7cac14b, type: 2}
+  statuses:
+  - {fileID: 11400000, guid: 922e799608934f4469cb8c77bfc6c32e, type: 2}
+  - {fileID: 11400000, guid: fd104bc4e7844760bfea57b9522141cd, type: 2}
+  - {fileID: 11400000, guid: 39ec54928a091684d8daf631dfe56d67, type: 2}
+  jobs:
+  - {fileID: 11400000, guid: 14afa0c3d8c0b594da66d52015932182, type: 2}
+  - {fileID: 11400000, guid: 6e6fe1f0766480141bc9187ff8175e29, type: 2}
+  wantedStatus: {fileID: 11400000, guid: fd104bc4e7844760bfea57b9522141cd, type: 2}
+  arrestedStatus: {fileID: 11400000, guid: 39ec54928a091684d8daf631dfe56d67, type: 2}

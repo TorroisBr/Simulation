@@ -73,7 +73,7 @@ public class TravelSystem
 
     public int GetTravelDays(CityRuntime originCity, CityRuntime targetCity)
     {
-        if (originCity == null || targetCity == null || originCity.CityData == null || originCity.CityData.connections == null)
+        if (originCity == null || targetCity == null || originCity.CityData == null || targetCity.CityData == null || originCity.CityData.connections == null)
         {
             return -1;
         }
