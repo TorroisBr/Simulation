@@ -10,15 +10,13 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: efaa8a44b89313f48aaa55dad7921efe, type: 3}
-  m_Name: Action-SerPreso
-  m_EditorClassIdentifier: Assembly-CSharp::NPCActionSO
+  m_Name: Action-ComprarMercadoria
+  m_EditorClassIdentifier: Assembly-CSharp::NpcActionData
   statusNecessariosParaFazerAcao:
   - {fileID: 11400000, guid: 922e799608934f4469cb8c77bfc6c32e, type: 2}
-  actionName: SER_PRESO
-  actionType: 0
-  baseUtility: 1
+  actionName: COMPRAR_MERCADORIA
+  actionType: 1
+  baseUtility: 10
   statusModifiers: []
-  statusToAdd:
-  - {fileID: 11400000, guid: 39ec54928a091684d8daf631dfe56d67, type: 2}
-  statusToRemove:
-  - {fileID: 11400000, guid: 922e799608934f4469cb8c77bfc6c32e, type: 2}
+  statusToAdd: []
+  statusToRemove: []

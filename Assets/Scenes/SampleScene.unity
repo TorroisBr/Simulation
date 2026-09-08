@@ -385,6 +385,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TesteSimulaccao
   daysToSimulate: 1
+  maxMerchantTradeAmount: 5
+  minimumProfitPerItem: 1
   npcList:
   - {fileID: 11400000, guid: 6a0d3bb70f1f27647a263088c511fbf7, type: 2}
   - {fileID: 11400000, guid: 80a4772466a41c741ab4002313a098e5, type: 2}
@@ -398,6 +400,19 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 1e4507e7ee6cc804ea0be9238c0784f0, type: 2}
   - {fileID: 11400000, guid: 41a7cbb01d5dfb447835a8786c2b0991, type: 2}
   - {fileID: 11400000, guid: 5865aac66a0f87344bf73e5d71f94fdb, type: 2}
+  - {fileID: 11400000, guid: eb8c90d985a81db4880fee458f55f910, type: 2}
+  cityList:
+  - {fileID: 11400000, guid: 117b98e226397a9468aa6429546f7bfe, type: 2}
+  - {fileID: 11400000, guid: 9dcfc534da49bc447bd5a6784a74f79a, type: 2}
+  npcStartingCities:
+  - npc: {fileID: 11400000, guid: 6a0d3bb70f1f27647a263088c511fbf7, type: 2}
+    startingCity: {fileID: 11400000, guid: 117b98e226397a9468aa6429546f7bfe, type: 2}
+    initialMoney: 0
+  - npc: {fileID: 11400000, guid: 80a4772466a41c741ab4002313a098e5, type: 2}
+    startingCity: {fileID: 11400000, guid: 117b98e226397a9468aa6429546f7bfe, type: 2}
+    initialMoney: 0
+  npcRuntimeList: []
+  cityRuntimeList: []
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

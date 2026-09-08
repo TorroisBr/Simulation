@@ -6,6 +6,13 @@ using UnityEngine;
 public class NpcJobData : ScriptableObject
 {
     public string jobName;
+    public NpcJobType jobType = NpcJobType.None;
     public NpcActionData workAction;
     public float workUtility = 50;
+}
+
+public enum NpcJobType
+{
+    None,
+    Merchant
 }

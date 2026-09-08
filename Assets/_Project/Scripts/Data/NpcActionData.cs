@@ -8,11 +8,12 @@ public class NpcActionData : ScriptableObject
 {
 	public List<NpcStatusData> statusNecessariosParaFazerAcao = new List<NpcStatusData>();
 	public string actionName;
+    public NpcActionType actionType = NpcActionType.Normal;
 
 	[Range(0,REFERENCIASPARAREMOVERNOFUTURO.PESO_VALOR_MAX)]
 	public float baseUtility = 1f;
 
-	public List<StatusWeightModifier> statusModifiers;
+	public List<StatusWeightModifier> statusModifiers = new List<StatusWeightModifier>();
     
     public List<NpcStatusData> statusToAdd = new List<NpcStatusData>();
     public List<NpcStatusData> statusToRemove = new List<NpcStatusData>();
@@ -30,4 +31,12 @@ public class StatusWeightModifier
 public static class REFERENCIASPARAREMOVERNOFUTURO
 {
 	public const int PESO_VALOR_MAX = 100;
+}
+
+public enum NpcActionType
+{
+    Normal,
+    BuyGoods,
+    SellGoods,
+    Travel
 }

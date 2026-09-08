@@ -11,9 +11,9 @@ public class NpcData : ScriptableObject
 
     public NpcJobData job;
 
-    public List<NPCDefaultAction> acoesPadrao;
+    public List<NPCDefaultAction> acoesPadrao = new List<NPCDefaultAction>();
 
-    public List<NpcStatusData> statusPadrao;
+    public List<NpcStatusData> statusPadrao = new List<NpcStatusData>();
 }
 [System.Serializable]
 public class NPCDefaultAction

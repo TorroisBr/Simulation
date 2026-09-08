@@ -13,5 +13,6 @@ MonoBehaviour:
   m_Name: Job-Mercador
   m_EditorClassIdentifier: Assembly-CSharp::NpcJobSO
   jobName: Mercador
-  workAction: {fileID: 11400000, guid: 41a7cbb01d5dfb447835a8786c2b0991, type: 2}
-  workUtility: 60
+  jobType: 1
+  workAction: {fileID: 11400000, guid: 2fd0b05dba9748444891d218e424fc1c, type: 2}
+  workUtility: 80

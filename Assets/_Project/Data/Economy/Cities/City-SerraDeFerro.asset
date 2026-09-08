@@ -1,0 +1,46 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 24f4daabd5b68d24f883a6a44333254d, type: 3}
+  m_Name: City-SerraDeFerro
+  m_EditorClassIdentifier: Assembly-CSharp::CityData
+  id: SERRA_DE_FERRO
+  cityName: Serra de Ferro
+  initialPopulation: 800
+  marketItems:
+  - item: {fileID: 11400000, guid: d798f72a0978dbc4dbcba05b5d3a6c22, type: 2}
+    initialAmount: 45
+    desiredAmount: 220
+    consumptionPer1000Population: 8
+  - item: {fileID: 11400000, guid: 64cef03f3b8e1c1419c490e6711ba665, type: 2}
+    initialAmount: 420
+    desiredAmount: 180
+    consumptionPer1000Population: 1
+  - item: {fileID: 11400000, guid: b4fa9b2c9da2cf447b31c81d1c51eb9f, type: 2}
+    initialAmount: 55
+    desiredAmount: 100
+    consumptionPer1000Population: 1
+  - item: {fileID: 11400000, guid: 5e654620f3ce5484aba6c031af300e2c, type: 2}
+    initialAmount: 75
+    desiredAmount: 110
+    consumptionPer1000Population: 2
+  - item: {fileID: 11400000, guid: bc0ff92b945063c4abb55167fbe04f3c, type: 2}
+    initialAmount: 60
+    desiredAmount: 90
+    consumptionPer1000Population: 1
+  productionConfigs:
+  - item: {fileID: 11400000, guid: 64cef03f3b8e1c1419c490e6711ba665, type: 2}
+    amountPerDay: 35
+  - item: {fileID: 11400000, guid: bc0ff92b945063c4abb55167fbe04f3c, type: 2}
+    amountPerDay: 3
+  connections:
+  - destination: {fileID: 11400000, guid: eabd01569d86fa84bb8117495a6dfb5e, type: 2}
+    travelDays: 3
