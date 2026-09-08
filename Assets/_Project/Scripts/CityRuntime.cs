@@ -12,8 +12,8 @@ public class CityRuntime
 
     public CityData CityData => cityData;
     public int CurrentPopulation => currentPopulation;
-    public MarketRuntime Market => market;
-    public List<NpcRuntime> ImportantNpcs => importantNpcs;
+    public MarketRuntime Market => market ?? (market = new MarketRuntime());
+    public List<NpcRuntime> ImportantNpcs => importantNpcs ?? (importantNpcs = new List<NpcRuntime>());
     public string CityName => cityData != null ? cityData.cityName : "Cidade desconhecida";
 
     public CityRuntime(CityData cityData)
@@ -37,7 +37,7 @@ public class CityRuntime
                 continue;
             }
 
-            market.AddStock(production.item, production.amountPerDay);
+            Market.AddStock(production.item, production.amountPerDay);
             Debug.Log($"{CityName} produziu {production.amountPerDay} {production.item.itemName}");
         }
     }
@@ -57,7 +57,7 @@ public class CityRuntime
             }
 
             int desiredConsumption = Mathf.RoundToInt(currentPopulation / 1000f * config.consumptionPer1000Population);
-            int consumed = market.RemoveStockUpTo(config.item, desiredConsumption);
+            int consumed = Market.RemoveStockUpTo(config.item, desiredConsumption);
 
             if (consumed > 0)
             {
@@ -68,7 +68,7 @@ public class CityRuntime
 
     public void UpdateMarketPrices()
     {
-        market.UpdatePrices();
+        Market.UpdatePrices();
     }
 
     public void AddImportantNpc(NpcRuntime npcRuntime)
@@ -78,9 +78,9 @@ public class CityRuntime
             return;
         }
 
-        if (importantNpcs.Contains(npcRuntime) == false)
+        if (ImportantNpcs.Contains(npcRuntime) == false)
         {
-            importantNpcs.Add(npcRuntime);
+            ImportantNpcs.Add(npcRuntime);
         }
 
         npcRuntime.SetCurrentCity(this);
@@ -93,7 +93,7 @@ public class CityRuntime
             return;
         }
 
-        importantNpcs.Remove(npcRuntime);
+        ImportantNpcs.Remove(npcRuntime);
 
         if (npcRuntime.CurrentCity == this)
         {

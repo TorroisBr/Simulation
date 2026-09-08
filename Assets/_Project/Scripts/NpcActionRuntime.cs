@@ -40,14 +40,19 @@ public class MerchantTradePlanRuntime
     [NonSerialized] private CityRuntime originCity;
     [NonSerialized] private CityRuntime targetCity;
     [SerializeField] private int plannedAmount;
+    [SerializeField] private int remainingAmount;
     [SerializeField] private float purchasePricePerItem;
+    [SerializeField] private int waitDaysAtDestination;
 
     public ItemData Item => item;
     public CityRuntime OriginCity => originCity;
     public CityRuntime TargetCity => targetCity;
     public int PlannedAmount => plannedAmount;
+    public int RemainingAmount => remainingAmount > 0 ? remainingAmount : plannedAmount;
     public float PurchasePricePerItem => purchasePricePerItem;
-    public bool IsActive => item != null && targetCity != null && plannedAmount > 0;
+    public int WaitDaysAtDestination => waitDaysAtDestination;
+    public bool HasData => item != null || originCity != null || targetCity != null || plannedAmount > 0 || remainingAmount > 0;
+    public bool IsActive => item != null && targetCity != null && RemainingAmount > 0;
 
     public void Set(ItemData item, CityRuntime originCity, CityRuntime targetCity, int plannedAmount, float purchasePricePerItem)
     {
@@ -55,7 +60,48 @@ public class MerchantTradePlanRuntime
         this.originCity = originCity;
         this.targetCity = targetCity;
         this.plannedAmount = Mathf.Max(0, plannedAmount);
+        remainingAmount = this.plannedAmount;
         this.purchasePricePerItem = Mathf.Max(0f, purchasePricePerItem);
+        waitDaysAtDestination = 0;
+    }
+
+    public void RedirectTo(CityRuntime targetCity)
+    {
+        if (this.targetCity != targetCity)
+        {
+            waitDaysAtDestination = 0;
+        }
+
+        this.targetCity = targetCity;
+    }
+
+    public void IncrementWaitDayAtDestination()
+    {
+        waitDaysAtDestination++;
+    }
+
+    public void ResetWaitDaysAtDestination()
+    {
+        waitDaysAtDestination = 0;
+    }
+
+    public bool RegisterSale(int amountSold)
+    {
+        if (amountSold <= 0)
+        {
+            return false;
+        }
+
+        remainingAmount = Mathf.Max(0, RemainingAmount - amountSold);
+        waitDaysAtDestination = 0;
+
+        if (remainingAmount > 0)
+        {
+            return false;
+        }
+
+        Clear();
+        return true;
     }
 
     public void Clear()
@@ -64,6 +110,8 @@ public class MerchantTradePlanRuntime
         originCity = null;
         targetCity = null;
         plannedAmount = 0;
+        remainingAmount = 0;
         purchasePricePerItem = 0f;
+        waitDaysAtDestination = 0;
     }
 }

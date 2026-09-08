@@ -67,11 +67,11 @@ public class InventoryRuntime
 {
     [SerializeField] private List<InventoryItemRuntime> items = new List<InventoryItemRuntime>();
 
-    public List<InventoryItemRuntime> Items => items;
+    public List<InventoryItemRuntime> Items => items ?? (items = new List<InventoryItemRuntime>());
 
     public InventoryItemRuntime GetItem(ItemData item)
     {
-        return items.Find(x => x.Item == item);
+        return Items.Find(x => x.Item == item);
     }
 
     public int GetAmount(ItemData item)
@@ -102,7 +102,7 @@ public class InventoryRuntime
 
         if (inventoryItem == null)
         {
-            items.Add(new InventoryItemRuntime(item, amount, unitCost));
+            Items.Add(new InventoryItemRuntime(item, amount, unitCost));
             return;
         }
 
@@ -120,7 +120,7 @@ public class InventoryRuntime
 
         if (inventoryItem.Amount <= 0)
         {
-            items.Remove(inventoryItem);
+            Items.Remove(inventoryItem);
         }
 
         return true;
@@ -128,7 +128,7 @@ public class InventoryRuntime
 
     public bool IsEmpty()
     {
-        foreach (InventoryItemRuntime item in items)
+        foreach (InventoryItemRuntime item in Items)
         {
             if (item.Amount > 0)
             {

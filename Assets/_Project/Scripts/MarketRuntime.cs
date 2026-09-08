@@ -65,7 +65,7 @@ public class MarketRuntime
 {
     [SerializeField] private List<MarketItemRuntime> items = new List<MarketItemRuntime>();
 
-    public List<MarketItemRuntime> Items => items;
+    public List<MarketItemRuntime> Items => items ?? (items = new List<MarketItemRuntime>());
 
     public MarketRuntime()
     {
@@ -85,13 +85,13 @@ public class MarketRuntime
                 continue;
             }
 
-            items.Add(new MarketItemRuntime(config.item, config.initialAmount, config.desiredAmount));
+            Items.Add(new MarketItemRuntime(config.item, config.initialAmount, config.desiredAmount));
         }
     }
 
     public MarketItemRuntime GetItem(ItemData item)
     {
-        return items.Find(x => x.Item == item);
+        return Items.Find(x => x.Item == item);
     }
 
     public int GetAmount(ItemData item)
@@ -157,7 +157,7 @@ public class MarketRuntime
 
     public void UpdatePrices()
     {
-        foreach (MarketItemRuntime item in items)
+        foreach (MarketItemRuntime item in Items)
         {
             item.UpdatePrice();
         }
@@ -240,7 +240,7 @@ public class MarketRuntime
         }
 
         marketItem = new MarketItemRuntime(item, 0, Mathf.Max(1, desiredAmount));
-        items.Add(marketItem);
+        Items.Add(marketItem);
         return marketItem;
     }
 }

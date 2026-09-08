@@ -58,7 +58,7 @@ public static class EconomyTestDataCreator
 
         ReplaceList(jorge.statusPadrao, livre);
         ReplaceList(jorge.acoesPadrao,
-            new NPCDefaultAction { action = buyGoods, baseUtility = 70f },
+            new NPCDefaultAction { action = buyGoods, baseUtility = 40f },
             new NPCDefaultAction { action = sellGoods, baseUtility = 80f },
             new NPCDefaultAction { action = travel, baseUtility = 60f });
         EditorUtility.SetDirty(jorge);

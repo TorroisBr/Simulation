@@ -18,17 +18,17 @@ public class NpcRuntime
     [SerializeField]private MerchantTradePlanRuntime merchantTradePlan = new MerchantTradePlanRuntime();
 
     public NpcData NpcData => npcData;
-    public List<NpcStatusData> CurrentStatus => currentStatus;
+    public List<NpcStatusData> CurrentStatus => currentStatus ?? (currentStatus = new List<NpcStatusData>());
     public NpcActionData CurrentAction => currentAction;
     public NpcActionRuntime CurrentActionRuntime => currentActionRuntime;
-    public InventoryRuntime Inventory => inventory;
+    public InventoryRuntime Inventory => inventory ?? (inventory = new InventoryRuntime());
     public float Money => money;
     public CityRuntime CurrentCity => currentCity;
     public CityRuntime DestinationCity => destinationCity;
     public int TravelDaysRemaining => travelDaysRemaining;
     public bool TravelStartedToday => travelStartedToday;
     public bool IsTraveling => destinationCity != null && travelDaysRemaining > 0;
-    public MerchantTradePlanRuntime MerchantTradePlan => merchantTradePlan;
+    public MerchantTradePlanRuntime MerchantTradePlan => merchantTradePlan ?? (merchantTradePlan = new MerchantTradePlanRuntime());
     public string NpcName => npcData != null ? npcData.name : "NPC desconhecido";
 
 	public NpcRuntime(NpcData npcData)
@@ -43,7 +43,7 @@ public class NpcRuntime
 
         if (npcData != null && npcData.statusPadrao != null)
         {
-		    currentStatus.AddRange(npcData.statusPadrao);
+		    CurrentStatus.AddRange(npcData.statusPadrao);
         }
 
         if (startingCity != null)
@@ -71,15 +71,15 @@ public class NpcRuntime
             return;
         }
 
-        if (currentStatus.Contains(status) == false)
+        if (CurrentStatus.Contains(status) == false)
         {
-            currentStatus.Add(status);
+            CurrentStatus.Add(status);
         }
     }
 
     public void RemoveStatus(NpcStatusData status)
     {
-        currentStatus.Remove(status);
+        CurrentStatus.Remove(status);
     }
 
     public void SetCurrentCity(CityRuntime city)
@@ -165,11 +165,11 @@ public class NpcRuntime
 
     public void SetMerchantTradePlan(ItemData item, CityRuntime originCity, CityRuntime targetCity, int plannedAmount, float purchasePricePerItem)
     {
-        merchantTradePlan.Set(item, originCity, targetCity, plannedAmount, purchasePricePerItem);
+        MerchantTradePlan.Set(item, originCity, targetCity, plannedAmount, purchasePricePerItem);
     }
 
     public void ClearMerchantTradePlan()
     {
-        merchantTradePlan.Clear();
+        MerchantTradePlan.Clear();
     }
 }

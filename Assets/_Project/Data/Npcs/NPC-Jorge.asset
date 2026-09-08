@@ -17,7 +17,7 @@ MonoBehaviour:
   job: {fileID: 11400000, guid: 14afa0c3d8c0b594da66d52015932182, type: 2}
   acoesPadrao:
   - action: {fileID: 11400000, guid: 2fd0b05dba9748444891d218e424fc1c, type: 2}
-    baseUtility: 70
+    baseUtility: 40
   - action: {fileID: 11400000, guid: 5041bea373640e64b817c6d64f4dd131, type: 2}
     baseUtility: 80
   - action: {fileID: 11400000, guid: 5865aac66a0f87344bf73e5d71f94fdb, type: 2}
