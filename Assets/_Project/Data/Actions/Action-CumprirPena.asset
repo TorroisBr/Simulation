@@ -15,8 +15,8 @@ MonoBehaviour:
   statusNecessariosParaFazerAcao:
   - {fileID: 11400000, guid: 39ec54928a091684d8daf631dfe56d67, type: 2}
   actionName: CUMPRIR_PENA
-  normalActionLogText: cumpriu mais um dia de pena.
-  actionCategory: 3
+  normalActionLogText: "permaneceu na pris\xE3o."
+  actionCategory: 0
   actionType: 0
   baseUtility: 60
   statusModifiers: []

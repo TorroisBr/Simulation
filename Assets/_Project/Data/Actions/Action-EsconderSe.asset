@@ -32,3 +32,4 @@ MonoBehaviour:
     sentenceDays: 0
     hiddenDays: 1
     escapeBountyPenalty: 0
+    failedEscapeSentencePenalty: 2

@@ -169,12 +169,12 @@ public static class SimulationTestDataCreator
         ConfigureCrimeSettings(data.hide, 0, 0f, 0, 1, 0f);
         data.fleeCity = CreateAction("Action-FugirDaCidade", "FUGIR_DA_CIDADE", NpcActionCategory.Crime, NpcActionType.FleeCity, 20f, false, 1f, data.livre);
         ConfigureCrimeSettings(data.fleeCity, 0, 0f, 0, 1, 0f);
-        data.escapePrison = CreateAction("Action-Fugir", "FUGIR_DA_PRISAO", NpcActionCategory.Crime, NpcActionType.EscapePrison, 30f, true, 0.35f, data.preso);
+        data.escapePrison = CreateAction("Action-Fugir", "FUGIR_DA_PRISAO", NpcActionCategory.Crime, NpcActionType.EscapePrison, 30f, true, 0.25f, data.preso);
         ConfigureCrimeSettings(data.escapePrison, 0, 0f, 0, 1, 25f, 2);
         data.rest = CreateNeutralAction("Action-Descansar", "DESCANSAR", "descansou.", 18f, data.livre);
         data.walk = CreateNeutralAction("Action-Passear", "PASSEAR", "passeou pela cidade.", 20f, data.livre);
         data.tavern = CreateNeutralAction("Action-IrATaverna", "IR_A_TAVERNA", "foi a taverna.", 18f, data.livre);
-        data.serveSentence = CreateNeutralAction("Action-CumprirPena", "CUMPRIR_PENA", "cumpriu mais um dia de pena.", 60f, data.preso);
+        data.serveSentence = CreateNeutralAction("Action-CumprirPena", "CUMPRIR_PENA", "permaneceu na prisão.", 60f, data.preso);
 
         data.merchantJob = CreateJob("Job-Mercador", "Mercador", NpcJobType.Merchant, MerchantBehavior.Traveling, data.buyGoods, 80f);
         data.ironMerchantJob = CreateJob("Job-MercadorFerro", "Mercador de Ferro", NpcJobType.Merchant, MerchantBehavior.Traveling, data.buyGoods, 80f,

@@ -215,7 +215,7 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler
 
         int remainingDays = justiceSystem.GetRemainingSentenceDays(npcRuntime);
 
-        if (remainingDays <= 0)
+        if (remainingDays <= 1)
         {
             utility = 0f;
             return null;

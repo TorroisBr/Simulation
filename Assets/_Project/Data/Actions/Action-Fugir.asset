@@ -21,7 +21,7 @@ MonoBehaviour:
   baseUtility: 30
   statusModifiers: []
   canFail: 1
-  baseSuccessChance: 0.35
+  baseSuccessChance: 0.25
   statusToAdd: []
   statusToRemove: []
   targetStatusToAdd: []
