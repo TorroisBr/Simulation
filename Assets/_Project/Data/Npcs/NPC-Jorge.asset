@@ -22,5 +22,11 @@ MonoBehaviour:
     baseUtility: 80
   - action: {fileID: 11400000, guid: 5865aac66a0f87344bf73e5d71f94fdb, type: 2}
     baseUtility: 60
+  - action: {fileID: 11400000, guid: 1cd32fa5fdbb46fcaf34ff0a6f390eaf, type: 2}
+    baseUtility: 16
+  - action: {fileID: 11400000, guid: 3a34fd972a2f4ca68cf1e82ecc01b126, type: 2}
+    baseUtility: 18
+  - action: {fileID: 11400000, guid: ac62c1a5cea3459899bfd31f38bea7f0, type: 2}
+    baseUtility: 14
   statusPadrao:
   - {fileID: 11400000, guid: 922e799608934f4469cb8c77bfc6c32e, type: 2}

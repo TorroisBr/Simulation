@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Text;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -23,6 +24,8 @@ public class TesteSimulacao : MonoBehaviour
     private SimulationLogger logger;
     private int currentDay;
 
+    public string FullLog => logger != null ? logger.FullLog : string.Empty;
+
     public void Start()
     {
         InitializeSimulation();
@@ -40,7 +43,12 @@ public class TesteSimulacao : MonoBehaviour
     {
         currentDay = 0;
         logger = new SimulationLogger(simulationConfig != null ? simulationConfig.LogSettings : null);
-        enabledModules = new SimulationModuleSet(simulationConfig);
+        logger.BeginSimulation(
+            simulationConfig != null ? simulationConfig.simulationName : "Unnamed",
+            simulationConfig != null ? simulationConfig.EnabledModules : null,
+            simulationConfig != null ? simulationConfig.Cities.Count : 0,
+            simulationConfig != null ? simulationConfig.Npcs.Count : 0);
+        enabledModules = new SimulationModuleSet(simulationConfig, logger);
 
         CityRuntimeList.Clear();
         cityRuntimeByData.Clear();
@@ -54,12 +62,17 @@ public class TesteSimulacao : MonoBehaviour
         InitializeJusticeState();
     }
 
+    public string GetFullLog()
+    {
+        return FullLog;
+    }
+
     private void Simulate(int daysToSimulate)
     {
         for (int i = 0; i < daysToSimulate; i++)
         {
             currentDay++;
-            logger.Log(SimulationLogCategory.Day, $"Dia {currentDay}");
+            logger.BeginDay(currentDay);
             BeginSimulationDay();
 
             if (enabledModules.IsEnabled(SimulationModule.Economy) == true)
@@ -80,7 +93,104 @@ public class TesteSimulacao : MonoBehaviour
             }
 
             travelSystem.AdvanceTravels(NpcRuntimeList);
+            AppendNpcStateSummary();
         }
+
+        SaveSimulationLog();
+    }
+
+    private void AppendNpcStateSummary()
+    {
+        logger.AddReportLine(string.Empty);
+        logger.AddReportLine($"--- ESTADO AO FIM DO DIA {currentDay} ---");
+
+        foreach (NpcRuntime npcRuntime in NpcRuntimeList)
+        {
+            if (npcRuntime != null)
+            {
+                logger.AddReportLine(CreateNpcStateLine(npcRuntime));
+            }
+        }
+    }
+
+    private string CreateNpcStateLine(NpcRuntime npcRuntime)
+    {
+        string location = CreateNpcLocationText(npcRuntime);
+        string status = CreateNpcStatusText(npcRuntime);
+        string line = $"{npcRuntime.NpcName} | {location} | ${npcRuntime.Money:0.##} | {status}";
+
+        if (npcRuntime.NpcData != null && npcRuntime.NpcData.job != null && npcRuntime.NpcData.job.jobType == NpcJobType.Merchant)
+        {
+            if (npcRuntime.MerchantTradePlan.IsActive == true && npcRuntime.MerchantTradePlan.Item != null)
+            {
+                line += $" | Trade: {npcRuntime.MerchantTradePlan.RemainingAmount} {npcRuntime.MerchantTradePlan.Item.itemName}";
+            }
+            else if (npcRuntime.NpcData.job.merchantBehavior == MerchantBehavior.Local)
+            {
+                line += $" | Estoque: {CountInventoryTypes(npcRuntime)} tipos";
+            }
+        }
+
+        return line;
+    }
+
+    private string CreateNpcLocationText(NpcRuntime npcRuntime)
+    {
+        if (npcRuntime.IsTraveling == true)
+        {
+            string destinationName = npcRuntime.DestinationCity != null ? npcRuntime.DestinationCity.CityName : "destino desconhecido";
+            return $"VIAJANDO -> {destinationName} | {npcRuntime.TravelDaysRemaining} dias restantes";
+        }
+
+        return npcRuntime.CurrentCity != null ? npcRuntime.CurrentCity.CityName : "SEM CIDADE";
+    }
+
+    private string CreateNpcStatusText(NpcRuntime npcRuntime)
+    {
+        if (npcRuntime.CurrentStatus == null || npcRuntime.CurrentStatus.Count == 0)
+        {
+            return "SEM STATUS";
+        }
+
+        StringBuilder statusBuilder = new StringBuilder();
+
+        foreach (NpcStatusData status in npcRuntime.CurrentStatus)
+        {
+            if (status == null)
+            {
+                continue;
+            }
+
+            if (statusBuilder.Length > 0)
+            {
+                statusBuilder.Append(", ");
+            }
+
+            statusBuilder.Append(string.IsNullOrEmpty(status.statusName) == true ? "STATUS DESCONHECIDO" : status.statusName);
+        }
+
+        return statusBuilder.Length > 0 ? statusBuilder.ToString() : "SEM STATUS";
+    }
+
+    private int CountInventoryTypes(NpcRuntime npcRuntime)
+    {
+        int itemTypeCount = 0;
+
+        foreach (InventoryItemRuntime inventoryItem in npcRuntime.Inventory.Items)
+        {
+            if (inventoryItem != null && inventoryItem.Item != null && inventoryItem.Amount > 0)
+            {
+                itemTypeCount++;
+            }
+        }
+
+        return itemTypeCount;
+    }
+
+    private void SaveSimulationLog()
+    {
+        string simulationName = simulationConfig != null ? simulationConfig.simulationName : "Simulation";
+        logger.SaveToFile(simulationName + "-Run.txt");
     }
 
     private List<NpcRuntime> NpcRuntimeList
@@ -185,7 +295,7 @@ public class TesteSimulacao : MonoBehaviour
 
     private void RebuildSystems()
     {
-        enabledModules = new SimulationModuleSet(simulationConfig);
+        enabledModules = new SimulationModuleSet(simulationConfig, logger);
         logger = logger ?? new SimulationLogger(simulationConfig != null ? simulationConfig.LogSettings : null);
         float travelCostPerDay = simulationConfig != null ? simulationConfig.travelCostPerDay : 0f;
         travelSystem = new TravelSystem(GetCityRuntime, travelCostPerDay, logger);

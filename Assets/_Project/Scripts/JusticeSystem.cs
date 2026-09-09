@@ -317,7 +317,7 @@ public class JusticeSystem
             }
 
             ReleasePrisoner(npcRuntime);
-            Debug.LogWarning($"{npcRuntime.NpcName} estava preso sem sentenca ativa e foi libertado.");
+            logger.LogWarning($"{npcRuntime.NpcName} estava preso sem sentenca ativa e foi libertado.");
         }
     }
 

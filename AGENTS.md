@@ -45,6 +45,7 @@ Status
 - NpcActionRuntime é a instância concreta extensível da ação e pode carregar TargetNpc, TargetCity, TargetItem, Amount etc.
 - NpcActionData possui NpcActionCategory para classificar família ampla sem substituir NpcActionType.
 - Ações de crime iniciais: ROUBAR, ESCONDER_SE, FUGIR_DA_CIDADE e FUGIR_DA_PRISAO.
+- Ações neutras como DESCANSAR, PASSEAR e IR_A_TAVERNA usam NpcActionType.Normal e entram no mesmo sorteio ponderado.
 
 ## Direção futura
 
@@ -54,7 +55,14 @@ Status
 - Exemplo: PRENDER tem um NpcRuntime como alvo.
 - Mercado, viagem e mercadores já existem; mercadores exploram diferenças de preço entre cidades.
 - NpcJobType representa uma família ampla de comportamento; NpcJobData pode especializar preferências, como preferredTradeItems para jobs Merchant.
+- Mercadores usam NpcJobType.Merchant com MerchantBehavior Traveling ou Local. O mercador local compra diretamente de viajantes, mantém estoque e vende ao mercado, sem iniciar viagem comercial.
+- A venda viajante para mercador local valida cidade, estoque e dinheiro próprio do comprador; quando não há comprador válido, MarketRuntime permanece como fallback.
 - Prisão usa PrisonSentenceRuntime. Ao cumprir pena, resolve o mandado local e sincroniza PROCURADO conforme outros mandados ativos.
+
+## Observabilidade e cenários
+
+- SimulationLogger filtra Day, NpcAction, Trade, Travel, Crime, Justice, produção, consumo e Market por SimulationConfigData.logSettings; warnings e errors continuam visíveis.
+- GeneralTest é o sandbox integrado com duas cidades, mercadores viajantes e locais, guardas, crime e civis.
 
 ## Código
 

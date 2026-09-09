@@ -14,6 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::NpcJobSO
   jobName: Mercador
   jobType: 1
+  merchantBehavior: 0
   workAction: {fileID: 11400000, guid: 2fd0b05dba9748444891d218e424fc1c, type: 2}
   workUtility: 80
   preferredTradeItems: []

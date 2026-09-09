@@ -41,6 +41,16 @@ MonoBehaviour:
     bounty: 100
     sentenceDays: 3
   travelCostPerDay: 10
+  logSettings:
+    showDay: 1
+    npcActions: 1
+    trade: 0
+    travel: 0
+    crime: 0
+    justice: 1
+    economyProduction: 0
+    economyConsumption: 0
+    market: 0
   freeStatus: {fileID: 11400000, guid: 922e799608934f4469cb8c77bfc6c32e, type: 2}
   wantedStatus: {fileID: 11400000, guid: fd104bc4e7844760bfea57b9522141cd, type: 2}
   arrestedStatus: {fileID: 11400000, guid: 39ec54928a091684d8daf631dfe56d67, type: 2}

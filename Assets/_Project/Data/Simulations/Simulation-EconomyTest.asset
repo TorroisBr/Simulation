@@ -34,6 +34,16 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 14afa0c3d8c0b594da66d52015932182, type: 2}
   initialWarrants: []
   travelCostPerDay: 10
+  logSettings:
+    showDay: 1
+    npcActions: 1
+    trade: 1
+    travel: 1
+    crime: 0
+    justice: 0
+    economyProduction: 1
+    economyConsumption: 1
+    market: 1
   freeStatus: {fileID: 11400000, guid: 922e799608934f4469cb8c77bfc6c32e, type: 2}
   wantedStatus: {fileID: 0}
   arrestedStatus: {fileID: 0}

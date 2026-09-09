@@ -10,25 +10,21 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: b8bd1275207b6b745bbc7bff8e99284b, type: 3}
-  m_Name: NPC-Jobson
-  m_EditorClassIdentifier: Assembly-CSharp::NPC
-  id: JOBSON
-  name: Jobson
-  job: {fileID: 0}
+  m_Name: NPC-Maria
+  m_EditorClassIdentifier: Assembly-CSharp::NpcData
+  id: MARIA
+  name: Maria
+  job: {fileID: 11400000, guid: 3b65695fde8eb5b4aaa3942aeb26d625, type: 2}
   acoesPadrao:
-  - action: {fileID: 11400000, guid: 4a0d889e89c7410a9853697fccc549f6, type: 2}
-    baseUtility: 22
-  - action: {fileID: 11400000, guid: 4d17b6150dbe4b3884146c663a64e14c, type: 2}
+  - action: {fileID: 11400000, guid: 2fd0b05dba9748444891d218e424fc1c, type: 2}
     baseUtility: 35
-  - action: {fileID: 11400000, guid: e78bf19140194bb1969ba878ddec8a86, type: 2}
+  - action: {fileID: 11400000, guid: 5041bea373640e64b817c6d64f4dd131, type: 2}
     baseUtility: 45
-  - action: {fileID: 11400000, guid: 1e4507e7ee6cc804ea0be9238c0784f0, type: 2}
-    baseUtility: 35
   - action: {fileID: 11400000, guid: 1cd32fa5fdbb46fcaf34ff0a6f390eaf, type: 2}
-    baseUtility: 20
+    baseUtility: 18
   - action: {fileID: 11400000, guid: 3a34fd972a2f4ca68cf1e82ecc01b126, type: 2}
-    baseUtility: 25
+    baseUtility: 18
   - action: {fileID: 11400000, guid: ac62c1a5cea3459899bfd31f38bea7f0, type: 2}
-    baseUtility: 22
+    baseUtility: 16
   statusPadrao:
   - {fileID: 11400000, guid: 922e799608934f4469cb8c77bfc6c32e, type: 2}

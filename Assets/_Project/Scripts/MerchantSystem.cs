@@ -3,8 +3,6 @@ using UnityEngine;
 public class MerchantSystem : INpcActionProvider
 {
     private const int MaxUnprofitablePlanWaitDays = 3;
-    private const float LocalMerchantCheapPriceMultiplier = 0.9f;
-    private const float PreferredLocalBuyPriceMultiplier = 1.05f;
 
     private readonly int maxMerchantTradeAmount;
     private readonly float minimumProfitPerItem;
@@ -211,9 +209,13 @@ public class MerchantSystem : INpcActionProvider
             return null;
         }
 
-        MerchantTradeOpportunity opportunity = IsLocalMerchant(npcRuntime) == true
-            ? FindBestLocalBuyOpportunity(npcRuntime)
-            : FindBestTradeOpportunity(npcRuntime);
+        if (IsLocalMerchant(npcRuntime) == true)
+        {
+            utility = 0f;
+            return null;
+        }
+
+        MerchantTradeOpportunity opportunity = FindBestTradeOpportunity(npcRuntime);
 
         if (opportunity == null)
         {
@@ -375,53 +377,6 @@ public class MerchantSystem : INpcActionProvider
         SetTradeTravelPlan(npcRuntime, opportunity.TargetCity);
         logger.Log(SimulationLogCategory.Trade, $"{npcRuntime.NpcName} reavaliou o plano comercial e mudou o destino para {opportunity.TargetCity.CityName}.");
         return true;
-    }
-
-    private MerchantTradeOpportunity FindBestLocalBuyOpportunity(NpcRuntime npcRuntime)
-    {
-        CityRuntime currentCity = npcRuntime.CurrentCity;
-
-        if (currentCity == null)
-        {
-            return null;
-        }
-
-        MerchantTradeOpportunity bestOpportunity = null;
-
-        foreach (MarketItemRuntime localItem in currentCity.Market.Items)
-        {
-            if (localItem == null || localItem.Item == null || localItem.Amount <= 0)
-            {
-                continue;
-            }
-
-            float buyPrice = currentCity.Market.GetPrice(localItem.Item);
-            float preferenceMultiplier = GetTradePreferenceMultiplier(npcRuntime, localItem.Item);
-            float acceptablePrice = localItem.Item.basePrice * (preferenceMultiplier > 1f ? PreferredLocalBuyPriceMultiplier : LocalMerchantCheapPriceMultiplier);
-
-            if (buyPrice > acceptablePrice)
-            {
-                continue;
-            }
-
-            int affordableAmount = Mathf.FloorToInt(npcRuntime.Money / buyPrice);
-            int amount = Mathf.Min(maxMerchantTradeAmount, localItem.Amount, affordableAmount);
-
-            if (amount <= 0)
-            {
-                continue;
-            }
-
-            float priceAdvantage = Mathf.Max(0.5f, localItem.Item.basePrice - buyPrice);
-            float score = priceAdvantage * amount * preferenceMultiplier;
-
-            if (bestOpportunity == null || score > bestOpportunity.Score)
-            {
-                bestOpportunity = new MerchantTradeOpportunity(localItem.Item, currentCity, amount, buyPrice, buyPrice, priceAdvantage, priceAdvantage * amount, score);
-            }
-        }
-
-        return bestOpportunity;
     }
 
     private MerchantTradeOpportunity FindBestTradeOpportunity(NpcRuntime npcRuntime)

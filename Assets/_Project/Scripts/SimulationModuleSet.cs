@@ -1,12 +1,14 @@
 using System.Collections.Generic;
-using UnityEngine;
 
 public class SimulationModuleSet
 {
     private readonly HashSet<SimulationModule> enabledModules = new HashSet<SimulationModule>();
+    private readonly SimulationLogger logger;
 
-    public SimulationModuleSet(SimulationConfigData config)
+    public SimulationModuleSet(SimulationConfigData config, SimulationLogger logger = null)
     {
+        this.logger = logger ?? new SimulationLogger(null);
+
         if (config != null)
         {
             foreach (SimulationModule module in config.EnabledModules)
@@ -28,7 +30,7 @@ public class SimulationModuleSet
         if (enabledModules.Contains(SimulationModule.Merchant) == true && enabledModules.Contains(SimulationModule.Economy) == false)
         {
             enabledModules.Remove(SimulationModule.Merchant);
-            Debug.LogWarning("Modulo Merchant desabilitado porque Economy nao esta ativo.");
+            logger.LogWarning("Modulo Merchant desabilitado porque Economy nao esta ativo.");
         }
     }
 }
