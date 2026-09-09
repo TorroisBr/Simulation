@@ -46,6 +46,7 @@ Status
 - NpcActionData possui NpcActionCategory para classificar família ampla sem substituir NpcActionType.
 - Ações de crime iniciais: ROUBAR, ESCONDER_SE, FUGIR_DA_CIDADE e FUGIR_DA_PRISAO.
 - Ações neutras como DESCANSAR, PASSEAR e IR_A_TAVERNA usam NpcActionType.Normal e entram no mesmo sorteio ponderado.
+- Utility representa a intenção de tentar uma ação, enquanto Success Chance permanece separado; falhas de fuga aumentam pena e vigilância no estado runtime.
 
 ## Direção futura
 
@@ -56,7 +57,8 @@ Status
 - Mercado, viagem e mercadores já existem; mercadores exploram diferenças de preço entre cidades.
 - NpcJobType representa uma família ampla de comportamento; NpcJobData pode especializar preferências, como preferredTradeItems para jobs Merchant.
 - Mercadores usam NpcJobType.Merchant com MerchantBehavior Traveling ou Local. O mercador local compra diretamente de viajantes, mantém estoque e vende ao mercado, sem iniciar viagem comercial.
-- A venda viajante para mercador local valida cidade, estoque e dinheiro próprio do comprador; quando não há comprador válido, MarketRuntime permanece como fallback.
+- MerchantTradePlan pendente acumula urgência apenas enquanto o mercador está parado e ainda precisa viajar; a urgência é resetada ao criar, concluir ou limpar o plano.
+- O mercador local representa varejo/intermediação: a venda viajante para mercador local usa preço atacadista, valida margem, reserva de caixa, cidade, estoque e dinheiro próprio do comprador; quando não há comprador válido, MarketRuntime permanece como fallback.
 - Prisão usa PrisonSentenceRuntime. Ao cumprir pena, resolve o mandado local e sincroniza PROCURADO conforme outros mandados ativos.
 
 ## Observabilidade e cenários

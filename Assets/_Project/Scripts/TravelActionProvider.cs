@@ -36,7 +36,16 @@ public class TravelActionProvider : INpcActionProvider
             return null;
         }
 
-        utility = Mathf.Max(utility, plan.Utility);
+        float planUtility = plan.Utility;
+
+        if (plan.Reason == NpcTravelReason.Trade
+            && npcRuntime.MerchantTradePlan.IsActive == true
+            && npcRuntime.MerchantTradePlan.TargetCity == plan.TargetCity)
+        {
+            planUtility += Mathf.Min(30f, npcRuntime.MerchantTradePlan.PendingTravelDays * 10f);
+        }
+
+        utility = Mathf.Max(utility, Mathf.Clamp(planUtility, 0f, 100f));
         return new NpcActionRuntime(action, plan.TargetCity, null, 0, travelCost);
     }
 

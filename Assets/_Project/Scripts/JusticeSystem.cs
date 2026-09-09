@@ -21,6 +21,17 @@ public class JusticeSystem
         this.logger = logger ?? new SimulationLogger(null);
     }
 
+    public void BeginDay()
+    {
+        foreach (PrisonSentenceRuntime sentence in prisonSentences)
+        {
+            if (sentence != null)
+            {
+                sentence.ClearArrestedToday();
+            }
+        }
+    }
+
     public void CreateInitialWarrants(SimulationConfigData config, Func<NpcData, NpcRuntime> getNpcRuntime, Func<CityData, CityRuntime> getCityRuntime)
     {
         if (config == null || getNpcRuntime == null || getCityRuntime == null)
@@ -143,7 +154,7 @@ public class JusticeSystem
 
     public bool EscapePrison(NpcRuntime targetRuntime, float escapeBountyPenalty)
     {
-        if (targetRuntime == null || IsArrested(targetRuntime) == false)
+        if (targetRuntime == null || IsArrested(targetRuntime) == false || WasArrestedToday(targetRuntime) == true)
         {
             return false;
         }
@@ -228,6 +239,31 @@ public class JusticeSystem
     {
         PrisonSentenceRuntime sentence = GetActiveSentence(targetRuntime);
         return sentence != null ? sentence.RemainingDays : 0;
+    }
+
+    public int GetFailedEscapeAttempts(NpcRuntime targetRuntime)
+    {
+        PrisonSentenceRuntime sentence = GetActiveSentence(targetRuntime);
+        return sentence != null ? sentence.FailedEscapeAttempts : 0;
+    }
+
+    public bool WasArrestedToday(NpcRuntime targetRuntime)
+    {
+        PrisonSentenceRuntime sentence = GetActiveSentence(targetRuntime);
+        return sentence != null && sentence.WasArrestedToday;
+    }
+
+    public bool RegisterFailedEscape(NpcRuntime targetRuntime, int additionalSentenceDays)
+    {
+        PrisonSentenceRuntime sentence = GetActiveSentence(targetRuntime);
+
+        if (sentence == null || sentence.Warrant == null || sentence.Warrant.IsActive == false)
+        {
+            return false;
+        }
+
+        sentence.RegisterFailedEscape(additionalSentenceDays);
+        return true;
     }
 
     public bool IsArrested(NpcRuntime targetRuntime)
@@ -379,11 +415,15 @@ public class PrisonSentenceRuntime
     [NonSerialized] private CityRuntime city;
     [NonSerialized] private WantedRecordRuntime warrant;
     [SerializeField] private int remainingDays;
+    [SerializeField] private int failedEscapeAttempts;
+    [SerializeField] private bool wasArrestedToday;
 
     public NpcRuntime Target => target;
     public CityRuntime City => city;
     public WantedRecordRuntime Warrant => warrant;
     public int RemainingDays => remainingDays;
+    public int FailedEscapeAttempts => failedEscapeAttempts;
+    public bool WasArrestedToday => wasArrestedToday;
     public bool IsActive => target != null && city != null && remainingDays > 0;
 
     public PrisonSentenceRuntime(NpcRuntime target, CityRuntime city, WantedRecordRuntime warrant, int sentenceDays)
@@ -392,10 +432,22 @@ public class PrisonSentenceRuntime
         this.city = city;
         this.warrant = warrant;
         remainingDays = Mathf.Max(1, sentenceDays);
+        wasArrestedToday = true;
     }
 
     public void AdvanceDay()
     {
         remainingDays = Mathf.Max(0, remainingDays - 1);
+    }
+
+    public void RegisterFailedEscape(int additionalSentenceDays)
+    {
+        failedEscapeAttempts++;
+        remainingDays += Mathf.Max(0, additionalSentenceDays);
+    }
+
+    public void ClearArrestedToday()
+    {
+        wasArrestedToday = false;
     }
 }

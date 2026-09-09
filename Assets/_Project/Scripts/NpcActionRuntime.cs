@@ -10,6 +10,7 @@ public class NpcActionRuntime
     [SerializeField] private ItemData targetItem;
     [SerializeField] private int amount;
     [SerializeField] private float expectedUnitPrice;
+    [SerializeField] private float successChanceMultiplier = 1f;
 
     public NpcActionData Action => action;
     public NpcRuntime TargetNpc => targetNpc;
@@ -17,6 +18,7 @@ public class NpcActionRuntime
     public ItemData TargetItem => targetItem;
     public int Amount => amount;
     public float ExpectedUnitPrice => expectedUnitPrice;
+    public float SuccessChanceMultiplier => successChanceMultiplier;
 
     public NpcActionRuntime(NpcActionData action)
     {
@@ -43,6 +45,11 @@ public class NpcActionRuntime
         this.targetItem = targetItem;
         this.amount = Mathf.Max(0, amount);
         this.expectedUnitPrice = Mathf.Max(0f, expectedUnitPrice);
+    }
+
+    public void SetSuccessChanceMultiplier(float multiplier)
+    {
+        successChanceMultiplier = Mathf.Max(0f, multiplier);
     }
 
     public NpcActionRuntime(NpcActionData action, CityRuntime targetCity, ItemData targetItem, int amount, float expectedUnitPrice)
@@ -132,6 +139,7 @@ public class MerchantTradePlanRuntime
     [SerializeField] private int remainingAmount;
     [SerializeField] private float purchasePricePerItem;
     [SerializeField] private int waitDaysAtDestination;
+    [SerializeField] private int pendingTravelDays;
 
     public ItemData Item => item;
     public CityRuntime OriginCity => originCity;
@@ -140,6 +148,7 @@ public class MerchantTradePlanRuntime
     public int RemainingAmount => remainingAmount > 0 ? remainingAmount : plannedAmount;
     public float PurchasePricePerItem => purchasePricePerItem;
     public int WaitDaysAtDestination => waitDaysAtDestination;
+    public int PendingTravelDays => pendingTravelDays;
     public bool HasData => item != null || originCity != null || targetCity != null || plannedAmount > 0 || remainingAmount > 0;
     public bool IsActive => item != null && targetCity != null && RemainingAmount > 0;
 
@@ -152,6 +161,7 @@ public class MerchantTradePlanRuntime
         remainingAmount = this.plannedAmount;
         this.purchasePricePerItem = Mathf.Max(0f, purchasePricePerItem);
         waitDaysAtDestination = 0;
+        pendingTravelDays = 0;
     }
 
     public void RedirectTo(CityRuntime targetCity)
@@ -172,6 +182,11 @@ public class MerchantTradePlanRuntime
     public void ResetWaitDaysAtDestination()
     {
         waitDaysAtDestination = 0;
+    }
+
+    public void IncrementPendingTravelDay()
+    {
+        pendingTravelDays++;
     }
 
     public bool RegisterSale(int amountSold)
@@ -202,5 +217,6 @@ public class MerchantTradePlanRuntime
         remainingAmount = 0;
         purchasePricePerItem = 0f;
         waitDaysAtDestination = 0;
+        pendingTravelDays = 0;
     }
 }

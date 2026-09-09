@@ -127,8 +127,15 @@ public class TesteSimulacao : MonoBehaviour
             }
             else if (npcRuntime.NpcData.job.merchantBehavior == MerchantBehavior.Local)
             {
-                line += $" | Estoque: {CountInventoryTypes(npcRuntime)} tipos";
+                line += $" | Estoque: {CreateLocalInventoryText(npcRuntime)}";
             }
+        }
+
+        string warrantText = CreateWarrantText(npcRuntime);
+
+        if (string.IsNullOrEmpty(warrantText) == false)
+        {
+            line += " | Mandados: " + warrantText;
         }
 
         return line;
@@ -139,7 +146,8 @@ public class TesteSimulacao : MonoBehaviour
         if (npcRuntime.IsTraveling == true)
         {
             string destinationName = npcRuntime.DestinationCity != null ? npcRuntime.DestinationCity.CityName : "destino desconhecido";
-            return $"VIAJANDO -> {destinationName} | {npcRuntime.TravelDaysRemaining} dias restantes";
+            string dayText = npcRuntime.TravelDaysRemaining == 1 ? "dia restante" : "dias restantes";
+            return $"VIAJANDO -> {destinationName} | {npcRuntime.TravelDaysRemaining} {dayText}";
         }
 
         return npcRuntime.CurrentCity != null ? npcRuntime.CurrentCity.CityName : "SEM CIDADE";
@@ -172,19 +180,76 @@ public class TesteSimulacao : MonoBehaviour
         return statusBuilder.Length > 0 ? statusBuilder.ToString() : "SEM STATUS";
     }
 
-    private int CountInventoryTypes(NpcRuntime npcRuntime)
+    private string CreateLocalInventoryText(NpcRuntime npcRuntime)
     {
+        StringBuilder inventoryBuilder = new StringBuilder();
         int itemTypeCount = 0;
 
         foreach (InventoryItemRuntime inventoryItem in npcRuntime.Inventory.Items)
         {
-            if (inventoryItem != null && inventoryItem.Item != null && inventoryItem.Amount > 0)
+            if (inventoryItem == null || inventoryItem.Item == null || inventoryItem.Amount <= 0)
             {
-                itemTypeCount++;
+                continue;
+            }
+
+            if (inventoryBuilder.Length > 0)
+            {
+                inventoryBuilder.Append(", ");
+            }
+
+            inventoryBuilder.Append(inventoryItem.Amount);
+            inventoryBuilder.Append(" ");
+            inventoryBuilder.Append(inventoryItem.Item.itemName);
+
+            if (inventoryItem.AverageUnitCost > 0f)
+            {
+                inventoryBuilder.Append($" @{inventoryItem.AverageUnitCost:0.##}");
+            }
+
+            itemTypeCount++;
+
+            if (itemTypeCount >= 3)
+            {
+                break;
             }
         }
 
-        return itemTypeCount;
+        return inventoryBuilder.Length > 0 ? inventoryBuilder.ToString() : "vazio";
+    }
+
+    private string CreateWarrantText(NpcRuntime npcRuntime)
+    {
+        if (justiceSystem == null)
+        {
+            return string.Empty;
+        }
+
+        List<WantedRecordRuntime> warrants = justiceSystem.GetActiveWarrants(npcRuntime);
+
+        if (warrants == null || warrants.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        StringBuilder warrantBuilder = new StringBuilder();
+
+        foreach (WantedRecordRuntime warrant in warrants)
+        {
+            if (warrant == null)
+            {
+                continue;
+            }
+
+            if (warrantBuilder.Length > 0)
+            {
+                warrantBuilder.Append(", ");
+            }
+
+            string cityName = warrant.City != null ? warrant.City.CityName : "cidade desconhecida";
+            warrantBuilder.Append($"{cityName}({warrant.Bounty:0.##})");
+        }
+
+        return warrantBuilder.ToString();
     }
 
     private void SaveSimulationLog()
@@ -338,6 +403,11 @@ public class TesteSimulacao : MonoBehaviour
 
     private void BeginSimulationDay()
     {
+        if (justiceSystem != null)
+        {
+            justiceSystem.BeginDay();
+        }
+
         if (crimeSystem != null)
         {
             crimeSystem.AdvanceHiddenStatuses(NpcRuntimeList);
@@ -351,6 +421,26 @@ public class TesteSimulacao : MonoBehaviour
         if (justiceSystem != null)
         {
             justiceSystem.SyncWantedStatuses(NpcRuntimeList);
+        }
+
+        AdvanceMerchantPlanUrgency();
+    }
+
+    private void AdvanceMerchantPlanUrgency()
+    {
+        foreach (NpcRuntime npcRuntime in NpcRuntimeList)
+        {
+            if (npcRuntime == null || npcRuntime.IsTraveling == true)
+            {
+                continue;
+            }
+
+            MerchantTradePlanRuntime tradePlan = npcRuntime.MerchantTradePlan;
+
+            if (tradePlan.IsActive == true && tradePlan.TargetCity != null && tradePlan.TargetCity != npcRuntime.CurrentCity)
+            {
+                tradePlan.IncrementPendingTravelDay();
+            }
         }
     }
 
@@ -414,8 +504,27 @@ public class TesteSimulacao : MonoBehaviour
 
     private NpcActionResult TryExecuteAction(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime, NpcActionData action)
     {
-        if (RollActionSuccess(action) == false)
+        INpcActionProvider actionProvider = action.actionType == NpcActionType.Normal
+            ? null
+            : npcDecisionSystem.GetProviderForAction(action);
+
+        if (action.actionType != NpcActionType.Normal && actionProvider == null)
         {
+            return NpcActionResult.Failed();
+        }
+
+        if (RollActionSuccess(action, actionRuntime) == false)
+        {
+            if (actionProvider is INpcActionFailureHandler failureHandler)
+            {
+                NpcActionResult failureResult = failureHandler.HandleActionFailure(npcRuntime, actionRuntime);
+
+                if (failureResult != null)
+                {
+                    return failureResult;
+                }
+            }
+
             return NpcActionResult.Failed(CreateFailureMessage(npcRuntime, actionRuntime, action));
         }
 
@@ -424,24 +533,19 @@ public class TesteSimulacao : MonoBehaviour
             return NpcActionResult.Succeeded(CreateNormalActionMessage(npcRuntime, action));
         }
 
-        INpcActionProvider actionProvider = npcDecisionSystem.GetProviderForAction(action);
-
-        if (actionProvider == null)
-        {
-            return NpcActionResult.Failed();
-        }
-
         return actionProvider.TryExecuteAction(npcRuntime, actionRuntime);
     }
 
-    private bool RollActionSuccess(NpcActionData action)
+    private bool RollActionSuccess(NpcActionData action, NpcActionRuntime actionRuntime)
     {
         if (action == null || action.canFail == false)
         {
             return true;
         }
 
-        return Random.value <= Mathf.Clamp01(action.baseSuccessChance);
+        float contextualMultiplier = actionRuntime != null ? actionRuntime.SuccessChanceMultiplier : 1f;
+        float effectiveChance = Mathf.Clamp01(action.baseSuccessChance * Mathf.Max(0f, contextualMultiplier));
+        return Random.value <= effectiveChance;
     }
 
     private void ApplySuccessStatusChanges(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime, NpcActionData action)

@@ -92,7 +92,7 @@ public static class SimulationTestDataCreator
                 CreateNpcConfig(data.jorge, data.campoVerde, 120f),
                 CreateNpcConfig(data.ana, data.campoVerde, 60f)
             },
-            new[] { data.steal, data.hide, data.fleeCity, data.escapePrison, data.travel, data.arrest, data.rest, data.walk, data.tavern },
+            new[] { data.steal, data.hide, data.fleeCity, data.escapePrison, data.travel, data.arrest, data.rest, data.walk, data.tavern, data.serveSentence },
             new[] { data.livre, data.procurado, data.preso, data.escondido },
             new[] { data.guardJob, data.merchantJob },
             null,
@@ -128,7 +128,7 @@ public static class SimulationTestDataCreator
                 CreateNpcConfig(data.carlos, data.serraDeFerro, 80f),
                 CreateNpcConfig(data.ana, data.campoVerde, 65f)
             },
-            new[] { data.buyGoods, data.sellGoods, data.travel, data.steal, data.hide, data.fleeCity, data.escapePrison, data.arrest, data.rest, data.walk, data.tavern },
+            new[] { data.buyGoods, data.sellGoods, data.travel, data.steal, data.hide, data.fleeCity, data.escapePrison, data.arrest, data.rest, data.walk, data.tavern, data.serveSentence },
             new[] { data.livre, data.procurado, data.preso, data.escondido },
             new[] { data.merchantJob, data.ironMerchantJob, data.wineMerchantJob, data.localMerchantJob, data.guardJob },
             null,
@@ -170,10 +170,11 @@ public static class SimulationTestDataCreator
         data.fleeCity = CreateAction("Action-FugirDaCidade", "FUGIR_DA_CIDADE", NpcActionCategory.Crime, NpcActionType.FleeCity, 20f, false, 1f, data.livre);
         ConfigureCrimeSettings(data.fleeCity, 0, 0f, 0, 1, 0f);
         data.escapePrison = CreateAction("Action-Fugir", "FUGIR_DA_PRISAO", NpcActionCategory.Crime, NpcActionType.EscapePrison, 30f, true, 0.35f, data.preso);
-        ConfigureCrimeSettings(data.escapePrison, 0, 0f, 0, 1, 25f);
+        ConfigureCrimeSettings(data.escapePrison, 0, 0f, 0, 1, 25f, 2);
         data.rest = CreateNeutralAction("Action-Descansar", "DESCANSAR", "descansou.", 18f, data.livre);
         data.walk = CreateNeutralAction("Action-Passear", "PASSEAR", "passeou pela cidade.", 20f, data.livre);
         data.tavern = CreateNeutralAction("Action-IrATaverna", "IR_A_TAVERNA", "foi a taverna.", 18f, data.livre);
+        data.serveSentence = CreateNeutralAction("Action-CumprirPena", "CUMPRIR_PENA", "cumpriu mais um dia de pena.", 60f, data.preso);
 
         data.merchantJob = CreateJob("Job-Mercador", "Mercador", NpcJobType.Merchant, MerchantBehavior.Traveling, data.buyGoods, 80f);
         data.ironMerchantJob = CreateJob("Job-MercadorFerro", "Mercador de Ferro", NpcJobType.Merchant, MerchantBehavior.Traveling, data.buyGoods, 80f,
@@ -330,7 +331,7 @@ public static class SimulationTestDataCreator
         return action;
     }
 
-    private static void ConfigureCrimeSettings(NpcActionData action, int amount, float bounty, int sentenceDays, int hiddenDays, float escapeBountyPenalty)
+    private static void ConfigureCrimeSettings(NpcActionData action, int amount, float bounty, int sentenceDays, int hiddenDays, float escapeBountyPenalty, int failedEscapeSentencePenalty = 2)
     {
         if (action == null)
         {
@@ -346,6 +347,7 @@ public static class SimulationTestDataCreator
         action.crimeSettings.sentenceDays = Mathf.Max(0, sentenceDays);
         action.crimeSettings.hiddenDays = Mathf.Max(1, hiddenDays);
         action.crimeSettings.escapeBountyPenalty = Mathf.Max(0f, escapeBountyPenalty);
+        action.crimeSettings.failedEscapeSentencePenalty = Mathf.Max(0, failedEscapeSentencePenalty);
         EditorUtility.SetDirty(action);
     }
 
@@ -688,6 +690,7 @@ public static class SimulationTestDataCreator
         public NpcActionData hide;
         public NpcActionData fleeCity;
         public NpcActionData escapePrison;
+        public NpcActionData serveSentence;
         public NpcActionData rest;
         public NpcActionData walk;
         public NpcActionData tavern;

@@ -1,8 +1,9 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public class CrimeSystem : INpcActionProvider
+public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler
 {
+    private const float EscapeSuccessMultiplierPerFailure = 0.8f;
     private readonly JusticeSystem justiceSystem;
     private readonly TravelSystem travelSystem;
     private readonly NpcStatusData hiddenStatus;
@@ -88,6 +89,25 @@ public class CrimeSystem : INpcActionProvider
             return TryExecuteEscapePrison(npcRuntime, actionRuntime);
         }
 
+        return NpcActionResult.Failed();
+    }
+
+    public NpcActionResult HandleActionFailure(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime)
+    {
+        if (actionRuntime == null || actionRuntime.Action == null || actionRuntime.Action.actionType != NpcActionType.EscapePrison)
+        {
+            return null;
+        }
+
+        CrimeActionSettings settings = GetCrimeSettings(actionRuntime.Action);
+        int sentencePenalty = Mathf.Max(0, settings.failedEscapeSentencePenalty);
+
+        if (justiceSystem.RegisterFailedEscape(npcRuntime, sentencePenalty) == false)
+        {
+            return null;
+        }
+
+        logger.Log(SimulationLogCategory.Crime, $"{npcRuntime.NpcName} tentou fugir da prisao e falhou. Pena aumentou em {sentencePenalty} dias. Vigilancia aumentou.");
         return NpcActionResult.Failed();
     }
 
@@ -187,15 +207,27 @@ public class CrimeSystem : INpcActionProvider
 
     private NpcActionRuntime CreateEscapePrisonAction(NpcRuntime npcRuntime, NpcActionData action, ref float utility)
     {
-        if (npcRuntime == null || justiceSystem.IsArrested(npcRuntime) == false)
+        if (npcRuntime == null || justiceSystem.IsArrested(npcRuntime) == false || justiceSystem.WasArrestedToday(npcRuntime) == true)
         {
             utility = 0f;
             return null;
         }
 
         int remainingDays = justiceSystem.GetRemainingSentenceDays(npcRuntime);
-        utility = Mathf.Max(utility, 25f + remainingDays * 5f);
-        return new NpcActionRuntime(action);
+
+        if (remainingDays <= 0)
+        {
+            utility = 0f;
+            return null;
+        }
+
+        float remainingSentenceUrgency = Mathf.Clamp01((remainingDays - 1f) / 7f);
+        utility = Mathf.Clamp(10f + remainingSentenceUrgency * 20f, 10f, 30f);
+
+        NpcActionRuntime actionRuntime = new NpcActionRuntime(action);
+        int failedAttempts = justiceSystem.GetFailedEscapeAttempts(npcRuntime);
+        actionRuntime.SetSuccessChanceMultiplier(Mathf.Pow(EscapeSuccessMultiplierPerFailure, failedAttempts));
+        return actionRuntime;
     }
 
     private NpcActionResult TryExecuteSteal(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime)
@@ -252,7 +284,9 @@ public class CrimeSystem : INpcActionProvider
 
     private NpcActionResult TryExecuteEscapePrison(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime)
     {
-        if (justiceSystem.EscapePrison(npcRuntime, GetCrimeSettings(actionRuntime.Action).escapeBountyPenalty) == false)
+        CrimeActionSettings settings = GetCrimeSettings(actionRuntime.Action);
+
+        if (justiceSystem.EscapePrison(npcRuntime, settings.escapeBountyPenalty) == false)
         {
             return NpcActionResult.Failed();
         }

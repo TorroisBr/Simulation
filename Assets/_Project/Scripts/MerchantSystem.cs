@@ -3,6 +3,8 @@ using UnityEngine;
 public class MerchantSystem : INpcActionProvider
 {
     private const int MaxUnprofitablePlanWaitDays = 3;
+    private const float LocalMerchantWholesalePriceMultiplier = 0.70f;
+    private const float LocalMerchantReserveRatio = 0.25f;
 
     private readonly int maxMerchantTradeAmount;
     private readonly float minimumProfitPerItem;
@@ -223,7 +225,7 @@ public class MerchantSystem : INpcActionProvider
             return null;
         }
 
-        float baseUtility = IsLocalMerchant(npcRuntime) == true ? 22f : 30f;
+        float baseUtility = 30f;
         utility = Mathf.Max(utility, baseUtility + opportunity.Score);
         return new NpcActionRuntime(action, opportunity.TargetCity, opportunity.Item, opportunity.Amount, opportunity.BuyPrice);
     }
@@ -526,14 +528,6 @@ public class MerchantSystem : INpcActionProvider
             return null;
         }
 
-        float unitPrice = sellerRuntime.CurrentCity.Market.GetPrice(item);
-        float profitPerItem = unitPrice - referencePrice;
-
-        if (profitPerItem < minimumProfitPerItem)
-        {
-            return null;
-        }
-
         int sellerAmount = sellerRuntime.Inventory.GetAmount(item);
         int maxAmount = Mathf.Min(requestedAmount, sellerAmount);
 
@@ -543,6 +537,7 @@ public class MerchantSystem : INpcActionProvider
         }
 
         MerchantTradeOpportunity bestBuyer = null;
+        float retailPrice = sellerRuntime.CurrentCity.Market.GetPrice(item);
 
         foreach (NpcRuntime candidate in sellerRuntime.CurrentCity.ImportantNpcs)
         {
@@ -551,7 +546,19 @@ public class MerchantSystem : INpcActionProvider
                 continue;
             }
 
-            int affordableAmount = Mathf.FloorToInt(candidate.Money / unitPrice);
+            float preferenceMultiplier = GetTradePreferenceMultiplier(candidate, item);
+            float preferredPriceBonus = Mathf.Min(0.15f, Mathf.Max(0f, preferenceMultiplier - 1f) * 0.1f);
+            float unitPrice = retailPrice * Mathf.Clamp(LocalMerchantWholesalePriceMultiplier + preferredPriceBonus, 0.5f, 0.85f);
+            float profitPerItem = unitPrice - referencePrice;
+
+            if (profitPerItem < minimumProfitPerItem)
+            {
+                continue;
+            }
+
+            float reserveAmount = candidate.Money * LocalMerchantReserveRatio;
+            float spendableMoney = Mathf.Max(0f, candidate.Money - reserveAmount);
+            int affordableAmount = Mathf.FloorToInt(spendableMoney / unitPrice);
             int amount = Mathf.Min(maxAmount, affordableAmount);
 
             if (amount <= 0)
@@ -559,7 +566,7 @@ public class MerchantSystem : INpcActionProvider
                 continue;
             }
 
-            float score = CalculateTradeScore(profitPerItem * amount, 1) * GetTradePreferenceMultiplier(candidate, item);
+            float score = CalculateTradeScore(profitPerItem * amount, 1) * preferenceMultiplier;
 
             if (bestBuyer == null || score > bestBuyer.Score)
             {

@@ -37,6 +37,7 @@ public class CrimeActionSettings
     public int sentenceDays = 3;
     public int hiddenDays = 1;
     public float escapeBountyPenalty = 25f;
+    public int failedEscapeSentencePenalty = 2;
 }
 
 [System.Serializable]
