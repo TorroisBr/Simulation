@@ -10,17 +10,17 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: efaa8a44b89313f48aaa55dad7921efe, type: 3}
-  m_Name: Action-Trabalhar
-  m_EditorClassIdentifier: Assembly-CSharp::NPCActionSO
+  m_Name: Action-EsconderSe
+  m_EditorClassIdentifier: Assembly-CSharp::NpcActionData
   statusNecessariosParaFazerAcao:
   - {fileID: 11400000, guid: 922e799608934f4469cb8c77bfc6c32e, type: 2}
-  actionName: TRABALHAR
-  actionCategory: 0
-  actionType: 0
-  baseUtility: 1
+  actionName: ESCONDER_SE
+  actionCategory: 2
+  actionType: 6
+  baseUtility: 25
   statusModifiers: []
-  canFail: 0
-  baseSuccessChance: 1
+  canFail: 1
+  baseSuccessChance: 0.6
   statusToAdd: []
   statusToRemove: []
   targetStatusToAdd: []

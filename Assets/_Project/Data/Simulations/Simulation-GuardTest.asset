@@ -32,7 +32,16 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 922e799608934f4469cb8c77bfc6c32e, type: 2}
   - {fileID: 11400000, guid: fd104bc4e7844760bfea57b9522141cd, type: 2}
   - {fileID: 11400000, guid: 39ec54928a091684d8daf631dfe56d67, type: 2}
+  - {fileID: 11400000, guid: 02f011b05cde418e83eef2af611b5e7f, type: 2}
   jobs:
   - {fileID: 11400000, guid: 6e6fe1f0766480141bc9187ff8175e29, type: 2}
+  initialWarrants:
+  - target: {fileID: 11400000, guid: 6a0d3bb70f1f27647a263088c511fbf7, type: 2}
+    city: {fileID: 11400000, guid: 38e9bcfb3afb4b8a916b15e745be561f, type: 2}
+    bounty: 100
+    sentenceDays: 3
+  travelCostPerDay: 10
+  freeStatus: {fileID: 11400000, guid: 922e799608934f4469cb8c77bfc6c32e, type: 2}
   wantedStatus: {fileID: 11400000, guid: fd104bc4e7844760bfea57b9522141cd, type: 2}
   arrestedStatus: {fileID: 11400000, guid: 39ec54928a091684d8daf631dfe56d67, type: 2}
+  hiddenStatus: {fileID: 11400000, guid: 02f011b05cde418e83eef2af611b5e7f, type: 2}

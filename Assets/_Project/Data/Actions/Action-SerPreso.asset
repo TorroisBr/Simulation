@@ -15,6 +15,7 @@ MonoBehaviour:
   statusNecessariosParaFazerAcao:
   - {fileID: 11400000, guid: 922e799608934f4469cb8c77bfc6c32e, type: 2}
   actionName: SER_PRESO
+  actionCategory: 3
   actionType: 0
   baseUtility: 1
   statusModifiers: []
@@ -26,3 +27,9 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 922e799608934f4469cb8c77bfc6c32e, type: 2}
   targetStatusToAdd: []
   targetStatusToRemove: []
+  crimeSettings:
+    amount: 0
+    bounty: 0
+    sentenceDays: 0
+    hiddenDays: 1
+    escapeBountyPenalty: 0

@@ -14,17 +14,20 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::NPCActionSO
   statusNecessariosParaFazerAcao:
   - {fileID: 11400000, guid: 39ec54928a091684d8daf631dfe56d67, type: 2}
-  actionName: FUGIR
-  actionType: 0
-  baseUtility: 1
-  statusModifiers:
-  - status: {fileID: 11400000, guid: 92d24d793f1ff2a419b49fbe2da81d63, type: 2}
-    multiplier: 5
-  canFail: 0
-  baseSuccessChance: 1
-  statusToAdd:
-  - {fileID: 11400000, guid: 922e799608934f4469cb8c77bfc6c32e, type: 2}
-  statusToRemove:
-  - {fileID: 11400000, guid: 39ec54928a091684d8daf631dfe56d67, type: 2}
+  actionName: FUGIR_DA_PRISAO
+  actionCategory: 2
+  actionType: 8
+  baseUtility: 30
+  statusModifiers: []
+  canFail: 1
+  baseSuccessChance: 0.35
+  statusToAdd: []
+  statusToRemove: []
   targetStatusToAdd: []
   targetStatusToRemove: []
+  crimeSettings:
+    amount: 0
+    bounty: 0
+    sentenceDays: 0
+    hiddenDays: 1
+    escapeBountyPenalty: 25

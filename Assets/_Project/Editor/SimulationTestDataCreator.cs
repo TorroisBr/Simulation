@@ -32,7 +32,11 @@ public static class SimulationTestDataCreator
             new[] { data.livre },
             new[] { data.merchantJob },
             null,
-            null);
+            data.livre,
+            null,
+            null,
+            null,
+            10f);
 
         FinishCreation(config, "Economy Test");
     }
@@ -58,12 +62,44 @@ public static class SimulationTestDataCreator
                 CreateNpcConfig(data.jobson, data.guardTestCity, 0f)
             },
             new[] { data.arrest },
-            new[] { data.livre, data.procurado, data.preso },
+            new[] { data.livre, data.procurado, data.preso, data.escondido },
             new[] { data.guardJob },
+            new[] { CreateInitialWarrantConfig(data.jobson, data.guardTestCity, 100f, 3) },
+            data.livre,
             data.procurado,
-            data.preso);
+            data.preso,
+            data.escondido,
+            10f);
 
         FinishCreation(config, "Guard Test");
+    }
+
+    [MenuItem("Simulation/Create Crime Justice Test")]
+    public static void CreateCrimeJusticeTest()
+    {
+        TestData data = CreateSharedTestData();
+        SimulationConfigData config = CreateSimulationConfig(
+            "Simulation-CrimeJusticeTest",
+            "Crime Justice Test",
+            new[] { SimulationModule.Crime, SimulationModule.GuardCrime },
+            new[] { data.campoVerde, data.serraDeFerro },
+            new[]
+            {
+                CreateNpcConfig(data.jobson, data.campoVerde, 35f),
+                CreateNpcConfig(data.marcus, data.campoVerde, 0f),
+                CreateNpcConfig(data.jorge, data.campoVerde, 120f)
+            },
+            new[] { data.steal, data.hide, data.fleeCity, data.escapePrison, data.travel, data.arrest },
+            new[] { data.livre, data.procurado, data.preso, data.escondido },
+            new[] { data.guardJob, data.merchantJob },
+            null,
+            data.livre,
+            data.procurado,
+            data.preso,
+            data.escondido,
+            10f);
+
+        FinishCreation(config, "Crime Justice Test");
     }
 
     [MenuItem("Simulation/Create General Test")]
@@ -73,19 +109,23 @@ public static class SimulationTestDataCreator
         SimulationConfigData config = CreateSimulationConfig(
             "Simulation-GeneralTest",
             "General Test",
-            new[] { SimulationModule.Economy, SimulationModule.Merchant, SimulationModule.GuardCrime },
+            new[] { SimulationModule.Economy, SimulationModule.Merchant, SimulationModule.Crime, SimulationModule.GuardCrime },
             new[] { data.campoVerde, data.serraDeFerro },
             new[]
             {
-                CreateNpcConfig(data.jorge, data.serraDeFerro, 200f),
-                CreateNpcConfig(data.marcus, data.campoVerde, 0f),
-                CreateNpcConfig(data.jobson, data.campoVerde, 0f)
+                CreateNpcConfig(data.jorge, data.campoVerde, 200f),
+                CreateNpcConfig(data.jobson, data.campoVerde, 35f),
+                CreateNpcConfig(data.marcus, data.campoVerde, 0f)
             },
-            new[] { data.buyGoods, data.sellGoods, data.travel, data.arrest },
-            new[] { data.livre, data.procurado, data.preso },
+            new[] { data.buyGoods, data.sellGoods, data.travel, data.steal, data.hide, data.fleeCity, data.escapePrison, data.arrest },
+            new[] { data.livre, data.procurado, data.preso, data.escondido },
             new[] { data.merchantJob, data.guardJob },
+            null,
+            data.livre,
             data.procurado,
-            data.preso);
+            data.preso,
+            data.escondido,
+            10f);
 
         FinishCreation(config, "General Test");
     }
@@ -105,14 +145,20 @@ public static class SimulationTestDataCreator
         data.livre = CreateStatus("Status-Livre", "LIVRE");
         data.procurado = CreateStatus("Status-Procurado", "PROCURADO");
         data.preso = CreateStatus("Status-Preso", "PRESO");
+        data.escondido = CreateStatus("Status-Escondido", "ESCONDIDO");
 
-        data.buyGoods = CreateAction("Action-ComprarMercadoria", "COMPRAR_MERCADORIA", NpcActionType.BuyGoods, 10f, false, 1f, data.livre);
-        data.sellGoods = CreateAction("Action-VenderMercadoria", "VENDER_MERCADORIA", NpcActionType.SellGoods, 10f, false, 1f, data.livre);
-        data.travel = CreateAction("Action-Viajar", "VIAJAR", NpcActionType.Travel, 5f, false, 1f, data.livre);
-        data.arrest = CreateAction("Action-Prender", "PRENDER", NpcActionType.Arrest, 10f, true, 0.5f, data.livre);
-        ReplaceList(data.arrest.targetStatusToAdd, data.preso);
-        ReplaceList(data.arrest.targetStatusToRemove, data.livre, data.procurado);
-        EditorUtility.SetDirty(data.arrest);
+        data.buyGoods = CreateAction("Action-ComprarMercadoria", "COMPRAR_MERCADORIA", NpcActionCategory.Commerce, NpcActionType.BuyGoods, 10f, false, 1f, data.livre);
+        data.sellGoods = CreateAction("Action-VenderMercadoria", "VENDER_MERCADORIA", NpcActionCategory.Commerce, NpcActionType.SellGoods, 10f, false, 1f, data.livre);
+        data.travel = CreateAction("Action-Viajar", "VIAJAR", NpcActionCategory.Travel, NpcActionType.Travel, 5f, false, 1f, data.livre);
+        data.arrest = CreateAction("Action-Prender", "PRENDER", NpcActionCategory.Justice, NpcActionType.Arrest, 10f, true, 0.5f, data.livre);
+        data.steal = CreateAction("Action-Roubar", "ROUBAR", NpcActionCategory.Crime, NpcActionType.Steal, 35f, true, 0.75f, data.livre);
+        ConfigureCrimeSettings(data.steal, 20, 50f, 3, 1, 0f);
+        data.hide = CreateAction("Action-EsconderSe", "ESCONDER_SE", NpcActionCategory.Crime, NpcActionType.Hide, 25f, true, 0.6f, data.livre);
+        ConfigureCrimeSettings(data.hide, 0, 0f, 0, 1, 0f);
+        data.fleeCity = CreateAction("Action-FugirDaCidade", "FUGIR_DA_CIDADE", NpcActionCategory.Crime, NpcActionType.FleeCity, 20f, false, 1f, data.livre);
+        ConfigureCrimeSettings(data.fleeCity, 0, 0f, 0, 1, 0f);
+        data.escapePrison = CreateAction("Action-Fugir", "FUGIR_DA_PRISAO", NpcActionCategory.Crime, NpcActionType.EscapePrison, 30f, true, 0.35f, data.preso);
+        ConfigureCrimeSettings(data.escapePrison, 0, 0f, 0, 1, 25f);
 
         data.merchantJob = CreateJob("Job-Mercador", "Mercador", NpcJobType.Merchant, data.buyGoods, 80f);
         data.guardJob = CreateJob("Job-Guarda", "Guarda", NpcJobType.Guard, data.arrest, 80f);
@@ -125,7 +171,11 @@ public static class SimulationTestDataCreator
         data.marcus = CreateNpc("NPC-Marcus", "MARCUS", "Marcus", data.guardJob, new[] { data.livre },
             new NPCDefaultAction { action = data.arrest, baseUtility = 70f });
 
-        data.jobson = CreateNpc("NPC-Jobson", "JOBSON", "Jobson", null, new[] { data.livre, data.procurado });
+        data.jobson = CreateNpc("NPC-Jobson", "JOBSON", "Jobson", null, new[] { data.livre },
+            new NPCDefaultAction { action = data.steal, baseUtility = 70f },
+            new NPCDefaultAction { action = data.hide, baseUtility = 35f },
+            new NPCDefaultAction { action = data.fleeCity, baseUtility = 45f },
+            new NPCDefaultAction { action = data.escapePrison, baseUtility = 35f });
 
         data.campoVerde = CreateCampoVerde(data);
         data.serraDeFerro = CreateSerraDeFerro(data);
@@ -164,10 +214,11 @@ public static class SimulationTestDataCreator
         return status;
     }
 
-    private static NpcActionData CreateAction(string assetName, string actionName, NpcActionType actionType, float baseUtility, bool canFail, float baseSuccessChance, params NpcStatusData[] requiredStatus)
+    private static NpcActionData CreateAction(string assetName, string actionName, NpcActionCategory actionCategory, NpcActionType actionType, float baseUtility, bool canFail, float baseSuccessChance, params NpcStatusData[] requiredStatus)
     {
         NpcActionData action = CreateOrLoadAsset<NpcActionData>($"{ActionFolder}/{assetName}.asset");
         action.actionName = actionName;
+        action.actionCategory = actionCategory;
         action.actionType = actionType;
         action.baseUtility = baseUtility;
         action.canFail = canFail;
@@ -179,6 +230,10 @@ public static class SimulationTestDataCreator
         EnsureList(ref action.statusToRemove);
         EnsureList(ref action.targetStatusToAdd);
         EnsureList(ref action.targetStatusToRemove);
+        if (action.crimeSettings == null)
+        {
+            action.crimeSettings = new CrimeActionSettings();
+        }
 
         ReplaceList(action.statusNecessariosParaFazerAcao, requiredStatus);
         action.statusModifiers.Clear();
@@ -191,6 +246,25 @@ public static class SimulationTestDataCreator
         return action;
     }
 
+    private static void ConfigureCrimeSettings(NpcActionData action, int amount, float bounty, int sentenceDays, int hiddenDays, float escapeBountyPenalty)
+    {
+        if (action == null)
+        {
+            return;
+        }
+
+        if (action.crimeSettings == null)
+        {
+            action.crimeSettings = new CrimeActionSettings();
+        }
+        action.crimeSettings.amount = Mathf.Max(0, amount);
+        action.crimeSettings.bounty = Mathf.Max(0f, bounty);
+        action.crimeSettings.sentenceDays = Mathf.Max(0, sentenceDays);
+        action.crimeSettings.hiddenDays = Mathf.Max(1, hiddenDays);
+        action.crimeSettings.escapeBountyPenalty = Mathf.Max(0f, escapeBountyPenalty);
+        EditorUtility.SetDirty(action);
+    }
+
     private static NpcJobData CreateJob(string assetName, string jobName, NpcJobType jobType, NpcActionData workAction, float workUtility)
     {
         NpcJobData job = CreateOrLoadAsset<NpcJobData>($"{JobFolder}/{assetName}.asset");
@@ -198,6 +272,7 @@ public static class SimulationTestDataCreator
         job.jobType = jobType;
         job.workAction = workAction;
         job.workUtility = workUtility;
+        EnsureList(ref job.preferredTradeItems);
         EditorUtility.SetDirty(job);
         return job;
     }
@@ -280,12 +355,15 @@ public static class SimulationTestDataCreator
         return city;
     }
 
-    private static SimulationConfigData CreateSimulationConfig(string assetName, string simulationName, SimulationModule[] modules, CityData[] cities, NpcSimulationConfig[] npcs, NpcActionData[] actions, NpcStatusData[] statuses, NpcJobData[] jobs, NpcStatusData wantedStatus, NpcStatusData arrestedStatus)
+    private static SimulationConfigData CreateSimulationConfig(string assetName, string simulationName, SimulationModule[] modules, CityData[] cities, NpcSimulationConfig[] npcs, NpcActionData[] actions, NpcStatusData[] statuses, NpcJobData[] jobs, InitialWantedRecordConfig[] initialWarrants, NpcStatusData freeStatus, NpcStatusData wantedStatus, NpcStatusData arrestedStatus, NpcStatusData hiddenStatus, float travelCostPerDay)
     {
         SimulationConfigData config = CreateOrLoadAsset<SimulationConfigData>($"{SimulationFolder}/{assetName}.asset");
         config.simulationName = simulationName;
+        config.freeStatus = freeStatus;
         config.wantedStatus = wantedStatus;
         config.arrestedStatus = arrestedStatus;
+        config.hiddenStatus = hiddenStatus;
+        config.travelCostPerDay = Mathf.Max(0f, travelCostPerDay);
 
         EnsureList(ref config.enabledModules);
         EnsureList(ref config.cities);
@@ -293,6 +371,7 @@ public static class SimulationTestDataCreator
         EnsureList(ref config.actions);
         EnsureList(ref config.statuses);
         EnsureList(ref config.jobs);
+        EnsureList(ref config.initialWarrants);
 
         ReplaceList(config.enabledModules, modules);
         ReplaceList(config.cities, cities);
@@ -300,6 +379,7 @@ public static class SimulationTestDataCreator
         ReplaceList(config.actions, actions);
         ReplaceList(config.statuses, statuses);
         ReplaceList(config.jobs, jobs);
+        ReplaceList(config.initialWarrants, initialWarrants);
 
         EditorUtility.SetDirty(config);
         return config;
@@ -313,6 +393,17 @@ public static class SimulationTestDataCreator
             startingCity = startingCity,
             initialMoney = initialMoney,
             initialInventory = new List<NpcInitialInventoryItemConfig>()
+        };
+    }
+
+    private static InitialWantedRecordConfig CreateInitialWarrantConfig(NpcData target, CityData city, float bounty, int sentenceDays)
+    {
+        return new InitialWantedRecordConfig
+        {
+            target = target,
+            city = city,
+            bounty = Mathf.Max(0f, bounty),
+            sentenceDays = Mathf.Max(1, sentenceDays)
         };
     }
 
@@ -462,10 +553,15 @@ public static class SimulationTestDataCreator
         public NpcStatusData livre;
         public NpcStatusData procurado;
         public NpcStatusData preso;
+        public NpcStatusData escondido;
         public NpcActionData buyGoods;
         public NpcActionData sellGoods;
         public NpcActionData travel;
         public NpcActionData arrest;
+        public NpcActionData steal;
+        public NpcActionData hide;
+        public NpcActionData fleeCity;
+        public NpcActionData escapePrison;
         public NpcJobData merchantJob;
         public NpcJobData guardJob;
         public NpcData jorge;

@@ -18,7 +18,9 @@ Projeto Unity/C# de simulação de mundo inspirada em Dwarf Fortress.
 - NpcRuntime guarda status, ação atual, localização, inventário etc.
 - SimulationConfigData representa o cenário/mundo configurado: módulos habilitados, cidades, NPCs, ações, status e jobs usados.
 - Módulos de simulação são normalizados em runtime; Merchant depende de Economy.
-- Módulos atuais: Economy, Merchant e GuardCrime. TravelSystem/TravelActionProvider são core e podem ser usados por sistemas diferentes.
+- Módulos atuais: Economy, Merchant, Crime e GuardCrime. TravelSystem/TravelActionProvider são core e não são exclusivos de Merchant.
+- JusticeSystem mantém mandados e sentenças runtime; mandados são locais por cidade e não ficam em ScriptableObjects.
+- PROCURADO é um resumo derivado: deve existir quando o NPC possui pelo menos um mandado ativo.
 
 ## NPC Actions
 
@@ -41,6 +43,8 @@ Status
 - Efeitos de status do executor e do TargetNpc só devem ser aplicados quando a ação tem sucesso.
 - Ações contextuais são fornecidas por INpcActionProvider. Ações especiais sem provider habilitado não entram na decisão.
 - NpcActionRuntime é a instância concreta extensível da ação e pode carregar TargetNpc, TargetCity, TargetItem, Amount etc.
+- NpcActionData possui NpcActionCategory para classificar família ampla sem substituir NpcActionType.
+- Ações de crime iniciais: ROUBAR, ESCONDER_SE, FUGIR_DA_CIDADE e FUGIR_DA_PRISAO.
 
 ## Direção futura
 
@@ -49,6 +53,8 @@ Status
 - Ações podem afetar outro NPC.
 - Exemplo: PRENDER tem um NpcRuntime como alvo.
 - Mercado, viagem e mercadores já existem; mercadores exploram diferenças de preço entre cidades.
+- NpcJobType representa uma família ampla de comportamento; NpcJobData pode especializar preferências, como preferredTradeItems para jobs Merchant.
+- Prisão usa PrisonSentenceRuntime. Ao cumprir pena, resolve o mandado local e sincroniza PROCURADO conforme outros mandados ativos.
 
 ## Código
 

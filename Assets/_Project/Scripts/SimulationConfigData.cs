@@ -12,10 +12,14 @@ public class SimulationConfigData : ScriptableObject
     public List<NpcActionData> actions = new List<NpcActionData>();
     public List<NpcStatusData> statuses = new List<NpcStatusData>();
     public List<NpcJobData> jobs = new List<NpcJobData>();
+    public List<InitialWantedRecordConfig> initialWarrants = new List<InitialWantedRecordConfig>();
+    public float travelCostPerDay = 10f;
 
-    [Header("Guard Crime")]
+    [Header("Status References")]
+    public NpcStatusData freeStatus;
     public NpcStatusData wantedStatus;
     public NpcStatusData arrestedStatus;
+    public NpcStatusData hiddenStatus;
 
     public List<SimulationModule> EnabledModules => enabledModules ?? (enabledModules = new List<SimulationModule>());
     public List<CityData> Cities => cities ?? (cities = new List<CityData>());
@@ -23,6 +27,7 @@ public class SimulationConfigData : ScriptableObject
     public List<NpcActionData> Actions => actions ?? (actions = new List<NpcActionData>());
     public List<NpcStatusData> Statuses => statuses ?? (statuses = new List<NpcStatusData>());
     public List<NpcJobData> Jobs => jobs ?? (jobs = new List<NpcJobData>());
+    public List<InitialWantedRecordConfig> InitialWarrants => initialWarrants ?? (initialWarrants = new List<InitialWantedRecordConfig>());
 
     public bool HasModule(SimulationModule module)
     {
@@ -34,7 +39,8 @@ public enum SimulationModule
 {
     Economy,
     Merchant,
-    GuardCrime
+    GuardCrime,
+    Crime
 }
 
 [Serializable]
@@ -54,4 +60,13 @@ public class NpcInitialInventoryItemConfig
     public ItemData item;
     public int amount;
     public float averageUnitCost;
+}
+
+[Serializable]
+public class InitialWantedRecordConfig
+{
+    public NpcData target;
+    public CityData city;
+    public float bounty = 100f;
+    public int sentenceDays = 3;
 }

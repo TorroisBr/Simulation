@@ -8,6 +8,7 @@ public class NpcActionData : ScriptableObject
 {
 	public List<NpcStatusData> statusNecessariosParaFazerAcao = new List<NpcStatusData>();
 	public string actionName;
+    public NpcActionCategory actionCategory = NpcActionCategory.General;
     public NpcActionType actionType = NpcActionType.Normal;
 
 	[Range(0,REFERENCIASPARAREMOVERNOFUTURO.PESO_VALOR_MAX)]
@@ -24,6 +25,17 @@ public class NpcActionData : ScriptableObject
     public List<NpcStatusData> statusToRemove = new List<NpcStatusData>();
     public List<NpcStatusData> targetStatusToAdd = new List<NpcStatusData>();
     public List<NpcStatusData> targetStatusToRemove = new List<NpcStatusData>();
+    public CrimeActionSettings crimeSettings = new CrimeActionSettings();
+}
+
+[Serializable]
+public class CrimeActionSettings
+{
+    public int amount = 20;
+    public float bounty = 50f;
+    public int sentenceDays = 3;
+    public int hiddenDays = 1;
+    public float escapeBountyPenalty = 25f;
 }
 
 [System.Serializable]
@@ -46,5 +58,18 @@ public enum NpcActionType
     BuyGoods,
     SellGoods,
     Travel,
-    Arrest
+    Arrest,
+    Steal,
+    Hide,
+    FleeCity,
+    EscapePrison
+}
+
+public enum NpcActionCategory
+{
+    General,
+    Commerce,
+    Crime,
+    Justice,
+    Travel
 }

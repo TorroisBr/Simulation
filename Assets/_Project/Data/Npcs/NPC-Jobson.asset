@@ -15,7 +15,14 @@ MonoBehaviour:
   id: JOBSON
   name: Jobson
   job: {fileID: 0}
-  acoesPadrao: []
+  acoesPadrao:
+  - action: {fileID: 11400000, guid: 4a0d889e89c7410a9853697fccc549f6, type: 2}
+    baseUtility: 70
+  - action: {fileID: 11400000, guid: 4d17b6150dbe4b3884146c663a64e14c, type: 2}
+    baseUtility: 35
+  - action: {fileID: 11400000, guid: e78bf19140194bb1969ba878ddec8a86, type: 2}
+    baseUtility: 45
+  - action: {fileID: 11400000, guid: 1e4507e7ee6cc804ea0be9238c0784f0, type: 2}
+    baseUtility: 35
   statusPadrao:
   - {fileID: 11400000, guid: 922e799608934f4469cb8c77bfc6c32e, type: 2}
-  - {fileID: 11400000, guid: fd104bc4e7844760bfea57b9522141cd, type: 2}

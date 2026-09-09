@@ -14,7 +14,10 @@ public class TesteSimulacao : MonoBehaviour
 
     private readonly List<INpcActionProvider> actionProviders = new List<INpcActionProvider>();
     private Dictionary<CityData, CityRuntime> cityRuntimeByData = new Dictionary<CityData, CityRuntime>();
+    private Dictionary<NpcData, NpcRuntime> npcRuntimeByData = new Dictionary<NpcData, NpcRuntime>();
     private SimulationModuleSet enabledModules;
+    private JusticeSystem justiceSystem;
+    private CrimeSystem crimeSystem;
     private NpcDecisionSystem npcDecisionSystem;
     private TravelSystem travelSystem;
     private int currentDay;
@@ -41,20 +44,21 @@ public class TesteSimulacao : MonoBehaviour
         cityRuntimeByData.Clear();
         CreateCityRuntimes();
 
-        RebuildSystems();
-
         NpcRuntimeList.Clear();
+        npcRuntimeByData.Clear();
         CreateNpcRuntimes();
+
+        RebuildSystems();
+        InitializeJusticeState();
     }
 
     private void Simulate(int daysToSimulate)
     {
-        RebuildSystems();
-
         for (int i = 0; i < daysToSimulate; i++)
         {
             currentDay++;
             Debug.Log($"Dia {currentDay}");
+            BeginSimulationDay();
 
             if (enabledModules.IsEnabled(SimulationModule.Economy) == true)
             {
@@ -155,6 +159,7 @@ public class TesteSimulacao : MonoBehaviour
             NpcRuntime npcRuntime = new NpcRuntime(npcConfig.npc, startingCity, npcConfig.initialMoney);
             ApplyInitialInventory(npcRuntime, npcConfig);
             NpcRuntimeList.Add(npcRuntime);
+            npcRuntimeByData[npcConfig.npc] = npcRuntime;
         }
     }
 
@@ -179,7 +184,12 @@ public class TesteSimulacao : MonoBehaviour
     private void RebuildSystems()
     {
         enabledModules = new SimulationModuleSet(simulationConfig);
-        travelSystem = new TravelSystem(GetCityRuntime);
+        float travelCostPerDay = simulationConfig != null ? simulationConfig.travelCostPerDay : 0f;
+        travelSystem = new TravelSystem(GetCityRuntime, travelCostPerDay);
+        justiceSystem = simulationConfig != null
+            ? new JusticeSystem(simulationConfig.freeStatus, simulationConfig.wantedStatus, simulationConfig.arrestedStatus, simulationConfig.hiddenStatus)
+            : null;
+        crimeSystem = null;
         actionProviders.Clear();
         actionProviders.Add(new TravelActionProvider(travelSystem));
 
@@ -188,12 +198,47 @@ public class TesteSimulacao : MonoBehaviour
             actionProviders.Add(new MerchantSystem(maxMerchantTradeAmount, minimumProfitPerItem, travelSystem));
         }
 
-        if (enabledModules.IsEnabled(SimulationModule.GuardCrime) == true && simulationConfig != null)
+        if (enabledModules.IsEnabled(SimulationModule.Crime) == true && justiceSystem != null)
         {
-            actionProviders.Add(new GuardSystem(simulationConfig.wantedStatus, simulationConfig.arrestedStatus));
+            crimeSystem = new CrimeSystem(justiceSystem, travelSystem, simulationConfig.hiddenStatus);
+            actionProviders.Add(crimeSystem);
+        }
+
+        if (enabledModules.IsEnabled(SimulationModule.GuardCrime) == true && justiceSystem != null)
+        {
+            actionProviders.Add(new GuardSystem(justiceSystem, simulationConfig.hiddenStatus));
         }
 
         npcDecisionSystem = new NpcDecisionSystem(actionProviders);
+    }
+
+    private void InitializeJusticeState()
+    {
+        if (justiceSystem == null)
+        {
+            return;
+        }
+
+        justiceSystem.CreateInitialWarrants(simulationConfig, GetNpcRuntime, GetCityRuntime);
+        justiceSystem.SyncWantedStatuses(NpcRuntimeList);
+    }
+
+    private void BeginSimulationDay()
+    {
+        if (crimeSystem != null)
+        {
+            crimeSystem.AdvanceHiddenStatuses(NpcRuntimeList);
+        }
+
+        if (enabledModules.IsEnabled(SimulationModule.GuardCrime) == true && justiceSystem != null)
+        {
+            justiceSystem.AdvanceSentences(NpcRuntimeList);
+        }
+
+        if (justiceSystem != null)
+        {
+            justiceSystem.SyncWantedStatuses(NpcRuntimeList);
+        }
     }
 
     private void SimulateEconomyDay()
@@ -324,6 +369,12 @@ public class TesteSimulacao : MonoBehaviour
     {
         if (npcRuntime == null || actionRuntime == null || actionRuntime.Action == null || actionRuntime.TargetNpc == null)
         {
+            if (npcRuntime == null || actionRuntime == null || actionRuntime.Action == null || actionRuntime.TargetCity == null)
+            {
+                return;
+            }
+
+            Debug.Log($"{npcRuntime.NpcName} escolheu {GetActionName(actionRuntime.Action)} {actionRuntime.TargetCity.CityName}.");
             return;
         }
 
@@ -356,5 +407,16 @@ public class TesteSimulacao : MonoBehaviour
 
         cityRuntimeByData.TryGetValue(cityData, out CityRuntime cityRuntime);
         return cityRuntime;
+    }
+
+    private NpcRuntime GetNpcRuntime(NpcData npcData)
+    {
+        if (npcData == null)
+        {
+            return null;
+        }
+
+        npcRuntimeByData.TryGetValue(npcData, out NpcRuntime npcRuntime);
+        return npcRuntime;
     }
 }

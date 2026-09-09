@@ -15,6 +15,7 @@ MonoBehaviour:
   statusNecessariosParaFazerAcao:
   - {fileID: 11400000, guid: 922e799608934f4469cb8c77bfc6c32e, type: 2}
   actionName: PRENDER
+  actionCategory: 3
   actionType: 4
   baseUtility: 10
   statusModifiers: []
@@ -22,8 +23,11 @@ MonoBehaviour:
   baseSuccessChance: 0.5
   statusToAdd: []
   statusToRemove: []
-  targetStatusToAdd:
-  - {fileID: 11400000, guid: 39ec54928a091684d8daf631dfe56d67, type: 2}
-  targetStatusToRemove:
-  - {fileID: 11400000, guid: 922e799608934f4469cb8c77bfc6c32e, type: 2}
-  - {fileID: 11400000, guid: fd104bc4e7844760bfea57b9522141cd, type: 2}
+  targetStatusToAdd: []
+  targetStatusToRemove: []
+  crimeSettings:
+    amount: 0
+    bounty: 0
+    sentenceDays: 0
+    hiddenDays: 1
+    escapeBountyPenalty: 0

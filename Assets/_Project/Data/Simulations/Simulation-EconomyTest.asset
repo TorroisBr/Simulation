@@ -13,7 +13,9 @@ MonoBehaviour:
   m_Name: Simulation-EconomyTest
   m_EditorClassIdentifier: Assembly-CSharp::SimulationConfigData
   simulationName: Economy Test
-  enabledModules: 0000000001000000
+  enabledModules:
+  - 0
+  - 1
   cities:
   - {fileID: 11400000, guid: eabd01569d86fa84bb8117495a6dfb5e, type: 2}
   - {fileID: 11400000, guid: ca4ded573f6d79a4b8bc96de1114b659, type: 2}
@@ -30,5 +32,9 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 922e799608934f4469cb8c77bfc6c32e, type: 2}
   jobs:
   - {fileID: 11400000, guid: 14afa0c3d8c0b594da66d52015932182, type: 2}
+  initialWarrants: []
+  travelCostPerDay: 10
+  freeStatus: {fileID: 11400000, guid: 922e799608934f4469cb8c77bfc6c32e, type: 2}
   wantedStatus: {fileID: 0}
   arrestedStatus: {fileID: 0}
+  hiddenStatus: {fileID: 0}

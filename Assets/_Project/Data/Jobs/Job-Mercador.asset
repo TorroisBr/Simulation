@@ -16,3 +16,4 @@ MonoBehaviour:
   jobType: 1
   workAction: {fileID: 11400000, guid: 2fd0b05dba9748444891d218e424fc1c, type: 2}
   workUtility: 80
+  preferredTradeItems: []

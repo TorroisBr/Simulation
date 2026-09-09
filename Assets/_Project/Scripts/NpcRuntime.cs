@@ -15,7 +15,9 @@ public class NpcRuntime
     [NonSerialized]private CityRuntime destinationCity;
     [SerializeField]private int travelDaysRemaining;
     [SerializeField]private bool travelStartedToday;
+    [SerializeField]private int hiddenDaysRemaining;
     [SerializeField]private MerchantTradePlanRuntime merchantTradePlan = new MerchantTradePlanRuntime();
+    [SerializeField]private NpcTravelPlanRuntime travelPlan = new NpcTravelPlanRuntime();
 
     public NpcData NpcData => npcData;
     public List<NpcStatusData> CurrentStatus => currentStatus ?? (currentStatus = new List<NpcStatusData>());
@@ -28,7 +30,10 @@ public class NpcRuntime
     public int TravelDaysRemaining => travelDaysRemaining;
     public bool TravelStartedToday => travelStartedToday;
     public bool IsTraveling => destinationCity != null && travelDaysRemaining > 0;
+    public int HiddenDaysRemaining => hiddenDaysRemaining;
+    public bool IsHidden => hiddenDaysRemaining > 0;
     public MerchantTradePlanRuntime MerchantTradePlan => merchantTradePlan ?? (merchantTradePlan = new MerchantTradePlanRuntime());
+    public NpcTravelPlanRuntime TravelPlan => travelPlan ?? (travelPlan = new NpcTravelPlanRuntime());
     public string NpcName => npcData != null ? npcData.name : "NPC desconhecido";
 
 	public NpcRuntime(NpcData npcData)
@@ -163,6 +168,37 @@ public class NpcRuntime
         return true;
     }
 
+    public void SetTravelPlan(CityRuntime targetCity, NpcTravelReason reason, float utility, float expectedCost)
+    {
+        TravelPlan.Set(targetCity, reason, utility, expectedCost);
+    }
+
+    public void ClearTravelPlan()
+    {
+        TravelPlan.Clear();
+    }
+
+    public void HideForDays(int days)
+    {
+        hiddenDaysRemaining = Mathf.Max(hiddenDaysRemaining, days);
+    }
+
+    public bool AdvanceHiddenDay()
+    {
+        if (hiddenDaysRemaining <= 0)
+        {
+            return false;
+        }
+
+        hiddenDaysRemaining = Mathf.Max(0, hiddenDaysRemaining - 1);
+        return hiddenDaysRemaining <= 0;
+    }
+
+    public void ClearHidden()
+    {
+        hiddenDaysRemaining = 0;
+    }
+
     public void SetMerchantTradePlan(ItemData item, CityRuntime originCity, CityRuntime targetCity, int plannedAmount, float purchasePricePerItem)
     {
         MerchantTradePlan.Set(item, originCity, targetCity, plannedAmount, purchasePricePerItem);
@@ -171,5 +207,10 @@ public class NpcRuntime
     public void ClearMerchantTradePlan()
     {
         MerchantTradePlan.Clear();
+
+        if (TravelPlan.Reason == NpcTravelReason.Trade)
+        {
+            ClearTravelPlan();
+        }
     }
 }

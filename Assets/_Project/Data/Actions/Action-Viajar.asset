@@ -15,6 +15,7 @@ MonoBehaviour:
   statusNecessariosParaFazerAcao:
   - {fileID: 11400000, guid: 922e799608934f4469cb8c77bfc6c32e, type: 2}
   actionName: VIAJAR
+  actionCategory: 4
   actionType: 3
   baseUtility: 5
   statusModifiers: []
@@ -24,3 +25,9 @@ MonoBehaviour:
   statusToRemove: []
   targetStatusToAdd: []
   targetStatusToRemove: []
+  crimeSettings:
+    amount: 0
+    bounty: 0
+    sentenceDays: 0
+    hiddenDays: 1
+    escapeBountyPenalty: 0

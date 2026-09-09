@@ -5,10 +5,12 @@ using UnityEngine;
 public class TravelSystem
 {
     private readonly Func<CityData, CityRuntime> getCityRuntime;
+    private readonly float travelCostPerDay;
 
-    public TravelSystem(Func<CityData, CityRuntime> getCityRuntime)
+    public TravelSystem(Func<CityData, CityRuntime> getCityRuntime, float travelCostPerDay = 0f)
     {
         this.getCityRuntime = getCityRuntime;
+        this.travelCostPerDay = Mathf.Max(0f, travelCostPerDay);
     }
 
     public bool TryStartTravel(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime)
@@ -25,6 +27,13 @@ public class TravelSystem
             return false;
         }
 
+        float travelCost = GetTravelCost(npcRuntime.CurrentCity, actionRuntime.TargetCity);
+
+        if (travelCost < 0f || npcRuntime.Money < travelCost)
+        {
+            return false;
+        }
+
         CityRuntime originCity = npcRuntime.CurrentCity;
 
         if (npcRuntime.StartTravel(actionRuntime.TargetCity, travelDays) == false)
@@ -32,8 +41,36 @@ public class TravelSystem
             return false;
         }
 
+        npcRuntime.TrySpendMoney(travelCost);
         Debug.Log($"{npcRuntime.NpcName} iniciou viagem de {originCity.CityName} para {actionRuntime.TargetCity.CityName}");
+
+        if (travelCost > 0f)
+        {
+            Debug.Log($"Custo de viagem: {travelCost:0.##}");
+        }
+
         return true;
+    }
+
+    public bool CanStartTravel(NpcRuntime npcRuntime, CityRuntime targetCity, out int travelDays, out float travelCost)
+    {
+        travelDays = -1;
+        travelCost = -1f;
+
+        if (npcRuntime == null || npcRuntime.CurrentCity == null || targetCity == null || npcRuntime.IsTraveling == true)
+        {
+            return false;
+        }
+
+        travelDays = GetTravelDays(npcRuntime.CurrentCity, targetCity);
+
+        if (travelDays <= 0)
+        {
+            return false;
+        }
+
+        travelCost = GetTravelCost(travelDays);
+        return npcRuntime.Money >= travelCost;
     }
 
     public void AdvanceTravels(List<NpcRuntime> npcRuntimeList)
@@ -92,6 +129,23 @@ public class TravelSystem
         }
 
         return -1;
+    }
+
+    public float GetTravelCost(CityRuntime originCity, CityRuntime targetCity)
+    {
+        int travelDays = GetTravelDays(originCity, targetCity);
+
+        if (travelDays <= 0)
+        {
+            return -1f;
+        }
+
+        return GetTravelCost(travelDays);
+    }
+
+    public float GetTravelCost(int travelDays)
+    {
+        return Mathf.Max(1, travelDays) * travelCostPerDay;
     }
 
     public CityRuntime GetCityRuntime(CityData cityData)

@@ -29,6 +29,13 @@ public class NpcActionRuntime
         this.targetNpc = targetNpc;
     }
 
+    public NpcActionRuntime(NpcActionData action, NpcRuntime targetNpc, int amount)
+    {
+        this.action = action;
+        this.targetNpc = targetNpc;
+        this.amount = Mathf.Max(0, amount);
+    }
+
     public NpcActionRuntime(NpcActionData action, CityRuntime targetCity, ItemData targetItem, int amount, float expectedUnitPrice)
     {
         this.action = action;
@@ -37,6 +44,44 @@ public class NpcActionRuntime
         this.amount = amount;
         this.expectedUnitPrice = expectedUnitPrice;
     }
+}
+
+[Serializable]
+public class NpcTravelPlanRuntime
+{
+    [NonSerialized] private CityRuntime targetCity;
+    [SerializeField] private NpcTravelReason reason;
+    [SerializeField] private float utility;
+    [SerializeField] private float expectedCost;
+
+    public CityRuntime TargetCity => targetCity;
+    public NpcTravelReason Reason => reason;
+    public float Utility => utility;
+    public float ExpectedCost => expectedCost;
+    public bool IsActive => targetCity != null && reason != NpcTravelReason.None;
+
+    public void Set(CityRuntime targetCity, NpcTravelReason reason, float utility, float expectedCost)
+    {
+        this.targetCity = targetCity;
+        this.reason = reason;
+        this.utility = Mathf.Max(0f, utility);
+        this.expectedCost = Mathf.Max(0f, expectedCost);
+    }
+
+    public void Clear()
+    {
+        targetCity = null;
+        reason = NpcTravelReason.None;
+        utility = 0f;
+        expectedCost = 0f;
+    }
+}
+
+public enum NpcTravelReason
+{
+    None,
+    Trade,
+    Flee
 }
 
 public enum NpcActionResultType
