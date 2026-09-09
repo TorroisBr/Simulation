@@ -9,6 +9,7 @@ public class CityRuntime
     [SerializeField] private int currentPopulation;
     [SerializeField] private MarketRuntime market;
     [NonSerialized] private List<NpcRuntime> importantNpcs = new List<NpcRuntime>();
+    [NonSerialized] private SimulationLogger logger;
 
     public CityData CityData => cityData;
     public int CurrentPopulation => currentPopulation;
@@ -16,9 +17,10 @@ public class CityRuntime
     public List<NpcRuntime> ImportantNpcs => importantNpcs ?? (importantNpcs = new List<NpcRuntime>());
     public string CityName => cityData != null ? cityData.cityName : "Cidade desconhecida";
 
-    public CityRuntime(CityData cityData)
+    public CityRuntime(CityData cityData, SimulationLogger logger = null)
     {
         this.cityData = cityData;
+        this.logger = logger ?? new SimulationLogger(null);
         currentPopulation = cityData != null ? Mathf.Max(0, cityData.initialPopulation) : 0;
         market = cityData != null ? new MarketRuntime(cityData.marketItems) : new MarketRuntime();
     }
@@ -38,7 +40,7 @@ public class CityRuntime
             }
 
             Market.AddStock(production.item, production.amountPerDay);
-            Debug.Log($"{CityName} produziu {production.amountPerDay} {production.item.itemName}");
+            logger?.Log(SimulationLogCategory.EconomyProduction, $"{CityName} produziu {production.amountPerDay} {production.item.itemName}");
         }
     }
 
@@ -61,7 +63,7 @@ public class CityRuntime
 
             if (consumed > 0)
             {
-                Debug.Log($"{CityName} consumiu {consumed} {config.item.itemName}");
+                logger?.Log(SimulationLogCategory.EconomyConsumption, $"{CityName} consumiu {consumed} {config.item.itemName}");
             }
         }
     }
@@ -69,6 +71,7 @@ public class CityRuntime
     public void UpdateMarketPrices()
     {
         Market.UpdatePrices();
+        logger?.Log(SimulationLogCategory.Market, $"{CityName} atualizou os precos do mercado.");
     }
 
     public void AddImportantNpc(NpcRuntime npcRuntime)

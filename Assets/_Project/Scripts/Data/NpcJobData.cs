@@ -8,6 +8,7 @@ public class NpcJobData : ScriptableObject
 {
     public string jobName;
     public NpcJobType jobType = NpcJobType.None;
+    public MerchantBehavior merchantBehavior = MerchantBehavior.Traveling;
     public NpcActionData workAction;
     public float workUtility = 50;
     public List<TradeItemPreference> preferredTradeItems = new List<TradeItemPreference>();
@@ -27,4 +28,10 @@ public enum NpcJobType
     None,
     Merchant,
     Guard
+}
+
+public enum MerchantBehavior
+{
+    Traveling,
+    Local
 }

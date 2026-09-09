@@ -10,15 +10,15 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: efaa8a44b89313f48aaa55dad7921efe, type: 3}
-  m_Name: Action-Trabalhar
-  m_EditorClassIdentifier: Assembly-CSharp::NPCActionSO
+  m_Name: Action-IrATaverna
+  m_EditorClassIdentifier: Assembly-CSharp::NpcActionData
   statusNecessariosParaFazerAcao:
   - {fileID: 11400000, guid: 922e799608934f4469cb8c77bfc6c32e, type: 2}
-  actionName: TRABALHAR
-  normalActionLogText: 
+  actionName: IR_A_TAVERNA
+  normalActionLogText: foi a taverna.
   actionCategory: 0
   actionType: 0
-  baseUtility: 1
+  baseUtility: 18
   statusModifiers: []
   canFail: 0
   baseSuccessChance: 1
@@ -27,8 +27,8 @@ MonoBehaviour:
   targetStatusToAdd: []
   targetStatusToRemove: []
   crimeSettings:
-    amount: 0
-    bounty: 0
-    sentenceDays: 0
+    amount: 20
+    bounty: 50
+    sentenceDays: 3
     hiddenDays: 1
-    escapeBountyPenalty: 0
+    escapeBountyPenalty: 25

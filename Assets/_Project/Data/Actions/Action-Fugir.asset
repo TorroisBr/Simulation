@@ -15,6 +15,7 @@ MonoBehaviour:
   statusNecessariosParaFazerAcao:
   - {fileID: 11400000, guid: 39ec54928a091684d8daf631dfe56d67, type: 2}
   actionName: FUGIR_DA_PRISAO
+  normalActionLogText: 
   actionCategory: 2
   actionType: 8
   baseUtility: 30

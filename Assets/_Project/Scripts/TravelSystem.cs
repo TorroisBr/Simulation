@@ -6,11 +6,13 @@ public class TravelSystem
 {
     private readonly Func<CityData, CityRuntime> getCityRuntime;
     private readonly float travelCostPerDay;
+    private readonly SimulationLogger logger;
 
-    public TravelSystem(Func<CityData, CityRuntime> getCityRuntime, float travelCostPerDay = 0f)
+    public TravelSystem(Func<CityData, CityRuntime> getCityRuntime, float travelCostPerDay = 0f, SimulationLogger logger = null)
     {
         this.getCityRuntime = getCityRuntime;
         this.travelCostPerDay = Mathf.Max(0f, travelCostPerDay);
+        this.logger = logger ?? new SimulationLogger(null);
     }
 
     public bool TryStartTravel(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime)
@@ -42,11 +44,11 @@ public class TravelSystem
         }
 
         npcRuntime.TrySpendMoney(travelCost);
-        Debug.Log($"{npcRuntime.NpcName} iniciou viagem de {originCity.CityName} para {actionRuntime.TargetCity.CityName}");
+        logger.Log(SimulationLogCategory.Travel, $"{npcRuntime.NpcName} iniciou viagem de {originCity.CityName} para {actionRuntime.TargetCity.CityName}");
 
         if (travelCost > 0f)
         {
-            Debug.Log($"Custo de viagem: {travelCost:0.##}");
+            logger.Log(SimulationLogCategory.Travel, $"Custo de viagem: {travelCost:0.##}");
         }
 
         return true;
@@ -98,13 +100,13 @@ public class TravelSystem
             if (arrived == true)
             {
                 string cityName = arrivedCity != null ? arrivedCity.CityName : "destino desconhecido";
-                Debug.Log($"{npcRuntime.NpcName} chegou em {cityName}");
+                logger.Log(SimulationLogCategory.Travel, $"{npcRuntime.NpcName} chegou em {cityName}");
                 continue;
             }
 
             string verb = npcRuntime.TravelDaysRemaining == 1 ? "Resta" : "Restam";
             string dayText = npcRuntime.TravelDaysRemaining == 1 ? "dia" : "dias";
-            Debug.Log($"{npcRuntime.NpcName} esta viajando. {verb} {npcRuntime.TravelDaysRemaining} {dayText}.");
+            logger.Log(SimulationLogCategory.Travel, $"{npcRuntime.NpcName} esta viajando. {verb} {npcRuntime.TravelDaysRemaining} {dayText}.");
         }
     }
 

@@ -10,13 +10,15 @@ public class JusticeSystem
     private readonly NpcStatusData wantedStatus;
     private readonly NpcStatusData arrestedStatus;
     private readonly NpcStatusData hiddenStatus;
+    private readonly SimulationLogger logger;
 
-    public JusticeSystem(NpcStatusData freeStatus, NpcStatusData wantedStatus, NpcStatusData arrestedStatus, NpcStatusData hiddenStatus)
+    public JusticeSystem(NpcStatusData freeStatus, NpcStatusData wantedStatus, NpcStatusData arrestedStatus, NpcStatusData hiddenStatus, SimulationLogger logger = null)
     {
         this.freeStatus = freeStatus;
         this.wantedStatus = wantedStatus;
         this.arrestedStatus = arrestedStatus;
         this.hiddenStatus = hiddenStatus;
+        this.logger = logger ?? new SimulationLogger(null);
     }
 
     public void CreateInitialWarrants(SimulationConfigData config, Func<NpcData, NpcRuntime> getNpcRuntime, Func<CityData, CityRuntime> getCityRuntime)
@@ -59,7 +61,7 @@ public class JusticeSystem
         }
 
         SyncWantedStatus(target);
-        Debug.Log($"{target.NpcName} agora possui mandado em {city.CityName}. Recompensa: {record.Bounty:0.##}. Pena: {record.SentenceDays} dias.");
+        logger.Log(SimulationLogCategory.Justice, $"{target.NpcName} agora possui mandado em {city.CityName}. Recompensa: {record.Bounty:0.##}. Pena: {record.SentenceDays} dias.");
         return record;
     }
 
@@ -91,7 +93,7 @@ public class JusticeSystem
         targetRuntime.RemoveStatus(freeStatus);
         targetRuntime.AddStatus(arrestedStatus);
         SyncWantedStatus(targetRuntime);
-        Debug.Log($"{guardRuntime.NpcName} prendeu {targetRuntime.NpcName} em {city.CityName}. Pena restante: {sentence.RemainingDays} dias.");
+        logger.Log(SimulationLogCategory.Justice, $"{guardRuntime.NpcName} prendeu {targetRuntime.NpcName} em {city.CityName}. Pena restante: {sentence.RemainingDays} dias.");
         return true;
     }
 
@@ -111,7 +113,7 @@ public class JusticeSystem
             {
                 ReleasePrisoner(sentence.Target);
                 prisonSentences.RemoveAt(i);
-                Debug.Log($"{sentence.Target.NpcName} foi libertado porque seu mandado nao esta mais ativo.");
+                logger.Log(SimulationLogCategory.Justice, $"{sentence.Target.NpcName} foi libertado porque seu mandado nao esta mais ativo.");
                 continue;
             }
 
@@ -132,7 +134,7 @@ public class JusticeSystem
             ResolveWarrant(sentence.Warrant);
             ReleasePrisoner(sentence.Target);
             prisonSentences.RemoveAt(i);
-            Debug.Log($"{sentence.Target.NpcName} cumpriu sua pena em {sentence.City.CityName} e foi libertado.");
+            logger.Log(SimulationLogCategory.Justice, $"{sentence.Target.NpcName} cumpriu sua pena em {sentence.City.CityName} e foi libertado.");
         }
 
         ReleasePrisonersWithoutActiveSentence(npcRuntimeList);
@@ -164,7 +166,7 @@ public class JusticeSystem
         targetRuntime.RemoveStatus(arrestedStatus);
         targetRuntime.AddStatus(freeStatus);
         SyncWantedStatus(targetRuntime);
-        Debug.Log($"{targetRuntime.NpcName} fugiu da prisao em {sentence.City.CityName}. Recompensa atual: {sentence.Warrant.Bounty:0.##}.");
+        logger.Log(SimulationLogCategory.Justice, $"{targetRuntime.NpcName} fugiu da prisao em {sentence.City.CityName}. Recompensa atual: {sentence.Warrant.Bounty:0.##}.");
         return true;
     }
 

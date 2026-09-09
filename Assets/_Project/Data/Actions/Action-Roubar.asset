@@ -15,9 +15,10 @@ MonoBehaviour:
   statusNecessariosParaFazerAcao:
   - {fileID: 11400000, guid: 922e799608934f4469cb8c77bfc6c32e, type: 2}
   actionName: ROUBAR
+  normalActionLogText: 
   actionCategory: 2
   actionType: 5
-  baseUtility: 35
+  baseUtility: 20
   statusModifiers: []
   canFail: 1
   baseSuccessChance: 0.75

@@ -15,6 +15,7 @@ MonoBehaviour:
   statusNecessariosParaFazerAcao:
   - {fileID: 11400000, guid: 922e799608934f4469cb8c77bfc6c32e, type: 2}
   actionName: PRENDER
+  normalActionLogText: 
   actionCategory: 3
   actionType: 4
   baseUtility: 10

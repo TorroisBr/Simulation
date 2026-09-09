@@ -20,6 +20,7 @@ public class TesteSimulacao : MonoBehaviour
     private CrimeSystem crimeSystem;
     private NpcDecisionSystem npcDecisionSystem;
     private TravelSystem travelSystem;
+    private SimulationLogger logger;
     private int currentDay;
 
     public void Start()
@@ -38,6 +39,7 @@ public class TesteSimulacao : MonoBehaviour
     private void InitializeSimulation()
     {
         currentDay = 0;
+        logger = new SimulationLogger(simulationConfig != null ? simulationConfig.LogSettings : null);
         enabledModules = new SimulationModuleSet(simulationConfig);
 
         CityRuntimeList.Clear();
@@ -57,7 +59,7 @@ public class TesteSimulacao : MonoBehaviour
         for (int i = 0; i < daysToSimulate; i++)
         {
             currentDay++;
-            Debug.Log($"Dia {currentDay}");
+            logger.Log(SimulationLogCategory.Day, $"Dia {currentDay}");
             BeginSimulationDay();
 
             if (enabledModules.IsEnabled(SimulationModule.Economy) == true)
@@ -124,7 +126,7 @@ public class TesteSimulacao : MonoBehaviour
     {
         if (simulationConfig == null)
         {
-            Debug.LogWarning("Nenhum SimulationConfigData configurado. A simulacao iniciara sem cidades nem NPCs.");
+            logger.LogWarning("Nenhum SimulationConfigData configurado. A simulacao iniciara sem cidades nem NPCs.");
             return;
         }
 
@@ -135,7 +137,7 @@ public class TesteSimulacao : MonoBehaviour
                 continue;
             }
 
-            CityRuntime cityRuntime = new CityRuntime(cityData);
+            CityRuntime cityRuntime = new CityRuntime(cityData, logger);
             CityRuntimeList.Add(cityRuntime);
             cityRuntimeByData[cityData] = cityRuntime;
         }
@@ -184,10 +186,11 @@ public class TesteSimulacao : MonoBehaviour
     private void RebuildSystems()
     {
         enabledModules = new SimulationModuleSet(simulationConfig);
+        logger = logger ?? new SimulationLogger(simulationConfig != null ? simulationConfig.LogSettings : null);
         float travelCostPerDay = simulationConfig != null ? simulationConfig.travelCostPerDay : 0f;
-        travelSystem = new TravelSystem(GetCityRuntime, travelCostPerDay);
+        travelSystem = new TravelSystem(GetCityRuntime, travelCostPerDay, logger);
         justiceSystem = simulationConfig != null
-            ? new JusticeSystem(simulationConfig.freeStatus, simulationConfig.wantedStatus, simulationConfig.arrestedStatus, simulationConfig.hiddenStatus)
+            ? new JusticeSystem(simulationConfig.freeStatus, simulationConfig.wantedStatus, simulationConfig.arrestedStatus, simulationConfig.hiddenStatus, logger)
             : null;
         crimeSystem = null;
         actionProviders.Clear();
@@ -195,12 +198,12 @@ public class TesteSimulacao : MonoBehaviour
 
         if (enabledModules.IsEnabled(SimulationModule.Merchant) == true)
         {
-            actionProviders.Add(new MerchantSystem(maxMerchantTradeAmount, minimumProfitPerItem, travelSystem));
+            actionProviders.Add(new MerchantSystem(maxMerchantTradeAmount, minimumProfitPerItem, travelSystem, logger));
         }
 
         if (enabledModules.IsEnabled(SimulationModule.Crime) == true && justiceSystem != null)
         {
-            crimeSystem = new CrimeSystem(justiceSystem, travelSystem, simulationConfig.hiddenStatus);
+            crimeSystem = new CrimeSystem(justiceSystem, travelSystem, simulationConfig.hiddenStatus, logger);
             actionProviders.Add(crimeSystem);
         }
 
@@ -290,7 +293,7 @@ public class TesteSimulacao : MonoBehaviour
 
         if (actionResult != null && string.IsNullOrEmpty(actionResult.Message) == false)
         {
-            Debug.Log(actionResult.Message);
+            logger.Log(SimulationLogCategory.NpcAction, actionResult.Message);
         }
 
         if (actionResult != null && actionResult.Success == true)
@@ -308,7 +311,7 @@ public class TesteSimulacao : MonoBehaviour
 
         if (action.actionType == NpcActionType.Normal)
         {
-            return NpcActionResult.Succeeded();
+            return NpcActionResult.Succeeded(CreateNormalActionMessage(npcRuntime, action));
         }
 
         INpcActionProvider actionProvider = npcDecisionSystem.GetProviderForAction(action);
@@ -374,18 +377,31 @@ public class TesteSimulacao : MonoBehaviour
                 return;
             }
 
-            Debug.Log($"{npcRuntime.NpcName} escolheu {GetActionName(actionRuntime.Action)} {actionRuntime.TargetCity.CityName}.");
+            logger.Log(SimulationLogCategory.NpcAction, $"{npcRuntime.NpcName} escolheu {GetActionName(actionRuntime.Action)} {actionRuntime.TargetCity.CityName}.");
             return;
         }
 
-        Debug.Log($"{npcRuntime.NpcName} escolheu {GetActionName(actionRuntime.Action)} {actionRuntime.TargetNpc.NpcName}.");
+        logger.Log(SimulationLogCategory.NpcAction, $"{npcRuntime.NpcName} escolheu {GetActionName(actionRuntime.Action)} {actionRuntime.TargetNpc.NpcName}.");
     }
 
     private string CreateFailureMessage(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime, NpcActionData action)
     {
         string actorName = npcRuntime != null ? npcRuntime.NpcName : "NPC desconhecido";
         string targetName = actionRuntime != null && actionRuntime.TargetNpc != null ? $" {actionRuntime.TargetNpc.NpcName}" : string.Empty;
-        return $"{actorName} tentou {GetActionName(action)}{targetName}, mas falhou.";
+        string targetCityName = actionRuntime != null && actionRuntime.TargetCity != null ? $" {actionRuntime.TargetCity.CityName}" : string.Empty;
+        return $"{actorName} tentou {GetActionName(action)}{targetName}{targetCityName}, mas falhou.";
+    }
+
+    private string CreateNormalActionMessage(NpcRuntime npcRuntime, NpcActionData action)
+    {
+        string actorName = npcRuntime != null ? npcRuntime.NpcName : "NPC desconhecido";
+
+        if (action != null && string.IsNullOrEmpty(action.normalActionLogText) == false)
+        {
+            return $"{actorName} {action.normalActionLogText}";
+        }
+
+        return $"{actorName} realizou {GetActionName(action)}.";
     }
 
     private string GetActionName(NpcActionData action)

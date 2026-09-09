@@ -6,12 +6,14 @@ public class CrimeSystem : INpcActionProvider
     private readonly JusticeSystem justiceSystem;
     private readonly TravelSystem travelSystem;
     private readonly NpcStatusData hiddenStatus;
+    private readonly SimulationLogger logger;
 
-    public CrimeSystem(JusticeSystem justiceSystem, TravelSystem travelSystem, NpcStatusData hiddenStatus)
+    public CrimeSystem(JusticeSystem justiceSystem, TravelSystem travelSystem, NpcStatusData hiddenStatus, SimulationLogger logger = null)
     {
         this.justiceSystem = justiceSystem;
         this.travelSystem = travelSystem;
         this.hiddenStatus = hiddenStatus;
+        this.logger = logger ?? new SimulationLogger(null);
     }
 
     public bool HandlesAction(NpcActionData action)
@@ -117,7 +119,7 @@ public class CrimeSystem : INpcActionProvider
             if (npcRuntime.AdvanceHiddenDay() == true)
             {
                 npcRuntime.RemoveStatus(hiddenStatus);
-                Debug.Log($"{npcRuntime.NpcName} nao esta mais escondido.");
+                logger.Log(SimulationLogCategory.Crime, $"{npcRuntime.NpcName} nao esta mais escondido.");
             }
         }
     }
@@ -146,7 +148,7 @@ public class CrimeSystem : INpcActionProvider
             return null;
         }
 
-        utility = Mathf.Max(utility, 25f + amount * 0.25f);
+        utility = Mathf.Max(0f, utility) + GetMoneyPressureBonus(npcRuntime) + Mathf.Min(8f, amount * 0.2f);
         return new NpcActionRuntime(action, target, amount);
     }
 
@@ -212,7 +214,7 @@ public class CrimeSystem : INpcActionProvider
 
         npcRuntime.AddMoney(amount);
         CrimeActionSettings settings = GetCrimeSettings(actionRuntime.Action);
-        Debug.Log($"{npcRuntime.NpcName} roubou {actionRuntime.TargetNpc.NpcName} e levou {amount} moedas.");
+        logger.Log(SimulationLogCategory.Crime, $"{npcRuntime.NpcName} roubou {actionRuntime.TargetNpc.NpcName} e levou {amount} moedas.");
         justiceSystem.CreateOrIncreaseWarrant(npcRuntime, npcRuntime.CurrentCity, settings.bounty, settings.sentenceDays);
         return NpcActionResult.Succeeded();
     }
@@ -227,7 +229,8 @@ public class CrimeSystem : INpcActionProvider
         int hiddenDays = Mathf.Max(1, GetCrimeSettings(actionRuntime.Action).hiddenDays);
         npcRuntime.HideForDays(hiddenDays);
         npcRuntime.AddStatus(hiddenStatus);
-        return NpcActionResult.Succeeded($"{npcRuntime.NpcName} esta escondido.");
+        logger.Log(SimulationLogCategory.Crime, $"{npcRuntime.NpcName} esta escondido.");
+        return NpcActionResult.Succeeded();
     }
 
     private NpcActionResult TryExecuteFleeCity(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime)
@@ -243,7 +246,8 @@ public class CrimeSystem : INpcActionProvider
         }
 
         npcRuntime.SetTravelPlan(actionRuntime.TargetCity, NpcTravelReason.Flee, 80f, travelCost);
-        return NpcActionResult.Succeeded($"{npcRuntime.NpcName} decidiu fugir para {actionRuntime.TargetCity.CityName}. Custo de viagem: {travelCost:0.##}.");
+        logger.Log(SimulationLogCategory.Crime, $"{npcRuntime.NpcName} decidiu fugir para {actionRuntime.TargetCity.CityName}. Custo de viagem: {travelCost:0.##}.");
+        return NpcActionResult.Succeeded();
     }
 
     private NpcActionResult TryExecuteEscapePrison(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime)
@@ -254,12 +258,13 @@ public class CrimeSystem : INpcActionProvider
         }
 
         string wantedText = justiceSystem.HasAnyActiveWarrant(npcRuntime) == true ? "continua procurado" : "nao possui mandado ativo";
-        return NpcActionResult.Succeeded($"{npcRuntime.NpcName} esta livre e {wantedText}.");
+        logger.Log(SimulationLogCategory.Crime, $"{npcRuntime.NpcName} esta livre e {wantedText}.");
+        return NpcActionResult.Succeeded();
     }
 
     private NpcRuntime FindStealTarget(NpcRuntime thiefRuntime)
     {
-        NpcRuntime bestTarget = null;
+        float totalWeight = 0f;
 
         foreach (NpcRuntime candidate in thiefRuntime.CurrentCity.ImportantNpcs)
         {
@@ -268,13 +273,33 @@ public class CrimeSystem : INpcActionProvider
                 continue;
             }
 
-            if (bestTarget == null || candidate.Money > bestTarget.Money)
+            totalWeight += GetStealTargetWeight(candidate);
+        }
+
+        if (totalWeight <= 0f)
+        {
+            return null;
+        }
+
+        float randomValue = Random.Range(0f, totalWeight);
+        float currentWeight = 0f;
+
+        foreach (NpcRuntime candidate in thiefRuntime.CurrentCity.ImportantNpcs)
+        {
+            if (IsValidStealTarget(thiefRuntime, candidate) == false)
             {
-                bestTarget = candidate;
+                continue;
+            }
+
+            currentWeight += GetStealTargetWeight(candidate);
+
+            if (randomValue <= currentWeight)
+            {
+                return candidate;
             }
         }
 
-        return bestTarget;
+        return null;
     }
 
     private bool IsValidStealTarget(NpcRuntime thiefRuntime, NpcRuntime targetRuntime)
@@ -365,6 +390,21 @@ public class CrimeSystem : INpcActionProvider
     {
         int configuredAmount = Mathf.Max(0, GetCrimeSettings(action).amount);
         return Mathf.Min(configuredAmount, Mathf.FloorToInt(targetRuntime.Money));
+    }
+
+    private float GetMoneyPressureBonus(NpcRuntime npcRuntime)
+    {
+        if (npcRuntime == null)
+        {
+            return 0f;
+        }
+
+        return Mathf.Clamp((50f - npcRuntime.Money) * 0.35f, 0f, 18f);
+    }
+
+    private float GetStealTargetWeight(NpcRuntime candidate)
+    {
+        return candidate != null ? Mathf.Max(1f, candidate.Money) : 0f;
     }
 
     private CrimeActionSettings GetCrimeSettings(NpcActionData action)

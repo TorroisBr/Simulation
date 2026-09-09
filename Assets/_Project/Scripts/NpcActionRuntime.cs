@@ -36,6 +36,15 @@ public class NpcActionRuntime
         this.amount = Mathf.Max(0, amount);
     }
 
+    public NpcActionRuntime(NpcActionData action, NpcRuntime targetNpc, ItemData targetItem, int amount, float expectedUnitPrice)
+    {
+        this.action = action;
+        this.targetNpc = targetNpc;
+        this.targetItem = targetItem;
+        this.amount = Mathf.Max(0, amount);
+        this.expectedUnitPrice = Mathf.Max(0f, expectedUnitPrice);
+    }
+
     public NpcActionRuntime(NpcActionData action, CityRuntime targetCity, ItemData targetItem, int amount, float expectedUnitPrice)
     {
         this.action = action;

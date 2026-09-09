@@ -14,6 +14,7 @@ public class SimulationConfigData : ScriptableObject
     public List<NpcJobData> jobs = new List<NpcJobData>();
     public List<InitialWantedRecordConfig> initialWarrants = new List<InitialWantedRecordConfig>();
     public float travelCostPerDay = 10f;
+    public SimulationLogSettings logSettings = new SimulationLogSettings();
 
     [Header("Status References")]
     public NpcStatusData freeStatus;
@@ -28,6 +29,7 @@ public class SimulationConfigData : ScriptableObject
     public List<NpcStatusData> Statuses => statuses ?? (statuses = new List<NpcStatusData>());
     public List<NpcJobData> Jobs => jobs ?? (jobs = new List<NpcJobData>());
     public List<InitialWantedRecordConfig> InitialWarrants => initialWarrants ?? (initialWarrants = new List<InitialWantedRecordConfig>());
+    public SimulationLogSettings LogSettings => logSettings ?? (logSettings = new SimulationLogSettings());
 
     public bool HasModule(SimulationModule module)
     {

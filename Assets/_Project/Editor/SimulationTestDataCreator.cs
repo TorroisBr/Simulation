@@ -36,7 +36,8 @@ public static class SimulationTestDataCreator
             null,
             null,
             null,
-            10f);
+            10f,
+            CreateLogSettings(true, true, true, true, false, false, true, true, true));
 
         FinishCreation(config, "Economy Test");
     }
@@ -69,7 +70,8 @@ public static class SimulationTestDataCreator
             data.procurado,
             data.preso,
             data.escondido,
-            10f);
+            10f,
+            CreateLogSettings(true, true, false, false, false, true, false, false, false));
 
         FinishCreation(config, "Guard Test");
     }
@@ -87,9 +89,10 @@ public static class SimulationTestDataCreator
             {
                 CreateNpcConfig(data.jobson, data.campoVerde, 35f),
                 CreateNpcConfig(data.marcus, data.campoVerde, 0f),
-                CreateNpcConfig(data.jorge, data.campoVerde, 120f)
+                CreateNpcConfig(data.jorge, data.campoVerde, 120f),
+                CreateNpcConfig(data.ana, data.campoVerde, 60f)
             },
-            new[] { data.steal, data.hide, data.fleeCity, data.escapePrison, data.travel, data.arrest },
+            new[] { data.steal, data.hide, data.fleeCity, data.escapePrison, data.travel, data.arrest, data.rest, data.walk, data.tavern },
             new[] { data.livre, data.procurado, data.preso, data.escondido },
             new[] { data.guardJob, data.merchantJob },
             null,
@@ -97,7 +100,8 @@ public static class SimulationTestDataCreator
             data.procurado,
             data.preso,
             data.escondido,
-            10f);
+            10f,
+            CreateLogSettings(true, true, false, true, true, true, false, false, false));
 
         FinishCreation(config, "Crime Justice Test");
     }
@@ -113,19 +117,27 @@ public static class SimulationTestDataCreator
             new[] { data.campoVerde, data.serraDeFerro },
             new[]
             {
-                CreateNpcConfig(data.jorge, data.campoVerde, 200f),
+                CreateNpcConfig(data.jorge, data.campoVerde, 220f),
+                CreateNpcConfig(data.afonso, data.serraDeFerro, 180f),
+                CreateNpcConfig(data.helena, data.serraDeFerro, 170f),
+                CreateNpcConfig(data.pedro, data.campoVerde, 220f, CreateInitialInventoryConfig(data.tecido, 4, 6f)),
+                CreateNpcConfig(data.maria, data.serraDeFerro, 220f, CreateInitialInventoryConfig(data.ferro, 4, 8f)),
+                CreateNpcConfig(data.marcus, data.campoVerde, 20f),
+                CreateNpcConfig(data.arthur, data.serraDeFerro, 20f),
                 CreateNpcConfig(data.jobson, data.campoVerde, 35f),
-                CreateNpcConfig(data.marcus, data.campoVerde, 0f)
+                CreateNpcConfig(data.carlos, data.serraDeFerro, 80f),
+                CreateNpcConfig(data.ana, data.campoVerde, 65f)
             },
-            new[] { data.buyGoods, data.sellGoods, data.travel, data.steal, data.hide, data.fleeCity, data.escapePrison, data.arrest },
+            new[] { data.buyGoods, data.sellGoods, data.travel, data.steal, data.hide, data.fleeCity, data.escapePrison, data.arrest, data.rest, data.walk, data.tavern },
             new[] { data.livre, data.procurado, data.preso, data.escondido },
-            new[] { data.merchantJob, data.guardJob },
+            new[] { data.merchantJob, data.ironMerchantJob, data.wineMerchantJob, data.localMerchantJob, data.guardJob },
             null,
             data.livre,
             data.procurado,
             data.preso,
             data.escondido,
-            10f);
+            10f,
+            CreateLogSettings(true, true, true, true, true, true, false, false, false));
 
         FinishCreation(config, "General Test");
     }
@@ -151,7 +163,7 @@ public static class SimulationTestDataCreator
         data.sellGoods = CreateAction("Action-VenderMercadoria", "VENDER_MERCADORIA", NpcActionCategory.Commerce, NpcActionType.SellGoods, 10f, false, 1f, data.livre);
         data.travel = CreateAction("Action-Viajar", "VIAJAR", NpcActionCategory.Travel, NpcActionType.Travel, 5f, false, 1f, data.livre);
         data.arrest = CreateAction("Action-Prender", "PRENDER", NpcActionCategory.Justice, NpcActionType.Arrest, 10f, true, 0.5f, data.livre);
-        data.steal = CreateAction("Action-Roubar", "ROUBAR", NpcActionCategory.Crime, NpcActionType.Steal, 35f, true, 0.75f, data.livre);
+        data.steal = CreateAction("Action-Roubar", "ROUBAR", NpcActionCategory.Crime, NpcActionType.Steal, 20f, true, 0.75f, data.livre);
         ConfigureCrimeSettings(data.steal, 20, 50f, 3, 1, 0f);
         data.hide = CreateAction("Action-EsconderSe", "ESCONDER_SE", NpcActionCategory.Crime, NpcActionType.Hide, 25f, true, 0.6f, data.livre);
         ConfigureCrimeSettings(data.hide, 0, 0f, 0, 1, 0f);
@@ -159,23 +171,86 @@ public static class SimulationTestDataCreator
         ConfigureCrimeSettings(data.fleeCity, 0, 0f, 0, 1, 0f);
         data.escapePrison = CreateAction("Action-Fugir", "FUGIR_DA_PRISAO", NpcActionCategory.Crime, NpcActionType.EscapePrison, 30f, true, 0.35f, data.preso);
         ConfigureCrimeSettings(data.escapePrison, 0, 0f, 0, 1, 25f);
+        data.rest = CreateNeutralAction("Action-Descansar", "DESCANSAR", "descansou.", 18f, data.livre);
+        data.walk = CreateNeutralAction("Action-Passear", "PASSEAR", "passeou pela cidade.", 20f, data.livre);
+        data.tavern = CreateNeutralAction("Action-IrATaverna", "IR_A_TAVERNA", "foi a taverna.", 18f, data.livre);
 
-        data.merchantJob = CreateJob("Job-Mercador", "Mercador", NpcJobType.Merchant, data.buyGoods, 80f);
-        data.guardJob = CreateJob("Job-Guarda", "Guarda", NpcJobType.Guard, data.arrest, 80f);
+        data.merchantJob = CreateJob("Job-Mercador", "Mercador", NpcJobType.Merchant, MerchantBehavior.Traveling, data.buyGoods, 80f);
+        data.ironMerchantJob = CreateJob("Job-MercadorFerro", "Mercador de Ferro", NpcJobType.Merchant, MerchantBehavior.Traveling, data.buyGoods, 80f,
+            new TradeItemPreference { item = data.ferro, utilityMultiplier = 2f });
+        data.wineMerchantJob = CreateJob("Job-MercadorVinho", "Mercador de Vinho", NpcJobType.Merchant, MerchantBehavior.Traveling, data.buyGoods, 80f,
+            new TradeItemPreference { item = data.vinho, utilityMultiplier = 2f });
+        data.localMerchantJob = CreateJob("Job-MercadorLocal", "Mercador Local", NpcJobType.Merchant, MerchantBehavior.Local, data.buyGoods, 55f);
+        data.guardJob = CreateJob("Job-Guarda", "Guarda", NpcJobType.Guard, MerchantBehavior.Traveling, data.arrest, 80f);
 
         data.jorge = CreateNpc("NPC-Jorge", "JORGE", "Jorge", data.merchantJob, new[] { data.livre },
             new NPCDefaultAction { action = data.buyGoods, baseUtility = 40f },
             new NPCDefaultAction { action = data.sellGoods, baseUtility = 80f },
-            new NPCDefaultAction { action = data.travel, baseUtility = 60f });
+            new NPCDefaultAction { action = data.travel, baseUtility = 60f },
+            new NPCDefaultAction { action = data.rest, baseUtility = 16f },
+            new NPCDefaultAction { action = data.walk, baseUtility = 18f },
+            new NPCDefaultAction { action = data.tavern, baseUtility = 14f });
+
+        data.afonso = CreateNpc("NPC-Afonso", "AFONSO", "Afonso", data.ironMerchantJob, new[] { data.livre },
+            new NPCDefaultAction { action = data.buyGoods, baseUtility = 42f },
+            new NPCDefaultAction { action = data.sellGoods, baseUtility = 78f },
+            new NPCDefaultAction { action = data.travel, baseUtility = 58f },
+            new NPCDefaultAction { action = data.rest, baseUtility = 16f },
+            new NPCDefaultAction { action = data.walk, baseUtility = 18f },
+            new NPCDefaultAction { action = data.tavern, baseUtility = 14f });
+
+        data.helena = CreateNpc("NPC-Helena", "HELENA", "Helena", data.wineMerchantJob, new[] { data.livre },
+            new NPCDefaultAction { action = data.buyGoods, baseUtility = 42f },
+            new NPCDefaultAction { action = data.sellGoods, baseUtility = 78f },
+            new NPCDefaultAction { action = data.travel, baseUtility = 58f },
+            new NPCDefaultAction { action = data.rest, baseUtility = 18f },
+            new NPCDefaultAction { action = data.walk, baseUtility = 16f },
+            new NPCDefaultAction { action = data.tavern, baseUtility = 16f });
+
+        data.pedro = CreateNpc("NPC-Pedro", "PEDRO", "Pedro", data.localMerchantJob, new[] { data.livre },
+            new NPCDefaultAction { action = data.buyGoods, baseUtility = 35f },
+            new NPCDefaultAction { action = data.sellGoods, baseUtility = 45f },
+            new NPCDefaultAction { action = data.rest, baseUtility = 18f },
+            new NPCDefaultAction { action = data.walk, baseUtility = 18f },
+            new NPCDefaultAction { action = data.tavern, baseUtility = 16f });
+
+        data.maria = CreateNpc("NPC-Maria", "MARIA", "Maria", data.localMerchantJob, new[] { data.livre },
+            new NPCDefaultAction { action = data.buyGoods, baseUtility = 35f },
+            new NPCDefaultAction { action = data.sellGoods, baseUtility = 45f },
+            new NPCDefaultAction { action = data.rest, baseUtility = 18f },
+            new NPCDefaultAction { action = data.walk, baseUtility = 18f },
+            new NPCDefaultAction { action = data.tavern, baseUtility = 16f });
 
         data.marcus = CreateNpc("NPC-Marcus", "MARCUS", "Marcus", data.guardJob, new[] { data.livre },
-            new NPCDefaultAction { action = data.arrest, baseUtility = 70f });
+            new NPCDefaultAction { action = data.arrest, baseUtility = 70f },
+            new NPCDefaultAction { action = data.rest, baseUtility = 12f },
+            new NPCDefaultAction { action = data.walk, baseUtility = 20f },
+            new NPCDefaultAction { action = data.tavern, baseUtility = 10f });
+
+        data.arthur = CreateNpc("NPC-Arthur", "ARTHUR", "Arthur", data.guardJob, new[] { data.livre },
+            new NPCDefaultAction { action = data.arrest, baseUtility = 68f },
+            new NPCDefaultAction { action = data.rest, baseUtility = 12f },
+            new NPCDefaultAction { action = data.walk, baseUtility = 20f },
+            new NPCDefaultAction { action = data.tavern, baseUtility = 10f });
 
         data.jobson = CreateNpc("NPC-Jobson", "JOBSON", "Jobson", null, new[] { data.livre },
-            new NPCDefaultAction { action = data.steal, baseUtility = 70f },
+            new NPCDefaultAction { action = data.steal, baseUtility = 22f },
             new NPCDefaultAction { action = data.hide, baseUtility = 35f },
             new NPCDefaultAction { action = data.fleeCity, baseUtility = 45f },
-            new NPCDefaultAction { action = data.escapePrison, baseUtility = 35f });
+            new NPCDefaultAction { action = data.escapePrison, baseUtility = 35f },
+            new NPCDefaultAction { action = data.rest, baseUtility = 20f },
+            new NPCDefaultAction { action = data.walk, baseUtility = 25f },
+            new NPCDefaultAction { action = data.tavern, baseUtility = 22f });
+
+        data.carlos = CreateNpc("NPC-Carlos", "CARLOS", "Carlos", null, new[] { data.livre },
+            new NPCDefaultAction { action = data.rest, baseUtility = 22f },
+            new NPCDefaultAction { action = data.walk, baseUtility = 28f },
+            new NPCDefaultAction { action = data.tavern, baseUtility = 20f });
+
+        data.ana = CreateNpc("NPC-Ana", "ANA", "Ana", null, new[] { data.livre },
+            new NPCDefaultAction { action = data.rest, baseUtility = 24f },
+            new NPCDefaultAction { action = data.walk, baseUtility = 24f },
+            new NPCDefaultAction { action = data.tavern, baseUtility = 18f });
 
         data.campoVerde = CreateCampoVerde(data);
         data.serraDeFerro = CreateSerraDeFerro(data);
@@ -218,6 +293,7 @@ public static class SimulationTestDataCreator
     {
         NpcActionData action = CreateOrLoadAsset<NpcActionData>($"{ActionFolder}/{assetName}.asset");
         action.actionName = actionName;
+        action.normalActionLogText = string.Empty;
         action.actionCategory = actionCategory;
         action.actionType = actionType;
         action.baseUtility = baseUtility;
@@ -246,6 +322,14 @@ public static class SimulationTestDataCreator
         return action;
     }
 
+    private static NpcActionData CreateNeutralAction(string assetName, string actionName, string logText, float baseUtility, params NpcStatusData[] requiredStatus)
+    {
+        NpcActionData action = CreateAction(assetName, actionName, NpcActionCategory.General, NpcActionType.Normal, baseUtility, false, 1f, requiredStatus);
+        action.normalActionLogText = logText;
+        EditorUtility.SetDirty(action);
+        return action;
+    }
+
     private static void ConfigureCrimeSettings(NpcActionData action, int amount, float bounty, int sentenceDays, int hiddenDays, float escapeBountyPenalty)
     {
         if (action == null)
@@ -265,14 +349,16 @@ public static class SimulationTestDataCreator
         EditorUtility.SetDirty(action);
     }
 
-    private static NpcJobData CreateJob(string assetName, string jobName, NpcJobType jobType, NpcActionData workAction, float workUtility)
+    private static NpcJobData CreateJob(string assetName, string jobName, NpcJobType jobType, MerchantBehavior merchantBehavior, NpcActionData workAction, float workUtility, params TradeItemPreference[] preferredTradeItems)
     {
         NpcJobData job = CreateOrLoadAsset<NpcJobData>($"{JobFolder}/{assetName}.asset");
         job.jobName = jobName;
         job.jobType = jobType;
+        job.merchantBehavior = merchantBehavior;
         job.workAction = workAction;
         job.workUtility = workUtility;
         EnsureList(ref job.preferredTradeItems);
+        ReplaceList(job.preferredTradeItems, preferredTradeItems);
         EditorUtility.SetDirty(job);
         return job;
     }
@@ -355,7 +441,7 @@ public static class SimulationTestDataCreator
         return city;
     }
 
-    private static SimulationConfigData CreateSimulationConfig(string assetName, string simulationName, SimulationModule[] modules, CityData[] cities, NpcSimulationConfig[] npcs, NpcActionData[] actions, NpcStatusData[] statuses, NpcJobData[] jobs, InitialWantedRecordConfig[] initialWarrants, NpcStatusData freeStatus, NpcStatusData wantedStatus, NpcStatusData arrestedStatus, NpcStatusData hiddenStatus, float travelCostPerDay)
+    private static SimulationConfigData CreateSimulationConfig(string assetName, string simulationName, SimulationModule[] modules, CityData[] cities, NpcSimulationConfig[] npcs, NpcActionData[] actions, NpcStatusData[] statuses, NpcJobData[] jobs, InitialWantedRecordConfig[] initialWarrants, NpcStatusData freeStatus, NpcStatusData wantedStatus, NpcStatusData arrestedStatus, NpcStatusData hiddenStatus, float travelCostPerDay, SimulationLogSettings logSettings)
     {
         SimulationConfigData config = CreateOrLoadAsset<SimulationConfigData>($"{SimulationFolder}/{assetName}.asset");
         config.simulationName = simulationName;
@@ -364,6 +450,7 @@ public static class SimulationTestDataCreator
         config.arrestedStatus = arrestedStatus;
         config.hiddenStatus = hiddenStatus;
         config.travelCostPerDay = Mathf.Max(0f, travelCostPerDay);
+        config.logSettings = logSettings ?? new SimulationLogSettings();
 
         EnsureList(ref config.enabledModules);
         EnsureList(ref config.cities);
@@ -385,14 +472,37 @@ public static class SimulationTestDataCreator
         return config;
     }
 
-    private static NpcSimulationConfig CreateNpcConfig(NpcData npc, CityData startingCity, float initialMoney)
+    private static NpcSimulationConfig CreateNpcConfig(NpcData npc, CityData startingCity, float initialMoney, params NpcInitialInventoryItemConfig[] initialInventory)
     {
-        return new NpcSimulationConfig
+        NpcSimulationConfig config = new NpcSimulationConfig
         {
             npc = npc,
             startingCity = startingCity,
             initialMoney = initialMoney,
             initialInventory = new List<NpcInitialInventoryItemConfig>()
+        };
+
+        if (initialInventory != null)
+        {
+            foreach (NpcInitialInventoryItemConfig item in initialInventory)
+            {
+                if (item != null && item.item != null && item.amount > 0)
+                {
+                    config.initialInventory.Add(item);
+                }
+            }
+        }
+
+        return config;
+    }
+
+    private static NpcInitialInventoryItemConfig CreateInitialInventoryConfig(ItemData item, int amount, float averageUnitCost)
+    {
+        return new NpcInitialInventoryItemConfig
+        {
+            item = item,
+            amount = Mathf.Max(0, amount),
+            averageUnitCost = Mathf.Max(0f, averageUnitCost)
         };
     }
 
@@ -404,6 +514,22 @@ public static class SimulationTestDataCreator
             city = city,
             bounty = Mathf.Max(0f, bounty),
             sentenceDays = Mathf.Max(1, sentenceDays)
+        };
+    }
+
+    private static SimulationLogSettings CreateLogSettings(bool showDay, bool npcActions, bool trade, bool travel, bool crime, bool justice, bool economyProduction, bool economyConsumption, bool market)
+    {
+        return new SimulationLogSettings
+        {
+            showDay = showDay,
+            npcActions = npcActions,
+            trade = trade,
+            travel = travel,
+            crime = crime,
+            justice = justice,
+            economyProduction = economyProduction,
+            economyConsumption = economyConsumption,
+            market = market
         };
     }
 
@@ -562,11 +688,24 @@ public static class SimulationTestDataCreator
         public NpcActionData hide;
         public NpcActionData fleeCity;
         public NpcActionData escapePrison;
+        public NpcActionData rest;
+        public NpcActionData walk;
+        public NpcActionData tavern;
         public NpcJobData merchantJob;
+        public NpcJobData ironMerchantJob;
+        public NpcJobData wineMerchantJob;
+        public NpcJobData localMerchantJob;
         public NpcJobData guardJob;
         public NpcData jorge;
+        public NpcData afonso;
+        public NpcData helena;
+        public NpcData pedro;
+        public NpcData maria;
         public NpcData marcus;
+        public NpcData arthur;
         public NpcData jobson;
+        public NpcData carlos;
+        public NpcData ana;
         public CityData campoVerde;
         public CityData serraDeFerro;
         public CityData guardTestCity;

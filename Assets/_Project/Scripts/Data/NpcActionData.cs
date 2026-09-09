@@ -8,6 +8,7 @@ public class NpcActionData : ScriptableObject
 {
 	public List<NpcStatusData> statusNecessariosParaFazerAcao = new List<NpcStatusData>();
 	public string actionName;
+    public string normalActionLogText;
     public NpcActionCategory actionCategory = NpcActionCategory.General;
     public NpcActionType actionType = NpcActionType.Normal;
 
