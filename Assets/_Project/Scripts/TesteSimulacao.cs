@@ -25,10 +25,15 @@ public class TesteSimulacao : MonoBehaviour
     private TravelSystem travelSystem;
     private MerchantSystem merchantSystem;
     private SimulationLogger logger;
-    private int currentDay;
-    private int lastEconomySnapshotDay;
+    private SimulationTime simulationTime = new SimulationTime();
+    private CalendarDefinition calendarDefinition = CalendarDefinition.CreateDefault();
+    private long lastEconomySnapshotDay;
 
     public string FullLog => logger != null ? logger.FullLog : string.Empty;
+    public SimulationTime SimulationTime => simulationTime;
+    public CalendarDefinition Calendar => calendarDefinition;
+    public long CurrentDay => simulationTime.AbsoluteDay;
+    public SimulationDate CurrentDate => calendarDefinition.GetDate(CurrentDay);
 
     public void Start()
     {
@@ -50,7 +55,7 @@ public class TesteSimulacao : MonoBehaviour
             Random.InitState(simulationConfig.simulationSeed);
         }
 
-        currentDay = 0;
+        simulationTime = new SimulationTime();
         lastEconomySnapshotDay = 0;
         logger = new SimulationLogger(simulationConfig != null ? simulationConfig.LogSettings : null);
         logger.BeginSimulation(
@@ -59,6 +64,7 @@ public class TesteSimulacao : MonoBehaviour
             simulationConfig != null ? simulationConfig.Cities.Count : 0,
             simulationConfig != null ? simulationConfig.Npcs.Count : 0);
         AppendScenarioDiagnostics();
+        calendarDefinition = ResolveCalendarDefinition();
         enabledModules = new SimulationModuleSet(simulationConfig, logger);
         runtimeIdAllocator = new RuntimeIdAllocator();
         runtimeIdentityRegistry = new RuntimeIdentityRegistry(logger);
@@ -104,12 +110,25 @@ public class TesteSimulacao : MonoBehaviour
         return false;
     }
 
+    private CalendarDefinition ResolveCalendarDefinition()
+    {
+        CalendarDefinition configuredCalendar = simulationConfig != null ? simulationConfig.Calendar : null;
+        CalendarDefinition resolvedCalendar = CalendarDefinition.CreateValidatedOrDefault(configuredCalendar, out string diagnostic);
+
+        if (string.IsNullOrEmpty(diagnostic) == false)
+        {
+            logger.LogWarning(diagnostic);
+        }
+
+        return resolvedCalendar;
+    }
+
     private void Simulate(int daysToSimulate)
     {
         for (int i = 0; i < daysToSimulate; i++)
         {
-            currentDay++;
-            logger.BeginDay(currentDay);
+            simulationTime.AdvanceDay();
+            logger.BeginDay(CurrentDay);
             BeginSimulationDay();
 
             if (enabledModules.IsEnabled(SimulationModule.Economy) == true)
@@ -201,20 +220,20 @@ public class TesteSimulacao : MonoBehaviour
 
     private void AppendEconomySnapshotIfNeeded(bool forceFinal)
     {
-        if (simulationConfig == null || simulationConfig.includeEconomySnapshots == false || currentDay <= 0 || currentDay == lastEconomySnapshotDay)
+        if (simulationConfig == null || simulationConfig.includeEconomySnapshots == false || CurrentDay <= 0 || CurrentDay == lastEconomySnapshotDay)
         {
             return;
         }
 
         int interval = Mathf.Max(1, simulationConfig.economySnapshotIntervalDays);
 
-        if (currentDay % interval != 0 && forceFinal == false)
+        if (CurrentDay % interval != 0 && forceFinal == false)
         {
             return;
         }
 
         logger.AddReportLine(string.Empty);
-        logger.AddReportLine("=== ECONOMY SNAPSHOT - DAY " + currentDay + " ===");
+        logger.AddReportLine("=== ECONOMY SNAPSHOT - DAY " + CurrentDay + " ===");
 
         foreach (CityRuntime cityRuntime in CityRuntimeList)
         {
@@ -237,13 +256,13 @@ public class TesteSimulacao : MonoBehaviour
             }
         }
 
-        lastEconomySnapshotDay = currentDay;
+        lastEconomySnapshotDay = CurrentDay;
     }
 
     private void AppendNpcStateSummary()
     {
         logger.AddReportLine(string.Empty);
-        logger.AddReportLine($"--- ESTADO AO FIM DO DIA {currentDay} ---");
+        logger.AddReportLine($"--- ESTADO AO FIM DO DIA {CurrentDay} ---");
 
         foreach (NpcRuntime npcRuntime in NpcRuntimeList)
         {

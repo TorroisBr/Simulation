@@ -6,6 +6,7 @@ using UnityEngine;
 public class SimulationConfigData : ScriptableObject
 {
     public string simulationName;
+    public CalendarDefinition calendar = new CalendarDefinition();
     public List<SimulationModule> enabledModules = new List<SimulationModule>();
     public List<CityData> cities = new List<CityData>();
     public List<NpcSimulationConfig> npcs = new List<NpcSimulationConfig>();
@@ -27,6 +28,7 @@ public class SimulationConfigData : ScriptableObject
     public NpcStatusData arrestedStatus;
     public NpcStatusData hiddenStatus;
 
+    public CalendarDefinition Calendar => calendar;
     public List<SimulationModule> EnabledModules => enabledModules ?? (enabledModules = new List<SimulationModule>());
     public List<CityData> Cities => cities ?? (cities = new List<CityData>());
     public List<NpcSimulationConfig> Npcs => npcs ?? (npcs = new List<NpcSimulationConfig>());

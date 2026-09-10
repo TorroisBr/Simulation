@@ -35,7 +35,7 @@ public class SimulationLogger
         AddReportLine(string.Empty);
     }
 
-    public void BeginDay(int day)
+    public void BeginDay(long absoluteDay)
     {
         if (IsEnabled(SimulationLogCategory.Day) == false)
         {
@@ -43,7 +43,7 @@ public class SimulationLogger
         }
 
         AddReportLine("====================");
-        AddReportLine("DIA " + day);
+        AddReportLine("DIA " + absoluteDay);
         AddReportLine("====================");
         AddReportLine(string.Empty);
     }
