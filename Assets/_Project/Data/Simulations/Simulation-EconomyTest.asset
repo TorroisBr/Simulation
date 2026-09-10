@@ -13,9 +13,7 @@ MonoBehaviour:
   m_Name: Simulation-EconomyTest
   m_EditorClassIdentifier: Assembly-CSharp::SimulationConfigData
   simulationName: Economy Test
-  enabledModules:
-  - 0
-  - 1
+  enabledModules: 0000000001000000
   cities:
   - {fileID: 11400000, guid: eabd01569d86fa84bb8117495a6dfb5e, type: 2}
   - {fileID: 11400000, guid: ca4ded573f6d79a4b8bc96de1114b659, type: 2}
@@ -34,6 +32,8 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 14afa0c3d8c0b594da66d52015932182, type: 2}
   initialWarrants: []
   travelCostPerDay: 10
+  includeEconomySnapshots: 0
+  economySnapshotIntervalDays: 10
   logSettings:
     showDay: 1
     npcActions: 1

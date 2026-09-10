@@ -1,0 +1,167 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3474883101d4499e9e45247304cbd4c5, type: 3}
+  m_Name: Simulation-EconomicNetworkTest
+  m_EditorClassIdentifier: Assembly-CSharp::SimulationConfigData
+  simulationName: Economic Network Test
+  enabledModules: 0000000001000000
+  cities:
+  - {fileID: 11400000, guid: 09efe343303cae84bb865c0041406b56, type: 2}
+  - {fileID: 11400000, guid: 45c0d8875b0f9ed43a200ea1ee6f51b7, type: 2}
+  - {fileID: 11400000, guid: 1519b282af1c571488137570c8543dc0, type: 2}
+  - {fileID: 11400000, guid: 33803855acf3fc049a434f08dce7ca8b, type: 2}
+  - {fileID: 11400000, guid: a19053f39a1228a4f9de1c012f66f587, type: 2}
+  - {fileID: 11400000, guid: 4bd3f5df3d3b3504390b2a92158c4d6d, type: 2}
+  npcs:
+  - npc: {fileID: 11400000, guid: 323bacfc917674944882cf8c050a6cfa, type: 2}
+    startingCity: {fileID: 11400000, guid: 09efe343303cae84bb865c0041406b56, type: 2}
+    initialMoney: 320
+    initialInventory: []
+  - npc: {fileID: 11400000, guid: 1874a2fff0c547d449a60683464ee0d2, type: 2}
+    startingCity: {fileID: 11400000, guid: 09efe343303cae84bb865c0041406b56, type: 2}
+    initialMoney: 260
+    initialInventory: []
+  - npc: {fileID: 11400000, guid: d4848df877f707e4d9d1053ad24ebd1e, type: 2}
+    startingCity: {fileID: 11400000, guid: 45c0d8875b0f9ed43a200ea1ee6f51b7, type: 2}
+    initialMoney: 400
+    initialInventory: []
+  - npc: {fileID: 11400000, guid: 75f05b2ade4428f45a66f8879432f8bc, type: 2}
+    startingCity: {fileID: 11400000, guid: 45c0d8875b0f9ed43a200ea1ee6f51b7, type: 2}
+    initialMoney: 280
+    initialInventory: []
+  - npc: {fileID: 11400000, guid: 47e3ff9eae7eda44095bbfc14a01a98e, type: 2}
+    startingCity: {fileID: 11400000, guid: 1519b282af1c571488137570c8543dc0, type: 2}
+    initialMoney: 350
+    initialInventory: []
+  - npc: {fileID: 11400000, guid: 5b668b2e5c321174892100dfcf75552c, type: 2}
+    startingCity: {fileID: 11400000, guid: 1519b282af1c571488137570c8543dc0, type: 2}
+    initialMoney: 300
+    initialInventory: []
+  - npc: {fileID: 11400000, guid: 134240204a3a296449710ac3f2ca884d, type: 2}
+    startingCity: {fileID: 11400000, guid: 33803855acf3fc049a434f08dce7ca8b, type: 2}
+    initialMoney: 420
+    initialInventory: []
+  - npc: {fileID: 11400000, guid: a0a286132322216498b64d73510ba7f9, type: 2}
+    startingCity: {fileID: 11400000, guid: 33803855acf3fc049a434f08dce7ca8b, type: 2}
+    initialMoney: 240
+    initialInventory: []
+  - npc: {fileID: 11400000, guid: 80b54b7485d2c4c478fe2140bf10100b, type: 2}
+    startingCity: {fileID: 11400000, guid: a19053f39a1228a4f9de1c012f66f587, type: 2}
+    initialMoney: 390
+    initialInventory: []
+  - npc: {fileID: 11400000, guid: 2941c3b9152ff7b4ca3a6c21e821f3a7, type: 2}
+    startingCity: {fileID: 11400000, guid: a19053f39a1228a4f9de1c012f66f587, type: 2}
+    initialMoney: 310
+    initialInventory: []
+  - npc: {fileID: 11400000, guid: 2998cefde2dbff1418e6db30dc0564ad, type: 2}
+    startingCity: {fileID: 11400000, guid: 4bd3f5df3d3b3504390b2a92158c4d6d, type: 2}
+    initialMoney: 450
+    initialInventory: []
+  - npc: {fileID: 11400000, guid: b3f9d1549994e714bbf6e1f6d37aefba, type: 2}
+    startingCity: {fileID: 11400000, guid: 4bd3f5df3d3b3504390b2a92158c4d6d, type: 2}
+    initialMoney: 275
+    initialInventory: []
+  - npc: {fileID: 11400000, guid: cfbca03ba8957af46bbd12a5d3706985, type: 2}
+    startingCity: {fileID: 11400000, guid: 09efe343303cae84bb865c0041406b56, type: 2}
+    initialMoney: 520
+    initialInventory:
+    - item: {fileID: 11400000, guid: d798f72a0978dbc4dbcba05b5d3a6c22, type: 2}
+      amount: 4
+      averageUnitCost: 3
+    - item: {fileID: 11400000, guid: b4fa9b2c9da2cf447b31c81d1c51eb9f, type: 2}
+      amount: 2
+      averageUnitCost: 10
+  - npc: {fileID: 11400000, guid: 146cd61f1b1f9324aa6fea2ae4d29d41, type: 2}
+    startingCity: {fileID: 11400000, guid: 45c0d8875b0f9ed43a200ea1ee6f51b7, type: 2}
+    initialMoney: 440
+    initialInventory:
+    - item: {fileID: 11400000, guid: 64cef03f3b8e1c1419c490e6711ba665, type: 2}
+      amount: 4
+      averageUnitCost: 12
+    - item: {fileID: 11400000, guid: f8936c04587c6754cbc222ebbecbf150, type: 2}
+      amount: 3
+      averageUnitCost: 7
+  - npc: {fileID: 11400000, guid: 65f8f3d546609cc40b6c7a8bf32bd7d6, type: 2}
+    startingCity: {fileID: 11400000, guid: 1519b282af1c571488137570c8543dc0, type: 2}
+    initialMoney: 580
+    initialInventory:
+    - item: {fileID: 11400000, guid: 61db352f11c373c48bc9c10c2fdb7a25, type: 2}
+      amount: 5
+      averageUnitCost: 5
+    - item: {fileID: 11400000, guid: bc0ff92b945063c4abb55167fbe04f3c, type: 2}
+      amount: 3
+      averageUnitCost: 3
+  - npc: {fileID: 11400000, guid: c24ba3c849250ab4f810b9280df9f0c8, type: 2}
+    startingCity: {fileID: 11400000, guid: 33803855acf3fc049a434f08dce7ca8b, type: 2}
+    initialMoney: 360
+    initialInventory:
+    - item: {fileID: 11400000, guid: 3d6698c213313444e9bfa2df0b7aedb7, type: 2}
+      amount: 5
+      averageUnitCost: 4
+    - item: {fileID: 11400000, guid: c4d2420add5544f43b7639f24250c298, type: 2}
+      amount: 3
+      averageUnitCost: 3
+  - npc: {fileID: 11400000, guid: 51a3c9b6670bbd24bb50a995cf1a1a6b, type: 2}
+    startingCity: {fileID: 11400000, guid: a19053f39a1228a4f9de1c012f66f587, type: 2}
+    initialMoney: 490
+    initialInventory:
+    - item: {fileID: 11400000, guid: 1c8d5942f4e2f1340ae713db7fb6b134, type: 2}
+      amount: 4
+      averageUnitCost: 10
+    - item: {fileID: 11400000, guid: 5e654620f3ce5484aba6c031af300e2c, type: 2}
+      amount: 3
+      averageUnitCost: 7
+  - npc: {fileID: 11400000, guid: f8e52c516d69f91439d60c33d9afb89a, type: 2}
+    startingCity: {fileID: 11400000, guid: 4bd3f5df3d3b3504390b2a92158c4d6d, type: 2}
+    initialMoney: 600
+    initialInventory:
+    - item: {fileID: 11400000, guid: d798f72a0978dbc4dbcba05b5d3a6c22, type: 2}
+      amount: 3
+      averageUnitCost: 4
+    - item: {fileID: 11400000, guid: 1c8d5942f4e2f1340ae713db7fb6b134, type: 2}
+      amount: 2
+      averageUnitCost: 13
+  actions:
+  - {fileID: 11400000, guid: 2fd0b05dba9748444891d218e424fc1c, type: 2}
+  - {fileID: 11400000, guid: 5041bea373640e64b817c6d64f4dd131, type: 2}
+  - {fileID: 11400000, guid: 5865aac66a0f87344bf73e5d71f94fdb, type: 2}
+  - {fileID: 11400000, guid: 1cd32fa5fdbb46fcaf34ff0a6f390eaf, type: 2}
+  - {fileID: 11400000, guid: 3a34fd972a2f4ca68cf1e82ecc01b126, type: 2}
+  - {fileID: 11400000, guid: ac62c1a5cea3459899bfd31f38bea7f0, type: 2}
+  statuses:
+  - {fileID: 11400000, guid: 922e799608934f4469cb8c77bfc6c32e, type: 2}
+  jobs:
+  - {fileID: 11400000, guid: 4049896b86e84244282938a957185716, type: 2}
+  - {fileID: 11400000, guid: 7ba936cb15df2c34c8c51c394ae1e42f, type: 2}
+  - {fileID: 11400000, guid: ec3596dfc34f7d047a21aa5de3a45f66, type: 2}
+  - {fileID: 11400000, guid: dc3370a6b449a2b43a1eeca2515256c5, type: 2}
+  - {fileID: 11400000, guid: 031ce4dc4bc70aa49bc776078a5775a1, type: 2}
+  - {fileID: 11400000, guid: 6f4e14c4871e68a4ba87189e617a2f1f, type: 2}
+  - {fileID: 11400000, guid: 7b2dce7e0fd3f0242803afc5ad77e489, type: 2}
+  initialWarrants: []
+  travelCostPerDay: 10
+  includeEconomySnapshots: 1
+  economySnapshotIntervalDays: 10
+  logSettings:
+    showDay: 1
+    npcActions: 1
+    trade: 1
+    travel: 1
+    crime: 0
+    justice: 0
+    economyProduction: 1
+    economyConsumption: 1
+    market: 1
+  freeStatus: {fileID: 11400000, guid: 922e799608934f4469cb8c77bfc6c32e, type: 2}
+  wantedStatus: {fileID: 0}
+  arrestedStatus: {fileID: 0}
+  hiddenStatus: {fileID: 0}

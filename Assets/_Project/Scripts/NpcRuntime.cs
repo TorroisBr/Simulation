@@ -180,7 +180,9 @@ public class NpcRuntime
 
     public void HideForDays(int days)
     {
-        hiddenDaysRemaining = Mathf.Max(hiddenDaysRemaining, days);
+        int followingFullDays = Mathf.Max(1, days);
+        int durationIncludingCurrentDay = followingFullDays + 1;
+        hiddenDaysRemaining = Mathf.Max(hiddenDaysRemaining, durationIncludingCurrentDay);
     }
 
     public bool AdvanceHiddenDay()

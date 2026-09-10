@@ -1,0 +1,70 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 24f4daabd5b68d24f883a6a44333254d, type: 3}
+  m_Name: City-EconomicNetwork-ValeDoCouro
+  m_EditorClassIdentifier: Assembly-CSharp::CityData
+  id: ECONOMIC_NETWORK_VALE_DO_COURO
+  cityName: Vale do Couro
+  initialPopulation: 850
+  marketItems:
+  - item: {fileID: 11400000, guid: d798f72a0978dbc4dbcba05b5d3a6c22, type: 2}
+    initialAmount: 100
+    desiredAmount: 190
+    consumptionPer1000Population: 10
+  - item: {fileID: 11400000, guid: 64cef03f3b8e1c1419c490e6711ba665, type: 2}
+    initialAmount: 80
+    desiredAmount: 160
+    consumptionPer1000Population: 2
+  - item: {fileID: 11400000, guid: b4fa9b2c9da2cf447b31c81d1c51eb9f, type: 2}
+    initialAmount: 70
+    desiredAmount: 110
+    consumptionPer1000Population: 2
+  - item: {fileID: 11400000, guid: 5e654620f3ce5484aba6c031af300e2c, type: 2}
+    initialAmount: 300
+    desiredAmount: 170
+    consumptionPer1000Population: 3
+  - item: {fileID: 11400000, guid: bc0ff92b945063c4abb55167fbe04f3c, type: 2}
+    initialAmount: 35
+    desiredAmount: 100
+    consumptionPer1000Population: 2
+  - item: {fileID: 11400000, guid: 3d6698c213313444e9bfa2df0b7aedb7, type: 2}
+    initialAmount: 80
+    desiredAmount: 130
+    consumptionPer1000Population: 3
+  - item: {fileID: 11400000, guid: 61db352f11c373c48bc9c10c2fdb7a25, type: 2}
+    initialAmount: 50
+    desiredAmount: 100
+    consumptionPer1000Population: 4
+  - item: {fileID: 11400000, guid: 1c8d5942f4e2f1340ae713db7fb6b134, type: 2}
+    initialAmount: 360
+    desiredAmount: 180
+    consumptionPer1000Population: 4
+  - item: {fileID: 11400000, guid: c4d2420add5544f43b7639f24250c298, type: 2}
+    initialAmount: 70
+    desiredAmount: 110
+    consumptionPer1000Population: 2
+  - item: {fileID: 11400000, guid: f8936c04587c6754cbc222ebbecbf150, type: 2}
+    initialAmount: 60
+    desiredAmount: 120
+    consumptionPer1000Population: 2
+  productionConfigs:
+  - item: {fileID: 11400000, guid: 1c8d5942f4e2f1340ae713db7fb6b134, type: 2}
+    amountPerDay: 26
+  - item: {fileID: 11400000, guid: 5e654620f3ce5484aba6c031af300e2c, type: 2}
+    amountPerDay: 20
+  connections:
+  - destination: {fileID: 11400000, guid: 4bd3f5df3d3b3504390b2a92158c4d6d, type: 2}
+    travelDays: 3
+  - destination: {fileID: 11400000, guid: 09efe343303cae84bb865c0041406b56, type: 2}
+    travelDays: 3
+  - destination: {fileID: 11400000, guid: 1519b282af1c571488137570c8543dc0, type: 2}
+    travelDays: 2

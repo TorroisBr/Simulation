@@ -23,6 +23,7 @@ public class TesteSimulacao : MonoBehaviour
     private TravelSystem travelSystem;
     private SimulationLogger logger;
     private int currentDay;
+    private int lastEconomySnapshotDay;
 
     public string FullLog => logger != null ? logger.FullLog : string.Empty;
 
@@ -42,12 +43,14 @@ public class TesteSimulacao : MonoBehaviour
     private void InitializeSimulation()
     {
         currentDay = 0;
+        lastEconomySnapshotDay = 0;
         logger = new SimulationLogger(simulationConfig != null ? simulationConfig.LogSettings : null);
         logger.BeginSimulation(
             simulationConfig != null ? simulationConfig.simulationName : "Unnamed",
             simulationConfig != null ? simulationConfig.EnabledModules : null,
             simulationConfig != null ? simulationConfig.Cities.Count : 0,
             simulationConfig != null ? simulationConfig.Npcs.Count : 0);
+        AppendScenarioDiagnostics();
         enabledModules = new SimulationModuleSet(simulationConfig, logger);
 
         CityRuntimeList.Clear();
@@ -94,9 +97,105 @@ public class TesteSimulacao : MonoBehaviour
 
             travelSystem.AdvanceTravels(NpcRuntimeList);
             AppendNpcStateSummary();
+            AppendEconomySnapshotIfNeeded(false);
+        }
+
+        if (simulationConfig != null
+            && simulationConfig.includeEconomySnapshots == true
+            && daysToSimulate >= Mathf.Max(1, simulationConfig.economySnapshotIntervalDays))
+        {
+            AppendEconomySnapshotIfNeeded(true);
         }
 
         SaveSimulationLog();
+    }
+
+    private void AppendScenarioDiagnostics()
+    {
+        if (simulationConfig == null || simulationConfig.includeEconomySnapshots == false)
+        {
+            return;
+        }
+
+        logger.AddReportLine("Max Merchant Trade Amount: " + maxMerchantTradeAmount);
+        logger.AddReportLine("Travel Cost Per Day: " + simulationConfig.travelCostPerDay.ToString("0.##"));
+        logger.AddReportLine(string.Empty);
+        logger.AddReportLine("ROADS");
+
+        HashSet<string> roadKeys = new HashSet<string>();
+
+        foreach (CityData city in simulationConfig.Cities)
+        {
+            if (city == null || city.connections == null)
+            {
+                continue;
+            }
+
+            foreach (CityConnection connection in city.connections)
+            {
+                if (connection == null || connection.destination == null || connection.destination == city)
+                {
+                    continue;
+                }
+
+                string roadKey = CreateRoadKey(city, connection.destination);
+
+                if (roadKeys.Add(roadKey) == true)
+                {
+                    logger.AddReportLine($"{city.cityName} <-> {connection.destination.cityName} : {connection.travelDays}d");
+                }
+            }
+        }
+
+        logger.AddReportLine(string.Empty);
+    }
+
+    private string CreateRoadKey(CityData first, CityData second)
+    {
+        string firstKey = !string.IsNullOrEmpty(first.id) ? first.id : first.cityName;
+        string secondKey = !string.IsNullOrEmpty(second.id) ? second.id : second.cityName;
+        return string.CompareOrdinal(firstKey, secondKey) < 0 ? firstKey + "|" + secondKey : secondKey + "|" + firstKey;
+    }
+
+    private void AppendEconomySnapshotIfNeeded(bool forceFinal)
+    {
+        if (simulationConfig == null || simulationConfig.includeEconomySnapshots == false || currentDay <= 0 || currentDay == lastEconomySnapshotDay)
+        {
+            return;
+        }
+
+        int interval = Mathf.Max(1, simulationConfig.economySnapshotIntervalDays);
+
+        if (currentDay % interval != 0 && forceFinal == false)
+        {
+            return;
+        }
+
+        logger.AddReportLine(string.Empty);
+        logger.AddReportLine("=== ECONOMY SNAPSHOT - DAY " + currentDay + " ===");
+
+        foreach (CityRuntime cityRuntime in CityRuntimeList)
+        {
+            if (cityRuntime == null)
+            {
+                continue;
+            }
+
+            logger.AddReportLine(string.Empty);
+            logger.AddReportLine(cityRuntime.CityName);
+
+            foreach (MarketItemRuntime marketItem in cityRuntime.Market.Items)
+            {
+                if (marketItem == null || marketItem.Item == null)
+                {
+                    continue;
+                }
+
+                logger.AddReportLine($"{marketItem.Item.itemName}: stock {marketItem.Amount} / desired {marketItem.DesiredAmount} | ${marketItem.CurrentPrice:0.##}");
+            }
+        }
+
+        lastEconomySnapshotDay = currentDay;
     }
 
     private void AppendNpcStateSummary()

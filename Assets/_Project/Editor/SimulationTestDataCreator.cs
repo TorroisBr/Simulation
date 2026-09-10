@@ -42,6 +42,73 @@ public static class SimulationTestDataCreator
         FinishCreation(config, "Economy Test");
     }
 
+    [MenuItem("Simulation/Create Economic Network Test")]
+    public static void CreateEconomicNetworkTest()
+    {
+        TestData data = CreateEconomicNetworkTestData();
+        SimulationConfigData config = CreateSimulationConfig(
+            "Simulation-EconomicNetworkTest",
+            "Economic Network Test",
+            new[] { SimulationModule.Economy, SimulationModule.Merchant },
+            new[] { data.networkCampoVerde, data.networkSerraDeFerro, data.portoAzul, data.bosqueAlto, data.valeDoCouro, data.feiraCentral },
+            new[]
+            {
+                CreateNpcConfig(data.networkCampoTravelerOne, data.networkCampoVerde, 320f),
+                CreateNpcConfig(data.networkCampoTravelerTwo, data.networkCampoVerde, 260f),
+                CreateNpcConfig(data.networkSerraTravelerOne, data.networkSerraDeFerro, 400f),
+                CreateNpcConfig(data.networkSerraTravelerTwo, data.networkSerraDeFerro, 280f),
+                CreateNpcConfig(data.networkPortoTravelerOne, data.portoAzul, 350f),
+                CreateNpcConfig(data.networkPortoTravelerTwo, data.portoAzul, 300f),
+                CreateNpcConfig(data.networkBosqueTravelerOne, data.bosqueAlto, 420f),
+                CreateNpcConfig(data.networkBosqueTravelerTwo, data.bosqueAlto, 240f),
+                CreateNpcConfig(data.networkValeTravelerOne, data.valeDoCouro, 390f),
+                CreateNpcConfig(data.networkValeTravelerTwo, data.valeDoCouro, 310f),
+                CreateNpcConfig(data.networkFeiraTravelerOne, data.feiraCentral, 450f),
+                CreateNpcConfig(data.networkFeiraTravelerTwo, data.feiraCentral, 275f),
+                CreateNpcConfig(data.networkCampoLocal, data.networkCampoVerde, 520f,
+                    CreateInitialInventoryConfig(data.trigo, 4, 3f),
+                    CreateInitialInventoryConfig(data.vinho, 2, 10f)),
+                CreateNpcConfig(data.networkSerraLocal, data.networkSerraDeFerro, 440f,
+                    CreateInitialInventoryConfig(data.ferro, 4, 12f),
+                    CreateInitialInventoryConfig(data.carvao, 3, 7f)),
+                CreateNpcConfig(data.networkPortoLocal, data.portoAzul, 580f,
+                    CreateInitialInventoryConfig(data.peixe, 5, 5f),
+                    CreateInitialInventoryConfig(data.sal, 3, 3f)),
+                CreateNpcConfig(data.networkBosqueLocal, data.bosqueAlto, 360f,
+                    CreateInitialInventoryConfig(data.madeira, 5, 4f),
+                    CreateInitialInventoryConfig(data.ervas, 3, 3f)),
+                CreateNpcConfig(data.networkValeLocal, data.valeDoCouro, 490f,
+                    CreateInitialInventoryConfig(data.couro, 4, 10f),
+                    CreateInitialInventoryConfig(data.tecido, 3, 7f)),
+                CreateNpcConfig(data.networkFeiraLocal, data.feiraCentral, 600f,
+                    CreateInitialInventoryConfig(data.trigo, 3, 4f),
+                    CreateInitialInventoryConfig(data.couro, 2, 13f))
+            },
+            new[] { data.buyGoods, data.sellGoods, data.travel, data.rest, data.walk, data.tavern },
+            new[] { data.livre },
+            new[]
+            {
+                data.networkAgricultureJob,
+                data.networkMiningJob,
+                data.networkMaritimeJob,
+                data.networkForestryJob,
+                data.networkManufacturingJob,
+                data.networkGeneralJob,
+                data.networkLocalJob
+            },
+            null,
+            data.livre,
+            null,
+            null,
+            null,
+            10f,
+            CreateLogSettings(true, true, true, true, false, false, true, true, true),
+            true,
+            10);
+
+        FinishCreation(config, "Economic Network Test", 20);
+    }
+
     [MenuItem("Simulation/Create Test Economy Data")]
     public static void CreateLegacyEconomyTest()
     {
@@ -175,6 +242,8 @@ public static class SimulationTestDataCreator
         data.walk = CreateNeutralAction("Action-Passear", "PASSEAR", "passeou pela cidade.", 20f, data.livre);
         data.tavern = CreateNeutralAction("Action-IrATaverna", "IR_A_TAVERNA", "foi a taverna.", 18f, data.livre);
         data.serveSentence = CreateNeutralAction("Action-CumprirPena", "CUMPRIR_PENA", "permaneceu na prisão.", 60f, data.preso);
+        data.serveSentence.actionCategory = NpcActionCategory.Justice;
+        EditorUtility.SetDirty(data.serveSentence);
 
         data.merchantJob = CreateJob("Job-Mercador", "Mercador", NpcJobType.Merchant, MerchantBehavior.Traveling, data.buyGoods, 80f);
         data.ironMerchantJob = CreateJob("Job-MercadorFerro", "Mercador de Ferro", NpcJobType.Merchant, MerchantBehavior.Traveling, data.buyGoods, 80f,
@@ -271,6 +340,262 @@ public static class SimulationTestDataCreator
         EditorUtility.SetDirty(data.serraDeFerro);
 
         return data;
+    }
+
+    private static TestData CreateEconomicNetworkTestData()
+    {
+        EnsureBaseFolders();
+
+        TestData data = new TestData();
+        data.trigo = CreateItem("Item-Trigo", "TRIGO", 4f);
+        data.ferro = CreateItem("Item-Ferro", "FERRO", 20f);
+        data.vinho = CreateItem("Item-Vinho", "VINHO", 14f);
+        data.tecido = CreateItem("Item-Tecido", "TECIDO", 10f);
+        data.sal = CreateItem("Item-Sal", "SAL", 6f);
+        data.madeira = CreateItem("Item-Madeira", "MADEIRA", 8f);
+        data.peixe = CreateItem("Item-Peixe", "PEIXE", 9f);
+        data.couro = CreateItem("Item-Couro", "COURO", 16f);
+        data.ervas = CreateItem("Item-Ervas", "ERVAS", 7f);
+        data.carvao = CreateItem("Item-Carvao", "CARVAO", 12f);
+
+        data.livre = CreateStatus("Status-Livre", "LIVRE");
+        data.buyGoods = CreateAction("Action-ComprarMercadoria", "COMPRAR_MERCADORIA", NpcActionCategory.Commerce, NpcActionType.BuyGoods, 10f, false, 1f, data.livre);
+        data.sellGoods = CreateAction("Action-VenderMercadoria", "VENDER_MERCADORIA", NpcActionCategory.Commerce, NpcActionType.SellGoods, 10f, false, 1f, data.livre);
+        data.travel = CreateAction("Action-Viajar", "VIAJAR", NpcActionCategory.Travel, NpcActionType.Travel, 5f, false, 1f, data.livre);
+        data.rest = CreateNeutralAction("Action-Descansar", "DESCANSAR", "descansou.", 18f, data.livre);
+        data.walk = CreateNeutralAction("Action-Passear", "PASSEAR", "passeou pela cidade.", 20f, data.livre);
+        data.tavern = CreateNeutralAction("Action-IrATaverna", "IR_A_TAVERNA", "foi a taverna.", 18f, data.livre);
+
+        data.networkAgricultureJob = CreateJob("Job-EconomicNetwork-Agricola", "Mercador Agricola", NpcJobType.Merchant, MerchantBehavior.Traveling, data.buyGoods, 80f,
+            new TradeItemPreference { item = data.trigo, utilityMultiplier = 2f },
+            new TradeItemPreference { item = data.vinho, utilityMultiplier = 1.8f });
+        data.networkMiningJob = CreateJob("Job-EconomicNetwork-Minerador", "Mercador Minerador", NpcJobType.Merchant, MerchantBehavior.Traveling, data.buyGoods, 80f,
+            new TradeItemPreference { item = data.ferro, utilityMultiplier = 2f },
+            new TradeItemPreference { item = data.carvao, utilityMultiplier = 1.8f });
+        data.networkMaritimeJob = CreateJob("Job-EconomicNetwork-Maritimo", "Mercador Maritimo", NpcJobType.Merchant, MerchantBehavior.Traveling, data.buyGoods, 80f,
+            new TradeItemPreference { item = data.peixe, utilityMultiplier = 2f },
+            new TradeItemPreference { item = data.sal, utilityMultiplier = 1.8f });
+        data.networkForestryJob = CreateJob("Job-EconomicNetwork-Florestal", "Mercador Florestal", NpcJobType.Merchant, MerchantBehavior.Traveling, data.buyGoods, 80f,
+            new TradeItemPreference { item = data.madeira, utilityMultiplier = 2f },
+            new TradeItemPreference { item = data.ervas, utilityMultiplier = 1.8f });
+        data.networkManufacturingJob = CreateJob("Job-EconomicNetwork-Manufatureiro", "Mercador Manufatureiro", NpcJobType.Merchant, MerchantBehavior.Traveling, data.buyGoods, 80f,
+            new TradeItemPreference { item = data.couro, utilityMultiplier = 2f },
+            new TradeItemPreference { item = data.tecido, utilityMultiplier = 1.8f });
+        data.networkGeneralJob = CreateJob("Job-EconomicNetwork-Geral", "Mercador Geral", NpcJobType.Merchant, MerchantBehavior.Traveling, data.buyGoods, 80f);
+        data.networkLocalJob = CreateJob("Job-EconomicNetwork-Local", "Mercador Local", NpcJobType.Merchant, MerchantBehavior.Local, data.buyGoods, 55f);
+
+        data.networkCampoTravelerOne = CreateEconomicNetworkMerchantNpc(data, "NPC-EconomicNetwork-Campo-01", "ECON_CAMPO_01", "Caio", data.networkAgricultureJob);
+        data.networkCampoTravelerTwo = CreateEconomicNetworkMerchantNpc(data, "NPC-EconomicNetwork-Campo-02", "ECON_CAMPO_02", "Livia", data.networkAgricultureJob);
+        data.networkSerraTravelerOne = CreateEconomicNetworkMerchantNpc(data, "NPC-EconomicNetwork-Serra-01", "ECON_SERRA_01", "Bruno", data.networkMiningJob);
+        data.networkSerraTravelerTwo = CreateEconomicNetworkMerchantNpc(data, "NPC-EconomicNetwork-Serra-02", "ECON_SERRA_02", "Iris", data.networkMiningJob);
+        data.networkPortoTravelerOne = CreateEconomicNetworkMerchantNpc(data, "NPC-EconomicNetwork-Porto-01", "ECON_PORTO_01", "Marina", data.networkMaritimeJob);
+        data.networkPortoTravelerTwo = CreateEconomicNetworkMerchantNpc(data, "NPC-EconomicNetwork-Porto-02", "ECON_PORTO_02", "Tiago", data.networkMaritimeJob);
+        data.networkBosqueTravelerOne = CreateEconomicNetworkMerchantNpc(data, "NPC-EconomicNetwork-Bosque-01", "ECON_BOSQUE_01", "Raul", data.networkForestryJob);
+        data.networkBosqueTravelerTwo = CreateEconomicNetworkMerchantNpc(data, "NPC-EconomicNetwork-Bosque-02", "ECON_BOSQUE_02", "Flora", data.networkForestryJob);
+        data.networkValeTravelerOne = CreateEconomicNetworkMerchantNpc(data, "NPC-EconomicNetwork-Vale-01", "ECON_VALE_01", "Hugo", data.networkManufacturingJob);
+        data.networkValeTravelerTwo = CreateEconomicNetworkMerchantNpc(data, "NPC-EconomicNetwork-Vale-02", "ECON_VALE_02", "Clara", data.networkManufacturingJob);
+        data.networkFeiraTravelerOne = CreateEconomicNetworkMerchantNpc(data, "NPC-EconomicNetwork-Feira-01", "ECON_FEIRA_01", "Nilo", data.networkGeneralJob);
+        data.networkFeiraTravelerTwo = CreateEconomicNetworkMerchantNpc(data, "NPC-EconomicNetwork-Feira-02", "ECON_FEIRA_02", "Sofia", data.networkGeneralJob);
+        data.networkCampoLocal = CreateEconomicNetworkMerchantNpc(data, "NPC-EconomicNetwork-Local-Campo", "ECON_LOCAL_CAMPO", "Olivia", data.networkLocalJob);
+        data.networkSerraLocal = CreateEconomicNetworkMerchantNpc(data, "NPC-EconomicNetwork-Local-Serra", "ECON_LOCAL_SERRA", "Mateus", data.networkLocalJob);
+        data.networkPortoLocal = CreateEconomicNetworkMerchantNpc(data, "NPC-EconomicNetwork-Local-Porto", "ECON_LOCAL_PORTO", "Lara", data.networkLocalJob);
+        data.networkBosqueLocal = CreateEconomicNetworkMerchantNpc(data, "NPC-EconomicNetwork-Local-Bosque", "ECON_LOCAL_BOSQUE", "Dario", data.networkLocalJob);
+        data.networkValeLocal = CreateEconomicNetworkMerchantNpc(data, "NPC-EconomicNetwork-Local-Vale", "ECON_LOCAL_VALE", "Beatriz", data.networkLocalJob);
+        data.networkFeiraLocal = CreateEconomicNetworkMerchantNpc(data, "NPC-EconomicNetwork-Local-Feira", "ECON_LOCAL_FEIRA", "Celso", data.networkLocalJob);
+
+        data.networkCampoVerde = CreateEconomicNetworkCampoVerde(data);
+        data.networkSerraDeFerro = CreateEconomicNetworkSerraDeFerro(data);
+        data.portoAzul = CreateEconomicNetworkPortoAzul(data);
+        data.bosqueAlto = CreateEconomicNetworkBosqueAlto(data);
+        data.valeDoCouro = CreateEconomicNetworkValeDoCouro(data);
+        data.feiraCentral = CreateEconomicNetworkFeiraCentral(data);
+        ConfigureEconomicNetworkConnections(data);
+
+        return data;
+    }
+
+    private static CityData CreateEconomicNetworkCampoVerde(TestData data)
+    {
+        return CreateEconomicNetworkCity("City-EconomicNetwork-CampoVerde", "ECONOMIC_NETWORK_CAMPO_VERDE", "Campo Verde", 1200,
+            new[]
+            {
+                CreateMarketItemConfig(data.trigo, 520, 260, 10f), CreateMarketItemConfig(data.ferro, 35, 180, 2f),
+                CreateMarketItemConfig(data.vinho, 160, 130, 2f), CreateMarketItemConfig(data.tecido, 90, 120, 2f),
+                CreateMarketItemConfig(data.sal, 80, 100, 1f), CreateMarketItemConfig(data.madeira, 50, 150, 3f),
+                CreateMarketItemConfig(data.peixe, 45, 130, 4f), CreateMarketItemConfig(data.couro, 70, 100, 1f),
+                CreateMarketItemConfig(data.ervas, 80, 100, 1f), CreateMarketItemConfig(data.carvao, 35, 120, 2f)
+            },
+            new[]
+            {
+                CreateProductionConfig(data.trigo, 36), CreateProductionConfig(data.vinho, 5), CreateProductionConfig(data.tecido, 3)
+            });
+    }
+
+    private static CityData CreateEconomicNetworkSerraDeFerro(TestData data)
+    {
+        return CreateEconomicNetworkCity("City-EconomicNetwork-SerraDeFerro", "ECONOMIC_NETWORK_SERRA_DE_FERRO", "Serra de Ferro", 900,
+            new[]
+            {
+                CreateMarketItemConfig(data.trigo, 50, 220, 10f), CreateMarketItemConfig(data.ferro, 430, 180, 2f),
+                CreateMarketItemConfig(data.vinho, 60, 110, 2f), CreateMarketItemConfig(data.tecido, 80, 120, 2f),
+                CreateMarketItemConfig(data.sal, 120, 100, 1f), CreateMarketItemConfig(data.madeira, 45, 130, 2f),
+                CreateMarketItemConfig(data.peixe, 35, 100, 3f), CreateMarketItemConfig(data.couro, 50, 100, 1f),
+                CreateMarketItemConfig(data.ervas, 45, 110, 2f), CreateMarketItemConfig(data.carvao, 360, 170, 2f)
+            },
+            new[]
+            {
+                CreateProductionConfig(data.ferro, 32), CreateProductionConfig(data.carvao, 26), CreateProductionConfig(data.sal, 4)
+            });
+    }
+
+    private static CityData CreateEconomicNetworkPortoAzul(TestData data)
+    {
+        return CreateEconomicNetworkCity("City-EconomicNetwork-PortoAzul", "ECONOMIC_NETWORK_PORTO_AZUL", "Porto Azul", 1100,
+            new[]
+            {
+                CreateMarketItemConfig(data.trigo, 150, 230, 10f), CreateMarketItemConfig(data.ferro, 70, 150, 2f),
+                CreateMarketItemConfig(data.vinho, 90, 120, 2f), CreateMarketItemConfig(data.tecido, 80, 110, 2f),
+                CreateMarketItemConfig(data.sal, 380, 180, 2f), CreateMarketItemConfig(data.madeira, 45, 160, 4f),
+                CreateMarketItemConfig(data.peixe, 480, 220, 12f), CreateMarketItemConfig(data.couro, 50, 100, 1f),
+                CreateMarketItemConfig(data.ervas, 60, 110, 2f), CreateMarketItemConfig(data.carvao, 70, 130, 2f)
+            },
+            new[]
+            {
+                CreateProductionConfig(data.peixe, 38), CreateProductionConfig(data.sal, 12)
+            });
+    }
+
+    private static CityData CreateEconomicNetworkBosqueAlto(TestData data)
+    {
+        return CreateEconomicNetworkCity("City-EconomicNetwork-BosqueAlto", "ECONOMIC_NETWORK_BOSQUE_ALTO", "Bosque Alto", 700,
+            new[]
+            {
+                CreateMarketItemConfig(data.trigo, 70, 180, 10f), CreateMarketItemConfig(data.ferro, 30, 160, 2f),
+                CreateMarketItemConfig(data.vinho, 55, 110, 2f), CreateMarketItemConfig(data.tecido, 40, 100, 2f),
+                CreateMarketItemConfig(data.sal, 55, 100, 2f), CreateMarketItemConfig(data.madeira, 420, 190, 5f),
+                CreateMarketItemConfig(data.peixe, 35, 100, 4f), CreateMarketItemConfig(data.couro, 45, 100, 1f),
+                CreateMarketItemConfig(data.ervas, 300, 150, 4f), CreateMarketItemConfig(data.carvao, 45, 120, 2f)
+            },
+            new[]
+            {
+                CreateProductionConfig(data.madeira, 30), CreateProductionConfig(data.ervas, 16)
+            });
+    }
+
+    private static CityData CreateEconomicNetworkValeDoCouro(TestData data)
+    {
+        return CreateEconomicNetworkCity("City-EconomicNetwork-ValeDoCouro", "ECONOMIC_NETWORK_VALE_DO_COURO", "Vale do Couro", 850,
+            new[]
+            {
+                CreateMarketItemConfig(data.trigo, 100, 190, 10f), CreateMarketItemConfig(data.ferro, 80, 160, 2f),
+                CreateMarketItemConfig(data.vinho, 70, 110, 2f), CreateMarketItemConfig(data.tecido, 300, 170, 3f),
+                CreateMarketItemConfig(data.sal, 35, 100, 2f), CreateMarketItemConfig(data.madeira, 80, 130, 3f),
+                CreateMarketItemConfig(data.peixe, 50, 100, 4f), CreateMarketItemConfig(data.couro, 360, 180, 4f),
+                CreateMarketItemConfig(data.ervas, 70, 110, 2f), CreateMarketItemConfig(data.carvao, 60, 120, 2f)
+            },
+            new[]
+            {
+                CreateProductionConfig(data.couro, 26), CreateProductionConfig(data.tecido, 20)
+            });
+    }
+
+    private static CityData CreateEconomicNetworkFeiraCentral(TestData data)
+    {
+        return CreateEconomicNetworkCity("City-EconomicNetwork-FeiraCentral", "ECONOMIC_NETWORK_FEIRA_CENTRAL", "Feira Central", 2500,
+            new[]
+            {
+                CreateMarketItemConfig(data.trigo, 220, 500, 20f), CreateMarketItemConfig(data.ferro, 160, 400, 3f),
+                CreateMarketItemConfig(data.vinho, 120, 260, 6f), CreateMarketItemConfig(data.tecido, 140, 260, 5f),
+                CreateMarketItemConfig(data.sal, 140, 300, 4f), CreateMarketItemConfig(data.madeira, 130, 280, 6f),
+                CreateMarketItemConfig(data.peixe, 160, 300, 8f), CreateMarketItemConfig(data.couro, 100, 220, 3f),
+                CreateMarketItemConfig(data.ervas, 100, 220, 5f), CreateMarketItemConfig(data.carvao, 120, 260, 4f)
+            },
+            new CityProductionConfig[0]);
+    }
+
+    private static CityData CreateEconomicNetworkCity(string assetName, string id, string cityName, int population, MarketItemConfig[] marketItems, CityProductionConfig[] productionConfigs)
+    {
+        CityData city = CreateOrLoadAsset<CityData>($"{CityFolder}/{assetName}.asset");
+        city.id = id;
+        city.cityName = cityName;
+        city.initialPopulation = population;
+        city.marketItems = new List<MarketItemConfig>(marketItems ?? new MarketItemConfig[0]);
+        city.productionConfigs = new List<CityProductionConfig>(productionConfigs ?? new CityProductionConfig[0]);
+        city.connections = new List<CityConnection>();
+        EditorUtility.SetDirty(city);
+        return city;
+    }
+
+    private static MarketItemConfig CreateMarketItemConfig(ItemData item, int initialAmount, int desiredAmount, float consumptionPer1000Population)
+    {
+        return new MarketItemConfig
+        {
+            item = item,
+            initialAmount = initialAmount,
+            desiredAmount = desiredAmount,
+            consumptionPer1000Population = consumptionPer1000Population
+        };
+    }
+
+    private static CityProductionConfig CreateProductionConfig(ItemData item, int amountPerDay)
+    {
+        return new CityProductionConfig
+        {
+            item = item,
+            amountPerDay = amountPerDay
+        };
+    }
+
+    private static void ConfigureEconomicNetworkConnections(TestData data)
+    {
+        ConnectBidirectionally(data.networkCampoVerde, data.feiraCentral, 1);
+        ConnectBidirectionally(data.networkSerraDeFerro, data.feiraCentral, 2);
+        ConnectBidirectionally(data.bosqueAlto, data.feiraCentral, 2);
+        ConnectBidirectionally(data.valeDoCouro, data.feiraCentral, 3);
+        ConnectBidirectionally(data.portoAzul, data.feiraCentral, 4);
+        ConnectBidirectionally(data.networkCampoVerde, data.valeDoCouro, 3);
+        ConnectBidirectionally(data.networkCampoVerde, data.portoAzul, 5);
+        ConnectBidirectionally(data.networkSerraDeFerro, data.bosqueAlto, 4);
+        ConnectBidirectionally(data.portoAzul, data.valeDoCouro, 2);
+    }
+
+    private static void ConnectBidirectionally(CityData first, CityData second, int travelDays)
+    {
+        UpsertConnection(first, second, travelDays);
+        UpsertConnection(second, first, travelDays);
+    }
+
+    private static void UpsertConnection(CityData source, CityData destination, int travelDays)
+    {
+        if (source == null || destination == null || source == destination)
+        {
+            return;
+        }
+
+        EnsureList(ref source.connections);
+        CityConnection connection = source.connections.Find(x => x != null && x.destination == destination);
+
+        if (connection == null)
+        {
+            source.connections.Add(new CityConnection { destination = destination, travelDays = Mathf.Max(1, travelDays) });
+        }
+        else
+        {
+            connection.travelDays = Mathf.Max(1, travelDays);
+        }
+
+        EditorUtility.SetDirty(source);
+    }
+
+    private static NpcData CreateEconomicNetworkMerchantNpc(TestData data, string assetName, string id, string npcName, NpcJobData job)
+    {
+        return CreateNpc(assetName, id, npcName, job, new[] { data.livre },
+            new NPCDefaultAction { action = data.buyGoods, baseUtility = 40f },
+            new NPCDefaultAction { action = data.sellGoods, baseUtility = 75f },
+            new NPCDefaultAction { action = data.travel, baseUtility = 60f },
+            new NPCDefaultAction { action = data.rest, baseUtility = 16f },
+            new NPCDefaultAction { action = data.walk, baseUtility = 18f },
+            new NPCDefaultAction { action = data.tavern, baseUtility = 14f });
     }
 
     private static ItemData CreateItem(string assetName, string itemName, float basePrice)
@@ -443,7 +768,7 @@ public static class SimulationTestDataCreator
         return city;
     }
 
-    private static SimulationConfigData CreateSimulationConfig(string assetName, string simulationName, SimulationModule[] modules, CityData[] cities, NpcSimulationConfig[] npcs, NpcActionData[] actions, NpcStatusData[] statuses, NpcJobData[] jobs, InitialWantedRecordConfig[] initialWarrants, NpcStatusData freeStatus, NpcStatusData wantedStatus, NpcStatusData arrestedStatus, NpcStatusData hiddenStatus, float travelCostPerDay, SimulationLogSettings logSettings)
+    private static SimulationConfigData CreateSimulationConfig(string assetName, string simulationName, SimulationModule[] modules, CityData[] cities, NpcSimulationConfig[] npcs, NpcActionData[] actions, NpcStatusData[] statuses, NpcJobData[] jobs, InitialWantedRecordConfig[] initialWarrants, NpcStatusData freeStatus, NpcStatusData wantedStatus, NpcStatusData arrestedStatus, NpcStatusData hiddenStatus, float travelCostPerDay, SimulationLogSettings logSettings, bool includeEconomySnapshots = false, int economySnapshotIntervalDays = 10)
     {
         SimulationConfigData config = CreateOrLoadAsset<SimulationConfigData>($"{SimulationFolder}/{assetName}.asset");
         config.simulationName = simulationName;
@@ -452,6 +777,8 @@ public static class SimulationTestDataCreator
         config.arrestedStatus = arrestedStatus;
         config.hiddenStatus = hiddenStatus;
         config.travelCostPerDay = Mathf.Max(0f, travelCostPerDay);
+        config.includeEconomySnapshots = includeEconomySnapshots;
+        config.economySnapshotIntervalDays = Mathf.Max(1, economySnapshotIntervalDays);
         config.logSettings = logSettings ?? new SimulationLogSettings();
 
         EnsureList(ref config.enabledModules);
@@ -613,15 +940,15 @@ public static class SimulationTestDataCreator
         return boxedValue != null;
     }
 
-    private static void FinishCreation(SimulationConfigData config, string label)
+    private static void FinishCreation(SimulationConfigData config, string label, int maxMerchantTradeAmount = 5)
     {
-        ConfigureOpenSimulation(config);
+        ConfigureOpenSimulation(config, maxMerchantTradeAmount);
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();
         Debug.Log($"{label} criado em {SimulationFolder}.");
     }
 
-    private static void ConfigureOpenSimulation(SimulationConfigData config)
+    private static void ConfigureOpenSimulation(SimulationConfigData config, int maxMerchantTradeAmount = 5)
     {
         TesteSimulacao simulation = Object.FindFirstObjectByType<TesteSimulacao>();
 
@@ -633,7 +960,7 @@ public static class SimulationTestDataCreator
 
         SerializedObject serializedObject = new SerializedObject(simulation);
         SetInt(serializedObject, "daysToSimulate", 8);
-        SetInt(serializedObject, "maxMerchantTradeAmount", 5);
+        SetInt(serializedObject, "maxMerchantTradeAmount", Mathf.Max(1, maxMerchantTradeAmount));
         SetFloat(serializedObject, "minimumProfitPerItem", 1f);
         SetObject(serializedObject, "simulationConfig", config);
         serializedObject.ApplyModifiedProperties();
@@ -678,6 +1005,11 @@ public static class SimulationTestDataCreator
         public ItemData vinho;
         public ItemData tecido;
         public ItemData sal;
+        public ItemData madeira;
+        public ItemData peixe;
+        public ItemData couro;
+        public ItemData ervas;
+        public ItemData carvao;
         public NpcStatusData livre;
         public NpcStatusData procurado;
         public NpcStatusData preso;
@@ -699,6 +1031,13 @@ public static class SimulationTestDataCreator
         public NpcJobData wineMerchantJob;
         public NpcJobData localMerchantJob;
         public NpcJobData guardJob;
+        public NpcJobData networkAgricultureJob;
+        public NpcJobData networkMiningJob;
+        public NpcJobData networkMaritimeJob;
+        public NpcJobData networkForestryJob;
+        public NpcJobData networkManufacturingJob;
+        public NpcJobData networkGeneralJob;
+        public NpcJobData networkLocalJob;
         public NpcData jorge;
         public NpcData afonso;
         public NpcData helena;
@@ -709,8 +1048,32 @@ public static class SimulationTestDataCreator
         public NpcData jobson;
         public NpcData carlos;
         public NpcData ana;
+        public NpcData networkCampoTravelerOne;
+        public NpcData networkCampoTravelerTwo;
+        public NpcData networkSerraTravelerOne;
+        public NpcData networkSerraTravelerTwo;
+        public NpcData networkPortoTravelerOne;
+        public NpcData networkPortoTravelerTwo;
+        public NpcData networkBosqueTravelerOne;
+        public NpcData networkBosqueTravelerTwo;
+        public NpcData networkValeTravelerOne;
+        public NpcData networkValeTravelerTwo;
+        public NpcData networkFeiraTravelerOne;
+        public NpcData networkFeiraTravelerTwo;
+        public NpcData networkCampoLocal;
+        public NpcData networkSerraLocal;
+        public NpcData networkPortoLocal;
+        public NpcData networkBosqueLocal;
+        public NpcData networkValeLocal;
+        public NpcData networkFeiraLocal;
         public CityData campoVerde;
         public CityData serraDeFerro;
         public CityData guardTestCity;
+        public CityData networkCampoVerde;
+        public CityData networkSerraDeFerro;
+        public CityData portoAzul;
+        public CityData bosqueAlto;
+        public CityData valeDoCouro;
+        public CityData feiraCentral;
     }
 }

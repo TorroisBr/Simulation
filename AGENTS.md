@@ -65,6 +65,7 @@ Status
 
 - SimulationLogger filtra Day, NpcAction, Trade, Travel, Crime, Justice, produção, consumo e Market por SimulationConfigData.logSettings; warnings e errors continuam visíveis.
 - GeneralTest é o sandbox integrado com duas cidades, mercadores viajantes e locais, guardas, crime e civis.
+- Economic Network Test é um sandbox econômico de maior escala para observar rede de cidades, especialização regional, capacidade comercial, custo/distância das rotas e convergência de preços.
 
 ## Código
 

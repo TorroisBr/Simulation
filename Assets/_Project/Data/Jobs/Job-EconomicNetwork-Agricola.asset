@@ -1,0 +1,24 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9b962bf2f9e6cab419e52899b98127c0, type: 3}
+  m_Name: Job-EconomicNetwork-Agricola
+  m_EditorClassIdentifier: Assembly-CSharp::NpcJobData
+  jobName: Mercador Agricola
+  jobType: 1
+  merchantBehavior: 0
+  workAction: {fileID: 11400000, guid: 2fd0b05dba9748444891d218e424fc1c, type: 2}
+  workUtility: 80
+  preferredTradeItems:
+  - item: {fileID: 11400000, guid: d798f72a0978dbc4dbcba05b5d3a6c22, type: 2}
+    utilityMultiplier: 2
+  - item: {fileID: 11400000, guid: b4fa9b2c9da2cf447b31c81d1c51eb9f, type: 2}
+    utilityMultiplier: 1.8
