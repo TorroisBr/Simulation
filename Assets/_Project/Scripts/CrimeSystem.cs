@@ -364,7 +364,7 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler
                 continue;
             }
 
-            CityRuntime targetCity = travelSystem.GetCityRuntime(connection.destination);
+            CityRuntime targetCity = travelSystem.GetSingleCityRuntimeByDefinition(connection.destination);
 
             if (targetCity == null || targetCity == npcRuntime.CurrentCity)
             {

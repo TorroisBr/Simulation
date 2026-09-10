@@ -14,8 +14,10 @@ public class TesteSimulacao : MonoBehaviour
     private List<CityRuntime> cityRuntimeList = new List<CityRuntime>();
 
     private readonly List<INpcActionProvider> actionProviders = new List<INpcActionProvider>();
-    private Dictionary<CityData, CityRuntime> cityRuntimeByData = new Dictionary<CityData, CityRuntime>();
-    private Dictionary<NpcData, NpcRuntime> npcRuntimeByData = new Dictionary<NpcData, NpcRuntime>();
+    private Dictionary<CityData, List<CityRuntime>> cityRuntimesByDefinition = new Dictionary<CityData, List<CityRuntime>>();
+    private Dictionary<NpcData, List<NpcRuntime>> npcRuntimesByDefinition = new Dictionary<NpcData, List<NpcRuntime>>();
+    private RuntimeIdAllocator runtimeIdAllocator;
+    private RuntimeIdentityRegistry runtimeIdentityRegistry;
     private SimulationModuleSet enabledModules;
     private JusticeSystem justiceSystem;
     private CrimeSystem crimeSystem;
@@ -58,13 +60,15 @@ public class TesteSimulacao : MonoBehaviour
             simulationConfig != null ? simulationConfig.Npcs.Count : 0);
         AppendScenarioDiagnostics();
         enabledModules = new SimulationModuleSet(simulationConfig, logger);
+        runtimeIdAllocator = new RuntimeIdAllocator();
+        runtimeIdentityRegistry = new RuntimeIdentityRegistry(logger);
 
         CityRuntimeList.Clear();
-        cityRuntimeByData.Clear();
+        cityRuntimesByDefinition.Clear();
         CreateCityRuntimes();
 
         NpcRuntimeList.Clear();
-        npcRuntimeByData.Clear();
+        npcRuntimesByDefinition.Clear();
         CreateNpcRuntimes();
 
         RebuildSystems();
@@ -74,6 +78,30 @@ public class TesteSimulacao : MonoBehaviour
     public string GetFullLog()
     {
         return FullLog;
+    }
+
+    public bool TryGetNpcRuntime(string runtimeId, out NpcRuntime npcRuntime)
+    {
+        if (runtimeIdentityRegistry != null)
+        {
+            return runtimeIdentityRegistry.TryGetNpc(runtimeId, out npcRuntime);
+        }
+
+        npcRuntime = null;
+        logger?.LogWarning($"NPC runtime resolution failed: identity registry is not initialized for RuntimeId '{runtimeId ?? "<empty>"}'.");
+        return false;
+    }
+
+    public bool TryGetCityRuntime(string runtimeId, out CityRuntime cityRuntime)
+    {
+        if (runtimeIdentityRegistry != null)
+        {
+            return runtimeIdentityRegistry.TryGetCity(runtimeId, out cityRuntime);
+        }
+
+        cityRuntime = null;
+        logger?.LogWarning($"City runtime resolution failed: identity registry is not initialized for RuntimeId '{runtimeId ?? "<empty>"}'.");
+        return false;
     }
 
     private void Simulate(int daysToSimulate)
@@ -425,9 +453,15 @@ public class TesteSimulacao : MonoBehaviour
                 continue;
             }
 
-            CityRuntime cityRuntime = new CityRuntime(cityData, logger);
+            CityRuntime cityRuntime = new CityRuntime(runtimeIdAllocator.AllocateCityId(), cityData, logger);
+
+            if (runtimeIdentityRegistry.RegisterCity(cityRuntime) == false)
+            {
+                continue;
+            }
+
             CityRuntimeList.Add(cityRuntime);
-            cityRuntimeByData[cityData] = cityRuntime;
+            AddCityRuntimeByDefinition(cityData, cityRuntime);
         }
     }
 
@@ -445,11 +479,18 @@ public class TesteSimulacao : MonoBehaviour
                 continue;
             }
 
-            CityRuntime startingCity = GetCityRuntime(npcConfig.startingCity);
-            NpcRuntime npcRuntime = new NpcRuntime(npcConfig.npc, startingCity, npcConfig.initialMoney);
+            CityRuntime startingCity = GetSingleCityRuntimeByDefinition(npcConfig.startingCity);
+            NpcRuntime npcRuntime = new NpcRuntime(runtimeIdAllocator.AllocateNpcId(), npcConfig.npc, startingCity, npcConfig.initialMoney);
+
+            if (runtimeIdentityRegistry.RegisterNpc(npcRuntime) == false)
+            {
+                startingCity?.RemoveImportantNpc(npcRuntime);
+                continue;
+            }
+
             ApplyInitialInventory(npcRuntime, npcConfig);
             NpcRuntimeList.Add(npcRuntime);
-            npcRuntimeByData[npcConfig.npc] = npcRuntime;
+            AddNpcRuntimeByDefinition(npcConfig.npc, npcRuntime);
         }
     }
 
@@ -476,7 +517,7 @@ public class TesteSimulacao : MonoBehaviour
         enabledModules = new SimulationModuleSet(simulationConfig, logger);
         logger = logger ?? new SimulationLogger(simulationConfig != null ? simulationConfig.LogSettings : null);
         float travelCostPerDay = simulationConfig != null ? simulationConfig.travelCostPerDay : 0f;
-        travelSystem = new TravelSystem(GetCityRuntime, travelCostPerDay, logger);
+        travelSystem = new TravelSystem(GetSingleCityRuntimeByDefinition, travelCostPerDay, logger);
         justiceSystem = simulationConfig != null
             ? new JusticeSystem(simulationConfig.freeStatus, simulationConfig.wantedStatus, simulationConfig.arrestedStatus, simulationConfig.hiddenStatus, logger)
             : null;
@@ -518,7 +559,7 @@ public class TesteSimulacao : MonoBehaviour
             return;
         }
 
-        justiceSystem.CreateInitialWarrants(simulationConfig, GetNpcRuntime, GetCityRuntime);
+        justiceSystem.CreateInitialWarrants(simulationConfig, GetSingleNpcRuntimeByDefinition, GetSingleCityRuntimeByDefinition);
         justiceSystem.SyncWantedStatuses(NpcRuntimeList);
     }
 
@@ -749,25 +790,79 @@ public class TesteSimulacao : MonoBehaviour
         return string.IsNullOrEmpty(action.actionName) == false ? action.actionName : action.actionType.ToString();
     }
 
-    private CityRuntime GetCityRuntime(CityData cityData)
+    private void AddCityRuntimeByDefinition(CityData cityData, CityRuntime cityRuntime)
+    {
+        if (cityRuntimesByDefinition.TryGetValue(cityData, out List<CityRuntime> runtimes) == false)
+        {
+            runtimes = new List<CityRuntime>();
+            cityRuntimesByDefinition.Add(cityData, runtimes);
+        }
+
+        runtimes.Add(cityRuntime);
+    }
+
+    private void AddNpcRuntimeByDefinition(NpcData npcData, NpcRuntime npcRuntime)
+    {
+        if (npcRuntimesByDefinition.TryGetValue(npcData, out List<NpcRuntime> runtimes) == false)
+        {
+            runtimes = new List<NpcRuntime>();
+            npcRuntimesByDefinition.Add(npcData, runtimes);
+        }
+
+        runtimes.Add(npcRuntime);
+    }
+
+    private CityRuntime GetSingleCityRuntimeByDefinition(CityData cityData)
     {
         if (cityData == null)
         {
             return null;
         }
 
-        cityRuntimeByData.TryGetValue(cityData, out CityRuntime cityRuntime);
-        return cityRuntime;
+        if (cityRuntimesByDefinition.TryGetValue(cityData, out List<CityRuntime> runtimes) == false || runtimes.Count == 0)
+        {
+            logger.LogWarning($"City definition '{FormatCityDefinition(cityData)}' has no runtime instance.");
+            return null;
+        }
+
+        if (runtimes.Count > 1)
+        {
+            logger.LogError($"City definition '{FormatCityDefinition(cityData)}' is ambiguous: {runtimes.Count} runtime instances exist. Resolve by RuntimeId instead.");
+            return null;
+        }
+
+        return runtimes[0];
     }
 
-    private NpcRuntime GetNpcRuntime(NpcData npcData)
+    private NpcRuntime GetSingleNpcRuntimeByDefinition(NpcData npcData)
     {
         if (npcData == null)
         {
             return null;
         }
 
-        npcRuntimeByData.TryGetValue(npcData, out NpcRuntime npcRuntime);
-        return npcRuntime;
+        if (npcRuntimesByDefinition.TryGetValue(npcData, out List<NpcRuntime> runtimes) == false || runtimes.Count == 0)
+        {
+            logger.LogWarning($"NPC definition '{FormatNpcDefinition(npcData)}' has no runtime instance.");
+            return null;
+        }
+
+        if (runtimes.Count > 1)
+        {
+            logger.LogError($"NPC definition '{FormatNpcDefinition(npcData)}' is ambiguous: {runtimes.Count} runtime instances exist. Resolve by RuntimeId instead.");
+            return null;
+        }
+
+        return runtimes[0];
+    }
+
+    private static string FormatCityDefinition(CityData cityData)
+    {
+        return string.IsNullOrEmpty(cityData.id) == false ? cityData.id : cityData.cityName;
+    }
+
+    private static string FormatNpcDefinition(NpcData npcData)
+    {
+        return string.IsNullOrEmpty(npcData.id) == false ? npcData.id : npcData.name;
     }
 }

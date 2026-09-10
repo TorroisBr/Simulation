@@ -5,6 +5,7 @@ using UnityEngine;
 [Serializable]
 public class NpcRuntime
 {
+	[SerializeField]private string runtimeId;
 	[SerializeField]private NpcData npcData;
 	[SerializeField]private List<NpcStatusData> currentStatus = new List<NpcStatusData>();
 	[SerializeField]private NpcActionData currentAction;
@@ -19,7 +20,9 @@ public class NpcRuntime
     [SerializeField]private MerchantTradePlanRuntime merchantTradePlan = new MerchantTradePlanRuntime();
     [SerializeField]private NpcTravelPlanRuntime travelPlan = new NpcTravelPlanRuntime();
 
+    public string RuntimeId => runtimeId;
     public NpcData NpcData => npcData;
+    public string DefinitionId => npcData != null ? npcData.DefinitionId : string.Empty;
     public List<NpcStatusData> CurrentStatus => currentStatus ?? (currentStatus = new List<NpcStatusData>());
     public NpcActionData CurrentAction => currentAction;
     public NpcActionRuntime CurrentActionRuntime => currentActionRuntime;
@@ -36,13 +39,19 @@ public class NpcRuntime
     public NpcTravelPlanRuntime TravelPlan => travelPlan ?? (travelPlan = new NpcTravelPlanRuntime());
     public string NpcName => npcData != null ? npcData.name : "NPC desconhecido";
 
-	public NpcRuntime(NpcData npcData)
-        : this(npcData, null, 0f)
+	public NpcRuntime(string runtimeId, NpcData npcData)
+		: this(runtimeId, npcData, null, 0f)
 	{
 	}
 
-	public NpcRuntime(NpcData npcData, CityRuntime startingCity, float initialMoney)
+	public NpcRuntime(string runtimeId, NpcData npcData, CityRuntime startingCity, float initialMoney)
 	{
+		if (string.IsNullOrWhiteSpace(runtimeId) == true)
+        {
+            throw new ArgumentException("NpcRuntime requires a non-empty RuntimeId.", nameof(runtimeId));
+        }
+
+		this.runtimeId = runtimeId;
 		this.npcData = npcData;
         money = Mathf.Max(0f, initialMoney);
 

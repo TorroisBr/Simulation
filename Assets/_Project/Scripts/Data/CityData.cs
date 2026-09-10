@@ -10,6 +10,8 @@ public class CityData : ScriptableObject
     public string cityName;
     public int initialPopulation = 1000;
 
+    public string DefinitionId => id;
+
     public List<MarketItemConfig> marketItems = new List<MarketItemConfig>();
     public List<CityProductionConfig> productionConfigs = new List<CityProductionConfig>();
     public List<CityConnection> connections = new List<CityConnection>();

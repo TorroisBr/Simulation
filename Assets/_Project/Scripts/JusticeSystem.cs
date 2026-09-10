@@ -32,9 +32,12 @@ public class JusticeSystem
         }
     }
 
-    public void CreateInitialWarrants(SimulationConfigData config, Func<NpcData, NpcRuntime> getNpcRuntime, Func<CityData, CityRuntime> getCityRuntime)
+    public void CreateInitialWarrants(
+        SimulationConfigData config,
+        Func<NpcData, NpcRuntime> getSingleNpcRuntimeByDefinition,
+        Func<CityData, CityRuntime> getSingleCityRuntimeByDefinition)
     {
-        if (config == null || getNpcRuntime == null || getCityRuntime == null)
+        if (config == null || getSingleNpcRuntimeByDefinition == null || getSingleCityRuntimeByDefinition == null)
         {
             return;
         }
@@ -46,8 +49,8 @@ public class JusticeSystem
                 continue;
             }
 
-            NpcRuntime target = getNpcRuntime(warrantConfig.target);
-            CityRuntime city = getCityRuntime(warrantConfig.city);
+            NpcRuntime target = getSingleNpcRuntimeByDefinition(warrantConfig.target);
+            CityRuntime city = getSingleCityRuntimeByDefinition(warrantConfig.city);
             CreateOrIncreaseWarrant(target, city, warrantConfig.bounty, warrantConfig.sentenceDays);
         }
     }

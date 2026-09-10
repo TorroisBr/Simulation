@@ -759,7 +759,7 @@ public class MerchantSystem : INpcActionProvider
             return null;
         }
 
-        return travelSystem != null ? travelSystem.GetCityRuntime(connection.destination) : null;
+        return travelSystem != null ? travelSystem.GetSingleCityRuntimeByDefinition(connection.destination) : null;
     }
 
     private int GetPlannedTradeAmount(NpcRuntime npcRuntime, MerchantTradePlanRuntime plan)

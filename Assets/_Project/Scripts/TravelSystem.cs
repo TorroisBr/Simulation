@@ -4,13 +4,13 @@ using UnityEngine;
 
 public class TravelSystem
 {
-    private readonly Func<CityData, CityRuntime> getCityRuntime;
+    private readonly Func<CityData, CityRuntime> getSingleCityRuntimeByDefinition;
     private readonly float travelCostPerDay;
     private readonly SimulationLogger logger;
 
-    public TravelSystem(Func<CityData, CityRuntime> getCityRuntime, float travelCostPerDay = 0f, SimulationLogger logger = null)
+    public TravelSystem(Func<CityData, CityRuntime> getSingleCityRuntimeByDefinition, float travelCostPerDay = 0f, SimulationLogger logger = null)
     {
-        this.getCityRuntime = getCityRuntime;
+        this.getSingleCityRuntimeByDefinition = getSingleCityRuntimeByDefinition;
         this.travelCostPerDay = Mathf.Max(0f, travelCostPerDay);
         this.logger = logger ?? new SimulationLogger(null);
     }
@@ -150,13 +150,13 @@ public class TravelSystem
         return Mathf.Max(1, travelDays) * travelCostPerDay;
     }
 
-    public CityRuntime GetCityRuntime(CityData cityData)
+    public CityRuntime GetSingleCityRuntimeByDefinition(CityData cityData)
     {
-        if (cityData == null || getCityRuntime == null)
+        if (cityData == null || getSingleCityRuntimeByDefinition == null)
         {
             return null;
         }
 
-        return getCityRuntime(cityData);
+        return getSingleCityRuntimeByDefinition(cityData);
     }
 }

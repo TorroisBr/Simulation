@@ -9,6 +9,8 @@ public class NpcData : ScriptableObject
     public string id;
     public string name;
 
+    public string DefinitionId => id;
+
     public NpcJobData job;
 
     public List<NPCDefaultAction> acoesPadrao = new List<NPCDefaultAction>();
