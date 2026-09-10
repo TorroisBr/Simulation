@@ -4,13 +4,19 @@ using UnityEngine;
 
 public class TravelSystem
 {
-    private readonly Func<CityData, CityRuntime> getSingleCityRuntimeByDefinition;
+    private readonly SpatialNetworkRuntime spatialNetwork;
+    private readonly Func<SpatialLocationRuntime, CityRuntime> getCityRuntimeByLocation;
     private readonly float travelCostPerDay;
     private readonly SimulationLogger logger;
 
-    public TravelSystem(Func<CityData, CityRuntime> getSingleCityRuntimeByDefinition, float travelCostPerDay = 0f, SimulationLogger logger = null)
+    public TravelSystem(
+        SpatialNetworkRuntime spatialNetwork,
+        Func<SpatialLocationRuntime, CityRuntime> getCityRuntimeByLocation,
+        float travelCostPerDay = 0f,
+        SimulationLogger logger = null)
     {
-        this.getSingleCityRuntimeByDefinition = getSingleCityRuntimeByDefinition;
+        this.spatialNetwork = spatialNetwork;
+        this.getCityRuntimeByLocation = getCityRuntimeByLocation;
         this.travelCostPerDay = Mathf.Max(0f, travelCostPerDay);
         this.logger = logger ?? new SimulationLogger(null);
     }
@@ -112,25 +118,52 @@ public class TravelSystem
 
     public int GetTravelDays(CityRuntime originCity, CityRuntime targetCity)
     {
-        if (originCity == null || targetCity == null || originCity.CityData == null || targetCity.CityData == null || originCity.CityData.connections == null)
+        if (originCity == null || targetCity == null || originCity.Location == null || targetCity.Location == null || spatialNetwork == null)
         {
             return -1;
         }
 
-        foreach (CityConnection connection in originCity.CityData.connections)
+        return spatialNetwork.TryGetSingleDirectRoute(originCity.Location, targetCity.Location, out SpatialRouteRuntime route) == true
+            ? route.TravelDays
+            : -1;
+    }
+
+    public List<CityRuntime> GetDirectDestinationCities(CityRuntime originCity)
+    {
+        List<CityRuntime> destinationCities = new List<CityRuntime>();
+
+        if (originCity == null || originCity.Location == null || spatialNetwork == null || getCityRuntimeByLocation == null)
         {
-            if (connection == null || connection.destination == null)
+            return destinationCities;
+        }
+
+        HashSet<SpatialLocationRuntime> visitedDestinations = new HashSet<SpatialLocationRuntime>();
+
+        foreach (SpatialRouteRuntime route in spatialNetwork.GetOutgoingRoutes(originCity.Location))
+        {
+            if (route == null || visitedDestinations.Add(route.Destination) == false)
             {
                 continue;
             }
 
-            if (connection.destination == targetCity.CityData)
+            if (spatialNetwork.TryGetSingleDirectRoute(originCity.Location, route.Destination, out _) == false)
             {
-                return Mathf.Max(1, connection.travelDays);
+                continue;
+            }
+
+            CityRuntime destinationCity = getCityRuntimeByLocation(route.Destination);
+
+            if (destinationCity != null)
+            {
+                destinationCities.Add(destinationCity);
+            }
+            else
+            {
+                logger.LogWarning($"Direct route '{route.RuntimeId}' points to location '{route.Destination.RuntimeId}', which is not associated with a CityRuntime.");
             }
         }
 
-        return -1;
+        return destinationCities;
     }
 
     public float GetTravelCost(CityRuntime originCity, CityRuntime targetCity)
@@ -150,13 +183,4 @@ public class TravelSystem
         return Mathf.Max(1, travelDays) * travelCostPerDay;
     }
 
-    public CityRuntime GetSingleCityRuntimeByDefinition(CityData cityData)
-    {
-        if (cityData == null || getSingleCityRuntimeByDefinition == null)
-        {
-            return null;
-        }
-
-        return getSingleCityRuntimeByDefinition(cityData);
-    }
 }

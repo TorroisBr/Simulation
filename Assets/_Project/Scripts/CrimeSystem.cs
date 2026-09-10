@@ -349,7 +349,7 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler
 
     private FleeDestinationOption FindBestFleeDestination(NpcRuntime npcRuntime)
     {
-        if (travelSystem == null || npcRuntime == null || npcRuntime.CurrentCity == null || npcRuntime.CurrentCity.CityData == null || npcRuntime.CurrentCity.CityData.connections == null)
+        if (travelSystem == null || npcRuntime == null || npcRuntime.CurrentCity == null)
         {
             return null;
         }
@@ -357,15 +357,8 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler
         float currentBounty = justiceSystem.GetBounty(npcRuntime, npcRuntime.CurrentCity);
         FleeDestinationOption bestOption = null;
 
-        foreach (CityConnection connection in npcRuntime.CurrentCity.CityData.connections)
+        foreach (CityRuntime targetCity in travelSystem.GetDirectDestinationCities(npcRuntime.CurrentCity))
         {
-            if (connection == null || connection.destination == null)
-            {
-                continue;
-            }
-
-            CityRuntime targetCity = travelSystem.GetSingleCityRuntimeByDefinition(connection.destination);
-
             if (targetCity == null || targetCity == npcRuntime.CurrentCity)
             {
                 continue;

@@ -16,8 +16,10 @@ public class TesteSimulacao : MonoBehaviour
     private readonly List<INpcActionProvider> actionProviders = new List<INpcActionProvider>();
     private Dictionary<CityData, List<CityRuntime>> cityRuntimesByDefinition = new Dictionary<CityData, List<CityRuntime>>();
     private Dictionary<NpcData, List<NpcRuntime>> npcRuntimesByDefinition = new Dictionary<NpcData, List<NpcRuntime>>();
+    private Dictionary<SpatialLocationRuntime, CityRuntime> cityRuntimeByLocation = new Dictionary<SpatialLocationRuntime, CityRuntime>();
     private RuntimeIdAllocator runtimeIdAllocator;
     private RuntimeIdentityRegistry runtimeIdentityRegistry;
+    private SpatialNetworkRuntime spatialNetwork;
     private SimulationModuleSet enabledModules;
     private JusticeSystem justiceSystem;
     private CrimeSystem crimeSystem;
@@ -32,6 +34,7 @@ public class TesteSimulacao : MonoBehaviour
     public string FullLog => logger != null ? logger.FullLog : string.Empty;
     public SimulationTime SimulationTime => simulationTime;
     public CalendarDefinition Calendar => calendarDefinition;
+    public SpatialNetworkRuntime SpatialNetwork => spatialNetwork;
     public long CurrentDay => simulationTime.AbsoluteDay;
     public SimulationDate CurrentDate => calendarDefinition.GetDate(CurrentDay);
 
@@ -68,10 +71,13 @@ public class TesteSimulacao : MonoBehaviour
         enabledModules = new SimulationModuleSet(simulationConfig, logger);
         runtimeIdAllocator = new RuntimeIdAllocator();
         runtimeIdentityRegistry = new RuntimeIdentityRegistry(logger);
+        spatialNetwork = new SpatialNetworkRuntime(runtimeIdentityRegistry, logger);
 
         CityRuntimeList.Clear();
         cityRuntimesByDefinition.Clear();
+        cityRuntimeByLocation.Clear();
         CreateCityRuntimes();
+        CreateSpatialRoutes();
 
         NpcRuntimeList.Clear();
         npcRuntimesByDefinition.Clear();
@@ -107,6 +113,30 @@ public class TesteSimulacao : MonoBehaviour
 
         cityRuntime = null;
         logger?.LogWarning($"City runtime resolution failed: identity registry is not initialized for RuntimeId '{runtimeId ?? "<empty>"}'.");
+        return false;
+    }
+
+    public bool TryGetSpatialLocation(string runtimeId, out SpatialLocationRuntime location)
+    {
+        if (spatialNetwork != null)
+        {
+            return spatialNetwork.TryGetLocation(runtimeId, out location);
+        }
+
+        location = null;
+        logger?.LogWarning($"Location runtime resolution failed: spatial network is not initialized for RuntimeId '{runtimeId ?? "<empty>"}'.");
+        return false;
+    }
+
+    public bool TryGetSpatialRoute(string runtimeId, out SpatialRouteRuntime route)
+    {
+        if (spatialNetwork != null)
+        {
+            return spatialNetwork.TryGetRoute(runtimeId, out route);
+        }
+
+        route = null;
+        logger?.LogWarning($"Route runtime resolution failed: spatial network is not initialized for RuntimeId '{runtimeId ?? "<empty>"}'.");
         return false;
     }
 
@@ -472,7 +502,14 @@ public class TesteSimulacao : MonoBehaviour
                 continue;
             }
 
-            CityRuntime cityRuntime = new CityRuntime(runtimeIdAllocator.AllocateCityId(), cityData, logger);
+            SpatialLocationRuntime location = new SpatialLocationRuntime(runtimeIdAllocator.AllocateLocationId());
+
+            if (spatialNetwork.RegisterLocation(location) == false)
+            {
+                continue;
+            }
+
+            CityRuntime cityRuntime = new CityRuntime(runtimeIdAllocator.AllocateCityId(), cityData, location, logger);
 
             if (runtimeIdentityRegistry.RegisterCity(cityRuntime) == false)
             {
@@ -481,6 +518,53 @@ public class TesteSimulacao : MonoBehaviour
 
             CityRuntimeList.Add(cityRuntime);
             AddCityRuntimeByDefinition(cityData, cityRuntime);
+            cityRuntimeByLocation.Add(location, cityRuntime);
+        }
+    }
+
+    private void CreateSpatialRoutes()
+    {
+        foreach (CityRuntime originCity in CityRuntimeList)
+        {
+            if (originCity == null || originCity.CityData == null || originCity.CityData.connections == null)
+            {
+                continue;
+            }
+
+            foreach (CityConnection connection in originCity.CityData.connections)
+            {
+                if (connection == null)
+                {
+                    logger.LogWarning($"Skipping invalid spatial route from city '{originCity.CityName}': connection is null.");
+                    continue;
+                }
+
+                if (connection.destination == null)
+                {
+                    logger.LogWarning($"Skipping invalid spatial route from city '{originCity.CityName}': destination definition is null.");
+                    continue;
+                }
+
+                CityRuntime destinationCity = GetSingleCityRuntimeByDefinition(connection.destination);
+
+                if (destinationCity == null)
+                {
+                    continue;
+                }
+
+                if (destinationCity == originCity)
+                {
+                    logger.LogWarning($"Skipping invalid self route for city '{originCity.CityName}'.");
+                    continue;
+                }
+
+                SpatialRouteRuntime route = new SpatialRouteRuntime(
+                    runtimeIdAllocator.AllocateRouteId(),
+                    originCity.Location,
+                    destinationCity.Location,
+                    connection.travelDays);
+                spatialNetwork.RegisterRoute(route);
+            }
         }
     }
 
@@ -536,7 +620,7 @@ public class TesteSimulacao : MonoBehaviour
         enabledModules = new SimulationModuleSet(simulationConfig, logger);
         logger = logger ?? new SimulationLogger(simulationConfig != null ? simulationConfig.LogSettings : null);
         float travelCostPerDay = simulationConfig != null ? simulationConfig.travelCostPerDay : 0f;
-        travelSystem = new TravelSystem(GetSingleCityRuntimeByDefinition, travelCostPerDay, logger);
+        travelSystem = new TravelSystem(spatialNetwork, GetCityRuntimeByLocation, travelCostPerDay, logger);
         justiceSystem = simulationConfig != null
             ? new JusticeSystem(simulationConfig.freeStatus, simulationConfig.wantedStatus, simulationConfig.arrestedStatus, simulationConfig.hiddenStatus, logger)
             : null;
@@ -829,6 +913,17 @@ public class TesteSimulacao : MonoBehaviour
         }
 
         runtimes.Add(npcRuntime);
+    }
+
+    private CityRuntime GetCityRuntimeByLocation(SpatialLocationRuntime location)
+    {
+        if (location == null)
+        {
+            return null;
+        }
+
+        cityRuntimeByLocation.TryGetValue(location, out CityRuntime cityRuntime);
+        return cityRuntime;
     }
 
     private CityRuntime GetSingleCityRuntimeByDefinition(CityData cityData)

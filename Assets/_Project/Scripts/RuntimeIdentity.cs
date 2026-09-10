@@ -6,6 +6,8 @@ public sealed class RuntimeIdAllocator
 {
     private long nextNpcSequence = 1;
     private long nextCitySequence = 1;
+    private long nextLocationSequence = 1;
+    private long nextRouteSequence = 1;
 
     public string AllocateNpcId()
     {
@@ -15,6 +17,16 @@ public sealed class RuntimeIdAllocator
     public string AllocateCityId()
     {
         return Allocate("city", ref nextCitySequence);
+    }
+
+    public string AllocateLocationId()
+    {
+        return Allocate("location", ref nextLocationSequence);
+    }
+
+    public string AllocateRouteId()
+    {
+        return Allocate("route", ref nextRouteSequence);
     }
 
     private static string Allocate(string prefix, ref long nextSequence)
@@ -34,6 +46,8 @@ public sealed class RuntimeIdentityRegistry
 {
     private readonly Dictionary<string, NpcRuntime> npcsByRuntimeId = new Dictionary<string, NpcRuntime>(StringComparer.Ordinal);
     private readonly Dictionary<string, CityRuntime> citiesByRuntimeId = new Dictionary<string, CityRuntime>(StringComparer.Ordinal);
+    private readonly Dictionary<string, SpatialLocationRuntime> locationsByRuntimeId = new Dictionary<string, SpatialLocationRuntime>(StringComparer.Ordinal);
+    private readonly Dictionary<string, SpatialRouteRuntime> routesByRuntimeId = new Dictionary<string, SpatialRouteRuntime>(StringComparer.Ordinal);
     private readonly SimulationLogger logger;
 
     public RuntimeIdentityRegistry(SimulationLogger logger = null)
@@ -89,6 +103,54 @@ public sealed class RuntimeIdentityRegistry
         return true;
     }
 
+    public bool RegisterLocation(SpatialLocationRuntime location)
+    {
+        if (location == null)
+        {
+            logger.LogError("Cannot register Location runtime identity: runtime instance is null.");
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(location.RuntimeId) == true)
+        {
+            logger.LogError("Cannot register Location runtime identity: RuntimeId is empty.");
+            return false;
+        }
+
+        if (TryGetRegisteredType(location.RuntimeId, out string registeredType) == true)
+        {
+            logger.LogError($"Duplicate RuntimeId '{location.RuntimeId}' while registering Location; it is already registered as {registeredType}.");
+            return false;
+        }
+
+        locationsByRuntimeId.Add(location.RuntimeId, location);
+        return true;
+    }
+
+    public bool RegisterRoute(SpatialRouteRuntime route)
+    {
+        if (route == null)
+        {
+            logger.LogError("Cannot register Route runtime identity: runtime instance is null.");
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(route.RuntimeId) == true)
+        {
+            logger.LogError("Cannot register Route runtime identity: RuntimeId is empty.");
+            return false;
+        }
+
+        if (TryGetRegisteredType(route.RuntimeId, out string registeredType) == true)
+        {
+            logger.LogError($"Duplicate RuntimeId '{route.RuntimeId}' while registering Route; it is already registered as {registeredType}.");
+            return false;
+        }
+
+        routesByRuntimeId.Add(route.RuntimeId, route);
+        return true;
+    }
+
     public bool TryGetNpc(string runtimeId, out NpcRuntime npcRuntime)
     {
         if (string.IsNullOrWhiteSpace(runtimeId) == false && npcsByRuntimeId.TryGetValue(runtimeId, out npcRuntime) == true)
@@ -98,13 +160,7 @@ public sealed class RuntimeIdentityRegistry
 
         npcRuntime = null;
 
-        if (string.IsNullOrWhiteSpace(runtimeId) == false && citiesByRuntimeId.ContainsKey(runtimeId) == true)
-        {
-            logger.LogWarning($"NPC runtime resolution failed: RuntimeId '{runtimeId}' is registered as City, not NPC.");
-            return false;
-        }
-
-        logger.LogWarning($"NPC runtime resolution failed: RuntimeId '{FormatRuntimeId(runtimeId)}' is not registered.");
+        LogResolutionFailure("NPC", runtimeId);
         return false;
     }
 
@@ -117,13 +173,31 @@ public sealed class RuntimeIdentityRegistry
 
         cityRuntime = null;
 
-        if (string.IsNullOrWhiteSpace(runtimeId) == false && npcsByRuntimeId.ContainsKey(runtimeId) == true)
+        LogResolutionFailure("City", runtimeId);
+        return false;
+    }
+
+    public bool TryGetLocation(string runtimeId, out SpatialLocationRuntime location)
+    {
+        if (string.IsNullOrWhiteSpace(runtimeId) == false && locationsByRuntimeId.TryGetValue(runtimeId, out location) == true)
         {
-            logger.LogWarning($"City runtime resolution failed: RuntimeId '{runtimeId}' is registered as NPC, not City.");
-            return false;
+            return true;
         }
 
-        logger.LogWarning($"City runtime resolution failed: RuntimeId '{FormatRuntimeId(runtimeId)}' is not registered.");
+        location = null;
+        LogResolutionFailure("Location", runtimeId);
+        return false;
+    }
+
+    public bool TryGetRoute(string runtimeId, out SpatialRouteRuntime route)
+    {
+        if (string.IsNullOrWhiteSpace(runtimeId) == false && routesByRuntimeId.TryGetValue(runtimeId, out route) == true)
+        {
+            return true;
+        }
+
+        route = null;
+        LogResolutionFailure("Route", runtimeId);
         return false;
     }
 
@@ -141,8 +215,31 @@ public sealed class RuntimeIdentityRegistry
             return true;
         }
 
+        if (locationsByRuntimeId.ContainsKey(runtimeId) == true)
+        {
+            registeredType = "Location";
+            return true;
+        }
+
+        if (routesByRuntimeId.ContainsKey(runtimeId) == true)
+        {
+            registeredType = "Route";
+            return true;
+        }
+
         registeredType = null;
         return false;
+    }
+
+    private void LogResolutionFailure(string requestedType, string runtimeId)
+    {
+        if (string.IsNullOrWhiteSpace(runtimeId) == false && TryGetRegisteredType(runtimeId, out string registeredType) == true)
+        {
+            logger.LogWarning($"{requestedType} runtime resolution failed: RuntimeId '{runtimeId}' is registered as {registeredType}, not {requestedType}.");
+            return;
+        }
+
+        logger.LogWarning($"{requestedType} runtime resolution failed: RuntimeId '{FormatRuntimeId(runtimeId)}' is not registered.");
     }
 
     private static string FormatRuntimeId(string runtimeId)

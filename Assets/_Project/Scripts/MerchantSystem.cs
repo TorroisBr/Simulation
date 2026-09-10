@@ -475,12 +475,13 @@ public class MerchantSystem : INpcActionProvider
             return null;
         }
 
-        if (originCity == null || originCity.CityData == null || originCity.CityData.connections == null)
+        if (originCity == null)
         {
             return null;
         }
 
         MerchantTradeOpportunity bestOpportunity = null;
+        List<CityRuntime> destinationCities = travelSystem.GetDirectDestinationCities(originCity);
 
         foreach (MarketItemRuntime localItem in originCity.Market.Items)
         {
@@ -496,10 +497,8 @@ public class MerchantSystem : INpcActionProvider
                 continue;
             }
 
-            foreach (CityConnection connection in originCity.CityData.connections)
+            foreach (CityRuntime targetCity in destinationCities)
             {
-                CityRuntime targetCity = GetConnectedCity(connection);
-
                 if (targetCity == null || targetCity == originCity)
                 {
                     continue;
@@ -554,17 +553,15 @@ public class MerchantSystem : INpcActionProvider
     {
         CityRuntime currentCity = npcRuntime != null ? npcRuntime.CurrentCity : null;
 
-        if (currentCity == null || currentCity.CityData == null || currentCity.CityData.connections == null || travelSystem == null)
+        if (currentCity == null || travelSystem == null)
         {
             return null;
         }
 
         MerchantTradeRepositionOpportunity bestReposition = null;
 
-        foreach (CityConnection connection in currentCity.CityData.connections)
+        foreach (CityRuntime repositionCity in travelSystem.GetDirectDestinationCities(currentCity))
         {
-            CityRuntime repositionCity = GetConnectedCity(connection);
-
             if (repositionCity == null || repositionCity == currentCity)
             {
                 continue;
@@ -602,7 +599,7 @@ public class MerchantSystem : INpcActionProvider
     {
         CityRuntime currentCity = npcRuntime.CurrentCity;
 
-        if (currentCity == null || currentCity.CityData == null || currentCity.CityData.connections == null || plan == null || plan.Item == null)
+        if (currentCity == null || plan == null || plan.Item == null || travelSystem == null)
         {
             return null;
         }
@@ -616,23 +613,21 @@ public class MerchantSystem : INpcActionProvider
 
         MerchantTradeOpportunity bestOpportunity = null;
 
-        foreach (CityConnection connection in currentCity.CityData.connections)
+        foreach (CityRuntime targetCity in travelSystem.GetDirectDestinationCities(currentCity))
         {
-            CityRuntime targetCity = GetConnectedCity(connection);
-
             if (targetCity == null || targetCity == currentCity)
             {
                 continue;
             }
 
-            int travelDays = travelSystem != null ? travelSystem.GetTravelDays(currentCity, targetCity) : -1;
+            int travelDays = travelSystem.GetTravelDays(currentCity, targetCity);
 
             if (travelDays <= 0)
             {
                 continue;
             }
 
-            float travelCost = travelSystem != null ? travelSystem.GetTravelCost(travelDays) : 0f;
+            float travelCost = travelSystem.GetTravelCost(travelDays);
 
             if (npcRuntime.Money < travelCost)
             {
@@ -750,16 +745,6 @@ public class MerchantSystem : INpcActionProvider
         }
 
         return bestSale;
-    }
-
-    private CityRuntime GetConnectedCity(CityConnection connection)
-    {
-        if (connection == null || connection.destination == null)
-        {
-            return null;
-        }
-
-        return travelSystem != null ? travelSystem.GetSingleCityRuntimeByDefinition(connection.destination) : null;
     }
 
     private int GetPlannedTradeAmount(NpcRuntime npcRuntime, MerchantTradePlanRuntime plan)
