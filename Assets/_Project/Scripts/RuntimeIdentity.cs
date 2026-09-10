@@ -9,6 +9,7 @@ public sealed class RuntimeIdAllocator
     private long nextLocationSequence = 1;
     private long nextRouteSequence = 1;
     private long nextEventSequence = 1;
+    private long nextDirectiveSequence = 1;
 
     public string AllocateNpcId()
     {
@@ -33,6 +34,11 @@ public sealed class RuntimeIdAllocator
     public string AllocateEventId()
     {
         return Allocate("event", ref nextEventSequence);
+    }
+
+    public string AllocateDirectiveId()
+    {
+        return Allocate("directive", ref nextDirectiveSequence);
     }
 
     private static string Allocate(string prefix, ref long nextSequence)

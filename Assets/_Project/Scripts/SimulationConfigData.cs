@@ -14,6 +14,7 @@ public class SimulationConfigData : ScriptableObject
     public List<NpcStatusData> statuses = new List<NpcStatusData>();
     public List<NpcJobData> jobs = new List<NpcJobData>();
     public List<InitialWantedRecordConfig> initialWarrants = new List<InitialWantedRecordConfig>();
+    public List<ScheduledDirectiveConfig> scheduledDirectives = new List<ScheduledDirectiveConfig>();
     public float travelCostPerDay = 10f;
     public bool allowMerchantTradeRepositioning;
     public bool useFixedSimulationSeed;
@@ -36,6 +37,7 @@ public class SimulationConfigData : ScriptableObject
     public List<NpcStatusData> Statuses => statuses ?? (statuses = new List<NpcStatusData>());
     public List<NpcJobData> Jobs => jobs ?? (jobs = new List<NpcJobData>());
     public List<InitialWantedRecordConfig> InitialWarrants => initialWarrants ?? (initialWarrants = new List<InitialWantedRecordConfig>());
+    public List<ScheduledDirectiveConfig> ScheduledDirectives => scheduledDirectives ?? (scheduledDirectives = new List<ScheduledDirectiveConfig>());
     public SimulationLogSettings LogSettings => logSettings ?? (logSettings = new SimulationLogSettings());
 
     public bool HasModule(SimulationModule module)
@@ -78,4 +80,14 @@ public class InitialWantedRecordConfig
     public CityData city;
     public float bounty = 100f;
     public int sentenceDays = 3;
+}
+
+[Serializable]
+public class ScheduledDirectiveConfig
+{
+    public long absoluteDay = 1L;
+    public ScheduledDirectiveMode mode = ScheduledDirectiveMode.RequestAction;
+    public ScheduledDirectiveOperation operation = ScheduledDirectiveOperation.EscapePrison;
+    public NpcData actor;
+    public NpcActionData action;
 }

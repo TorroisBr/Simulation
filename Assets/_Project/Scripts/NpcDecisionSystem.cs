@@ -33,6 +33,17 @@ public class NpcDecisionSystem
         return ChooseWeightedAction(utilities);
     }
 
+    public NpcActionRuntime CreateRequestedAction(NpcRuntime npcRuntime, NpcActionData action)
+    {
+        if (npcRuntime == null || action == null || HasAllRequiredStatus(action, npcRuntime.CurrentStatus) == false)
+        {
+            return null;
+        }
+
+        float ignoredUtility = 0f;
+        return CreateRuntimeAction(npcRuntime, action, ref ignoredUtility);
+    }
+
     private Dictionary<NpcActionRuntime, float> CalculateActionUtilities(NpcRuntime npcRuntime, List<NpcActionData> validActions)
     {
         Dictionary<NpcActionRuntime, float> utilities = new Dictionary<NpcActionRuntime, float>();

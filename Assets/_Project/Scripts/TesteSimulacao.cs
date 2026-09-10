@@ -23,6 +23,8 @@ public class TesteSimulacao : MonoBehaviour
     private DomainEventStore domainEventStore;
     private HistoryStore historyStore;
     private DomainEventRecorder domainEventRecorder;
+    private ScheduledDirectiveStore scheduledDirectiveStore;
+    private ScheduledDirectiveSystem scheduledDirectiveSystem;
     private SimulationModuleSet enabledModules;
     private JusticeSystem justiceSystem;
     private CrimeSystem crimeSystem;
@@ -40,6 +42,7 @@ public class TesteSimulacao : MonoBehaviour
     public SpatialNetworkRuntime SpatialNetwork => spatialNetwork;
     public DomainEventStore DomainEventStore => domainEventStore;
     public HistoryStore History => historyStore;
+    public ScheduledDirectiveStore ScheduledDirectives => scheduledDirectiveStore;
     public long CurrentDay => simulationTime.AbsoluteDay;
     public SimulationDate CurrentDate => calendarDefinition.GetDate(CurrentDay);
 
@@ -78,6 +81,7 @@ public class TesteSimulacao : MonoBehaviour
         historyStore = new HistoryStore();
         domainEventStore = new DomainEventStore(historyStore, new HistoryPolicy(), logger);
         domainEventRecorder = new DomainEventRecorder(runtimeIdAllocator, simulationTime, domainEventStore, logger);
+        scheduledDirectiveStore = new ScheduledDirectiveStore(simulationTime, logger);
         runtimeIdentityRegistry = new RuntimeIdentityRegistry(logger);
         spatialNetwork = new SpatialNetworkRuntime(runtimeIdentityRegistry, logger);
 
@@ -90,6 +94,8 @@ public class TesteSimulacao : MonoBehaviour
         NpcRuntimeList.Clear();
         npcRuntimesByDefinition.Clear();
         CreateNpcRuntimes();
+        CreateScheduledDirectives();
+        scheduledDirectiveSystem = new ScheduledDirectiveSystem(scheduledDirectiveStore, runtimeIdentityRegistry, logger);
 
         RebuildSystems();
         InitializeJusticeState();
@@ -168,6 +174,7 @@ public class TesteSimulacao : MonoBehaviour
             simulationTime.AdvanceDay();
             logger.BeginDay(CurrentDay);
             BeginSimulationDay();
+            scheduledDirectiveSystem?.PrepareDay(CurrentDay);
 
             if (enabledModules.IsEnabled(SimulationModule.Economy) == true)
             {
@@ -176,13 +183,25 @@ public class TesteSimulacao : MonoBehaviour
 
             foreach (NpcRuntime npcRuntime in NpcRuntimeList)
             {
-                if (npcRuntime == null || npcRuntime.IsTraveling == true)
+                if (npcRuntime == null)
                 {
+                    continue;
+                }
+
+                if (npcRuntime.IsTraveling == true)
+                {
+                    TryProcessScheduledDirective(npcRuntime);
                     continue;
                 }
 
                 EvaluateStatus(npcRuntime);
                 merchantSystem?.AdvanceNpcTradeState(npcRuntime);
+
+                if (TryProcessScheduledDirective(npcRuntime) == true)
+                {
+                    continue;
+                }
+
                 EvaluateAction(npcRuntime);
                 TryExecuteCurrentAction(npcRuntime);
             }
@@ -623,6 +642,62 @@ public class TesteSimulacao : MonoBehaviour
         }
     }
 
+    private void CreateScheduledDirectives()
+    {
+        if (simulationConfig == null)
+        {
+            return;
+        }
+
+        foreach (ScheduledDirectiveConfig directiveConfig in simulationConfig.ScheduledDirectives)
+        {
+            if (directiveConfig == null)
+            {
+                logger.LogWarning("Skipping null scheduled directive configuration.");
+                continue;
+            }
+
+            if (directiveConfig.actor == null)
+            {
+                logger.LogWarning("Skipping scheduled directive configuration: actor definition is null.");
+                continue;
+            }
+
+            if (directiveConfig.action == null || directiveConfig.action.actionType != NpcActionType.EscapePrison)
+            {
+                logger.LogWarning("Skipping scheduled directive configuration: EscapePrison requires a matching action definition.");
+                continue;
+            }
+
+            NpcRuntime actorRuntime = GetSingleNpcRuntimeByDefinition(directiveConfig.actor);
+
+            if (actorRuntime == null)
+            {
+                continue;
+            }
+
+            try
+            {
+                ScheduledDirective directive = new ScheduledDirective(
+                    runtimeIdAllocator.AllocateDirectiveId(),
+                    directiveConfig.absoluteDay,
+                    directiveConfig.mode,
+                    directiveConfig.operation,
+                    actorRuntime.RuntimeId,
+                    directiveConfig.action);
+                scheduledDirectiveStore.Add(directive);
+            }
+            catch (System.ArgumentException exception)
+            {
+                logger.LogError("Cannot create scheduled directive: " + exception.Message);
+            }
+            catch (System.InvalidOperationException exception)
+            {
+                logger.LogError("Cannot allocate DirectiveId: " + exception.Message);
+            }
+        }
+    }
+
     private void RebuildSystems()
     {
         enabledModules = new SimulationModuleSet(simulationConfig, logger);
@@ -751,14 +826,14 @@ public class TesteSimulacao : MonoBehaviour
         npcRuntime.SetCurrentActionRuntime(chosenAction);
     }
 
-    private void TryExecuteCurrentAction(NpcRuntime npcRuntime)
+    private NpcActionResult TryExecuteCurrentAction(NpcRuntime npcRuntime)
     {
         NpcActionRuntime actionRuntime = npcRuntime.CurrentActionRuntime;
         NpcActionData action = actionRuntime != null ? actionRuntime.Action : npcRuntime.CurrentAction;
 
         if (action == null)
         {
-            return;
+            return null;
         }
 
         LogChosenTargetAction(npcRuntime, actionRuntime);
@@ -773,6 +848,101 @@ public class TesteSimulacao : MonoBehaviour
         {
             ApplySuccessStatusChanges(npcRuntime, actionRuntime, action);
         }
+
+        return actionResult;
+    }
+
+    private bool TryProcessScheduledDirective(NpcRuntime npcRuntime)
+    {
+        if (scheduledDirectiveSystem == null || scheduledDirectiveSystem.TryTakeDirective(npcRuntime, out ScheduledDirective directive) == false)
+        {
+            return false;
+        }
+
+        npcRuntime.SetCurrentActionRuntime(null);
+
+        if (directive.Mode == ScheduledDirectiveMode.RequestAction)
+        {
+            ProcessRequestedActionDirective(npcRuntime, directive);
+        }
+        else if (directive.Mode == ScheduledDirectiveMode.ForceOutcome)
+        {
+            ProcessForcedOutcomeDirective(npcRuntime, directive);
+        }
+        else
+        {
+            SkipDirective(directive, "Directive mode is not supported.");
+        }
+
+        return true;
+    }
+
+    private void ProcessRequestedActionDirective(NpcRuntime npcRuntime, ScheduledDirective directive)
+    {
+        NpcActionRuntime requestedAction = npcDecisionSystem != null
+            ? npcDecisionSystem.CreateRequestedAction(npcRuntime, directive.Action)
+            : null;
+
+        if (requestedAction == null)
+        {
+            SkipDirective(directive, "Actor is not in a compatible state for the requested action.");
+            return;
+        }
+
+        npcRuntime.SetCurrentActionRuntime(requestedAction);
+        NpcActionResult result = TryExecuteCurrentAction(npcRuntime);
+
+        if (result != null && result.Success == true)
+        {
+            directive.MarkSucceeded(CurrentDay);
+            return;
+        }
+
+        string reason = result != null && string.IsNullOrEmpty(result.Message) == false
+            ? result.Message
+            : "Requested action was attempted and failed.";
+        directive.MarkFailed(CurrentDay, reason);
+    }
+
+    private void ProcessForcedOutcomeDirective(NpcRuntime npcRuntime, ScheduledDirective directive)
+    {
+        if (directive.Operation != ScheduledDirectiveOperation.EscapePrison || justiceSystem == null)
+        {
+            SkipDirective(directive, "Escape domain operation is unavailable.");
+            return;
+        }
+
+        if (justiceSystem.IsArrested(npcRuntime) == false)
+        {
+            SkipDirective(directive, "Actor is not arrested; escape outcome is incompatible with current state.");
+            return;
+        }
+
+        CrimeActionSettings settings = directive.Action != null && directive.Action.crimeSettings != null
+            ? directive.Action.crimeSettings
+            : new CrimeActionSettings();
+
+        npcRuntime.SetCurrentActionRuntime(new NpcActionRuntime(directive.Action));
+
+        if (justiceSystem.ApplyEscapeSuccess(npcRuntime, settings.escapeBountyPenalty) == false)
+        {
+            directive.MarkFailed(CurrentDay, "Canonical escape transition rejected the forced outcome.");
+            return;
+        }
+
+        ApplySuccessStatusChanges(npcRuntime, npcRuntime.CurrentActionRuntime, directive.Action);
+        directive.MarkSucceeded(CurrentDay);
+    }
+
+    private void SkipDirective(ScheduledDirective directive, string reason)
+    {
+        if (directive == null)
+        {
+            return;
+        }
+
+        directive.MarkSkipped(CurrentDay, reason);
+        logger.LogWarning($"Scheduled directive '{directive.DirectiveId}' was skipped: {reason}");
     }
 
     private NpcActionResult TryExecuteAction(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime, NpcActionData action)

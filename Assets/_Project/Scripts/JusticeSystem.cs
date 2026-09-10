@@ -186,6 +186,16 @@ public class JusticeSystem
             return false;
         }
 
+        return ApplyEscapeSuccess(targetRuntime, escapeBountyPenalty);
+    }
+
+    public bool ApplyEscapeSuccess(NpcRuntime targetRuntime, float escapeBountyPenalty)
+    {
+        if (targetRuntime == null || IsArrested(targetRuntime) == false)
+        {
+            return false;
+        }
+
         PrisonSentenceRuntime sentence = GetActiveSentence(targetRuntime);
 
         if (sentence == null || sentence.Warrant == null || sentence.Warrant.IsActive == false)
