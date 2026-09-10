@@ -20,6 +20,9 @@ public class TesteSimulacao : MonoBehaviour
     private RuntimeIdAllocator runtimeIdAllocator;
     private RuntimeIdentityRegistry runtimeIdentityRegistry;
     private SpatialNetworkRuntime spatialNetwork;
+    private DomainEventStore domainEventStore;
+    private HistoryStore historyStore;
+    private DomainEventRecorder domainEventRecorder;
     private SimulationModuleSet enabledModules;
     private JusticeSystem justiceSystem;
     private CrimeSystem crimeSystem;
@@ -35,6 +38,8 @@ public class TesteSimulacao : MonoBehaviour
     public SimulationTime SimulationTime => simulationTime;
     public CalendarDefinition Calendar => calendarDefinition;
     public SpatialNetworkRuntime SpatialNetwork => spatialNetwork;
+    public DomainEventStore DomainEventStore => domainEventStore;
+    public HistoryStore History => historyStore;
     public long CurrentDay => simulationTime.AbsoluteDay;
     public SimulationDate CurrentDate => calendarDefinition.GetDate(CurrentDay);
 
@@ -70,6 +75,9 @@ public class TesteSimulacao : MonoBehaviour
         calendarDefinition = ResolveCalendarDefinition();
         enabledModules = new SimulationModuleSet(simulationConfig, logger);
         runtimeIdAllocator = new RuntimeIdAllocator();
+        historyStore = new HistoryStore();
+        domainEventStore = new DomainEventStore(historyStore, new HistoryPolicy(), logger);
+        domainEventRecorder = new DomainEventRecorder(runtimeIdAllocator, simulationTime, domainEventStore, logger);
         runtimeIdentityRegistry = new RuntimeIdentityRegistry(logger);
         spatialNetwork = new SpatialNetworkRuntime(runtimeIdentityRegistry, logger);
 
@@ -620,9 +628,9 @@ public class TesteSimulacao : MonoBehaviour
         enabledModules = new SimulationModuleSet(simulationConfig, logger);
         logger = logger ?? new SimulationLogger(simulationConfig != null ? simulationConfig.LogSettings : null);
         float travelCostPerDay = simulationConfig != null ? simulationConfig.travelCostPerDay : 0f;
-        travelSystem = new TravelSystem(spatialNetwork, GetCityRuntimeByLocation, travelCostPerDay, logger);
+        travelSystem = new TravelSystem(spatialNetwork, GetCityRuntimeByLocation, travelCostPerDay, domainEventRecorder, logger);
         justiceSystem = simulationConfig != null
-            ? new JusticeSystem(simulationConfig.freeStatus, simulationConfig.wantedStatus, simulationConfig.arrestedStatus, simulationConfig.hiddenStatus, logger)
+            ? new JusticeSystem(simulationConfig.freeStatus, simulationConfig.wantedStatus, simulationConfig.arrestedStatus, simulationConfig.hiddenStatus, domainEventRecorder, logger)
             : null;
         crimeSystem = null;
         merchantSystem = null;

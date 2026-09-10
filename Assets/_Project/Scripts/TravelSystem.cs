@@ -7,6 +7,7 @@ public class TravelSystem
     private readonly SpatialNetworkRuntime spatialNetwork;
     private readonly Func<SpatialLocationRuntime, CityRuntime> getCityRuntimeByLocation;
     private readonly float travelCostPerDay;
+    private readonly DomainEventRecorder domainEventRecorder;
     private readonly SimulationLogger logger;
 
     public TravelSystem(
@@ -14,10 +15,21 @@ public class TravelSystem
         Func<SpatialLocationRuntime, CityRuntime> getCityRuntimeByLocation,
         float travelCostPerDay = 0f,
         SimulationLogger logger = null)
+        : this(spatialNetwork, getCityRuntimeByLocation, travelCostPerDay, null, logger)
+    {
+    }
+
+    public TravelSystem(
+        SpatialNetworkRuntime spatialNetwork,
+        Func<SpatialLocationRuntime, CityRuntime> getCityRuntimeByLocation,
+        float travelCostPerDay,
+        DomainEventRecorder domainEventRecorder,
+        SimulationLogger logger)
     {
         this.spatialNetwork = spatialNetwork;
         this.getCityRuntimeByLocation = getCityRuntimeByLocation;
         this.travelCostPerDay = Mathf.Max(0f, travelCostPerDay);
+        this.domainEventRecorder = domainEventRecorder;
         this.logger = logger ?? new SimulationLogger(null);
     }
 
@@ -28,14 +40,13 @@ public class TravelSystem
             return false;
         }
 
-        int travelDays = GetTravelDays(npcRuntime.CurrentCity, actionRuntime.TargetCity);
-
-        if (travelDays <= 0)
+        if (TryGetDirectRoute(npcRuntime.CurrentCity, actionRuntime.TargetCity, out SpatialRouteRuntime route) == false)
         {
             return false;
         }
 
-        float travelCost = GetTravelCost(npcRuntime.CurrentCity, actionRuntime.TargetCity);
+        int travelDays = route.TravelDays;
+        float travelCost = GetTravelCost(travelDays);
 
         if (travelCost < 0f || npcRuntime.Money < travelCost)
         {
@@ -50,6 +61,13 @@ public class TravelSystem
         }
 
         npcRuntime.TrySpendMoney(travelCost);
+        domainEventRecorder?.Record((eventId, absoluteDay) => new NpcTravelStartedEvent(
+            eventId,
+            absoluteDay,
+            npcRuntime.RuntimeId,
+            originCity.Location.RuntimeId,
+            actionRuntime.TargetCity.Location.RuntimeId,
+            route.RuntimeId));
         logger.Log(SimulationLogCategory.Travel, $"{npcRuntime.NpcName} iniciou viagem de {originCity.CityName} para {actionRuntime.TargetCity.CityName}");
 
         if (travelCost > 0f)
@@ -105,6 +123,11 @@ public class TravelSystem
 
             if (arrived == true)
             {
+                domainEventRecorder?.Record((eventId, absoluteDay) => new NpcArrivedEvent(
+                    eventId,
+                    absoluteDay,
+                    npcRuntime.RuntimeId,
+                    arrivedCity?.Location?.RuntimeId));
                 string cityName = arrivedCity != null ? arrivedCity.CityName : "destino desconhecido";
                 logger.Log(SimulationLogCategory.Travel, $"{npcRuntime.NpcName} chegou em {cityName}");
                 continue;
@@ -118,12 +141,7 @@ public class TravelSystem
 
     public int GetTravelDays(CityRuntime originCity, CityRuntime targetCity)
     {
-        if (originCity == null || targetCity == null || originCity.Location == null || targetCity.Location == null || spatialNetwork == null)
-        {
-            return -1;
-        }
-
-        return spatialNetwork.TryGetSingleDirectRoute(originCity.Location, targetCity.Location, out SpatialRouteRuntime route) == true
+        return TryGetDirectRoute(originCity, targetCity, out SpatialRouteRuntime route) == true
             ? route.TravelDays
             : -1;
     }
@@ -181,6 +199,18 @@ public class TravelSystem
     public float GetTravelCost(int travelDays)
     {
         return Mathf.Max(1, travelDays) * travelCostPerDay;
+    }
+
+    private bool TryGetDirectRoute(CityRuntime originCity, CityRuntime targetCity, out SpatialRouteRuntime route)
+    {
+        route = null;
+
+        if (originCity == null || targetCity == null || originCity.Location == null || targetCity.Location == null || spatialNetwork == null)
+        {
+            return false;
+        }
+
+        return spatialNetwork.TryGetSingleDirectRoute(originCity.Location, targetCity.Location, out route);
     }
 
 }
