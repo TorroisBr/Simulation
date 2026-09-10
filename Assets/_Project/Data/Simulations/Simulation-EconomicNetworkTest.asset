@@ -149,6 +149,9 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 7b2dce7e0fd3f0242803afc5ad77e489, type: 2}
   initialWarrants: []
   travelCostPerDay: 10
+  allowMerchantTradeRepositioning: 1
+  useFixedSimulationSeed: 1
+  simulationSeed: 12345
   includeEconomySnapshots: 1
   economySnapshotIntervalDays: 10
   logSettings:

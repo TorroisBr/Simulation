@@ -104,7 +104,10 @@ public static class SimulationTestDataCreator
             10f,
             CreateLogSettings(true, true, true, true, false, false, true, true, true),
             true,
-            10);
+            10,
+            true,
+            true,
+            12345);
 
         FinishCreation(config, "Economic Network Test", 20);
     }
@@ -768,7 +771,7 @@ public static class SimulationTestDataCreator
         return city;
     }
 
-    private static SimulationConfigData CreateSimulationConfig(string assetName, string simulationName, SimulationModule[] modules, CityData[] cities, NpcSimulationConfig[] npcs, NpcActionData[] actions, NpcStatusData[] statuses, NpcJobData[] jobs, InitialWantedRecordConfig[] initialWarrants, NpcStatusData freeStatus, NpcStatusData wantedStatus, NpcStatusData arrestedStatus, NpcStatusData hiddenStatus, float travelCostPerDay, SimulationLogSettings logSettings, bool includeEconomySnapshots = false, int economySnapshotIntervalDays = 10)
+    private static SimulationConfigData CreateSimulationConfig(string assetName, string simulationName, SimulationModule[] modules, CityData[] cities, NpcSimulationConfig[] npcs, NpcActionData[] actions, NpcStatusData[] statuses, NpcJobData[] jobs, InitialWantedRecordConfig[] initialWarrants, NpcStatusData freeStatus, NpcStatusData wantedStatus, NpcStatusData arrestedStatus, NpcStatusData hiddenStatus, float travelCostPerDay, SimulationLogSettings logSettings, bool includeEconomySnapshots = false, int economySnapshotIntervalDays = 10, bool allowMerchantTradeRepositioning = false, bool useFixedSimulationSeed = false, int simulationSeed = 12345)
     {
         SimulationConfigData config = CreateOrLoadAsset<SimulationConfigData>($"{SimulationFolder}/{assetName}.asset");
         config.simulationName = simulationName;
@@ -777,6 +780,9 @@ public static class SimulationTestDataCreator
         config.arrestedStatus = arrestedStatus;
         config.hiddenStatus = hiddenStatus;
         config.travelCostPerDay = Mathf.Max(0f, travelCostPerDay);
+        config.allowMerchantTradeRepositioning = allowMerchantTradeRepositioning;
+        config.useFixedSimulationSeed = useFixedSimulationSeed;
+        config.simulationSeed = simulationSeed;
         config.includeEconomySnapshots = includeEconomySnapshots;
         config.economySnapshotIntervalDays = Mathf.Max(1, economySnapshotIntervalDays);
         config.logSettings = logSettings ?? new SimulationLogSettings();

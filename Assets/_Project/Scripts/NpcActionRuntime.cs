@@ -11,6 +11,8 @@ public class NpcActionRuntime
     [SerializeField] private int amount;
     [SerializeField] private float expectedUnitPrice;
     [SerializeField] private float successChanceMultiplier = 1f;
+    [SerializeField] private NpcTravelReason travelReason;
+    [SerializeField] private float expectedNetValue;
 
     public NpcActionData Action => action;
     public NpcRuntime TargetNpc => targetNpc;
@@ -18,7 +20,10 @@ public class NpcActionRuntime
     public ItemData TargetItem => targetItem;
     public int Amount => amount;
     public float ExpectedUnitPrice => expectedUnitPrice;
+    public float ExpectedTravelCost => expectedUnitPrice;
     public float SuccessChanceMultiplier => successChanceMultiplier;
+    public NpcTravelReason TravelReason => travelReason;
+    public float ExpectedNetValue => expectedNetValue;
 
     public NpcActionRuntime(NpcActionData action)
     {
@@ -60,6 +65,16 @@ public class NpcActionRuntime
         this.amount = amount;
         this.expectedUnitPrice = expectedUnitPrice;
     }
+
+    public NpcActionRuntime(NpcActionData action, CityRuntime targetCity, ItemData targetItem, NpcTravelReason travelReason, float expectedCost, float expectedNetValue)
+    {
+        this.action = action;
+        this.targetCity = targetCity;
+        this.targetItem = targetItem;
+        this.travelReason = travelReason;
+        expectedUnitPrice = Mathf.Max(0f, expectedCost);
+        this.expectedNetValue = expectedNetValue;
+    }
 }
 
 [Serializable]
@@ -97,7 +112,8 @@ public enum NpcTravelReason
 {
     None,
     Trade,
-    Flee
+    Flee,
+    TradeReposition
 }
 
 public enum NpcActionResultType

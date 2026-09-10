@@ -8,15 +8,127 @@ public class MerchantSystem : INpcActionProvider
 
     private readonly int maxMerchantTradeAmount;
     private readonly float minimumProfitPerItem;
+    private readonly bool allowTradeRepositioning;
     private readonly TravelSystem travelSystem;
     private readonly SimulationLogger logger;
 
-    public MerchantSystem(int maxMerchantTradeAmount, float minimumProfitPerItem, TravelSystem travelSystem, SimulationLogger logger = null)
+    public MerchantSystem(int maxMerchantTradeAmount, float minimumProfitPerItem, bool allowTradeRepositioning, TravelSystem travelSystem, SimulationLogger logger = null)
     {
         this.maxMerchantTradeAmount = Mathf.Max(1, maxMerchantTradeAmount);
         this.minimumProfitPerItem = Mathf.Max(0f, minimumProfitPerItem);
+        this.allowTradeRepositioning = allowTradeRepositioning;
         this.travelSystem = travelSystem;
         this.logger = logger ?? new SimulationLogger(null);
+    }
+
+    public void AdvanceNpcTradeState(NpcRuntime npcRuntime)
+    {
+        if (IsMerchant(npcRuntime) == false || npcRuntime.CurrentCity == null || npcRuntime.IsTraveling == true)
+        {
+            return;
+        }
+
+        NormalizeTradePlan(npcRuntime);
+        MerchantTradePlanRuntime plan = npcRuntime.MerchantTradePlan;
+
+        if (plan.IsActive == false)
+        {
+            return;
+        }
+
+        if (plan.TargetCity != npcRuntime.CurrentCity)
+        {
+            if (CanStartTradeTravel(npcRuntime, plan.TargetCity) == true)
+            {
+                SetTradeTravelPlan(npcRuntime, plan.TargetCity);
+                return;
+            }
+
+            ClearTradeTravelPlan(npcRuntime);
+            plan.RedirectTo(npcRuntime.CurrentCity);
+            logger.Log(SimulationLogCategory.Trade, $"{npcRuntime.NpcName} nao consegue viajar para cumprir o plano comercial e vai reavaliar venda local.");
+        }
+
+        int amount = GetPlannedTradeAmount(npcRuntime, plan);
+
+        if (amount <= 0)
+        {
+            npcRuntime.ClearMerchantTradePlan();
+            return;
+        }
+
+        float localPrice = npcRuntime.CurrentCity.Market.GetPrice(plan.Item);
+        float profitPerItem = localPrice - plan.PurchasePricePerItem;
+        MerchantTradeOpportunity localBuyer = FindBestLocalMerchantBuyer(npcRuntime, plan.Item, amount, plan.PurchasePricePerItem);
+
+        if (localBuyer != null || profitPerItem >= minimumProfitPerItem)
+        {
+            plan.ResetWaitDaysAtDestination();
+            return;
+        }
+
+        MerchantTradeOpportunity redirectOpportunity = FindBestTradeDestinationForPlan(npcRuntime, plan);
+
+        if (redirectOpportunity != null)
+        {
+            plan.RedirectTo(redirectOpportunity.TargetCity);
+            SetTradeTravelPlan(npcRuntime, redirectOpportunity.TargetCity);
+            logger.Log(SimulationLogCategory.Trade, $"{npcRuntime.NpcName} reavaliou o plano comercial e mudou o destino para {redirectOpportunity.TargetCity.CityName}.");
+            return;
+        }
+
+        plan.IncrementWaitDayAtDestination();
+    }
+
+    public NpcActionRuntime CreateTradeRepositionAction(NpcRuntime npcRuntime, NpcActionData action, ref float utility)
+    {
+        if (allowTradeRepositioning == false
+            || action == null
+            || IsTravelingMerchant(npcRuntime) == false
+            || npcRuntime.CurrentCity == null
+            || npcRuntime.IsTraveling == true
+            || npcRuntime.MerchantTradePlan.IsActive == true
+            || npcRuntime.TravelPlan.IsActive == true)
+        {
+            utility = 0f;
+            return null;
+        }
+
+        if (FindBestTradeOpportunityFrom(npcRuntime, npcRuntime.CurrentCity, 0f, 0) != null)
+        {
+            utility = 0f;
+            return null;
+        }
+
+        MerchantTradeRepositionOpportunity reposition = FindBestTradeRepositionOpportunity(npcRuntime);
+
+        if (reposition == null)
+        {
+            utility = 0f;
+            return null;
+        }
+
+        utility = Mathf.Max(0f, reposition.TradeOpportunity.Score);
+        return new NpcActionRuntime(
+            action,
+            reposition.OriginCity,
+            reposition.TradeOpportunity.Item,
+            NpcTravelReason.TradeReposition,
+            reposition.RepositionCost,
+            reposition.TradeOpportunity.NetProfit);
+    }
+
+    public void LogTradeRepositionDecision(NpcRuntime npcRuntime, CityRuntime originCity, NpcActionRuntime actionRuntime)
+    {
+        if (npcRuntime == null || originCity == null || actionRuntime == null || actionRuntime.TargetCity == null)
+        {
+            return;
+        }
+
+        string opportunity = actionRuntime.TargetItem != null ? actionRuntime.TargetItem.itemName : "desconhecida";
+        logger.Log(
+            SimulationLogCategory.Trade,
+            $"{npcRuntime.NpcName} decidiu se reposicionar comercialmente de {originCity.CityName} para {actionRuntime.TargetCity.CityName}. Custo: {actionRuntime.ExpectedTravelCost:0.##}; oportunidade esperada: {opportunity}; lucro liquido esperado do ciclo: {actionRuntime.ExpectedNetValue:0.##}.");
     }
 
     public bool HandlesAction(NpcActionData action)
@@ -203,8 +315,6 @@ public class MerchantSystem : INpcActionProvider
             return null;
         }
 
-        NormalizeTradePlan(npcRuntime);
-
         if (npcRuntime.MerchantTradePlan.IsActive == true)
         {
             utility = 0f;
@@ -238,8 +348,6 @@ public class MerchantSystem : INpcActionProvider
             return null;
         }
 
-        NormalizeTradePlan(npcRuntime);
-
         MerchantTradePlanRuntime plan = npcRuntime.MerchantTradePlan;
 
         if (plan.IsActive == true)
@@ -249,14 +357,6 @@ public class MerchantSystem : INpcActionProvider
                 return CreatePlannedSellGoodsAction(npcRuntime, action, ref utility);
             }
 
-            if (CanStartTradeTravel(npcRuntime, plan.TargetCity) == false)
-            {
-                plan.RedirectTo(npcRuntime.CurrentCity);
-                logger.Log(SimulationLogCategory.Trade, $"{npcRuntime.NpcName} nao consegue viajar para cumprir o plano comercial e vai reavaliar venda local.");
-                return CreatePlannedSellGoodsAction(npcRuntime, action, ref utility);
-            }
-
-            SetTradeTravelPlan(npcRuntime, plan.TargetCity);
             utility = 0f;
             return null;
         }
@@ -280,7 +380,6 @@ public class MerchantSystem : INpcActionProvider
 
         if (amount <= 0)
         {
-            npcRuntime.ClearMerchantTradePlan();
             utility = 0f;
             return null;
         }
@@ -291,25 +390,15 @@ public class MerchantSystem : INpcActionProvider
 
         if (localBuyer != null)
         {
-            plan.ResetWaitDaysAtDestination();
             utility = Mathf.Max(utility, 85f + localBuyer.Score);
             return new NpcActionRuntime(action, localBuyer.TargetNpc, plan.Item, localBuyer.Amount, localBuyer.SellPrice);
         }
 
         if (profitPerItem >= minimumProfitPerItem)
         {
-            plan.ResetWaitDaysAtDestination();
             utility = Mathf.Max(utility, 80f + profitPerItem * 5f);
             return new NpcActionRuntime(action, npcRuntime.CurrentCity, plan.Item, amount, localPrice);
         }
-
-        if (TryRedirectPlanToConnectedDestination(npcRuntime, plan) == true)
-        {
-            utility = 0f;
-            return null;
-        }
-
-        plan.IncrementWaitDayAtDestination();
 
         if (plan.WaitDaysAtDestination >= MaxUnprofitablePlanWaitDays)
         {
@@ -360,79 +449,79 @@ public class MerchantSystem : INpcActionProvider
         npcRuntime.SetTravelPlan(targetCity, NpcTravelReason.Trade, 70f, travelCost);
     }
 
+    private void ClearTradeTravelPlan(NpcRuntime npcRuntime)
+    {
+        if (npcRuntime != null && npcRuntime.TravelPlan.Reason == NpcTravelReason.Trade)
+        {
+            npcRuntime.ClearTravelPlan();
+        }
+    }
+
     private bool CanStartTradeTravel(NpcRuntime npcRuntime, CityRuntime targetCity)
     {
         return travelSystem != null
             && travelSystem.CanStartTravel(npcRuntime, targetCity, out _, out _);
     }
 
-    private bool TryRedirectPlanToConnectedDestination(NpcRuntime npcRuntime, MerchantTradePlanRuntime plan)
-    {
-        MerchantTradeOpportunity opportunity = FindBestTradeDestinationForPlan(npcRuntime, plan);
-
-        if (opportunity == null)
-        {
-            return false;
-        }
-
-        plan.RedirectTo(opportunity.TargetCity);
-        SetTradeTravelPlan(npcRuntime, opportunity.TargetCity);
-        logger.Log(SimulationLogCategory.Trade, $"{npcRuntime.NpcName} reavaliou o plano comercial e mudou o destino para {opportunity.TargetCity.CityName}.");
-        return true;
-    }
-
     private MerchantTradeOpportunity FindBestTradeOpportunity(NpcRuntime npcRuntime)
     {
-        CityRuntime currentCity = npcRuntime.CurrentCity;
+        return FindBestTradeOpportunityFrom(npcRuntime, npcRuntime.CurrentCity, 0f, 0);
+    }
 
-        if (currentCity == null || currentCity.CityData == null || currentCity.CityData.connections == null)
+    private MerchantTradeOpportunity FindBestTradeOpportunityFrom(NpcRuntime npcRuntime, CityRuntime originCity, float additionalCost, int additionalTravelDays)
+    {
+        if (npcRuntime == null || travelSystem == null)
+        {
+            return null;
+        }
+
+        if (originCity == null || originCity.CityData == null || originCity.CityData.connections == null)
         {
             return null;
         }
 
         MerchantTradeOpportunity bestOpportunity = null;
 
-        foreach (MarketItemRuntime localItem in currentCity.Market.Items)
+        foreach (MarketItemRuntime localItem in originCity.Market.Items)
         {
             if (localItem == null || localItem.Item == null || localItem.Amount <= 0)
             {
                 continue;
             }
 
-            float buyPrice = currentCity.Market.GetPrice(localItem.Item);
-            int affordableAmount = Mathf.FloorToInt(npcRuntime.Money / buyPrice);
-            int baseAmount = Mathf.Min(maxMerchantTradeAmount, localItem.Amount, affordableAmount);
+            float buyPrice = originCity.Market.GetPrice(localItem.Item);
 
-            if (baseAmount <= 0)
+            if (buyPrice <= 0f)
             {
                 continue;
             }
 
-            foreach (CityConnection connection in currentCity.CityData.connections)
+            foreach (CityConnection connection in originCity.CityData.connections)
             {
                 CityRuntime targetCity = GetConnectedCity(connection);
 
-                if (targetCity == null || targetCity == currentCity)
+                if (targetCity == null || targetCity == originCity)
                 {
                     continue;
                 }
 
-                int travelDays = travelSystem != null ? travelSystem.GetTravelDays(currentCity, targetCity) : -1;
+                int travelDays = travelSystem.GetTravelDays(originCity, targetCity);
 
                 if (travelDays <= 0)
                 {
                     continue;
                 }
 
-                float travelCost = travelSystem != null ? travelSystem.GetTravelCost(travelDays) : 0f;
-                float moneyAvailableForGoods = npcRuntime.Money - travelCost;
+                float travelCost = travelSystem.GetTravelCost(travelDays);
+                float totalTravelCost = additionalCost + travelCost;
+                float moneyAvailableForGoods = npcRuntime.Money - totalTravelCost;
 
                 if (moneyAvailableForGoods <= 0f)
                 {
                     continue;
                 }
 
-                int amount = Mathf.Min(baseAmount, Mathf.FloorToInt(moneyAvailableForGoods / buyPrice));
+                int amount = Mathf.Min(maxMerchantTradeAmount, localItem.Amount, Mathf.FloorToInt(moneyAvailableForGoods / buyPrice));
 
                 if (amount <= 0)
                 {
@@ -441,14 +530,15 @@ public class MerchantSystem : INpcActionProvider
 
                 float sellPrice = targetCity.Market.GetPrice(localItem.Item);
                 float profitPerItem = sellPrice - buyPrice;
-                float netProfit = profitPerItem * amount - travelCost;
+                float netProfit = profitPerItem * amount - totalTravelCost;
 
                 if (profitPerItem < minimumProfitPerItem || netProfit <= 0f)
                 {
                     continue;
                 }
 
-                float score = CalculateTradeScore(netProfit, travelDays) * GetTradePreferenceMultiplier(npcRuntime, localItem.Item);
+                int totalTravelDays = additionalTravelDays + travelDays;
+                float score = CalculateTradeScore(netProfit, totalTravelDays) * GetTradePreferenceMultiplier(npcRuntime, localItem.Item);
 
                 if (bestOpportunity == null || score > bestOpportunity.Score)
                 {
@@ -458,6 +548,54 @@ public class MerchantSystem : INpcActionProvider
         }
 
         return bestOpportunity;
+    }
+
+    private MerchantTradeRepositionOpportunity FindBestTradeRepositionOpportunity(NpcRuntime npcRuntime)
+    {
+        CityRuntime currentCity = npcRuntime != null ? npcRuntime.CurrentCity : null;
+
+        if (currentCity == null || currentCity.CityData == null || currentCity.CityData.connections == null || travelSystem == null)
+        {
+            return null;
+        }
+
+        MerchantTradeRepositionOpportunity bestReposition = null;
+
+        foreach (CityConnection connection in currentCity.CityData.connections)
+        {
+            CityRuntime repositionCity = GetConnectedCity(connection);
+
+            if (repositionCity == null || repositionCity == currentCity)
+            {
+                continue;
+            }
+
+            int repositionDays = travelSystem.GetTravelDays(currentCity, repositionCity);
+
+            if (repositionDays <= 0)
+            {
+                continue;
+            }
+
+            float repositionCost = travelSystem.GetTravelCost(repositionDays);
+            MerchantTradeOpportunity tradeOpportunity = FindBestTradeOpportunityFrom(
+                npcRuntime,
+                repositionCity,
+                repositionCost,
+                repositionDays);
+
+            if (tradeOpportunity == null)
+            {
+                continue;
+            }
+
+            if (bestReposition == null || tradeOpportunity.Score > bestReposition.TradeOpportunity.Score)
+            {
+                bestReposition = new MerchantTradeRepositionOpportunity(repositionCity, repositionCost, tradeOpportunity);
+            }
+        }
+
+        return bestReposition;
     }
 
     private MerchantTradeOpportunity FindBestTradeDestinationForPlan(NpcRuntime npcRuntime, MerchantTradePlanRuntime plan)
@@ -700,6 +838,20 @@ public class MerchantSystem : INpcActionProvider
             ProfitPerItem = profitPerItem;
             NetProfit = netProfit;
             Score = score;
+        }
+    }
+
+    private class MerchantTradeRepositionOpportunity
+    {
+        public CityRuntime OriginCity { get; }
+        public float RepositionCost { get; }
+        public MerchantTradeOpportunity TradeOpportunity { get; }
+
+        public MerchantTradeRepositionOpportunity(CityRuntime originCity, float repositionCost, MerchantTradeOpportunity tradeOpportunity)
+        {
+            OriginCity = originCity;
+            RepositionCost = repositionCost;
+            TradeOpportunity = tradeOpportunity;
         }
     }
 }

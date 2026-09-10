@@ -3,10 +3,12 @@ using UnityEngine;
 public class TravelActionProvider : INpcActionProvider
 {
     private readonly TravelSystem travelSystem;
+    private readonly MerchantSystem merchantSystem;
 
-    public TravelActionProvider(TravelSystem travelSystem)
+    public TravelActionProvider(TravelSystem travelSystem, MerchantSystem merchantSystem = null)
     {
         this.travelSystem = travelSystem;
+        this.merchantSystem = merchantSystem;
     }
 
     public bool HandlesAction(NpcActionData action)
@@ -26,8 +28,13 @@ public class TravelActionProvider : INpcActionProvider
 
         if (plan.IsActive == false || plan.TargetCity == null || plan.TargetCity == npcRuntime.CurrentCity)
         {
-            utility = 0f;
-            return null;
+            if (merchantSystem == null)
+            {
+                utility = 0f;
+                return null;
+            }
+
+            return merchantSystem.CreateTradeRepositionAction(npcRuntime, action, ref utility);
         }
 
         if (travelSystem.CanStartTravel(npcRuntime, plan.TargetCity, out _, out float travelCost) == false)
@@ -46,11 +53,23 @@ public class TravelActionProvider : INpcActionProvider
         }
 
         utility = Mathf.Max(utility, Mathf.Clamp(planUtility, 0f, 100f));
-        return new NpcActionRuntime(action, plan.TargetCity, null, 0, travelCost);
+        return new NpcActionRuntime(action, plan.TargetCity, null, plan.Reason, travelCost, 0f);
     }
 
     public NpcActionResult TryExecuteAction(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime)
     {
+        CityRuntime originCity = npcRuntime != null ? npcRuntime.CurrentCity : null;
+
+        if (actionRuntime != null && actionRuntime.TravelReason == NpcTravelReason.TradeReposition)
+        {
+            if (travelSystem == null || travelSystem.CanStartTravel(npcRuntime, actionRuntime.TargetCity, out _, out _) == false)
+            {
+                return NpcActionResult.Failed();
+            }
+
+            merchantSystem?.LogTradeRepositionDecision(npcRuntime, originCity, actionRuntime);
+        }
+
         if (travelSystem == null || travelSystem.TryStartTravel(npcRuntime, actionRuntime) == false)
         {
             return NpcActionResult.Failed();

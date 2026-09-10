@@ -21,6 +21,7 @@ public class TesteSimulacao : MonoBehaviour
     private CrimeSystem crimeSystem;
     private NpcDecisionSystem npcDecisionSystem;
     private TravelSystem travelSystem;
+    private MerchantSystem merchantSystem;
     private SimulationLogger logger;
     private int currentDay;
     private int lastEconomySnapshotDay;
@@ -42,6 +43,11 @@ public class TesteSimulacao : MonoBehaviour
 
     private void InitializeSimulation()
     {
+        if (simulationConfig != null && simulationConfig.useFixedSimulationSeed == true)
+        {
+            Random.InitState(simulationConfig.simulationSeed);
+        }
+
         currentDay = 0;
         lastEconomySnapshotDay = 0;
         logger = new SimulationLogger(simulationConfig != null ? simulationConfig.LogSettings : null);
@@ -91,6 +97,7 @@ public class TesteSimulacao : MonoBehaviour
                 }
 
                 EvaluateStatus(npcRuntime);
+                merchantSystem?.AdvanceNpcTradeState(npcRuntime);
                 EvaluateAction(npcRuntime);
                 TryExecuteCurrentAction(npcRuntime);
             }
@@ -119,6 +126,13 @@ public class TesteSimulacao : MonoBehaviour
 
         logger.AddReportLine("Max Merchant Trade Amount: " + maxMerchantTradeAmount);
         logger.AddReportLine("Travel Cost Per Day: " + simulationConfig.travelCostPerDay.ToString("0.##"));
+        logger.AddReportLine("Merchant Trade Repositioning: " + (simulationConfig.allowMerchantTradeRepositioning ? "ON" : "OFF"));
+
+        if (simulationConfig.useFixedSimulationSeed == true)
+        {
+            logger.AddReportLine("Simulation Seed: " + simulationConfig.simulationSeed);
+        }
+
         logger.AddReportLine(string.Empty);
         logger.AddReportLine("ROADS");
 
@@ -467,12 +481,20 @@ public class TesteSimulacao : MonoBehaviour
             ? new JusticeSystem(simulationConfig.freeStatus, simulationConfig.wantedStatus, simulationConfig.arrestedStatus, simulationConfig.hiddenStatus, logger)
             : null;
         crimeSystem = null;
+        merchantSystem = null;
         actionProviders.Clear();
-        actionProviders.Add(new TravelActionProvider(travelSystem));
 
         if (enabledModules.IsEnabled(SimulationModule.Merchant) == true)
         {
-            actionProviders.Add(new MerchantSystem(maxMerchantTradeAmount, minimumProfitPerItem, travelSystem, logger));
+            bool allowTradeRepositioning = simulationConfig != null && simulationConfig.allowMerchantTradeRepositioning == true;
+            merchantSystem = new MerchantSystem(maxMerchantTradeAmount, minimumProfitPerItem, allowTradeRepositioning, travelSystem, logger);
+        }
+
+        actionProviders.Add(new TravelActionProvider(travelSystem, merchantSystem));
+
+        if (merchantSystem != null)
+        {
+            actionProviders.Add(merchantSystem);
         }
 
         if (enabledModules.IsEnabled(SimulationModule.Crime) == true && justiceSystem != null)

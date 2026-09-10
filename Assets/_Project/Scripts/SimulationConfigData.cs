@@ -14,6 +14,9 @@ public class SimulationConfigData : ScriptableObject
     public List<NpcJobData> jobs = new List<NpcJobData>();
     public List<InitialWantedRecordConfig> initialWarrants = new List<InitialWantedRecordConfig>();
     public float travelCostPerDay = 10f;
+    public bool allowMerchantTradeRepositioning;
+    public bool useFixedSimulationSeed;
+    public int simulationSeed = 12345;
     public bool includeEconomySnapshots;
     public int economySnapshotIntervalDays = 10;
     public SimulationLogSettings logSettings = new SimulationLogSettings();
