@@ -42,7 +42,7 @@ public sealed class NpcChronicleEntry
         DomainEvent = domainEvent;
     }
 
-    public static NpcChronicleEntry FromDecision(NpcDecisionRecord decision)
+    public static NpcChronicleEntry FromDecision(NpcDecisionRecord decision, NpcChronicleRelation relation)
     {
         if (decision == null)
         {
@@ -53,7 +53,7 @@ public sealed class NpcChronicleEntry
             decision.AbsoluteDay,
             decision.RecordSequence,
             NpcChronicleEntryType.Decision,
-            NpcChronicleRelation.SelfDecision,
+            relation,
             decision,
             null);
     }
@@ -92,7 +92,7 @@ public sealed class NpcChronicleService
 
         foreach (NpcDecisionRecord decision in decisionStore.GetDecisionsForParticipant(npcRuntimeId))
         {
-            entries.Add(NpcChronicleEntry.FromDecision(decision));
+            entries.Add(NpcChronicleEntry.FromDecision(decision, GetDecisionRelation(decision, npcRuntimeId)));
         }
 
         foreach (DomainEvent domainEvent in domainEventStore.GetEventsForParticipant(npcRuntimeId))
@@ -102,6 +102,40 @@ public sealed class NpcChronicleService
 
         entries.Sort((left, right) => left.RecordSequence.CompareTo(right.RecordSequence));
         return entries.AsReadOnly();
+    }
+
+    private static NpcChronicleRelation GetDecisionRelation(NpcDecisionRecord decision, string npcRuntimeId)
+    {
+        bool isDecisionMaker = false;
+        bool isSupport = false;
+
+        foreach (NpcDecisionParticipant participant in decision.DecisionParticipants)
+        {
+            if (participant == null
+                || string.Equals(participant.RuntimeId, npcRuntimeId, StringComparison.Ordinal) == false)
+            {
+                continue;
+            }
+
+            // Deterministic precedence: DecisionMaker > Support > Contributor/Participant.
+            if (participant.Role == NpcDecisionParticipantRole.DecisionMaker)
+            {
+                isDecisionMaker = true;
+            }
+            else if (participant.Role == NpcDecisionParticipantRole.Support)
+            {
+                isSupport = true;
+            }
+        }
+
+        if (isDecisionMaker == true)
+        {
+            return NpcChronicleRelation.SelfDecision;
+        }
+
+        return isSupport == true
+            ? NpcChronicleRelation.Support
+            : NpcChronicleRelation.Participant;
     }
 
     private static NpcChronicleRelation GetRelation(DomainEvent domainEvent, string npcRuntimeId)
