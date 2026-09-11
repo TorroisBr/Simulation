@@ -36,6 +36,35 @@ public enum NpcDecisionOrigin
     ScheduledDirective
 }
 
+public enum NpcDecisionParticipantRole
+{
+    DecisionMaker,
+    Contributor,
+    Support,
+    Participant
+}
+
+[Serializable]
+public sealed class NpcDecisionParticipant
+{
+    private readonly string runtimeId;
+    private readonly NpcDecisionParticipantRole role;
+
+    public string RuntimeId => runtimeId;
+    public NpcDecisionParticipantRole Role => role;
+
+    public NpcDecisionParticipant(string runtimeId, NpcDecisionParticipantRole role)
+    {
+        if (string.IsNullOrWhiteSpace(runtimeId) == true)
+        {
+            throw new ArgumentException("Decision participant requires a RuntimeId.", nameof(runtimeId));
+        }
+
+        this.runtimeId = runtimeId;
+        this.role = role;
+    }
+}
+
 [Serializable]
 public sealed class CommercialObservationEvidence
 {
@@ -185,17 +214,25 @@ public sealed class NpcDecisionRecord
     private readonly string targetRuntimeId;
     private readonly string targetLocationRuntimeId;
     private readonly CommercialDecisionEvidence commercialEvidence;
+    private readonly IReadOnlyList<NpcDecisionParticipant> decisionParticipants;
+    private readonly IReadOnlyList<string> targetRuntimeIds;
 
     public string DecisionId => decisionId;
     public long AbsoluteDay => absoluteDay;
     public long RecordSequence => recordSequence;
+    // Compatibility/convenience projection for the primary decision maker.
+    // Other decision participants are represented by DecisionParticipants.
     public string ActorRuntimeId => actorRuntimeId;
     public NpcDecisionType DecisionType => decisionType;
     public NpcDecisionOrigin Origin => origin;
     public string ActionDefinitionId => actionDefinitionId;
+    // Compatibility/convenience projection for the first intended target.
+    // Intended targets are not decision participants and the complete snapshot is in TargetRuntimeIds.
     public string TargetRuntimeId => targetRuntimeId;
     public string TargetLocationRuntimeId => targetLocationRuntimeId;
     public CommercialDecisionEvidence CommercialEvidence => commercialEvidence;
+    public IReadOnlyList<NpcDecisionParticipant> DecisionParticipants => decisionParticipants;
+    public IReadOnlyList<string> TargetRuntimeIds => targetRuntimeIds;
 
     public NpcDecisionRecord(
         string decisionId,
@@ -206,6 +243,33 @@ public sealed class NpcDecisionRecord
         NpcDecisionOrigin origin,
         string actionDefinitionId,
         string targetRuntimeId,
+        string targetLocationRuntimeId,
+        CommercialDecisionEvidence commercialEvidence)
+        : this(
+            decisionId,
+            absoluteDay,
+            recordSequence,
+            actorRuntimeId,
+            decisionType,
+            origin,
+            actionDefinitionId,
+            null,
+            string.IsNullOrWhiteSpace(targetRuntimeId) == true ? null : new[] { targetRuntimeId },
+            targetLocationRuntimeId,
+            commercialEvidence)
+    {
+    }
+
+    public NpcDecisionRecord(
+        string decisionId,
+        long absoluteDay,
+        long recordSequence,
+        string actorRuntimeId,
+        NpcDecisionType decisionType,
+        NpcDecisionOrigin origin,
+        string actionDefinitionId,
+        IEnumerable<NpcDecisionParticipant> decisionParticipants,
+        IEnumerable<string> targetRuntimeIds,
         string targetLocationRuntimeId,
         CommercialDecisionEvidence commercialEvidence)
     {
@@ -227,9 +291,72 @@ public sealed class NpcDecisionRecord
         this.decisionType = decisionType;
         this.origin = origin;
         this.actionDefinitionId = NormalizeOptionalId(actionDefinitionId);
-        this.targetRuntimeId = NormalizeOptionalId(targetRuntimeId);
+        this.decisionParticipants = CaptureDecisionParticipants(actorRuntimeId, decisionParticipants);
+        this.targetRuntimeIds = CaptureTargetRuntimeIds(targetRuntimeIds);
+        this.targetRuntimeId = this.targetRuntimeIds.Count > 0 ? this.targetRuntimeIds[0] : null;
         this.targetLocationRuntimeId = NormalizeOptionalId(targetLocationRuntimeId);
         this.commercialEvidence = commercialEvidence;
+    }
+
+    private static IReadOnlyList<NpcDecisionParticipant> CaptureDecisionParticipants(
+        string primaryActorRuntimeId,
+        IEnumerable<NpcDecisionParticipant> participants)
+    {
+        List<NpcDecisionParticipant> snapshot = new List<NpcDecisionParticipant>();
+        HashSet<string> participantRoles = new HashSet<string>(StringComparer.Ordinal);
+        AddDecisionParticipant(
+            snapshot,
+            participantRoles,
+            new NpcDecisionParticipant(primaryActorRuntimeId, NpcDecisionParticipantRole.DecisionMaker));
+
+        if (participants != null)
+        {
+            foreach (NpcDecisionParticipant participant in participants)
+            {
+                AddDecisionParticipant(snapshot, participantRoles, participant);
+            }
+        }
+
+        return snapshot.AsReadOnly();
+    }
+
+    private static void AddDecisionParticipant(
+        List<NpcDecisionParticipant> snapshot,
+        HashSet<string> participantRoles,
+        NpcDecisionParticipant participant)
+    {
+        if (participant == null || string.IsNullOrWhiteSpace(participant.RuntimeId) == true)
+        {
+            return;
+        }
+
+        string participantRoleKey = participant.RuntimeId + "\u001f" + (int)participant.Role;
+
+        if (participantRoles.Add(participantRoleKey) == true)
+        {
+            snapshot.Add(new NpcDecisionParticipant(participant.RuntimeId, participant.Role));
+        }
+    }
+
+    private static IReadOnlyList<string> CaptureTargetRuntimeIds(IEnumerable<string> targetIds)
+    {
+        List<string> snapshot = new List<string>();
+        HashSet<string> uniqueTargetIds = new HashSet<string>(StringComparer.Ordinal);
+
+        if (targetIds != null)
+        {
+            foreach (string targetId in targetIds)
+            {
+                string normalizedTargetId = NormalizeOptionalId(targetId);
+
+                if (normalizedTargetId != null && uniqueTargetIds.Add(normalizedTargetId) == true)
+                {
+                    snapshot.Add(normalizedTargetId);
+                }
+            }
+        }
+
+        return snapshot.AsReadOnly();
     }
 
     private static string RequireId(string value, string parameterName)
@@ -254,6 +381,8 @@ public sealed class NpcDecisionStore
     private readonly IReadOnlyList<NpcDecisionRecord> readOnlyDecisions;
     private readonly Dictionary<string, NpcDecisionRecord> decisionsById = new Dictionary<string, NpcDecisionRecord>(StringComparer.Ordinal);
     private readonly Dictionary<string, List<NpcDecisionRecord>> decisionsByActor = new Dictionary<string, List<NpcDecisionRecord>>(StringComparer.Ordinal);
+    private readonly Dictionary<string, List<NpcDecisionRecord>> decisionsByParticipant = new Dictionary<string, List<NpcDecisionRecord>>(StringComparer.Ordinal);
+    private readonly Dictionary<string, List<NpcDecisionRecord>> decisionsByTarget = new Dictionary<string, List<NpcDecisionRecord>>(StringComparer.Ordinal);
     private readonly SimulationLogger logger;
 
     public IReadOnlyList<NpcDecisionRecord> Decisions => readOnlyDecisions;
@@ -288,6 +417,8 @@ public sealed class NpcDecisionStore
         }
 
         actorDecisions.Add(decision);
+        IndexDecisionParticipants(decision);
+        IndexDecisionTargets(decision);
         return true;
     }
 
@@ -301,6 +432,59 @@ public sealed class NpcDecisionStore
         return decisionsByActor.TryGetValue(actorRuntimeId ?? string.Empty, out List<NpcDecisionRecord> actorDecisions) == true
             ? actorDecisions.AsReadOnly()
             : Array.Empty<NpcDecisionRecord>();
+    }
+
+    public IReadOnlyList<NpcDecisionRecord> GetDecisionsForParticipant(string participantRuntimeId)
+    {
+        return decisionsByParticipant.TryGetValue(participantRuntimeId ?? string.Empty, out List<NpcDecisionRecord> participantDecisions) == true
+            ? participantDecisions.AsReadOnly()
+            : Array.Empty<NpcDecisionRecord>();
+    }
+
+    public IReadOnlyList<NpcDecisionRecord> GetDecisionsTargeting(string targetRuntimeId)
+    {
+        return decisionsByTarget.TryGetValue(targetRuntimeId ?? string.Empty, out List<NpcDecisionRecord> targetingDecisions) == true
+            ? targetingDecisions.AsReadOnly()
+            : Array.Empty<NpcDecisionRecord>();
+    }
+
+    private void IndexDecisionParticipants(NpcDecisionRecord decision)
+    {
+        HashSet<string> indexedRuntimeIds = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (NpcDecisionParticipant participant in decision.DecisionParticipants)
+        {
+            if (participant == null
+                || string.IsNullOrWhiteSpace(participant.RuntimeId) == true
+                || indexedRuntimeIds.Add(participant.RuntimeId) == false)
+            {
+                continue;
+            }
+
+            AddToIndex(decisionsByParticipant, participant.RuntimeId, decision);
+        }
+    }
+
+    private void IndexDecisionTargets(NpcDecisionRecord decision)
+    {
+        foreach (string targetRuntimeId in decision.TargetRuntimeIds)
+        {
+            AddToIndex(decisionsByTarget, targetRuntimeId, decision);
+        }
+    }
+
+    private static void AddToIndex(
+        Dictionary<string, List<NpcDecisionRecord>> index,
+        string runtimeId,
+        NpcDecisionRecord decision)
+    {
+        if (index.TryGetValue(runtimeId, out List<NpcDecisionRecord> indexedDecisions) == false)
+        {
+            indexedDecisions = new List<NpcDecisionRecord>();
+            index.Add(runtimeId, indexedDecisions);
+        }
+
+        indexedDecisions.Add(decision);
     }
 }
 
@@ -373,17 +557,39 @@ public sealed class NpcDecisionRecorder
         string targetLocationRuntimeId,
         CommercialDecisionEvidence commercialEvidence)
     {
+        return RecordWithParticipants(
+            actorRuntimeId,
+            decisionType,
+            origin,
+            actionDefinitionId,
+            null,
+            string.IsNullOrWhiteSpace(targetRuntimeId) == true ? null : new[] { targetRuntimeId },
+            targetLocationRuntimeId,
+            commercialEvidence);
+    }
+
+    public NpcDecisionRecord RecordWithParticipants(
+        string primaryActorRuntimeId,
+        NpcDecisionType decisionType,
+        NpcDecisionOrigin origin,
+        string actionDefinitionId,
+        IEnumerable<NpcDecisionParticipant> decisionParticipants,
+        IEnumerable<string> targetRuntimeIds,
+        string targetLocationRuntimeId,
+        CommercialDecisionEvidence commercialEvidence)
+    {
         try
         {
             NpcDecisionRecord decision = new NpcDecisionRecord(
                 idAllocator.AllocateDecisionId(),
                 simulationTime.AbsoluteDay,
                 recordSequence.Allocate(),
-                actorRuntimeId,
+                primaryActorRuntimeId,
                 decisionType,
                 origin,
                 actionDefinitionId,
-                targetRuntimeId,
+                decisionParticipants,
+                targetRuntimeIds,
                 targetLocationRuntimeId,
                 commercialEvidence);
 

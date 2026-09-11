@@ -12,13 +12,19 @@ public enum DomainEventType
 public enum DomainEventParticipantRole
 {
     Actor,
-    Target
+    Support,
+    Target,
+    Participant
 }
 
+[Serializable]
 public sealed class DomainEventParticipant
 {
-    public string RuntimeId { get; }
-    public DomainEventParticipantRole Role { get; }
+    private readonly string runtimeId;
+    private readonly DomainEventParticipantRole role;
+
+    public string RuntimeId => runtimeId;
+    public DomainEventParticipantRole Role => role;
 
     public DomainEventParticipant(string runtimeId, DomainEventParticipantRole role)
     {
@@ -27,8 +33,8 @@ public sealed class DomainEventParticipant
             throw new ArgumentException("Domain event participant requires a RuntimeId.", nameof(runtimeId));
         }
 
-        RuntimeId = runtimeId;
-        Role = role;
+        this.runtimeId = runtimeId;
+        this.role = role;
     }
 }
 
@@ -287,8 +293,14 @@ public sealed class DomainEventStore
     private void IndexParticipants(DomainEvent domainEvent)
     {
         HashSet<string> indexedRuntimeIds = new HashSet<string>(StringComparer.Ordinal);
+        IReadOnlyList<DomainEventParticipant> participants = domainEvent.GetParticipants();
 
-        foreach (DomainEventParticipant participant in domainEvent.GetParticipants())
+        if (participants == null)
+        {
+            return;
+        }
+
+        foreach (DomainEventParticipant participant in participants)
         {
             if (participant == null
                 || string.IsNullOrWhiteSpace(participant.RuntimeId) == true

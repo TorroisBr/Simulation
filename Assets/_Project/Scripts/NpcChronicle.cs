@@ -13,6 +13,7 @@ public enum NpcChronicleRelation
     SelfAction,
     AffectedOther,
     AffectedByOther,
+    Support,
     Participant
 }
 
@@ -89,7 +90,7 @@ public sealed class NpcChronicleService
     {
         List<NpcChronicleEntry> entries = new List<NpcChronicleEntry>();
 
-        foreach (NpcDecisionRecord decision in decisionStore.GetDecisionsForActor(npcRuntimeId))
+        foreach (NpcDecisionRecord decision in decisionStore.GetDecisionsForParticipant(npcRuntimeId))
         {
             entries.Add(NpcChronicleEntry.FromDecision(decision));
         }
@@ -107,10 +108,22 @@ public sealed class NpcChronicleService
     {
         bool isActor = false;
         bool isTarget = false;
+        bool isSupport = false;
         bool hasOtherTarget = false;
+        IReadOnlyList<DomainEventParticipant> participants = domainEvent.GetParticipants();
 
-        foreach (DomainEventParticipant participant in domainEvent.GetParticipants())
+        if (participants == null)
         {
+            return NpcChronicleRelation.Participant;
+        }
+
+        foreach (DomainEventParticipant participant in participants)
+        {
+            if (participant == null)
+            {
+                continue;
+            }
+
             if (participant.Role == DomainEventParticipantRole.Actor
                 && string.Equals(participant.RuntimeId, npcRuntimeId, StringComparison.Ordinal) == true)
             {
@@ -128,6 +141,12 @@ public sealed class NpcChronicleService
                     hasOtherTarget = true;
                 }
             }
+
+            if (participant.Role == DomainEventParticipantRole.Support
+                && string.Equals(participant.RuntimeId, npcRuntimeId, StringComparison.Ordinal) == true)
+            {
+                isSupport = true;
+            }
         }
 
         if (isTarget == true && isActor == false)
@@ -140,6 +159,11 @@ public sealed class NpcChronicleService
             return hasOtherTarget == true
                 ? NpcChronicleRelation.AffectedOther
                 : NpcChronicleRelation.SelfAction;
+        }
+
+        if (isSupport == true)
+        {
+            return NpcChronicleRelation.Support;
         }
 
         return NpcChronicleRelation.Participant;
@@ -185,6 +209,7 @@ public sealed class NpcChronicleFormatter
         }
 
         string actor = Resolve(resolveNpcName, decision.ActorRuntimeId);
+        string participantSuffix = FormatDecisionParticipantSuffix(decision);
         CommercialDecisionEvidence evidence = decision.CommercialEvidence;
 
         if (evidence != null)
@@ -194,33 +219,33 @@ public sealed class NpcChronicleFormatter
 
             if (decision.DecisionType == NpcDecisionType.TradePurchase)
             {
-                return $"{actor} decidiu comprar {evidence.ExpectedQuantity} de {item} para negociar em {destination}; lucro liquido esperado: {evidence.ExpectedNetProfit:0.##}.";
+                return $"{actor} decidiu comprar {evidence.ExpectedQuantity} de {item} para negociar em {destination}{participantSuffix}; lucro liquido esperado: {evidence.ExpectedNetProfit:0.##}.";
             }
 
             if (decision.DecisionType == NpcDecisionType.TradeReposition)
             {
                 string tradeOrigin = Resolve(resolveLocationName, evidence.TradeOriginLocationRuntimeId);
-                return $"{actor} decidiu se reposicionar em {tradeOrigin} para negociar {item} em {destination}; lucro liquido esperado: {evidence.ExpectedNetProfit:0.##}.";
+                return $"{actor} decidiu se reposicionar em {tradeOrigin} para negociar {item} em {destination}{participantSuffix}; lucro liquido esperado: {evidence.ExpectedNetProfit:0.##}.";
             }
 
             if (decision.DecisionType == NpcDecisionType.TradeRedirect)
             {
-                return $"{actor} decidiu redirecionar o plano de {item} para {destination}; lucro liquido esperado: {evidence.ExpectedNetProfit:0.##}.";
+                return $"{actor} decidiu redirecionar o plano de {item} para {destination}{participantSuffix}; lucro liquido esperado: {evidence.ExpectedNetProfit:0.##}.";
             }
 
             if (decision.DecisionType == NpcDecisionType.TradeSale)
             {
-                return $"{actor} decidiu vender {evidence.ExpectedQuantity} de {item} em {destination} por {evidence.ExpectedSaleUnitPrice:0.##} cada.";
+                return $"{actor} decidiu vender {evidence.ExpectedQuantity} de {item} em {destination} por {evidence.ExpectedSaleUnitPrice:0.##} cada{participantSuffix}.";
             }
         }
 
         string action = Resolve(resolveActionName, decision.ActionDefinitionId);
-        string target = decision.TargetRuntimeId != null
-            ? " para " + Resolve(resolveNpcName, decision.TargetRuntimeId)
+        string target = decision.TargetRuntimeIds.Count > 0
+            ? " para " + FormatNpcRuntimeIds(decision.TargetRuntimeIds)
             : decision.TargetLocationRuntimeId != null
                 ? " para " + Resolve(resolveLocationName, decision.TargetLocationRuntimeId)
                 : string.Empty;
-        return $"{actor} decidiu realizar {action}{target}.";
+        return $"{actor} decidiu realizar {action}{target}{participantSuffix}.";
     }
 
     private string FormatEvent(DomainEvent domainEvent, string perspectiveNpcRuntimeId)
@@ -257,7 +282,63 @@ public sealed class NpcChronicleFormatter
             return $"{actor} escapou da prisao em {location}.";
         }
 
-        return domainEvent != null ? domainEvent.EventId : string.Empty;
+        return domainEvent != null
+            ? $"{domainEvent.EventType}: {FormatEventParticipants(domainEvent.GetParticipants())}."
+            : string.Empty;
+    }
+
+    private string FormatDecisionParticipantSuffix(NpcDecisionRecord decision)
+    {
+        List<string> otherParticipants = new List<string>();
+        HashSet<string> addedRuntimeIds = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (NpcDecisionParticipant participant in decision.DecisionParticipants)
+        {
+            if (participant == null
+                || string.Equals(participant.RuntimeId, decision.ActorRuntimeId, StringComparison.Ordinal) == true
+                || addedRuntimeIds.Add(participant.RuntimeId) == false)
+            {
+                continue;
+            }
+
+            otherParticipants.Add(Resolve(resolveNpcName, participant.RuntimeId));
+        }
+
+        return otherParticipants.Count > 0
+            ? " com participacao de " + string.Join(", ", otherParticipants)
+            : string.Empty;
+    }
+
+    private string FormatNpcRuntimeIds(IReadOnlyList<string> runtimeIds)
+    {
+        List<string> names = new List<string>();
+
+        foreach (string runtimeId in runtimeIds)
+        {
+            names.Add(Resolve(resolveNpcName, runtimeId));
+        }
+
+        return string.Join(", ", names);
+    }
+
+    private string FormatEventParticipants(IReadOnlyList<DomainEventParticipant> participants)
+    {
+        List<string> formattedParticipants = new List<string>();
+
+        if (participants != null)
+        {
+            foreach (DomainEventParticipant participant in participants)
+            {
+                if (participant != null)
+                {
+                    formattedParticipants.Add($"{participant.Role}={Resolve(resolveNpcName, participant.RuntimeId)}");
+                }
+            }
+        }
+
+        return formattedParticipants.Count > 0
+            ? string.Join(", ", formattedParticipants)
+            : "sem participantes";
     }
 
     private static string Resolve(Func<string, string> resolver, string stableId)
