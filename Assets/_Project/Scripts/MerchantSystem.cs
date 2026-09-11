@@ -10,14 +10,25 @@ public class MerchantSystem : INpcActionProvider
     private readonly float minimumProfitPerItem;
     private readonly bool allowTradeRepositioning;
     private readonly TravelSystem travelSystem;
+    private readonly SimulationTime simulationTime;
+    private readonly CommercialKnowledgePolicy knowledgePolicy;
     private readonly SimulationLogger logger;
 
-    public MerchantSystem(int maxMerchantTradeAmount, float minimumProfitPerItem, bool allowTradeRepositioning, TravelSystem travelSystem, SimulationLogger logger = null)
+    public MerchantSystem(
+        int maxMerchantTradeAmount,
+        float minimumProfitPerItem,
+        bool allowTradeRepositioning,
+        TravelSystem travelSystem,
+        SimulationTime simulationTime,
+        CommercialKnowledgeSettings knowledgeSettings,
+        SimulationLogger logger = null)
     {
         this.maxMerchantTradeAmount = Mathf.Max(1, maxMerchantTradeAmount);
         this.minimumProfitPerItem = Mathf.Max(0f, minimumProfitPerItem);
         this.allowTradeRepositioning = allowTradeRepositioning;
         this.travelSystem = travelSystem;
+        this.simulationTime = simulationTime ?? throw new System.ArgumentNullException(nameof(simulationTime));
+        knowledgePolicy = new CommercialKnowledgePolicy(knowledgeSettings);
         this.logger = logger ?? new SimulationLogger(null);
     }
 
@@ -28,6 +39,7 @@ public class MerchantSystem : INpcActionProvider
             return;
         }
 
+        ObserveCurrentMarket(npcRuntime);
         NormalizeTradePlan(npcRuntime);
         MerchantTradePlanRuntime plan = npcRuntime.MerchantTradePlan;
 
@@ -57,7 +69,13 @@ public class MerchantSystem : INpcActionProvider
             return;
         }
 
-        float localPrice = npcRuntime.CurrentCity.Market.GetPrice(plan.Item);
+        if (TryGetUsefulObservation(npcRuntime, npcRuntime.CurrentCity, plan.Item, out CommercialMarketObservation localObservation, out _) == false)
+        {
+            plan.IncrementWaitDayAtDestination();
+            return;
+        }
+
+        float localPrice = localObservation.ObservedPrice;
         float profitPerItem = localPrice - plan.PurchasePricePerItem;
         MerchantTradeOpportunity localBuyer = FindBestLocalMerchantBuyer(npcRuntime, plan.Item, amount, plan.PurchasePricePerItem);
 
@@ -78,6 +96,66 @@ public class MerchantSystem : INpcActionProvider
         }
 
         plan.IncrementWaitDayAtDestination();
+    }
+
+    public void BootstrapInitialKnowledge(NpcRuntime npcRuntime)
+    {
+        if (simulationTime.AbsoluteDay != 0L
+            || IsTravelingMerchant(npcRuntime) == false
+            || npcRuntime.CurrentCity == null)
+        {
+            return;
+        }
+
+        ObserveMarket(npcRuntime, npcRuntime.CurrentCity);
+
+        if (travelSystem == null)
+        {
+            return;
+        }
+
+        foreach (CityRuntime connectedCity in travelSystem.GetDirectDestinationCities(npcRuntime.CurrentCity))
+        {
+            ObserveMarket(npcRuntime, connectedCity);
+        }
+    }
+
+    public void ObserveCurrentMarket(NpcRuntime npcRuntime)
+    {
+        if (IsMerchant(npcRuntime) == false || npcRuntime.CurrentCity == null || npcRuntime.IsTraveling == true)
+        {
+            return;
+        }
+
+        ObserveMarket(npcRuntime, npcRuntime.CurrentCity);
+    }
+
+    private void ObserveMarket(NpcRuntime npcRuntime, CityRuntime cityRuntime)
+    {
+        if (npcRuntime == null || cityRuntime == null || cityRuntime.Location == null)
+        {
+            return;
+        }
+
+        foreach (MarketItemRuntime marketItem in cityRuntime.Market.Items)
+        {
+            if (marketItem == null
+                || marketItem.Item == null
+                || string.IsNullOrWhiteSpace(marketItem.Item.DefinitionId) == true)
+            {
+                continue;
+            }
+
+            CommercialMarketObservation observation = new CommercialMarketObservation(
+                cityRuntime.Location.RuntimeId,
+                marketItem.Item,
+                marketItem.CurrentPrice,
+                marketItem.Amount,
+                simulationTime.AbsoluteDay,
+                simulationTime.AbsoluteDay,
+                CommercialKnowledgeSource.DirectObservation);
+            npcRuntime.CommercialKnowledge.RecordObservation(observation);
+        }
     }
 
     public NpcActionRuntime CreateTradeRepositionAction(NpcRuntime npcRuntime, NpcActionData action, ref float utility)
@@ -251,8 +329,17 @@ public class MerchantSystem : INpcActionProvider
             return false;
         }
 
-        float unitPrice = Mathf.Max(0.01f, actionRuntime.ExpectedUnitPrice);
-        int affordableAmount = Mathf.FloorToInt(buyerRuntime.Money / unitPrice);
+        float currentRetailPrice = sellerRuntime.CurrentCity.Market.GetPrice(actionRuntime.TargetItem);
+        float unitPrice = CalculateLocalMerchantUnitPrice(buyerRuntime, actionRuntime.TargetItem, currentRetailPrice);
+
+        if (unitPrice - referencePrice < minimumProfitPerItem)
+        {
+            return false;
+        }
+
+        float reserveAmount = buyerRuntime.Money * LocalMerchantReserveRatio;
+        float spendableMoney = Mathf.Max(0f, buyerRuntime.Money - reserveAmount);
+        int affordableAmount = Mathf.FloorToInt(spendableMoney / unitPrice);
         amountSold = Mathf.Min(actionRuntime.Amount, sellerRuntime.Inventory.GetAmount(actionRuntime.TargetItem), affordableAmount);
 
         if (amountSold <= 0)
@@ -384,7 +471,13 @@ public class MerchantSystem : INpcActionProvider
             return null;
         }
 
-        float localPrice = npcRuntime.CurrentCity.Market.GetPrice(plan.Item);
+        if (TryGetUsefulObservation(npcRuntime, npcRuntime.CurrentCity, plan.Item, out CommercialMarketObservation localObservation, out _) == false)
+        {
+            utility = 0f;
+            return null;
+        }
+
+        float localPrice = localObservation.ObservedPrice;
         float profitPerItem = localPrice - plan.PurchasePricePerItem;
         MerchantTradeOpportunity localBuyer = FindBestLocalMerchantBuyer(npcRuntime, plan.Item, amount, plan.PurchasePricePerItem);
 
@@ -470,12 +563,7 @@ public class MerchantSystem : INpcActionProvider
 
     private MerchantTradeOpportunity FindBestTradeOpportunityFrom(NpcRuntime npcRuntime, CityRuntime originCity, float additionalCost, int additionalTravelDays)
     {
-        if (npcRuntime == null || travelSystem == null)
-        {
-            return null;
-        }
-
-        if (originCity == null)
+        if (npcRuntime == null || travelSystem == null || originCity == null || originCity.Location == null)
         {
             return null;
         }
@@ -483,16 +571,20 @@ public class MerchantSystem : INpcActionProvider
         MerchantTradeOpportunity bestOpportunity = null;
         List<CityRuntime> destinationCities = travelSystem.GetDirectDestinationCities(originCity);
 
-        foreach (MarketItemRuntime localItem in originCity.Market.Items)
+        foreach (CommercialMarketObservation originObservation in npcRuntime.CommercialKnowledge.Observations)
         {
-            if (localItem == null || localItem.Item == null || localItem.Amount <= 0)
+            if (originObservation == null
+                || originObservation.LocationRuntimeId != originCity.Location.RuntimeId
+                || originObservation.ItemDefinition == null
+                || originObservation.ObservedStock <= 0)
             {
                 continue;
             }
 
-            float buyPrice = originCity.Market.GetPrice(localItem.Item);
+            float originFreshness = knowledgePolicy.GetFreshness(originObservation, simulationTime.AbsoluteDay);
+            float buyPrice = originObservation.ObservedPrice;
 
-            if (buyPrice <= 0f)
+            if (originFreshness <= 0f || buyPrice <= 0f)
             {
                 continue;
             }
@@ -520,14 +612,19 @@ public class MerchantSystem : INpcActionProvider
                     continue;
                 }
 
-                int amount = Mathf.Min(maxMerchantTradeAmount, localItem.Amount, Mathf.FloorToInt(moneyAvailableForGoods / buyPrice));
+                int amount = Mathf.Min(maxMerchantTradeAmount, originObservation.ObservedStock, Mathf.FloorToInt(moneyAvailableForGoods / buyPrice));
 
                 if (amount <= 0)
                 {
                     continue;
                 }
 
-                float sellPrice = targetCity.Market.GetPrice(localItem.Item);
+                if (TryGetUsefulObservation(npcRuntime, targetCity, originObservation.ItemDefinition, out CommercialMarketObservation targetObservation, out float targetFreshness) == false)
+                {
+                    continue;
+                }
+
+                float sellPrice = targetObservation.ObservedPrice;
                 float profitPerItem = sellPrice - buyPrice;
                 float netProfit = profitPerItem * amount - totalTravelCost;
 
@@ -537,11 +634,14 @@ public class MerchantSystem : INpcActionProvider
                 }
 
                 int totalTravelDays = additionalTravelDays + travelDays;
-                float score = CalculateTradeScore(netProfit, totalTravelDays) * GetTradePreferenceMultiplier(npcRuntime, localItem.Item);
+                float freshness = Mathf.Min(originFreshness, targetFreshness);
+                float score = CalculateTradeScore(netProfit, totalTravelDays)
+                    * freshness
+                    * GetTradePreferenceMultiplier(npcRuntime, originObservation.ItemDefinition);
 
                 if (bestOpportunity == null || score > bestOpportunity.Score)
                 {
-                    bestOpportunity = new MerchantTradeOpportunity(localItem.Item, targetCity, amount, buyPrice, sellPrice, profitPerItem, netProfit, score);
+                    bestOpportunity = new MerchantTradeOpportunity(originObservation.ItemDefinition, targetCity, amount, buyPrice, sellPrice, profitPerItem, netProfit, score);
                 }
             }
         }
@@ -634,7 +734,12 @@ public class MerchantSystem : INpcActionProvider
                 continue;
             }
 
-            float sellPrice = targetCity.Market.GetPrice(plan.Item);
+            if (TryGetUsefulObservation(npcRuntime, targetCity, plan.Item, out CommercialMarketObservation targetObservation, out float freshness) == false)
+            {
+                continue;
+            }
+
+            float sellPrice = targetObservation.ObservedPrice;
             float profitPerItem = sellPrice - plan.PurchasePricePerItem;
             float netProfit = profitPerItem * amount - travelCost;
 
@@ -643,7 +748,9 @@ public class MerchantSystem : INpcActionProvider
                 continue;
             }
 
-            float score = CalculateTradeScore(netProfit, travelDays) * GetTradePreferenceMultiplier(npcRuntime, plan.Item);
+            float score = CalculateTradeScore(netProfit, travelDays)
+                * freshness
+                * GetTradePreferenceMultiplier(npcRuntime, plan.Item);
 
             if (bestOpportunity == null || score > bestOpportunity.Score)
             {
@@ -670,7 +777,13 @@ public class MerchantSystem : INpcActionProvider
         }
 
         MerchantTradeOpportunity bestBuyer = null;
-        float retailPrice = sellerRuntime.CurrentCity.Market.GetPrice(item);
+
+        if (TryGetUsefulObservation(sellerRuntime, sellerRuntime.CurrentCity, item, out CommercialMarketObservation localObservation, out float freshness) == false)
+        {
+            return null;
+        }
+
+        float retailPrice = localObservation.ObservedPrice;
 
         foreach (NpcRuntime candidate in sellerRuntime.CurrentCity.ImportantNpcs)
         {
@@ -680,8 +793,7 @@ public class MerchantSystem : INpcActionProvider
             }
 
             float preferenceMultiplier = GetTradePreferenceMultiplier(candidate, item);
-            float preferredPriceBonus = Mathf.Min(0.15f, Mathf.Max(0f, preferenceMultiplier - 1f) * 0.1f);
-            float unitPrice = retailPrice * Mathf.Clamp(LocalMerchantWholesalePriceMultiplier + preferredPriceBonus, 0.5f, 0.85f);
+            float unitPrice = CalculateLocalMerchantUnitPrice(candidate, item, retailPrice);
             float profitPerItem = unitPrice - referencePrice;
 
             if (profitPerItem < minimumProfitPerItem)
@@ -699,7 +811,7 @@ public class MerchantSystem : INpcActionProvider
                 continue;
             }
 
-            float score = CalculateTradeScore(profitPerItem * amount, 1) * preferenceMultiplier;
+            float score = CalculateTradeScore(profitPerItem * amount, 1) * freshness * preferenceMultiplier;
 
             if (bestBuyer == null || score > bestBuyer.Score)
             {
@@ -726,7 +838,12 @@ public class MerchantSystem : INpcActionProvider
                 continue;
             }
 
-            float localPrice = npcRuntime.CurrentCity.Market.GetPrice(inventoryItem.Item);
+            if (TryGetUsefulObservation(npcRuntime, npcRuntime.CurrentCity, inventoryItem.Item, out CommercialMarketObservation localObservation, out float freshness) == false)
+            {
+                continue;
+            }
+
+            float localPrice = localObservation.ObservedPrice;
             float referencePrice = inventoryItem.AverageUnitCost > 0f ? inventoryItem.AverageUnitCost : inventoryItem.Item.basePrice;
             float profitPerItem = localPrice - referencePrice;
 
@@ -736,7 +853,9 @@ public class MerchantSystem : INpcActionProvider
             }
 
             int amount = Mathf.Min(maxMerchantTradeAmount, inventoryItem.Amount);
-            float score = CalculateTradeScore(profitPerItem * amount, 1) * GetTradePreferenceMultiplier(npcRuntime, inventoryItem.Item);
+            float score = CalculateTradeScore(profitPerItem * amount, 1)
+                * freshness
+                * GetTradePreferenceMultiplier(npcRuntime, inventoryItem.Item);
 
             if (bestSale == null || score > bestSale.Score)
             {
@@ -745,6 +864,38 @@ public class MerchantSystem : INpcActionProvider
         }
 
         return bestSale;
+    }
+
+    private bool TryGetUsefulObservation(
+        NpcRuntime npcRuntime,
+        CityRuntime cityRuntime,
+        ItemData item,
+        out CommercialMarketObservation observation,
+        out float freshness)
+    {
+        observation = null;
+        freshness = 0f;
+
+        if (npcRuntime == null
+            || cityRuntime == null
+            || cityRuntime.Location == null
+            || item == null
+            || string.IsNullOrWhiteSpace(item.DefinitionId) == true
+            || npcRuntime.CommercialKnowledge.TryGetObservation(cityRuntime.Location.RuntimeId, item.DefinitionId, out observation) == false)
+        {
+            return false;
+        }
+
+        freshness = knowledgePolicy.GetFreshness(observation, simulationTime.AbsoluteDay);
+        return freshness > 0f;
+    }
+
+    private float CalculateLocalMerchantUnitPrice(NpcRuntime buyerRuntime, ItemData item, float retailPrice)
+    {
+        float preferenceMultiplier = GetTradePreferenceMultiplier(buyerRuntime, item);
+        float preferredPriceBonus = Mathf.Min(0.15f, Mathf.Max(0f, preferenceMultiplier - 1f) * 0.1f);
+        return Mathf.Max(0.01f, retailPrice)
+            * Mathf.Clamp(LocalMerchantWholesalePriceMultiplier + preferredPriceBonus, 0.5f, 0.85f);
     }
 
     private int GetPlannedTradeAmount(NpcRuntime npcRuntime, MerchantTradePlanRuntime plan)

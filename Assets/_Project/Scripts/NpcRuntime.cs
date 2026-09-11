@@ -19,6 +19,7 @@ public class NpcRuntime
     [SerializeField]private int hiddenDaysRemaining;
     [SerializeField]private MerchantTradePlanRuntime merchantTradePlan = new MerchantTradePlanRuntime();
     [SerializeField]private NpcTravelPlanRuntime travelPlan = new NpcTravelPlanRuntime();
+    [SerializeField]private CommercialKnowledgeRuntime commercialKnowledge = new CommercialKnowledgeRuntime();
 
     public string RuntimeId => runtimeId;
     public NpcData NpcData => npcData;
@@ -37,6 +38,7 @@ public class NpcRuntime
     public bool IsHidden => hiddenDaysRemaining > 0;
     public MerchantTradePlanRuntime MerchantTradePlan => merchantTradePlan ?? (merchantTradePlan = new MerchantTradePlanRuntime());
     public NpcTravelPlanRuntime TravelPlan => travelPlan ?? (travelPlan = new NpcTravelPlanRuntime());
+    public CommercialKnowledgeRuntime CommercialKnowledge => commercialKnowledge ?? (commercialKnowledge = new CommercialKnowledgeRuntime());
     public string NpcName => npcData != null ? npcData.name : "NPC desconhecido";
 
 	public NpcRuntime(string runtimeId, NpcData npcData)

@@ -17,6 +17,7 @@ public class SimulationConfigData : ScriptableObject
     public List<ScheduledDirectiveConfig> scheduledDirectives = new List<ScheduledDirectiveConfig>();
     public float travelCostPerDay = 10f;
     public bool allowMerchantTradeRepositioning;
+    public CommercialKnowledgeSettings commercialKnowledge = new CommercialKnowledgeSettings();
     public bool useFixedSimulationSeed;
     public int simulationSeed = 12345;
     public bool includeEconomySnapshots;
@@ -38,6 +39,7 @@ public class SimulationConfigData : ScriptableObject
     public List<NpcJobData> Jobs => jobs ?? (jobs = new List<NpcJobData>());
     public List<InitialWantedRecordConfig> InitialWarrants => initialWarrants ?? (initialWarrants = new List<InitialWantedRecordConfig>());
     public List<ScheduledDirectiveConfig> ScheduledDirectives => scheduledDirectives ?? (scheduledDirectives = new List<ScheduledDirectiveConfig>());
+    public CommercialKnowledgeSettings CommercialKnowledge => commercialKnowledge ?? (commercialKnowledge = new CommercialKnowledgeSettings());
     public SimulationLogSettings LogSettings => logSettings ?? (logSettings = new SimulationLogSettings());
 
     public bool HasModule(SimulationModule module)

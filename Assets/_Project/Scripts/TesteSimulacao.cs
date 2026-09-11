@@ -98,6 +98,7 @@ public class TesteSimulacao : MonoBehaviour
         scheduledDirectiveSystem = new ScheduledDirectiveSystem(scheduledDirectiveStore, runtimeIdentityRegistry, logger);
 
         RebuildSystems();
+        BootstrapInitialCommercialKnowledge();
         InitializeJusticeState();
     }
 
@@ -642,6 +643,19 @@ public class TesteSimulacao : MonoBehaviour
         }
     }
 
+    private void BootstrapInitialCommercialKnowledge()
+    {
+        if (merchantSystem == null)
+        {
+            return;
+        }
+
+        foreach (NpcRuntime npcRuntime in NpcRuntimeList)
+        {
+            merchantSystem.BootstrapInitialKnowledge(npcRuntime);
+        }
+    }
+
     private void CreateScheduledDirectives()
     {
         if (simulationConfig == null)
@@ -714,7 +728,15 @@ public class TesteSimulacao : MonoBehaviour
         if (enabledModules.IsEnabled(SimulationModule.Merchant) == true)
         {
             bool allowTradeRepositioning = simulationConfig != null && simulationConfig.allowMerchantTradeRepositioning == true;
-            merchantSystem = new MerchantSystem(maxMerchantTradeAmount, minimumProfitPerItem, allowTradeRepositioning, travelSystem, logger);
+            CommercialKnowledgeSettings knowledgeSettings = simulationConfig != null ? simulationConfig.CommercialKnowledge : null;
+            merchantSystem = new MerchantSystem(
+                maxMerchantTradeAmount,
+                minimumProfitPerItem,
+                allowTradeRepositioning,
+                travelSystem,
+                simulationTime,
+                knowledgeSettings,
+                logger);
         }
 
         actionProviders.Add(new TravelActionProvider(travelSystem, merchantSystem));

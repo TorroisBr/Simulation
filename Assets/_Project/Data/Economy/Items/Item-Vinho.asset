@@ -12,5 +12,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3d4f400338d9d34459ab5ba980688366, type: 3}
   m_Name: Item-Vinho
   m_EditorClassIdentifier: Assembly-CSharp::ItemData
+  id: VINHO
   itemName: VINHO
   basePrice: 14
