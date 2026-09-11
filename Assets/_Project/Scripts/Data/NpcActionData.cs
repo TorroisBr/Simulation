@@ -6,6 +6,7 @@ using System.Collections.Generic;
 [CreateAssetMenu(menuName = "World Simulation/Action")]
 public class NpcActionData : ScriptableObject
 {
+	public string id;
 	public List<NpcStatusData> statusNecessariosParaFazerAcao = new List<NpcStatusData>();
 	public string actionName;
     public string normalActionLogText;
@@ -27,6 +28,8 @@ public class NpcActionData : ScriptableObject
     public List<NpcStatusData> targetStatusToAdd = new List<NpcStatusData>();
     public List<NpcStatusData> targetStatusToRemove = new List<NpcStatusData>();
     public CrimeActionSettings crimeSettings = new CrimeActionSettings();
+
+    public string DefinitionId => id;
 }
 
 [Serializable]

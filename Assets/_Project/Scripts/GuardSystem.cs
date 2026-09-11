@@ -43,7 +43,7 @@ public class GuardSystem : INpcActionProvider
             return NpcActionResult.Failed();
         }
 
-        return justiceSystem.Arrest(npcRuntime, actionRuntime.TargetNpc, npcRuntime.CurrentCity) == true
+        return justiceSystem.Arrest(npcRuntime, actionRuntime.TargetNpc, npcRuntime.CurrentCity, actionRuntime.OriginDecisionId) == true
             ? NpcActionResult.Succeeded()
             : NpcActionResult.Failed();
     }

@@ -1,17 +1,52 @@
 using System;
 using System.Collections.Generic;
 
+public enum DomainEventType
+{
+    NpcTravelStarted,
+    NpcArrived,
+    NpcArrested,
+    NpcEscaped
+}
+
+public enum DomainEventParticipantRole
+{
+    Actor,
+    Target
+}
+
+public sealed class DomainEventParticipant
+{
+    public string RuntimeId { get; }
+    public DomainEventParticipantRole Role { get; }
+
+    public DomainEventParticipant(string runtimeId, DomainEventParticipantRole role)
+    {
+        if (string.IsNullOrWhiteSpace(runtimeId) == true)
+        {
+            throw new ArgumentException("Domain event participant requires a RuntimeId.", nameof(runtimeId));
+        }
+
+        RuntimeId = runtimeId;
+        Role = role;
+    }
+}
+
 [Serializable]
 public abstract class DomainEvent
 {
     private readonly string eventId;
     private readonly long absoluteDay;
+    private readonly long recordSequence;
+    private readonly string originDecisionId;
 
     public string EventId => eventId;
     public long AbsoluteDay => absoluteDay;
-    public abstract string EventType { get; }
+    public long RecordSequence => recordSequence;
+    public string OriginDecisionId => originDecisionId;
+    public abstract DomainEventType EventType { get; }
 
-    protected DomainEvent(string eventId, long absoluteDay)
+    protected DomainEvent(string eventId, long absoluteDay, long recordSequence, string originDecisionId)
     {
         if (string.IsNullOrWhiteSpace(eventId) == true)
         {
@@ -23,9 +58,18 @@ public abstract class DomainEvent
             throw new ArgumentOutOfRangeException(nameof(absoluteDay), "DomainEvent AbsoluteDay cannot be negative.");
         }
 
+        if (recordSequence <= 0L)
+        {
+            throw new ArgumentOutOfRangeException(nameof(recordSequence), "DomainEvent RecordSequence must be positive.");
+        }
+
         this.eventId = eventId;
         this.absoluteDay = absoluteDay;
+        this.recordSequence = recordSequence;
+        this.originDecisionId = string.IsNullOrWhiteSpace(originDecisionId) == true ? null : originDecisionId;
     }
+
+    public abstract IReadOnlyList<DomainEventParticipant> GetParticipants();
 
     protected static string RequireId(string value, string parameterName)
     {
@@ -46,7 +90,7 @@ public sealed class NpcTravelStartedEvent : DomainEvent
     private readonly string destinationLocationRuntimeId;
     private readonly string routeRuntimeId;
 
-    public override string EventType => nameof(NpcTravelStartedEvent);
+    public override DomainEventType EventType => DomainEventType.NpcTravelStarted;
     public string ActorRuntimeId => actorRuntimeId;
     public string OriginLocationRuntimeId => originLocationRuntimeId;
     public string DestinationLocationRuntimeId => destinationLocationRuntimeId;
@@ -55,16 +99,23 @@ public sealed class NpcTravelStartedEvent : DomainEvent
     public NpcTravelStartedEvent(
         string eventId,
         long absoluteDay,
+        long recordSequence,
         string actorRuntimeId,
         string originLocationRuntimeId,
         string destinationLocationRuntimeId,
-        string routeRuntimeId)
-        : base(eventId, absoluteDay)
+        string routeRuntimeId,
+        string originDecisionId = null)
+        : base(eventId, absoluteDay, recordSequence, originDecisionId)
     {
         this.actorRuntimeId = RequireId(actorRuntimeId, nameof(actorRuntimeId));
         this.originLocationRuntimeId = RequireId(originLocationRuntimeId, nameof(originLocationRuntimeId));
         this.destinationLocationRuntimeId = RequireId(destinationLocationRuntimeId, nameof(destinationLocationRuntimeId));
         this.routeRuntimeId = RequireId(routeRuntimeId, nameof(routeRuntimeId));
+    }
+
+    public override IReadOnlyList<DomainEventParticipant> GetParticipants()
+    {
+        return new[] { new DomainEventParticipant(actorRuntimeId, DomainEventParticipantRole.Actor) };
     }
 }
 
@@ -74,19 +125,26 @@ public sealed class NpcArrivedEvent : DomainEvent
     private readonly string actorRuntimeId;
     private readonly string destinationLocationRuntimeId;
 
-    public override string EventType => nameof(NpcArrivedEvent);
+    public override DomainEventType EventType => DomainEventType.NpcArrived;
     public string ActorRuntimeId => actorRuntimeId;
     public string DestinationLocationRuntimeId => destinationLocationRuntimeId;
 
     public NpcArrivedEvent(
         string eventId,
         long absoluteDay,
+        long recordSequence,
         string actorRuntimeId,
-        string destinationLocationRuntimeId)
-        : base(eventId, absoluteDay)
+        string destinationLocationRuntimeId,
+        string originDecisionId = null)
+        : base(eventId, absoluteDay, recordSequence, originDecisionId)
     {
         this.actorRuntimeId = RequireId(actorRuntimeId, nameof(actorRuntimeId));
         this.destinationLocationRuntimeId = RequireId(destinationLocationRuntimeId, nameof(destinationLocationRuntimeId));
+    }
+
+    public override IReadOnlyList<DomainEventParticipant> GetParticipants()
+    {
+        return new[] { new DomainEventParticipant(actorRuntimeId, DomainEventParticipantRole.Actor) };
     }
 }
 
@@ -97,7 +155,7 @@ public sealed class NpcArrestedEvent : DomainEvent
     private readonly string targetRuntimeId;
     private readonly string locationRuntimeId;
 
-    public override string EventType => nameof(NpcArrestedEvent);
+    public override DomainEventType EventType => DomainEventType.NpcArrested;
     public string ActorRuntimeId => actorRuntimeId;
     public string TargetRuntimeId => targetRuntimeId;
     public string LocationRuntimeId => locationRuntimeId;
@@ -105,14 +163,25 @@ public sealed class NpcArrestedEvent : DomainEvent
     public NpcArrestedEvent(
         string eventId,
         long absoluteDay,
+        long recordSequence,
         string actorRuntimeId,
         string targetRuntimeId,
-        string locationRuntimeId)
-        : base(eventId, absoluteDay)
+        string locationRuntimeId,
+        string originDecisionId = null)
+        : base(eventId, absoluteDay, recordSequence, originDecisionId)
     {
         this.actorRuntimeId = RequireId(actorRuntimeId, nameof(actorRuntimeId));
         this.targetRuntimeId = RequireId(targetRuntimeId, nameof(targetRuntimeId));
         this.locationRuntimeId = RequireId(locationRuntimeId, nameof(locationRuntimeId));
+    }
+
+    public override IReadOnlyList<DomainEventParticipant> GetParticipants()
+    {
+        return new[]
+        {
+            new DomainEventParticipant(actorRuntimeId, DomainEventParticipantRole.Actor),
+            new DomainEventParticipant(targetRuntimeId, DomainEventParticipantRole.Target)
+        };
     }
 }
 
@@ -122,19 +191,26 @@ public sealed class NpcEscapedEvent : DomainEvent
     private readonly string actorRuntimeId;
     private readonly string locationRuntimeId;
 
-    public override string EventType => nameof(NpcEscapedEvent);
+    public override DomainEventType EventType => DomainEventType.NpcEscaped;
     public string ActorRuntimeId => actorRuntimeId;
     public string LocationRuntimeId => locationRuntimeId;
 
     public NpcEscapedEvent(
         string eventId,
         long absoluteDay,
+        long recordSequence,
         string actorRuntimeId,
-        string locationRuntimeId)
-        : base(eventId, absoluteDay)
+        string locationRuntimeId,
+        string originDecisionId = null)
+        : base(eventId, absoluteDay, recordSequence, originDecisionId)
     {
         this.actorRuntimeId = RequireId(actorRuntimeId, nameof(actorRuntimeId));
         this.locationRuntimeId = RequireId(locationRuntimeId, nameof(locationRuntimeId));
+    }
+
+    public override IReadOnlyList<DomainEventParticipant> GetParticipants()
+    {
+        return new[] { new DomainEventParticipant(actorRuntimeId, DomainEventParticipantRole.Actor) };
     }
 }
 
@@ -143,6 +219,7 @@ public sealed class DomainEventStore
     private readonly List<DomainEvent> events = new List<DomainEvent>();
     private readonly IReadOnlyList<DomainEvent> readOnlyEvents;
     private readonly Dictionary<string, DomainEvent> eventsById = new Dictionary<string, DomainEvent>(StringComparer.Ordinal);
+    private readonly Dictionary<string, List<DomainEvent>> eventsByParticipant = new Dictionary<string, List<DomainEvent>>(StringComparer.Ordinal);
     private readonly HistoryStore historyStore;
     private readonly HistoryPolicy historyPolicy;
     private readonly SimulationLogger logger;
@@ -185,6 +262,7 @@ public sealed class DomainEventStore
 
         eventsById.Add(domainEvent.EventId, domainEvent);
         events.Add(domainEvent);
+        IndexParticipants(domainEvent);
 
         if (historyPolicy.ShouldRetain(domainEvent) == true)
         {
@@ -192,6 +270,41 @@ public sealed class DomainEventStore
         }
 
         return true;
+    }
+
+    public bool TryGetEvent(string eventId, out DomainEvent domainEvent)
+    {
+        return eventsById.TryGetValue(eventId ?? string.Empty, out domainEvent);
+    }
+
+    public IReadOnlyList<DomainEvent> GetEventsForParticipant(string runtimeId)
+    {
+        return eventsByParticipant.TryGetValue(runtimeId ?? string.Empty, out List<DomainEvent> participantEvents) == true
+            ? participantEvents.AsReadOnly()
+            : Array.Empty<DomainEvent>();
+    }
+
+    private void IndexParticipants(DomainEvent domainEvent)
+    {
+        HashSet<string> indexedRuntimeIds = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (DomainEventParticipant participant in domainEvent.GetParticipants())
+        {
+            if (participant == null
+                || string.IsNullOrWhiteSpace(participant.RuntimeId) == true
+                || indexedRuntimeIds.Add(participant.RuntimeId) == false)
+            {
+                continue;
+            }
+
+            if (eventsByParticipant.TryGetValue(participant.RuntimeId, out List<DomainEvent> participantEvents) == false)
+            {
+                participantEvents = new List<DomainEvent>();
+                eventsByParticipant.Add(participant.RuntimeId, participantEvents);
+            }
+
+            participantEvents.Add(domainEvent);
+        }
     }
 }
 
@@ -232,22 +345,25 @@ public sealed class DomainEventRecorder
 {
     private readonly RuntimeIdAllocator eventIdAllocator;
     private readonly SimulationTime simulationTime;
+    private readonly SimulationRecordSequence recordSequence;
     private readonly DomainEventStore eventStore;
     private readonly SimulationLogger logger;
 
     public DomainEventRecorder(
         RuntimeIdAllocator eventIdAllocator,
         SimulationTime simulationTime,
+        SimulationRecordSequence recordSequence,
         DomainEventStore eventStore,
         SimulationLogger logger = null)
     {
         this.eventIdAllocator = eventIdAllocator ?? throw new ArgumentNullException(nameof(eventIdAllocator));
         this.simulationTime = simulationTime ?? throw new ArgumentNullException(nameof(simulationTime));
+        this.recordSequence = recordSequence ?? throw new ArgumentNullException(nameof(recordSequence));
         this.eventStore = eventStore ?? throw new ArgumentNullException(nameof(eventStore));
         this.logger = logger ?? new SimulationLogger(null);
     }
 
-    public bool Record(Func<string, long, DomainEvent> createEvent)
+    public bool Record(Func<string, long, long, DomainEvent> createEvent)
     {
         if (createEvent == null)
         {
@@ -257,7 +373,10 @@ public sealed class DomainEventRecorder
 
         try
         {
-            DomainEvent domainEvent = createEvent(eventIdAllocator.AllocateEventId(), simulationTime.AbsoluteDay);
+            DomainEvent domainEvent = createEvent(
+                eventIdAllocator.AllocateEventId(),
+                simulationTime.AbsoluteDay,
+                recordSequence.Allocate());
             return eventStore.Record(domainEvent);
         }
         catch (ArgumentException exception)

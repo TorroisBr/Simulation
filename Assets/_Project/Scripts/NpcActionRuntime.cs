@@ -13,6 +13,8 @@ public class NpcActionRuntime
     [SerializeField] private float successChanceMultiplier = 1f;
     [SerializeField] private NpcTravelReason travelReason;
     [SerializeField] private float expectedNetValue;
+    [SerializeField] private string originDecisionId;
+    [NonSerialized] private CommercialDecisionEvidence commercialDecisionEvidence;
 
     public NpcActionData Action => action;
     public NpcRuntime TargetNpc => targetNpc;
@@ -24,6 +26,8 @@ public class NpcActionRuntime
     public float SuccessChanceMultiplier => successChanceMultiplier;
     public NpcTravelReason TravelReason => travelReason;
     public float ExpectedNetValue => expectedNetValue;
+    public string OriginDecisionId => originDecisionId;
+    public CommercialDecisionEvidence CommercialDecisionEvidence => commercialDecisionEvidence;
 
     public NpcActionRuntime(NpcActionData action)
     {
@@ -57,6 +61,16 @@ public class NpcActionRuntime
         successChanceMultiplier = Mathf.Max(0f, multiplier);
     }
 
+    public void SetOriginDecisionId(string decisionId)
+    {
+        originDecisionId = string.IsNullOrWhiteSpace(decisionId) == true ? null : decisionId;
+    }
+
+    public void SetCommercialDecisionEvidence(CommercialDecisionEvidence evidence)
+    {
+        commercialDecisionEvidence = evidence;
+    }
+
     public NpcActionRuntime(NpcActionData action, CityRuntime targetCity, ItemData targetItem, int amount, float expectedUnitPrice)
     {
         this.action = action;
@@ -84,19 +98,22 @@ public class NpcTravelPlanRuntime
     [SerializeField] private NpcTravelReason reason;
     [SerializeField] private float utility;
     [SerializeField] private float expectedCost;
+    [SerializeField] private string originDecisionId;
 
     public CityRuntime TargetCity => targetCity;
     public NpcTravelReason Reason => reason;
     public float Utility => utility;
     public float ExpectedCost => expectedCost;
+    public string OriginDecisionId => originDecisionId;
     public bool IsActive => targetCity != null && reason != NpcTravelReason.None;
 
-    public void Set(CityRuntime targetCity, NpcTravelReason reason, float utility, float expectedCost)
+    public void Set(CityRuntime targetCity, NpcTravelReason reason, float utility, float expectedCost, string originDecisionId = null)
     {
         this.targetCity = targetCity;
         this.reason = reason;
         this.utility = Mathf.Max(0f, utility);
         this.expectedCost = Mathf.Max(0f, expectedCost);
+        this.originDecisionId = string.IsNullOrWhiteSpace(originDecisionId) == true ? null : originDecisionId;
     }
 
     public void Clear()
@@ -105,6 +122,7 @@ public class NpcTravelPlanRuntime
         reason = NpcTravelReason.None;
         utility = 0f;
         expectedCost = 0f;
+        originDecisionId = null;
     }
 }
 
@@ -156,6 +174,7 @@ public class MerchantTradePlanRuntime
     [SerializeField] private float purchasePricePerItem;
     [SerializeField] private int waitDaysAtDestination;
     [SerializeField] private int pendingTravelDays;
+    [SerializeField] private string originDecisionId;
 
     public ItemData Item => item;
     public CityRuntime OriginCity => originCity;
@@ -165,10 +184,11 @@ public class MerchantTradePlanRuntime
     public float PurchasePricePerItem => purchasePricePerItem;
     public int WaitDaysAtDestination => waitDaysAtDestination;
     public int PendingTravelDays => pendingTravelDays;
+    public string OriginDecisionId => originDecisionId;
     public bool HasData => item != null || originCity != null || targetCity != null || plannedAmount > 0 || remainingAmount > 0;
     public bool IsActive => item != null && targetCity != null && RemainingAmount > 0;
 
-    public void Set(ItemData item, CityRuntime originCity, CityRuntime targetCity, int plannedAmount, float purchasePricePerItem)
+    public void Set(ItemData item, CityRuntime originCity, CityRuntime targetCity, int plannedAmount, float purchasePricePerItem, string originDecisionId = null)
     {
         this.item = item;
         this.originCity = originCity;
@@ -178,9 +198,10 @@ public class MerchantTradePlanRuntime
         this.purchasePricePerItem = Mathf.Max(0f, purchasePricePerItem);
         waitDaysAtDestination = 0;
         pendingTravelDays = 0;
+        this.originDecisionId = string.IsNullOrWhiteSpace(originDecisionId) == true ? null : originDecisionId;
     }
 
-    public void RedirectTo(CityRuntime targetCity)
+    public void RedirectTo(CityRuntime targetCity, string originDecisionId = null)
     {
         if (this.targetCity != targetCity)
         {
@@ -188,6 +209,11 @@ public class MerchantTradePlanRuntime
         }
 
         this.targetCity = targetCity;
+
+        if (string.IsNullOrWhiteSpace(originDecisionId) == false)
+        {
+            this.originDecisionId = originDecisionId;
+        }
     }
 
     public void IncrementWaitDayAtDestination()
@@ -234,5 +260,6 @@ public class MerchantTradePlanRuntime
         purchasePricePerItem = 0f;
         waitDaysAtDestination = 0;
         pendingTravelDays = 0;
+        originDecisionId = null;
     }
 }

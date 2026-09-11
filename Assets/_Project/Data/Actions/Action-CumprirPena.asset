@@ -12,6 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: efaa8a44b89313f48aaa55dad7921efe, type: 3}
   m_Name: Action-CumprirPena
   m_EditorClassIdentifier: Assembly-CSharp::NpcActionData
+  id: CUMPRIR_PENA
   statusNecessariosParaFazerAcao:
   - {fileID: 11400000, guid: 39ec54928a091684d8daf631dfe56d67, type: 2}
   actionName: CUMPRIR_PENA

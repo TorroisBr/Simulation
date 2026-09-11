@@ -53,7 +53,9 @@ public class TravelActionProvider : INpcActionProvider
         }
 
         utility = Mathf.Max(utility, Mathf.Clamp(planUtility, 0f, 100f));
-        return new NpcActionRuntime(action, plan.TargetCity, null, plan.Reason, travelCost, 0f);
+        NpcActionRuntime actionRuntime = new NpcActionRuntime(action, plan.TargetCity, null, plan.Reason, travelCost, 0f);
+        actionRuntime.SetOriginDecisionId(plan.OriginDecisionId);
+        return actionRuntime;
     }
 
     public NpcActionResult TryExecuteAction(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime)

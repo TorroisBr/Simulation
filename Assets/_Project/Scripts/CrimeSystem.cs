@@ -277,7 +277,7 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler
             return NpcActionResult.Failed();
         }
 
-        npcRuntime.SetTravelPlan(actionRuntime.TargetCity, NpcTravelReason.Flee, 80f, travelCost);
+        npcRuntime.SetTravelPlan(actionRuntime.TargetCity, NpcTravelReason.Flee, 80f, travelCost, actionRuntime.OriginDecisionId);
         logger.Log(SimulationLogCategory.Crime, $"{npcRuntime.NpcName} decidiu fugir para {actionRuntime.TargetCity.CityName}. Custo de viagem: {travelCost:0.##}.");
         return NpcActionResult.Succeeded();
     }
@@ -286,7 +286,7 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler
     {
         CrimeActionSettings settings = GetCrimeSettings(actionRuntime.Action);
 
-        if (justiceSystem.EscapePrison(npcRuntime, settings.escapeBountyPenalty) == false)
+        if (justiceSystem.EscapePrison(npcRuntime, settings.escapeBountyPenalty, actionRuntime.OriginDecisionId) == false)
         {
             return NpcActionResult.Failed();
         }

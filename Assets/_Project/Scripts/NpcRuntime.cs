@@ -16,6 +16,7 @@ public class NpcRuntime
     [NonSerialized]private CityRuntime destinationCity;
     [SerializeField]private int travelDaysRemaining;
     [SerializeField]private bool travelStartedToday;
+    [SerializeField]private string travelOriginDecisionId;
     [SerializeField]private int hiddenDaysRemaining;
     [SerializeField]private MerchantTradePlanRuntime merchantTradePlan = new MerchantTradePlanRuntime();
     [SerializeField]private NpcTravelPlanRuntime travelPlan = new NpcTravelPlanRuntime();
@@ -33,6 +34,7 @@ public class NpcRuntime
     public CityRuntime DestinationCity => destinationCity;
     public int TravelDaysRemaining => travelDaysRemaining;
     public bool TravelStartedToday => travelStartedToday;
+    public string TravelOriginDecisionId => travelOriginDecisionId;
     public bool IsTraveling => destinationCity != null && travelDaysRemaining > 0;
     public int HiddenDaysRemaining => hiddenDaysRemaining;
     public bool IsHidden => hiddenDaysRemaining > 0;
@@ -129,7 +131,7 @@ public class NpcRuntime
         return true;
     }
 
-    public bool StartTravel(CityRuntime destination, int travelDays)
+    public bool StartTravel(CityRuntime destination, int travelDays, string originDecisionId = null)
     {
         if (destination == null || IsTraveling == true)
         {
@@ -144,6 +146,7 @@ public class NpcRuntime
         destinationCity = destination;
         travelDaysRemaining = Mathf.Max(1, travelDays);
         travelStartedToday = true;
+        travelOriginDecisionId = string.IsNullOrWhiteSpace(originDecisionId) == true ? null : originDecisionId;
         return true;
     }
 
@@ -170,6 +173,7 @@ public class NpcRuntime
 
         arrivedCity = destinationCity;
         destinationCity = null;
+        travelOriginDecisionId = null;
 
         if (arrivedCity != null)
         {
@@ -179,9 +183,9 @@ public class NpcRuntime
         return true;
     }
 
-    public void SetTravelPlan(CityRuntime targetCity, NpcTravelReason reason, float utility, float expectedCost)
+    public void SetTravelPlan(CityRuntime targetCity, NpcTravelReason reason, float utility, float expectedCost, string originDecisionId = null)
     {
-        TravelPlan.Set(targetCity, reason, utility, expectedCost);
+        TravelPlan.Set(targetCity, reason, utility, expectedCost, originDecisionId);
     }
 
     public void ClearTravelPlan()
@@ -212,9 +216,9 @@ public class NpcRuntime
         hiddenDaysRemaining = 0;
     }
 
-    public void SetMerchantTradePlan(ItemData item, CityRuntime originCity, CityRuntime targetCity, int plannedAmount, float purchasePricePerItem)
+    public void SetMerchantTradePlan(ItemData item, CityRuntime originCity, CityRuntime targetCity, int plannedAmount, float purchasePricePerItem, string originDecisionId = null)
     {
-        MerchantTradePlan.Set(item, originCity, targetCity, plannedAmount, purchasePricePerItem);
+        MerchantTradePlan.Set(item, originCity, targetCity, plannedAmount, purchasePricePerItem, originDecisionId);
     }
 
     public void ClearMerchantTradePlan()

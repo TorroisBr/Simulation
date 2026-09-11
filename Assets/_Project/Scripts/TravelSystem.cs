@@ -55,19 +55,21 @@ public class TravelSystem
 
         CityRuntime originCity = npcRuntime.CurrentCity;
 
-        if (npcRuntime.StartTravel(actionRuntime.TargetCity, travelDays) == false)
+        if (npcRuntime.StartTravel(actionRuntime.TargetCity, travelDays, actionRuntime.OriginDecisionId) == false)
         {
             return false;
         }
 
         npcRuntime.TrySpendMoney(travelCost);
-        domainEventRecorder?.Record((eventId, absoluteDay) => new NpcTravelStartedEvent(
+        domainEventRecorder?.Record((eventId, absoluteDay, recordSequence) => new NpcTravelStartedEvent(
             eventId,
             absoluteDay,
+            recordSequence,
             npcRuntime.RuntimeId,
             originCity.Location.RuntimeId,
             actionRuntime.TargetCity.Location.RuntimeId,
-            route.RuntimeId));
+            route.RuntimeId,
+            actionRuntime.OriginDecisionId));
         logger.Log(SimulationLogCategory.Travel, $"{npcRuntime.NpcName} iniciou viagem de {originCity.CityName} para {actionRuntime.TargetCity.CityName}");
 
         if (travelCost > 0f)
@@ -119,15 +121,18 @@ public class TravelSystem
                 continue;
             }
 
+            string originDecisionId = npcRuntime.TravelOriginDecisionId;
             bool arrived = npcRuntime.AdvanceTravelDay(out CityRuntime arrivedCity);
 
             if (arrived == true)
             {
-                domainEventRecorder?.Record((eventId, absoluteDay) => new NpcArrivedEvent(
+                domainEventRecorder?.Record((eventId, absoluteDay, recordSequence) => new NpcArrivedEvent(
                     eventId,
                     absoluteDay,
+                    recordSequence,
                     npcRuntime.RuntimeId,
-                    arrivedCity?.Location?.RuntimeId));
+                    arrivedCity?.Location?.RuntimeId,
+                    originDecisionId));
                 string cityName = arrivedCity != null ? arrivedCity.CityName : "destino desconhecido";
                 logger.Log(SimulationLogCategory.Travel, $"{npcRuntime.NpcName} chegou em {cityName}");
                 continue;

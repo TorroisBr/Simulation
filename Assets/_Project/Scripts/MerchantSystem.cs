@@ -12,6 +12,7 @@ public class MerchantSystem : INpcActionProvider
     private readonly TravelSystem travelSystem;
     private readonly SimulationTime simulationTime;
     private readonly CommercialKnowledgePolicy knowledgePolicy;
+    private readonly NpcDecisionRecorder decisionRecorder;
     private readonly SimulationLogger logger;
 
     public MerchantSystem(
@@ -21,6 +22,7 @@ public class MerchantSystem : INpcActionProvider
         TravelSystem travelSystem,
         SimulationTime simulationTime,
         CommercialKnowledgeSettings knowledgeSettings,
+        NpcDecisionRecorder decisionRecorder,
         SimulationLogger logger = null)
     {
         this.maxMerchantTradeAmount = Mathf.Max(1, maxMerchantTradeAmount);
@@ -29,6 +31,7 @@ public class MerchantSystem : INpcActionProvider
         this.travelSystem = travelSystem;
         this.simulationTime = simulationTime ?? throw new System.ArgumentNullException(nameof(simulationTime));
         knowledgePolicy = new CommercialKnowledgePolicy(knowledgeSettings);
+        this.decisionRecorder = decisionRecorder;
         this.logger = logger ?? new SimulationLogger(null);
     }
 
@@ -89,7 +92,15 @@ public class MerchantSystem : INpcActionProvider
 
         if (redirectOpportunity != null)
         {
-            plan.RedirectTo(redirectOpportunity.TargetCity);
+            NpcDecisionRecord redirectDecision = decisionRecorder?.Record(
+                npcRuntime.RuntimeId,
+                NpcDecisionType.TradeRedirect,
+                NpcDecisionOrigin.Autonomous,
+                null,
+                null,
+                redirectOpportunity.TargetCity?.Location?.RuntimeId,
+                redirectOpportunity.Evidence);
+            plan.RedirectTo(redirectOpportunity.TargetCity, redirectDecision?.DecisionId);
             SetTradeTravelPlan(npcRuntime, redirectOpportunity.TargetCity);
             logger.Log(SimulationLogCategory.Trade, $"{npcRuntime.NpcName} reavaliou o plano comercial e mudou o destino para {redirectOpportunity.TargetCity.CityName}.");
             return;
@@ -187,13 +198,15 @@ public class MerchantSystem : INpcActionProvider
         }
 
         utility = Mathf.Max(0f, reposition.TradeOpportunity.Score);
-        return new NpcActionRuntime(
+        NpcActionRuntime repositionAction = new NpcActionRuntime(
             action,
             reposition.OriginCity,
             reposition.TradeOpportunity.Item,
             NpcTravelReason.TradeReposition,
             reposition.RepositionCost,
             reposition.TradeOpportunity.NetProfit);
+        repositionAction.SetCommercialDecisionEvidence(reposition.TradeOpportunity.Evidence);
+        return repositionAction;
     }
 
     public void LogTradeRepositionDecision(NpcRuntime npcRuntime, CityRuntime originCity, NpcActionRuntime actionRuntime)
@@ -278,7 +291,13 @@ public class MerchantSystem : INpcActionProvider
 
         if (IsTravelingMerchant(npcRuntime) == true && actionRuntime.TargetCity != npcRuntime.CurrentCity)
         {
-            npcRuntime.SetMerchantTradePlan(actionRuntime.TargetItem, npcRuntime.CurrentCity, actionRuntime.TargetCity, amountBought, unitPrice);
+            npcRuntime.SetMerchantTradePlan(
+                actionRuntime.TargetItem,
+                npcRuntime.CurrentCity,
+                actionRuntime.TargetCity,
+                amountBought,
+                unitPrice,
+                actionRuntime.OriginDecisionId);
             SetTradeTravelPlan(npcRuntime, actionRuntime.TargetCity);
             logger.Log(SimulationLogCategory.Trade, $"{npcRuntime.NpcName} comprou {amountBought} {actionRuntime.TargetItem.itemName} em {npcRuntime.CurrentCity.CityName} por {unitPrice:0.##} cada para vender em {actionRuntime.TargetCity.CityName}");
             return true;
@@ -424,7 +443,9 @@ public class MerchantSystem : INpcActionProvider
 
         float baseUtility = 30f;
         utility = Mathf.Max(utility, baseUtility + opportunity.Score);
-        return new NpcActionRuntime(action, opportunity.TargetCity, opportunity.Item, opportunity.Amount, opportunity.BuyPrice);
+        NpcActionRuntime buyAction = new NpcActionRuntime(action, opportunity.TargetCity, opportunity.Item, opportunity.Amount, opportunity.BuyPrice);
+        buyAction.SetCommercialDecisionEvidence(opportunity.Evidence);
+        return buyAction;
     }
 
     private NpcActionRuntime CreateSellGoodsAction(NpcRuntime npcRuntime, NpcActionData action, ref float utility)
@@ -457,7 +478,9 @@ public class MerchantSystem : INpcActionProvider
         }
 
         utility = Mathf.Max(utility, 25f + localSale.Score);
-        return new NpcActionRuntime(action, npcRuntime.CurrentCity, localSale.Item, localSale.Amount, localSale.SellPrice);
+        NpcActionRuntime sellAction = new NpcActionRuntime(action, npcRuntime.CurrentCity, localSale.Item, localSale.Amount, localSale.SellPrice);
+        sellAction.SetCommercialDecisionEvidence(localSale.Evidence);
+        return sellAction;
     }
 
     private NpcActionRuntime CreatePlannedSellGoodsAction(NpcRuntime npcRuntime, NpcActionData action, ref float utility)
@@ -471,7 +494,7 @@ public class MerchantSystem : INpcActionProvider
             return null;
         }
 
-        if (TryGetUsefulObservation(npcRuntime, npcRuntime.CurrentCity, plan.Item, out CommercialMarketObservation localObservation, out _) == false)
+        if (TryGetUsefulObservation(npcRuntime, npcRuntime.CurrentCity, plan.Item, out CommercialMarketObservation localObservation, out float localFreshness) == false)
         {
             utility = 0f;
             return null;
@@ -484,19 +507,44 @@ public class MerchantSystem : INpcActionProvider
         if (localBuyer != null)
         {
             utility = Mathf.Max(utility, 85f + localBuyer.Score);
-            return new NpcActionRuntime(action, localBuyer.TargetNpc, plan.Item, localBuyer.Amount, localBuyer.SellPrice);
+            NpcActionRuntime buyerSaleAction = new NpcActionRuntime(action, localBuyer.TargetNpc, plan.Item, localBuyer.Amount, localBuyer.SellPrice);
+            buyerSaleAction.SetCommercialDecisionEvidence(localBuyer.Evidence);
+            return buyerSaleAction;
         }
+
+        float expectedGrossProfit = profitPerItem * amount;
+        CommercialDecisionEvidence saleEvidence = CreateCommercialEvidence(
+            npcRuntime,
+            plan.OriginCity ?? npcRuntime.CurrentCity,
+            npcRuntime.CurrentCity,
+            null,
+            plan.Item,
+            null,
+            0f,
+            localObservation,
+            localFreshness,
+            amount,
+            plan.PurchasePricePerItem,
+            localPrice,
+            0f,
+            expectedGrossProfit,
+            expectedGrossProfit,
+            profitPerItem >= minimumProfitPerItem ? profitPerItem * 5f : 0f);
 
         if (profitPerItem >= minimumProfitPerItem)
         {
             utility = Mathf.Max(utility, 80f + profitPerItem * 5f);
-            return new NpcActionRuntime(action, npcRuntime.CurrentCity, plan.Item, amount, localPrice);
+            NpcActionRuntime plannedSaleAction = new NpcActionRuntime(action, npcRuntime.CurrentCity, plan.Item, amount, localPrice);
+            plannedSaleAction.SetCommercialDecisionEvidence(saleEvidence);
+            return plannedSaleAction;
         }
 
         if (plan.WaitDaysAtDestination >= MaxUnprofitablePlanWaitDays)
         {
             utility = Mathf.Max(utility, 35f);
-            return new NpcActionRuntime(action, npcRuntime.CurrentCity, plan.Item, amount, localPrice);
+            NpcActionRuntime liquidationAction = new NpcActionRuntime(action, npcRuntime.CurrentCity, plan.Item, amount, localPrice);
+            liquidationAction.SetCommercialDecisionEvidence(saleEvidence);
+            return liquidationAction;
         }
 
         utility = 0f;
@@ -539,7 +587,7 @@ public class MerchantSystem : INpcActionProvider
             return;
         }
 
-        npcRuntime.SetTravelPlan(targetCity, NpcTravelReason.Trade, 70f, travelCost);
+        npcRuntime.SetTravelPlan(targetCity, NpcTravelReason.Trade, 70f, travelCost, npcRuntime.MerchantTradePlan.OriginDecisionId);
     }
 
     private void ClearTradeTravelPlan(NpcRuntime npcRuntime)
@@ -641,7 +689,24 @@ public class MerchantSystem : INpcActionProvider
 
                 if (bestOpportunity == null || score > bestOpportunity.Score)
                 {
-                    bestOpportunity = new MerchantTradeOpportunity(originObservation.ItemDefinition, targetCity, amount, buyPrice, sellPrice, profitPerItem, netProfit, score);
+                    CommercialDecisionEvidence evidence = CreateCommercialEvidence(
+                        npcRuntime,
+                        originCity,
+                        targetCity,
+                        null,
+                        originObservation.ItemDefinition,
+                        originObservation,
+                        originFreshness,
+                        targetObservation,
+                        targetFreshness,
+                        amount,
+                        buyPrice,
+                        sellPrice,
+                        totalTravelCost,
+                        profitPerItem * amount,
+                        netProfit,
+                        score);
+                    bestOpportunity = new MerchantTradeOpportunity(originObservation.ItemDefinition, targetCity, amount, buyPrice, sellPrice, profitPerItem, netProfit, score, evidence);
                 }
             }
         }
@@ -754,7 +819,24 @@ public class MerchantSystem : INpcActionProvider
 
             if (bestOpportunity == null || score > bestOpportunity.Score)
             {
-                bestOpportunity = new MerchantTradeOpportunity(plan.Item, targetCity, amount, plan.PurchasePricePerItem, sellPrice, profitPerItem, netProfit, score);
+                CommercialDecisionEvidence evidence = CreateCommercialEvidence(
+                    npcRuntime,
+                    currentCity,
+                    targetCity,
+                    plan.TargetCity,
+                    plan.Item,
+                    null,
+                    0f,
+                    targetObservation,
+                    freshness,
+                    amount,
+                    plan.PurchasePricePerItem,
+                    sellPrice,
+                    travelCost,
+                    profitPerItem * amount,
+                    netProfit,
+                    score);
+                bestOpportunity = new MerchantTradeOpportunity(plan.Item, targetCity, amount, plan.PurchasePricePerItem, sellPrice, profitPerItem, netProfit, score, evidence);
             }
         }
 
@@ -815,7 +897,24 @@ public class MerchantSystem : INpcActionProvider
 
             if (bestBuyer == null || score > bestBuyer.Score)
             {
-                bestBuyer = new MerchantTradeOpportunity(item, sellerRuntime.CurrentCity, amount, referencePrice, unitPrice, profitPerItem, profitPerItem * amount, score, candidate);
+                CommercialDecisionEvidence evidence = CreateCommercialEvidence(
+                    sellerRuntime,
+                    sellerRuntime.CurrentCity,
+                    sellerRuntime.CurrentCity,
+                    null,
+                    item,
+                    null,
+                    0f,
+                    localObservation,
+                    freshness,
+                    amount,
+                    referencePrice,
+                    unitPrice,
+                    0f,
+                    profitPerItem * amount,
+                    profitPerItem * amount,
+                    score);
+                bestBuyer = new MerchantTradeOpportunity(item, sellerRuntime.CurrentCity, amount, referencePrice, unitPrice, profitPerItem, profitPerItem * amount, score, evidence, candidate);
             }
         }
 
@@ -859,7 +958,24 @@ public class MerchantSystem : INpcActionProvider
 
             if (bestSale == null || score > bestSale.Score)
             {
-                bestSale = new MerchantTradeOpportunity(inventoryItem.Item, npcRuntime.CurrentCity, amount, referencePrice, localPrice, profitPerItem, profitPerItem * amount, score);
+                CommercialDecisionEvidence evidence = CreateCommercialEvidence(
+                    npcRuntime,
+                    npcRuntime.CurrentCity,
+                    npcRuntime.CurrentCity,
+                    null,
+                    inventoryItem.Item,
+                    null,
+                    0f,
+                    localObservation,
+                    freshness,
+                    amount,
+                    referencePrice,
+                    localPrice,
+                    0f,
+                    profitPerItem * amount,
+                    profitPerItem * amount,
+                    score);
+                bestSale = new MerchantTradeOpportunity(inventoryItem.Item, npcRuntime.CurrentCity, amount, referencePrice, localPrice, profitPerItem, profitPerItem * amount, score, evidence);
             }
         }
 
@@ -888,6 +1004,50 @@ public class MerchantSystem : INpcActionProvider
 
         freshness = knowledgePolicy.GetFreshness(observation, simulationTime.AbsoluteDay);
         return freshness > 0f;
+    }
+
+    private CommercialDecisionEvidence CreateCommercialEvidence(
+        NpcRuntime npcRuntime,
+        CityRuntime tradeOrigin,
+        CityRuntime tradeDestination,
+        CityRuntime previousDestination,
+        ItemData item,
+        CommercialMarketObservation originObservation,
+        float originFreshness,
+        CommercialMarketObservation destinationObservation,
+        float destinationFreshness,
+        int expectedQuantity,
+        float expectedPurchaseUnitPrice,
+        float expectedSaleUnitPrice,
+        float expectedTravelCost,
+        float expectedGrossProfit,
+        float expectedNetProfit,
+        float expectedScore)
+    {
+        if (npcRuntime?.CurrentCity?.Location == null
+            || tradeOrigin?.Location == null
+            || tradeDestination?.Location == null
+            || item == null
+            || string.IsNullOrWhiteSpace(item.DefinitionId) == true)
+        {
+            return null;
+        }
+
+        return new CommercialDecisionEvidence(
+            item.DefinitionId,
+            npcRuntime.CurrentCity.Location.RuntimeId,
+            tradeOrigin.Location.RuntimeId,
+            tradeDestination.Location.RuntimeId,
+            previousDestination?.Location?.RuntimeId,
+            CommercialObservationEvidence.Capture(originObservation, originFreshness),
+            CommercialObservationEvidence.Capture(destinationObservation, destinationFreshness),
+            expectedQuantity,
+            expectedPurchaseUnitPrice,
+            expectedSaleUnitPrice,
+            expectedTravelCost,
+            expectedGrossProfit,
+            expectedNetProfit,
+            expectedScore);
     }
 
     private float CalculateLocalMerchantUnitPrice(NpcRuntime buyerRuntime, ItemData item, float retailPrice)
@@ -962,8 +1122,9 @@ public class MerchantSystem : INpcActionProvider
         public float ProfitPerItem { get; }
         public float NetProfit { get; }
         public float Score { get; }
+        public CommercialDecisionEvidence Evidence { get; }
 
-        public MerchantTradeOpportunity(ItemData item, CityRuntime targetCity, int amount, float buyPrice, float sellPrice, float profitPerItem, float netProfit, float score, NpcRuntime targetNpc = null)
+        public MerchantTradeOpportunity(ItemData item, CityRuntime targetCity, int amount, float buyPrice, float sellPrice, float profitPerItem, float netProfit, float score, CommercialDecisionEvidence evidence, NpcRuntime targetNpc = null)
         {
             Item = item;
             TargetNpc = targetNpc;
@@ -974,6 +1135,7 @@ public class MerchantSystem : INpcActionProvider
             ProfitPerItem = profitPerItem;
             NetProfit = netProfit;
             Score = score;
+            Evidence = evidence;
         }
     }
 

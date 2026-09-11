@@ -97,7 +97,7 @@ public class JusticeSystem
         return record;
     }
 
-    public bool Arrest(NpcRuntime guardRuntime, NpcRuntime targetRuntime, CityRuntime city)
+    public bool Arrest(NpcRuntime guardRuntime, NpcRuntime targetRuntime, CityRuntime city, string originDecisionId = null)
     {
         if (guardRuntime == null || targetRuntime == null || city == null || arrestedStatus == null || IsArrested(targetRuntime) == true)
         {
@@ -125,12 +125,14 @@ public class JusticeSystem
         targetRuntime.RemoveStatus(freeStatus);
         targetRuntime.AddStatus(arrestedStatus);
         SyncWantedStatus(targetRuntime);
-        domainEventRecorder?.Record((eventId, absoluteDay) => new NpcArrestedEvent(
+        domainEventRecorder?.Record((eventId, absoluteDay, recordSequence) => new NpcArrestedEvent(
             eventId,
             absoluteDay,
+            recordSequence,
             guardRuntime.RuntimeId,
             targetRuntime.RuntimeId,
-            city.Location?.RuntimeId));
+            city.Location?.RuntimeId,
+            originDecisionId));
         logger.Log(SimulationLogCategory.Justice, $"{guardRuntime.NpcName} prendeu {targetRuntime.NpcName} em {city.CityName}. Pena restante: {sentence.RemainingDays} dias.");
         return true;
     }
@@ -179,17 +181,17 @@ public class JusticeSystem
         SyncWantedStatuses(npcRuntimeList);
     }
 
-    public bool EscapePrison(NpcRuntime targetRuntime, float escapeBountyPenalty)
+    public bool EscapePrison(NpcRuntime targetRuntime, float escapeBountyPenalty, string originDecisionId = null)
     {
         if (targetRuntime == null || IsArrested(targetRuntime) == false || WasArrestedToday(targetRuntime) == true)
         {
             return false;
         }
 
-        return ApplyEscapeSuccess(targetRuntime, escapeBountyPenalty);
+        return ApplyEscapeSuccess(targetRuntime, escapeBountyPenalty, originDecisionId);
     }
 
-    public bool ApplyEscapeSuccess(NpcRuntime targetRuntime, float escapeBountyPenalty)
+    public bool ApplyEscapeSuccess(NpcRuntime targetRuntime, float escapeBountyPenalty, string originDecisionId = null)
     {
         if (targetRuntime == null || IsArrested(targetRuntime) == false)
         {
@@ -203,7 +205,7 @@ public class JusticeSystem
             CityRuntime escapeCity = targetRuntime.CurrentCity;
             ReleasePrisoner(targetRuntime);
             SyncWantedStatus(targetRuntime);
-            RecordNpcEscaped(targetRuntime, escapeCity);
+            RecordNpcEscaped(targetRuntime, escapeCity, originDecisionId);
             return true;
         }
 
@@ -216,7 +218,7 @@ public class JusticeSystem
         targetRuntime.RemoveStatus(arrestedStatus);
         targetRuntime.AddStatus(freeStatus);
         SyncWantedStatus(targetRuntime);
-        RecordNpcEscaped(targetRuntime, sentence.City);
+        RecordNpcEscaped(targetRuntime, sentence.City, originDecisionId);
         logger.Log(SimulationLogCategory.Justice, $"{targetRuntime.NpcName} fugiu da prisao em {sentence.City.CityName}. Recompensa atual: {sentence.Warrant.Bounty:0.##}.");
         return true;
     }
@@ -411,13 +413,15 @@ public class JusticeSystem
         SyncWantedStatus(targetRuntime);
     }
 
-    private void RecordNpcEscaped(NpcRuntime targetRuntime, CityRuntime cityRuntime)
+    private void RecordNpcEscaped(NpcRuntime targetRuntime, CityRuntime cityRuntime, string originDecisionId)
     {
-        domainEventRecorder?.Record((eventId, absoluteDay) => new NpcEscapedEvent(
+        domainEventRecorder?.Record((eventId, absoluteDay, recordSequence) => new NpcEscapedEvent(
             eventId,
             absoluteDay,
+            recordSequence,
             targetRuntime?.RuntimeId,
-            cityRuntime?.Location?.RuntimeId));
+            cityRuntime?.Location?.RuntimeId,
+            originDecisionId));
     }
 }
 

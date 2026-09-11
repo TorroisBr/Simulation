@@ -12,6 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: efaa8a44b89313f48aaa55dad7921efe, type: 3}
   m_Name: Action-IrATaverna
   m_EditorClassIdentifier: Assembly-CSharp::NpcActionData
+  id: IR_A_TAVERNA
   statusNecessariosParaFazerAcao:
   - {fileID: 11400000, guid: 922e799608934f4469cb8c77bfc6c32e, type: 2}
   actionName: IR_A_TAVERNA

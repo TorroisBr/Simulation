@@ -23,6 +23,11 @@ public class TesteSimulacao : MonoBehaviour
     private DomainEventStore domainEventStore;
     private HistoryStore historyStore;
     private DomainEventRecorder domainEventRecorder;
+    private SimulationRecordSequence recordSequence;
+    private NpcDecisionStore decisionStore;
+    private NpcDecisionRecorder decisionRecorder;
+    private NpcChronicleService npcChronicleService;
+    private NpcChronicleFormatter npcChronicleFormatter;
     private ScheduledDirectiveStore scheduledDirectiveStore;
     private ScheduledDirectiveSystem scheduledDirectiveSystem;
     private SimulationModuleSet enabledModules;
@@ -43,6 +48,9 @@ public class TesteSimulacao : MonoBehaviour
     public DomainEventStore DomainEventStore => domainEventStore;
     public HistoryStore History => historyStore;
     public ScheduledDirectiveStore ScheduledDirectives => scheduledDirectiveStore;
+    public NpcDecisionStore Decisions => decisionStore;
+    public NpcChronicleService NpcChronicles => npcChronicleService;
+    public NpcChronicleFormatter ChronicleFormatter => npcChronicleFormatter;
     public long CurrentDay => simulationTime.AbsoluteDay;
     public SimulationDate CurrentDate => calendarDefinition.GetDate(CurrentDay);
 
@@ -78,9 +86,18 @@ public class TesteSimulacao : MonoBehaviour
         calendarDefinition = ResolveCalendarDefinition();
         enabledModules = new SimulationModuleSet(simulationConfig, logger);
         runtimeIdAllocator = new RuntimeIdAllocator();
+        recordSequence = new SimulationRecordSequence();
         historyStore = new HistoryStore();
         domainEventStore = new DomainEventStore(historyStore, new HistoryPolicy(), logger);
-        domainEventRecorder = new DomainEventRecorder(runtimeIdAllocator, simulationTime, domainEventStore, logger);
+        domainEventRecorder = new DomainEventRecorder(runtimeIdAllocator, simulationTime, recordSequence, domainEventStore, logger);
+        decisionStore = new NpcDecisionStore(logger);
+        decisionRecorder = new NpcDecisionRecorder(runtimeIdAllocator, simulationTime, recordSequence, decisionStore, logger);
+        npcChronicleService = new NpcChronicleService(decisionStore, domainEventStore);
+        npcChronicleFormatter = new NpcChronicleFormatter(
+            ResolveNpcDisplayName,
+            ResolveLocationDisplayName,
+            ResolveItemDisplayName,
+            ResolveActionDisplayName);
         scheduledDirectiveStore = new ScheduledDirectiveStore(simulationTime, logger);
         runtimeIdentityRegistry = new RuntimeIdentityRegistry(logger);
         spatialNetwork = new SpatialNetworkRuntime(runtimeIdentityRegistry, logger);
@@ -153,6 +170,13 @@ public class TesteSimulacao : MonoBehaviour
         route = null;
         logger?.LogWarning($"Route runtime resolution failed: spatial network is not initialized for RuntimeId '{runtimeId ?? "<empty>"}'.");
         return false;
+    }
+
+    public IReadOnlyList<NpcChronicleEntry> GetNpcChronicle(string npcRuntimeId)
+    {
+        return npcChronicleService != null
+            ? npcChronicleService.GetChronicle(npcRuntimeId)
+            : System.Array.Empty<NpcChronicleEntry>();
     }
 
     private CalendarDefinition ResolveCalendarDefinition()
@@ -736,6 +760,7 @@ public class TesteSimulacao : MonoBehaviour
                 travelSystem,
                 simulationTime,
                 knowledgeSettings,
+                decisionRecorder,
                 logger);
         }
 
@@ -845,6 +870,7 @@ public class TesteSimulacao : MonoBehaviour
     private void EvaluateAction(NpcRuntime npcRuntime)
     {
         NpcActionRuntime chosenAction = npcDecisionSystem.ChooseAction(npcRuntime, ConfiguredActions);
+        decisionRecorder?.RecordChosenAction(npcRuntime, chosenAction, NpcDecisionOrigin.Autonomous);
         npcRuntime.SetCurrentActionRuntime(chosenAction);
     }
 
@@ -911,6 +937,7 @@ public class TesteSimulacao : MonoBehaviour
             return;
         }
 
+        decisionRecorder?.RecordChosenAction(npcRuntime, requestedAction, NpcDecisionOrigin.ScheduledDirective);
         npcRuntime.SetCurrentActionRuntime(requestedAction);
         NpcActionResult result = TryExecuteCurrentAction(npcRuntime);
 
@@ -1168,6 +1195,66 @@ public class TesteSimulacao : MonoBehaviour
         }
 
         return runtimes[0];
+    }
+
+    private string ResolveNpcDisplayName(string runtimeId)
+    {
+        return runtimeIdentityRegistry != null
+            && runtimeIdentityRegistry.TryGetNpc(runtimeId, out NpcRuntime npcRuntime) == true
+                ? npcRuntime.NpcName
+                : null;
+    }
+
+    private string ResolveLocationDisplayName(string runtimeId)
+    {
+        if (spatialNetwork == null
+            || spatialNetwork.TryGetLocation(runtimeId, out SpatialLocationRuntime location) == false
+            || cityRuntimeByLocation.TryGetValue(location, out CityRuntime cityRuntime) == false)
+        {
+            return null;
+        }
+
+        return cityRuntime.CityName;
+    }
+
+    private string ResolveItemDisplayName(string definitionId)
+    {
+        foreach (CityRuntime cityRuntime in CityRuntimeList)
+        {
+            if (cityRuntime == null)
+            {
+                continue;
+            }
+
+            foreach (MarketItemRuntime marketItem in cityRuntime.Market.Items)
+            {
+                if (marketItem?.Item != null
+                    && string.Equals(marketItem.Item.DefinitionId, definitionId, System.StringComparison.Ordinal) == true)
+                {
+                    return marketItem.Item.itemName;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private string ResolveActionDisplayName(string definitionId)
+    {
+        if (simulationConfig == null)
+        {
+            return null;
+        }
+
+        foreach (NpcActionData action in simulationConfig.Actions)
+        {
+            if (action != null && string.Equals(action.DefinitionId, definitionId, System.StringComparison.Ordinal) == true)
+            {
+                return action.actionName;
+            }
+        }
+
+        return null;
     }
 
     private static string FormatCityDefinition(CityData cityData)
