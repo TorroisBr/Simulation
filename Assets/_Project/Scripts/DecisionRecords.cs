@@ -27,7 +27,8 @@ public enum NpcDecisionType
     TradeRedirect,
     Travel,
     Arrest,
-    Escape
+    Escape,
+    CommercialScout
 }
 
 public enum NpcDecisionOrigin
@@ -72,13 +73,19 @@ public sealed class CommercialObservationEvidence
     private readonly float knownPrice;
     private readonly int knownStock;
     private readonly long observedDay;
+    private readonly long receivedDay;
     private readonly float freshness;
+    private readonly CommercialKnowledgeSource source;
+    private readonly string sourceRuntimeId;
 
     public string LocationRuntimeId => locationRuntimeId;
     public float KnownPrice => knownPrice;
     public int KnownStock => knownStock;
     public long ObservedDay => observedDay;
+    public long ReceivedDay => receivedDay;
     public float Freshness => freshness;
+    public CommercialKnowledgeSource Source => source;
+    public string SourceRuntimeId => sourceRuntimeId;
 
     public CommercialObservationEvidence(
         string locationRuntimeId,
@@ -86,12 +93,38 @@ public sealed class CommercialObservationEvidence
         int knownStock,
         long observedDay,
         float freshness)
+        : this(
+            locationRuntimeId,
+            knownPrice,
+            knownStock,
+            observedDay,
+            observedDay,
+            freshness,
+            CommercialKnowledgeSource.DirectObservation,
+            null)
+    {
+    }
+
+    public CommercialObservationEvidence(
+        string locationRuntimeId,
+        float knownPrice,
+        int knownStock,
+        long observedDay,
+        long receivedDay,
+        float freshness,
+        CommercialKnowledgeSource source,
+        string sourceRuntimeId)
     {
         this.locationRuntimeId = RequireId(locationRuntimeId, nameof(locationRuntimeId));
         this.knownPrice = Math.Max(0f, knownPrice);
         this.knownStock = Math.Max(0, knownStock);
         this.observedDay = Math.Max(0L, observedDay);
+        this.receivedDay = Math.Max(this.observedDay, receivedDay);
         this.freshness = Math.Max(0f, Math.Min(1f, freshness));
+        this.source = source;
+        this.sourceRuntimeId = source == CommercialKnowledgeSource.SharedByNpc
+            ? RequireId(sourceRuntimeId, nameof(sourceRuntimeId))
+            : null;
     }
 
     public static CommercialObservationEvidence Capture(CommercialMarketObservation observation, float freshness)
@@ -106,7 +139,10 @@ public sealed class CommercialObservationEvidence
             observation.ObservedPrice,
             observation.ObservedStock,
             observation.ObservedDay,
-            freshness);
+            observation.ReceivedDay,
+            freshness,
+            observation.Source,
+            observation.SourceRuntimeId);
     }
 
     private static string RequireId(string value, string parameterName)
@@ -202,6 +238,62 @@ public sealed class CommercialDecisionEvidence
 }
 
 [Serializable]
+public sealed class CommercialScoutingEvidence
+{
+    private readonly string targetLocationRuntimeId;
+    private readonly string knownRouteRuntimeId;
+    private readonly int unknownObservationCount;
+    private readonly int staleObservationCount;
+    private readonly bool hasOldestObservation;
+    private readonly long oldestObservationDay;
+    private readonly float expectedTravelCost;
+    private readonly int expectedTravelDays;
+    private readonly float expectedScore;
+
+    public string TargetLocationRuntimeId => targetLocationRuntimeId;
+    public string KnownRouteRuntimeId => knownRouteRuntimeId;
+    public int UnknownObservationCount => unknownObservationCount;
+    public int StaleObservationCount => staleObservationCount;
+    public bool HasOldestObservation => hasOldestObservation;
+    public long OldestObservationDay => oldestObservationDay;
+    public float ExpectedTravelCost => expectedTravelCost;
+    public int ExpectedTravelDays => expectedTravelDays;
+    public float ExpectedScore => expectedScore;
+
+    public CommercialScoutingEvidence(
+        string targetLocationRuntimeId,
+        string knownRouteRuntimeId,
+        int unknownObservationCount,
+        int staleObservationCount,
+        bool hasOldestObservation,
+        long oldestObservationDay,
+        float expectedTravelCost,
+        int expectedTravelDays,
+        float expectedScore)
+    {
+        this.targetLocationRuntimeId = RequireId(targetLocationRuntimeId, nameof(targetLocationRuntimeId));
+        this.knownRouteRuntimeId = RequireId(knownRouteRuntimeId, nameof(knownRouteRuntimeId));
+        this.unknownObservationCount = Math.Max(0, unknownObservationCount);
+        this.staleObservationCount = Math.Max(0, staleObservationCount);
+        this.hasOldestObservation = hasOldestObservation;
+        this.oldestObservationDay = hasOldestObservation ? Math.Max(0L, oldestObservationDay) : 0L;
+        this.expectedTravelCost = Math.Max(0f, expectedTravelCost);
+        this.expectedTravelDays = Math.Max(1, expectedTravelDays);
+        this.expectedScore = Math.Max(0f, expectedScore);
+    }
+
+    private static string RequireId(string value, string parameterName)
+    {
+        if (string.IsNullOrWhiteSpace(value) == true)
+        {
+            throw new ArgumentException("Commercial scouting evidence requires stable IDs.", parameterName);
+        }
+
+        return value;
+    }
+}
+
+[Serializable]
 public sealed class NpcDecisionRecord
 {
     private readonly string decisionId;
@@ -214,6 +306,7 @@ public sealed class NpcDecisionRecord
     private readonly string targetRuntimeId;
     private readonly string targetLocationRuntimeId;
     private readonly CommercialDecisionEvidence commercialEvidence;
+    private readonly CommercialScoutingEvidence commercialScoutingEvidence;
     private readonly IReadOnlyList<NpcDecisionParticipant> decisionParticipants;
     private readonly IReadOnlyList<string> targetRuntimeIds;
 
@@ -231,6 +324,7 @@ public sealed class NpcDecisionRecord
     public string TargetRuntimeId => targetRuntimeId;
     public string TargetLocationRuntimeId => targetLocationRuntimeId;
     public CommercialDecisionEvidence CommercialEvidence => commercialEvidence;
+    public CommercialScoutingEvidence CommercialScoutingEvidence => commercialScoutingEvidence;
     public IReadOnlyList<NpcDecisionParticipant> DecisionParticipants => decisionParticipants;
     public IReadOnlyList<string> TargetRuntimeIds => targetRuntimeIds;
 
@@ -256,7 +350,8 @@ public sealed class NpcDecisionRecord
             null,
             string.IsNullOrWhiteSpace(targetRuntimeId) == true ? null : new[] { targetRuntimeId },
             targetLocationRuntimeId,
-            commercialEvidence)
+            commercialEvidence,
+            null)
     {
     }
 
@@ -272,6 +367,35 @@ public sealed class NpcDecisionRecord
         IEnumerable<string> targetRuntimeIds,
         string targetLocationRuntimeId,
         CommercialDecisionEvidence commercialEvidence)
+        : this(
+            decisionId,
+            absoluteDay,
+            recordSequence,
+            actorRuntimeId,
+            decisionType,
+            origin,
+            actionDefinitionId,
+            decisionParticipants,
+            targetRuntimeIds,
+            targetLocationRuntimeId,
+            commercialEvidence,
+            null)
+    {
+    }
+
+    public NpcDecisionRecord(
+        string decisionId,
+        long absoluteDay,
+        long recordSequence,
+        string actorRuntimeId,
+        NpcDecisionType decisionType,
+        NpcDecisionOrigin origin,
+        string actionDefinitionId,
+        IEnumerable<NpcDecisionParticipant> decisionParticipants,
+        IEnumerable<string> targetRuntimeIds,
+        string targetLocationRuntimeId,
+        CommercialDecisionEvidence commercialEvidence,
+        CommercialScoutingEvidence commercialScoutingEvidence)
     {
         this.decisionId = RequireId(decisionId, nameof(decisionId));
         this.actorRuntimeId = RequireId(actorRuntimeId, nameof(actorRuntimeId));
@@ -296,6 +420,7 @@ public sealed class NpcDecisionRecord
         this.targetRuntimeId = this.targetRuntimeIds.Count > 0 ? this.targetRuntimeIds[0] : null;
         this.targetLocationRuntimeId = NormalizeOptionalId(targetLocationRuntimeId);
         this.commercialEvidence = commercialEvidence;
+        this.commercialScoutingEvidence = commercialScoutingEvidence;
     }
 
     private static IReadOnlyList<NpcDecisionParticipant> CaptureDecisionParticipants(
@@ -538,7 +663,8 @@ public sealed class NpcDecisionRecorder
             actionDefinitionId,
             actionRuntime.TargetNpc?.RuntimeId,
             actionRuntime.TargetCity?.Location?.RuntimeId,
-            actionRuntime.CommercialDecisionEvidence);
+            actionRuntime.CommercialDecisionEvidence,
+            actionRuntime.CommercialScoutingEvidence);
 
         if (decision != null)
         {
@@ -555,7 +681,8 @@ public sealed class NpcDecisionRecorder
         string actionDefinitionId,
         string targetRuntimeId,
         string targetLocationRuntimeId,
-        CommercialDecisionEvidence commercialEvidence)
+        CommercialDecisionEvidence commercialEvidence,
+        CommercialScoutingEvidence commercialScoutingEvidence = null)
     {
         return RecordWithParticipants(
             actorRuntimeId,
@@ -565,7 +692,8 @@ public sealed class NpcDecisionRecorder
             null,
             string.IsNullOrWhiteSpace(targetRuntimeId) == true ? null : new[] { targetRuntimeId },
             targetLocationRuntimeId,
-            commercialEvidence);
+            commercialEvidence,
+            commercialScoutingEvidence);
     }
 
     public NpcDecisionRecord RecordWithParticipants(
@@ -576,7 +704,8 @@ public sealed class NpcDecisionRecorder
         IEnumerable<NpcDecisionParticipant> decisionParticipants,
         IEnumerable<string> targetRuntimeIds,
         string targetLocationRuntimeId,
-        CommercialDecisionEvidence commercialEvidence)
+        CommercialDecisionEvidence commercialEvidence,
+        CommercialScoutingEvidence commercialScoutingEvidence = null)
     {
         try
         {
@@ -591,7 +720,8 @@ public sealed class NpcDecisionRecorder
                 decisionParticipants,
                 targetRuntimeIds,
                 targetLocationRuntimeId,
-                commercialEvidence);
+                commercialEvidence,
+                commercialScoutingEvidence);
 
             return decisionStore.Record(decision) == true ? decision : null;
         }
@@ -616,8 +746,13 @@ public sealed class NpcDecisionRecorder
             case NpcActionType.SellGoods:
                 return NpcDecisionType.TradeSale;
             case NpcActionType.Travel:
-                return actionRuntime.TravelReason == NpcTravelReason.TradeReposition
-                    ? NpcDecisionType.TradeReposition
+                if (actionRuntime.TravelReason == NpcTravelReason.TradeReposition)
+                {
+                    return NpcDecisionType.TradeReposition;
+                }
+
+                return actionRuntime.TravelReason == NpcTravelReason.CommercialScout
+                    ? NpcDecisionType.CommercialScout
                     : NpcDecisionType.Travel;
             case NpcActionType.FleeCity:
                 return NpcDecisionType.Travel;

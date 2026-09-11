@@ -36,6 +36,7 @@ public class TesteSimulacao : MonoBehaviour
     private NpcDecisionSystem npcDecisionSystem;
     private TravelSystem travelSystem;
     private MerchantSystem merchantSystem;
+    private CommercialKnowledgeSharingSystem commercialKnowledgeSharingSystem;
     private SimulationLogger logger;
     private SimulationTime simulationTime = new SimulationTime();
     private CalendarDefinition calendarDefinition = CalendarDefinition.CreateDefault();
@@ -115,6 +116,7 @@ public class TesteSimulacao : MonoBehaviour
         scheduledDirectiveSystem = new ScheduledDirectiveSystem(scheduledDirectiveStore, runtimeIdentityRegistry, logger);
 
         RebuildSystems();
+        BootstrapInitialSpatialKnowledge();
         BootstrapInitialCommercialKnowledge();
         InitializeJusticeState();
     }
@@ -206,6 +208,8 @@ public class TesteSimulacao : MonoBehaviour
                 SimulateEconomyDay();
             }
 
+            RefreshLocalKnowledgeAndShare();
+
             foreach (NpcRuntime npcRuntime in NpcRuntimeList)
             {
                 if (npcRuntime == null)
@@ -231,7 +235,12 @@ public class TesteSimulacao : MonoBehaviour
                 TryExecuteCurrentAction(npcRuntime);
             }
 
-            travelSystem.AdvanceTravels(NpcRuntimeList);
+            IReadOnlyList<NpcRuntime> arrivedNpcs = travelSystem.AdvanceTravels(NpcRuntimeList);
+
+            foreach (NpcRuntime arrivedNpc in arrivedNpcs)
+            {
+                merchantSystem?.ObserveCurrentMarket(arrivedNpc);
+            }
             AppendNpcStateSummary();
             AppendEconomySnapshotIfNeeded(false);
         }
@@ -680,6 +689,55 @@ public class TesteSimulacao : MonoBehaviour
         }
     }
 
+    private void BootstrapInitialSpatialKnowledge()
+    {
+        if (spatialNetwork == null)
+        {
+            return;
+        }
+
+        foreach (NpcRuntime npcRuntime in NpcRuntimeList)
+        {
+            SpatialLocationRuntime startingLocation = npcRuntime?.CurrentCity?.Location;
+
+            if (startingLocation == null)
+            {
+                continue;
+            }
+
+            // Temporary scenario bootstrap: local location, outgoing direct routes and their destinations only.
+            npcRuntime.SpatialKnowledge.DiscoverLocation(startingLocation.RuntimeId);
+
+            foreach (SpatialRouteRuntime route in spatialNetwork.GetOutgoingRoutes(startingLocation))
+            {
+                if (route == null)
+                {
+                    continue;
+                }
+
+                npcRuntime.SpatialKnowledge.DiscoverRoute(route.RuntimeId);
+                npcRuntime.SpatialKnowledge.DiscoverLocation(route.Destination?.RuntimeId);
+            }
+        }
+    }
+
+    private void RefreshLocalKnowledgeAndShare()
+    {
+        foreach (NpcRuntime npcRuntime in NpcRuntimeList)
+        {
+            if (npcRuntime?.CurrentCity?.Location == null || npcRuntime.IsTraveling == true)
+            {
+                continue;
+            }
+
+            npcRuntime.SpatialKnowledge.DiscoverLocation(npcRuntime.CurrentCity.Location.RuntimeId);
+            merchantSystem?.ObserveCurrentMarket(npcRuntime);
+        }
+
+        // Sharing runs after all local observations and from phase-start snapshots.
+        commercialKnowledgeSharingSystem?.ShareAmongPresentMerchants(NpcRuntimeList);
+    }
+
     private void CreateScheduledDirectives()
     {
         if (simulationConfig == null)
@@ -747,6 +805,7 @@ public class TesteSimulacao : MonoBehaviour
             : null;
         crimeSystem = null;
         merchantSystem = null;
+        commercialKnowledgeSharingSystem = null;
         actionProviders.Clear();
 
         if (enabledModules.IsEnabled(SimulationModule.Merchant) == true)
@@ -762,6 +821,7 @@ public class TesteSimulacao : MonoBehaviour
                 knowledgeSettings,
                 decisionRecorder,
                 logger);
+            commercialKnowledgeSharingSystem = new CommercialKnowledgeSharingSystem(simulationTime, knowledgeSettings);
         }
 
         actionProviders.Add(new TravelActionProvider(travelSystem, merchantSystem));

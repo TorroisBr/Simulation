@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 public class MerchantSystem : INpcActionProvider
@@ -118,16 +120,19 @@ public class MerchantSystem : INpcActionProvider
             return;
         }
 
-        ObserveMarket(npcRuntime, npcRuntime.CurrentCity);
+        if (npcRuntime.SpatialKnowledge.KnowsLocation(npcRuntime.CurrentCity.Location?.RuntimeId) == true)
+        {
+            ObserveMarket(npcRuntime, npcRuntime.CurrentCity, CommercialKnowledgeSource.InitialScenarioKnowledge);
+        }
 
         if (travelSystem == null)
         {
             return;
         }
 
-        foreach (CityRuntime connectedCity in travelSystem.GetDirectDestinationCities(npcRuntime.CurrentCity))
+        foreach (CityRuntime connectedCity in travelSystem.GetKnownDirectDestinationCities(npcRuntime, npcRuntime.CurrentCity))
         {
-            ObserveMarket(npcRuntime, connectedCity);
+            ObserveMarket(npcRuntime, connectedCity, CommercialKnowledgeSource.InitialScenarioKnowledge);
         }
     }
 
@@ -138,10 +143,14 @@ public class MerchantSystem : INpcActionProvider
             return;
         }
 
-        ObserveMarket(npcRuntime, npcRuntime.CurrentCity);
+        npcRuntime.SpatialKnowledge.DiscoverLocation(npcRuntime.CurrentCity.Location?.RuntimeId);
+        ObserveMarket(npcRuntime, npcRuntime.CurrentCity, CommercialKnowledgeSource.DirectObservation);
     }
 
-    private void ObserveMarket(NpcRuntime npcRuntime, CityRuntime cityRuntime)
+    private void ObserveMarket(
+        NpcRuntime npcRuntime,
+        CityRuntime cityRuntime,
+        CommercialKnowledgeSource source)
     {
         if (npcRuntime == null || cityRuntime == null || cityRuntime.Location == null)
         {
@@ -164,15 +173,14 @@ public class MerchantSystem : INpcActionProvider
                 marketItem.Amount,
                 simulationTime.AbsoluteDay,
                 simulationTime.AbsoluteDay,
-                CommercialKnowledgeSource.DirectObservation);
+                source);
             npcRuntime.CommercialKnowledge.RecordObservation(observation);
         }
     }
 
-    public NpcActionRuntime CreateTradeRepositionAction(NpcRuntime npcRuntime, NpcActionData action, ref float utility)
+    public NpcActionRuntime CreateMerchantTravelAction(NpcRuntime npcRuntime, NpcActionData action, ref float utility)
     {
-        if (allowTradeRepositioning == false
-            || action == null
+        if (action == null
             || IsTravelingMerchant(npcRuntime) == false
             || npcRuntime.CurrentCity == null
             || npcRuntime.IsTraveling == true
@@ -183,30 +191,50 @@ public class MerchantSystem : INpcActionProvider
             return null;
         }
 
-        if (FindBestTradeOpportunityFrom(npcRuntime, npcRuntime.CurrentCity, 0f, 0) != null)
+        if (FindBestTradeOpportunityFrom(npcRuntime, npcRuntime.CurrentCity, 0f, 0) != null
+            || FindBestLocalSale(npcRuntime) != null)
         {
             utility = 0f;
             return null;
         }
 
-        MerchantTradeRepositionOpportunity reposition = FindBestTradeRepositionOpportunity(npcRuntime);
+        if (allowTradeRepositioning == true)
+        {
+            MerchantTradeRepositionOpportunity reposition = FindBestTradeRepositionOpportunity(npcRuntime);
 
-        if (reposition == null)
+            if (reposition != null)
+            {
+                utility = Mathf.Max(0f, reposition.TradeOpportunity.Score);
+                NpcActionRuntime repositionAction = new NpcActionRuntime(
+                    action,
+                    reposition.OriginCity,
+                    reposition.TradeOpportunity.Item,
+                    NpcTravelReason.TradeReposition,
+                    reposition.RepositionCost,
+                    reposition.TradeOpportunity.NetProfit);
+                repositionAction.SetCommercialDecisionEvidence(reposition.TradeOpportunity.Evidence);
+                return repositionAction;
+            }
+        }
+
+        MerchantCommercialScoutingOpportunity scouting = FindBestCommercialScoutingOpportunity(npcRuntime);
+
+        if (scouting == null)
         {
             utility = 0f;
             return null;
         }
 
-        utility = Mathf.Max(0f, reposition.TradeOpportunity.Score);
-        NpcActionRuntime repositionAction = new NpcActionRuntime(
+        utility = Mathf.Max(utility, 20f + scouting.Score);
+        NpcActionRuntime scoutingAction = new NpcActionRuntime(
             action,
-            reposition.OriginCity,
-            reposition.TradeOpportunity.Item,
-            NpcTravelReason.TradeReposition,
-            reposition.RepositionCost,
-            reposition.TradeOpportunity.NetProfit);
-        repositionAction.SetCommercialDecisionEvidence(reposition.TradeOpportunity.Evidence);
-        return repositionAction;
+            scouting.TargetCity,
+            null,
+            NpcTravelReason.CommercialScout,
+            scouting.TravelCost,
+            0f);
+        scoutingAction.SetCommercialScoutingEvidence(scouting.Evidence);
+        return scoutingAction;
     }
 
     public void LogTradeRepositionDecision(NpcRuntime npcRuntime, CityRuntime originCity, NpcActionRuntime actionRuntime)
@@ -220,6 +248,20 @@ public class MerchantSystem : INpcActionProvider
         logger.Log(
             SimulationLogCategory.Trade,
             $"{npcRuntime.NpcName} decidiu se reposicionar comercialmente de {originCity.CityName} para {actionRuntime.TargetCity.CityName}. Custo: {actionRuntime.ExpectedTravelCost:0.##}; oportunidade esperada: {opportunity}; lucro liquido esperado do ciclo: {actionRuntime.ExpectedNetValue:0.##}.");
+    }
+
+    public void LogCommercialScoutingDecision(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime)
+    {
+        CommercialScoutingEvidence evidence = actionRuntime?.CommercialScoutingEvidence;
+
+        if (npcRuntime == null || actionRuntime?.TargetCity == null || evidence == null)
+        {
+            return;
+        }
+
+        logger.Log(
+            SimulationLogCategory.Trade,
+            $"{npcRuntime.NpcName} iniciou pesquisa comercial em {actionRuntime.TargetCity.CityName}. Informacoes ausentes: {evidence.UnknownObservationCount}; desatualizadas: {evidence.StaleObservationCount}.");
     }
 
     public bool HandlesAction(NpcActionData action)
@@ -601,7 +643,7 @@ public class MerchantSystem : INpcActionProvider
     private bool CanStartTradeTravel(NpcRuntime npcRuntime, CityRuntime targetCity)
     {
         return travelSystem != null
-            && travelSystem.CanStartTravel(npcRuntime, targetCity, out _, out _);
+            && travelSystem.CanPlanKnownTravel(npcRuntime, targetCity, out _, out _);
     }
 
     private MerchantTradeOpportunity FindBestTradeOpportunity(NpcRuntime npcRuntime)
@@ -617,7 +659,7 @@ public class MerchantSystem : INpcActionProvider
         }
 
         MerchantTradeOpportunity bestOpportunity = null;
-        List<CityRuntime> destinationCities = travelSystem.GetDirectDestinationCities(originCity);
+        List<CityRuntime> destinationCities = travelSystem.GetKnownDirectDestinationCities(npcRuntime, originCity);
 
         foreach (CommercialMarketObservation originObservation in npcRuntime.CommercialKnowledge.Observations)
         {
@@ -725,7 +767,7 @@ public class MerchantSystem : INpcActionProvider
 
         MerchantTradeRepositionOpportunity bestReposition = null;
 
-        foreach (CityRuntime repositionCity in travelSystem.GetDirectDestinationCities(currentCity))
+        foreach (CityRuntime repositionCity in travelSystem.GetKnownDirectDestinationCities(npcRuntime, currentCity))
         {
             if (repositionCity == null || repositionCity == currentCity)
             {
@@ -778,7 +820,7 @@ public class MerchantSystem : INpcActionProvider
 
         MerchantTradeOpportunity bestOpportunity = null;
 
-        foreach (CityRuntime targetCity in travelSystem.GetDirectDestinationCities(currentCity))
+        foreach (CityRuntime targetCity in travelSystem.GetKnownDirectDestinationCities(npcRuntime, currentCity))
         {
             if (targetCity == null || targetCity == currentCity)
             {
@@ -982,6 +1024,148 @@ public class MerchantSystem : INpcActionProvider
         return bestSale;
     }
 
+    private MerchantCommercialScoutingOpportunity FindBestCommercialScoutingOpportunity(NpcRuntime npcRuntime)
+    {
+        if (npcRuntime == null || npcRuntime.CurrentCity == null || travelSystem == null)
+        {
+            return null;
+        }
+
+        List<string> relevantItemDefinitionIds = GetRelevantCommercialItemDefinitionIds(npcRuntime);
+        MerchantCommercialScoutingOpportunity bestOpportunity = null;
+
+        foreach (SpatialRouteRuntime route in travelSystem.GetKnownDirectRoutes(npcRuntime, npcRuntime.CurrentCity))
+        {
+            CityRuntime targetCity = travelSystem.GetCityRuntime(route.Destination);
+
+            if (targetCity == null || targetCity == npcRuntime.CurrentCity)
+            {
+                continue;
+            }
+
+            float travelCost = travelSystem.GetTravelCost(route.TravelDays);
+
+            if (travelCost < 0f || npcRuntime.Money < travelCost)
+            {
+                continue;
+            }
+
+            int unknownObservationCount = 0;
+            int staleObservationCount = 0;
+            bool hasOldestObservation = false;
+            long oldestObservationDay = 0L;
+
+            if (relevantItemDefinitionIds.Count == 0)
+            {
+                unknownObservationCount = 1;
+            }
+            else
+            {
+                foreach (string itemDefinitionId in relevantItemDefinitionIds)
+                {
+                    if (npcRuntime.CommercialKnowledge.TryGetObservation(
+                        targetCity.Location.RuntimeId,
+                        itemDefinitionId,
+                        out CommercialMarketObservation observation) == false)
+                    {
+                        unknownObservationCount++;
+                        continue;
+                    }
+
+                    if (knowledgePolicy.GetFreshness(observation, simulationTime.AbsoluteDay) > 0f)
+                    {
+                        continue;
+                    }
+
+                    staleObservationCount++;
+
+                    if (hasOldestObservation == false || observation.ObservedDay < oldestObservationDay)
+                    {
+                        hasOldestObservation = true;
+                        oldestObservationDay = observation.ObservedDay;
+                    }
+                }
+            }
+
+            if (unknownObservationCount == 0 && staleObservationCount == 0)
+            {
+                continue;
+            }
+
+            long oldestAgeDays = hasOldestObservation == true
+                ? Math.Max(0L, simulationTime.AbsoluteDay - oldestObservationDay)
+                : 0L;
+            float informationNeed = unknownObservationCount * 20f
+                + staleObservationCount * 12f
+                + Mathf.Min(30f, (float)oldestAgeDays) * 0.5f;
+            float score = informationNeed / Mathf.Max(1f, route.TravelDays + travelCost / 10f);
+
+            if (score <= 0f)
+            {
+                continue;
+            }
+
+            CommercialScoutingEvidence evidence = new CommercialScoutingEvidence(
+                targetCity.Location.RuntimeId,
+                route.RuntimeId,
+                unknownObservationCount,
+                staleObservationCount,
+                hasOldestObservation,
+                oldestObservationDay,
+                travelCost,
+                route.TravelDays,
+                score);
+            MerchantCommercialScoutingOpportunity opportunity = new MerchantCommercialScoutingOpportunity(
+                targetCity,
+                travelCost,
+                score,
+                evidence);
+
+            if (bestOpportunity == null
+                || opportunity.Score > bestOpportunity.Score
+                || (Mathf.Approximately(opportunity.Score, bestOpportunity.Score) == true
+                    && string.CompareOrdinal(opportunity.Evidence.KnownRouteRuntimeId, bestOpportunity.Evidence.KnownRouteRuntimeId) < 0))
+            {
+                bestOpportunity = opportunity;
+            }
+        }
+
+        return bestOpportunity;
+    }
+
+    private List<string> GetRelevantCommercialItemDefinitionIds(NpcRuntime npcRuntime)
+    {
+        List<string> definitionIds = new List<string>();
+        HashSet<string> uniqueDefinitionIds = new HashSet<string>(StringComparer.Ordinal);
+
+        if (npcRuntime?.NpcData?.job != null)
+        {
+            foreach (TradeItemPreference preference in npcRuntime.NpcData.job.PreferredTradeItems)
+            {
+                AddRelevantItemDefinitionId(definitionIds, uniqueDefinitionIds, preference?.item?.DefinitionId);
+            }
+        }
+
+        foreach (CommercialMarketObservation observation in npcRuntime.CommercialKnowledge.Observations)
+        {
+            AddRelevantItemDefinitionId(definitionIds, uniqueDefinitionIds, observation?.ItemDefinitionId);
+        }
+
+        definitionIds.Sort(StringComparer.Ordinal);
+        return definitionIds;
+    }
+
+    private static void AddRelevantItemDefinitionId(
+        List<string> definitionIds,
+        HashSet<string> uniqueDefinitionIds,
+        string definitionId)
+    {
+        if (string.IsNullOrWhiteSpace(definitionId) == false && uniqueDefinitionIds.Add(definitionId) == true)
+        {
+            definitionIds.Add(definitionId);
+        }
+    }
+
     private bool TryGetUsefulObservation(
         NpcRuntime npcRuntime,
         CityRuntime cityRuntime,
@@ -1150,6 +1334,26 @@ public class MerchantSystem : INpcActionProvider
             OriginCity = originCity;
             RepositionCost = repositionCost;
             TradeOpportunity = tradeOpportunity;
+        }
+    }
+
+    private sealed class MerchantCommercialScoutingOpportunity
+    {
+        public CityRuntime TargetCity { get; }
+        public float TravelCost { get; }
+        public float Score { get; }
+        public CommercialScoutingEvidence Evidence { get; }
+
+        public MerchantCommercialScoutingOpportunity(
+            CityRuntime targetCity,
+            float travelCost,
+            float score,
+            CommercialScoutingEvidence evidence)
+        {
+            TargetCity = targetCity;
+            TravelCost = travelCost;
+            Score = score;
+            Evidence = evidence;
         }
     }
 }

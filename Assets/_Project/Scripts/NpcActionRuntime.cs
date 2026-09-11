@@ -15,6 +15,7 @@ public class NpcActionRuntime
     [SerializeField] private float expectedNetValue;
     [SerializeField] private string originDecisionId;
     [NonSerialized] private CommercialDecisionEvidence commercialDecisionEvidence;
+    [NonSerialized] private CommercialScoutingEvidence commercialScoutingEvidence;
 
     public NpcActionData Action => action;
     public NpcRuntime TargetNpc => targetNpc;
@@ -28,6 +29,7 @@ public class NpcActionRuntime
     public float ExpectedNetValue => expectedNetValue;
     public string OriginDecisionId => originDecisionId;
     public CommercialDecisionEvidence CommercialDecisionEvidence => commercialDecisionEvidence;
+    public CommercialScoutingEvidence CommercialScoutingEvidence => commercialScoutingEvidence;
 
     public NpcActionRuntime(NpcActionData action)
     {
@@ -69,6 +71,11 @@ public class NpcActionRuntime
     public void SetCommercialDecisionEvidence(CommercialDecisionEvidence evidence)
     {
         commercialDecisionEvidence = evidence;
+    }
+
+    public void SetCommercialScoutingEvidence(CommercialScoutingEvidence evidence)
+    {
+        commercialScoutingEvidence = evidence;
     }
 
     public NpcActionRuntime(NpcActionData action, CityRuntime targetCity, ItemData targetItem, int amount, float expectedUnitPrice)
@@ -131,7 +138,8 @@ public enum NpcTravelReason
     None,
     Trade,
     Flee,
-    TradeReposition
+    TradeReposition,
+    CommercialScout
 }
 
 public enum NpcActionResultType

@@ -357,14 +357,14 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler
         float currentBounty = justiceSystem.GetBounty(npcRuntime, npcRuntime.CurrentCity);
         FleeDestinationOption bestOption = null;
 
-        foreach (CityRuntime targetCity in travelSystem.GetDirectDestinationCities(npcRuntime.CurrentCity))
+        foreach (CityRuntime targetCity in travelSystem.GetKnownDirectDestinationCities(npcRuntime, npcRuntime.CurrentCity))
         {
             if (targetCity == null || targetCity == npcRuntime.CurrentCity)
             {
                 continue;
             }
 
-            if (travelSystem.CanStartTravel(npcRuntime, targetCity, out int travelDays, out float travelCost) == false)
+            if (travelSystem.CanPlanKnownTravel(npcRuntime, targetCity, out int travelDays, out float travelCost) == false)
             {
                 continue;
             }

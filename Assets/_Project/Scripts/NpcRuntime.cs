@@ -21,6 +21,7 @@ public class NpcRuntime
     [SerializeField]private MerchantTradePlanRuntime merchantTradePlan = new MerchantTradePlanRuntime();
     [SerializeField]private NpcTravelPlanRuntime travelPlan = new NpcTravelPlanRuntime();
     [SerializeField]private CommercialKnowledgeRuntime commercialKnowledge = new CommercialKnowledgeRuntime();
+    [SerializeField]private SpatialKnowledgeRuntime spatialKnowledge;
 
     public string RuntimeId => runtimeId;
     public NpcData NpcData => npcData;
@@ -41,6 +42,7 @@ public class NpcRuntime
     public MerchantTradePlanRuntime MerchantTradePlan => merchantTradePlan ?? (merchantTradePlan = new MerchantTradePlanRuntime());
     public NpcTravelPlanRuntime TravelPlan => travelPlan ?? (travelPlan = new NpcTravelPlanRuntime());
     public CommercialKnowledgeRuntime CommercialKnowledge => commercialKnowledge ?? (commercialKnowledge = new CommercialKnowledgeRuntime());
+    public SpatialKnowledgeRuntime SpatialKnowledge => spatialKnowledge ?? (spatialKnowledge = new SpatialKnowledgeRuntime(runtimeId));
     public string NpcName => npcData != null ? npcData.name : "NPC desconhecido";
 
 	public NpcRuntime(string runtimeId, NpcData npcData)
@@ -57,6 +59,7 @@ public class NpcRuntime
 
 		this.runtimeId = runtimeId;
 		this.npcData = npcData;
+        spatialKnowledge = new SpatialKnowledgeRuntime(runtimeId);
         money = Mathf.Max(0f, initialMoney);
 
         if (npcData != null && npcData.statusPadrao != null)

@@ -60,6 +60,9 @@ public class TravelSystem
             return false;
         }
 
+        // Direct discovery happens only after execution has entered the real route.
+        npcRuntime.SpatialKnowledge.DiscoverLocation(originCity.Location.RuntimeId);
+        npcRuntime.SpatialKnowledge.DiscoverRoute(route.RuntimeId);
         npcRuntime.TrySpendMoney(travelCost);
         domainEventRecorder?.Record((eventId, absoluteDay, recordSequence) => new NpcTravelStartedEvent(
             eventId,
@@ -101,12 +104,14 @@ public class TravelSystem
         return npcRuntime.Money >= travelCost;
     }
 
-    public void AdvanceTravels(List<NpcRuntime> npcRuntimeList)
+    public IReadOnlyList<NpcRuntime> AdvanceTravels(List<NpcRuntime> npcRuntimeList)
     {
         if (npcRuntimeList == null)
         {
-            return;
+            return Array.Empty<NpcRuntime>();
         }
+
+        List<NpcRuntime> arrivedNpcs = new List<NpcRuntime>();
 
         foreach (NpcRuntime npcRuntime in npcRuntimeList)
         {
@@ -126,6 +131,8 @@ public class TravelSystem
 
             if (arrived == true)
             {
+                npcRuntime.SpatialKnowledge.DiscoverLocation(arrivedCity?.Location?.RuntimeId);
+                arrivedNpcs.Add(npcRuntime);
                 domainEventRecorder?.Record((eventId, absoluteDay, recordSequence) => new NpcArrivedEvent(
                     eventId,
                     absoluteDay,
@@ -142,6 +149,8 @@ public class TravelSystem
             string dayText = npcRuntime.TravelDaysRemaining == 1 ? "dia" : "dias";
             logger.Log(SimulationLogCategory.Travel, $"{npcRuntime.NpcName} esta viajando. {verb} {npcRuntime.TravelDaysRemaining} {dayText}.");
         }
+
+        return arrivedNpcs.AsReadOnly();
     }
 
     public int GetTravelDays(CityRuntime originCity, CityRuntime targetCity)
@@ -187,6 +196,109 @@ public class TravelSystem
         }
 
         return destinationCities;
+    }
+
+    public IReadOnlyList<SpatialRouteRuntime> GetKnownDirectRoutes(NpcRuntime npcRuntime, CityRuntime originCity)
+    {
+        List<SpatialRouteRuntime> knownRoutes = new List<SpatialRouteRuntime>();
+
+        if (npcRuntime == null
+            || originCity == null
+            || originCity.Location == null
+            || spatialNetwork == null
+            || npcRuntime.SpatialKnowledge.KnowsLocation(originCity.Location.RuntimeId) == false)
+        {
+            return knownRoutes;
+        }
+
+        foreach (SpatialRouteRuntime route in spatialNetwork.GetOutgoingRoutes(originCity.Location))
+        {
+            if (route == null
+                || npcRuntime.SpatialKnowledge.KnowsRoute(route.RuntimeId) == false
+                || npcRuntime.SpatialKnowledge.KnowsLocation(route.Destination.RuntimeId) == false
+                || spatialNetwork.TryGetSingleDirectRoute(originCity.Location, route.Destination, out SpatialRouteRuntime directRoute) == false
+                || directRoute != route)
+            {
+                continue;
+            }
+
+            knownRoutes.Add(route);
+        }
+
+        return knownRoutes.AsReadOnly();
+    }
+
+    public List<CityRuntime> GetKnownDirectDestinationCities(NpcRuntime npcRuntime, CityRuntime originCity)
+    {
+        List<CityRuntime> destinationCities = new List<CityRuntime>();
+
+        foreach (SpatialRouteRuntime route in GetKnownDirectRoutes(npcRuntime, originCity))
+        {
+            CityRuntime destinationCity = GetCityRuntime(route.Destination);
+
+            if (destinationCity != null)
+            {
+                destinationCities.Add(destinationCity);
+            }
+        }
+
+        return destinationCities;
+    }
+
+    public bool CanPlanKnownTravel(NpcRuntime npcRuntime, CityRuntime targetCity, out int travelDays, out float travelCost)
+    {
+        travelDays = -1;
+        travelCost = -1f;
+
+        if (npcRuntime == null
+            || npcRuntime.CurrentCity == null
+            || targetCity == null
+            || npcRuntime.IsTraveling == true
+            || TryGetKnownDirectRoute(npcRuntime, npcRuntime.CurrentCity, targetCity, out SpatialRouteRuntime route) == false)
+        {
+            return false;
+        }
+
+        travelDays = route.TravelDays;
+        travelCost = GetTravelCost(travelDays);
+        return npcRuntime.Money >= travelCost;
+    }
+
+    public bool TryGetKnownDirectRoute(
+        NpcRuntime npcRuntime,
+        CityRuntime originCity,
+        CityRuntime targetCity,
+        out SpatialRouteRuntime route)
+    {
+        route = null;
+
+        if (npcRuntime == null
+            || originCity == null
+            || targetCity == null
+            || originCity.Location == null
+            || targetCity.Location == null
+            || npcRuntime.SpatialKnowledge.KnowsLocation(originCity.Location.RuntimeId) == false
+            || npcRuntime.SpatialKnowledge.KnowsLocation(targetCity.Location.RuntimeId) == false
+            || TryGetDirectRoute(originCity, targetCity, out route) == false)
+        {
+            route = null;
+            return false;
+        }
+
+        if (npcRuntime.SpatialKnowledge.KnowsRoute(route.RuntimeId) == true)
+        {
+            return true;
+        }
+
+        route = null;
+        return false;
+    }
+
+    public CityRuntime GetCityRuntime(SpatialLocationRuntime location)
+    {
+        return location != null && getCityRuntimeByLocation != null
+            ? getCityRuntimeByLocation(location)
+            : null;
     }
 
     public float GetTravelCost(CityRuntime originCity, CityRuntime targetCity)

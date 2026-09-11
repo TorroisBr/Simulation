@@ -244,6 +244,14 @@ public sealed class NpcChronicleFormatter
 
         string actor = Resolve(resolveNpcName, decision.ActorRuntimeId);
         string participantSuffix = FormatDecisionParticipantSuffix(decision);
+        CommercialScoutingEvidence scoutingEvidence = decision.CommercialScoutingEvidence;
+
+        if (decision.DecisionType == NpcDecisionType.CommercialScout && scoutingEvidence != null)
+        {
+            string destination = Resolve(resolveLocationName, scoutingEvidence.TargetLocationRuntimeId);
+            return $"{actor} decidiu pesquisar o mercado de {destination}{participantSuffix}; informacoes ausentes: {scoutingEvidence.UnknownObservationCount}; desatualizadas: {scoutingEvidence.StaleObservationCount}.";
+        }
+
         CommercialDecisionEvidence evidence = decision.CommercialEvidence;
 
         if (evidence != null)

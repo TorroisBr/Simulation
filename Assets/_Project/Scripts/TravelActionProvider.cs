@@ -34,7 +34,7 @@ public class TravelActionProvider : INpcActionProvider
                 return null;
             }
 
-            return merchantSystem.CreateTradeRepositionAction(npcRuntime, action, ref utility);
+            return merchantSystem.CreateMerchantTravelAction(npcRuntime, action, ref utility);
         }
 
         if (travelSystem.CanStartTravel(npcRuntime, plan.TargetCity, out _, out float travelCost) == false)
@@ -75,6 +75,11 @@ public class TravelActionProvider : INpcActionProvider
         if (travelSystem == null || travelSystem.TryStartTravel(npcRuntime, actionRuntime) == false)
         {
             return NpcActionResult.Failed();
+        }
+
+        if (actionRuntime.TravelReason == NpcTravelReason.CommercialScout)
+        {
+            merchantSystem?.LogCommercialScoutingDecision(npcRuntime, actionRuntime);
         }
 
         npcRuntime.ClearTravelPlan();
