@@ -98,9 +98,9 @@ public sealed class DecisionEventChronicleTests
             null,
             null);
 
-        Assert.That(fixture.Decisions.GetDecisionsForActor("npc-bruno"), Does.Contain(decision));
-        Assert.That(fixture.Decisions.GetDecisionsForParticipant("npc-caio"), Does.Contain(decision));
-        Assert.That(fixture.Decisions.GetDecisionsTargeting("npc-jobson"), Does.Contain(decision));
+        Assert.That(fixture.Decisions.GetDecisionsForActor("npc-bruno"), Has.Member(decision));
+        Assert.That(fixture.Decisions.GetDecisionsForParticipant("npc-caio"), Has.Member(decision));
+        Assert.That(fixture.Decisions.GetDecisionsTargeting("npc-jobson"), Has.Member(decision));
         Assert.That(fixture.Decisions.GetDecisionsForParticipant("npc-jobson"), Is.Empty);
     }
 

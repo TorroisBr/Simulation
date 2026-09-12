@@ -173,6 +173,6 @@ public sealed class CoreRuntimeTests
 
         Assert.That(destinations, Has.Count.EqualTo(1));
         Assert.That(destinations[0], Is.SameAs(world.B));
-        Assert.That(destinations, Does.Not.Contain(world.C));
+        Assert.That(destinations, Has.No.Member(world.C));
     }
 }

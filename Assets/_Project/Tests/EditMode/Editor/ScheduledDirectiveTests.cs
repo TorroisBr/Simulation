@@ -153,8 +153,8 @@ public sealed class ScheduledDirectiveTests
         Assert.That(directive.MarkSucceeded(fixture.Time.AbsoluteDay), Is.True);
         Assert.That(directive.State, Is.EqualTo(ScheduledDirectiveState.Succeeded));
         Assert.That(justice.IsArrested(actor), Is.False);
-        Assert.That(actor.CurrentStatus, Does.Contain(freeStatus));
-        Assert.That(actor.CurrentStatus, Does.Not.Contain(arrestedStatus));
+        Assert.That(actor.CurrentStatus, Has.Member(freeStatus));
+        Assert.That(actor.CurrentStatus, Has.No.Member(arrestedStatus));
         Assert.That(fixture.Decisions.Decisions, Is.Empty);
 
         Assert.That(fixture.Events.Events, Has.Count.EqualTo(2));
