@@ -110,14 +110,14 @@ public sealed class TravelPartyRuntime
         }
 
         memberRuntimeIds = allMembers.AsReadOnly();
-        memberCosts = CaptureCosts(memberCosts);
+        this.memberCosts = CaptureCosts(memberCosts);
 
-        if (memberCosts.Count != memberRuntimeIds.Count)
+        if (this.memberCosts.Count != memberRuntimeIds.Count)
         {
             throw new ArgumentException("Travel party requires one cost snapshot per member.", nameof(memberCosts));
         }
 
-        foreach (TravelPartyMemberCost cost in memberCosts)
+        foreach (TravelPartyMemberCost cost in this.memberCosts)
         {
             if (allMemberIds.Contains(cost.RuntimeId) == false)
             {
@@ -379,7 +379,7 @@ public sealed class TravelPartySystem
             return false;
         }
 
-        party = new TravelPartyRuntime(
+        TravelPartyRuntime createdParty = new TravelPartyRuntime(
             partyId,
             preparation.Origin.Location.RuntimeId,
             preparation.Destination.Location.RuntimeId,
@@ -398,7 +398,6 @@ public sealed class TravelPartySystem
             if (member.StartTravel(preparation.Destination, preparation.Route.TravelDays, context.OriginDecisionId) == false)
             {
                 Rollback(startedMembers, paidCosts, preparation.Origin);
-                party = null;
                 return false;
             }
 
@@ -412,37 +411,35 @@ public sealed class TravelPartySystem
             if (member.TrySpendMoney(cost.Amount) == false)
             {
                 Rollback(startedMembers, paidCosts, preparation.Origin);
-                party = null;
                 return false;
             }
 
             paidCosts.Add(cost);
         }
 
-        if (partyStore.Add(party) == false)
+        if (partyStore.Add(createdParty) == false)
         {
             Rollback(startedMembers, paidCosts, preparation.Origin);
-            party = null;
             return false;
         }
 
         foreach (NpcRuntime member in preparation.Members)
         {
-            member.SetActiveTravelPartyId(party.TravelPartyId);
+            member.SetActiveTravelPartyId(createdParty.TravelPartyId);
         }
 
         bool eventRecorded = domainEventRecorder == null || domainEventRecorder.Record((eventId, absoluteDay, sequence) => new TravelPartyStartedEvent(
             eventId,
             absoluteDay,
             sequence,
-            party.TravelPartyId,
-            party.OriginLocationRuntimeId,
-            party.DestinationLocationRuntimeId,
-            party.RouteRuntimeId,
-            party.TravelDaysTotal,
-            party.TravelerRuntimeIds,
-            party.EscortRuntimeIds,
-            party.OriginDecisionId));
+            createdParty.TravelPartyId,
+            createdParty.OriginLocationRuntimeId,
+            createdParty.DestinationLocationRuntimeId,
+            createdParty.RouteRuntimeId,
+            createdParty.TravelDaysTotal,
+            createdParty.TravelerRuntimeIds,
+            createdParty.EscortRuntimeIds,
+            createdParty.OriginDecisionId));
 
         if (eventRecorded == false)
         {
@@ -451,9 +448,8 @@ public sealed class TravelPartySystem
                 member.SetActiveTravelPartyId(null);
             }
 
-            partyStore.Remove(party.TravelPartyId);
+            partyStore.Remove(createdParty.TravelPartyId);
             Rollback(startedMembers, paidCosts, preparation.Origin);
-            party = null;
             return false;
         }
 
@@ -463,6 +459,7 @@ public sealed class TravelPartySystem
             member.SpatialKnowledge.DiscoverRoute(preparation.Route.RuntimeId);
         }
 
+        party = createdParty;
         return true;
     }
 
