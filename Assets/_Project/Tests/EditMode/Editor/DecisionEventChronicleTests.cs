@@ -57,6 +57,34 @@ public sealed class DecisionEventChronicleTests
     }
 
     [Test]
+    public void DecisionValidator_AllowsSameNpcInDifferentRolesButDeduplicatesExactPair()
+    {
+        RecordFixture fixture = SimulationTestFactory.CreateRecordFixture();
+        NpcDecisionRecord decision = fixture.DecisionRecorder.RecordWithParticipants(
+            "npc-bruno",
+            NpcDecisionType.Action,
+            NpcDecisionOrigin.Autonomous,
+            "action-test",
+            new[]
+            {
+                new NpcDecisionParticipant("npc-bruno", NpcDecisionParticipantRole.Support),
+                new NpcDecisionParticipant("npc-bruno", NpcDecisionParticipantRole.Support),
+                new NpcDecisionParticipant("npc-bruno", NpcDecisionParticipantRole.Contributor),
+                new NpcDecisionParticipant("npc-caio", NpcDecisionParticipantRole.Support)
+            },
+            new[] { "npc-jobson" },
+            null,
+            null);
+
+        SimulationInvariantValidator.ValidateDecision(decision);
+
+        Assert.That(decision.DecisionParticipants, Has.Count.EqualTo(4));
+        Assert.That(decision.DecisionParticipants[0].Role, Is.EqualTo(NpcDecisionParticipantRole.DecisionMaker));
+        Assert.That(decision.DecisionParticipants[1].Role, Is.EqualTo(NpcDecisionParticipantRole.Support));
+        Assert.That(decision.DecisionParticipants[2].Role, Is.EqualTo(NpcDecisionParticipantRole.Contributor));
+    }
+
+    [Test]
     public void DecisionStore_IndexesActorParticipantsAndIntendedTargetsSeparately()
     {
         RecordFixture fixture = SimulationTestFactory.CreateRecordFixture();
@@ -154,12 +182,14 @@ public sealed class DecisionEventChronicleTests
             new[]
             {
                 new DomainEventParticipant("npc-a", DomainEventParticipantRole.Actor),
+                new DomainEventParticipant("npc-a", DomainEventParticipantRole.Participant),
                 new DomainEventParticipant("npc-b", DomainEventParticipantRole.Support),
                 new DomainEventParticipant("npc-c", DomainEventParticipantRole.Participant),
                 new DomainEventParticipant("npc-x", DomainEventParticipantRole.Target),
                 new DomainEventParticipant("npc-y", DomainEventParticipantRole.Target)
             });
 
+        SimulationInvariantValidator.ValidateDomainEvent(domainEvent);
         Assert.That(fixture.Events.Record(domainEvent), Is.True);
         Assert.That(fixture.Events.Events, Has.Count.EqualTo(1));
         foreach (string participantId in new[] { "npc-a", "npc-b", "npc-c", "npc-x", "npc-y" })
@@ -167,6 +197,31 @@ public sealed class DecisionEventChronicleTests
             Assert.That(fixture.Events.GetEventsForParticipant(participantId), Has.Count.EqualTo(1));
             Assert.That(fixture.Events.GetEventsForParticipant(participantId)[0].EventId, Is.EqualTo(domainEvent.EventId));
         }
+
+        Assert.That(domainEvent.GetParticipants(), Has.Count.EqualTo(6));
+        Assert.That(domainEvent.GetParticipants()[0].Role, Is.EqualTo(DomainEventParticipantRole.Actor));
+        Assert.That(domainEvent.GetParticipants()[1].Role, Is.EqualTo(DomainEventParticipantRole.Participant));
+        Assert.That(fixture.Events.GetEventsForParticipant("npc-a"), Has.Count.EqualTo(1));
+        Assert.That(fixture.Chronicle.GetChronicle("npc-a"), Has.Count.EqualTo(1));
+        Assert.That(fixture.Chronicle.GetChronicle("npc-a")[0].DomainEvent, Is.SameAs(domainEvent));
+        Assert.That(fixture.Chronicle.GetChronicle("npc-a")[0].Relation, Is.EqualTo(NpcChronicleRelation.SelfAction));
+    }
+
+    [Test]
+    public void DomainEventValidator_RejectsDuplicateSameRolePair()
+    {
+        RecordFixture fixture = SimulationTestFactory.CreateRecordFixture();
+        MultiParticipantTestEvent domainEvent = new MultiParticipantTestEvent(
+            fixture.Allocator.AllocateEventId(),
+            fixture.Time.AbsoluteDay,
+            fixture.Sequence.Allocate(),
+            new[]
+            {
+                new DomainEventParticipant("npc-a", DomainEventParticipantRole.Actor),
+                new DomainEventParticipant("npc-a", DomainEventParticipantRole.Actor)
+            });
+
+        Assert.Throws<AssertionException>(() => SimulationInvariantValidator.ValidateDomainEvent(domainEvent));
     }
 
     [Test]
@@ -243,6 +298,59 @@ public sealed class DecisionEventChronicleTests
         Assert.That(fixture.Chronicle.GetChronicle("npc-bruno")[0].Relation, Is.EqualTo(NpcChronicleRelation.SelfDecision));
         Assert.That(fixture.Chronicle.GetChronicle("npc-caio")[0].Relation, Is.EqualTo(NpcChronicleRelation.Support));
         Assert.That(fixture.Chronicle.GetChronicle("npc-marta")[0].Relation, Is.EqualTo(NpcChronicleRelation.Participant));
+    }
+
+    [Test]
+    public void Chronicle_DecisionMakerAndSupportForSameNpcUsesSelfDecisionOnce()
+    {
+        RecordFixture fixture = SimulationTestFactory.CreateRecordFixture();
+        NpcDecisionRecord decision = fixture.DecisionRecorder.RecordWithParticipants(
+            "npc-bruno",
+            NpcDecisionType.Action,
+            NpcDecisionOrigin.Autonomous,
+            "action-group",
+            new[]
+            {
+                new NpcDecisionParticipant("npc-bruno", NpcDecisionParticipantRole.Support),
+                new NpcDecisionParticipant("npc-caio", NpcDecisionParticipantRole.Contributor)
+            },
+            null,
+            null,
+            null);
+
+        IReadOnlyList<NpcChronicleEntry> chronicle = fixture.Chronicle.GetChronicle("npc-bruno");
+
+        Assert.That(decision.DecisionParticipants, Has.Count.EqualTo(3));
+        Assert.That(chronicle, Has.Count.EqualTo(1));
+        Assert.That(chronicle[0].Relation, Is.EqualTo(NpcChronicleRelation.SelfDecision));
+        Assert.That(chronicle[0].Decision.DecisionParticipants[1].Role, Is.EqualTo(NpcDecisionParticipantRole.Support));
+    }
+
+    [Test]
+    public void Chronicle_SupportAndContributorForSameNpcUsesSupportOnceAndPreservesRoles()
+    {
+        RecordFixture fixture = SimulationTestFactory.CreateRecordFixture();
+        NpcDecisionRecord decision = fixture.DecisionRecorder.RecordWithParticipants(
+            "npc-bruno",
+            NpcDecisionType.Action,
+            NpcDecisionOrigin.Autonomous,
+            "action-group",
+            new[]
+            {
+                new NpcDecisionParticipant("npc-caio", NpcDecisionParticipantRole.Support),
+                new NpcDecisionParticipant("npc-caio", NpcDecisionParticipantRole.Contributor)
+            },
+            null,
+            null,
+            null);
+
+        IReadOnlyList<NpcChronicleEntry> chronicle = fixture.Chronicle.GetChronicle("npc-caio");
+
+        Assert.That(decision.DecisionParticipants, Has.Count.EqualTo(3));
+        Assert.That(chronicle, Has.Count.EqualTo(1));
+        Assert.That(chronicle[0].Relation, Is.EqualTo(NpcChronicleRelation.Support));
+        Assert.That(decision.DecisionParticipants[1].Role, Is.EqualTo(NpcDecisionParticipantRole.Support));
+        Assert.That(decision.DecisionParticipants[2].Role, Is.EqualTo(NpcDecisionParticipantRole.Contributor));
     }
 
     private sealed class MultiParticipantTestEvent : DomainEvent

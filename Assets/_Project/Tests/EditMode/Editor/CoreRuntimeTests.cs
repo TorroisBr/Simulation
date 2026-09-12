@@ -1,4 +1,6 @@
 using NUnit.Framework;
+using UnityEngine;
+using UnityEngine.TestTools;
 
 public sealed class CoreRuntimeTests
 {
@@ -64,6 +66,9 @@ public sealed class CoreRuntimeTests
         CityRuntime city = SimulationTestFactory.CreateCity("duplicate-runtime", "location-runtime");
 
         Assert.That(registry.RegisterNpc(npc), Is.True);
+        LogAssert.Expect(
+            LogType.Error,
+            "Duplicate RuntimeId 'duplicate-runtime' while registering City; it is already registered as NPC.");
         Assert.That(registry.RegisterCity(city), Is.False);
     }
 

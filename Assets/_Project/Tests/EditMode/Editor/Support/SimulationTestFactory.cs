@@ -44,6 +44,13 @@ public static class SimulationTestFactory
         return action;
     }
 
+    public static NpcStatusData CreateStatus(string id)
+    {
+        NpcStatusData status = Track(ScriptableObject.CreateInstance<NpcStatusData>());
+        status.statusName = id;
+        return status;
+    }
+
     public static CityData CreateCityData(string id, params MarketItemConfig[] marketItems)
     {
         CityData city = Track(ScriptableObject.CreateInstance<CityData>());

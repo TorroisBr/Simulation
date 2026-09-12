@@ -50,13 +50,14 @@ public static class SimulationInvariantValidator
             Assert.That(registry.TryGetNpc(decision.ActorRuntimeId, out _), Is.True);
         }
 
-        HashSet<string> participantIds = new HashSet<string>(StringComparer.Ordinal);
+        HashSet<string> participantRoleKeys = new HashSet<string>(StringComparer.Ordinal);
         bool actorIsDecisionMaker = false;
         foreach (NpcDecisionParticipant participant in decision.DecisionParticipants)
         {
             Assert.That(participant, Is.Not.Null);
             Assert.That(participant.RuntimeId, Is.Not.Null.And.Not.Empty);
-            Assert.That(participantIds.Add(participant.RuntimeId), Is.True);
+            string participantRoleKey = participant.RuntimeId + "\u001f" + (int)participant.Role;
+            Assert.That(participantRoleKeys.Add(participantRoleKey), Is.True);
 
             if (registry != null)
             {
@@ -106,12 +107,13 @@ public static class SimulationInvariantValidator
         Assert.That(domainEvent.EventId, Is.Not.Null.And.Not.Empty);
         Assert.That(domainEvent.RecordSequence, Is.GreaterThan(0L));
 
-        HashSet<string> participantIds = new HashSet<string>(StringComparer.Ordinal);
+        HashSet<string> participantRoleKeys = new HashSet<string>(StringComparer.Ordinal);
         foreach (DomainEventParticipant participant in domainEvent.GetParticipants())
         {
             Assert.That(participant, Is.Not.Null);
             Assert.That(participant.RuntimeId, Is.Not.Null.And.Not.Empty);
-            Assert.That(participantIds.Add(participant.RuntimeId), Is.True);
+            string participantRoleKey = participant.RuntimeId + "\u001f" + (int)participant.Role;
+            Assert.That(participantRoleKeys.Add(participantRoleKey), Is.True);
 
             if (registry != null)
             {
