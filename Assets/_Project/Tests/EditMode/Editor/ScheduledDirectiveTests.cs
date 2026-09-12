@@ -102,7 +102,7 @@ public sealed class ScheduledDirectiveTests
         Assert.That(decision.Origin, Is.EqualTo(NpcDecisionOrigin.ScheduledDirective));
         Assert.That(decision.DecisionType, Is.EqualTo(NpcDecisionType.Escape));
         Assert.That(directive.State, Is.EqualTo(ScheduledDirectiveState.Succeeded));
-        Assert.That(fixture.Events.Events, Has.Count.EqualTo(2));
+        Assert.That(fixture.Events.Events.Count, Is.EqualTo(2));
         NpcEscapedEvent escaped = fixture.Events.Events[1] as NpcEscapedEvent;
         Assert.That(escaped, Is.Not.Null);
         Assert.That(escaped.OriginDecisionId, Is.EqualTo(decision.DecisionId));
@@ -157,7 +157,7 @@ public sealed class ScheduledDirectiveTests
         Assert.That(actor.CurrentStatus, Has.No.Member(arrestedStatus));
         Assert.That(fixture.Decisions.Decisions, Is.Empty);
 
-        Assert.That(fixture.Events.Events, Has.Count.EqualTo(2));
+        Assert.That(fixture.Events.Events.Count, Is.EqualTo(2));
         NpcEscapedEvent escaped = fixture.Events.Events[1] as NpcEscapedEvent;
         Assert.That(escaped, Is.Not.Null);
         Assert.That(escaped.ActorRuntimeId, Is.EqualTo(actor.RuntimeId));

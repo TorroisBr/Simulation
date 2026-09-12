@@ -79,7 +79,7 @@ public sealed class CommercialKnowledgeSharingTests
 
         sharing.ShareAmongPresentMerchants(new[] { sender, receiver });
 
-        Assert.That(receiver.CommercialKnowledge.Observations, Has.Count.EqualTo(1));
+        Assert.That(receiver.CommercialKnowledge.Observations.Count, Is.EqualTo(1));
         Assert.That(receiver.CommercialKnowledge.TryGetObservation(
             city.Location.RuntimeId, newerItem.DefinitionId, out _), Is.True);
     }

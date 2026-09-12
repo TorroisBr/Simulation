@@ -58,7 +58,7 @@ public sealed class ScenarioTests
 
         IReadOnlyList<NpcChronicleEntry> chronicle = records.Chronicle.GetChronicle(actor.RuntimeId);
 
-        Assert.That(chronicle, Has.Count.EqualTo(3));
+        Assert.That(chronicle.Count, Is.EqualTo(3));
         Assert.That(chronicle[0].Decision, Is.SameAs(decision));
         Assert.That(chronicle[1].DomainEvent.EventType, Is.EqualTo(DomainEventType.NpcTravelStarted));
         Assert.That(chronicle[2].DomainEvent.EventType, Is.EqualTo(DomainEventType.NpcArrived));
@@ -99,7 +99,7 @@ public sealed class ScenarioTests
         IReadOnlyList<NpcRuntime> arrivals = travel.AdvanceTravels(new List<NpcRuntime> { merchant });
         merchantSystem.ObserveCurrentMarket(merchant);
 
-        Assert.That(arrivals, Has.Count.EqualTo(1));
+        Assert.That(arrivals.Count, Is.EqualTo(1));
         Assert.That(merchant.CurrentCity, Is.SameAs(world.B));
         Assert.That(merchant.CommercialKnowledge.TryGetObservation(
             world.B.Location.RuntimeId, item.DefinitionId, out CommercialMarketObservation refreshed), Is.True);

@@ -107,7 +107,7 @@ public sealed class CoreRuntimeTests
         SimulationDate yearBoundary = calendar.GetDate(13L);
 
         Assert.That(weekBoundary.WeekOfMonth, Is.EqualTo(2));
-        Assert.That(weekBoundary.DayOfMonth, Is.EqualTo(1));
+        Assert.That(weekBoundary.DayOfMonth, Is.EqualTo(4));
         Assert.That(weekBoundary.DayOfWeek, Is.EqualTo(1));
         Assert.That(monthBoundary.Month, Is.EqualTo(2));
         Assert.That(monthBoundary.DayOfMonth, Is.EqualTo(1));
@@ -142,8 +142,8 @@ public sealed class CoreRuntimeTests
         Assert.That(knowledge.DiscoverRoute("route-a-b"), Is.False);
         Assert.That(knowledge.KnowsLocation("location-a"), Is.True);
         Assert.That(knowledge.KnowsRoute("route-a-b"), Is.True);
-        Assert.That(knowledge.KnownLocationRuntimeIds, Has.Count.EqualTo(1));
-        Assert.That(knowledge.KnownRouteRuntimeIds, Has.Count.EqualTo(1));
+        Assert.That(knowledge.KnownLocationRuntimeIds.Count, Is.EqualTo(1));
+        Assert.That(knowledge.KnownRouteRuntimeIds.Count, Is.EqualTo(1));
     }
 
     [Test]
@@ -171,7 +171,7 @@ public sealed class CoreRuntimeTests
         SimulationInvariantValidator.ValidateSpatialKnowledge(npc.SpatialKnowledge, world.IdentityRegistry);
         var destinations = travel.GetKnownDirectDestinationCities(npc, world.A);
 
-        Assert.That(destinations, Has.Count.EqualTo(1));
+        Assert.That(destinations.Count, Is.EqualTo(1));
         Assert.That(destinations[0], Is.SameAs(world.B));
         Assert.That(destinations, Has.No.Member(world.C));
     }

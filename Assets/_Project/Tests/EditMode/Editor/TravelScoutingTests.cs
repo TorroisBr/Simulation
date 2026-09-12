@@ -60,7 +60,7 @@ public sealed class TravelScoutingTests
         Assert.That(travel.AdvanceTravels(new List<NpcRuntime> { npc }), Is.Empty);
         IReadOnlyList<NpcRuntime> arrivals = travel.AdvanceTravels(new List<NpcRuntime> { npc });
 
-        Assert.That(arrivals, Has.Count.EqualTo(1));
+        Assert.That(arrivals.Count, Is.EqualTo(1));
         Assert.That(npc.CurrentCity, Is.SameAs(world.B));
         Assert.That(npc.SpatialKnowledge.KnowsLocation(world.B.Location.RuntimeId), Is.True);
     }
@@ -80,7 +80,7 @@ public sealed class TravelScoutingTests
         travel.AdvanceTravels(new List<NpcRuntime> { npc });
         travel.AdvanceTravels(new List<NpcRuntime> { npc });
 
-        Assert.That(records.Events.Events, Has.Count.EqualTo(2));
+        Assert.That(records.Events.Events.Count, Is.EqualTo(2));
         Assert.That(records.Events.Events[0].EventType, Is.EqualTo(DomainEventType.NpcTravelStarted));
         Assert.That(records.Events.Events[1].EventType, Is.EqualTo(DomainEventType.NpcArrived));
         Assert.That(records.Events.Events[0].OriginDecisionId, Is.EqualTo(decision.DecisionId));

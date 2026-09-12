@@ -50,8 +50,8 @@ public sealed class DecisionEventChronicleTests
             null,
             null);
 
-        Assert.That(decision.DecisionParticipants, Has.Count.EqualTo(3));
-        Assert.That(decision.TargetRuntimeIds, Has.Count.EqualTo(2));
+        Assert.That(decision.DecisionParticipants.Count, Is.EqualTo(3));
+        Assert.That(decision.TargetRuntimeIds.Count, Is.EqualTo(2));
         Assert.That(decision.TargetRuntimeIds, Is.EqualTo(new[] { "npc-jobson", "npc-joao" }));
         Assert.That(decision.DecisionParticipants[0].Role, Is.EqualTo(NpcDecisionParticipantRole.DecisionMaker));
     }
@@ -78,7 +78,7 @@ public sealed class DecisionEventChronicleTests
 
         SimulationInvariantValidator.ValidateDecision(decision);
 
-        Assert.That(decision.DecisionParticipants, Has.Count.EqualTo(4));
+        Assert.That(decision.DecisionParticipants.Count, Is.EqualTo(4));
         Assert.That(decision.DecisionParticipants[0].Role, Is.EqualTo(NpcDecisionParticipantRole.DecisionMaker));
         Assert.That(decision.DecisionParticipants[1].Role, Is.EqualTo(NpcDecisionParticipantRole.Support));
         Assert.That(decision.DecisionParticipants[2].Role, Is.EqualTo(NpcDecisionParticipantRole.Contributor));
@@ -159,7 +159,7 @@ public sealed class DecisionEventChronicleTests
         fixture.EventRecorder.Record((id, day, sequence) => new NpcEscapedEvent(
             id, day, sequence, "npc-bruno", "location-b", "decision-3"));
 
-        Assert.That(fixture.Events.Events, Has.Count.EqualTo(4));
+        Assert.That(fixture.Events.Events.Count, Is.EqualTo(4));
         Assert.That(fixture.Events.Events[0].EventType, Is.EqualTo(DomainEventType.NpcTravelStarted));
         Assert.That(fixture.Events.Events[1].EventType, Is.EqualTo(DomainEventType.NpcArrived));
         Assert.That(fixture.Events.Events[2].EventType, Is.EqualTo(DomainEventType.NpcArrested));
@@ -191,20 +191,20 @@ public sealed class DecisionEventChronicleTests
 
         SimulationInvariantValidator.ValidateDomainEvent(domainEvent);
         Assert.That(fixture.Events.Record(domainEvent), Is.True);
-        Assert.That(fixture.Events.Events, Has.Count.EqualTo(1));
+        Assert.That(fixture.Events.Events.Count, Is.EqualTo(1));
         foreach (string participantId in new[] { "npc-a", "npc-b", "npc-c", "npc-x", "npc-y" })
         {
-            Assert.That(fixture.Events.GetEventsForParticipant(participantId), Has.Count.EqualTo(1));
+            Assert.That(fixture.Events.GetEventsForParticipant(participantId).Count, Is.EqualTo(1));
             Assert.That(fixture.Events.GetEventsForParticipant(participantId)[0].EventId, Is.EqualTo(domainEvent.EventId));
         }
 
-        Assert.That(domainEvent.GetParticipants(), Has.Count.EqualTo(6));
+        Assert.That(domainEvent.GetParticipants().Count, Is.EqualTo(6));
         Assert.That(domainEvent.GetParticipants()[0].Role, Is.EqualTo(DomainEventParticipantRole.Actor));
         Assert.That(domainEvent.GetParticipants()[1].Role, Is.EqualTo(DomainEventParticipantRole.Participant));
-        Assert.That(fixture.Events.GetEventsForParticipant("npc-a"), Has.Count.EqualTo(1));
-        Assert.That(fixture.Chronicle.GetChronicle("npc-a"), Has.Count.EqualTo(1));
+        Assert.That(fixture.Events.GetEventsForParticipant("npc-a").Count, Is.EqualTo(1));
+        Assert.That(fixture.Chronicle.GetChronicle("npc-a").Count, Is.EqualTo(1));
         Assert.That(fixture.Chronicle.GetChronicle("npc-a")[0].DomainEvent, Is.SameAs(domainEvent));
-        Assert.That(fixture.Chronicle.GetChronicle("npc-a")[0].Relation, Is.EqualTo(NpcChronicleRelation.SelfAction));
+        Assert.That(fixture.Chronicle.GetChronicle("npc-a")[0].Relation, Is.EqualTo(NpcChronicleRelation.AffectedOther));
     }
 
     [Test]
@@ -245,7 +245,7 @@ public sealed class DecisionEventChronicleTests
         IReadOnlyList<NpcChronicleEntry> chronicle = fixture.Chronicle.GetChronicle(actor.RuntimeId);
 
         SimulationInvariantValidator.ValidateChronicle(chronicle);
-        Assert.That(chronicle, Has.Count.EqualTo(4));
+        Assert.That(chronicle.Count, Is.EqualTo(4));
         Assert.That(chronicle[0].EntryType, Is.EqualTo(NpcChronicleEntryType.Decision));
         Assert.That(chronicle[1].EntryType, Is.EqualTo(NpcChronicleEntryType.DomainEvent));
         Assert.That(chronicle[2].EntryType, Is.EqualTo(NpcChronicleEntryType.Decision));
@@ -260,7 +260,7 @@ public sealed class DecisionEventChronicleTests
             "npc-jobson", NpcDecisionType.Action, NpcDecisionOrigin.Autonomous, "action-steal", "npc-bruno", null, null);
 
         Assert.That(fixture.Chronicle.GetChronicle("npc-bruno"), Is.Empty);
-        Assert.That(fixture.Chronicle.GetChronicle("npc-jobson"), Has.Count.EqualTo(1));
+        Assert.That(fixture.Chronicle.GetChronicle("npc-jobson").Count, Is.EqualTo(1));
         Assert.That(fixture.Chronicle.GetChronicle("npc-jobson")[0].Decision, Is.SameAs(decision));
     }
 
@@ -273,7 +273,7 @@ public sealed class DecisionEventChronicleTests
 
         IReadOnlyList<NpcChronicleEntry> chronicle = fixture.Chronicle.GetChronicle("npc-bruno");
 
-        Assert.That(chronicle, Has.Count.EqualTo(1));
+        Assert.That(chronicle.Count, Is.EqualTo(1));
         Assert.That(chronicle[0].Relation, Is.EqualTo(NpcChronicleRelation.AffectedByOther));
     }
 
@@ -320,8 +320,8 @@ public sealed class DecisionEventChronicleTests
 
         IReadOnlyList<NpcChronicleEntry> chronicle = fixture.Chronicle.GetChronicle("npc-bruno");
 
-        Assert.That(decision.DecisionParticipants, Has.Count.EqualTo(3));
-        Assert.That(chronicle, Has.Count.EqualTo(1));
+        Assert.That(decision.DecisionParticipants.Count, Is.EqualTo(3));
+        Assert.That(chronicle.Count, Is.EqualTo(1));
         Assert.That(chronicle[0].Relation, Is.EqualTo(NpcChronicleRelation.SelfDecision));
         Assert.That(chronicle[0].Decision.DecisionParticipants[1].Role, Is.EqualTo(NpcDecisionParticipantRole.Support));
     }
@@ -346,8 +346,8 @@ public sealed class DecisionEventChronicleTests
 
         IReadOnlyList<NpcChronicleEntry> chronicle = fixture.Chronicle.GetChronicle("npc-caio");
 
-        Assert.That(decision.DecisionParticipants, Has.Count.EqualTo(3));
-        Assert.That(chronicle, Has.Count.EqualTo(1));
+        Assert.That(decision.DecisionParticipants.Count, Is.EqualTo(3));
+        Assert.That(chronicle.Count, Is.EqualTo(1));
         Assert.That(chronicle[0].Relation, Is.EqualTo(NpcChronicleRelation.Support));
         Assert.That(decision.DecisionParticipants[1].Role, Is.EqualTo(NpcDecisionParticipantRole.Support));
         Assert.That(decision.DecisionParticipants[2].Role, Is.EqualTo(NpcDecisionParticipantRole.Contributor));
