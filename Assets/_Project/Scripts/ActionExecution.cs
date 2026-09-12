@@ -35,14 +35,12 @@ public sealed class ActionExecutionContext
 {
     private readonly string actionDefinitionId;
     private readonly IReadOnlyList<ActionExecutionParticipant> participants;
-    private readonly IReadOnlyList<string> targetRuntimeIds;
     private readonly string targetLocationRuntimeId;
     private readonly string targetRouteRuntimeId;
     private readonly string originDecisionId;
 
     public string ActionDefinitionId => actionDefinitionId;
     public IReadOnlyList<ActionExecutionParticipant> Participants => participants;
-    public IReadOnlyList<string> TargetRuntimeIds => targetRuntimeIds;
     public string TargetLocationRuntimeId => targetLocationRuntimeId;
     public string TargetRouteRuntimeId => targetRouteRuntimeId;
     public string OriginDecisionId => originDecisionId;
@@ -52,12 +50,10 @@ public sealed class ActionExecutionContext
         IEnumerable<ActionExecutionParticipant> participants,
         string targetLocationRuntimeId = null,
         string targetRouteRuntimeId = null,
-        string originDecisionId = null,
-        IEnumerable<string> targetRuntimeIds = null)
+        string originDecisionId = null)
     {
         this.actionDefinitionId = actionDefinitionId;
         this.participants = CaptureParticipants(participants);
-        this.targetRuntimeIds = CaptureTargetRuntimeIds(targetRuntimeIds);
         this.targetLocationRuntimeId = NormalizeOptionalId(targetLocationRuntimeId);
         this.targetRouteRuntimeId = NormalizeOptionalId(targetRouteRuntimeId);
         this.originDecisionId = NormalizeOptionalId(originDecisionId);
@@ -73,21 +69,6 @@ public sealed class ActionExecutionContext
             foreach (ActionExecutionParticipant participant in source)
             {
                 snapshot.Add(participant);
-            }
-        }
-
-        return snapshot.AsReadOnly();
-    }
-
-    private static IReadOnlyList<string> CaptureTargetRuntimeIds(IEnumerable<string> source)
-    {
-        List<string> snapshot = new List<string>();
-
-        if (source != null)
-        {
-            foreach (string runtimeId in source)
-            {
-                snapshot.Add(runtimeId);
             }
         }
 
@@ -181,7 +162,6 @@ public static class ActionExecutionValidator
         int supportCount = 0;
         int targetParticipantCount = 0;
         HashSet<string> participantRoleKeys = new HashSet<string>(StringComparer.Ordinal);
-        HashSet<string> targetIds = new HashSet<string>(StringComparer.Ordinal);
 
         if (context.Participants == null)
         {
@@ -225,25 +205,6 @@ public static class ActionExecutionValidator
             }
         }
 
-        if (context.TargetRuntimeIds == null)
-        {
-            reason = "Target RuntimeIds are null.";
-            return false;
-        }
-
-        foreach (string targetRuntimeId in context.TargetRuntimeIds)
-        {
-            if (string.IsNullOrWhiteSpace(targetRuntimeId) == true || targetIds.Add(targetRuntimeId) == false)
-            {
-                reason = "Target RuntimeIds must be non-empty and unique.";
-                return false;
-            }
-        }
-
-        int targetCount = context.TargetRuntimeIds.Count > 0
-            ? context.TargetRuntimeIds.Count
-            : targetParticipantCount;
-
         if (Satisfies(performerCount, requirements.MinPerformers, requirements.MaxPerformers) == false)
         {
             reason = "Performer participation requirement was not satisfied.";
@@ -256,7 +217,7 @@ public static class ActionExecutionValidator
             return false;
         }
 
-        if (Satisfies(targetCount, requirements.MinTargets, requirements.MaxTargets) == false)
+        if (Satisfies(targetParticipantCount, requirements.MinTargets, requirements.MaxTargets) == false)
         {
             reason = "Target participation requirement was not satisfied.";
             return false;

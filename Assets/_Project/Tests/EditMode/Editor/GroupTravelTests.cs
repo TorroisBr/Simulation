@@ -120,7 +120,29 @@ public sealed class GroupTravelTests
     }
 
     [Test]
-    public void ActionExecutionValidator_TargetParticipantsDoNotSatisfyPerformerMinimum()
+    public void ActionExecutionTargets_TargetParticipantsAreCanonical()
+    {
+        ActionExecutionContext context = new ActionExecutionContext(
+            "canonical-targets",
+            new[]
+            {
+                new ActionExecutionParticipant("npc-a", ActionExecutionParticipantRole.Performer),
+                new ActionExecutionParticipant("npc-x", ActionExecutionParticipantRole.Target),
+                new ActionExecutionParticipant("npc-y", ActionExecutionParticipantRole.Target)
+            });
+
+        SimulationInvariantValidator.ValidateActionExecution(
+            context,
+            new ActionParticipationRequirements(minPerformers: 1, minTargets: 2, maxTargets: 2));
+        Assert.That(context.Participants.Count, Is.EqualTo(3));
+        Assert.That(context.Participants[1].RuntimeId, Is.EqualTo("npc-x"));
+        Assert.That(context.Participants[1].Role, Is.EqualTo(ActionExecutionParticipantRole.Target));
+        Assert.That(context.Participants[2].RuntimeId, Is.EqualTo("npc-y"));
+        Assert.That(context.Participants[2].Role, Is.EqualTo(ActionExecutionParticipantRole.Target));
+    }
+
+    [Test]
+    public void ActionExecutionTargets_TargetDoesNotCountAsPerformer()
     {
         ActionExecutionContext context = new ActionExecutionContext(
             "target-only",
@@ -133,16 +155,57 @@ public sealed class GroupTravelTests
     }
 
     [Test]
-    public void ActionExecutionValidator_TargetRuntimeIdsSatisfyTargetBounds()
+    public void ActionExecutionTargets_MinTargetsUsesCanonicalTargets()
     {
         ActionExecutionContext context = new ActionExecutionContext(
-            "target-snapshot",
-            new[] { new ActionExecutionParticipant("npc-a", ActionExecutionParticipantRole.Performer) },
-            targetRuntimeIds: new[] { "npc-x", "npc-y" });
+            "minimum-targets",
+            new[]
+            {
+                new ActionExecutionParticipant("npc-a", ActionExecutionParticipantRole.Performer),
+                new ActionExecutionParticipant("npc-x", ActionExecutionParticipantRole.Target)
+            });
 
-        SimulationInvariantValidator.ValidateActionExecution(
+        Assert.That(ActionExecutionValidator.TryValidate(
             context,
-            new ActionParticipationRequirements(minPerformers: 1, minTargets: 2, maxTargets: 2));
+            new ActionParticipationRequirements(minPerformers: 1, minTargets: 2),
+            out _), Is.False);
+    }
+
+    [Test]
+    public void ActionExecutionTargets_MaxTargetsUsesCanonicalTargets()
+    {
+        ActionExecutionContext context = new ActionExecutionContext(
+            "maximum-targets",
+            new[]
+            {
+                new ActionExecutionParticipant("npc-a", ActionExecutionParticipantRole.Performer),
+                new ActionExecutionParticipant("npc-x", ActionExecutionParticipantRole.Target),
+                new ActionExecutionParticipant("npc-y", ActionExecutionParticipantRole.Target),
+                new ActionExecutionParticipant("npc-z", ActionExecutionParticipantRole.Target)
+            });
+
+        Assert.That(ActionExecutionValidator.TryValidate(
+            context,
+            new ActionParticipationRequirements(minPerformers: 1, maxTargets: 2),
+            out _), Is.False);
+    }
+
+    [Test]
+    public void ActionExecutionTargets_DuplicateSameTargetRoleIsRejected()
+    {
+        ActionExecutionContext context = new ActionExecutionContext(
+            "duplicate-target",
+            new[]
+            {
+                new ActionExecutionParticipant("npc-a", ActionExecutionParticipantRole.Performer),
+                new ActionExecutionParticipant("npc-x", ActionExecutionParticipantRole.Target),
+                new ActionExecutionParticipant("npc-x", ActionExecutionParticipantRole.Target)
+            });
+
+        Assert.That(ActionExecutionValidator.TryValidate(
+            context,
+            new ActionParticipationRequirements(minPerformers: 1, minTargets: 1),
+            out _), Is.False);
     }
 
     [Test]
@@ -171,7 +234,113 @@ public sealed class GroupTravelTests
         Assert.That(fixture.Records.Events.Events.Count, Is.EqualTo(1));
         Assert.That(fixture.Records.Events.Events[0].EventType, Is.EqualTo(DomainEventType.TravelPartyStarted));
         Assert.That(fixture.Records.Events.Events[0].GetParticipants().Count, Is.EqualTo(3));
-        SimulationInvariantValidator.ValidateTravelParties(fixture.Parties, fixture.World.IdentityRegistry);
+        SimulationInvariantValidator.ValidateTravelParties(fixture.Parties, fixture.World.IdentityRegistry, fixture.Members);
+    }
+
+    [Test]
+    public void TravelPartyInvariant_ActiveTravelPartyIdWithoutExistingPartyIsInvalid()
+    {
+        TravelPartyFixture fixture = SimulationTestFactory.CreateTravelPartyFixture(3);
+        fixture.Bruno.SetActiveTravelPartyId("travel-party-missing");
+
+        Assert.Throws<AssertionException>(() => SimulationInvariantValidator.ValidateTravelParties(
+            fixture.Parties,
+            fixture.World.IdentityRegistry,
+            fixture.Members));
+    }
+
+    [Test]
+    public void TravelPartyInvariant_ExistingPartyWithoutNpcMembershipIsInvalid()
+    {
+        TravelPartyFixture fixture = SimulationTestFactory.CreateTravelPartyFixture(3);
+        string partyId = "travel-party-manual";
+        Assert.That(fixture.Caio.StartTravel(fixture.World.B, 3), Is.True);
+        fixture.Caio.SetActiveTravelPartyId(partyId);
+        TravelPartyRuntime party = CreatePartySnapshot(
+            fixture,
+            partyId,
+            new[] { fixture.Caio },
+            fixture.World.B,
+            fixture.World.RouteAB,
+            3,
+            null);
+        Assert.That(fixture.Parties.Add(party), Is.True);
+        fixture.Bruno.SetActiveTravelPartyId(partyId);
+
+        Assert.Throws<AssertionException>(() => SimulationInvariantValidator.ValidateTravelParties(
+            fixture.Parties,
+            fixture.World.IdentityRegistry,
+            fixture.Members));
+    }
+
+    [Test]
+    public void TravelPartyInvariant_ProgressDesynchronizationIsInvalid()
+    {
+        TravelPartyFixture fixture = SimulationTestFactory.CreateTravelPartyFixture(3);
+        Assert.That(fixture.System.TryStartTravelParty(CreateContext(fixture), out _), Is.True);
+        fixture.System.AdvanceParties();
+        Assert.That(fixture.Bruno.AdvanceTravelDay(out _), Is.False);
+
+        Assert.Throws<AssertionException>(() => SimulationInvariantValidator.ValidateTravelParties(
+            fixture.Parties,
+            fixture.World.IdentityRegistry,
+            fixture.Members));
+    }
+
+    [Test]
+    public void TravelPartyInvariant_DestinationDesynchronizationIsInvalid()
+    {
+        TravelPartyFixture fixture = SimulationTestFactory.CreateTravelPartyFixture(3);
+        string partyId = "travel-party-manual";
+        Assert.That(fixture.Bruno.StartTravel(fixture.World.B, 3), Is.True);
+        Assert.That(fixture.Caio.StartTravel(fixture.World.C, 3), Is.True);
+        fixture.Bruno.SetActiveTravelPartyId(partyId);
+        fixture.Caio.SetActiveTravelPartyId(partyId);
+        TravelPartyRuntime party = CreatePartySnapshot(
+            fixture,
+            partyId,
+            new[] { fixture.Bruno, fixture.Caio },
+            fixture.World.B,
+            fixture.World.RouteAB,
+            3,
+            null);
+        Assert.That(fixture.Parties.Add(party), Is.True);
+
+        Assert.That(fixture.System.AdvanceParties().Count, Is.EqualTo(0));
+        Assert.That(fixture.Bruno.TravelDaysRemaining, Is.EqualTo(3));
+        Assert.That(fixture.Caio.TravelDaysRemaining, Is.EqualTo(3));
+        Assert.Throws<AssertionException>(() => SimulationInvariantValidator.ValidateTravelParties(
+            fixture.Parties,
+            fixture.World.IdentityRegistry,
+            new[] { fixture.Bruno, fixture.Caio }));
+    }
+
+    [Test]
+    public void TravelPartyInvariant_OriginDecisionDesynchronizationIsInvalid()
+    {
+        TravelPartyFixture fixture = SimulationTestFactory.CreateTravelPartyFixture(3);
+        string partyId = "travel-party-manual";
+        Assert.That(fixture.Bruno.StartTravel(fixture.World.B, 3, "decision-a"), Is.True);
+        Assert.That(fixture.Caio.StartTravel(fixture.World.B, 3, "decision-b"), Is.True);
+        fixture.Bruno.SetActiveTravelPartyId(partyId);
+        fixture.Caio.SetActiveTravelPartyId(partyId);
+        TravelPartyRuntime party = CreatePartySnapshot(
+            fixture,
+            partyId,
+            new[] { fixture.Bruno, fixture.Caio },
+            fixture.World.B,
+            fixture.World.RouteAB,
+            3,
+            "decision-a");
+        Assert.That(fixture.Parties.Add(party), Is.True);
+
+        Assert.That(fixture.System.AdvanceParties().Count, Is.EqualTo(0));
+        Assert.That(fixture.Bruno.TravelDaysRemaining, Is.EqualTo(3));
+        Assert.That(fixture.Caio.TravelDaysRemaining, Is.EqualTo(3));
+        Assert.Throws<AssertionException>(() => SimulationInvariantValidator.ValidateTravelParties(
+            fixture.Parties,
+            fixture.World.IdentityRegistry,
+            new[] { fixture.Bruno, fixture.Caio }));
     }
 
     [Test]
@@ -287,15 +456,77 @@ public sealed class GroupTravelTests
         IReadOnlyList<NpcRuntime> arrivals = fixture.System.AdvanceParties();
 
         Assert.That(arrivals.Count, Is.EqualTo(3));
-        Assert.That(fixture.Bruno.CurrentCity, Is.SameAs(fixture.World.B));
-        Assert.That(fixture.Caio.CurrentCity, Is.SameAs(fixture.World.B));
-        Assert.That(fixture.Marta.CurrentCity, Is.SameAs(fixture.World.B));
-        Assert.That(fixture.Bruno.ActiveTravelPartyId, Is.Null);
+        foreach (NpcRuntime member in fixture.Members)
+        {
+            Assert.That(member.CurrentCity, Is.SameAs(fixture.World.B));
+            Assert.That(member.IsTraveling, Is.False);
+            Assert.That(member.ActiveTravelPartyId, Is.Null);
+            Assert.That(member.TravelOriginDecisionId, Is.Null);
+        }
+
         Assert.That(fixture.Parties.ActiveParties.Count, Is.EqualTo(0));
         Assert.That(fixture.Records.Events.Events.Count, Is.EqualTo(2));
         Assert.That(fixture.Records.Events.Events[1].EventType, Is.EqualTo(DomainEventType.TravelPartyArrived));
         Assert.That(fixture.Records.Events.Events[1].EventId, Is.Not.EqualTo(fixture.Records.Events.Events[0].EventId));
         Assert.That(party.IsCompleted, Is.True);
+    }
+
+    [Test]
+    public void TravelParty_StartWithoutOriginDecision_DoesNotCreateDecisionRecord()
+    {
+        TravelPartyFixture fixture = SimulationTestFactory.CreateTravelPartyFixture(1);
+
+        Assert.That(fixture.Records.Decisions.Decisions.Count, Is.EqualTo(0));
+        Assert.That(fixture.System.TryStartTravelParty(CreateContext(fixture), out _), Is.True);
+        Assert.That(fixture.Records.Decisions.Decisions.Count, Is.EqualTo(0));
+        Assert.That(fixture.Records.Events.Events.Count, Is.EqualTo(1));
+        Assert.That(fixture.Records.Events.Events[0].EventType, Is.EqualTo(DomainEventType.TravelPartyStarted));
+        Assert.That(fixture.Records.Events.Events[0].OriginDecisionId, Is.Null);
+        fixture.System.AdvanceParties();
+        fixture.System.AdvanceParties();
+
+        Assert.That(fixture.Records.Decisions.Decisions.Count, Is.EqualTo(0));
+        Assert.That(fixture.Records.Events.Events.Count, Is.EqualTo(2));
+        Assert.That(fixture.Records.Events.Events[1].EventType, Is.EqualTo(DomainEventType.TravelPartyArrived));
+        Assert.That(fixture.Records.Events.Events[1].OriginDecisionId, Is.Null);
+    }
+
+    [Test]
+    public void TravelParty_DesynchronizedProgressDoesNotAdvanceAnyMember()
+    {
+        TravelPartyFixture fixture = SimulationTestFactory.CreateTravelPartyFixture(3);
+        Assert.That(fixture.System.TryStartTravelParty(CreateContext(fixture), out _), Is.True);
+        fixture.System.AdvanceParties();
+        Assert.That(fixture.Bruno.AdvanceTravelDay(out _), Is.False);
+
+        IReadOnlyList<NpcRuntime> arrivals = fixture.System.AdvanceParties();
+
+        Assert.That(arrivals.Count, Is.EqualTo(0));
+        Assert.That(fixture.Bruno.TravelDaysRemaining, Is.EqualTo(2));
+        Assert.That(fixture.Caio.TravelDaysRemaining, Is.EqualTo(3));
+        Assert.That(fixture.Marta.TravelDaysRemaining, Is.EqualTo(3));
+        Assert.That(fixture.Parties.ActiveParties.Count, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void TravelParty_DesynchronizedActivePartyIdDoesNotAdvanceAnyMember()
+    {
+        TravelPartyFixture fixture = SimulationTestFactory.CreateTravelPartyFixture(3);
+        Assert.That(fixture.System.TryStartTravelParty(CreateContext(fixture), out _), Is.True);
+        fixture.System.AdvanceParties();
+        fixture.Bruno.SetActiveTravelPartyId("travel-party-other");
+
+        IReadOnlyList<NpcRuntime> arrivals = fixture.System.AdvanceParties();
+
+        Assert.That(arrivals.Count, Is.EqualTo(0));
+        Assert.That(fixture.Bruno.TravelDaysRemaining, Is.EqualTo(3));
+        Assert.That(fixture.Caio.TravelDaysRemaining, Is.EqualTo(3));
+        Assert.That(fixture.Marta.TravelDaysRemaining, Is.EqualTo(3));
+        Assert.That(fixture.Parties.ActiveParties.Count, Is.EqualTo(1));
+        Assert.Throws<AssertionException>(() => SimulationInvariantValidator.ValidateTravelParties(
+            fixture.Parties,
+            fixture.World.IdentityRegistry,
+            fixture.Members));
     }
 
     [Test]
@@ -349,6 +580,12 @@ public sealed class GroupTravelTests
         Assert.That(started.RecordSequence, Is.LessThan(arrived.RecordSequence));
         Assert.That(started.OriginDecisionId, Is.EqualTo(decision.DecisionId));
         Assert.That(arrived.OriginDecisionId, Is.EqualTo(decision.DecisionId));
+
+        foreach (NpcRuntime member in fixture.Members)
+        {
+            Assert.That(member.TravelOriginDecisionId, Is.Null);
+        }
+
         SimulationInvariantValidator.ValidateChronicle(fixture.Records.Chronicle.GetChronicle(fixture.Bruno.RuntimeId));
     }
 
@@ -393,5 +630,35 @@ public sealed class GroupTravelTests
             fixture.World.B.Location.RuntimeId,
             routeRuntimeId ?? fixture.World.RouteAB.RuntimeId,
             originDecisionId);
+    }
+
+    private static TravelPartyRuntime CreatePartySnapshot(
+        TravelPartyFixture fixture,
+        string partyId,
+        IEnumerable<NpcRuntime> travelers,
+        CityRuntime destination,
+        SpatialRouteRuntime route,
+        int travelDays,
+        string originDecisionId)
+    {
+        List<string> travelerIds = new List<string>();
+        List<TravelPartyMemberCost> costs = new List<TravelPartyMemberCost>();
+
+        foreach (NpcRuntime traveler in travelers)
+        {
+            travelerIds.Add(traveler.RuntimeId);
+            costs.Add(new TravelPartyMemberCost(traveler.RuntimeId, 0f));
+        }
+
+        return new TravelPartyRuntime(
+            partyId,
+            fixture.World.A.Location.RuntimeId,
+            destination.Location.RuntimeId,
+            route.RuntimeId,
+            travelerIds,
+            null,
+            travelDays,
+            originDecisionId,
+            costs);
     }
 }

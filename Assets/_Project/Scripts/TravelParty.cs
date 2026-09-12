@@ -483,7 +483,7 @@ public sealed class TravelPartySystem
                 continue;
             }
 
-            if (TryResolvePartyMembers(party, out List<NpcRuntime> members) == false || AreMembersSynchronized(members) == false)
+            if (TryResolvePartyMembers(party, out List<NpcRuntime> members) == false || AreMembersSynchronized(party, members) == false)
             {
                 continue;
             }
@@ -716,18 +716,34 @@ public sealed class TravelPartySystem
         return members.Count > 0;
     }
 
-    private static bool AreMembersSynchronized(List<NpcRuntime> members)
+    private static bool AreMembersSynchronized(TravelPartyRuntime party, List<NpcRuntime> members)
     {
-        if (members == null || members.Count == 0 || members[0] == null || members[0].IsTraveling == false)
+        if (party == null
+            || members == null
+            || members.Count == 0
+            || members[0] == null
+            || members[0].IsTraveling == false
+            || members[0].DestinationCity == null
+            || members[0].DestinationCity.Location == null
+            || members[0].TravelDaysRemaining <= 0
+            || string.Equals(members[0].ActiveTravelPartyId, party.TravelPartyId, StringComparison.Ordinal) == false
+            || string.Equals(members[0].DestinationCity.Location.RuntimeId, party.DestinationLocationRuntimeId, StringComparison.Ordinal) == false
+            || string.Equals(members[0].TravelOriginDecisionId, party.OriginDecisionId, StringComparison.Ordinal) == false)
         {
             return false;
         }
 
         int remainingDays = members[0].TravelDaysRemaining;
+        CityRuntime destination = members[0].DestinationCity;
 
         foreach (NpcRuntime member in members)
         {
-            if (member == null || member.IsTraveling == false || member.TravelDaysRemaining != remainingDays)
+            if (member == null
+                || member.IsTraveling == false
+                || member.DestinationCity != destination
+                || member.TravelDaysRemaining != remainingDays
+                || string.Equals(member.ActiveTravelPartyId, party.TravelPartyId, StringComparison.Ordinal) == false
+                || string.Equals(member.TravelOriginDecisionId, party.OriginDecisionId, StringComparison.Ordinal) == false)
             {
                 return false;
             }

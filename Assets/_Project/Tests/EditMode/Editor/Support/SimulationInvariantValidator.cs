@@ -28,11 +28,16 @@ public static class SimulationInvariantValidator
         Assert.That(party.MemberCosts, Is.Not.Null);
         Assert.That(party.MemberCosts.Count, Is.EqualTo(party.MemberRuntimeIds.Count));
 
-        Assert.That(registry.TryGetLocation(party.OriginLocationRuntimeId, out _), Is.True);
-        Assert.That(registry.TryGetLocation(party.DestinationLocationRuntimeId, out _), Is.True);
-        Assert.That(registry.TryGetRoute(party.RouteRuntimeId, out _), Is.True);
+        Assert.That(registry, Is.Not.Null);
+        Assert.That(registry.TryGetLocation(party.OriginLocationRuntimeId, out SpatialLocationRuntime origin), Is.True);
+        Assert.That(registry.TryGetLocation(party.DestinationLocationRuntimeId, out SpatialLocationRuntime destination), Is.True);
+        Assert.That(registry.TryGetRoute(party.RouteRuntimeId, out SpatialRouteRuntime route), Is.True);
+        Assert.That(route.Origin, Is.SameAs(origin));
+        Assert.That(route.Destination, Is.SameAs(destination));
 
         HashSet<string> memberIds = new HashSet<string>(StringComparer.Ordinal);
+        CityRuntime commonDestination = null;
+        int? commonRemainingDays = null;
         foreach (string runtimeId in party.MemberRuntimeIds)
         {
             Assert.That(runtimeId, Is.Not.Null.And.Not.Empty);
@@ -41,6 +46,22 @@ public static class SimulationInvariantValidator
             Assert.That(npc, Is.Not.Null);
             Assert.That(npc.ActiveTravelPartyId, Is.EqualTo(party.TravelPartyId));
             Assert.That(npc.IsTraveling, Is.True);
+            Assert.That(npc.DestinationCity, Is.Not.Null);
+            Assert.That(npc.DestinationCity.Location, Is.Not.Null);
+            Assert.That(npc.DestinationCity.Location.RuntimeId, Is.EqualTo(party.DestinationLocationRuntimeId));
+            Assert.That(npc.TravelDaysRemaining, Is.GreaterThan(0));
+            Assert.That(npc.TravelOriginDecisionId, Is.EqualTo(party.OriginDecisionId));
+
+            if (commonDestination == null)
+            {
+                commonDestination = npc.DestinationCity;
+                commonRemainingDays = npc.TravelDaysRemaining;
+            }
+            else
+            {
+                Assert.That(npc.DestinationCity, Is.SameAs(commonDestination));
+                Assert.That(npc.TravelDaysRemaining, Is.EqualTo(commonRemainingDays.Value));
+            }
         }
 
         HashSet<string> costIds = new HashSet<string>(StringComparer.Ordinal);
@@ -60,7 +81,8 @@ public static class SimulationInvariantValidator
 
     public static void ValidateTravelParties(
         TravelPartyStore store,
-        RuntimeIdentityRegistry registry)
+        RuntimeIdentityRegistry registry,
+        IEnumerable<NpcRuntime> npcs)
     {
         Assert.That(store, Is.Not.Null);
         Assert.That(store.ActiveParties, Is.Not.Null);
@@ -77,6 +99,45 @@ public static class SimulationInvariantValidator
                 Assert.That(indexed, Is.SameAs(party));
             }
         }
+
+        if (npcs == null)
+        {
+            return;
+        }
+
+        foreach (NpcRuntime npc in npcs)
+        {
+            Assert.That(npc, Is.Not.Null);
+
+            if (string.IsNullOrWhiteSpace(npc.ActiveTravelPartyId) == true)
+            {
+                continue;
+            }
+
+            TravelPartyRuntime party = store.GetById(npc.ActiveTravelPartyId);
+            Assert.That(party, Is.Not.Null);
+            Assert.That(ContainsRuntimeId(party.MemberRuntimeIds, npc.RuntimeId), Is.True);
+            Assert.That(store.TryGetPartyForNpc(npc.RuntimeId, out TravelPartyRuntime indexed), Is.True);
+            Assert.That(indexed, Is.SameAs(party));
+        }
+    }
+
+    private static bool ContainsRuntimeId(IReadOnlyList<string> runtimeIds, string expected)
+    {
+        if (runtimeIds == null)
+        {
+            return false;
+        }
+
+        foreach (string runtimeId in runtimeIds)
+        {
+            if (string.Equals(runtimeId, expected, StringComparison.Ordinal) == true)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public static void ValidateCommercialObservation(CommercialMarketObservation observation)
