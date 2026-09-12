@@ -324,6 +324,18 @@ public sealed class NpcChronicleFormatter
             return $"{actor} escapou da prisao em {location}.";
         }
 
+        if (domainEvent is TravelPartyStartedEvent partyStarted)
+        {
+            string destination = Resolve(resolveLocationName, partyStarted.DestinationLocationRuntimeId);
+            return $"Grupo {partyStarted.TravelPartyId} iniciou viagem para {destination}: {FormatEventParticipants(domainEvent.GetParticipants())}.";
+        }
+
+        if (domainEvent is TravelPartyArrivedEvent partyArrived)
+        {
+            string destination = Resolve(resolveLocationName, partyArrived.DestinationLocationRuntimeId);
+            return $"Grupo {partyArrived.TravelPartyId} chegou em {destination}: {FormatEventParticipants(domainEvent.GetParticipants())}.";
+        }
+
         return domainEvent != null
             ? $"{domainEvent.EventType}: {FormatEventParticipants(domainEvent.GetParticipants())}."
             : string.Empty;

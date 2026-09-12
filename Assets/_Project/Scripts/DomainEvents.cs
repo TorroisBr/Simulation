@@ -6,7 +6,9 @@ public enum DomainEventType
     NpcTravelStarted,
     NpcArrived,
     NpcArrested,
-    NpcEscaped
+    NpcEscaped,
+    TravelPartyStarted,
+    TravelPartyArrived
 }
 
 public enum DomainEventParticipantRole
@@ -217,6 +219,181 @@ public sealed class NpcEscapedEvent : DomainEvent
     public override IReadOnlyList<DomainEventParticipant> GetParticipants()
     {
         return new[] { new DomainEventParticipant(actorRuntimeId, DomainEventParticipantRole.Actor) };
+    }
+}
+
+[Serializable]
+public sealed class TravelPartyStartedEvent : DomainEvent
+{
+    private readonly string travelPartyId;
+    private readonly string originLocationRuntimeId;
+    private readonly string destinationLocationRuntimeId;
+    private readonly string routeRuntimeId;
+    private readonly int travelDaysTotal;
+    private readonly IReadOnlyList<string> travelerRuntimeIds;
+    private readonly IReadOnlyList<string> escortRuntimeIds;
+    private readonly IReadOnlyList<DomainEventParticipant> participants;
+
+    public override DomainEventType EventType => DomainEventType.TravelPartyStarted;
+    public string TravelPartyId => travelPartyId;
+    public string OriginLocationRuntimeId => originLocationRuntimeId;
+    public string DestinationLocationRuntimeId => destinationLocationRuntimeId;
+    public string RouteRuntimeId => routeRuntimeId;
+    public int TravelDaysTotal => travelDaysTotal;
+    public IReadOnlyList<string> TravelerRuntimeIds => travelerRuntimeIds;
+    public IReadOnlyList<string> EscortRuntimeIds => escortRuntimeIds;
+
+    public TravelPartyStartedEvent(
+        string eventId,
+        long absoluteDay,
+        long recordSequence,
+        string travelPartyId,
+        string originLocationRuntimeId,
+        string destinationLocationRuntimeId,
+        string routeRuntimeId,
+        int travelDaysTotal,
+        IEnumerable<string> travelerRuntimeIds,
+        IEnumerable<string> escortRuntimeIds,
+        string originDecisionId = null)
+        : base(eventId, absoluteDay, recordSequence, originDecisionId)
+    {
+        this.travelPartyId = TravelPartyEventData.RequireId(travelPartyId, nameof(travelPartyId));
+        this.originLocationRuntimeId = TravelPartyEventData.RequireId(originLocationRuntimeId, nameof(originLocationRuntimeId));
+        this.destinationLocationRuntimeId = TravelPartyEventData.RequireId(destinationLocationRuntimeId, nameof(destinationLocationRuntimeId));
+        this.routeRuntimeId = TravelPartyEventData.RequireId(routeRuntimeId, nameof(routeRuntimeId));
+
+        if (travelDaysTotal <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(travelDaysTotal));
+        }
+
+        this.travelDaysTotal = travelDaysTotal;
+        this.travelerRuntimeIds = TravelPartyEventData.CaptureIds(travelerRuntimeIds, nameof(travelerRuntimeIds));
+        this.escortRuntimeIds = TravelPartyEventData.CaptureIds(escortRuntimeIds, nameof(escortRuntimeIds));
+        if (this.travelerRuntimeIds.Count == 0)
+        {
+            throw new ArgumentException("Travel party event requires at least one traveler.", nameof(travelerRuntimeIds));
+        }
+        participants = TravelPartyEventData.BuildParticipants(this.travelerRuntimeIds, this.escortRuntimeIds);
+    }
+
+    public override IReadOnlyList<DomainEventParticipant> GetParticipants()
+    {
+        return participants;
+    }
+}
+
+[Serializable]
+public sealed class TravelPartyArrivedEvent : DomainEvent
+{
+    private readonly string travelPartyId;
+    private readonly string originLocationRuntimeId;
+    private readonly string destinationLocationRuntimeId;
+    private readonly string routeRuntimeId;
+    private readonly int travelDaysTotal;
+    private readonly IReadOnlyList<string> travelerRuntimeIds;
+    private readonly IReadOnlyList<string> escortRuntimeIds;
+    private readonly IReadOnlyList<DomainEventParticipant> participants;
+
+    public override DomainEventType EventType => DomainEventType.TravelPartyArrived;
+    public string TravelPartyId => travelPartyId;
+    public string OriginLocationRuntimeId => originLocationRuntimeId;
+    public string DestinationLocationRuntimeId => destinationLocationRuntimeId;
+    public string RouteRuntimeId => routeRuntimeId;
+    public int TravelDaysTotal => travelDaysTotal;
+    public IReadOnlyList<string> TravelerRuntimeIds => travelerRuntimeIds;
+    public IReadOnlyList<string> EscortRuntimeIds => escortRuntimeIds;
+
+    public TravelPartyArrivedEvent(
+        string eventId,
+        long absoluteDay,
+        long recordSequence,
+        string travelPartyId,
+        string originLocationRuntimeId,
+        string destinationLocationRuntimeId,
+        string routeRuntimeId,
+        int travelDaysTotal,
+        IEnumerable<string> travelerRuntimeIds,
+        IEnumerable<string> escortRuntimeIds,
+        string originDecisionId = null)
+        : base(eventId, absoluteDay, recordSequence, originDecisionId)
+    {
+        this.travelPartyId = TravelPartyEventData.RequireId(travelPartyId, nameof(travelPartyId));
+        this.originLocationRuntimeId = TravelPartyEventData.RequireId(originLocationRuntimeId, nameof(originLocationRuntimeId));
+        this.destinationLocationRuntimeId = TravelPartyEventData.RequireId(destinationLocationRuntimeId, nameof(destinationLocationRuntimeId));
+        this.routeRuntimeId = TravelPartyEventData.RequireId(routeRuntimeId, nameof(routeRuntimeId));
+
+        if (travelDaysTotal <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(travelDaysTotal));
+        }
+
+        this.travelDaysTotal = travelDaysTotal;
+        this.travelerRuntimeIds = TravelPartyEventData.CaptureIds(travelerRuntimeIds, nameof(travelerRuntimeIds));
+        this.escortRuntimeIds = TravelPartyEventData.CaptureIds(escortRuntimeIds, nameof(escortRuntimeIds));
+        if (this.travelerRuntimeIds.Count == 0)
+        {
+            throw new ArgumentException("Travel party event requires at least one traveler.", nameof(travelerRuntimeIds));
+        }
+        participants = TravelPartyEventData.BuildParticipants(this.travelerRuntimeIds, this.escortRuntimeIds);
+    }
+
+    public override IReadOnlyList<DomainEventParticipant> GetParticipants()
+    {
+        return participants;
+    }
+}
+
+internal static class TravelPartyEventData
+{
+    public static string RequireId(string value, string parameterName)
+    {
+        if (string.IsNullOrWhiteSpace(value) == true)
+        {
+            throw new ArgumentException("Travel party event requires stable IDs.", parameterName);
+        }
+
+        return value;
+    }
+
+    public static IReadOnlyList<string> CaptureIds(IEnumerable<string> source, string parameterName)
+    {
+        List<string> snapshot = new List<string>();
+        HashSet<string> uniqueIds = new HashSet<string>(StringComparer.Ordinal);
+
+        if (source != null)
+        {
+            foreach (string runtimeId in source)
+            {
+                if (string.IsNullOrWhiteSpace(runtimeId) == true || uniqueIds.Add(runtimeId) == false)
+                {
+                    throw new ArgumentException("Travel party event participant IDs must be non-empty and unique.", parameterName);
+                }
+
+                snapshot.Add(runtimeId);
+            }
+        }
+
+        return snapshot.AsReadOnly();
+    }
+
+    public static IReadOnlyList<DomainEventParticipant> BuildParticipants(
+        IReadOnlyList<string> travelerRuntimeIds,
+        IReadOnlyList<string> escortRuntimeIds)
+    {
+        List<DomainEventParticipant> snapshot = new List<DomainEventParticipant>();
+
+        foreach (string runtimeId in travelerRuntimeIds)
+        {
+            snapshot.Add(new DomainEventParticipant(runtimeId, DomainEventParticipantRole.Actor));
+        }
+
+        foreach (string runtimeId in escortRuntimeIds)
+        {
+            snapshot.Add(new DomainEventParticipant(runtimeId, DomainEventParticipantRole.Support));
+        }
+
+        return snapshot.AsReadOnly();
     }
 }
 

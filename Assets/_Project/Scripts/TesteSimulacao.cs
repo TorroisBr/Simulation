@@ -35,6 +35,8 @@ public class TesteSimulacao : MonoBehaviour
     private CrimeSystem crimeSystem;
     private NpcDecisionSystem npcDecisionSystem;
     private TravelSystem travelSystem;
+    private TravelPartyStore travelPartyStore;
+    private TravelPartySystem travelPartySystem;
     private MerchantSystem merchantSystem;
     private CommercialKnowledgeSharingSystem commercialKnowledgeSharingSystem;
     private SimulationLogger logger;
@@ -52,8 +54,15 @@ public class TesteSimulacao : MonoBehaviour
     public NpcDecisionStore Decisions => decisionStore;
     public NpcChronicleService NpcChronicles => npcChronicleService;
     public NpcChronicleFormatter ChronicleFormatter => npcChronicleFormatter;
+    public TravelPartyStore TravelParties => travelPartyStore;
+    public TravelPartySystem GroupTravel => travelPartySystem;
     public long CurrentDay => simulationTime.AbsoluteDay;
     public SimulationDate CurrentDate => calendarDefinition.GetDate(CurrentDay);
+
+    public bool TryStartTravelParty(ActionExecutionContext context)
+    {
+        return travelPartySystem != null && travelPartySystem.TryStartTravelParty(context);
+    }
 
     public void Start()
     {
@@ -235,7 +244,13 @@ public class TesteSimulacao : MonoBehaviour
                 TryExecuteCurrentAction(npcRuntime);
             }
 
-            IReadOnlyList<NpcRuntime> arrivedNpcs = travelSystem.AdvanceTravels(NpcRuntimeList);
+            List<NpcRuntime> arrivedNpcs = new List<NpcRuntime>();
+            if (travelPartySystem != null)
+            {
+                arrivedNpcs.AddRange(travelPartySystem.AdvanceParties());
+            }
+
+            arrivedNpcs.AddRange(travelSystem.AdvanceTravels(NpcRuntimeList));
 
             foreach (NpcRuntime arrivedNpc in arrivedNpcs)
             {
@@ -800,6 +815,16 @@ public class TesteSimulacao : MonoBehaviour
         logger = logger ?? new SimulationLogger(simulationConfig != null ? simulationConfig.LogSettings : null);
         float travelCostPerDay = simulationConfig != null ? simulationConfig.travelCostPerDay : 0f;
         travelSystem = new TravelSystem(spatialNetwork, GetCityRuntimeByLocation, travelCostPerDay, domainEventRecorder, logger);
+        travelPartyStore = new TravelPartyStore();
+        travelPartySystem = new TravelPartySystem(
+            travelPartyStore,
+            runtimeIdAllocator,
+            runtimeIdentityRegistry,
+            travelSystem,
+            simulationTime,
+            recordSequence,
+            domainEventRecorder,
+            logger);
         justiceSystem = simulationConfig != null
             ? new JusticeSystem(simulationConfig.freeStatus, simulationConfig.wantedStatus, simulationConfig.arrestedStatus, simulationConfig.hiddenStatus, domainEventRecorder, logger)
             : null;

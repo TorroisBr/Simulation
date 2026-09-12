@@ -187,6 +187,11 @@ public static class SimulationTestFactory
             decisionRecorder);
     }
 
+    public static TravelPartyFixture CreateTravelPartyFixture(int routeTravelDays = 3)
+    {
+        return new TravelPartyFixture(routeTravelDays);
+    }
+
     public static void CleanupDefinitions()
     {
         for (int i = createdDefinitions.Count - 1; i >= 0; i--)
@@ -256,12 +261,12 @@ public sealed class ThreeCityFixture
     public SpatialNetworkRuntime Network { get; }
     public Dictionary<SpatialLocationRuntime, CityRuntime> CitiesByLocation { get; }
 
-    public ThreeCityFixture(bool includeRouteAC = true)
+    public ThreeCityFixture(bool includeRouteAC = true, int routeABTravelDays = 1)
     {
         A = SimulationTestFactory.CreateCity("city-a", "location-a");
         B = SimulationTestFactory.CreateCity("city-b", "location-b");
         C = SimulationTestFactory.CreateCity("city-c", "location-c");
-        RouteAB = SimulationTestFactory.CreateRoute("route-a-b", A, B, 1);
+        RouteAB = SimulationTestFactory.CreateRoute("route-a-b", A, B, routeABTravelDays);
         RouteAC = SimulationTestFactory.CreateRoute("route-a-c", A, C, 2);
         IdentityRegistry = new RuntimeIdentityRegistry();
         CitiesByLocation = new Dictionary<SpatialLocationRuntime, CityRuntime>
@@ -284,5 +289,59 @@ public sealed class ThreeCityFixture
             1f,
             eventRecorder,
             null);
+    }
+}
+
+public sealed class TravelPartyFixture
+{
+    public ThreeCityFixture World { get; }
+    public RecordFixture Records { get; }
+    public TravelSystem Travel { get; }
+    public TravelPartyStore Parties { get; }
+    public TravelPartySystem System { get; }
+    public NpcRuntime Bruno { get; }
+    public NpcRuntime Caio { get; }
+    public NpcRuntime Marta { get; }
+    public IReadOnlyList<NpcRuntime> Members { get; }
+
+    public TravelPartyFixture(int routeTravelDays = 3)
+    {
+        World = new ThreeCityFixture(true, routeTravelDays);
+        Records = SimulationTestFactory.CreateRecordFixture();
+        Travel = World.CreateTravelSystem(Records.Time, Records.EventRecorder);
+        Parties = new TravelPartyStore();
+        System = new TravelPartySystem(
+            Parties,
+            Records.Allocator,
+            World.IdentityRegistry,
+            Travel,
+            Records.Time,
+            Records.Sequence,
+            Records.EventRecorder);
+
+        Bruno = CreateMember("bruno");
+        Caio = CreateMember("caio");
+        Marta = CreateMember("marta");
+        Members = new[] { Bruno, Caio, Marta };
+    }
+
+    private NpcRuntime CreateMember(string definitionId)
+    {
+        NpcData definition = SimulationTestFactory.CreateNpc(definitionId, NpcJobType.Merchant);
+        NpcRuntime member = new NpcRuntime(
+            Records.Allocator.AllocateNpcId(),
+            definition,
+            World.A,
+            100f);
+        AssertRegister(World.IdentityRegistry.RegisterNpc(member), definitionId);
+        return member;
+    }
+
+    private static void AssertRegister(bool registered, string definitionId)
+    {
+        if (registered == false)
+        {
+            throw new InvalidOperationException("Could not register travel party fixture member '" + definitionId + "'.");
+        }
     }
 }

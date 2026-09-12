@@ -17,6 +17,7 @@ public class NpcRuntime
     [SerializeField]private int travelDaysRemaining;
     [SerializeField]private bool travelStartedToday;
     [SerializeField]private string travelOriginDecisionId;
+    [SerializeField]private string activeTravelPartyId;
     [SerializeField]private int hiddenDaysRemaining;
     [SerializeField]private MerchantTradePlanRuntime merchantTradePlan = new MerchantTradePlanRuntime();
     [SerializeField]private NpcTravelPlanRuntime travelPlan = new NpcTravelPlanRuntime();
@@ -36,6 +37,7 @@ public class NpcRuntime
     public int TravelDaysRemaining => travelDaysRemaining;
     public bool TravelStartedToday => travelStartedToday;
     public string TravelOriginDecisionId => travelOriginDecisionId;
+    public string ActiveTravelPartyId => activeTravelPartyId;
     public bool IsTraveling => destinationCity != null && travelDaysRemaining > 0;
     public int HiddenDaysRemaining => hiddenDaysRemaining;
     public bool IsHidden => hiddenDaysRemaining > 0;
@@ -136,7 +138,7 @@ public class NpcRuntime
 
     public bool StartTravel(CityRuntime destination, int travelDays, string originDecisionId = null)
     {
-        if (destination == null || IsTraveling == true)
+        if (destination == null || IsTraveling == true || string.IsNullOrWhiteSpace(activeTravelPartyId) == false)
         {
             return false;
         }
@@ -151,6 +153,11 @@ public class NpcRuntime
         travelStartedToday = true;
         travelOriginDecisionId = string.IsNullOrWhiteSpace(originDecisionId) == true ? null : originDecisionId;
         return true;
+    }
+
+    public void SetActiveTravelPartyId(string travelPartyId)
+    {
+        activeTravelPartyId = string.IsNullOrWhiteSpace(travelPartyId) == true ? null : travelPartyId;
     }
 
     public void ClearTravelStartedToday()
@@ -181,6 +188,28 @@ public class NpcRuntime
         if (arrivedCity != null)
         {
             arrivedCity.AddImportantNpc(this);
+        }
+
+        return true;
+    }
+
+    public bool CancelTravel(CityRuntime originCity)
+    {
+        if (IsTraveling == false)
+        {
+            return false;
+        }
+
+        destinationCity = null;
+        travelDaysRemaining = 0;
+        travelStartedToday = false;
+        travelOriginDecisionId = null;
+        activeTravelPartyId = null;
+
+        if (originCity != null)
+        {
+            originCity.AddImportantNpc(this);
+            currentCity = originCity;
         }
 
         return true;

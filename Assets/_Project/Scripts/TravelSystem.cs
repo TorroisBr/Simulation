@@ -9,6 +9,7 @@ public class TravelSystem
     private readonly float travelCostPerDay;
     private readonly DomainEventRecorder domainEventRecorder;
     private readonly SimulationLogger logger;
+    private TravelPartyStore travelPartyStore;
 
     public TravelSystem(
         SpatialNetworkRuntime spatialNetwork,
@@ -33,9 +34,18 @@ public class TravelSystem
         this.logger = logger ?? new SimulationLogger(null);
     }
 
+    public void AttachTravelPartyStore(TravelPartyStore store)
+    {
+        travelPartyStore = store;
+    }
+
     public bool TryStartTravel(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime)
     {
-        if (npcRuntime == null || npcRuntime.CurrentCity == null || actionRuntime == null || actionRuntime.TargetCity == null)
+        if (npcRuntime == null
+            || npcRuntime.CurrentCity == null
+            || actionRuntime == null
+            || actionRuntime.TargetCity == null
+            || IsManagedByTravelParty(npcRuntime))
         {
             return false;
         }
@@ -88,7 +98,11 @@ public class TravelSystem
         travelDays = -1;
         travelCost = -1f;
 
-        if (npcRuntime == null || npcRuntime.CurrentCity == null || targetCity == null || npcRuntime.IsTraveling == true)
+        if (npcRuntime == null
+            || npcRuntime.CurrentCity == null
+            || targetCity == null
+            || npcRuntime.IsTraveling == true
+            || IsManagedByTravelParty(npcRuntime))
         {
             return false;
         }
@@ -115,7 +129,7 @@ public class TravelSystem
 
         foreach (NpcRuntime npcRuntime in npcRuntimeList)
         {
-            if (npcRuntime == null || npcRuntime.IsTraveling == false)
+            if (npcRuntime == null || npcRuntime.IsTraveling == false || IsManagedByTravelParty(npcRuntime))
             {
                 continue;
             }
@@ -328,6 +342,22 @@ public class TravelSystem
         }
 
         return spatialNetwork.TryGetSingleDirectRoute(originCity.Location, targetCity.Location, out route);
+    }
+
+    private bool IsManagedByTravelParty(NpcRuntime npcRuntime)
+    {
+        if (npcRuntime == null)
+        {
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(npcRuntime.ActiveTravelPartyId) == false)
+        {
+            return true;
+        }
+
+        return travelPartyStore != null
+            && travelPartyStore.TryGetPartyForNpc(npcRuntime.RuntimeId, out _);
     }
 
 }

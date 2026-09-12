@@ -11,6 +11,7 @@ public sealed class RuntimeIdAllocator
     private long nextEventSequence = 1;
     private long nextDirectiveSequence = 1;
     private long nextDecisionSequence = 1;
+    private long nextTravelPartySequence = 1;
 
     public string AllocateNpcId()
     {
@@ -45,6 +46,11 @@ public sealed class RuntimeIdAllocator
     public string AllocateDecisionId()
     {
         return Allocate("decision", ref nextDecisionSequence);
+    }
+
+    public string AllocateTravelPartyId()
+    {
+        return Allocate("travel-party", ref nextTravelPartySequence);
     }
 
     private static string Allocate(string prefix, ref long nextSequence)

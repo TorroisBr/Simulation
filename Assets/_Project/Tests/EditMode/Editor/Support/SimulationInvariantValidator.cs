@@ -4,6 +4,81 @@ using NUnit.Framework;
 
 public static class SimulationInvariantValidator
 {
+    public static void ValidateActionExecution(
+        ActionExecutionContext context,
+        ActionParticipationRequirements requirements)
+    {
+        Assert.That(ActionExecutionValidator.TryValidate(context, requirements, out string reason), Is.True, reason);
+    }
+
+    public static void ValidateTravelParty(
+        TravelPartyRuntime party,
+        RuntimeIdentityRegistry registry)
+    {
+        Assert.That(party, Is.Not.Null);
+        Assert.That(party.TravelPartyId, Is.Not.Null.And.Not.Empty);
+        Assert.That(party.OriginLocationRuntimeId, Is.Not.Null.And.Not.Empty);
+        Assert.That(party.DestinationLocationRuntimeId, Is.Not.Null.And.Not.Empty);
+        Assert.That(party.RouteRuntimeId, Is.Not.Null.And.Not.Empty);
+        Assert.That(party.TravelDaysTotal, Is.GreaterThan(0));
+        Assert.That(party.TravelerRuntimeIds, Is.Not.Null);
+        Assert.That(party.TravelerRuntimeIds.Count, Is.GreaterThan(0));
+        Assert.That(party.EscortRuntimeIds, Is.Not.Null);
+        Assert.That(party.MemberRuntimeIds, Is.Not.Null);
+        Assert.That(party.MemberCosts, Is.Not.Null);
+        Assert.That(party.MemberCosts.Count, Is.EqualTo(party.MemberRuntimeIds.Count));
+
+        Assert.That(registry.TryGetLocation(party.OriginLocationRuntimeId, out _), Is.True);
+        Assert.That(registry.TryGetLocation(party.DestinationLocationRuntimeId, out _), Is.True);
+        Assert.That(registry.TryGetRoute(party.RouteRuntimeId, out _), Is.True);
+
+        HashSet<string> memberIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (string runtimeId in party.MemberRuntimeIds)
+        {
+            Assert.That(runtimeId, Is.Not.Null.And.Not.Empty);
+            Assert.That(memberIds.Add(runtimeId), Is.True);
+            Assert.That(registry.TryGetNpc(runtimeId, out NpcRuntime npc), Is.True);
+            Assert.That(npc, Is.Not.Null);
+            Assert.That(npc.ActiveTravelPartyId, Is.EqualTo(party.TravelPartyId));
+            Assert.That(npc.IsTraveling, Is.True);
+        }
+
+        HashSet<string> costIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (TravelPartyMemberCost cost in party.MemberCosts)
+        {
+            Assert.That(cost, Is.Not.Null);
+            Assert.That(memberIds.Contains(cost.RuntimeId), Is.True);
+            Assert.That(costIds.Add(cost.RuntimeId), Is.True);
+            Assert.That(cost.Amount, Is.GreaterThanOrEqualTo(0f));
+        }
+
+        if (string.IsNullOrWhiteSpace(party.OriginDecisionId) == false)
+        {
+            Assert.That(party.OriginDecisionId, Is.Not.Empty);
+        }
+    }
+
+    public static void ValidateTravelParties(
+        TravelPartyStore store,
+        RuntimeIdentityRegistry registry)
+    {
+        Assert.That(store, Is.Not.Null);
+        Assert.That(store.ActiveParties, Is.Not.Null);
+        HashSet<string> partyIds = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (TravelPartyRuntime party in store.ActiveParties)
+        {
+            ValidateTravelParty(party, registry);
+            Assert.That(partyIds.Add(party.TravelPartyId), Is.True);
+
+            foreach (string runtimeId in party.MemberRuntimeIds)
+            {
+                Assert.That(store.TryGetPartyForNpc(runtimeId, out TravelPartyRuntime indexed), Is.True);
+                Assert.That(indexed, Is.SameAs(party));
+            }
+        }
+    }
+
     public static void ValidateCommercialObservation(CommercialMarketObservation observation)
     {
         Assert.That(observation, Is.Not.Null);
