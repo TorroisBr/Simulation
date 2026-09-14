@@ -78,11 +78,13 @@ public class CityRuntime
             : new MarketRuntime(new List<MarketItemConfig>(), this.marketCounterparty);
     }
 
-    public void SimulateProductionDay()
+    public IReadOnlyList<CityProductionResult> SimulateProductionDay()
     {
+        List<CityProductionResult> results = new List<CityProductionResult>();
+
         if (cityData == null || cityData.productionConfigs == null)
         {
-            return;
+            return results.AsReadOnly();
         }
 
         foreach (CityProductionConfig production in cityData.productionConfigs)
@@ -92,9 +94,20 @@ public class CityRuntime
                 continue;
             }
 
-            Market.AddStock(production.item, production.amountPerDay);
-            logger?.Log(SimulationLogCategory.EconomyProduction, $"{CityName} produziu {production.amountPerDay} {production.item.itemName}");
+            int produced = Market.AddStock(production.item, production.amountPerDay);
+            results.Add(new CityProductionResult(
+                RuntimeId,
+                production.item.DefinitionId,
+                produced,
+                Market.StockOwnerRuntimeId));
+
+            if (produced > 0)
+            {
+                logger?.Log(SimulationLogCategory.EconomyProduction, $"{CityName} produziu {produced} {production.item.itemName}");
+            }
         }
+
+        return results.AsReadOnly();
     }
 
     public void SimulateConsumptionDay()

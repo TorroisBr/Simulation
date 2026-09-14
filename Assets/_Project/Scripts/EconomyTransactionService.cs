@@ -50,6 +50,8 @@ public sealed class EconomyTransactionResult
     private readonly float totalPrice;
     private readonly string sourceRuntimeId;
     private readonly string destinationRuntimeId;
+    private readonly string itemSourceRuntimeId;
+    private readonly string itemDestinationRuntimeId;
     private readonly string buyerRuntimeId;
     private readonly string sellerRuntimeId;
     private readonly string actorRuntimeId;
@@ -70,6 +72,8 @@ public sealed class EconomyTransactionResult
     public float TotalPrice => totalPrice;
     public string SourceRuntimeId => sourceRuntimeId;
     public string DestinationRuntimeId => destinationRuntimeId;
+    public string ItemSourceRuntimeId => itemSourceRuntimeId;
+    public string ItemDestinationRuntimeId => itemDestinationRuntimeId;
     public string BuyerRuntimeId => buyerRuntimeId;
     public string SellerRuntimeId => sellerRuntimeId;
     public string ActorRuntimeId => actorRuntimeId;
@@ -91,7 +95,9 @@ public sealed class EconomyTransactionResult
         string buyerRuntimeId,
         string sellerRuntimeId,
         string actorRuntimeId,
-        IEnumerable<string> participantRuntimeIds)
+        IEnumerable<string> participantRuntimeIds,
+        string itemSourceRuntimeId,
+        string itemDestinationRuntimeId)
     {
         this.success = success;
         this.transactionType = transactionType;
@@ -105,6 +111,8 @@ public sealed class EconomyTransactionResult
         this.totalPrice = totalPrice;
         this.sourceRuntimeId = sourceRuntimeId;
         this.destinationRuntimeId = destinationRuntimeId;
+        this.itemSourceRuntimeId = itemSourceRuntimeId;
+        this.itemDestinationRuntimeId = itemDestinationRuntimeId;
         this.buyerRuntimeId = buyerRuntimeId;
         this.sellerRuntimeId = sellerRuntimeId;
         this.actorRuntimeId = actorRuntimeId;
@@ -139,7 +147,9 @@ public sealed class EconomyTransactionResult
         string buyerRuntimeId = null,
         string sellerRuntimeId = null,
         string actorRuntimeId = null,
-        IEnumerable<string> participantRuntimeIds = null)
+        IEnumerable<string> participantRuntimeIds = null,
+        string itemSourceRuntimeId = null,
+        string itemDestinationRuntimeId = null)
     {
         return new EconomyTransactionResult(
             true,
@@ -157,7 +167,9 @@ public sealed class EconomyTransactionResult
             buyerRuntimeId,
             sellerRuntimeId,
             actorRuntimeId,
-            participantRuntimeIds);
+            participantRuntimeIds,
+            itemSourceRuntimeId,
+            itemDestinationRuntimeId);
     }
 
     internal static EconomyTransactionResult CreateFailure(
@@ -169,7 +181,9 @@ public sealed class EconomyTransactionResult
         string buyerRuntimeId = null,
         string sellerRuntimeId = null,
         string actorRuntimeId = null,
-        IEnumerable<string> participantRuntimeIds = null)
+        IEnumerable<string> participantRuntimeIds = null,
+        string itemSourceRuntimeId = null,
+        string itemDestinationRuntimeId = null)
     {
         return new EconomyTransactionResult(
             false,
@@ -187,7 +201,9 @@ public sealed class EconomyTransactionResult
             buyerRuntimeId,
             sellerRuntimeId,
             actorRuntimeId,
-            participantRuntimeIds);
+            participantRuntimeIds,
+            itemSourceRuntimeId,
+            itemDestinationRuntimeId);
     }
 }
 
@@ -365,8 +381,12 @@ public sealed class EconomyTransactionService
             quantity,
             unitPrice,
             totalPrice,
+            sourceRuntimeId: buyer.RuntimeId,
+            destinationRuntimeId: seller.RuntimeId,
             buyerRuntimeId: buyer.RuntimeId,
-            sellerRuntimeId: seller.RuntimeId);
+            sellerRuntimeId: seller.RuntimeId,
+            itemSourceRuntimeId: seller.RuntimeId,
+            itemDestinationRuntimeId: buyer.RuntimeId);
     }
 
     public EconomyTransactionResult TryExecuteOpenMarketPurchase(
@@ -572,7 +592,9 @@ public sealed class EconomyTransactionService
             totalPrice,
             sourceRuntimeId: accountBacked == true ? npc.RuntimeId : null,
             destinationRuntimeId: accountBacked == true ? counterparty.CounterpartyRuntimeId : null,
-            actorRuntimeId: npc.RuntimeId);
+            actorRuntimeId: npc.RuntimeId,
+            itemSourceRuntimeId: counterparty.CounterpartyRuntimeId,
+            itemDestinationRuntimeId: npc.RuntimeId);
     }
 
     private EconomyTransactionResult ExecuteMarketSale(
@@ -757,7 +779,9 @@ public sealed class EconomyTransactionService
             totalPrice,
             sourceRuntimeId: accountBacked == true ? counterparty.CounterpartyRuntimeId : null,
             destinationRuntimeId: accountBacked == true ? npc.RuntimeId : null,
-            actorRuntimeId: npc.RuntimeId);
+            actorRuntimeId: npc.RuntimeId,
+            itemSourceRuntimeId: npc.RuntimeId,
+            itemDestinationRuntimeId: counterparty.CounterpartyRuntimeId);
     }
 
     public bool CanChargeTravel(NpcRuntime npc, float amount)

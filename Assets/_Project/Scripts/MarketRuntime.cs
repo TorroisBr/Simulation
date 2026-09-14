@@ -23,14 +23,20 @@ public class MarketItemRuntime
         UpdatePrice();
     }
 
-    public void AddAmount(int amountToAdd)
+    public bool AddAmount(int amountToAdd)
     {
         if (amountToAdd <= 0)
         {
-            return;
+            return false;
+        }
+
+        if (amount > int.MaxValue - amountToAdd)
+        {
+            return false;
         }
 
         amount += amountToAdd;
+        return true;
     }
 
     public bool RemoveAmount(int amountToRemove)
@@ -68,6 +74,7 @@ public class MarketRuntime
 
     public List<MarketItemRuntime> Items => items ?? (items = new List<MarketItemRuntime>());
     public MarketCounterpartyRuntime Counterparty => counterparty ?? (counterparty = MarketCounterpartyRuntime.CreateOpen());
+    public string StockOwnerRuntimeId => Counterparty.CounterpartyRuntimeId;
 
     public MarketRuntime()
     {
@@ -136,16 +143,26 @@ public class MarketRuntime
         return item != null ? new MarketItemRuntime(item, 0, 100).CurrentPrice : 0f;
     }
 
-    public void AddStock(ItemData item, int amount, int desiredAmount = 100)
+    public int AddStock(ItemData item, int amount, int desiredAmount = 100)
     {
         if (item == null || amount <= 0)
         {
-            return;
+            return 0;
+        }
+
+        if (CanAddStock(item, amount) == false)
+        {
+            return 0;
         }
 
         MarketItemRuntime marketItem = GetOrCreateItem(item, desiredAmount);
-        marketItem.AddAmount(amount);
+        if (marketItem.AddAmount(amount) == false)
+        {
+            return 0;
+        }
+
         marketItem.UpdatePrice();
+        return amount;
     }
 
     public bool CanAddStock(ItemData item, int amount)

@@ -181,8 +181,16 @@ public static class SimulationInvariantValidator
     public static void ValidateCityMarketCounterparty(CityRuntime city)
     {
         Assert.That(city, Is.Not.Null);
+        Assert.That(city.Market, Is.Not.Null);
         Assert.That(city.MarketCounterparty, Is.SameAs(city.Market.Counterparty));
         Assert.That(city.MarketCounterparty.CounterpartyRuntimeId, Is.EqualTo(city.RuntimeId));
+        Assert.That(city.Market.StockOwnerRuntimeId, Is.EqualTo(city.RuntimeId));
+
+        foreach (MarketItemRuntime item in city.Market.Items)
+        {
+            Assert.That(item, Is.Not.Null);
+            Assert.That(item.Amount, Is.GreaterThanOrEqualTo(0));
+        }
 
         if (city.MarketCounterparty.LiquidityMode == MarketLiquidityMode.Open)
         {
@@ -193,6 +201,16 @@ public static class SimulationInvariantValidator
             Assert.That(city.MarketCounterparty.MoneyAccount, Is.Not.Null);
             Assert.That(city.MarketCounterparty.MoneyAccount.Balance, Is.GreaterThanOrEqualTo(0f));
         }
+    }
+
+    public static void ValidateCityProductionResult(CityProductionResult result)
+    {
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.SettlementRuntimeId, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.StockOwnerRuntimeId, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.StockOwnerRuntimeId, Is.EqualTo(result.SettlementRuntimeId));
+        Assert.That(result.ItemDefinitionId, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.QuantityProduced, Is.GreaterThanOrEqualTo(0));
     }
 
     public static void ValidateSpatialKnowledge(
