@@ -103,12 +103,37 @@ public sealed class MerchantLiquidityTests
             fixture.City,
             100f);
         fixture.ObserveLiquidity(MarketLiquidityMode.AccountBacked, 0f, 0L);
+        fixture.Merchant.SetMerchantTradePlan(
+            fixture.Item,
+            fixture.City,
+            fixture.City,
+            5,
+            1f);
+
+        float sellerMoneyBefore = fixture.Merchant.Money;
+        float buyerMoneyBefore = localBuyer.Money;
+        int sellerInventoryBefore = fixture.Merchant.Inventory.GetAmount(fixture.Item);
+        int buyerInventoryBefore = localBuyer.Inventory.GetAmount(fixture.Item);
 
         NpcActionRuntime action = fixture.CreateSaleAction();
 
         Assert.That(action, Is.Not.Null);
         Assert.That(action.TargetNpc, Is.SameAs(localBuyer));
         Assert.That(action.Amount, Is.EqualTo(5));
+        Assert.That(fixture.Merchant.CommercialKnowledge.TryGetLiquidityObservation(
+            fixture.City.Location.RuntimeId,
+            out CommercialLiquidityObservation liquidity), Is.True);
+        Assert.That(liquidity.LiquidityMode, Is.EqualTo(MarketLiquidityMode.AccountBacked));
+        Assert.That(liquidity.ObservedPurchasingPower, Is.EqualTo(0f));
+
+        NpcActionResult result = fixture.System.TryExecuteAction(fixture.Merchant, action);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(localBuyer.Money, Is.LessThan(buyerMoneyBefore));
+        Assert.That(fixture.Merchant.Money, Is.GreaterThan(sellerMoneyBefore));
+        Assert.That(fixture.Merchant.Inventory.GetAmount(fixture.Item), Is.LessThan(sellerInventoryBefore));
+        Assert.That(localBuyer.Inventory.GetAmount(fixture.Item), Is.GreaterThan(buyerInventoryBefore));
+        Assert.That(fixture.City.MarketCounterparty.MoneyAccount.Balance, Is.EqualTo(0f));
     }
 
     [Test]
