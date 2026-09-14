@@ -79,6 +79,17 @@ public static class SimulationInvariantValidator
         }
     }
 
+    public static void ValidateExplorableSite(ExplorableSiteRuntime site)
+    {
+        Assert.That(site, Is.Not.Null);
+        Assert.That(site.RuntimeId, Is.Not.Null.And.Not.Empty);
+        Assert.That(site.Definition, Is.Not.Null);
+        Assert.That(site.DefinitionId, Is.Not.Null.And.Not.Empty);
+        Assert.That(site.Location, Is.Not.Null);
+        Assert.That(site.Location.RuntimeId, Is.Not.Null.And.Not.Empty);
+        Assert.That(site.RuntimeId, Is.Not.EqualTo(site.Location.RuntimeId));
+    }
+
     public static void ValidateTravelParties(
         TravelPartyStore store,
         RuntimeIdentityRegistry registry,

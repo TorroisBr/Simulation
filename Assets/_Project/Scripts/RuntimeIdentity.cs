@@ -13,6 +13,7 @@ public sealed class RuntimeIdAllocator
     private long nextDecisionSequence = 1;
     private long nextTravelPartySequence = 1;
     private long nextOrganizationSequence = 1;
+    private long nextExplorableSiteSequence = 1;
 
     public string AllocateNpcId()
     {
@@ -59,6 +60,11 @@ public sealed class RuntimeIdAllocator
         return Allocate("organization", ref nextOrganizationSequence);
     }
 
+    public string AllocateExplorableSiteId()
+    {
+        return Allocate("site", ref nextExplorableSiteSequence);
+    }
+
     private static string Allocate(string prefix, ref long nextSequence)
     {
         if (nextSequence == long.MaxValue)
@@ -78,6 +84,7 @@ public sealed class RuntimeIdentityRegistry
     private readonly Dictionary<string, CityRuntime> citiesByRuntimeId = new Dictionary<string, CityRuntime>(StringComparer.Ordinal);
     private readonly Dictionary<string, SpatialLocationRuntime> locationsByRuntimeId = new Dictionary<string, SpatialLocationRuntime>(StringComparer.Ordinal);
     private readonly Dictionary<string, SpatialRouteRuntime> routesByRuntimeId = new Dictionary<string, SpatialRouteRuntime>(StringComparer.Ordinal);
+    private readonly Dictionary<string, ExplorableSiteRuntime> explorableSitesByRuntimeId = new Dictionary<string, ExplorableSiteRuntime>(StringComparer.Ordinal);
     private readonly SimulationLogger logger;
 
     public RuntimeIdentityRegistry(SimulationLogger logger = null)
@@ -181,6 +188,30 @@ public sealed class RuntimeIdentityRegistry
         return true;
     }
 
+    public bool RegisterExplorableSite(ExplorableSiteRuntime site)
+    {
+        if (site == null)
+        {
+            logger.LogError("Cannot register ExplorableSite runtime identity: runtime instance is null.");
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(site.RuntimeId) == true)
+        {
+            logger.LogError("Cannot register ExplorableSite runtime identity: RuntimeId is empty.");
+            return false;
+        }
+
+        if (TryGetRegisteredType(site.RuntimeId, out string registeredType) == true)
+        {
+            logger.LogError($"Duplicate RuntimeId '{site.RuntimeId}' while registering ExplorableSite; it is already registered as {registeredType}.");
+            return false;
+        }
+
+        explorableSitesByRuntimeId.Add(site.RuntimeId, site);
+        return true;
+    }
+
     public bool TryGetNpc(string runtimeId, out NpcRuntime npcRuntime)
     {
         if (string.IsNullOrWhiteSpace(runtimeId) == false && npcsByRuntimeId.TryGetValue(runtimeId, out npcRuntime) == true)
@@ -231,6 +262,20 @@ public sealed class RuntimeIdentityRegistry
         return false;
     }
 
+    public bool TryGetExplorableSite(string runtimeId, out ExplorableSiteRuntime site)
+    {
+        if (string.IsNullOrWhiteSpace(runtimeId) == false
+            && explorableSitesByRuntimeId.TryGetValue(runtimeId, out site) == true)
+        {
+            return true;
+        }
+
+        site = null;
+
+        LogResolutionFailure("ExplorableSite", runtimeId);
+        return false;
+    }
+
     private bool TryGetRegisteredType(string runtimeId, out string registeredType)
     {
         if (npcsByRuntimeId.ContainsKey(runtimeId) == true)
@@ -254,6 +299,12 @@ public sealed class RuntimeIdentityRegistry
         if (routesByRuntimeId.ContainsKey(runtimeId) == true)
         {
             registeredType = "Route";
+            return true;
+        }
+
+        if (explorableSitesByRuntimeId.ContainsKey(runtimeId) == true)
+        {
+            registeredType = "ExplorableSite";
             return true;
         }
 

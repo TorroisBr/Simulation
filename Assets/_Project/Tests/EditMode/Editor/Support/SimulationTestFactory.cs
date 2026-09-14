@@ -51,6 +51,18 @@ public static class SimulationTestFactory
         return status;
     }
 
+    public static ExplorableSiteData CreateExplorableSite(
+        string id,
+        ExplorableSiteKind kind = ExplorableSiteKind.Generic,
+        string siteName = null)
+    {
+        ExplorableSiteData site = Track(ScriptableObject.CreateInstance<ExplorableSiteData>());
+        site.id = id;
+        site.siteName = siteName ?? id + " display";
+        site.kind = kind;
+        return site;
+    }
+
     public static CityData CreateCityData(string id, params MarketItemConfig[] marketItems)
     {
         CityData city = Track(ScriptableObject.CreateInstance<CityData>());
