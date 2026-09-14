@@ -11,7 +11,7 @@ public class NpcRuntime
 	[SerializeField]private NpcActionData currentAction;
     [NonSerialized]private NpcActionRuntime currentActionRuntime;
     [SerializeField]private InventoryRuntime inventory = new InventoryRuntime();
-    [SerializeField]private float money;
+    [SerializeField]private MoneyAccountRuntime moneyAccount = new MoneyAccountRuntime();
     [NonSerialized]private CityRuntime currentCity;
     [NonSerialized]private CityRuntime destinationCity;
     [SerializeField]private int travelDaysRemaining;
@@ -31,7 +31,8 @@ public class NpcRuntime
     public NpcActionData CurrentAction => currentAction;
     public NpcActionRuntime CurrentActionRuntime => currentActionRuntime;
     public InventoryRuntime Inventory => inventory ?? (inventory = new InventoryRuntime());
-    public float Money => money;
+    public MoneyAccountRuntime MoneyAccount => moneyAccount;
+    public float Money => MoneyAccount.Balance;
     public CityRuntime CurrentCity => currentCity;
     public CityRuntime DestinationCity => destinationCity;
     public int TravelDaysRemaining => travelDaysRemaining;
@@ -62,7 +63,7 @@ public class NpcRuntime
 		this.runtimeId = runtimeId;
 		this.npcData = npcData;
         spatialKnowledge = new SpatialKnowledgeRuntime(runtimeId);
-        money = Mathf.Max(0f, initialMoney);
+        moneyAccount = new MoneyAccountRuntime(initialMoney);
 
         if (npcData != null && npcData.statusPadrao != null)
         {
@@ -112,28 +113,12 @@ public class NpcRuntime
 
     public void AddMoney(float amount)
     {
-        if (amount <= 0f)
-        {
-            return;
-        }
-
-        money += amount;
+        MoneyAccount.TryCredit(amount);
     }
 
     public bool TrySpendMoney(float amount)
     {
-        if (amount <= 0f)
-        {
-            return true;
-        }
-
-        if (money < amount)
-        {
-            return false;
-        }
-
-        money -= amount;
-        return true;
+        return MoneyAccount.TryDebit(amount);
     }
 
     public bool StartTravel(CityRuntime destination, int travelDays, string originDecisionId = null)
