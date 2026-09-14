@@ -30,6 +30,8 @@ public enum EconomyTransactionFailureReason
     InsufficientInventory,
     InventoryCapacity,
     MarketCapacity,
+    CounterpartyCreditCapacity,
+    InsufficientCounterpartyFunds,
     CreditRejected,
     TransactionCommitFailed
 }
@@ -373,8 +375,56 @@ public sealed class EconomyTransactionService
         ItemData item,
         int requestedQuantity)
     {
+        return ExecuteMarketPurchase(npc, market, item, requestedQuantity, MarketLiquidityMode.Open);
+    }
+
+    public EconomyTransactionResult TryExecuteOpenMarketSale(
+        NpcRuntime npc,
+        MarketRuntime market,
+        ItemData item,
+        int requestedQuantity)
+    {
+        return ExecuteMarketSale(npc, market, item, requestedQuantity, MarketLiquidityMode.Open);
+    }
+
+    public EconomyTransactionResult TryExecuteMarketPurchase(
+        NpcRuntime npc,
+        MarketRuntime market,
+        ItemData item,
+        int requestedQuantity)
+    {
+        return ExecuteMarketPurchase(
+            npc,
+            market,
+            item,
+            requestedQuantity,
+            market != null ? market.Counterparty.LiquidityMode : MarketLiquidityMode.Open);
+    }
+
+    public EconomyTransactionResult TryExecuteMarketSale(
+        NpcRuntime npc,
+        MarketRuntime market,
+        ItemData item,
+        int requestedQuantity)
+    {
+        return ExecuteMarketSale(
+            npc,
+            market,
+            item,
+            requestedQuantity,
+            market != null ? market.Counterparty.LiquidityMode : MarketLiquidityMode.Open);
+    }
+
+    private EconomyTransactionResult ExecuteMarketPurchase(
+        NpcRuntime npc,
+        MarketRuntime market,
+        ItemData item,
+        int requestedQuantity,
+        MarketLiquidityMode liquidityMode)
+    {
         EconomyTransactionType transactionType = EconomyTransactionType.OpenMarketPurchase;
-        MoneyEffect moneyEffect = MoneyEffect.ExplicitSink;
+        bool accountBacked = liquidityMode == MarketLiquidityMode.AccountBacked;
+        MoneyEffect moneyEffect = accountBacked ? MoneyEffect.Transfer : MoneyEffect.ExplicitSink;
 
         if (npc == null || market == null || item == null)
         {
@@ -383,6 +433,17 @@ public sealed class EconomyTransactionService
                 moneyEffect,
                 EconomyTransactionFailureReason.InvalidInput,
                 actorRuntimeId: npc != null ? npc.RuntimeId : null);
+        }
+
+        MarketCounterpartyRuntime counterparty = market.Counterparty;
+
+        if (accountBacked == true && (counterparty == null || counterparty.MoneyAccount == null))
+        {
+            return EconomyTransactionResult.CreateFailure(
+                transactionType,
+                moneyEffect,
+                EconomyTransactionFailureReason.InvalidInput,
+                actorRuntimeId: npc.RuntimeId);
         }
 
         if (requestedQuantity <= 0)
@@ -439,12 +500,22 @@ public sealed class EconomyTransactionService
 
         float totalPrice = unitPrice * quantity;
 
-        if (npc.MoneyAccount.CanDebit(totalPrice) == false)
+        if (IsValidNonNegativeFiniteAmount(totalPrice) == false
+            || npc.MoneyAccount.CanDebit(totalPrice) == false)
         {
             return EconomyTransactionResult.CreateFailure(
                 transactionType,
                 moneyEffect,
                 EconomyTransactionFailureReason.InsufficientFunds,
+                actorRuntimeId: npc.RuntimeId);
+        }
+
+        if (accountBacked == true && counterparty.MoneyAccount.CanCredit(totalPrice) == false)
+        {
+            return EconomyTransactionResult.CreateFailure(
+                transactionType,
+                moneyEffect,
+                EconomyTransactionFailureReason.CounterpartyCreditCapacity,
                 actorRuntimeId: npc.RuntimeId);
         }
 
@@ -457,7 +528,11 @@ public sealed class EconomyTransactionService
                 actorRuntimeId: npc.RuntimeId);
         }
 
-        if (npc.MoneyAccount.TryDebit(totalPrice) == false)
+        bool moneyCommitted = accountBacked == true
+            ? TryCommitMoneyTransfer(npc.MoneyAccount, counterparty.MoneyAccount, totalPrice)
+            : npc.MoneyAccount.TryDebit(totalPrice);
+
+        if (moneyCommitted == false)
         {
             return EconomyTransactionResult.CreateFailure(
                 transactionType,
@@ -468,7 +543,15 @@ public sealed class EconomyTransactionService
 
         if (market.RemoveStockUpTo(item, quantity) != quantity)
         {
-            npc.MoneyAccount.TryCredit(totalPrice);
+            if (accountBacked == true)
+            {
+                TryCommitMoneyTransfer(counterparty.MoneyAccount, npc.MoneyAccount, totalPrice);
+            }
+            else
+            {
+                npc.MoneyAccount.TryCredit(totalPrice);
+            }
+
             return EconomyTransactionResult.CreateFailure(
                 transactionType,
                 moneyEffect,
@@ -487,17 +570,21 @@ public sealed class EconomyTransactionService
             quantity,
             unitPrice,
             totalPrice,
+            sourceRuntimeId: accountBacked == true ? npc.RuntimeId : null,
+            destinationRuntimeId: accountBacked == true ? counterparty.CounterpartyRuntimeId : null,
             actorRuntimeId: npc.RuntimeId);
     }
 
-    public EconomyTransactionResult TryExecuteOpenMarketSale(
+    private EconomyTransactionResult ExecuteMarketSale(
         NpcRuntime npc,
         MarketRuntime market,
         ItemData item,
-        int requestedQuantity)
+        int requestedQuantity,
+        MarketLiquidityMode liquidityMode)
     {
         EconomyTransactionType transactionType = EconomyTransactionType.OpenMarketSale;
-        MoneyEffect moneyEffect = MoneyEffect.ExplicitSource;
+        bool accountBacked = liquidityMode == MarketLiquidityMode.AccountBacked;
+        MoneyEffect moneyEffect = accountBacked ? MoneyEffect.Transfer : MoneyEffect.ExplicitSource;
 
         if (npc == null || market == null || item == null)
         {
@@ -505,7 +592,18 @@ public sealed class EconomyTransactionService
                 transactionType,
                 moneyEffect,
                 EconomyTransactionFailureReason.InvalidInput,
-                sourceRuntimeId: npc != null ? npc.RuntimeId : null);
+                actorRuntimeId: npc != null ? npc.RuntimeId : null);
+        }
+
+        MarketCounterpartyRuntime counterparty = market.Counterparty;
+
+        if (accountBacked == true && (counterparty == null || counterparty.MoneyAccount == null))
+        {
+            return EconomyTransactionResult.CreateFailure(
+                transactionType,
+                moneyEffect,
+                EconomyTransactionFailureReason.InvalidInput,
+                actorRuntimeId: npc.RuntimeId);
         }
 
         if (requestedQuantity <= 0)
@@ -514,7 +612,7 @@ public sealed class EconomyTransactionService
                 transactionType,
                 moneyEffect,
                 EconomyTransactionFailureReason.InvalidQuantity,
-                sourceRuntimeId: npc.RuntimeId);
+                actorRuntimeId: npc.RuntimeId);
         }
 
         int availableQuantity = npc.Inventory.GetAmount(item);
@@ -526,7 +624,7 @@ public sealed class EconomyTransactionService
                 transactionType,
                 moneyEffect,
                 EconomyTransactionFailureReason.InsufficientInventory,
-                sourceRuntimeId: npc.RuntimeId);
+                actorRuntimeId: npc.RuntimeId);
         }
 
         float salePrice = market.GetPriceForSale(item);
@@ -537,7 +635,7 @@ public sealed class EconomyTransactionService
                 transactionType,
                 moneyEffect,
                 EconomyTransactionFailureReason.InvalidPrice,
-                sourceRuntimeId: npc.RuntimeId);
+                actorRuntimeId: npc.RuntimeId);
         }
 
         float unitPrice = Mathf.Max(0.01f, salePrice);
@@ -548,7 +646,22 @@ public sealed class EconomyTransactionService
                 transactionType,
                 moneyEffect,
                 EconomyTransactionFailureReason.InvalidPrice,
-                sourceRuntimeId: npc.RuntimeId);
+                actorRuntimeId: npc.RuntimeId);
+        }
+
+        if (accountBacked == true)
+        {
+            int affordableQuantity = GetAffordableQuantity(counterparty.MoneyAccount.Balance, unitPrice);
+            quantity = Mathf.Min(quantity, affordableQuantity);
+
+            if (quantity <= 0)
+            {
+                return EconomyTransactionResult.CreateFailure(
+                    transactionType,
+                    moneyEffect,
+                    EconomyTransactionFailureReason.InsufficientCounterpartyFunds,
+                    actorRuntimeId: npc.RuntimeId);
+            }
         }
 
         float totalPrice = unitPrice * quantity;
@@ -559,16 +672,36 @@ public sealed class EconomyTransactionService
                 transactionType,
                 moneyEffect,
                 EconomyTransactionFailureReason.InvalidPrice,
-                sourceRuntimeId: npc.RuntimeId);
+                actorRuntimeId: npc.RuntimeId);
         }
 
-        if (npc.MoneyAccount.CanCredit(totalPrice) == false)
+        if (accountBacked == true)
+        {
+            if (counterparty.MoneyAccount.CanDebit(totalPrice) == false)
+            {
+                return EconomyTransactionResult.CreateFailure(
+                    transactionType,
+                    moneyEffect,
+                    EconomyTransactionFailureReason.InsufficientCounterpartyFunds,
+                    actorRuntimeId: npc.RuntimeId);
+            }
+
+            if (npc.MoneyAccount.CanCredit(totalPrice) == false)
+            {
+                return EconomyTransactionResult.CreateFailure(
+                    transactionType,
+                    moneyEffect,
+                    EconomyTransactionFailureReason.CreditRejected,
+                    actorRuntimeId: npc.RuntimeId);
+            }
+        }
+        else if (npc.MoneyAccount.CanCredit(totalPrice) == false)
         {
             return EconomyTransactionResult.CreateFailure(
                 transactionType,
                 moneyEffect,
                 EconomyTransactionFailureReason.CreditRejected,
-                sourceRuntimeId: npc.RuntimeId);
+                actorRuntimeId: npc.RuntimeId);
         }
 
         if (market.CanAddStock(item, quantity) == false)
@@ -577,30 +710,41 @@ public sealed class EconomyTransactionService
                 transactionType,
                 moneyEffect,
                 EconomyTransactionFailureReason.MarketCapacity,
-                sourceRuntimeId: npc.RuntimeId);
+                actorRuntimeId: npc.RuntimeId);
+        }
+
+        bool moneyCommitted = accountBacked == true
+            ? TryCommitMoneyTransfer(counterparty.MoneyAccount, npc.MoneyAccount, totalPrice)
+            : npc.MoneyAccount.TryCredit(totalPrice);
+
+        if (moneyCommitted == false)
+        {
+            return EconomyTransactionResult.CreateFailure(
+                transactionType,
+                moneyEffect,
+                EconomyTransactionFailureReason.TransactionCommitFailed,
+                actorRuntimeId: npc.RuntimeId);
         }
 
         if (npc.Inventory.RemoveItem(item, quantity) == false)
         {
+            if (accountBacked == true)
+            {
+                TryCommitMoneyTransfer(npc.MoneyAccount, counterparty.MoneyAccount, totalPrice);
+            }
+            else
+            {
+                npc.MoneyAccount.TryDebit(totalPrice);
+            }
+
             return EconomyTransactionResult.CreateFailure(
                 transactionType,
                 moneyEffect,
                 EconomyTransactionFailureReason.TransactionCommitFailed,
-                sourceRuntimeId: npc.RuntimeId);
+                actorRuntimeId: npc.RuntimeId);
         }
 
         market.AddStock(item, quantity);
-
-        if (npc.MoneyAccount.TryCredit(totalPrice) == false)
-        {
-            market.RemoveStockUpTo(item, quantity);
-            npc.Inventory.AddItem(item, quantity);
-            return EconomyTransactionResult.CreateFailure(
-                transactionType,
-                moneyEffect,
-                EconomyTransactionFailureReason.TransactionCommitFailed,
-                sourceRuntimeId: npc.RuntimeId);
-        }
 
         return EconomyTransactionResult.CreateSuccess(
             transactionType,
@@ -611,25 +755,9 @@ public sealed class EconomyTransactionService
             quantity,
             unitPrice,
             totalPrice,
-            sourceRuntimeId: npc.RuntimeId);
-    }
-
-    public EconomyTransactionResult TryExecuteMarketPurchase(
-        NpcRuntime npc,
-        MarketRuntime market,
-        ItemData item,
-        int requestedQuantity)
-    {
-        return TryExecuteOpenMarketPurchase(npc, market, item, requestedQuantity);
-    }
-
-    public EconomyTransactionResult TryExecuteMarketSale(
-        NpcRuntime npc,
-        MarketRuntime market,
-        ItemData item,
-        int requestedQuantity)
-    {
-        return TryExecuteOpenMarketSale(npc, market, item, requestedQuantity);
+            sourceRuntimeId: accountBacked == true ? counterparty.CounterpartyRuntimeId : null,
+            destinationRuntimeId: accountBacked == true ? npc.RuntimeId : null,
+            actorRuntimeId: npc.RuntimeId);
     }
 
     public bool CanChargeTravel(NpcRuntime npc, float amount)
@@ -842,19 +970,8 @@ public sealed class EconomyTransactionService
                 destinationRuntimeId);
         }
 
-        if (source.TryDebit(amount) == false)
+        if (TryCommitMoneyTransfer(source, destination, amount) == false)
         {
-            return EconomyTransactionResult.CreateFailure(
-                transactionType,
-                moneyEffect,
-                EconomyTransactionFailureReason.TransactionCommitFailed,
-                sourceRuntimeId,
-                destinationRuntimeId);
-        }
-
-        if (destination.TryCredit(amount) == false)
-        {
-            source.TryCredit(amount);
             return EconomyTransactionResult.CreateFailure(
                 transactionType,
                 moneyEffect,
@@ -870,6 +987,25 @@ public sealed class EconomyTransactionService
             totalPrice: amount,
             sourceRuntimeId: sourceRuntimeId,
             destinationRuntimeId: destinationRuntimeId);
+    }
+
+    private static bool TryCommitMoneyTransfer(
+        MoneyAccountRuntime source,
+        MoneyAccountRuntime destination,
+        float amount)
+    {
+        if (source.TryDebit(amount) == false)
+        {
+            return false;
+        }
+
+        if (destination.TryCredit(amount) == true)
+        {
+            return true;
+        }
+
+        source.TryCredit(amount);
+        return false;
     }
 
     private static int GetAffordableQuantity(float balance, float unitPrice)

@@ -327,7 +327,7 @@ public class MerchantSystem : INpcActionProvider
             return false;
         }
 
-        EconomyTransactionResult transaction = transactionService.TryExecuteOpenMarketPurchase(
+        EconomyTransactionResult transaction = transactionService.TryExecuteMarketPurchase(
             npcRuntime,
             npcRuntime.CurrentCity.Market,
             actionRuntime.TargetItem,
@@ -442,7 +442,7 @@ public class MerchantSystem : INpcActionProvider
     private bool TryExecuteSellGoodsToMarket(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime, bool saleBelongsToPlan, MerchantTradePlanRuntime plan, float planPurchasePrice)
     {
         float averageUnitCost = npcRuntime.Inventory.GetAverageUnitCost(actionRuntime.TargetItem);
-        EconomyTransactionResult transaction = transactionService.TryExecuteOpenMarketSale(
+        EconomyTransactionResult transaction = transactionService.TryExecuteMarketSale(
             npcRuntime,
             npcRuntime.CurrentCity.Market,
             actionRuntime.TargetItem,

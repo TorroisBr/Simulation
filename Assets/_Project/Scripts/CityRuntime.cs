@@ -9,6 +9,7 @@ public class CityRuntime
     [SerializeField] private CityData cityData;
     [SerializeField] private int currentPopulation;
     [SerializeField] private MarketRuntime market;
+    [NonSerialized] private MarketCounterpartyRuntime marketCounterparty;
     [NonSerialized] private SpatialLocationRuntime location;
     [NonSerialized] private List<NpcRuntime> importantNpcs = new List<NpcRuntime>();
     [NonSerialized] private SimulationLogger logger;
@@ -18,11 +19,41 @@ public class CityRuntime
     public string DefinitionId => cityData != null ? cityData.DefinitionId : string.Empty;
     public SpatialLocationRuntime Location => location;
     public int CurrentPopulation => currentPopulation;
-    public MarketRuntime Market => market ?? (market = new MarketRuntime());
+    public MarketRuntime Market
+    {
+        get
+        {
+            if (market == null)
+            {
+                marketCounterparty = NormalizeMarketCounterparty(marketCounterparty, runtimeId);
+                market = new MarketRuntime(new List<MarketItemConfig>(), marketCounterparty);
+            }
+
+            return market;
+        }
+    }
+
+    public MarketCounterpartyRuntime MarketCounterparty
+    {
+        get
+        {
+            if (marketCounterparty == null)
+            {
+                marketCounterparty = NormalizeMarketCounterparty(market != null ? market.Counterparty : null, runtimeId);
+            }
+
+            return marketCounterparty;
+        }
+    }
     public List<NpcRuntime> ImportantNpcs => importantNpcs ?? (importantNpcs = new List<NpcRuntime>());
     public string CityName => cityData != null ? cityData.cityName : "Cidade desconhecida";
 
-    public CityRuntime(string runtimeId, CityData cityData, SpatialLocationRuntime location, SimulationLogger logger = null)
+    public CityRuntime(
+        string runtimeId,
+        CityData cityData,
+        SpatialLocationRuntime location,
+        SimulationLogger logger = null,
+        MarketCounterpartyRuntime marketCounterparty = null)
     {
         if (string.IsNullOrWhiteSpace(runtimeId) == true)
         {
@@ -38,8 +69,11 @@ public class CityRuntime
         this.cityData = cityData;
         this.location = location;
         this.logger = logger ?? new SimulationLogger(null);
+        this.marketCounterparty = NormalizeMarketCounterparty(marketCounterparty, runtimeId);
         currentPopulation = cityData != null ? Mathf.Max(0, cityData.initialPopulation) : 0;
-        market = cityData != null ? new MarketRuntime(cityData.marketItems) : new MarketRuntime();
+        market = cityData != null
+            ? new MarketRuntime(cityData.marketItems, this.marketCounterparty)
+            : new MarketRuntime(new List<MarketItemConfig>(), this.marketCounterparty);
     }
 
     public void SimulateProductionDay()
@@ -119,5 +153,30 @@ public class CityRuntime
         {
             npcRuntime.SetCurrentCity(null);
         }
+    }
+
+    private static MarketCounterpartyRuntime NormalizeMarketCounterparty(
+        MarketCounterpartyRuntime counterparty,
+        string cityRuntimeId)
+    {
+        if (counterparty == null)
+        {
+            return MarketCounterpartyRuntime.CreateOpen(cityRuntimeId);
+        }
+
+        if (counterparty.LiquidityMode == MarketLiquidityMode.Open
+            && string.IsNullOrWhiteSpace(counterparty.CounterpartyRuntimeId) == true)
+        {
+            return MarketCounterpartyRuntime.CreateOpen(cityRuntimeId);
+        }
+
+        if (string.Equals(counterparty.CounterpartyRuntimeId, cityRuntimeId, StringComparison.Ordinal) == false)
+        {
+            throw new ArgumentException(
+                "A CityRuntime market counterparty must use the CityRuntime RuntimeId.",
+                nameof(counterparty));
+        }
+
+        return counterparty;
     }
 }

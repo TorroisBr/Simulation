@@ -64,15 +64,27 @@ public class MarketItemRuntime
 public class MarketRuntime
 {
     [SerializeField] private List<MarketItemRuntime> items = new List<MarketItemRuntime>();
+    [NonSerialized] private MarketCounterpartyRuntime counterparty;
 
     public List<MarketItemRuntime> Items => items ?? (items = new List<MarketItemRuntime>());
+    public MarketCounterpartyRuntime Counterparty => counterparty ?? (counterparty = MarketCounterpartyRuntime.CreateOpen());
 
     public MarketRuntime()
     {
+        counterparty = MarketCounterpartyRuntime.CreateOpen();
     }
 
     public MarketRuntime(List<MarketItemConfig> marketItems)
+        : this(marketItems, null)
     {
+    }
+
+    public MarketRuntime(
+        List<MarketItemConfig> marketItems,
+        MarketCounterpartyRuntime counterparty)
+    {
+        this.counterparty = counterparty ?? MarketCounterpartyRuntime.CreateOpen();
+
         if (marketItems == null)
         {
             return;
@@ -170,7 +182,7 @@ public class MarketRuntime
 
     public bool BuyItem(NpcRuntime npc, ItemData item, int requestedAmount, out int amountBought, out float unitPrice, out float totalPrice)
     {
-        EconomyTransactionResult result = new EconomyTransactionService().TryExecuteOpenMarketPurchase(npc, this, item, requestedAmount);
+        EconomyTransactionResult result = new EconomyTransactionService().TryExecuteMarketPurchase(npc, this, item, requestedAmount);
         amountBought = result.Quantity;
         unitPrice = result.UnitPrice;
         totalPrice = result.TotalPrice;
@@ -180,7 +192,7 @@ public class MarketRuntime
     public bool SellItem(NpcRuntime npc, ItemData item, int requestedAmount, out int amountSold, out float unitPrice, out float totalPrice, out float approximateProfit)
     {
         float averageUnitCost = npc != null && item != null ? npc.Inventory.GetAverageUnitCost(item) : 0f;
-        EconomyTransactionResult result = new EconomyTransactionService().TryExecuteOpenMarketSale(npc, this, item, requestedAmount);
+        EconomyTransactionResult result = new EconomyTransactionService().TryExecuteMarketSale(npc, this, item, requestedAmount);
         amountSold = result.Quantity;
         unitPrice = result.UnitPrice;
         totalPrice = result.TotalPrice;
