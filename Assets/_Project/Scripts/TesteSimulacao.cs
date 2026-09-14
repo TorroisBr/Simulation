@@ -12,10 +12,12 @@ public class TesteSimulacao : MonoBehaviour
 
     private List<NpcRuntime> npcRuntimeList = new List<NpcRuntime>();
     private List<CityRuntime> cityRuntimeList = new List<CityRuntime>();
+    private ExplorableSiteStore explorableSiteStore;
 
     private readonly List<INpcActionProvider> actionProviders = new List<INpcActionProvider>();
     private Dictionary<CityData, List<CityRuntime>> cityRuntimesByDefinition = new Dictionary<CityData, List<CityRuntime>>();
     private Dictionary<NpcData, List<NpcRuntime>> npcRuntimesByDefinition = new Dictionary<NpcData, List<NpcRuntime>>();
+    private Dictionary<ExplorableSiteData, List<ExplorableSiteRuntime>> explorableSiteRuntimesByDefinition = new Dictionary<ExplorableSiteData, List<ExplorableSiteRuntime>>();
     private Dictionary<SpatialLocationRuntime, CityRuntime> cityRuntimeByLocation = new Dictionary<SpatialLocationRuntime, CityRuntime>();
     private RuntimeIdAllocator runtimeIdAllocator;
     private RuntimeIdentityRegistry runtimeIdentityRegistry;
@@ -59,6 +61,7 @@ public class TesteSimulacao : MonoBehaviour
     public TravelPartyStore TravelParties => travelPartyStore;
     public TravelPartySystem GroupTravel => travelPartySystem;
     public SimulationRuntime Runtime => simulationRuntime;
+    public ExplorableSiteStore ExplorableSites => explorableSiteStore;
     public long CurrentDay => simulationTime.AbsoluteDay;
     public SimulationDate CurrentDate => calendarDefinition.GetDate(CurrentDay);
 
@@ -121,6 +124,9 @@ public class TesteSimulacao : MonoBehaviour
         cityRuntimesByDefinition.Clear();
         cityRuntimeByLocation.Clear();
         CreateCityRuntimes();
+        explorableSiteStore = new ExplorableSiteStore();
+        explorableSiteRuntimesByDefinition.Clear();
+        CreateExplorableSiteRuntimes();
         CreateSpatialRoutes();
 
         NpcRuntimeList.Clear();
@@ -203,6 +209,18 @@ public class TesteSimulacao : MonoBehaviour
 
         route = null;
         logger?.LogWarning($"Route runtime resolution failed: spatial network is not initialized for RuntimeId '{runtimeId ?? "<empty>"}'.");
+        return false;
+    }
+
+    public bool TryGetExplorableSiteRuntime(string runtimeId, out ExplorableSiteRuntime siteRuntime)
+    {
+        if (runtimeIdentityRegistry != null)
+        {
+            return runtimeIdentityRegistry.TryGetExplorableSite(runtimeId, out siteRuntime);
+        }
+
+        siteRuntime = null;
+        logger?.LogWarning($"ExplorableSite runtime resolution failed: identity registry is not initialized for RuntimeId '{runtimeId ?? "<empty>"}'.");
         return false;
     }
 
@@ -624,6 +642,115 @@ public class TesteSimulacao : MonoBehaviour
         }
     }
 
+    private void CreateExplorableSiteRuntimes()
+    {
+        if (simulationConfig == null)
+        {
+            return;
+        }
+
+        foreach (ExplorableSiteConfig siteConfig in simulationConfig.ExplorableSites)
+        {
+            if (siteConfig == null)
+            {
+                logger.LogWarning("Skipping null explorable site configuration.");
+                continue;
+            }
+
+            if (siteConfig.site == null)
+            {
+                logger.LogWarning("Skipping explorable site configuration: site definition is null.");
+                continue;
+            }
+
+            if (string.IsNullOrWhiteSpace(siteConfig.site.DefinitionId) == true)
+            {
+                logger.LogWarning("Skipping explorable site configuration: site DefinitionId is empty.");
+                continue;
+            }
+
+            ExplorableSiteRuntime siteRuntime;
+
+            try
+            {
+                SpatialLocationRuntime location = new SpatialLocationRuntime(runtimeIdAllocator.AllocateLocationId());
+                siteRuntime = new ExplorableSiteRuntime(
+                    runtimeIdAllocator,
+                    siteConfig.site,
+                    location);
+
+                if (runtimeIdentityRegistry.RegisterExplorableSite(siteRuntime) == false)
+                {
+                    logger.LogWarning($"Skipping explorable site '{siteConfig.site.DefinitionId}': runtime identity registration failed.");
+                    continue;
+                }
+
+                if (spatialNetwork.RegisterLocation(location) == false)
+                {
+                    logger.LogWarning($"Skipping explorable site '{siteConfig.site.DefinitionId}': location registration failed.");
+                    continue;
+                }
+
+                if (explorableSiteStore.Add(siteRuntime) == false)
+                {
+                    logger.LogWarning($"Skipping explorable site '{siteConfig.site.DefinitionId}': site store registration failed.");
+                    continue;
+                }
+
+                AddExplorableSiteRuntimeByDefinition(siteConfig.site, siteRuntime);
+                CreateExplorableSiteRoutes(siteConfig, siteRuntime);
+            }
+            catch (System.ArgumentException exception)
+            {
+                logger.LogWarning($"Skipping explorable site '{siteConfig.site.DefinitionId}': {exception.Message}");
+            }
+            catch (System.InvalidOperationException exception)
+            {
+                logger.LogWarning($"Skipping explorable site '{siteConfig.site.DefinitionId}': {exception.Message}");
+            }
+        }
+    }
+
+    private void CreateExplorableSiteRoutes(ExplorableSiteConfig siteConfig, ExplorableSiteRuntime siteRuntime)
+    {
+        if (siteConfig == null || siteRuntime == null || siteConfig.anchorCity == null)
+        {
+            return;
+        }
+
+        CityRuntime anchorCity = GetSingleCityRuntimeByDefinition(siteConfig.anchorCity);
+
+        if (anchorCity == null || anchorCity.Location == null || siteRuntime.Location == null)
+        {
+            logger.LogWarning($"Explorable site '{siteRuntime.DefinitionId}' remains isolated because its anchor city could not be resolved.");
+            return;
+        }
+
+        int travelDays = siteConfig.travelDaysFromAnchor;
+        SpatialRouteRuntime anchorToSite = new SpatialRouteRuntime(
+            runtimeIdAllocator.AllocateRouteId(),
+            anchorCity.Location,
+            siteRuntime.Location,
+            travelDays);
+
+        if (spatialNetwork.RegisterRoute(anchorToSite) == false)
+        {
+            logger.LogWarning($"Could not register route from city '{anchorCity.CityName}' to explorable site '{siteRuntime.DefinitionId}'.");
+            return;
+        }
+
+        SpatialRouteRuntime siteToAnchor = new SpatialRouteRuntime(
+            runtimeIdAllocator.AllocateRouteId(),
+            siteRuntime.Location,
+            anchorCity.Location,
+            travelDays);
+
+        if (spatialNetwork.RegisterRoute(siteToAnchor) == false)
+        {
+            logger.LogWarning($"Could not register return route from explorable site '{siteRuntime.DefinitionId}' to city '{anchorCity.CityName}'.");
+        }
+    }
+
     private void CreateNpcRuntimes()
     {
         if (simulationConfig == null)
@@ -706,6 +833,12 @@ public class TesteSimulacao : MonoBehaviour
             foreach (SpatialRouteRuntime route in spatialNetwork.GetOutgoingRoutes(startingLocation))
             {
                 if (route == null)
+                {
+                    continue;
+                }
+
+                if (explorableSiteStore != null
+                    && explorableSiteStore.GetForLocation(route.Destination).Count > 0)
                 {
                     continue;
                 }
@@ -867,6 +1000,19 @@ public class TesteSimulacao : MonoBehaviour
         }
 
         runtimes.Add(npcRuntime);
+    }
+
+    private void AddExplorableSiteRuntimeByDefinition(
+        ExplorableSiteData siteData,
+        ExplorableSiteRuntime siteRuntime)
+    {
+        if (explorableSiteRuntimesByDefinition.TryGetValue(siteData, out List<ExplorableSiteRuntime> runtimes) == false)
+        {
+            runtimes = new List<ExplorableSiteRuntime>();
+            explorableSiteRuntimesByDefinition.Add(siteData, runtimes);
+        }
+
+        runtimes.Add(siteRuntime);
     }
 
     private CityRuntime GetCityRuntimeByLocation(SpatialLocationRuntime location)

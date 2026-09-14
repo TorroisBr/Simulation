@@ -9,6 +9,7 @@ public class SimulationConfigData : ScriptableObject
     public CalendarDefinition calendar = new CalendarDefinition();
     public List<SimulationModule> enabledModules = new List<SimulationModule>();
     public List<CityData> cities = new List<CityData>();
+    public List<ExplorableSiteConfig> explorableSites = new List<ExplorableSiteConfig>();
     public List<NpcSimulationConfig> npcs = new List<NpcSimulationConfig>();
     public List<NpcActionData> actions = new List<NpcActionData>();
     public List<NpcStatusData> statuses = new List<NpcStatusData>();
@@ -33,6 +34,7 @@ public class SimulationConfigData : ScriptableObject
     public CalendarDefinition Calendar => calendar;
     public List<SimulationModule> EnabledModules => enabledModules ?? (enabledModules = new List<SimulationModule>());
     public List<CityData> Cities => cities ?? (cities = new List<CityData>());
+    public List<ExplorableSiteConfig> ExplorableSites => explorableSites ?? (explorableSites = new List<ExplorableSiteConfig>());
     public List<NpcSimulationConfig> Npcs => npcs ?? (npcs = new List<NpcSimulationConfig>());
     public List<NpcActionData> Actions => actions ?? (actions = new List<NpcActionData>());
     public List<NpcStatusData> Statuses => statuses ?? (statuses = new List<NpcStatusData>());
@@ -54,6 +56,14 @@ public enum SimulationModule
     Merchant,
     GuardCrime,
     Crime
+}
+
+[Serializable]
+public class ExplorableSiteConfig
+{
+    public ExplorableSiteData site;
+    public CityData anchorCity;
+    public int travelDaysFromAnchor = 1;
 }
 
 [Serializable]

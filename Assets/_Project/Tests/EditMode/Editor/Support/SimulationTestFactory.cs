@@ -63,6 +63,11 @@ public static class SimulationTestFactory
         return site;
     }
 
+    public static SimulationConfigData CreateSimulationConfig()
+    {
+        return Track(ScriptableObject.CreateInstance<SimulationConfigData>());
+    }
+
     public static CityData CreateCityData(string id, params MarketItemConfig[] marketItems)
     {
         CityData city = Track(ScriptableObject.CreateInstance<CityData>());
