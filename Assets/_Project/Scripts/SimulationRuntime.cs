@@ -20,6 +20,7 @@ public sealed class SimulationRuntime
     private readonly CommercialKnowledgeSharingSystem commercialKnowledgeSharingSystem;
     private readonly ExplorableSiteStore explorableSiteStore;
     private readonly ExplorableSiteKnowledgeSystem explorableSiteKnowledgeSystem;
+    private readonly ExpeditionSystem expeditionSystem;
     private readonly NpcDecisionRecorder decisionRecorder;
     private readonly SimulationLogger logger;
 
@@ -46,7 +47,8 @@ public sealed class SimulationRuntime
         SimulationLogger logger = null,
         bool guardCrimeEnabled = false,
         ExplorableSiteStore explorableSiteStore = null,
-        ExplorableSiteKnowledgeSystem explorableSiteKnowledgeSystem = null)
+        ExplorableSiteKnowledgeSystem explorableSiteKnowledgeSystem = null,
+        ExpeditionSystem expeditionSystem = null)
     {
         this.simulationTime = simulationTime ?? throw new ArgumentNullException(nameof(simulationTime));
         this.cities = cities != null ? new List<CityRuntime>(cities) : new List<CityRuntime>();
@@ -66,6 +68,7 @@ public sealed class SimulationRuntime
         this.commercialKnowledgeSharingSystem = commercialKnowledgeSharingSystem;
         this.explorableSiteStore = explorableSiteStore;
         this.explorableSiteKnowledgeSystem = explorableSiteKnowledgeSystem;
+        this.expeditionSystem = expeditionSystem;
         this.decisionRecorder = decisionRecorder;
         this.logger = logger;
     }
@@ -97,6 +100,13 @@ public sealed class SimulationRuntime
             }
 
             if (npcRuntime.IsTraveling == true)
+            {
+                TryProcessScheduledDirective(npcRuntime);
+                continue;
+            }
+
+            if (expeditionSystem != null
+                && expeditionSystem.IsNpcOnActiveExpedition(npcRuntime.RuntimeId) == true)
             {
                 TryProcessScheduledDirective(npcRuntime);
                 continue;
@@ -135,6 +145,8 @@ public sealed class SimulationRuntime
                 merchantSystem?.ObserveCurrentMarket(arrivedNpc);
             }
         }
+
+        expeditionSystem?.ReconcileAfterTravel(arrivedNpcs);
     }
 
     public void AdvanceDays(int dayCount)

@@ -188,7 +188,6 @@ public sealed class ExplorableSiteKnowledgeSystem
     }
 
     // The caller is responsible for ensuring that the NPC physically observed the site.
-    // NpcRuntime remains city-centric until the later generalized travel phase.
     public bool RecordDirectObservation(
         NpcRuntime npcRuntime,
         ExplorableSiteRuntime siteRuntime,

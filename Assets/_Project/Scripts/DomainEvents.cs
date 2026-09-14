@@ -8,7 +8,9 @@ public enum DomainEventType
     NpcArrested,
     NpcEscaped,
     TravelPartyStarted,
-    TravelPartyArrived
+    TravelPartyArrived,
+    ExpeditionStarted,
+    ExpeditionArrivedAtSite
 }
 
 public enum DomainEventParticipantRole
@@ -341,6 +343,150 @@ public sealed class TravelPartyArrivedEvent : DomainEvent
     public override IReadOnlyList<DomainEventParticipant> GetParticipants()
     {
         return participants;
+    }
+}
+
+[Serializable]
+public sealed class ExpeditionStartedEvent : DomainEvent
+{
+    private readonly string expeditionId;
+    private readonly string targetSiteRuntimeId;
+    private readonly string originLocationRuntimeId;
+    private readonly string targetLocationRuntimeId;
+    private readonly string travelPartyId;
+    private readonly IReadOnlyList<string> performerRuntimeIds;
+    private readonly IReadOnlyList<string> supportRuntimeIds;
+    private readonly IReadOnlyList<DomainEventParticipant> participants;
+
+    public override DomainEventType EventType => DomainEventType.ExpeditionStarted;
+    public string ExpeditionId => expeditionId;
+    public string TargetSiteRuntimeId => targetSiteRuntimeId;
+    public string OriginLocationRuntimeId => originLocationRuntimeId;
+    public string TargetLocationRuntimeId => targetLocationRuntimeId;
+    public string TravelPartyId => travelPartyId;
+    public IReadOnlyList<string> PerformerRuntimeIds => performerRuntimeIds;
+    public IReadOnlyList<string> SupportRuntimeIds => supportRuntimeIds;
+
+    public ExpeditionStartedEvent(
+        string eventId,
+        long absoluteDay,
+        long recordSequence,
+        string expeditionId,
+        string targetSiteRuntimeId,
+        string originLocationRuntimeId,
+        string targetLocationRuntimeId,
+        string travelPartyId,
+        IEnumerable<string> performerRuntimeIds,
+        IEnumerable<string> supportRuntimeIds,
+        string originDecisionId = null)
+        : base(eventId, absoluteDay, recordSequence, originDecisionId)
+    {
+        this.expeditionId = TravelPartyEventData.RequireId(expeditionId, nameof(expeditionId));
+        this.targetSiteRuntimeId = TravelPartyEventData.RequireId(targetSiteRuntimeId, nameof(targetSiteRuntimeId));
+        this.originLocationRuntimeId = TravelPartyEventData.RequireId(originLocationRuntimeId, nameof(originLocationRuntimeId));
+        this.targetLocationRuntimeId = TravelPartyEventData.RequireId(targetLocationRuntimeId, nameof(targetLocationRuntimeId));
+        this.travelPartyId = TravelPartyEventData.RequireId(travelPartyId, nameof(travelPartyId));
+        this.performerRuntimeIds = TravelPartyEventData.CaptureIds(performerRuntimeIds, nameof(performerRuntimeIds));
+        this.supportRuntimeIds = TravelPartyEventData.CaptureIds(supportRuntimeIds, nameof(supportRuntimeIds));
+        ValidateDistinctRoles(this.performerRuntimeIds, this.supportRuntimeIds);
+        if (this.performerRuntimeIds.Count == 0)
+        {
+            throw new ArgumentException("Expedition event requires at least one Performer.", nameof(performerRuntimeIds));
+        }
+
+        participants = TravelPartyEventData.BuildParticipants(this.performerRuntimeIds, this.supportRuntimeIds);
+    }
+
+    public override IReadOnlyList<DomainEventParticipant> GetParticipants()
+    {
+        return participants;
+    }
+
+    private static void ValidateDistinctRoles(
+        IReadOnlyList<string> performers,
+        IReadOnlyList<string> supports)
+    {
+        HashSet<string> ids = new HashSet<string>(performers, StringComparer.Ordinal);
+
+        foreach (string supportRuntimeId in supports)
+        {
+            if (ids.Add(supportRuntimeId) == false)
+            {
+                throw new ArgumentException("Expedition event participant IDs must be unique across roles.", nameof(supports));
+            }
+        }
+    }
+}
+
+[Serializable]
+public sealed class ExpeditionArrivedAtSiteEvent : DomainEvent
+{
+    private readonly string expeditionId;
+    private readonly string targetSiteRuntimeId;
+    private readonly string originLocationRuntimeId;
+    private readonly string targetLocationRuntimeId;
+    private readonly string travelPartyId;
+    private readonly IReadOnlyList<string> performerRuntimeIds;
+    private readonly IReadOnlyList<string> supportRuntimeIds;
+    private readonly IReadOnlyList<DomainEventParticipant> participants;
+
+    public override DomainEventType EventType => DomainEventType.ExpeditionArrivedAtSite;
+    public string ExpeditionId => expeditionId;
+    public string TargetSiteRuntimeId => targetSiteRuntimeId;
+    public string OriginLocationRuntimeId => originLocationRuntimeId;
+    public string TargetLocationRuntimeId => targetLocationRuntimeId;
+    public string TravelPartyId => travelPartyId;
+    public IReadOnlyList<string> PerformerRuntimeIds => performerRuntimeIds;
+    public IReadOnlyList<string> SupportRuntimeIds => supportRuntimeIds;
+
+    public ExpeditionArrivedAtSiteEvent(
+        string eventId,
+        long absoluteDay,
+        long recordSequence,
+        string expeditionId,
+        string targetSiteRuntimeId,
+        string originLocationRuntimeId,
+        string targetLocationRuntimeId,
+        string travelPartyId,
+        IEnumerable<string> performerRuntimeIds,
+        IEnumerable<string> supportRuntimeIds,
+        string originDecisionId = null)
+        : base(eventId, absoluteDay, recordSequence, originDecisionId)
+    {
+        this.expeditionId = TravelPartyEventData.RequireId(expeditionId, nameof(expeditionId));
+        this.targetSiteRuntimeId = TravelPartyEventData.RequireId(targetSiteRuntimeId, nameof(targetSiteRuntimeId));
+        this.originLocationRuntimeId = TravelPartyEventData.RequireId(originLocationRuntimeId, nameof(originLocationRuntimeId));
+        this.targetLocationRuntimeId = TravelPartyEventData.RequireId(targetLocationRuntimeId, nameof(targetLocationRuntimeId));
+        this.travelPartyId = TravelPartyEventData.RequireId(travelPartyId, nameof(travelPartyId));
+        this.performerRuntimeIds = TravelPartyEventData.CaptureIds(performerRuntimeIds, nameof(performerRuntimeIds));
+        this.supportRuntimeIds = TravelPartyEventData.CaptureIds(supportRuntimeIds, nameof(supportRuntimeIds));
+        ValidateDistinctRoles(this.performerRuntimeIds, this.supportRuntimeIds);
+        if (this.performerRuntimeIds.Count == 0)
+        {
+            throw new ArgumentException("Expedition event requires at least one Performer.", nameof(performerRuntimeIds));
+        }
+
+        participants = TravelPartyEventData.BuildParticipants(this.performerRuntimeIds, this.supportRuntimeIds);
+    }
+
+    public override IReadOnlyList<DomainEventParticipant> GetParticipants()
+    {
+        return participants;
+    }
+
+    private static void ValidateDistinctRoles(
+        IReadOnlyList<string> performers,
+        IReadOnlyList<string> supports)
+    {
+        HashSet<string> ids = new HashSet<string>(performers, StringComparer.Ordinal);
+
+        foreach (string supportRuntimeId in supports)
+        {
+            if (ids.Add(supportRuntimeId) == false)
+            {
+                throw new ArgumentException("Expedition event participant IDs must be unique across roles.", nameof(supports));
+            }
+        }
     }
 }
 

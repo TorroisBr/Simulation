@@ -329,9 +329,12 @@ internal sealed class SpatialTravelFixture
     public RuntimeIdentityRegistry IdentityRegistry { get; }
     public SpatialNetworkRuntime Network { get; }
     public ExplorableSiteStore Sites { get; }
+    public ExplorableSiteKnowledgeSystem Knowledge { get; }
     public RecordFixture Records { get; }
     public TravelSystem Travel { get; }
     public MerchantSystem MerchantSystem { get; }
+    public TravelPartySystem TravelPartySystem { get; private set; }
+    public TravelPartyStore TravelParties { get; private set; }
 
     private readonly Dictionary<SpatialLocationRuntime, CityRuntime> citiesByLocation;
 
@@ -369,6 +372,7 @@ internal sealed class SpatialTravelFixture
         Sites = new ExplorableSiteStore();
         Sites.Add(Site);
         Sites.Add(UnrelatedSite);
+        Knowledge = new ExplorableSiteKnowledgeSystem();
         Records = SimulationTestFactory.CreateRecordFixture();
         Travel = new TravelSystem(
             Network,
@@ -377,6 +381,12 @@ internal sealed class SpatialTravelFixture
             Records.EventRecorder,
             null);
         MerchantSystem = SimulationTestFactory.CreateMerchantSystem(Travel, Records.Time);
+    }
+
+    public void SetTravelPartySystem(TravelPartySystem system)
+    {
+        TravelPartySystem = system;
+        TravelParties = system != null ? system.Store : null;
     }
 
     public NpcRuntime CreateNpc(

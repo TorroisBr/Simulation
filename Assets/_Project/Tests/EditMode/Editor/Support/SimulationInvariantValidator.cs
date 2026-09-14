@@ -134,6 +134,76 @@ public static class SimulationInvariantValidator
         Assert.That(Enum.IsDefined(typeof(ExplorableSiteKnowledgeSource), observation.Source), Is.True);
     }
 
+    public static void ValidateExpedition(
+        ExpeditionRuntime expedition,
+        RuntimeIdentityRegistry registry)
+    {
+        Assert.That(expedition, Is.Not.Null);
+        Assert.That(expedition.ExpeditionId, Is.Not.Null.And.Not.Empty);
+        Assert.That(expedition.TargetSiteRuntimeId, Is.Not.Null.And.Not.Empty);
+        Assert.That(expedition.OriginLocationRuntimeId, Is.Not.Null.And.Not.Empty);
+        Assert.That(expedition.TargetLocationRuntimeId, Is.Not.Null.And.Not.Empty);
+        Assert.That(expedition.OutboundRouteRuntimeId, Is.Not.Null.And.Not.Empty);
+        Assert.That(expedition.MemberRuntimeIds, Is.Not.Null);
+        Assert.That(expedition.PerformerRuntimeIds, Is.Not.Null);
+        Assert.That(expedition.PerformerRuntimeIds.Count, Is.GreaterThan(0));
+        Assert.That(expedition.SupportRuntimeIds, Is.Not.Null);
+
+        HashSet<string> memberIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (string runtimeId in expedition.MemberRuntimeIds)
+        {
+            Assert.That(runtimeId, Is.Not.Null.And.Not.Empty);
+            Assert.That(memberIds.Add(runtimeId), Is.True);
+        }
+
+        HashSet<string> roleIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (string runtimeId in expedition.PerformerRuntimeIds)
+        {
+            Assert.That(memberIds.Contains(runtimeId), Is.True);
+            Assert.That(roleIds.Add(runtimeId), Is.True);
+        }
+
+        foreach (string runtimeId in expedition.SupportRuntimeIds)
+        {
+            Assert.That(memberIds.Contains(runtimeId), Is.True);
+            Assert.That(roleIds.Add(runtimeId), Is.True);
+        }
+
+        Assert.That(roleIds.Count, Is.EqualTo(memberIds.Count));
+        Assert.That(registry, Is.Not.Null);
+        Assert.That(registry.TryGetExplorableSite(expedition.TargetSiteRuntimeId, out ExplorableSiteRuntime site), Is.True);
+        Assert.That(site.Location.RuntimeId, Is.EqualTo(expedition.TargetLocationRuntimeId));
+        Assert.That(registry.TryGetLocation(expedition.OriginLocationRuntimeId, out _), Is.True);
+        Assert.That(registry.TryGetLocation(expedition.TargetLocationRuntimeId, out _), Is.True);
+        Assert.That(registry.TryGetRoute(expedition.OutboundRouteRuntimeId, out SpatialRouteRuntime route), Is.True);
+        Assert.That(route.Origin.RuntimeId, Is.EqualTo(expedition.OriginLocationRuntimeId));
+        Assert.That(route.Destination.RuntimeId, Is.EqualTo(expedition.TargetLocationRuntimeId));
+
+        if (expedition.State == ExpeditionState.Preparing)
+        {
+            return;
+        }
+
+        Assert.That(expedition.TravelPartyId, Is.Not.Null.And.Not.Empty);
+
+        foreach (string runtimeId in expedition.MemberRuntimeIds)
+        {
+            Assert.That(registry.TryGetNpc(runtimeId, out NpcRuntime npc), Is.True);
+            Assert.That(npc, Is.Not.Null);
+
+            if (expedition.State == ExpeditionState.TravelingToSite)
+            {
+                Assert.That(npc.IsTraveling, Is.True);
+                Assert.That(npc.DestinationLocation.RuntimeId, Is.EqualTo(expedition.TargetLocationRuntimeId));
+            }
+            else if (expedition.State == ExpeditionState.AtSite)
+            {
+                Assert.That(npc.IsTraveling, Is.False);
+                Assert.That(npc.CurrentLocation.RuntimeId, Is.EqualTo(expedition.TargetLocationRuntimeId));
+            }
+        }
+    }
+
     public static void ValidateTravelParties(
         TravelPartyStore store,
         RuntimeIdentityRegistry registry,

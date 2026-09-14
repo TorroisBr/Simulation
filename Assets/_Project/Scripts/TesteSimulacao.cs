@@ -19,6 +19,7 @@ public class TesteSimulacao : MonoBehaviour
     private Dictionary<NpcData, List<NpcRuntime>> npcRuntimesByDefinition = new Dictionary<NpcData, List<NpcRuntime>>();
     private Dictionary<ExplorableSiteData, List<ExplorableSiteRuntime>> explorableSiteRuntimesByDefinition = new Dictionary<ExplorableSiteData, List<ExplorableSiteRuntime>>();
     private ExplorableSiteKnowledgeSystem explorableSiteKnowledgeSystem;
+    private ExpeditionStore expeditionStore;
     private Dictionary<SpatialLocationRuntime, CityRuntime> cityRuntimeByLocation = new Dictionary<SpatialLocationRuntime, CityRuntime>();
     private RuntimeIdAllocator runtimeIdAllocator;
     private RuntimeIdentityRegistry runtimeIdentityRegistry;
@@ -40,6 +41,7 @@ public class TesteSimulacao : MonoBehaviour
     private TravelSystem travelSystem;
     private TravelPartyStore travelPartyStore;
     private TravelPartySystem travelPartySystem;
+    private ExpeditionSystem expeditionSystem;
     private MerchantSystem merchantSystem;
     private CommercialKnowledgeSharingSystem commercialKnowledgeSharingSystem;
     private EconomyTransactionService economyTransactionService;
@@ -63,6 +65,9 @@ public class TesteSimulacao : MonoBehaviour
     public TravelPartySystem GroupTravel => travelPartySystem;
     public SimulationRuntime Runtime => simulationRuntime;
     public ExplorableSiteStore ExplorableSites => explorableSiteStore;
+    public ExpeditionStore Expeditions => expeditionStore;
+    public ExpeditionSystem ExpeditionRuntime => expeditionSystem;
+    public ExpeditionSystem ExpeditionSystem => expeditionSystem;
     public long CurrentDay => simulationTime.AbsoluteDay;
     public SimulationDate CurrentDate => calendarDefinition.GetDate(CurrentDay);
 
@@ -71,6 +76,20 @@ public class TesteSimulacao : MonoBehaviour
         return simulationRuntime != null
             ? simulationRuntime.TryStartTravelParty(context)
             : travelPartySystem != null && travelPartySystem.TryStartTravelParty(context);
+    }
+
+    public bool TryStartExpedition(
+        ExplorableSiteRuntime targetSite,
+        ActionExecutionContext context,
+        out ExpeditionRuntime expedition)
+    {
+        if (expeditionSystem == null)
+        {
+            expedition = null;
+            return false;
+        }
+
+        return expeditionSystem.TryStartExpedition(targetSite, context, out expedition);
     }
 
     public void Start()
@@ -137,6 +156,7 @@ public class TesteSimulacao : MonoBehaviour
         CreateScheduledDirectives();
         scheduledDirectiveSystem = new ScheduledDirectiveSystem(scheduledDirectiveStore, runtimeIdentityRegistry, logger);
         economyTransactionService = new EconomyTransactionService();
+        expeditionStore = new ExpeditionStore();
 
         RebuildSystems();
         BootstrapInitialSpatialKnowledge();
@@ -161,7 +181,8 @@ public class TesteSimulacao : MonoBehaviour
             logger,
             enabledModules.IsEnabled(SimulationModule.GuardCrime),
             explorableSiteStore,
-            explorableSiteKnowledgeSystem);
+            explorableSiteKnowledgeSystem,
+            expeditionSystem);
     }
 
     public string GetFullLog()
@@ -928,6 +949,17 @@ public class TesteSimulacao : MonoBehaviour
             domainEventRecorder,
             logger,
             economyTransactionService);
+        expeditionSystem = new ExpeditionSystem(
+            expeditionStore,
+            runtimeIdAllocator,
+            runtimeIdentityRegistry,
+            explorableSiteStore,
+            travelPartySystem,
+            travelPartyStore,
+            explorableSiteKnowledgeSystem,
+            simulationTime,
+            domainEventRecorder,
+            logger);
         justiceSystem = simulationConfig != null
             ? new JusticeSystem(simulationConfig.freeStatus, simulationConfig.wantedStatus, simulationConfig.arrestedStatus, simulationConfig.hiddenStatus, domainEventRecorder, logger)
             : null;

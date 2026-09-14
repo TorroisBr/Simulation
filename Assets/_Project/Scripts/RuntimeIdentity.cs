@@ -14,6 +14,7 @@ public sealed class RuntimeIdAllocator
     private long nextTravelPartySequence = 1;
     private long nextOrganizationSequence = 1;
     private long nextExplorableSiteSequence = 1;
+    private long nextExpeditionSequence = 1;
 
     public string AllocateNpcId()
     {
@@ -63,6 +64,11 @@ public sealed class RuntimeIdAllocator
     public string AllocateExplorableSiteId()
     {
         return Allocate("site", ref nextExplorableSiteSequence);
+    }
+
+    public string AllocateExpeditionId()
+    {
+        return Allocate("expedition", ref nextExpeditionSequence);
     }
 
     private static string Allocate(string prefix, ref long nextSequence)
