@@ -28,16 +28,39 @@ public sealed class MoneyAccountRuntime
 
     public bool CanDebit(float amount)
     {
-        return IsValidNonNegativeFiniteAmount(amount) == true
-            && IsValidNonNegativeFiniteAmount(balance) == true
-            && balance >= amount;
+        if (IsValidNonNegativeFiniteAmount(amount) == false
+            || IsValidNonNegativeFiniteAmount(balance) == false
+            || balance < amount)
+        {
+            return false;
+        }
+
+        if (amount == 0f)
+        {
+            return true;
+        }
+
+        float nextBalance = balance - amount;
+        return IsValidNonNegativeFiniteAmount(nextBalance) == true
+            && nextBalance < balance;
     }
 
     public bool CanCredit(float amount)
     {
-        return IsValidNonNegativeFiniteAmount(amount) == true
-            && IsValidNonNegativeFiniteAmount(balance) == true
-            && IsValidNonNegativeFiniteAmount(balance + amount) == true;
+        if (IsValidNonNegativeFiniteAmount(amount) == false
+            || IsValidNonNegativeFiniteAmount(balance) == false)
+        {
+            return false;
+        }
+
+        if (amount == 0f)
+        {
+            return true;
+        }
+
+        float nextBalance = balance + amount;
+        return IsValidNonNegativeFiniteAmount(nextBalance) == true
+            && nextBalance > balance;
     }
 
     public bool TryCredit(float amount)
@@ -47,7 +70,8 @@ public sealed class MoneyAccountRuntime
             return false;
         }
 
-        balance += amount;
+        float nextBalance = balance + amount;
+        balance = nextBalance;
         return true;
     }
 

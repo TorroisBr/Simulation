@@ -69,6 +69,7 @@ public sealed class MoneyAccountTests
     {
         MoneyAccountRuntime account = new MoneyAccountRuntime(25f);
 
+        Assert.That(account.CanCredit(0f), Is.True);
         Assert.That(account.TryCredit(0f), Is.True);
         Assert.That(account.Balance, Is.EqualTo(25f));
     }
@@ -111,6 +112,17 @@ public sealed class MoneyAccountTests
     }
 
     [Test]
+    public void MoneyAccount_PositiveCreditThatCannotChangeFloatIsRejected()
+    {
+        MoneyAccountRuntime account = new MoneyAccountRuntime(float.MaxValue);
+        float before = account.Balance;
+
+        Assert.That(account.CanCredit(10f), Is.False);
+        Assert.That(account.TryCredit(10f), Is.False);
+        Assert.That(account.Balance, Is.EqualTo(before));
+    }
+
+    [Test]
     public void MoneyAccount_DebitAvailableBalanceDecreasesBalance()
     {
         MoneyAccountRuntime account = new MoneyAccountRuntime(25f);
@@ -126,6 +138,17 @@ public sealed class MoneyAccountTests
 
         Assert.That(account.TryDebit(25f), Is.True);
         Assert.That(account.Balance, Is.EqualTo(0f));
+    }
+
+    [Test]
+    public void MoneyAccount_PositiveDebitThatCannotChangeFloatIsRejected()
+    {
+        MoneyAccountRuntime account = new MoneyAccountRuntime(float.MaxValue);
+        float before = account.Balance;
+
+        Assert.That(account.CanDebit(10f), Is.False);
+        Assert.That(account.TryDebit(10f), Is.False);
+        Assert.That(account.Balance, Is.EqualTo(before));
     }
 
     [Test]
@@ -170,6 +193,7 @@ public sealed class MoneyAccountTests
     {
         MoneyAccountRuntime account = new MoneyAccountRuntime(25f);
 
+        Assert.That(account.CanDebit(0f), Is.True);
         Assert.That(account.TryDebit(0f), Is.True);
         Assert.That(account.Balance, Is.EqualTo(25f));
     }

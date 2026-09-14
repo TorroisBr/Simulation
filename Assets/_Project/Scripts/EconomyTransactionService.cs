@@ -994,6 +994,16 @@ public sealed class EconomyTransactionService
         MoneyAccountRuntime destination,
         float amount)
     {
+        if (source == null
+            || destination == null
+            || ReferenceEquals(source, destination)
+            || IsValidNonNegativeFiniteAmount(amount) == false
+            || source.CanDebit(amount) == false
+            || destination.CanCredit(amount) == false)
+        {
+            return false;
+        }
+
         if (source.TryDebit(amount) == false)
         {
             return false;

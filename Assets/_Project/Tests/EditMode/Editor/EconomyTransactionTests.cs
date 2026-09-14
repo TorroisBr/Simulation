@@ -56,6 +56,37 @@ public sealed class EconomyTransactionTests
     }
 
     [Test]
+    public void MoneyTransfer_RejectsUnrepresentablePositiveMutationWithoutSuccess()
+    {
+        EconomyTransactionService service = new EconomyTransactionService();
+        MoneyAccountRuntime sourceWithUnrepresentableDebit = new MoneyAccountRuntime(float.MaxValue);
+        MoneyAccountRuntime destinationWithRoom = new MoneyAccountRuntime(0f);
+
+        EconomyTransactionResult debitResult = service.TryTransferMoney(
+            sourceWithUnrepresentableDebit,
+            destinationWithRoom,
+            10f);
+
+        Assert.That(debitResult.Success, Is.False);
+        Assert.That(debitResult.FailureReason, Is.EqualTo(EconomyTransactionFailureReason.InsufficientFunds));
+        Assert.That(sourceWithUnrepresentableDebit.Balance, Is.EqualTo(float.MaxValue));
+        Assert.That(destinationWithRoom.Balance, Is.EqualTo(0f));
+
+        MoneyAccountRuntime sourceWithRoom = new MoneyAccountRuntime(100f);
+        MoneyAccountRuntime destinationWithUnrepresentableCredit = new MoneyAccountRuntime(float.MaxValue);
+
+        EconomyTransactionResult creditResult = service.TryTransferMoney(
+            sourceWithRoom,
+            destinationWithUnrepresentableCredit,
+            10f);
+
+        Assert.That(creditResult.Success, Is.False);
+        Assert.That(creditResult.FailureReason, Is.EqualTo(EconomyTransactionFailureReason.CreditRejected));
+        Assert.That(sourceWithRoom.Balance, Is.EqualTo(100f));
+        Assert.That(destinationWithUnrepresentableCredit.Balance, Is.EqualTo(float.MaxValue));
+    }
+
+    [Test]
     public void NpcTrade_FailedPaymentDoesNotMoveItemsOrMoney()
     {
         ItemData item = SimulationTestFactory.CreateItem("trade-item", 10f);
@@ -372,14 +403,16 @@ public sealed class EconomyTransactionTests
 
         EconomyTransactionResult beforeRevenue = service.TryExecuteMarketSale(seller, city.Market, item, 1);
         EconomyTransactionResult purchase = service.TryExecuteMarketPurchase(buyer, city.Market, item, 2);
+        float balanceAfterPurchase = city.Market.Counterparty.MoneyAccount.Balance;
         EconomyTransactionResult afterRevenue = service.TryExecuteMarketSale(seller, city.Market, item, 2);
+        float expectedFinalBalance = balanceAfterPurchase - afterRevenue.TotalPrice;
 
         Assert.That(beforeRevenue.Success, Is.False);
         Assert.That(beforeRevenue.FailureReason, Is.EqualTo(EconomyTransactionFailureReason.InsufficientCounterpartyFunds));
         Assert.That(purchase.Success, Is.True);
-        Assert.That(city.Market.Counterparty.MoneyAccount.Balance, Is.EqualTo(20f).Within(0.001f));
+        Assert.That(balanceAfterPurchase, Is.EqualTo(purchase.TotalPrice).Within(0.001f));
         Assert.That(afterRevenue.Success, Is.True);
-        Assert.That(city.Market.Counterparty.MoneyAccount.Balance, Is.EqualTo(0f).Within(0.001f));
+        Assert.That(city.Market.Counterparty.MoneyAccount.Balance, Is.EqualTo(expectedFinalBalance).Within(0.001f));
     }
 
     [Test]
@@ -387,16 +420,26 @@ public sealed class EconomyTransactionTests
     {
         ItemData item = SimulationTestFactory.CreateItem("production-item", 10f);
         CityRuntime city = CreateAccountBackedCity("city-production", item, 10, 42f);
-        city.CityData.productionConfigs.Add(new CityProductionConfig { item = item, amountPerDay = 5 });
+        int configuredProductionAmount = 5;
+        city.CityData.productionConfigs.Add(new CityProductionConfig { item = item, amountPerDay = configuredProductionAmount });
         city.CityData.marketItems[0].consumptionPer1000Population = 1000f;
 
-        city.SimulateProductionDay();
-        float balanceAfterProduction = city.Market.Counterparty.MoneyAccount.Balance;
-        city.SimulateConsumptionDay();
+        int initialStock = city.Market.GetAmount(item);
+        float initialCounterpartyMoney = city.Market.Counterparty.MoneyAccount.Balance;
 
-        Assert.That(balanceAfterProduction, Is.EqualTo(42f).Within(0.001f));
-        Assert.That(city.Market.Counterparty.MoneyAccount.Balance, Is.EqualTo(42f).Within(0.001f));
-        Assert.That(city.Market.GetAmount(item), Is.EqualTo(5));
+        city.SimulateProductionDay();
+        int stockAfterProduction = city.Market.GetAmount(item);
+        float balanceAfterProduction = city.Market.Counterparty.MoneyAccount.Balance;
+
+        Assert.That(stockAfterProduction, Is.EqualTo(initialStock + configuredProductionAmount));
+        Assert.That(balanceAfterProduction, Is.EqualTo(initialCounterpartyMoney).Within(0.001f));
+
+        city.SimulateConsumptionDay();
+        int stockAfterConsumption = city.Market.GetAmount(item);
+        float balanceAfterConsumption = city.Market.Counterparty.MoneyAccount.Balance;
+
+        Assert.That(stockAfterConsumption, Is.LessThan(stockAfterProduction));
+        Assert.That(balanceAfterConsumption, Is.EqualTo(initialCounterpartyMoney).Within(0.001f));
     }
 
     [Test]
