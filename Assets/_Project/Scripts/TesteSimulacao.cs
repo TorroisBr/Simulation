@@ -39,6 +39,7 @@ public class TesteSimulacao : MonoBehaviour
     private TravelPartySystem travelPartySystem;
     private MerchantSystem merchantSystem;
     private CommercialKnowledgeSharingSystem commercialKnowledgeSharingSystem;
+    private EconomyTransactionService economyTransactionService;
     private SimulationLogger logger;
     private SimulationTime simulationTime = new SimulationTime();
     private CalendarDefinition calendarDefinition = CalendarDefinition.CreateDefault();
@@ -123,6 +124,7 @@ public class TesteSimulacao : MonoBehaviour
         CreateNpcRuntimes();
         CreateScheduledDirectives();
         scheduledDirectiveSystem = new ScheduledDirectiveSystem(scheduledDirectiveStore, runtimeIdentityRegistry, logger);
+        economyTransactionService = new EconomyTransactionService();
 
         RebuildSystems();
         BootstrapInitialSpatialKnowledge();
@@ -814,7 +816,8 @@ public class TesteSimulacao : MonoBehaviour
         enabledModules = new SimulationModuleSet(simulationConfig, logger);
         logger = logger ?? new SimulationLogger(simulationConfig != null ? simulationConfig.LogSettings : null);
         float travelCostPerDay = simulationConfig != null ? simulationConfig.travelCostPerDay : 0f;
-        travelSystem = new TravelSystem(spatialNetwork, GetCityRuntimeByLocation, travelCostPerDay, domainEventRecorder, logger);
+        economyTransactionService = economyTransactionService ?? new EconomyTransactionService();
+        travelSystem = new TravelSystem(spatialNetwork, GetCityRuntimeByLocation, travelCostPerDay, domainEventRecorder, logger, economyTransactionService);
         travelPartyStore = new TravelPartyStore();
         travelPartySystem = new TravelPartySystem(
             travelPartyStore,
@@ -824,7 +827,8 @@ public class TesteSimulacao : MonoBehaviour
             simulationTime,
             recordSequence,
             domainEventRecorder,
-            logger);
+            logger,
+            economyTransactionService);
         justiceSystem = simulationConfig != null
             ? new JusticeSystem(simulationConfig.freeStatus, simulationConfig.wantedStatus, simulationConfig.arrestedStatus, simulationConfig.hiddenStatus, domainEventRecorder, logger)
             : null;
@@ -845,7 +849,8 @@ public class TesteSimulacao : MonoBehaviour
                 simulationTime,
                 knowledgeSettings,
                 decisionRecorder,
-                logger);
+                logger,
+                economyTransactionService);
             commercialKnowledgeSharingSystem = new CommercialKnowledgeSharingSystem(simulationTime, knowledgeSettings);
         }
 
@@ -858,7 +863,7 @@ public class TesteSimulacao : MonoBehaviour
 
         if (enabledModules.IsEnabled(SimulationModule.Crime) == true && justiceSystem != null)
         {
-            crimeSystem = new CrimeSystem(justiceSystem, travelSystem, simulationConfig.hiddenStatus, logger);
+            crimeSystem = new CrimeSystem(justiceSystem, travelSystem, simulationConfig.hiddenStatus, logger, economyTransactionService);
             actionProviders.Add(crimeSystem);
         }
 

@@ -112,6 +112,18 @@ public class MarketRuntime
         return item != null ? Mathf.Max(0.01f, item.basePrice) : 0f;
     }
 
+    internal float GetPriceForSale(ItemData item)
+    {
+        MarketItemRuntime marketItem = GetItem(item);
+
+        if (marketItem != null)
+        {
+            return marketItem.CurrentPrice;
+        }
+
+        return item != null ? new MarketItemRuntime(item, 0, 100).CurrentPrice : 0f;
+    }
+
     public void AddStock(ItemData item, int amount, int desiredAmount = 100)
     {
         if (item == null || amount <= 0)
@@ -122,6 +134,17 @@ public class MarketRuntime
         MarketItemRuntime marketItem = GetOrCreateItem(item, desiredAmount);
         marketItem.AddAmount(amount);
         marketItem.UpdatePrice();
+    }
+
+    public bool CanAddStock(ItemData item, int amount)
+    {
+        if (item == null || amount <= 0)
+        {
+            return false;
+        }
+
+        MarketItemRuntime marketItem = GetItem(item);
+        return marketItem == null || marketItem.Amount <= int.MaxValue - amount;
     }
 
     public int RemoveStockUpTo(ItemData item, int amount)
@@ -147,12 +170,22 @@ public class MarketRuntime
 
     public bool BuyItem(NpcRuntime npc, ItemData item, int requestedAmount, out int amountBought, out float unitPrice, out float totalPrice)
     {
-        return ExecuteNpcTrade(npc, item, requestedAmount, true, out amountBought, out unitPrice, out totalPrice, out _);
+        EconomyTransactionResult result = new EconomyTransactionService().TryExecuteOpenMarketPurchase(npc, this, item, requestedAmount);
+        amountBought = result.Quantity;
+        unitPrice = result.UnitPrice;
+        totalPrice = result.TotalPrice;
+        return result.Success;
     }
 
     public bool SellItem(NpcRuntime npc, ItemData item, int requestedAmount, out int amountSold, out float unitPrice, out float totalPrice, out float approximateProfit)
     {
-        return ExecuteNpcTrade(npc, item, requestedAmount, false, out amountSold, out unitPrice, out totalPrice, out approximateProfit);
+        float averageUnitCost = npc != null && item != null ? npc.Inventory.GetAverageUnitCost(item) : 0f;
+        EconomyTransactionResult result = new EconomyTransactionService().TryExecuteOpenMarketSale(npc, this, item, requestedAmount);
+        amountSold = result.Quantity;
+        unitPrice = result.UnitPrice;
+        totalPrice = result.TotalPrice;
+        approximateProfit = result.Success ? (unitPrice - averageUnitCost) * amountSold : 0f;
+        return result.Success;
     }
 
     public void UpdatePrices()
@@ -164,73 +197,6 @@ public class MarketRuntime
                 item.UpdatePrice();
             }
         }
-    }
-
-    private bool ExecuteNpcTrade(NpcRuntime npc, ItemData item, int requestedAmount, bool npcBuys, out int amountTraded, out float unitPrice, out float totalPrice, out float approximateProfit)
-    {
-        amountTraded = 0;
-        unitPrice = 0f;
-        totalPrice = 0f;
-        approximateProfit = 0f;
-
-        if (npc == null || item == null || requestedAmount <= 0)
-        {
-            return false;
-        }
-
-        MarketItemRuntime marketItem = npcBuys == true ? GetItem(item) : GetOrCreateItem(item, 100);
-
-        if (marketItem == null)
-        {
-            return false;
-        }
-
-        unitPrice = Mathf.Max(0.01f, marketItem.CurrentPrice);
-
-        if (npcBuys == true)
-        {
-            int affordableAmount = Mathf.FloorToInt(npc.Money / unitPrice);
-            amountTraded = Mathf.Min(requestedAmount, marketItem.Amount, affordableAmount);
-
-            if (amountTraded <= 0)
-            {
-                return false;
-            }
-
-            totalPrice = unitPrice * amountTraded;
-
-            if (npc.TrySpendMoney(totalPrice) == false)
-            {
-                return false;
-            }
-
-            marketItem.RemoveAmount(amountTraded);
-            npc.Inventory.AddItem(item, amountTraded, unitPrice);
-        }
-        else
-        {
-            amountTraded = Mathf.Min(requestedAmount, npc.Inventory.GetAmount(item));
-
-            if (amountTraded <= 0)
-            {
-                return false;
-            }
-
-            float averageUnitCost = npc.Inventory.GetAverageUnitCost(item);
-            totalPrice = unitPrice * amountTraded;
-
-            if (npc.Inventory.RemoveItem(item, amountTraded) == false)
-            {
-                return false;
-            }
-
-            marketItem.AddAmount(amountTraded);
-            npc.AddMoney(totalPrice);
-            approximateProfit = (unitPrice - averageUnitCost) * amountTraded;
-        }
-
-        marketItem.UpdatePrice();
-        return true;
     }
 
     private MarketItemRuntime GetOrCreateItem(ItemData item, int desiredAmount)

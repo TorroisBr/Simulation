@@ -9,14 +9,16 @@ public class TravelSystem
     private readonly float travelCostPerDay;
     private readonly DomainEventRecorder domainEventRecorder;
     private readonly SimulationLogger logger;
+    private readonly EconomyTransactionService transactionService;
     private TravelPartyStore travelPartyStore;
 
     public TravelSystem(
         SpatialNetworkRuntime spatialNetwork,
         Func<SpatialLocationRuntime, CityRuntime> getCityRuntimeByLocation,
         float travelCostPerDay = 0f,
-        SimulationLogger logger = null)
-        : this(spatialNetwork, getCityRuntimeByLocation, travelCostPerDay, null, logger)
+        SimulationLogger logger = null,
+        EconomyTransactionService transactionService = null)
+        : this(spatialNetwork, getCityRuntimeByLocation, travelCostPerDay, null, logger, transactionService)
     {
     }
 
@@ -25,13 +27,15 @@ public class TravelSystem
         Func<SpatialLocationRuntime, CityRuntime> getCityRuntimeByLocation,
         float travelCostPerDay,
         DomainEventRecorder domainEventRecorder,
-        SimulationLogger logger)
+        SimulationLogger logger,
+        EconomyTransactionService transactionService = null)
     {
         this.spatialNetwork = spatialNetwork;
         this.getCityRuntimeByLocation = getCityRuntimeByLocation;
         this.travelCostPerDay = Mathf.Max(0f, travelCostPerDay);
         this.domainEventRecorder = domainEventRecorder;
         this.logger = logger ?? new SimulationLogger(null);
+        this.transactionService = transactionService ?? new EconomyTransactionService();
     }
 
     public void AttachTravelPartyStore(TravelPartyStore store)
@@ -58,22 +62,29 @@ public class TravelSystem
         int travelDays = route.TravelDays;
         float travelCost = GetTravelCost(travelDays);
 
-        if (travelCost < 0f || npcRuntime.Money < travelCost)
+        if (travelCost < 0f || transactionService.CanChargeTravel(npcRuntime, travelCost) == false)
         {
             return false;
         }
 
         CityRuntime originCity = npcRuntime.CurrentCity;
 
+        EconomyTransactionResult charge = transactionService.TryChargeTravel(npcRuntime, travelCost);
+
+        if (charge.Success == false)
+        {
+            return false;
+        }
+
         if (npcRuntime.StartTravel(actionRuntime.TargetCity, travelDays, actionRuntime.OriginDecisionId) == false)
         {
+            transactionService.TryRestoreTravelCharge(npcRuntime, travelCost);
             return false;
         }
 
         // Direct discovery happens only after execution has entered the real route.
         npcRuntime.SpatialKnowledge.DiscoverLocation(originCity.Location.RuntimeId);
         npcRuntime.SpatialKnowledge.DiscoverRoute(route.RuntimeId);
-        npcRuntime.TrySpendMoney(travelCost);
         domainEventRecorder?.Record((eventId, absoluteDay, recordSequence) => new NpcTravelStartedEvent(
             eventId,
             absoluteDay,
@@ -115,7 +126,7 @@ public class TravelSystem
         }
 
         travelCost = GetTravelCost(travelDays);
-        return npcRuntime.Money >= travelCost;
+        return transactionService.CanChargeTravel(npcRuntime, travelCost);
     }
 
     public IReadOnlyList<NpcRuntime> AdvanceTravels(List<NpcRuntime> npcRuntimeList)

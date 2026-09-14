@@ -91,6 +91,38 @@ public class InventoryRuntime
         return GetAmount(item) >= amount;
     }
 
+    public bool CanAddItem(ItemData item, int amount, float unitCost = 0f)
+    {
+        if (item == null
+            || amount <= 0
+            || float.IsNaN(unitCost) == true
+            || float.IsInfinity(unitCost) == true
+            || unitCost < 0f)
+        {
+            return false;
+        }
+
+        InventoryItemRuntime inventoryItem = GetItem(item);
+
+        if (inventoryItem == null || inventoryItem.Amount > int.MaxValue - amount)
+        {
+            return inventoryItem == null;
+        }
+
+        if (unitCost <= 0f || inventoryItem.Amount <= 0)
+        {
+            return true;
+        }
+
+        float currentTotalCost = inventoryItem.AverageUnitCost * inventoryItem.Amount;
+        float addedTotalCost = unitCost * amount;
+        float nextAverageUnitCost = (currentTotalCost + addedTotalCost) / (inventoryItem.Amount + amount);
+
+        return float.IsNaN(nextAverageUnitCost) == false
+            && float.IsInfinity(nextAverageUnitCost) == false
+            && nextAverageUnitCost >= 0f;
+    }
+
     public void AddItem(ItemData item, int amount, float unitCost = 0f)
     {
         if (item == null || amount <= 0)

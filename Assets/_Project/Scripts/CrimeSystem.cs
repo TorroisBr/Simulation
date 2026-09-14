@@ -8,13 +8,20 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler
     private readonly TravelSystem travelSystem;
     private readonly NpcStatusData hiddenStatus;
     private readonly SimulationLogger logger;
+    private readonly EconomyTransactionService transactionService;
 
-    public CrimeSystem(JusticeSystem justiceSystem, TravelSystem travelSystem, NpcStatusData hiddenStatus, SimulationLogger logger = null)
+    public CrimeSystem(
+        JusticeSystem justiceSystem,
+        TravelSystem travelSystem,
+        NpcStatusData hiddenStatus,
+        SimulationLogger logger = null,
+        EconomyTransactionService transactionService = null)
     {
         this.justiceSystem = justiceSystem;
         this.travelSystem = travelSystem;
         this.hiddenStatus = hiddenStatus;
         this.logger = logger ?? new SimulationLogger(null);
+        this.transactionService = transactionService ?? new EconomyTransactionService();
     }
 
     public bool HandlesAction(NpcActionData action)
@@ -239,12 +246,11 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler
 
         int amount = Mathf.Min(actionRuntime.Amount, Mathf.FloorToInt(actionRuntime.TargetNpc.Money));
 
-        if (amount <= 0 || actionRuntime.TargetNpc.TrySpendMoney(amount) == false)
+        if (amount <= 0 || transactionService.TryTransferMoney(actionRuntime.TargetNpc, npcRuntime, amount).Success == false)
         {
             return NpcActionResult.Failed();
         }
 
-        npcRuntime.AddMoney(amount);
         CrimeActionSettings settings = GetCrimeSettings(actionRuntime.Action);
         logger.Log(SimulationLogCategory.Crime, $"{npcRuntime.NpcName} roubou {actionRuntime.TargetNpc.NpcName} e levou {amount} moedas.");
         justiceSystem.CreateOrIncreaseWarrant(npcRuntime, npcRuntime.CurrentCity, settings.bounty, settings.sentenceDays);

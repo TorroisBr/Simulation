@@ -329,6 +329,7 @@ public sealed class TravelPartySystem
     private readonly SimulationRecordSequence recordSequence;
     private readonly DomainEventRecorder domainEventRecorder;
     private readonly SimulationLogger logger;
+    private readonly EconomyTransactionService transactionService;
 
     public TravelPartyStore Store => partyStore;
 
@@ -340,7 +341,8 @@ public sealed class TravelPartySystem
         SimulationTime simulationTime,
         SimulationRecordSequence recordSequence,
         DomainEventRecorder domainEventRecorder,
-        SimulationLogger logger = null)
+        SimulationLogger logger = null,
+        EconomyTransactionService transactionService = null)
     {
         this.partyStore = partyStore ?? throw new ArgumentNullException(nameof(partyStore));
         this.idAllocator = idAllocator ?? throw new ArgumentNullException(nameof(idAllocator));
@@ -350,6 +352,7 @@ public sealed class TravelPartySystem
         this.recordSequence = recordSequence ?? throw new ArgumentNullException(nameof(recordSequence));
         this.domainEventRecorder = domainEventRecorder;
         this.logger = logger ?? new SimulationLogger(null);
+        this.transactionService = transactionService ?? new EconomyTransactionService();
         travelSystem.AttachTravelPartyStore(partyStore);
     }
 
@@ -404,18 +407,16 @@ public sealed class TravelPartySystem
             startedMembers.Add(member);
         }
 
-        foreach (TravelPartyMemberCost cost in preparation.Costs)
+        float travelCost = preparation.Costs[0].Amount;
+        EconomyTransactionResult groupCharge = transactionService.TryChargeTravelGroup(preparation.Members, travelCost);
+
+        if (groupCharge.Success == false)
         {
-            NpcRuntime member = preparation.MemberById[cost.RuntimeId];
-
-            if (member.TrySpendMoney(cost.Amount) == false)
-            {
-                Rollback(startedMembers, paidCosts, preparation.Origin);
-                return false;
-            }
-
-            paidCosts.Add(cost);
+            Rollback(startedMembers, paidCosts, preparation.Origin);
+            return false;
         }
+
+        paidCosts.AddRange(preparation.Costs);
 
         if (partyStore.Add(createdParty) == false)
         {
@@ -675,7 +676,7 @@ public sealed class TravelPartySystem
                 return false;
             }
 
-            if (member.Money < cost)
+            if (transactionService.CanChargeTravel(member, cost) == false)
             {
                 reason = "A group travel participant cannot pay the travel cost.";
                 return false;
@@ -749,7 +750,7 @@ public sealed class TravelPartySystem
         return true;
     }
 
-    private static void Rollback(
+    private void Rollback(
         List<NpcRuntime> startedMembers,
         List<TravelPartyMemberCost> paidCosts,
         CityRuntime origin)
@@ -766,7 +767,7 @@ public sealed class TravelPartySystem
                     {
                         if (member != null && member.RuntimeId == cost.RuntimeId)
                         {
-                            member.AddMoney(cost.Amount);
+                            transactionService.TryRestoreTravelCharge(member, cost.Amount);
                             break;
                         }
                     }

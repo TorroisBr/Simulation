@@ -33,22 +33,21 @@ public sealed class MoneyAccountRuntime
             && balance >= amount;
     }
 
+    public bool CanCredit(float amount)
+    {
+        return IsValidNonNegativeFiniteAmount(amount) == true
+            && IsValidNonNegativeFiniteAmount(balance) == true
+            && IsValidNonNegativeFiniteAmount(balance + amount) == true;
+    }
+
     public bool TryCredit(float amount)
     {
-        if (IsValidNonNegativeFiniteAmount(amount) == false
-            || IsValidNonNegativeFiniteAmount(balance) == false)
+        if (CanCredit(amount) == false)
         {
             return false;
         }
 
-        float nextBalance = balance + amount;
-
-        if (IsValidNonNegativeFiniteAmount(nextBalance) == false)
-        {
-            return false;
-        }
-
-        balance = nextBalance;
+        balance += amount;
         return true;
     }
 

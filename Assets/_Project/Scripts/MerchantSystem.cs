@@ -16,6 +16,7 @@ public class MerchantSystem : INpcActionProvider
     private readonly CommercialKnowledgePolicy knowledgePolicy;
     private readonly NpcDecisionRecorder decisionRecorder;
     private readonly SimulationLogger logger;
+    private readonly EconomyTransactionService transactionService;
 
     public MerchantSystem(
         int maxMerchantTradeAmount,
@@ -25,7 +26,8 @@ public class MerchantSystem : INpcActionProvider
         SimulationTime simulationTime,
         CommercialKnowledgeSettings knowledgeSettings,
         NpcDecisionRecorder decisionRecorder,
-        SimulationLogger logger = null)
+        SimulationLogger logger = null,
+        EconomyTransactionService transactionService = null)
     {
         this.maxMerchantTradeAmount = Mathf.Max(1, maxMerchantTradeAmount);
         this.minimumProfitPerItem = Mathf.Max(0f, minimumProfitPerItem);
@@ -35,6 +37,7 @@ public class MerchantSystem : INpcActionProvider
         knowledgePolicy = new CommercialKnowledgePolicy(knowledgeSettings);
         this.decisionRecorder = decisionRecorder;
         this.logger = logger ?? new SimulationLogger(null);
+        this.transactionService = transactionService ?? new EconomyTransactionService();
     }
 
     public void AdvanceNpcTradeState(NpcRuntime npcRuntime)
@@ -324,12 +327,19 @@ public class MerchantSystem : INpcActionProvider
             return false;
         }
 
-        bool bought = npcRuntime.CurrentCity.Market.BuyItem(npcRuntime, actionRuntime.TargetItem, actionRuntime.Amount, out int amountBought, out float unitPrice, out _);
+        EconomyTransactionResult transaction = transactionService.TryExecuteOpenMarketPurchase(
+            npcRuntime,
+            npcRuntime.CurrentCity.Market,
+            actionRuntime.TargetItem,
+            actionRuntime.Amount);
 
-        if (bought == false || amountBought <= 0)
+        if (transaction.Success == false || transaction.Quantity <= 0)
         {
             return false;
         }
+
+        int amountBought = transaction.Quantity;
+        float unitPrice = transaction.UnitPrice;
 
         if (IsTravelingMerchant(npcRuntime) == true && actionRuntime.TargetCity != npcRuntime.CurrentCity)
         {
@@ -371,6 +381,8 @@ public class MerchantSystem : INpcActionProvider
             return true;
         }
 
+        // NPC-to-NPC trade and open-market sale are separate transaction choices.
+        // A failed NPC trade may explicitly fall back to the open market here.
         return TryExecuteSellGoodsToMarket(npcRuntime, actionRuntime, saleBelongsToPlan, plan, planPurchasePrice);
     }
 
@@ -408,23 +420,20 @@ public class MerchantSystem : INpcActionProvider
             return false;
         }
 
-        float totalPrice = unitPrice * amountSold;
+        EconomyTransactionResult transaction = transactionService.TryExecuteNpcTrade(
+            buyerRuntime,
+            sellerRuntime,
+            actionRuntime.TargetItem,
+            amountSold,
+            unitPrice);
 
-        if (buyerRuntime.TrySpendMoney(totalPrice) == false)
+        if (transaction.Success == false)
         {
-            return false;
-        }
-
-        if (sellerRuntime.Inventory.RemoveItem(actionRuntime.TargetItem, amountSold) == false)
-        {
-            buyerRuntime.AddMoney(totalPrice);
             amountSold = 0;
             return false;
         }
 
-        sellerRuntime.AddMoney(totalPrice);
-        buyerRuntime.Inventory.AddItem(actionRuntime.TargetItem, amountSold, unitPrice);
-        float approximateProfit = (unitPrice - referencePrice) * amountSold;
+        float approximateProfit = (transaction.UnitPrice - referencePrice) * transaction.Quantity;
         logger.Log(SimulationLogCategory.Trade, $"{sellerRuntime.NpcName} vendeu {amountSold} {actionRuntime.TargetItem.itemName} para {buyerRuntime.NpcName} em {sellerRuntime.CurrentCity.CityName} por {unitPrice:0.##} cada");
         logger.Log(SimulationLogCategory.Trade, $"Lucro aproximado: {approximateProfit:0.##}");
         return true;
@@ -432,12 +441,21 @@ public class MerchantSystem : INpcActionProvider
 
     private bool TryExecuteSellGoodsToMarket(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime, bool saleBelongsToPlan, MerchantTradePlanRuntime plan, float planPurchasePrice)
     {
-        bool sold = npcRuntime.CurrentCity.Market.SellItem(npcRuntime, actionRuntime.TargetItem, actionRuntime.Amount, out int amountSold, out float unitPrice, out _, out float approximateProfit);
+        float averageUnitCost = npcRuntime.Inventory.GetAverageUnitCost(actionRuntime.TargetItem);
+        EconomyTransactionResult transaction = transactionService.TryExecuteOpenMarketSale(
+            npcRuntime,
+            npcRuntime.CurrentCity.Market,
+            actionRuntime.TargetItem,
+            actionRuntime.Amount);
 
-        if (sold == false || amountSold <= 0)
+        if (transaction.Success == false || transaction.Quantity <= 0)
         {
             return false;
         }
+
+        int amountSold = transaction.Quantity;
+        float unitPrice = transaction.UnitPrice;
+        float approximateProfit = (unitPrice - averageUnitCost) * amountSold;
 
         if (saleBelongsToPlan == true)
         {
