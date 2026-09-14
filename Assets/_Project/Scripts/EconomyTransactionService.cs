@@ -867,13 +867,21 @@ public sealed class EconomyTransactionService
         float totalPrice = unitPrice * quantity;
 
         if (IsValidNonNegativeFiniteAmount(totalPrice) == false
-            || population.MoneyAccount.CanDebit(totalPrice) == false
-            || settlement.MoneyAccount.CanCredit(totalPrice) == false)
+            || population.MoneyAccount.CanDebit(totalPrice) == false)
         {
             return EconomyTransactionResult.CreateFailure(
                 transactionType,
                 moneyEffect,
                 EconomyTransactionFailureReason.InsufficientFunds,
+                actorRuntimeId: population.PopulationEconomicRuntimeId);
+        }
+
+        if (settlement.MoneyAccount.CanCredit(totalPrice) == false)
+        {
+            return EconomyTransactionResult.CreateFailure(
+                transactionType,
+                moneyEffect,
+                EconomyTransactionFailureReason.CounterpartyCreditCapacity,
                 actorRuntimeId: population.PopulationEconomicRuntimeId);
         }
 

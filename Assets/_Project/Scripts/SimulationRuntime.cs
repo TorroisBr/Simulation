@@ -1,0 +1,488 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+public sealed class SimulationRuntime
+{
+    private readonly SimulationTime simulationTime;
+    private readonly List<CityRuntime> cities;
+    private readonly List<NpcRuntime> npcRuntimes;
+    private readonly bool economyEnabled;
+    private readonly bool guardCrimeEnabled;
+    private readonly List<NpcActionData> configuredActions;
+    private readonly ScheduledDirectiveSystem scheduledDirectiveSystem;
+    private readonly JusticeSystem justiceSystem;
+    private readonly CrimeSystem crimeSystem;
+    private readonly NpcDecisionSystem npcDecisionSystem;
+    private readonly TravelSystem travelSystem;
+    private readonly TravelPartySystem travelPartySystem;
+    private readonly MerchantSystem merchantSystem;
+    private readonly CommercialKnowledgeSharingSystem commercialKnowledgeSharingSystem;
+    private readonly NpcDecisionRecorder decisionRecorder;
+    private readonly SimulationLogger logger;
+
+    public SimulationTime SimulationTime => simulationTime;
+    public long CurrentDay => simulationTime.AbsoluteDay;
+    public IReadOnlyList<CityRuntime> Cities => cities;
+    public IReadOnlyList<NpcRuntime> NpcRuntimes => npcRuntimes;
+
+    public SimulationRuntime(
+        SimulationTime simulationTime,
+        IEnumerable<CityRuntime> cities,
+        IEnumerable<NpcRuntime> npcRuntimes,
+        bool economyEnabled = true,
+        IReadOnlyList<NpcActionData> configuredActions = null,
+        ScheduledDirectiveSystem scheduledDirectiveSystem = null,
+        JusticeSystem justiceSystem = null,
+        CrimeSystem crimeSystem = null,
+        NpcDecisionSystem npcDecisionSystem = null,
+        TravelSystem travelSystem = null,
+        TravelPartySystem travelPartySystem = null,
+        MerchantSystem merchantSystem = null,
+        CommercialKnowledgeSharingSystem commercialKnowledgeSharingSystem = null,
+        NpcDecisionRecorder decisionRecorder = null,
+        SimulationLogger logger = null,
+        bool guardCrimeEnabled = false)
+    {
+        this.simulationTime = simulationTime ?? throw new ArgumentNullException(nameof(simulationTime));
+        this.cities = cities != null ? new List<CityRuntime>(cities) : new List<CityRuntime>();
+        this.npcRuntimes = npcRuntimes != null ? new List<NpcRuntime>(npcRuntimes) : new List<NpcRuntime>();
+        this.economyEnabled = economyEnabled;
+        this.guardCrimeEnabled = guardCrimeEnabled;
+        this.configuredActions = configuredActions != null
+            ? new List<NpcActionData>(configuredActions)
+            : null;
+        this.scheduledDirectiveSystem = scheduledDirectiveSystem;
+        this.justiceSystem = justiceSystem;
+        this.crimeSystem = crimeSystem;
+        this.npcDecisionSystem = npcDecisionSystem;
+        this.travelSystem = travelSystem;
+        this.travelPartySystem = travelPartySystem;
+        this.merchantSystem = merchantSystem;
+        this.commercialKnowledgeSharingSystem = commercialKnowledgeSharingSystem;
+        this.decisionRecorder = decisionRecorder;
+        this.logger = logger;
+    }
+
+    public bool TryStartTravelParty(ActionExecutionContext context)
+    {
+        return travelPartySystem != null && travelPartySystem.TryStartTravelParty(context);
+    }
+
+    public void AdvanceDay()
+    {
+        simulationTime.AdvanceDay();
+        logger?.BeginDay(CurrentDay);
+        BeginSimulationDay();
+        scheduledDirectiveSystem?.PrepareDay(CurrentDay);
+
+        if (economyEnabled == true)
+        {
+            SimulateEconomyDay();
+        }
+
+        RefreshLocalKnowledgeAndShare();
+
+        foreach (NpcRuntime npcRuntime in npcRuntimes)
+        {
+            if (npcRuntime == null)
+            {
+                continue;
+            }
+
+            if (npcRuntime.IsTraveling == true)
+            {
+                TryProcessScheduledDirective(npcRuntime);
+                continue;
+            }
+
+            EvaluateStatus(npcRuntime);
+            merchantSystem?.AdvanceNpcTradeState(npcRuntime);
+
+            if (TryProcessScheduledDirective(npcRuntime) == true)
+            {
+                continue;
+            }
+
+            EvaluateAction(npcRuntime);
+            TryExecuteCurrentAction(npcRuntime);
+        }
+
+        List<NpcRuntime> arrivedNpcs = new List<NpcRuntime>();
+
+        if (travelPartySystem != null)
+        {
+            arrivedNpcs.AddRange(travelPartySystem.AdvanceParties());
+        }
+
+        if (travelSystem != null)
+        {
+            arrivedNpcs.AddRange(travelSystem.AdvanceTravels(npcRuntimes));
+        }
+
+        foreach (NpcRuntime arrivedNpc in arrivedNpcs)
+        {
+            merchantSystem?.ObserveCurrentMarket(arrivedNpc);
+        }
+    }
+
+    public void AdvanceDays(int dayCount)
+    {
+        if (dayCount < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(dayCount), dayCount, "dayCount cannot be negative.");
+        }
+
+        for (int i = 0; i < dayCount; i++)
+        {
+            AdvanceDay();
+        }
+    }
+
+    private void BeginSimulationDay()
+    {
+        if (justiceSystem != null)
+        {
+            justiceSystem.BeginDay();
+        }
+
+        if (crimeSystem != null)
+        {
+            crimeSystem.AdvanceHiddenStatuses(npcRuntimes);
+        }
+
+        if (guardCrimeEnabled == true && justiceSystem != null)
+        {
+            justiceSystem.AdvanceSentences(npcRuntimes);
+        }
+
+        if (justiceSystem != null)
+        {
+            justiceSystem.SyncWantedStatuses(npcRuntimes);
+        }
+
+        AdvanceMerchantPlanUrgency();
+    }
+
+    private void AdvanceMerchantPlanUrgency()
+    {
+        foreach (NpcRuntime npcRuntime in npcRuntimes)
+        {
+            if (npcRuntime == null || npcRuntime.IsTraveling == true)
+            {
+                continue;
+            }
+
+            MerchantTradePlanRuntime tradePlan = npcRuntime.MerchantTradePlan;
+
+            if (tradePlan.IsActive == true
+                && tradePlan.TargetCity != null
+                && tradePlan.TargetCity != npcRuntime.CurrentCity)
+            {
+                tradePlan.IncrementPendingTravelDay();
+            }
+        }
+    }
+
+    private void SimulateEconomyDay()
+    {
+        foreach (CityRuntime cityRuntime in cities)
+        {
+            if (cityRuntime != null)
+            {
+                cityRuntime.SimulateProductionDay();
+            }
+        }
+
+        foreach (CityRuntime cityRuntime in cities)
+        {
+            if (cityRuntime == null)
+            {
+                continue;
+            }
+
+            cityRuntime.SimulateConsumptionDay();
+            cityRuntime.UpdateMarketPrices();
+        }
+    }
+
+    private void RefreshLocalKnowledgeAndShare()
+    {
+        foreach (NpcRuntime npcRuntime in npcRuntimes)
+        {
+            if (npcRuntime?.CurrentCity?.Location == null || npcRuntime.IsTraveling == true)
+            {
+                continue;
+            }
+
+            npcRuntime.SpatialKnowledge.DiscoverLocation(npcRuntime.CurrentCity.Location.RuntimeId);
+            merchantSystem?.ObserveCurrentMarket(npcRuntime);
+        }
+
+        commercialKnowledgeSharingSystem?.ShareAmongPresentMerchants(npcRuntimes);
+    }
+
+    private void EvaluateStatus(NpcRuntime npcRuntime)
+    {
+    }
+
+    private void EvaluateAction(NpcRuntime npcRuntime)
+    {
+        if (npcDecisionSystem == null)
+        {
+            return;
+        }
+
+        NpcActionRuntime chosenAction = npcDecisionSystem.ChooseAction(npcRuntime, configuredActions);
+        decisionRecorder?.RecordChosenAction(npcRuntime, chosenAction, NpcDecisionOrigin.Autonomous);
+        npcRuntime.SetCurrentActionRuntime(chosenAction);
+    }
+
+    private NpcActionResult TryExecuteCurrentAction(NpcRuntime npcRuntime)
+    {
+        NpcActionRuntime actionRuntime = npcRuntime.CurrentActionRuntime;
+        NpcActionData action = actionRuntime != null ? actionRuntime.Action : npcRuntime.CurrentAction;
+
+        if (action == null)
+        {
+            return null;
+        }
+
+        LogChosenTargetAction(npcRuntime, actionRuntime);
+        NpcActionResult actionResult = TryExecuteAction(npcRuntime, actionRuntime, action);
+
+        if (actionResult != null && string.IsNullOrEmpty(actionResult.Message) == false)
+        {
+            logger?.Log(SimulationLogCategory.NpcAction, actionResult.Message);
+        }
+
+        if (actionResult != null && actionResult.Success == true)
+        {
+            ApplySuccessStatusChanges(npcRuntime, actionRuntime, action);
+        }
+
+        return actionResult;
+    }
+
+    private bool TryProcessScheduledDirective(NpcRuntime npcRuntime)
+    {
+        if (scheduledDirectiveSystem == null
+            || scheduledDirectiveSystem.TryTakeDirective(npcRuntime, out ScheduledDirective directive) == false)
+        {
+            return false;
+        }
+
+        npcRuntime.SetCurrentActionRuntime(null);
+
+        if (directive.Mode == ScheduledDirectiveMode.RequestAction)
+        {
+            ProcessRequestedActionDirective(npcRuntime, directive);
+        }
+        else if (directive.Mode == ScheduledDirectiveMode.ForceOutcome)
+        {
+            ProcessForcedOutcomeDirective(npcRuntime, directive);
+        }
+        else
+        {
+            SkipDirective(directive, "Directive mode is not supported.");
+        }
+
+        return true;
+    }
+
+    private void ProcessRequestedActionDirective(NpcRuntime npcRuntime, ScheduledDirective directive)
+    {
+        NpcActionRuntime requestedAction = npcDecisionSystem != null
+            ? npcDecisionSystem.CreateRequestedAction(npcRuntime, directive.Action)
+            : null;
+
+        if (requestedAction == null)
+        {
+            SkipDirective(directive, "Actor is not in a compatible state for the requested action.");
+            return;
+        }
+
+        decisionRecorder?.RecordChosenAction(npcRuntime, requestedAction, NpcDecisionOrigin.ScheduledDirective);
+        npcRuntime.SetCurrentActionRuntime(requestedAction);
+        NpcActionResult result = TryExecuteCurrentAction(npcRuntime);
+
+        if (result != null && result.Success == true)
+        {
+            directive.MarkSucceeded(CurrentDay);
+            return;
+        }
+
+        string reason = result != null && string.IsNullOrEmpty(result.Message) == false
+            ? result.Message
+            : "Requested action was attempted and failed.";
+        directive.MarkFailed(CurrentDay, reason);
+    }
+
+    private void ProcessForcedOutcomeDirective(NpcRuntime npcRuntime, ScheduledDirective directive)
+    {
+        if (directive.Operation != ScheduledDirectiveOperation.EscapePrison || justiceSystem == null)
+        {
+            SkipDirective(directive, "Escape domain operation is unavailable.");
+            return;
+        }
+
+        if (justiceSystem.IsArrested(npcRuntime) == false)
+        {
+            SkipDirective(directive, "Actor is not arrested; escape outcome is incompatible with current state.");
+            return;
+        }
+
+        CrimeActionSettings settings = directive.Action != null && directive.Action.crimeSettings != null
+            ? directive.Action.crimeSettings
+            : new CrimeActionSettings();
+
+        npcRuntime.SetCurrentActionRuntime(new NpcActionRuntime(directive.Action));
+
+        if (justiceSystem.ApplyEscapeSuccess(npcRuntime, settings.escapeBountyPenalty) == false)
+        {
+            directive.MarkFailed(CurrentDay, "Canonical escape transition rejected the forced outcome.");
+            return;
+        }
+
+        ApplySuccessStatusChanges(npcRuntime, npcRuntime.CurrentActionRuntime, directive.Action);
+        directive.MarkSucceeded(CurrentDay);
+    }
+
+    private void SkipDirective(ScheduledDirective directive, string reason)
+    {
+        if (directive == null)
+        {
+            return;
+        }
+
+        directive.MarkSkipped(CurrentDay, reason);
+        logger?.LogWarning($"Scheduled directive '{directive.DirectiveId}' was skipped: {reason}");
+    }
+
+    private NpcActionResult TryExecuteAction(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime, NpcActionData action)
+    {
+        INpcActionProvider actionProvider = action.actionType == NpcActionType.Normal
+            ? null
+            : npcDecisionSystem?.GetProviderForAction(action);
+
+        if (action.actionType != NpcActionType.Normal && actionProvider == null)
+        {
+            return NpcActionResult.Failed();
+        }
+
+        if (RollActionSuccess(action, actionRuntime) == false)
+        {
+            if (actionProvider is INpcActionFailureHandler failureHandler)
+            {
+                NpcActionResult failureResult = failureHandler.HandleActionFailure(npcRuntime, actionRuntime);
+
+                if (failureResult != null)
+                {
+                    return failureResult;
+                }
+            }
+
+            return NpcActionResult.Failed(CreateFailureMessage(npcRuntime, actionRuntime, action));
+        }
+
+        if (action.actionType == NpcActionType.Normal)
+        {
+            return NpcActionResult.Succeeded(CreateNormalActionMessage(npcRuntime, action));
+        }
+
+        return actionProvider.TryExecuteAction(npcRuntime, actionRuntime);
+    }
+
+    private bool RollActionSuccess(NpcActionData action, NpcActionRuntime actionRuntime)
+    {
+        if (action == null || action.canFail == false)
+        {
+            return true;
+        }
+
+        float contextualMultiplier = actionRuntime != null ? actionRuntime.SuccessChanceMultiplier : 1f;
+        float effectiveChance = Mathf.Clamp01(action.baseSuccessChance * Mathf.Max(0f, contextualMultiplier));
+        return UnityEngine.Random.value <= effectiveChance;
+    }
+
+    private void ApplySuccessStatusChanges(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime, NpcActionData action)
+    {
+        ApplyStatusChanges(npcRuntime, action.statusToRemove, action.statusToAdd);
+
+        if (actionRuntime != null && actionRuntime.TargetNpc != null)
+        {
+            ApplyStatusChanges(actionRuntime.TargetNpc, action.targetStatusToRemove, action.targetStatusToAdd);
+        }
+    }
+
+    private void ApplyStatusChanges(NpcRuntime npcRuntime, List<NpcStatusData> statusToRemove, List<NpcStatusData> statusToAdd)
+    {
+        if (npcRuntime == null)
+        {
+            return;
+        }
+
+        if (statusToRemove != null)
+        {
+            foreach (NpcStatusData status in statusToRemove)
+            {
+                npcRuntime.RemoveStatus(status);
+            }
+        }
+
+        if (statusToAdd != null)
+        {
+            foreach (NpcStatusData status in statusToAdd)
+            {
+                npcRuntime.AddStatus(status);
+            }
+        }
+    }
+
+    private void LogChosenTargetAction(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime)
+    {
+        if (npcRuntime == null || actionRuntime == null || actionRuntime.Action == null)
+        {
+            return;
+        }
+
+        if (actionRuntime.TargetNpc != null)
+        {
+            logger?.Log(SimulationLogCategory.NpcAction, $"{npcRuntime.NpcName} escolheu {GetActionName(actionRuntime.Action)} {actionRuntime.TargetNpc.NpcName}.");
+        }
+        else if (actionRuntime.TargetCity != null)
+        {
+            logger?.Log(SimulationLogCategory.NpcAction, $"{npcRuntime.NpcName} escolheu {GetActionName(actionRuntime.Action)} {actionRuntime.TargetCity.CityName}.");
+        }
+    }
+
+    private string CreateFailureMessage(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime, NpcActionData action)
+    {
+        string actorName = npcRuntime != null ? npcRuntime.NpcName : "NPC desconhecido";
+        string targetName = actionRuntime != null && actionRuntime.TargetNpc != null ? $" {actionRuntime.TargetNpc.NpcName}" : string.Empty;
+        string targetCityName = actionRuntime != null && actionRuntime.TargetCity != null ? $" {actionRuntime.TargetCity.CityName}" : string.Empty;
+        return $"{actorName} tentou {GetActionName(action)}{targetName}{targetCityName}, mas falhou.";
+    }
+
+    private string CreateNormalActionMessage(NpcRuntime npcRuntime, NpcActionData action)
+    {
+        string actorName = npcRuntime != null ? npcRuntime.NpcName : "NPC desconhecido";
+
+        if (action != null && string.IsNullOrEmpty(action.normalActionLogText) == false)
+        {
+            return $"{actorName} {action.normalActionLogText}";
+        }
+
+        return $"{actorName} realizou {GetActionName(action)}.";
+    }
+
+    private string GetActionName(NpcActionData action)
+    {
+        if (action == null)
+        {
+            return "acao desconhecida";
+        }
+
+        return string.IsNullOrEmpty(action.actionName) == false ? action.actionName : action.actionType.ToString();
+    }
+}
