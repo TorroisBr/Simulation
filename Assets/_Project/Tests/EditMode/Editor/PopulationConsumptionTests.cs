@@ -66,14 +66,43 @@ public sealed class PopulationConsumptionTests
     public void InvalidInitialPopulationPurchasingPowerIsRejected(float invalidPower)
     {
         CityData cityData = SimulationTestFactory.CreateCityData("population-invalid");
+        cityData.marketLiquidity = new MarketLiquidityConfig
+        {
+            liquidityMode = MarketLiquidityMode.AccountBacked,
+            initialPurchasingPower = 0f
+        };
+        cityData.populationConsumption = new PopulationConsumptionConfig
+        {
+            paymentMode = ConsumptionPaymentMode.AccountBacked,
+            initialPurchasingPower = invalidPower
+        };
+
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new CityRuntime("city-population-invalid", cityData, new SpatialLocationRuntime("location-population-invalid")));
+    }
+
+    [TestCase(-1f)]
+    [TestCase(float.NaN)]
+    [TestCase(float.PositiveInfinity)]
+    [TestCase(float.NegativeInfinity)]
+    public void FreePopulationConsumptionIgnoresInvalidInitialPurchasingPower(float invalidPower)
+    {
+        CityData cityData = SimulationTestFactory.CreateCityData("population-free-invalid-power");
         cityData.populationConsumption = new PopulationConsumptionConfig
         {
             paymentMode = ConsumptionPaymentMode.Free,
             initialPurchasingPower = invalidPower
         };
 
-        Assert.Throws<ArgumentOutOfRangeException>(() =>
-            new CityRuntime("city-population-invalid", cityData, new SpatialLocationRuntime("location-population-invalid")));
+        CityRuntime city = null;
+        Assert.DoesNotThrow(() =>
+        {
+            city = new CityRuntime(
+                "city-free-invalid-power",
+                cityData,
+                new SpatialLocationRuntime("location-free-invalid-power"));
+        });
+        Assert.That(city.PopulationEconomy.MoneyAccount, Is.Null);
     }
 
     [Test]

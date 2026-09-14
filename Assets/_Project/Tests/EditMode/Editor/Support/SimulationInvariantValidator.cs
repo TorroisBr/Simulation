@@ -210,7 +210,7 @@ public static class SimulationInvariantValidator
         Assert.That(result.StockOwnerRuntimeId, Is.Not.Null.And.Not.Empty);
         Assert.That(result.StockOwnerRuntimeId, Is.EqualTo(result.SettlementRuntimeId));
         Assert.That(result.ItemDefinitionId, Is.Not.Null.And.Not.Empty);
-        Assert.That(result.QuantityProduced, Is.GreaterThanOrEqualTo(0));
+        Assert.That(result.QuantityProduced, Is.GreaterThan(0));
     }
 
     public static void ValidatePopulationEconomy(CityRuntime city)

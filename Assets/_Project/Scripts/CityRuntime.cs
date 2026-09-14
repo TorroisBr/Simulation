@@ -109,16 +109,17 @@ public class CityRuntime
             }
 
             int produced = Market.AddStock(production.item, production.amountPerDay);
+            if (produced <= 0)
+            {
+                continue;
+            }
+
             results.Add(new CityProductionResult(
                 RuntimeId,
                 production.item.DefinitionId,
                 produced,
                 Market.StockOwnerRuntimeId));
-
-            if (produced > 0)
-            {
-                logger?.Log(SimulationLogCategory.EconomyProduction, $"{CityName} produziu {produced} {production.item.itemName}");
-            }
+            logger?.Log(SimulationLogCategory.EconomyProduction, $"{CityName} produziu {produced} {production.item.itemName}");
         }
 
         return results.AsReadOnly();

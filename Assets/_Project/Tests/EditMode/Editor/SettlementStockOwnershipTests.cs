@@ -268,8 +268,7 @@ public sealed class SettlementStockOwnershipTests
 
         IReadOnlyList<CityProductionResult> results = city.SimulateProductionDay();
 
-        Assert.That(results.Count, Is.EqualTo(1));
-        Assert.That(results[0].QuantityProduced, Is.EqualTo(0));
+        Assert.That(results.Count, Is.EqualTo(0));
         Assert.That(city.Market.GetAmount(item), Is.EqualTo(int.MaxValue));
     }
 
