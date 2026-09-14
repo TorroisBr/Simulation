@@ -10,9 +10,11 @@ public class CityData : ScriptableObject
     public string cityName;
     public int initialPopulation = 1000;
     public MarketLiquidityConfig marketLiquidity = new MarketLiquidityConfig();
+    public PopulationConsumptionConfig populationConsumption = new PopulationConsumptionConfig();
 
     public string DefinitionId => id;
     public MarketLiquidityConfig MarketLiquidity => marketLiquidity ?? new MarketLiquidityConfig();
+    public PopulationConsumptionConfig PopulationConsumption => populationConsumption ?? new PopulationConsumptionConfig();
 
     public List<MarketItemConfig> marketItems = new List<MarketItemConfig>();
     public List<CityProductionConfig> productionConfigs = new List<CityProductionConfig>();
@@ -23,6 +25,19 @@ public class CityData : ScriptableObject
 public sealed class MarketLiquidityConfig
 {
     public MarketLiquidityMode liquidityMode = MarketLiquidityMode.Open;
+    public float initialPurchasingPower;
+}
+
+public enum ConsumptionPaymentMode
+{
+    Free,
+    AccountBacked
+}
+
+[Serializable]
+public sealed class PopulationConsumptionConfig
+{
+    public ConsumptionPaymentMode paymentMode = ConsumptionPaymentMode.Free;
     public float initialPurchasingPower;
 }
 

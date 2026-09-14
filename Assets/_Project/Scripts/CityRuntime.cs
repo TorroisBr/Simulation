@@ -10,6 +10,7 @@ public class CityRuntime
     [SerializeField] private int currentPopulation;
     [SerializeField] private MarketRuntime market;
     [NonSerialized] private MarketCounterpartyRuntime marketCounterparty;
+    [NonSerialized] private PopulationEconomyRuntime populationEconomy;
     [NonSerialized] private SpatialLocationRuntime location;
     [NonSerialized] private List<NpcRuntime> importantNpcs = new List<NpcRuntime>();
     [NonSerialized] private SimulationLogger logger;
@@ -45,6 +46,18 @@ public class CityRuntime
             return marketCounterparty;
         }
     }
+    public PopulationEconomyRuntime PopulationEconomy
+    {
+        get
+        {
+            if (populationEconomy == null)
+            {
+                populationEconomy = CreateConfiguredPopulationEconomy();
+            }
+
+            return populationEconomy;
+        }
+    }
     public List<NpcRuntime> ImportantNpcs => importantNpcs ?? (importantNpcs = new List<NpcRuntime>());
     public string CityName => cityData != null ? cityData.cityName : "Cidade desconhecida";
 
@@ -76,6 +89,7 @@ public class CityRuntime
         market = cityData != null
             ? new MarketRuntime(cityData.marketItems, this.marketCounterparty)
             : new MarketRuntime(new List<MarketItemConfig>(), this.marketCounterparty);
+        populationEconomy = CreateConfiguredPopulationEconomy();
     }
 
     public IReadOnlyList<CityProductionResult> SimulateProductionDay()
@@ -110,11 +124,13 @@ public class CityRuntime
         return results.AsReadOnly();
     }
 
-    public void SimulateConsumptionDay()
+    public IReadOnlyList<CityConsumptionResult> SimulateConsumptionDay()
     {
+        List<CityConsumptionResult> results = new List<CityConsumptionResult>();
+
         if (cityData == null || cityData.marketItems == null)
         {
-            return;
+            return results.AsReadOnly();
         }
 
         foreach (MarketItemConfig config in cityData.marketItems)
@@ -125,13 +141,57 @@ public class CityRuntime
             }
 
             int desiredConsumption = Mathf.RoundToInt(currentPopulation / 1000f * config.consumptionPer1000Population);
-            int consumed = Market.RemoveStockUpTo(config.item, desiredConsumption);
+            if (desiredConsumption <= 0)
+            {
+                results.Add(new CityConsumptionResult(
+                    RuntimeId,
+                    PopulationEconomy.PopulationEconomicRuntimeId,
+                    config.item.DefinitionId,
+                    desiredConsumption,
+                    0,
+                    PopulationEconomy.PaymentMode,
+                    0f,
+                    0f));
+                continue;
+            }
+
+            int consumed;
+            float unitPrice = 0f;
+            float totalPaid = 0f;
+
+            if (PopulationEconomy.PaymentMode == ConsumptionPaymentMode.Free)
+            {
+                consumed = Market.RemoveStockUpTo(config.item, desiredConsumption);
+            }
+            else
+            {
+                EconomyTransactionResult receipt = new EconomyTransactionService().TryExecutePopulationConsumption(
+                    PopulationEconomy,
+                    Market,
+                    config.item,
+                    desiredConsumption);
+                consumed = receipt.Quantity;
+                unitPrice = receipt.UnitPrice;
+                totalPaid = receipt.TotalPrice;
+            }
+
+            results.Add(new CityConsumptionResult(
+                RuntimeId,
+                PopulationEconomy.PopulationEconomicRuntimeId,
+                config.item.DefinitionId,
+                desiredConsumption,
+                consumed,
+                PopulationEconomy.PaymentMode,
+                unitPrice,
+                totalPaid));
 
             if (consumed > 0)
             {
                 logger?.Log(SimulationLogCategory.EconomyConsumption, $"{CityName} consumiu {consumed} {config.item.itemName}");
             }
         }
+
+        return results.AsReadOnly();
     }
 
     public void UpdateMarketPrices()
@@ -218,5 +278,16 @@ public class CityRuntime
 
         MoneyAccountRuntime account = new MoneyAccountRuntime(liquidity.initialPurchasingPower);
         return MarketCounterpartyRuntime.CreateAccountBacked(cityRuntimeId, account);
+    }
+
+    private PopulationEconomyRuntime CreateConfiguredPopulationEconomy()
+    {
+        PopulationConsumptionConfig consumption = cityData != null
+            ? cityData.PopulationConsumption
+            : new PopulationConsumptionConfig();
+        return new PopulationEconomyRuntime(
+            runtimeId,
+            consumption,
+            MarketCounterparty.LiquidityMode);
     }
 }

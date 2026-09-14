@@ -213,6 +213,27 @@ public static class SimulationInvariantValidator
         Assert.That(result.QuantityProduced, Is.GreaterThanOrEqualTo(0));
     }
 
+    public static void ValidatePopulationEconomy(CityRuntime city)
+    {
+        Assert.That(city, Is.Not.Null);
+        Assert.That(city.PopulationEconomy, Is.Not.Null);
+        Assert.That(city.PopulationEconomy.CityRuntimeId, Is.EqualTo(city.RuntimeId));
+        Assert.That(city.PopulationEconomy.PopulationEconomicRuntimeId, Is.Not.Null.And.Not.Empty);
+        Assert.That(city.PopulationEconomy.PopulationEconomicRuntimeId, Is.Not.EqualTo(city.RuntimeId));
+
+        if (city.PopulationEconomy.PaymentMode == ConsumptionPaymentMode.Free)
+        {
+            Assert.That(city.PopulationEconomy.MoneyAccount, Is.Null);
+            return;
+        }
+
+        Assert.That(city.PopulationEconomy.MoneyAccount, Is.Not.Null);
+        Assert.That(city.PopulationEconomy.MoneyAccount.Balance, Is.GreaterThanOrEqualTo(0f));
+        Assert.That(float.IsNaN(city.PopulationEconomy.MoneyAccount.Balance), Is.False);
+        Assert.That(float.IsInfinity(city.PopulationEconomy.MoneyAccount.Balance), Is.False);
+        Assert.That(city.MarketCounterparty.LiquidityMode, Is.EqualTo(MarketLiquidityMode.AccountBacked));
+    }
+
     public static void ValidateSpatialKnowledge(
         SpatialKnowledgeRuntime knowledge,
         RuntimeIdentityRegistry registry)
