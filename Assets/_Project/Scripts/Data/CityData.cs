@@ -9,12 +9,21 @@ public class CityData : ScriptableObject
     public string id;
     public string cityName;
     public int initialPopulation = 1000;
+    public MarketLiquidityConfig marketLiquidity = new MarketLiquidityConfig();
 
     public string DefinitionId => id;
+    public MarketLiquidityConfig MarketLiquidity => marketLiquidity ?? new MarketLiquidityConfig();
 
     public List<MarketItemConfig> marketItems = new List<MarketItemConfig>();
     public List<CityProductionConfig> productionConfigs = new List<CityProductionConfig>();
     public List<CityConnection> connections = new List<CityConnection>();
+}
+
+[Serializable]
+public sealed class MarketLiquidityConfig
+{
+    public MarketLiquidityMode liquidityMode = MarketLiquidityMode.Open;
+    public float initialPurchasingPower;
 }
 
 [Serializable]

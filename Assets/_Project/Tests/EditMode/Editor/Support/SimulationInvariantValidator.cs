@@ -154,6 +154,47 @@ public static class SimulationInvariantValidator
         }
     }
 
+    public static void ValidateCommercialLiquidityObservation(CommercialLiquidityObservation observation)
+    {
+        Assert.That(observation, Is.Not.Null);
+        Assert.That(observation.LocationRuntimeId, Is.Not.Null.And.Not.Empty);
+        Assert.That(observation.ObservedDay, Is.GreaterThanOrEqualTo(0L));
+        Assert.That(observation.ReceivedDay, Is.GreaterThanOrEqualTo(observation.ObservedDay));
+
+        if (observation.LiquidityMode == MarketLiquidityMode.Open)
+        {
+            Assert.That(observation.ObservedPurchasingPower, Is.EqualTo(0f));
+        }
+        else
+        {
+            Assert.That(observation.ObservedPurchasingPower, Is.GreaterThanOrEqualTo(0f));
+            Assert.That(float.IsNaN(observation.ObservedPurchasingPower), Is.False);
+            Assert.That(float.IsInfinity(observation.ObservedPurchasingPower), Is.False);
+        }
+
+        if (observation.Source == CommercialKnowledgeSource.SharedByNpc)
+        {
+            Assert.That(observation.SourceRuntimeId, Is.Not.Null.And.Not.Empty);
+        }
+    }
+
+    public static void ValidateCityMarketCounterparty(CityRuntime city)
+    {
+        Assert.That(city, Is.Not.Null);
+        Assert.That(city.MarketCounterparty, Is.SameAs(city.Market.Counterparty));
+        Assert.That(city.MarketCounterparty.CounterpartyRuntimeId, Is.EqualTo(city.RuntimeId));
+
+        if (city.MarketCounterparty.LiquidityMode == MarketLiquidityMode.Open)
+        {
+            Assert.That(city.MarketCounterparty.MoneyAccount, Is.Null);
+        }
+        else
+        {
+            Assert.That(city.MarketCounterparty.MoneyAccount, Is.Not.Null);
+            Assert.That(city.MarketCounterparty.MoneyAccount.Balance, Is.GreaterThanOrEqualTo(0f));
+        }
+    }
+
     public static void ValidateSpatialKnowledge(
         SpatialKnowledgeRuntime knowledge,
         RuntimeIdentityRegistry registry)

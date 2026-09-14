@@ -101,13 +101,92 @@ public sealed class CommercialMarketObservation
 }
 
 [Serializable]
+public sealed class CommercialLiquidityObservation
+{
+    [SerializeField] private string locationRuntimeId;
+    [SerializeField] private MarketLiquidityMode liquidityMode;
+    [SerializeField] private float observedPurchasingPower;
+    [SerializeField] private long observedDay;
+    [SerializeField] private long receivedDay;
+    [SerializeField] private CommercialKnowledgeSource source;
+    [SerializeField] private string sourceRuntimeId;
+
+    public string LocationRuntimeId => locationRuntimeId;
+    public MarketLiquidityMode LiquidityMode => liquidityMode;
+    public MarketLiquidityMode Mode => liquidityMode;
+    public float ObservedPurchasingPower => observedPurchasingPower;
+    public float PurchasingPower => observedPurchasingPower;
+    public long ObservedDay => observedDay;
+    public long ReceivedDay => receivedDay;
+    public CommercialKnowledgeSource Source => source;
+    public string SourceRuntimeId => sourceRuntimeId;
+    public string SourceNpcRuntimeId => sourceRuntimeId;
+
+    public CommercialLiquidityObservation(
+        string locationRuntimeId,
+        MarketLiquidityMode liquidityMode,
+        float observedPurchasingPower,
+        long observedDay,
+        long receivedDay,
+        CommercialKnowledgeSource source,
+        string sourceRuntimeId = null)
+    {
+        if (string.IsNullOrWhiteSpace(locationRuntimeId) == true)
+        {
+            throw new ArgumentException("A liquidity observation requires a LocationRuntimeId.", nameof(locationRuntimeId));
+        }
+
+        if (liquidityMode != MarketLiquidityMode.Open
+            && liquidityMode != MarketLiquidityMode.AccountBacked)
+        {
+            throw new ArgumentOutOfRangeException(nameof(liquidityMode));
+        }
+
+        if (liquidityMode == MarketLiquidityMode.AccountBacked
+            && (float.IsNaN(observedPurchasingPower)
+                || float.IsInfinity(observedPurchasingPower)
+                || observedPurchasingPower < 0f))
+        {
+            throw new ArgumentOutOfRangeException(nameof(observedPurchasingPower));
+        }
+
+        if (observedDay < 0L)
+        {
+            throw new ArgumentOutOfRangeException(nameof(observedDay));
+        }
+
+        if (receivedDay < observedDay)
+        {
+            throw new ArgumentOutOfRangeException(nameof(receivedDay));
+        }
+
+        if (source == CommercialKnowledgeSource.SharedByNpc
+            && string.IsNullOrWhiteSpace(sourceRuntimeId) == true)
+        {
+            throw new ArgumentException("Shared liquidity knowledge requires the source NPC RuntimeId.", nameof(sourceRuntimeId));
+        }
+
+        this.locationRuntimeId = locationRuntimeId;
+        this.liquidityMode = liquidityMode;
+        this.observedPurchasingPower = liquidityMode == MarketLiquidityMode.Open ? 0f : observedPurchasingPower;
+        this.observedDay = observedDay;
+        this.receivedDay = receivedDay;
+        this.source = source;
+        this.sourceRuntimeId = source == CommercialKnowledgeSource.SharedByNpc ? sourceRuntimeId : null;
+    }
+}
+
+[Serializable]
 public sealed class CommercialKnowledgeRuntime
 {
     [SerializeField] private List<CommercialMarketObservation> observations = new List<CommercialMarketObservation>();
+    [SerializeField] private List<CommercialLiquidityObservation> liquidityObservations = new List<CommercialLiquidityObservation>();
 
     public IReadOnlyList<CommercialMarketObservation> Observations => ObservationList;
+    public IReadOnlyList<CommercialLiquidityObservation> LiquidityObservations => LiquidityObservationList;
 
     private List<CommercialMarketObservation> ObservationList => observations ?? (observations = new List<CommercialMarketObservation>());
+    private List<CommercialLiquidityObservation> LiquidityObservationList => liquidityObservations ?? (liquidityObservations = new List<CommercialLiquidityObservation>());
 
     public bool RecordObservation(CommercialMarketObservation observation)
     {
@@ -160,6 +239,55 @@ public sealed class CommercialKnowledgeRuntime
         return false;
     }
 
+    public bool RecordLiquidityObservation(CommercialLiquidityObservation observation)
+    {
+        if (observation == null)
+        {
+            return false;
+        }
+
+        int existingIndex = FindLiquidityObservationIndex(observation.LocationRuntimeId);
+
+        if (existingIndex < 0)
+        {
+            LiquidityObservationList.Add(observation);
+            return true;
+        }
+
+        if (ShouldReplace(LiquidityObservationList[existingIndex], observation) == false)
+        {
+            return false;
+        }
+
+        LiquidityObservationList[existingIndex] = observation;
+        return true;
+    }
+
+    public bool CanImproveWith(CommercialLiquidityObservation observation)
+    {
+        if (observation == null)
+        {
+            return false;
+        }
+
+        int existingIndex = FindLiquidityObservationIndex(observation.LocationRuntimeId);
+        return existingIndex < 0 || ShouldReplace(LiquidityObservationList[existingIndex], observation);
+    }
+
+    public bool TryGetLiquidityObservation(string locationRuntimeId, out CommercialLiquidityObservation observation)
+    {
+        int index = FindLiquidityObservationIndex(locationRuntimeId);
+
+        if (index >= 0)
+        {
+            observation = LiquidityObservationList[index];
+            return true;
+        }
+
+        observation = null;
+        return false;
+    }
+
     private int FindObservationIndex(string locationRuntimeId, string itemDefinitionId)
     {
         if (string.IsNullOrWhiteSpace(locationRuntimeId) == true || string.IsNullOrWhiteSpace(itemDefinitionId) == true)
@@ -174,6 +302,27 @@ public sealed class CommercialKnowledgeRuntime
             if (candidate != null
                 && string.Equals(candidate.LocationRuntimeId, locationRuntimeId, StringComparison.Ordinal) == true
                 && string.Equals(candidate.ItemDefinitionId, itemDefinitionId, StringComparison.Ordinal) == true)
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    private int FindLiquidityObservationIndex(string locationRuntimeId)
+    {
+        if (string.IsNullOrWhiteSpace(locationRuntimeId) == true)
+        {
+            return -1;
+        }
+
+        for (int i = 0; i < LiquidityObservationList.Count; i++)
+        {
+            CommercialLiquidityObservation candidate = LiquidityObservationList[i];
+
+            if (candidate != null
+                && string.Equals(candidate.LocationRuntimeId, locationRuntimeId, StringComparison.Ordinal) == true)
             {
                 return i;
             }
@@ -199,6 +348,21 @@ public sealed class CommercialKnowledgeRuntime
 
         // Same observation day and source priority preserves the existing snapshot.
         return incomingPriority > existingPriority;
+    }
+
+    private static bool ShouldReplace(CommercialLiquidityObservation existing, CommercialLiquidityObservation incoming)
+    {
+        if (existing == null)
+        {
+            return true;
+        }
+
+        if (incoming.ObservedDay != existing.ObservedDay)
+        {
+            return incoming.ObservedDay > existing.ObservedDay;
+        }
+
+        return GetSourcePriority(incoming.Source) > GetSourcePriority(existing.Source);
     }
 
     public static int GetSourcePriority(CommercialKnowledgeSource source)
@@ -264,6 +428,39 @@ public sealed class CommercialKnowledgePolicy
     }
 
     public float GetFreshness(CommercialMarketObservation observation, long currentAbsoluteDay)
+    {
+        if (observation == null)
+        {
+            return 0f;
+        }
+
+        long ageDays = GetAgeDays(observation, Math.Max(0L, currentAbsoluteDay));
+
+        if (ageDays <= freshForDays)
+        {
+            return 1f;
+        }
+
+        if (ageDays >= maxUsefulAgeDays)
+        {
+            return 0f;
+        }
+
+        float decayRange = maxUsefulAgeDays - freshForDays;
+        return 1f - (ageDays - freshForDays) / decayRange;
+    }
+
+    public long GetAgeDays(CommercialLiquidityObservation observation, long currentAbsoluteDay)
+    {
+        if (observation == null || currentAbsoluteDay <= observation.ObservedDay)
+        {
+            return 0L;
+        }
+
+        return currentAbsoluteDay - observation.ObservedDay;
+    }
+
+    public float GetFreshness(CommercialLiquidityObservation observation, long currentAbsoluteDay)
     {
         if (observation == null)
         {

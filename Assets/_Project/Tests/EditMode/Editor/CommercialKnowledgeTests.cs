@@ -178,5 +178,82 @@ public sealed class CommercialKnowledgeTests
         Assert.That(neighbor.Source, Is.EqualTo(CommercialKnowledgeSource.InitialScenarioKnowledge));
         Assert.That(merchant.CommercialKnowledge.TryGetObservation(
             world.C.Location.RuntimeId, item.DefinitionId, out _), Is.False);
+        Assert.That(merchant.CommercialKnowledge.TryGetLiquidityObservation(
+            world.A.Location.RuntimeId, out CommercialLiquidityObservation localLiquidity), Is.True);
+        Assert.That(localLiquidity.Source, Is.EqualTo(CommercialKnowledgeSource.InitialScenarioKnowledge));
+        Assert.That(merchant.CommercialKnowledge.TryGetLiquidityObservation(
+            world.B.Location.RuntimeId, out CommercialLiquidityObservation neighborLiquidity), Is.True);
+        Assert.That(neighborLiquidity.Source, Is.EqualTo(CommercialKnowledgeSource.InitialScenarioKnowledge));
+        Assert.That(merchant.CommercialKnowledge.TryGetLiquidityObservation(
+            world.C.Location.RuntimeId, out _), Is.False);
+    }
+
+    [Test]
+    public void LiquidityObservation_OpenModeUsesFiniteSentinelInsteadOfInfinity()
+    {
+        CommercialLiquidityObservation observation = SimulationTestFactory.CreateLiquidityObservation(
+            "location-open", MarketLiquidityMode.Open, float.PositiveInfinity, 3L, 3L);
+
+        SimulationInvariantValidator.ValidateCommercialLiquidityObservation(observation);
+        Assert.That(observation.ObservedPurchasingPower, Is.EqualTo(0f));
+        Assert.That(float.IsInfinity(observation.ObservedPurchasingPower), Is.False);
+    }
+
+    [Test]
+    public void LiquidityObservation_SameDayDirectObservationBeatsSharedKnowledge()
+    {
+        CommercialKnowledgeRuntime knowledge = new CommercialKnowledgeRuntime();
+        knowledge.RecordLiquidityObservation(SimulationTestFactory.CreateLiquidityObservation(
+            "location-a", MarketLiquidityMode.AccountBacked, 90f, 10L, 20L,
+            CommercialKnowledgeSource.SharedByNpc, "npc-source"));
+
+        bool replaced = knowledge.RecordLiquidityObservation(SimulationTestFactory.CreateLiquidityObservation(
+            "location-a", MarketLiquidityMode.AccountBacked, 25f, 10L, 10L,
+            CommercialKnowledgeSource.DirectObservation));
+
+        Assert.That(replaced, Is.True);
+        knowledge.TryGetLiquidityObservation("location-a", out CommercialLiquidityObservation current);
+        Assert.That(current.ObservedPurchasingPower, Is.EqualTo(25f));
+        Assert.That(current.Source, Is.EqualTo(CommercialKnowledgeSource.DirectObservation));
+    }
+
+    [Test]
+    public void LiquidityFreshness_UsesObservedDayInsteadOfReceivedDay()
+    {
+        CommercialLiquidityObservation observation = SimulationTestFactory.CreateLiquidityObservation(
+            "location-a", MarketLiquidityMode.AccountBacked, 50f, 10L, 20L,
+            CommercialKnowledgeSource.SharedByNpc, "npc-source");
+        CommercialKnowledgePolicy policy = new CommercialKnowledgePolicy(new CommercialKnowledgeSettings
+        {
+            freshForDays = 7,
+            maxUsefulAgeDays = 30
+        });
+
+        Assert.That(policy.GetAgeDays(observation, 25L), Is.EqualTo(15L));
+        Assert.That(policy.GetFreshness(observation, 25L), Is.InRange(0.01f, 0.99f));
+    }
+
+    [Test]
+    public void DirectLiquidityObservation_IsSnapshotUntilMerchantObservesAgain()
+    {
+        ItemData item = SimulationTestFactory.CreateItem("snapshot-item", 10f);
+        CityRuntime city = SimulationTestFactory.CreateAccountBackedCity(
+            "city-snapshot", "location-snapshot", 75f, SimulationTestFactory.CreateMarketItem(item, 10, 10));
+        NpcRuntime merchant = new NpcRuntime(
+            "npc-merchant", SimulationTestFactory.CreateNpc("merchant", NpcJobType.Merchant), city, 100f);
+        NpcRuntime buyer = new NpcRuntime("npc-buyer", SimulationTestFactory.CreateNpc("buyer"), city, 20f);
+        SimulationTime time = new SimulationTime();
+        MerchantSystem system = SimulationTestFactory.CreateMerchantSystem(null, time);
+
+        system.ObserveCurrentMarket(merchant);
+        Assert.That(new EconomyTransactionService().TryExecuteMarketPurchase(buyer, city.Market, item, 1).Success, Is.True);
+        merchant.CommercialKnowledge.TryGetLiquidityObservation(city.Location.RuntimeId, out CommercialLiquidityObservation oldSnapshot);
+
+        Assert.That(oldSnapshot.ObservedPurchasingPower, Is.EqualTo(75f));
+        time.AdvanceDay();
+        system.ObserveCurrentMarket(merchant);
+        merchant.CommercialKnowledge.TryGetLiquidityObservation(city.Location.RuntimeId, out CommercialLiquidityObservation refreshed);
+        Assert.That(refreshed.ObservedPurchasingPower, Is.EqualTo(85f));
+        Assert.That(refreshed.ObservedDay, Is.EqualTo(1L));
     }
 }

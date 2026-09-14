@@ -157,6 +157,45 @@ public sealed class CommercialObservationEvidence
 }
 
 [Serializable]
+public sealed class CommercialLiquidityEvidence
+{
+    private readonly string locationRuntimeId;
+    private readonly MarketLiquidityMode liquidityMode;
+    private readonly float observedPurchasingPower;
+    private readonly long observedDay;
+    private readonly long receivedDay;
+    private readonly float freshness;
+    private readonly CommercialKnowledgeSource source;
+    private readonly string sourceRuntimeId;
+
+    public string LocationRuntimeId => locationRuntimeId;
+    public MarketLiquidityMode LiquidityMode => liquidityMode;
+    public float ObservedPurchasingPower => observedPurchasingPower;
+    public long ObservedDay => observedDay;
+    public long ReceivedDay => receivedDay;
+    public float Freshness => freshness;
+    public CommercialKnowledgeSource Source => source;
+    public string SourceRuntimeId => sourceRuntimeId;
+
+    private CommercialLiquidityEvidence(CommercialLiquidityObservation observation, float freshness)
+    {
+        locationRuntimeId = observation.LocationRuntimeId;
+        liquidityMode = observation.LiquidityMode;
+        observedPurchasingPower = observation.ObservedPurchasingPower;
+        observedDay = observation.ObservedDay;
+        receivedDay = observation.ReceivedDay;
+        this.freshness = Math.Max(0f, Math.Min(1f, freshness));
+        source = observation.Source;
+        sourceRuntimeId = observation.SourceRuntimeId;
+    }
+
+    public static CommercialLiquidityEvidence Capture(CommercialLiquidityObservation observation, float freshness)
+    {
+        return observation == null ? null : new CommercialLiquidityEvidence(observation, freshness);
+    }
+}
+
+[Serializable]
 public sealed class CommercialDecisionEvidence
 {
     private readonly string itemDefinitionId;
@@ -166,6 +205,7 @@ public sealed class CommercialDecisionEvidence
     private readonly string previousDestinationLocationRuntimeId;
     private readonly CommercialObservationEvidence originObservation;
     private readonly CommercialObservationEvidence destinationObservation;
+    private readonly CommercialLiquidityEvidence destinationLiquidityObservation;
     private readonly int expectedQuantity;
     private readonly float expectedPurchaseUnitPrice;
     private readonly float expectedSaleUnitPrice;
@@ -181,6 +221,7 @@ public sealed class CommercialDecisionEvidence
     public string PreviousDestinationLocationRuntimeId => previousDestinationLocationRuntimeId;
     public CommercialObservationEvidence OriginObservation => originObservation;
     public CommercialObservationEvidence DestinationObservation => destinationObservation;
+    public CommercialLiquidityEvidence DestinationLiquidityObservation => destinationLiquidityObservation;
     public int ExpectedQuantity => expectedQuantity;
     public float ExpectedPurchaseUnitPrice => expectedPurchaseUnitPrice;
     public float ExpectedSaleUnitPrice => expectedSaleUnitPrice;
@@ -203,7 +244,8 @@ public sealed class CommercialDecisionEvidence
         float expectedTravelCost,
         float expectedGrossProfit,
         float expectedNetProfit,
-        float expectedScore)
+        float expectedScore,
+        CommercialLiquidityEvidence destinationLiquidityObservation = null)
     {
         this.itemDefinitionId = RequireId(itemDefinitionId, nameof(itemDefinitionId));
         this.currentLocationRuntimeId = RequireId(currentLocationRuntimeId, nameof(currentLocationRuntimeId));
@@ -212,6 +254,7 @@ public sealed class CommercialDecisionEvidence
         this.previousDestinationLocationRuntimeId = NormalizeOptionalId(previousDestinationLocationRuntimeId);
         this.originObservation = originObservation;
         this.destinationObservation = destinationObservation;
+        this.destinationLiquidityObservation = destinationLiquidityObservation;
         this.expectedQuantity = Math.Max(0, expectedQuantity);
         this.expectedPurchaseUnitPrice = Math.Max(0f, expectedPurchaseUnitPrice);
         this.expectedSaleUnitPrice = Math.Max(0f, expectedSaleUnitPrice);

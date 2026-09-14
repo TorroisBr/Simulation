@@ -7,10 +7,12 @@ public sealed class CommercialKnowledgeSharingSystem
 
     private readonly SimulationTime simulationTime;
     private readonly int maxSharedObservationsPerInteraction;
+    private readonly CommercialKnowledgePolicy knowledgePolicy;
 
     public CommercialKnowledgeSharingSystem(SimulationTime simulationTime, CommercialKnowledgeSettings settings)
     {
         this.simulationTime = simulationTime ?? throw new ArgumentNullException(nameof(simulationTime));
+        knowledgePolicy = new CommercialKnowledgePolicy(settings);
         int configuredLimit = settings != null ? settings.maxSharedObservationsPerInteraction : DefaultMaxSharedObservationsPerInteraction;
         maxSharedObservationsPerInteraction = Math.Max(1, configuredLimit);
     }
@@ -33,7 +35,7 @@ public sealed class CommercialKnowledgeSharingSystem
         }
 
         merchants.Sort(CompareMerchants);
-        Dictionary<string, IReadOnlyList<CommercialMarketObservation>> phaseSnapshots = CapturePhaseSnapshots(merchants);
+        Dictionary<string, IReadOnlyList<ShareableObservation>> phaseSnapshots = CapturePhaseSnapshots(merchants);
 
         int groupStart = 0;
 
@@ -65,25 +67,39 @@ public sealed class CommercialKnowledgeSharingSystem
         }
     }
 
-    private Dictionary<string, IReadOnlyList<CommercialMarketObservation>> CapturePhaseSnapshots(List<NpcRuntime> merchants)
+    private Dictionary<string, IReadOnlyList<ShareableObservation>> CapturePhaseSnapshots(List<NpcRuntime> merchants)
     {
-        Dictionary<string, IReadOnlyList<CommercialMarketObservation>> snapshots = new Dictionary<string, IReadOnlyList<CommercialMarketObservation>>(StringComparer.Ordinal);
+        Dictionary<string, IReadOnlyList<ShareableObservation>> snapshots = new Dictionary<string, IReadOnlyList<ShareableObservation>>(StringComparer.Ordinal);
 
         foreach (NpcRuntime merchant in merchants)
         {
-            List<CommercialMarketObservation> observations = new List<CommercialMarketObservation>();
+            List<ShareableObservation> observations = new List<ShareableObservation>();
 
             foreach (CommercialMarketObservation observation in merchant.CommercialKnowledge.Observations)
             {
                 if (observation == null
                     || observation.ItemDefinition == null
+                    || knowledgePolicy.GetFreshness(observation, simulationTime.AbsoluteDay) <= 0f
                     || (observation.Source == CommercialKnowledgeSource.SharedByNpc
                         && observation.ReceivedDay >= simulationTime.AbsoluteDay))
                 {
                     continue;
                 }
 
-                observations.Add(observation);
+                observations.Add(new ShareableObservation(observation));
+            }
+
+            foreach (CommercialLiquidityObservation observation in merchant.CommercialKnowledge.LiquidityObservations)
+            {
+                if (observation == null
+                    || knowledgePolicy.GetFreshness(observation, simulationTime.AbsoluteDay) <= 0f
+                    || (observation.Source == CommercialKnowledgeSource.SharedByNpc
+                        && observation.ReceivedDay >= simulationTime.AbsoluteDay))
+                {
+                    continue;
+                }
+
+                observations.Add(new ShareableObservation(observation));
             }
 
             observations.Sort(CompareObservations);
@@ -93,28 +109,17 @@ public sealed class CommercialKnowledgeSharingSystem
         return snapshots;
     }
 
-    private void ShareSnapshot(NpcRuntime sender, NpcRuntime receiver, IReadOnlyList<CommercialMarketObservation> observations)
+    private void ShareSnapshot(NpcRuntime sender, NpcRuntime receiver, IReadOnlyList<ShareableObservation> observations)
     {
         int sharedCount = 0;
 
-        foreach (CommercialMarketObservation observation in observations)
+        foreach (ShareableObservation observation in observations)
         {
-            CommercialMarketObservation sharedObservation = new CommercialMarketObservation(
-                observation.LocationRuntimeId,
-                observation.ItemDefinition,
-                observation.ObservedPrice,
-                observation.ObservedStock,
-                observation.ObservedDay,
-                simulationTime.AbsoluteDay,
-                CommercialKnowledgeSource.SharedByNpc,
-                sender.RuntimeId);
+            bool recorded = observation.MarketObservation != null
+                ? ShareMarketObservation(sender, receiver, observation.MarketObservation)
+                : ShareLiquidityObservation(sender, receiver, observation.LiquidityObservation);
 
-            if (receiver.CommercialKnowledge.CanImproveWith(sharedObservation) == false)
-            {
-                continue;
-            }
-
-            if (receiver.CommercialKnowledge.RecordObservation(sharedObservation) == true)
+            if (recorded == true)
             {
                 sharedCount++;
             }
@@ -126,6 +131,37 @@ public sealed class CommercialKnowledgeSharingSystem
         }
     }
 
+    private bool ShareMarketObservation(NpcRuntime sender, NpcRuntime receiver, CommercialMarketObservation observation)
+    {
+        CommercialMarketObservation sharedObservation = new CommercialMarketObservation(
+            observation.LocationRuntimeId,
+            observation.ItemDefinition,
+            observation.ObservedPrice,
+            observation.ObservedStock,
+            observation.ObservedDay,
+            simulationTime.AbsoluteDay,
+            CommercialKnowledgeSource.SharedByNpc,
+            sender.RuntimeId);
+
+        return receiver.CommercialKnowledge.CanImproveWith(sharedObservation)
+            && receiver.CommercialKnowledge.RecordObservation(sharedObservation);
+    }
+
+    private bool ShareLiquidityObservation(NpcRuntime sender, NpcRuntime receiver, CommercialLiquidityObservation observation)
+    {
+        CommercialLiquidityObservation sharedObservation = new CommercialLiquidityObservation(
+            observation.LocationRuntimeId,
+            observation.LiquidityMode,
+            observation.ObservedPurchasingPower,
+            observation.ObservedDay,
+            simulationTime.AbsoluteDay,
+            CommercialKnowledgeSource.SharedByNpc,
+            sender.RuntimeId);
+
+        return receiver.CommercialKnowledge.CanImproveWith(sharedObservation)
+            && receiver.CommercialKnowledge.RecordLiquidityObservation(sharedObservation);
+    }
+
     private static int CompareMerchants(NpcRuntime left, NpcRuntime right)
     {
         string leftLocationId = left.CurrentCity?.Location?.RuntimeId ?? string.Empty;
@@ -134,7 +170,7 @@ public sealed class CommercialKnowledgeSharingSystem
         return locationComparison != 0 ? locationComparison : string.CompareOrdinal(left.RuntimeId, right.RuntimeId);
     }
 
-    private static int CompareObservations(CommercialMarketObservation left, CommercialMarketObservation right)
+    private static int CompareObservations(ShareableObservation left, ShareableObservation right)
     {
         int dayComparison = right.ObservedDay.CompareTo(left.ObservedDay);
 
@@ -152,9 +188,12 @@ public sealed class CommercialKnowledgeSharingSystem
         }
 
         int locationComparison = string.CompareOrdinal(left.LocationRuntimeId, right.LocationRuntimeId);
-        return locationComparison != 0
-            ? locationComparison
-            : string.CompareOrdinal(left.ItemDefinitionId, right.ItemDefinitionId);
+        if (locationComparison != 0)
+        {
+            return locationComparison;
+        }
+
+        return string.CompareOrdinal(left.SortKey, right.SortKey);
     }
 
     private static bool IsEligibleMerchant(NpcRuntime npcRuntime)
@@ -165,5 +204,25 @@ public sealed class CommercialKnowledgeSharingSystem
             && npcRuntime.NpcData != null
             && npcRuntime.NpcData.job != null
             && npcRuntime.NpcData.job.jobType == NpcJobType.Merchant;
+    }
+
+    private sealed class ShareableObservation
+    {
+        public CommercialMarketObservation MarketObservation { get; }
+        public CommercialLiquidityObservation LiquidityObservation { get; }
+        public long ObservedDay => MarketObservation != null ? MarketObservation.ObservedDay : LiquidityObservation.ObservedDay;
+        public CommercialKnowledgeSource Source => MarketObservation != null ? MarketObservation.Source : LiquidityObservation.Source;
+        public string LocationRuntimeId => MarketObservation != null ? MarketObservation.LocationRuntimeId : LiquidityObservation.LocationRuntimeId;
+        public string SortKey => MarketObservation != null ? "item:" + MarketObservation.ItemDefinitionId : "liquidity";
+
+        public ShareableObservation(CommercialMarketObservation observation)
+        {
+            MarketObservation = observation;
+        }
+
+        public ShareableObservation(CommercialLiquidityObservation observation)
+        {
+            LiquidityObservation = observation;
+        }
     }
 }

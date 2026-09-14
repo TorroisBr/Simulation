@@ -71,6 +71,21 @@ public static class SimulationTestFactory
         return new CityRuntime(runtimeId, cityData, new SpatialLocationRuntime(locationRuntimeId));
     }
 
+    public static CityRuntime CreateAccountBackedCity(
+        string runtimeId,
+        string locationRuntimeId,
+        float initialPurchasingPower,
+        params MarketItemConfig[] marketItems)
+    {
+        CityData cityData = CreateCityData("definition-" + runtimeId, marketItems);
+        cityData.marketLiquidity = new MarketLiquidityConfig
+        {
+            liquidityMode = MarketLiquidityMode.AccountBacked,
+            initialPurchasingPower = initialPurchasingPower
+        };
+        return new CityRuntime(runtimeId, cityData, new SpatialLocationRuntime(locationRuntimeId));
+    }
+
     public static MarketItemConfig CreateMarketItem(ItemData item, int initialAmount = 100, int desiredAmount = 100)
     {
         return new MarketItemConfig
@@ -96,6 +111,25 @@ public static class SimulationTestFactory
             item,
             price,
             stock,
+            observedDay,
+            receivedDay,
+            source,
+            sourceRuntimeId);
+    }
+
+    public static CommercialLiquidityObservation CreateLiquidityObservation(
+        string locationRuntimeId,
+        MarketLiquidityMode liquidityMode,
+        float purchasingPower,
+        long observedDay,
+        long receivedDay,
+        CommercialKnowledgeSource source = CommercialKnowledgeSource.DirectObservation,
+        string sourceRuntimeId = null)
+    {
+        return new CommercialLiquidityObservation(
+            locationRuntimeId,
+            liquidityMode,
+            purchasingPower,
             observedDay,
             receivedDay,
             source,

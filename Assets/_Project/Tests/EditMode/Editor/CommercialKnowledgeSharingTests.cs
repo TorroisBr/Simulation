@@ -125,4 +125,44 @@ public sealed class CommercialKnowledgeSharingTests
         Assert.That(differentCity.CommercialKnowledge.Observations, Is.Empty);
         Assert.That(traveler.CommercialKnowledge.Observations, Is.Empty);
     }
+
+    [Test]
+    public void Sharing_CopiesLiquiditySnapshotWithProvenanceAndPreservedObservedDay()
+    {
+        CityRuntime city = SimulationTestFactory.CreateCity("city-a", "location-a");
+        NpcRuntime sender = new NpcRuntime("npc-sender", SimulationTestFactory.CreateNpc("sender", NpcJobType.Merchant), city, 100f);
+        NpcRuntime receiver = new NpcRuntime("npc-receiver", SimulationTestFactory.CreateNpc("receiver", NpcJobType.Merchant), city, 100f);
+        sender.CommercialKnowledge.RecordLiquidityObservation(SimulationTestFactory.CreateLiquidityObservation(
+            "location-market", MarketLiquidityMode.AccountBacked, 42f, 10L, 10L));
+
+        new CommercialKnowledgeSharingSystem(new SimulationTime(20L), null)
+            .ShareAmongPresentMerchants(new[] { sender, receiver });
+
+        Assert.That(receiver.CommercialKnowledge.TryGetLiquidityObservation(
+            "location-market", out CommercialLiquidityObservation received), Is.True);
+        SimulationInvariantValidator.ValidateCommercialLiquidityObservation(received);
+        Assert.That(received.ObservedPurchasingPower, Is.EqualTo(42f));
+        Assert.That(received.ObservedDay, Is.EqualTo(10L));
+        Assert.That(received.ReceivedDay, Is.EqualTo(20L));
+        Assert.That(received.Source, Is.EqualTo(CommercialKnowledgeSource.SharedByNpc));
+        Assert.That(received.SourceRuntimeId, Is.EqualTo(sender.RuntimeId));
+    }
+
+    [Test]
+    public void Sharing_ReceivedLiquidityCannotCascadeWithinSameDay()
+    {
+        CityRuntime city = SimulationTestFactory.CreateCity("city-a", "location-a");
+        NpcRuntime first = new NpcRuntime("npc-first", SimulationTestFactory.CreateNpc("first", NpcJobType.Merchant), city, 100f);
+        NpcRuntime second = new NpcRuntime("npc-second", SimulationTestFactory.CreateNpc("second", NpcJobType.Merchant), city, 100f);
+        NpcRuntime third = new NpcRuntime("npc-third", SimulationTestFactory.CreateNpc("third", NpcJobType.Merchant), city, 100f);
+        first.CommercialKnowledge.RecordLiquidityObservation(SimulationTestFactory.CreateLiquidityObservation(
+            "location-market", MarketLiquidityMode.AccountBacked, 42f, 10L, 10L));
+        CommercialKnowledgeSharingSystem sharing = new CommercialKnowledgeSharingSystem(new SimulationTime(20L), null);
+
+        sharing.ShareAmongPresentMerchants(new[] { first, second });
+        sharing.ShareAmongPresentMerchants(new[] { second, third });
+
+        Assert.That(second.CommercialKnowledge.TryGetLiquidityObservation("location-market", out _), Is.True);
+        Assert.That(third.CommercialKnowledge.TryGetLiquidityObservation("location-market", out _), Is.False);
+    }
 }

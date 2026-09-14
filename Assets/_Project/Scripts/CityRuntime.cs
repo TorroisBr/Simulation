@@ -69,7 +69,9 @@ public class CityRuntime
         this.cityData = cityData;
         this.location = location;
         this.logger = logger ?? new SimulationLogger(null);
-        this.marketCounterparty = NormalizeMarketCounterparty(marketCounterparty, runtimeId);
+        this.marketCounterparty = marketCounterparty != null
+            ? NormalizeMarketCounterparty(marketCounterparty, runtimeId)
+            : CreateConfiguredMarketCounterparty(runtimeId, cityData);
         currentPopulation = cityData != null ? Mathf.Max(0, cityData.initialPopulation) : 0;
         market = cityData != null
             ? new MarketRuntime(cityData.marketItems, this.marketCounterparty)
@@ -178,5 +180,30 @@ public class CityRuntime
         }
 
         return counterparty;
+    }
+
+    private static MarketCounterpartyRuntime CreateConfiguredMarketCounterparty(
+        string cityRuntimeId,
+        CityData configuredCity)
+    {
+        MarketLiquidityConfig liquidity = configuredCity != null
+            ? configuredCity.MarketLiquidity
+            : null;
+
+        if (liquidity == null || liquidity.liquidityMode == MarketLiquidityMode.Open)
+        {
+            return MarketCounterpartyRuntime.CreateOpen(cityRuntimeId);
+        }
+
+        if (liquidity.liquidityMode != MarketLiquidityMode.AccountBacked)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(configuredCity),
+                liquidity.liquidityMode,
+                "CityData contains an unsupported MarketLiquidityMode.");
+        }
+
+        MoneyAccountRuntime account = new MoneyAccountRuntime(liquidity.initialPurchasingPower);
+        return MarketCounterpartyRuntime.CreateAccountBacked(cityRuntimeId, account);
     }
 }

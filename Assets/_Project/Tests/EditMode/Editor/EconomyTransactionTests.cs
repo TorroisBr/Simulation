@@ -516,6 +516,70 @@ public sealed class EconomyTransactionTests
         Assert.That(receipt.TotalPrice, Is.EqualTo(totalPrice));
     }
 
+    [Test]
+    public void CityData_DefaultLiquidityConfigurationCreatesOpenMarket()
+    {
+        CityData definition = SimulationTestFactory.CreateCityData("default-open");
+        CityRuntime city = new CityRuntime("city-default-open", definition, new SpatialLocationRuntime("location-default-open"));
+
+        Assert.That(definition.MarketLiquidity.liquidityMode, Is.EqualTo(MarketLiquidityMode.Open));
+        SimulationInvariantValidator.ValidateCityMarketCounterparty(city);
+        Assert.That(city.MarketCounterparty.LiquidityMode, Is.EqualTo(MarketLiquidityMode.Open));
+    }
+
+    [Test]
+    public void CityData_AccountBackedConfigurationCreatesSettlementAccountWithCityIdentity()
+    {
+        CityRuntime city = SimulationTestFactory.CreateAccountBackedCity(
+            "city-configured", "location-configured", 37f);
+
+        SimulationInvariantValidator.ValidateCityMarketCounterparty(city);
+        Assert.That(city.MarketCounterparty.LiquidityMode, Is.EqualTo(MarketLiquidityMode.AccountBacked));
+        Assert.That(city.MarketCounterparty.MoneyAccount.Balance, Is.EqualTo(37f));
+        Assert.That(city.MarketCounterparty.CounterpartyRuntimeId, Is.EqualTo("city-configured"));
+    }
+
+    [TestCase(-1f)]
+    [TestCase(float.NaN)]
+    [TestCase(float.PositiveInfinity)]
+    [TestCase(float.NegativeInfinity)]
+    public void CityData_AccountBackedConfigurationRejectsInvalidInitialPurchasingPower(float invalidBalance)
+    {
+        CityData definition = SimulationTestFactory.CreateCityData("invalid-liquidity");
+        definition.marketLiquidity = new MarketLiquidityConfig
+        {
+            liquidityMode = MarketLiquidityMode.AccountBacked,
+            initialPurchasingPower = invalidBalance
+        };
+
+        Assert.Throws<System.ArgumentOutOfRangeException>(() =>
+            new CityRuntime("city-invalid", definition, new SpatialLocationRuntime("location-invalid")));
+    }
+
+    [Test]
+    public void ConfiguredAccountBackedSettlementDepletesAndRevenueRestoresPurchasingPower()
+    {
+        ItemData item = SimulationTestFactory.CreateItem("configured-cycle", 10f);
+        CityRuntime city = SimulationTestFactory.CreateAccountBackedCity(
+            "city-cycle", "location-cycle", 30f, SimulationTestFactory.CreateMarketItem(item, 10, 10));
+        NpcRuntime seller = CreateNpc("configured-seller", 0f);
+        NpcRuntime buyer = CreateNpc("configured-buyer", 20f);
+        seller.Inventory.AddItem(item, 5, 4f);
+        EconomyTransactionService service = new EconomyTransactionService();
+
+        EconomyTransactionResult depletion = service.TryExecuteMarketSale(seller, city.Market, item, 3);
+        EconomyTransactionResult blocked = service.TryExecuteMarketSale(seller, city.Market, item, 1);
+        EconomyTransactionResult revenue = service.TryExecuteMarketPurchase(buyer, city.Market, item, 2);
+        EconomyTransactionResult restored = service.TryExecuteMarketSale(seller, city.Market, item, 1);
+
+        Assert.That(depletion.Success, Is.True);
+        Assert.That(blocked.Success, Is.False);
+        Assert.That(revenue.Success, Is.True);
+        Assert.That(restored.Success, Is.True);
+        Assert.That(seller.Money + buyer.Money + city.MarketCounterparty.MoneyAccount.Balance, Is.EqualTo(50f).Within(0.001f));
+        Assert.That(seller.Inventory.GetAmount(item) + buyer.Inventory.GetAmount(item) + city.Market.GetAmount(item), Is.EqualTo(15));
+    }
+
     private static NpcRuntime CreateNpc(string id, float money, CityRuntime city = null)
     {
         return new NpcRuntime(id, SimulationTestFactory.CreateNpc(id), city, money);

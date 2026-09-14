@@ -86,8 +86,9 @@ public class MerchantSystem : INpcActionProvider
         float localPrice = localObservation.ObservedPrice;
         float profitPerItem = localPrice - plan.PurchasePricePerItem;
         MerchantTradeOpportunity localBuyer = FindBestLocalMerchantBuyer(npcRuntime, plan.Item, amount, plan.PurchasePricePerItem);
+        int marketAmount = LimitMarketSaleAmountFromKnowledge(npcRuntime, npcRuntime.CurrentCity, localPrice, amount);
 
-        if (localBuyer != null || profitPerItem >= minimumProfitPerItem)
+        if (localBuyer != null || (marketAmount > 0 && profitPerItem >= minimumProfitPerItem))
         {
             plan.ResetWaitDaysAtDestination();
             return;
@@ -179,6 +180,18 @@ public class MerchantSystem : INpcActionProvider
                 source);
             npcRuntime.CommercialKnowledge.RecordObservation(observation);
         }
+
+        MarketCounterpartyRuntime counterparty = cityRuntime.MarketCounterparty;
+        float observedPurchasingPower = counterparty.LiquidityMode == MarketLiquidityMode.AccountBacked
+            ? counterparty.MoneyAccount.Balance
+            : 0f;
+        npcRuntime.CommercialKnowledge.RecordLiquidityObservation(new CommercialLiquidityObservation(
+            cityRuntime.Location.RuntimeId,
+            counterparty.LiquidityMode,
+            observedPurchasingPower,
+            simulationTime.AbsoluteDay,
+            simulationTime.AbsoluteDay,
+            source));
     }
 
     public NpcActionRuntime CreateMerchantTravelAction(NpcRuntime npcRuntime, NpcActionData action, ref float utility)
@@ -572,6 +585,14 @@ public class MerchantSystem : INpcActionProvider
             return buyerSaleAction;
         }
 
+        amount = LimitMarketSaleAmountFromKnowledge(npcRuntime, npcRuntime.CurrentCity, localPrice, amount);
+
+        if (amount <= 0)
+        {
+            utility = 0f;
+            return null;
+        }
+
         float expectedGrossProfit = profitPerItem * amount;
         CommercialDecisionEvidence saleEvidence = CreateCommercialEvidence(
             npcRuntime,
@@ -720,9 +741,9 @@ public class MerchantSystem : INpcActionProvider
                     continue;
                 }
 
-                int amount = Mathf.Min(maxMerchantTradeAmount, originObservation.ObservedStock, Mathf.FloorToInt(moneyAvailableForGoods / buyPrice));
+                int availableAmount = Mathf.Min(maxMerchantTradeAmount, originObservation.ObservedStock, Mathf.FloorToInt(moneyAvailableForGoods / buyPrice));
 
-                if (amount <= 0)
+                if (availableAmount <= 0)
                 {
                     continue;
                 }
@@ -733,6 +754,13 @@ public class MerchantSystem : INpcActionProvider
                 }
 
                 float sellPrice = targetObservation.ObservedPrice;
+                int amount = LimitMarketSaleAmountFromKnowledge(npcRuntime, targetCity, sellPrice, availableAmount);
+
+                if (amount <= 0)
+                {
+                    continue;
+                }
+
                 float profitPerItem = sellPrice - buyPrice;
                 float netProfit = profitPerItem * amount - totalTravelCost;
 
@@ -829,9 +857,9 @@ public class MerchantSystem : INpcActionProvider
             return null;
         }
 
-        int amount = GetPlannedTradeAmount(npcRuntime, plan);
+        int availableAmount = GetPlannedTradeAmount(npcRuntime, plan);
 
-        if (amount <= 0)
+        if (availableAmount <= 0)
         {
             return null;
         }
@@ -865,6 +893,13 @@ public class MerchantSystem : INpcActionProvider
             }
 
             float sellPrice = targetObservation.ObservedPrice;
+            int amount = LimitMarketSaleAmountFromKnowledge(npcRuntime, targetCity, sellPrice, availableAmount);
+
+            if (amount <= 0)
+            {
+                continue;
+            }
+
             float profitPerItem = sellPrice - plan.PurchasePricePerItem;
             float netProfit = profitPerItem * amount - travelCost;
 
@@ -1012,6 +1047,13 @@ public class MerchantSystem : INpcActionProvider
             }
 
             int amount = Mathf.Min(maxMerchantTradeAmount, inventoryItem.Amount);
+            amount = LimitMarketSaleAmountFromKnowledge(npcRuntime, npcRuntime.CurrentCity, localPrice, amount);
+
+            if (amount <= 0)
+            {
+                continue;
+            }
+
             float score = CalculateTradeScore(profitPerItem * amount, 1)
                 * freshness
                 * GetTradePreferenceMultiplier(npcRuntime, inventoryItem.Item);
@@ -1208,6 +1250,34 @@ public class MerchantSystem : INpcActionProvider
         return freshness > 0f;
     }
 
+    private int LimitMarketSaleAmountFromKnowledge(
+        NpcRuntime npcRuntime,
+        CityRuntime targetCity,
+        float expectedUnitPrice,
+        int requestedAmount)
+    {
+        if (requestedAmount <= 0
+            || expectedUnitPrice <= 0f
+            || npcRuntime == null
+            || targetCity?.Location == null
+            || npcRuntime.CommercialKnowledge.TryGetLiquidityObservation(
+                targetCity.Location.RuntimeId,
+                out CommercialLiquidityObservation observation) == false)
+        {
+            return Math.Max(0, requestedAmount);
+        }
+
+        if (knowledgePolicy.GetFreshness(observation, simulationTime.AbsoluteDay) <= 0f
+            || observation.LiquidityMode == MarketLiquidityMode.Open)
+        {
+            return requestedAmount;
+        }
+
+        return Mathf.Min(
+            requestedAmount,
+            Mathf.FloorToInt(observation.ObservedPurchasingPower / expectedUnitPrice));
+    }
+
     private CommercialDecisionEvidence CreateCommercialEvidence(
         NpcRuntime npcRuntime,
         CityRuntime tradeOrigin,
@@ -1235,6 +1305,11 @@ public class MerchantSystem : INpcActionProvider
             return null;
         }
 
+        npcRuntime.CommercialKnowledge.TryGetLiquidityObservation(
+            tradeDestination.Location.RuntimeId,
+            out CommercialLiquidityObservation liquidityObservation);
+        float liquidityFreshness = knowledgePolicy.GetFreshness(liquidityObservation, simulationTime.AbsoluteDay);
+
         return new CommercialDecisionEvidence(
             item.DefinitionId,
             npcRuntime.CurrentCity.Location.RuntimeId,
@@ -1249,7 +1324,8 @@ public class MerchantSystem : INpcActionProvider
             expectedTravelCost,
             expectedGrossProfit,
             expectedNetProfit,
-            expectedScore);
+            expectedScore,
+            CommercialLiquidityEvidence.Capture(liquidityObservation, liquidityFreshness));
     }
 
     private float CalculateLocalMerchantUnitPrice(NpcRuntime buyerRuntime, ItemData item, float retailPrice)
