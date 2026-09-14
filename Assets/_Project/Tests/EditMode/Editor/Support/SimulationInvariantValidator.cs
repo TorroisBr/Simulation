@@ -90,6 +90,17 @@ public static class SimulationInvariantValidator
         Assert.That(site.RuntimeId, Is.Not.EqualTo(site.Location.RuntimeId));
     }
 
+    public static void ValidateExplorableSiteKnowledgeObservation(
+        ExplorableSiteKnowledgeObservation observation)
+    {
+        Assert.That(observation, Is.Not.Null);
+        Assert.That(observation.SiteRuntimeId, Is.Not.Null.And.Not.Empty);
+        Assert.That(observation.LocationRuntimeId, Is.Not.Null.And.Not.Empty);
+        Assert.That(observation.ObservedDay, Is.GreaterThanOrEqualTo(0L));
+        Assert.That(observation.ReceivedDay, Is.GreaterThanOrEqualTo(observation.ObservedDay));
+        Assert.That(Enum.IsDefined(typeof(ExplorableSiteKnowledgeSource), observation.Source), Is.True);
+    }
+
     public static void ValidateTravelParties(
         TravelPartyStore store,
         RuntimeIdentityRegistry registry,

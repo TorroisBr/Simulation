@@ -73,8 +73,10 @@ public class NpcSimulationConfig
     public CityData startingCity;
     public float initialMoney = 100f;
     public List<NpcInitialInventoryItemConfig> initialInventory = new List<NpcInitialInventoryItemConfig>();
+    public List<ExplorableSiteData> initialKnownExplorableSites = new List<ExplorableSiteData>();
 
     public List<NpcInitialInventoryItemConfig> InitialInventory => initialInventory ?? (initialInventory = new List<NpcInitialInventoryItemConfig>());
+    public List<ExplorableSiteData> InitialKnownExplorableSites => initialKnownExplorableSites ?? (initialKnownExplorableSites = new List<ExplorableSiteData>());
 }
 
 [Serializable]

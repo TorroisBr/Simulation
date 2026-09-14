@@ -18,6 +18,7 @@ public class TesteSimulacao : MonoBehaviour
     private Dictionary<CityData, List<CityRuntime>> cityRuntimesByDefinition = new Dictionary<CityData, List<CityRuntime>>();
     private Dictionary<NpcData, List<NpcRuntime>> npcRuntimesByDefinition = new Dictionary<NpcData, List<NpcRuntime>>();
     private Dictionary<ExplorableSiteData, List<ExplorableSiteRuntime>> explorableSiteRuntimesByDefinition = new Dictionary<ExplorableSiteData, List<ExplorableSiteRuntime>>();
+    private ExplorableSiteKnowledgeSystem explorableSiteKnowledgeSystem;
     private Dictionary<SpatialLocationRuntime, CityRuntime> cityRuntimeByLocation = new Dictionary<SpatialLocationRuntime, CityRuntime>();
     private RuntimeIdAllocator runtimeIdAllocator;
     private RuntimeIdentityRegistry runtimeIdentityRegistry;
@@ -104,6 +105,7 @@ public class TesteSimulacao : MonoBehaviour
         calendarDefinition = ResolveCalendarDefinition();
         enabledModules = new SimulationModuleSet(simulationConfig, logger);
         runtimeIdAllocator = new RuntimeIdAllocator();
+        explorableSiteKnowledgeSystem = new ExplorableSiteKnowledgeSystem();
         recordSequence = new SimulationRecordSequence();
         historyStore = new HistoryStore();
         domainEventStore = new DomainEventStore(historyStore, new HistoryPolicy(), logger);
@@ -138,6 +140,7 @@ public class TesteSimulacao : MonoBehaviour
 
         RebuildSystems();
         BootstrapInitialSpatialKnowledge();
+        BootstrapInitialExplorableSiteKnowledge();
         BootstrapInitialCommercialKnowledge();
         InitializeJusticeState();
         simulationRuntime = new SimulationRuntime(
@@ -1002,6 +1005,58 @@ public class TesteSimulacao : MonoBehaviour
         runtimes.Add(npcRuntime);
     }
 
+    private void BootstrapInitialExplorableSiteKnowledge()
+    {
+        if (simulationConfig == null || explorableSiteKnowledgeSystem == null)
+        {
+            return;
+        }
+
+        foreach (NpcSimulationConfig npcConfig in simulationConfig.Npcs)
+        {
+            if (npcConfig == null || npcConfig.npc == null)
+            {
+                continue;
+            }
+
+            NpcRuntime npcRuntime = GetSingleNpcRuntimeByDefinition(npcConfig.npc);
+
+            if (npcRuntime == null)
+            {
+                continue;
+            }
+
+            foreach (ExplorableSiteData siteDefinition in npcConfig.InitialKnownExplorableSites)
+            {
+                if (siteDefinition == null)
+                {
+                    logger.LogWarning("Skipping initial explorable site knowledge: site definition is null.");
+                    continue;
+                }
+
+                if (explorableSiteRuntimesByDefinition.TryGetValue(
+                    siteDefinition,
+                    out List<ExplorableSiteRuntime> siteRuntimes) == false
+                    || siteRuntimes.Count == 0)
+                {
+                    logger.LogWarning($"Explorable site definition '{FormatExplorableSiteDefinition(siteDefinition)}' has no runtime instance.");
+                    continue;
+                }
+
+                if (siteRuntimes.Count > 1)
+                {
+                    logger.LogError($"Explorable site definition '{FormatExplorableSiteDefinition(siteDefinition)}' is ambiguous: {siteRuntimes.Count} runtime instances exist. Resolve by RuntimeId instead.");
+                    continue;
+                }
+
+                explorableSiteKnowledgeSystem.RecordInitialScenarioKnowledge(
+                    npcRuntime,
+                    siteRuntimes[0],
+                    simulationTime.AbsoluteDay);
+            }
+        }
+    }
+
     private void AddExplorableSiteRuntimeByDefinition(
         ExplorableSiteData siteData,
         ExplorableSiteRuntime siteRuntime)
@@ -1138,5 +1193,10 @@ public class TesteSimulacao : MonoBehaviour
     private static string FormatNpcDefinition(NpcData npcData)
     {
         return string.IsNullOrEmpty(npcData.id) == false ? npcData.id : npcData.name;
+    }
+
+    private static string FormatExplorableSiteDefinition(ExplorableSiteData siteData)
+    {
+        return string.IsNullOrEmpty(siteData.id) == false ? siteData.id : siteData.siteName;
     }
 }

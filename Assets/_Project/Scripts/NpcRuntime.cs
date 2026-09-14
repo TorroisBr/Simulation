@@ -22,6 +22,7 @@ public class NpcRuntime
     [SerializeField]private MerchantTradePlanRuntime merchantTradePlan = new MerchantTradePlanRuntime();
     [SerializeField]private NpcTravelPlanRuntime travelPlan = new NpcTravelPlanRuntime();
     [SerializeField]private CommercialKnowledgeRuntime commercialKnowledge = new CommercialKnowledgeRuntime();
+    [SerializeField]private ExplorableSiteKnowledgeRuntime explorableSiteKnowledge;
     [SerializeField]private SpatialKnowledgeRuntime spatialKnowledge;
 
     public string RuntimeId => runtimeId;
@@ -45,6 +46,7 @@ public class NpcRuntime
     public MerchantTradePlanRuntime MerchantTradePlan => merchantTradePlan ?? (merchantTradePlan = new MerchantTradePlanRuntime());
     public NpcTravelPlanRuntime TravelPlan => travelPlan ?? (travelPlan = new NpcTravelPlanRuntime());
     public CommercialKnowledgeRuntime CommercialKnowledge => commercialKnowledge ?? (commercialKnowledge = new CommercialKnowledgeRuntime());
+    public ExplorableSiteKnowledgeRuntime ExplorableSiteKnowledge => explorableSiteKnowledge ?? (explorableSiteKnowledge = new ExplorableSiteKnowledgeRuntime(runtimeId));
     public SpatialKnowledgeRuntime SpatialKnowledge => spatialKnowledge ?? (spatialKnowledge = new SpatialKnowledgeRuntime(runtimeId));
     public string NpcName => npcData != null ? npcData.name : "NPC desconhecido";
 
@@ -61,8 +63,9 @@ public class NpcRuntime
         }
 
 		this.runtimeId = runtimeId;
-		this.npcData = npcData;
+        this.npcData = npcData;
         spatialKnowledge = new SpatialKnowledgeRuntime(runtimeId);
+        explorableSiteKnowledge = new ExplorableSiteKnowledgeRuntime(runtimeId);
         moneyAccount = new MoneyAccountRuntime(initialMoney);
 
         if (npcData != null && npcData.statusPadrao != null)
