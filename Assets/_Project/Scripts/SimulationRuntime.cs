@@ -75,6 +75,23 @@ public sealed class SimulationRuntime
 
     public bool TryStartTravelParty(ActionExecutionContext context)
     {
+        if (context == null)
+        {
+            return false;
+        }
+
+        if (expeditionSystem != null)
+        {
+            foreach (ActionExecutionParticipant participant in context.Participants)
+            {
+                if (participant != null
+                    && expeditionSystem.IsNpcOnActiveExpedition(participant.RuntimeId) == true)
+                {
+                    return false;
+                }
+            }
+        }
+
         return travelPartySystem != null && travelPartySystem.TryStartTravelParty(context);
     }
 

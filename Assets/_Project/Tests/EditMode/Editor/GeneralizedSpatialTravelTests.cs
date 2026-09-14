@@ -189,7 +189,13 @@ public sealed class GeneralizedSpatialTravelTests
             travelSystem: fixture.Travel,
             merchantSystem: fixture.MerchantSystem);
 
+        runtime.AdvanceDays(fixture.SiteRoute.TravelDays);
+        Assert.That(merchant.CurrentLocation, Is.SameAs(fixture.Site.Location));
+        Assert.That(merchant.CurrentCity, Is.Null);
+        Assert.That(merchant.IsTraveling, Is.False);
+
         Assert.DoesNotThrow(() => runtime.AdvanceDay());
+        Assert.That(merchant.CurrentLocation, Is.SameAs(fixture.Site.Location));
         Assert.That(merchant.CurrentCity, Is.Null);
         Assert.That(merchant.CommercialKnowledge.TryGetObservation(
             fixture.Site.Location.RuntimeId,

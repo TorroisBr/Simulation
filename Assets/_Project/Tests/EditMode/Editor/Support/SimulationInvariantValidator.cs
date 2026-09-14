@@ -200,6 +200,9 @@ public static class SimulationInvariantValidator
             {
                 Assert.That(npc.IsTraveling, Is.False);
                 Assert.That(npc.CurrentLocation.RuntimeId, Is.EqualTo(expedition.TargetLocationRuntimeId));
+                Assert.That(npc.ActiveTravelPartyId, Is.Null.Or.Empty);
+                Assert.That(npc.DestinationLocation, Is.Null);
+                Assert.That(npc.TravelDaysRemaining, Is.EqualTo(0));
             }
         }
     }

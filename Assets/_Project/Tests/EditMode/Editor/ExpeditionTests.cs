@@ -285,6 +285,62 @@ public sealed class ExpeditionTests
         Assert.That(expedition.State, Is.EqualTo(ExpeditionState.AtSite));
     }
 
+    [Test]
+    public void AtSiteExpeditionMemberCannotStartExternalTravelParty()
+    {
+        SpatialTravelFixture fixture = new SpatialTravelFixture();
+        NpcRuntime performer = fixture.CreateNpc("guarded-performer", fixture.CityA, 10f);
+        AddSpatialKnowledge(performer, fixture, includeRoute: true);
+        performer.SpatialKnowledge.DiscoverRoute(fixture.SiteToCityRoute.RuntimeId);
+        fixture.Knowledge.RecordInitialScenarioKnowledge(performer, fixture.Site);
+        ExpeditionSystem system = CreateSystem(fixture);
+
+        Assert.That(system.TryStartExpedition(
+            fixture.Site,
+            CreateContext(fixture, performer).ActionContext,
+            out ExpeditionRuntime expedition), Is.True);
+
+        SimulationRuntime runtime = new SimulationRuntime(
+            fixture.Records.Time,
+            new[] { fixture.CityA, fixture.CityB },
+            new[] { performer },
+            economyEnabled: false,
+            travelSystem: fixture.Travel,
+            travelPartySystem: fixture.TravelPartySystem,
+            explorableSiteStore: fixture.Sites,
+            explorableSiteKnowledgeSystem: fixture.Knowledge,
+            expeditionSystem: system);
+
+        runtime.AdvanceDays(fixture.SiteRoute.TravelDays + 1);
+
+        Assert.That(expedition.State, Is.EqualTo(ExpeditionState.AtSite));
+        Assert.That(performer.IsTraveling, Is.False);
+        Assert.That(performer.CurrentLocation, Is.SameAs(fixture.Site.Location));
+        Assert.That(performer.CurrentCity, Is.Null);
+        Assert.That(fixture.TravelParties.ActiveParties.Count, Is.EqualTo(0));
+
+        ActionExecutionContext externalTravel = new ActionExecutionContext(
+            "external-site-to-city-travel",
+            new[]
+            {
+                new ActionExecutionParticipant(performer.RuntimeId, ActionExecutionParticipantRole.Performer)
+            },
+            fixture.CityA.Location.RuntimeId,
+            fixture.SiteToCityRoute.RuntimeId);
+
+        Assert.That(
+            fixture.TravelPartySystem.CanPlanKnownGroupTravel(externalTravel, out string reason),
+            Is.True,
+            reason);
+        Assert.That(runtime.TryStartTravelParty(externalTravel), Is.False);
+
+        Assert.That(expedition.State, Is.EqualTo(ExpeditionState.AtSite));
+        Assert.That(performer.IsTraveling, Is.False);
+        Assert.That(performer.CurrentLocation, Is.SameAs(fixture.Site.Location));
+        Assert.That(performer.CurrentCity, Is.Null);
+        Assert.That(fixture.TravelParties.ActiveParties.Count, Is.EqualTo(0));
+    }
+
     private static ExpeditionSystem CreateSystem(
         SpatialTravelFixture fixture,
         TravelPartyStore parties = null)

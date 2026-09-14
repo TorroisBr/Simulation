@@ -435,7 +435,9 @@ public class TesteSimulacao : MonoBehaviour
     {
         if (npcRuntime.IsTraveling == true)
         {
-            string destinationName = npcRuntime.DestinationCity != null ? npcRuntime.DestinationCity.CityName : "destino desconhecido";
+            string destinationName = npcRuntime.DestinationCity != null
+                ? npcRuntime.DestinationCity.CityName
+                : ResolveLocationDisplayName(npcRuntime.DestinationLocation?.RuntimeId) ?? "destino desconhecido";
             string dayText = npcRuntime.TravelDaysRemaining == 1 ? "dia restante" : "dias restantes";
             return $"VIAJANDO -> {destinationName} | {npcRuntime.TravelDaysRemaining} {dayText}";
         }
@@ -1170,13 +1172,30 @@ public class TesteSimulacao : MonoBehaviour
     private string ResolveLocationDisplayName(string runtimeId)
     {
         if (spatialNetwork == null
-            || spatialNetwork.TryGetLocation(runtimeId, out SpatialLocationRuntime location) == false
-            || cityRuntimeByLocation.TryGetValue(location, out CityRuntime cityRuntime) == false)
+            || spatialNetwork.TryGetLocation(runtimeId, out SpatialLocationRuntime location) == false)
         {
             return null;
         }
 
-        return cityRuntime.CityName;
+        if (cityRuntimeByLocation.TryGetValue(location, out CityRuntime cityRuntime) == true)
+        {
+            return cityRuntime.CityName;
+        }
+
+        if (explorableSiteStore != null)
+        {
+            foreach (ExplorableSiteRuntime siteRuntime in explorableSiteStore.GetForLocation(location))
+            {
+                if (siteRuntime?.Definition != null)
+                {
+                    return string.IsNullOrWhiteSpace(siteRuntime.Definition.DisplayName) == false
+                        ? siteRuntime.Definition.DisplayName
+                        : siteRuntime.DefinitionId;
+                }
+            }
+        }
+
+        return null;
     }
 
     private string ResolveItemDisplayName(string definitionId)
