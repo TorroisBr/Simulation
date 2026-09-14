@@ -208,12 +208,28 @@ public class CityRuntime
             return;
         }
 
+        if (npcRuntime.IsTraveling == true)
+        {
+            return;
+        }
+
+        if (npcRuntime.CurrentCity != this || npcRuntime.CurrentLocation != Location)
+        {
+            if (npcRuntime.CurrentCity != null)
+            {
+                npcRuntime.CurrentCity.RemoveImportantNpc(npcRuntime);
+            }
+
+            if (npcRuntime.SetCurrentPresence(Location, this) == false)
+            {
+                return;
+            }
+        }
+
         if (ImportantNpcs.Contains(npcRuntime) == false)
         {
             ImportantNpcs.Add(npcRuntime);
         }
-
-        npcRuntime.SetCurrentCity(this);
     }
 
     public void RemoveImportantNpc(NpcRuntime npcRuntime)
@@ -227,7 +243,7 @@ public class CityRuntime
 
         if (npcRuntime.CurrentCity == this)
         {
-            npcRuntime.SetCurrentCity(null);
+            npcRuntime.ClearCurrentPresenceFromCity(this);
         }
     }
 

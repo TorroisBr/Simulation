@@ -18,6 +18,8 @@ public sealed class SimulationRuntime
     private readonly TravelPartySystem travelPartySystem;
     private readonly MerchantSystem merchantSystem;
     private readonly CommercialKnowledgeSharingSystem commercialKnowledgeSharingSystem;
+    private readonly ExplorableSiteStore explorableSiteStore;
+    private readonly ExplorableSiteKnowledgeSystem explorableSiteKnowledgeSystem;
     private readonly NpcDecisionRecorder decisionRecorder;
     private readonly SimulationLogger logger;
 
@@ -42,7 +44,9 @@ public sealed class SimulationRuntime
         CommercialKnowledgeSharingSystem commercialKnowledgeSharingSystem = null,
         NpcDecisionRecorder decisionRecorder = null,
         SimulationLogger logger = null,
-        bool guardCrimeEnabled = false)
+        bool guardCrimeEnabled = false,
+        ExplorableSiteStore explorableSiteStore = null,
+        ExplorableSiteKnowledgeSystem explorableSiteKnowledgeSystem = null)
     {
         this.simulationTime = simulationTime ?? throw new ArgumentNullException(nameof(simulationTime));
         this.cities = cities != null ? new List<CityRuntime>(cities) : new List<CityRuntime>();
@@ -60,6 +64,8 @@ public sealed class SimulationRuntime
         this.travelPartySystem = travelPartySystem;
         this.merchantSystem = merchantSystem;
         this.commercialKnowledgeSharingSystem = commercialKnowledgeSharingSystem;
+        this.explorableSiteStore = explorableSiteStore;
+        this.explorableSiteKnowledgeSystem = explorableSiteKnowledgeSystem;
         this.decisionRecorder = decisionRecorder;
         this.logger = logger;
     }
@@ -122,7 +128,12 @@ public sealed class SimulationRuntime
 
         foreach (NpcRuntime arrivedNpc in arrivedNpcs)
         {
-            merchantSystem?.ObserveCurrentMarket(arrivedNpc);
+            ObserveArrivedExplorableSites(arrivedNpc);
+
+            if (arrivedNpc?.CurrentCity != null)
+            {
+                merchantSystem?.ObserveCurrentMarket(arrivedNpc);
+            }
         }
     }
 
@@ -168,7 +179,7 @@ public sealed class SimulationRuntime
     {
         foreach (NpcRuntime npcRuntime in npcRuntimes)
         {
-            if (npcRuntime == null || npcRuntime.IsTraveling == true)
+            if (npcRuntime == null || npcRuntime.IsTraveling == true || npcRuntime.CurrentCity == null)
             {
                 continue;
             }
@@ -210,16 +221,38 @@ public sealed class SimulationRuntime
     {
         foreach (NpcRuntime npcRuntime in npcRuntimes)
         {
-            if (npcRuntime?.CurrentCity?.Location == null || npcRuntime.IsTraveling == true)
+            if (npcRuntime?.CurrentLocation == null || npcRuntime.IsTraveling == true)
             {
                 continue;
             }
 
-            npcRuntime.SpatialKnowledge.DiscoverLocation(npcRuntime.CurrentCity.Location.RuntimeId);
-            merchantSystem?.ObserveCurrentMarket(npcRuntime);
+            npcRuntime.SpatialKnowledge.DiscoverLocation(npcRuntime.CurrentLocation.RuntimeId);
+
+            if (npcRuntime.CurrentCity != null)
+            {
+                merchantSystem?.ObserveCurrentMarket(npcRuntime);
+            }
         }
 
         commercialKnowledgeSharingSystem?.ShareAmongPresentMerchants(npcRuntimes);
+    }
+
+    private void ObserveArrivedExplorableSites(NpcRuntime npcRuntime)
+    {
+        if (npcRuntime?.CurrentLocation == null
+            || explorableSiteStore == null
+            || explorableSiteKnowledgeSystem == null)
+        {
+            return;
+        }
+
+        foreach (ExplorableSiteRuntime siteRuntime in explorableSiteStore.GetForLocation(npcRuntime.CurrentLocation))
+        {
+            explorableSiteKnowledgeSystem.RecordDirectObservation(
+                npcRuntime,
+                siteRuntime,
+                CurrentDay);
+        }
     }
 
     private void EvaluateStatus(NpcRuntime npcRuntime)

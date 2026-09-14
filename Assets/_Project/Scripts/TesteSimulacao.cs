@@ -159,7 +159,9 @@ public class TesteSimulacao : MonoBehaviour
             commercialKnowledgeSharingSystem,
             decisionRecorder,
             logger,
-            enabledModules.IsEnabled(SimulationModule.GuardCrime));
+            enabledModules.IsEnabled(SimulationModule.GuardCrime),
+            explorableSiteStore,
+            explorableSiteKnowledgeSystem);
     }
 
     public string GetFullLog()

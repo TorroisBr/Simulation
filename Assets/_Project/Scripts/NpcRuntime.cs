@@ -12,6 +12,8 @@ public class NpcRuntime
     [NonSerialized]private NpcActionRuntime currentActionRuntime;
     [SerializeField]private InventoryRuntime inventory = new InventoryRuntime();
     [SerializeField]private MoneyAccountRuntime moneyAccount = new MoneyAccountRuntime();
+    [NonSerialized]private SpatialLocationRuntime currentLocation;
+    [NonSerialized]private SpatialLocationRuntime destinationLocation;
     [NonSerialized]private CityRuntime currentCity;
     [NonSerialized]private CityRuntime destinationCity;
     [SerializeField]private int travelDaysRemaining;
@@ -34,13 +36,15 @@ public class NpcRuntime
     public InventoryRuntime Inventory => inventory ?? (inventory = new InventoryRuntime());
     public MoneyAccountRuntime MoneyAccount => moneyAccount;
     public float Money => MoneyAccount.Balance;
+    public SpatialLocationRuntime CurrentLocation => currentLocation;
+    public SpatialLocationRuntime DestinationLocation => destinationLocation;
     public CityRuntime CurrentCity => currentCity;
     public CityRuntime DestinationCity => destinationCity;
     public int TravelDaysRemaining => travelDaysRemaining;
     public bool TravelStartedToday => travelStartedToday;
     public string TravelOriginDecisionId => travelOriginDecisionId;
     public string ActiveTravelPartyId => activeTravelPartyId;
-    public bool IsTraveling => destinationCity != null && travelDaysRemaining > 0;
+    public bool IsTraveling => destinationLocation != null && travelDaysRemaining > 0;
     public int HiddenDaysRemaining => hiddenDaysRemaining;
     public bool IsHidden => hiddenDaysRemaining > 0;
     public MerchantTradePlanRuntime MerchantTradePlan => merchantTradePlan ?? (merchantTradePlan = new MerchantTradePlanRuntime());
@@ -109,9 +113,34 @@ public class NpcRuntime
         CurrentStatus.Remove(status);
     }
 
-    public void SetCurrentCity(CityRuntime city)
+    public bool SetCurrentPresence(SpatialLocationRuntime location, CityRuntime cityProjection = null)
     {
-        currentCity = city;
+        if (cityProjection != null && cityProjection.Location != location)
+        {
+            return false;
+        }
+
+        if (IsTraveling == true)
+        {
+            return false;
+        }
+
+        CityRuntime previousCity = currentCity;
+
+        if (previousCity != null && previousCity != cityProjection)
+        {
+            previousCity.RemoveImportantNpc(this);
+        }
+
+        currentLocation = location;
+        currentCity = cityProjection;
+
+        if (cityProjection != null && cityProjection.ImportantNpcs.Contains(this) == false)
+        {
+            cityProjection.ImportantNpcs.Add(this);
+        }
+
+        return true;
     }
 
     public void AddMoney(float amount)
@@ -124,9 +153,17 @@ public class NpcRuntime
         return MoneyAccount.TryDebit(amount);
     }
 
-    public bool StartTravel(CityRuntime destination, int travelDays, string originDecisionId = null)
+    public bool StartTravel(
+        SpatialLocationRuntime destination,
+        CityRuntime destinationCityProjection,
+        int travelDays,
+        string originDecisionId = null)
     {
-        if (destination == null || IsTraveling == true || string.IsNullOrWhiteSpace(activeTravelPartyId) == false)
+        if (destination == null
+            || (destinationCityProjection != null && destinationCityProjection.Location != destination)
+            || currentLocation == null
+            || IsTraveling == true
+            || string.IsNullOrWhiteSpace(activeTravelPartyId) == false)
         {
             return false;
         }
@@ -136,11 +173,21 @@ public class NpcRuntime
             currentCity.RemoveImportantNpc(this);
         }
 
-        destinationCity = destination;
+        currentLocation = null;
+        currentCity = null;
+
+        destinationLocation = destination;
+        destinationCity = destinationCityProjection;
         travelDaysRemaining = Mathf.Max(1, travelDays);
         travelStartedToday = true;
         travelOriginDecisionId = string.IsNullOrWhiteSpace(originDecisionId) == true ? null : originDecisionId;
         return true;
+    }
+
+    public bool StartTravel(CityRuntime destination, int travelDays, string originDecisionId = null)
+    {
+        return destination != null
+            && StartTravel(destination.Location, destination, travelDays, originDecisionId);
     }
 
     public void SetActiveTravelPartyId(string travelPartyId)
@@ -169,13 +216,48 @@ public class NpcRuntime
             return false;
         }
 
+        SpatialLocationRuntime arrivedLocation = destinationLocation;
         arrivedCity = destinationCity;
+        destinationLocation = null;
         destinationCity = null;
         travelOriginDecisionId = null;
 
-        if (arrivedCity != null)
+        if (arrivedLocation != null)
         {
-            arrivedCity.AddImportantNpc(this);
+            if (arrivedCity != null)
+            {
+                arrivedCity.AddImportantNpc(this);
+            }
+            else
+            {
+                SetCurrentPresence(arrivedLocation);
+            }
+        }
+
+        return true;
+    }
+
+    public bool CancelTravel(SpatialLocationRuntime originLocation, CityRuntime originCityProjection)
+    {
+        if (IsTraveling == false)
+        {
+            return false;
+        }
+
+        destinationLocation = null;
+        destinationCity = null;
+        travelDaysRemaining = 0;
+        travelStartedToday = false;
+        travelOriginDecisionId = null;
+        activeTravelPartyId = null;
+
+        if (originCityProjection != null)
+        {
+            originCityProjection.AddImportantNpc(this);
+        }
+        else
+        {
+            SetCurrentPresence(originLocation);
         }
 
         return true;
@@ -183,29 +265,32 @@ public class NpcRuntime
 
     public bool CancelTravel(CityRuntime originCity)
     {
-        if (IsTraveling == false)
+        return CancelTravel(originCity?.Location, originCity);
+    }
+
+    internal void ClearCurrentPresenceFromCity(CityRuntime city)
+    {
+        if (currentCity == city)
         {
-            return false;
+            currentCity = null;
+            currentLocation = null;
         }
-
-        destinationCity = null;
-        travelDaysRemaining = 0;
-        travelStartedToday = false;
-        travelOriginDecisionId = null;
-        activeTravelPartyId = null;
-
-        if (originCity != null)
-        {
-            originCity.AddImportantNpc(this);
-            currentCity = originCity;
-        }
-
-        return true;
     }
 
     public void SetTravelPlan(CityRuntime targetCity, NpcTravelReason reason, float utility, float expectedCost, string originDecisionId = null)
     {
         TravelPlan.Set(targetCity, reason, utility, expectedCost, originDecisionId);
+    }
+
+    public void SetTravelPlan(
+        SpatialLocationRuntime targetLocation,
+        CityRuntime targetCityProjection,
+        NpcTravelReason reason,
+        float utility,
+        float expectedCost,
+        string originDecisionId = null)
+    {
+        TravelPlan.Set(targetLocation, targetCityProjection, reason, utility, expectedCost, originDecisionId);
     }
 
     public void ClearTravelPlan()

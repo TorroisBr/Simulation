@@ -4,6 +4,39 @@ using NUnit.Framework;
 
 public static class SimulationInvariantValidator
 {
+    public static void ValidateNpcSpatialPresence(NpcRuntime npc, bool allowUnplaced = false)
+    {
+        Assert.That(npc, Is.Not.Null);
+
+        if (npc.IsTraveling == true)
+        {
+            Assert.That(npc.DestinationLocation, Is.Not.Null);
+            Assert.That(npc.TravelDaysRemaining, Is.GreaterThan(0));
+            Assert.That(npc.CurrentLocation, Is.Null);
+            Assert.That(npc.CurrentCity, Is.Null);
+        }
+        else
+        {
+            Assert.That(npc.DestinationLocation, Is.Null);
+            Assert.That(npc.TravelDaysRemaining, Is.EqualTo(0));
+
+            if (allowUnplaced == false)
+            {
+                Assert.That(npc.CurrentLocation, Is.Not.Null);
+            }
+        }
+
+        if (npc.CurrentCity != null)
+        {
+            Assert.That(npc.CurrentLocation, Is.SameAs(npc.CurrentCity.Location));
+        }
+
+        if (npc.DestinationCity != null)
+        {
+            Assert.That(npc.DestinationLocation, Is.SameAs(npc.DestinationCity.Location));
+        }
+    }
+
     public static void ValidateActionExecution(
         ActionExecutionContext context,
         ActionParticipationRequirements requirements)
@@ -36,7 +69,7 @@ public static class SimulationInvariantValidator
         Assert.That(route.Destination, Is.SameAs(destination));
 
         HashSet<string> memberIds = new HashSet<string>(StringComparer.Ordinal);
-        CityRuntime commonDestination = null;
+        SpatialLocationRuntime commonDestination = null;
         int? commonRemainingDays = null;
         foreach (string runtimeId in party.MemberRuntimeIds)
         {
@@ -46,20 +79,20 @@ public static class SimulationInvariantValidator
             Assert.That(npc, Is.Not.Null);
             Assert.That(npc.ActiveTravelPartyId, Is.EqualTo(party.TravelPartyId));
             Assert.That(npc.IsTraveling, Is.True);
-            Assert.That(npc.DestinationCity, Is.Not.Null);
-            Assert.That(npc.DestinationCity.Location, Is.Not.Null);
-            Assert.That(npc.DestinationCity.Location.RuntimeId, Is.EqualTo(party.DestinationLocationRuntimeId));
+            Assert.That(npc.CurrentLocation, Is.Null);
+            Assert.That(npc.DestinationLocation, Is.Not.Null);
+            Assert.That(npc.DestinationLocation.RuntimeId, Is.EqualTo(party.DestinationLocationRuntimeId));
             Assert.That(npc.TravelDaysRemaining, Is.GreaterThan(0));
             Assert.That(npc.TravelOriginDecisionId, Is.EqualTo(party.OriginDecisionId));
 
             if (commonDestination == null)
             {
-                commonDestination = npc.DestinationCity;
+                commonDestination = npc.DestinationLocation;
                 commonRemainingDays = npc.TravelDaysRemaining;
             }
             else
             {
-                Assert.That(npc.DestinationCity, Is.SameAs(commonDestination));
+                Assert.That(npc.DestinationLocation, Is.SameAs(commonDestination));
                 Assert.That(npc.TravelDaysRemaining, Is.EqualTo(commonRemainingDays.Value));
             }
         }

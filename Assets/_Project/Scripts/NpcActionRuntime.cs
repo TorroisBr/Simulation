@@ -101,22 +101,43 @@ public class NpcActionRuntime
 [Serializable]
 public class NpcTravelPlanRuntime
 {
+    [NonSerialized] private SpatialLocationRuntime targetLocation;
     [NonSerialized] private CityRuntime targetCity;
     [SerializeField] private NpcTravelReason reason;
     [SerializeField] private float utility;
     [SerializeField] private float expectedCost;
     [SerializeField] private string originDecisionId;
 
+    public SpatialLocationRuntime TargetLocation => targetLocation;
     public CityRuntime TargetCity => targetCity;
     public NpcTravelReason Reason => reason;
     public float Utility => utility;
     public float ExpectedCost => expectedCost;
     public string OriginDecisionId => originDecisionId;
-    public bool IsActive => targetCity != null && reason != NpcTravelReason.None;
+    public bool IsActive => targetLocation != null && reason != NpcTravelReason.None;
 
     public void Set(CityRuntime targetCity, NpcTravelReason reason, float utility, float expectedCost, string originDecisionId = null)
     {
-        this.targetCity = targetCity;
+        Set(targetCity?.Location, targetCity, reason, utility, expectedCost, originDecisionId);
+    }
+
+    public void Set(
+        SpatialLocationRuntime targetLocation,
+        CityRuntime targetCityProjection,
+        NpcTravelReason reason,
+        float utility,
+        float expectedCost,
+        string originDecisionId = null)
+    {
+        if (targetLocation == null
+            || (targetCityProjection != null && targetCityProjection.Location != targetLocation))
+        {
+            Clear();
+            return;
+        }
+
+        this.targetLocation = targetLocation;
+        targetCity = targetCityProjection;
         this.reason = reason;
         this.utility = Mathf.Max(0f, utility);
         this.expectedCost = Mathf.Max(0f, expectedCost);
@@ -125,6 +146,7 @@ public class NpcTravelPlanRuntime
 
     public void Clear()
     {
+        targetLocation = null;
         targetCity = null;
         reason = NpcTravelReason.None;
         utility = 0f;

@@ -384,8 +384,8 @@ public sealed class TravelPartySystem
 
         TravelPartyRuntime createdParty = new TravelPartyRuntime(
             partyId,
-            preparation.Origin.Location.RuntimeId,
-            preparation.Destination.Location.RuntimeId,
+            preparation.OriginLocation.RuntimeId,
+            preparation.DestinationLocation.RuntimeId,
             preparation.Route.RuntimeId,
             preparation.Travelers.ConvertAll(npc => npc.RuntimeId),
             preparation.Escorts.ConvertAll(npc => npc.RuntimeId),
@@ -398,9 +398,17 @@ public sealed class TravelPartySystem
 
         foreach (NpcRuntime member in preparation.Members)
         {
-            if (member.StartTravel(preparation.Destination, preparation.Route.TravelDays, context.OriginDecisionId) == false)
+            if (member.StartTravel(
+                preparation.DestinationLocation,
+                preparation.DestinationCity,
+                preparation.Route.TravelDays,
+                context.OriginDecisionId) == false)
             {
-                Rollback(startedMembers, paidCosts, preparation.Origin);
+                Rollback(
+                    startedMembers,
+                    paidCosts,
+                    preparation.OriginLocation,
+                    preparation.OriginCity);
                 return false;
             }
 
@@ -412,7 +420,11 @@ public sealed class TravelPartySystem
 
         if (groupCharge.Success == false)
         {
-            Rollback(startedMembers, paidCosts, preparation.Origin);
+            Rollback(
+                startedMembers,
+                paidCosts,
+                preparation.OriginLocation,
+                preparation.OriginCity);
             return false;
         }
 
@@ -420,7 +432,11 @@ public sealed class TravelPartySystem
 
         if (partyStore.Add(createdParty) == false)
         {
-            Rollback(startedMembers, paidCosts, preparation.Origin);
+            Rollback(
+                startedMembers,
+                paidCosts,
+                preparation.OriginLocation,
+                preparation.OriginCity);
             return false;
         }
 
@@ -450,13 +466,17 @@ public sealed class TravelPartySystem
             }
 
             partyStore.Remove(createdParty.TravelPartyId);
-            Rollback(startedMembers, paidCosts, preparation.Origin);
+            Rollback(
+                startedMembers,
+                paidCosts,
+                preparation.OriginLocation,
+                preparation.OriginCity);
             return false;
         }
 
         foreach (NpcRuntime member in preparation.Members)
         {
-            member.SpatialKnowledge.DiscoverLocation(preparation.Origin.Location.RuntimeId);
+            member.SpatialKnowledge.DiscoverLocation(preparation.OriginLocation.RuntimeId);
             member.SpatialKnowledge.DiscoverRoute(preparation.Route.RuntimeId);
         }
 
@@ -620,19 +640,19 @@ public sealed class TravelPartySystem
             return false;
         }
 
-        CityRuntime origin = members[0].CurrentCity;
+        SpatialLocationRuntime originLocation = members[0].CurrentLocation;
 
-        if (origin == null || origin.Location == null)
+        if (originLocation == null)
         {
-            reason = "Group travel participants require a common origin city.";
+            reason = "Group travel participants require a common origin location.";
             return false;
         }
 
         foreach (NpcRuntime member in members)
         {
-            if (member.CurrentCity != origin)
+            if (member.CurrentLocation != originLocation)
             {
-                reason = "Group travel participants must share one origin city.";
+                reason = "Group travel participants must share one origin location.";
                 return false;
             }
         }
@@ -646,17 +666,15 @@ public sealed class TravelPartySystem
             return false;
         }
 
-        CityRuntime destination = travelSystem.GetCityRuntime(destinationLocation);
-
-        if (destination == null || destination.Location == null || destination == origin)
+        if (destinationLocation == originLocation)
         {
-            reason = "Group travel destination could not be resolved or equals the origin.";
+            reason = "Group travel destination could not be resolved or equals the origin location.";
             return false;
         }
 
-        if (route.Origin != origin.Location
-            || route.Destination != destination.Location
-            || travelSystem.GetTravelDays(origin, destination) != route.TravelDays)
+        if (route.Origin != originLocation
+            || route.Destination != destinationLocation
+            || travelSystem.GetTravelDays(originLocation, destinationLocation) != route.TravelDays)
         {
             reason = "Group travel route does not match the executable World Truth route.";
             return false;
@@ -668,8 +686,8 @@ public sealed class TravelPartySystem
         foreach (NpcRuntime member in members)
         {
             if (requireKnowledge == true
-                && (member.SpatialKnowledge.KnowsLocation(origin.Location.RuntimeId) == false
-                    || member.SpatialKnowledge.KnowsLocation(destination.Location.RuntimeId) == false
+                && (member.SpatialKnowledge.KnowsLocation(originLocation.RuntimeId) == false
+                    || member.SpatialKnowledge.KnowsLocation(destinationLocation.RuntimeId) == false
                     || member.SpatialKnowledge.KnowsRoute(route.RuntimeId) == false))
             {
                 reason = "A group travel participant lacks the required spatial knowledge.";
@@ -686,8 +704,10 @@ public sealed class TravelPartySystem
         }
 
         preparation = new TravelPreparation(
-            origin,
-            destination,
+            originLocation,
+            travelSystem.GetCityRuntime(originLocation),
+            destinationLocation,
+            travelSystem.GetCityRuntime(destinationLocation),
             route,
             travelers,
             escorts,
@@ -721,24 +741,23 @@ public sealed class TravelPartySystem
             || members.Count == 0
             || members[0] == null
             || members[0].IsTraveling == false
-            || members[0].DestinationCity == null
-            || members[0].DestinationCity.Location == null
+            || members[0].DestinationLocation == null
             || members[0].TravelDaysRemaining <= 0
             || string.Equals(members[0].ActiveTravelPartyId, party.TravelPartyId, StringComparison.Ordinal) == false
-            || string.Equals(members[0].DestinationCity.Location.RuntimeId, party.DestinationLocationRuntimeId, StringComparison.Ordinal) == false
+            || string.Equals(members[0].DestinationLocation.RuntimeId, party.DestinationLocationRuntimeId, StringComparison.Ordinal) == false
             || string.Equals(members[0].TravelOriginDecisionId, party.OriginDecisionId, StringComparison.Ordinal) == false)
         {
             return false;
         }
 
         int remainingDays = members[0].TravelDaysRemaining;
-        CityRuntime destination = members[0].DestinationCity;
+        SpatialLocationRuntime destination = members[0].DestinationLocation;
 
         foreach (NpcRuntime member in members)
         {
             if (member == null
                 || member.IsTraveling == false
-                || member.DestinationCity != destination
+                || member.DestinationLocation != destination
                 || member.TravelDaysRemaining != remainingDays
                 || string.Equals(member.ActiveTravelPartyId, party.TravelPartyId, StringComparison.Ordinal) == false
                 || string.Equals(member.TravelOriginDecisionId, party.OriginDecisionId, StringComparison.Ordinal) == false)
@@ -753,7 +772,8 @@ public sealed class TravelPartySystem
     private void Rollback(
         List<NpcRuntime> startedMembers,
         List<TravelPartyMemberCost> paidCosts,
-        CityRuntime origin)
+        SpatialLocationRuntime originLocation,
+        CityRuntime originCity)
     {
         if (paidCosts != null)
         {
@@ -779,15 +799,17 @@ public sealed class TravelPartySystem
         {
             foreach (NpcRuntime member in startedMembers)
             {
-                member?.CancelTravel(origin);
+                member?.CancelTravel(originLocation, originCity);
             }
         }
     }
 
     private sealed class TravelPreparation
     {
-        public CityRuntime Origin { get; }
-        public CityRuntime Destination { get; }
+        public SpatialLocationRuntime OriginLocation { get; }
+        public CityRuntime OriginCity { get; }
+        public SpatialLocationRuntime DestinationLocation { get; }
+        public CityRuntime DestinationCity { get; }
         public SpatialRouteRuntime Route { get; }
         public List<NpcRuntime> Travelers { get; }
         public List<NpcRuntime> Escorts { get; }
@@ -796,8 +818,10 @@ public sealed class TravelPartySystem
         public List<TravelPartyMemberCost> Costs { get; }
 
         public TravelPreparation(
-            CityRuntime origin,
-            CityRuntime destination,
+            SpatialLocationRuntime originLocation,
+            CityRuntime originCity,
+            SpatialLocationRuntime destinationLocation,
+            CityRuntime destinationCity,
             SpatialRouteRuntime route,
             List<NpcRuntime> travelers,
             List<NpcRuntime> escorts,
@@ -805,8 +829,10 @@ public sealed class TravelPartySystem
             Dictionary<string, NpcRuntime> memberById,
             List<TravelPartyMemberCost> costs)
         {
-            Origin = origin;
-            Destination = destination;
+            OriginLocation = originLocation;
+            OriginCity = originCity;
+            DestinationLocation = destinationLocation;
+            DestinationCity = destinationCity;
             Route = route;
             Travelers = travelers;
             Escorts = escorts;
