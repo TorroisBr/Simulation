@@ -288,13 +288,28 @@ public sealed class DefaultConflictConsequenceResolver : IConflictConsequenceRes
         int injuryRank)
     {
         if (side.Stakes != ConflictStakes.Existential
-            || injuryRank < (int)NpcInjurySeverity.SeriouslyInjured
-            || sideResult.Disposition == ConflictSideDisposition.Victorious)
+            || injuryRank < (int)NpcInjurySeverity.SeriouslyInjured)
         {
             return false;
         }
 
-        float deathChance = Math.Min(0.65f, 0.15f + scoreMargin * 0.25f);
+        float deathChance;
+        if (sideResult.Disposition == ConflictSideDisposition.Victorious)
+        {
+            const float decisiveVictoryMargin = 0.25f;
+            if (scoreMargin >= decisiveVictoryMargin)
+            {
+                return false;
+            }
+
+            float closeness = 1f - scoreMargin / decisiveVictoryMargin;
+            deathChance = 0.02f + 0.08f * closeness;
+        }
+        else
+        {
+            deathChance = Math.Min(0.65f, 0.15f + scoreMargin * 0.25f);
+        }
+
         return randomSource.NextUnit() < deathChance;
     }
 

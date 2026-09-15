@@ -499,9 +499,10 @@ public sealed class ConflictResolutionConstraints
     public ConflictOutcomeType? ForcedOverallOutcome { get; set; }
     public IReadOnlyList<ConflictParticipantResolutionConstraint> ParticipantConstraints => participantConstraints.AsReadOnly();
 
-    public bool HasExternalConstraints => string.IsNullOrWhiteSpace(ForcedWinningSideId) == false
-        || ForcedOverallOutcome.HasValue
-        || participantConstraints.Count > 0;
+    public bool HasOutcomeConstraints => string.IsNullOrWhiteSpace(ForcedWinningSideId) == false
+        || ForcedOverallOutcome.HasValue;
+    public bool HasParticipantConsequenceConstraints => participantConstraints.Count > 0;
+    public bool HasExternalConstraints => HasOutcomeConstraints || HasParticipantConsequenceConstraints;
 
     public void AddParticipantConstraint(ConflictParticipantResolutionConstraint constraint)
     {
@@ -844,6 +845,7 @@ public sealed class ConflictResolutionResult
     private readonly string winningSideId;
     private readonly ConflictOutcomeType outcome;
     private readonly ConflictOutcomeSource outcomeSource;
+    private readonly bool consequencesWereExternallyConstrained;
     private readonly IReadOnlyList<ConflictSideResolutionResult> sideResults;
     private readonly IReadOnlyList<ConflictNpcConsequence> npcConsequences;
     private readonly IReadOnlyList<ConflictAggregateConsequence> aggregateConsequences;
@@ -854,6 +856,7 @@ public sealed class ConflictResolutionResult
     public ConflictOutcomeSource OutcomeSource => outcomeSource;
     public bool OutcomeWasExternallyConstrained => outcomeSource == ConflictOutcomeSource.ExternallyConstrained;
     public bool WasSimulated => outcomeSource == ConflictOutcomeSource.Simulated;
+    public bool ConsequencesWereExternallyConstrained => consequencesWereExternallyConstrained;
     public IReadOnlyList<ConflictSideResolutionResult> SideResults => sideResults;
     public IReadOnlyList<ConflictNpcConsequence> NpcConsequences => npcConsequences;
     public IReadOnlyList<ConflictAggregateConsequence> AggregateConsequences => aggregateConsequences;
@@ -865,7 +868,8 @@ public sealed class ConflictResolutionResult
         ConflictOutcomeSource outcomeSource,
         IReadOnlyList<ConflictSideResolutionResult> sideResults,
         IReadOnlyList<ConflictNpcConsequence> npcConsequences = null,
-        IReadOnlyList<ConflictAggregateConsequence> aggregateConsequences = null)
+        IReadOnlyList<ConflictAggregateConsequence> aggregateConsequences = null,
+        bool consequencesWereExternallyConstrained = false)
     {
         if (string.IsNullOrWhiteSpace(conflictId) == true)
         {
@@ -891,6 +895,7 @@ public sealed class ConflictResolutionResult
         this.winningSideId = string.IsNullOrWhiteSpace(winningSideId) == true ? null : winningSideId;
         this.outcome = outcome;
         this.outcomeSource = outcomeSource;
+        this.consequencesWereExternallyConstrained = consequencesWereExternallyConstrained;
         this.sideResults = new List<ConflictSideResolutionResult>(sideResults).AsReadOnly();
         this.npcConsequences = new List<ConflictNpcConsequence>(npcConsequences ?? Array.Empty<ConflictNpcConsequence>()).AsReadOnly();
         this.aggregateConsequences = new List<ConflictAggregateConsequence>(aggregateConsequences ?? Array.Empty<ConflictAggregateConsequence>()).AsReadOnly();
@@ -907,7 +912,8 @@ public sealed class ConflictResolutionResult
             outcomeSource,
             sideResults,
             npcConsequences,
-            aggregateConsequences);
+            aggregateConsequences,
+            consequencesWereExternallyConstrained);
     }
 }
 
@@ -984,7 +990,7 @@ public sealed class ConflictResolver
             winningSideId = constraints.ForcedWinningSideId;
         }
 
-        ConflictOutcomeSource outcomeSource = constraints.HasExternalConstraints
+        ConflictOutcomeSource outcomeSource = constraints.HasOutcomeConstraints
             ? ConflictOutcomeSource.ExternallyConstrained
             : ConflictOutcomeSource.Simulated;
         List<ConflictSideResolutionResult> sideResults = new List<ConflictSideResolutionResult>();
@@ -1018,7 +1024,8 @@ public sealed class ConflictResolver
             winningSideId,
             outcome,
             outcomeSource,
-            sideResults);
+            sideResults,
+            consequencesWereExternallyConstrained: constraints.HasParticipantConsequenceConstraints);
         ConflictResultValidator.Validate(conflict, result);
         return result;
     }

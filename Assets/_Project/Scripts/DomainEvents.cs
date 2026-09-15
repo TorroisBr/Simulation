@@ -557,6 +557,7 @@ public sealed class ConflictResolvedEvent : DomainEvent
     public string WinningSideId => resolution.WinningSideId;
     public ConflictOutcomeType Outcome => resolution.Outcome;
     public ConflictOutcomeSource OutcomeSource => resolution.OutcomeSource;
+    public bool ConsequencesWereExternallyConstrained => resolution.ConsequencesWereExternallyConstrained;
     public IReadOnlyList<ConflictSideResolutionResult> SideResults => resolution.SideResults;
     public IReadOnlyList<ConflictNpcConsequence> NpcConsequences => resolution.NpcConsequences;
     public IReadOnlyList<ConflictAggregateConsequence> AggregateConsequences => resolution.AggregateConsequences;

@@ -59,6 +59,116 @@ public sealed class ConflictConsequencesTests
     }
 
     [Test]
+    public void ExistentialCloseVictoryCanKillWinningSideNpc()
+    {
+        NpcRuntime winner = CreateNpc("fatal-winner");
+        NpcRuntime loser = CreateNpc("fatal-winner-opponent");
+        Conflict conflict = CreateNpcConflict(winner, loser, ConflictStakes.Existential, 102f, 100f);
+        ConflictResolutionService service = CreateService(new SequenceConflictRandomSource(0.5f, 0.5f, 0f, 1f));
+
+        Assert.That(service.TryResolveAndApply(conflict, null, out ConflictResolutionResult result, out string reason), Is.True, reason);
+
+        Assert.That(result.WinningSideId, Is.EqualTo("a"));
+        Assert.That(winner.IsDead, Is.True);
+        Assert.That(loser.IsAlive, Is.True);
+    }
+
+    [Test]
+    public void WinningSideDeathDoesNotChangeWinningSide()
+    {
+        NpcRuntime winner = CreateNpc("dead-victor");
+        NpcRuntime loser = CreateNpc("dead-victor-opponent");
+        Conflict conflict = CreateNpcConflict(winner, loser, ConflictStakes.Existential, 102f, 100f);
+
+        ConflictResolutionResult result = CreateService(
+            new SequenceConflictRandomSource(0.5f, 0.5f, 0f, 1f)).Compute(conflict);
+
+        Assert.That(result.NpcConsequences.FindByRuntimeId(winner.RuntimeId).IsDead, Is.True);
+        Assert.That(result.WinningSideId, Is.EqualTo("a"));
+        Assert.That(result.Outcome, Is.EqualTo(ConflictOutcomeType.Victory));
+    }
+
+    [Test]
+    public void CloseExistentialConflictCanProduceFatalCasualtiesOnBothSides()
+    {
+        NpcRuntime winner = CreateNpc("both-fatal-winner");
+        NpcRuntime loser = CreateNpc("both-fatal-loser");
+        Conflict conflict = CreateNpcConflict(winner, loser, ConflictStakes.Existential, 102f, 100f);
+
+        ConflictResolutionResult result = CreateService(
+            new SequenceConflictRandomSource(0.5f, 0.5f, 0f, 0f)).Compute(conflict);
+
+        Assert.That(result.NpcConsequences.FindByRuntimeId(winner.RuntimeId).IsDead, Is.True);
+        Assert.That(result.NpcConsequences.FindByRuntimeId(loser.RuntimeId).IsDead, Is.True);
+    }
+
+    [Test]
+    public void LowStakesWinnerDoesNotDieUnderEquivalentDeterministicInput()
+    {
+        NpcRuntime winner = CreateNpc("low-stakes-winner");
+        NpcRuntime loser = CreateNpc("low-stakes-loser");
+        Conflict conflict = CreateNpcConflict(winner, loser, ConflictStakes.Low, 102f, 100f);
+
+        ConflictResolutionResult result = CreateService(
+            new SequenceConflictRandomSource(0.5f, 0.5f, 0f, 0f)).Compute(conflict);
+
+        Assert.That(result.WinningSideId, Is.EqualTo("a"));
+        Assert.That(result.NpcConsequences.FindByRuntimeId(winner.RuntimeId).IsDead, Is.False);
+    }
+
+    [Test]
+    public void DecisiveVictoryProtectsWinnerFromDefaultFatality()
+    {
+        NpcRuntime winner = CreateNpc("decisive-winner");
+        NpcRuntime loser = CreateNpc("decisive-loser");
+        Conflict conflict = CreateNpcConflict(winner, loser, ConflictStakes.Existential, 100f, 10f);
+
+        ConflictResolutionResult result = CreateService(
+            new SequenceConflictRandomSource(0.5f, 0.5f, 0f)).Compute(conflict);
+
+        Assert.That(result.WinningSideId, Is.EqualTo("a"));
+        Assert.That(result.NpcConsequences.FindByRuntimeId(winner.RuntimeId).IsDead, Is.False);
+    }
+
+    [Test]
+    public void ForceAliveStillPreventsWinnerDeath()
+    {
+        NpcRuntime winner = CreateNpc("force-alive-winner");
+        NpcRuntime loser = CreateNpc("force-alive-loser");
+        Conflict conflict = CreateNpcConflict(winner, loser, ConflictStakes.Existential, 102f, 100f);
+        ConflictResolutionConstraints constraints = new ConflictResolutionConstraints();
+        constraints.AddParticipantConstraint(new ConflictParticipantResolutionConstraint(winner.RuntimeId)
+        {
+            ForceAlive = true
+        });
+
+        ConflictResolutionResult result = CreateService(
+            new SequenceConflictRandomSource(0.5f, 0.5f, 0f, 0f)).Compute(conflict, constraints);
+
+        Assert.That(result.WinningSideId, Is.EqualTo("a"));
+        Assert.That(result.NpcConsequences.FindByRuntimeId(winner.RuntimeId).IsDead, Is.False);
+    }
+
+    [Test]
+    public void ForcedDeathStillOverridesNormalWinnerProtection()
+    {
+        NpcRuntime winner = CreateNpc("forced-dead-decisive-winner");
+        NpcRuntime loser = CreateNpc("forced-dead-decisive-loser");
+        Conflict conflict = CreateNpcConflict(winner, loser, ConflictStakes.Existential, 100f, 10f);
+        ConflictResolutionConstraints constraints = new ConflictResolutionConstraints();
+        constraints.AddParticipantConstraint(new ConflictParticipantResolutionConstraint(winner.RuntimeId)
+        {
+            ForceDeath = true
+        });
+
+        ConflictResolutionResult result = CreateService(
+            new SequenceConflictRandomSource(0.5f, 0.5f, 0f)).Compute(conflict, constraints);
+
+        Assert.That(result.WinningSideId, Is.EqualTo("a"));
+        Assert.That(result.NpcConsequences.FindByRuntimeId(winner.RuntimeId).IsDead, Is.True);
+    }
+
+    [Test]
     public void LowStakesProducesLessSevereConsequencesThanExistentialUnderSameDeterministicInputs()
     {
         NpcRuntime lowA = CreateNpc("low-a");
@@ -268,6 +378,109 @@ public sealed class ConflictConsequencesTests
     }
 
     [Test]
+    public void ParticipantConstraintDoesNotMarkOutcomeAsExternallyConstrained()
+    {
+        NpcRuntime winner = CreateNpc("participant-provenance-winner");
+        NpcRuntime constrained = CreateNpc("participant-provenance-constrained");
+        Conflict conflict = CreateNpcConflict(winner, constrained, ConflictStakes.Low, 100f, 90f);
+        ConflictResolutionConstraints constraints = new ConflictResolutionConstraints();
+        constraints.AddParticipantConstraint(new ConflictParticipantResolutionConstraint(constrained.RuntimeId)
+        {
+            ForceDeath = true
+        });
+
+        ConflictResolutionResult result = CreateService(
+            new SequenceConflictRandomSource(0.5f, 0.5f)).Compute(conflict, constraints);
+
+        Assert.That(result.OutcomeSource, Is.EqualTo(ConflictOutcomeSource.Simulated));
+        Assert.That(result.OutcomeWasExternallyConstrained, Is.False);
+        Assert.That(result.ConsequencesWereExternallyConstrained, Is.True);
+        Assert.That(constraints.HasExternalConstraints, Is.True);
+    }
+
+    [Test]
+    public void ForcedWinnerMarksOnlyOutcomeAsExternallyConstrained()
+    {
+        NpcRuntime forcedWinner = CreateNpc("outcome-only-winner");
+        NpcRuntime strongerOpponent = CreateNpc("outcome-only-opponent");
+        Conflict conflict = CreateNpcConflict(forcedWinner, strongerOpponent, ConflictStakes.Meaningful, 1f, 100f);
+        ConflictResolutionConstraints constraints = new ConflictResolutionConstraints
+        {
+            ForcedWinningSideId = "a"
+        };
+
+        ConflictResolutionResult result = CreateService(
+            new SequenceConflictRandomSource(0.5f, 0.5f)).Compute(conflict, constraints);
+
+        Assert.That(result.OutcomeWasExternallyConstrained, Is.True);
+        Assert.That(result.ConsequencesWereExternallyConstrained, Is.False);
+    }
+
+    [Test]
+    public void ForcedWinnerAndParticipantConstraintTrackBothSources()
+    {
+        NpcRuntime forcedWinner = CreateNpc("both-sources-winner");
+        NpcRuntime forcedDead = CreateNpc("both-sources-dead");
+        Conflict conflict = CreateNpcConflict(forcedWinner, forcedDead, ConflictStakes.Meaningful, 1f, 100f);
+        ConflictResolutionConstraints constraints = new ConflictResolutionConstraints
+        {
+            ForcedWinningSideId = "a"
+        };
+        constraints.AddParticipantConstraint(new ConflictParticipantResolutionConstraint(forcedDead.RuntimeId)
+        {
+            ForceDeath = true
+        });
+
+        ConflictResolutionResult result = CreateService(
+            new SequenceConflictRandomSource(0.5f, 0.5f)).Compute(conflict, constraints);
+
+        Assert.That(result.OutcomeWasExternallyConstrained, Is.True);
+        Assert.That(result.ConsequencesWereExternallyConstrained, Is.True);
+    }
+
+    [Test]
+    public void FullySimulatedConflictHasNoExternalConstraintFlags()
+    {
+        NpcRuntime winner = CreateNpc("fully-simulated-winner");
+        NpcRuntime loser = CreateNpc("fully-simulated-loser");
+        Conflict conflict = CreateNpcConflict(winner, loser, ConflictStakes.Meaningful, 100f, 90f);
+
+        ConflictResolutionResult result = CreateService(
+            new SequenceConflictRandomSource(0.5f, 0.5f)).Compute(conflict);
+
+        Assert.That(result.OutcomeWasExternallyConstrained, Is.False);
+        Assert.That(result.ConsequencesWereExternallyConstrained, Is.False);
+        Assert.That(result.WasSimulated, Is.True);
+    }
+
+    [Test]
+    public void ParticipantConstraintDoesNotChangeRawOrFinalScores()
+    {
+        NpcRuntime first = CreateNpc("score-provenance-first");
+        NpcRuntime second = CreateNpc("score-provenance-second");
+        Conflict conflict = CreateNpcConflict(first, second, ConflictStakes.Meaningful, 100f, 90f);
+        ConflictResolutionConstraints constraints = new ConflictResolutionConstraints();
+        constraints.AddParticipantConstraint(new ConflictParticipantResolutionConstraint(second.RuntimeId)
+        {
+            ForcedInjurySeverity = NpcInjurySeverity.SeriouslyInjured
+        });
+
+        ConflictResolutionResult simulated = CreateService(
+            new SequenceConflictRandomSource(0.2f, 0.8f)).Compute(conflict);
+        ConflictResolutionResult constrained = CreateService(
+            new SequenceConflictRandomSource(0.2f, 0.8f)).Compute(conflict, constraints);
+
+        Assert.That(constrained.WinningSideId, Is.EqualTo(simulated.WinningSideId));
+        for (int i = 0; i < simulated.SideResults.Count; i++)
+        {
+            Assert.That(constrained.SideResults[i].RawCapability, Is.EqualTo(simulated.SideResults[i].RawCapability));
+            Assert.That(constrained.SideResults[i].ModifierAdjustedCapability, Is.EqualTo(simulated.SideResults[i].ModifierAdjustedCapability));
+            Assert.That(constrained.SideResults[i].RandomFactor, Is.EqualTo(simulated.SideResults[i].RandomFactor));
+            Assert.That(constrained.SideResults[i].FinalScore, Is.EqualTo(simulated.SideResults[i].FinalScore));
+        }
+    }
+
+    [Test]
     public void ForcedParticipantDeathIsHonored()
     {
         NpcRuntime first = CreateNpc("forced-death-first");
@@ -314,6 +527,7 @@ public sealed class ConflictConsequencesTests
 
         Assert.That(result.WinningSideId, Is.EqualTo("a"));
         Assert.That(result.OutcomeWasExternallyConstrained, Is.True);
+        Assert.That(result.ConsequencesWereExternallyConstrained, Is.True);
         Assert.That(forcedDead.IsDead, Is.True);
         Assert.That(forcedWinner.IsAlive, Is.True);
         Assert.That(forcedWinner.InjurySeverity, Is.Not.EqualTo(NpcInjurySeverity.None));
@@ -377,7 +591,34 @@ public sealed class ConflictConsequencesTests
         Assert.That(service.TryApply(conflict, result, out string reason), Is.True, reason);
         Assert.That(records.Events.Events, Has.Count.EqualTo(1));
         Assert.That(records.Events.Events[0], Is.TypeOf<ConflictResolvedEvent>());
+        Assert.That(((ConflictResolvedEvent)records.Events.Events[0]).ConsequencesWereExternallyConstrained, Is.False);
         Assert.That(first.InjurySeverity, Is.EqualTo(result.NpcConsequences.FindByRuntimeId(first.RuntimeId).InjurySeverity));
+    }
+
+    [Test]
+    public void ConflictResolvedEventPreservesDistinctConstraintProvenance()
+    {
+        RecordFixture records = SimulationTestFactory.CreateRecordFixture();
+        NpcRuntime winner = CreateNpc("event-provenance-winner");
+        NpcRuntime forcedDead = CreateNpc("event-provenance-dead");
+        Conflict conflict = CreateNpcConflict(winner, forcedDead, ConflictStakes.Low, 100f, 90f);
+        ConflictResolutionConstraints constraints = new ConflictResolutionConstraints();
+        constraints.AddParticipantConstraint(new ConflictParticipantResolutionConstraint(forcedDead.RuntimeId)
+        {
+            ForceDeath = true
+        });
+        ConflictResolutionService service = new ConflictResolutionService(
+            new ConflictResolver(new FixedCapabilityModel(capabilityOverrides), new SequenceConflictRandomSource(0.5f, 0.5f)),
+            null,
+            records.EventRecorder);
+
+        Assert.That(service.TryResolveAndApply(conflict, constraints, out _, out string reason), Is.True, reason);
+        ConflictResolvedEvent domainEvent = records.Events.Events[0] as ConflictResolvedEvent;
+
+        Assert.That(domainEvent, Is.Not.Null);
+        Assert.That(domainEvent.OutcomeSource, Is.EqualTo(ConflictOutcomeSource.Simulated));
+        Assert.That(domainEvent.ConsequencesWereExternallyConstrained, Is.True);
+        Assert.That(domainEvent.Resolution.OutcomeWasExternallyConstrained, Is.False);
     }
 
     [Test]
