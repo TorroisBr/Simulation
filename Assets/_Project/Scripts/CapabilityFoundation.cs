@@ -472,7 +472,7 @@ public sealed class GenericCapabilityModel : ICapabilityModel
         }
 
         float contribution = rawValue * Mathf.Max(0f, weight);
-        if (Mathf.Approximately(contribution, 0f) == true)
+        if (Mathf.Approximately(contribution, 0f) == true && source != CapabilityContributionSource.BaseAttribute)
         {
             return 0f;
         }
