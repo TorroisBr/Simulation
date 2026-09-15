@@ -613,7 +613,8 @@ public sealed class TravelPartySystem
                 return false;
             }
 
-            if (member.IsTraveling == true
+            if (member.IsAlive == false
+                || member.IsTraveling == true
                 || string.IsNullOrWhiteSpace(member.ActiveTravelPartyId) == false
                 || partyStore.TryGetPartyForNpc(member.RuntimeId, out _))
             {
@@ -723,7 +724,7 @@ public sealed class TravelPartySystem
 
         foreach (string runtimeId in party.MemberRuntimeIds)
         {
-            if (identityRegistry.TryGetNpc(runtimeId, out NpcRuntime member) == false || member == null)
+            if (identityRegistry.TryGetNpc(runtimeId, out NpcRuntime member) == false || member == null || member.IsAlive == false)
             {
                 return false;
             }

@@ -208,6 +208,11 @@ public class CityRuntime
             return;
         }
 
+        if (npcRuntime.IsAlive == false)
+        {
+            return;
+        }
+
         if (npcRuntime.IsTraveling == true)
         {
             return;

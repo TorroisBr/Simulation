@@ -10,7 +10,8 @@ public enum DomainEventType
     TravelPartyStarted,
     TravelPartyArrived,
     ExpeditionStarted,
-    ExpeditionArrivedAtSite
+    ExpeditionArrivedAtSite,
+    ConflictResolved
 }
 
 public enum DomainEventParticipantRole
@@ -543,6 +544,76 @@ internal static class TravelPartyEventData
     }
 }
 
+public sealed class ConflictResolvedEvent : DomainEvent
+{
+    private readonly string conflictId;
+    private readonly string locationRuntimeId;
+    private readonly ConflictResolutionResult resolution;
+
+    public override DomainEventType EventType => DomainEventType.ConflictResolved;
+    public string ConflictId => conflictId;
+    public string LocationRuntimeId => locationRuntimeId;
+    public ConflictResolutionResult Resolution => resolution;
+    public string WinningSideId => resolution.WinningSideId;
+    public ConflictOutcomeType Outcome => resolution.Outcome;
+    public ConflictOutcomeSource OutcomeSource => resolution.OutcomeSource;
+    public IReadOnlyList<ConflictSideResolutionResult> SideResults => resolution.SideResults;
+    public IReadOnlyList<ConflictNpcConsequence> NpcConsequences => resolution.NpcConsequences;
+    public IReadOnlyList<ConflictAggregateConsequence> AggregateConsequences => resolution.AggregateConsequences;
+
+    public ConflictResolvedEvent(
+        string eventId,
+        long absoluteDay,
+        long recordSequence,
+        Conflict conflict,
+        ConflictResolutionResult resolution)
+        : base(
+            eventId,
+            absoluteDay,
+            recordSequence,
+            conflict != null ? conflict.OriginDecisionId : null)
+    {
+        if (conflict == null)
+        {
+            throw new ArgumentNullException(nameof(conflict));
+        }
+
+        if (resolution == null)
+        {
+            throw new ArgumentNullException(nameof(resolution));
+        }
+
+        ConflictResultValidator.Validate(conflict, resolution);
+        conflictId = conflict.ConflictId;
+        locationRuntimeId = conflict.LocationRuntimeId;
+        this.resolution = resolution;
+    }
+
+    public override IReadOnlyList<DomainEventParticipant> GetParticipants()
+    {
+        List<DomainEventParticipant> participants = new List<DomainEventParticipant>();
+        HashSet<string> runtimeIds = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (ConflictSideResolutionResult sideResult in resolution.SideResults)
+        {
+            foreach (ConflictParticipantCapabilityResult participant in sideResult.ParticipantContributions)
+            {
+                if (participant.Kind != ConflictParticipantKind.Npc
+                    || runtimeIds.Add(participant.SourceId) == false)
+                {
+                    continue;
+                }
+
+                participants.Add(new DomainEventParticipant(
+                    participant.SourceId,
+                    DomainEventParticipantRole.Participant));
+            }
+        }
+
+        return participants.AsReadOnly();
+    }
+}
+
 public sealed class DomainEventStore
 {
     private readonly List<DomainEvent> events = new List<DomainEvent>();
@@ -647,7 +718,7 @@ public sealed class HistoryPolicy
 {
     public bool ShouldRetain(DomainEvent domainEvent)
     {
-        return domainEvent is NpcEscapedEvent;
+        return domainEvent is NpcEscapedEvent || domainEvent is ConflictResolvedEvent;
     }
 }
 

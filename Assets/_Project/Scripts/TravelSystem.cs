@@ -68,6 +68,7 @@ public class TravelSystem
         CityRuntime resolvedTargetCity = targetCityProjection ?? GetCityRuntime(targetLocation);
 
         if (npcRuntime == null
+            || npcRuntime.IsAlive == false
             || targetLocation == null
             || (targetCityProjection != null && targetCityProjection.Location != targetLocation)
             || IsManagedByTravelParty(npcRuntime)
@@ -157,6 +158,7 @@ public class TravelSystem
         travelCost = -1f;
 
         if (npcRuntime == null
+            || npcRuntime.IsAlive == false
             || npcRuntime.CurrentLocation == null
             || targetLocation == null
             || npcRuntime.IsTraveling == true
@@ -187,7 +189,7 @@ public class TravelSystem
 
         foreach (NpcRuntime npcRuntime in npcRuntimeList)
         {
-            if (npcRuntime == null || npcRuntime.IsTraveling == false || IsManagedByTravelParty(npcRuntime))
+            if (npcRuntime == null || npcRuntime.IsAlive == false || npcRuntime.IsTraveling == false || IsManagedByTravelParty(npcRuntime))
             {
                 continue;
             }

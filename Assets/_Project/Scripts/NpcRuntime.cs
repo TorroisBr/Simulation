@@ -3,12 +3,14 @@ using System.Collections.Generic;
 using UnityEngine;
 
 [Serializable]
-public class NpcRuntime
+public class NpcRuntime : ICapabilityConditionSource
 {
 	[SerializeField]private string runtimeId;
 	[SerializeField]private NpcData npcData;
 	[SerializeField]private List<NpcStatusData> currentStatus = new List<NpcStatusData>();
 	[SerializeField]private NpcActionData currentAction;
+    [SerializeField]private NpcLifeState lifeState = NpcLifeState.Alive;
+    [SerializeField]private NpcInjurySeverity injurySeverity = NpcInjurySeverity.None;
     [NonSerialized]private NpcActionRuntime currentActionRuntime;
     [SerializeField]private InventoryRuntime inventory = new InventoryRuntime();
     [SerializeField]private MoneyAccountRuntime moneyAccount = new MoneyAccountRuntime();
@@ -33,6 +35,10 @@ public class NpcRuntime
     public List<NpcStatusData> CurrentStatus => currentStatus ?? (currentStatus = new List<NpcStatusData>());
     public NpcActionData CurrentAction => currentAction;
     public NpcActionRuntime CurrentActionRuntime => currentActionRuntime;
+    public NpcLifeState LifeState => lifeState;
+    public bool IsAlive => lifeState == NpcLifeState.Alive;
+    public bool IsDead => lifeState == NpcLifeState.Dead;
+    public NpcInjurySeverity InjurySeverity => injurySeverity;
     public InventoryRuntime Inventory => inventory ?? (inventory = new InventoryRuntime());
     public MoneyAccountRuntime MoneyAccount => moneyAccount;
     public float Money => MoneyAccount.Balance;
@@ -85,14 +91,86 @@ public class NpcRuntime
 
     public void SetCurrentAction(NpcActionData action)
     {
+        if (IsAlive == false && action != null)
+        {
+            return;
+        }
+
         currentAction = action;
         currentActionRuntime = action != null ? new NpcActionRuntime(action) : null;
     }
 
     public void SetCurrentActionRuntime(NpcActionRuntime actionRuntime)
     {
+        if (IsAlive == false && actionRuntime != null)
+        {
+            return;
+        }
+
         currentActionRuntime = actionRuntime;
         currentAction = actionRuntime != null ? actionRuntime.Action : null;
+    }
+
+    public bool TryApplyInjury(NpcInjurySeverity severity)
+    {
+        if (IsAlive == false || NpcInjuryRules.IsValid(severity) == false)
+        {
+            return false;
+        }
+
+        if (severity > injurySeverity)
+        {
+            injurySeverity = severity;
+        }
+
+        return true;
+    }
+
+    public bool TryApplyDeath()
+    {
+        if (IsDead == true)
+        {
+            return false;
+        }
+
+        lifeState = NpcLifeState.Dead;
+        currentAction = null;
+        currentActionRuntime = null;
+        return true;
+    }
+
+    public bool CanApplyConflictConsequence(
+        NpcInjurySeverity severity,
+        bool shouldDie)
+    {
+        return IsAlive == true
+            && NpcInjuryRules.IsValid(severity) == true
+            && (shouldDie == false || lifeState == NpcLifeState.Alive);
+    }
+
+    public bool ApplyConflictConsequence(
+        NpcInjurySeverity severity,
+        bool shouldDie)
+    {
+        if (CanApplyConflictConsequence(severity, shouldDie) == false)
+        {
+            return false;
+        }
+
+        TryApplyInjury(severity);
+        if (shouldDie == true)
+        {
+            TryApplyDeath();
+        }
+
+        return true;
+    }
+
+    public string ConditionSourceId => "injury:" + RuntimeId;
+
+    public float GetCapabilityMultiplier()
+    {
+        return NpcInjuryRules.GetCapabilityMultiplier(injurySeverity);
     }
 
     public void AddStatus(NpcStatusData status)
@@ -159,7 +237,8 @@ public class NpcRuntime
         int travelDays,
         string originDecisionId = null)
     {
-        if (destination == null
+        if (IsAlive == false
+            || destination == null
             || (destinationCityProjection != null && destinationCityProjection.Location != destination)
             || currentLocation == null
             || IsTraveling == true
@@ -204,7 +283,7 @@ public class NpcRuntime
     {
         arrivedCity = null;
 
-        if (IsTraveling == false)
+        if (IsAlive == false || IsTraveling == false)
         {
             return false;
         }

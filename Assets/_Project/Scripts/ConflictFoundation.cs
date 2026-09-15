@@ -434,6 +434,12 @@ public sealed class Conflict
                         return false;
                     }
 
+                    if (participant.Npc.IsAlive == false)
+                    {
+                        diagnostic = "Dead NPC '" + participant.Npc.RuntimeId + "' cannot join a new conflict.";
+                        return false;
+                    }
+
                     if (npcSideByRuntimeId.TryGetValue(participant.Npc.RuntimeId, out string previousSideId) == true)
                     {
                         diagnostic = "NPC '" + participant.Npc.RuntimeId + "' cannot belong to multiple conflict sides ('"
@@ -487,10 +493,25 @@ public sealed class Conflict
 
 public sealed class ConflictResolutionConstraints
 {
+    private readonly List<ConflictParticipantResolutionConstraint> participantConstraints = new List<ConflictParticipantResolutionConstraint>();
+
     public string ForcedWinningSideId { get; set; }
     public ConflictOutcomeType? ForcedOverallOutcome { get; set; }
+    public IReadOnlyList<ConflictParticipantResolutionConstraint> ParticipantConstraints => participantConstraints.AsReadOnly();
 
-    public bool HasExternalConstraints => string.IsNullOrWhiteSpace(ForcedWinningSideId) == false || ForcedOverallOutcome.HasValue;
+    public bool HasExternalConstraints => string.IsNullOrWhiteSpace(ForcedWinningSideId) == false
+        || ForcedOverallOutcome.HasValue
+        || participantConstraints.Count > 0;
+
+    public void AddParticipantConstraint(ConflictParticipantResolutionConstraint constraint)
+    {
+        if (constraint == null)
+        {
+            throw new ArgumentNullException(nameof(constraint));
+        }
+
+        participantConstraints.Add(constraint);
+    }
 
     public bool TryValidate(Conflict conflict, out string diagnostic)
     {
@@ -518,6 +539,58 @@ public sealed class ConflictResolutionConstraints
             return false;
         }
 
+        HashSet<string> participantIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (ConflictParticipantResolutionConstraint participantConstraint in participantConstraints)
+        {
+            if (participantConstraint == null || string.IsNullOrWhiteSpace(participantConstraint.ParticipantId) == true)
+            {
+                diagnostic = "Conflict participant constraints require a ParticipantId.";
+                return false;
+            }
+
+            if (participantIds.Add(participantConstraint.ParticipantId) == false)
+            {
+                diagnostic = "Conflict participant constraints contain duplicate ParticipantId '" + participantConstraint.ParticipantId + "'.";
+                return false;
+            }
+
+            ConflictParticipantReference participant = FindParticipant(conflict, participantConstraint.ParticipantId);
+            if (participant == null)
+            {
+                diagnostic = "Conflict participant constraint references unknown participant '" + participantConstraint.ParticipantId + "'.";
+                return false;
+            }
+
+            if (participant.IsAggregate == true
+                && (participantConstraint.ForceDeath.HasValue
+                    || participantConstraint.ForceAlive.HasValue
+                    || participantConstraint.ForcedInjurySeverity.HasValue))
+            {
+                diagnostic = "Life and injury constraints can only target NPC participants.";
+                return false;
+            }
+
+            if (participantConstraint.ForceDeath == true && participantConstraint.ForceAlive == true)
+            {
+                diagnostic = "Conflict participant constraint cannot force both death and life for '" + participantConstraint.ParticipantId + "'.";
+                return false;
+            }
+
+            if (participantConstraint.ForcedInjurySeverity.HasValue
+                && NpcInjuryRules.IsValid(participantConstraint.ForcedInjurySeverity.Value) == false)
+            {
+                diagnostic = "Conflict participant constraint contains an invalid injury severity.";
+                return false;
+            }
+
+            if (participantConstraint.ForcedDisposition == ConflictParticipantDisposition.Dead
+                && participantConstraint.ForceAlive == true)
+            {
+                diagnostic = "Conflict participant constraint cannot force a dead disposition and ForceAlive for '" + participantConstraint.ParticipantId + "'.";
+                return false;
+            }
+        }
+
         diagnostic = null;
         return true;
     }
@@ -534,6 +607,22 @@ public sealed class ConflictResolutionConstraints
 
         return null;
     }
+
+    private static ConflictParticipantReference FindParticipant(Conflict conflict, string participantId)
+    {
+        foreach (ConflictSide side in conflict.Sides)
+        {
+            foreach (ConflictParticipantReference participant in side.Participants)
+            {
+                if (participant != null && string.Equals(participant.ParticipantId, participantId, StringComparison.Ordinal) == true)
+                {
+                    return participant;
+                }
+            }
+        }
+
+        return null;
+    }
 }
 
 public interface IConflictRandomSource
@@ -545,6 +634,8 @@ public sealed class SequenceConflictRandomSource : IConflictRandomSource
 {
     private readonly Queue<float> values;
     private readonly float fallbackValue;
+
+    public int ConsumedCount { get; private set; }
 
     public SequenceConflictRandomSource(IEnumerable<float> values, float fallbackValue = 0.5f)
     {
@@ -564,6 +655,7 @@ public sealed class SequenceConflictRandomSource : IConflictRandomSource
 
     public float NextUnit()
     {
+        ConsumedCount++;
         return values.Count > 0 ? ClampUnit(values.Dequeue()) : fallbackValue;
     }
 
@@ -753,6 +845,8 @@ public sealed class ConflictResolutionResult
     private readonly ConflictOutcomeType outcome;
     private readonly ConflictOutcomeSource outcomeSource;
     private readonly IReadOnlyList<ConflictSideResolutionResult> sideResults;
+    private readonly IReadOnlyList<ConflictNpcConsequence> npcConsequences;
+    private readonly IReadOnlyList<ConflictAggregateConsequence> aggregateConsequences;
 
     public string ConflictId => conflictId;
     public string WinningSideId => winningSideId;
@@ -761,13 +855,17 @@ public sealed class ConflictResolutionResult
     public bool OutcomeWasExternallyConstrained => outcomeSource == ConflictOutcomeSource.ExternallyConstrained;
     public bool WasSimulated => outcomeSource == ConflictOutcomeSource.Simulated;
     public IReadOnlyList<ConflictSideResolutionResult> SideResults => sideResults;
+    public IReadOnlyList<ConflictNpcConsequence> NpcConsequences => npcConsequences;
+    public IReadOnlyList<ConflictAggregateConsequence> AggregateConsequences => aggregateConsequences;
 
     public ConflictResolutionResult(
         string conflictId,
         string winningSideId,
         ConflictOutcomeType outcome,
         ConflictOutcomeSource outcomeSource,
-        IReadOnlyList<ConflictSideResolutionResult> sideResults)
+        IReadOnlyList<ConflictSideResolutionResult> sideResults,
+        IReadOnlyList<ConflictNpcConsequence> npcConsequences = null,
+        IReadOnlyList<ConflictAggregateConsequence> aggregateConsequences = null)
     {
         if (string.IsNullOrWhiteSpace(conflictId) == true)
         {
@@ -794,6 +892,22 @@ public sealed class ConflictResolutionResult
         this.outcome = outcome;
         this.outcomeSource = outcomeSource;
         this.sideResults = new List<ConflictSideResolutionResult>(sideResults).AsReadOnly();
+        this.npcConsequences = new List<ConflictNpcConsequence>(npcConsequences ?? Array.Empty<ConflictNpcConsequence>()).AsReadOnly();
+        this.aggregateConsequences = new List<ConflictAggregateConsequence>(aggregateConsequences ?? Array.Empty<ConflictAggregateConsequence>()).AsReadOnly();
+    }
+
+    public ConflictResolutionResult WithConsequences(
+        IReadOnlyList<ConflictNpcConsequence> npcConsequences,
+        IReadOnlyList<ConflictAggregateConsequence> aggregateConsequences)
+    {
+        return new ConflictResolutionResult(
+            conflictId,
+            winningSideId,
+            outcome,
+            outcomeSource,
+            sideResults,
+            npcConsequences,
+            aggregateConsequences);
     }
 }
 
@@ -1050,6 +1164,17 @@ public static class ConflictResultValidator
         }
 
         HashSet<string> resultSideIds = new HashSet<string>(StringComparer.Ordinal);
+        Dictionary<string, ConflictParticipantReference> participantsById = new Dictionary<string, ConflictParticipantReference>(StringComparer.Ordinal);
+        Dictionary<string, string> participantSideById = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (ConflictSide side in conflict.Sides)
+        {
+            foreach (ConflictParticipantReference participant in side.Participants)
+            {
+                participantsById[participant.ParticipantId] = participant;
+                participantSideById[participant.ParticipantId] = side.SideId;
+            }
+        }
+
         foreach (ConflictSideResolutionResult sideResult in result.SideResults)
         {
             if (sideResult == null || sideIds.Contains(sideResult.SideId) == false || resultSideIds.Add(sideResult.SideId) == false)
@@ -1067,11 +1192,52 @@ public static class ConflictResultValidator
             {
                 throw new InvalidOperationException("Conflict result has a stalemate side disposition without a draw.");
             }
+
+            HashSet<string> sideParticipantIds = new HashSet<string>(StringComparer.Ordinal);
+            foreach (ConflictParticipantCapabilityResult participant in sideResult.ParticipantContributions)
+            {
+                if (participant == null
+                    || participantsById.TryGetValue(participant.ParticipantId, out ConflictParticipantReference reference) == false
+                    || string.Equals(participantSideById[participant.ParticipantId], sideResult.SideId, StringComparison.Ordinal) == false
+                    || reference.Kind != participant.Kind
+                    || string.Equals(reference.SourceId, participant.SourceId, StringComparison.Ordinal) == false
+                    || sideParticipantIds.Add(participant.ParticipantId) == false)
+                {
+                    throw new InvalidOperationException("Conflict result participant contributions must reference their original participants.");
+                }
+            }
         }
 
         if (resultSideIds.Count != sideIds.Count)
         {
             throw new InvalidOperationException("Conflict result must contain every conflict side exactly once.");
+        }
+
+        HashSet<string> consequenceParticipantIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (ConflictNpcConsequence consequence in result.NpcConsequences)
+        {
+            if (consequence == null
+                || participantsById.TryGetValue(consequence.ParticipantId, out ConflictParticipantReference participant) == false
+                || participant.IsNpc == false
+                || string.Equals(participantSideById[consequence.ParticipantId], consequence.SideId, StringComparison.Ordinal) == false
+                || string.Equals(participant.Npc.RuntimeId, consequence.RuntimeId, StringComparison.Ordinal) == false
+                || consequenceParticipantIds.Add(consequence.ParticipantId) == false)
+            {
+                throw new InvalidOperationException("Conflict result NPC consequences must reference their original participants.");
+            }
+        }
+
+        foreach (ConflictAggregateConsequence consequence in result.AggregateConsequences)
+        {
+            if (consequence == null
+                || participantsById.TryGetValue(consequence.ParticipantId, out ConflictParticipantReference participant) == false
+                || participant.IsAggregate == false
+                || string.Equals(participantSideById[consequence.ParticipantId], consequence.SideId, StringComparison.Ordinal) == false
+                || string.Equals(participant.Aggregate.SourceId, consequence.SourceId, StringComparison.Ordinal) == false
+                || consequenceParticipantIds.Add(consequence.ParticipantId) == false)
+            {
+                throw new InvalidOperationException("Conflict result aggregate consequences must reference their original participants.");
+            }
         }
     }
 }

@@ -345,6 +345,7 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler
     private bool IsValidStealTarget(NpcRuntime thiefRuntime, NpcRuntime targetRuntime)
     {
         return targetRuntime != null
+            && targetRuntime.IsAlive == true
             && targetRuntime != thiefRuntime
             && targetRuntime.CurrentCity == thiefRuntime.CurrentCity
             && targetRuntime.IsTraveling == false
@@ -404,6 +405,7 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler
     private bool CanActInCity(NpcRuntime npcRuntime)
     {
         return npcRuntime != null
+            && npcRuntime.IsAlive == true
             && npcRuntime.CurrentCity != null
             && npcRuntime.IsTraveling == false
             && justiceSystem.IsArrested(npcRuntime) == false;

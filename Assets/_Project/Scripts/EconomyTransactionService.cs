@@ -246,7 +246,7 @@ public sealed class EconomyTransactionService
         EconomyTransactionType transactionType = EconomyTransactionType.NpcToNpcTrade;
         MoneyEffect moneyEffect = MoneyEffect.Transfer;
 
-        if (buyer == null || seller == null || item == null)
+        if (buyer == null || seller == null || item == null || buyer.IsAlive == false || seller.IsAlive == false)
         {
             return EconomyTransactionResult.CreateFailure(
                 transactionType,
@@ -447,7 +447,7 @@ public sealed class EconomyTransactionService
         bool accountBacked = liquidityMode == MarketLiquidityMode.AccountBacked;
         MoneyEffect moneyEffect = accountBacked ? MoneyEffect.Transfer : MoneyEffect.ExplicitSink;
 
-        if (npc == null || market == null || item == null)
+        if (npc == null || npc.IsAlive == false || market == null || item == null)
         {
             return EconomyTransactionResult.CreateFailure(
                 transactionType,
@@ -609,7 +609,7 @@ public sealed class EconomyTransactionService
         bool accountBacked = liquidityMode == MarketLiquidityMode.AccountBacked;
         MoneyEffect moneyEffect = accountBacked ? MoneyEffect.Transfer : MoneyEffect.ExplicitSource;
 
-        if (npc == null || market == null || item == null)
+        if (npc == null || npc.IsAlive == false || market == null || item == null)
         {
             return EconomyTransactionResult.CreateFailure(
                 transactionType,

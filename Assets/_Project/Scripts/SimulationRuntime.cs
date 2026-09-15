@@ -84,6 +84,11 @@ public sealed class SimulationRuntime
         {
             foreach (ActionExecutionParticipant participant in context.Participants)
             {
+                if (participant != null && IsDeadNpc(participant.RuntimeId) == true)
+                {
+                    return false;
+                }
+
                 if (participant != null
                     && expeditionSystem.IsNpcOnActiveExpedition(participant.RuntimeId) == true)
                 {
@@ -112,6 +117,11 @@ public sealed class SimulationRuntime
         foreach (NpcRuntime npcRuntime in npcRuntimes)
         {
             if (npcRuntime == null)
+            {
+                continue;
+            }
+
+            if (npcRuntime.IsAlive == false)
             {
                 continue;
             }
@@ -250,7 +260,7 @@ public sealed class SimulationRuntime
     {
         foreach (NpcRuntime npcRuntime in npcRuntimes)
         {
-            if (npcRuntime?.CurrentLocation == null || npcRuntime.IsTraveling == true)
+            if (npcRuntime == null || npcRuntime.IsAlive == false || npcRuntime.CurrentLocation == null || npcRuntime.IsTraveling == true)
             {
                 continue;
             }
@@ -264,6 +274,19 @@ public sealed class SimulationRuntime
         }
 
         commercialKnowledgeSharingSystem?.ShareAmongPresentMerchants(npcRuntimes);
+    }
+
+    private bool IsDeadNpc(string runtimeId)
+    {
+        foreach (NpcRuntime npcRuntime in npcRuntimes)
+        {
+            if (npcRuntime != null && string.Equals(npcRuntime.RuntimeId, runtimeId, StringComparison.Ordinal) == true)
+            {
+                return npcRuntime.IsDead;
+            }
+        }
+
+        return false;
     }
 
     private void ObserveArrivedExplorableSites(NpcRuntime npcRuntime)

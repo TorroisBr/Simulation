@@ -256,7 +256,8 @@ public sealed class CapabilityContextModifier
 
 public interface ICapabilityConditionSource
 {
-    IReadOnlyList<CapabilityContextModifier> GetCapabilityModifiers();
+    string ConditionSourceId { get; }
+    float GetCapabilityMultiplier();
 }
 
 public sealed class CapabilityEvaluationContext
@@ -399,10 +400,27 @@ public sealed class GenericCapabilityModel : ICapabilityModel
 
         if (participant is ICapabilityConditionSource conditionSource)
         {
-            total += AddContextContributions(
-                conditionSource.GetCapabilityModifiers(),
-                CapabilityContributionSource.Condition,
-                breakdown);
+            float conditionMultiplier = conditionSource.GetCapabilityMultiplier();
+            if (float.IsNaN(conditionMultiplier) == true
+                || float.IsInfinity(conditionMultiplier) == true
+                || conditionMultiplier < 0f)
+            {
+                throw new InvalidOperationException("Capability condition source returned an invalid multiplier.");
+            }
+
+            float beforeCondition = total;
+            total *= conditionMultiplier;
+            float conditionContribution = total - beforeCondition;
+            if (Mathf.Approximately(conditionContribution, 0f) == false)
+            {
+                breakdown.Add(new CapabilityBreakdownEntry(
+                    CapabilityContributionSource.Condition,
+                    conditionSource.ConditionSourceId,
+                    configuration.PhysicalAttribute,
+                    conditionContribution,
+                    1f,
+                    conditionContribution));
+            }
         }
 
         return new CapabilityEvaluationResult(

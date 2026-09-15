@@ -42,7 +42,7 @@ public class MerchantSystem : INpcActionProvider
 
     public void AdvanceNpcTradeState(NpcRuntime npcRuntime)
     {
-        if (IsMerchant(npcRuntime) == false || npcRuntime.CurrentCity == null || npcRuntime.IsTraveling == true)
+        if (IsMerchant(npcRuntime) == false || npcRuntime.IsAlive == false || npcRuntime.CurrentCity == null || npcRuntime.IsTraveling == true)
         {
             return;
         }
@@ -315,7 +315,7 @@ public class MerchantSystem : INpcActionProvider
 
     public NpcActionResult TryExecuteAction(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime)
     {
-        if (actionRuntime == null || actionRuntime.Action == null)
+        if (npcRuntime == null || npcRuntime.IsAlive == false || actionRuntime == null || actionRuntime.Action == null)
         {
             return NpcActionResult.Failed();
         }
@@ -1372,6 +1372,7 @@ public class MerchantSystem : INpcActionProvider
     private bool IsMerchant(NpcRuntime npcRuntime)
     {
         return npcRuntime != null
+            && npcRuntime.IsAlive == true
             && npcRuntime.NpcData != null
             && npcRuntime.NpcData.job != null
             && npcRuntime.NpcData.job.jobType == NpcJobType.Merchant;

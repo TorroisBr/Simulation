@@ -491,6 +491,115 @@ public static class SimulationInvariantValidator
         }
     }
 
+    public static void ValidateNpcLifeState(NpcRuntime npc)
+    {
+        Assert.That(npc, Is.Not.Null);
+        Assert.That(npc.RuntimeId, Is.Not.Null.And.Not.Empty);
+        Assert.That(NpcInjuryRules.IsValid(npc.LifeState), Is.True);
+        Assert.That(NpcInjuryRules.IsValid(npc.InjurySeverity), Is.True);
+        Assert.That(npc.IsAlive, Is.EqualTo(npc.LifeState == NpcLifeState.Alive));
+        Assert.That(npc.IsDead, Is.EqualTo(npc.LifeState == NpcLifeState.Dead));
+
+        float capabilityMultiplier = npc.GetCapabilityMultiplier();
+        Assert.That(float.IsNaN(capabilityMultiplier), Is.False);
+        Assert.That(float.IsInfinity(capabilityMultiplier), Is.False);
+        Assert.That(capabilityMultiplier, Is.InRange(0f, 1f));
+        Assert.That(capabilityMultiplier, Is.EqualTo(NpcInjuryRules.GetCapabilityMultiplier(npc.InjurySeverity)).Within(0.0001f));
+
+        if (npc.IsDead == true)
+        {
+            Assert.That(npc.CurrentAction, Is.Null);
+            Assert.That(npc.CurrentActionRuntime, Is.Null);
+        }
+    }
+
+    public static void ValidateConflict(Conflict conflict)
+    {
+        Assert.That(conflict, Is.Not.Null);
+        Assert.That(conflict.ConflictId, Is.Not.Null.And.Not.Empty);
+        Assert.That(conflict.TryValidate(out string diagnostic), Is.True, diagnostic);
+
+        foreach (ConflictSide side in conflict.Sides)
+        {
+            Assert.That(side, Is.Not.Null);
+            Assert.That(side.SideId, Is.Not.Null.And.Not.Empty);
+            Assert.That(Enum.IsDefined(typeof(ConflictObjectiveType), side.Objective), Is.True);
+            Assert.That(Enum.IsDefined(typeof(ConflictStakes), side.Stakes), Is.True);
+
+            foreach (ConflictParticipantReference participant in side.Participants)
+            {
+                Assert.That(participant, Is.Not.Null);
+                Assert.That(participant.ParticipantId, Is.Not.Null.And.Not.Empty);
+                if (participant.IsNpc == true)
+                {
+                    ValidateNpcLifeState(participant.Npc);
+                    Assert.That(participant.Npc.IsAlive, Is.True);
+                }
+                else
+                {
+                    Assert.That(participant.Aggregate, Is.Not.Null);
+                    Assert.That(participant.Aggregate.SourceId, Is.Not.Null.And.Not.Empty);
+                    Assert.That(participant.Aggregate.BaseCapability, Is.GreaterThanOrEqualTo(0f));
+                }
+            }
+        }
+    }
+
+    public static void ValidateConflictResult(
+        Conflict conflict,
+        ConflictResolutionResult result,
+        bool requireConsequences = false)
+    {
+        ValidateConflict(conflict);
+        Assert.That(result, Is.Not.Null);
+        Assert.DoesNotThrow(() => ConflictResultValidator.Validate(conflict, result));
+        Assert.That(Enum.IsDefined(typeof(ConflictOutcomeType), result.Outcome), Is.True);
+        Assert.That(Enum.IsDefined(typeof(ConflictOutcomeSource), result.OutcomeSource), Is.True);
+
+        HashSet<string> participantIds = new HashSet<string>(StringComparer.Ordinal);
+        int expectedConsequenceCount = 0;
+        foreach (ConflictSide side in conflict.Sides)
+        {
+            foreach (ConflictParticipantReference participant in side.Participants)
+            {
+                Assert.That(participantIds.Add(participant.ParticipantId), Is.True);
+                expectedConsequenceCount++;
+            }
+        }
+
+        HashSet<string> consequenceIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (ConflictNpcConsequence consequence in result.NpcConsequences)
+        {
+            Assert.That(consequence, Is.Not.Null);
+            Assert.That(NpcInjuryRules.IsValid(consequence.InjurySeverity), Is.True);
+            Assert.That(consequence.ResultingLifeState, Is.EqualTo(consequence.IsDead ? NpcLifeState.Dead : NpcLifeState.Alive));
+            if (consequence.IsDead == true)
+            {
+                Assert.That(consequence.Disposition, Is.EqualTo(ConflictParticipantDisposition.Dead));
+            }
+            else
+            {
+                Assert.That(consequence.Disposition, Is.Not.EqualTo(ConflictParticipantDisposition.Dead));
+            }
+
+            Assert.That(consequenceIds.Add(consequence.ParticipantId), Is.True);
+        }
+
+        foreach (ConflictAggregateConsequence consequence in result.AggregateConsequences)
+        {
+            Assert.That(consequence, Is.Not.Null);
+            Assert.That(consequence.OriginalCapability, Is.GreaterThanOrEqualTo(0f));
+            Assert.That(consequence.RemainingCapability, Is.InRange(0f, consequence.OriginalCapability));
+            Assert.That(consequence.LossFraction, Is.InRange(0f, 1f));
+            Assert.That(consequenceIds.Add(consequence.ParticipantId), Is.True);
+        }
+
+        if (requireConsequences == true)
+        {
+            Assert.That(consequenceIds.Count, Is.EqualTo(expectedConsequenceCount));
+        }
+    }
+
     public static void ValidateChronicle(IReadOnlyList<NpcChronicleEntry> entries)
     {
         Assert.That(entries, Is.Not.Null);

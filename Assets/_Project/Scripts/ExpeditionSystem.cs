@@ -273,7 +273,8 @@ public sealed class ExpeditionSystem
                 return false;
             }
 
-            if (member.IsTraveling == true
+            if (member.IsAlive == false
+                || member.IsTraveling == true
                 || member.CurrentLocation == null
                 || string.IsNullOrWhiteSpace(member.ActiveTravelPartyId) == false
                 || travelPartyStore.TryGetPartyForNpc(member.RuntimeId, out _)

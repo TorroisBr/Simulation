@@ -199,6 +199,7 @@ public sealed class CommercialKnowledgeSharingSystem
     private static bool IsEligibleMerchant(NpcRuntime npcRuntime)
     {
         return npcRuntime != null
+            && npcRuntime.IsAlive == true
             && npcRuntime.IsTraveling == false
             && npcRuntime.CurrentCity != null
             && npcRuntime.NpcData != null

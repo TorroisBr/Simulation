@@ -80,7 +80,7 @@ public class GuardSystem : INpcActionProvider
 
     private bool IsValidArrestTarget(NpcRuntime guardRuntime, NpcRuntime targetRuntime)
     {
-        if (guardRuntime == null || targetRuntime == null || targetRuntime == guardRuntime || justiceSystem == null)
+        if (guardRuntime == null || guardRuntime.IsAlive == false || targetRuntime == null || targetRuntime.IsAlive == false || targetRuntime == guardRuntime || justiceSystem == null)
         {
             return false;
         }
@@ -101,6 +101,7 @@ public class GuardSystem : INpcActionProvider
     private bool IsGuard(NpcRuntime npcRuntime)
     {
         return npcRuntime != null
+            && npcRuntime.IsAlive == true
             && npcRuntime.NpcData != null
             && npcRuntime.NpcData.job != null
             && npcRuntime.NpcData.job.jobType == NpcJobType.Guard;

@@ -23,7 +23,7 @@ public class NpcDecisionSystem
 
     public NpcActionRuntime ChooseAction(NpcRuntime npcRuntime, List<NpcActionData> availableActions)
     {
-        if (npcRuntime == null)
+        if (npcRuntime == null || npcRuntime.IsAlive == false)
         {
             return null;
         }
@@ -35,7 +35,7 @@ public class NpcDecisionSystem
 
     public NpcActionRuntime CreateRequestedAction(NpcRuntime npcRuntime, NpcActionData action)
     {
-        if (npcRuntime == null || action == null || HasAllRequiredStatus(action, npcRuntime.CurrentStatus) == false)
+        if (npcRuntime == null || npcRuntime.IsAlive == false || action == null || HasAllRequiredStatus(action, npcRuntime.CurrentStatus) == false)
         {
             return null;
         }
