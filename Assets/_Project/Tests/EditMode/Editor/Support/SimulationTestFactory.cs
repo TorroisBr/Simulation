@@ -15,6 +15,22 @@ public static class SimulationTestFactory
         return item;
     }
 
+    public static CapabilityAttributeData CreateCapabilityAttribute(string id, string displayName = null)
+    {
+        CapabilityAttributeData attribute = Track(ScriptableObject.CreateInstance<CapabilityAttributeData>());
+        attribute.id = id;
+        attribute.displayName = displayName ?? id + " display";
+        return attribute;
+    }
+
+    public static TraitData CreateTrait(string id, string traitName = null)
+    {
+        TraitData trait = Track(ScriptableObject.CreateInstance<TraitData>());
+        trait.id = id;
+        trait.traitName = traitName ?? id + " display";
+        return trait;
+    }
+
     public static NpcJobData CreateJob(NpcJobType jobType = NpcJobType.None, MerchantBehavior merchantBehavior = MerchantBehavior.Traveling)
     {
         NpcJobData job = Track(ScriptableObject.CreateInstance<NpcJobData>());
