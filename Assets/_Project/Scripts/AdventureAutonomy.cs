@@ -15,11 +15,11 @@ public enum AdventureCandidateKind
 [Serializable]
 public sealed class AdventureAutonomySettings
 {
+    public bool enableScout = false;
     public float exploreUtility = 10f;
     public float scoutUtility = 9f;
     public float retrieveUtility = 14f;
     public float eliminateUtility = 12f;
-    public float secureUtility = 8f;
     public float returnUtility = 20f;
 }
 
@@ -115,6 +115,8 @@ public sealed class AdventureCandidate
                 return ExpeditionObjectiveRuntime.Eliminate(TargetRuntimeId);
             case AdventureCandidateKind.Scout:
                 return new ExpeditionObjectiveRuntime(ExpeditionObjectiveType.Scout);
+            case AdventureCandidateKind.Secure:
+                throw new InvalidOperationException("Secure autonomous candidates are not supported.");
             default:
                 return ExpeditionObjectiveRuntime.Explore();
         }
@@ -209,6 +211,20 @@ public sealed class AdventureAutonomySystem
                 participants,
                 performers,
                 supports));
+
+            if (settings.enableScout == true)
+            {
+                candidates.Add(CreateCandidate(
+                    AdventureCandidateKind.Scout,
+                    site,
+                    null,
+                    null,
+                    null,
+                    settings.scoutUtility,
+                    participants,
+                    performers,
+                    supports));
+            }
 
             AddIntelCandidates(decisionMaker, site, candidates, participants, performers, supports);
         }

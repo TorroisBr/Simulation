@@ -81,6 +81,7 @@ public sealed class AdventureExpeditionAutonomySystem
 
         reservationDay = simulationTime.AbsoluteDay;
         reservedToday.Clear();
+        failedExecutionKeys.Clear();
     }
 
     public bool IsReservedToday(string npcRuntimeId)
@@ -613,6 +614,28 @@ public sealed class AdventureExpeditionAutonomySystem
         foreach (NpcRuntime member in ResolveMembers(expedition))
         {
             intelSystem.RecordDirectObservation(member, site, null, null, contentStore, simulationTime.AbsoluteDay);
+
+            if (topologyStore == null
+                || topologyStore.TryGetTopologyForOwner(site.RuntimeId, out LocalTopologyRuntime topology) == false
+                || topology == null
+                || topology.IsPublished == false)
+            {
+                continue;
+            }
+
+            foreach (LocalPlaceRuntime entryPoint in topology.EntryPoints)
+            {
+                if (entryPoint != null)
+                {
+                    intelSystem.RecordDirectObservation(
+                        member,
+                        site,
+                        entryPoint,
+                        topology,
+                        contentStore,
+                        simulationTime.AbsoluteDay);
+                }
+            }
         }
     }
 

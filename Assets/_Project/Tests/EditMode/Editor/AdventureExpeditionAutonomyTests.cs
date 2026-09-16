@@ -96,6 +96,142 @@ public sealed class AdventureExpeditionAutonomyTests
     }
 
     [Test]
+    public void ArrivalAtDetailedSiteStillDoesNotRevealTopology()
+    {
+        Fixture f = new Fixture();
+        LocalTopologyRuntime topology = f.PublishTopology(
+            out LocalPlaceRuntime root,
+            out LocalPlaceRuntime middle,
+            out LocalPlaceRuntime target,
+            true);
+        ExpeditionRuntime expedition = f.CreateActiveExpedition(
+            ExpeditionObjectiveRuntime.Explore(),
+            ExpeditionState.AtSite);
+
+        Assert.That(f.Actor.LocalTopologyKnowledge.KnowsLocalPlace(f.Site.RuntimeId, root.RuntimeId), Is.False);
+        Assert.That(f.Actor.LocalTopologyKnowledge.KnowsLocalPlace(f.Site.RuntimeId, middle.RuntimeId), Is.False);
+        Assert.That(f.Actor.LocalTopologyKnowledge.KnowsLocalPlace(f.Site.RuntimeId, target.RuntimeId), Is.False);
+        Assert.That(expedition.CurrentLocalPlaceRuntimeId, Is.Null);
+        Assert.That(topology.IsPublished, Is.True);
+    }
+
+    [Test]
+    public void BeginningAutonomousExplorationRevealsPublishedEntryPoints()
+    {
+        Fixture f = new Fixture();
+        LocalTopologyRuntime topology = f.PublishTopology(
+            out LocalPlaceRuntime root,
+            out LocalPlaceRuntime middle,
+            out LocalPlaceRuntime target,
+            true);
+        LocalTopologyConnectionRuntime rootConnection = topology.Connections[0];
+        f.CreateActiveExpedition(ExpeditionObjectiveRuntime.Explore(), ExpeditionState.AtSite);
+
+        f.Autonomy.AdvanceActiveExpeditions();
+
+        Assert.That(f.Actor.LocalTopologyKnowledge.KnowsLocalPlace(f.Site.RuntimeId, root.RuntimeId), Is.True);
+        Assert.That(f.Actor.LocalTopologyKnowledge.KnowsConnection(f.Site.RuntimeId, rootConnection.RuntimeId), Is.True);
+        Assert.That(f.Actor.LocalTopologyKnowledge.KnowsLocalPlace(f.Site.RuntimeId, middle.RuntimeId), Is.True);
+        Assert.That(f.Actor.LocalTopologyKnowledge.KnowsLocalPlace(f.Site.RuntimeId, target.RuntimeId), Is.False);
+    }
+
+    [Test]
+    public void BeginningExplorationDoesNotRevealWholeTopology()
+    {
+        Fixture f = new Fixture();
+        LocalTopologyRuntime topology = f.PublishTopology(
+            out LocalPlaceRuntime root,
+            out LocalPlaceRuntime middle,
+            out LocalPlaceRuntime target,
+            true);
+        LocalTopologyConnectionRuntime hiddenConnection = topology.Connections[1];
+        f.CreateActiveExpedition(ExpeditionObjectiveRuntime.Explore(), ExpeditionState.AtSite);
+
+        f.Autonomy.AdvanceActiveExpeditions();
+
+        Assert.That(f.Actor.LocalTopologyKnowledge.KnowsLocalPlace(f.Site.RuntimeId, root.RuntimeId), Is.True);
+        Assert.That(f.Actor.LocalTopologyKnowledge.KnowsLocalPlace(f.Site.RuntimeId, middle.RuntimeId), Is.True);
+        Assert.That(f.Actor.LocalTopologyKnowledge.KnowsLocalPlace(f.Site.RuntimeId, target.RuntimeId), Is.False);
+        Assert.That(f.Actor.LocalTopologyKnowledge.KnowsConnection(f.Site.RuntimeId, hiddenConnection.RuntimeId), Is.False);
+    }
+
+    [Test]
+    public void FreshNpcCanEnterDetailedSiteWithoutPreseededLocalKnowledge()
+    {
+        Fixture f = new Fixture();
+        LocalTopologyRuntime topology = f.PublishTopology(out LocalPlaceRuntime root, out _, out _, true);
+        ExpeditionRuntime expedition = f.CreateActiveExpedition(
+            ExpeditionObjectiveRuntime.Explore(2),
+            ExpeditionState.AtSite);
+
+        f.Autonomy.AdvanceActiveExpeditions();
+        Assert.That(expedition.CurrentLocalPlaceRuntimeId, Is.Null);
+        f.Records.Time.AdvanceDay();
+        f.Autonomy.AdvanceActiveExpeditions();
+
+        Assert.That(expedition.CurrentLocalPlaceRuntimeId, Is.EqualTo(root.RuntimeId));
+        Assert.That(f.Actor.LocalTopologyKnowledge.KnowsLocalPlace(f.Site.RuntimeId, root.RuntimeId), Is.True);
+        Assert.That(topology.IsPublished, Is.True);
+    }
+
+    [Test]
+    public void MultipleEntryPointsBecomeInitiallyObservable()
+    {
+        Fixture f = new Fixture();
+        LocalTopologyRuntime topology = f.PublishTopology(out LocalPlaceRuntime first, out _, out _, false);
+        LocalPlaceRuntime second = new LocalPlaceRuntime("local-entry-second", "Second Entry");
+        Assert.That(f.Topologies.TryAddPlace(topology, second, true, out string diagnostic), Is.True, diagnostic);
+        f.CreateActiveExpedition(ExpeditionObjectiveRuntime.Explore(), ExpeditionState.AtSite);
+
+        f.Autonomy.AdvanceActiveExpeditions();
+
+        Assert.That(f.Actor.LocalTopologyKnowledge.KnowsLocalPlace(f.Site.RuntimeId, first.RuntimeId), Is.True);
+        Assert.That(f.Actor.LocalTopologyKnowledge.KnowsLocalPlace(f.Site.RuntimeId, second.RuntimeId), Is.True);
+    }
+
+    [Test]
+    public void TopologyWithoutEntryPointDoesNotTeleportExpedition()
+    {
+        Fixture f = new Fixture();
+        LocalTopologyRuntime topology = new LocalTopologyRuntime(
+            LocalTopologyOwnerReference.ForExplorableSite(f.Site),
+            f.Registry);
+        LocalPlaceRuntime hiddenRoot = new LocalPlaceRuntime("local-no-entry", "No Entry");
+        topology.AddPlace(hiddenRoot);
+        Assert.That(f.Topologies.TryAddTopology(topology, out string diagnostic), Is.True, diagnostic);
+        ExpeditionRuntime expedition = f.CreateActiveExpedition(
+            ExpeditionObjectiveRuntime.Explore(2),
+            ExpeditionState.AtSite);
+
+        f.Autonomy.AdvanceActiveExpeditions();
+        f.Records.Time.AdvanceDay();
+        f.Autonomy.AdvanceActiveExpeditions();
+
+        Assert.That(expedition.CurrentLocalPlaceRuntimeId, Is.Null);
+        Assert.That(expedition.State, Is.EqualTo(ExpeditionState.Returning));
+        Assert.That(f.Actor.CurrentLocation, Is.Null);
+        Assert.That(f.Actor.IsTraveling, Is.True);
+    }
+
+    [Test]
+    public void EntryBootstrapUsesDirectObservationSource()
+    {
+        Fixture f = new Fixture();
+        LocalTopologyRuntime topology = f.PublishTopology(out LocalPlaceRuntime root, out _, out _, true);
+        LocalTopologyConnectionRuntime connection = topology.Connections[0];
+        f.CreateActiveExpedition(ExpeditionObjectiveRuntime.Explore(), ExpeditionState.AtSite);
+
+        f.Autonomy.AdvanceActiveExpeditions();
+
+        Assert.That(f.Actor.LocalTopologyKnowledge.TryGetPlaceObservation(
+            f.Site.RuntimeId, root.RuntimeId, out LocalPlaceKnowledgeObservation place), Is.True);
+        Assert.That(place.Source, Is.EqualTo(LocalTopologyKnowledgeSource.DirectObservation));
+        Assert.That(f.Actor.LocalTopologyKnowledge.TryGetConnectionObservation(
+            f.Site.RuntimeId, connection.RuntimeId, out LocalConnectionKnowledgeObservation observedConnection), Is.True);
+        Assert.That(observedConnection.Source, Is.EqualTo(LocalTopologyKnowledgeSource.DirectObservation));
+    }
+
+    [Test]
     public void AbstractSiteAutonomouslyAdvances()
     {
         Fixture f = new Fixture();
@@ -279,6 +415,167 @@ public sealed class AdventureExpeditionAutonomyTests
         }
         Assert.That(retrieveDecisions, Is.EqualTo(1));
         Assert.That(f.Actor.Inventory.Items, Is.Empty);
+    }
+
+    [Test]
+    public void FailedExecutionIsNotRetriedRepeatedlySameDay()
+    {
+        Fixture f = new Fixture();
+        f.KnowCommonResource("item-missing", null);
+        f.CreateActiveExpedition(ExpeditionObjectiveRuntime.Retrieve("item-missing"));
+
+        f.Autonomy.AdvanceActiveExpeditions();
+        int decisionsAfterFailure = f.Records.Decisions.Decisions.Count;
+        f.Autonomy.AdvanceActiveExpeditions();
+
+        Assert.That(f.Records.Decisions.Decisions, Has.Count.EqualTo(decisionsAfterFailure));
+    }
+
+    [Test]
+    public void FailedExecutionCanRetryOnNextDay()
+    {
+        Fixture f = new Fixture(includeReturnRoute: false);
+        ExpeditionRuntime expedition = f.CreateActiveExpedition(ExpeditionObjectiveRuntime.Explore());
+        expedition.TryMarkObjectiveComplete();
+
+        f.Autonomy.AdvanceActiveExpeditions();
+        int returnDecisionsAfterFailure = f.Records.Decisions.Decisions.Count(
+            decision => decision.DecisionType == NpcDecisionType.ExpeditionReturn);
+        SpatialRouteRuntime returnRoute = new SpatialRouteRuntime(
+            "route-return-next-day", f.SiteLocation, f.Origin, 1);
+        f.Network.RegisterRoute(returnRoute);
+        f.Actor.SpatialKnowledge.DiscoverRoute(returnRoute.RuntimeId);
+        f.Records.Time.AdvanceDay();
+        f.Autonomy.AdvanceActiveExpeditions();
+
+        Assert.That(returnDecisionsAfterFailure, Is.EqualTo(1));
+        Assert.That(f.Records.Decisions.Decisions.Count(
+            decision => decision.DecisionType == NpcDecisionType.ExpeditionReturn), Is.EqualTo(2));
+        Assert.That(expedition.State, Is.EqualTo(ExpeditionState.Returning));
+    }
+
+    [Test]
+    public void FailedStartCanRetryNextDayAfterTruthChanges()
+    {
+        Fixture f = new Fixture();
+        SpatialLocationRuntime rumorLocation = new SpatialLocationRuntime("location-rumor-next-day");
+        f.Network.RegisterLocation(rumorLocation);
+        SpatialRouteRuntime rumorRoute = new SpatialRouteRuntime(
+            "route-rumor-next-day", f.Origin, rumorLocation, 1);
+        f.Network.RegisterRoute(rumorRoute);
+        f.Actor.SpatialKnowledge.DiscoverRoute(rumorRoute.RuntimeId);
+        f.Actor.ExplorableSiteKnowledge.RecordObservation(new ExplorableSiteKnowledgeObservation(
+            f.Site.RuntimeId,
+            rumorLocation.RuntimeId,
+            0,
+            0,
+            ExplorableSiteKnowledgeSource.DirectObservation));
+
+        Assert.That(f.Autonomy.TryStartAutonomousExpedition(f.Actor, f.Npcs), Is.False);
+        f.Actor.ExplorableSiteKnowledge.RecordObservation(new ExplorableSiteKnowledgeObservation(
+            f.Site.RuntimeId,
+            f.Site.Location.RuntimeId,
+            1,
+            1,
+            ExplorableSiteKnowledgeSource.DirectObservation));
+        f.Records.Time.AdvanceDay();
+
+        Assert.That(f.Autonomy.TryStartAutonomousExpedition(f.Actor, f.Npcs), Is.True);
+    }
+
+    [Test]
+    public void FailedReturnCanRetryNextDayAfterRouteBecomesKnown()
+    {
+        Fixture f = new Fixture(includeReturnRoute: false);
+        ExpeditionRuntime expedition = f.CreateActiveExpedition(ExpeditionObjectiveRuntime.Explore());
+        expedition.TryMarkObjectiveComplete();
+
+        f.Autonomy.AdvanceActiveExpeditions();
+        Assert.That(expedition.State, Is.EqualTo(ExpeditionState.Exploring));
+        SpatialRouteRuntime returnRoute = new SpatialRouteRuntime(
+            "route-return-revealed", f.SiteLocation, f.Origin, 1);
+        f.Network.RegisterRoute(returnRoute);
+        f.Actor.SpatialKnowledge.DiscoverRoute(returnRoute.RuntimeId);
+        f.Records.Time.AdvanceDay();
+
+        f.Autonomy.AdvanceActiveExpeditions();
+
+        Assert.That(expedition.State, Is.EqualTo(ExpeditionState.Returning));
+        Assert.That(f.Actor.IsTraveling, Is.True);
+    }
+
+    [Test]
+    public void PreviousFailedDecisionRemainsInHistoryAfterRetry()
+    {
+        Fixture f = new Fixture();
+        SpatialLocationRuntime rumorLocation = new SpatialLocationRuntime("location-rumor-history");
+        f.Network.RegisterLocation(rumorLocation);
+        SpatialRouteRuntime rumorRoute = new SpatialRouteRuntime(
+            "route-rumor-history", f.Origin, rumorLocation, 1);
+        f.Network.RegisterRoute(rumorRoute);
+        f.Actor.SpatialKnowledge.DiscoverRoute(rumorRoute.RuntimeId);
+        f.Actor.ExplorableSiteKnowledge.RecordObservation(new ExplorableSiteKnowledgeObservation(
+            f.Site.RuntimeId,
+            rumorLocation.RuntimeId,
+            0,
+            0,
+            ExplorableSiteKnowledgeSource.DirectObservation));
+
+        Assert.That(f.Autonomy.TryStartAutonomousExpedition(f.Actor, f.Npcs), Is.False);
+        f.Actor.ExplorableSiteKnowledge.RecordObservation(new ExplorableSiteKnowledgeObservation(
+            f.Site.RuntimeId,
+            f.Site.Location.RuntimeId,
+            1,
+            1,
+            ExplorableSiteKnowledgeSource.DirectObservation));
+        f.Records.Time.AdvanceDay();
+        Assert.That(f.Autonomy.TryStartAutonomousExpedition(f.Actor, f.Npcs), Is.True);
+
+        Assert.That(f.Records.Decisions.Decisions, Has.Count.EqualTo(2));
+        Assert.That(f.Records.Decisions.Decisions[0].DecisionType, Is.EqualTo(NpcDecisionType.ExpeditionStart));
+        Assert.That(f.Records.Decisions.Decisions[1].DecisionType, Is.EqualTo(NpcDecisionType.ExpeditionStart));
+    }
+
+    [Test]
+    public void DailyResetDoesNotClearActiveExpeditionReservationIncorrectly()
+    {
+        Fixture f = new Fixture();
+        ExpeditionRuntime expedition = f.CreateActiveExpedition(ExpeditionObjectiveRuntime.Explore(3));
+
+        f.Autonomy.AdvanceActiveExpeditions();
+        Assert.That(f.Autonomy.IsReservedToday(f.Actor.RuntimeId), Is.True);
+        f.Records.Time.AdvanceDay();
+        f.Autonomy.AdvanceActiveExpeditions();
+
+        Assert.That(expedition.IsActive, Is.True);
+        Assert.That(f.Autonomy.IsReservedToday(f.Actor.RuntimeId), Is.True);
+    }
+
+    [Test]
+    public void AutonomousScoutCanProgressUsingExistingExplorationSemantics()
+    {
+        Fixture f = new Fixture();
+        AdventureAutonomySystem candidateSystem = new AdventureAutonomySystem(
+            new AdventureAutonomySettings
+            {
+                enableScout = true,
+                exploreUtility = 1f,
+                scoutUtility = 20f
+            });
+        f.ReplaceAutonomy(candidateSystem);
+
+        Assert.That(f.Autonomy.TryStartAutonomousExpedition(f.Actor, f.Npcs), Is.True);
+        ExpeditionRuntime expedition = f.Expeditions.ActiveExpeditions[0];
+        Assert.That(expedition.Objective.ObjectiveType, Is.EqualTo(ExpeditionObjectiveType.Scout));
+        f.PartySystem.AdvanceParties();
+        f.PartySystem.AdvanceParties();
+        IReadOnlyList<NpcRuntime> arrived = f.PartySystem.AdvanceParties();
+        f.ExpeditionSystem.ReconcileAfterTravel(arrived);
+        f.Autonomy.AdvanceActiveExpeditions();
+        f.Records.Time.AdvanceDay();
+        f.Autonomy.AdvanceActiveExpeditions();
+
+        Assert.That(expedition.ExplorationProgress, Is.EqualTo(1));
     }
 
     [Test]

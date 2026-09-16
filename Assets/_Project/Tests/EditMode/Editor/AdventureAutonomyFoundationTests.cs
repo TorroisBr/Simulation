@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using NUnit.Framework;
 
 public sealed class AdventureAutonomyFoundationTests
@@ -63,6 +65,89 @@ public sealed class AdventureAutonomyFoundationTests
         Fixture f = new Fixture();
         f.KnowSite();
         Assert.That(f.Autonomy.BuildCandidates(f.Actor), Has.Some.Matches<AdventureCandidate>(c => c.Kind == AdventureCandidateKind.Explore));
+    }
+
+    [Test]
+    public void EnabledScoutCanBecomeCandidateForKnownSite()
+    {
+        Fixture f = new Fixture();
+        f.KnowSite();
+        AdventureAutonomySystem autonomy = new AdventureAutonomySystem(
+            new AdventureAutonomySettings { enableScout = true, scoutUtility = 20f });
+
+        Assert.That(autonomy.BuildCandidates(f.Actor), Has.Some.Matches<AdventureCandidate>(candidate =>
+            candidate.Kind == AdventureCandidateKind.Scout
+            && candidate.SiteRuntimeId == f.Site.RuntimeId));
+    }
+
+    [Test]
+    public void UnknownSiteCannotBecomeScoutCandidate()
+    {
+        Fixture f = new Fixture();
+        AdventureAutonomySystem autonomy = new AdventureAutonomySystem(
+            new AdventureAutonomySettings { enableScout = true });
+
+        Assert.That(autonomy.BuildCandidates(f.Actor), Has.None.Matches<AdventureCandidate>(candidate =>
+            candidate.Kind == AdventureCandidateKind.Scout));
+    }
+
+    [Test]
+    public void ScoutCandidateCreatesScoutObjective()
+    {
+        Fixture f = new Fixture();
+        f.KnowSite();
+        AdventureAutonomySystem autonomy = new AdventureAutonomySystem(
+            new AdventureAutonomySettings { enableScout = true, scoutUtility = 20f });
+        AdventureCandidate candidate = autonomy.BuildCandidates(f.Actor)
+            .First(candidate => candidate.Kind == AdventureCandidateKind.Scout);
+
+        Assert.That(candidate.CreateObjective().ObjectiveType, Is.EqualTo(ExpeditionObjectiveType.Scout));
+    }
+
+    [Test]
+    public void ScoutPlanningDoesNotReadUnknownTruth()
+    {
+        Fixture f = new Fixture();
+        f.KnowSite();
+        PlaceOppositionRuntime hiddenOpposition = new PlaceOppositionRuntime("opposition-hidden");
+        Assert.That(f.ContentStore.TryAddOpposition(f.Hidden, hiddenOpposition, out _), Is.True);
+        AdventureAutonomySystem autonomy = new AdventureAutonomySystem(
+            new AdventureAutonomySettings { enableScout = true, scoutUtility = 20f });
+
+        IReadOnlyList<AdventureCandidate> candidates = autonomy.BuildCandidates(f.Actor);
+
+        Assert.That(candidates, Has.Some.Matches<AdventureCandidate>(candidate => candidate.Kind == AdventureCandidateKind.Scout));
+        Assert.That(candidates, Has.None.Matches<AdventureCandidate>(candidate =>
+            candidate.Kind == AdventureCandidateKind.EliminateOpposition));
+    }
+
+    [Test]
+    public void UnsupportedSecureIsNotAdvertisedAsAutonomousCandidate()
+    {
+        Fixture f = new Fixture();
+        f.KnowSite();
+
+        Assert.That(f.Autonomy.BuildCandidates(f.Actor), Has.None.Matches<AdventureCandidate>(candidate =>
+            candidate.Kind == AdventureCandidateKind.Secure));
+    }
+
+    [Test]
+    public void NoCandidateKindSilentlyMapsSecureToExplore()
+    {
+        Fixture f = new Fixture();
+        AdventureCandidate candidate = new AdventureCandidate(
+            AdventureCandidateKind.Secure,
+            f.Site.RuntimeId,
+            f.Site.Location.RuntimeId,
+            null,
+            null,
+            null,
+            1f,
+            new[] { new NpcDecisionParticipant(f.Actor.RuntimeId, NpcDecisionParticipantRole.Performer) },
+            new[] { f.Actor.RuntimeId },
+            Array.Empty<string>());
+
+        Assert.That(() => candidate.CreateObjective(), Throws.TypeOf<InvalidOperationException>());
     }
 
     [Test]
