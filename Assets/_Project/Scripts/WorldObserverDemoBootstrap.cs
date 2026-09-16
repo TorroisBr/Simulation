@@ -9,6 +9,12 @@ public sealed class WorldObserverDemoBootstrap : MonoBehaviour
 
     private readonly List<ScriptableObject> runtimeDefinitions = new List<ScriptableObject>();
     private bool initialized;
+    private WorldCommandService worldCommandService;
+    private PlaceContentStore contentStore;
+
+    public WorldCommandService WorldCommandService => worldCommandService;
+    public PlaceContentStore ContentStore => contentStore;
+    public GMConsolePanel GmConsolePanel => observerView?.GmConsolePanel;
 
     public WorldObserverCanvasView ObserverView
     {
@@ -108,6 +114,8 @@ public sealed class WorldObserverDemoBootstrap : MonoBehaviour
         CityData southData = CreateCityDefinition("observer-demo-south-city", "Southmere");
         CityRuntime north = new CityRuntime("observer-demo-north-city-runtime", northData, northLocation);
         CityRuntime south = new CityRuntime("observer-demo-south-city-runtime", southData, southLocation);
+        identity.RegisterCity(north);
+        identity.RegisterCity(south);
 
         ExplorableSiteData ruinData = ScriptableObject.CreateInstance<ExplorableSiteData>();
         ruinData.id = "observer-demo-ruin";
@@ -131,11 +139,38 @@ public sealed class WorldObserverDemoBootstrap : MonoBehaviour
         topology.AddConnection(new LocalTopologyConnectionRuntime("observer-demo-crypt-vault", crypt, vault, 1f));
         topologies.Add(topology);
 
-        PlaceContentStore content = new PlaceContentStore(new RuntimeIdAllocator(), identity);
+        RuntimeIdAllocator commandRuntimeIds = new RuntimeIdAllocator();
+        PlaceContentStore content = new PlaceContentStore(commandRuntimeIds, identity);
+        contentStore = content;
         content.GetOrCreate(ruin);
         SimulationTime time = new SimulationTime(12L);
         HistoryStore history = new HistoryStore();
         DomainEventStore events = new DomainEventStore(history, new HistoryPolicy());
+        WorldCommandDefinitionCatalog definitions = new WorldCommandDefinitionCatalog();
+        ItemData demoResource = ScriptableObject.CreateInstance<ItemData>();
+        demoResource.id = "observer-demo-ore";
+        demoResource.itemName = "Observer Demo Ore";
+        demoResource.basePrice = 10f;
+        runtimeDefinitions.Add(demoResource);
+        definitions.RegisterItem(demoResource);
+        worldCommandService = new WorldCommandService(
+            runtimeIdAllocator: commandRuntimeIds,
+            identityRegistry: identity,
+            definitionResolver: definitions,
+            simulationTime: time);
+        ConflictResolutionService conflictService = new ConflictResolutionService(
+            new ConflictResolver(new WorldObserverDemoCapabilityModel(), new SeededConflictRandomSource(12)),
+            null,
+            new DomainEventRecorder(commandRuntimeIds, time, new SimulationRecordSequence(), events));
+        WorldCommandHandlerRegistration.RegisterCoreHandlers(
+            worldCommandService,
+            commandRuntimeIds,
+            identity,
+            content,
+            topologies,
+            conflictService,
+            definitions,
+            domainEventStore: events);
         SimulationRuntime runtime = new SimulationRuntime(time, new[] { north, south }, new NpcRuntime[0], economyEnabled: false);
         WorldObserverQueryService query = new WorldObserverQueryService(
             new[] { north, south },
@@ -148,6 +183,17 @@ public sealed class WorldObserverDemoBootstrap : MonoBehaviour
             simulationTime: time);
 
         Initialize(query, runtime);
+        observerView.BindGmConsole(new WorldObserverGmConsoleContext(
+            worldCommandService,
+            definitions,
+            identity,
+            new[] { north, south },
+            new NpcRuntime[0],
+            sites,
+            topologies,
+            content,
+            () => observerView.SelectedPlaceRuntimeId,
+            observerView.Refresh));
     }
 
     private CityData CreateCityDefinition(string id, string displayName)
@@ -158,5 +204,13 @@ public sealed class WorldObserverDemoBootstrap : MonoBehaviour
         definition.initialPopulation = 1000;
         runtimeDefinitions.Add(definition);
         return definition;
+    }
+
+    private sealed class WorldObserverDemoCapabilityModel : ICapabilityModel
+    {
+        public CapabilityEvaluationResult Evaluate(NpcRuntime participant, CapabilityEvaluationContext context = null)
+        {
+            return new CapabilityEvaluationResult(1f, 1f, null);
+        }
     }
 }

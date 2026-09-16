@@ -1,4 +1,5 @@
 #if UNITY_EDITOR
+using System;
 using System.IO;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -19,7 +20,7 @@ public static class WorldObserverAssetBuilder
         WorldObserverDemoBootstrap bootstrap = root.AddComponent<WorldObserverDemoBootstrap>();
         bootstrap.EnsureReady();
         PrefabUtility.SaveAsPrefabAsset(root, PrefabPath);
-        Object.DestroyImmediate(root);
+        UnityEngine.Object.DestroyImmediate(root);
 
         Scene scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
         GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath);
@@ -46,6 +47,42 @@ public static class WorldObserverAssetBuilder
         AssetDatabase.importPackageCompleted += OnTmpPackageImported;
         AssetDatabase.importPackageFailed += OnTmpPackageImportFailed;
         AssetDatabase.ImportPackage(Path.GetFullPath(packagePath), false);
+    }
+
+    public static void AddGmConsoleToAssets()
+    {
+        GameObject prefabContents = PrefabUtility.LoadPrefabContents(PrefabPath);
+        try
+        {
+            WorldObserverCanvasView view = prefabContents.GetComponentInChildren<WorldObserverCanvasView>(true);
+            if (view == null)
+            {
+                throw new InvalidOperationException("WorldObserver prefab has no CanvasView.");
+            }
+
+            view.EnsureReady();
+            PrefabUtility.SaveAsPrefabAsset(prefabContents, PrefabPath);
+        }
+        finally
+        {
+            PrefabUtility.UnloadPrefabContents(prefabContents);
+        }
+
+        Scene scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+        WorldObserverDemoBootstrap bootstrap = UnityEngine.Object.FindFirstObjectByType<WorldObserverDemoBootstrap>();
+        if (bootstrap == null)
+        {
+            throw new InvalidOperationException("WorldObserver scene has no demo bootstrap.");
+        }
+
+        bootstrap.EnsureReady();
+        EditorSceneManager.SaveScene(scene, ScenePath);
+        AssetDatabase.SaveAssets();
+        AssetDatabase.Refresh();
+        if (Application.isBatchMode)
+        {
+            EditorApplication.Exit(0);
+        }
     }
 
     private static void OnTmpPackageImported(string packageName)

@@ -286,6 +286,10 @@ public sealed class WorldObserverCanvasView : MonoBehaviour
     [SerializeField] private RectTransform activityPanel;
     [SerializeField] private RectTransform activityContent;
 
+    [Header("GM Console")]
+    [SerializeField] private Button gmConsoleButton;
+    [SerializeField] private GMConsolePanel gmConsolePanel;
+
     private readonly List<WorldObserverWorldNodeView> worldNodes = new List<WorldObserverWorldNodeView>();
     private readonly List<WorldObserverRouteView> routeViews = new List<WorldObserverRouteView>();
     private readonly List<WorldObserverTravelerMarkerView> travelerMarkers = new List<WorldObserverTravelerMarkerView>();
@@ -297,6 +301,7 @@ public sealed class WorldObserverCanvasView : MonoBehaviour
     private WorldObserverTimeController timeController;
     private string selectedPlaceRuntimeId;
     private bool topologyVisible;
+    private int refreshCount;
 
     public TMP_Text DayText => dayText;
     public Button AdvanceDayButton => advanceDayButton;
@@ -304,10 +309,13 @@ public sealed class WorldObserverCanvasView : MonoBehaviour
     public RectTransform DetailPanel => detailPanel;
     public RectTransform TopologyPanel => topologyPanel;
     public RectTransform ActivityPanel => activityPanel;
+    public Button GmConsoleButton => gmConsoleButton;
+    public GMConsolePanel GmConsolePanel => gmConsolePanel;
     public TMP_Text SelectedPlaceTitle => selectedPlaceTitle;
     public TMP_Text BreadcrumbText => breadcrumbText;
     public Button TopologyBackButton => topologyBackButton;
     public string SelectedPlaceRuntimeId => selectedPlaceRuntimeId;
+    public int RefreshCount => refreshCount;
     public bool IsTopologyVisible => topologyVisible;
     public IReadOnlyList<WorldObserverWorldNodeView> WorldNodes => worldNodes.AsReadOnly();
     public IReadOnlyList<WorldObserverRouteView> RouteViews => routeViews.AsReadOnly();
@@ -365,6 +373,7 @@ public sealed class WorldObserverCanvasView : MonoBehaviour
     public void Refresh()
     {
         EnsureReady();
+        refreshCount++;
         WorldObserverReadModel model = queryService?.BuildReadModel(selectedPlaceRuntimeId);
         Render(model);
     }
@@ -695,6 +704,27 @@ public sealed class WorldObserverCanvasView : MonoBehaviour
         advanceRect.pivot = new Vector2(1f, 0.5f);
         advanceRect.anchoredPosition = new Vector2(-18f, 0f);
 
+        gmConsoleButton = gmConsoleButton != null
+            ? gmConsoleButton
+            : WorldObserverUiFactory.CreateButton(topBar, "GmConsoleButton", "GM Console", new Vector2(126f, 34f));
+        RectTransform gmButtonRect = (RectTransform)gmConsoleButton.transform;
+        gmButtonRect.anchorMin = new Vector2(0f, 0.5f);
+        gmButtonRect.anchorMax = new Vector2(0f, 0.5f);
+        gmButtonRect.pivot = new Vector2(0f, 0.5f);
+        gmButtonRect.anchoredPosition = new Vector2(220f, 0f);
+
+        if (gmConsolePanel == null)
+        {
+            Transform existingConsole = transform.Find("GMConsolePanel");
+            gmConsolePanel = existingConsole != null
+                ? existingConsole.GetComponent<GMConsolePanel>()
+                : WorldObserverUiFactory.CreateUiObject("GMConsolePanel", transform).AddComponent<GMConsolePanel>();
+        }
+
+        gmConsolePanel.EnsureReady();
+        gmConsoleButton.onClick.RemoveListener(ToggleGmConsole);
+        gmConsoleButton.onClick.AddListener(ToggleGmConsole);
+
         worldGraphPanel = worldGraphPanel != null ? worldGraphPanel : WorldObserverUiFactory.CreatePanel(transform, "WorldGraphPanel", new Color(0.06f, 0.09f, 0.12f, 0.96f));
         WorldObserverUiFactory.SetAnchors(worldGraphPanel, new Vector2(0f, 0.34f), new Vector2(0.68f, 1f), new Vector2(12f, 12f), new Vector2(-6f, -76f));
         routeLayer = routeLayer != null ? routeLayer : WorldObserverUiFactory.CreateLayer(worldGraphPanel, "RouteLayer");
@@ -746,6 +776,17 @@ public sealed class WorldObserverCanvasView : MonoBehaviour
         eventObject.transform.SetParent(transform, false);
         eventObject.AddComponent<EventSystem>();
         eventObject.AddComponent<InputSystemUIInputModule>();
+    }
+
+    public void BindGmConsole(WorldObserverGmConsoleContext context)
+    {
+        EnsureReady();
+        gmConsolePanel.Bind(context);
+    }
+
+    private void ToggleGmConsole()
+    {
+        gmConsolePanel?.Toggle();
     }
 }
 

@@ -7,6 +7,10 @@ public sealed class WorldCommandDefinitionCatalog : IWorldCommandDefinitionResol
     private readonly Dictionary<string, LocalPlaceTypeData> placeTypes = new Dictionary<string, LocalPlaceTypeData>(StringComparer.Ordinal);
     private readonly Dictionary<string, LocalConnectionTypeData> connectionTypes = new Dictionary<string, LocalConnectionTypeData>(StringComparer.Ordinal);
 
+    public IReadOnlyCollection<string> ItemDefinitionIds => items.Keys;
+    public IReadOnlyCollection<string> LocalPlaceTypeDefinitionIds => placeTypes.Keys;
+    public IReadOnlyCollection<string> LocalConnectionTypeDefinitionIds => connectionTypes.Keys;
+
     public bool RegisterItem(ItemData item)
     {
         return item != null && Register(items, item.DefinitionId, item);
