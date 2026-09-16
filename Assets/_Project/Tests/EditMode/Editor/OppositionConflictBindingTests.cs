@@ -187,6 +187,129 @@ public sealed class OppositionConflictBindingTests
     }
 
     [Test]
+    public void OppositionConflictRejectsDifferentNpcInstanceWithSameRuntimeId()
+    {
+        BindingFixture fixture = new BindingFixture();
+        fixture.Opposition.AddNamedParticipant(fixture.OppositionNpc);
+        NpcRuntime fakeNpc = new NpcRuntime(
+            fixture.OppositionNpc.RuntimeId,
+            SimulationTestFactory.CreateNpc("binding-fake-opposition"));
+        Conflict conflict = fixture.CreateConflict(new[] { fixture.Performer }, includeOppositionParticipants: false);
+        FindSide(conflict, fixture.Opposition.OppositionSideId).AddNpc(fakeNpc);
+
+        Assert.That(fixture.ResolveAtStore(conflict, out _, out string reason), Is.False, reason);
+    }
+
+    [Test]
+    public void FakeOppositionNpcDoesNotMutateRealNpcOrOpposition()
+    {
+        BindingFixture fixture = new BindingFixture();
+        fixture.Opposition.AddNamedParticipant(fixture.OppositionNpc);
+        NpcRuntime fakeNpc = new NpcRuntime(
+            fixture.OppositionNpc.RuntimeId,
+            SimulationTestFactory.CreateNpc("binding-fake-opposition-consequence"));
+        Conflict conflict = fixture.CreateConflict(new[] { fixture.Performer }, includeOppositionParticipants: false);
+        FindSide(conflict, fixture.Opposition.OppositionSideId).AddNpc(fakeNpc);
+        PlaceAccessState accessBefore = fixture.ContentRuntime.AccessState;
+        ConflictResolutionConstraints constraints = new ConflictResolutionConstraints
+        {
+            ForcedWinningSideId = "expedition"
+        };
+        constraints.AddParticipantConstraint(new ConflictParticipantResolutionConstraint(fakeNpc.RuntimeId)
+        {
+            ForceDeath = true
+        });
+
+        Assert.That(fixture.ResolveAtStore(conflict, constraints, out _, out string reason), Is.False, reason);
+        Assert.That(fixture.OppositionNpc.IsAlive, Is.True);
+        Assert.That(fixture.OppositionNpc.InjurySeverity, Is.EqualTo(NpcInjurySeverity.None));
+        Assert.That(fakeNpc.IsAlive, Is.True);
+        Assert.That(fakeNpc.InjurySeverity, Is.EqualTo(NpcInjurySeverity.None));
+        Assert.That(fixture.Opposition.IsActive, Is.True);
+        Assert.That(fixture.ContentRuntime.AccessState, Is.EqualTo(accessBefore));
+    }
+
+    [Test]
+    public void FakeOppositionNpcDoesNotRecordConflictEvent()
+    {
+        BindingFixture fixture = new BindingFixture();
+        fixture.Opposition.AddNamedParticipant(fixture.OppositionNpc);
+        NpcRuntime fakeNpc = new NpcRuntime(
+            fixture.OppositionNpc.RuntimeId,
+            SimulationTestFactory.CreateNpc("binding-fake-opposition-event"));
+        Conflict conflict = fixture.CreateConflict(new[] { fixture.Performer }, includeOppositionParticipants: false);
+        FindSide(conflict, fixture.Opposition.OppositionSideId).AddNpc(fakeNpc);
+
+        Assert.That(fixture.ResolveAtStore(conflict, out _, out string reason), Is.False, reason);
+        Assert.That(fixture.World.Records.Events.Events, Has.None.TypeOf<ConflictResolvedEvent>());
+    }
+
+    [Test]
+    public void FakeOppositionNpcDoesNotCompleteEliminateObjective()
+    {
+        BindingFixture fixture = new BindingFixture(ExpeditionObjectiveRuntime.Eliminate("binding-opposition"));
+        fixture.Opposition.AddNamedParticipant(fixture.OppositionNpc);
+        NpcRuntime fakeNpc = new NpcRuntime(
+            fixture.OppositionNpc.RuntimeId,
+            SimulationTestFactory.CreateNpc("binding-fake-opposition-objective"));
+        Conflict conflict = fixture.CreateConflict(new[] { fixture.Performer }, includeOppositionParticipants: false);
+        FindSide(conflict, fixture.Opposition.OppositionSideId).AddNpc(fakeNpc);
+
+        Assert.That(fixture.ResolveAtExpedition(conflict, out _, out string reason), Is.False, reason);
+        Assert.That(fixture.Expedition.IsObjectiveComplete, Is.False);
+        Assert.That(fixture.Opposition.IsActive, Is.True);
+    }
+
+    [Test]
+    public void ValidOppositionNamedNpcSameInstanceStillResolves()
+    {
+        BindingFixture fixture = new BindingFixture();
+        fixture.Opposition.AddNamedParticipant(fixture.OppositionNpc);
+        Conflict conflict = fixture.CreateConflict(new[] { fixture.Performer });
+
+        Assert.That(fixture.ResolveAtStore(
+            conflict,
+            new ConflictResolutionConstraints { ForcedWinningSideId = "expedition" },
+            out _,
+            out string reason), Is.True, reason);
+        Assert.That(fixture.Opposition.IsResolved, Is.True);
+    }
+
+    [Test]
+    public void ValidOppositionNamedNpcOrderStillDoesNotMatter()
+    {
+        BindingFixture fixture = new BindingFixture();
+        fixture.Opposition.AddNamedParticipant(fixture.OppositionNpc);
+        fixture.Opposition.AddNamedParticipant(fixture.OppositionLieutenant);
+        Conflict conflict = fixture.CreateConflict(new[] { fixture.Performer }, includeOppositionParticipants: false);
+        ConflictSide oppositionSide = FindSide(conflict, fixture.Opposition.OppositionSideId);
+        oppositionSide.AddNpc(fixture.OppositionLieutenant);
+        oppositionSide.AddNpc(fixture.OppositionNpc);
+
+        Assert.That(fixture.ResolveAtStore(
+            conflict,
+            new ConflictResolutionConstraints { ForcedWinningSideId = "expedition" },
+            out _,
+            out string reason), Is.True, reason);
+    }
+
+    [Test]
+    public void AggregateEquivalentSnapshotWithSameSourceIdStillValid()
+    {
+        BindingFixture fixture = new BindingFixture();
+        fixture.Opposition.AddAggregateParticipant(new AggregateParticipantSnapshot("undead-horde", 10f));
+        Conflict conflict = fixture.CreateConflict(new[] { fixture.Performer }, includeOppositionParticipants: false);
+        FindSide(conflict, fixture.Opposition.OppositionSideId).AddAggregate(
+            new AggregateParticipantSnapshot("undead-horde", 3f));
+
+        Assert.That(fixture.ResolveAtStore(
+            conflict,
+            new ConflictResolutionConstraints { ForcedWinningSideId = "expedition" },
+            out _,
+            out string reason), Is.True, reason);
+    }
+
+    [Test]
     public void ExpeditionConflictRejectsNpcOutsideExpedition()
     {
         BindingFixture fixture = new BindingFixture();

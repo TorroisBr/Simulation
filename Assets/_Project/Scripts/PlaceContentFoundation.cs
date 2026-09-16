@@ -512,14 +512,18 @@ public sealed class PlaceOppositionRuntime
             return false;
         }
 
-        HashSet<string> expectedNamedIds = new HashSet<string>(StringComparer.Ordinal);
+        Dictionary<string, NpcRuntime> expectedNamedByRuntimeId = new Dictionary<string, NpcRuntime>(StringComparer.Ordinal);
         foreach (NpcRuntime participant in namedParticipants)
         {
-            if (participant == null || expectedNamedIds.Add(participant.RuntimeId) == false)
+            if (participant == null
+                || string.IsNullOrWhiteSpace(participant.RuntimeId) == true
+                || expectedNamedByRuntimeId.ContainsKey(participant.RuntimeId) == true)
             {
                 diagnostic = "Place opposition named participants must have unique valid RuntimeIds.";
                 return false;
             }
+
+            expectedNamedByRuntimeId.Add(participant.RuntimeId, participant);
         }
 
         HashSet<string> expectedAggregateSourceIds = new HashSet<string>(StringComparer.Ordinal);
@@ -545,9 +549,13 @@ public sealed class PlaceOppositionRuntime
             if (participant.IsNpc == true)
             {
                 if (participant.Npc == null
+                    || expectedNamedByRuntimeId.TryGetValue(
+                        participant.Npc.RuntimeId,
+                        out NpcRuntime expectedNpc) == false
+                    || ReferenceEquals(expectedNpc, participant.Npc) == false
                     || actualNamedIds.Add(participant.Npc.RuntimeId) == false)
                 {
-                    diagnostic = "Opposition conflict side contains an invalid or duplicate named NPC.";
+                    diagnostic = "Opposition conflict named NPCs must match the expected RuntimeId and concrete runtime instance.";
                     return false;
                 }
             }
@@ -567,7 +575,7 @@ public sealed class PlaceOppositionRuntime
             }
         }
 
-        if (expectedNamedIds.SetEquals(actualNamedIds) == false)
+        if (expectedNamedByRuntimeId.Count != actualNamedIds.Count)
         {
             diagnostic = "Opposition conflict named NPCs must exactly match the opposition participants.";
             return false;
