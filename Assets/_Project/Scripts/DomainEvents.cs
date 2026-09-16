@@ -11,7 +11,12 @@ public enum DomainEventType
     TravelPartyArrived,
     ExpeditionStarted,
     ExpeditionArrivedAtSite,
-    ConflictResolved
+    ConflictResolved,
+    ExpeditionExplorationStarted,
+    ExpeditionAdvanced,
+    ExpeditionObjectiveCompleted,
+    ExpeditionReturnStarted,
+    ExpeditionCompleted
 }
 
 public enum DomainEventParticipantRole
@@ -544,6 +549,157 @@ internal static class TravelPartyEventData
     }
 }
 
+[Serializable]
+public abstract class ExpeditionLifecycleEvent : DomainEvent
+{
+    private readonly string expeditionId;
+    private readonly string targetSiteRuntimeId;
+    private readonly string macroLocationRuntimeId;
+    private readonly string currentLocalPlaceRuntimeId;
+    private readonly ExpeditionObjectiveType objectiveType;
+    private readonly int progress;
+    private readonly int requiredProgress;
+    private readonly string relevantTargetId;
+    private readonly IReadOnlyList<string> performerRuntimeIds;
+    private readonly IReadOnlyList<string> supportRuntimeIds;
+    private readonly IReadOnlyList<DomainEventParticipant> participants;
+
+    public string ExpeditionId => expeditionId;
+    public string TargetSiteRuntimeId => targetSiteRuntimeId;
+    public string MacroLocationRuntimeId => macroLocationRuntimeId;
+    public string CurrentLocalPlaceRuntimeId => currentLocalPlaceRuntimeId;
+    public ExpeditionObjectiveType ObjectiveType => objectiveType;
+    public int Progress => progress;
+    public int RequiredProgress => requiredProgress;
+    public string RelevantTargetId => relevantTargetId;
+    public IReadOnlyList<string> PerformerRuntimeIds => performerRuntimeIds;
+    public IReadOnlyList<string> SupportRuntimeIds => supportRuntimeIds;
+
+    protected ExpeditionLifecycleEvent(
+        string eventId,
+        long absoluteDay,
+        long recordSequence,
+        ExpeditionRuntime expedition,
+        string macroLocationRuntimeId,
+        string relevantTargetId = null)
+        : base(
+            eventId,
+            absoluteDay,
+            recordSequence,
+            expedition != null ? expedition.OriginDecisionId : null)
+    {
+        if (expedition == null)
+        {
+            throw new ArgumentNullException(nameof(expedition));
+        }
+
+        expeditionId = RequireId(expedition.ExpeditionId, nameof(expedition.ExpeditionId));
+        targetSiteRuntimeId = RequireId(expedition.TargetSiteRuntimeId, nameof(expedition.TargetSiteRuntimeId));
+        this.macroLocationRuntimeId = RequireId(macroLocationRuntimeId, nameof(macroLocationRuntimeId));
+        currentLocalPlaceRuntimeId = string.IsNullOrWhiteSpace(expedition.CurrentLocalPlaceRuntimeId)
+            ? null
+            : expedition.CurrentLocalPlaceRuntimeId;
+        objectiveType = expedition.Objective.ObjectiveType;
+        progress = expedition.Objective.Progress;
+        requiredProgress = expedition.Objective.RequiredProgress;
+        this.relevantTargetId = string.IsNullOrWhiteSpace(relevantTargetId) ? null : relevantTargetId;
+        performerRuntimeIds = TravelPartyEventData.CaptureIds(
+            expedition.PerformerRuntimeIds,
+            nameof(expedition.PerformerRuntimeIds));
+        supportRuntimeIds = TravelPartyEventData.CaptureIds(
+            expedition.SupportRuntimeIds,
+            nameof(expedition.SupportRuntimeIds));
+        participants = TravelPartyEventData.BuildParticipants(performerRuntimeIds, supportRuntimeIds);
+    }
+
+    public override IReadOnlyList<DomainEventParticipant> GetParticipants()
+    {
+        return participants;
+    }
+}
+
+[Serializable]
+public sealed class ExpeditionExplorationStartedEvent : ExpeditionLifecycleEvent
+{
+    public override DomainEventType EventType => DomainEventType.ExpeditionExplorationStarted;
+
+    public ExpeditionExplorationStartedEvent(
+        string eventId,
+        long absoluteDay,
+        long recordSequence,
+        ExpeditionRuntime expedition,
+        string macroLocationRuntimeId)
+        : base(eventId, absoluteDay, recordSequence, expedition, macroLocationRuntimeId)
+    {
+    }
+}
+
+[Serializable]
+public sealed class ExpeditionAdvancedEvent : ExpeditionLifecycleEvent
+{
+    public override DomainEventType EventType => DomainEventType.ExpeditionAdvanced;
+
+    public ExpeditionAdvancedEvent(
+        string eventId,
+        long absoluteDay,
+        long recordSequence,
+        ExpeditionRuntime expedition,
+        string macroLocationRuntimeId,
+        string relevantTargetId = null)
+        : base(eventId, absoluteDay, recordSequence, expedition, macroLocationRuntimeId, relevantTargetId)
+    {
+    }
+}
+
+[Serializable]
+public sealed class ExpeditionObjectiveCompletedEvent : ExpeditionLifecycleEvent
+{
+    public override DomainEventType EventType => DomainEventType.ExpeditionObjectiveCompleted;
+
+    public ExpeditionObjectiveCompletedEvent(
+        string eventId,
+        long absoluteDay,
+        long recordSequence,
+        ExpeditionRuntime expedition,
+        string macroLocationRuntimeId,
+        string relevantTargetId = null)
+        : base(eventId, absoluteDay, recordSequence, expedition, macroLocationRuntimeId, relevantTargetId)
+    {
+    }
+}
+
+[Serializable]
+public sealed class ExpeditionReturnStartedEvent : ExpeditionLifecycleEvent
+{
+    public override DomainEventType EventType => DomainEventType.ExpeditionReturnStarted;
+
+    public ExpeditionReturnStartedEvent(
+        string eventId,
+        long absoluteDay,
+        long recordSequence,
+        ExpeditionRuntime expedition,
+        string macroLocationRuntimeId)
+        : base(eventId, absoluteDay, recordSequence, expedition, macroLocationRuntimeId)
+    {
+    }
+}
+
+[Serializable]
+public sealed class ExpeditionCompletedEvent : ExpeditionLifecycleEvent
+{
+    public override DomainEventType EventType => DomainEventType.ExpeditionCompleted;
+
+    public ExpeditionCompletedEvent(
+        string eventId,
+        long absoluteDay,
+        long recordSequence,
+        ExpeditionRuntime expedition,
+        string macroLocationRuntimeId)
+        : base(eventId, absoluteDay, recordSequence, expedition, macroLocationRuntimeId)
+    {
+    }
+}
+
 public sealed class ConflictResolvedEvent : DomainEvent
 {
     private readonly string conflictId;
@@ -719,7 +875,9 @@ public sealed class HistoryPolicy
 {
     public bool ShouldRetain(DomainEvent domainEvent)
     {
-        return domainEvent is NpcEscapedEvent || domainEvent is ConflictResolvedEvent;
+        return domainEvent is NpcEscapedEvent
+            || domainEvent is ConflictResolvedEvent
+            || domainEvent is ExpeditionCompletedEvent;
     }
 }
 
@@ -748,7 +906,12 @@ public sealed class HistoryStore
     }
 }
 
-public sealed class DomainEventRecorder
+public interface IDomainEventRecorder
+{
+    bool Record(Func<string, long, long, DomainEvent> createEvent);
+}
+
+public sealed class DomainEventRecorder : IDomainEventRecorder
 {
     private readonly RuntimeIdAllocator eventIdAllocator;
     private readonly SimulationTime simulationTime;

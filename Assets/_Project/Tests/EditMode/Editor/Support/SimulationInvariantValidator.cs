@@ -136,7 +136,9 @@ public static class SimulationInvariantValidator
 
     public static void ValidateExpedition(
         ExpeditionRuntime expedition,
-        RuntimeIdentityRegistry registry)
+        RuntimeIdentityRegistry registry,
+        LocalTopologyStore topologyStore = null,
+        ExpeditionStore expeditionStore = null)
     {
         Assert.That(expedition, Is.Not.Null);
         Assert.That(expedition.ExpeditionId, Is.Not.Null.And.Not.Empty);
@@ -178,6 +180,32 @@ public static class SimulationInvariantValidator
         Assert.That(registry.TryGetRoute(expedition.OutboundRouteRuntimeId, out SpatialRouteRuntime route), Is.True);
         Assert.That(route.Origin.RuntimeId, Is.EqualTo(expedition.OriginLocationRuntimeId));
         Assert.That(route.Destination.RuntimeId, Is.EqualTo(expedition.TargetLocationRuntimeId));
+
+        Assert.That(
+            new HashSet<string>(expedition.VisitedLocalPlaceRuntimeIds, StringComparer.Ordinal).Count,
+            Is.EqualTo(expedition.VisitedLocalPlaceRuntimeIds.Count));
+        Assert.That(
+            new HashSet<string>(expedition.ObservedLocalConnectionRuntimeIds, StringComparer.Ordinal).Count,
+            Is.EqualTo(expedition.ObservedLocalConnectionRuntimeIds.Count));
+
+        if (string.IsNullOrWhiteSpace(expedition.CurrentLocalPlaceRuntimeId) == false)
+        {
+            Assert.That(topologyStore, Is.Not.Null);
+            Assert.That(
+                topologyStore.TryGetTopologyForOwner(
+                    expedition.TargetSiteRuntimeId,
+                    out LocalTopologyRuntime topology),
+                Is.True);
+            Assert.That(topology, Is.Not.Null);
+            Assert.That(topology.IsPublished, Is.True);
+            Assert.That(topology.Owner.OwnerRuntimeId, Is.EqualTo(expedition.TargetSiteRuntimeId));
+            Assert.That(topology.TryGetPlace(expedition.CurrentLocalPlaceRuntimeId, out _), Is.True);
+        }
+
+        if (expedition.State == ExpeditionState.Completed && expeditionStore != null)
+        {
+            Assert.That(expeditionStore.GetById(expedition.ExpeditionId), Is.Null);
+        }
 
         if (expedition.State == ExpeditionState.Preparing)
         {

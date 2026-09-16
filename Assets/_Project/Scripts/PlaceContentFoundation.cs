@@ -660,6 +660,17 @@ public sealed class PlaceContentRuntime
         return true;
     }
 
+    public bool MarkInaccessible()
+    {
+        if (ActiveOppositions.Count > 0)
+        {
+            return false;
+        }
+
+        accessState = PlaceAccessState.Inaccessible;
+        return true;
+    }
+
     public bool TrySetController(string nextControllerRuntimeId)
     {
         if (string.IsNullOrWhiteSpace(nextControllerRuntimeId) == true)

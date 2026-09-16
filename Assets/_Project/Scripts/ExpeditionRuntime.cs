@@ -27,6 +27,7 @@ public sealed class ExpeditionObjectiveRuntime
 {
     private readonly ExpeditionObjectiveType objectiveType;
     private readonly string targetItemDefinitionId;
+    private readonly string targetNotableItemRuntimeId;
     private readonly string targetOppositionRuntimeId;
     private readonly int requiredProgress;
     private readonly bool allowContinueAfterCompletion;
@@ -36,6 +37,7 @@ public sealed class ExpeditionObjectiveRuntime
     public ExpeditionObjectiveType ObjectiveType => objectiveType;
     public ExpeditionObjectiveType Type => objectiveType;
     public string TargetItemDefinitionId => targetItemDefinitionId;
+    public string TargetNotableItemRuntimeId => targetNotableItemRuntimeId;
     public string TargetOppositionRuntimeId => targetOppositionRuntimeId;
     public int RequiredProgress => requiredProgress;
     public int Progress => progress;
@@ -47,7 +49,8 @@ public sealed class ExpeditionObjectiveRuntime
         string targetItemDefinitionId = null,
         string targetOppositionRuntimeId = null,
         int requiredProgress = 1,
-        bool allowContinueAfterCompletion = true)
+        bool allowContinueAfterCompletion = true,
+        string targetNotableItemRuntimeId = null)
     {
         if (Enum.IsDefined(typeof(ExpeditionObjectiveType), objectiveType) == false)
         {
@@ -61,9 +64,22 @@ public sealed class ExpeditionObjectiveRuntime
 
         this.objectiveType = objectiveType;
         this.targetItemDefinitionId = NormalizeOptionalId(targetItemDefinitionId);
+        this.targetNotableItemRuntimeId = NormalizeOptionalId(targetNotableItemRuntimeId);
         this.targetOppositionRuntimeId = NormalizeOptionalId(targetOppositionRuntimeId);
         this.requiredProgress = requiredProgress;
         this.allowContinueAfterCompletion = allowContinueAfterCompletion;
+
+        if (this.targetItemDefinitionId != null && this.targetNotableItemRuntimeId != null)
+        {
+            throw new ArgumentException("A Retrieve objective cannot target a common definition and an exact notable item simultaneously.");
+        }
+
+        if (objectiveType == ExpeditionObjectiveType.Retrieve
+            && this.targetItemDefinitionId == null
+            && this.targetNotableItemRuntimeId == null)
+        {
+            throw new ArgumentException("A Retrieve objective requires a target item definition or notable item RuntimeId.");
+        }
     }
 
     public static ExpeditionObjectiveRuntime Explore(int requiredProgress = 1)
@@ -74,6 +90,18 @@ public sealed class ExpeditionObjectiveRuntime
     public static ExpeditionObjectiveRuntime Retrieve(string itemDefinitionId)
     {
         return new ExpeditionObjectiveRuntime(ExpeditionObjectiveType.Retrieve, targetItemDefinitionId: itemDefinitionId);
+    }
+
+    public static ExpeditionObjectiveRuntime RetrieveDefinition(string itemDefinitionId)
+    {
+        return Retrieve(itemDefinitionId);
+    }
+
+    public static ExpeditionObjectiveRuntime RetrieveNotable(string notableItemRuntimeId)
+    {
+        return new ExpeditionObjectiveRuntime(
+            ExpeditionObjectiveType.Retrieve,
+            targetNotableItemRuntimeId: notableItemRuntimeId);
     }
 
     public static ExpeditionObjectiveRuntime Eliminate(string oppositionRuntimeId)
@@ -268,6 +296,12 @@ public sealed class ExpeditionRuntime
 
     public bool TrySetCurrentLocalPlace(string localPlaceRuntimeId)
     {
+        return TrySetCurrentLocalPlace(localPlaceRuntimeId, out _);
+    }
+
+    public bool TrySetCurrentLocalPlace(string localPlaceRuntimeId, out bool firstVisit)
+    {
+        firstVisit = false;
         if (CanContinueExploration() == false || string.IsNullOrWhiteSpace(localPlaceRuntimeId) == true)
         {
             return false;
@@ -277,10 +311,13 @@ public sealed class ExpeditionRuntime
         if (visitedLocalPlaceRuntimeIds.Contains(localPlaceRuntimeId) == false)
         {
             visitedLocalPlaceRuntimeIds.Add(localPlaceRuntimeId);
+            firstVisit = true;
         }
 
-        if (objective.ObjectiveType == ExpeditionObjectiveType.Explore
+        if (firstVisit == true
+            && (objective.ObjectiveType == ExpeditionObjectiveType.Explore
             || objective.ObjectiveType == ExpeditionObjectiveType.Scout)
+        )
         {
             objective.AddProgress(1);
         }
@@ -289,6 +326,12 @@ public sealed class ExpeditionRuntime
 
     public bool TryRecordObservedConnection(string localConnectionRuntimeId)
     {
+        return TryRecordObservedConnection(localConnectionRuntimeId, out _);
+    }
+
+    public bool TryRecordObservedConnection(string localConnectionRuntimeId, out bool firstObservation)
+    {
+        firstObservation = false;
         if (CanContinueExploration() == false || string.IsNullOrWhiteSpace(localConnectionRuntimeId) == true)
         {
             return false;
@@ -297,14 +340,52 @@ public sealed class ExpeditionRuntime
         if (observedLocalConnectionRuntimeIds.Contains(localConnectionRuntimeId) == false)
         {
             observedLocalConnectionRuntimeIds.Add(localConnectionRuntimeId);
+            firstObservation = true;
         }
 
         return true;
     }
 
+    public bool TryTraverseLocalConnection(
+        string localConnectionRuntimeId,
+        string destinationLocalPlaceRuntimeId,
+        out bool advanced)
+    {
+        advanced = false;
+        if (CanContinueExploration() == false
+            || string.IsNullOrWhiteSpace(localConnectionRuntimeId) == true
+            || string.IsNullOrWhiteSpace(destinationLocalPlaceRuntimeId) == true)
+        {
+            return false;
+        }
+
+        bool firstConnection = observedLocalConnectionRuntimeIds.Contains(localConnectionRuntimeId) == false;
+        bool firstVisit = visitedLocalPlaceRuntimeIds.Contains(destinationLocalPlaceRuntimeId) == false;
+
+        if (firstConnection == true)
+        {
+            observedLocalConnectionRuntimeIds.Add(localConnectionRuntimeId);
+        }
+
+        currentLocalPlaceRuntimeId = destinationLocalPlaceRuntimeId;
+        if (firstVisit == true)
+        {
+            visitedLocalPlaceRuntimeIds.Add(destinationLocalPlaceRuntimeId);
+            if (objective.ObjectiveType == ExpeditionObjectiveType.Explore
+                || objective.ObjectiveType == ExpeditionObjectiveType.Scout)
+            {
+                objective.AddProgress(1);
+            }
+        }
+
+        advanced = firstConnection || firstVisit;
+        return true;
+    }
+
     public bool TryMarkObjectiveComplete()
     {
-        if (state != ExpeditionState.Exploring && state != ExpeditionState.AtSite)
+        if ((state != ExpeditionState.Exploring && state != ExpeditionState.AtSite)
+            || objective.IsCompleted == true)
         {
             return false;
         }

@@ -385,7 +385,9 @@ public sealed class ExpeditionExplorationTests
     private static ExplorationFixture CreateContentFixture(ExpeditionObjectiveRuntime objective)
     {
         ExplorationFixture fixture = CreateDirectFixture(ExpeditionState.Exploring, objective);
-        fixture.ContentStore = new PlaceContentStore();
+        fixture.ContentStore = new PlaceContentStore(
+            fixture.World.Records.Allocator,
+            fixture.World.IdentityRegistry);
         fixture.System = CreateSystem(fixture.World, fixture.ContentStore, null);
         Assert.That(fixture.System.Store.Add(fixture.Expedition), Is.True);
         return fixture;
@@ -513,7 +515,7 @@ public sealed class ExpeditionExplorationTests
             System = system;
             Member = member;
             Expedition = expedition;
-            ContentStore = new PlaceContentStore();
+            ContentStore = new PlaceContentStore(world.Records.Allocator, world.IdentityRegistry);
         }
     }
 

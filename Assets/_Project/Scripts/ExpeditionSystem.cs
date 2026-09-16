@@ -21,7 +21,7 @@ public sealed class ExpeditionSystem
     private readonly ExplorableSiteKnowledgeSystem explorableSiteKnowledgeSystem;
     private readonly LocalTopologyKnowledgeSystem localTopologyKnowledgeSystem;
     private readonly SimulationTime simulationTime;
-    private readonly DomainEventRecorder domainEventRecorder;
+    private readonly IDomainEventRecorder domainEventRecorder;
     private readonly SimulationLogger logger;
     private readonly PlaceContentStore placeContentStore;
     private readonly LocalTopologyStore localTopologyStore;
@@ -37,7 +37,7 @@ public sealed class ExpeditionSystem
         TravelPartyStore travelPartyStore,
         ExplorableSiteKnowledgeSystem explorableSiteKnowledgeSystem,
         SimulationTime simulationTime,
-        DomainEventRecorder domainEventRecorder = null,
+        IDomainEventRecorder domainEventRecorder = null,
         SimulationLogger logger = null,
         PlaceContentStore placeContentStore = null,
         LocalTopologyStore localTopologyStore = null)
@@ -198,6 +198,17 @@ public sealed class ExpeditionSystem
             return false;
         }
 
+        RecordLifecycleEvent(
+            () => domainEventRecorder.Record(
+                (eventId, absoluteDay, recordSequence) => new ExpeditionExplorationStartedEvent(
+                    eventId,
+                    absoluteDay,
+                    recordSequence,
+                    expedition,
+                    expedition.TargetLocationRuntimeId)),
+            "exploration-started",
+            expedition);
+
         return true;
     }
 
@@ -233,11 +244,20 @@ public sealed class ExpeditionSystem
             return false;
         }
 
+        int previousProgress = expedition.ExplorationProgress;
+        bool objectiveWasCompleted = expedition.IsObjectiveComplete;
         if (expedition.TryAdvanceAbstractProgress() == false)
         {
             reason = "Abstract exploration progress could not advance.";
             return false;
         }
+
+        if (expedition.ExplorationProgress > previousProgress)
+        {
+            RecordAdvanced(expedition, null);
+        }
+
+        RecordObjectiveCompletedIfNeeded(expedition, objectiveWasCompleted, GetObjectiveTargetId(expedition.Objective));
 
         return true;
     }
@@ -262,28 +282,41 @@ public sealed class ExpeditionSystem
         }
 
         if (place == null
-            || localTopologyStore == null
-            || localTopologyStore.TryGetTopologyForOwner(expedition.TargetSiteRuntimeId, out LocalTopologyRuntime topology) == false
-            || topology == null
-            || topology.IsPublished == false
+            || TryGetPublishedTargetTopology(expedition, out LocalTopologyRuntime topology) == false
             || topology.ContainsPlace(place) == false)
         {
             reason = "Local exploration target must belong to the published target-site topology.";
             return false;
         }
 
-        foreach (string memberRuntimeId in expedition.MemberRuntimeIds)
+        if (expedition.CurrentLocalPlaceRuntimeId == null)
         {
-            if (identityRegistry.TryGetNpc(memberRuntimeId, out NpcRuntime member) == false || member == null)
+            if (topology.IsEntryPoint(place) == false)
             {
-                reason = "Every expedition member must resolve before observing a local place.";
+                reason = "Detailed exploration must enter through a published topology entry point.";
                 return false;
             }
         }
-
-        foreach (string memberRuntimeId in expedition.MemberRuntimeIds)
+        else if (string.Equals(expedition.CurrentLocalPlaceRuntimeId, place.RuntimeId, StringComparison.Ordinal) == false)
         {
-            identityRegistry.TryGetNpc(memberRuntimeId, out NpcRuntime member);
+            reason = "Direct local exploration cannot teleport between places; use a directed connection.";
+            return false;
+        }
+
+        if (TryResolveMembers(expedition, out List<NpcRuntime> members, out reason) == false)
+        {
+            return false;
+        }
+
+        bool objectiveWasCompleted = expedition.IsObjectiveComplete;
+        if (expedition.TrySetCurrentLocalPlace(place.RuntimeId, out bool firstVisit) == false)
+        {
+            reason = "Expedition could not record its local exploration position.";
+            return false;
+        }
+
+        foreach (NpcRuntime member in members)
+        {
             localTopologyKnowledgeSystem.RecordDirectObservation(
                 member,
                 topology,
@@ -291,11 +324,12 @@ public sealed class ExpeditionSystem
                 simulationTime.AbsoluteDay);
         }
 
-        if (expedition.TrySetCurrentLocalPlace(place.RuntimeId) == false)
+        if (firstVisit == true)
         {
-            reason = "Expedition could not record its local exploration position.";
-            return false;
+            RecordAdvanced(expedition, place.RuntimeId);
         }
+
+        RecordObjectiveCompletedIfNeeded(expedition, objectiveWasCompleted, place.RuntimeId);
 
         return true;
     }
@@ -312,10 +346,7 @@ public sealed class ExpeditionSystem
         }
 
         if (connection == null
-            || localTopologyStore == null
-            || localTopologyStore.TryGetTopologyForOwner(expedition.TargetSiteRuntimeId, out LocalTopologyRuntime topology) == false
-            || topology == null
-            || topology.IsPublished == false
+            || TryGetPublishedTargetTopology(expedition, out LocalTopologyRuntime topology) == false
             || topology.ContainsConnection(connection) == false)
         {
             reason = "Local traversal requires a connection from the published target-site topology.";
@@ -329,31 +360,41 @@ public sealed class ExpeditionSystem
             return false;
         }
 
-        foreach (string memberRuntimeId in expedition.MemberRuntimeIds)
+        if (TryResolveMembers(expedition, out List<NpcRuntime> members, out reason) == false)
         {
-            if (identityRegistry.TryGetNpc(memberRuntimeId, out NpcRuntime member) == false || member == null)
-            {
-                reason = "Every expedition member must resolve before observing a local connection.";
-                return false;
-            }
+            return false;
         }
 
-        foreach (string memberRuntimeId in expedition.MemberRuntimeIds)
+        bool objectiveWasCompleted = expedition.IsObjectiveComplete;
+        if (expedition.TryTraverseLocalConnection(
+            connection.RuntimeId,
+            connection.Destination.RuntimeId,
+            out bool advanced) == false)
         {
-            identityRegistry.TryGetNpc(memberRuntimeId, out NpcRuntime member);
+            reason = "Expedition could not record the directed local traversal.";
+            return false;
+        }
+
+        foreach (NpcRuntime member in members)
+        {
             localTopologyKnowledgeSystem.RecordDirectObservation(
                 member,
                 topology,
                 connection,
                 simulationTime.AbsoluteDay);
+            localTopologyKnowledgeSystem.RecordDirectObservation(
+                member,
+                topology,
+                connection.Destination,
+                simulationTime.AbsoluteDay);
         }
 
-        if (expedition.TryRecordObservedConnection(connection.RuntimeId) == false
-            || expedition.TrySetCurrentLocalPlace(connection.Destination.RuntimeId) == false)
+        if (advanced == true)
         {
-            reason = "Expedition could not record the directed local traversal.";
-            return false;
+            RecordAdvanced(expedition, connection.RuntimeId);
         }
+
+        RecordObjectiveCompletedIfNeeded(expedition, objectiveWasCompleted, connection.Destination.RuntimeId);
 
         return true;
     }
@@ -398,15 +439,17 @@ public sealed class ExpeditionSystem
 
         if (identityRegistry.TryGetNpc(expedition.PerformerRuntimeIds[0], out NpcRuntime performer) == false
             || performer == null
+            || performer.IsAlive == false
             || performer.Inventory.CanAddItem(item, amount) == false
-            || placeContentStore.TryGet(owner, out PlaceContentRuntime content) == false
+            || TryValidateContentContext(expedition, owner, true, out PlaceContentRuntime content, out reason) == false
             || content.GetAmount(item) < amount
             || content.GetStack(item) == null)
         {
-            reason = "Target resource is not available or the performer cannot carry it.";
+            reason = reason ?? "Target resource is not available in the expedition's current accessible place or the performer cannot carry it.";
             return false;
         }
 
+        bool objectiveWasCompleted = expedition.IsObjectiveComplete;
         float averageUnitCost = content.GetStack(item).AverageUnitCost;
         if (placeContentStore.TryTakeStack(owner, item, amount, out int removedAmount) == false)
         {
@@ -416,12 +459,96 @@ public sealed class ExpeditionSystem
 
         performer.Inventory.AddItem(item, removedAmount, averageUnitCost);
         if (expedition.Objective.ObjectiveType == ExpeditionObjectiveType.Retrieve
-            && (string.IsNullOrWhiteSpace(expedition.Objective.TargetItemDefinitionId) == true
-                || expedition.Objective.TargetItemDefinitionId == item.DefinitionId))
+            && expedition.Objective.TargetItemDefinitionId == item.DefinitionId)
         {
             expedition.TryMarkObjectiveComplete();
         }
 
+        RecordObjectiveCompletedIfNeeded(expedition, objectiveWasCompleted, item.DefinitionId);
+
+        return true;
+    }
+
+    public bool TryRetrieveNotableItem(
+        ExpeditionRuntime expedition,
+        string notableItemRuntimeId,
+        out NotableItemRuntime notable,
+        out string reason)
+    {
+        notable = null;
+        reason = null;
+        if (expedition == null || expedition.PerformerRuntimeIds.Count == 0
+            || identityRegistry.TryGetNpc(expedition.PerformerRuntimeIds[0], out NpcRuntime performer) == false)
+        {
+            reason = "Notable retrieval requires a resolvable expedition Performer.";
+            return false;
+        }
+
+        return TryRetrieveNotableItem(expedition, notableItemRuntimeId, performer, out notable, out reason);
+    }
+
+    public bool TryRetrieveNotableItem(
+        ExpeditionRuntime expedition,
+        string notableItemRuntimeId,
+        NpcRuntime destinationPerformer,
+        out NotableItemRuntime notable,
+        out string reason)
+    {
+        notable = null;
+        reason = null;
+        if (CanContinueExploration(expedition, out reason) == false
+            || placeContentStore == null
+            || string.IsNullOrWhiteSpace(notableItemRuntimeId) == true
+            || destinationPerformer == null)
+        {
+            reason = reason ?? "Notable retrieval requires an active exploration, item RuntimeId, and destination Performer.";
+            return false;
+        }
+
+        if (ContainsId(expedition.PerformerRuntimeIds, destinationPerformer.RuntimeId) == false
+            || destinationPerformer.IsAlive == false
+            || identityRegistry.TryGetNpcWithoutLogging(destinationPerformer.RuntimeId, out NpcRuntime registeredPerformer) == false
+            || ReferenceEquals(registeredPerformer, destinationPerformer) == false)
+        {
+            reason = "Notable item destination must be a living registered Performer of this expedition.";
+            return false;
+        }
+
+        if (placeContentStore.TryGetNotableItem(notableItemRuntimeId, out NotableItemRuntime storedNotable) == false
+            || storedNotable.Custody?.CustodyKind != NotableItemCustodyKind.Place
+            || storedNotable.Custody.PlaceOwner == null)
+        {
+            reason = "The exact notable item is not currently held at a place.";
+            return false;
+        }
+
+        PlaceContentOwnerReference sourceOwner = storedNotable.Custody.PlaceOwner;
+        if (TryValidateContentContext(expedition, sourceOwner, true, out _, out reason) == false)
+        {
+            return false;
+        }
+
+        bool objectiveWasCompleted = expedition.IsObjectiveComplete;
+        if (placeContentStore.TryTransferNotableFromPlaceToNpc(
+            sourceOwner,
+            notableItemRuntimeId,
+            destinationPerformer,
+            out notable,
+            out reason) == false)
+        {
+            return false;
+        }
+
+        if (expedition.Objective.ObjectiveType == ExpeditionObjectiveType.Retrieve
+            && string.Equals(
+                expedition.Objective.TargetNotableItemRuntimeId,
+                notableItemRuntimeId,
+                StringComparison.Ordinal) == true)
+        {
+            expedition.TryMarkObjectiveComplete();
+        }
+
+        RecordObjectiveCompletedIfNeeded(expedition, objectiveWasCompleted, notableItemRuntimeId);
         return true;
     }
 
@@ -443,6 +570,12 @@ public sealed class ExpeditionSystem
             return false;
         }
 
+        if (TryValidateContentContext(expedition, owner, false, out _, out reason) == false)
+        {
+            return false;
+        }
+
+        bool objectiveWasCompleted = expedition.IsObjectiveComplete;
         if (placeContentStore.TryResolveOpposition(
             owner,
             opposition,
@@ -460,6 +593,8 @@ public sealed class ExpeditionSystem
         {
             expedition.TryMarkObjectiveComplete();
         }
+
+        RecordObjectiveCompletedIfNeeded(expedition, objectiveWasCompleted, opposition.RuntimeId);
 
         return true;
     }
@@ -528,6 +663,17 @@ public sealed class ExpeditionSystem
             return false;
         }
 
+        RecordLifecycleEvent(
+            () => domainEventRecorder.Record(
+                (eventId, absoluteDay, recordSequence) => new ExpeditionReturnStartedEvent(
+                    eventId,
+                    absoluteDay,
+                    recordSequence,
+                    expedition,
+                    expedition.TargetLocationRuntimeId)),
+            "return-started",
+            expedition);
+
         return true;
     }
 
@@ -543,6 +689,177 @@ public sealed class ExpeditionSystem
         }
 
         return true;
+    }
+
+    private bool TryGetPublishedTargetTopology(
+        ExpeditionRuntime expedition,
+        out LocalTopologyRuntime topology)
+    {
+        topology = null;
+        return expedition != null
+            && localTopologyStore != null
+            && localTopologyStore.TryGetTopologyForOwner(expedition.TargetSiteRuntimeId, out topology) == true
+            && topology != null
+            && topology.IsPublished == true
+            && string.Equals(
+                topology.Owner.OwnerRuntimeId,
+                expedition.TargetSiteRuntimeId,
+                StringComparison.Ordinal) == true;
+    }
+
+    private bool TryResolveMembers(
+        ExpeditionRuntime expedition,
+        out List<NpcRuntime> members,
+        out string reason)
+    {
+        members = new List<NpcRuntime>();
+        reason = null;
+        if (expedition == null)
+        {
+            reason = "Expedition is null.";
+            return false;
+        }
+
+        foreach (string memberRuntimeId in expedition.MemberRuntimeIds)
+        {
+            if (identityRegistry.TryGetNpcWithoutLogging(memberRuntimeId, out NpcRuntime member) == false
+                || member == null)
+            {
+                members.Clear();
+                reason = "Every expedition member must resolve before local exploration mutates state.";
+                return false;
+            }
+
+            members.Add(member);
+        }
+
+        return true;
+    }
+
+    private bool TryValidateContentContext(
+        ExpeditionRuntime expedition,
+        PlaceContentOwnerReference owner,
+        bool requireAccessible,
+        out PlaceContentRuntime content,
+        out string reason)
+    {
+        content = null;
+        reason = null;
+        if (expedition == null || owner == null || placeContentStore == null)
+        {
+            reason = "Content interaction requires an expedition, owner, and content store.";
+            return false;
+        }
+
+        if (owner.OwnerKind == PlaceContentOwnerKind.ExplorableSite)
+        {
+            if (string.Equals(owner.OwnerRuntimeId, expedition.TargetSiteRuntimeId, StringComparison.Ordinal) == false
+                || string.Equals(owner.MacroLocationRuntimeId, expedition.TargetLocationRuntimeId, StringComparison.Ordinal) == false)
+            {
+                reason = "Site-level content must belong to this expedition's target site.";
+                return false;
+            }
+        }
+        else if (owner.OwnerKind == PlaceContentOwnerKind.LocalPlace)
+        {
+            if (TryGetPublishedTargetTopology(expedition, out LocalTopologyRuntime topology) == false
+                || topology.TryGetPlace(owner.OwnerRuntimeId, out LocalPlaceRuntime localPlace) == false
+                || localPlace == null
+                || string.Equals(owner.TopologyOwnerRuntimeId, expedition.TargetSiteRuntimeId, StringComparison.Ordinal) == false
+                || string.Equals(owner.MacroLocationRuntimeId, expedition.TargetLocationRuntimeId, StringComparison.Ordinal) == false
+                || string.Equals(expedition.CurrentLocalPlaceRuntimeId, localPlace.RuntimeId, StringComparison.Ordinal) == false)
+            {
+                reason = "Local content requires the expedition to be at that LocalPlace in the published target-site topology.";
+                return false;
+            }
+        }
+        else
+        {
+            reason = "An expedition cannot remotely interact with City content while exploring a site.";
+            return false;
+        }
+
+        if (placeContentStore.TryGet(owner, out content) == false)
+        {
+            reason = "The requested content owner has no persistent content state.";
+            return false;
+        }
+
+        if (requireAccessible == true && content.AccessState != PlaceAccessState.Accessible)
+        {
+            content = null;
+            reason = "The requested place content is not accessible.";
+            return false;
+        }
+
+        return true;
+    }
+
+    private void RecordAdvanced(ExpeditionRuntime expedition, string relevantTargetId)
+    {
+        RecordLifecycleEvent(
+            () => domainEventRecorder.Record(
+                (eventId, absoluteDay, recordSequence) => new ExpeditionAdvancedEvent(
+                    eventId,
+                    absoluteDay,
+                    recordSequence,
+                    expedition,
+                    expedition.TargetLocationRuntimeId,
+                    relevantTargetId)),
+            "advanced",
+            expedition);
+    }
+
+    private void RecordObjectiveCompletedIfNeeded(
+        ExpeditionRuntime expedition,
+        bool objectiveWasCompleted,
+        string relevantTargetId)
+    {
+        if (expedition == null || objectiveWasCompleted == true || expedition.IsObjectiveComplete == false)
+        {
+            return;
+        }
+
+        RecordLifecycleEvent(
+            () => domainEventRecorder.Record(
+                (eventId, absoluteDay, recordSequence) => new ExpeditionObjectiveCompletedEvent(
+                    eventId,
+                    absoluteDay,
+                    recordSequence,
+                    expedition,
+                    expedition.TargetLocationRuntimeId,
+                    relevantTargetId)),
+            "objective-completed",
+            expedition);
+    }
+
+    private void RecordLifecycleEvent(
+        Func<bool> record,
+        string eventName,
+        ExpeditionRuntime expedition)
+    {
+        if (domainEventRecorder == null)
+        {
+            return;
+        }
+
+        if (record == null || record() == false)
+        {
+            logger.LogWarning(
+                $"Expedition {eventName} event could not be recorded for ExpeditionId '{expedition?.ExpeditionId}'.");
+        }
+    }
+
+    private static string GetObjectiveTargetId(ExpeditionObjectiveRuntime objective)
+    {
+        if (objective == null)
+        {
+            return null;
+        }
+
+        return objective.TargetNotableItemRuntimeId
+            ?? objective.TargetItemDefinitionId
+            ?? objective.TargetOppositionRuntimeId;
     }
 
     public bool TryGetExpeditionForNpc(string npcRuntimeId, out ExpeditionRuntime expedition)
@@ -606,6 +923,17 @@ public sealed class ExpeditionSystem
             {
                 continue;
             }
+
+            RecordLifecycleEvent(
+                () => domainEventRecorder.Record(
+                    (eventId, absoluteDay, recordSequence) => new ExpeditionCompletedEvent(
+                        eventId,
+                        absoluteDay,
+                        recordSequence,
+                        expedition,
+                        expedition.OriginLocationRuntimeId)),
+                "completed",
+                expedition);
 
             arrivedExpeditions.Add(expedition);
         }
