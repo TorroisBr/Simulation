@@ -387,7 +387,7 @@ public sealed class WorldObserverReadModelTests
         public List<NpcRuntime> Npcs { get; } = new List<NpcRuntime>();
         public RecordFixture Records => World.Records;
         public ExpeditionStore Expeditions { get; } = new ExpeditionStore();
-        public PlaceContentStore ContentStore { get; } = new PlaceContentStore();
+        public PlaceContentStore ContentStore { get; }
         public LocalTopologyStore TopologyStore { get; }
         public WorldObserverQueryService Query { get; set; }
         public LocalPlaceRuntime Root { get; set; }
@@ -400,6 +400,7 @@ public sealed class WorldObserverReadModelTests
         {
             World = world;
             TopologyStore = new LocalTopologyStore(world.IdentityRegistry);
+            ContentStore = new PlaceContentStore(new RuntimeIdAllocator(), world.IdentityRegistry);
             Member = world.CreateNpc("observer-member", world.CityA, 10f);
             Npcs.Add(Member);
         }

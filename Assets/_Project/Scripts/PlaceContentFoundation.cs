@@ -8,6 +8,12 @@ public enum PlaceContentOwnerKind
     LocalPlace
 }
 
+public enum NotableItemCustodyKind
+{
+    Place,
+    Npc
+}
+
 public enum PlaceContentPersistencePolicy
 {
     Transient,
@@ -117,10 +123,16 @@ public sealed class PlaceContentOwnerReference
             }
         }
 
+        if (string.IsNullOrWhiteSpace(resolvedMacroLocationRuntimeId) == true)
+        {
+            throw new InvalidOperationException(
+                "A LocalPlace content owner requires an owning topology or an explicit macro location RuntimeId.");
+        }
+
         return new PlaceContentOwnerReference(
             localPlace.RuntimeId,
             PlaceContentOwnerKind.LocalPlace,
-            resolvedMacroLocationRuntimeId ?? localPlace.RuntimeId,
+            resolvedMacroLocationRuntimeId,
             topologyOwnerRuntimeId);
     }
 }
@@ -230,18 +242,93 @@ public sealed class PlaceContentStackRuntime
 }
 
 [Serializable]
+public sealed class NotableItemCustodyReference
+{
+    private readonly NotableItemCustodyKind custodyKind;
+    private readonly PlaceContentOwnerReference placeOwner;
+    private readonly string npcRuntimeId;
+
+    public NotableItemCustodyKind CustodyKind => custodyKind;
+    public PlaceContentOwnerReference PlaceOwner => placeOwner;
+    public string NpcRuntimeId => npcRuntimeId;
+    public string StableKey => custodyKind == NotableItemCustodyKind.Place
+        ? "Place:" + placeOwner.StableKey
+        : "Npc:" + npcRuntimeId;
+
+    private NotableItemCustodyReference(
+        NotableItemCustodyKind custodyKind,
+        PlaceContentOwnerReference placeOwner,
+        string npcRuntimeId)
+    {
+        custodyKind = ValidateKind(custodyKind);
+        if (custodyKind == NotableItemCustodyKind.Place && placeOwner == null)
+        {
+            throw new ArgumentNullException(nameof(placeOwner));
+        }
+
+        if (custodyKind == NotableItemCustodyKind.Npc && string.IsNullOrWhiteSpace(npcRuntimeId) == true)
+        {
+            throw new ArgumentException("NPC custody requires a RuntimeId.", nameof(npcRuntimeId));
+        }
+
+        this.custodyKind = custodyKind;
+        this.placeOwner = placeOwner;
+        this.npcRuntimeId = npcRuntimeId;
+    }
+
+    public static NotableItemCustodyReference ForPlace(PlaceContentOwnerReference owner)
+    {
+        return new NotableItemCustodyReference(NotableItemCustodyKind.Place, owner, null);
+    }
+
+    public static NotableItemCustodyReference ForNpc(NpcRuntime npc)
+    {
+        if (npc == null)
+        {
+            throw new ArgumentNullException(nameof(npc));
+        }
+
+        return ForNpcRuntimeId(npc.RuntimeId);
+    }
+
+    public static NotableItemCustodyReference ForNpcRuntimeId(string npcRuntimeId)
+    {
+        return new NotableItemCustodyReference(NotableItemCustodyKind.Npc, null, npcRuntimeId);
+    }
+
+    public bool Matches(NotableItemCustodyReference other)
+    {
+        return other != null && string.Equals(StableKey, other.StableKey, StringComparison.Ordinal);
+    }
+
+    private static NotableItemCustodyKind ValidateKind(NotableItemCustodyKind custodyKind)
+    {
+        if (Enum.IsDefined(typeof(NotableItemCustodyKind), custodyKind) == false)
+        {
+            throw new ArgumentOutOfRangeException(nameof(custodyKind));
+        }
+
+        return custodyKind;
+    }
+}
+
+[Serializable]
 public sealed class NotableItemRuntime
 {
     private readonly string runtimeId;
     private readonly ItemData definition;
-    private PlaceContentOwnerReference owner;
+    private NotableItemCustodyReference custody;
 
     public string RuntimeId => runtimeId;
     public ItemData Definition => definition;
     public ItemData Item => definition;
     public string DefinitionId => definition != null ? definition.DefinitionId : string.Empty;
-    public PlaceContentOwnerReference Owner => owner;
-    public bool IsPresent => owner != null;
+    public NotableItemCustodyReference Custody => custody;
+    public PlaceContentOwnerReference Owner => custody?.PlaceOwner;
+    public string CustodianNpcRuntimeId => custody?.NpcRuntimeId;
+    public bool IsPresent => custody != null;
+    public bool IsAtPlace => custody?.CustodyKind == NotableItemCustodyKind.Place;
+    public bool IsHeldByNpc => custody?.CustodyKind == NotableItemCustodyKind.Npc;
     public PlaceContentPersistencePolicy PersistencePolicy => PlaceContentPersistencePolicy.Notable;
 
     public NotableItemRuntime(string runtimeId, ItemData definition)
@@ -260,25 +347,29 @@ public sealed class NotableItemRuntime
         this.definition = definition;
     }
 
-    internal bool TryAssignOwner(PlaceContentOwnerReference nextOwner)
+    internal bool TryAssignCustody(NotableItemCustodyReference nextCustody)
     {
-        if (nextOwner == null || owner != null)
+        if (nextCustody == null || custody != null)
         {
             return false;
         }
 
-        owner = nextOwner;
+        custody = nextCustody;
         return true;
     }
 
-    internal bool TryClearOwner(PlaceContentOwnerReference expectedOwner)
+    internal bool TryTransferCustody(
+        NotableItemCustodyReference expectedCustody,
+        NotableItemCustodyReference nextCustody)
     {
-        if (owner == null || expectedOwner == null || owner.StableKey != expectedOwner.StableKey)
+        if (expectedCustody == null || nextCustody == null
+            || custody?.Matches(expectedCustody) != true
+            || expectedCustody.Matches(nextCustody) == true)
         {
             return false;
         }
 
-        owner = null;
+        custody = nextCustody;
         return true;
     }
 }
@@ -637,18 +728,170 @@ public sealed class PlaceContentRuntime
 
 public sealed class PlaceContentStore
 {
+    private readonly RuntimeIdAllocator notableItemIdAllocator;
+    private readonly RuntimeIdentityRegistry identityRegistry;
     private readonly List<PlaceContentRuntime> places = new List<PlaceContentRuntime>();
+    private readonly List<NotableItemRuntime> notableItems = new List<NotableItemRuntime>();
     private readonly Dictionary<string, PlaceContentRuntime> placesByOwnerKey =
         new Dictionary<string, PlaceContentRuntime>(StringComparer.Ordinal);
     private readonly Dictionary<string, NotableItemRuntime> notableByRuntimeId =
         new Dictionary<string, NotableItemRuntime>(StringComparer.Ordinal);
     private readonly IReadOnlyList<PlaceContentRuntime> readOnlyPlaces;
+    private readonly IReadOnlyList<NotableItemRuntime> readOnlyNotableItems;
 
     public IReadOnlyList<PlaceContentRuntime> Places => readOnlyPlaces;
+    public IReadOnlyList<NotableItemRuntime> NotableItems => readOnlyNotableItems;
 
     public PlaceContentStore()
+        : this(null, null)
     {
+    }
+
+    public PlaceContentStore(
+        RuntimeIdAllocator notableItemIdAllocator,
+        RuntimeIdentityRegistry identityRegistry)
+    {
+        this.notableItemIdAllocator = notableItemIdAllocator;
+        this.identityRegistry = identityRegistry;
         readOnlyPlaces = places.AsReadOnly();
+        readOnlyNotableItems = notableItems.AsReadOnly();
+    }
+
+    public bool TryCreateNotableItem(
+        ItemData definition,
+        out NotableItemRuntime notable,
+        out string diagnostic)
+    {
+        notable = null;
+        diagnostic = null;
+        if (definition == null)
+        {
+            diagnostic = "Notable item creation requires an ItemData definition.";
+            return false;
+        }
+
+        if (notableItemIdAllocator == null || identityRegistry == null)
+        {
+            diagnostic = "Notable item creation requires a RuntimeIdAllocator and RuntimeIdentityRegistry.";
+            return false;
+        }
+
+        string runtimeId;
+        do
+        {
+            runtimeId = notableItemIdAllocator.AllocateNotableItemId();
+        }
+        while (identityRegistry.IsRuntimeIdAvailable(runtimeId) == false);
+
+        NotableItemRuntime created = new NotableItemRuntime(runtimeId, definition);
+        if (TryRegisterNotableItem(created, out diagnostic) == false)
+        {
+            return false;
+        }
+
+        notable = created;
+        return true;
+    }
+
+    public NotableItemRuntime CreateNotableItem(ItemData definition)
+    {
+        if (TryCreateNotableItem(definition, out NotableItemRuntime notable, out string diagnostic) == false)
+        {
+            throw new InvalidOperationException(diagnostic);
+        }
+
+        return notable;
+    }
+
+    public bool TryRegisterNotableItem(NotableItemRuntime notable, out string diagnostic)
+    {
+        diagnostic = null;
+        if (notable == null)
+        {
+            diagnostic = "Cannot register a null NotableItemRuntime.";
+            return false;
+        }
+
+        if (identityRegistry == null)
+        {
+            diagnostic = "Notable items require a shared RuntimeIdentityRegistry.";
+            return false;
+        }
+
+        if (notableByRuntimeId.TryGetValue(notable.RuntimeId, out NotableItemRuntime existing) == true)
+        {
+            if (ReferenceEquals(existing, notable) == true)
+            {
+                return true;
+            }
+
+            diagnostic = $"Notable item RuntimeId '{notable.RuntimeId}' already belongs to another instance.";
+            return false;
+        }
+
+        if (identityRegistry.TryGetNotableItemWithoutLogging(notable.RuntimeId, out NotableItemRuntime registered) == true)
+        {
+            if (ReferenceEquals(registered, notable) == false)
+            {
+                diagnostic = $"Notable item RuntimeId '{notable.RuntimeId}' is already globally registered.";
+                return false;
+            }
+        }
+        else if (identityRegistry.RegisterNotableItem(notable) == false)
+        {
+            diagnostic = $"Notable item RuntimeId '{notable.RuntimeId}' conflicts with another runtime identity.";
+            return false;
+        }
+
+        notableByRuntimeId.Add(notable.RuntimeId, notable);
+        notableItems.Add(notable);
+        return true;
+    }
+
+    public bool TryGetNotableItem(string runtimeId, out NotableItemRuntime notable)
+    {
+        if (string.IsNullOrWhiteSpace(runtimeId) == false
+            && notableByRuntimeId.TryGetValue(runtimeId, out notable) == true)
+        {
+            return true;
+        }
+
+        notable = null;
+        return false;
+    }
+
+    public IReadOnlyList<NotableItemRuntime> GetNotableItemsAtPlace(PlaceContentOwnerReference owner)
+    {
+        return owner != null && TryGet(owner, out PlaceContentRuntime content) == true
+            ? content.NotableContent
+            : Array.Empty<NotableItemRuntime>();
+    }
+
+    public IReadOnlyList<NotableItemRuntime> GetNotableItemsHeldByNpc(NpcRuntime npc)
+    {
+        return npc != null ? GetNotableItemsHeldByNpc(npc.RuntimeId) : Array.Empty<NotableItemRuntime>();
+    }
+
+    public IReadOnlyList<NotableItemRuntime> GetNotableItemsHeldByNpc(string npcRuntimeId)
+    {
+        if (string.IsNullOrWhiteSpace(npcRuntimeId) == true)
+        {
+            return Array.Empty<NotableItemRuntime>();
+        }
+
+        List<NotableItemRuntime> held = new List<NotableItemRuntime>();
+        foreach (NotableItemRuntime notable in notableItems)
+        {
+            if (notable != null
+                && notable.Custody?.CustodyKind == NotableItemCustodyKind.Npc
+                && string.Equals(notable.Custody.NpcRuntimeId, npcRuntimeId, StringComparison.Ordinal) == true)
+            {
+                held.Add(notable);
+            }
+        }
+
+        held.Sort((left, right) => string.CompareOrdinal(left.RuntimeId, right.RuntimeId));
+        return held.AsReadOnly();
     }
 
     public PlaceContentRuntime GetOrCreate(CityRuntime cityRuntime)
@@ -852,49 +1095,175 @@ public sealed class PlaceContentStore
     public bool TryTakeNotable(
         PlaceContentOwnerReference owner,
         string notableRuntimeId,
+        NpcRuntime destinationNpc,
         out NotableItemRuntime notable)
     {
+        return TryTransferNotableFromPlaceToNpc(
+            owner,
+            notableRuntimeId,
+            destinationNpc,
+            out notable,
+            out _);
+    }
+
+    public bool TryTransferNotableFromPlaceToNpc(
+        PlaceContentOwnerReference sourceOwner,
+        string notableRuntimeId,
+        NpcRuntime destinationNpc,
+        out NotableItemRuntime notable,
+        out string diagnostic)
+    {
         notable = null;
-        if (owner == null || string.IsNullOrWhiteSpace(notableRuntimeId) == true
-            || TryGet(owner, out PlaceContentRuntime content) == false
-            || content.GetNotable(notableRuntimeId) == null
-            || notableByRuntimeId.TryGetValue(notableRuntimeId, out notable) == false
-            || content.GetNotable(notableRuntimeId) != notable)
+        diagnostic = null;
+        if (sourceOwner == null || destinationNpc == null || string.IsNullOrWhiteSpace(notableRuntimeId) == true)
         {
-            notable = null;
+            diagnostic = "Place-to-NPC transfer requires a source place, notable RuntimeId, and destination NPC.";
             return false;
         }
 
-        if (notable.TryClearOwner(owner) == false)
+        if (TryValidateNpcIdentity(destinationNpc, out diagnostic) == false)
         {
-            notable = null;
             return false;
         }
 
-        content.RemoveNotable(notable);
-        notableByRuntimeId.Remove(notableRuntimeId);
+        if (TryGet(sourceOwner, out PlaceContentRuntime sourceContent) == false
+            || TryGetNotableItem(notableRuntimeId, out notable) == false
+            || ReferenceEquals(sourceContent.GetNotable(notableRuntimeId), notable) == false)
+        {
+            notable = null;
+            diagnostic = "The notable item is not present at the expected source place.";
+            return false;
+        }
+
+        NotableItemCustodyReference expectedCustody = NotableItemCustodyReference.ForPlace(sourceOwner);
+        NotableItemCustodyReference nextCustody = NotableItemCustodyReference.ForNpc(destinationNpc);
+        if (notable.Custody?.Matches(expectedCustody) != true)
+        {
+            notable = null;
+            diagnostic = "The notable item's custody does not match the expected source place.";
+            return false;
+        }
+
+        if (notable.TryTransferCustody(expectedCustody, nextCustody) == false)
+        {
+            notable = null;
+            diagnostic = "The notable item custody transfer was rejected before mutation.";
+            return false;
+        }
+
+        sourceContent.RemoveNotable(notable);
         return true;
     }
 
-    public bool TryTakeNotable(CityRuntime cityRuntime, string notableRuntimeId, out NotableItemRuntime notable)
+    public bool TryTransferNotableFromNpcToPlace(
+        NpcRuntime sourceNpc,
+        string notableRuntimeId,
+        PlaceContentOwnerReference destinationOwner,
+        out NotableItemRuntime notable,
+        out string diagnostic)
     {
         notable = null;
-        return cityRuntime != null && TryTakeNotable(
-            PlaceContentOwnerReference.ForCity(cityRuntime), notableRuntimeId, out notable);
+        diagnostic = null;
+        if (sourceNpc == null || destinationOwner == null || string.IsNullOrWhiteSpace(notableRuntimeId) == true)
+        {
+            diagnostic = "NPC-to-place transfer requires a source NPC, notable RuntimeId, and destination place.";
+            return false;
+        }
+
+        if (TryValidateNpcIdentity(sourceNpc, out diagnostic) == false)
+        {
+            return false;
+        }
+
+        if (TryGetNotableItem(notableRuntimeId, out notable) == false)
+        {
+            diagnostic = "The notable item is not globally registered in this store.";
+            return false;
+        }
+
+        NotableItemCustodyReference expectedCustody = NotableItemCustodyReference.ForNpc(sourceNpc);
+        if (notable.Custody?.Matches(expectedCustody) != true)
+        {
+            notable = null;
+            diagnostic = "The source NPC does not hold the notable item.";
+            return false;
+        }
+
+        if (TryGet(destinationOwner, out PlaceContentRuntime existingDestination) == true
+            && existingDestination.GetNotable(notableRuntimeId) != null)
+        {
+            notable = null;
+            diagnostic = "The destination place already contains this notable RuntimeId.";
+            return false;
+        }
+
+        PlaceContentRuntime destinationContent = existingDestination ?? GetOrCreate(destinationOwner);
+        NotableItemCustodyReference nextCustody = NotableItemCustodyReference.ForPlace(destinationOwner);
+        if (notable.TryTransferCustody(expectedCustody, nextCustody) == false)
+        {
+            notable = null;
+            diagnostic = "The notable item custody transfer was rejected before mutation.";
+            return false;
+        }
+
+        destinationContent.AddNotable(notable);
+        return true;
     }
 
-    public bool TryTakeNotable(ExplorableSiteRuntime siteRuntime, string notableRuntimeId, out NotableItemRuntime notable)
+    public bool TryTransferNotableBetweenPlaces(
+        PlaceContentOwnerReference sourceOwner,
+        PlaceContentOwnerReference destinationOwner,
+        string notableRuntimeId,
+        out NotableItemRuntime notable,
+        out string diagnostic)
     {
         notable = null;
-        return siteRuntime != null && TryTakeNotable(
-            PlaceContentOwnerReference.ForExplorableSite(siteRuntime), notableRuntimeId, out notable);
-    }
+        diagnostic = null;
+        if (sourceOwner == null || destinationOwner == null
+            || string.IsNullOrWhiteSpace(notableRuntimeId) == true
+            || string.Equals(sourceOwner.StableKey, destinationOwner.StableKey, StringComparison.Ordinal) == true)
+        {
+            diagnostic = "Place-to-place transfer requires distinct valid source and destination places.";
+            return false;
+        }
 
-    public bool TryTakeNotable(LocalPlaceRuntime localPlace, string notableRuntimeId, out NotableItemRuntime notable)
-    {
-        notable = null;
-        return localPlace != null && TryTakeNotable(
-            PlaceContentOwnerReference.ForLocalPlace(localPlace), notableRuntimeId, out notable);
+        if (TryGet(sourceOwner, out PlaceContentRuntime sourceContent) == false
+            || TryGetNotableItem(notableRuntimeId, out notable) == false
+            || ReferenceEquals(sourceContent.GetNotable(notableRuntimeId), notable) == false)
+        {
+            notable = null;
+            diagnostic = "The notable item is not present at the expected source place.";
+            return false;
+        }
+
+        if (TryGet(destinationOwner, out PlaceContentRuntime existingDestination) == true
+            && existingDestination.GetNotable(notableRuntimeId) != null)
+        {
+            notable = null;
+            diagnostic = "The destination place already contains this notable RuntimeId.";
+            return false;
+        }
+
+        NotableItemCustodyReference expectedCustody = NotableItemCustodyReference.ForPlace(sourceOwner);
+        NotableItemCustodyReference nextCustody = NotableItemCustodyReference.ForPlace(destinationOwner);
+        if (notable.Custody?.Matches(expectedCustody) != true)
+        {
+            notable = null;
+            diagnostic = "The notable item's custody does not match the expected source place.";
+            return false;
+        }
+
+        PlaceContentRuntime destinationContent = existingDestination ?? GetOrCreate(destinationOwner);
+        if (notable.TryTransferCustody(expectedCustody, nextCustody) == false)
+        {
+            notable = null;
+            diagnostic = "The notable item custody transfer was rejected before mutation.";
+            return false;
+        }
+
+        sourceContent.RemoveNotable(notable);
+        destinationContent.AddNotable(notable);
+        return true;
     }
 
     public bool TryAddNotable(
@@ -909,21 +1278,32 @@ public sealed class PlaceContentStore
             return false;
         }
 
-        if (notableByRuntimeId.ContainsKey(notable.RuntimeId) == true || notable.IsPresent == true)
+        if (notable.IsPresent == true)
         {
-            diagnostic = "A NotableItemRuntime can exist in only one place at a time.";
+            diagnostic = "A NotableItemRuntime can have only one place or NPC custody at a time.";
             return false;
         }
 
-        PlaceContentRuntime content = GetOrCreate(owner);
-        if (content.GetNotable(notable.RuntimeId) != null || notable.TryAssignOwner(owner) == false)
+        if (TryGet(owner, out PlaceContentRuntime existingContent) == true
+            && existingContent.GetNotable(notable.RuntimeId) != null)
+        {
+            diagnostic = "The destination place already contains this notable RuntimeId.";
+            return false;
+        }
+
+        if (TryRegisterNotableItem(notable, out diagnostic) == false)
+        {
+            return false;
+        }
+
+        PlaceContentRuntime content = existingContent ?? GetOrCreate(owner);
+        if (notable.TryAssignCustody(NotableItemCustodyReference.ForPlace(owner)) == false)
         {
             diagnostic = "Notable content mutation was rejected before insertion.";
             return false;
         }
 
         content.AddNotable(notable);
-        notableByRuntimeId.Add(notable.RuntimeId, notable);
         return true;
     }
 
@@ -1092,6 +1472,26 @@ public sealed class PlaceContentStore
         {
             content?.AdvanceDays(dayCount);
         }
+    }
+
+    private bool TryValidateNpcIdentity(NpcRuntime npc, out string diagnostic)
+    {
+        diagnostic = null;
+        if (npc == null || string.IsNullOrWhiteSpace(npc.RuntimeId) == true)
+        {
+            diagnostic = "Notable item NPC custody requires a valid NpcRuntime identity.";
+            return false;
+        }
+
+        if (identityRegistry != null
+            && (identityRegistry.TryGetNpcWithoutLogging(npc.RuntimeId, out NpcRuntime registeredNpc) == false
+                || ReferenceEquals(registeredNpc, npc) == false))
+        {
+            diagnostic = $"NPC RuntimeId '{npc.RuntimeId}' is not the globally registered NPC instance.";
+            return false;
+        }
+
+        return true;
     }
 
     private static bool TryValidateStackInput(

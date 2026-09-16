@@ -83,7 +83,7 @@ public sealed class PlaceContentFoundationTests
         CityRuntime firstCity = SimulationTestFactory.CreateCity("notable-a", "notable-location-a");
         CityRuntime secondCity = SimulationTestFactory.CreateCity("notable-b", "notable-location-b");
         NotableItemRuntime notable = new NotableItemRuntime("crown-001", SimulationTestFactory.CreateItem("crown"));
-        PlaceContentStore store = new PlaceContentStore();
+        PlaceContentStore store = CreateNotableStore();
 
         Assert.That(store.TryAddNotable(firstCity, notable, out string firstDiagnostic), Is.True, firstDiagnostic);
         Assert.That(store.TryAddNotable(secondCity, notable, out string secondDiagnostic), Is.False);
@@ -95,12 +95,17 @@ public sealed class PlaceContentFoundationTests
     {
         CityRuntime city = SimulationTestFactory.CreateCity("notable-take", "notable-take-location");
         NotableItemRuntime notable = new NotableItemRuntime("key-001", SimulationTestFactory.CreateItem("key"));
-        PlaceContentStore store = new PlaceContentStore();
+        RuntimeIdentityRegistry registry = new RuntimeIdentityRegistry();
+        PlaceContentStore store = new PlaceContentStore(new RuntimeIdAllocator(), registry);
+        NpcRuntime custodian = new NpcRuntime("key-custodian", SimulationTestFactory.CreateNpc("key-custodian"));
+        Assert.That(registry.RegisterNpc(custodian), Is.True);
         Assert.That(store.TryAddNotable(city, notable, out string addDiagnostic), Is.True, addDiagnostic);
 
-        Assert.That(store.TryTakeNotable(PlaceContentOwnerReference.ForCity(city), notable.RuntimeId, out NotableItemRuntime taken), Is.True);
+        Assert.That(store.TryTakeNotable(
+            PlaceContentOwnerReference.ForCity(city), notable.RuntimeId, custodian, out NotableItemRuntime taken), Is.True);
         Assert.That(taken, Is.SameAs(notable));
-        Assert.That(notable.IsPresent, Is.False);
+        Assert.That(notable.IsHeldByNpc, Is.True);
+        Assert.That(notable.CustodianNpcRuntimeId, Is.EqualTo(custodian.RuntimeId));
         Assert.That(store.GetOrCreate(city).NotableContent, Is.Empty);
     }
 
@@ -286,7 +291,7 @@ public sealed class PlaceContentFoundationTests
     {
         CityRuntime city = SimulationTestFactory.CreateCity("notable-decay", "notable-decay-location");
         NotableItemRuntime notable = new NotableItemRuntime("notable-stable", SimulationTestFactory.CreateItem("notable-stable-item"));
-        PlaceContentStore store = new PlaceContentStore();
+        PlaceContentStore store = CreateNotableStore();
         Assert.That(store.TryAddNotable(city, notable, out _), Is.True);
 
         store.AdvanceDays(1000);
@@ -339,6 +344,11 @@ public sealed class PlaceContentFoundationTests
     {
         named = new NpcRuntime("named-opposition", SimulationTestFactory.CreateNpc("named-opposition"));
         return new PlaceOppositionRuntime("mixed-opposition", "Mixed Opposition");
+    }
+
+    private static PlaceContentStore CreateNotableStore()
+    {
+        return new PlaceContentStore(new RuntimeIdAllocator(), new RuntimeIdentityRegistry());
     }
 
     private sealed class FixedCapabilityModel : ICapabilityModel

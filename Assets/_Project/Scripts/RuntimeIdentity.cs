@@ -17,6 +17,7 @@ public sealed class RuntimeIdAllocator
     private long nextExpeditionSequence = 1;
     private long nextLocalPlaceSequence = 1;
     private long nextLocalConnectionSequence = 1;
+    private long nextNotableItemSequence = 1;
 
     public string AllocateNpcId()
     {
@@ -83,6 +84,11 @@ public sealed class RuntimeIdAllocator
         return Allocate("local-connection", ref nextLocalConnectionSequence);
     }
 
+    public string AllocateNotableItemId()
+    {
+        return Allocate("notable-item", ref nextNotableItemSequence);
+    }
+
     private static string Allocate(string prefix, ref long nextSequence)
     {
         if (nextSequence == long.MaxValue)
@@ -105,6 +111,7 @@ public sealed class RuntimeIdentityRegistry
     private readonly Dictionary<string, ExplorableSiteRuntime> explorableSitesByRuntimeId = new Dictionary<string, ExplorableSiteRuntime>(StringComparer.Ordinal);
     private readonly Dictionary<string, LocalPlaceRuntime> localPlacesByRuntimeId = new Dictionary<string, LocalPlaceRuntime>(StringComparer.Ordinal);
     private readonly Dictionary<string, LocalTopologyConnectionRuntime> localConnectionsByRuntimeId = new Dictionary<string, LocalTopologyConnectionRuntime>(StringComparer.Ordinal);
+    private readonly Dictionary<string, NotableItemRuntime> notableItemsByRuntimeId = new Dictionary<string, NotableItemRuntime>(StringComparer.Ordinal);
     private readonly SimulationLogger logger;
 
     public RuntimeIdentityRegistry(SimulationLogger logger = null)
@@ -277,6 +284,30 @@ public sealed class RuntimeIdentityRegistry
         }
 
         localConnectionsByRuntimeId.Add(localConnection.RuntimeId, localConnection);
+        return true;
+    }
+
+    public bool RegisterNotableItem(NotableItemRuntime notableItem)
+    {
+        if (notableItem == null)
+        {
+            logger.LogError("Cannot register NotableItem runtime identity: runtime instance is null.");
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(notableItem.RuntimeId) == true)
+        {
+            logger.LogError("Cannot register NotableItem runtime identity: RuntimeId is empty.");
+            return false;
+        }
+
+        if (TryGetRegisteredType(notableItem.RuntimeId, out string registeredType) == true)
+        {
+            logger.LogError($"Duplicate RuntimeId '{notableItem.RuntimeId}' while registering NotableItem; it is already registered as {registeredType}.");
+            return false;
+        }
+
+        notableItemsByRuntimeId.Add(notableItem.RuntimeId, notableItem);
         return true;
     }
 
@@ -487,6 +518,19 @@ public sealed class RuntimeIdentityRegistry
         return false;
     }
 
+    public bool TryGetNotableItem(string runtimeId, out NotableItemRuntime notableItem)
+    {
+        if (string.IsNullOrWhiteSpace(runtimeId) == false
+            && notableItemsByRuntimeId.TryGetValue(runtimeId, out notableItem) == true)
+        {
+            return true;
+        }
+
+        notableItem = null;
+        LogResolutionFailure("NotableItem", runtimeId);
+        return false;
+    }
+
     public bool IsRuntimeIdAvailable(string runtimeId)
     {
         return string.IsNullOrWhiteSpace(runtimeId) == false
@@ -505,6 +549,18 @@ public sealed class RuntimeIdentityRegistry
         return false;
     }
 
+    internal bool TryGetNpcWithoutLogging(string runtimeId, out NpcRuntime npcRuntime)
+    {
+        if (string.IsNullOrWhiteSpace(runtimeId) == false
+            && npcsByRuntimeId.TryGetValue(runtimeId, out npcRuntime) == true)
+        {
+            return true;
+        }
+
+        npcRuntime = null;
+        return false;
+    }
+
     internal bool TryGetExplorableSiteWithoutLogging(string runtimeId, out ExplorableSiteRuntime site)
     {
         if (string.IsNullOrWhiteSpace(runtimeId) == false
@@ -514,6 +570,18 @@ public sealed class RuntimeIdentityRegistry
         }
 
         site = null;
+        return false;
+    }
+
+    internal bool TryGetNotableItemWithoutLogging(string runtimeId, out NotableItemRuntime notableItem)
+    {
+        if (string.IsNullOrWhiteSpace(runtimeId) == false
+            && notableItemsByRuntimeId.TryGetValue(runtimeId, out notableItem) == true)
+        {
+            return true;
+        }
+
+        notableItem = null;
         return false;
     }
 
@@ -558,6 +626,12 @@ public sealed class RuntimeIdentityRegistry
         if (localConnectionsByRuntimeId.ContainsKey(runtimeId) == true)
         {
             registeredType = "LocalConnection";
+            return true;
+        }
+
+        if (notableItemsByRuntimeId.ContainsKey(runtimeId) == true)
+        {
+            registeredType = "NotableItem";
             return true;
         }
 
