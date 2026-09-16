@@ -79,6 +79,22 @@ public static class SimulationTestFactory
         return site;
     }
 
+    public static LocalPlaceTypeData CreateLocalPlaceType(string id, string displayName = null)
+    {
+        LocalPlaceTypeData type = Track(ScriptableObject.CreateInstance<LocalPlaceTypeData>());
+        type.id = id;
+        type.displayName = displayName ?? id + " display";
+        return type;
+    }
+
+    public static LocalConnectionTypeData CreateLocalConnectionType(string id, string displayName = null)
+    {
+        LocalConnectionTypeData type = Track(ScriptableObject.CreateInstance<LocalConnectionTypeData>());
+        type.id = id;
+        type.displayName = displayName ?? id + " display";
+        return type;
+    }
+
     public static SimulationConfigData CreateSimulationConfig()
     {
         return Track(ScriptableObject.CreateInstance<SimulationConfigData>());

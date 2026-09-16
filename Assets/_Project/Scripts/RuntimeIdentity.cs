@@ -15,6 +15,8 @@ public sealed class RuntimeIdAllocator
     private long nextOrganizationSequence = 1;
     private long nextExplorableSiteSequence = 1;
     private long nextExpeditionSequence = 1;
+    private long nextLocalPlaceSequence = 1;
+    private long nextLocalConnectionSequence = 1;
 
     public string AllocateNpcId()
     {
@@ -71,6 +73,16 @@ public sealed class RuntimeIdAllocator
         return Allocate("expedition", ref nextExpeditionSequence);
     }
 
+    public string AllocateLocalPlaceId()
+    {
+        return Allocate("local-place", ref nextLocalPlaceSequence);
+    }
+
+    public string AllocateLocalConnectionId()
+    {
+        return Allocate("local-connection", ref nextLocalConnectionSequence);
+    }
+
     private static string Allocate(string prefix, ref long nextSequence)
     {
         if (nextSequence == long.MaxValue)
@@ -91,6 +103,8 @@ public sealed class RuntimeIdentityRegistry
     private readonly Dictionary<string, SpatialLocationRuntime> locationsByRuntimeId = new Dictionary<string, SpatialLocationRuntime>(StringComparer.Ordinal);
     private readonly Dictionary<string, SpatialRouteRuntime> routesByRuntimeId = new Dictionary<string, SpatialRouteRuntime>(StringComparer.Ordinal);
     private readonly Dictionary<string, ExplorableSiteRuntime> explorableSitesByRuntimeId = new Dictionary<string, ExplorableSiteRuntime>(StringComparer.Ordinal);
+    private readonly Dictionary<string, LocalPlaceRuntime> localPlacesByRuntimeId = new Dictionary<string, LocalPlaceRuntime>(StringComparer.Ordinal);
+    private readonly Dictionary<string, LocalTopologyConnectionRuntime> localConnectionsByRuntimeId = new Dictionary<string, LocalTopologyConnectionRuntime>(StringComparer.Ordinal);
     private readonly SimulationLogger logger;
 
     public RuntimeIdentityRegistry(SimulationLogger logger = null)
@@ -218,6 +232,54 @@ public sealed class RuntimeIdentityRegistry
         return true;
     }
 
+    public bool RegisterLocalPlace(LocalPlaceRuntime localPlace)
+    {
+        if (localPlace == null)
+        {
+            logger.LogError("Cannot register LocalPlace runtime identity: runtime instance is null.");
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(localPlace.RuntimeId) == true)
+        {
+            logger.LogError("Cannot register LocalPlace runtime identity: RuntimeId is empty.");
+            return false;
+        }
+
+        if (TryGetRegisteredType(localPlace.RuntimeId, out string registeredType) == true)
+        {
+            logger.LogError($"Duplicate RuntimeId '{localPlace.RuntimeId}' while registering LocalPlace; it is already registered as {registeredType}.");
+            return false;
+        }
+
+        localPlacesByRuntimeId.Add(localPlace.RuntimeId, localPlace);
+        return true;
+    }
+
+    public bool RegisterLocalConnection(LocalTopologyConnectionRuntime localConnection)
+    {
+        if (localConnection == null)
+        {
+            logger.LogError("Cannot register LocalConnection runtime identity: runtime instance is null.");
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(localConnection.RuntimeId) == true)
+        {
+            logger.LogError("Cannot register LocalConnection runtime identity: RuntimeId is empty.");
+            return false;
+        }
+
+        if (TryGetRegisteredType(localConnection.RuntimeId, out string registeredType) == true)
+        {
+            logger.LogError($"Duplicate RuntimeId '{localConnection.RuntimeId}' while registering LocalConnection; it is already registered as {registeredType}.");
+            return false;
+        }
+
+        localConnectionsByRuntimeId.Add(localConnection.RuntimeId, localConnection);
+        return true;
+    }
+
     public bool TryGetNpc(string runtimeId, out NpcRuntime npcRuntime)
     {
         if (string.IsNullOrWhiteSpace(runtimeId) == false && npcsByRuntimeId.TryGetValue(runtimeId, out npcRuntime) == true)
@@ -282,6 +344,64 @@ public sealed class RuntimeIdentityRegistry
         return false;
     }
 
+    public bool TryGetLocalPlace(string runtimeId, out LocalPlaceRuntime localPlace)
+    {
+        if (string.IsNullOrWhiteSpace(runtimeId) == false
+            && localPlacesByRuntimeId.TryGetValue(runtimeId, out localPlace) == true)
+        {
+            return true;
+        }
+
+        localPlace = null;
+
+        LogResolutionFailure("LocalPlace", runtimeId);
+        return false;
+    }
+
+    public bool TryGetLocalConnection(string runtimeId, out LocalTopologyConnectionRuntime localConnection)
+    {
+        if (string.IsNullOrWhiteSpace(runtimeId) == false
+            && localConnectionsByRuntimeId.TryGetValue(runtimeId, out localConnection) == true)
+        {
+            return true;
+        }
+
+        localConnection = null;
+
+        LogResolutionFailure("LocalConnection", runtimeId);
+        return false;
+    }
+
+    public bool IsRuntimeIdAvailable(string runtimeId)
+    {
+        return string.IsNullOrWhiteSpace(runtimeId) == false
+            && TryGetRegisteredType(runtimeId, out _) == false;
+    }
+
+    internal bool TryGetCityWithoutLogging(string runtimeId, out CityRuntime cityRuntime)
+    {
+        if (string.IsNullOrWhiteSpace(runtimeId) == false
+            && citiesByRuntimeId.TryGetValue(runtimeId, out cityRuntime) == true)
+        {
+            return true;
+        }
+
+        cityRuntime = null;
+        return false;
+    }
+
+    internal bool TryGetExplorableSiteWithoutLogging(string runtimeId, out ExplorableSiteRuntime site)
+    {
+        if (string.IsNullOrWhiteSpace(runtimeId) == false
+            && explorableSitesByRuntimeId.TryGetValue(runtimeId, out site) == true)
+        {
+            return true;
+        }
+
+        site = null;
+        return false;
+    }
+
     private bool TryGetRegisteredType(string runtimeId, out string registeredType)
     {
         if (npcsByRuntimeId.ContainsKey(runtimeId) == true)
@@ -311,6 +431,18 @@ public sealed class RuntimeIdentityRegistry
         if (explorableSitesByRuntimeId.ContainsKey(runtimeId) == true)
         {
             registeredType = "ExplorableSite";
+            return true;
+        }
+
+        if (localPlacesByRuntimeId.ContainsKey(runtimeId) == true)
+        {
+            registeredType = "LocalPlace";
+            return true;
+        }
+
+        if (localConnectionsByRuntimeId.ContainsKey(runtimeId) == true)
+        {
+            registeredType = "LocalConnection";
             return true;
         }
 
