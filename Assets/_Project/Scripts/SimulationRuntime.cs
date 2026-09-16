@@ -23,6 +23,7 @@ public sealed class SimulationRuntime
     private readonly ExpeditionSystem expeditionSystem;
     private readonly PlaceContentStore placeContentStore;
     private readonly NpcDecisionRecorder decisionRecorder;
+    private readonly AdventureExpeditionAutonomySystem adventureExpeditionAutonomySystem;
     private readonly SimulationLogger logger;
 
     public SimulationTime SimulationTime => simulationTime;
@@ -51,7 +52,8 @@ public sealed class SimulationRuntime
         ExplorableSiteStore explorableSiteStore = null,
         ExplorableSiteKnowledgeSystem explorableSiteKnowledgeSystem = null,
         ExpeditionSystem expeditionSystem = null,
-        PlaceContentStore placeContentStore = null)
+        PlaceContentStore placeContentStore = null,
+        AdventureExpeditionAutonomySystem adventureExpeditionAutonomySystem = null)
     {
         this.simulationTime = simulationTime ?? throw new ArgumentNullException(nameof(simulationTime));
         this.cities = cities != null ? new List<CityRuntime>(cities) : new List<CityRuntime>();
@@ -74,6 +76,7 @@ public sealed class SimulationRuntime
         this.expeditionSystem = expeditionSystem;
         this.placeContentStore = placeContentStore;
         this.decisionRecorder = decisionRecorder;
+        this.adventureExpeditionAutonomySystem = adventureExpeditionAutonomySystem;
         this.logger = logger;
     }
 
@@ -118,6 +121,21 @@ public sealed class SimulationRuntime
         }
 
         RefreshLocalKnowledgeAndShare();
+        adventureExpeditionAutonomySystem?.AdvanceActiveExpeditions();
+
+        if (adventureExpeditionAutonomySystem != null)
+        {
+            foreach (NpcRuntime npcRuntime in npcRuntimes)
+            {
+                if (npcRuntime != null
+                    && npcRuntime.IsAlive
+                    && npcRuntime.IsTraveling == false
+                    && (expeditionSystem == null || expeditionSystem.IsNpcOnActiveExpedition(npcRuntime.RuntimeId) == false))
+                {
+                    adventureExpeditionAutonomySystem.TryStartAutonomousExpedition(npcRuntime, npcRuntimes);
+                }
+            }
+        }
 
         foreach (NpcRuntime npcRuntime in npcRuntimes)
         {
@@ -141,6 +159,12 @@ public sealed class SimulationRuntime
                 && expeditionSystem.IsNpcOnActiveExpedition(npcRuntime.RuntimeId) == true)
             {
                 TryProcessScheduledDirective(npcRuntime);
+                continue;
+            }
+
+            if (adventureExpeditionAutonomySystem != null
+                && adventureExpeditionAutonomySystem.IsReservedToday(npcRuntime.RuntimeId))
+            {
                 continue;
             }
 

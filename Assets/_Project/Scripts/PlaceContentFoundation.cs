@@ -595,9 +595,11 @@ public sealed class PlaceOppositionRuntime
         IEnumerable<NpcRuntime> opposingSideParticipants = null,
         string attackingSideId = "expedition",
         ConflictObjectiveType objective = ConflictObjectiveType.Defeat,
-        ConflictStakes stakes = ConflictStakes.Meaningful)
+        ConflictStakes stakes = ConflictStakes.Meaningful,
+        string locationRuntimeId = null,
+        string originDecisionId = null)
     {
-        Conflict conflict = new Conflict(conflictId);
+        Conflict conflict = new Conflict(conflictId, locationRuntimeId, originDecisionId);
         ConflictSide attackingSide = conflict.AddSide(attackingSideId, objective, stakes);
         ConflictSide oppositionSide = conflict.AddSide(oppositionSideId, ConflictObjectiveType.Defend, stakes);
 
