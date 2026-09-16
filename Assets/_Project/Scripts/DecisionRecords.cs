@@ -28,7 +28,13 @@ public enum NpcDecisionType
     Travel,
     Arrest,
     Escape,
-    CommercialScout
+    CommercialScout,
+    ExpeditionStart,
+    ExpeditionExplore,
+    ExpeditionTraverse,
+    ExpeditionResolveOpposition,
+    ExpeditionRetrieve,
+    ExpeditionReturn
 }
 
 public enum NpcDecisionOrigin
@@ -40,6 +46,7 @@ public enum NpcDecisionOrigin
 public enum NpcDecisionParticipantRole
 {
     DecisionMaker,
+    Performer,
     Contributor,
     Support,
     Participant

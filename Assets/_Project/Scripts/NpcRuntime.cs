@@ -31,6 +31,7 @@ public class NpcRuntime : ICapabilityConditionSource
     [SerializeField]private ExplorableSiteKnowledgeRuntime explorableSiteKnowledge;
     [SerializeField]private SpatialKnowledgeRuntime spatialKnowledge;
     [SerializeField]private LocalTopologyKnowledgeRuntime localTopologyKnowledge;
+    [SerializeField]private AdventureSiteIntelKnowledgeRuntime adventureSiteIntelKnowledge;
 
     public string RuntimeId => runtimeId;
     public NpcData NpcData => npcData;
@@ -64,6 +65,7 @@ public class NpcRuntime : ICapabilityConditionSource
     public ExplorableSiteKnowledgeRuntime ExplorableSiteKnowledge => explorableSiteKnowledge ?? (explorableSiteKnowledge = new ExplorableSiteKnowledgeRuntime(runtimeId));
     public SpatialKnowledgeRuntime SpatialKnowledge => spatialKnowledge ?? (spatialKnowledge = new SpatialKnowledgeRuntime(runtimeId));
     public LocalTopologyKnowledgeRuntime LocalTopologyKnowledge => localTopologyKnowledge ?? (localTopologyKnowledge = new LocalTopologyKnowledgeRuntime(runtimeId));
+    public AdventureSiteIntelKnowledgeRuntime AdventureSiteIntelKnowledge => adventureSiteIntelKnowledge ?? (adventureSiteIntelKnowledge = new AdventureSiteIntelKnowledgeRuntime(runtimeId));
     public string NpcName => npcData != null ? npcData.name : "NPC desconhecido";
 
 	public NpcRuntime(string runtimeId, NpcData npcData)
@@ -83,6 +85,7 @@ public class NpcRuntime : ICapabilityConditionSource
         spatialKnowledge = new SpatialKnowledgeRuntime(runtimeId);
         explorableSiteKnowledge = new ExplorableSiteKnowledgeRuntime(runtimeId);
         localTopologyKnowledge = new LocalTopologyKnowledgeRuntime(runtimeId);
+        adventureSiteIntelKnowledge = new AdventureSiteIntelKnowledgeRuntime(runtimeId);
         moneyAccount = new MoneyAccountRuntime(initialMoney);
 
         if (npcData != null && npcData.statusPadrao != null)
