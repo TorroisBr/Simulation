@@ -19,6 +19,8 @@ public class NpcRuntime : ICapabilityConditionSource
     [NonSerialized]private CityRuntime currentCity;
     [NonSerialized]private CityRuntime destinationCity;
     [SerializeField]private int travelDaysRemaining;
+    [SerializeField]private int travelDaysTotal;
+    [SerializeField]private string travelRouteRuntimeId;
     [SerializeField]private bool travelStartedToday;
     [SerializeField]private string travelOriginDecisionId;
     [SerializeField]private string activeTravelPartyId;
@@ -48,6 +50,8 @@ public class NpcRuntime : ICapabilityConditionSource
     public CityRuntime CurrentCity => currentCity;
     public CityRuntime DestinationCity => destinationCity;
     public int TravelDaysRemaining => travelDaysRemaining;
+    public int TravelDaysTotal => travelDaysTotal;
+    public string TravelRouteRuntimeId => travelRouteRuntimeId;
     public bool TravelStartedToday => travelStartedToday;
     public string TravelOriginDecisionId => travelOriginDecisionId;
     public string ActiveTravelPartyId => activeTravelPartyId;
@@ -238,7 +242,8 @@ public class NpcRuntime : ICapabilityConditionSource
         SpatialLocationRuntime destination,
         CityRuntime destinationCityProjection,
         int travelDays,
-        string originDecisionId = null)
+        string originDecisionId = null,
+        string routeRuntimeId = null)
     {
         if (IsAlive == false
             || destination == null
@@ -261,6 +266,8 @@ public class NpcRuntime : ICapabilityConditionSource
         destinationLocation = destination;
         destinationCity = destinationCityProjection;
         travelDaysRemaining = Mathf.Max(1, travelDays);
+        travelDaysTotal = travelDaysRemaining;
+        travelRouteRuntimeId = string.IsNullOrWhiteSpace(routeRuntimeId) == true ? null : routeRuntimeId;
         travelStartedToday = true;
         travelOriginDecisionId = string.IsNullOrWhiteSpace(originDecisionId) == true ? null : originDecisionId;
         return true;
@@ -302,6 +309,8 @@ public class NpcRuntime : ICapabilityConditionSource
         arrivedCity = destinationCity;
         destinationLocation = null;
         destinationCity = null;
+        travelDaysTotal = 0;
+        travelRouteRuntimeId = null;
         travelOriginDecisionId = null;
 
         if (arrivedLocation != null)
@@ -329,6 +338,8 @@ public class NpcRuntime : ICapabilityConditionSource
         destinationLocation = null;
         destinationCity = null;
         travelDaysRemaining = 0;
+        travelDaysTotal = 0;
+        travelRouteRuntimeId = null;
         travelStartedToday = false;
         travelOriginDecisionId = null;
         activeTravelPartyId = null;

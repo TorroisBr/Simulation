@@ -44,6 +44,118 @@ public sealed class WorldObserverReadModelTests
     }
 
     [Test]
+    public void ReadModelContainsCurrentDay()
+    {
+        ObserverFixture fixture = CreateFixture();
+        fixture.Records.Time.AdvanceDay();
+
+        Assert.That(fixture.Query.BuildReadModel().CurrentDay, Is.EqualTo(1L));
+    }
+
+    [Test]
+    public void TravelerReadModelContainsTotalTravelDays()
+    {
+        ObserverFixture fixture = CreateFixture();
+        NpcRuntime traveler = StartPartyTraveler(fixture, "observer-total-days");
+
+        Assert.That(
+            FindTraveler(fixture.Query.BuildReadModel(), traveler.RuntimeId).TotalTravelDays,
+            Is.EqualTo(fixture.World.SiteRoute.TravelDays));
+    }
+
+    [Test]
+    public void TravelerReadModelContainsProgress01()
+    {
+        ObserverFixture fixture = CreateFixture();
+        NpcRuntime traveler = StartIndividualTraveler(fixture, "observer-progress");
+        traveler.ClearTravelStartedToday();
+        fixture.World.Travel.AdvanceTravels(fixture.Npcs);
+
+        WorldObserverTravelerReadModel model = FindTraveler(fixture.Query.BuildReadModel(), traveler.RuntimeId);
+        Assert.That(model.Progress01, Is.EqualTo(0.5f).Within(0.0001f));
+    }
+
+    [Test]
+    public void TravelerProgressIsDeterministic()
+    {
+        ObserverFixture fixture = CreateFixture();
+        NpcRuntime traveler = StartIndividualTraveler(fixture, "observer-deterministic-progress");
+        traveler.ClearTravelStartedToday();
+        fixture.World.Travel.AdvanceTravels(fixture.Npcs);
+
+        float first = FindTraveler(fixture.Query.BuildReadModel(), traveler.RuntimeId).Progress01;
+        float second = FindTraveler(fixture.Query.BuildReadModel(), traveler.RuntimeId).Progress01;
+        Assert.That(second, Is.EqualTo(first));
+        Assert.That(second, Is.InRange(0f, 1f));
+    }
+
+    [Test]
+    public void TravelPartyTravelerHasRouteRuntimeId()
+    {
+        ObserverFixture fixture = CreateFixture();
+        NpcRuntime traveler = StartPartyTraveler(fixture, "observer-party-route");
+
+        Assert.That(
+            FindTraveler(fixture.Query.BuildReadModel(), traveler.RuntimeId).RouteRuntimeId,
+            Is.EqualTo(fixture.World.SiteRoute.RuntimeId));
+    }
+
+    [Test]
+    public void IndividualTravelerHasRouteRuntimeIdWhenDomainTravelKnowsIt()
+    {
+        ObserverFixture fixture = CreateFixture();
+        NpcRuntime traveler = StartIndividualTraveler(fixture, "observer-individual-route");
+
+        WorldObserverTravelerReadModel model = FindTraveler(fixture.Query.BuildReadModel(), traveler.RuntimeId);
+        Assert.That(model.RouteRuntimeId, Is.EqualTo(fixture.World.SiteRoute.RuntimeId));
+        Assert.That(model.TotalTravelDays, Is.EqualTo(fixture.World.SiteRoute.TravelDays));
+    }
+
+    [Test]
+    public void StationaryNpcDoesNotHaveFakeRouteProgress()
+    {
+        ObserverFixture fixture = CreateFixture();
+
+        WorldObserverTravelerReadModel model = FindTraveler(fixture.Query.BuildReadModel(), fixture.Member.RuntimeId);
+        Assert.That(model.IsTraveling, Is.False);
+        Assert.That(model.RouteRuntimeId, Is.Null);
+        Assert.That(model.TotalTravelDays, Is.Zero);
+        Assert.That(model.Progress01, Is.Zero);
+    }
+
+    [Test]
+    public void CompletedExpeditionEventRemainsInActivityFeed()
+    {
+        ObserverFixture fixture = CreateFixture();
+        ExpeditionRuntime completed = new ExpeditionRuntime(
+            "observer-completed-expedition",
+            fixture.World.Site.RuntimeId,
+            fixture.World.CityA.Location.RuntimeId,
+            fixture.World.Site.Location.RuntimeId,
+            fixture.World.SiteRoute.RuntimeId,
+            "observer-completed-party",
+            null,
+            new[] { fixture.Member.RuntimeId },
+            new[] { fixture.Member.RuntimeId },
+            Array.Empty<string>(),
+            ExpeditionState.Returning,
+            ExpeditionObjectiveRuntime.Explore());
+        Assert.That(completed.TryComplete(), Is.True);
+        Assert.That(fixture.Records.EventRecorder.Record((eventId, day, sequence) =>
+            new ExpeditionCompletedEvent(
+                eventId,
+                day,
+                sequence,
+                completed,
+                completed.OriginLocationRuntimeId)), Is.True);
+
+        WorldObserverReadModel model = fixture.Query.BuildReadModel();
+        Assert.That(model.Expeditions, Is.Empty);
+        Assert.That(model.ActivityFeed, Has.Some.Matches<WorldObserverActivityReadModel>(
+            activity => activity.EventType == DomainEventType.ExpeditionCompleted));
+    }
+
+    [Test]
     public void ReadModelContainsRoutes()
     {
         ObserverFixture fixture = CreateFixture();
@@ -267,11 +379,10 @@ public sealed class WorldObserverReadModelTests
     [Test]
     public void UiUsesTmpTypes()
     {
-        Assert.That(typeof(WorldObserverCanvasView).GetField("worldGraphText", BindingFlags.Instance | BindingFlags.NonPublic).FieldType, Is.EqualTo(typeof(TMP_Text)));
-        Assert.That(typeof(WorldObserverCanvasView).GetField("selectedPlaceText", BindingFlags.Instance | BindingFlags.NonPublic).FieldType, Is.EqualTo(typeof(TMP_Text)));
-        Assert.That(typeof(WorldObserverCanvasView).GetField("topologyText", BindingFlags.Instance | BindingFlags.NonPublic).FieldType, Is.EqualTo(typeof(TMP_Text)));
-        Assert.That(typeof(WorldObserverCanvasView).GetField("activityFeedText", BindingFlags.Instance | BindingFlags.NonPublic).FieldType, Is.EqualTo(typeof(TMP_Text)));
         Assert.That(typeof(WorldObserverCanvasView).GetFields(BindingFlags.Instance | BindingFlags.NonPublic), Has.None.Matches<FieldInfo>(field => field.FieldType == typeof(Text)));
+        Assert.That(typeof(WorldObserverCanvasView).GetField("dayText", BindingFlags.Instance | BindingFlags.NonPublic).FieldType, Is.EqualTo(typeof(TMP_Text)));
+        Assert.That(typeof(WorldObserverCanvasView).GetField("selectedPlaceTitle", BindingFlags.Instance | BindingFlags.NonPublic).FieldType, Is.EqualTo(typeof(TMP_Text)));
+        Assert.That(typeof(WorldObserverCanvasView).GetField("breadcrumbText", BindingFlags.Instance | BindingFlags.NonPublic).FieldType, Is.EqualTo(typeof(TMP_Text)));
     }
 
     [Test]
@@ -352,7 +463,38 @@ public sealed class WorldObserverReadModelTests
             fixture.World.TravelParties,
             fixture.TopologyStore,
             fixture.ContentStore,
-            fixture.Records.Events);
+            fixture.Records.Events,
+            fixture.Records.Time);
+    }
+
+    private static NpcRuntime StartPartyTraveler(ObserverFixture fixture, string runtimeId)
+    {
+        NpcRuntime traveler = fixture.World.CreateNpc(runtimeId, fixture.World.CityA, 100f);
+        fixture.Npcs.Add(traveler);
+        fixture.EnsurePartySystem();
+        traveler.SpatialKnowledge.DiscoverLocation(fixture.World.CityA.Location.RuntimeId);
+        traveler.SpatialKnowledge.DiscoverLocation(fixture.World.Site.Location.RuntimeId);
+        traveler.SpatialKnowledge.DiscoverRoute(fixture.World.SiteRoute.RuntimeId);
+        ActionExecutionContext context = new ActionExecutionContext(
+            "observer-party-travel",
+            new[] { new ActionExecutionParticipant(traveler.RuntimeId, ActionExecutionParticipantRole.Performer) },
+            fixture.World.Site.Location.RuntimeId,
+            fixture.World.SiteRoute.RuntimeId);
+        Assert.That(fixture.World.TravelPartySystem.TryStartTravelParty(context, out _), Is.True);
+        fixture.Query = CreateQuery(fixture);
+        return traveler;
+    }
+
+    private static NpcRuntime StartIndividualTraveler(ObserverFixture fixture, string runtimeId)
+    {
+        NpcRuntime traveler = fixture.World.CreateNpc(runtimeId, fixture.World.CityA, 100f);
+        fixture.Npcs.Add(traveler);
+        Assert.That(fixture.World.Travel.TryStartTravel(
+            traveler,
+            fixture.World.Site.Location,
+            null), Is.True);
+        fixture.Query = CreateQuery(fixture);
+        return traveler;
     }
 
     private static WorldObserverTravelerReadModel FindTraveler(WorldObserverReadModel model, string runtimeId)

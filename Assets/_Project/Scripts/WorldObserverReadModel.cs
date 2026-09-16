@@ -3,6 +3,7 @@ using System.Collections.Generic;
 
 public sealed class WorldObserverReadModel
 {
+    public long CurrentDay { get; }
     public IReadOnlyList<WorldObserverLocationReadModel> Locations { get; }
     public IReadOnlyList<WorldObserverLocationReadModel> MacroLocations => Locations;
     public IReadOnlyList<WorldObserverRouteReadModel> Routes { get; }
@@ -13,6 +14,7 @@ public sealed class WorldObserverReadModel
     public IReadOnlyList<WorldObserverActivityReadModel> ActivityFeed { get; }
 
     public WorldObserverReadModel(
+        long currentDay,
         IReadOnlyList<WorldObserverLocationReadModel> locations,
         IReadOnlyList<WorldObserverRouteReadModel> routes,
         IReadOnlyList<WorldObserverSiteReadModel> sites,
@@ -21,6 +23,7 @@ public sealed class WorldObserverReadModel
         WorldObserverPlaceReadModel selectedPlace,
         IReadOnlyList<WorldObserverActivityReadModel> activityFeed)
     {
+        CurrentDay = currentDay;
         Locations = locations ?? Array.Empty<WorldObserverLocationReadModel>();
         Routes = routes ?? Array.Empty<WorldObserverRouteReadModel>();
         Sites = sites ?? Array.Empty<WorldObserverSiteReadModel>();
@@ -36,17 +39,20 @@ public sealed class WorldObserverLocationReadModel
     public string RuntimeId { get; }
     public string DisplayName { get; }
     public bool IsCity { get; }
+    public string CityRuntimeId { get; }
     public IReadOnlyList<string> SiteRuntimeIds { get; }
 
     public WorldObserverLocationReadModel(
         string runtimeId,
         string displayName,
         bool isCity,
+        string cityRuntimeId,
         IReadOnlyList<string> siteRuntimeIds)
     {
         RuntimeId = runtimeId;
         DisplayName = displayName;
         IsCity = isCity;
+        CityRuntimeId = cityRuntimeId;
         SiteRuntimeIds = siteRuntimeIds ?? Array.Empty<string>();
     }
 }
@@ -102,6 +108,8 @@ public sealed class WorldObserverTravelerReadModel
     public string DestinationLocationRuntimeId { get; }
     public string RouteRuntimeId { get; }
     public int RemainingTravelDays { get; }
+    public int TotalTravelDays { get; }
+    public float Progress01 { get; }
     public string ExpeditionId { get; }
     public ExpeditionState? ExpeditionState { get; }
     public int ExplorationProgress { get; }
@@ -119,8 +127,12 @@ public sealed class WorldObserverTravelerReadModel
         IsTraveling = npc.IsTraveling;
         CurrentLocationRuntimeId = npc.CurrentLocation?.RuntimeId;
         DestinationLocationRuntimeId = npc.DestinationLocation?.RuntimeId;
-        RouteRuntimeId = travelParty?.RouteRuntimeId;
+        RouteRuntimeId = travelParty?.RouteRuntimeId ?? npc.TravelRouteRuntimeId;
         RemainingTravelDays = npc.TravelDaysRemaining;
+        TotalTravelDays = travelParty?.TravelDaysTotal ?? npc.TravelDaysTotal;
+        Progress01 = IsTraveling == true && TotalTravelDays > 0
+            ? Math.Max(0f, Math.Min(1f, 1f - (float)RemainingTravelDays / TotalTravelDays))
+            : 0f;
         ExpeditionId = expedition?.ExpeditionId;
         ExpeditionState = expedition?.State;
         ExplorationProgress = expedition != null ? expedition.ExplorationProgress : 0;
@@ -319,6 +331,7 @@ public sealed class WorldObserverQueryService
     private readonly LocalTopologyStore topologyStore;
     private readonly PlaceContentStore contentStore;
     private readonly DomainEventStore eventStore;
+    private readonly SimulationTime simulationTime;
 
     public WorldObserverQueryService(
         IEnumerable<CityRuntime> cities,
@@ -329,7 +342,8 @@ public sealed class WorldObserverQueryService
         TravelPartyStore travelPartyStore = null,
         LocalTopologyStore topologyStore = null,
         PlaceContentStore contentStore = null,
-        DomainEventStore eventStore = null)
+        DomainEventStore eventStore = null,
+        SimulationTime simulationTime = null)
     {
         this.cities = new List<CityRuntime>(cities ?? Array.Empty<CityRuntime>()).AsReadOnly();
         this.npcs = new List<NpcRuntime>(npcs ?? Array.Empty<NpcRuntime>()).AsReadOnly();
@@ -340,6 +354,7 @@ public sealed class WorldObserverQueryService
         this.topologyStore = topologyStore;
         this.contentStore = contentStore;
         this.eventStore = eventStore;
+        this.simulationTime = simulationTime;
     }
 
     public WorldObserverReadModel BuildReadModel(string selectedPlaceRuntimeId = null)
@@ -353,6 +368,7 @@ public sealed class WorldObserverQueryService
         List<WorldObserverActivityReadModel> activityFeed = BuildActivityFeed();
 
         return new WorldObserverReadModel(
+            simulationTime?.AbsoluteDay ?? 0L,
             locations.AsReadOnly(),
             routes.AsReadOnly(),
             sites.AsReadOnly(),
@@ -401,6 +417,7 @@ public sealed class WorldObserverQueryService
                 location.RuntimeId,
                 city != null ? city.CityName : location.RuntimeId,
                 city != null,
+                city?.RuntimeId,
                 siteIds.AsReadOnly()));
         }
 

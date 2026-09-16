@@ -402,7 +402,8 @@ public sealed class TravelPartySystem
                 preparation.DestinationLocation,
                 preparation.DestinationCity,
                 preparation.Route.TravelDays,
-                context.OriginDecisionId) == false)
+                context.OriginDecisionId,
+                preparation.Route.RuntimeId) == false)
             {
                 Rollback(
                     startedMembers,

@@ -94,7 +94,12 @@ public class TravelSystem
             return false;
         }
 
-        if (npcRuntime.StartTravel(targetLocation, resolvedTargetCity, travelDays, originDecisionId) == false)
+        if (npcRuntime.StartTravel(
+            targetLocation,
+            resolvedTargetCity,
+            travelDays,
+            originDecisionId,
+            route.RuntimeId) == false)
         {
             transactionService.TryRestoreTravelCharge(npcRuntime, travelCost);
             return false;
