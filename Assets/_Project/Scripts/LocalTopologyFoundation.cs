@@ -280,11 +280,6 @@ public sealed class LocalTopologyRuntime
             return false;
         }
 
-        if (identityRegistry != null && identityRegistry.RegisterLocalPlace(place) == false)
-        {
-            return false;
-        }
-
         if (place.AttachToTopology(this) == false)
         {
             return false;
@@ -382,11 +377,6 @@ public sealed class LocalTopologyRuntime
             || ContainsPlace(connection.Destination) == false
             || LocalTopologyConnectionRuntime.IsValidTraversalCost(connection.TraversalCost) == false
             || connection.OwningTopology != null)
-        {
-            return false;
-        }
-
-        if (identityRegistry != null && identityRegistry.RegisterLocalConnection(connection) == false)
         {
             return false;
         }
@@ -854,6 +844,14 @@ public sealed class LocalTopologyStore
         }
 
         if (IsOwnerReferenceConsistent(owner, out diagnostic) == false)
+        {
+            return false;
+        }
+
+        if (identityRegistry.TryRegisterLocalTopologyMembers(
+            topology.Places,
+            topology.Connections,
+            out diagnostic) == false)
         {
             return false;
         }

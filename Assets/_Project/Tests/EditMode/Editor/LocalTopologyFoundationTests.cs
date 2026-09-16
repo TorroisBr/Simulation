@@ -264,6 +264,7 @@ public sealed class LocalTopologyFoundationTests
         Assert.That(store.Add(first), Is.True);
         Assert.That(store.Add(second), Is.False);
         Assert.That(store.Topologies.Count, Is.EqualTo(1));
+        Assert.That(registry.IsRuntimeIdAvailable(second.Places[0].RuntimeId), Is.True);
     }
 
     [Test]

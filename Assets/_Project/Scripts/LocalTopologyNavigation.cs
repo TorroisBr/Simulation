@@ -207,12 +207,6 @@ public sealed class LocalTopologyBuilder
         foreach (LocalTopologyBlueprintNode node in blueprint.Nodes)
         {
             string runtimeId = idAllocator.AllocateLocalPlaceId();
-            if (identityRegistry.IsRuntimeIdAvailable(runtimeId) == false)
-            {
-                diagnostic = $"LocalPlace RuntimeId '{runtimeId}' is already registered.";
-                return false;
-            }
-
             localPlaceRuntimeIds.Add(runtimeId);
         }
 
@@ -220,12 +214,6 @@ public sealed class LocalTopologyBuilder
         foreach (LocalTopologyBlueprintConnection _ in blueprint.Connections)
         {
             string runtimeId = idAllocator.AllocateLocalConnectionId();
-            if (identityRegistry.IsRuntimeIdAvailable(runtimeId) == false)
-            {
-                diagnostic = $"LocalConnection RuntimeId '{runtimeId}' is already registered.";
-                return false;
-            }
-
             localConnectionRuntimeIds.Add(runtimeId);
         }
 
@@ -310,6 +298,12 @@ public sealed class LocalTopologyBuilder
                 diagnostic = $"Could not materialize blueprint connection '{blueprintConnection.OriginLocalKey}' -> '{blueprintConnection.DestinationLocalKey}'.";
                 return false;
             }
+        }
+
+        if (topology.TryValidate(out diagnostic) == false)
+        {
+            topology = null;
+            return false;
         }
 
         if (topologyStore.TryAddTopology(topology, out diagnostic) == false)

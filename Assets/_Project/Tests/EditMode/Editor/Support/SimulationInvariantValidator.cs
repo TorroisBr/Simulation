@@ -382,7 +382,8 @@ public static class SimulationInvariantValidator
 
     public static void ValidateLocalTopology(
         LocalTopologyRuntime topology,
-        RuntimeIdentityRegistry registry = null)
+        RuntimeIdentityRegistry registry = null,
+        bool requirePublishedMembers = false)
     {
         Assert.That(topology, Is.Not.Null);
         Assert.That(topology.TryValidate(out string diagnostic), Is.True, diagnostic);
@@ -416,6 +417,16 @@ public static class SimulationInvariantValidator
             {
                 Assert.That(topology.ContainsPlace(place.Parent), Is.True);
             }
+
+            if (requirePublishedMembers == true)
+            {
+                Assert.That(registry, Is.Not.Null);
+                if (registry != null)
+                {
+                    Assert.That(registry.TryGetLocalPlace(place.RuntimeId, out LocalPlaceRuntime resolvedPlace), Is.True);
+                    Assert.That(resolvedPlace, Is.SameAs(place));
+                }
+            }
         }
 
         HashSet<string> connectionIds = new HashSet<string>(StringComparer.Ordinal);
@@ -428,6 +439,18 @@ public static class SimulationInvariantValidator
             Assert.That(topology.ContainsPlace(connection.Origin), Is.True);
             Assert.That(topology.ContainsPlace(connection.Destination), Is.True);
             Assert.That(LocalTopologyConnectionRuntime.IsValidTraversalCost(connection.TraversalCost), Is.True);
+
+            if (requirePublishedMembers == true)
+            {
+                Assert.That(registry, Is.Not.Null);
+                if (registry != null)
+                {
+                    Assert.That(registry.TryGetLocalConnection(
+                        connection.RuntimeId,
+                        out LocalTopologyConnectionRuntime resolvedConnection), Is.True);
+                    Assert.That(resolvedConnection, Is.SameAs(connection));
+                }
+            }
         }
 
         foreach (LocalPlaceRuntime entryPoint in topology.EntryPoints)

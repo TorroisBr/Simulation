@@ -280,6 +280,88 @@ public sealed class RuntimeIdentityRegistry
         return true;
     }
 
+    internal bool TryRegisterLocalTopologyMembers(
+        IReadOnlyList<LocalPlaceRuntime> localPlaces,
+        IReadOnlyList<LocalTopologyConnectionRuntime> localConnections,
+        out string diagnostic)
+    {
+        diagnostic = null;
+
+        if (localPlaces == null || localConnections == null)
+        {
+            diagnostic = "Local topology member collections cannot be null.";
+            return false;
+        }
+
+        HashSet<string> runtimeIds = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (LocalPlaceRuntime localPlace in localPlaces)
+        {
+            if (localPlace == null)
+            {
+                diagnostic = "Local topology contains a null LocalPlace.";
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(localPlace.RuntimeId) == true)
+            {
+                diagnostic = "Local topology contains a LocalPlace with an empty RuntimeId.";
+                return false;
+            }
+
+            if (runtimeIds.Add(localPlace.RuntimeId) == false)
+            {
+                diagnostic = $"Local topology contains duplicate RuntimeId '{localPlace.RuntimeId}'.";
+                return false;
+            }
+
+            if (IsRuntimeIdAvailable(localPlace.RuntimeId) == false)
+            {
+                diagnostic = $"LocalPlace RuntimeId '{localPlace.RuntimeId}' is already registered.";
+                return false;
+            }
+        }
+
+        foreach (LocalTopologyConnectionRuntime localConnection in localConnections)
+        {
+            if (localConnection == null)
+            {
+                diagnostic = "Local topology contains a null LocalConnection.";
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(localConnection.RuntimeId) == true)
+            {
+                diagnostic = "Local topology contains a LocalConnection with an empty RuntimeId.";
+                return false;
+            }
+
+            if (runtimeIds.Add(localConnection.RuntimeId) == false)
+            {
+                diagnostic = $"Local topology contains duplicate RuntimeId '{localConnection.RuntimeId}'.";
+                return false;
+            }
+
+            if (IsRuntimeIdAvailable(localConnection.RuntimeId) == false)
+            {
+                diagnostic = $"LocalConnection RuntimeId '{localConnection.RuntimeId}' is already registered.";
+                return false;
+            }
+        }
+
+        foreach (LocalPlaceRuntime localPlace in localPlaces)
+        {
+            localPlacesByRuntimeId.Add(localPlace.RuntimeId, localPlace);
+        }
+
+        foreach (LocalTopologyConnectionRuntime localConnection in localConnections)
+        {
+            localConnectionsByRuntimeId.Add(localConnection.RuntimeId, localConnection);
+        }
+
+        return true;
+    }
+
     public bool TryGetNpc(string runtimeId, out NpcRuntime npcRuntime)
     {
         if (string.IsNullOrWhiteSpace(runtimeId) == false && npcsByRuntimeId.TryGetValue(runtimeId, out npcRuntime) == true)
