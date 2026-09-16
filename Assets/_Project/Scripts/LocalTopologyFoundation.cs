@@ -7,6 +7,12 @@ public enum LocalTopologyOwnerKind
     ExplorableSite
 }
 
+public enum LocalTopologyPublicationState
+{
+    Draft,
+    Published
+}
+
 [Serializable]
 public sealed class LocalTopologyOwnerReference
 {
@@ -222,6 +228,7 @@ public sealed class LocalTopologyRuntime
 {
     private readonly LocalTopologyOwnerReference owner;
     private readonly RuntimeIdentityRegistry identityRegistry;
+    private LocalTopologyPublicationState publicationState = LocalTopologyPublicationState.Draft;
     private readonly List<LocalPlaceRuntime> places = new List<LocalPlaceRuntime>();
     private readonly List<LocalTopologyConnectionRuntime> connections = new List<LocalTopologyConnectionRuntime>();
     private readonly List<LocalPlaceRuntime> entryPoints = new List<LocalPlaceRuntime>();
@@ -235,6 +242,8 @@ public sealed class LocalTopologyRuntime
         new Dictionary<LocalPlaceRuntime, List<LocalTopologyConnectionRuntime>>();
 
     public LocalTopologyOwnerReference Owner => owner;
+    public LocalTopologyPublicationState PublicationState => publicationState;
+    public bool IsPublished => publicationState == LocalTopologyPublicationState.Published;
     public IReadOnlyList<LocalPlaceRuntime> Places => places.AsReadOnly();
     public IReadOnlyList<LocalTopologyConnectionRuntime> Connections => connections.AsReadOnly();
     public IReadOnlyList<LocalPlaceRuntime> EntryPoints => entryPoints.AsReadOnly();
@@ -257,6 +266,11 @@ public sealed class LocalTopologyRuntime
 
     internal RuntimeIdentityRegistry IdentityRegistry => identityRegistry;
 
+    internal void MarkPublished()
+    {
+        publicationState = LocalTopologyPublicationState.Published;
+    }
+
     public LocalTopologyRuntime(
         LocalTopologyOwnerReference owner,
         RuntimeIdentityRegistry identityRegistry = null)
@@ -270,19 +284,76 @@ public sealed class LocalTopologyRuntime
         LocalPlaceRuntime parent = null,
         bool isEntryPoint = false)
     {
-        if (place == null
-            || places.Contains(place) == true
-            || placesByRuntimeId.ContainsKey(place.RuntimeId) == true
-            || place.OwningTopology != null
-            || (parent != null && ContainsPlace(parent) == false)
-            || parent == place)
+        if (IsPublished == true
+            || CanAddPlace(place, parent, out _) == false)
         {
             return false;
         }
 
+        AddPlaceFromValidatedMutation(place, parent, isEntryPoint);
+        return true;
+    }
+
+    internal bool CanAddPlace(
+        LocalPlaceRuntime place,
+        LocalPlaceRuntime parent,
+        out string diagnostic)
+    {
+        diagnostic = null;
+
+        if (place == null)
+        {
+            diagnostic = "LocalPlace is null.";
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(place.RuntimeId) == true)
+        {
+            diagnostic = "LocalPlace RuntimeId is empty.";
+            return false;
+        }
+
+        if (places.Contains(place) == true)
+        {
+            diagnostic = "LocalPlace already belongs to this topology.";
+            return false;
+        }
+
+        if (placesByRuntimeId.ContainsKey(place.RuntimeId) == true)
+        {
+            diagnostic = $"LocalPlace RuntimeId '{place.RuntimeId}' already belongs to this topology.";
+            return false;
+        }
+
+        if (place.OwningTopology != null)
+        {
+            diagnostic = "LocalPlace already belongs to a topology.";
+            return false;
+        }
+
+        if (parent == place)
+        {
+            diagnostic = "A LocalPlace cannot be its own parent.";
+            return false;
+        }
+
+        if (parent != null && ContainsPlace(parent) == false)
+        {
+            diagnostic = "The parent LocalPlace must belong to this topology.";
+            return false;
+        }
+
+        return true;
+    }
+
+    internal void AddPlaceFromValidatedMutation(
+        LocalPlaceRuntime place,
+        LocalPlaceRuntime parent,
+        bool isEntryPoint)
+    {
         if (place.AttachToTopology(this) == false)
         {
-            return false;
+            throw new InvalidOperationException("Validated LocalPlace could not attach to its topology.");
         }
 
         places.Add(place);
@@ -300,8 +371,6 @@ public sealed class LocalTopologyRuntime
         {
             entryPoints.Add(place);
         }
-
-        return true;
     }
 
     public bool TrySetParent(
@@ -369,27 +438,89 @@ public sealed class LocalTopologyRuntime
 
     public bool AddConnection(LocalTopologyConnectionRuntime connection)
     {
-        if (connection == null
-            || connections.Contains(connection) == true
-            || connectionsByRuntimeId.ContainsKey(connection.RuntimeId) == true
-            || connection.Origin == connection.Destination
-            || ContainsPlace(connection.Origin) == false
-            || ContainsPlace(connection.Destination) == false
-            || LocalTopologyConnectionRuntime.IsValidTraversalCost(connection.TraversalCost) == false
-            || connection.OwningTopology != null)
+        if (IsPublished == true
+            || CanAddConnection(connection, out _) == false)
         {
             return false;
         }
 
+        AddConnectionFromValidatedMutation(connection);
+        return true;
+    }
+
+    internal bool CanAddConnection(
+        LocalTopologyConnectionRuntime connection,
+        out string diagnostic)
+    {
+        diagnostic = null;
+
+        if (connection == null)
+        {
+            diagnostic = "LocalConnection is null.";
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(connection.RuntimeId) == true)
+        {
+            diagnostic = "LocalConnection RuntimeId is empty.";
+            return false;
+        }
+
+        if (connections.Contains(connection) == true)
+        {
+            diagnostic = "LocalConnection already belongs to this topology.";
+            return false;
+        }
+
+        if (connectionsByRuntimeId.ContainsKey(connection.RuntimeId) == true)
+        {
+            diagnostic = $"LocalConnection RuntimeId '{connection.RuntimeId}' already belongs to this topology.";
+            return false;
+        }
+
+        if (connection.Origin == connection.Destination)
+        {
+            diagnostic = "LocalConnection cannot connect a place to itself.";
+            return false;
+        }
+
+        if (ContainsPlace(connection.Origin) == false)
+        {
+            diagnostic = "The LocalConnection origin must belong to this topology.";
+            return false;
+        }
+
+        if (ContainsPlace(connection.Destination) == false)
+        {
+            diagnostic = "The LocalConnection destination must belong to this topology.";
+            return false;
+        }
+
+        if (LocalTopologyConnectionRuntime.IsValidTraversalCost(connection.TraversalCost) == false)
+        {
+            diagnostic = "LocalConnection traversal cost is invalid.";
+            return false;
+        }
+
+        if (connection.OwningTopology != null)
+        {
+            diagnostic = "LocalConnection already belongs to a topology.";
+            return false;
+        }
+
+        return true;
+    }
+
+    internal void AddConnectionFromValidatedMutation(LocalTopologyConnectionRuntime connection)
+    {
         if (connection.AttachToTopology(this) == false)
         {
-            return false;
+            throw new InvalidOperationException("Validated LocalConnection could not attach to its topology.");
         }
 
         connections.Add(connection);
         connectionsByRuntimeId.Add(connection.RuntimeId, connection);
         outgoingConnections[connection.Origin].Add(connection);
-        return true;
     }
 
     public bool ContainsPlace(LocalPlaceRuntime place)
@@ -831,6 +962,12 @@ public sealed class LocalTopologyStore
             return false;
         }
 
+        if (topology.IsPublished == true)
+        {
+            diagnostic = "Local topology is already published.";
+            return false;
+        }
+
         if (topology.TryValidate(out diagnostic) == false)
         {
             return false;
@@ -858,6 +995,101 @@ public sealed class LocalTopologyStore
 
         topologiesByOwnerRuntimeId.Add(owner.OwnerRuntimeId, topology);
         topologies.Add(topology);
+        topology.MarkPublished();
+        return true;
+    }
+
+    public bool TryAddPlace(
+        LocalTopologyRuntime topology,
+        LocalPlaceRuntime place,
+        out string diagnostic)
+    {
+        return TryAddPlace(topology, place, null, false, out diagnostic);
+    }
+
+    public bool TryAddPlace(
+        LocalTopologyRuntime topology,
+        LocalPlaceRuntime place,
+        bool isEntryPoint,
+        out string diagnostic)
+    {
+        return TryAddPlace(topology, place, null, isEntryPoint, out diagnostic);
+    }
+
+    public bool TryAddPlace(
+        LocalTopologyRuntime topology,
+        LocalPlaceRuntime place,
+        LocalPlaceRuntime parent,
+        out string diagnostic)
+    {
+        return TryAddPlace(topology, place, parent, false, out diagnostic);
+    }
+
+    public bool TryAddPlace(
+        LocalTopologyRuntime topology,
+        LocalPlaceRuntime place,
+        LocalPlaceRuntime parent,
+        bool isEntryPoint,
+        out string diagnostic)
+    {
+        diagnostic = null;
+
+        if (TryPreparePublishedTopology(topology, out diagnostic) == false)
+        {
+            return false;
+        }
+
+        if (topology.CanAddPlace(place, parent, out diagnostic) == false)
+        {
+            return false;
+        }
+
+        if (identityRegistry.IsRuntimeIdAvailable(place.RuntimeId) == false)
+        {
+            diagnostic = $"LocalPlace RuntimeId '{place.RuntimeId}' is already registered.";
+            return false;
+        }
+
+        if (identityRegistry.RegisterLocalPlace(place) == false)
+        {
+            diagnostic = $"Could not publish LocalPlace RuntimeId '{place.RuntimeId}'.";
+            return false;
+        }
+
+        topology.AddPlaceFromValidatedMutation(place, parent, isEntryPoint);
+        return true;
+    }
+
+    public bool TryAddConnection(
+        LocalTopologyRuntime topology,
+        LocalTopologyConnectionRuntime connection,
+        out string diagnostic)
+    {
+        diagnostic = null;
+
+        if (TryPreparePublishedTopology(topology, out diagnostic) == false)
+        {
+            return false;
+        }
+
+        if (topology.CanAddConnection(connection, out diagnostic) == false)
+        {
+            return false;
+        }
+
+        if (identityRegistry.IsRuntimeIdAvailable(connection.RuntimeId) == false)
+        {
+            diagnostic = $"LocalConnection RuntimeId '{connection.RuntimeId}' is already registered.";
+            return false;
+        }
+
+        if (identityRegistry.RegisterLocalConnection(connection) == false)
+        {
+            diagnostic = $"Could not publish LocalConnection RuntimeId '{connection.RuntimeId}'.";
+            return false;
+        }
+
+        topology.AddConnectionFromValidatedMutation(connection);
         return true;
     }
 
@@ -887,6 +1119,50 @@ public sealed class LocalTopologyStore
     public bool TryGetLocalConnection(string runtimeId, out LocalTopologyConnectionRuntime connection)
     {
         return identityRegistry.TryGetLocalConnection(runtimeId, out connection);
+    }
+
+    private bool TryPreparePublishedTopology(
+        LocalTopologyRuntime topology,
+        out string diagnostic)
+    {
+        diagnostic = null;
+
+        if (topology == null)
+        {
+            diagnostic = "Local topology is null.";
+            return false;
+        }
+
+        if (topology.IdentityRegistry != identityRegistry)
+        {
+            diagnostic = "Local topology must use this store's RuntimeIdentityRegistry.";
+            return false;
+        }
+
+        if (topology.IsPublished == false)
+        {
+            diagnostic = "Local topology must be published before it can be expanded through the store.";
+            return false;
+        }
+
+        if (topologiesByOwnerRuntimeId.TryGetValue(topology.Owner.OwnerRuntimeId, out LocalTopologyRuntime storedTopology) == false
+            || storedTopology != topology)
+        {
+            diagnostic = "Local topology is not published by this store.";
+            return false;
+        }
+
+        if (topology.TryValidate(out diagnostic) == false)
+        {
+            return false;
+        }
+
+        if (IsOwnerReferenceConsistent(topology.Owner, out diagnostic) == false)
+        {
+            return false;
+        }
+
+        return true;
     }
 
     private bool IsOwnerReferenceConsistent(

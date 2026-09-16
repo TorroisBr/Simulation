@@ -406,6 +406,8 @@ public static class SimulationInvariantValidator
         }
 
         HashSet<string> placeIds = new HashSet<string>(StringComparer.Ordinal);
+        bool mustValidatePublishedMembers = requirePublishedMembers
+            || (topology.IsPublished == true && registry != null);
         foreach (LocalPlaceRuntime place in topology.Places)
         {
             Assert.That(place, Is.Not.Null);
@@ -418,7 +420,7 @@ public static class SimulationInvariantValidator
                 Assert.That(topology.ContainsPlace(place.Parent), Is.True);
             }
 
-            if (requirePublishedMembers == true)
+            if (mustValidatePublishedMembers == true)
             {
                 Assert.That(registry, Is.Not.Null);
                 if (registry != null)
@@ -440,7 +442,7 @@ public static class SimulationInvariantValidator
             Assert.That(topology.ContainsPlace(connection.Destination), Is.True);
             Assert.That(LocalTopologyConnectionRuntime.IsValidTraversalCost(connection.TraversalCost), Is.True);
 
-            if (requirePublishedMembers == true)
+            if (mustValidatePublishedMembers == true)
             {
                 Assert.That(registry, Is.Not.Null);
                 if (registry != null)
