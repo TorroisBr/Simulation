@@ -575,6 +575,11 @@ public sealed class ExpeditionSystem
             return false;
         }
 
+        if (TryValidateExpeditionConflictBinding(expedition, opposition, conflict, out reason) == false)
+        {
+            return false;
+        }
+
         bool objectiveWasCompleted = expedition.IsObjectiveComplete;
         if (placeContentStore.TryResolveOpposition(
             owner,
@@ -595,6 +600,90 @@ public sealed class ExpeditionSystem
         }
 
         RecordObjectiveCompletedIfNeeded(expedition, objectiveWasCompleted, opposition.RuntimeId);
+
+        return true;
+    }
+
+    private bool TryValidateExpeditionConflictBinding(
+        ExpeditionRuntime expedition,
+        PlaceOppositionRuntime opposition,
+        Conflict conflict,
+        out string reason)
+    {
+        reason = null;
+        if (expedition == null || opposition == null || conflict == null)
+        {
+            reason = "Expedition conflict binding requires an expedition, opposition, and conflict.";
+            return false;
+        }
+
+        if (conflict.TryValidate(out reason) == false)
+        {
+            return false;
+        }
+
+        List<ConflictSide> nonOppositionSides = new List<ConflictSide>();
+        foreach (ConflictSide side in conflict.Sides)
+        {
+            if (side == null)
+            {
+                reason = "Expedition conflict binding cannot contain a null side.";
+                return false;
+            }
+
+            if (string.Equals(side.SideId, opposition.OppositionSideId, StringComparison.Ordinal) == false)
+            {
+                nonOppositionSides.Add(side);
+            }
+        }
+
+        if (nonOppositionSides.Count != 1)
+        {
+            reason = "Place opposition integration requires exactly one non-opposition expedition side.";
+            return false;
+        }
+
+        ConflictSide expeditionSide = nonOppositionSides[0];
+        bool hasPerformer = false;
+        foreach (ConflictParticipantReference participant in expeditionSide.Participants)
+        {
+            if (participant == null || participant.IsNpc == false || participant.Npc == null)
+            {
+                reason = "The expedition conflict side may contain only real expedition NPC participants.";
+                return false;
+            }
+
+            NpcRuntime participantNpc = participant.Npc;
+            if (identityRegistry.TryGetNpcWithoutLogging(participantNpc.RuntimeId, out NpcRuntime registeredNpc) == false
+                || ReferenceEquals(registeredNpc, participantNpc) == false)
+            {
+                reason = "Every expedition conflict NPC must be the registered runtime instance for its RuntimeId.";
+                return false;
+            }
+
+            if (participantNpc.IsAlive == false)
+            {
+                reason = "A dead expedition NPC cannot participate in a new conflict.";
+                return false;
+            }
+
+            if (ContainsId(expedition.MemberRuntimeIds, participantNpc.RuntimeId) == false)
+            {
+                reason = "Every expedition conflict NPC must belong to the active expedition.";
+                return false;
+            }
+
+            if (ContainsId(expedition.PerformerRuntimeIds, participantNpc.RuntimeId) == true)
+            {
+                hasPerformer = true;
+            }
+        }
+
+        if (hasPerformer == false)
+        {
+            reason = "An expedition conflict must contain at least one expedition Performer.";
+            return false;
+        }
 
         return true;
     }

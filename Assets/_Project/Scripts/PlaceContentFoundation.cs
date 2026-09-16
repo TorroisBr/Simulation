@@ -479,6 +479,109 @@ public sealed class PlaceOppositionRuntime
         }
     }
 
+    public bool TryValidateConflictBinding(Conflict conflict, out string diagnostic)
+    {
+        diagnostic = null;
+        if (conflict == null)
+        {
+            diagnostic = "Opposition conflict binding requires a conflict.";
+            return false;
+        }
+
+        if (conflict.TryValidate(out diagnostic) == false)
+        {
+            return false;
+        }
+
+        ConflictSide oppositionSide = null;
+        int matchingSideCount = 0;
+        foreach (ConflictSide side in conflict.Sides)
+        {
+            if (side != null
+                && string.Equals(side.SideId, oppositionSideId, StringComparison.Ordinal) == true)
+            {
+                oppositionSide = side;
+                matchingSideCount++;
+            }
+        }
+
+        if (matchingSideCount != 1 || oppositionSide == null)
+        {
+            diagnostic = "Conflict must contain exactly one side matching opposition SideId '"
+                + oppositionSideId + "'.";
+            return false;
+        }
+
+        HashSet<string> expectedNamedIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (NpcRuntime participant in namedParticipants)
+        {
+            if (participant == null || expectedNamedIds.Add(participant.RuntimeId) == false)
+            {
+                diagnostic = "Place opposition named participants must have unique valid RuntimeIds.";
+                return false;
+            }
+        }
+
+        HashSet<string> expectedAggregateSourceIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (AggregateParticipantSnapshot aggregate in aggregateParticipants)
+        {
+            if (aggregate == null || expectedAggregateSourceIds.Add(aggregate.SourceId) == false)
+            {
+                diagnostic = "Place opposition aggregates must have unique valid SourceIds.";
+                return false;
+            }
+        }
+
+        HashSet<string> actualNamedIds = new HashSet<string>(StringComparer.Ordinal);
+        HashSet<string> actualAggregateSourceIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (ConflictParticipantReference participant in oppositionSide.Participants)
+        {
+            if (participant == null)
+            {
+                diagnostic = "Opposition conflict side contains a null participant.";
+                return false;
+            }
+
+            if (participant.IsNpc == true)
+            {
+                if (participant.Npc == null
+                    || actualNamedIds.Add(participant.Npc.RuntimeId) == false)
+                {
+                    diagnostic = "Opposition conflict side contains an invalid or duplicate named NPC.";
+                    return false;
+                }
+            }
+            else if (participant.IsAggregate == true)
+            {
+                if (participant.Aggregate == null
+                    || actualAggregateSourceIds.Add(participant.Aggregate.SourceId) == false)
+                {
+                    diagnostic = "Opposition conflict side contains an invalid or duplicate aggregate.";
+                    return false;
+                }
+            }
+            else
+            {
+                diagnostic = "Opposition conflict side contains an unsupported participant kind.";
+                return false;
+            }
+        }
+
+        if (expectedNamedIds.SetEquals(actualNamedIds) == false)
+        {
+            diagnostic = "Opposition conflict named NPCs must exactly match the opposition participants.";
+            return false;
+        }
+
+        if (expectedAggregateSourceIds.SetEquals(actualAggregateSourceIds) == false)
+        {
+            diagnostic = "Opposition conflict aggregate SourceIds must exactly match the opposition participants.";
+            return false;
+        }
+
+        return true;
+    }
+
     public Conflict CreateConflict(
         string conflictId,
         IEnumerable<NpcRuntime> opposingSideParticipants = null,
@@ -1421,6 +1524,16 @@ public sealed class PlaceContentStore
             return false;
         }
 
+        if (TryValidateConflictLocation(owner, conflict, out diagnostic) == false)
+        {
+            return false;
+        }
+
+        if (opposition.TryValidateConflictBinding(conflict, out diagnostic) == false)
+        {
+            return false;
+        }
+
         if (conflictResolutionService.TryResolveAndApply(conflict, constraints, out result, out diagnostic) == false)
         {
             return false;
@@ -1431,6 +1544,38 @@ public sealed class PlaceContentStore
         {
             opposition.MarkResolved(result);
             content.MarkOppositionResolved(opposition);
+        }
+
+        return true;
+    }
+
+    private static bool TryValidateConflictLocation(
+        PlaceContentOwnerReference owner,
+        Conflict conflict,
+        out string diagnostic)
+    {
+        diagnostic = null;
+        if (owner == null || conflict == null || string.IsNullOrWhiteSpace(conflict.LocationRuntimeId) == true)
+        {
+            return true;
+        }
+
+        bool matchesOwner = string.Equals(
+            conflict.LocationRuntimeId,
+            owner.OwnerRuntimeId,
+            StringComparison.Ordinal);
+        bool matchesMacroLocation = string.Equals(
+            conflict.LocationRuntimeId,
+            owner.MacroLocationRuntimeId,
+            StringComparison.Ordinal);
+        bool matchesTopologyOwner = string.Equals(
+            conflict.LocationRuntimeId,
+            owner.TopologyOwnerRuntimeId,
+            StringComparison.Ordinal);
+        if (matchesOwner == false && matchesMacroLocation == false && matchesTopologyOwner == false)
+        {
+            diagnostic = "Conflict LocationRuntimeId contradicts the place content owner context.";
+            return false;
         }
 
         return true;
