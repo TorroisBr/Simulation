@@ -102,6 +102,68 @@ public sealed class GMConsolePanelTests
     }
 
     [Test]
+    public void GmConsoleInvalidAuthorityPreviewDisablesApply()
+    {
+        SetStackResourceForm();
+        SelectAuthority(WorldCommandAuthorityMode.Request);
+
+        fixture.Panel.PreviewButton.onClick.Invoke();
+
+        Assert.That(fixture.Panel.LastPreview.IsValid, Is.False);
+        Assert.That(fixture.Panel.ApplyButton.interactable, Is.False);
+        Assert.That(fixture.Content.Places[0].StackedContent, Is.Empty);
+    }
+
+    [Test]
+    public void GmConsoleDeclareRelocateCanStillPreviewAndApply()
+    {
+        SelectKind(WorldCommandKind.RelocateNpc);
+        SelectAuthority(WorldCommandAuthorityMode.Declare);
+        SetInput("relocate.npc", fixture.Actor.RuntimeId);
+        SetInput("relocate.destination", fixture.Site.Location.RuntimeId);
+
+        fixture.Panel.PreviewButton.onClick.Invoke();
+        Assert.That(fixture.Panel.LastPreview.IsValid, Is.True, fixture.Panel.LastPreview.Presentation);
+        fixture.Panel.ApplyButton.onClick.Invoke();
+
+        Assert.That(fixture.Panel.LastResult.Success, Is.True, fixture.Panel.LastResult.Diagnostic);
+        Assert.That(fixture.Actor.CurrentLocation, Is.SameAs(fixture.Site.Location));
+    }
+
+    [Test]
+    public void GmConsoleRequestConflictCanPreviewAndApply()
+    {
+        SelectKind(WorldCommandKind.ResolveConflict);
+        SelectAuthority(WorldCommandAuthorityMode.Request);
+        SetInput("conflict.location", fixture.Site.Location.RuntimeId);
+        SetInput("conflict.attacker", fixture.Actor.RuntimeId);
+        SetInput("conflict.defender", fixture.Defender.RuntimeId);
+
+        fixture.Panel.PreviewButton.onClick.Invoke();
+        Assert.That(fixture.Panel.LastPreview.IsValid, Is.True);
+        fixture.Panel.ApplyButton.onClick.Invoke();
+
+        Assert.That(fixture.Panel.LastResult.Success, Is.True, fixture.Panel.LastResult.Diagnostic);
+        Assert.That(fixture.Service.RecordStore.Records, Has.Count.EqualTo(1));
+    }
+
+    [Test]
+    public void GmConsoleForceOutcomeConflictCanPreviewWhenConstraintsValid()
+    {
+        SelectKind(WorldCommandKind.ResolveConflict);
+        SelectAuthority(WorldCommandAuthorityMode.ForceOutcome);
+        SetInput("conflict.location", fixture.Site.Location.RuntimeId);
+        SetInput("conflict.attacker", fixture.Actor.RuntimeId);
+        SetInput("conflict.defender", fixture.Defender.RuntimeId);
+        SetInput("conflict.forcedWinner", "attacker");
+
+        fixture.Panel.PreviewButton.onClick.Invoke();
+
+        Assert.That(fixture.Panel.LastPreview.IsValid, Is.True, fixture.Panel.LastPreview.Presentation);
+        Assert.That(fixture.Panel.ApplyButton.interactable, Is.True);
+    }
+
+    [Test]
     public void ApplyButtonUsesWorldCommandService()
     {
         SetStackResourceForm();
@@ -296,6 +358,21 @@ public sealed class GMConsolePanelTests
         SetFormDropdown("content.persistence", PlaceContentPersistencePolicy.Durable.ToString());
     }
 
+    private void SelectAuthority(WorldCommandAuthorityMode authority)
+    {
+        for (int i = 0; i < fixture.Panel.AuthorityDropdown.options.Count; i++)
+        {
+            if (fixture.Panel.AuthorityDropdown.options[i].text == authority.ToString())
+            {
+                fixture.Panel.AuthorityDropdown.value = i;
+                fixture.Panel.AuthorityDropdown.RefreshShownValue();
+                return;
+            }
+        }
+
+        Assert.Fail("Authority mode was not present in the GM Console dropdown: " + authority);
+    }
+
     private void SetOwnerFields()
     {
         SetFormDropdown("content.ownerKind", PlaceContentOwnerKind.ExplorableSite.ToString());
@@ -397,6 +474,8 @@ public sealed class GMConsolePanelTests
             Defender = new NpcRuntime("gm-defender", SimulationTestFactory.CreateNpc("gm-defender-definition"));
             Actor.SetCurrentPresence(City.Location);
             Defender.SetCurrentPresence(Site.Location);
+            Assert.That(Identity.RegisterLocation(City.Location), Is.True);
+            Assert.That(Identity.RegisterLocation(Site.Location), Is.True);
             Assert.That(Identity.RegisterCity(City), Is.True);
             Assert.That(Identity.RegisterExplorableSite(Site), Is.True);
             Assert.That(Identity.RegisterNpc(Actor), Is.True);

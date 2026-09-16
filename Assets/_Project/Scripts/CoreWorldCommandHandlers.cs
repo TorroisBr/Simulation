@@ -137,6 +137,42 @@ public sealed class CoreWorldCommandDependencies
     }
 }
 
+internal static class WorldCommandAuthorityRules
+{
+    public static bool IsAllowedForPreview(WorldCommandKind kind, WorldCommandAuthorityMode authority)
+    {
+        return authority == WorldCommandAuthorityMode.Suggest
+            || IsAllowedForExecution(kind, authority);
+    }
+
+    public static bool IsAllowedForExecution(WorldCommandKind kind, WorldCommandAuthorityMode authority)
+    {
+        if (kind == WorldCommandKind.ResolveConflict || kind == WorldCommandKind.PlaceOpposition)
+        {
+            return authority == WorldCommandAuthorityMode.Request
+                || authority == WorldCommandAuthorityMode.Declare
+                || authority == WorldCommandAuthorityMode.ForceOutcome;
+        }
+
+        return authority == WorldCommandAuthorityMode.Declare;
+    }
+
+    public static string GetDiagnostic(WorldCommandKind kind, WorldCommandAuthorityMode authority)
+    {
+        if (authority == WorldCommandAuthorityMode.Suggest)
+        {
+            return "Suggest authority is preview-only.";
+        }
+
+        if (kind == WorldCommandKind.ResolveConflict || kind == WorldCommandKind.PlaceOpposition)
+        {
+            return kind + " accepts Request, Declare, or ForceOutcome authority.";
+        }
+
+        return kind + " requires Declare authority.";
+    }
+}
+
 public abstract class CoreWorldCommandHandlerBase : IWorldCommandHandler
 {
     protected readonly CoreWorldCommandDependencies Dependencies;
@@ -187,6 +223,30 @@ public abstract class CoreWorldCommandHandlerBase : IWorldCommandHandler
         IEnumerable<string> events = null)
     {
         return new WorldCommandHandlerResult(true, affectedRuntimeIds: affected, createdRuntimeIds: created, eventIds: events);
+    }
+
+    protected bool TryValidatePreviewAuthority(WorldCommand command, out string diagnostic)
+    {
+        diagnostic = null;
+        if (command == null || WorldCommandAuthorityRules.IsAllowedForPreview(Kind, command.Authority))
+        {
+            return true;
+        }
+
+        diagnostic = WorldCommandAuthorityRules.GetDiagnostic(Kind, command.Authority);
+        return false;
+    }
+
+    protected bool TryValidateExecutionAuthority(WorldCommand command, out string diagnostic)
+    {
+        diagnostic = null;
+        if (command == null || WorldCommandAuthorityRules.IsAllowedForExecution(Kind, command.Authority))
+        {
+            return true;
+        }
+
+        diagnostic = WorldCommandAuthorityRules.GetDiagnostic(Kind, command.Authority);
+        return false;
     }
 
     protected bool TryResolveOwner(
@@ -438,6 +498,11 @@ public sealed class RelocateNpcWorldCommandHandler : CoreWorldCommandHandlerBase
             return Invalid(command, "Relocate NPC requires a typed payload.");
         }
 
+        if (TryValidatePreviewAuthority(command, out string authorityDiagnostic) == false)
+        {
+            return Invalid(command, authorityDiagnostic);
+        }
+
         if (Dependencies.IdentityRegistry.TryGetNpcWithoutLogging(payload.NpcRuntimeId, out NpcRuntime npc) == false
             || Dependencies.IdentityRegistry.TryGetLocation(payload.DestinationMacroLocationRuntimeId, out _) == false)
         {
@@ -464,6 +529,11 @@ public sealed class RelocateNpcWorldCommandHandler : CoreWorldCommandHandlerBase
         if (payload == null)
         {
             return Failure("Relocate NPC requires a typed payload.");
+        }
+
+        if (TryValidateExecutionAuthority(command, out string authorityDiagnostic) == false)
+        {
+            return Failure(authorityDiagnostic);
         }
 
         if (Dependencies.IdentityRegistry.TryGetNpcWithoutLogging(payload.NpcRuntimeId, out NpcRuntime npc) == false
@@ -510,6 +580,11 @@ public sealed class DeclareStackResourceWorldCommandHandler : CoreWorldCommandHa
             return Invalid(command, "Stack resource declaration requires a typed payload.");
         }
 
+        if (TryValidatePreviewAuthority(command, out string authorityDiagnostic) == false)
+        {
+            return Invalid(command, authorityDiagnostic);
+        }
+
         if (TryResolveOwner(payload.Owner, out PlaceContentOwnerReference owner, out string ownerDiagnostic) == false)
         {
             return Invalid(command, ownerDiagnostic);
@@ -529,6 +604,11 @@ public sealed class DeclareStackResourceWorldCommandHandler : CoreWorldCommandHa
         if (payload == null)
         {
             return Failure("Stack resource declaration requires a typed payload.");
+        }
+
+        if (TryValidateExecutionAuthority(command, out string authorityDiagnostic) == false)
+        {
+            return Failure(authorityDiagnostic);
         }
 
         if (TryResolveOwner(payload.Owner, out PlaceContentOwnerReference owner, out string ownerDiagnostic) == false)
@@ -570,6 +650,11 @@ public sealed class DeclareNotableItemWorldCommandHandler : CoreWorldCommandHand
             return Invalid(command, "Notable declaration requires a typed payload.");
         }
 
+        if (TryValidatePreviewAuthority(command, out string authorityDiagnostic) == false)
+        {
+            return Invalid(command, authorityDiagnostic);
+        }
+
         if (TryResolveOwner(payload.Owner, out PlaceContentOwnerReference owner, out string ownerDiagnostic) == false)
         {
             return Invalid(command, ownerDiagnostic);
@@ -589,6 +674,11 @@ public sealed class DeclareNotableItemWorldCommandHandler : CoreWorldCommandHand
         if (payload == null)
         {
             return Failure("Notable declaration requires a typed payload.");
+        }
+
+        if (TryValidateExecutionAuthority(command, out string authorityDiagnostic) == false)
+        {
+            return Failure(authorityDiagnostic);
         }
 
         if (TryResolveOwner(payload.Owner, out PlaceContentOwnerReference owner, out string ownerDiagnostic) == false)
@@ -628,6 +718,11 @@ public sealed class AddLocalPlaceWorldCommandHandler : CoreWorldCommandHandlerBa
             return Invalid(command, "Local place creation requires a typed payload.");
         }
 
+        if (TryValidatePreviewAuthority(command, out string authorityDiagnostic) == false)
+        {
+            return Invalid(command, authorityDiagnostic);
+        }
+
         if (TryResolveTopology(payload.TopologyOwnerRuntimeId, null, payload, out LocalTopologyRuntime topology, out LocalPlaceRuntime parent, out LocalPlaceTypeData typeDefinition, out string diagnostic) == false)
         {
             return Invalid(command, diagnostic);
@@ -642,6 +737,11 @@ public sealed class AddLocalPlaceWorldCommandHandler : CoreWorldCommandHandlerBa
         if (payload == null)
         {
             return Failure("Local place creation requires a typed payload.");
+        }
+
+        if (TryValidateExecutionAuthority(command, out string authorityDiagnostic) == false)
+        {
+            return Failure(authorityDiagnostic);
         }
 
         if (TryResolveTopology(payload.TopologyOwnerRuntimeId, context, payload, out LocalTopologyRuntime topology, out LocalPlaceRuntime parent, out LocalPlaceTypeData typeDefinition, out string diagnostic) == false)
@@ -726,6 +826,11 @@ public sealed class AddLocalConnectionWorldCommandHandler : CoreWorldCommandHand
             return Invalid(command, "Local connection creation requires a typed payload.");
         }
 
+        if (TryValidatePreviewAuthority(command, out string authorityDiagnostic) == false)
+        {
+            return Invalid(command, authorityDiagnostic);
+        }
+
         if (TryResolveConnection(payload, null, out LocalTopologyRuntime topology, out LocalPlaceRuntime origin, out LocalPlaceRuntime destination, out LocalConnectionTypeData typeDefinition, out string diagnostic) == false)
         {
             return Invalid(command, diagnostic);
@@ -740,6 +845,11 @@ public sealed class AddLocalConnectionWorldCommandHandler : CoreWorldCommandHand
         if (payload == null)
         {
             return Failure("Local connection creation requires a typed payload.");
+        }
+
+        if (TryValidateExecutionAuthority(command, out string authorityDiagnostic) == false)
+        {
+            return Failure(authorityDiagnostic);
         }
 
         if (TryResolveConnection(payload, context, out LocalTopologyRuntime topology, out LocalPlaceRuntime origin, out LocalPlaceRuntime destination, out LocalConnectionTypeData typeDefinition, out string diagnostic) == false)
@@ -820,6 +930,11 @@ public sealed class GrantSiteKnowledgeWorldCommandHandler : CoreWorldCommandHand
             return Invalid(command, "Site knowledge grant requires a typed payload.");
         }
 
+        if (TryValidatePreviewAuthority(command, out string authorityDiagnostic) == false)
+        {
+            return Invalid(command, authorityDiagnostic);
+        }
+
         if (Dependencies.IdentityRegistry.TryGetNpcWithoutLogging(payload.NpcRuntimeId, out _) == false
             || Dependencies.IdentityRegistry.TryGetExplorableSiteWithoutLogging(payload.SiteRuntimeId, out ExplorableSiteRuntime site) == false
             || site == null)
@@ -836,6 +951,11 @@ public sealed class GrantSiteKnowledgeWorldCommandHandler : CoreWorldCommandHand
         if (payload == null)
         {
             return Failure("Site knowledge grant requires a typed payload.");
+        }
+
+        if (TryValidateExecutionAuthority(command, out string authorityDiagnostic) == false)
+        {
+            return Failure(authorityDiagnostic);
         }
 
         if (Dependencies.IdentityRegistry.TryGetNpcWithoutLogging(payload.NpcRuntimeId, out NpcRuntime npc) == false
@@ -871,6 +991,11 @@ public sealed class GrantAdventureIntelWorldCommandHandler : CoreWorldCommandHan
             return Invalid(command, "Adventure intel grant requires a typed payload.");
         }
 
+        if (TryValidatePreviewAuthority(command, out string authorityDiagnostic) == false)
+        {
+            return Invalid(command, authorityDiagnostic);
+        }
+
         if (Dependencies.IdentityRegistry.TryGetNpcWithoutLogging(payload.NpcRuntimeId, out _) == false)
         {
             return Invalid(command, "Adventure intel requires a registered NPC identity.");
@@ -885,6 +1010,11 @@ public sealed class GrantAdventureIntelWorldCommandHandler : CoreWorldCommandHan
         if (payload == null)
         {
             return Failure("Adventure intel grant requires a typed payload.");
+        }
+
+        if (TryValidateExecutionAuthority(command, out string authorityDiagnostic) == false)
+        {
+            return Failure(authorityDiagnostic);
         }
 
         if (Dependencies.IdentityRegistry.TryGetNpcWithoutLogging(payload.NpcRuntimeId, out NpcRuntime npc) == false || npc == null)
@@ -998,6 +1128,17 @@ public sealed class ResolveConflictWorldCommandHandler : CoreWorldCommandHandler
             return Invalid(command, "Conflict command requires a typed payload.");
         }
 
+        if (TryValidatePreviewAuthority(command, out string authorityDiagnostic) == false)
+        {
+            return Invalid(command, authorityDiagnostic);
+        }
+
+        if (command.Authority != WorldCommandAuthorityMode.ForceOutcome
+            && ContainsForcedConflictFields(payload))
+        {
+            return Invalid(command, "Forced conflict constraints require ForceOutcome authority.");
+        }
+
         if (kind == WorldCommandKind.PlaceOpposition && string.IsNullOrWhiteSpace(payload.OppositionRuntimeId))
         {
             return Invalid(command, "Place opposition command requires an OppositionRuntimeId.");
@@ -1012,6 +1153,11 @@ public sealed class ResolveConflictWorldCommandHandler : CoreWorldCommandHandler
         if (payload == null)
         {
             return Failure("Conflict command requires a typed payload.");
+        }
+
+        if (TryValidateExecutionAuthority(command, out string authorityDiagnostic) == false)
+        {
+            return Failure(authorityDiagnostic);
         }
 
         if (kind == WorldCommandKind.PlaceOpposition && string.IsNullOrWhiteSpace(payload.OppositionRuntimeId))

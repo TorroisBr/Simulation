@@ -101,6 +101,118 @@ public sealed class CoreWorldCommandHandlerTests
     }
 
     [Test]
+    public void SuggestCannotExecuteAnyCommand()
+    {
+        WorldCommandTestFixture fixture = new WorldCommandTestFixture();
+        WorldCommandResult result = fixture.Execute(
+            WorldCommandKind.RelocateNpc,
+            WorldCommandAuthorityMode.Suggest,
+            new RelocateNpcWorldCommandPayload(fixture.Actor.RuntimeId, fixture.Destination.RuntimeId));
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(fixture.Actor.CurrentLocation, Is.SameAs(fixture.City.Location));
+    }
+
+    [Test]
+    public void PreviewRejectsUnsupportedAuthorityWithoutMutation()
+    {
+        WorldCommandTestFixture fixture = new WorldCommandTestFixture();
+        SpatialLocationRuntime before = fixture.Actor.CurrentLocation;
+        WorldCommandPreview preview = fixture.Service.Preview(fixture.Command(
+            WorldCommandKind.RelocateNpc,
+            WorldCommandAuthorityMode.Request,
+            new RelocateNpcWorldCommandPayload(fixture.Actor.RuntimeId, fixture.Destination.RuntimeId)));
+
+        Assert.That(preview.IsValid, Is.False);
+        Assert.That(fixture.Actor.CurrentLocation, Is.SameAs(before));
+    }
+
+    [Test]
+    public void ExecuteRejectsUnsupportedAuthorityWithoutMutation()
+    {
+        WorldCommandTestFixture fixture = new WorldCommandTestFixture();
+        SpatialLocationRuntime before = fixture.Actor.CurrentLocation;
+        WorldCommandResult result = fixture.Execute(
+            WorldCommandKind.RelocateNpc,
+            WorldCommandAuthorityMode.Request,
+            new RelocateNpcWorldCommandPayload(fixture.Actor.RuntimeId, fixture.Destination.RuntimeId));
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(fixture.Actor.CurrentLocation, Is.SameAs(before));
+    }
+
+    [Test]
+    public void RejectedAuthorityStillProducesAuditRecord()
+    {
+        WorldCommandTestFixture fixture = new WorldCommandTestFixture();
+        WorldCommandResult result = fixture.Execute(
+            WorldCommandKind.DeclareStackResource,
+            WorldCommandAuthorityMode.Request,
+            new DeclareStackResourceWorldCommandPayload(
+                fixture.SiteOwnerPayload(), fixture.Item.DefinitionId, 2, PlaceContentPersistencePolicy.Durable));
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Record, Is.Not.Null);
+        Assert.That(result.Record.Success, Is.False);
+        Assert.That(fixture.Service.RecordStore.Records, Has.Count.EqualTo(1));
+        Assert.That(fixture.Content.Places, Is.Empty);
+    }
+
+    [Test]
+    public void RejectedAuthorityPreservesOriginAndRequestedAuthority()
+    {
+        WorldCommandTestFixture fixture = new WorldCommandTestFixture();
+        WorldCommandResult result = fixture.Execute(
+            WorldCommandKind.RelocateNpc,
+            WorldCommandAuthorityMode.Request,
+            new RelocateNpcWorldCommandPayload(fixture.Actor.RuntimeId, fixture.Destination.RuntimeId),
+            WorldCommandOrigin.ExternalImport);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Record.Origin, Is.EqualTo(WorldCommandOrigin.ExternalImport));
+        Assert.That(result.Record.Authority, Is.EqualTo(WorldCommandAuthorityMode.Request));
+    }
+
+    [Test]
+    public void RelocateNpcRequestIsRejected()
+    {
+        WorldCommandTestFixture fixture = new WorldCommandTestFixture();
+        WorldCommandResult result = fixture.Execute(
+            WorldCommandKind.RelocateNpc,
+            WorldCommandAuthorityMode.Request,
+            new RelocateNpcWorldCommandPayload(fixture.Actor.RuntimeId, fixture.Destination.RuntimeId));
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(fixture.Actor.CurrentLocation, Is.SameAs(fixture.City.Location));
+    }
+
+    [Test]
+    public void RelocateNpcDeclareStillWorks()
+    {
+        WorldCommandTestFixture fixture = new WorldCommandTestFixture();
+        WorldCommandResult result = fixture.Execute(
+            WorldCommandKind.RelocateNpc,
+            WorldCommandAuthorityMode.Declare,
+            new RelocateNpcWorldCommandPayload(fixture.Actor.RuntimeId, fixture.Destination.RuntimeId));
+
+        Assert.That(result.Success, Is.True, result.Diagnostic);
+        Assert.That(fixture.Actor.CurrentLocation, Is.SameAs(fixture.Destination));
+    }
+
+    [Test]
+    public void RelocateNpcForceOutcomeIsRejected()
+    {
+        WorldCommandTestFixture fixture = new WorldCommandTestFixture();
+        WorldCommandResult result = fixture.Execute(
+            WorldCommandKind.RelocateNpc,
+            WorldCommandAuthorityMode.ForceOutcome,
+            new RelocateNpcWorldCommandPayload(fixture.Actor.RuntimeId, fixture.Destination.RuntimeId));
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(fixture.Actor.CurrentLocation, Is.SameAs(fixture.City.Location));
+    }
+
+    [Test]
     public void DeclareStackResourceCreatesWorldTruthContent()
     {
         WorldCommandTestFixture fixture = new WorldCommandTestFixture();
@@ -172,6 +284,35 @@ public sealed class CoreWorldCommandHandlerTests
     }
 
     [Test]
+    public void DeclareStackResourceRequestIsRejected()
+    {
+        WorldCommandTestFixture fixture = new WorldCommandTestFixture();
+        WorldCommandResult result = fixture.Execute(
+            WorldCommandKind.DeclareStackResource,
+            WorldCommandAuthorityMode.Request,
+            new DeclareStackResourceWorldCommandPayload(
+                fixture.SiteOwnerPayload(), fixture.Item.DefinitionId, 4, PlaceContentPersistencePolicy.Durable));
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(fixture.Content.Places, Is.Empty);
+    }
+
+    [Test]
+    public void DeclareStackResourceDeclareStillWorks()
+    {
+        WorldCommandTestFixture fixture = new WorldCommandTestFixture();
+        WorldCommandResult result = fixture.Execute(
+            WorldCommandKind.DeclareStackResource,
+            WorldCommandAuthorityMode.Declare,
+            new DeclareStackResourceWorldCommandPayload(
+                fixture.SiteOwnerPayload(), fixture.Item.DefinitionId, 4, PlaceContentPersistencePolicy.Durable));
+
+        Assert.That(result.Success, Is.True, result.Diagnostic);
+        Assert.That(fixture.Content.TryGet(fixture.Site, out PlaceContentRuntime content), Is.True);
+        Assert.That(content.GetAmount(fixture.Item), Is.EqualTo(4));
+    }
+
+    [Test]
     public void DeclareNotableCreatesStableRuntimeIdentity()
     {
         WorldCommandTestFixture fixture = new WorldCommandTestFixture();
@@ -227,6 +368,32 @@ public sealed class CoreWorldCommandHandlerTests
         Assert.That(result.Success, Is.False);
         Assert.That(fixture.Content.NotableItems, Is.Empty);
         Assert.That(fixture.Registry.TryGetNotableItem("notable-item-000001", out _), Is.False);
+    }
+
+    [Test]
+    public void DeclareNotableItemRequestIsRejected()
+    {
+        WorldCommandTestFixture fixture = new WorldCommandTestFixture();
+        WorldCommandResult result = fixture.Execute(
+            WorldCommandKind.DeclareNotableItem,
+            WorldCommandAuthorityMode.Request,
+            new DeclareNotableItemWorldCommandPayload(fixture.SiteOwnerPayload(), fixture.Item.DefinitionId));
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(fixture.Content.NotableItems, Is.Empty);
+    }
+
+    [Test]
+    public void DeclareNotableItemDeclareStillWorks()
+    {
+        WorldCommandTestFixture fixture = new WorldCommandTestFixture();
+        WorldCommandResult result = fixture.Execute(
+            WorldCommandKind.DeclareNotableItem,
+            WorldCommandAuthorityMode.Declare,
+            new DeclareNotableItemWorldCommandPayload(fixture.SiteOwnerPayload(), fixture.Item.DefinitionId));
+
+        Assert.That(result.Success, Is.True, result.Diagnostic);
+        Assert.That(fixture.Content.NotableItems, Has.Count.EqualTo(1));
     }
 
     [Test]
@@ -300,6 +467,60 @@ public sealed class CoreWorldCommandHandlerTests
     }
 
     [Test]
+    public void AddLocalPlaceRequestIsRejected()
+    {
+        WorldCommandTestFixture fixture = new WorldCommandTestFixture();
+        WorldCommandResult result = fixture.Execute(
+            WorldCommandKind.AddLocalPlace,
+            WorldCommandAuthorityMode.Request,
+            new AddLocalPlaceWorldCommandPayload(fixture.Site.RuntimeId, "Chamber"));
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(fixture.Topology.Places, Has.Count.EqualTo(2));
+    }
+
+    [Test]
+    public void AddLocalPlaceDeclareStillWorks()
+    {
+        WorldCommandTestFixture fixture = new WorldCommandTestFixture();
+        WorldCommandResult result = fixture.Execute(
+            WorldCommandKind.AddLocalPlace,
+            WorldCommandAuthorityMode.Declare,
+            new AddLocalPlaceWorldCommandPayload(fixture.Site.RuntimeId, "Chamber"));
+
+        Assert.That(result.Success, Is.True, result.Diagnostic);
+        Assert.That(fixture.Topology.Places, Has.Count.EqualTo(3));
+    }
+
+    [Test]
+    public void AddLocalConnectionRequestIsRejected()
+    {
+        WorldCommandTestFixture fixture = new WorldCommandTestFixture();
+        WorldCommandResult result = fixture.Execute(
+            WorldCommandKind.AddLocalConnection,
+            WorldCommandAuthorityMode.Request,
+            new AddLocalConnectionWorldCommandPayload(
+                fixture.Site.RuntimeId, fixture.Entry.RuntimeId, fixture.Exit.RuntimeId, 2f));
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(fixture.Topology.ConnectionCount, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void AddLocalConnectionDeclareStillWorks()
+    {
+        WorldCommandTestFixture fixture = new WorldCommandTestFixture();
+        WorldCommandResult result = fixture.Execute(
+            WorldCommandKind.AddLocalConnection,
+            WorldCommandAuthorityMode.Declare,
+            new AddLocalConnectionWorldCommandPayload(
+                fixture.Site.RuntimeId, fixture.Entry.RuntimeId, fixture.Exit.RuntimeId, 2f));
+
+        Assert.That(result.Success, Is.True, result.Diagnostic);
+        Assert.That(fixture.Topology.ConnectionCount, Is.EqualTo(1));
+    }
+
+    [Test]
     public void GrantSiteKnowledgeMutatesKnowledgeNotTruth()
     {
         WorldCommandTestFixture fixture = new WorldCommandTestFixture();
@@ -366,6 +587,68 @@ public sealed class CoreWorldCommandHandlerTests
 
         Assert.That(result.Success, Is.True, result.Diagnostic);
         Assert.That(fixture.Registry.TryGetNotableItem("notable-fiction", out _), Is.False);
+    }
+
+    [Test]
+    public void GrantSiteKnowledgeRequestIsRejected()
+    {
+        WorldCommandTestFixture fixture = new WorldCommandTestFixture();
+        WorldCommandResult result = fixture.Execute(
+            WorldCommandKind.GrantSiteKnowledge,
+            WorldCommandAuthorityMode.Request,
+            new GrantSiteKnowledgeWorldCommandPayload(fixture.Actor.RuntimeId, fixture.Site.RuntimeId));
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(fixture.Actor.ExplorableSiteKnowledge.KnowsSite(fixture.Site.RuntimeId), Is.False);
+    }
+
+    [Test]
+    public void GrantSiteKnowledgeDeclareStillWorks()
+    {
+        WorldCommandTestFixture fixture = new WorldCommandTestFixture();
+        WorldCommandResult result = fixture.Execute(
+            WorldCommandKind.GrantSiteKnowledge,
+            WorldCommandAuthorityMode.Declare,
+            new GrantSiteKnowledgeWorldCommandPayload(fixture.Actor.RuntimeId, fixture.Site.RuntimeId));
+
+        Assert.That(result.Success, Is.True, result.Diagnostic);
+        Assert.That(fixture.Actor.ExplorableSiteKnowledge.KnowsSite(fixture.Site.RuntimeId), Is.True);
+    }
+
+    [Test]
+    public void GrantAdventureIntelRequestIsRejected()
+    {
+        WorldCommandTestFixture fixture = new WorldCommandTestFixture();
+        WorldCommandResult result = fixture.Execute(
+            WorldCommandKind.GrantAdventureIntel,
+            WorldCommandAuthorityMode.Request,
+            new GrantAdventureIntelWorldCommandPayload(
+                fixture.Actor.RuntimeId,
+                AdventureIntelDeclarationKind.Opposition,
+                fixture.Site.RuntimeId,
+                oppositionRuntimeId: "opposition-request"));
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(fixture.Actor.AdventureSiteIntelKnowledge.OppositionObservations, Is.Empty);
+    }
+
+    [Test]
+    public void GrantAdventureIntelDeclareStillWorks()
+    {
+        WorldCommandTestFixture fixture = new WorldCommandTestFixture();
+        WorldCommandResult result = fixture.Execute(
+            WorldCommandKind.GrantAdventureIntel,
+            WorldCommandAuthorityMode.Declare,
+            new GrantAdventureIntelWorldCommandPayload(
+                fixture.Actor.RuntimeId,
+                AdventureIntelDeclarationKind.Opposition,
+                fixture.Site.RuntimeId,
+                oppositionRuntimeId: "opposition-declare",
+                oppositionState: AdventureOppositionObservedState.Active));
+
+        Assert.That(result.Success, Is.True, result.Diagnostic);
+        Assert.That(fixture.Actor.AdventureSiteIntelKnowledge.KnowsOpposition(
+            fixture.Site.RuntimeId, "opposition-declare"), Is.True);
     }
 
     [Test]
@@ -448,6 +731,80 @@ public sealed class CoreWorldCommandHandlerTests
     }
 
     [Test]
+    public void ResolveConflictRequestUsesNormalResolver()
+    {
+        WorldCommandTestFixture fixture = new WorldCommandTestFixture();
+        WorldCommandResult result = fixture.Execute(
+            WorldCommandKind.ResolveConflict,
+            WorldCommandAuthorityMode.Request,
+            fixture.ConflictPayload());
+
+        Assert.That(result.Success, Is.True, result.Diagnostic);
+        Assert.That(LastConflictEvent(fixture).Resolution.OutcomeSource, Is.EqualTo(ConflictOutcomeSource.Simulated));
+    }
+
+    [Test]
+    public void ResolveConflictDeclareUsesNormalResolverWithoutForcedOutcome()
+    {
+        WorldCommandTestFixture fixture = new WorldCommandTestFixture();
+        WorldCommandResult result = fixture.Execute(
+            WorldCommandKind.ResolveConflict,
+            WorldCommandAuthorityMode.Declare,
+            fixture.ConflictPayload());
+
+        Assert.That(result.Success, Is.True, result.Diagnostic);
+        Assert.That(LastConflictEvent(fixture).Resolution.OutcomeSource, Is.EqualTo(ConflictOutcomeSource.Simulated));
+    }
+
+    [Test]
+    public void ResolveConflictForceOutcomeCanForceWinner()
+    {
+        WorldCommandTestFixture fixture = new WorldCommandTestFixture();
+        WorldCommandResult result = fixture.Execute(
+            WorldCommandKind.ResolveConflict,
+            WorldCommandAuthorityMode.ForceOutcome,
+            new ResolveConflictWorldCommandPayload(
+                fixture.City.Location.RuntimeId,
+                fixture.ConflictPayload().Sides,
+                forcedWinningSideId: "attacker"));
+
+        Assert.That(result.Success, Is.True, result.Diagnostic);
+        Assert.That(LastConflictEvent(fixture).Resolution.WinningSideId, Is.EqualTo("attacker"));
+    }
+
+    [Test]
+    public void ResolveConflictRequestRejectsForcedFields()
+    {
+        WorldCommandTestFixture fixture = new WorldCommandTestFixture();
+        WorldCommandResult result = fixture.Execute(
+            WorldCommandKind.ResolveConflict,
+            WorldCommandAuthorityMode.Request,
+            new ResolveConflictWorldCommandPayload(
+                fixture.City.Location.RuntimeId,
+                fixture.ConflictPayload().Sides,
+                forcedWinningSideId: "attacker"));
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(HasEvent(fixture, DomainEventType.ConflictResolved), Is.False);
+    }
+
+    [Test]
+    public void ResolveConflictDeclareRejectsForcedFields()
+    {
+        WorldCommandTestFixture fixture = new WorldCommandTestFixture();
+        WorldCommandResult result = fixture.Execute(
+            WorldCommandKind.ResolveConflict,
+            WorldCommandAuthorityMode.Declare,
+            new ResolveConflictWorldCommandPayload(
+                fixture.City.Location.RuntimeId,
+                fixture.ConflictPayload().Sides,
+                forcedWinningSideId: "attacker"));
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(HasEvent(fixture, DomainEventType.ConflictResolved), Is.False);
+    }
+
+    [Test]
     public void PlaceOppositionCommandUsesExistingBinding()
     {
         WorldCommandTestFixture fixture = new WorldCommandTestFixture(includeOpposition: true);
@@ -478,6 +835,120 @@ public sealed class CoreWorldCommandHandlerTests
 
         Assert.That(result.Success, Is.True, result.Diagnostic);
         Assert.That(fixture.Opposition.IsActive, Is.True);
+    }
+
+    [Test]
+    public void PlaceOppositionRequestUsesNormalResolver()
+    {
+        WorldCommandTestFixture fixture = new WorldCommandTestFixture(includeOpposition: true);
+        WorldCommandResult result = fixture.Execute(
+            WorldCommandKind.PlaceOpposition,
+            WorldCommandAuthorityMode.Request,
+            new ResolveConflictWorldCommandPayload(
+                fixture.Site.Location.RuntimeId,
+                fixture.OppositionConflictPayload().Sides,
+                oppositionRuntimeId: fixture.Opposition.RuntimeId));
+
+        Assert.That(result.Success, Is.True, result.Diagnostic);
+        Assert.That(LastConflictEvent(fixture).Resolution.OutcomeSource, Is.EqualTo(ConflictOutcomeSource.Simulated));
+    }
+
+    [Test]
+    public void PlaceOppositionDeclareUsesNormalResolver()
+    {
+        WorldCommandTestFixture fixture = new WorldCommandTestFixture(includeOpposition: true);
+        WorldCommandResult result = fixture.Execute(
+            WorldCommandKind.PlaceOpposition,
+            WorldCommandAuthorityMode.Declare,
+            new ResolveConflictWorldCommandPayload(
+                fixture.Site.Location.RuntimeId,
+                fixture.OppositionConflictPayload().Sides,
+                oppositionRuntimeId: fixture.Opposition.RuntimeId));
+
+        Assert.That(result.Success, Is.True, result.Diagnostic);
+        Assert.That(LastConflictEvent(fixture).Resolution.OutcomeSource, Is.EqualTo(ConflictOutcomeSource.Simulated));
+    }
+
+    [Test]
+    public void PlaceOppositionForceOutcomePreservesStructuralBinding()
+    {
+        WorldCommandTestFixture fixture = new WorldCommandTestFixture(includeOpposition: true);
+        WorldCommandResult result = fixture.Execute(
+            WorldCommandKind.PlaceOpposition,
+            WorldCommandAuthorityMode.ForceOutcome,
+            new ResolveConflictWorldCommandPayload(
+                fixture.Site.Location.RuntimeId,
+                fixture.OppositionConflictPayload().Sides,
+                oppositionRuntimeId: fixture.Opposition.RuntimeId,
+                forcedWinningSideId: "attacker"));
+
+        Assert.That(result.Success, Is.True, result.Diagnostic);
+        Assert.That(fixture.Opposition.IsResolved, Is.True);
+    }
+
+    [Test]
+    public void ForceOutcomeCannotBypassFakeNamedNpcProtection()
+    {
+        WorldCommandTestFixture fixture = new WorldCommandTestFixture();
+        WorldConflictSidePayload fakeNamedSide = new WorldConflictSidePayload(
+            "attacker",
+            ConflictObjectiveType.Defeat,
+            ConflictStakes.Meaningful,
+            new[] { new WorldConflictParticipantPayload("npc-fictional-named") });
+        WorldCommandResult result = fixture.Execute(
+            WorldCommandKind.ResolveConflict,
+            WorldCommandAuthorityMode.ForceOutcome,
+            new ResolveConflictWorldCommandPayload(
+                fixture.City.Location.RuntimeId,
+                new[]
+                {
+                    fakeNamedSide,
+                    new WorldConflictSidePayload(
+                        "defender",
+                        ConflictObjectiveType.Defend,
+                        ConflictStakes.Meaningful,
+                        new[] { new WorldConflictParticipantPayload(fixture.Defender.RuntimeId) })
+                },
+                forcedWinningSideId: "attacker"));
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(HasEvent(fixture, DomainEventType.ConflictResolved), Is.False);
+    }
+
+    [Test]
+    public void ForceOutcomeCannotBypassAggregateBinding()
+    {
+        WorldCommandTestFixture fixture = new WorldCommandTestFixture(includeOpposition: true);
+        fixture.Opposition.AddAggregateParticipant(new AggregateParticipantSnapshot("bandits", 1f, 1));
+        WorldConflictSidePayload oppositionSide = new WorldConflictSidePayload(
+            "opposition",
+            ConflictObjectiveType.Defend,
+            ConflictStakes.Meaningful,
+            new[]
+            {
+                new WorldConflictParticipantPayload(fixture.Defender.RuntimeId),
+                new WorldConflictParticipantPayload(new AggregateParticipantSnapshot("bandits", 99f, 1))
+            });
+        WorldCommandResult result = fixture.Execute(
+            WorldCommandKind.PlaceOpposition,
+            WorldCommandAuthorityMode.ForceOutcome,
+            new ResolveConflictWorldCommandPayload(
+                fixture.Site.Location.RuntimeId,
+                new[]
+                {
+                    new WorldConflictSidePayload(
+                        "attacker",
+                        ConflictObjectiveType.Defeat,
+                        ConflictStakes.Meaningful,
+                        new[] { new WorldConflictParticipantPayload(fixture.Actor.RuntimeId) }),
+                    oppositionSide
+                },
+                oppositionRuntimeId: fixture.Opposition.RuntimeId,
+                forcedWinningSideId: "attacker"));
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(fixture.Opposition.IsActive, Is.True);
+        Assert.That(HasEvent(fixture, DomainEventType.ConflictResolved), Is.False);
     }
 
     [Test]
