@@ -538,6 +538,110 @@ public sealed class LocalTopologyRuntime
         return Array.Empty<LocalTopologyConnectionRuntime>();
     }
 
+    public bool TryFindShortestPath(
+        string startLocalPlaceRuntimeId,
+        string targetLocalPlaceRuntimeId,
+        out LocalTopologyPath path)
+    {
+        path = null;
+
+        if (TryGetPlace(startLocalPlaceRuntimeId, out LocalPlaceRuntime start) == false
+            || TryGetPlace(targetLocalPlaceRuntimeId, out LocalPlaceRuntime target) == false)
+        {
+            return false;
+        }
+
+        if (start == target)
+        {
+            path = new LocalTopologyPath(
+                start.RuntimeId,
+                target.RuntimeId,
+                new[] { start.RuntimeId },
+                Array.Empty<string>(),
+                0f);
+            return true;
+        }
+
+        Dictionary<string, float> distances = new Dictionary<string, float>(StringComparer.Ordinal);
+        Dictionary<string, string> previousPlaceRuntimeIds = new Dictionary<string, string>(StringComparer.Ordinal);
+        Dictionary<string, string> previousConnectionRuntimeIds = new Dictionary<string, string>(StringComparer.Ordinal);
+        HashSet<string> settledPlaceRuntimeIds = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (LocalPlaceRuntime place in places)
+        {
+            distances.Add(place.RuntimeId, float.PositiveInfinity);
+        }
+
+        distances[start.RuntimeId] = 0f;
+
+        while (true)
+        {
+            LocalPlaceRuntime current = SelectNextUnsettledPlace(distances, settledPlaceRuntimeIds);
+            if (current == null)
+            {
+                break;
+            }
+
+            settledPlaceRuntimeIds.Add(current.RuntimeId);
+            if (current == target)
+            {
+                break;
+            }
+
+            foreach (LocalTopologyConnectionRuntime connection in GetOutgoingConnections(current))
+            {
+                if (connection == null || settledPlaceRuntimeIds.Contains(connection.Destination.RuntimeId) == true)
+                {
+                    continue;
+                }
+
+                float candidateDistance = distances[current.RuntimeId] + connection.TraversalCost;
+                if (float.IsInfinity(candidateDistance) == true
+                    || candidateDistance >= distances[connection.Destination.RuntimeId])
+                {
+                    continue;
+                }
+
+                distances[connection.Destination.RuntimeId] = candidateDistance;
+                previousPlaceRuntimeIds[connection.Destination.RuntimeId] = current.RuntimeId;
+                previousConnectionRuntimeIds[connection.Destination.RuntimeId] = connection.RuntimeId;
+            }
+        }
+
+        if (float.IsInfinity(distances[target.RuntimeId]) == true)
+        {
+            return false;
+        }
+
+        List<string> reversePlaceRuntimeIds = new List<string>();
+        List<string> reverseConnectionRuntimeIds = new List<string>();
+        string currentRuntimeId = target.RuntimeId;
+        reversePlaceRuntimeIds.Add(currentRuntimeId);
+
+        while (string.Equals(currentRuntimeId, start.RuntimeId, StringComparison.Ordinal) == false)
+        {
+            if (previousPlaceRuntimeIds.TryGetValue(currentRuntimeId, out string previousPlaceRuntimeId) == false
+                || previousConnectionRuntimeIds.TryGetValue(currentRuntimeId, out string previousConnectionRuntimeId) == false)
+            {
+                return false;
+            }
+
+            reverseConnectionRuntimeIds.Add(previousConnectionRuntimeId);
+            currentRuntimeId = previousPlaceRuntimeId;
+            reversePlaceRuntimeIds.Add(currentRuntimeId);
+        }
+
+        reversePlaceRuntimeIds.Reverse();
+        reverseConnectionRuntimeIds.Reverse();
+        path = new LocalTopologyPath(
+            start.RuntimeId,
+            target.RuntimeId,
+            reversePlaceRuntimeIds,
+            reverseConnectionRuntimeIds,
+            distances[target.RuntimeId]);
+        return true;
+    }
+
     public bool TryValidate(out string diagnostic)
     {
         diagnostic = null;
@@ -628,6 +732,31 @@ public sealed class LocalTopologyRuntime
         }
 
         return false;
+    }
+
+    private LocalPlaceRuntime SelectNextUnsettledPlace(
+        Dictionary<string, float> distances,
+        HashSet<string> settledPlaceRuntimeIds)
+    {
+        LocalPlaceRuntime selected = null;
+        float selectedDistance = float.PositiveInfinity;
+
+        // The places list is insertion ordered, so equal-cost frontier choices are stable.
+        foreach (LocalPlaceRuntime place in places)
+        {
+            if (place == null
+                || settledPlaceRuntimeIds.Contains(place.RuntimeId) == true
+                || distances.TryGetValue(place.RuntimeId, out float distance) == false
+                || distance >= selectedDistance)
+            {
+                continue;
+            }
+
+            selected = place;
+            selectedDistance = distance;
+        }
+
+        return selected;
     }
 
     private bool IsOwnerReferenceConsistent(out string diagnostic)
