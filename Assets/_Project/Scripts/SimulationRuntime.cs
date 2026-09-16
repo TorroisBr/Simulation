@@ -21,6 +21,7 @@ public sealed class SimulationRuntime
     private readonly ExplorableSiteStore explorableSiteStore;
     private readonly ExplorableSiteKnowledgeSystem explorableSiteKnowledgeSystem;
     private readonly ExpeditionSystem expeditionSystem;
+    private readonly PlaceContentStore placeContentStore;
     private readonly NpcDecisionRecorder decisionRecorder;
     private readonly SimulationLogger logger;
 
@@ -28,6 +29,7 @@ public sealed class SimulationRuntime
     public long CurrentDay => simulationTime.AbsoluteDay;
     public IReadOnlyList<CityRuntime> Cities => cities;
     public IReadOnlyList<NpcRuntime> NpcRuntimes => npcRuntimes;
+    public PlaceContentStore PlaceContentStore => placeContentStore;
 
     public SimulationRuntime(
         SimulationTime simulationTime,
@@ -48,7 +50,8 @@ public sealed class SimulationRuntime
         bool guardCrimeEnabled = false,
         ExplorableSiteStore explorableSiteStore = null,
         ExplorableSiteKnowledgeSystem explorableSiteKnowledgeSystem = null,
-        ExpeditionSystem expeditionSystem = null)
+        ExpeditionSystem expeditionSystem = null,
+        PlaceContentStore placeContentStore = null)
     {
         this.simulationTime = simulationTime ?? throw new ArgumentNullException(nameof(simulationTime));
         this.cities = cities != null ? new List<CityRuntime>(cities) : new List<CityRuntime>();
@@ -69,6 +72,7 @@ public sealed class SimulationRuntime
         this.explorableSiteStore = explorableSiteStore;
         this.explorableSiteKnowledgeSystem = explorableSiteKnowledgeSystem;
         this.expeditionSystem = expeditionSystem;
+        this.placeContentStore = placeContentStore;
         this.decisionRecorder = decisionRecorder;
         this.logger = logger;
     }
@@ -103,6 +107,7 @@ public sealed class SimulationRuntime
     public void AdvanceDay()
     {
         simulationTime.AdvanceDay();
+        placeContentStore?.AdvanceDays(1);
         logger?.BeginDay(CurrentDay);
         BeginSimulationDay();
         scheduledDirectiveSystem?.PrepareDay(CurrentDay);
