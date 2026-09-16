@@ -380,6 +380,95 @@ public static class SimulationInvariantValidator
         }
     }
 
+    public static void ValidateLocalTopology(
+        LocalTopologyRuntime topology,
+        RuntimeIdentityRegistry registry = null)
+    {
+        Assert.That(topology, Is.Not.Null);
+        Assert.That(topology.TryValidate(out string diagnostic), Is.True, diagnostic);
+        Assert.That(topology.Owner, Is.Not.Null);
+        Assert.That(topology.Owner.OwnerRuntimeId, Is.Not.Null.And.Not.Empty);
+        Assert.That(topology.Owner.MacroLocationRuntimeId, Is.Not.Null.And.Not.Empty);
+
+        if (registry != null)
+        {
+            if (topology.Owner.OwnerKind == LocalTopologyOwnerKind.City)
+            {
+                Assert.That(registry.TryGetCity(topology.Owner.OwnerRuntimeId, out CityRuntime city), Is.True);
+                Assert.That(city.Location.RuntimeId, Is.EqualTo(topology.Owner.MacroLocationRuntimeId));
+            }
+            else
+            {
+                Assert.That(registry.TryGetExplorableSite(topology.Owner.OwnerRuntimeId, out ExplorableSiteRuntime site), Is.True);
+                Assert.That(site.Location.RuntimeId, Is.EqualTo(topology.Owner.MacroLocationRuntimeId));
+            }
+        }
+
+        HashSet<string> placeIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (LocalPlaceRuntime place in topology.Places)
+        {
+            Assert.That(place, Is.Not.Null);
+            Assert.That(place.RuntimeId, Is.Not.Null.And.Not.Empty);
+            Assert.That(placeIds.Add(place.RuntimeId), Is.True);
+            Assert.That(place.OwningTopology, Is.SameAs(topology));
+            Assert.That(topology.GetDepth(place), Is.GreaterThanOrEqualTo(0));
+            if (place.Parent != null)
+            {
+                Assert.That(topology.ContainsPlace(place.Parent), Is.True);
+            }
+        }
+
+        HashSet<string> connectionIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (LocalTopologyConnectionRuntime connection in topology.Connections)
+        {
+            Assert.That(connection, Is.Not.Null);
+            Assert.That(connection.RuntimeId, Is.Not.Null.And.Not.Empty);
+            Assert.That(connectionIds.Add(connection.RuntimeId), Is.True);
+            Assert.That(connection.OwningTopology, Is.SameAs(topology));
+            Assert.That(topology.ContainsPlace(connection.Origin), Is.True);
+            Assert.That(topology.ContainsPlace(connection.Destination), Is.True);
+            Assert.That(LocalTopologyConnectionRuntime.IsValidTraversalCost(connection.TraversalCost), Is.True);
+        }
+
+        foreach (LocalPlaceRuntime entryPoint in topology.EntryPoints)
+        {
+            Assert.That(topology.ContainsPlace(entryPoint), Is.True);
+        }
+    }
+
+    public static void ValidateLocalTopologyKnowledge(LocalTopologyKnowledgeRuntime knowledge)
+    {
+        Assert.That(knowledge, Is.Not.Null);
+        Assert.That(knowledge.OwnerRuntimeId, Is.Not.Null.And.Not.Empty);
+        HashSet<string> placeKeys = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (LocalPlaceKnowledgeObservation observation in knowledge.PlaceObservations)
+        {
+            Assert.That(observation, Is.Not.Null);
+            Assert.That(observation.TopologyOwnerRuntimeId, Is.Not.Null.And.Not.Empty);
+            Assert.That(observation.LocalPlaceRuntimeId, Is.Not.Null.And.Not.Empty);
+            Assert.That(placeKeys.Add(observation.TopologyOwnerRuntimeId + "\u001f" + observation.LocalPlaceRuntimeId), Is.True);
+            Assert.That(observation.ObservedDay, Is.GreaterThanOrEqualTo(0L));
+            Assert.That(observation.ReceivedDay, Is.GreaterThanOrEqualTo(observation.ObservedDay));
+            Assert.That(Enum.IsDefined(typeof(LocalTopologyKnowledgeSource), observation.Source), Is.True);
+        }
+
+        HashSet<string> connectionKeys = new HashSet<string>(StringComparer.Ordinal);
+        foreach (LocalConnectionKnowledgeObservation observation in knowledge.ConnectionObservations)
+        {
+            Assert.That(observation, Is.Not.Null);
+            Assert.That(observation.TopologyOwnerRuntimeId, Is.Not.Null.And.Not.Empty);
+            Assert.That(observation.LocalConnectionRuntimeId, Is.Not.Null.And.Not.Empty);
+            Assert.That(connectionKeys.Add(observation.TopologyOwnerRuntimeId + "\u001f" + observation.LocalConnectionRuntimeId), Is.True);
+            Assert.That(knowledge.KnowsLocalPlace(observation.TopologyOwnerRuntimeId, observation.OriginLocalPlaceRuntimeId), Is.True);
+            Assert.That(knowledge.KnowsLocalPlace(observation.TopologyOwnerRuntimeId, observation.DestinationLocalPlaceRuntimeId), Is.True);
+            Assert.That(LocalTopologyConnectionRuntime.IsValidTraversalCost(observation.TraversalCost), Is.True);
+            Assert.That(observation.ObservedDay, Is.GreaterThanOrEqualTo(0L));
+            Assert.That(observation.ReceivedDay, Is.GreaterThanOrEqualTo(observation.ObservedDay));
+            Assert.That(Enum.IsDefined(typeof(LocalTopologyKnowledgeSource), observation.Source), Is.True);
+        }
+    }
+
     public static void ValidateDecision(
         NpcDecisionRecord decision,
         RuntimeIdentityRegistry registry = null)
