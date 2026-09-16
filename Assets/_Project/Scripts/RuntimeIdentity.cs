@@ -412,6 +412,39 @@ public sealed class RuntimeIdentityRegistry
         return false;
     }
 
+    public bool TryFindRouteBetweenLocations(
+        string originLocationRuntimeId,
+        string destinationLocationRuntimeId,
+        out SpatialRouteRuntime route)
+    {
+        route = null;
+        if (string.IsNullOrWhiteSpace(originLocationRuntimeId) == true
+            || string.IsNullOrWhiteSpace(destinationLocationRuntimeId) == true)
+        {
+            return false;
+        }
+
+        foreach (SpatialRouteRuntime candidate in routesByRuntimeId.Values)
+        {
+            if (candidate != null
+                && candidate.Origin != null
+                && candidate.Destination != null
+                && string.Equals(candidate.Origin.RuntimeId, originLocationRuntimeId, StringComparison.Ordinal) == true
+                && string.Equals(candidate.Destination.RuntimeId, destinationLocationRuntimeId, StringComparison.Ordinal) == true)
+            {
+                if (route != null)
+                {
+                    route = null;
+                    return false;
+                }
+
+                route = candidate;
+            }
+        }
+
+        return route != null;
+    }
+
     public bool TryGetExplorableSite(string runtimeId, out ExplorableSiteRuntime site)
     {
         if (string.IsNullOrWhiteSpace(runtimeId) == false

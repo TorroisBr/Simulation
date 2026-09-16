@@ -5,7 +5,109 @@ public enum ExpeditionState
 {
     Preparing,
     TravelingToSite,
-    AtSite
+    AtSite,
+    Exploring,
+    Returning,
+    Completed
+}
+
+public enum ExpeditionObjectiveType
+{
+    Explore,
+    Retrieve,
+    Eliminate,
+    Rescue,
+    Scout,
+    Escort,
+    Secure
+}
+
+[Serializable]
+public sealed class ExpeditionObjectiveRuntime
+{
+    private readonly ExpeditionObjectiveType objectiveType;
+    private readonly string targetItemDefinitionId;
+    private readonly string targetOppositionRuntimeId;
+    private readonly int requiredProgress;
+    private readonly bool allowContinueAfterCompletion;
+    private int progress;
+    private bool completed;
+
+    public ExpeditionObjectiveType ObjectiveType => objectiveType;
+    public ExpeditionObjectiveType Type => objectiveType;
+    public string TargetItemDefinitionId => targetItemDefinitionId;
+    public string TargetOppositionRuntimeId => targetOppositionRuntimeId;
+    public int RequiredProgress => requiredProgress;
+    public int Progress => progress;
+    public bool IsCompleted => completed;
+    public bool AllowContinueAfterCompletion => allowContinueAfterCompletion;
+
+    public ExpeditionObjectiveRuntime(
+        ExpeditionObjectiveType objectiveType,
+        string targetItemDefinitionId = null,
+        string targetOppositionRuntimeId = null,
+        int requiredProgress = 1,
+        bool allowContinueAfterCompletion = true)
+    {
+        if (Enum.IsDefined(typeof(ExpeditionObjectiveType), objectiveType) == false)
+        {
+            throw new ArgumentOutOfRangeException(nameof(objectiveType));
+        }
+
+        if (requiredProgress <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(requiredProgress));
+        }
+
+        this.objectiveType = objectiveType;
+        this.targetItemDefinitionId = NormalizeOptionalId(targetItemDefinitionId);
+        this.targetOppositionRuntimeId = NormalizeOptionalId(targetOppositionRuntimeId);
+        this.requiredProgress = requiredProgress;
+        this.allowContinueAfterCompletion = allowContinueAfterCompletion;
+    }
+
+    public static ExpeditionObjectiveRuntime Explore(int requiredProgress = 1)
+    {
+        return new ExpeditionObjectiveRuntime(ExpeditionObjectiveType.Explore, requiredProgress: requiredProgress);
+    }
+
+    public static ExpeditionObjectiveRuntime Retrieve(string itemDefinitionId)
+    {
+        return new ExpeditionObjectiveRuntime(ExpeditionObjectiveType.Retrieve, targetItemDefinitionId: itemDefinitionId);
+    }
+
+    public static ExpeditionObjectiveRuntime Eliminate(string oppositionRuntimeId)
+    {
+        return new ExpeditionObjectiveRuntime(ExpeditionObjectiveType.Eliminate, targetOppositionRuntimeId: oppositionRuntimeId);
+    }
+
+    internal void AddProgress(int progressDelta)
+    {
+        if (progressDelta <= 0 || completed == true)
+        {
+            return;
+        }
+
+        progress = progress >= requiredProgress - progressDelta
+            ? requiredProgress
+            : progress + progressDelta;
+
+        if (progress >= requiredProgress)
+        {
+            completed = true;
+        }
+    }
+
+    internal void MarkCompleted()
+    {
+        progress = requiredProgress;
+        completed = true;
+    }
+
+    private static string NormalizeOptionalId(string value)
+    {
+        return string.IsNullOrWhiteSpace(value) == true ? null : value;
+    }
 }
 
 [Serializable]
@@ -21,7 +123,13 @@ public sealed class ExpeditionRuntime
     private readonly IReadOnlyList<string> memberRuntimeIds;
     private readonly IReadOnlyList<string> performerRuntimeIds;
     private readonly IReadOnlyList<string> supportRuntimeIds;
+    private readonly ExpeditionObjectiveRuntime objective;
+    private readonly List<string> visitedLocalPlaceRuntimeIds = new List<string>();
+    private readonly List<string> observedLocalConnectionRuntimeIds = new List<string>();
+    private readonly IReadOnlyList<string> readOnlyVisitedLocalPlaceRuntimeIds;
+    private readonly IReadOnlyList<string> readOnlyObservedLocalConnectionRuntimeIds;
     private ExpeditionState state;
+    private string currentLocalPlaceRuntimeId;
 
     public string ExpeditionId => expeditionId;
     public string TargetSiteRuntimeId => targetSiteRuntimeId;
@@ -33,8 +141,16 @@ public sealed class ExpeditionRuntime
     public IReadOnlyList<string> MemberRuntimeIds => memberRuntimeIds;
     public IReadOnlyList<string> PerformerRuntimeIds => performerRuntimeIds;
     public IReadOnlyList<string> SupportRuntimeIds => supportRuntimeIds;
+    public ExpeditionObjectiveRuntime Objective => objective;
+    public ExpeditionObjectiveRuntime ObjectiveRuntime => objective;
     public ExpeditionState State => state;
-    public bool IsActive => true;
+    public bool IsActive => state != ExpeditionState.Completed;
+    public bool IsObjectiveComplete => objective.IsCompleted;
+    public string CurrentLocalPlaceRuntimeId => currentLocalPlaceRuntimeId;
+    public IReadOnlyList<string> VisitedLocalPlaceRuntimeIds => readOnlyVisitedLocalPlaceRuntimeIds;
+    public IReadOnlyList<string> ObservedLocalConnectionRuntimeIds => readOnlyObservedLocalConnectionRuntimeIds;
+    public int ExplorationProgress => objective.Progress;
+    public int ExplorationProgressRequired => objective.RequiredProgress;
 
     public ExpeditionRuntime(
         string expeditionId,
@@ -47,7 +163,8 @@ public sealed class ExpeditionRuntime
         IEnumerable<string> memberRuntimeIds,
         IEnumerable<string> performerRuntimeIds,
         IEnumerable<string> supportRuntimeIds,
-        ExpeditionState state = ExpeditionState.Preparing)
+        ExpeditionState state = ExpeditionState.Preparing,
+        ExpeditionObjectiveRuntime objective = null)
     {
         this.expeditionId = RequireId(expeditionId, nameof(expeditionId));
         this.targetSiteRuntimeId = RequireId(targetSiteRuntimeId, nameof(targetSiteRuntimeId));
@@ -66,7 +183,7 @@ public sealed class ExpeditionRuntime
         ValidateParticipants(this.memberRuntimeIds, this.performerRuntimeIds, this.supportRuntimeIds);
 
         this.travelPartyId = NormalizeOptionalId(travelPartyId);
-        if (state != ExpeditionState.Preparing && this.travelPartyId == null)
+        if ((state == ExpeditionState.TravelingToSite || state == ExpeditionState.Returning) && this.travelPartyId == null)
         {
             throw new ArgumentException(
                 "An expedition that has started traveling requires a TravelPartyId.",
@@ -74,7 +191,10 @@ public sealed class ExpeditionRuntime
         }
 
         this.originDecisionId = NormalizeOptionalId(originDecisionId);
+        this.objective = objective ?? ExpeditionObjectiveRuntime.Explore();
         this.state = state;
+        readOnlyVisitedLocalPlaceRuntimeIds = visitedLocalPlaceRuntimeIds.AsReadOnly();
+        readOnlyObservedLocalConnectionRuntimeIds = observedLocalConnectionRuntimeIds.AsReadOnly();
     }
 
     public ExpeditionRuntime(
@@ -86,7 +206,8 @@ public sealed class ExpeditionRuntime
         IEnumerable<string> memberRuntimeIds,
         IEnumerable<string> performerRuntimeIds,
         IEnumerable<string> supportRuntimeIds,
-        string originDecisionId = null)
+        string originDecisionId = null,
+        ExpeditionObjectiveRuntime objective = null)
         : this(
             expeditionId,
             targetSiteRuntimeId,
@@ -98,8 +219,120 @@ public sealed class ExpeditionRuntime
             memberRuntimeIds,
             performerRuntimeIds,
             supportRuntimeIds,
-            ExpeditionState.Preparing)
+            ExpeditionState.Preparing,
+            objective)
     {
+    }
+
+    public bool CanBeginExploration()
+    {
+        return state == ExpeditionState.AtSite;
+    }
+
+    public bool CanContinueExploration()
+    {
+        return state == ExpeditionState.Exploring
+            && (objective.IsCompleted == false || objective.AllowContinueAfterCompletion == true);
+    }
+
+    public bool CanBeginReturn()
+    {
+        return state == ExpeditionState.AtSite || state == ExpeditionState.Exploring;
+    }
+
+    public bool TryBeginExploration()
+    {
+        if (CanBeginExploration() == false)
+        {
+            return false;
+        }
+
+        state = ExpeditionState.Exploring;
+        return true;
+    }
+
+    public bool TryAdvanceAbstractProgress(int progressDelta = 1)
+    {
+        if (CanContinueExploration() == false || progressDelta <= 0)
+        {
+            return false;
+        }
+
+        if (objective.ObjectiveType == ExpeditionObjectiveType.Explore
+            || objective.ObjectiveType == ExpeditionObjectiveType.Scout)
+        {
+            objective.AddProgress(progressDelta);
+        }
+        return true;
+    }
+
+    public bool TrySetCurrentLocalPlace(string localPlaceRuntimeId)
+    {
+        if (CanContinueExploration() == false || string.IsNullOrWhiteSpace(localPlaceRuntimeId) == true)
+        {
+            return false;
+        }
+
+        currentLocalPlaceRuntimeId = localPlaceRuntimeId;
+        if (visitedLocalPlaceRuntimeIds.Contains(localPlaceRuntimeId) == false)
+        {
+            visitedLocalPlaceRuntimeIds.Add(localPlaceRuntimeId);
+        }
+
+        if (objective.ObjectiveType == ExpeditionObjectiveType.Explore
+            || objective.ObjectiveType == ExpeditionObjectiveType.Scout)
+        {
+            objective.AddProgress(1);
+        }
+        return true;
+    }
+
+    public bool TryRecordObservedConnection(string localConnectionRuntimeId)
+    {
+        if (CanContinueExploration() == false || string.IsNullOrWhiteSpace(localConnectionRuntimeId) == true)
+        {
+            return false;
+        }
+
+        if (observedLocalConnectionRuntimeIds.Contains(localConnectionRuntimeId) == false)
+        {
+            observedLocalConnectionRuntimeIds.Add(localConnectionRuntimeId);
+        }
+
+        return true;
+    }
+
+    public bool TryMarkObjectiveComplete()
+    {
+        if (state != ExpeditionState.Exploring && state != ExpeditionState.AtSite)
+        {
+            return false;
+        }
+
+        objective.MarkCompleted();
+        return true;
+    }
+
+    public bool TryBeginReturn()
+    {
+        if (CanBeginReturn() == false)
+        {
+            return false;
+        }
+
+        state = ExpeditionState.Returning;
+        return true;
+    }
+
+    public bool TryComplete()
+    {
+        if (state != ExpeditionState.Returning)
+        {
+            return false;
+        }
+
+        state = ExpeditionState.Completed;
+        return true;
     }
 
     internal bool TryBeginTravel(string newTravelPartyId)
@@ -122,6 +355,28 @@ public sealed class ExpeditionRuntime
         }
 
         state = ExpeditionState.AtSite;
+        return true;
+    }
+
+    internal bool TryBeginReturnTravel(string newTravelPartyId)
+    {
+        if (state != ExpeditionState.Returning || string.IsNullOrWhiteSpace(newTravelPartyId) == true)
+        {
+            return false;
+        }
+
+        travelPartyId = newTravelPartyId;
+        return true;
+    }
+
+    internal bool TryCancelReturn()
+    {
+        if (state != ExpeditionState.Returning)
+        {
+            return false;
+        }
+
+        state = currentLocalPlaceRuntimeId == null ? ExpeditionState.AtSite : ExpeditionState.Exploring;
         return true;
     }
 

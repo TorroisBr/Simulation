@@ -107,6 +107,20 @@ public sealed class ExpeditionStore
         return true;
     }
 
+    public bool Complete(string expeditionId)
+    {
+        ExpeditionRuntime expedition = GetById(expeditionId);
+
+        if (expedition == null || expedition.State != ExpeditionState.Completed)
+        {
+            return false;
+        }
+
+        expeditionsById.Remove(expeditionId);
+        activeExpeditions.Remove(expedition);
+        return true;
+    }
+
     private static bool ContainsMember(IReadOnlyList<string> memberRuntimeIds, string npcRuntimeId)
     {
         if (memberRuntimeIds == null)

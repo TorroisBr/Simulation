@@ -19,9 +19,12 @@ public sealed class ExpeditionSystem
     private readonly TravelPartySystem travelPartySystem;
     private readonly TravelPartyStore travelPartyStore;
     private readonly ExplorableSiteKnowledgeSystem explorableSiteKnowledgeSystem;
+    private readonly LocalTopologyKnowledgeSystem localTopologyKnowledgeSystem;
     private readonly SimulationTime simulationTime;
     private readonly DomainEventRecorder domainEventRecorder;
     private readonly SimulationLogger logger;
+    private readonly PlaceContentStore placeContentStore;
+    private readonly LocalTopologyStore localTopologyStore;
 
     public ExpeditionStore Store => expeditionStore;
 
@@ -35,7 +38,9 @@ public sealed class ExpeditionSystem
         ExplorableSiteKnowledgeSystem explorableSiteKnowledgeSystem,
         SimulationTime simulationTime,
         DomainEventRecorder domainEventRecorder = null,
-        SimulationLogger logger = null)
+        SimulationLogger logger = null,
+        PlaceContentStore placeContentStore = null,
+        LocalTopologyStore localTopologyStore = null)
     {
         this.expeditionStore = expeditionStore ?? throw new ArgumentNullException(nameof(expeditionStore));
         this.idAllocator = idAllocator ?? throw new ArgumentNullException(nameof(idAllocator));
@@ -45,14 +50,26 @@ public sealed class ExpeditionSystem
         this.travelPartyStore = travelPartyStore ?? throw new ArgumentNullException(nameof(travelPartyStore));
         this.explorableSiteKnowledgeSystem = explorableSiteKnowledgeSystem
             ?? throw new ArgumentNullException(nameof(explorableSiteKnowledgeSystem));
+        this.localTopologyKnowledgeSystem = new LocalTopologyKnowledgeSystem();
         this.simulationTime = simulationTime ?? throw new ArgumentNullException(nameof(simulationTime));
         this.domainEventRecorder = domainEventRecorder;
         this.logger = logger ?? new SimulationLogger(null);
+        this.placeContentStore = placeContentStore;
+        this.localTopologyStore = localTopologyStore;
     }
 
     public bool TryStartExpedition(
         ExplorableSiteRuntime targetSite,
         ActionExecutionContext context,
+        out ExpeditionRuntime expedition)
+    {
+        return TryStartExpedition(targetSite, context, null, out expedition);
+    }
+
+    public bool TryStartExpedition(
+        ExplorableSiteRuntime targetSite,
+        ActionExecutionContext context,
+        ExpeditionObjectiveRuntime objective,
         out ExpeditionRuntime expedition)
     {
         expedition = null;
@@ -93,7 +110,9 @@ public sealed class ExpeditionSystem
                 context.OriginDecisionId,
                 preparation.MemberRuntimeIds,
                 preparation.PerformerRuntimeIds,
-                preparation.SupportRuntimeIds);
+                preparation.SupportRuntimeIds,
+                ExpeditionState.Preparing,
+                objective);
         }
         catch (ArgumentException exception)
         {
@@ -149,6 +168,383 @@ public sealed class ExpeditionSystem
         return expeditionStore.IsNpcOnActiveExpedition(npcRuntimeId);
     }
 
+    public bool CanBeginExploration(ExpeditionRuntime expedition, out string reason)
+    {
+        reason = null;
+        if (TryValidateActiveExpedition(expedition, out reason) == false)
+        {
+            return false;
+        }
+
+        if (expedition.CanBeginExploration() == false)
+        {
+            reason = "An expedition can begin exploring only after reaching its target site.";
+            return false;
+        }
+
+        return true;
+    }
+
+    public bool TryBeginExploration(ExpeditionRuntime expedition, out string reason)
+    {
+        if (CanBeginExploration(expedition, out reason) == false)
+        {
+            return false;
+        }
+
+        if (expedition.TryBeginExploration() == false)
+        {
+            reason = "Expedition could not enter the Exploring state.";
+            return false;
+        }
+
+        return true;
+    }
+
+    public bool CanContinueExploration(ExpeditionRuntime expedition, out string reason)
+    {
+        reason = null;
+        if (TryValidateActiveExpedition(expedition, out reason) == false)
+        {
+            return false;
+        }
+
+        if (expedition.CanContinueExploration() == false)
+        {
+            reason = "Expedition is not allowed to continue exploring in its current state.";
+            return false;
+        }
+
+        return true;
+    }
+
+    public bool TryContinueExploration(ExpeditionRuntime expedition, out string reason)
+    {
+        if (CanContinueExploration(expedition, out reason) == false)
+        {
+            return false;
+        }
+
+        if (localTopologyStore != null
+            && localTopologyStore.TryGetTopologyForOwner(expedition.TargetSiteRuntimeId, out LocalTopologyRuntime topology) == true
+            && topology != null)
+        {
+            reason = "A detailed topology requires an explicit LocalPlaceRuntime or connection target.";
+            return false;
+        }
+
+        if (expedition.TryAdvanceAbstractProgress() == false)
+        {
+            reason = "Abstract exploration progress could not advance.";
+            return false;
+        }
+
+        return true;
+    }
+
+    public bool TryContinueExploration(
+        ExpeditionRuntime expedition,
+        LocalPlaceRuntime place,
+        out string reason)
+    {
+        return TryExploreLocalPlace(expedition, place, out reason);
+    }
+
+    public bool TryExploreLocalPlace(
+        ExpeditionRuntime expedition,
+        LocalPlaceRuntime place,
+        out string reason)
+    {
+        reason = null;
+        if (CanContinueExploration(expedition, out reason) == false)
+        {
+            return false;
+        }
+
+        if (place == null
+            || localTopologyStore == null
+            || localTopologyStore.TryGetTopologyForOwner(expedition.TargetSiteRuntimeId, out LocalTopologyRuntime topology) == false
+            || topology == null
+            || topology.IsPublished == false
+            || topology.ContainsPlace(place) == false)
+        {
+            reason = "Local exploration target must belong to the published target-site topology.";
+            return false;
+        }
+
+        foreach (string memberRuntimeId in expedition.MemberRuntimeIds)
+        {
+            if (identityRegistry.TryGetNpc(memberRuntimeId, out NpcRuntime member) == false || member == null)
+            {
+                reason = "Every expedition member must resolve before observing a local place.";
+                return false;
+            }
+        }
+
+        foreach (string memberRuntimeId in expedition.MemberRuntimeIds)
+        {
+            identityRegistry.TryGetNpc(memberRuntimeId, out NpcRuntime member);
+            localTopologyKnowledgeSystem.RecordDirectObservation(
+                member,
+                topology,
+                place,
+                simulationTime.AbsoluteDay);
+        }
+
+        if (expedition.TrySetCurrentLocalPlace(place.RuntimeId) == false)
+        {
+            reason = "Expedition could not record its local exploration position.";
+            return false;
+        }
+
+        return true;
+    }
+
+    public bool TryTraverseLocalConnection(
+        ExpeditionRuntime expedition,
+        LocalTopologyConnectionRuntime connection,
+        out string reason)
+    {
+        reason = null;
+        if (CanContinueExploration(expedition, out reason) == false)
+        {
+            return false;
+        }
+
+        if (connection == null
+            || localTopologyStore == null
+            || localTopologyStore.TryGetTopologyForOwner(expedition.TargetSiteRuntimeId, out LocalTopologyRuntime topology) == false
+            || topology == null
+            || topology.IsPublished == false
+            || topology.ContainsConnection(connection) == false)
+        {
+            reason = "Local traversal requires a connection from the published target-site topology.";
+            return false;
+        }
+
+        if (expedition.CurrentLocalPlaceRuntimeId == null
+            || string.Equals(expedition.CurrentLocalPlaceRuntimeId, connection.Origin.RuntimeId, StringComparison.Ordinal) == false)
+        {
+            reason = "Local traversal must follow a directed connection from the expedition's current place.";
+            return false;
+        }
+
+        foreach (string memberRuntimeId in expedition.MemberRuntimeIds)
+        {
+            if (identityRegistry.TryGetNpc(memberRuntimeId, out NpcRuntime member) == false || member == null)
+            {
+                reason = "Every expedition member must resolve before observing a local connection.";
+                return false;
+            }
+        }
+
+        foreach (string memberRuntimeId in expedition.MemberRuntimeIds)
+        {
+            identityRegistry.TryGetNpc(memberRuntimeId, out NpcRuntime member);
+            localTopologyKnowledgeSystem.RecordDirectObservation(
+                member,
+                topology,
+                connection,
+                simulationTime.AbsoluteDay);
+        }
+
+        if (expedition.TryRecordObservedConnection(connection.RuntimeId) == false
+            || expedition.TrySetCurrentLocalPlace(connection.Destination.RuntimeId) == false)
+        {
+            reason = "Expedition could not record the directed local traversal.";
+            return false;
+        }
+
+        return true;
+    }
+
+    public bool TryRetrieveTargetResource(
+        ExpeditionRuntime expedition,
+        ItemData item,
+        int amount,
+        out string reason)
+    {
+        ExplorableSiteRuntime site = expedition != null
+            ? explorableSiteStore.GetByRuntimeId(expedition.TargetSiteRuntimeId)
+            : null;
+        PlaceContentOwnerReference owner = site != null
+            ? PlaceContentOwnerReference.ForExplorableSite(site)
+            : null;
+        return TryRetrieveTargetResource(
+            expedition,
+            owner,
+            item,
+            amount,
+            out reason);
+    }
+
+    public bool TryRetrieveTargetResource(
+        ExpeditionRuntime expedition,
+        PlaceContentOwnerReference owner,
+        ItemData item,
+        int amount,
+        out string reason)
+    {
+        reason = null;
+        if (CanContinueExploration(expedition, out reason) == false
+            || placeContentStore == null
+            || owner == null
+            || item == null
+            || amount <= 0)
+        {
+            reason = reason ?? "Retrieval requires an active exploration and a valid content owner, item, and amount.";
+            return false;
+        }
+
+        if (identityRegistry.TryGetNpc(expedition.PerformerRuntimeIds[0], out NpcRuntime performer) == false
+            || performer == null
+            || performer.Inventory.CanAddItem(item, amount) == false
+            || placeContentStore.TryGet(owner, out PlaceContentRuntime content) == false
+            || content.GetAmount(item) < amount
+            || content.GetStack(item) == null)
+        {
+            reason = "Target resource is not available or the performer cannot carry it.";
+            return false;
+        }
+
+        float averageUnitCost = content.GetStack(item).AverageUnitCost;
+        if (placeContentStore.TryTakeStack(owner, item, amount, out int removedAmount) == false)
+        {
+            reason = "Target resource could not be removed atomically from the place.";
+            return false;
+        }
+
+        performer.Inventory.AddItem(item, removedAmount, averageUnitCost);
+        if (expedition.Objective.ObjectiveType == ExpeditionObjectiveType.Retrieve
+            && (string.IsNullOrWhiteSpace(expedition.Objective.TargetItemDefinitionId) == true
+                || expedition.Objective.TargetItemDefinitionId == item.DefinitionId))
+        {
+            expedition.TryMarkObjectiveComplete();
+        }
+
+        return true;
+    }
+
+    public bool TryResolvePlaceOpposition(
+        ExpeditionRuntime expedition,
+        PlaceContentOwnerReference owner,
+        PlaceOppositionRuntime opposition,
+        Conflict conflict,
+        ConflictResolutionService conflictResolutionService,
+        out ConflictResolutionResult result,
+        out string reason)
+    {
+        result = null;
+        reason = null;
+        if (CanContinueExploration(expedition, out reason) == false
+            || placeContentStore == null)
+        {
+            reason = reason ?? "Opposition resolution requires an active exploration and a content store.";
+            return false;
+        }
+
+        if (placeContentStore.TryResolveOpposition(
+            owner,
+            opposition,
+            conflict,
+            conflictResolutionService,
+            out result,
+            out reason) == false)
+        {
+            return false;
+        }
+
+        if (expedition.Objective.ObjectiveType == ExpeditionObjectiveType.Eliminate
+            && expedition.Objective.TargetOppositionRuntimeId == opposition.RuntimeId
+            && opposition.IsResolved)
+        {
+            expedition.TryMarkObjectiveComplete();
+        }
+
+        return true;
+    }
+
+    public bool TryBeginReturn(ExpeditionRuntime expedition, out string reason)
+    {
+        reason = null;
+        if (TryValidateActiveExpedition(expedition, out reason) == false
+            || expedition.CanBeginReturn() == false)
+        {
+            reason = reason ?? "Expedition can begin returning only from AtSite or Exploring.";
+            return false;
+        }
+
+        if (identityRegistry.TryFindRouteBetweenLocations(
+            expedition.TargetLocationRuntimeId,
+            expedition.OriginLocationRuntimeId,
+            out SpatialRouteRuntime returnRoute) == false
+            || returnRoute == null)
+        {
+            reason = "No unique real macro return route exists for this expedition.";
+            return false;
+        }
+
+        List<ActionExecutionParticipant> participants = new List<ActionExecutionParticipant>();
+        foreach (string performerRuntimeId in expedition.PerformerRuntimeIds)
+        {
+            participants.Add(new ActionExecutionParticipant(performerRuntimeId, ActionExecutionParticipantRole.Performer));
+        }
+
+        foreach (string supportRuntimeId in expedition.SupportRuntimeIds)
+        {
+            participants.Add(new ActionExecutionParticipant(supportRuntimeId, ActionExecutionParticipantRole.Support));
+        }
+
+        ActionExecutionContext returnContext = new ActionExecutionContext(
+            "return-" + expedition.ExpeditionId,
+            participants,
+            expedition.OriginLocationRuntimeId,
+            returnRoute.RuntimeId,
+            expedition.OriginDecisionId);
+
+        if (travelPartySystem.CanPlanKnownGroupTravel(returnContext, out reason) == false)
+        {
+            return false;
+        }
+
+        if (expedition.TryBeginReturn() == false)
+        {
+            reason = "Expedition could not enter the Returning state.";
+            return false;
+        }
+
+        if (travelPartySystem.TryStartTravelParty(returnContext, out TravelPartyRuntime party) == false)
+        {
+            expedition.TryCancelReturn();
+            reason = "The real macro return TravelParty could not be started.";
+            return false;
+        }
+
+        if (expedition.TryBeginReturnTravel(party.TravelPartyId) == false)
+        {
+            expedition.TryCancelReturn();
+            travelPartyStore.Remove(party.TravelPartyId);
+            reason = "Expedition could not associate its real macro return TravelParty.";
+            return false;
+        }
+
+        return true;
+    }
+
+    private bool TryValidateActiveExpedition(ExpeditionRuntime expedition, out string reason)
+    {
+        reason = null;
+        if (expedition == null
+            || expeditionStore.GetById(expedition.ExpeditionId) != expedition
+            || expedition.IsActive == false)
+        {
+            reason = "Expedition is not the active World Truth runtime.";
+            return false;
+        }
+
+        return true;
+    }
+
     public bool TryGetExpeditionForNpc(string npcRuntimeId, out ExpeditionRuntime expedition)
     {
         return expeditionStore.TryGetExpeditionForNpc(npcRuntimeId, out expedition);
@@ -167,35 +563,48 @@ public sealed class ExpeditionSystem
         foreach (ExpeditionRuntime expedition in activeExpeditions)
         {
             if (expedition == null
-                || expedition.State != ExpeditionState.TravelingToSite
                 || HasArrivedMember(expedition, arrivedNpcs) == false
-                || CanReconcileArrival(expedition) == false)
+                || (expedition.State != ExpeditionState.TravelingToSite
+                    && expedition.State != ExpeditionState.Returning))
             {
                 continue;
             }
 
-            if (expedition.TryArriveAtSite() == false)
+            if (expedition.State == ExpeditionState.TravelingToSite)
             {
+                if (CanReconcileArrival(expedition) == false || expedition.TryArriveAtSite() == false)
+                {
+                    continue;
+                }
+
+                bool eventRecorded = domainEventRecorder == null || domainEventRecorder.Record(
+                    (eventId, absoluteDay, recordSequence) => new ExpeditionArrivedAtSiteEvent(
+                        eventId,
+                        absoluteDay,
+                        recordSequence,
+                        expedition.ExpeditionId,
+                        expedition.TargetSiteRuntimeId,
+                        expedition.OriginLocationRuntimeId,
+                        expedition.TargetLocationRuntimeId,
+                        expedition.TravelPartyId,
+                        expedition.PerformerRuntimeIds,
+                        expedition.SupportRuntimeIds,
+                        expedition.OriginDecisionId));
+
+                if (eventRecorded == false)
+                {
+                    logger.LogWarning("Expedition arrival event could not be recorded for ExpeditionId '" + expedition.ExpeditionId + "'.");
+                }
+
+                arrivedExpeditions.Add(expedition);
                 continue;
             }
 
-            bool eventRecorded = domainEventRecorder == null || domainEventRecorder.Record(
-                (eventId, absoluteDay, recordSequence) => new ExpeditionArrivedAtSiteEvent(
-                    eventId,
-                    absoluteDay,
-                    recordSequence,
-                    expedition.ExpeditionId,
-                    expedition.TargetSiteRuntimeId,
-                    expedition.OriginLocationRuntimeId,
-                    expedition.TargetLocationRuntimeId,
-                    expedition.TravelPartyId,
-                    expedition.PerformerRuntimeIds,
-                    expedition.SupportRuntimeIds,
-                    expedition.OriginDecisionId));
-
-            if (eventRecorded == false)
+            if (CanReconcileReturn(expedition) == false
+                || expedition.TryComplete() == false
+                || expeditionStore.Complete(expedition.ExpeditionId) == false)
             {
-                logger.LogWarning("Expedition arrival event could not be recorded for ExpeditionId '" + expedition.ExpeditionId + "'.");
+                continue;
             }
 
             arrivedExpeditions.Add(expedition);
@@ -354,6 +763,30 @@ public sealed class ExpeditionSystem
                 || string.IsNullOrWhiteSpace(member.ActiveTravelPartyId) == false
                 || member.CurrentLocation == null
                 || string.Equals(member.CurrentLocation.RuntimeId, expedition.TargetLocationRuntimeId, StringComparison.Ordinal) == false)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private bool CanReconcileReturn(ExpeditionRuntime expedition)
+    {
+        if (string.IsNullOrWhiteSpace(expedition.TravelPartyId) == true
+            || travelPartyStore.GetById(expedition.TravelPartyId) != null)
+        {
+            return false;
+        }
+
+        foreach (string memberRuntimeId in expedition.MemberRuntimeIds)
+        {
+            if (identityRegistry.TryGetNpc(memberRuntimeId, out NpcRuntime member) == false
+                || member == null
+                || member.IsTraveling == true
+                || string.IsNullOrWhiteSpace(member.ActiveTravelPartyId) == false
+                || member.CurrentLocation == null
+                || string.Equals(member.CurrentLocation.RuntimeId, expedition.OriginLocationRuntimeId, StringComparison.Ordinal) == false)
             {
                 return false;
             }
