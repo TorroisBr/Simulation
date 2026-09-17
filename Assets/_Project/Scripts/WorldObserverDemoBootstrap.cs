@@ -193,7 +193,8 @@ public sealed class WorldObserverDemoBootstrap : MonoBehaviour
             topologies,
             content,
             () => observerView.SelectedPlaceRuntimeId,
-            observerView.Refresh));
+            observerView.Refresh,
+            new DeterministicWorldCommandNaturalLanguageTranslator()));
     }
 
     private CityData CreateCityDefinition(string id, string displayName)

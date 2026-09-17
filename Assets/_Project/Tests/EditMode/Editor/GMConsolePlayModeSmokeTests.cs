@@ -55,6 +55,52 @@ public sealed class GMConsolePlayModeSmokeTests
         yield return new ExitPlayMode();
     }
 
+    [UnityTest]
+    public IEnumerator GmConsoleNaturalLanguageCanTranslatePreviewApplyAndRefreshObserver()
+    {
+        EditorSceneManager.OpenScene(WorldObserverAssetBuilder.ScenePath, OpenSceneMode.Single);
+
+        yield return new EnterPlayMode();
+        yield return null;
+
+        WorldObserverDemoBootstrap bootstrap = Object.FindFirstObjectByType<WorldObserverDemoBootstrap>();
+        Assert.That(bootstrap, Is.Not.Null);
+        GMConsolePanel panel = bootstrap.GmConsolePanel;
+        Assert.That(panel, Is.Not.Null);
+        Assert.That(panel.NaturalLanguageInput, Is.Not.Null);
+        Assert.That(panel.NaturalLanguageTranslateButton, Is.Not.Null);
+
+        panel.Show();
+        panel.NaturalLanguageInput.text = "declare 1 observer-demo-ore no observer-demo-ruin-runtime";
+        int refreshBefore = bootstrap.ObserverView.RefreshCount;
+        panel.NaturalLanguageTranslateButton.onClick.Invoke();
+        yield return null;
+
+        Assert.That(panel.NaturalLanguageTranslationResult, Is.Not.Null);
+        Assert.That(panel.NaturalLanguageTranslationResult.Status, Is.EqualTo(NaturalLanguageTranslationStatus.Resolved));
+        StringAssert.Contains("Command: DeclareStackResource", panel.NaturalLanguageResultText.text);
+        Assert.That(bootstrap.WorldCommandService.RecordStore.Records, Is.Empty);
+
+        panel.NaturalLanguagePreviewButton.onClick.Invoke();
+        yield return null;
+
+        Assert.That(panel.NaturalLanguagePreview, Is.Not.Null);
+        Assert.That(panel.NaturalLanguagePreview.IsValid, Is.True, panel.NaturalLanguagePreview.Presentation);
+        Assert.That(panel.NaturalLanguageApplyButton.interactable, Is.True);
+
+        panel.NaturalLanguageApplyButton.onClick.Invoke();
+        yield return null;
+
+        Assert.That(panel.LastResult, Is.Not.Null);
+        Assert.That(panel.LastResult.Success, Is.True, panel.LastResult.Diagnostic);
+        Assert.That(bootstrap.WorldCommandService.RecordStore.Records, Has.Count.EqualTo(1));
+        Assert.That(bootstrap.ContentStore.Places, Has.Count.EqualTo(1));
+        Assert.That(bootstrap.ContentStore.Places[0].StackedContent, Has.Count.EqualTo(1));
+        Assert.That(bootstrap.ObserverView.RefreshCount, Is.EqualTo(refreshBefore + 1));
+
+        yield return new ExitPlayMode();
+    }
+
     private static void SetInput(GMConsolePanel panel, string key, string value)
     {
         TMP_InputField input = panel.GetInput(key);

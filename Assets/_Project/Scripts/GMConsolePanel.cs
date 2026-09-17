@@ -17,6 +17,7 @@ public sealed class WorldObserverGmConsoleContext
     public PlaceContentStore ContentStore { get; }
     public Func<string> SelectedPlaceRuntimeId { get; }
     public Action RefreshObserver { get; }
+    public IWorldCommandNaturalLanguageTranslator NaturalLanguageTranslator { get; }
 
     public WorldObserverGmConsoleContext(
         WorldCommandService commandService,
@@ -28,7 +29,8 @@ public sealed class WorldObserverGmConsoleContext
         LocalTopologyStore topologyStore,
         PlaceContentStore contentStore,
         Func<string> selectedPlaceRuntimeId = null,
-        Action refreshObserver = null)
+        Action refreshObserver = null,
+        IWorldCommandNaturalLanguageTranslator naturalLanguageTranslator = null)
     {
         CommandService = commandService ?? throw new ArgumentNullException(nameof(commandService));
         DefinitionResolver = definitionResolver;
@@ -40,6 +42,7 @@ public sealed class WorldObserverGmConsoleContext
         ContentStore = contentStore;
         SelectedPlaceRuntimeId = selectedPlaceRuntimeId;
         RefreshObserver = refreshObserver;
+        NaturalLanguageTranslator = naturalLanguageTranslator ?? new DeterministicWorldCommandNaturalLanguageTranslator();
     }
 }
 
@@ -79,7 +82,16 @@ public sealed class GMConsolePanel : MonoBehaviour
     private Button previewButton;
     private Button applyButton;
     private Button closeButton;
+    private TMP_InputField naturalLanguageInput;
+    private Button naturalLanguageTranslateButton;
+    private Button naturalLanguagePreviewButton;
+    private Button naturalLanguageApplyButton;
+    private TMP_Text naturalLanguageResultText;
     private WorldObserverGmConsoleContext context;
+    private IWorldCommandNaturalLanguageTranslator naturalLanguageTranslator;
+    private NaturalLanguageTranslationResult naturalLanguageTranslationResult;
+    private WorldCommandPreview naturalLanguagePreview;
+    private string translatedNaturalLanguageText;
     private WorldCommand pendingCommand;
     private WorldCommandPreview lastPreview;
     private WorldCommandResult lastResult;
@@ -97,6 +109,14 @@ public sealed class GMConsolePanel : MonoBehaviour
     public WorldCommandPreview LastPreview => lastPreview;
     public WorldCommandResult LastResult => lastResult;
     public bool IsReady => ready;
+    public TMP_InputField NaturalLanguageInput => naturalLanguageInput ?? FindChildComponent<TMP_InputField>("NaturalLanguageInput");
+    public Button NaturalLanguageTranslateButton => naturalLanguageTranslateButton ?? FindChildComponent<Button>("NaturalLanguageTranslateButton");
+    public Button NaturalLanguagePreviewButton => naturalLanguagePreviewButton ?? FindChildComponent<Button>("NaturalLanguagePreviewButton");
+    public Button NaturalLanguageApplyButton => naturalLanguageApplyButton ?? FindChildComponent<Button>("NaturalLanguageApplyButton");
+    public TMP_Text NaturalLanguageResultText => naturalLanguageResultText ?? FindChildComponent<TMP_Text>("NaturalLanguageResultText");
+    public IWorldCommandNaturalLanguageTranslator NaturalLanguageTranslator => naturalLanguageTranslator;
+    public NaturalLanguageTranslationResult NaturalLanguageTranslationResult => naturalLanguageTranslationResult;
+    public WorldCommandPreview NaturalLanguagePreview => naturalLanguagePreview;
 
     public TMP_InputField GetInput(string key)
     {
@@ -124,11 +144,13 @@ public sealed class GMConsolePanel : MonoBehaviour
 
         if (ready)
         {
+            EnsureNaturalLanguageUi();
             return;
         }
 
         if (TryCacheSerializedUi())
         {
+            EnsureNaturalLanguageUi();
             ready = true;
             SetVisibleForm();
             applyButton.interactable = false;
@@ -140,6 +162,7 @@ public sealed class GMConsolePanel : MonoBehaviour
         BuildHeader();
         BuildForms();
         BuildPreviewAndHistory();
+        EnsureNaturalLanguageUi();
         ready = true;
         if (wasActive)
         {
@@ -151,10 +174,18 @@ public sealed class GMConsolePanel : MonoBehaviour
     {
         EnsureReady();
         context = nextContext ?? throw new ArgumentNullException(nameof(nextContext));
+        naturalLanguageTranslator = context.NaturalLanguageTranslator ?? naturalLanguageTranslator ?? new DeterministicWorldCommandNaturalLanguageTranslator();
         ApplySelectedPlaceDefault();
         RefreshDefinitionDefaults();
         RefreshCommandHistory();
         SetPreviewMessage("Choose a structured command and press Preview.");
+        InvalidateNaturalLanguageTranslation();
+    }
+
+    public void SetNaturalLanguageTranslator(IWorldCommandNaturalLanguageTranslator translator)
+    {
+        naturalLanguageTranslator = translator ?? new DeterministicWorldCommandNaturalLanguageTranslator();
+        InvalidateNaturalLanguageTranslation();
     }
 
     public void Toggle()
@@ -228,6 +259,86 @@ public sealed class GMConsolePanel : MonoBehaviour
         pendingCommand = null;
         SetPreviewMessage(FormatResult(lastResult));
         applyButton.interactable = false;
+        RefreshCommandHistory();
+        if (lastResult.Success)
+        {
+            context.RefreshObserver?.Invoke();
+        }
+    }
+
+    public void TranslateNaturalLanguage()
+    {
+        EnsureReady();
+        EnsureNaturalLanguageUi();
+        InvalidateNaturalLanguageTranslation(clearText: false);
+
+        if (context == null)
+        {
+            SetNaturalLanguageMessage("GM Console is not bound to a WorldCommandService.");
+            return;
+        }
+
+        if (naturalLanguageTranslator == null)
+        {
+            naturalLanguageTranslator = new DeterministicWorldCommandNaturalLanguageTranslator();
+        }
+
+        string text = naturalLanguageInput == null ? string.Empty : naturalLanguageInput.text;
+        try
+        {
+            naturalLanguageTranslationResult = naturalLanguageTranslator.Translate(
+                new NaturalLanguageWorldCommandRequest(text, WorldCommandOrigin.GM),
+                CreateNaturalLanguageTranslationContext());
+        }
+        catch (Exception exception)
+        {
+            naturalLanguageTranslationResult = NaturalLanguageTranslationResult.Invalid(
+                new[] { new WorldCommandTranslationDiagnostic("TranslationException", exception.Message) });
+        }
+
+        translatedNaturalLanguageText = text;
+        naturalLanguagePreview = null;
+        UpdateNaturalLanguageButtons();
+        SetNaturalLanguageMessage(FormatNaturalLanguageTranslation(naturalLanguageTranslationResult));
+    }
+
+    public void PreviewNaturalLanguage()
+    {
+        EnsureReady();
+        EnsureNaturalLanguageUi();
+        if (IsCurrentNaturalLanguageTranslationResolved() == false)
+        {
+            UpdateNaturalLanguageButtons();
+            return;
+        }
+
+        naturalLanguagePreview = context.CommandService.Preview(naturalLanguageTranslationResult.Command);
+        UpdateNaturalLanguageButtons();
+        SetNaturalLanguageMessage(
+            FormatNaturalLanguageTranslation(naturalLanguageTranslationResult)
+            + "\n\nPreview\n"
+            + FormatPreview(naturalLanguagePreview));
+    }
+
+    public void ApplyNaturalLanguage()
+    {
+        EnsureReady();
+        EnsureNaturalLanguageUi();
+        if (IsCurrentNaturalLanguageTranslationResolved() == false
+            || naturalLanguagePreview == null
+            || naturalLanguagePreview.IsValid == false)
+        {
+            UpdateNaturalLanguageButtons();
+            return;
+        }
+
+        lastResult = context.CommandService.Execute(naturalLanguageTranslationResult.Command);
+        SetNaturalLanguageMessage(
+            FormatNaturalLanguageTranslation(naturalLanguageTranslationResult)
+            + "\n\n"
+            + FormatResult(lastResult));
+        naturalLanguagePreview = null;
+        UpdateNaturalLanguageButtons();
         RefreshCommandHistory();
         if (lastResult.Success)
         {
@@ -441,6 +552,8 @@ public sealed class GMConsolePanel : MonoBehaviour
         formContent = WorldObserverUiFactory.CreateScrollContent(transform, "DynamicFormArea", 62f);
         WorldObserverUiFactory.SetAnchors(formContent, new Vector2(0f, 0f), new Vector2(0.52f, 1f), new Vector2(14f, 14f), new Vector2(-8f, -62f));
 
+        BuildNaturalLanguageSection();
+
         GameObject relocate = CreateGroup("RelocateNpcForm");
         AddInput(relocate.transform, "relocate.npc", "NPC RuntimeId");
         AddInput(relocate.transform, "relocate.destination", "Destination macro LocationRuntimeId");
@@ -488,6 +601,119 @@ public sealed class GMConsolePanel : MonoBehaviour
         AddInput(conflict.transform, "conflict.forcedWinner", "Forced winning SideId (optional)");
 
         SetVisibleForm();
+    }
+
+    private void EnsureNaturalLanguageUi()
+    {
+        if (naturalLanguageInput != null
+            && naturalLanguageTranslateButton != null
+            && naturalLanguagePreviewButton != null
+            && naturalLanguageApplyButton != null
+            && naturalLanguageResultText != null)
+        {
+            HookNaturalLanguageUi();
+            return;
+        }
+
+        Transform section = formContent?.Find("NaturalLanguageCommandForm");
+        if (section == null)
+        {
+            BuildNaturalLanguageSection();
+            return;
+        }
+
+        naturalLanguageInput = FindDescendantComponent<TMP_InputField>(section, "NaturalLanguageInput");
+        naturalLanguageTranslateButton = section.Find("NaturalLanguageActions/NaturalLanguageTranslateButton")?.GetComponent<Button>();
+        naturalLanguagePreviewButton = section.Find("NaturalLanguageActions/NaturalLanguagePreviewButton")?.GetComponent<Button>();
+        naturalLanguageApplyButton = section.Find("NaturalLanguageActions/NaturalLanguageApplyButton")?.GetComponent<Button>();
+        naturalLanguageResultText = section.Find("NaturalLanguageResultText")?.GetComponent<TMP_Text>();
+        if (naturalLanguageInput != null
+            && naturalLanguageTranslateButton != null
+            && naturalLanguagePreviewButton != null
+            && naturalLanguageApplyButton != null
+            && naturalLanguageResultText != null)
+        {
+            HookNaturalLanguageUi();
+        }
+    }
+
+    private void BuildNaturalLanguageSection()
+    {
+        if (formContent == null || formContent.Find("NaturalLanguageCommandForm") != null)
+        {
+            return;
+        }
+
+        GameObject section = WorldObserverUiFactory.CreateUiObject("NaturalLanguageCommandForm", formContent);
+        LayoutElement sectionLayout = section.AddComponent<LayoutElement>();
+        sectionLayout.minHeight = 292f;
+        sectionLayout.preferredHeight = 292f;
+        VerticalLayoutGroup sectionVertical = section.AddComponent<VerticalLayoutGroup>();
+        sectionVertical.spacing = 3f;
+        sectionVertical.padding = new RectOffset(4, 4, 4, 4);
+        sectionVertical.childControlHeight = true;
+        sectionVertical.childControlWidth = true;
+        sectionVertical.childForceExpandHeight = false;
+
+        TMP_Text title = WorldObserverUiFactory.CreateText(section.transform, "NaturalLanguageTitle", 16f, TextAlignmentOptions.MidlineLeft);
+        title.text = "Natural language command · deterministic translation";
+        LayoutElement titleLayout = title.gameObject.AddComponent<LayoutElement>();
+        titleLayout.minHeight = 26f;
+        titleLayout.preferredHeight = 26f;
+
+        GameObject inputRow = CreateRow(section.transform, "Command text");
+        GameObject inputObject = WorldObserverUiFactory.CreateUiObject("NaturalLanguageInput", inputRow.transform);
+        Image inputBackground = inputObject.AddComponent<Image>();
+        inputBackground.color = new Color(0.10f, 0.14f, 0.18f, 1f);
+        naturalLanguageInput = inputObject.AddComponent<TMP_InputField>();
+        naturalLanguageInput.lineType = TMP_InputField.LineType.SingleLine;
+        ((RectTransform)inputObject.transform).sizeDelta = new Vector2(0f, 30f);
+        TextMeshProUGUI inputText = (TextMeshProUGUI)WorldObserverUiFactory.CreateText(inputObject.transform, "Text", 13f, TextAlignmentOptions.MidlineLeft);
+        inputText.enableWordWrapping = false;
+        naturalLanguageInput.textComponent = inputText;
+        naturalLanguageInput.text = string.Empty;
+
+        GameObject actions = WorldObserverUiFactory.CreateUiObject("NaturalLanguageActions", section.transform);
+        LayoutElement actionsLayout = actions.AddComponent<LayoutElement>();
+        actionsLayout.minHeight = 36f;
+        actionsLayout.preferredHeight = 36f;
+        HorizontalLayoutGroup actionsHorizontal = actions.AddComponent<HorizontalLayoutGroup>();
+        actionsHorizontal.spacing = 4f;
+        actionsHorizontal.childControlHeight = true;
+        actionsHorizontal.childControlWidth = false;
+        actionsHorizontal.childForceExpandHeight = false;
+        actionsHorizontal.childForceExpandWidth = false;
+        naturalLanguageTranslateButton = WorldObserverUiFactory.CreateButton(actions.transform, "NaturalLanguageTranslateButton", "Translate", new Vector2(100f, 32f));
+        naturalLanguagePreviewButton = WorldObserverUiFactory.CreateButton(actions.transform, "NaturalLanguagePreviewButton", "Preview", new Vector2(100f, 32f));
+        naturalLanguageApplyButton = WorldObserverUiFactory.CreateButton(actions.transform, "NaturalLanguageApplyButton", "Apply", new Vector2(100f, 32f));
+
+        naturalLanguageResultText = WorldObserverUiFactory.CreateText(section.transform, "NaturalLanguageResultText", 13f, TextAlignmentOptions.TopLeft);
+        naturalLanguageResultText.enableWordWrapping = true;
+        LayoutElement resultLayout = naturalLanguageResultText.gameObject.AddComponent<LayoutElement>();
+        resultLayout.minHeight = 150f;
+        resultLayout.preferredHeight = 170f;
+        HookNaturalLanguageUi();
+    }
+
+    private void HookNaturalLanguageUi()
+    {
+        if (naturalLanguageInput == null
+            || naturalLanguageTranslateButton == null
+            || naturalLanguagePreviewButton == null
+            || naturalLanguageApplyButton == null)
+        {
+            return;
+        }
+
+        naturalLanguageInput.onValueChanged.RemoveListener(HandleNaturalLanguageTextChanged);
+        naturalLanguageInput.onValueChanged.AddListener(HandleNaturalLanguageTextChanged);
+        naturalLanguageTranslateButton.onClick.RemoveListener(TranslateNaturalLanguage);
+        naturalLanguageTranslateButton.onClick.AddListener(TranslateNaturalLanguage);
+        naturalLanguagePreviewButton.onClick.RemoveListener(PreviewNaturalLanguage);
+        naturalLanguagePreviewButton.onClick.AddListener(PreviewNaturalLanguage);
+        naturalLanguageApplyButton.onClick.RemoveListener(ApplyNaturalLanguage);
+        naturalLanguageApplyButton.onClick.AddListener(ApplyNaturalLanguage);
+        UpdateNaturalLanguageButtons();
     }
 
     private void BuildPreviewAndHistory()
@@ -964,6 +1190,184 @@ public sealed class GMConsolePanel : MonoBehaviour
         return result;
     }
 
+    private WorldCommandTranslationContext CreateNaturalLanguageTranslationContext()
+    {
+        List<SpatialLocationRuntime> macroLocations = new List<SpatialLocationRuntime>();
+        if (context?.Cities != null)
+        {
+            foreach (CityRuntime city in context.Cities)
+            {
+                AddMacroLocation(macroLocations, city?.Location);
+            }
+        }
+
+        if (context?.Npcs != null)
+        {
+            foreach (NpcRuntime npc in context.Npcs)
+            {
+                AddMacroLocation(macroLocations, npc?.CurrentLocation);
+            }
+        }
+
+        if (context?.SiteStore != null)
+        {
+            foreach (ExplorableSiteRuntime site in context.SiteStore.Sites)
+            {
+                AddMacroLocation(macroLocations, site?.Location);
+            }
+        }
+
+        IWorldCommandDefinitionLookup lookup = context?.DefinitionResolver as IWorldCommandDefinitionLookup;
+        IWorldCommandEntityResolver entityResolver = new DeterministicWorldCommandEntityResolver(
+            context?.Npcs,
+            context?.Cities,
+            macroLocations,
+            context?.SiteStore,
+            context?.TopologyStore,
+            context?.ContentStore);
+        return new WorldCommandTranslationContext(entityResolver, lookup, context?.DefinitionResolver);
+    }
+
+    private static void AddMacroLocation(List<SpatialLocationRuntime> locations, SpatialLocationRuntime location)
+    {
+        if (location == null)
+        {
+            return;
+        }
+
+        foreach (SpatialLocationRuntime existing in locations)
+        {
+            if (existing != null && string.Equals(existing.RuntimeId, location.RuntimeId, StringComparison.Ordinal))
+            {
+                return;
+            }
+        }
+
+        locations.Add(location);
+    }
+
+    private void HandleNaturalLanguageTextChanged(string value)
+    {
+        InvalidateNaturalLanguageTranslation();
+    }
+
+    private void InvalidateNaturalLanguageTranslation(bool clearText = true)
+    {
+        naturalLanguageTranslationResult = null;
+        naturalLanguagePreview = null;
+        translatedNaturalLanguageText = null;
+        UpdateNaturalLanguageButtons();
+        if (clearText == false)
+        {
+            return;
+        }
+
+        if (naturalLanguageResultText != null)
+        {
+            naturalLanguageResultText.text = "Text changed. Translate again before Preview or Apply.";
+        }
+    }
+
+    private bool IsCurrentNaturalLanguageTranslationResolved()
+    {
+        return context != null
+            && naturalLanguageTranslationResult != null
+            && naturalLanguageTranslationResult.Status == NaturalLanguageTranslationStatus.Resolved
+            && naturalLanguageTranslationResult.Command != null
+            && naturalLanguageInput != null
+            && string.Equals(naturalLanguageInput.text, translatedNaturalLanguageText, StringComparison.Ordinal);
+    }
+
+    private void UpdateNaturalLanguageButtons()
+    {
+        if (naturalLanguagePreviewButton != null)
+        {
+            naturalLanguagePreviewButton.interactable = IsCurrentNaturalLanguageTranslationResolved();
+        }
+
+        if (naturalLanguageApplyButton != null)
+        {
+            naturalLanguageApplyButton.interactable = IsCurrentNaturalLanguageTranslationResolved()
+                && naturalLanguagePreview != null
+                && naturalLanguagePreview.IsValid;
+        }
+    }
+
+    private string FormatNaturalLanguageTranslation(NaturalLanguageTranslationResult translation)
+    {
+        if (translation == null)
+        {
+            return "No translation available.";
+        }
+
+        string result = "Status: " + translation.Status;
+        if (translation.Command != null)
+        {
+            result += "\nCommand: " + translation.Command.Kind
+                + " · Origin: " + translation.Command.Origin
+                + " · Authority: " + translation.Command.Authority
+                + "\nPayload: " + translation.Command.Payload.GetType().Name;
+            if (translation.Command.Payload is ResolveConflictWorldCommandPayload conflict)
+            {
+                result += "\nConflict sides: " + conflict.Sides.Count;
+                if (string.IsNullOrWhiteSpace(conflict.ForcedWinningSideId) == false)
+                {
+                    result += " · Forced winner: " + conflict.ForcedWinningSideId;
+                }
+
+                if (conflict.Constraints.Count > 0)
+                {
+                    result += " · Constraints: " + conflict.Constraints.Count;
+                }
+            }
+        }
+
+        if (translation.ResolvedEntities.Count > 0)
+        {
+            List<string> entities = new List<string>();
+            foreach (WorldCommandTranslationEntity entity in translation.ResolvedEntities)
+            {
+                entities.Add(entity.Kind + "=" + entity.StableId);
+            }
+
+            result += "\nResolved: " + string.Join(", ", entities);
+        }
+
+        if (translation.Candidates.Count > 0)
+        {
+            List<string> candidates = new List<string>();
+            foreach (WorldCommandTranslationCandidate candidate in translation.Candidates)
+            {
+                candidates.Add(candidate.EntityKind + "=" + candidate.CandidateId);
+            }
+
+            result += "\nCandidates: " + string.Join(", ", candidates);
+        }
+
+        if (translation.MissingFields.Count > 0)
+        {
+            result += "\nMissing: " + string.Join(", ", translation.MissingFields);
+        }
+
+        if (translation.Diagnostics.Count > 0)
+        {
+            foreach (WorldCommandTranslationDiagnostic diagnostic in translation.Diagnostics)
+            {
+                result += "\n" + diagnostic.Severity + " [" + diagnostic.Code + "] " + diagnostic.Message;
+            }
+        }
+
+        return result;
+    }
+
+    private void SetNaturalLanguageMessage(string message)
+    {
+        if (naturalLanguageResultText != null)
+        {
+            naturalLanguageResultText.text = message ?? string.Empty;
+        }
+    }
+
     private static string FormatResult(WorldCommandResult result)
     {
         if (result == null)
@@ -1006,6 +1410,30 @@ public sealed class GMConsolePanel : MonoBehaviour
     {
         Transform child = transform.Find(childName);
         return child == null ? null : child.GetComponent<TMP_Dropdown>();
+    }
+
+    private T FindChildComponent<T>(string childName) where T : Component
+    {
+        return FindDescendantComponent<T>(this.transform, childName);
+    }
+
+    private static T FindDescendantComponent<T>(Transform root, string childName) where T : Component
+    {
+        if (root == null)
+        {
+            return null;
+        }
+
+        T[] components = root.GetComponentsInChildren<T>(true);
+        foreach (T component in components)
+        {
+            if (component != null && string.Equals(component.name, childName, StringComparison.Ordinal))
+            {
+                return component;
+            }
+        }
+
+        return null;
     }
 
     private void SetDropdownByText(string key, string value)

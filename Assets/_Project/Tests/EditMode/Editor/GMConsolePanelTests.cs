@@ -347,6 +347,274 @@ public sealed class GMConsolePanelTests
         StringAssert.Contains("SUCCESS", HistoryText());
     }
 
+    [Test]
+    public void GmConsoleContainsNaturalLanguageInput()
+    {
+        Assert.That(fixture.Panel.NaturalLanguageInput, Is.Not.Null);
+        Assert.That(fixture.Panel.NaturalLanguageTranslateButton, Is.Not.Null);
+        Assert.That(fixture.Panel.NaturalLanguagePreviewButton, Is.Not.Null);
+        Assert.That(fixture.Panel.NaturalLanguageApplyButton, Is.Not.Null);
+        Assert.That(fixture.Panel.NaturalLanguageResultText, Is.Not.Null);
+    }
+
+    [Test]
+    public void NaturalLanguageInputUsesTmpInputField()
+    {
+        Assert.That(fixture.Panel.NaturalLanguageInput, Is.TypeOf<TMP_InputField>());
+    }
+
+    [Test]
+    public void TranslateButtonDoesNotMutateWorld()
+    {
+        SetNaturalLanguageText("coloque " + fixture.Actor.RuntimeId + " em " + fixture.Site.Location.RuntimeId);
+        fixture.Panel.NaturalLanguageTranslateButton.onClick.Invoke();
+
+        Assert.That(fixture.Panel.NaturalLanguageTranslationResult.Status, Is.EqualTo(NaturalLanguageTranslationStatus.Resolved));
+        Assert.That(fixture.Actor.CurrentLocation, Is.SameAs(fixture.City.Location));
+        Assert.That(fixture.Content.Places[0].StackedContent, Is.Empty);
+        Assert.That(fixture.Service.RecordStore.Records, Is.Empty);
+    }
+
+    [Test]
+    public void ResolvedTranslationDisplaysCommandKind()
+    {
+        TranslateNaturalLanguage("coloque " + fixture.Actor.RuntimeId + " em " + fixture.Site.Location.RuntimeId);
+
+        StringAssert.Contains("Command: RelocateNpc", fixture.Panel.NaturalLanguageResultText.text);
+    }
+
+    [Test]
+    public void ResolvedTranslationDisplaysAuthority()
+    {
+        TranslateNaturalLanguage("coloque " + fixture.Actor.RuntimeId + " em " + fixture.Site.Location.RuntimeId);
+
+        StringAssert.Contains("Authority: Declare", fixture.Panel.NaturalLanguageResultText.text);
+    }
+
+    [Test]
+    public void AmbiguousTranslationDisablesPreviewAndApply()
+    {
+        fixture.Panel.SetNaturalLanguageTranslator(new FixedNaturalLanguageTranslator(
+            NaturalLanguageTranslationResult.Ambiguous(new[]
+            {
+                new WorldCommandTranslationCandidate(new WorldCommandTranslationEntity(WorldCommandTranslationEntityKind.Npc, runtimeId: "npc-a")),
+                new WorldCommandTranslationCandidate(new WorldCommandTranslationEntity(WorldCommandTranslationEntityKind.Npc, runtimeId: "npc-b"))
+            })));
+        TranslateNaturalLanguage("mova o personagem");
+
+        Assert.That(fixture.Panel.NaturalLanguageTranslationResult.Status, Is.EqualTo(NaturalLanguageTranslationStatus.Ambiguous));
+        Assert.That(fixture.Panel.NaturalLanguagePreviewButton.interactable, Is.False);
+        Assert.That(fixture.Panel.NaturalLanguageApplyButton.interactable, Is.False);
+    }
+
+    [Test]
+    public void MissingInformationDisablesPreviewAndApply()
+    {
+        fixture.Panel.SetNaturalLanguageTranslator(new FixedNaturalLanguageTranslator(
+            NaturalLanguageTranslationResult.MissingInformation(new[] { "amount" })));
+        TranslateNaturalLanguage("adicione minério");
+
+        Assert.That(fixture.Panel.NaturalLanguageTranslationResult.Status, Is.EqualTo(NaturalLanguageTranslationStatus.MissingInformation));
+        Assert.That(fixture.Panel.NaturalLanguagePreviewButton.interactable, Is.False);
+        Assert.That(fixture.Panel.NaturalLanguageApplyButton.interactable, Is.False);
+    }
+
+    [Test]
+    public void UnsupportedTranslationDisablesPreviewAndApply()
+    {
+        fixture.Panel.SetNaturalLanguageTranslator(new FixedNaturalLanguageTranslator(
+            NaturalLanguageTranslationResult.Unsupported(new[]
+            {
+                new WorldCommandTranslationDiagnostic("NormalTravelUnsupported", "Travel is not a world command.")
+            })));
+        TranslateNaturalLanguage("viaje até a cidade");
+
+        Assert.That(fixture.Panel.NaturalLanguageTranslationResult.Status, Is.EqualTo(NaturalLanguageTranslationStatus.Unsupported));
+        Assert.That(fixture.Panel.NaturalLanguagePreviewButton.interactable, Is.False);
+        Assert.That(fixture.Panel.NaturalLanguageApplyButton.interactable, Is.False);
+    }
+
+    [Test]
+    public void ResolvedTranslationCanCallWorldCommandPreview()
+    {
+        TranslateNaturalLanguage("coloque " + fixture.Actor.RuntimeId + " em " + fixture.Site.Location.RuntimeId);
+        fixture.Panel.NaturalLanguagePreviewButton.onClick.Invoke();
+
+        Assert.That(fixture.Panel.NaturalLanguagePreview, Is.Not.Null);
+        Assert.That(fixture.Panel.NaturalLanguagePreview.IsValid, Is.True, fixture.Panel.NaturalLanguagePreview.Presentation);
+        Assert.That(fixture.Service.RecordStore.Records, Is.Empty);
+    }
+
+    [Test]
+    public void InvalidWorldCommandPreviewDisablesApply()
+    {
+        WorldCommand requestCommand = new WorldCommand(
+            WorldCommandKind.RelocateNpc,
+            WorldCommandOrigin.GM,
+            WorldCommandAuthorityMode.Request,
+            new RelocateNpcWorldCommandPayload(fixture.Actor.RuntimeId, fixture.Site.Location.RuntimeId));
+        fixture.Panel.SetNaturalLanguageTranslator(new FixedNaturalLanguageTranslator(
+            NaturalLanguageTranslationResult.Resolved(requestCommand)));
+        TranslateNaturalLanguage("comando resolvido");
+        fixture.Panel.NaturalLanguagePreviewButton.onClick.Invoke();
+
+        Assert.That(fixture.Panel.NaturalLanguagePreview.IsValid, Is.False);
+        Assert.That(fixture.Panel.NaturalLanguageApplyButton.interactable, Is.False);
+    }
+
+    [Test]
+    public void ValidPreviewEnablesApply()
+    {
+        TranslateNaturalLanguage("coloque " + fixture.Actor.RuntimeId + " em " + fixture.Site.Location.RuntimeId);
+        fixture.Panel.NaturalLanguagePreviewButton.onClick.Invoke();
+
+        Assert.That(fixture.Panel.NaturalLanguageApplyButton.interactable, Is.True);
+    }
+
+    [Test]
+    public void ChangingTextInvalidatesExistingTranslation()
+    {
+        TranslateNaturalLanguage("coloque " + fixture.Actor.RuntimeId + " em " + fixture.Site.Location.RuntimeId);
+        fixture.Panel.NaturalLanguageInput.text += " alterado";
+
+        Assert.That(fixture.Panel.NaturalLanguageTranslationResult, Is.Null);
+        Assert.That(fixture.Panel.NaturalLanguagePreviewButton.interactable, Is.False);
+    }
+
+    [Test]
+    public void ChangingTextInvalidatesExistingPreview()
+    {
+        TranslateNaturalLanguage("coloque " + fixture.Actor.RuntimeId + " em " + fixture.Site.Location.RuntimeId);
+        fixture.Panel.NaturalLanguagePreviewButton.onClick.Invoke();
+        Assert.That(fixture.Panel.NaturalLanguagePreview, Is.Not.Null);
+
+        fixture.Panel.NaturalLanguageInput.text += " alterado";
+
+        Assert.That(fixture.Panel.NaturalLanguagePreview, Is.Null);
+        Assert.That(fixture.Panel.NaturalLanguageApplyButton.interactable, Is.False);
+    }
+
+    [Test]
+    public void ApplyUsesWorldCommandServiceExecute()
+    {
+        TranslateNaturalLanguage("coloque " + fixture.Actor.RuntimeId + " em " + fixture.Site.Location.RuntimeId);
+        fixture.Panel.NaturalLanguagePreviewButton.onClick.Invoke();
+        fixture.Panel.NaturalLanguageApplyButton.onClick.Invoke();
+
+        Assert.That(fixture.Panel.LastResult, Is.Not.Null);
+        Assert.That(fixture.Panel.LastResult.Success, Is.True, fixture.Panel.LastResult.Diagnostic);
+        Assert.That(fixture.Service.RecordStore.Records, Has.Count.EqualTo(1));
+    }
+
+    [Test]
+    public void ApplyDoesNotBypassAuthorityRules()
+    {
+        WorldCommand requestCommand = new WorldCommand(
+            WorldCommandKind.RelocateNpc,
+            WorldCommandOrigin.GM,
+            WorldCommandAuthorityMode.Request,
+            new RelocateNpcWorldCommandPayload(fixture.Actor.RuntimeId, fixture.Site.Location.RuntimeId));
+        fixture.Panel.SetNaturalLanguageTranslator(new FixedNaturalLanguageTranslator(
+            NaturalLanguageTranslationResult.Resolved(requestCommand)));
+        TranslateNaturalLanguage("solicite uma relocação");
+        fixture.Panel.NaturalLanguagePreviewButton.onClick.Invoke();
+        fixture.Panel.NaturalLanguageApplyButton.onClick.Invoke();
+
+        Assert.That(fixture.Panel.NaturalLanguagePreview.IsValid, Is.False);
+        Assert.That(fixture.Panel.LastResult, Is.Null);
+        Assert.That(fixture.Actor.CurrentLocation, Is.SameAs(fixture.City.Location));
+        Assert.That(fixture.Service.RecordStore.Records, Is.Empty);
+    }
+
+    [Test]
+    public void RequestTravelTextCannotTeleportNpc()
+    {
+        TranslateNaturalLanguage(fixture.Actor.RuntimeId + " vai para " + fixture.Site.Location.RuntimeId);
+
+        Assert.That(fixture.Panel.NaturalLanguageTranslationResult.Status, Is.EqualTo(NaturalLanguageTranslationStatus.Unsupported));
+        Assert.That(fixture.Actor.CurrentLocation, Is.SameAs(fixture.City.Location));
+        Assert.That(fixture.Service.RecordStore.Records, Is.Empty);
+    }
+
+    [Test]
+    public void RumorTextCannotCreateWorldTruthItem()
+    {
+        TranslateNaturalLanguage(fixture.Actor.RuntimeId + " ouviu dizer que há " + fixture.Item.DefinitionId + " em " + fixture.Site.RuntimeId);
+
+        Assert.That(fixture.Panel.NaturalLanguageTranslationResult.Status, Is.EqualTo(NaturalLanguageTranslationStatus.Resolved));
+        Assert.That(fixture.Panel.NaturalLanguageTranslationResult.Command.Kind, Is.EqualTo(WorldCommandKind.GrantAdventureIntel));
+        Assert.That(fixture.Content.Places[0].StackedContent, Is.Empty);
+        Assert.That(fixture.Content.Places[0].NotableContent, Is.Empty);
+        Assert.That(fixture.Service.RecordStore.Records, Is.Empty);
+    }
+
+    [Test]
+    public void DeclareRelocationCanApplyAfterValidPreview()
+    {
+        TranslateNaturalLanguage("coloque " + fixture.Actor.RuntimeId + " em " + fixture.Site.Location.RuntimeId);
+        fixture.Panel.NaturalLanguagePreviewButton.onClick.Invoke();
+        fixture.Panel.NaturalLanguageApplyButton.onClick.Invoke();
+
+        Assert.That(fixture.Panel.LastResult.Success, Is.True, fixture.Panel.LastResult.Diagnostic);
+        Assert.That(fixture.Actor.CurrentLocation, Is.SameAs(fixture.Site.Location));
+    }
+
+    [Test]
+    public void ConflictRequestCanApplyAfterValidPreview()
+    {
+        TranslateNaturalLanguage("resolva combate entre " + fixture.Actor.RuntimeId + " e " + fixture.Defender.RuntimeId + " em " + fixture.Site.Location.RuntimeId);
+        fixture.Panel.NaturalLanguagePreviewButton.onClick.Invoke();
+        fixture.Panel.NaturalLanguageApplyButton.onClick.Invoke();
+
+        Assert.That(fixture.Panel.NaturalLanguageTranslationResult.Command.Kind, Is.EqualTo(WorldCommandKind.ResolveConflict));
+        Assert.That(fixture.Panel.LastResult.Success, Is.True, fixture.Panel.LastResult.Diagnostic);
+        Assert.That(fixture.Service.RecordStore.Records, Has.Count.EqualTo(1));
+    }
+
+    [Test]
+    public void ForceOutcomeTranslationPreservesConstraints()
+    {
+        TranslateNaturalLanguage(fixture.Actor.RuntimeId + " venceu e " + fixture.Defender.RuntimeId + " morreu em " + fixture.Site.Location.RuntimeId);
+
+        ResolveConflictWorldCommandPayload payload = fixture.Panel.NaturalLanguageTranslationResult.Command.Payload as ResolveConflictWorldCommandPayload;
+        Assert.That(fixture.Panel.NaturalLanguageTranslationResult.Command.Authority, Is.EqualTo(WorldCommandAuthorityMode.ForceOutcome));
+        Assert.That(payload, Is.Not.Null);
+        Assert.That(payload.ForcedWinningSideId, Is.EqualTo("attacker"));
+        Assert.That(payload.ForcedOverallOutcome, Is.EqualTo(ConflictOutcomeType.Victory));
+        Assert.That(payload.Constraints, Has.Count.EqualTo(1));
+        Assert.That(payload.Constraints[0].ParticipantId, Is.EqualTo(fixture.Defender.RuntimeId));
+        Assert.That(payload.Constraints[0].ForceDeath, Is.True);
+    }
+
+    [Test]
+    public void NaturalLanguageSectionAddsNoLegacyUiText()
+    {
+        Assert.That(fixture.Panel.GetComponentsInChildren<Text>(true), Is.Empty);
+        Assert.That(fixture.Panel.GetComponentsInChildren<UnityEngine.UI.InputField>(true), Is.Empty);
+        Assert.That(fixture.Panel.GetComponentsInChildren<UnityEngine.UI.Dropdown>(true), Is.Empty);
+    }
+
+    private void SetNaturalLanguageText(string text)
+    {
+        Assert.That(fixture.Panel.NaturalLanguageInput, Is.Not.Null);
+        fixture.Panel.NaturalLanguageInput.text = text;
+    }
+
+    private void TranslateNaturalLanguage(string text)
+    {
+        SetNaturalLanguageText(text);
+        fixture.Panel.NaturalLanguageTranslateButton.onClick.Invoke();
+    }
+
+    private WorldCommand RelocateCommand()
+    {
+        return new WorldCommand(
+            WorldCommandKind.RelocateNpc,
+            WorldCommandOrigin.GM,
+            WorldCommandAuthorityMode.Declare,
+            new RelocateNpcWorldCommandPayload(fixture.Actor.RuntimeId, fixture.Site.Location.RuntimeId));
+    }
+
     private void SetStackResourceForm()
     {
         SelectKind(WorldCommandKind.DeclareStackResource);
@@ -429,6 +697,23 @@ public sealed class GMConsolePanelTests
         }
 
         return string.Join("\n", values);
+    }
+
+    private sealed class FixedNaturalLanguageTranslator : IWorldCommandNaturalLanguageTranslator
+    {
+        private readonly NaturalLanguageTranslationResult result;
+
+        public FixedNaturalLanguageTranslator(NaturalLanguageTranslationResult result)
+        {
+            this.result = result;
+        }
+
+        public NaturalLanguageTranslationResult Translate(
+            NaturalLanguageWorldCommandRequest request,
+            WorldCommandTranslationContext context)
+        {
+            return result;
+        }
     }
 
     private static GameObject LoadPrefab()
