@@ -43,6 +43,24 @@ $testRoot = Join-Path $projectPath ('Temp\UnityValidationSelfTests-' + [Guid]::N
 $resultsRoot = Join-Path $testRoot 'Results'
 New-Item -ItemType Directory -Path $resultsRoot -Force | Out-Null
 
+function New-TestOwnedProcess {
+    $pwshPath = (Get-Command pwsh -ErrorAction Stop).Source
+    return (Start-Process -FilePath $pwshPath -ArgumentList @('-NoProfile', '-Command', 'Start-Sleep -Seconds 30') -PassThru)
+}
+
+function Stop-TestOwnedProcess {
+    param([System.Diagnostics.Process]$Process)
+    if ($null -ne $Process) {
+        try {
+            if (-not $Process.HasExited) {
+                Stop-Process -Id $Process.Id -Force -ErrorAction SilentlyContinue
+            }
+        }
+        catch {
+        }
+    }
+}
+
 try {
     Invoke-Case 'NormalizesProjectPath' {
         $normalized = ConvertTo-UnityValidationPath -Path (Join-Path $projectPath '.')
@@ -159,6 +177,122 @@ try {
         Assert-Equal 1 @($plan.OwnedProcessIds).Count 'Unrelated Unity process expanded the cleanup tree.'
     }
 
+    Invoke-Case 'StartedProcessIsCleanedAfterOperationalException' {
+        $process = $null
+        $script:exceptionCleanupCalls = 0
+        try {
+            $attempt = Invoke-UnityValidationAttempt -StartAction { $script:exceptionProcess = New-TestOwnedProcess; $script:exceptionProcess } -RunAction { throw 'synthetic operational exception' } -CleanupAction {
+                param([System.Diagnostics.Process]$ownedProcess)
+                $script:exceptionCleanupCalls++
+                Stop-TestOwnedProcess -Process $ownedProcess
+            }
+            $process = $script:exceptionProcess
+            Assert-Equal $false $attempt.Succeeded 'Operational exception was reported as success.'
+            Assert-Equal 'OperationalFailure' $attempt.Status 'Started-process exception did not become OperationalFailure.'
+            Assert-Equal $true $attempt.CleanupAttempted 'Started process was not marked for cleanup.'
+            Assert-Equal 1 $script:exceptionCleanupCalls 'Cleanup action was not called exactly once.'
+            Start-Sleep -Milliseconds 100
+            Assert-True $process.HasExited 'Owned root process remained alive after operational exception.'
+        }
+        finally {
+            Stop-TestOwnedProcess -Process $process
+        }
+    }
+
+    Invoke-Case 'OperationalRetryDoesNotLeavePreviousOwnedRootRunning' {
+        $previousProcess = $null
+        $processes = New-Object System.Collections.Generic.List[object]
+        try {
+            for ($retry = 1; $retry -le 2; $retry++) {
+                if ($null -ne $previousProcess) {
+                    Assert-True $previousProcess.HasExited 'Retry started while the previous owned root was still alive.'
+                }
+
+                $attempt = Invoke-UnityValidationAttempt -StartAction { $script:retryProcess = New-TestOwnedProcess; $script:retryProcess } -RunAction { throw 'synthetic retryable operational exception' } -CleanupAction {
+                    param([System.Diagnostics.Process]$ownedProcess)
+                    Stop-TestOwnedProcess -Process $ownedProcess
+                }
+                $previousProcess = $script:retryProcess
+                [void]$processes.Add($previousProcess)
+                Assert-Equal 'OperationalFailure' $attempt.Status 'Retryable exception had the wrong status.'
+                Assert-True $attempt.CleanupAttempted 'Retryable exception did not attempt cleanup.'
+                Start-Sleep -Milliseconds 100
+                Assert-True $previousProcess.HasExited 'Retryable attempt left its root alive.'
+            }
+            Assert-Equal 2 $processes.Count 'Retry test did not execute two isolated attempts.'
+        }
+        finally {
+            foreach ($testProcess in $processes) { Stop-TestOwnedProcess -Process $testProcess }
+        }
+    }
+
+    Invoke-Case 'CleanupAfterExceptionUsesOwnedProcessTreeOnly' {
+        $process = $null
+        $script:exceptionCleanupPlan = $null
+        try {
+            $attempt = Invoke-UnityValidationAttempt -StartAction { $script:treeProcess = New-TestOwnedProcess; $script:treeProcess } -RunAction { throw 'synthetic tree exception' } -CleanupAction {
+                param([System.Diagnostics.Process]$ownedProcess)
+                $script:exceptionCleanupPlan = Get-UnityOwnedProcessCleanupPlan -RootProcessId $ownedProcess.Id -ProcessSnapshot @(
+                    [pscustomobject]@{ ProcessId = $ownedProcess.Id; ParentProcessId = 1; Name = 'Unity.exe'; CommandLine = 'owned root' },
+                    [pscustomobject]@{ ProcessId = $ownedProcess.Id + 1; ParentProcessId = $ownedProcess.Id; Name = 'UnityPackageManager.exe'; CommandLine = 'owned child' },
+                    [pscustomobject]@{ ProcessId = $ownedProcess.Id + 2; ParentProcessId = 1; Name = 'Unity.exe'; CommandLine = 'other worktree' }
+                )
+                Stop-TestOwnedProcess -Process $ownedProcess
+            }
+            $process = $script:treeProcess
+            Assert-Equal $true $attempt.CleanupAttempted 'Exception cleanup was not attempted.'
+            Assert-True ($script:exceptionCleanupPlan.OwnedProcessIds -contains $process.Id) 'Exception cleanup omitted the owned root.'
+            Assert-True ($script:exceptionCleanupPlan.OwnedProcessIds -contains ($process.Id + 1)) 'Exception cleanup omitted the owned child.'
+            Assert-True (-not ($script:exceptionCleanupPlan.OwnedProcessIds -contains ($process.Id + 2))) 'Exception cleanup selected an unrelated Unity process.'
+        }
+        finally {
+            Stop-TestOwnedProcess -Process $process
+        }
+    }
+
+    Invoke-Case 'CleanupAfterExceptionDoesNotSelectUnrelatedWorktree' {
+        $process = $null
+        $script:worktreeCleanupPlan = $null
+        try {
+            $attempt = Invoke-UnityValidationAttempt -StartAction { $script:worktreeProcess = New-TestOwnedProcess; $script:worktreeProcess } -RunAction { throw 'synthetic worktree exception' } -CleanupAction {
+                param([System.Diagnostics.Process]$ownedProcess)
+                $script:worktreeCleanupPlan = Get-UnityOwnedProcessCleanupPlan -RootProcessId $ownedProcess.Id -ProcessSnapshot @(
+                    [pscustomobject]@{ ProcessId = $ownedProcess.Id; ParentProcessId = 1; Name = 'Unity.exe'; CommandLine = 'Unity.exe -projectPath Simulation-unity-validation' },
+                    [pscustomobject]@{ ProcessId = $ownedProcess.Id + 3; ParentProcessId = 1; Name = 'Unity.exe'; CommandLine = 'Unity.exe -projectPath Simulation-population-foundation' }
+                )
+                Stop-TestOwnedProcess -Process $ownedProcess
+            }
+            $process = $script:worktreeProcess
+            Assert-Equal $true $attempt.CleanupAttempted 'Worktree exception cleanup was not attempted.'
+            Assert-Equal 1 @($script:worktreeCleanupPlan.OwnedProcessIds).Count 'Unrelated worktree entered exception cleanup.'
+            Assert-True (-not ($script:worktreeCleanupPlan.OwnedProcessIds -contains ($process.Id + 3))) 'Unrelated worktree root was selected.'
+        }
+        finally {
+            Stop-TestOwnedProcess -Process $process
+        }
+    }
+
+    Invoke-Case 'RealTestFailureDoesNotTriggerOperationalCleanupOrRetry' {
+        $process = $null
+        $script:failureCleanupCalls = 0
+        try {
+            $attempt = Invoke-UnityValidationAttempt -StartAction { $script:failureProcess = New-TestOwnedProcess; $script:failureProcess } -RunAction {
+                return [pscustomobject]@{ Status = 'Failed' }
+            } -CleanupAction {
+                param([System.Diagnostics.Process]$ownedProcess)
+                $script:failureCleanupCalls++
+                Stop-TestOwnedProcess -Process $ownedProcess
+            }
+            $process = $script:failureProcess
+            Assert-Equal $true $attempt.Succeeded 'Real test failure entered the operational exception path.'
+            Assert-Equal 0 $script:failureCleanupCalls 'Real test failure triggered operational cleanup.'
+            Assert-Equal $false (Test-UnityOperationalRetryEligible -Status 'Failed') 'Real test failure became retryable.'
+        }
+        finally {
+            Stop-TestOwnedProcess -Process $process
+        }
+    }
+
     Invoke-Case 'NoGlobalKillCommandIsGenerated' {
         $plan = Get-UnityOwnedProcessCleanupPlan -RootProcessId 101 -ProcessSnapshot @($sameProjectProcess, $unrelatedUnity)
         Assert-Equal $false $plan.UsesGlobalNameKill 'Cleanup plan permits global name kill.'
@@ -167,10 +301,59 @@ try {
         Assert-True (-not ($source -match 'Stop-Process\s+-Name')) 'Harness contains name-based process kill.'
     }
 
-    Invoke-Case 'ExplicitUnityPathWinsDiscovery' {
+    Invoke-Case 'ExplicitUnityPathStillWinsDiscovery' {
         $explicit = Join-Path $resultsRoot 'Unity.exe'
         Set-Content -LiteralPath $explicit -Value 'mock' -Encoding ASCII
         Assert-Equal (ConvertTo-UnityValidationPath -Path $explicit) (Find-UnityEditor -ProjectPath $projectPath -UnityPath $explicit) 'Explicit Unity path did not win.'
+    }
+
+    $missingHubProject = Join-Path $testRoot 'MissingHubProject'
+    New-Item -ItemType Directory -Path (Join-Path $missingHubProject 'ProjectSettings') -Force | Out-Null
+    $missingHubVersionFile = Join-Path $missingHubProject 'ProjectSettings\ProjectVersion.txt'
+    Set-Content -LiteralPath $missingHubVersionFile -Value 'm_EditorVersion: 9999.0.0f1' -Encoding UTF8
+    $fakePathUnityDirectory = Join-Path $testRoot 'PathUnity'
+    New-Item -ItemType Directory -Path $fakePathUnityDirectory -Force | Out-Null
+    $fakePathUnity = Join-Path $fakePathUnityDirectory 'Unity.exe'
+    Set-Content -LiteralPath $fakePathUnity -Value 'path mock' -Encoding ASCII
+
+    Invoke-Case 'AutomaticDiscoveryDoesNotUseArbitraryUnityFromPath' {
+        $source = Get-Content -Raw (Join-Path $PSScriptRoot '..\UnityValidation.psm1')
+        Assert-True (-not $source.Contains('Get-Command Unity.exe')) 'Automatic discovery still contains arbitrary PATH fallback.'
+        $oldPath = $env:PATH
+        try {
+            $env:PATH = "$fakePathUnityDirectory;$oldPath"
+            $threw = $false
+            try {
+                [void](Find-UnityEditor -ProjectPath $missingHubProject)
+            }
+            catch {
+                $threw = $true
+                Assert-Contains $_.Exception.Message 'UNITY_NOT_FOUND' 'Missing exact Hub version did not fail safely.'
+            }
+            Assert-True $threw 'Automatic discovery accepted a Unity executable from PATH.'
+        }
+        finally {
+            $env:PATH = $oldPath
+        }
+    }
+
+    Invoke-Case 'MissingExactHubVersionFailsInsteadOfUsingPathUnity' {
+        $threw = $false
+        try {
+            [void](Find-UnityEditor -ProjectPath $missingHubProject)
+        }
+        catch {
+            $threw = $true
+            Assert-Contains $_.Exception.Message 'UNITY_NOT_FOUND' 'Missing exact Hub version returned the wrong diagnostic.'
+        }
+        Assert-True $threw 'Discovery did not fail when the exact Hub version was absent.'
+    }
+
+    Invoke-Case 'ProjectVersionRemainsUnmodifiedOnDiscoveryFailure' {
+        $before = Get-FileHash -LiteralPath $missingHubVersionFile -Algorithm SHA256
+        try { [void](Find-UnityEditor -ProjectPath $missingHubProject) } catch { }
+        $after = Get-FileHash -LiteralPath $missingHubVersionFile -Algorithm SHA256
+        Assert-Equal $before.Hash $after.Hash 'Discovery failure modified ProjectVersion.txt.'
     }
 
     Invoke-Case 'ProjectVersionCanBeReadWithoutModification' {
