@@ -1,0 +1,1042 @@
+using System;
+using System.Collections.Generic;
+
+public sealed class WorldStateSnapshotContext
+{
+    public SimulationTime SimulationTime { get; }
+    public IEnumerable<NpcRuntime> Npcs { get; }
+    public IEnumerable<CityRuntime> Cities { get; }
+    public SpatialNetworkRuntime SpatialNetwork { get; }
+    public ExplorableSiteStore ExplorableSiteStore { get; }
+    public ExpeditionStore ExpeditionStore { get; }
+    public PlaceContentStore PlaceContentStore { get; }
+    public LocalTopologyStore LocalTopologyStore { get; }
+
+    public WorldStateSnapshotContext(
+        SimulationTime simulationTime = null,
+        IEnumerable<NpcRuntime> npcs = null,
+        IEnumerable<CityRuntime> cities = null,
+        SpatialNetworkRuntime spatialNetwork = null,
+        ExplorableSiteStore explorableSiteStore = null,
+        ExpeditionStore expeditionStore = null,
+        PlaceContentStore placeContentStore = null,
+        LocalTopologyStore localTopologyStore = null)
+    {
+        SimulationTime = simulationTime;
+        Npcs = npcs ?? Array.Empty<NpcRuntime>();
+        Cities = cities ?? Array.Empty<CityRuntime>();
+        SpatialNetwork = spatialNetwork;
+        ExplorableSiteStore = explorableSiteStore;
+        ExpeditionStore = expeditionStore;
+        PlaceContentStore = placeContentStore;
+        LocalTopologyStore = localTopologyStore;
+    }
+}
+
+public sealed class WorldStateSnapshot
+{
+    public WorldStateSnapshotMetadata Metadata { get; }
+    public long AbsoluteDay => Metadata.AbsoluteDay;
+    public IReadOnlyList<WorldStateNpcSnapshot> Npcs { get; }
+    public IReadOnlyList<WorldStateCitySnapshot> Cities { get; }
+    public WorldStateSpatialSnapshot Spatial { get; }
+    public IReadOnlyList<WorldStateSiteSnapshot> Sites { get; }
+    public IReadOnlyList<WorldStateExpeditionSnapshot> Expeditions { get; }
+    public IReadOnlyList<WorldStatePlaceContentSnapshot> PlaceContents { get; }
+    public IReadOnlyList<WorldStateNotableItemSnapshot> NotableItems { get; }
+    public IReadOnlyList<WorldStateLocalTopologySnapshot> LocalTopologies { get; }
+
+    public WorldStateSnapshot(
+        long absoluteDay,
+        IEnumerable<WorldStateNpcSnapshot> npcs = null,
+        IEnumerable<WorldStateCitySnapshot> cities = null,
+        WorldStateSpatialSnapshot spatial = null,
+        IEnumerable<WorldStateSiteSnapshot> sites = null,
+        IEnumerable<WorldStateExpeditionSnapshot> expeditions = null,
+        IEnumerable<WorldStatePlaceContentSnapshot> placeContents = null,
+        IEnumerable<WorldStateNotableItemSnapshot> notableItems = null,
+        IEnumerable<WorldStateLocalTopologySnapshot> localTopologies = null)
+    {
+        Metadata = new WorldStateSnapshotMetadata(absoluteDay);
+        Npcs = SnapshotCollections.Copy(npcs);
+        Cities = SnapshotCollections.Copy(cities);
+        Spatial = spatial ?? new WorldStateSpatialSnapshot();
+        Sites = SnapshotCollections.Copy(sites);
+        Expeditions = SnapshotCollections.Copy(expeditions);
+        PlaceContents = SnapshotCollections.Copy(placeContents);
+        NotableItems = SnapshotCollections.Copy(notableItems);
+        LocalTopologies = SnapshotCollections.Copy(localTopologies);
+    }
+}
+
+public sealed class WorldStateSnapshotMetadata
+{
+    public long AbsoluteDay { get; }
+
+    public WorldStateSnapshotMetadata(long absoluteDay)
+    {
+        AbsoluteDay = absoluteDay;
+    }
+}
+
+public sealed class WorldStateNpcSnapshot
+{
+    public string RuntimeId { get; }
+    public string DefinitionId { get; }
+    public NpcLifeState LifeState { get; }
+    public NpcInjurySeverity InjurySeverity { get; }
+    public string CurrentLocationRuntimeId { get; }
+    public string CurrentCityRuntimeId { get; }
+    public string DestinationLocationRuntimeId { get; }
+    public string DestinationCityRuntimeId { get; }
+    public bool IsTraveling { get; }
+    public string TravelRouteRuntimeId { get; }
+    public int RemainingTravelDays { get; }
+    public string ActiveTravelPartyId { get; }
+    public float MoneyBalance { get; }
+    public string ActiveExpeditionId { get; }
+    public IReadOnlyList<WorldStateInventoryStackSnapshot> Inventory { get; }
+
+    public WorldStateNpcSnapshot(
+        string runtimeId,
+        string definitionId,
+        NpcLifeState lifeState,
+        NpcInjurySeverity injurySeverity,
+        string currentLocationRuntimeId,
+        string currentCityRuntimeId,
+        string destinationLocationRuntimeId,
+        string destinationCityRuntimeId,
+        bool isTraveling,
+        string travelRouteRuntimeId,
+        int remainingTravelDays,
+        string activeTravelPartyId,
+        float moneyBalance,
+        string activeExpeditionId,
+        IEnumerable<WorldStateInventoryStackSnapshot> inventory)
+    {
+        RuntimeId = runtimeId;
+        DefinitionId = definitionId;
+        LifeState = lifeState;
+        InjurySeverity = injurySeverity;
+        CurrentLocationRuntimeId = currentLocationRuntimeId;
+        CurrentCityRuntimeId = currentCityRuntimeId;
+        DestinationLocationRuntimeId = destinationLocationRuntimeId;
+        DestinationCityRuntimeId = destinationCityRuntimeId;
+        IsTraveling = isTraveling;
+        TravelRouteRuntimeId = travelRouteRuntimeId;
+        RemainingTravelDays = remainingTravelDays;
+        ActiveTravelPartyId = activeTravelPartyId;
+        MoneyBalance = moneyBalance;
+        ActiveExpeditionId = activeExpeditionId;
+        Inventory = SnapshotCollections.Copy(inventory);
+    }
+}
+
+public sealed class WorldStateInventoryStackSnapshot
+{
+    public string ItemDefinitionId { get; }
+    public int Amount { get; }
+    public float AverageUnitCost { get; }
+
+    public WorldStateInventoryStackSnapshot(string itemDefinitionId, int amount, float averageUnitCost)
+    {
+        ItemDefinitionId = itemDefinitionId;
+        Amount = amount;
+        AverageUnitCost = averageUnitCost;
+    }
+}
+
+public sealed class WorldStateCitySnapshot
+{
+    public string RuntimeId { get; }
+    public string DefinitionId { get; }
+    public string LocationRuntimeId { get; }
+    public int CurrentPopulation { get; }
+    public string MarketCounterpartyRuntimeId { get; }
+    public MarketLiquidityMode MarketLiquidityMode { get; }
+    public float MarketBalance { get; }
+    public IReadOnlyList<string> ResidentNpcRuntimeIds { get; }
+    public IReadOnlyList<WorldStateMarketStackSnapshot> MarketStock { get; }
+
+    public WorldStateCitySnapshot(
+        string runtimeId,
+        string definitionId,
+        string locationRuntimeId,
+        int currentPopulation,
+        string marketCounterpartyRuntimeId,
+        MarketLiquidityMode marketLiquidityMode,
+        float marketBalance,
+        IEnumerable<string> residentNpcRuntimeIds,
+        IEnumerable<WorldStateMarketStackSnapshot> marketStock)
+    {
+        RuntimeId = runtimeId;
+        DefinitionId = definitionId;
+        LocationRuntimeId = locationRuntimeId;
+        CurrentPopulation = currentPopulation;
+        MarketCounterpartyRuntimeId = marketCounterpartyRuntimeId;
+        MarketLiquidityMode = marketLiquidityMode;
+        MarketBalance = marketBalance;
+        ResidentNpcRuntimeIds = SnapshotCollections.Copy(residentNpcRuntimeIds);
+        MarketStock = SnapshotCollections.Copy(marketStock);
+    }
+}
+
+public sealed class WorldStateMarketStackSnapshot
+{
+    public string ItemDefinitionId { get; }
+    public int Amount { get; }
+    public int DesiredAmount { get; }
+    public float CurrentPrice { get; }
+
+    public WorldStateMarketStackSnapshot(string itemDefinitionId, int amount, int desiredAmount, float currentPrice)
+    {
+        ItemDefinitionId = itemDefinitionId;
+        Amount = amount;
+        DesiredAmount = desiredAmount;
+        CurrentPrice = currentPrice;
+    }
+}
+
+public sealed class WorldStateSpatialSnapshot
+{
+    public IReadOnlyList<WorldStateLocationSnapshot> Locations { get; }
+    public IReadOnlyList<WorldStateRouteSnapshot> Routes { get; }
+
+    public WorldStateSpatialSnapshot(
+        IEnumerable<WorldStateLocationSnapshot> locations = null,
+        IEnumerable<WorldStateRouteSnapshot> routes = null)
+    {
+        Locations = SnapshotCollections.Copy(locations);
+        Routes = SnapshotCollections.Copy(routes);
+    }
+}
+
+public sealed class WorldStateLocationSnapshot
+{
+    public string RuntimeId { get; }
+
+    public WorldStateLocationSnapshot(string runtimeId)
+    {
+        RuntimeId = runtimeId;
+    }
+}
+
+public sealed class WorldStateRouteSnapshot
+{
+    public string RuntimeId { get; }
+    public string OriginRuntimeId { get; }
+    public string DestinationRuntimeId { get; }
+    public int TravelDays { get; }
+
+    public WorldStateRouteSnapshot(string runtimeId, string originRuntimeId, string destinationRuntimeId, int travelDays)
+    {
+        RuntimeId = runtimeId;
+        OriginRuntimeId = originRuntimeId;
+        DestinationRuntimeId = destinationRuntimeId;
+        TravelDays = travelDays;
+    }
+}
+
+public sealed class WorldStateSiteSnapshot
+{
+    public string RuntimeId { get; }
+    public string DefinitionId { get; }
+    public string LocationRuntimeId { get; }
+    public ExplorableSiteKind SiteKind { get; }
+
+    public WorldStateSiteSnapshot(string runtimeId, string definitionId, string locationRuntimeId, ExplorableSiteKind siteKind)
+    {
+        RuntimeId = runtimeId;
+        DefinitionId = definitionId;
+        LocationRuntimeId = locationRuntimeId;
+        SiteKind = siteKind;
+    }
+}
+
+public sealed class WorldStateExpeditionSnapshot
+{
+    public string ExpeditionId { get; }
+    public ExpeditionState State { get; }
+    public string TargetSiteRuntimeId { get; }
+    public string OriginLocationRuntimeId { get; }
+    public string TargetLocationRuntimeId { get; }
+    public string OutboundRouteRuntimeId { get; }
+    public string OriginDecisionId { get; }
+    public string TravelPartyId { get; }
+    public string CurrentLocalPlaceRuntimeId { get; }
+    public int ExplorationProgress { get; }
+    public int ExplorationProgressRequired { get; }
+    public IReadOnlyList<string> MemberRuntimeIds { get; }
+    public IReadOnlyList<string> PerformerRuntimeIds { get; }
+    public IReadOnlyList<string> SupportRuntimeIds { get; }
+    public IReadOnlyList<string> VisitedLocalPlaceRuntimeIds { get; }
+    public IReadOnlyList<string> ObservedLocalConnectionRuntimeIds { get; }
+    public ExpeditionObjectiveType ObjectiveType { get; }
+    public string ObjectiveTargetItemDefinitionId { get; }
+    public string ObjectiveTargetNotableItemRuntimeId { get; }
+    public string ObjectiveTargetOppositionRuntimeId { get; }
+    public bool ObjectiveCompleted { get; }
+    public bool ObjectiveAllowsContinueAfterCompletion { get; }
+
+    public WorldStateExpeditionSnapshot(
+        string expeditionId,
+        ExpeditionState state,
+        string targetSiteRuntimeId,
+        string originLocationRuntimeId,
+        string targetLocationRuntimeId,
+        string outboundRouteRuntimeId,
+        string originDecisionId,
+        string travelPartyId,
+        string currentLocalPlaceRuntimeId,
+        int explorationProgress,
+        int explorationProgressRequired,
+        IEnumerable<string> memberRuntimeIds,
+        IEnumerable<string> performerRuntimeIds,
+        IEnumerable<string> supportRuntimeIds,
+        IEnumerable<string> visitedLocalPlaceRuntimeIds,
+        IEnumerable<string> observedLocalConnectionRuntimeIds,
+        ExpeditionObjectiveType objectiveType,
+        string objectiveTargetItemDefinitionId,
+        string objectiveTargetNotableItemRuntimeId,
+        string objectiveTargetOppositionRuntimeId,
+        bool objectiveCompleted,
+        bool objectiveAllowsContinueAfterCompletion)
+    {
+        ExpeditionId = expeditionId;
+        State = state;
+        TargetSiteRuntimeId = targetSiteRuntimeId;
+        OriginLocationRuntimeId = originLocationRuntimeId;
+        TargetLocationRuntimeId = targetLocationRuntimeId;
+        OutboundRouteRuntimeId = outboundRouteRuntimeId;
+        OriginDecisionId = originDecisionId;
+        TravelPartyId = travelPartyId;
+        CurrentLocalPlaceRuntimeId = currentLocalPlaceRuntimeId;
+        ExplorationProgress = explorationProgress;
+        ExplorationProgressRequired = explorationProgressRequired;
+        MemberRuntimeIds = SnapshotCollections.Copy(memberRuntimeIds);
+        PerformerRuntimeIds = SnapshotCollections.Copy(performerRuntimeIds);
+        SupportRuntimeIds = SnapshotCollections.Copy(supportRuntimeIds);
+        VisitedLocalPlaceRuntimeIds = SnapshotCollections.Copy(visitedLocalPlaceRuntimeIds);
+        ObservedLocalConnectionRuntimeIds = SnapshotCollections.Copy(observedLocalConnectionRuntimeIds);
+        ObjectiveType = objectiveType;
+        ObjectiveTargetItemDefinitionId = objectiveTargetItemDefinitionId;
+        ObjectiveTargetNotableItemRuntimeId = objectiveTargetNotableItemRuntimeId;
+        ObjectiveTargetOppositionRuntimeId = objectiveTargetOppositionRuntimeId;
+        ObjectiveCompleted = objectiveCompleted;
+        ObjectiveAllowsContinueAfterCompletion = objectiveAllowsContinueAfterCompletion;
+    }
+}
+
+public sealed class WorldStatePlaceContentSnapshot
+{
+    public PlaceContentOwnerKind OwnerKind { get; }
+    public string OwnerRuntimeId { get; }
+    public string MacroLocationRuntimeId { get; }
+    public string TopologyOwnerRuntimeId { get; }
+    public PlaceSiteState SiteState { get; }
+    public PlaceAccessState AccessState { get; }
+    public string ControllerRuntimeId { get; }
+    public IReadOnlyList<WorldStatePlaceStackSnapshot> Stacks { get; }
+    public IReadOnlyList<WorldStatePlaceOppositionSnapshot> Oppositions { get; }
+
+    public string StableKey => WorldStateSnapshotValue.OwnerKey(OwnerKind, OwnerRuntimeId);
+
+    public WorldStatePlaceContentSnapshot(
+        PlaceContentOwnerKind ownerKind,
+        string ownerRuntimeId,
+        string macroLocationRuntimeId,
+        string topologyOwnerRuntimeId,
+        PlaceSiteState siteState,
+        PlaceAccessState accessState,
+        string controllerRuntimeId,
+        IEnumerable<WorldStatePlaceStackSnapshot> stacks,
+        IEnumerable<WorldStatePlaceOppositionSnapshot> oppositions)
+    {
+        OwnerKind = ownerKind;
+        OwnerRuntimeId = ownerRuntimeId;
+        MacroLocationRuntimeId = macroLocationRuntimeId;
+        TopologyOwnerRuntimeId = topologyOwnerRuntimeId;
+        SiteState = siteState;
+        AccessState = accessState;
+        ControllerRuntimeId = controllerRuntimeId;
+        Stacks = SnapshotCollections.Copy(stacks);
+        Oppositions = SnapshotCollections.Copy(oppositions);
+    }
+}
+
+public sealed class WorldStatePlaceStackSnapshot
+{
+    public string ItemDefinitionId { get; }
+    public int Amount { get; }
+    public PlaceContentPersistencePolicy PersistencePolicy { get; }
+    public int DecayPerDay { get; }
+    public float AverageUnitCost { get; }
+
+    public WorldStatePlaceStackSnapshot(
+        string itemDefinitionId,
+        int amount,
+        PlaceContentPersistencePolicy persistencePolicy,
+        int decayPerDay,
+        float averageUnitCost)
+    {
+        ItemDefinitionId = itemDefinitionId;
+        Amount = amount;
+        PersistencePolicy = persistencePolicy;
+        DecayPerDay = decayPerDay;
+        AverageUnitCost = averageUnitCost;
+    }
+}
+
+public sealed class WorldStatePlaceOppositionSnapshot
+{
+    public string RuntimeId { get; }
+    public bool IsActive { get; }
+    public bool IsResolved { get; }
+    public string OppositionSideId { get; }
+    public IReadOnlyList<string> NamedParticipantRuntimeIds { get; }
+    public IReadOnlyList<string> AggregateParticipantSourceIds { get; }
+
+    public WorldStatePlaceOppositionSnapshot(
+        string runtimeId,
+        bool isActive,
+        bool isResolved,
+        string oppositionSideId,
+        IEnumerable<string> namedParticipantRuntimeIds,
+        IEnumerable<string> aggregateParticipantSourceIds)
+    {
+        RuntimeId = runtimeId;
+        IsActive = isActive;
+        IsResolved = isResolved;
+        OppositionSideId = oppositionSideId;
+        NamedParticipantRuntimeIds = SnapshotCollections.Copy(namedParticipantRuntimeIds);
+        AggregateParticipantSourceIds = SnapshotCollections.Copy(aggregateParticipantSourceIds);
+    }
+}
+
+public sealed class WorldStateNotableItemSnapshot
+{
+    public string RuntimeId { get; }
+    public string DefinitionId { get; }
+    public bool IsPresent { get; }
+    public NotableItemCustodyKind? CustodyKind { get; }
+    public PlaceContentOwnerKind? OwnerKind { get; }
+    public string OwnerRuntimeId { get; }
+    public string OwnerMacroLocationRuntimeId { get; }
+    public string OwnerTopologyRuntimeId { get; }
+    public string CustodianNpcRuntimeId { get; }
+
+    public string CustodyKey
+    {
+        get
+        {
+            if (IsPresent == false || CustodyKind.HasValue == false)
+            {
+                return null;
+            }
+
+            if (CustodyKind.Value == NotableItemCustodyKind.Npc)
+            {
+                return "Npc:" + CustodianNpcRuntimeId;
+            }
+
+            return "Place:" + WorldStateSnapshotValue.OwnerKey(OwnerKind.Value, OwnerRuntimeId);
+        }
+    }
+
+    public WorldStateNotableItemSnapshot(
+        string runtimeId,
+        string definitionId,
+        bool isPresent,
+        NotableItemCustodyKind? custodyKind,
+        PlaceContentOwnerKind? ownerKind,
+        string ownerRuntimeId,
+        string ownerMacroLocationRuntimeId,
+        string ownerTopologyRuntimeId,
+        string custodianNpcRuntimeId)
+    {
+        RuntimeId = runtimeId;
+        DefinitionId = definitionId;
+        IsPresent = isPresent;
+        CustodyKind = custodyKind;
+        OwnerKind = ownerKind;
+        OwnerRuntimeId = ownerRuntimeId;
+        OwnerMacroLocationRuntimeId = ownerMacroLocationRuntimeId;
+        OwnerTopologyRuntimeId = ownerTopologyRuntimeId;
+        CustodianNpcRuntimeId = custodianNpcRuntimeId;
+    }
+}
+
+public sealed class WorldStateLocalTopologySnapshot
+{
+    public LocalTopologyOwnerKind OwnerKind { get; }
+    public string OwnerRuntimeId { get; }
+    public string MacroLocationRuntimeId { get; }
+    public LocalTopologyPublicationState PublicationState { get; }
+    public IReadOnlyList<WorldStateLocalPlaceSnapshot> Places { get; }
+    public IReadOnlyList<WorldStateLocalConnectionSnapshot> Connections { get; }
+
+    public string StableKey => WorldStateSnapshotValue.OwnerKey(OwnerKind, OwnerRuntimeId);
+
+    public WorldStateLocalTopologySnapshot(
+        LocalTopologyOwnerKind ownerKind,
+        string ownerRuntimeId,
+        string macroLocationRuntimeId,
+        LocalTopologyPublicationState publicationState,
+        IEnumerable<WorldStateLocalPlaceSnapshot> places,
+        IEnumerable<WorldStateLocalConnectionSnapshot> connections)
+    {
+        OwnerKind = ownerKind;
+        OwnerRuntimeId = ownerRuntimeId;
+        MacroLocationRuntimeId = macroLocationRuntimeId;
+        PublicationState = publicationState;
+        Places = SnapshotCollections.Copy(places);
+        Connections = SnapshotCollections.Copy(connections);
+    }
+}
+
+public sealed class WorldStateLocalPlaceSnapshot
+{
+    public string RuntimeId { get; }
+    public string DefinitionId { get; }
+    public string ParentRuntimeId { get; }
+    public bool IsEntryPoint { get; }
+
+    public WorldStateLocalPlaceSnapshot(string runtimeId, string definitionId, string parentRuntimeId, bool isEntryPoint)
+    {
+        RuntimeId = runtimeId;
+        DefinitionId = definitionId;
+        ParentRuntimeId = parentRuntimeId;
+        IsEntryPoint = isEntryPoint;
+    }
+}
+
+public sealed class WorldStateLocalConnectionSnapshot
+{
+    public string RuntimeId { get; }
+    public string OriginRuntimeId { get; }
+    public string DestinationRuntimeId { get; }
+    public float TraversalCost { get; }
+    public string ConnectionTypeDefinitionId { get; }
+
+    public WorldStateLocalConnectionSnapshot(
+        string runtimeId,
+        string originRuntimeId,
+        string destinationRuntimeId,
+        float traversalCost,
+        string connectionTypeDefinitionId)
+    {
+        RuntimeId = runtimeId;
+        OriginRuntimeId = originRuntimeId;
+        DestinationRuntimeId = destinationRuntimeId;
+        TraversalCost = traversalCost;
+        ConnectionTypeDefinitionId = connectionTypeDefinitionId;
+    }
+}
+
+public static class WorldStateSnapshotBuilder
+{
+    public static WorldStateSnapshot BuildSnapshot(WorldStateSnapshotContext context)
+    {
+        context = context ?? new WorldStateSnapshotContext();
+
+        List<WorldStateExpeditionSnapshot> expeditions = BuildExpeditionSnapshots(context.ExpeditionStore);
+        return new WorldStateSnapshot(
+            context.SimulationTime != null ? context.SimulationTime.AbsoluteDay : 0L,
+            BuildNpcSnapshots(context.Npcs, expeditions),
+            BuildCitySnapshots(context.Cities),
+            BuildSpatialSnapshot(context.SpatialNetwork),
+            BuildSiteSnapshots(context.ExplorableSiteStore),
+            expeditions,
+            BuildPlaceContentSnapshots(context.PlaceContentStore),
+            BuildNotableItemSnapshots(context.PlaceContentStore),
+            BuildLocalTopologySnapshots(context.LocalTopologyStore));
+    }
+
+    private static List<WorldStateNpcSnapshot> BuildNpcSnapshots(
+        IEnumerable<NpcRuntime> source,
+        IReadOnlyList<WorldStateExpeditionSnapshot> expeditions)
+    {
+        List<NpcRuntime> npcs = SnapshotCollections.Materialize(source);
+        npcs.RemoveAll(npc => npc == null || string.IsNullOrWhiteSpace(npc.RuntimeId));
+        npcs.Sort((left, right) => StringComparer.Ordinal.Compare(left.RuntimeId, right.RuntimeId));
+
+        List<WorldStateNpcSnapshot> result = new List<WorldStateNpcSnapshot>();
+        foreach (NpcRuntime npc in npcs)
+        {
+            result.Add(new WorldStateNpcSnapshot(
+                npc.RuntimeId,
+                npc.DefinitionId,
+                npc.LifeState,
+                npc.InjurySeverity,
+                npc.CurrentLocation?.RuntimeId,
+                npc.CurrentCity?.RuntimeId,
+                npc.DestinationLocation?.RuntimeId,
+                npc.DestinationCity?.RuntimeId,
+                npc.IsTraveling,
+                npc.TravelRouteRuntimeId,
+                npc.TravelDaysRemaining,
+                npc.ActiveTravelPartyId,
+                npc.MoneyAccount?.Balance ?? 0f,
+                FindActiveExpeditionId(npc.RuntimeId, expeditions),
+                BuildInventorySnapshots(npc)));
+        }
+
+        return result;
+    }
+
+    private static string FindActiveExpeditionId(
+        string npcRuntimeId,
+        IReadOnlyList<WorldStateExpeditionSnapshot> expeditions)
+    {
+        foreach (WorldStateExpeditionSnapshot expedition in expeditions)
+        {
+            if (ContainsId(expedition.MemberRuntimeIds, npcRuntimeId))
+            {
+                return expedition.ExpeditionId;
+            }
+        }
+
+        return null;
+    }
+
+    private static bool ContainsId(IReadOnlyList<string> values, string expected)
+    {
+        if (values == null)
+        {
+            return false;
+        }
+
+        foreach (string value in values)
+        {
+            if (string.Equals(value, expected, StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static List<WorldStateInventoryStackSnapshot> BuildInventorySnapshots(NpcRuntime npc)
+    {
+        Dictionary<string, InventoryAggregate> aggregates = new Dictionary<string, InventoryAggregate>(StringComparer.Ordinal);
+        if (npc?.Inventory?.Items != null)
+        {
+            foreach (InventoryItemRuntime item in npc.Inventory.Items)
+            {
+                string definitionId = item?.Item?.DefinitionId;
+                if (string.IsNullOrWhiteSpace(definitionId) == true)
+                {
+                    continue;
+                }
+
+                if (aggregates.TryGetValue(definitionId, out InventoryAggregate aggregate) == false)
+                {
+                    aggregate = new InventoryAggregate();
+                    aggregates.Add(definitionId, aggregate);
+                }
+
+                aggregate.Add(item.Amount, item.AverageUnitCost);
+            }
+        }
+
+        List<string> definitionIds = new List<string>(aggregates.Keys);
+        definitionIds.Sort(StringComparer.Ordinal);
+        List<WorldStateInventoryStackSnapshot> result = new List<WorldStateInventoryStackSnapshot>();
+        foreach (string definitionId in definitionIds)
+        {
+            InventoryAggregate aggregate = aggregates[definitionId];
+            result.Add(new WorldStateInventoryStackSnapshot(
+                definitionId,
+                aggregate.Amount,
+                aggregate.GetAverageUnitCost()));
+        }
+
+        return result;
+    }
+
+    private static List<WorldStateCitySnapshot> BuildCitySnapshots(IEnumerable<CityRuntime> source)
+    {
+        List<CityRuntime> cities = SnapshotCollections.Materialize(source);
+        cities.RemoveAll(city => city == null || string.IsNullOrWhiteSpace(city.RuntimeId));
+        cities.Sort((left, right) => StringComparer.Ordinal.Compare(left.RuntimeId, right.RuntimeId));
+
+        List<WorldStateCitySnapshot> result = new List<WorldStateCitySnapshot>();
+        foreach (CityRuntime city in cities)
+        {
+            MarketRuntime market = city.Market;
+            MarketCounterpartyRuntime counterparty = market?.Counterparty;
+            List<string> residents = new List<string>();
+            foreach (NpcRuntime npc in city.ImportantNpcs)
+            {
+                if (npc != null && string.IsNullOrWhiteSpace(npc.RuntimeId) == false)
+                {
+                    residents.Add(npc.RuntimeId);
+                }
+            }
+
+            residents.Sort(StringComparer.Ordinal);
+            result.Add(new WorldStateCitySnapshot(
+                city.RuntimeId,
+                city.DefinitionId,
+                city.Location?.RuntimeId,
+                city.CurrentPopulation,
+                counterparty?.CounterpartyRuntimeId,
+                counterparty != null ? counterparty.LiquidityMode : MarketLiquidityMode.Open,
+                counterparty?.MoneyAccount?.Balance ?? 0f,
+                residents,
+                BuildMarketStockSnapshots(market)));
+        }
+
+        return result;
+    }
+
+    private static List<WorldStateMarketStackSnapshot> BuildMarketStockSnapshots(MarketRuntime market)
+    {
+        List<MarketItemRuntime> items = market == null ? new List<MarketItemRuntime>() : new List<MarketItemRuntime>(market.Items);
+        items.RemoveAll(item => item == null || string.IsNullOrWhiteSpace(item.Item?.DefinitionId));
+        items.Sort((left, right) =>
+        {
+            int comparison = StringComparer.Ordinal.Compare(left.Item.DefinitionId, right.Item.DefinitionId);
+            if (comparison != 0) return comparison;
+            comparison = left.Amount.CompareTo(right.Amount);
+            if (comparison != 0) return comparison;
+            comparison = left.DesiredAmount.CompareTo(right.DesiredAmount);
+            if (comparison != 0) return comparison;
+            return left.CurrentPrice.CompareTo(right.CurrentPrice);
+        });
+
+        List<WorldStateMarketStackSnapshot> result = new List<WorldStateMarketStackSnapshot>();
+        foreach (MarketItemRuntime item in items)
+        {
+            result.Add(new WorldStateMarketStackSnapshot(
+                item.Item.DefinitionId,
+                item.Amount,
+                item.DesiredAmount,
+                item.CurrentPrice));
+        }
+
+        return result;
+    }
+
+    private static WorldStateSpatialSnapshot BuildSpatialSnapshot(SpatialNetworkRuntime network)
+    {
+        if (network == null)
+        {
+            return new WorldStateSpatialSnapshot();
+        }
+
+        List<SpatialLocationRuntime> locations = new List<SpatialLocationRuntime>(network.Locations);
+        locations.RemoveAll(location => location == null || string.IsNullOrWhiteSpace(location.RuntimeId));
+        locations.Sort((left, right) => StringComparer.Ordinal.Compare(left.RuntimeId, right.RuntimeId));
+        List<WorldStateLocationSnapshot> locationSnapshots = new List<WorldStateLocationSnapshot>();
+        foreach (SpatialLocationRuntime location in locations)
+        {
+            locationSnapshots.Add(new WorldStateLocationSnapshot(location.RuntimeId));
+        }
+
+        List<SpatialRouteRuntime> routes = new List<SpatialRouteRuntime>(network.Routes);
+        routes.RemoveAll(route => route == null || string.IsNullOrWhiteSpace(route.RuntimeId));
+        routes.Sort((left, right) => StringComparer.Ordinal.Compare(left.RuntimeId, right.RuntimeId));
+        List<WorldStateRouteSnapshot> routeSnapshots = new List<WorldStateRouteSnapshot>();
+        foreach (SpatialRouteRuntime route in routes)
+        {
+            routeSnapshots.Add(new WorldStateRouteSnapshot(
+                route.RuntimeId,
+                route.Origin?.RuntimeId,
+                route.Destination?.RuntimeId,
+                route.TravelDays));
+        }
+
+        return new WorldStateSpatialSnapshot(locationSnapshots, routeSnapshots);
+    }
+
+    private static List<WorldStateSiteSnapshot> BuildSiteSnapshots(ExplorableSiteStore store)
+    {
+        List<ExplorableSiteRuntime> sites = store == null
+            ? new List<ExplorableSiteRuntime>()
+            : new List<ExplorableSiteRuntime>(store.Sites);
+        sites.RemoveAll(site => site == null || string.IsNullOrWhiteSpace(site.RuntimeId));
+        sites.Sort((left, right) => StringComparer.Ordinal.Compare(left.RuntimeId, right.RuntimeId));
+
+        List<WorldStateSiteSnapshot> result = new List<WorldStateSiteSnapshot>();
+        foreach (ExplorableSiteRuntime site in sites)
+        {
+            result.Add(new WorldStateSiteSnapshot(
+                site.RuntimeId,
+                site.DefinitionId,
+                site.Location?.RuntimeId,
+                site.Definition != null ? site.Definition.kind : ExplorableSiteKind.Generic));
+        }
+
+        return result;
+    }
+
+    private static List<WorldStateExpeditionSnapshot> BuildExpeditionSnapshots(ExpeditionStore store)
+    {
+        List<ExpeditionRuntime> expeditions = store == null
+            ? new List<ExpeditionRuntime>()
+            : new List<ExpeditionRuntime>(store.ActiveExpeditions);
+        expeditions.RemoveAll(expedition => expedition == null || string.IsNullOrWhiteSpace(expedition.ExpeditionId));
+        expeditions.Sort((left, right) => StringComparer.Ordinal.Compare(left.ExpeditionId, right.ExpeditionId));
+
+        List<WorldStateExpeditionSnapshot> result = new List<WorldStateExpeditionSnapshot>();
+        foreach (ExpeditionRuntime expedition in expeditions)
+        {
+            ExpeditionObjectiveRuntime objective = expedition.Objective;
+            result.Add(new WorldStateExpeditionSnapshot(
+                expedition.ExpeditionId,
+                expedition.State,
+                expedition.TargetSiteRuntimeId,
+                expedition.OriginLocationRuntimeId,
+                expedition.TargetLocationRuntimeId,
+                expedition.OutboundRouteRuntimeId,
+                expedition.OriginDecisionId,
+                expedition.TravelPartyId,
+                expedition.CurrentLocalPlaceRuntimeId,
+                expedition.ExplorationProgress,
+                expedition.ExplorationProgressRequired,
+                SortStrings(expedition.MemberRuntimeIds),
+                SortStrings(expedition.PerformerRuntimeIds),
+                SortStrings(expedition.SupportRuntimeIds),
+                SortStrings(expedition.VisitedLocalPlaceRuntimeIds),
+                SortStrings(expedition.ObservedLocalConnectionRuntimeIds),
+                objective != null ? objective.ObjectiveType : ExpeditionObjectiveType.Explore,
+                objective?.TargetItemDefinitionId,
+                objective?.TargetNotableItemRuntimeId,
+                objective?.TargetOppositionRuntimeId,
+                objective?.IsCompleted ?? false,
+                objective?.AllowContinueAfterCompletion ?? false));
+        }
+
+        return result;
+    }
+
+    private static List<WorldStatePlaceContentSnapshot> BuildPlaceContentSnapshots(PlaceContentStore store)
+    {
+        List<PlaceContentRuntime> contents = store == null
+            ? new List<PlaceContentRuntime>()
+            : new List<PlaceContentRuntime>(store.Places);
+        contents.RemoveAll(content => content == null || content.Owner == null);
+        contents.Sort((left, right) => StringComparer.Ordinal.Compare(left.Owner.StableKey, right.Owner.StableKey));
+
+        List<WorldStatePlaceContentSnapshot> result = new List<WorldStatePlaceContentSnapshot>();
+        foreach (PlaceContentRuntime content in contents)
+        {
+            PlaceContentOwnerReference owner = content.Owner;
+            result.Add(new WorldStatePlaceContentSnapshot(
+                owner.OwnerKind,
+                owner.OwnerRuntimeId,
+                owner.MacroLocationRuntimeId,
+                owner.TopologyOwnerRuntimeId,
+                content.SiteState,
+                content.AccessState,
+                content.ControllerRuntimeId,
+                BuildPlaceStackSnapshots(content.StackedContent),
+                BuildOppositionSnapshots(content.Oppositions)));
+        }
+
+        return result;
+    }
+
+    private static List<WorldStatePlaceStackSnapshot> BuildPlaceStackSnapshots(
+        IEnumerable<PlaceContentStackRuntime> source)
+    {
+        List<PlaceContentStackRuntime> stacks = SnapshotCollections.Materialize(source);
+        stacks.RemoveAll(stack => stack == null || string.IsNullOrWhiteSpace(stack.ItemDefinitionId));
+        stacks.Sort((left, right) => StringComparer.Ordinal.Compare(left.ItemDefinitionId, right.ItemDefinitionId));
+        List<WorldStatePlaceStackSnapshot> result = new List<WorldStatePlaceStackSnapshot>();
+        foreach (PlaceContentStackRuntime stack in stacks)
+        {
+            result.Add(new WorldStatePlaceStackSnapshot(
+                stack.ItemDefinitionId,
+                stack.Amount,
+                stack.PersistencePolicy,
+                stack.DecayPerDay,
+                stack.AverageUnitCost));
+        }
+
+        return result;
+    }
+
+    private static List<WorldStatePlaceOppositionSnapshot> BuildOppositionSnapshots(
+        IEnumerable<PlaceOppositionRuntime> source)
+    {
+        List<PlaceOppositionRuntime> oppositions = SnapshotCollections.Materialize(source);
+        oppositions.RemoveAll(opposition => opposition == null || string.IsNullOrWhiteSpace(opposition.RuntimeId));
+        oppositions.Sort((left, right) => StringComparer.Ordinal.Compare(left.RuntimeId, right.RuntimeId));
+        List<WorldStatePlaceOppositionSnapshot> result = new List<WorldStatePlaceOppositionSnapshot>();
+        foreach (PlaceOppositionRuntime opposition in oppositions)
+        {
+            List<string> named = new List<string>();
+            foreach (NpcRuntime npc in opposition.NamedParticipants)
+            {
+                if (npc != null && string.IsNullOrWhiteSpace(npc.RuntimeId) == false)
+                {
+                    named.Add(npc.RuntimeId);
+                }
+            }
+
+            List<string> aggregate = new List<string>();
+            foreach (AggregateParticipantSnapshot participant in opposition.AggregateParticipants)
+            {
+                if (participant != null && string.IsNullOrWhiteSpace(participant.SourceId) == false)
+                {
+                    aggregate.Add(participant.SourceId);
+                }
+            }
+
+            named.Sort(StringComparer.Ordinal);
+            aggregate.Sort(StringComparer.Ordinal);
+            result.Add(new WorldStatePlaceOppositionSnapshot(
+                opposition.RuntimeId,
+                opposition.IsActive,
+                opposition.IsResolved,
+                opposition.OppositionSideId,
+                named,
+                aggregate));
+        }
+
+        return result;
+    }
+
+    private static List<WorldStateNotableItemSnapshot> BuildNotableItemSnapshots(PlaceContentStore store)
+    {
+        List<NotableItemRuntime> notables = store == null
+            ? new List<NotableItemRuntime>()
+            : new List<NotableItemRuntime>(store.NotableItems);
+        notables.RemoveAll(notable => notable == null || string.IsNullOrWhiteSpace(notable.RuntimeId));
+        notables.Sort((left, right) => StringComparer.Ordinal.Compare(left.RuntimeId, right.RuntimeId));
+
+        List<WorldStateNotableItemSnapshot> result = new List<WorldStateNotableItemSnapshot>();
+        foreach (NotableItemRuntime notable in notables)
+        {
+            NotableItemCustodyReference custody = notable.Custody;
+            PlaceContentOwnerReference owner = custody?.PlaceOwner;
+            result.Add(new WorldStateNotableItemSnapshot(
+                notable.RuntimeId,
+                notable.DefinitionId,
+                notable.IsPresent,
+                custody?.CustodyKind,
+                owner?.OwnerKind,
+                owner?.OwnerRuntimeId,
+                owner?.MacroLocationRuntimeId,
+                owner?.TopologyOwnerRuntimeId,
+                custody?.NpcRuntimeId));
+        }
+
+        return result;
+    }
+
+    private static List<WorldStateLocalTopologySnapshot> BuildLocalTopologySnapshots(LocalTopologyStore store)
+    {
+        List<LocalTopologyRuntime> topologies = store == null
+            ? new List<LocalTopologyRuntime>()
+            : new List<LocalTopologyRuntime>(store.Topologies);
+        topologies.RemoveAll(topology => topology == null || topology.Owner == null);
+        topologies.Sort((left, right) => StringComparer.Ordinal.Compare(left.Owner.OwnerRuntimeId, right.Owner.OwnerRuntimeId));
+
+        List<WorldStateLocalTopologySnapshot> result = new List<WorldStateLocalTopologySnapshot>();
+        foreach (LocalTopologyRuntime topology in topologies)
+        {
+            LocalTopologyOwnerReference owner = topology.Owner;
+            List<LocalPlaceRuntime> places = new List<LocalPlaceRuntime>(topology.Places);
+            places.RemoveAll(place => place == null || string.IsNullOrWhiteSpace(place.RuntimeId));
+            places.Sort((left, right) => StringComparer.Ordinal.Compare(left.RuntimeId, right.RuntimeId));
+            List<WorldStateLocalPlaceSnapshot> placeSnapshots = new List<WorldStateLocalPlaceSnapshot>();
+            foreach (LocalPlaceRuntime place in places)
+            {
+                placeSnapshots.Add(new WorldStateLocalPlaceSnapshot(
+                    place.RuntimeId,
+                    place.TypeDefinitionId,
+                    place.Parent?.RuntimeId,
+                    topology.IsEntryPoint(place)));
+            }
+
+            List<LocalTopologyConnectionRuntime> connections = new List<LocalTopologyConnectionRuntime>(topology.Connections);
+            connections.RemoveAll(connection => connection == null || string.IsNullOrWhiteSpace(connection.RuntimeId));
+            connections.Sort((left, right) => StringComparer.Ordinal.Compare(left.RuntimeId, right.RuntimeId));
+            List<WorldStateLocalConnectionSnapshot> connectionSnapshots = new List<WorldStateLocalConnectionSnapshot>();
+            foreach (LocalTopologyConnectionRuntime connection in connections)
+            {
+                connectionSnapshots.Add(new WorldStateLocalConnectionSnapshot(
+                    connection.RuntimeId,
+                    connection.Origin?.RuntimeId,
+                    connection.Destination?.RuntimeId,
+                    connection.TraversalCost,
+                    connection.TypeDefinitionId));
+            }
+
+            result.Add(new WorldStateLocalTopologySnapshot(
+                owner.OwnerKind,
+                owner.OwnerRuntimeId,
+                owner.MacroLocationRuntimeId,
+                topology.PublicationState,
+                placeSnapshots,
+                connectionSnapshots));
+        }
+
+        return result;
+    }
+
+    private static List<string> SortStrings(IEnumerable<string> source)
+    {
+        List<string> result = new List<string>();
+        if (source != null)
+        {
+            foreach (string value in source)
+            {
+                if (string.IsNullOrWhiteSpace(value) == false)
+                {
+                    result.Add(value);
+                }
+            }
+        }
+
+        result.Sort(StringComparer.Ordinal);
+        return result;
+    }
+
+    private sealed class InventoryAggregate
+    {
+        public int Amount { get; private set; }
+        private double totalCost;
+
+        public void Add(int amount, float averageUnitCost)
+        {
+            Amount += amount;
+            totalCost += (double)amount * averageUnitCost;
+        }
+
+        public float GetAverageUnitCost()
+        {
+            return Amount > 0 ? (float)(totalCost / Amount) : 0f;
+        }
+    }
+}
+
+internal static class SnapshotCollections
+{
+    public static List<T> Materialize<T>(IEnumerable<T> source)
+    {
+        return source == null ? new List<T>() : new List<T>(source);
+    }
+
+    public static IReadOnlyList<T> Copy<T>(IEnumerable<T> source)
+    {
+        return Materialize(source).AsReadOnly();
+    }
+}
+
+internal static class WorldStateSnapshotValue
+{
+    public static string OwnerKey(PlaceContentOwnerKind kind, string runtimeId)
+    {
+        return Enum.GetName(typeof(PlaceContentOwnerKind), kind) + ":" + runtimeId;
+    }
+
+    public static string OwnerKey(LocalTopologyOwnerKind kind, string runtimeId)
+    {
+        return Enum.GetName(typeof(LocalTopologyOwnerKind), kind) + ":" + runtimeId;
+    }
+}
