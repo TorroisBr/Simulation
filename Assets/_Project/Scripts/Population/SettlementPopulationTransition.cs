@@ -11,7 +11,8 @@ public enum PopulationTransitionFailure
     WouldUnderflow = 3,
     WouldOverflow = 4,
     StaleState = 5,
-    InvalidTransition = 6
+    InvalidTransition = 6,
+    RevisionOverflow = 7
 }
 
 /// <summary>
@@ -20,6 +21,7 @@ public enum PopulationTransitionFailure
 public sealed class SettlementPopulationTransition : IEquatable<SettlementPopulationTransition>
 {
     public string SettlementRuntimeId { get; }
+    public long ExpectedRevision { get; }
     public int PopulationBefore { get; }
     public int Births { get; }
     public int Deaths { get; }
@@ -30,12 +32,14 @@ public sealed class SettlementPopulationTransition : IEquatable<SettlementPopula
 
     internal SettlementPopulationTransition(
         string settlementRuntimeId,
+        long expectedRevision,
         int populationBefore,
         PopulationChangeSet changes,
         long netChange,
         int populationAfter)
     {
         SettlementRuntimeId = settlementRuntimeId;
+        ExpectedRevision = expectedRevision;
         PopulationBefore = populationBefore;
         Births = changes.Births;
         Deaths = changes.Deaths;
@@ -53,6 +57,7 @@ public sealed class SettlementPopulationTransition : IEquatable<SettlementPopula
         }
 
         return string.Equals(SettlementRuntimeId, other.SettlementRuntimeId, StringComparison.Ordinal)
+            && ExpectedRevision == other.ExpectedRevision
             && PopulationBefore == other.PopulationBefore
             && Births == other.Births
             && Deaths == other.Deaths
@@ -72,6 +77,7 @@ public sealed class SettlementPopulationTransition : IEquatable<SettlementPopula
         unchecked
         {
             int hash = StringComparer.Ordinal.GetHashCode(SettlementRuntimeId ?? string.Empty);
+            hash = (hash * 397) ^ ExpectedRevision.GetHashCode();
             hash = (hash * 397) ^ PopulationBefore;
             hash = (hash * 397) ^ Births;
             hash = (hash * 397) ^ Deaths;

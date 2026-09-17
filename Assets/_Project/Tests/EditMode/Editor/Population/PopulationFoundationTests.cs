@@ -428,6 +428,104 @@ public sealed class PopulationFoundationTests
         Assert.That(transition.PopulationBefore, Is.EqualTo(transition.PopulationAfter));
     }
 
+    [Test]
+    public void NetZeroTransitionCannotBeAppliedTwice()
+    {
+        SettlementPopulationRuntime population = CreatePopulation(1000);
+        SettlementPopulationTransition transition = Propose(population, new PopulationChangeSet(5, 5, 0, 0));
+
+        Assert.That(SettlementPopulationSystem.TryApply(population, transition, out _), Is.True);
+        Assert.That(SettlementPopulationSystem.TryApply(population, transition, out PopulationTransitionFailure failure), Is.False);
+        Assert.That(failure, Is.EqualTo(PopulationTransitionFailure.StaleState));
+        Assert.That(population.CurrentPopulation, Is.EqualTo(1000));
+        Assert.That(population.Revision, Is.EqualTo(1L));
+    }
+
+    [Test]
+    public void ZeroChangeTransitionCannotBeAppliedTwice()
+    {
+        SettlementPopulationRuntime population = CreatePopulation(1000);
+        SettlementPopulationTransition transition = Propose(population, new PopulationChangeSet(0, 0, 0, 0));
+
+        Assert.That(SettlementPopulationSystem.TryApply(population, transition, out _), Is.True);
+        Assert.That(SettlementPopulationSystem.TryApply(population, transition, out PopulationTransitionFailure failure), Is.False);
+        Assert.That(failure, Is.EqualTo(PopulationTransitionFailure.StaleState));
+        Assert.That(population.CurrentPopulation, Is.EqualTo(1000));
+        Assert.That(population.Revision, Is.EqualTo(1L));
+    }
+
+    [Test]
+    public void SuccessfulApplyIncrementsRevision()
+    {
+        SettlementPopulationRuntime population = CreatePopulation(1000);
+        SettlementPopulationTransition transition = Propose(population, new PopulationChangeSet(10, 0, 0, 0));
+
+        Assert.That(population.Revision, Is.EqualTo(0L));
+        Apply(population, transition);
+
+        Assert.That(population.CurrentPopulation, Is.EqualTo(1010));
+        Assert.That(population.Revision, Is.EqualTo(1L));
+    }
+
+    [Test]
+    public void RejectedApplyDoesNotIncrementRevision()
+    {
+        SettlementPopulationRuntime population = CreatePopulation(1000);
+        SettlementPopulationTransition staleTransition = Propose(population, new PopulationChangeSet(10, 0, 0, 0));
+        Apply(population, Propose(population, new PopulationChangeSet(1, 0, 0, 0)));
+        long revisionBeforeRejectedApply = population.Revision;
+
+        bool applied = SettlementPopulationSystem.TryApply(population, staleTransition, out PopulationTransitionFailure failure);
+
+        Assert.That(applied, Is.False);
+        Assert.That(failure, Is.EqualTo(PopulationTransitionFailure.StaleState));
+        Assert.That(population.Revision, Is.EqualTo(revisionBeforeRejectedApply));
+    }
+
+    [Test]
+    public void StaleTransitionIsRejectedEvenWhenPopulationCountMatchesAgain()
+    {
+        SettlementPopulationRuntime population = CreatePopulation(100);
+        SettlementPopulationTransition transitionA = Propose(population, new PopulationChangeSet(10, 0, 0, 0));
+
+        Apply(population, Propose(population, new PopulationChangeSet(10, 0, 0, 0)));
+        Apply(population, Propose(population, new PopulationChangeSet(0, 10, 0, 0)));
+
+        Assert.That(population.CurrentPopulation, Is.EqualTo(100));
+        Assert.That(population.Revision, Is.EqualTo(2L));
+        bool applied = SettlementPopulationSystem.TryApply(population, transitionA, out PopulationTransitionFailure failure);
+
+        Assert.That(applied, Is.False);
+        Assert.That(failure, Is.EqualTo(PopulationTransitionFailure.StaleState));
+        Assert.That(population.CurrentPopulation, Is.EqualTo(100));
+        Assert.That(population.Revision, Is.EqualTo(2L));
+    }
+
+    [Test]
+    public void RepeatedProposalWithoutApplyDoesNotChangeRevision()
+    {
+        SettlementPopulationRuntime population = CreatePopulation(1000);
+
+        Propose(population, new PopulationChangeSet(10, 0, 0, 0));
+        Propose(population, new PopulationChangeSet(10, 0, 0, 0));
+
+        Assert.That(population.CurrentPopulation, Is.EqualTo(1000));
+        Assert.That(population.Revision, Is.EqualTo(0L));
+    }
+
+    [Test]
+    public void ProposalCapturesCurrentRevision()
+    {
+        SettlementPopulationRuntime population = CreatePopulation(1000);
+        SettlementPopulationTransition first = Propose(population, new PopulationChangeSet(10, 0, 0, 0));
+
+        Apply(population, first);
+        SettlementPopulationTransition second = Propose(population, new PopulationChangeSet(5, 0, 0, 0));
+
+        Assert.That(first.ExpectedRevision, Is.EqualTo(0L));
+        Assert.That(second.ExpectedRevision, Is.EqualTo(1L));
+    }
+
     private static SettlementPopulationRuntime CreatePopulation(int count)
     {
         return new SettlementPopulationRuntime("settlement-a", count);

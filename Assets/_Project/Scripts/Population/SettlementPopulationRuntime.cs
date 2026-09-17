@@ -8,9 +8,11 @@ public sealed class SettlementPopulationRuntime
 {
     private readonly string settlementRuntimeId;
     private int currentPopulation;
+    private long revision;
 
     public string SettlementRuntimeId => settlementRuntimeId;
     public int CurrentPopulation => currentPopulation;
+    public long Revision => revision;
 
     public SettlementPopulationRuntime(string settlementRuntimeId, int currentPopulation)
     {
@@ -30,17 +32,30 @@ public sealed class SettlementPopulationRuntime
 
         this.settlementRuntimeId = settlementRuntimeId;
         this.currentPopulation = currentPopulation;
+        revision = 0L;
     }
 
-    internal void SetPopulationAfterValidatedTransition(int populationAfter)
+    internal bool TryApplyValidatedTransition(
+        int populationAfter,
+        out PopulationTransitionFailure failure)
     {
+        failure = PopulationTransitionFailure.None;
+
         if (populationAfter < 0)
         {
-            throw new ArgumentOutOfRangeException(
-                nameof(populationAfter),
-                "Settlement population cannot be negative.");
+            failure = PopulationTransitionFailure.InvalidTransition;
+            return false;
         }
 
+        if (revision == long.MaxValue)
+        {
+            failure = PopulationTransitionFailure.RevisionOverflow;
+            return false;
+        }
+
+        // Both fields are committed together after the system has validated the transition.
         currentPopulation = populationAfter;
+        revision++;
+        return true;
     }
 }

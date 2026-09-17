@@ -42,6 +42,7 @@ public static class SettlementPopulationSystem
 
         transition = new SettlementPopulationTransition(
             population.SettlementRuntimeId,
+            population.Revision,
             population.CurrentPopulation,
             changes,
             changes.NetChange,
@@ -95,13 +96,13 @@ public static class SettlementPopulationSystem
             return false;
         }
 
-        if (population.CurrentPopulation != transition.PopulationBefore)
+        if (population.Revision != transition.ExpectedRevision
+            || population.CurrentPopulation != transition.PopulationBefore)
         {
             failure = PopulationTransitionFailure.StaleState;
             return false;
         }
 
-        population.SetPopulationAfterValidatedTransition(transition.PopulationAfter);
-        return true;
+        return population.TryApplyValidatedTransition(transition.PopulationAfter, out failure);
     }
 }
