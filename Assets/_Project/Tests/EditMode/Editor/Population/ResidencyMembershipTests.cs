@@ -239,13 +239,33 @@ public sealed class ResidencyMembershipTests
         bool bound = SettlementPopulationMembershipSystem.TryBindExistingResident(
             city,
             second,
-            AuthoritativeNpcRoster.Create(new[] { first, second }),
+            SimulationTestFactory.CreateAuthoritativeNpcRoster(new[] { first, second }),
             out PopulationMembershipFailure failure);
 
         Assert.That(bound, Is.False);
         Assert.That(failure, Is.EqualTo(PopulationMembershipFailure.AggregateCapacityExceeded));
         Assert.That(second.ResidenceSettlementRuntimeId, Is.Null);
         Assert.That(city.CurrentPopulation, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void NullAuthoritativeRosterFailsClosedWithoutPopulationChange()
+    {
+        CityRuntime city = CreateCity("residency-null-roster", 1);
+        NpcRuntime npc = CreateNpc("residency-null-roster-npc");
+        long revisionBefore = city.Population.Revision;
+
+        bool bound = SettlementPopulationMembershipSystem.TryBindExistingResident(
+            city,
+            npc,
+            (AuthoritativeNpcRoster)null,
+            out PopulationMembershipFailure failure);
+
+        Assert.That(bound, Is.False);
+        Assert.That(failure, Is.EqualTo(PopulationMembershipFailure.AuthoritativeRosterRequired));
+        Assert.That(npc.ResidenceSettlementRuntimeId, Is.Null);
+        Assert.That(city.CurrentPopulation, Is.EqualTo(1));
+        Assert.That(city.Population.Revision, Is.EqualTo(revisionBefore));
     }
 
     [Test]
@@ -279,7 +299,7 @@ public sealed class ResidencyMembershipTests
         bool rebound = SettlementPopulationMembershipSystem.TryBindExistingResident(
             city,
             npc,
-            AuthoritativeNpcRoster.Create(new[] { npc }),
+            SimulationTestFactory.CreateAuthoritativeNpcRoster(new[] { npc }),
             out PopulationMembershipFailure failure);
 
         Assert.That(rebound, Is.True);
@@ -298,7 +318,7 @@ public sealed class ResidencyMembershipTests
         bool rebound = SettlementPopulationMembershipSystem.TryBindExistingResident(
             other,
             npc,
-            AuthoritativeNpcRoster.Create(new[] { npc }),
+            SimulationTestFactory.CreateAuthoritativeNpcRoster(new[] { npc }),
             out PopulationMembershipFailure failure);
 
         Assert.That(rebound, Is.False);
@@ -351,6 +371,30 @@ public sealed class ResidencyMembershipTests
         Assert.That(typeof(SettlementPopulationPresenceSummary).GetProperty("NamedPresentCount"), Is.Not.Null);
     }
 
+    [Test]
+    public void AuthoritativeRosterHasNoPublicArbitraryConstructionApi()
+    {
+        BindingFlags publicInstance = BindingFlags.Instance | BindingFlags.Public;
+        Assert.That(typeof(AuthoritativeNpcRoster).GetConstructors(publicInstance), Is.Empty);
+
+        BindingFlags publicStatic = BindingFlags.Static | BindingFlags.Public;
+        foreach (MethodInfo method in typeof(AuthoritativeNpcRoster).GetMethods(publicStatic))
+        {
+            if (method.ReturnType != typeof(AuthoritativeNpcRoster))
+            {
+                continue;
+            }
+
+            foreach (ParameterInfo parameter in method.GetParameters())
+            {
+                Assert.That(
+                    typeof(IEnumerable<NpcRuntime>).IsAssignableFrom(parameter.ParameterType),
+                    Is.False,
+                    method.Name + " must not accept an arbitrary NPC enumerable.");
+            }
+        }
+    }
+
     private static SettlementPopulationPresenceSummary Query(
         CityRuntime city,
         IEnumerable<NpcRuntime> npcs)
@@ -366,7 +410,7 @@ public sealed class ResidencyMembershipTests
         bool bound = SettlementPopulationMembershipSystem.TryBindExistingResident(
             city,
             npc,
-            AuthoritativeNpcRoster.Create(knownNpcs),
+            SimulationTestFactory.CreateAuthoritativeNpcRoster(knownNpcs),
             out PopulationMembershipFailure failure);
         Assert.That(bound, Is.True, failure.ToString());
     }

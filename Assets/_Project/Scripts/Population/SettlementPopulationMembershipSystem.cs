@@ -14,11 +14,6 @@ public sealed class AuthoritativeNpcRoster
 
     private AuthoritativeNpcRoster(IReadOnlyList<NpcRuntime> npcs)
     {
-        this.npcs = npcs;
-    }
-
-    public static AuthoritativeNpcRoster Create(IEnumerable<NpcRuntime> npcs)
-    {
         if (npcs == null)
         {
             throw new ArgumentNullException(nameof(npcs));
@@ -45,7 +40,7 @@ public sealed class AuthoritativeNpcRoster
             snapshot.Add(npc);
         }
 
-        return new AuthoritativeNpcRoster(snapshot.AsReadOnly());
+        this.npcs = snapshot.AsReadOnly();
     }
 }
 

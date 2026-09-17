@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using UnityEngine;
 
 public static class SimulationTestFactory
@@ -47,6 +48,30 @@ public static class SimulationTestFactory
         npc.name = id + " display";
         npc.job = CreateJob(jobType, merchantBehavior);
         return npc;
+    }
+
+    // Test-only construction. Production keeps AuthoritativeNpcRoster construction private
+    // until the world/runtime owner can provide the complete named-NPC roster.
+    internal static AuthoritativeNpcRoster CreateAuthoritativeNpcRoster(IEnumerable<NpcRuntime> npcs)
+    {
+        if (npcs == null)
+        {
+            throw new ArgumentNullException(nameof(npcs));
+        }
+
+        List<NpcRuntime> snapshot = new List<NpcRuntime>(npcs);
+        ConstructorInfo constructor = typeof(AuthoritativeNpcRoster).GetConstructor(
+            BindingFlags.Instance | BindingFlags.NonPublic,
+            null,
+            new[] { typeof(IReadOnlyList<NpcRuntime>) },
+            null);
+        if (constructor == null)
+        {
+            throw new InvalidOperationException(
+                "AuthoritativeNpcRoster must retain its private snapshot constructor for tests.");
+        }
+
+        return (AuthoritativeNpcRoster)constructor.Invoke(new object[] { snapshot.AsReadOnly() });
     }
 
     public static NpcActionData CreateAction(string id, NpcActionType actionType, NpcActionCategory category = NpcActionCategory.General)

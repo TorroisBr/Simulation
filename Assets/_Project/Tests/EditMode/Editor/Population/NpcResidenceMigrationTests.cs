@@ -619,7 +619,7 @@ public sealed class NpcResidenceMigrationTests
         bool bound = SettlementPopulationMembershipSystem.TryBindExistingResident(
             origin,
             npc,
-            AuthoritativeNpcRoster.Create(new[] { npc }),
+            SimulationTestFactory.CreateAuthoritativeNpcRoster(new[] { npc }),
             out PopulationMembershipFailure failure);
         Assert.That(bound, Is.True, failure.ToString());
         origin.AddImportantNpc(npc);
