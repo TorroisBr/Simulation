@@ -16,7 +16,9 @@ public enum NpcResidenceMigrationFailure
     OriginRevisionOverflow = 11,
     DestinationRevisionOverflow = 12,
     InvalidTransition = 13,
-    AlreadyApplied = 14
+    AlreadyApplied = 14,
+    AuthoritativeRosterRequired = 15,
+    NpcNotInAuthoritativeRoster = 16
 }
 
 /// <summary>
@@ -132,6 +134,23 @@ public static class NpcResidenceMigrationSystem
         out NpcResidenceMigrationTransition transition,
         out NpcResidenceMigrationFailure failure)
     {
+        return TryPropose(
+            npc,
+            origin,
+            destination,
+            (AuthoritativeNpcRoster)null,
+            out transition,
+            out failure);
+    }
+
+    public static bool TryPropose(
+        NpcRuntime npc,
+        CityRuntime origin,
+        CityRuntime destination,
+        AuthoritativeNpcRoster authoritativeRoster,
+        out NpcResidenceMigrationTransition transition,
+        out NpcResidenceMigrationFailure failure)
+    {
         if (origin == null)
         {
             transition = null;
@@ -150,6 +169,7 @@ public static class NpcResidenceMigrationSystem
             npc,
             origin.Population,
             destination.Population,
+            authoritativeRoster,
             out transition,
             out failure);
     }
@@ -158,6 +178,23 @@ public static class NpcResidenceMigrationSystem
         NpcRuntime npc,
         SettlementPopulationRuntime origin,
         SettlementPopulationRuntime destination,
+        out NpcResidenceMigrationTransition transition,
+        out NpcResidenceMigrationFailure failure)
+    {
+        return TryPropose(
+            npc,
+            origin,
+            destination,
+            (AuthoritativeNpcRoster)null,
+            out transition,
+            out failure);
+    }
+
+    public static bool TryPropose(
+        NpcRuntime npc,
+        SettlementPopulationRuntime origin,
+        SettlementPopulationRuntime destination,
+        AuthoritativeNpcRoster authoritativeRoster,
         out NpcResidenceMigrationTransition transition,
         out NpcResidenceMigrationFailure failure)
     {
@@ -192,6 +229,18 @@ public static class NpcResidenceMigrationSystem
             || string.Equals(origin.SettlementRuntimeId, destination.SettlementRuntimeId, StringComparison.Ordinal))
         {
             failure = NpcResidenceMigrationFailure.SameSettlement;
+            return false;
+        }
+
+        if (authoritativeRoster == null)
+        {
+            failure = NpcResidenceMigrationFailure.AuthoritativeRosterRequired;
+            return false;
+        }
+
+        if (ContainsNpc(authoritativeRoster, npc) == false)
+        {
+            failure = NpcResidenceMigrationFailure.NpcNotInAuthoritativeRoster;
             return false;
         }
 
@@ -245,6 +294,23 @@ public static class NpcResidenceMigrationSystem
         NpcResidenceMigrationTransition transition,
         out NpcResidenceMigrationFailure failure)
     {
+        return TryApply(
+            npc,
+            origin,
+            destination,
+            (AuthoritativeNpcRoster)null,
+            transition,
+            out failure);
+    }
+
+    public static bool TryApply(
+        NpcRuntime npc,
+        CityRuntime origin,
+        CityRuntime destination,
+        AuthoritativeNpcRoster authoritativeRoster,
+        NpcResidenceMigrationTransition transition,
+        out NpcResidenceMigrationFailure failure)
+    {
         if (origin == null)
         {
             failure = NpcResidenceMigrationFailure.InvalidOrigin;
@@ -257,13 +323,36 @@ public static class NpcResidenceMigrationSystem
             return false;
         }
 
-        return TryApply(npc, origin.Population, destination.Population, transition, out failure);
+        return TryApply(
+            npc,
+            origin.Population,
+            destination.Population,
+            authoritativeRoster,
+            transition,
+            out failure);
     }
 
     public static bool TryApply(
         NpcRuntime npc,
         SettlementPopulationRuntime origin,
         SettlementPopulationRuntime destination,
+        NpcResidenceMigrationTransition transition,
+        out NpcResidenceMigrationFailure failure)
+    {
+        return TryApply(
+            npc,
+            origin,
+            destination,
+            (AuthoritativeNpcRoster)null,
+            transition,
+            out failure);
+    }
+
+    public static bool TryApply(
+        NpcRuntime npc,
+        SettlementPopulationRuntime origin,
+        SettlementPopulationRuntime destination,
+        AuthoritativeNpcRoster authoritativeRoster,
         NpcResidenceMigrationTransition transition,
         out NpcResidenceMigrationFailure failure)
     {
@@ -303,6 +392,18 @@ public static class NpcResidenceMigrationSystem
         if (transition == null)
         {
             failure = NpcResidenceMigrationFailure.InvalidTransition;
+            return false;
+        }
+
+        if (authoritativeRoster == null)
+        {
+            failure = NpcResidenceMigrationFailure.AuthoritativeRosterRequired;
+            return false;
+        }
+
+        if (ContainsNpc(authoritativeRoster, npc) == false)
+        {
+            failure = NpcResidenceMigrationFailure.NpcNotInAuthoritativeRoster;
             return false;
         }
 
@@ -390,5 +491,19 @@ public static class NpcResidenceMigrationSystem
 
         npc.SetResidenceSettlementRuntimeId(destination.SettlementRuntimeId);
         return true;
+    }
+
+    private static bool ContainsNpc(AuthoritativeNpcRoster authoritativeRoster, NpcRuntime npc)
+    {
+        foreach (NpcRuntime rosterNpc in authoritativeRoster.Npcs)
+        {
+            if (rosterNpc != null
+                && string.Equals(rosterNpc.RuntimeId, npc.RuntimeId, StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

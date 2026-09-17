@@ -128,6 +128,70 @@ public sealed class NpcResidenceMigrationTests
     }
 
     [Test]
+    public void MigrationCannotChangeResidenceWithoutAuthoritativeRoster()
+    {
+        CityRuntime origin = CreateCity("migration-required-roster-origin", 10);
+        CityRuntime destination = CreateCity("migration-required-roster-destination", 20);
+        NpcRuntime npc = CreateResident(origin, "migration-required-roster");
+        int originPopulation = origin.CurrentPopulation;
+        int destinationPopulation = destination.CurrentPopulation;
+        long originRevision = origin.Population.Revision;
+        long destinationRevision = destination.Population.Revision;
+
+        bool proposed = NpcResidenceMigrationSystem.TryPropose(
+            npc,
+            origin,
+            destination,
+            out NpcResidenceMigrationTransition transition,
+            out NpcResidenceMigrationFailure proposalFailure);
+
+        Assert.That(proposed, Is.False);
+        Assert.That(proposalFailure, Is.EqualTo(NpcResidenceMigrationFailure.AuthoritativeRosterRequired));
+        Assert.That(transition, Is.Null);
+
+        transition = Propose(origin, destination, npc);
+        bool applied = NpcResidenceMigrationSystem.TryApply(
+            npc,
+            origin,
+            destination,
+            transition,
+            out NpcResidenceMigrationFailure applyFailure);
+
+        Assert.That(applied, Is.False);
+        Assert.That(applyFailure, Is.EqualTo(NpcResidenceMigrationFailure.AuthoritativeRosterRequired));
+        Assert.That(origin.CurrentPopulation, Is.EqualTo(originPopulation));
+        Assert.That(destination.CurrentPopulation, Is.EqualTo(destinationPopulation));
+        Assert.That(origin.Population.Revision, Is.EqualTo(originRevision));
+        Assert.That(destination.Population.Revision, Is.EqualTo(destinationRevision));
+        Assert.That(npc.ResidenceSettlementRuntimeId, Is.EqualTo(origin.RuntimeId));
+    }
+
+    [Test]
+    public void MigrationRejectsNpcOutsideAuthoritativeRoster()
+    {
+        CityRuntime origin = CreateCity("migration-roster-membership-origin", 10);
+        CityRuntime destination = CreateCity("migration-roster-membership-destination", 20);
+        NpcRuntime npc = CreateResident(origin, "migration-roster-membership");
+        AuthoritativeNpcRoster authoritativeRoster =
+            SimulationTestFactory.CreateAuthoritativeNpcRoster(new NpcRuntime[0]);
+
+        bool proposed = NpcResidenceMigrationSystem.TryPropose(
+            npc,
+            origin,
+            destination,
+            authoritativeRoster,
+            out NpcResidenceMigrationTransition transition,
+            out NpcResidenceMigrationFailure failure);
+
+        Assert.That(proposed, Is.False);
+        Assert.That(failure, Is.EqualTo(NpcResidenceMigrationFailure.NpcNotInAuthoritativeRoster));
+        Assert.That(transition, Is.Null);
+        Assert.That(origin.CurrentPopulation, Is.EqualTo(10));
+        Assert.That(destination.CurrentPopulation, Is.EqualTo(20));
+        Assert.That(npc.ResidenceSettlementRuntimeId, Is.EqualTo(origin.RuntimeId));
+    }
+
+    [Test]
     public void MigrationProposalIsDeterministic()
     {
         CityRuntime firstOrigin = CreateCity("migration-origin-deterministic", 10);
@@ -186,6 +250,7 @@ public sealed class NpcResidenceMigrationTests
             npc,
             origin,
             destination,
+            Roster(npc),
             out _,
             out NpcResidenceMigrationFailure failure);
 
@@ -209,6 +274,7 @@ public sealed class NpcResidenceMigrationTests
             npc,
             origin,
             destination,
+            Roster(npc),
             out _,
             out NpcResidenceMigrationFailure failure);
 
@@ -234,6 +300,7 @@ public sealed class NpcResidenceMigrationTests
             npc,
             origin,
             destination,
+            Roster(npc),
             transition,
             out NpcResidenceMigrationFailure failure);
 
@@ -258,6 +325,7 @@ public sealed class NpcResidenceMigrationTests
             npc,
             origin,
             destination,
+            Roster(npc),
             transition,
             out NpcResidenceMigrationFailure failure);
 
@@ -279,6 +347,7 @@ public sealed class NpcResidenceMigrationTests
             npc,
             origin,
             destination,
+            Roster(npc),
             out _,
             out NpcResidenceMigrationFailure failure);
 
@@ -300,6 +369,7 @@ public sealed class NpcResidenceMigrationTests
             npc,
             origin,
             destination,
+            Roster(npc),
             out _,
             out NpcResidenceMigrationFailure failure);
 
@@ -326,6 +396,7 @@ public sealed class NpcResidenceMigrationTests
             npc,
             origin,
             destination,
+            Roster(npc),
             transition,
             out _), Is.False);
         Assert.That(origin.CurrentPopulation, Is.EqualTo(originBefore));
@@ -348,6 +419,7 @@ public sealed class NpcResidenceMigrationTests
             npc,
             origin,
             destination,
+            Roster(npc),
             transition,
             out _), Is.False);
         Assert.That(npc.ResidenceSettlementRuntimeId, Is.EqualTo(residenceBefore));
@@ -369,6 +441,7 @@ public sealed class NpcResidenceMigrationTests
             npc,
             origin,
             destination,
+            Roster(npc),
             transition,
             out NpcResidenceMigrationFailure failure);
 
@@ -389,6 +462,7 @@ public sealed class NpcResidenceMigrationTests
             npc,
             city,
             city,
+            Roster(npc),
             out _,
             out NpcResidenceMigrationFailure failure);
 
@@ -408,6 +482,7 @@ public sealed class NpcResidenceMigrationTests
             npc,
             origin,
             destination,
+            Roster(npc),
             out _,
             out NpcResidenceMigrationFailure failure);
 
@@ -427,6 +502,7 @@ public sealed class NpcResidenceMigrationTests
             npc,
             origin,
             destination,
+            Roster(npc),
             out _,
             out NpcResidenceMigrationFailure failure);
 
@@ -455,6 +531,7 @@ public sealed class NpcResidenceMigrationTests
             npc,
             origin,
             destination,
+            Roster(npc),
             invalid,
             out NpcResidenceMigrationFailure failure), Is.False);
         Assert.That(failure, Is.EqualTo(NpcResidenceMigrationFailure.InvalidTransition));
@@ -590,6 +667,7 @@ public sealed class NpcResidenceMigrationTests
             npc,
             origin,
             destination,
+            Roster(npc),
             out NpcResidenceMigrationTransition transition,
             out NpcResidenceMigrationFailure failure);
         Assert.That(proposed, Is.True, failure.ToString());
@@ -606,9 +684,15 @@ public sealed class NpcResidenceMigrationTests
             npc,
             origin,
             destination,
+            Roster(npc),
             transition,
             out NpcResidenceMigrationFailure failure);
         Assert.That(applied, Is.True, failure.ToString());
+    }
+
+    private static AuthoritativeNpcRoster Roster(NpcRuntime npc)
+    {
+        return SimulationTestFactory.CreateAuthoritativeNpcRoster(new[] { npc });
     }
 
     private static NpcRuntime CreateResident(CityRuntime origin, string runtimeId)
