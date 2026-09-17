@@ -48,7 +48,7 @@ public sealed class PopulationFoundationTests
     }
 
     [Test]
-    public void ArrivalsIncreasePopulation()
+    public void ImmigrationsIncreasePopulation()
     {
         SettlementPopulationRuntime population = CreatePopulation(1000);
         SettlementPopulationTransition transition = Propose(population, new PopulationChangeSet(0, 0, 20, 0));
@@ -58,7 +58,7 @@ public sealed class PopulationFoundationTests
     }
 
     [Test]
-    public void DeparturesDecreasePopulation()
+    public void EmigrationsDecreasePopulation()
     {
         SettlementPopulationRuntime population = CreatePopulation(1000);
         SettlementPopulationTransition transition = Propose(population, new PopulationChangeSet(0, 0, 0, 7));
@@ -143,13 +143,13 @@ public sealed class PopulationFoundationTests
     }
 
     [Test]
-    public void NegativeArrivalsAreRejected()
+    public void NegativeImmigrationsAreRejected()
     {
         AssertProposalRejected(new PopulationChangeSet(0, 0, -1, 0), PopulationTransitionFailure.NegativeChange);
     }
 
     [Test]
-    public void NegativeDeparturesAreRejected()
+    public void NegativeEmigrationsAreRejected()
     {
         AssertProposalRejected(new PopulationChangeSet(0, 0, 0, -1), PopulationTransitionFailure.NegativeChange);
     }
@@ -164,7 +164,7 @@ public sealed class PopulationFoundationTests
     }
 
     [Test]
-    public void DeparturesCannotUnderflowPopulation()
+    public void EmigrationsCannotUnderflowPopulation()
     {
         AssertProposalRejected(
             new PopulationChangeSet(0, 0, 0, 101),
@@ -173,7 +173,7 @@ public sealed class PopulationFoundationTests
     }
 
     [Test]
-    public void CombinedDeathsAndDeparturesCannotUnderflowPopulation()
+    public void CombinedDeathsAndEmigrationsCannotUnderflowPopulation()
     {
         AssertProposalRejected(
             new PopulationChangeSet(0, 60, 0, 41),
@@ -374,8 +374,8 @@ public sealed class PopulationFoundationTests
         Assert.That(first.PopulationBefore, Is.EqualTo(second.PopulationBefore));
         Assert.That(first.Births, Is.EqualTo(second.Births));
         Assert.That(first.Deaths, Is.EqualTo(second.Deaths));
-        Assert.That(first.Arrivals, Is.EqualTo(second.Arrivals));
-        Assert.That(first.Departures, Is.EqualTo(second.Departures));
+        Assert.That(first.Immigrations, Is.EqualTo(second.Immigrations));
+        Assert.That(first.Emigrations, Is.EqualTo(second.Emigrations));
         Assert.That(first.NetChange, Is.EqualTo(second.NetChange));
         Assert.That(first.PopulationAfter, Is.EqualTo(second.PopulationAfter));
     }

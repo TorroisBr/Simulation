@@ -25,8 +25,8 @@ public sealed class SettlementPopulationTransition : IEquatable<SettlementPopula
     public int PopulationBefore { get; }
     public int Births { get; }
     public int Deaths { get; }
-    public int Arrivals { get; }
-    public int Departures { get; }
+    public int Immigrations { get; }
+    public int Emigrations { get; }
     public long NetChange { get; }
     public int PopulationAfter { get; }
 
@@ -43,8 +43,8 @@ public sealed class SettlementPopulationTransition : IEquatable<SettlementPopula
         PopulationBefore = populationBefore;
         Births = changes.Births;
         Deaths = changes.Deaths;
-        Arrivals = changes.Arrivals;
-        Departures = changes.Departures;
+        Immigrations = changes.Immigrations;
+        Emigrations = changes.Emigrations;
         NetChange = netChange;
         PopulationAfter = populationAfter;
     }
@@ -61,8 +61,8 @@ public sealed class SettlementPopulationTransition : IEquatable<SettlementPopula
             && PopulationBefore == other.PopulationBefore
             && Births == other.Births
             && Deaths == other.Deaths
-            && Arrivals == other.Arrivals
-            && Departures == other.Departures
+            && Immigrations == other.Immigrations
+            && Emigrations == other.Emigrations
             && NetChange == other.NetChange
             && PopulationAfter == other.PopulationAfter;
     }
@@ -81,8 +81,8 @@ public sealed class SettlementPopulationTransition : IEquatable<SettlementPopula
             hash = (hash * 397) ^ PopulationBefore;
             hash = (hash * 397) ^ Births;
             hash = (hash * 397) ^ Deaths;
-            hash = (hash * 397) ^ Arrivals;
-            hash = (hash * 397) ^ Departures;
+            hash = (hash * 397) ^ Immigrations;
+            hash = (hash * 397) ^ Emigrations;
             hash = (hash * 397) ^ NetChange.GetHashCode();
             hash = (hash * 397) ^ PopulationAfter;
             return hash;

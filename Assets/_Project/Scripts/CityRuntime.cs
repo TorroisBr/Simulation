@@ -7,7 +7,7 @@ public class CityRuntime
 {
     [SerializeField] private string runtimeId;
     [SerializeField] private CityData cityData;
-    [SerializeField] private int currentPopulation;
+    [NonSerialized] private SettlementPopulationRuntime population;
     [SerializeField] private MarketRuntime market;
     [NonSerialized] private MarketCounterpartyRuntime marketCounterparty;
     [NonSerialized] private PopulationEconomyRuntime populationEconomy;
@@ -19,7 +19,19 @@ public class CityRuntime
     public CityData CityData => cityData;
     public string DefinitionId => cityData != null ? cityData.DefinitionId : string.Empty;
     public SpatialLocationRuntime Location => location;
-    public int CurrentPopulation => currentPopulation;
+    public SettlementPopulationRuntime Population
+    {
+        get
+        {
+            if (population == null)
+            {
+                population = CreatePopulationRuntime();
+            }
+
+            return population;
+        }
+    }
+    public int CurrentPopulation => Population.CurrentPopulation;
     public MarketRuntime Market
     {
         get
@@ -85,7 +97,7 @@ public class CityRuntime
         this.marketCounterparty = marketCounterparty != null
             ? NormalizeMarketCounterparty(marketCounterparty, runtimeId)
             : CreateConfiguredMarketCounterparty(runtimeId, cityData);
-        currentPopulation = cityData != null ? Mathf.Max(0, cityData.initialPopulation) : 0;
+        population = CreatePopulationRuntime();
         market = cityData != null
             ? new MarketRuntime(cityData.marketItems, this.marketCounterparty)
             : new MarketRuntime(new List<MarketItemConfig>(), this.marketCounterparty);
@@ -141,7 +153,7 @@ public class CityRuntime
                 continue;
             }
 
-            int desiredConsumption = Mathf.RoundToInt(currentPopulation / 1000f * config.consumptionPer1000Population);
+            int desiredConsumption = Mathf.RoundToInt(Population.CurrentPopulation / 1000f * config.consumptionPer1000Population);
             if (desiredConsumption <= 0)
             {
                 results.Add(new CityConsumptionResult(
@@ -311,5 +323,11 @@ public class CityRuntime
             runtimeId,
             consumption,
             MarketCounterparty.LiquidityMode);
+    }
+
+    private SettlementPopulationRuntime CreatePopulationRuntime()
+    {
+        int initialPopulation = cityData != null ? Mathf.Max(0, cityData.initialPopulation) : 0;
+        return new SettlementPopulationRuntime(runtimeId, initialPopulation);
     }
 }

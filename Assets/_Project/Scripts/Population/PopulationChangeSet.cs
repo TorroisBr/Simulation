@@ -8,26 +8,26 @@ public readonly struct PopulationChangeSet : IEquatable<PopulationChangeSet>
 {
     public int Births { get; }
     public int Deaths { get; }
-    public int Arrivals { get; }
-    public int Departures { get; }
+    public int Immigrations { get; }
+    public int Emigrations { get; }
 
-    public long NetChange => (long)Births + Arrivals - Deaths - Departures;
-    public bool HasNegativeChange => Births < 0 || Deaths < 0 || Arrivals < 0 || Departures < 0;
+    public long NetChange => (long)Births + Immigrations - Deaths - Emigrations;
+    public bool HasNegativeChange => Births < 0 || Deaths < 0 || Immigrations < 0 || Emigrations < 0;
 
-    public PopulationChangeSet(int births, int deaths, int arrivals, int departures)
+    public PopulationChangeSet(int births, int deaths, int immigrations, int emigrations)
     {
         Births = births;
         Deaths = deaths;
-        Arrivals = arrivals;
-        Departures = departures;
+        Immigrations = immigrations;
+        Emigrations = emigrations;
     }
 
     public bool Equals(PopulationChangeSet other)
     {
         return Births == other.Births
             && Deaths == other.Deaths
-            && Arrivals == other.Arrivals
-            && Departures == other.Departures;
+            && Immigrations == other.Immigrations
+            && Emigrations == other.Emigrations;
     }
 
     public override bool Equals(object obj)
@@ -41,8 +41,8 @@ public readonly struct PopulationChangeSet : IEquatable<PopulationChangeSet>
         {
             int hash = Births;
             hash = (hash * 397) ^ Deaths;
-            hash = (hash * 397) ^ Arrivals;
-            hash = (hash * 397) ^ Departures;
+            hash = (hash * 397) ^ Immigrations;
+            hash = (hash * 397) ^ Emigrations;
             return hash;
         }
     }

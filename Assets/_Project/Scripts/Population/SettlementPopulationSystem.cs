@@ -82,13 +82,13 @@ public static class SettlementPopulationSystem
         }
 
         long expectedNetChange = (long)transition.Births
-            + transition.Arrivals
+            + transition.Immigrations
             - transition.Deaths
-            - transition.Departures;
+            - transition.Emigrations;
         if (transition.Births < 0
             || transition.Deaths < 0
-            || transition.Arrivals < 0
-            || transition.Departures < 0
+            || transition.Immigrations < 0
+            || transition.Emigrations < 0
             || transition.NetChange != expectedNetChange
             || (long)transition.PopulationBefore + transition.NetChange != transition.PopulationAfter)
         {
