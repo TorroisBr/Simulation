@@ -103,17 +103,17 @@ public sealed class CoreRuntimeTests
         CalendarDefinition calendar = new CalendarDefinition(2, 2, 3);
 
         SimulationDate weekBoundary = calendar.GetDate(4L);
-        SimulationDate monthBoundary = calendar.GetDate(7L);
-        SimulationDate yearBoundary = calendar.GetDate(13L);
+        SimulationDate monthBoundary = calendar.GetDate(6L);
+        SimulationDate yearBoundary = calendar.GetDate(12L);
 
         Assert.That(weekBoundary.WeekOfMonth, Is.EqualTo(2));
-        Assert.That(weekBoundary.DayOfMonth, Is.EqualTo(4));
-        Assert.That(weekBoundary.DayOfWeek, Is.EqualTo(1));
+        Assert.That(weekBoundary.DayOfMonth, Is.EqualTo(5));
+        Assert.That(weekBoundary.DayOfWeek, Is.EqualTo(2));
         Assert.That(monthBoundary.Month, Is.EqualTo(2));
         Assert.That(monthBoundary.DayOfMonth, Is.EqualTo(1));
         Assert.That(monthBoundary.WeekOfMonth, Is.EqualTo(1));
         Assert.That(monthBoundary.DayOfWeek, Is.EqualTo(1));
-        Assert.That(yearBoundary.Year, Is.EqualTo(2L));
+        Assert.That(yearBoundary.Year, Is.EqualTo(1L));
         Assert.That(yearBoundary.Month, Is.EqualTo(1));
         Assert.That(yearBoundary.DayOfYear, Is.EqualTo(1L));
     }
