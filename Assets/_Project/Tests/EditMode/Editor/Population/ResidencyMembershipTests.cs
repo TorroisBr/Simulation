@@ -239,11 +239,31 @@ public sealed class ResidencyMembershipTests
         bool bound = SettlementPopulationMembershipSystem.TryBindExistingResident(
             city,
             second,
-            new[] { first, second },
+            AuthoritativeNpcRoster.Create(new[] { first, second }),
             out PopulationMembershipFailure failure);
 
         Assert.That(bound, Is.False);
         Assert.That(failure, Is.EqualTo(PopulationMembershipFailure.AggregateCapacityExceeded));
+        Assert.That(second.ResidenceSettlementRuntimeId, Is.Null);
+        Assert.That(city.CurrentPopulation, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void IncompleteRosterCannotSilentlyOverbookAggregatePopulation()
+    {
+        CityRuntime city = CreateCity("residency-incomplete-roster", 1);
+        NpcRuntime first = CreateNpc("incomplete-roster-first");
+        NpcRuntime second = CreateNpc("incomplete-roster-second");
+        BindExistingResident(city, first, new[] { first, second });
+
+        bool bound = SettlementPopulationMembershipSystem.TryBindExistingResident(
+            city,
+            second,
+            new[] { second },
+            out PopulationMembershipFailure failure);
+
+        Assert.That(bound, Is.False);
+        Assert.That(failure, Is.EqualTo(PopulationMembershipFailure.AuthoritativeRosterRequired));
         Assert.That(second.ResidenceSettlementRuntimeId, Is.Null);
         Assert.That(city.CurrentPopulation, Is.EqualTo(1));
     }
@@ -259,7 +279,7 @@ public sealed class ResidencyMembershipTests
         bool rebound = SettlementPopulationMembershipSystem.TryBindExistingResident(
             city,
             npc,
-            new[] { npc },
+            AuthoritativeNpcRoster.Create(new[] { npc }),
             out PopulationMembershipFailure failure);
 
         Assert.That(rebound, Is.True);
@@ -278,7 +298,7 @@ public sealed class ResidencyMembershipTests
         bool rebound = SettlementPopulationMembershipSystem.TryBindExistingResident(
             other,
             npc,
-            new[] { npc },
+            AuthoritativeNpcRoster.Create(new[] { npc }),
             out PopulationMembershipFailure failure);
 
         Assert.That(rebound, Is.False);
@@ -346,7 +366,7 @@ public sealed class ResidencyMembershipTests
         bool bound = SettlementPopulationMembershipSystem.TryBindExistingResident(
             city,
             npc,
-            knownNpcs,
+            AuthoritativeNpcRoster.Create(knownNpcs),
             out PopulationMembershipFailure failure);
         Assert.That(bound, Is.True, failure.ToString());
     }

@@ -371,10 +371,23 @@ public static class NpcResidenceMigrationSystem
             return false;
         }
 
-        // Every failure condition has been checked for both aggregates before this point.
-        // These commits cannot fail and therefore cannot leave only one population changed.
-        origin.CommitValidatedTransition(transition.OriginPopulationAfter);
-        destination.CommitValidatedTransition(transition.DestinationPopulationAfter);
+        // The paired population boundary repeats the aggregate checks and commits both
+        // sides together; it exposes no arbitrary populationAfter mutation primitive.
+        if (SettlementPopulationRuntime.TryApplyPairedMigration(
+            origin,
+            destination,
+            transition.OriginExpectedRevision,
+            transition.DestinationExpectedRevision,
+            transition.OriginPopulationBefore,
+            transition.DestinationPopulationBefore,
+            out PopulationTransitionFailure populationFailure) == false)
+        {
+            failure = populationFailure == PopulationTransitionFailure.StaleState
+                ? NpcResidenceMigrationFailure.OriginStaleState
+                : NpcResidenceMigrationFailure.InvalidTransition;
+            return false;
+        }
+
         npc.SetResidenceSettlementRuntimeId(destination.SettlementRuntimeId);
         return true;
     }

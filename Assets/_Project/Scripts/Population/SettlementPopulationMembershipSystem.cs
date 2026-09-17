@@ -1,6 +1,54 @@
 using System;
 using System.Collections.Generic;
 
+/// <summary>
+/// Explicit snapshot of the complete named-NPC roster known to the world boundary.
+/// Membership operations require this type so an arbitrary partial IEnumerable cannot
+/// silently be treated as authoritative for aggregate-capacity validation.
+/// </summary>
+public sealed class AuthoritativeNpcRoster
+{
+    private readonly IReadOnlyList<NpcRuntime> npcs;
+
+    public IReadOnlyList<NpcRuntime> Npcs => npcs;
+
+    private AuthoritativeNpcRoster(IReadOnlyList<NpcRuntime> npcs)
+    {
+        this.npcs = npcs;
+    }
+
+    public static AuthoritativeNpcRoster Create(IEnumerable<NpcRuntime> npcs)
+    {
+        if (npcs == null)
+        {
+            throw new ArgumentNullException(nameof(npcs));
+        }
+
+        List<NpcRuntime> snapshot = new List<NpcRuntime>();
+        HashSet<string> runtimeIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (NpcRuntime npc in npcs)
+        {
+            if (npc == null || string.IsNullOrWhiteSpace(npc.RuntimeId) == true)
+            {
+                throw new ArgumentException(
+                    "An authoritative NPC roster cannot contain null or unidentified NPCs.",
+                    nameof(npcs));
+            }
+
+            if (runtimeIds.Add(npc.RuntimeId) == false)
+            {
+                throw new ArgumentException(
+                    "An authoritative NPC roster cannot contain duplicate RuntimeIds.",
+                    nameof(npcs));
+            }
+
+            snapshot.Add(npc);
+        }
+
+        return new AuthoritativeNpcRoster(snapshot.AsReadOnly());
+    }
+}
+
 public enum PopulationMembershipFailure
 {
     None = 0,
@@ -8,7 +56,8 @@ public enum PopulationMembershipFailure
     DeadNpc = 2,
     InvalidSettlement = 3,
     ResidenceAlreadyAssigned = 4,
-    AggregateCapacityExceeded = 5
+    AggregateCapacityExceeded = 5,
+    AuthoritativeRosterRequired = 6
 }
 
 /// <summary>
@@ -20,7 +69,7 @@ public static class SettlementPopulationMembershipSystem
     public static bool TryBindExistingResident(
         CityRuntime city,
         NpcRuntime npc,
-        IEnumerable<NpcRuntime> knownNpcs,
+        AuthoritativeNpcRoster authoritativeRoster,
         out PopulationMembershipFailure failure)
     {
         failure = PopulationMembershipFailure.None;
@@ -34,6 +83,12 @@ public static class SettlementPopulationMembershipSystem
         if (npc == null)
         {
             failure = PopulationMembershipFailure.InvalidNpc;
+            return false;
+        }
+
+        if (authoritativeRoster == null)
+        {
+            failure = PopulationMembershipFailure.AuthoritativeRosterRequired;
             return false;
         }
 
@@ -55,12 +110,9 @@ public static class SettlementPopulationMembershipSystem
         }
 
         List<NpcRuntime> rosterWithCandidate = new List<NpcRuntime>();
-        if (knownNpcs != null)
+        foreach (NpcRuntime knownNpc in authoritativeRoster.Npcs)
         {
-            foreach (NpcRuntime knownNpc in knownNpcs)
-            {
-                rosterWithCandidate.Add(knownNpc);
-            }
+            rosterWithCandidate.Add(knownNpc);
         }
 
         rosterWithCandidate.Add(npc);
@@ -75,5 +127,15 @@ public static class SettlementPopulationMembershipSystem
 
         npc.SetResidenceSettlementRuntimeId(city.RuntimeId);
         return true;
+    }
+
+    public static bool TryBindExistingResident(
+        CityRuntime city,
+        NpcRuntime npc,
+        IEnumerable<NpcRuntime> nonAuthoritativeRoster,
+        out PopulationMembershipFailure failure)
+    {
+        failure = PopulationMembershipFailure.AuthoritativeRosterRequired;
+        return false;
     }
 }

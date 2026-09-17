@@ -63,46 +63,6 @@ public static class SettlementPopulationSystem
             return false;
         }
 
-        if (transition == null)
-        {
-            failure = PopulationTransitionFailure.InvalidTransition;
-            return false;
-        }
-
-        if (string.Equals(population.SettlementRuntimeId, transition.SettlementRuntimeId, StringComparison.Ordinal) == false)
-        {
-            failure = PopulationTransitionFailure.InvalidSettlement;
-            return false;
-        }
-
-        if (transition.PopulationBefore < 0 || transition.PopulationAfter < 0)
-        {
-            failure = PopulationTransitionFailure.InvalidTransition;
-            return false;
-        }
-
-        long expectedNetChange = (long)transition.Births
-            + transition.Immigrations
-            - transition.Deaths
-            - transition.Emigrations;
-        if (transition.Births < 0
-            || transition.Deaths < 0
-            || transition.Immigrations < 0
-            || transition.Emigrations < 0
-            || transition.NetChange != expectedNetChange
-            || (long)transition.PopulationBefore + transition.NetChange != transition.PopulationAfter)
-        {
-            failure = PopulationTransitionFailure.InvalidTransition;
-            return false;
-        }
-
-        if (population.Revision != transition.ExpectedRevision
-            || population.CurrentPopulation != transition.PopulationBefore)
-        {
-            failure = PopulationTransitionFailure.StaleState;
-            return false;
-        }
-
-        return population.TryApplyValidatedTransition(transition.PopulationAfter, out failure);
+        return population.TryApplyTransition(transition, out failure);
     }
 }

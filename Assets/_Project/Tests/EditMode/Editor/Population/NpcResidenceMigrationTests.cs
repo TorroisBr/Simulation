@@ -565,6 +565,22 @@ public sealed class NpcResidenceMigrationTests
         Assert.That(city.Population.Revision, Is.EqualTo(1L));
     }
 
+    [Test]
+    public void ProductionPopulationBoundaryHasNoUncheckedPopulationAfterMutator()
+    {
+        BindingFlags flags = BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
+
+        Assert.That(
+            typeof(SettlementPopulationRuntime).GetMethod("CommitValidatedTransition", flags),
+            Is.Null);
+        Assert.That(
+            typeof(SettlementPopulationRuntime).GetMethod("TryApplyValidatedTransition", flags),
+            Is.Null);
+        Assert.That(
+            typeof(SettlementPopulationRuntime).GetMethod("TryApplyPairedMigration", flags),
+            Is.Not.Null);
+    }
+
     private static NpcResidenceMigrationTransition Propose(
         CityRuntime origin,
         CityRuntime destination,
@@ -603,7 +619,7 @@ public sealed class NpcResidenceMigrationTests
         bool bound = SettlementPopulationMembershipSystem.TryBindExistingResident(
             origin,
             npc,
-            new[] { npc },
+            AuthoritativeNpcRoster.Create(new[] { npc }),
             out PopulationMembershipFailure failure);
         Assert.That(bound, Is.True, failure.ToString());
         origin.AddImportantNpc(npc);
