@@ -20,6 +20,7 @@ public static class WorldStateCanonicalWriter
             AppendLine(output, "NPC",
                 npc.RuntimeId,
                 npc.DefinitionId,
+                npc.ResidenceSettlementRuntimeId,
                 EnumValue(npc.LifeState),
                 EnumValue(npc.InjurySeverity),
                 npc.CurrentLocationRuntimeId,

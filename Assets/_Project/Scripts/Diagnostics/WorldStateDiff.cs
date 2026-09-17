@@ -64,6 +64,7 @@ public sealed class WorldStateDiff
             (identity, left, right) =>
             {
                 CompareValue("NPC", identity, "DefinitionId", WorldStateCanonicalWriter.StringValue(left.DefinitionId), WorldStateCanonicalWriter.StringValue(right.DefinitionId), differences);
+                CompareValue("NPC", identity, "ResidenceSettlementRuntimeId", WorldStateCanonicalWriter.StringValue(left.ResidenceSettlementRuntimeId), WorldStateCanonicalWriter.StringValue(right.ResidenceSettlementRuntimeId), differences);
                 CompareValue("NPC", identity, "LifeState", WorldStateCanonicalWriter.EnumValue(left.LifeState), WorldStateCanonicalWriter.EnumValue(right.LifeState), differences);
                 CompareValue("NPC", identity, "InjurySeverity", WorldStateCanonicalWriter.EnumValue(left.InjurySeverity), WorldStateCanonicalWriter.EnumValue(right.InjurySeverity), differences);
                 CompareValue("NPC", identity, "CurrentLocationRuntimeId", WorldStateCanonicalWriter.StringValue(left.CurrentLocationRuntimeId), WorldStateCanonicalWriter.StringValue(right.CurrentLocationRuntimeId), differences);

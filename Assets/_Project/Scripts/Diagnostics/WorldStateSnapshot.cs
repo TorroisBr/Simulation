@@ -83,6 +83,7 @@ public sealed class WorldStateNpcSnapshot
 {
     public string RuntimeId { get; }
     public string DefinitionId { get; }
+    public string ResidenceSettlementRuntimeId { get; }
     public NpcLifeState LifeState { get; }
     public NpcInjurySeverity InjurySeverity { get; }
     public string CurrentLocationRuntimeId { get; }
@@ -100,6 +101,7 @@ public sealed class WorldStateNpcSnapshot
     public WorldStateNpcSnapshot(
         string runtimeId,
         string definitionId,
+        string residenceSettlementRuntimeId,
         NpcLifeState lifeState,
         NpcInjurySeverity injurySeverity,
         string currentLocationRuntimeId,
@@ -116,6 +118,7 @@ public sealed class WorldStateNpcSnapshot
     {
         RuntimeId = runtimeId;
         DefinitionId = definitionId;
+        ResidenceSettlementRuntimeId = residenceSettlementRuntimeId;
         LifeState = lifeState;
         InjurySeverity = injurySeverity;
         CurrentLocationRuntimeId = currentLocationRuntimeId;
@@ -566,6 +569,7 @@ public static class WorldStateSnapshotBuilder
             result.Add(new WorldStateNpcSnapshot(
                 npc.RuntimeId,
                 npc.DefinitionId,
+                npc.ResidenceSettlementRuntimeId,
                 npc.LifeState,
                 npc.InjurySeverity,
                 npc.CurrentLocation?.RuntimeId,

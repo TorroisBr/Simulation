@@ -6,7 +6,8 @@ using UnityEngine;
 public class NpcRuntime : ICapabilityConditionSource
 {
 	[SerializeField]private string runtimeId;
-	[SerializeField]private NpcData npcData;
+    [SerializeField]private NpcData npcData;
+    [SerializeField]private string residenceSettlementRuntimeId;
 	[SerializeField]private List<NpcStatusData> currentStatus = new List<NpcStatusData>();
 	[SerializeField]private NpcActionData currentAction;
     [SerializeField]private NpcLifeState lifeState = NpcLifeState.Alive;
@@ -36,6 +37,7 @@ public class NpcRuntime : ICapabilityConditionSource
     public string RuntimeId => runtimeId;
     public NpcData NpcData => npcData;
     public string DefinitionId => npcData != null ? npcData.DefinitionId : string.Empty;
+    public string ResidenceSettlementRuntimeId => residenceSettlementRuntimeId;
     public List<NpcStatusData> CurrentStatus => currentStatus ?? (currentStatus = new List<NpcStatusData>());
     public NpcActionData CurrentAction => currentAction;
     public NpcActionRuntime CurrentActionRuntime => currentActionRuntime;
@@ -371,6 +373,13 @@ public class NpcRuntime : ICapabilityConditionSource
             currentCity = null;
             currentLocation = null;
         }
+    }
+
+    internal void SetResidenceSettlementRuntimeId(string settlementRuntimeId)
+    {
+        residenceSettlementRuntimeId = string.IsNullOrWhiteSpace(settlementRuntimeId) == true
+            ? null
+            : settlementRuntimeId;
     }
 
     public void SetTravelPlan(CityRuntime targetCity, NpcTravelReason reason, float utility, float expectedCost, string originDecisionId = null)
