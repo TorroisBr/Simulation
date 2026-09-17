@@ -58,4 +58,11 @@ public sealed class SettlementPopulationRuntime
         revision++;
         return true;
     }
+
+    internal void CommitValidatedTransition(int populationAfter)
+    {
+        // The migration boundary validates both aggregates before either commit begins.
+        currentPopulation = populationAfter;
+        revision++;
+    }
 }
