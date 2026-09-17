@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-public sealed class WorldCommandDefinitionCatalog : IWorldCommandDefinitionResolver
+public sealed class WorldCommandDefinitionCatalog : IWorldCommandDefinitionResolver, IWorldCommandDefinitionLookup
 {
     private readonly Dictionary<string, ItemData> items = new Dictionary<string, ItemData>(StringComparer.Ordinal);
     private readonly Dictionary<string, LocalPlaceTypeData> placeTypes = new Dictionary<string, LocalPlaceTypeData>(StringComparer.Ordinal);
@@ -39,6 +39,46 @@ public sealed class WorldCommandDefinitionCatalog : IWorldCommandDefinitionResol
     public bool TryResolveLocalConnectionType(string definitionId, out LocalConnectionTypeData typeDefinition)
     {
         return connectionTypes.TryGetValue(definitionId ?? string.Empty, out typeDefinition);
+    }
+
+    public IReadOnlyList<WorldCommandTranslationEntity> FindItemDefinitions(string reference)
+    {
+        return WorldCommandTranslationMatching.Resolve(ToEntities(items.Values, WorldCommandTranslationEntityKind.ItemDefinition), reference);
+    }
+
+    public IReadOnlyList<WorldCommandTranslationEntity> FindLocalPlaceTypes(string reference)
+    {
+        return WorldCommandTranslationMatching.Resolve(ToEntities(placeTypes.Values, WorldCommandTranslationEntityKind.LocalPlaceType), reference);
+    }
+
+    public IReadOnlyList<WorldCommandTranslationEntity> FindLocalConnectionTypes(string reference)
+    {
+        return WorldCommandTranslationMatching.Resolve(ToEntities(connectionTypes.Values, WorldCommandTranslationEntityKind.LocalConnectionType), reference);
+    }
+
+    private static List<WorldCommandTranslationEntity> ToEntities<T>(
+        IEnumerable<T> definitions,
+        WorldCommandTranslationEntityKind kind)
+        where T : UnityEngine.Object
+    {
+        List<WorldCommandTranslationEntity> result = new List<WorldCommandTranslationEntity>();
+        foreach (T definition in definitions)
+        {
+            if (definition is ItemData item)
+            {
+                result.Add(new WorldCommandTranslationEntity(kind, definitionId: item.DefinitionId, displayName: item.itemName));
+            }
+            else if (definition is LocalPlaceTypeData placeType)
+            {
+                result.Add(new WorldCommandTranslationEntity(kind, definitionId: placeType.DefinitionId, displayName: placeType.DisplayName));
+            }
+            else if (definition is LocalConnectionTypeData connectionType)
+            {
+                result.Add(new WorldCommandTranslationEntity(kind, definitionId: connectionType.DefinitionId, displayName: connectionType.DisplayName));
+            }
+        }
+
+        return result;
     }
 
     private static bool Register<T>(Dictionary<string, T> definitions, string definitionId, T definition)

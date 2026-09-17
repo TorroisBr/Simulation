@@ -53,6 +53,8 @@ public sealed class WorldCommandTranslationEntity
     public string RuntimeId { get; }
     public string DefinitionId { get; }
     public string DisplayName { get; }
+    public string MacroLocationRuntimeId { get; }
+    public string TopologyOwnerRuntimeId { get; }
 
     public string StableId => string.IsNullOrWhiteSpace(RuntimeId) ? DefinitionId : RuntimeId;
 
@@ -60,12 +62,16 @@ public sealed class WorldCommandTranslationEntity
         WorldCommandTranslationEntityKind kind,
         string runtimeId = null,
         string definitionId = null,
-        string displayName = null)
+        string displayName = null,
+        string macroLocationRuntimeId = null,
+        string topologyOwnerRuntimeId = null)
     {
         Kind = kind;
         RuntimeId = Normalize(runtimeId);
         DefinitionId = Normalize(definitionId);
         DisplayName = Normalize(displayName);
+        MacroLocationRuntimeId = Normalize(macroLocationRuntimeId);
+        TopologyOwnerRuntimeId = Normalize(topologyOwnerRuntimeId);
     }
 
     private static string Normalize(string value)
@@ -271,13 +277,16 @@ public sealed class WorldCommandTranslationContext
 {
     public IWorldCommandEntityResolver EntityResolver { get; }
     public IWorldCommandDefinitionLookup DefinitionLookup { get; }
+    public IWorldCommandDefinitionResolver DefinitionResolver { get; }
 
     public WorldCommandTranslationContext(
         IWorldCommandEntityResolver entityResolver = null,
-        IWorldCommandDefinitionLookup definitionLookup = null)
+        IWorldCommandDefinitionLookup definitionLookup = null,
+        IWorldCommandDefinitionResolver definitionResolver = null)
     {
         EntityResolver = entityResolver;
         DefinitionLookup = definitionLookup;
+        DefinitionResolver = definitionResolver;
     }
 }
 
