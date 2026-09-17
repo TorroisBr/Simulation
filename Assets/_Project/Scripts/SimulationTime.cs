@@ -33,7 +33,7 @@ public sealed class SimulationTime
     }
 }
 
-public struct SimulationDate
+public struct SimulationDate : IEquatable<SimulationDate>, IComparable<SimulationDate>
 {
     public long AbsoluteDay { get; }
     public long Year { get; }
@@ -65,5 +65,60 @@ public struct SimulationDate
         DayOfYear = dayOfYear;
         DaysPerMonth = daysPerMonth;
         DaysPerYear = daysPerYear;
+    }
+
+    public bool Equals(SimulationDate other)
+    {
+        return AbsoluteDay == other.AbsoluteDay
+            && Year == other.Year
+            && Month == other.Month
+            && WeekOfMonth == other.WeekOfMonth
+            && DayOfMonth == other.DayOfMonth
+            && DayOfWeek == other.DayOfWeek
+            && DayOfYear == other.DayOfYear
+            && DaysPerMonth == other.DaysPerMonth
+            && DaysPerYear == other.DaysPerYear;
+    }
+
+    public override bool Equals(object obj)
+    {
+        return obj is SimulationDate other && Equals(other);
+    }
+
+    public override int GetHashCode()
+    {
+        unchecked
+        {
+            int hash = AbsoluteDay.GetHashCode();
+            hash = (hash * 397) ^ Year.GetHashCode();
+            hash = (hash * 397) ^ Month;
+            hash = (hash * 397) ^ WeekOfMonth;
+            hash = (hash * 397) ^ DayOfMonth;
+            hash = (hash * 397) ^ DayOfWeek;
+            hash = (hash * 397) ^ DayOfYear.GetHashCode();
+            hash = (hash * 397) ^ DaysPerMonth.GetHashCode();
+            hash = (hash * 397) ^ DaysPerYear.GetHashCode();
+            return hash;
+        }
+    }
+
+    public int CompareTo(SimulationDate other)
+    {
+        return AbsoluteDay.CompareTo(other.AbsoluteDay);
+    }
+
+    public static bool operator ==(SimulationDate left, SimulationDate right)
+    {
+        return left.Equals(right);
+    }
+
+    public static bool operator !=(SimulationDate left, SimulationDate right)
+    {
+        return !left.Equals(right);
+    }
+
+    public override string ToString()
+    {
+        return $"Year {Year} / Month {Month} / Day {DayOfMonth}";
     }
 }
