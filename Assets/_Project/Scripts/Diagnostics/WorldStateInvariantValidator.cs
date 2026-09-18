@@ -199,6 +199,68 @@ public static class WorldStateInvariantValidator
             ValidateTradePlan(npc, issues);
         }
 
+        HashSet<string> personIds = new HashSet<string>(StringComparer.Ordinal);
+        Dictionary<string, string> personBindings = new Dictionary<string, string>(StringComparer.Ordinal);
+        HashSet<string> personBoundNpcIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (WorldStatePersonSnapshot person in snapshot.Persons)
+        {
+            if (person == null)
+            {
+                AddError(issues, "PersonNull", "person", "Snapshot contains a null Person entry.");
+                continue;
+            }
+
+            if (string.IsNullOrWhiteSpace(person.PersonId))
+            {
+                AddError(issues, "PersonIdMissing", "person", "PersonId is empty.");
+            }
+            else if (personIds.Add(person.PersonId) == false)
+            {
+                AddError(issues, "DuplicatePersonId", person.PersonId, "PersonId appears more than once.");
+            }
+
+            if (person.IsMaterialized)
+            {
+                if (string.IsNullOrWhiteSpace(person.MaterializedNpcRuntimeId))
+                {
+                    AddError(issues, "PersonMaterializedRuntimeMissing", person.PersonId, "Materialized Person has no NPC RuntimeId binding.");
+                }
+                else
+                {
+                    if (personBoundNpcIds.Add(person.MaterializedNpcRuntimeId) == false)
+                    {
+                        AddError(issues, "DuplicatePersonMaterializedRuntimeId", person.MaterializedNpcRuntimeId, "More than one Person is bound to the same NPC RuntimeId.");
+                    }
+
+                    if (npcIds.Contains(person.MaterializedNpcRuntimeId) == false)
+                    {
+                        AddError(issues, "PersonMaterializedNpcMissing", person.PersonId, "Materialized Person references an NPC absent from the snapshot.");
+                    }
+
+                    personBindings[person.PersonId] = person.MaterializedNpcRuntimeId;
+                }
+            }
+        }
+
+        foreach (WorldStateNpcSnapshot npc in snapshot.Npcs)
+        {
+            if (npc == null || string.IsNullOrWhiteSpace(npc.PersonId))
+            {
+                continue;
+            }
+
+            string npcIdentity = string.IsNullOrWhiteSpace(npc.RuntimeId) ? "npc" : npc.RuntimeId;
+            if (personIds.Contains(npc.PersonId) == false)
+            {
+                AddError(issues, "NpcPersonMissing", npcIdentity, "NPC references a Person absent from the snapshot.");
+            }
+            else if (personBindings.TryGetValue(npc.PersonId, out string boundRuntimeId) == false
+                || StringComparer.Ordinal.Equals(boundRuntimeId, npc.RuntimeId) == false)
+            {
+                AddError(issues, "PersonBindingMismatch", npcIdentity, "NPC PersonId does not match the Person snapshot binding.");
+            }
+        }
+
         return new WorldStateInvariantReport(issues);
     }
 

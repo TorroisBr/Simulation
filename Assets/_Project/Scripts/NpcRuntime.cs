@@ -6,6 +6,8 @@ using UnityEngine;
 public class NpcRuntime : ICapabilityConditionSource
 {
 	[SerializeField]private string runtimeId;
+    [SerializeField]private string personIdValue;
+    [NonSerialized]private PersonId personIdentity;
     [SerializeField]private NpcData npcData;
     [SerializeField]private string residenceSettlementRuntimeId;
 	[SerializeField]private List<NpcStatusData> currentStatus = new List<NpcStatusData>();
@@ -35,6 +37,24 @@ public class NpcRuntime : ICapabilityConditionSource
     [SerializeField]private AdventureSiteIntelKnowledgeRuntime adventureSiteIntelKnowledge;
 
     public string RuntimeId => runtimeId;
+    public PersonId PersonId
+    {
+        get
+        {
+            if (personIdentity != null)
+            {
+                return personIdentity;
+            }
+
+            if (string.IsNullOrWhiteSpace(personIdValue) == true
+                || PersonId.TryCreate(personIdValue, out personIdentity) == false)
+            {
+                return null;
+            }
+
+            return personIdentity;
+        }
+    }
     public NpcData NpcData => npcData;
     public string DefinitionId => npcData != null ? npcData.DefinitionId : string.Empty;
     public string ResidenceSettlementRuntimeId => residenceSettlementRuntimeId;
@@ -98,8 +118,37 @@ public class NpcRuntime : ICapabilityConditionSource
         if (startingCity != null)
         {
             startingCity.AddImportantNpc(this);
-        }
+		}
 	}
+
+    internal bool TryAssignPersonId(PersonId personId)
+    {
+        if (personId == null)
+        {
+            return false;
+        }
+
+        PersonId currentPersonId = PersonId;
+        if (currentPersonId != null && currentPersonId != personId)
+        {
+            return false;
+        }
+
+        if (currentPersonId == null && string.IsNullOrWhiteSpace(personIdValue) == false)
+        {
+            return false;
+        }
+
+        personIdentity = personId;
+        personIdValue = personId.Value;
+        return true;
+    }
+
+    internal void ClearPersonId()
+    {
+        personIdentity = null;
+        personIdValue = null;
+    }
 
     public void SetCurrentAction(NpcActionData action)
     {

@@ -12,6 +12,7 @@ public sealed class WorldStateSnapshotContext
     public ExpeditionStore ExpeditionStore { get; }
     public PlaceContentStore PlaceContentStore { get; }
     public LocalTopologyStore LocalTopologyStore { get; }
+    public PersonStore PersonStore { get; }
 
     public WorldStateSnapshotContext(
         SimulationTime simulationTime = null,
@@ -23,7 +24,8 @@ public sealed class WorldStateSnapshotContext
         PlaceContentStore placeContentStore = null,
         LocalTopologyStore localTopologyStore = null,
         SimulationCalendar calendar = null,
-        CalendarDefinition calendarDefinition = null)
+        CalendarDefinition calendarDefinition = null,
+        PersonStore personStore = null)
     {
         SimulationTime = simulationTime;
         Calendar = calendar ?? (calendarDefinition != null ? new SimulationCalendar(calendarDefinition) : null);
@@ -34,6 +36,7 @@ public sealed class WorldStateSnapshotContext
         ExpeditionStore = expeditionStore;
         PlaceContentStore = placeContentStore;
         LocalTopologyStore = localTopologyStore;
+        PersonStore = personStore;
     }
 }
 
@@ -47,6 +50,8 @@ public sealed class WorldStateSnapshot
     public IReadOnlyList<WorldStateCitySnapshot> Settlements => Cities;
     public int SettlementCount => Cities.Count;
     public int KnownNpcCount => Npcs.Count;
+    public IReadOnlyList<WorldStatePersonSnapshot> Persons { get; }
+    public int PersonCount => Persons.Count;
     public WorldStateSpatialSnapshot Spatial { get; }
     public IReadOnlyList<WorldStateSiteSnapshot> Sites { get; }
     public IReadOnlyList<WorldStateExpeditionSnapshot> Expeditions { get; }
@@ -64,7 +69,8 @@ public sealed class WorldStateSnapshot
         IEnumerable<WorldStatePlaceContentSnapshot> placeContents = null,
         IEnumerable<WorldStateNotableItemSnapshot> notableItems = null,
         IEnumerable<WorldStateLocalTopologySnapshot> localTopologies = null,
-        WorldStateCalendarSnapshot calendarDate = null)
+        WorldStateCalendarSnapshot calendarDate = null,
+        IEnumerable<WorldStatePersonSnapshot> persons = null)
     {
         Metadata = new WorldStateSnapshotMetadata(absoluteDay, calendarDate);
         Npcs = SnapshotCollections.CopySorted(npcs, npc => npc?.RuntimeId);
@@ -75,6 +81,22 @@ public sealed class WorldStateSnapshot
         PlaceContents = SnapshotCollections.CopySorted(placeContents, content => content?.StableKey);
         NotableItems = SnapshotCollections.CopySorted(notableItems, notable => notable?.RuntimeId);
         LocalTopologies = SnapshotCollections.CopySorted(localTopologies, topology => topology?.StableKey);
+        Persons = SnapshotCollections.CopySorted(persons, person => person?.PersonId);
+    }
+}
+
+public sealed class WorldStatePersonSnapshot
+{
+    public string PersonId { get; }
+    public string MaterializedNpcRuntimeId { get; }
+    public bool IsMaterialized => string.IsNullOrWhiteSpace(MaterializedNpcRuntimeId) == false;
+
+    public WorldStatePersonSnapshot(
+        string personId,
+        string materializedNpcRuntimeId)
+    {
+        PersonId = personId;
+        MaterializedNpcRuntimeId = materializedNpcRuntimeId;
     }
 }
 
@@ -119,6 +141,7 @@ public sealed class WorldStateCalendarSnapshot
 public sealed class WorldStateNpcSnapshot
 {
     public string RuntimeId { get; }
+    public string PersonId { get; }
     public string DefinitionId { get; }
     public string Name { get; }
     public string NpcName => Name;
@@ -178,7 +201,11 @@ public sealed class WorldStateNpcSnapshot
             activeTravelPartyId,
             moneyBalance,
             activeExpeditionId,
-            inventory)
+            inventory,
+            null,
+            null,
+            null,
+            null)
     {
     }
 
@@ -202,11 +229,13 @@ public sealed class WorldStateNpcSnapshot
         IEnumerable<WorldStateInventoryStackSnapshot> inventory,
         IEnumerable<string> statusNames = null,
         WorldStateActionSnapshot currentAction = null,
-        WorldStateMerchantTradePlanSnapshot merchantTradePlan = null)
+        WorldStateMerchantTradePlanSnapshot merchantTradePlan = null,
+        string personId = null)
     {
         RuntimeId = runtimeId;
         DefinitionId = definitionId;
         Name = name;
+        PersonId = personId;
         ResidenceSettlementRuntimeId = residenceSettlementRuntimeId;
         LifeState = lifeState;
         InjurySeverity = injurySeverity;
@@ -744,6 +773,7 @@ public static class WorldStateSnapshotBuilder
         context = context ?? new WorldStateSnapshotContext();
 
         List<NpcRuntime> knownNpcs = SnapshotCollections.Materialize(context.Npcs);
+        List<WorldStatePersonSnapshot> persons = BuildPersonSnapshots(context.PersonStore);
         List<WorldStateExpeditionSnapshot> expeditions = BuildExpeditionSnapshots(context.ExpeditionStore);
         WorldStateCalendarSnapshot calendarDate = null;
         if (context.Calendar != null && context.SimulationTime != null)
@@ -761,7 +791,8 @@ public static class WorldStateSnapshotBuilder
             BuildPlaceContentSnapshots(context.PlaceContentStore),
             BuildNotableItemSnapshots(context.PlaceContentStore),
             BuildLocalTopologySnapshots(context.LocalTopologyStore),
-            calendarDate);
+            calendarDate,
+            persons);
     }
 
     private static List<WorldStateNpcSnapshot> BuildNpcSnapshots(
@@ -795,7 +826,31 @@ public static class WorldStateSnapshotBuilder
                 BuildInventorySnapshots(npc),
                 BuildStatusSnapshots(npc),
                 BuildActionSnapshot(npc),
-                BuildMerchantTradePlanSnapshot(npc)));
+                BuildMerchantTradePlanSnapshot(npc),
+                npc.PersonId?.Value));
+        }
+
+        return result;
+    }
+
+    private static List<WorldStatePersonSnapshot> BuildPersonSnapshots(PersonStore personStore)
+    {
+        List<WorldStatePersonSnapshot> result = new List<WorldStatePersonSnapshot>();
+        if (personStore == null)
+        {
+            return result;
+        }
+
+        foreach (PersonRuntime person in personStore.Persons)
+        {
+            if (person == null || person.PersonId == null)
+            {
+                continue;
+            }
+
+            result.Add(new WorldStatePersonSnapshot(
+                person.PersonId.Value,
+                person.MaterializedNpcRuntimeId));
         }
 
         return result;

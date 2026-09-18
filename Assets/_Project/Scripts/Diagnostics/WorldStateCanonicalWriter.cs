@@ -31,6 +31,14 @@ public static class WorldStateCanonicalWriter
                 Int64Value(calendar.DaysPerYear));
         }
 
+        foreach (WorldStatePersonSnapshot person in snapshot.Persons)
+        {
+            AppendLine(output, "PERSON",
+                person.PersonId,
+                person.MaterializedNpcRuntimeId,
+                BoolValue(person.IsMaterialized));
+        }
+
         foreach (WorldStateNpcSnapshot npc in snapshot.Npcs)
         {
             AppendLine(output, "NPC",
@@ -49,6 +57,11 @@ public static class WorldStateCanonicalWriter
                 npc.ActiveTravelPartyId,
                 FloatValue(npc.MoneyBalance),
                 npc.ActiveExpeditionId);
+
+            if (string.IsNullOrWhiteSpace(npc.PersonId) == false)
+            {
+                AppendLine(output, "NPC_PERSON", npc.RuntimeId, npc.PersonId);
+            }
 
             foreach (string statusName in npc.StatusNames)
             {

@@ -8,5 +8,7 @@ public enum WorldNpcRegistryFailure
     InvalidRuntimeId = 2,
     DuplicateRuntimeId = 3,
     NpcNotRegistered = 4,
-    NpcHasResidence = 5
+    NpcHasResidence = 5,
+    NpcPersonBindingInvalid = 6,
+    NpcBoundToPerson = 7
 }

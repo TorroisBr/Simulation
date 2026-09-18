@@ -10,6 +10,7 @@ public sealed class SimulationRuntime
     private readonly IReadOnlyList<NpcRuntime> npcRuntimeSnapshot;
     private readonly Dictionary<string, NpcRuntime> npcRegistryById;
     private readonly EffectiveSimulationConfiguration configuration;
+    private readonly PersonStore personStore;
     private readonly List<NpcActionData> configuredActions;
     private readonly ScheduledDirectiveSystem scheduledDirectiveSystem;
     private readonly JusticeSystem justiceSystem;
@@ -31,6 +32,7 @@ public sealed class SimulationRuntime
     public long CurrentDay => simulationTime.AbsoluteDay;
     public IReadOnlyList<CityRuntime> Cities => cities;
     public EffectiveSimulationConfiguration Configuration => configuration;
+    public PersonStore PersonStore => personStore;
     /// <summary>
     /// Read-only view of every named NPC registered with this world. Registration is
     /// explicit; death and emigration do not remove an NPC from this world roster.
@@ -60,7 +62,8 @@ public sealed class SimulationRuntime
         ExpeditionSystem expeditionSystem = null,
         PlaceContentStore placeContentStore = null,
         AdventureExpeditionAutonomySystem adventureExpeditionAutonomySystem = null,
-        EffectiveSimulationConfiguration configuration = null)
+        EffectiveSimulationConfiguration configuration = null,
+        PersonStore personStore = null)
     {
         this.simulationTime = simulationTime ?? throw new ArgumentNullException(nameof(simulationTime));
 
@@ -86,6 +89,7 @@ public sealed class SimulationRuntime
         }
 
         this.configuration = resolvedConfiguration;
+        this.personStore = personStore ?? new PersonStore();
         this.cities = cities != null ? new List<CityRuntime>(cities) : new List<CityRuntime>();
         this.npcRuntimes = new List<NpcRuntime>();
         this.npcRuntimeSnapshot = this.npcRuntimes.AsReadOnly();
@@ -149,6 +153,15 @@ public sealed class SimulationRuntime
             return false;
         }
 
+        if (npcRuntime.PersonId != null
+            && (personStore.TryGet(npcRuntime.PersonId, out PersonRuntime person) == false
+                || person.IsMaterialized == false
+                || string.Equals(person.MaterializedNpcRuntimeId, npcRuntime.RuntimeId, StringComparison.Ordinal) == false))
+        {
+            failure = WorldNpcRegistryFailure.NpcPersonBindingInvalid;
+            return false;
+        }
+
         npcRegistryById.Add(npcRuntime.RuntimeId, npcRuntime);
         npcRuntimes.Add(npcRuntime);
         return true;
@@ -175,6 +188,12 @@ public sealed class SimulationRuntime
             return false;
         }
 
+        if (personStore.TryGetByMaterializedNpcRuntimeId(runtimeId, out _))
+        {
+            failure = WorldNpcRegistryFailure.NpcBoundToPerson;
+            return false;
+        }
+
         if (string.IsNullOrWhiteSpace(npcRuntime.ResidenceSettlementRuntimeId) == false)
         {
             failure = WorldNpcRegistryFailure.NpcHasResidence;
@@ -184,6 +203,50 @@ public sealed class SimulationRuntime
         npcRegistryById.Remove(runtimeId);
         npcRuntimes.Remove(npcRuntime);
         return true;
+    }
+
+    public bool TryGetNpcRuntime(string runtimeId, out NpcRuntime npcRuntime)
+    {
+        npcRuntime = null;
+        return string.IsNullOrWhiteSpace(runtimeId) == false
+            && npcRegistryById.TryGetValue(runtimeId, out npcRuntime);
+    }
+
+    public bool TryRegisterPerson(PersonRuntime person, out PersonStoreFailure failure)
+    {
+        return personStore.TryRegister(person, out failure);
+    }
+
+    public bool TryMaterializePerson(
+        PersonId personId,
+        NpcData npcData,
+        string runtimeId,
+        CityRuntime startingCity,
+        float initialMoney,
+        out NpcRuntime npcRuntime,
+        out PersonMaterializationFailure failure)
+    {
+        return PersonMaterializationSystem.TryMaterializePerson(
+            this,
+            personId,
+            npcData,
+            runtimeId,
+            startingCity,
+            initialMoney,
+            out npcRuntime,
+            out failure);
+    }
+
+    public bool TryBindExistingNpcToPerson(
+        PersonId personId,
+        string npcRuntimeId,
+        out PersonMaterializationFailure failure)
+    {
+        return PersonMaterializationSystem.TryBindExistingNpcToPerson(
+            this,
+            personId,
+            npcRuntimeId,
+            out failure);
     }
 
     /// <summary>

@@ -74,6 +74,7 @@ public sealed class WorldStateDiff
             {
                 CompareValue("NPC", identity, "DefinitionId", WorldStateCanonicalWriter.StringValue(left.DefinitionId), WorldStateCanonicalWriter.StringValue(right.DefinitionId), differences);
                 CompareValue("NPC", identity, "Name", WorldStateCanonicalWriter.StringValue(left.Name), WorldStateCanonicalWriter.StringValue(right.Name), differences);
+                CompareValue("NPC", identity, "PersonId", WorldStateCanonicalWriter.StringValue(left.PersonId), WorldStateCanonicalWriter.StringValue(right.PersonId), differences);
                 CompareValue("NPC", identity, "ResidenceSettlementRuntimeId", WorldStateCanonicalWriter.StringValue(left.ResidenceSettlementRuntimeId), WorldStateCanonicalWriter.StringValue(right.ResidenceSettlementRuntimeId), differences);
                 CompareValue("NPC", identity, "LifeState", WorldStateCanonicalWriter.EnumValue(left.LifeState), WorldStateCanonicalWriter.EnumValue(right.LifeState), differences);
                 CompareValue("NPC", identity, "InjurySeverity", WorldStateCanonicalWriter.EnumValue(left.InjurySeverity), WorldStateCanonicalWriter.EnumValue(right.InjurySeverity), differences);
@@ -91,6 +92,13 @@ public sealed class WorldStateDiff
                 CompareAction(identity, left.CurrentAction, right.CurrentAction, differences);
                 CompareMerchantTradePlan(identity, left.MerchantTradePlan, right.MerchantTradePlan, differences);
                 CompareInventory(identity, left.Inventory, right.Inventory, differences);
+            }, differences);
+
+        CompareEntities("Person", before.Persons, after.Persons, person => person.PersonId,
+            (identity, left, right) =>
+            {
+                CompareValue("Person", identity, "MaterializedNpcRuntimeId", WorldStateCanonicalWriter.StringValue(left.MaterializedNpcRuntimeId), WorldStateCanonicalWriter.StringValue(right.MaterializedNpcRuntimeId), differences);
+                CompareValue("Person", identity, "IsMaterialized", WorldStateCanonicalWriter.BoolValue(left.IsMaterialized), WorldStateCanonicalWriter.BoolValue(right.IsMaterialized), differences);
             }, differences);
 
         CompareEntities("City", before.Cities, after.Cities, city => city.RuntimeId,
