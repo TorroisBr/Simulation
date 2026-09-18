@@ -122,6 +122,10 @@ public sealed class WorldStateNpcSnapshot
     public string DefinitionId { get; }
     public string Name { get; }
     public string NpcName => Name;
+    public long? BirthAbsoluteDay { get; }
+    public bool HasKnownBirthDay => BirthAbsoluteDay.HasValue;
+    public long? AgeInDays { get; }
+    public long? CompletedYears { get; }
     public string ResidenceSettlementRuntimeId { get; }
     public NpcLifeState LifeState { get; }
     public NpcInjurySeverity InjurySeverity { get; }
@@ -202,11 +206,17 @@ public sealed class WorldStateNpcSnapshot
         IEnumerable<WorldStateInventoryStackSnapshot> inventory,
         IEnumerable<string> statusNames = null,
         WorldStateActionSnapshot currentAction = null,
-        WorldStateMerchantTradePlanSnapshot merchantTradePlan = null)
+        WorldStateMerchantTradePlanSnapshot merchantTradePlan = null,
+        long? birthAbsoluteDay = null,
+        long? ageInDays = null,
+        long? completedYears = null)
     {
         RuntimeId = runtimeId;
         DefinitionId = definitionId;
         Name = name;
+        BirthAbsoluteDay = birthAbsoluteDay;
+        AgeInDays = ageInDays;
+        CompletedYears = completedYears;
         ResidenceSettlementRuntimeId = residenceSettlementRuntimeId;
         LifeState = lifeState;
         InjurySeverity = injurySeverity;
@@ -753,7 +763,7 @@ public static class WorldStateSnapshotBuilder
 
         return new WorldStateSnapshot(
             context.SimulationTime != null ? context.SimulationTime.AbsoluteDay : 0L,
-            BuildNpcSnapshots(knownNpcs, expeditions),
+            BuildNpcSnapshots(knownNpcs, expeditions, context.SimulationTime, context.Calendar),
             BuildCitySnapshots(context.Cities, knownNpcs),
             BuildSpatialSnapshot(context.SpatialNetwork),
             BuildSiteSnapshots(context.ExplorableSiteStore),
@@ -766,7 +776,9 @@ public static class WorldStateSnapshotBuilder
 
     private static List<WorldStateNpcSnapshot> BuildNpcSnapshots(
         IEnumerable<NpcRuntime> source,
-        IReadOnlyList<WorldStateExpeditionSnapshot> expeditions)
+        IReadOnlyList<WorldStateExpeditionSnapshot> expeditions,
+        SimulationTime simulationTime,
+        SimulationCalendar calendar)
     {
         List<NpcRuntime> npcs = SnapshotCollections.Materialize(source);
         npcs.RemoveAll(npc => npc == null || string.IsNullOrWhiteSpace(npc.RuntimeId));
@@ -775,6 +787,17 @@ public static class WorldStateSnapshotBuilder
         List<WorldStateNpcSnapshot> result = new List<WorldStateNpcSnapshot>();
         foreach (NpcRuntime npc in npcs)
         {
+            NpcAgeSnapshot age = null;
+            if (simulationTime != null && calendar != null)
+            {
+                NpcAgeQuery.TryCalculate(
+                    npc,
+                    simulationTime,
+                    calendar,
+                    out age,
+                    out _);
+            }
+
             result.Add(new WorldStateNpcSnapshot(
                 npc.RuntimeId,
                 npc.DefinitionId,
@@ -795,7 +818,10 @@ public static class WorldStateSnapshotBuilder
                 BuildInventorySnapshots(npc),
                 BuildStatusSnapshots(npc),
                 BuildActionSnapshot(npc),
-                BuildMerchantTradePlanSnapshot(npc)));
+                BuildMerchantTradePlanSnapshot(npc),
+                npc.BirthAbsoluteDay,
+                age?.AgeInDays,
+                age?.CompletedYears));
         }
 
         return result;

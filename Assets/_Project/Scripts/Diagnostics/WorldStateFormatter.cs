@@ -63,6 +63,8 @@ public static class WorldStateSnapshotFormatter
                 .Append(" [").Append(WorldStateCanonicalWriter.StringValue(npc.RuntimeId)).Append("]\n");
             output.Append("Life: ").Append(WorldStateCanonicalWriter.EnumValue(npc.LifeState)).Append('\n');
             output.Append("Injury: ").Append(WorldStateCanonicalWriter.EnumValue(npc.InjurySeverity)).Append('\n');
+            output.Append("Birth absolute day: ").Append(WorldStateCanonicalWriter.NullableInt64Value(npc.BirthAbsoluteDay)).Append('\n');
+            output.Append("Completed years: ").Append(WorldStateCanonicalWriter.NullableInt64Value(npc.CompletedYears)).Append('\n');
             output.Append("Residence: ").Append(Value(npc.ResidenceSettlementRuntimeId)).Append('\n');
             output.Append("Presence: ").Append(Value(npc.CurrentCityRuntimeId ?? npc.CurrentLocationRuntimeId)).Append('\n');
             output.Append("Destination: ").Append(Value(npc.DestinationCityRuntimeId ?? npc.DestinationLocationRuntimeId)).Append('\n');

@@ -5,8 +5,9 @@ using UnityEngine;
 [Serializable]
 public class NpcRuntime : ICapabilityConditionSource
 {
-	[SerializeField]private string runtimeId;
+    [SerializeField]private string runtimeId;
     [SerializeField]private NpcData npcData;
+    [NonSerialized]private readonly long? birthAbsoluteDay;
     [SerializeField]private string residenceSettlementRuntimeId;
 	[SerializeField]private List<NpcStatusData> currentStatus = new List<NpcStatusData>();
 	[SerializeField]private NpcActionData currentAction;
@@ -37,6 +38,8 @@ public class NpcRuntime : ICapabilityConditionSource
     public string RuntimeId => runtimeId;
     public NpcData NpcData => npcData;
     public string DefinitionId => npcData != null ? npcData.DefinitionId : string.Empty;
+    public long? BirthAbsoluteDay => birthAbsoluteDay;
+    public bool HasKnownBirthDay => birthAbsoluteDay.HasValue;
     public string ResidenceSettlementRuntimeId => residenceSettlementRuntimeId;
     public List<NpcStatusData> CurrentStatus => currentStatus ?? (currentStatus = new List<NpcStatusData>());
     public NpcActionData CurrentAction => currentAction;
@@ -75,15 +78,26 @@ public class NpcRuntime : ICapabilityConditionSource
 	{
 	}
 
-	public NpcRuntime(string runtimeId, NpcData npcData, CityRuntime startingCity, float initialMoney)
+	public NpcRuntime(
+        string runtimeId,
+        NpcData npcData,
+        CityRuntime startingCity,
+        float initialMoney,
+        long? birthAbsoluteDay = null)
 	{
 		if (string.IsNullOrWhiteSpace(runtimeId) == true)
         {
             throw new ArgumentException("NpcRuntime requires a non-empty RuntimeId.", nameof(runtimeId));
         }
 
+        if (birthAbsoluteDay.HasValue == true && birthAbsoluteDay.Value < 0L)
+        {
+            throw new ArgumentOutOfRangeException(nameof(birthAbsoluteDay), birthAbsoluteDay, "BirthAbsoluteDay cannot be negative.");
+        }
+
 		this.runtimeId = runtimeId;
         this.npcData = npcData;
+        this.birthAbsoluteDay = birthAbsoluteDay;
         spatialKnowledge = new SpatialKnowledgeRuntime(runtimeId);
         explorableSiteKnowledge = new ExplorableSiteKnowledgeRuntime(runtimeId);
         localTopologyKnowledge = new LocalTopologyKnowledgeRuntime(runtimeId);

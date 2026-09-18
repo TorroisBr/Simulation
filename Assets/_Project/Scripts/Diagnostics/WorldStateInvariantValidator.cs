@@ -167,6 +167,17 @@ public static class WorldStateInvariantValidator
             }
 
             string npcIdentity = string.IsNullOrWhiteSpace(npc.RuntimeId) ? "npc" : npc.RuntimeId;
+            if (npc.BirthAbsoluteDay.HasValue == true && npc.BirthAbsoluteDay.Value < 0L)
+            {
+                AddError(issues, "NegativeBirthAbsoluteDay", npcIdentity, "NPC BirthAbsoluteDay cannot be negative.");
+            }
+
+            if (npc.BirthAbsoluteDay.HasValue == true
+                && npc.BirthAbsoluteDay.Value > snapshot.AbsoluteDay)
+            {
+                AddError(issues, "BirthDayInFuture", npcIdentity, "NPC BirthAbsoluteDay cannot be later than the snapshot day.");
+            }
+
             if (npc.LifeState == NpcLifeState.Alive
                 && string.IsNullOrWhiteSpace(npc.ResidenceSettlementRuntimeId) == false
                 && settlementIds.Contains(npc.ResidenceSettlementRuntimeId) == false)

@@ -36,6 +36,8 @@ public static class WorldStateCanonicalWriter
             AppendLine(output, "NPC",
                 npc.RuntimeId,
                 npc.DefinitionId,
+                NullableInt64Value(npc.BirthAbsoluteDay),
+                NullableInt64Value(npc.CompletedYears),
                 npc.ResidenceSettlementRuntimeId,
                 EnumValue(npc.LifeState),
                 EnumValue(npc.InjurySeverity),
@@ -307,6 +309,11 @@ public static class WorldStateCanonicalWriter
     public static string Int64Value(long value)
     {
         return value.ToString(CultureInfo.InvariantCulture);
+    }
+
+    public static string NullableInt64Value(long? value)
+    {
+        return value.HasValue ? Int64Value(value.Value) : "~";
     }
 
     public static string FloatValue(float value)

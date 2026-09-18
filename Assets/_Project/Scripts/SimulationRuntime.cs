@@ -127,6 +127,13 @@ public sealed class SimulationRuntime
             return false;
         }
 
+        if (npcRuntime.HasKnownBirthDay == true
+            && npcRuntime.BirthAbsoluteDay.Value > simulationTime.AbsoluteDay)
+        {
+            failure = WorldNpcRegistryFailure.BirthDayInFuture;
+            return false;
+        }
+
         npcRegistryById.Add(npcRuntime.RuntimeId, npcRuntime);
         npcRuntimes.Add(npcRuntime);
         return true;
