@@ -36,7 +36,9 @@ public static class WorldStateCanonicalWriter
             AppendLine(output, "PERSON",
                 person.PersonId,
                 person.MaterializedNpcRuntimeId,
-                BoolValue(person.IsMaterialized));
+                BoolValue(person.IsMaterialized),
+                person.BirthAbsoluteDay.HasValue ? Int64Value(person.BirthAbsoluteDay.Value) : null,
+                person.CompletedYears.HasValue ? Int64Value(person.CompletedYears.Value) : null);
         }
 
         foreach (WorldStateNpcSnapshot npc in snapshot.Npcs)
@@ -320,6 +322,11 @@ public static class WorldStateCanonicalWriter
     public static string Int64Value(long value)
     {
         return value.ToString(CultureInfo.InvariantCulture);
+    }
+
+    public static string NullableInt64Value(long? value)
+    {
+        return value.HasValue ? Int64Value(value.Value) : "~";
     }
 
     public static string FloatValue(float value)

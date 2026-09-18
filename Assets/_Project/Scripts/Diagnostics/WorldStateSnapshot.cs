@@ -88,14 +88,31 @@ public sealed class WorldStateSnapshot
 public sealed class WorldStatePersonSnapshot
 {
     public string PersonId { get; }
+    public long? BirthAbsoluteDay { get; }
+    public bool HasKnownBirthDay => BirthAbsoluteDay.HasValue;
+    public long? AgeInDays { get; }
+    public long? CompletedYears { get; }
     public string MaterializedNpcRuntimeId { get; }
     public bool IsMaterialized => string.IsNullOrWhiteSpace(MaterializedNpcRuntimeId) == false;
 
     public WorldStatePersonSnapshot(
         string personId,
         string materializedNpcRuntimeId)
+        : this(personId, null, null, null, materializedNpcRuntimeId)
+    {
+    }
+
+    public WorldStatePersonSnapshot(
+        string personId,
+        long? birthAbsoluteDay,
+        long? ageInDays,
+        long? completedYears,
+        string materializedNpcRuntimeId)
     {
         PersonId = personId;
+        BirthAbsoluteDay = birthAbsoluteDay;
+        AgeInDays = ageInDays;
+        CompletedYears = completedYears;
         MaterializedNpcRuntimeId = materializedNpcRuntimeId;
     }
 }
@@ -773,7 +790,10 @@ public static class WorldStateSnapshotBuilder
         context = context ?? new WorldStateSnapshotContext();
 
         List<NpcRuntime> knownNpcs = SnapshotCollections.Materialize(context.Npcs);
-        List<WorldStatePersonSnapshot> persons = BuildPersonSnapshots(context.PersonStore);
+        List<WorldStatePersonSnapshot> persons = BuildPersonSnapshots(
+            context.PersonStore,
+            context.SimulationTime,
+            context.Calendar);
         List<WorldStateExpeditionSnapshot> expeditions = BuildExpeditionSnapshots(context.ExpeditionStore);
         WorldStateCalendarSnapshot calendarDate = null;
         if (context.Calendar != null && context.SimulationTime != null)
@@ -833,7 +853,10 @@ public static class WorldStateSnapshotBuilder
         return result;
     }
 
-    private static List<WorldStatePersonSnapshot> BuildPersonSnapshots(PersonStore personStore)
+    private static List<WorldStatePersonSnapshot> BuildPersonSnapshots(
+        PersonStore personStore,
+        SimulationTime simulationTime,
+        SimulationCalendar calendar)
     {
         List<WorldStatePersonSnapshot> result = new List<WorldStatePersonSnapshot>();
         if (personStore == null)
@@ -848,8 +871,22 @@ public static class WorldStateSnapshotBuilder
                 continue;
             }
 
+            PersonAgeSnapshot age = null;
+            if (simulationTime != null && calendar != null)
+            {
+                PersonAgeQuery.TryCalculate(
+                    person,
+                    simulationTime,
+                    calendar,
+                    out age,
+                    out _);
+            }
+
             result.Add(new WorldStatePersonSnapshot(
                 person.PersonId.Value,
+                person.BirthAbsoluteDay,
+                age?.AgeInDays,
+                age?.CompletedYears,
                 person.MaterializedNpcRuntimeId));
         }
 

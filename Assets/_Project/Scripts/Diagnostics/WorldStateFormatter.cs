@@ -24,6 +24,34 @@ public static class WorldStateSnapshotFormatter
         output.Append("Settlements: ").Append(WorldStateCanonicalWriter.IntValue(snapshot.SettlementCount))
             .Append(" | Known NPCs: ").Append(WorldStateCanonicalWriter.IntValue(snapshot.KnownNpcCount)).Append('\n');
 
+        foreach (WorldStatePersonSnapshot person in snapshot.Persons)
+        {
+            if (person == null)
+            {
+                continue;
+            }
+
+            output.Append('\n').Append("PERSON ")
+                .Append(DisplayOrId(null, person.PersonId))
+                .Append(" [").Append(WorldStateCanonicalWriter.StringValue(person.PersonId)).Append("]\n");
+            output.Append("Birth day: ")
+                .Append(person.BirthAbsoluteDay.HasValue
+                    ? WorldStateCanonicalWriter.Int64Value(person.BirthAbsoluteDay.Value)
+                    : "unknown")
+                .Append('\n');
+            output.Append("Age in days: ")
+                .Append(person.AgeInDays.HasValue
+                    ? WorldStateCanonicalWriter.Int64Value(person.AgeInDays.Value)
+                    : "unknown")
+                .Append('\n');
+            output.Append("Completed years: ")
+                .Append(person.CompletedYears.HasValue
+                    ? WorldStateCanonicalWriter.Int64Value(person.CompletedYears.Value)
+                    : "unknown")
+                .Append('\n');
+            output.Append("Materialized NPC: ").Append(Value(person.MaterializedNpcRuntimeId)).Append('\n');
+        }
+
         foreach (WorldStateCitySnapshot city in snapshot.Cities)
         {
             if (city == null)

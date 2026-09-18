@@ -9,7 +9,8 @@ public enum PersonStoreFailure
     PersonNotRegistered = 3,
     AlreadyMaterialized = 4,
     InvalidNpcRuntimeId = 5,
-    NpcAlreadyBoundToAnotherPerson = 6
+    NpcAlreadyBoundToAnotherPerson = 6,
+    BirthAbsoluteDayInFuture = 7
 }
 
 /// <summary>

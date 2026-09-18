@@ -214,6 +214,14 @@ public sealed class SimulationRuntime
 
     public bool TryRegisterPerson(PersonRuntime person, out PersonStoreFailure failure)
     {
+        if (person != null
+            && person.BirthAbsoluteDay.HasValue
+            && person.BirthAbsoluteDay.Value > CurrentDay)
+        {
+            failure = PersonStoreFailure.BirthAbsoluteDayInFuture;
+            return false;
+        }
+
         return personStore.TryRegister(person, out failure);
     }
 

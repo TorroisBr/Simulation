@@ -219,6 +219,39 @@ public static class WorldStateInvariantValidator
                 AddError(issues, "DuplicatePersonId", person.PersonId, "PersonId appears more than once.");
             }
 
+            string personIdentity = string.IsNullOrWhiteSpace(person.PersonId) ? "person" : person.PersonId;
+            if (person.BirthAbsoluteDay.HasValue)
+            {
+                if (person.BirthAbsoluteDay.Value < 0L)
+                {
+                    AddError(issues, "NegativePersonBirthAbsoluteDay", personIdentity, "Person BirthAbsoluteDay cannot be negative.");
+                }
+                else if (person.BirthAbsoluteDay.Value > snapshot.AbsoluteDay)
+                {
+                    AddError(issues, "FuturePersonBirthAbsoluteDay", personIdentity, "Person BirthAbsoluteDay cannot be later than the snapshot day.");
+                }
+            }
+
+            if (person.AgeInDays.HasValue && person.BirthAbsoluteDay.HasValue == false)
+            {
+                AddError(issues, "PersonAgeWithoutBirth", personIdentity, "Person age cannot be known when BirthAbsoluteDay is unknown.");
+            }
+
+            if (person.CompletedYears.HasValue && person.BirthAbsoluteDay.HasValue == false)
+            {
+                AddError(issues, "PersonYearsWithoutBirth", personIdentity, "Person completed years cannot be known when BirthAbsoluteDay is unknown.");
+            }
+
+            if (person.AgeInDays.HasValue && person.AgeInDays.Value < 0L)
+            {
+                AddError(issues, "NegativePersonAgeInDays", personIdentity, "Person AgeInDays cannot be negative.");
+            }
+
+            if (person.CompletedYears.HasValue && person.CompletedYears.Value < 0L)
+            {
+                AddError(issues, "NegativePersonCompletedYears", personIdentity, "Person CompletedYears cannot be negative.");
+            }
+
             if (person.IsMaterialized)
             {
                 if (string.IsNullOrWhiteSpace(person.MaterializedNpcRuntimeId))
