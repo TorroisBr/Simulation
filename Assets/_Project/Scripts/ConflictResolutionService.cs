@@ -42,6 +42,21 @@ public sealed class ConflictResolutionService
         out ConflictResolutionResult result,
         out string reason)
     {
+        return TryResolveAndApply(conflict, constraints, null, out result, out reason);
+    }
+
+    /// <summary>
+    /// Resolves and applies a conflict through a world-aware consequence boundary.
+    /// The resolver remains pure; the world is used only while applying stateful
+    /// consequences such as fatal resident NPC outcomes.
+    /// </summary>
+    public bool TryResolveAndApply(
+        Conflict conflict,
+        ConflictResolutionConstraints constraints,
+        SimulationRuntime worldRuntime,
+        out ConflictResolutionResult result,
+        out string reason)
+    {
         result = null;
         reason = null;
 
@@ -60,12 +75,26 @@ public sealed class ConflictResolutionService
             return false;
         }
 
-        return TryApply(conflict, result, out reason);
+        return TryApply(conflict, result, worldRuntime, out reason);
     }
 
     public bool TryApply(
         Conflict conflict,
         ConflictResolutionResult result,
+        out string reason)
+    {
+        return TryApply(conflict, result, null, out reason);
+    }
+
+    /// <summary>
+    /// Applies a computed result. When a world owner is supplied, fatal resident NPC
+    /// consequences are routed through NpcPopulationLifecycleSystem instead of the
+    /// low-level resident-death guard.
+    /// </summary>
+    public bool TryApply(
+        Conflict conflict,
+        ConflictResolutionResult result,
+        SimulationRuntime worldRuntime,
         out string reason)
     {
         reason = null;
@@ -97,6 +126,12 @@ public sealed class ConflictResolutionService
             return false;
         }
 
+        Dictionary<string, NpcPopulationLifecycleTransition> residentDeathTransitions =
+            new Dictionary<string, NpcPopulationLifecycleTransition>(StringComparer.Ordinal);
+        Dictionary<string, CityRuntime> residentDeathSettlements =
+            new Dictionary<string, CityRuntime>(StringComparer.Ordinal);
+        AuthoritativeNpcRoster authoritativeRoster = null;
+
         HashSet<string> npcConsequenceIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (ConflictNpcConsequence consequence in result.NpcConsequences)
         {
@@ -110,8 +145,48 @@ public sealed class ConflictResolutionService
                 return false;
             }
 
-            if (participant.Npc.IsAlive == false
-                || participant.Npc.CanApplyConflictConsequence(consequence.InjurySeverity, consequence.IsDead) == false)
+            if (participant.Npc == null || participant.Npc.IsAlive == false)
+            {
+                reason = "Conflict consequence cannot be applied to an NPC that is not alive or has invalid life state.";
+                return false;
+            }
+
+            if (consequence.IsDead
+                && string.IsNullOrWhiteSpace(participant.Npc.ResidenceSettlementRuntimeId) == false)
+            {
+                if (worldRuntime == null)
+                {
+                    reason = "Fatal resident conflict consequence requires an owner-aware world boundary.";
+                    return false;
+                }
+
+                if (TryFindResidenceSettlement(
+                    worldRuntime,
+                    participant.Npc,
+                    out CityRuntime residenceSettlement,
+                    out reason) == false)
+                {
+                    return false;
+                }
+
+                authoritativeRoster = authoritativeRoster ?? worldRuntime.GetAuthoritativeNpcRoster();
+                if (NpcPopulationLifecycleSystem.TryProposeResidentDeath(
+                    participant.Npc,
+                    residenceSettlement,
+                    authoritativeRoster,
+                    out NpcPopulationLifecycleTransition transition,
+                    out NpcPopulationLifecycleFailure lifecycleFailure) == false)
+                {
+                    reason = "Resident conflict consequence lifecycle proposal was rejected: " + lifecycleFailure + ".";
+                    return false;
+                }
+
+                residentDeathTransitions.Add(consequence.ParticipantId, transition);
+                residentDeathSettlements.Add(consequence.ParticipantId, residenceSettlement);
+                continue;
+            }
+
+            if (participant.Npc.CanApplyConflictConsequence(consequence.InjurySeverity, consequence.IsDead) == false)
             {
                 reason = "Conflict consequence cannot be applied to an NPC that is not alive or has invalid life state.";
                 return false;
@@ -151,16 +226,68 @@ public sealed class ConflictResolutionService
         foreach (ConflictNpcConsequence consequence in result.NpcConsequences)
         {
             ConflictParticipantReference participant = participants[consequence.ParticipantId];
-            if (participant.Npc.CanApplyConflictConsequence(consequence.InjurySeverity, consequence.IsDead) == false)
+            if (residentDeathTransitions.ContainsKey(consequence.ParticipantId) == true)
+            {
+                CityRuntime residenceSettlement = residentDeathSettlements[consequence.ParticipantId];
+                if (participant.Npc.IsAlive == false
+                    || string.Equals(
+                        participant.Npc.ResidenceSettlementRuntimeId,
+                        residenceSettlement.RuntimeId,
+                        StringComparison.Ordinal) == false)
+                {
+                    reason = "Resident conflict consequence preconditions changed before lifecycle application.";
+                    return false;
+                }
+            }
+            else if (participant.Npc.CanApplyConflictConsequence(consequence.InjurySeverity, consequence.IsDead) == false)
             {
                 reason = "Conflict consequence preconditions changed before application.";
                 return false;
             }
         }
 
+        HashSet<string> appliedResidentDeathSettlements = new HashSet<string>(StringComparer.Ordinal);
         foreach (ConflictNpcConsequence consequence in result.NpcConsequences)
         {
             ConflictParticipantReference participant = participants[consequence.ParticipantId];
+            if (residentDeathTransitions.TryGetValue(
+                consequence.ParticipantId,
+                out NpcPopulationLifecycleTransition residentDeathTransition) == true)
+            {
+                CityRuntime residenceSettlement = residentDeathSettlements[consequence.ParticipantId];
+                bool usePreparedTransition = appliedResidentDeathSettlements.Add(residenceSettlement.RuntimeId);
+                bool lifecycleApplied;
+                NpcPopulationLifecycleFailure lifecycleFailure;
+                if (usePreparedTransition == true)
+                {
+                    lifecycleApplied = NpcPopulationLifecycleSystem.TryApplyResidentDeathWithConflictInjury(
+                        participant.Npc,
+                        residenceSettlement,
+                        authoritativeRoster,
+                        consequence.InjurySeverity,
+                        residentDeathTransition,
+                        out lifecycleFailure);
+                }
+                else
+                {
+                    lifecycleApplied = NpcPopulationLifecycleSystem.TryApplyResidentDeathWithConflictInjury(
+                        participant.Npc,
+                        residenceSettlement,
+                        authoritativeRoster,
+                        consequence.InjurySeverity,
+                        out _,
+                        out lifecycleFailure);
+                }
+
+                if (lifecycleApplied == false)
+                {
+                    reason = "Resident conflict consequence lifecycle application was rejected: " + lifecycleFailure + ".";
+                    return false;
+                }
+
+                continue;
+            }
+
             if (participant.Npc.ApplyConflictConsequence(consequence.InjurySeverity, consequence.IsDead) == false)
             {
                 // With the precondition pass above this is unreachable in the single-threaded simulation.
@@ -205,5 +332,41 @@ public sealed class ConflictResolutionService
 
         reason = null;
         return participants;
+    }
+
+    private static bool TryFindResidenceSettlement(
+        SimulationRuntime worldRuntime,
+        NpcRuntime npc,
+        out CityRuntime settlement,
+        out string reason)
+    {
+        settlement = null;
+        reason = null;
+
+        if (worldRuntime == null || npc == null)
+        {
+            reason = "Fatal resident conflict consequence requires an authoritative world and NPC.";
+            return false;
+        }
+
+        string residenceRuntimeId = npc.ResidenceSettlementRuntimeId;
+        if (string.IsNullOrWhiteSpace(residenceRuntimeId) == true)
+        {
+            reason = "Fatal resident conflict consequence requires a non-empty residence RuntimeId.";
+            return false;
+        }
+
+        foreach (CityRuntime candidate in worldRuntime.Cities)
+        {
+            if (candidate != null
+                && string.Equals(candidate.RuntimeId, residenceRuntimeId, StringComparison.Ordinal))
+            {
+                settlement = candidate;
+                return true;
+            }
+        }
+
+        reason = "Fatal resident conflict consequence references a residence settlement that is missing from the authoritative world.";
+        return false;
     }
 }

@@ -15,7 +15,8 @@ public enum NpcPopulationLifecycleFailure
     PopulationOverflow = 10,
     RevisionOverflow = 11,
     StaleState = 12,
-    InvalidTransition = 13
+    InvalidTransition = 13,
+    InvalidInjury = 14
 }
 
 /// <summary>
@@ -119,11 +120,93 @@ public static class NpcPopulationLifecycleSystem
         return TryApply(npc, settlement, authoritativeRoster, transition, out failure);
     }
 
+    /// <summary>
+    /// Applies a conflict injury and resident death as one owner-aware lifecycle
+    /// operation. The injury is validated before the aggregate commit and is committed
+    /// only by the same internal NPC transition that clears residence and marks death.
+    /// </summary>
+    public static bool TryApplyResidentDeathWithConflictInjury(
+        NpcRuntime npc,
+        CityRuntime settlement,
+        AuthoritativeNpcRoster authoritativeRoster,
+        NpcInjurySeverity injurySeverity,
+        out NpcPopulationLifecycleTransition transition,
+        out NpcPopulationLifecycleFailure failure)
+    {
+        if (NpcInjuryRules.IsValid(injurySeverity) == false)
+        {
+            transition = null;
+            failure = NpcPopulationLifecycleFailure.InvalidInjury;
+            return false;
+        }
+
+        if (TryProposeResidentDeath(
+            npc,
+            settlement,
+            authoritativeRoster,
+            out transition,
+            out failure) == false)
+        {
+            return false;
+        }
+
+        return TryApplyResidentDeathWithConflictInjury(
+            npc,
+            settlement,
+            authoritativeRoster,
+            injurySeverity,
+            transition,
+            out failure);
+    }
+
+    public static bool TryApplyResidentDeathWithConflictInjury(
+        NpcRuntime npc,
+        CityRuntime settlement,
+        AuthoritativeNpcRoster authoritativeRoster,
+        NpcInjurySeverity injurySeverity,
+        NpcPopulationLifecycleTransition transition,
+        out NpcPopulationLifecycleFailure failure)
+    {
+        if (NpcInjuryRules.IsValid(injurySeverity) == false)
+        {
+            failure = NpcPopulationLifecycleFailure.InvalidInjury;
+            return false;
+        }
+
+        return TryApplyInternal(
+            npc,
+            settlement,
+            authoritativeRoster,
+            transition,
+            true,
+            injurySeverity,
+            out failure);
+    }
+
     public static bool TryApply(
         NpcRuntime npc,
         CityRuntime settlement,
         AuthoritativeNpcRoster authoritativeRoster,
         NpcPopulationLifecycleTransition transition,
+        out NpcPopulationLifecycleFailure failure)
+    {
+        return TryApplyInternal(
+            npc,
+            settlement,
+            authoritativeRoster,
+            transition,
+            false,
+            NpcInjurySeverity.None,
+            out failure);
+    }
+
+    private static bool TryApplyInternal(
+        NpcRuntime npc,
+        CityRuntime settlement,
+        AuthoritativeNpcRoster authoritativeRoster,
+        NpcPopulationLifecycleTransition transition,
+        bool applyConflictInjury,
+        NpcInjurySeverity injurySeverity,
         out NpcPopulationLifecycleFailure failure)
     {
         failure = NpcPopulationLifecycleFailure.None;
@@ -188,7 +271,8 @@ public static class NpcPopulationLifecycleSystem
         }
         else
         {
-            npc.ApplyResidentDeathAfterPopulationValidation();
+            npc.ApplyResidentDeathAfterPopulationValidation(
+                applyConflictInjury ? injurySeverity : NpcInjurySeverity.None);
         }
 
         return true;

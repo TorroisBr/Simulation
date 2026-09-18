@@ -158,6 +158,25 @@ public class NpcRuntime : ICapabilityConditionSource
     /// </summary>
     internal void ApplyResidentDeathAfterPopulationValidation()
     {
+        ApplyResidentDeathAfterPopulationValidation(NpcInjurySeverity.None);
+    }
+
+    /// <summary>
+    /// Commits the already-validated conflict injury together with the resident death.
+    /// This is internal so conflict callers cannot bypass the population boundary.
+    /// </summary>
+    internal void ApplyResidentDeathAfterPopulationValidation(NpcInjurySeverity severity)
+    {
+        if (NpcInjuryRules.IsValid(severity) == false)
+        {
+            return;
+        }
+
+        if (severity > injurySeverity)
+        {
+            injurySeverity = severity;
+        }
+
         lifeState = NpcLifeState.Dead;
         residenceSettlementRuntimeId = null;
         currentAction = null;
