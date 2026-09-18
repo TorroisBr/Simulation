@@ -14,6 +14,22 @@ public static class WorldStateCanonicalWriter
 
         StringBuilder output = new StringBuilder();
         AppendLine(output, "METADATA", "AbsoluteDay", Int64Value(snapshot.AbsoluteDay));
+        AppendLine(output, "METADATA", "SettlementCount", IntValue(snapshot.SettlementCount));
+        AppendLine(output, "METADATA", "KnownNpcCount", IntValue(snapshot.KnownNpcCount));
+        if (snapshot.Metadata.CalendarDate != null)
+        {
+            WorldStateCalendarSnapshot calendar = snapshot.Metadata.CalendarDate;
+            AppendLine(output, "CALENDAR",
+                Int64Value(calendar.AbsoluteDay),
+                Int64Value(calendar.Year),
+                IntValue(calendar.Month),
+                IntValue(calendar.WeekOfMonth),
+                IntValue(calendar.DayOfMonth),
+                IntValue(calendar.DayOfWeek),
+                Int64Value(calendar.DayOfYear),
+                Int64Value(calendar.DaysPerMonth),
+                Int64Value(calendar.DaysPerYear));
+        }
 
         foreach (WorldStateNpcSnapshot npc in snapshot.Npcs)
         {
@@ -34,6 +50,48 @@ public static class WorldStateCanonicalWriter
                 FloatValue(npc.MoneyBalance),
                 npc.ActiveExpeditionId);
 
+            foreach (string statusName in npc.StatusNames)
+            {
+                AppendLine(output, "NPC_STATUS", npc.RuntimeId, statusName);
+            }
+
+            if (npc.CurrentAction != null)
+            {
+                WorldStateActionSnapshot action = npc.CurrentAction;
+                AppendLine(output, "NPC_ACTION",
+                    npc.RuntimeId,
+                    action.DefinitionId,
+                    EnumValue(action.Category),
+                    EnumValue(action.Type),
+                    action.TargetNpcRuntimeId,
+                    action.TargetCityRuntimeId,
+                    action.TargetItemDefinitionId,
+                    IntValue(action.Amount),
+                    FloatValue(action.ExpectedUnitPrice),
+                    FloatValue(action.SuccessChanceMultiplier),
+                    EnumValue(action.TravelReason),
+                    FloatValue(action.ExpectedNetValue),
+                    action.OriginDecisionId);
+            }
+
+            if (npc.MerchantTradePlan != null)
+            {
+                WorldStateMerchantTradePlanSnapshot plan = npc.MerchantTradePlan;
+                AppendLine(output, "NPC_TRADE_PLAN",
+                    npc.RuntimeId,
+                    BoolValue(plan.HasData),
+                    BoolValue(plan.IsActive),
+                    plan.ItemDefinitionId,
+                    plan.OriginCityRuntimeId,
+                    plan.TargetCityRuntimeId,
+                    IntValue(plan.PlannedAmount),
+                    IntValue(plan.RemainingAmount),
+                    FloatValue(plan.PurchasePricePerItem),
+                    IntValue(plan.WaitDaysAtDestination),
+                    IntValue(plan.PendingTravelDays),
+                    plan.OriginDecisionId);
+            }
+
             foreach (WorldStateInventoryStackSnapshot stack in npc.Inventory)
             {
                 AppendLine(output, "NPC_STACK",
@@ -51,6 +109,9 @@ public static class WorldStateCanonicalWriter
                 city.DefinitionId,
                 city.LocationRuntimeId,
                 IntValue(city.CurrentPopulation),
+                Int64Value(city.PopulationRevision),
+                IntValue(city.NamedResidentCount),
+                IntValue(city.NamedPresentCount),
                 city.MarketCounterpartyRuntimeId,
                 EnumValue(city.MarketLiquidityMode),
                 FloatValue(city.MarketBalance));

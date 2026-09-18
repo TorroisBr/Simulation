@@ -4,6 +4,7 @@ using System.Collections.Generic;
 public sealed class WorldStateSnapshotContext
 {
     public SimulationTime SimulationTime { get; }
+    public SimulationCalendar Calendar { get; }
     public IEnumerable<NpcRuntime> Npcs { get; }
     public IEnumerable<CityRuntime> Cities { get; }
     public SpatialNetworkRuntime SpatialNetwork { get; }
@@ -20,9 +21,12 @@ public sealed class WorldStateSnapshotContext
         ExplorableSiteStore explorableSiteStore = null,
         ExpeditionStore expeditionStore = null,
         PlaceContentStore placeContentStore = null,
-        LocalTopologyStore localTopologyStore = null)
+        LocalTopologyStore localTopologyStore = null,
+        SimulationCalendar calendar = null,
+        CalendarDefinition calendarDefinition = null)
     {
         SimulationTime = simulationTime;
+        Calendar = calendar ?? (calendarDefinition != null ? new SimulationCalendar(calendarDefinition) : null);
         Npcs = npcs ?? Array.Empty<NpcRuntime>();
         Cities = cities ?? Array.Empty<CityRuntime>();
         SpatialNetwork = spatialNetwork;
@@ -37,8 +41,12 @@ public sealed class WorldStateSnapshot
 {
     public WorldStateSnapshotMetadata Metadata { get; }
     public long AbsoluteDay => Metadata.AbsoluteDay;
+    public WorldStateCalendarSnapshot Calendar => Metadata.CalendarDate;
     public IReadOnlyList<WorldStateNpcSnapshot> Npcs { get; }
     public IReadOnlyList<WorldStateCitySnapshot> Cities { get; }
+    public IReadOnlyList<WorldStateCitySnapshot> Settlements => Cities;
+    public int SettlementCount => Cities.Count;
+    public int KnownNpcCount => Npcs.Count;
     public WorldStateSpatialSnapshot Spatial { get; }
     public IReadOnlyList<WorldStateSiteSnapshot> Sites { get; }
     public IReadOnlyList<WorldStateExpeditionSnapshot> Expeditions { get; }
@@ -55,27 +63,56 @@ public sealed class WorldStateSnapshot
         IEnumerable<WorldStateExpeditionSnapshot> expeditions = null,
         IEnumerable<WorldStatePlaceContentSnapshot> placeContents = null,
         IEnumerable<WorldStateNotableItemSnapshot> notableItems = null,
-        IEnumerable<WorldStateLocalTopologySnapshot> localTopologies = null)
+        IEnumerable<WorldStateLocalTopologySnapshot> localTopologies = null,
+        WorldStateCalendarSnapshot calendarDate = null)
     {
-        Metadata = new WorldStateSnapshotMetadata(absoluteDay);
-        Npcs = SnapshotCollections.Copy(npcs);
-        Cities = SnapshotCollections.Copy(cities);
+        Metadata = new WorldStateSnapshotMetadata(absoluteDay, calendarDate);
+        Npcs = SnapshotCollections.CopySorted(npcs, npc => npc?.RuntimeId);
+        Cities = SnapshotCollections.CopySorted(cities, city => city?.RuntimeId);
         Spatial = spatial ?? new WorldStateSpatialSnapshot();
-        Sites = SnapshotCollections.Copy(sites);
-        Expeditions = SnapshotCollections.Copy(expeditions);
-        PlaceContents = SnapshotCollections.Copy(placeContents);
-        NotableItems = SnapshotCollections.Copy(notableItems);
-        LocalTopologies = SnapshotCollections.Copy(localTopologies);
+        Sites = SnapshotCollections.CopySorted(sites, site => site?.RuntimeId);
+        Expeditions = SnapshotCollections.CopySorted(expeditions, expedition => expedition?.ExpeditionId);
+        PlaceContents = SnapshotCollections.CopySorted(placeContents, content => content?.StableKey);
+        NotableItems = SnapshotCollections.CopySorted(notableItems, notable => notable?.RuntimeId);
+        LocalTopologies = SnapshotCollections.CopySorted(localTopologies, topology => topology?.StableKey);
     }
 }
 
 public sealed class WorldStateSnapshotMetadata
 {
     public long AbsoluteDay { get; }
+    public WorldStateCalendarSnapshot CalendarDate { get; }
 
-    public WorldStateSnapshotMetadata(long absoluteDay)
+    public WorldStateSnapshotMetadata(long absoluteDay, WorldStateCalendarSnapshot calendarDate = null)
     {
         AbsoluteDay = absoluteDay;
+        CalendarDate = calendarDate;
+    }
+}
+
+public sealed class WorldStateCalendarSnapshot
+{
+    public long AbsoluteDay { get; }
+    public long Year { get; }
+    public int Month { get; }
+    public int WeekOfMonth { get; }
+    public int DayOfMonth { get; }
+    public int DayOfWeek { get; }
+    public long DayOfYear { get; }
+    public long DaysPerMonth { get; }
+    public long DaysPerYear { get; }
+
+    public WorldStateCalendarSnapshot(SimulationDate date)
+    {
+        AbsoluteDay = date.AbsoluteDay;
+        Year = date.Year;
+        Month = date.Month;
+        WeekOfMonth = date.WeekOfMonth;
+        DayOfMonth = date.DayOfMonth;
+        DayOfWeek = date.DayOfWeek;
+        DayOfYear = date.DayOfYear;
+        DaysPerMonth = date.DaysPerMonth;
+        DaysPerYear = date.DaysPerYear;
     }
 }
 
@@ -83,6 +120,8 @@ public sealed class WorldStateNpcSnapshot
 {
     public string RuntimeId { get; }
     public string DefinitionId { get; }
+    public string Name { get; }
+    public string NpcName => Name;
     public string ResidenceSettlementRuntimeId { get; }
     public NpcLifeState LifeState { get; }
     public NpcInjurySeverity InjurySeverity { get; }
@@ -93,10 +132,17 @@ public sealed class WorldStateNpcSnapshot
     public bool IsTraveling { get; }
     public string TravelRouteRuntimeId { get; }
     public int RemainingTravelDays { get; }
+    public int TravelDaysRemaining => RemainingTravelDays;
     public string ActiveTravelPartyId { get; }
     public float MoneyBalance { get; }
+    public float Money => MoneyBalance;
     public string ActiveExpeditionId { get; }
     public IReadOnlyList<WorldStateInventoryStackSnapshot> Inventory { get; }
+    public IReadOnlyList<string> StatusNames { get; }
+    public IReadOnlyList<string> Statuses => StatusNames;
+    public WorldStateActionSnapshot CurrentAction { get; }
+    public WorldStateMerchantTradePlanSnapshot MerchantTradePlan { get; }
+    public WorldStateMerchantTradePlanSnapshot TradePlan => MerchantTradePlan;
 
     public WorldStateNpcSnapshot(
         string runtimeId,
@@ -115,9 +161,52 @@ public sealed class WorldStateNpcSnapshot
         float moneyBalance,
         string activeExpeditionId,
         IEnumerable<WorldStateInventoryStackSnapshot> inventory)
+        : this(
+            runtimeId,
+            definitionId,
+            null,
+            residenceSettlementRuntimeId,
+            lifeState,
+            injurySeverity,
+            currentLocationRuntimeId,
+            currentCityRuntimeId,
+            destinationLocationRuntimeId,
+            destinationCityRuntimeId,
+            isTraveling,
+            travelRouteRuntimeId,
+            remainingTravelDays,
+            activeTravelPartyId,
+            moneyBalance,
+            activeExpeditionId,
+            inventory)
+    {
+    }
+
+    public WorldStateNpcSnapshot(
+        string runtimeId,
+        string definitionId,
+        string name,
+        string residenceSettlementRuntimeId,
+        NpcLifeState lifeState,
+        NpcInjurySeverity injurySeverity,
+        string currentLocationRuntimeId,
+        string currentCityRuntimeId,
+        string destinationLocationRuntimeId,
+        string destinationCityRuntimeId,
+        bool isTraveling,
+        string travelRouteRuntimeId,
+        int remainingTravelDays,
+        string activeTravelPartyId,
+        float moneyBalance,
+        string activeExpeditionId,
+        IEnumerable<WorldStateInventoryStackSnapshot> inventory,
+        IEnumerable<string> statusNames = null,
+        WorldStateActionSnapshot currentAction = null,
+        WorldStateMerchantTradePlanSnapshot merchantTradePlan = null)
     {
         RuntimeId = runtimeId;
         DefinitionId = definitionId;
+        Name = name;
         ResidenceSettlementRuntimeId = residenceSettlementRuntimeId;
         LifeState = lifeState;
         InjurySeverity = injurySeverity;
@@ -131,7 +220,98 @@ public sealed class WorldStateNpcSnapshot
         ActiveTravelPartyId = activeTravelPartyId;
         MoneyBalance = moneyBalance;
         ActiveExpeditionId = activeExpeditionId;
-        Inventory = SnapshotCollections.Copy(inventory);
+        Inventory = SnapshotCollections.CopySorted(inventory, stack => stack?.ItemDefinitionId);
+        StatusNames = SnapshotCollections.CopySorted(statusNames, status => status);
+        CurrentAction = currentAction;
+        MerchantTradePlan = merchantTradePlan;
+    }
+}
+
+public sealed class WorldStateActionSnapshot
+{
+    public string DefinitionId { get; }
+    public string ActionName { get; }
+    public NpcActionCategory Category { get; }
+    public NpcActionType Type { get; }
+    public string TargetNpcRuntimeId { get; }
+    public string TargetCityRuntimeId { get; }
+    public string TargetItemDefinitionId { get; }
+    public int Amount { get; }
+    public float ExpectedUnitPrice { get; }
+    public float SuccessChanceMultiplier { get; }
+    public NpcTravelReason TravelReason { get; }
+    public float ExpectedNetValue { get; }
+    public string OriginDecisionId { get; }
+
+    public WorldStateActionSnapshot(
+        string definitionId,
+        string actionName,
+        NpcActionCategory category,
+        NpcActionType type,
+        string targetNpcRuntimeId,
+        string targetCityRuntimeId,
+        string targetItemDefinitionId,
+        int amount,
+        float expectedUnitPrice,
+        float successChanceMultiplier,
+        NpcTravelReason travelReason,
+        float expectedNetValue,
+        string originDecisionId)
+    {
+        DefinitionId = definitionId;
+        ActionName = actionName;
+        Category = category;
+        Type = type;
+        TargetNpcRuntimeId = targetNpcRuntimeId;
+        TargetCityRuntimeId = targetCityRuntimeId;
+        TargetItemDefinitionId = targetItemDefinitionId;
+        Amount = amount;
+        ExpectedUnitPrice = expectedUnitPrice;
+        SuccessChanceMultiplier = successChanceMultiplier;
+        TravelReason = travelReason;
+        ExpectedNetValue = expectedNetValue;
+        OriginDecisionId = originDecisionId;
+    }
+}
+
+public sealed class WorldStateMerchantTradePlanSnapshot
+{
+    public bool HasData { get; }
+    public bool IsActive { get; }
+    public string ItemDefinitionId { get; }
+    public string OriginCityRuntimeId { get; }
+    public string TargetCityRuntimeId { get; }
+    public int PlannedAmount { get; }
+    public int RemainingAmount { get; }
+    public float PurchasePricePerItem { get; }
+    public int WaitDaysAtDestination { get; }
+    public int PendingTravelDays { get; }
+    public string OriginDecisionId { get; }
+
+    public WorldStateMerchantTradePlanSnapshot(
+        bool hasData,
+        bool isActive,
+        string itemDefinitionId,
+        string originCityRuntimeId,
+        string targetCityRuntimeId,
+        int plannedAmount,
+        int remainingAmount,
+        float purchasePricePerItem,
+        int waitDaysAtDestination,
+        int pendingTravelDays,
+        string originDecisionId)
+    {
+        HasData = hasData;
+        IsActive = isActive;
+        ItemDefinitionId = itemDefinitionId;
+        OriginCityRuntimeId = originCityRuntimeId;
+        TargetCityRuntimeId = targetCityRuntimeId;
+        PlannedAmount = plannedAmount;
+        RemainingAmount = remainingAmount;
+        PurchasePricePerItem = purchasePricePerItem;
+        WaitDaysAtDestination = waitDaysAtDestination;
+        PendingTravelDays = pendingTravelDays;
+        OriginDecisionId = originDecisionId;
     }
 }
 
@@ -152,9 +332,17 @@ public sealed class WorldStateInventoryStackSnapshot
 public sealed class WorldStateCitySnapshot
 {
     public string RuntimeId { get; }
+    public string SettlementRuntimeId => RuntimeId;
     public string DefinitionId { get; }
+    public string CityName { get; }
+    public string SettlementName => CityName;
     public string LocationRuntimeId { get; }
     public int CurrentPopulation { get; }
+    public long PopulationRevision { get; }
+    public long Revision => PopulationRevision;
+    public int NamedResidentCount { get; }
+    public int NamedLivingResidentCount => NamedResidentCount;
+    public int NamedPresentCount { get; }
     public string MarketCounterpartyRuntimeId { get; }
     public MarketLiquidityMode MarketLiquidityMode { get; }
     public float MarketBalance { get; }
@@ -170,17 +358,25 @@ public sealed class WorldStateCitySnapshot
         MarketLiquidityMode marketLiquidityMode,
         float marketBalance,
         IEnumerable<string> residentNpcRuntimeIds,
-        IEnumerable<WorldStateMarketStackSnapshot> marketStock)
+        IEnumerable<WorldStateMarketStackSnapshot> marketStock,
+        string cityName = null,
+        long populationRevision = 0L,
+        int namedResidentCount = 0,
+        int namedPresentCount = 0)
     {
         RuntimeId = runtimeId;
         DefinitionId = definitionId;
+        CityName = cityName;
         LocationRuntimeId = locationRuntimeId;
         CurrentPopulation = currentPopulation;
+        PopulationRevision = populationRevision;
+        NamedResidentCount = namedResidentCount;
+        NamedPresentCount = namedPresentCount;
         MarketCounterpartyRuntimeId = marketCounterpartyRuntimeId;
         MarketLiquidityMode = marketLiquidityMode;
         MarketBalance = marketBalance;
-        ResidentNpcRuntimeIds = SnapshotCollections.Copy(residentNpcRuntimeIds);
-        MarketStock = SnapshotCollections.Copy(marketStock);
+        ResidentNpcRuntimeIds = SnapshotCollections.CopySorted(residentNpcRuntimeIds, resident => resident);
+        MarketStock = SnapshotCollections.CopySorted(marketStock, stock => stock?.ItemDefinitionId);
     }
 }
 
@@ -209,8 +405,8 @@ public sealed class WorldStateSpatialSnapshot
         IEnumerable<WorldStateLocationSnapshot> locations = null,
         IEnumerable<WorldStateRouteSnapshot> routes = null)
     {
-        Locations = SnapshotCollections.Copy(locations);
-        Routes = SnapshotCollections.Copy(routes);
+        Locations = SnapshotCollections.CopySorted(locations, location => location?.RuntimeId);
+        Routes = SnapshotCollections.CopySorted(routes, route => route?.RuntimeId);
     }
 }
 
@@ -316,11 +512,11 @@ public sealed class WorldStateExpeditionSnapshot
         CurrentLocalPlaceRuntimeId = currentLocalPlaceRuntimeId;
         ExplorationProgress = explorationProgress;
         ExplorationProgressRequired = explorationProgressRequired;
-        MemberRuntimeIds = SnapshotCollections.Copy(memberRuntimeIds);
-        PerformerRuntimeIds = SnapshotCollections.Copy(performerRuntimeIds);
-        SupportRuntimeIds = SnapshotCollections.Copy(supportRuntimeIds);
-        VisitedLocalPlaceRuntimeIds = SnapshotCollections.Copy(visitedLocalPlaceRuntimeIds);
-        ObservedLocalConnectionRuntimeIds = SnapshotCollections.Copy(observedLocalConnectionRuntimeIds);
+        MemberRuntimeIds = SnapshotCollections.CopySorted(memberRuntimeIds, value => value);
+        PerformerRuntimeIds = SnapshotCollections.CopySorted(performerRuntimeIds, value => value);
+        SupportRuntimeIds = SnapshotCollections.CopySorted(supportRuntimeIds, value => value);
+        VisitedLocalPlaceRuntimeIds = SnapshotCollections.CopySorted(visitedLocalPlaceRuntimeIds, value => value);
+        ObservedLocalConnectionRuntimeIds = SnapshotCollections.CopySorted(observedLocalConnectionRuntimeIds, value => value);
         ObjectiveType = objectiveType;
         ObjectiveTargetItemDefinitionId = objectiveTargetItemDefinitionId;
         ObjectiveTargetNotableItemRuntimeId = objectiveTargetNotableItemRuntimeId;
@@ -362,8 +558,8 @@ public sealed class WorldStatePlaceContentSnapshot
         SiteState = siteState;
         AccessState = accessState;
         ControllerRuntimeId = controllerRuntimeId;
-        Stacks = SnapshotCollections.Copy(stacks);
-        Oppositions = SnapshotCollections.Copy(oppositions);
+        Stacks = SnapshotCollections.CopySorted(stacks, stack => stack?.ItemDefinitionId);
+        Oppositions = SnapshotCollections.CopySorted(oppositions, opposition => opposition?.RuntimeId);
     }
 }
 
@@ -411,8 +607,8 @@ public sealed class WorldStatePlaceOppositionSnapshot
         IsActive = isActive;
         IsResolved = isResolved;
         OppositionSideId = oppositionSideId;
-        NamedParticipantRuntimeIds = SnapshotCollections.Copy(namedParticipantRuntimeIds);
-        AggregateParticipantSourceIds = SnapshotCollections.Copy(aggregateParticipantSourceIds);
+        NamedParticipantRuntimeIds = SnapshotCollections.CopySorted(namedParticipantRuntimeIds, value => value);
+        AggregateParticipantSourceIds = SnapshotCollections.CopySorted(aggregateParticipantSourceIds, value => value);
     }
 }
 
@@ -492,8 +688,8 @@ public sealed class WorldStateLocalTopologySnapshot
         OwnerRuntimeId = ownerRuntimeId;
         MacroLocationRuntimeId = macroLocationRuntimeId;
         PublicationState = publicationState;
-        Places = SnapshotCollections.Copy(places);
-        Connections = SnapshotCollections.Copy(connections);
+        Places = SnapshotCollections.CopySorted(places, place => place?.RuntimeId);
+        Connections = SnapshotCollections.CopySorted(connections, connection => connection?.RuntimeId);
     }
 }
 
@@ -538,21 +734,34 @@ public sealed class WorldStateLocalConnectionSnapshot
 
 public static class WorldStateSnapshotBuilder
 {
+    public static WorldStateSnapshot Capture(WorldStateSnapshotContext context)
+    {
+        return BuildSnapshot(context);
+    }
+
     public static WorldStateSnapshot BuildSnapshot(WorldStateSnapshotContext context)
     {
         context = context ?? new WorldStateSnapshotContext();
 
+        List<NpcRuntime> knownNpcs = SnapshotCollections.Materialize(context.Npcs);
         List<WorldStateExpeditionSnapshot> expeditions = BuildExpeditionSnapshots(context.ExpeditionStore);
+        WorldStateCalendarSnapshot calendarDate = null;
+        if (context.Calendar != null && context.SimulationTime != null)
+        {
+            calendarDate = new WorldStateCalendarSnapshot(context.Calendar.GetDate(context.SimulationTime.AbsoluteDay));
+        }
+
         return new WorldStateSnapshot(
             context.SimulationTime != null ? context.SimulationTime.AbsoluteDay : 0L,
-            BuildNpcSnapshots(context.Npcs, expeditions),
-            BuildCitySnapshots(context.Cities),
+            BuildNpcSnapshots(knownNpcs, expeditions),
+            BuildCitySnapshots(context.Cities, knownNpcs),
             BuildSpatialSnapshot(context.SpatialNetwork),
             BuildSiteSnapshots(context.ExplorableSiteStore),
             expeditions,
             BuildPlaceContentSnapshots(context.PlaceContentStore),
             BuildNotableItemSnapshots(context.PlaceContentStore),
-            BuildLocalTopologySnapshots(context.LocalTopologyStore));
+            BuildLocalTopologySnapshots(context.LocalTopologyStore),
+            calendarDate);
     }
 
     private static List<WorldStateNpcSnapshot> BuildNpcSnapshots(
@@ -569,6 +778,7 @@ public static class WorldStateSnapshotBuilder
             result.Add(new WorldStateNpcSnapshot(
                 npc.RuntimeId,
                 npc.DefinitionId,
+                npc.NpcName,
                 npc.ResidenceSettlementRuntimeId,
                 npc.LifeState,
                 npc.InjurySeverity,
@@ -582,10 +792,88 @@ public static class WorldStateSnapshotBuilder
                 npc.ActiveTravelPartyId,
                 npc.MoneyAccount?.Balance ?? 0f,
                 FindActiveExpeditionId(npc.RuntimeId, expeditions),
-                BuildInventorySnapshots(npc)));
+                BuildInventorySnapshots(npc),
+                BuildStatusSnapshots(npc),
+                BuildActionSnapshot(npc),
+                BuildMerchantTradePlanSnapshot(npc)));
         }
 
         return result;
+    }
+
+    private static List<string> BuildStatusSnapshots(NpcRuntime npc)
+    {
+        List<string> result = new List<string>();
+        if (npc?.CurrentStatus != null)
+        {
+            foreach (NpcStatusData status in npc.CurrentStatus)
+            {
+                if (status != null && string.IsNullOrWhiteSpace(status.statusName) == false)
+                {
+                    result.Add(status.statusName);
+                }
+            }
+        }
+
+        result.Sort(StringComparer.Ordinal);
+        return result;
+    }
+
+    private static WorldStateActionSnapshot BuildActionSnapshot(NpcRuntime npc)
+    {
+        if (npc == null)
+        {
+            return null;
+        }
+
+        NpcActionRuntime actionRuntime = npc.CurrentActionRuntime;
+        NpcActionData action = actionRuntime != null ? actionRuntime.Action : npc.CurrentAction;
+        if (action == null)
+        {
+            return null;
+        }
+
+        return new WorldStateActionSnapshot(
+            action.DefinitionId,
+            action.actionName,
+            action.actionCategory,
+            action.actionType,
+            actionRuntime?.TargetNpc?.RuntimeId,
+            actionRuntime?.TargetCity?.RuntimeId,
+            actionRuntime?.TargetItem?.DefinitionId,
+            actionRuntime?.Amount ?? 0,
+            actionRuntime?.ExpectedUnitPrice ?? 0f,
+            actionRuntime?.SuccessChanceMultiplier ?? 1f,
+            actionRuntime?.TravelReason ?? NpcTravelReason.None,
+            actionRuntime?.ExpectedNetValue ?? 0f,
+            actionRuntime?.OriginDecisionId);
+    }
+
+    private static WorldStateMerchantTradePlanSnapshot BuildMerchantTradePlanSnapshot(NpcRuntime npc)
+    {
+        if (npc == null)
+        {
+            return null;
+        }
+
+        MerchantTradePlanRuntime plan = npc.MerchantTradePlan;
+        if (plan == null || plan.HasData == false)
+        {
+            return null;
+        }
+
+        return new WorldStateMerchantTradePlanSnapshot(
+            plan.HasData,
+            plan.IsActive,
+            plan.Item?.DefinitionId,
+            plan.OriginCity?.RuntimeId,
+            plan.TargetCity?.RuntimeId,
+            plan.PlannedAmount,
+            plan.RemainingAmount,
+            plan.PurchasePricePerItem,
+            plan.WaitDaysAtDestination,
+            plan.PendingTravelDays,
+            plan.OriginDecisionId);
     }
 
     private static string FindActiveExpeditionId(
@@ -659,7 +947,9 @@ public static class WorldStateSnapshotBuilder
         return result;
     }
 
-    private static List<WorldStateCitySnapshot> BuildCitySnapshots(IEnumerable<CityRuntime> source)
+    private static List<WorldStateCitySnapshot> BuildCitySnapshots(
+        IEnumerable<CityRuntime> source,
+        IEnumerable<NpcRuntime> knownNpcs)
     {
         List<CityRuntime> cities = SnapshotCollections.Materialize(source);
         cities.RemoveAll(city => city == null || string.IsNullOrWhiteSpace(city.RuntimeId));
@@ -680,6 +970,7 @@ public static class WorldStateSnapshotBuilder
             }
 
             residents.Sort(StringComparer.Ordinal);
+            SettlementPopulationPresenceSummary presence = SettlementPopulationPresenceQuery.BuildSummary(city, knownNpcs);
             result.Add(new WorldStateCitySnapshot(
                 city.RuntimeId,
                 city.DefinitionId,
@@ -689,7 +980,11 @@ public static class WorldStateSnapshotBuilder
                 counterparty != null ? counterparty.LiquidityMode : MarketLiquidityMode.Open,
                 counterparty?.MoneyAccount?.Balance ?? 0f,
                 residents,
-                BuildMarketStockSnapshots(market)));
+                BuildMarketStockSnapshots(market),
+                city.CityName,
+                city.Population.Revision,
+                presence?.NamedResidentCount ?? 0,
+                presence?.NamedPresentCount ?? 0));
         }
 
         return result;
@@ -938,7 +1233,9 @@ public static class WorldStateSnapshotBuilder
             ? new List<LocalTopologyRuntime>()
             : new List<LocalTopologyRuntime>(store.Topologies);
         topologies.RemoveAll(topology => topology == null || topology.Owner == null);
-        topologies.Sort((left, right) => StringComparer.Ordinal.Compare(left.Owner.OwnerRuntimeId, right.Owner.OwnerRuntimeId));
+        topologies.Sort((left, right) => StringComparer.Ordinal.Compare(
+            WorldStateSnapshotValue.OwnerKey(left.Owner.OwnerKind, left.Owner.OwnerRuntimeId),
+            WorldStateSnapshotValue.OwnerKey(right.Owner.OwnerKind, right.Owner.OwnerRuntimeId)));
 
         List<WorldStateLocalTopologySnapshot> result = new List<WorldStateLocalTopologySnapshot>();
         foreach (LocalTopologyRuntime topology in topologies)
@@ -1029,6 +1326,17 @@ internal static class SnapshotCollections
     public static IReadOnlyList<T> Copy<T>(IEnumerable<T> source)
     {
         return Materialize(source).AsReadOnly();
+    }
+
+    public static IReadOnlyList<T> CopySorted<T>(IEnumerable<T> source, Func<T, string> keySelector)
+    {
+        List<T> values = Materialize(source);
+        if (keySelector != null)
+        {
+            values.Sort((left, right) => StringComparer.Ordinal.Compare(keySelector(left) ?? string.Empty, keySelector(right) ?? string.Empty));
+        }
+
+        return values.AsReadOnly();
     }
 }
 

@@ -59,11 +59,21 @@ public sealed class WorldStateDiff
             WorldStateCanonicalWriter.Int64Value(before.AbsoluteDay),
             WorldStateCanonicalWriter.Int64Value(after.AbsoluteDay),
             differences);
+        CompareValue("Metadata", "world", "SettlementCount",
+            WorldStateCanonicalWriter.IntValue(before.SettlementCount),
+            WorldStateCanonicalWriter.IntValue(after.SettlementCount),
+            differences);
+        CompareValue("Metadata", "world", "KnownNpcCount",
+            WorldStateCanonicalWriter.IntValue(before.KnownNpcCount),
+            WorldStateCanonicalWriter.IntValue(after.KnownNpcCount),
+            differences);
+        CompareCalendar(before.Metadata.CalendarDate, after.Metadata.CalendarDate, differences);
 
         CompareEntities("NPC", before.Npcs, after.Npcs, npc => npc.RuntimeId,
             (identity, left, right) =>
             {
                 CompareValue("NPC", identity, "DefinitionId", WorldStateCanonicalWriter.StringValue(left.DefinitionId), WorldStateCanonicalWriter.StringValue(right.DefinitionId), differences);
+                CompareValue("NPC", identity, "Name", WorldStateCanonicalWriter.StringValue(left.Name), WorldStateCanonicalWriter.StringValue(right.Name), differences);
                 CompareValue("NPC", identity, "ResidenceSettlementRuntimeId", WorldStateCanonicalWriter.StringValue(left.ResidenceSettlementRuntimeId), WorldStateCanonicalWriter.StringValue(right.ResidenceSettlementRuntimeId), differences);
                 CompareValue("NPC", identity, "LifeState", WorldStateCanonicalWriter.EnumValue(left.LifeState), WorldStateCanonicalWriter.EnumValue(right.LifeState), differences);
                 CompareValue("NPC", identity, "InjurySeverity", WorldStateCanonicalWriter.EnumValue(left.InjurySeverity), WorldStateCanonicalWriter.EnumValue(right.InjurySeverity), differences);
@@ -77,6 +87,9 @@ public sealed class WorldStateDiff
                 CompareValue("NPC", identity, "ActiveTravelPartyId", WorldStateCanonicalWriter.StringValue(left.ActiveTravelPartyId), WorldStateCanonicalWriter.StringValue(right.ActiveTravelPartyId), differences);
                 CompareValue("NPC", identity, "MoneyBalance", WorldStateCanonicalWriter.FloatValue(left.MoneyBalance), WorldStateCanonicalWriter.FloatValue(right.MoneyBalance), differences);
                 CompareValue("NPC", identity, "ActiveExpeditionId", WorldStateCanonicalWriter.StringValue(left.ActiveExpeditionId), WorldStateCanonicalWriter.StringValue(right.ActiveExpeditionId), differences);
+                CompareValue("NPC", identity, "StatusNames", WorldStateCanonicalWriter.StringListValue(left.StatusNames), WorldStateCanonicalWriter.StringListValue(right.StatusNames), differences);
+                CompareAction(identity, left.CurrentAction, right.CurrentAction, differences);
+                CompareMerchantTradePlan(identity, left.MerchantTradePlan, right.MerchantTradePlan, differences);
                 CompareInventory(identity, left.Inventory, right.Inventory, differences);
             }, differences);
 
@@ -84,8 +97,12 @@ public sealed class WorldStateDiff
             (identity, left, right) =>
             {
                 CompareValue("City", identity, "DefinitionId", WorldStateCanonicalWriter.StringValue(left.DefinitionId), WorldStateCanonicalWriter.StringValue(right.DefinitionId), differences);
+                CompareValue("City", identity, "CityName", WorldStateCanonicalWriter.StringValue(left.CityName), WorldStateCanonicalWriter.StringValue(right.CityName), differences);
                 CompareValue("City", identity, "LocationRuntimeId", WorldStateCanonicalWriter.StringValue(left.LocationRuntimeId), WorldStateCanonicalWriter.StringValue(right.LocationRuntimeId), differences);
                 CompareValue("City", identity, "CurrentPopulation", WorldStateCanonicalWriter.IntValue(left.CurrentPopulation), WorldStateCanonicalWriter.IntValue(right.CurrentPopulation), differences);
+                CompareValue("City", identity, "PopulationRevision", WorldStateCanonicalWriter.Int64Value(left.PopulationRevision), WorldStateCanonicalWriter.Int64Value(right.PopulationRevision), differences);
+                CompareValue("City", identity, "NamedResidentCount", WorldStateCanonicalWriter.IntValue(left.NamedResidentCount), WorldStateCanonicalWriter.IntValue(right.NamedResidentCount), differences);
+                CompareValue("City", identity, "NamedPresentCount", WorldStateCanonicalWriter.IntValue(left.NamedPresentCount), WorldStateCanonicalWriter.IntValue(right.NamedPresentCount), differences);
                 CompareValue("City", identity, "MarketCounterpartyRuntimeId", WorldStateCanonicalWriter.StringValue(left.MarketCounterpartyRuntimeId), WorldStateCanonicalWriter.StringValue(right.MarketCounterpartyRuntimeId), differences);
                 CompareValue("City", identity, "MarketLiquidityMode", WorldStateCanonicalWriter.EnumValue(left.MarketLiquidityMode), WorldStateCanonicalWriter.EnumValue(right.MarketLiquidityMode), differences);
                 CompareValue("City", identity, "MarketBalance", WorldStateCanonicalWriter.FloatValue(left.MarketBalance), WorldStateCanonicalWriter.FloatValue(right.MarketBalance), differences);
@@ -217,6 +234,101 @@ public sealed class WorldStateDiff
         return new WorldStateDiff(differences);
     }
 
+    private static void CompareCalendar(
+        WorldStateCalendarSnapshot before,
+        WorldStateCalendarSnapshot after,
+        List<WorldStateDifference> differences)
+    {
+        if (before == null || after == null)
+        {
+            ComparePresence("Calendar", "world", before, after, differences);
+            return;
+        }
+
+        CompareValue("Calendar", "world", "Year", WorldStateCanonicalWriter.Int64Value(before.Year), WorldStateCanonicalWriter.Int64Value(after.Year), differences);
+        CompareValue("Calendar", "world", "Month", WorldStateCanonicalWriter.IntValue(before.Month), WorldStateCanonicalWriter.IntValue(after.Month), differences);
+        CompareValue("Calendar", "world", "WeekOfMonth", WorldStateCanonicalWriter.IntValue(before.WeekOfMonth), WorldStateCanonicalWriter.IntValue(after.WeekOfMonth), differences);
+        CompareValue("Calendar", "world", "DayOfMonth", WorldStateCanonicalWriter.IntValue(before.DayOfMonth), WorldStateCanonicalWriter.IntValue(after.DayOfMonth), differences);
+        CompareValue("Calendar", "world", "DayOfWeek", WorldStateCanonicalWriter.IntValue(before.DayOfWeek), WorldStateCanonicalWriter.IntValue(after.DayOfWeek), differences);
+        CompareValue("Calendar", "world", "DayOfYear", WorldStateCanonicalWriter.Int64Value(before.DayOfYear), WorldStateCanonicalWriter.Int64Value(after.DayOfYear), differences);
+        CompareValue("Calendar", "world", "DaysPerMonth", WorldStateCanonicalWriter.Int64Value(before.DaysPerMonth), WorldStateCanonicalWriter.Int64Value(after.DaysPerMonth), differences);
+        CompareValue("Calendar", "world", "DaysPerYear", WorldStateCanonicalWriter.Int64Value(before.DaysPerYear), WorldStateCanonicalWriter.Int64Value(after.DaysPerYear), differences);
+    }
+
+    private static void CompareAction(
+        string npcIdentity,
+        WorldStateActionSnapshot before,
+        WorldStateActionSnapshot after,
+        List<WorldStateDifference> differences)
+    {
+        const string section = "NpcAction";
+        string identity = npcIdentity + "/action";
+        if (before == null || after == null)
+        {
+            ComparePresence(section, identity, before, after, differences);
+            if (before == null && after != null)
+            {
+                CompareValue(section, identity, "DefinitionId", null, WorldStateCanonicalWriter.StringValue(after.DefinitionId), differences);
+            }
+            else if (before != null && after == null)
+            {
+                CompareValue(section, identity, "DefinitionId", WorldStateCanonicalWriter.StringValue(before.DefinitionId), null, differences);
+            }
+
+            return;
+        }
+
+        CompareValue(section, identity, "DefinitionId", WorldStateCanonicalWriter.StringValue(before.DefinitionId), WorldStateCanonicalWriter.StringValue(after.DefinitionId), differences);
+        CompareValue(section, identity, "ActionName", WorldStateCanonicalWriter.StringValue(before.ActionName), WorldStateCanonicalWriter.StringValue(after.ActionName), differences);
+        CompareValue(section, identity, "Category", WorldStateCanonicalWriter.EnumValue(before.Category), WorldStateCanonicalWriter.EnumValue(after.Category), differences);
+        CompareValue(section, identity, "Type", WorldStateCanonicalWriter.EnumValue(before.Type), WorldStateCanonicalWriter.EnumValue(after.Type), differences);
+        CompareValue(section, identity, "TargetNpcRuntimeId", WorldStateCanonicalWriter.StringValue(before.TargetNpcRuntimeId), WorldStateCanonicalWriter.StringValue(after.TargetNpcRuntimeId), differences);
+        CompareValue(section, identity, "TargetCityRuntimeId", WorldStateCanonicalWriter.StringValue(before.TargetCityRuntimeId), WorldStateCanonicalWriter.StringValue(after.TargetCityRuntimeId), differences);
+        CompareValue(section, identity, "TargetItemDefinitionId", WorldStateCanonicalWriter.StringValue(before.TargetItemDefinitionId), WorldStateCanonicalWriter.StringValue(after.TargetItemDefinitionId), differences);
+        CompareValue(section, identity, "Amount", WorldStateCanonicalWriter.IntValue(before.Amount), WorldStateCanonicalWriter.IntValue(after.Amount), differences);
+        CompareValue(section, identity, "ExpectedUnitPrice", WorldStateCanonicalWriter.FloatValue(before.ExpectedUnitPrice), WorldStateCanonicalWriter.FloatValue(after.ExpectedUnitPrice), differences);
+        CompareValue(section, identity, "SuccessChanceMultiplier", WorldStateCanonicalWriter.FloatValue(before.SuccessChanceMultiplier), WorldStateCanonicalWriter.FloatValue(after.SuccessChanceMultiplier), differences);
+        CompareValue(section, identity, "TravelReason", WorldStateCanonicalWriter.EnumValue(before.TravelReason), WorldStateCanonicalWriter.EnumValue(after.TravelReason), differences);
+        CompareValue(section, identity, "ExpectedNetValue", WorldStateCanonicalWriter.FloatValue(before.ExpectedNetValue), WorldStateCanonicalWriter.FloatValue(after.ExpectedNetValue), differences);
+        CompareValue(section, identity, "OriginDecisionId", WorldStateCanonicalWriter.StringValue(before.OriginDecisionId), WorldStateCanonicalWriter.StringValue(after.OriginDecisionId), differences);
+    }
+
+    private static void CompareMerchantTradePlan(
+        string npcIdentity,
+        WorldStateMerchantTradePlanSnapshot before,
+        WorldStateMerchantTradePlanSnapshot after,
+        List<WorldStateDifference> differences)
+    {
+        const string section = "MerchantTradePlan";
+        string identity = npcIdentity + "/trade-plan";
+        if (before == null || after == null)
+        {
+            ComparePresence(section, identity, before, after, differences);
+            if (before == null && after != null)
+            {
+                CompareValue(section, identity, "ItemDefinitionId", null, WorldStateCanonicalWriter.StringValue(after.ItemDefinitionId), differences);
+            }
+            else if (before != null && after == null)
+            {
+                CompareValue(section, identity, "ItemDefinitionId", WorldStateCanonicalWriter.StringValue(before.ItemDefinitionId), null, differences);
+            }
+
+            return;
+        }
+
+        CompareValue(section, identity, "HasData", WorldStateCanonicalWriter.BoolValue(before.HasData), WorldStateCanonicalWriter.BoolValue(after.HasData), differences);
+        CompareValue(section, identity, "IsActive", WorldStateCanonicalWriter.BoolValue(before.IsActive), WorldStateCanonicalWriter.BoolValue(after.IsActive), differences);
+        CompareValue(section, identity, "ItemDefinitionId", WorldStateCanonicalWriter.StringValue(before.ItemDefinitionId), WorldStateCanonicalWriter.StringValue(after.ItemDefinitionId), differences);
+        CompareValue(section, identity, "OriginCityRuntimeId", WorldStateCanonicalWriter.StringValue(before.OriginCityRuntimeId), WorldStateCanonicalWriter.StringValue(after.OriginCityRuntimeId), differences);
+        CompareValue(section, identity, "TargetCityRuntimeId", WorldStateCanonicalWriter.StringValue(before.TargetCityRuntimeId), WorldStateCanonicalWriter.StringValue(after.TargetCityRuntimeId), differences);
+        CompareValue(section, identity, "PlannedAmount", WorldStateCanonicalWriter.IntValue(before.PlannedAmount), WorldStateCanonicalWriter.IntValue(after.PlannedAmount), differences);
+        CompareValue(section, identity, "RemainingAmount", WorldStateCanonicalWriter.IntValue(before.RemainingAmount), WorldStateCanonicalWriter.IntValue(after.RemainingAmount), differences);
+        CompareValue(section, identity, "PurchasePricePerItem", WorldStateCanonicalWriter.FloatValue(before.PurchasePricePerItem), WorldStateCanonicalWriter.FloatValue(after.PurchasePricePerItem), differences);
+        CompareValue(section, identity, "WaitDaysAtDestination", WorldStateCanonicalWriter.IntValue(before.WaitDaysAtDestination), WorldStateCanonicalWriter.IntValue(after.WaitDaysAtDestination), differences);
+        CompareValue(section, identity, "PendingTravelDays", WorldStateCanonicalWriter.IntValue(before.PendingTravelDays), WorldStateCanonicalWriter.IntValue(after.PendingTravelDays), differences);
+        CompareValue(section, identity, "OriginDecisionId", WorldStateCanonicalWriter.StringValue(before.OriginDecisionId), WorldStateCanonicalWriter.StringValue(after.OriginDecisionId), differences);
+    }
+
     private static void CompareInventory(
         string npcIdentity,
         IReadOnlyList<WorldStateInventoryStackSnapshot> before,
@@ -346,22 +458,25 @@ public sealed class WorldStateDiff
     {
         switch (section)
         {
-            case "Metadata": return 0;
-            case "NPC": return 1;
-            case "NpcInventory": return 2;
-            case "City": return 3;
-            case "CityStock": return 4;
-            case "Location": return 5;
-            case "Route": return 6;
-            case "Site": return 7;
-            case "Expedition": return 8;
-            case "PlaceContent": return 9;
-            case "PlaceStack": return 10;
-            case "PlaceOpposition": return 11;
-            case "NotableItem": return 12;
-            case "LocalTopology": return 13;
-            case "LocalPlace": return 14;
-            case "LocalConnection": return 15;
+            case "NPC": return 0;
+            case "NpcAction": return 1;
+            case "MerchantTradePlan": return 2;
+            case "NpcInventory": return 3;
+            case "Metadata": return 4;
+            case "Calendar": return 5;
+            case "City": return 6;
+            case "CityStock": return 7;
+            case "Location": return 8;
+            case "Route": return 9;
+            case "Site": return 10;
+            case "Expedition": return 11;
+            case "PlaceContent": return 12;
+            case "PlaceStack": return 13;
+            case "PlaceOpposition": return 14;
+            case "NotableItem": return 15;
+            case "LocalTopology": return 16;
+            case "LocalPlace": return 17;
+            case "LocalConnection": return 18;
             default: return 100;
         }
     }
