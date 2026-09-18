@@ -9,8 +9,7 @@ public sealed class SimulationRuntime
     private readonly List<NpcRuntime> npcRuntimes;
     private readonly IReadOnlyList<NpcRuntime> npcRuntimeSnapshot;
     private readonly Dictionary<string, NpcRuntime> npcRegistryById;
-    private readonly bool economyEnabled;
-    private readonly bool guardCrimeEnabled;
+    private readonly EffectiveSimulationConfiguration configuration;
     private readonly List<NpcActionData> configuredActions;
     private readonly ScheduledDirectiveSystem scheduledDirectiveSystem;
     private readonly JusticeSystem justiceSystem;
@@ -31,6 +30,7 @@ public sealed class SimulationRuntime
     public SimulationTime SimulationTime => simulationTime;
     public long CurrentDay => simulationTime.AbsoluteDay;
     public IReadOnlyList<CityRuntime> Cities => cities;
+    public EffectiveSimulationConfiguration Configuration => configuration;
     /// <summary>
     /// Read-only view of every named NPC registered with this world. Registration is
     /// explicit; death and emigration do not remove an NPC from this world roster.
@@ -42,7 +42,7 @@ public sealed class SimulationRuntime
         SimulationTime simulationTime,
         IEnumerable<CityRuntime> cities,
         IEnumerable<NpcRuntime> npcRuntimes,
-        bool economyEnabled = true,
+        bool? economyEnabled = null,
         IReadOnlyList<NpcActionData> configuredActions = null,
         ScheduledDirectiveSystem scheduledDirectiveSystem = null,
         JusticeSystem justiceSystem = null,
@@ -54,20 +54,42 @@ public sealed class SimulationRuntime
         CommercialKnowledgeSharingSystem commercialKnowledgeSharingSystem = null,
         NpcDecisionRecorder decisionRecorder = null,
         SimulationLogger logger = null,
-        bool guardCrimeEnabled = false,
+        bool? guardCrimeEnabled = null,
         ExplorableSiteStore explorableSiteStore = null,
         ExplorableSiteKnowledgeSystem explorableSiteKnowledgeSystem = null,
         ExpeditionSystem expeditionSystem = null,
         PlaceContentStore placeContentStore = null,
-        AdventureExpeditionAutonomySystem adventureExpeditionAutonomySystem = null)
+        AdventureExpeditionAutonomySystem adventureExpeditionAutonomySystem = null,
+        EffectiveSimulationConfiguration configuration = null)
     {
         this.simulationTime = simulationTime ?? throw new ArgumentNullException(nameof(simulationTime));
+
+        if (configuration != null && (economyEnabled.HasValue || guardCrimeEnabled.HasValue))
+        {
+            throw new ArgumentException(
+                "Provide EffectiveSimulationConfiguration or legacy feature flags, not both.",
+                nameof(configuration));
+        }
+
+        EffectiveSimulationConfiguration resolvedConfiguration = configuration
+            ?? SimulationConfigurationDefaults.CreateForRuntime(
+                economyEnabled ?? true,
+                guardCrimeEnabled ?? false);
+        SimulationConfigurationValidationResult configurationValidation =
+            SimulationConfigurationValidator.Validate(resolvedConfiguration);
+        if (configurationValidation.IsValid == false)
+        {
+            throw new ArgumentException(
+                "The SimulationRuntime configuration is invalid: "
+                + string.Join("; ", configurationValidation.Errors),
+                nameof(configuration));
+        }
+
+        this.configuration = resolvedConfiguration;
         this.cities = cities != null ? new List<CityRuntime>(cities) : new List<CityRuntime>();
         this.npcRuntimes = new List<NpcRuntime>();
         this.npcRuntimeSnapshot = this.npcRuntimes.AsReadOnly();
         this.npcRegistryById = new Dictionary<string, NpcRuntime>(StringComparer.Ordinal);
-        this.economyEnabled = economyEnabled;
-        this.guardCrimeEnabled = guardCrimeEnabled;
         this.configuredActions = configuredActions != null
             ? new List<NpcActionData>(configuredActions)
             : null;
@@ -250,7 +272,7 @@ public sealed class SimulationRuntime
         BeginSimulationDay();
         scheduledDirectiveSystem?.PrepareDay(CurrentDay);
 
-        if (economyEnabled == true)
+        if (configuration.Economy.Enabled == true)
         {
             SimulateEconomyDay();
         }
@@ -365,7 +387,7 @@ public sealed class SimulationRuntime
             crimeSystem.AdvanceHiddenStatuses(npcRuntimes);
         }
 
-        if (guardCrimeEnabled == true && justiceSystem != null)
+        if (configuration.GuardCrime.Enabled == true && justiceSystem != null)
         {
             justiceSystem.AdvanceSentences(npcRuntimes);
         }

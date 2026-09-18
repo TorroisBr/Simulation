@@ -1,0 +1,27 @@
+public static class SimulationConfigurationDefaults
+{
+    public static EffectiveSimulationConfiguration Create()
+    {
+        return new EffectiveSimulationConfiguration(
+            new EffectivePopulationConfiguration(
+                PopulationRepresentationMode.Aggregate,
+                NpcDecisionSimulationScope.RelevantOnly),
+            new EffectiveEconomyConfiguration(true),
+            new EffectiveTravelConfiguration(0f),
+            new EffectiveCrimeConfiguration(false, false),
+            new EffectiveGuardCrimeConfiguration(false));
+    }
+
+    public static EffectiveSimulationConfiguration CreateForRuntime(
+        bool economyEnabled,
+        bool guardCrimeEnabled)
+    {
+        EffectiveSimulationConfiguration defaults = Create();
+        return new EffectiveSimulationConfiguration(
+            defaults.Population,
+            new EffectiveEconomyConfiguration(economyEnabled),
+            defaults.Travel,
+            defaults.Crime,
+            new EffectiveGuardCrimeConfiguration(guardCrimeEnabled));
+    }
+}
