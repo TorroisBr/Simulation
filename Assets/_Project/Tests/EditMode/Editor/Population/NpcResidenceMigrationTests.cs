@@ -496,7 +496,15 @@ public sealed class NpcResidenceMigrationTests
         CityRuntime origin = CreateCity("migration-dead-origin", 10);
         CityRuntime destination = CreateCity("migration-dead-destination", 20);
         NpcRuntime npc = CreateResident(origin, "migration-dead");
-        Assert.That(npc.TryApplyDeath(), Is.True);
+        Assert.That(
+            NpcPopulationLifecycleSystem.TryApplyResidentDeath(
+                npc,
+                origin,
+                SimulationTestFactory.CreateAuthoritativeNpcRoster(new[] { npc }),
+                out _,
+                out NpcPopulationLifecycleFailure deathFailure),
+            Is.True,
+            deathFailure.ToString());
 
         bool proposed = NpcResidenceMigrationSystem.TryPropose(
             npc,

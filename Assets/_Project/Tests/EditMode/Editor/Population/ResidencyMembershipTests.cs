@@ -162,7 +162,15 @@ public sealed class ResidencyMembershipTests
         CityRuntime city = CreateCity("residency-dead-resident", 10);
         NpcRuntime npc = CreateNpc("dead-resident");
         BindExistingResident(city, npc, new[] { npc });
-        Assert.That(npc.TryApplyDeath(), Is.True);
+        Assert.That(
+            NpcPopulationLifecycleSystem.TryApplyResidentDeath(
+                npc,
+                city,
+                SimulationTestFactory.CreateAuthoritativeNpcRoster(new[] { npc }),
+                out _,
+                out NpcPopulationLifecycleFailure failure),
+            Is.True,
+            failure.ToString());
 
         Assert.That(Query(city, new[] { npc }).NamedResidentCount, Is.EqualTo(0));
     }

@@ -7,6 +7,8 @@ public sealed class SimulationRuntime
     private readonly SimulationTime simulationTime;
     private readonly List<CityRuntime> cities;
     private readonly List<NpcRuntime> npcRuntimes;
+    private readonly IReadOnlyList<NpcRuntime> npcRuntimeSnapshot;
+    private readonly Dictionary<string, NpcRuntime> npcRegistryById;
     private readonly bool economyEnabled;
     private readonly bool guardCrimeEnabled;
     private readonly List<NpcActionData> configuredActions;
@@ -29,7 +31,11 @@ public sealed class SimulationRuntime
     public SimulationTime SimulationTime => simulationTime;
     public long CurrentDay => simulationTime.AbsoluteDay;
     public IReadOnlyList<CityRuntime> Cities => cities;
-    public IReadOnlyList<NpcRuntime> NpcRuntimes => npcRuntimes;
+    /// <summary>
+    /// Read-only view of every named NPC registered with this world. Registration is
+    /// explicit; death and emigration do not remove an NPC from this world roster.
+    /// </summary>
+    public IReadOnlyList<NpcRuntime> NpcRuntimes => npcRuntimeSnapshot;
     public PlaceContentStore PlaceContentStore => placeContentStore;
 
     public SimulationRuntime(
@@ -57,7 +63,9 @@ public sealed class SimulationRuntime
     {
         this.simulationTime = simulationTime ?? throw new ArgumentNullException(nameof(simulationTime));
         this.cities = cities != null ? new List<CityRuntime>(cities) : new List<CityRuntime>();
-        this.npcRuntimes = npcRuntimes != null ? new List<NpcRuntime>(npcRuntimes) : new List<NpcRuntime>();
+        this.npcRuntimes = new List<NpcRuntime>();
+        this.npcRuntimeSnapshot = this.npcRuntimes.AsReadOnly();
+        this.npcRegistryById = new Dictionary<string, NpcRuntime>(StringComparer.Ordinal);
         this.economyEnabled = economyEnabled;
         this.guardCrimeEnabled = guardCrimeEnabled;
         this.configuredActions = configuredActions != null
@@ -78,6 +86,133 @@ public sealed class SimulationRuntime
         this.decisionRecorder = decisionRecorder;
         this.adventureExpeditionAutonomySystem = adventureExpeditionAutonomySystem;
         this.logger = logger;
+
+        if (npcRuntimes != null)
+        {
+            foreach (NpcRuntime npcRuntime in npcRuntimes)
+            {
+                if (TryRegisterNpc(npcRuntime, out WorldNpcRegistryFailure failure) == false)
+                {
+                    throw new ArgumentException(
+                        "The SimulationRuntime NPC roster is invalid: " + failure + ".",
+                        nameof(npcRuntimes));
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Registers one named NPC in the world-owned roster. The operation rejects null,
+    /// unidentified, and duplicate RuntimeIds and never changes population aggregates.
+    /// </summary>
+    public bool TryRegisterNpc(NpcRuntime npcRuntime, out WorldNpcRegistryFailure failure)
+    {
+        failure = WorldNpcRegistryFailure.None;
+
+        if (npcRuntime == null)
+        {
+            failure = WorldNpcRegistryFailure.InvalidNpc;
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(npcRuntime.RuntimeId) == true)
+        {
+            failure = WorldNpcRegistryFailure.InvalidRuntimeId;
+            return false;
+        }
+
+        if (npcRegistryById.ContainsKey(npcRuntime.RuntimeId) == true)
+        {
+            failure = WorldNpcRegistryFailure.DuplicateRuntimeId;
+            return false;
+        }
+
+        npcRegistryById.Add(npcRuntime.RuntimeId, npcRuntime);
+        npcRuntimes.Add(npcRuntime);
+        return true;
+    }
+
+    /// <summary>
+    /// Explicitly unregisters an NPC from the world. A resident must first emigrate
+    /// through the population lifecycle so the aggregate cannot retain a named member
+    /// that disappeared from the authoritative roster.
+    /// </summary>
+    public bool TryUnregisterNpc(string runtimeId, out WorldNpcRegistryFailure failure)
+    {
+        failure = WorldNpcRegistryFailure.None;
+
+        if (string.IsNullOrWhiteSpace(runtimeId) == true)
+        {
+            failure = WorldNpcRegistryFailure.InvalidRuntimeId;
+            return false;
+        }
+
+        if (npcRegistryById.TryGetValue(runtimeId, out NpcRuntime npcRuntime) == false)
+        {
+            failure = WorldNpcRegistryFailure.NpcNotRegistered;
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(npcRuntime.ResidenceSettlementRuntimeId) == false)
+        {
+            failure = WorldNpcRegistryFailure.NpcHasResidence;
+            return false;
+        }
+
+        npcRegistryById.Remove(runtimeId);
+        npcRuntimes.Remove(npcRuntime);
+        return true;
+    }
+
+    /// <summary>
+    /// Creates a fresh immutable authoritative roster from the world-owned registry.
+    /// Callers never provide the source collection.
+    /// </summary>
+    public AuthoritativeNpcRoster GetAuthoritativeNpcRoster()
+    {
+        return new AuthoritativeNpcRoster(npcRuntimeSnapshot);
+    }
+
+    public bool TryApplyImmigration(
+        NpcRuntime npcRuntime,
+        CityRuntime settlement,
+        out NpcPopulationLifecycleTransition transition,
+        out NpcPopulationLifecycleFailure failure)
+    {
+        return NpcPopulationLifecycleSystem.TryApplyImmigration(
+            npcRuntime,
+            settlement,
+            GetAuthoritativeNpcRoster(),
+            out transition,
+            out failure);
+    }
+
+    public bool TryApplyEmigration(
+        NpcRuntime npcRuntime,
+        CityRuntime settlement,
+        out NpcPopulationLifecycleTransition transition,
+        out NpcPopulationLifecycleFailure failure)
+    {
+        return NpcPopulationLifecycleSystem.TryApplyEmigration(
+            npcRuntime,
+            settlement,
+            GetAuthoritativeNpcRoster(),
+            out transition,
+            out failure);
+    }
+
+    public bool TryApplyResidentDeath(
+        NpcRuntime npcRuntime,
+        CityRuntime settlement,
+        out NpcPopulationLifecycleTransition transition,
+        out NpcPopulationLifecycleFailure failure)
+    {
+        return NpcPopulationLifecycleSystem.TryApplyResidentDeath(
+            npcRuntime,
+            settlement,
+            GetAuthoritativeNpcRoster(),
+            out transition,
+            out failure);
     }
 
     public bool TryStartTravelParty(ActionExecutionContext context)

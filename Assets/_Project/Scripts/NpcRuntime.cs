@@ -140,7 +140,7 @@ public class NpcRuntime : ICapabilityConditionSource
 
     public bool TryApplyDeath()
     {
-        if (IsDead == true)
+        if (IsDead == true || string.IsNullOrWhiteSpace(ResidenceSettlementRuntimeId) == false)
         {
             return false;
         }
@@ -151,13 +151,27 @@ public class NpcRuntime : ICapabilityConditionSource
         return true;
     }
 
+    /// <summary>
+    /// Commits a resident death only after NpcPopulationLifecycleSystem has validated
+    /// and applied the matching aggregate transition. The residence is cleared so a
+    /// dead NPC remains world-known without remaining a living resident member.
+    /// </summary>
+    internal void ApplyResidentDeathAfterPopulationValidation()
+    {
+        lifeState = NpcLifeState.Dead;
+        residenceSettlementRuntimeId = null;
+        currentAction = null;
+        currentActionRuntime = null;
+    }
+
     public bool CanApplyConflictConsequence(
         NpcInjurySeverity severity,
         bool shouldDie)
     {
         return IsAlive == true
             && NpcInjuryRules.IsValid(severity) == true
-            && (shouldDie == false || lifeState == NpcLifeState.Alive);
+            && (shouldDie == false || (lifeState == NpcLifeState.Alive
+                && string.IsNullOrWhiteSpace(ResidenceSettlementRuntimeId) == true));
     }
 
     public bool ApplyConflictConsequence(

@@ -12,7 +12,10 @@ public sealed class AuthoritativeNpcRoster
 
     public IReadOnlyList<NpcRuntime> Npcs => npcs;
 
-    private AuthoritativeNpcRoster(IReadOnlyList<NpcRuntime> npcs)
+    // Construction is intentionally internal: only the world/runtime owner creates
+    // authoritative snapshots. Consumers can read a snapshot but cannot certify an
+    // arbitrary production IEnumerable as complete.
+    internal AuthoritativeNpcRoster(IReadOnlyList<NpcRuntime> npcs)
     {
         if (npcs == null)
         {
