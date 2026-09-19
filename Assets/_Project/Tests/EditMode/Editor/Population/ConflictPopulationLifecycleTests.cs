@@ -169,6 +169,46 @@ public sealed class ConflictPopulationLifecycleTests
     }
 
     [Test]
+    public void NonresidentFatalConflictRecordsPersonDeathAndMirrorsNpcLifeState()
+    {
+        CityRuntime unrelatedCity = CreateCity("nonresident-person-city", 5);
+        NpcRuntime opponent = CreateNpc("nonresident-person-opponent");
+        SimulationRuntime world = CreateWorld(new[] { unrelatedCity }, opponent);
+        PersonId personId = new PersonId("nonresident-person");
+        Assert.That(world.TryRegisterPerson(new PersonRuntime(personId, 0L), out _), Is.True);
+        Assert.That(world.TryMaterializePerson(
+            personId,
+            SimulationTestFactory.CreateNpc("nonresident-person-definition"),
+            "nonresident-person-npc",
+            null,
+            0f,
+            out NpcRuntime nonresident,
+            out _), Is.True);
+        NpcConflictConsequenceSystem applier = CreateApplier(world);
+        Conflict conflict = CreateConflict(nonresident, opponent, ConflictStakes.Existential);
+        ConflictResolutionConstraints constraints = ForceDeathFor(
+            nonresident,
+            NpcInjurySeverity.Injured);
+        constraints.AddParticipantConstraint(new ConflictParticipantResolutionConstraint(opponent.RuntimeId)
+        {
+            ForceAlive = true
+        });
+
+        Assert.That(applier.TryResolveAndApply(
+            conflict,
+            constraints,
+            out _,
+            out string reason), Is.True, reason);
+        Assert.That(world.PersonStore.TryGet(personId, out PersonRuntime person), Is.True);
+        Assert.That(person.DeathAbsoluteDay, Is.EqualTo(world.CurrentDay));
+        Assert.That(person.IsDeadAt(world.CurrentDay), Is.True);
+        Assert.That(nonresident.IsDead, Is.True);
+        Assert.That(nonresident.InjurySeverity, Is.EqualTo(NpcInjurySeverity.Injured));
+        Assert.That(unrelatedCity.CurrentPopulation, Is.EqualTo(5));
+        Assert.That(unrelatedCity.Population.Revision, Is.EqualTo(0));
+    }
+
+    [Test]
     public void NonfatalResidentConflictPreservesMembershipAndPopulation()
     {
         CityRuntime city = CreateCity("nonfatal-resident-city", 5);

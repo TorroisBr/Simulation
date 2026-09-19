@@ -284,6 +284,18 @@ public sealed class SimulationRuntime
         return PersonDeathLifecycleSystem.TryApplyDeath(this, transition, out failure);
     }
 
+    public bool TryApplyPersonDeathWithConflictInjury(
+        PersonDeathTransition transition,
+        NpcInjurySeverity injurySeverity,
+        out PersonDeathLifecycleFailure failure)
+    {
+        return PersonDeathLifecycleSystem.TryApplyDeathWithConflictInjury(
+            this,
+            transition,
+            injurySeverity,
+            out failure);
+    }
+
     public bool TryApplyPersonDeath(
         PersonId personId,
         out PersonDeathTransition transition,

@@ -233,6 +233,21 @@ public class NpcRuntime : ICapabilityConditionSource
     /// </summary>
     internal void ApplyPersonDeathAfterValidation()
     {
+        ApplyPersonDeathAfterValidation(NpcInjurySeverity.None);
+    }
+
+    internal void ApplyPersonDeathAfterValidation(NpcInjurySeverity severity)
+    {
+        if (NpcInjuryRules.IsValid(severity) == false)
+        {
+            return;
+        }
+
+        if (severity > injurySeverity)
+        {
+            injurySeverity = severity;
+        }
+
         lifeState = NpcLifeState.Dead;
         currentAction = null;
         currentActionRuntime = null;

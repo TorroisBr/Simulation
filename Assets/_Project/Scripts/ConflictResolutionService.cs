@@ -130,6 +130,8 @@ public sealed class ConflictResolutionService
             new Dictionary<string, NpcPopulationLifecycleTransition>(StringComparer.Ordinal);
         Dictionary<string, CityRuntime> residentDeathSettlements =
             new Dictionary<string, CityRuntime>(StringComparer.Ordinal);
+        Dictionary<string, PersonDeathTransition> personDeathTransitions =
+            new Dictionary<string, PersonDeathTransition>(StringComparer.Ordinal);
         AuthoritativeNpcRoster authoritativeRoster = null;
 
         HashSet<string> npcConsequenceIds = new HashSet<string>(StringComparer.Ordinal);
@@ -186,6 +188,27 @@ public sealed class ConflictResolutionService
                 continue;
             }
 
+            if (consequence.IsDead && participant.Npc.BoundPersonRuntime != null)
+            {
+                if (worldRuntime == null)
+                {
+                    reason = "Fatal non-resident Person-backed conflict consequence requires an owner-aware world boundary.";
+                    return false;
+                }
+
+                if (worldRuntime.TryProposePersonDeath(
+                        participant.Npc.PersonId,
+                        out PersonDeathTransition personDeathTransition,
+                        out PersonDeathLifecycleFailure personDeathFailure) == false)
+                {
+                    reason = "Person-backed conflict death proposal was rejected: " + personDeathFailure + ".";
+                    return false;
+                }
+
+                personDeathTransitions.Add(consequence.ParticipantId, personDeathTransition);
+                continue;
+            }
+
             if (participant.Npc.CanApplyConflictConsequence(consequence.InjurySeverity, consequence.IsDead) == false)
             {
                 reason = "Conflict consequence cannot be applied to an NPC that is not alive or has invalid life state.";
@@ -236,6 +259,15 @@ public sealed class ConflictResolutionService
                         StringComparison.Ordinal) == false)
                 {
                     reason = "Resident conflict consequence preconditions changed before lifecycle application.";
+                    return false;
+                }
+            }
+            else if (personDeathTransitions.ContainsKey(consequence.ParticipantId) == true)
+            {
+                if (participant.Npc.IsAlive == false
+                    || NpcInjuryRules.IsValid(consequence.InjurySeverity) == false)
+                {
+                    reason = "Person-backed conflict consequence preconditions changed before Person death application.";
                     return false;
                 }
             }
@@ -300,6 +332,22 @@ public sealed class ConflictResolutionService
                 if (lifecycleApplied == false)
                 {
                     reason = "Resident conflict consequence lifecycle application was rejected: " + lifecycleFailure + ".";
+                    return false;
+                }
+
+                continue;
+            }
+
+            if (personDeathTransitions.TryGetValue(
+                    consequence.ParticipantId,
+                    out PersonDeathTransition personDeathTransition) == true)
+            {
+                if (worldRuntime.TryApplyPersonDeathWithConflictInjury(
+                        personDeathTransition,
+                        consequence.InjurySeverity,
+                        out PersonDeathLifecycleFailure personDeathFailure) == false)
+                {
+                    reason = "Person-backed conflict death application was rejected: " + personDeathFailure + ".";
                     return false;
                 }
 
