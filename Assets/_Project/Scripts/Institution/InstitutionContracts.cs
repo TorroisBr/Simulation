@@ -198,7 +198,10 @@ public enum InstitutionFoundationFailureCode
     OfficeAlreadyOccupied,
     OfficeAlreadyVacant,
     InvalidStartAbsoluteDay,
-    PersonNotRegistered
+    PersonNotRegistered,
+    InvalidEndAbsoluteDay,
+    InvalidVacancyRecognitionReason,
+    StaleIncumbency
 }
 
 /// <summary>
@@ -384,6 +387,131 @@ public sealed class OfficeIncumbency : IEquatable<OfficeIncumbency>
             int hash = OfficeId != null ? OfficeId.GetHashCode() : 0;
             hash = (hash * 397) ^ (Incumbent != null ? Incumbent.GetHashCode() : 0);
             return (hash * 397) ^ (StartAbsoluteDay.HasValue ? StartAbsoluteDay.Value.GetHashCode() : 0);
+        }
+    }
+}
+
+/// <summary>
+/// The reason institutional recognition ended one office tenure. This is an
+/// institutional fact and is intentionally separate from factual Person death.
+/// </summary>
+public enum InstitutionalVacancyRecognitionReason
+{
+    ExplicitDecision = 0,
+    FactualDeath = 1,
+    Resignation = 2,
+    Removal = 3
+}
+
+/// <summary>
+/// Append-only historical record for one office tenure. Current occupancy is
+/// still represented by OfficeIncumbency; this record preserves continuity
+/// after the current incumbency is vacated.
+/// </summary>
+public sealed class OfficeTenureRecord : IEquatable<OfficeTenureRecord>
+{
+    public OfficeTenureRecord(
+        OfficeId officeId,
+        PersonId incumbent,
+        long? startAbsoluteDay,
+        long? endAbsoluteDay,
+        InstitutionalVacancyRecognitionReason? endReason)
+        : this(
+            officeId,
+            incumbent,
+            startAbsoluteDay,
+            endAbsoluteDay,
+            endReason,
+            endReason.HasValue)
+    {
+    }
+
+    internal OfficeTenureRecord(
+        OfficeId officeId,
+        PersonId incumbent,
+        long? startAbsoluteDay,
+        long? endAbsoluteDay,
+        InstitutionalVacancyRecognitionReason? endReason,
+        bool closed)
+    {
+        OfficeId = officeId ?? throw new ArgumentNullException(nameof(officeId));
+        Incumbent = incumbent ?? throw new ArgumentNullException(nameof(incumbent));
+
+        if (startAbsoluteDay.HasValue && startAbsoluteDay.Value < 0L)
+        {
+            throw new ArgumentOutOfRangeException(nameof(startAbsoluteDay));
+        }
+
+        if (endAbsoluteDay.HasValue && endAbsoluteDay.Value < 0L)
+        {
+            throw new ArgumentOutOfRangeException(nameof(endAbsoluteDay));
+        }
+
+        if (startAbsoluteDay.HasValue
+            && endAbsoluteDay.HasValue
+            && endAbsoluteDay.Value < startAbsoluteDay.Value)
+        {
+            throw new ArgumentException(
+                "EndAbsoluteDay cannot be earlier than StartAbsoluteDay.",
+                nameof(endAbsoluteDay));
+        }
+
+        if (closed == false && (endAbsoluteDay.HasValue || endReason.HasValue))
+        {
+            throw new ArgumentException(
+                "An open tenure cannot have an end day or end reason.",
+                nameof(endReason));
+        }
+
+        if (closed && endReason.HasValue == false)
+        {
+            throw new ArgumentException(
+                "A closed tenure must have an end reason.",
+                nameof(endReason));
+        }
+
+        OfficeId = officeId;
+        Incumbent = incumbent;
+        StartAbsoluteDay = startAbsoluteDay;
+        EndAbsoluteDay = endAbsoluteDay;
+        EndReason = endReason;
+        IsClosed = closed;
+    }
+
+    public OfficeId OfficeId { get; }
+    public PersonId Incumbent { get; }
+    public long? StartAbsoluteDay { get; }
+    public long? EndAbsoluteDay { get; }
+    public InstitutionalVacancyRecognitionReason? EndReason { get; }
+    public bool IsClosed { get; }
+    public bool IsOpen => IsClosed == false;
+
+    public bool Equals(OfficeTenureRecord other)
+    {
+        return other != null
+            && OfficeId == other.OfficeId
+            && Incumbent == other.Incumbent
+            && StartAbsoluteDay == other.StartAbsoluteDay
+            && EndAbsoluteDay == other.EndAbsoluteDay
+            && EndReason == other.EndReason
+            && IsClosed == other.IsClosed;
+    }
+
+    public override bool Equals(object obj)
+    {
+        return Equals(obj as OfficeTenureRecord);
+    }
+
+    public override int GetHashCode()
+    {
+        unchecked
+        {
+            int hash = OfficeId.GetHashCode();
+            hash = (hash * 397) ^ Incumbent.GetHashCode();
+            hash = (hash * 397) ^ (StartAbsoluteDay.HasValue ? StartAbsoluteDay.Value.GetHashCode() : 0);
+            hash = (hash * 397) ^ (EndAbsoluteDay.HasValue ? EndAbsoluteDay.Value.GetHashCode() : 0);
+            hash = (hash * 397) ^ (EndReason.HasValue ? (int)EndReason.Value : 0);
+            return (hash * 397) ^ (IsClosed ? 1 : 0);
         }
     }
 }
