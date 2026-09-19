@@ -416,6 +416,23 @@ public sealed class OfficeTenureRecord : IEquatable<OfficeTenureRecord>
         long? startAbsoluteDay,
         long? endAbsoluteDay,
         InstitutionalVacancyRecognitionReason? endReason)
+        : this(
+            officeId,
+            incumbent,
+            startAbsoluteDay,
+            endAbsoluteDay,
+            endReason,
+            endReason.HasValue)
+    {
+    }
+
+    internal OfficeTenureRecord(
+        OfficeId officeId,
+        PersonId incumbent,
+        long? startAbsoluteDay,
+        long? endAbsoluteDay,
+        InstitutionalVacancyRecognitionReason? endReason,
+        bool closed)
     {
         OfficeId = officeId ?? throw new ArgumentNullException(nameof(officeId));
         Incumbent = incumbent ?? throw new ArgumentNullException(nameof(incumbent));
@@ -439,10 +456,17 @@ public sealed class OfficeTenureRecord : IEquatable<OfficeTenureRecord>
                 nameof(endAbsoluteDay));
         }
 
-        if (endAbsoluteDay.HasValue != endReason.HasValue)
+        if (closed == false && (endAbsoluteDay.HasValue || endReason.HasValue))
         {
             throw new ArgumentException(
-                "A closed tenure must have both an end day and an end reason.",
+                "An open tenure cannot have an end day or end reason.",
+                nameof(endReason));
+        }
+
+        if (closed && endReason.HasValue == false)
+        {
+            throw new ArgumentException(
+                "A closed tenure must have an end reason.",
                 nameof(endReason));
         }
 
@@ -451,6 +475,7 @@ public sealed class OfficeTenureRecord : IEquatable<OfficeTenureRecord>
         StartAbsoluteDay = startAbsoluteDay;
         EndAbsoluteDay = endAbsoluteDay;
         EndReason = endReason;
+        IsClosed = closed;
     }
 
     public OfficeId OfficeId { get; }
@@ -458,7 +483,8 @@ public sealed class OfficeTenureRecord : IEquatable<OfficeTenureRecord>
     public long? StartAbsoluteDay { get; }
     public long? EndAbsoluteDay { get; }
     public InstitutionalVacancyRecognitionReason? EndReason { get; }
-    public bool IsOpen => EndAbsoluteDay.HasValue == false;
+    public bool IsClosed { get; }
+    public bool IsOpen => IsClosed == false;
 
     public bool Equals(OfficeTenureRecord other)
     {
@@ -467,7 +493,8 @@ public sealed class OfficeTenureRecord : IEquatable<OfficeTenureRecord>
             && Incumbent == other.Incumbent
             && StartAbsoluteDay == other.StartAbsoluteDay
             && EndAbsoluteDay == other.EndAbsoluteDay
-            && EndReason == other.EndReason;
+            && EndReason == other.EndReason
+            && IsClosed == other.IsClosed;
     }
 
     public override bool Equals(object obj)
@@ -483,7 +510,8 @@ public sealed class OfficeTenureRecord : IEquatable<OfficeTenureRecord>
             hash = (hash * 397) ^ Incumbent.GetHashCode();
             hash = (hash * 397) ^ (StartAbsoluteDay.HasValue ? StartAbsoluteDay.Value.GetHashCode() : 0);
             hash = (hash * 397) ^ (EndAbsoluteDay.HasValue ? EndAbsoluteDay.Value.GetHashCode() : 0);
-            return (hash * 397) ^ (EndReason.HasValue ? (int)EndReason.Value : 0);
+            hash = (hash * 397) ^ (EndReason.HasValue ? (int)EndReason.Value : 0);
+            return (hash * 397) ^ (IsClosed ? 1 : 0);
         }
     }
 }

@@ -107,7 +107,22 @@ public sealed class OfficeStore
                     return start;
                 }
 
-                return string.CompareOrdinal(left.Incumbent.Value, right.Incumbent.Value);
+                int incumbent = string.CompareOrdinal(left.Incumbent.Value, right.Incumbent.Value);
+                if (incumbent != 0)
+                {
+                    return incumbent;
+                }
+
+                int end = Nullable.Compare(left.EndAbsoluteDay, right.EndAbsoluteDay);
+                if (end != 0)
+                {
+                    return end;
+                }
+
+                int reason = Nullable.Compare(
+                    left.EndReason.HasValue ? (int?)left.EndReason.Value : null,
+                    right.EndReason.HasValue ? (int?)right.EndReason.Value : null);
+                return reason != 0 ? reason : left.IsClosed.CompareTo(right.IsClosed);
             });
             return new ReadOnlyCollection<OfficeTenureRecord>(snapshot);
         }
@@ -289,7 +304,8 @@ public sealed class OfficeStore
             current.Incumbent,
             current.StartAbsoluteDay,
             endAbsoluteDay,
-            endAbsoluteDay.HasValue ? endReason : (InstitutionalVacancyRecognitionReason?)null);
+            endReason,
+            true);
 
         if (incumbencies.Remove(officeId.Value) == false)
         {
@@ -312,6 +328,42 @@ public sealed class OfficeStore
             }
         }
 
+        failure = InstitutionFoundationFailure.None;
+        return true;
+    }
+
+    internal bool TryAddHistoricalTenure(
+        OfficeTenureRecord record,
+        out InstitutionFoundationFailure failure)
+    {
+        if (record == null || record.OfficeId == null || record.Incumbent == null || record.IsOpen)
+        {
+            failure = InstitutionFoundationFailure.Create(
+                InstitutionFoundationFailureCode.InvalidOfficeRecord,
+                "A closed historical office tenure is required.");
+            return false;
+        }
+
+        if (TryGet(record.OfficeId, out _) == false)
+        {
+            failure = InstitutionFoundationFailure.Create(
+                InstitutionFoundationFailureCode.OfficeNotFound,
+                "The historical tenure office must be registered first.");
+            return false;
+        }
+
+        foreach (OfficeTenureRecord existing in tenureHistory)
+        {
+            if (existing.Equals(record))
+            {
+                failure = InstitutionFoundationFailure.Create(
+                    InstitutionFoundationFailureCode.StaleIncumbency,
+                    "The historical office tenure is already registered.");
+                return false;
+            }
+        }
+
+        tenureHistory.Add(record);
         failure = InstitutionFoundationFailure.None;
         return true;
     }

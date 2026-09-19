@@ -11,7 +11,8 @@ public enum InstitutionalVacancyRecognitionFailure
     InvalidRecognitionReason = 6,
     StaleIncumbency = 7,
     IncumbentNotFactuallyDead = 8,
-    InvalidTransition = 9
+    InvalidTransition = 9,
+    IncumbentNotRegistered = 10
 }
 
 /// <summary>
@@ -133,40 +134,6 @@ public static class InstitutionalVacancyRecognitionSystem
         return true;
     }
 
-    public static bool TryProposeForFactualDeath(
-        OfficeStore officeStore,
-        OfficeId officeId,
-        PersonRuntime incumbent,
-        long recognitionAbsoluteDay,
-        out InstitutionalVacancyRecognitionTransition transition,
-        out InstitutionalVacancyRecognitionFailure failure)
-    {
-        transition = null;
-        if (incumbent == null
-            || incumbent.DeathAbsoluteDay.HasValue == false
-            || incumbent.DeathAbsoluteDay.Value > recognitionAbsoluteDay)
-        {
-            failure = InstitutionalVacancyRecognitionFailure.IncumbentNotFactuallyDead;
-            return false;
-        }
-
-        if (officeStore == null
-            || officeStore.TryGetIncumbency(officeId, out OfficeIncumbency current) == false
-            || current.Incumbent != incumbent.PersonId)
-        {
-            failure = InstitutionalVacancyRecognitionFailure.StaleIncumbency;
-            return false;
-        }
-
-        return TryPropose(
-            officeStore,
-            officeId,
-            recognitionAbsoluteDay,
-            InstitutionalVacancyRecognitionReason.FactualDeath,
-            out transition,
-            out failure);
-    }
-
     public static bool TryApply(
         OfficeStore officeStore,
         InstitutionalVacancyRecognitionTransition transition,
@@ -198,7 +165,8 @@ public static class InstitutionalVacancyRecognitionSystem
         }
 
         if (current.Incumbent != transition.ExpectedIncumbent
-            || current.StartAbsoluteDay != transition.ExpectedIncumbency.StartAbsoluteDay)
+            || current.StartAbsoluteDay != transition.ExpectedIncumbency.StartAbsoluteDay
+            || ReferenceEquals(current, transition.ExpectedIncumbency) == false)
         {
             failure = InstitutionalVacancyRecognitionFailure.StaleIncumbency;
             return false;

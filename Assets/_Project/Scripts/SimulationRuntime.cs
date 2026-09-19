@@ -46,6 +46,7 @@ public sealed class SimulationRuntime
     public IReadOnlyList<InstitutionRecord> InstitutionRecords => institutionStore.Institutions;
     public IReadOnlyList<OfficeRecord> OfficeRecords => officeStore.Offices;
     public IReadOnlyList<OfficeIncumbency> OfficeIncumbencies => officeStore.Incumbencies;
+    public IReadOnlyList<OfficeTenureRecord> OfficeTenureHistory => officeStore.TenureHistory;
     /// <summary>
     /// Read-only view of every named NPC registered with this world. Registration is
     /// explicit; death and emigration do not remove an NPC from this world roster.
@@ -453,6 +454,54 @@ public sealed class SimulationRuntime
         out InstitutionFoundationFailure failure)
     {
         return officeStore.TryVacateOffice(officeId, out failure);
+    }
+
+    public bool TryProposeInstitutionalVacancyRecognition(
+        OfficeId officeId,
+        InstitutionalVacancyRecognitionReason reason,
+        out InstitutionalVacancyRecognitionTransition transition,
+        out InstitutionalVacancyRecognitionFailure failure)
+    {
+        if (reason == InstitutionalVacancyRecognitionReason.FactualDeath)
+        {
+            transition = null;
+            if (officeStore.TryGetIncumbency(officeId, out OfficeIncumbency incumbency) == false)
+            {
+                failure = InstitutionalVacancyRecognitionFailure.StaleIncumbency;
+                return false;
+            }
+
+            if (personStore.TryGet(incumbency.Incumbent, out PersonRuntime incumbent) == false)
+            {
+                failure = InstitutionalVacancyRecognitionFailure.IncumbentNotRegistered;
+                return false;
+            }
+
+            if (incumbent.DeathAbsoluteDay.HasValue == false
+                || incumbent.DeathAbsoluteDay.Value > CurrentDay)
+            {
+                failure = InstitutionalVacancyRecognitionFailure.IncumbentNotFactuallyDead;
+                return false;
+            }
+        }
+
+        return InstitutionalVacancyRecognitionSystem.TryPropose(
+            officeStore,
+            officeId,
+            CurrentDay,
+            reason,
+            out transition,
+            out failure);
+    }
+
+    public bool TryApplyInstitutionalVacancyRecognition(
+        InstitutionalVacancyRecognitionTransition transition,
+        out InstitutionalVacancyRecognitionFailure failure)
+    {
+        return InstitutionalVacancyRecognitionSystem.TryApply(
+            officeStore,
+            transition,
+            out failure);
     }
 
     public IReadOnlyList<OfficeRecord> GetVacantOffices()
@@ -951,6 +1000,29 @@ public sealed class SimulationRuntime
             {
                 throw new ArgumentException(
                     "The SimulationRuntime OfficeStore contains an invalid incumbency: "
+                    + failure + ".",
+                    nameof(source));
+            }
+        }
+
+        foreach (OfficeTenureRecord tenure in source.TenureHistory)
+        {
+            if (tenure == null || tenure.IsOpen)
+            {
+                continue;
+            }
+
+            OfficeTenureRecord clone = new OfficeTenureRecord(
+                new OfficeId(tenure.OfficeId.Value),
+                new PersonId(tenure.Incumbent.Value),
+                tenure.StartAbsoluteDay,
+                tenure.EndAbsoluteDay,
+                tenure.EndReason,
+                true);
+            if (copy.TryAddHistoricalTenure(clone, out InstitutionFoundationFailure failure) == false)
+            {
+                throw new ArgumentException(
+                    "The SimulationRuntime OfficeStore contains invalid historical tenure: "
                     + failure + ".",
                     nameof(source));
             }
