@@ -92,13 +92,14 @@ public sealed class WorldStatePersonSnapshot
     public bool HasKnownBirthDay => BirthAbsoluteDay.HasValue;
     public long? AgeInDays { get; }
     public long? CompletedYears { get; }
+    public string ResidenceSettlementRuntimeId { get; }
     public string MaterializedNpcRuntimeId { get; }
     public bool IsMaterialized => string.IsNullOrWhiteSpace(MaterializedNpcRuntimeId) == false;
 
     public WorldStatePersonSnapshot(
         string personId,
         string materializedNpcRuntimeId)
-        : this(personId, null, null, null, materializedNpcRuntimeId)
+        : this(personId, null, null, null, null, materializedNpcRuntimeId)
     {
     }
 
@@ -108,11 +109,29 @@ public sealed class WorldStatePersonSnapshot
         long? ageInDays,
         long? completedYears,
         string materializedNpcRuntimeId)
+        : this(
+            personId,
+            birthAbsoluteDay,
+            ageInDays,
+            completedYears,
+            null,
+            materializedNpcRuntimeId)
+    {
+    }
+
+    public WorldStatePersonSnapshot(
+        string personId,
+        long? birthAbsoluteDay,
+        long? ageInDays,
+        long? completedYears,
+        string residenceSettlementRuntimeId,
+        string materializedNpcRuntimeId)
     {
         PersonId = personId;
         BirthAbsoluteDay = birthAbsoluteDay;
         AgeInDays = ageInDays;
         CompletedYears = completedYears;
+        ResidenceSettlementRuntimeId = residenceSettlementRuntimeId;
         MaterializedNpcRuntimeId = materializedNpcRuntimeId;
     }
 }
@@ -804,7 +823,7 @@ public static class WorldStateSnapshotBuilder
         return new WorldStateSnapshot(
             context.SimulationTime != null ? context.SimulationTime.AbsoluteDay : 0L,
             BuildNpcSnapshots(knownNpcs, expeditions),
-            BuildCitySnapshots(context.Cities, knownNpcs),
+            BuildCitySnapshots(context.Cities, knownNpcs, context.PersonStore?.Persons),
             BuildSpatialSnapshot(context.SpatialNetwork),
             BuildSiteSnapshots(context.ExplorableSiteStore),
             expeditions,
@@ -887,6 +906,7 @@ public static class WorldStateSnapshotBuilder
                 person.BirthAbsoluteDay,
                 age?.AgeInDays,
                 age?.CompletedYears,
+                person.ResidenceSettlementRuntimeId,
                 person.MaterializedNpcRuntimeId));
         }
 
@@ -1041,7 +1061,8 @@ public static class WorldStateSnapshotBuilder
 
     private static List<WorldStateCitySnapshot> BuildCitySnapshots(
         IEnumerable<CityRuntime> source,
-        IEnumerable<NpcRuntime> knownNpcs)
+        IEnumerable<NpcRuntime> knownNpcs,
+        IEnumerable<PersonRuntime> persons)
     {
         List<CityRuntime> cities = SnapshotCollections.Materialize(source);
         cities.RemoveAll(city => city == null || string.IsNullOrWhiteSpace(city.RuntimeId));
@@ -1062,7 +1083,7 @@ public static class WorldStateSnapshotBuilder
             }
 
             residents.Sort(StringComparer.Ordinal);
-            SettlementPopulationPresenceSummary presence = SettlementPopulationPresenceQuery.BuildSummary(city, knownNpcs);
+            SettlementPopulationPresenceSummary presence = SettlementPopulationPresenceQuery.BuildSummary(city, knownNpcs, persons);
             result.Add(new WorldStateCitySnapshot(
                 city.RuntimeId,
                 city.DefinitionId,

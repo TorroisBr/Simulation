@@ -38,7 +38,8 @@ public static class WorldStateCanonicalWriter
                 person.MaterializedNpcRuntimeId,
                 BoolValue(person.IsMaterialized),
                 person.BirthAbsoluteDay.HasValue ? Int64Value(person.BirthAbsoluteDay.Value) : null,
-                person.CompletedYears.HasValue ? Int64Value(person.CompletedYears.Value) : null);
+                person.CompletedYears.HasValue ? Int64Value(person.CompletedYears.Value) : null,
+                person.ResidenceSettlementRuntimeId);
         }
 
         foreach (WorldStateNpcSnapshot npc in snapshot.Npcs)

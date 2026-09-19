@@ -68,6 +68,52 @@ public sealed class PersonStore
             && personsByNpcRuntimeId.TryGetValue(npcRuntimeId, out person);
     }
 
+    public int CountResidents(string settlementRuntimeId)
+    {
+        if (string.IsNullOrWhiteSpace(settlementRuntimeId) == true)
+        {
+            return 0;
+        }
+
+        int count = 0;
+        foreach (PersonRuntime person in persons)
+        {
+            if (person != null
+                && string.Equals(
+                    person.ResidenceSettlementRuntimeId,
+                    settlementRuntimeId,
+                    StringComparison.Ordinal))
+            {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+    public IReadOnlyList<PersonRuntime> GetResidents(string settlementRuntimeId)
+    {
+        List<PersonRuntime> residents = new List<PersonRuntime>();
+        if (string.IsNullOrWhiteSpace(settlementRuntimeId) == true)
+        {
+            return residents.AsReadOnly();
+        }
+
+        foreach (PersonRuntime person in persons)
+        {
+            if (person != null
+                && string.Equals(
+                    person.ResidenceSettlementRuntimeId,
+                    settlementRuntimeId,
+                    StringComparison.Ordinal))
+            {
+                residents.Add(person);
+            }
+        }
+
+        return residents.AsReadOnly();
+    }
+
     internal bool TryBindMaterializedNpc(
         PersonId personId,
         string npcRuntimeId,

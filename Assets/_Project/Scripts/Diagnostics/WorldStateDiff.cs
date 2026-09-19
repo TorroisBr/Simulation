@@ -101,6 +101,7 @@ public sealed class WorldStateDiff
                 CompareValue("Person", identity, "MaterializedNpcRuntimeId", WorldStateCanonicalWriter.StringValue(left.MaterializedNpcRuntimeId), WorldStateCanonicalWriter.StringValue(right.MaterializedNpcRuntimeId), differences);
                 CompareValue("Person", identity, "IsMaterialized", WorldStateCanonicalWriter.BoolValue(left.IsMaterialized), WorldStateCanonicalWriter.BoolValue(right.IsMaterialized), differences);
                 CompareValue("Person", identity, "CompletedYears", WorldStateCanonicalWriter.NullableInt64Value(left.CompletedYears), WorldStateCanonicalWriter.NullableInt64Value(right.CompletedYears), differences);
+                CompareValue("Person", identity, "ResidenceSettlementRuntimeId", WorldStateCanonicalWriter.StringValue(left.ResidenceSettlementRuntimeId), WorldStateCanonicalWriter.StringValue(right.ResidenceSettlementRuntimeId), differences);
             }, differences);
 
         CompareEntities("City", before.Cities, after.Cities, city => city.RuntimeId,

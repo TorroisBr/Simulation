@@ -5,9 +5,10 @@ using UnityEngine;
 [Serializable]
 public class NpcRuntime : ICapabilityConditionSource
 {
-	[SerializeField]private string runtimeId;
+    [SerializeField]private string runtimeId;
     [SerializeField]private string personIdValue;
     [NonSerialized]private PersonId personIdentity;
+    [NonSerialized]private PersonRuntime personRuntime;
     [SerializeField]private NpcData npcData;
     [SerializeField]private string residenceSettlementRuntimeId;
 	[SerializeField]private List<NpcStatusData> currentStatus = new List<NpcStatusData>();
@@ -57,7 +58,10 @@ public class NpcRuntime : ICapabilityConditionSource
     }
     public NpcData NpcData => npcData;
     public string DefinitionId => npcData != null ? npcData.DefinitionId : string.Empty;
-    public string ResidenceSettlementRuntimeId => residenceSettlementRuntimeId;
+    public string ResidenceSettlementRuntimeId => personRuntime != null
+        ? personRuntime.ResidenceSettlementRuntimeId
+        : residenceSettlementRuntimeId;
+    internal PersonRuntime BoundPersonRuntime => personRuntime;
     public List<NpcStatusData> CurrentStatus => currentStatus ?? (currentStatus = new List<NpcStatusData>());
     public NpcActionData CurrentAction => currentAction;
     public NpcActionRuntime CurrentActionRuntime => currentActionRuntime;
@@ -150,6 +154,27 @@ public class NpcRuntime : ICapabilityConditionSource
         personIdValue = null;
     }
 
+    internal bool TryBindPersonRuntime(PersonRuntime person)
+    {
+        if (person == null || PersonId == null || PersonId != person.PersonId)
+        {
+            return false;
+        }
+
+        if (personRuntime != null && ReferenceEquals(personRuntime, person) == false)
+        {
+            return false;
+        }
+
+        personRuntime = person;
+        return true;
+    }
+
+    internal void ClearPersonRuntime()
+    {
+        personRuntime = null;
+    }
+
     public void SetCurrentAction(NpcActionData action)
     {
         if (IsAlive == false && action != null)
@@ -227,7 +252,7 @@ public class NpcRuntime : ICapabilityConditionSource
         }
 
         lifeState = NpcLifeState.Dead;
-        residenceSettlementRuntimeId = null;
+        SetResidenceSettlementRuntimeId(null);
         currentAction = null;
         currentActionRuntime = null;
     }
@@ -459,6 +484,12 @@ public class NpcRuntime : ICapabilityConditionSource
 
     internal void SetResidenceSettlementRuntimeId(string settlementRuntimeId)
     {
+        if (personRuntime != null)
+        {
+            personRuntime.TrySetResidenceSettlementRuntimeId(settlementRuntimeId);
+            return;
+        }
+
         residenceSettlementRuntimeId = string.IsNullOrWhiteSpace(settlementRuntimeId) == true
             ? null
             : settlementRuntimeId;

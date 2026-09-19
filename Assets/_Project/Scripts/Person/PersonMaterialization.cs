@@ -14,7 +14,8 @@ public enum PersonMaterializationFailure
     NpcAlreadyBoundToDifferentPerson = 9,
     RosterRegistrationFailed = 10,
     InvalidStartingContext = 11,
-    NpcNotRegistered = 12
+    NpcNotRegistered = 12,
+    ResidenceConflict = 13
 }
 
 /// <summary>
@@ -84,6 +85,13 @@ public static class PersonMaterializationSystem
             return false;
         }
 
+        if (candidate.TryBindPersonRuntime(person) == false)
+        {
+            candidate.ClearPersonId();
+            failure = PersonMaterializationFailure.NpcAlreadyBoundToDifferentPerson;
+            return false;
+        }
+
         if (world.PersonStore.TryBindMaterializedNpc(
                 personId,
                 runtimeId,
@@ -96,6 +104,7 @@ public static class PersonMaterializationSystem
         if (world.TryRegisterNpc(candidate, out WorldNpcRegistryFailure registryFailure) == false)
         {
             world.PersonStore.TryUnbindMaterializedNpc(personId, runtimeId);
+            candidate.ClearPersonRuntime();
             candidate.ClearPersonId();
             failure = registryFailure == WorldNpcRegistryFailure.DuplicateRuntimeId
                 ? PersonMaterializationFailure.DuplicateNpcRuntimeId
@@ -109,6 +118,7 @@ public static class PersonMaterializationSystem
             if (candidate.CurrentCity != startingCity)
             {
                 world.PersonStore.TryUnbindMaterializedNpc(personId, runtimeId);
+                candidate.ClearPersonRuntime();
                 candidate.ClearPersonId();
                 world.TryUnregisterNpc(runtimeId, out _);
                 failure = PersonMaterializationFailure.InvalidStartingContext;
@@ -154,19 +164,54 @@ public static class PersonMaterializationSystem
             return false;
         }
 
-        if (world.PersonStore.TryBindMaterializedNpc(
-                personId,
-                npcRuntimeId,
-                out PersonStoreFailure storeFailure) == false)
+        if (world.PersonStore.TryGet(personId, out PersonRuntime person) == false)
         {
-            failure = MapStoreFailure(storeFailure);
+            failure = PersonMaterializationFailure.PersonNotRegistered;
+            return false;
+        }
+
+        string npcResidence = npcRuntime.ResidenceSettlementRuntimeId;
+        string personResidence = person.ResidenceSettlementRuntimeId;
+        if (string.IsNullOrWhiteSpace(npcResidence) == false
+            && string.IsNullOrWhiteSpace(personResidence) == false
+            && string.Equals(npcResidence, personResidence, StringComparison.Ordinal) == false)
+        {
+            failure = PersonMaterializationFailure.ResidenceConflict;
             return false;
         }
 
         if (npcRuntime.TryAssignPersonId(personId) == false)
         {
-            world.PersonStore.TryUnbindMaterializedNpc(personId, npcRuntimeId);
             failure = PersonMaterializationFailure.NpcAlreadyBoundToDifferentPerson;
+            return false;
+        }
+
+        if (npcRuntime.TryBindPersonRuntime(person) == false)
+        {
+            npcRuntime.ClearPersonId();
+            failure = PersonMaterializationFailure.NpcAlreadyBoundToDifferentPerson;
+            return false;
+        }
+
+        if (world.PersonStore.TryBindMaterializedNpc(
+                personId,
+                npcRuntimeId,
+                out PersonStoreFailure storeFailure) == false)
+        {
+            npcRuntime.ClearPersonRuntime();
+            npcRuntime.ClearPersonId();
+            failure = MapStoreFailure(storeFailure);
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(personResidence) == true
+            && string.IsNullOrWhiteSpace(npcResidence) == false
+            && person.TrySetResidenceSettlementRuntimeId(npcResidence) == false)
+        {
+            world.PersonStore.TryUnbindMaterializedNpc(personId, npcRuntimeId);
+            npcRuntime.ClearPersonRuntime();
+            npcRuntime.ClearPersonId();
+            failure = PersonMaterializationFailure.ResidenceConflict;
             return false;
         }
 

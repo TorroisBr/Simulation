@@ -49,6 +49,7 @@ public static class WorldStateSnapshotFormatter
                     ? WorldStateCanonicalWriter.Int64Value(person.CompletedYears.Value)
                     : "unknown")
                 .Append('\n');
+            output.Append("Residence: ").Append(Value(person.ResidenceSettlementRuntimeId)).Append('\n');
             output.Append("Materialized NPC: ").Append(Value(person.MaterializedNpcRuntimeId)).Append('\n');
         }
 

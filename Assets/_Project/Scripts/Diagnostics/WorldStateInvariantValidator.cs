@@ -201,6 +201,7 @@ public static class WorldStateInvariantValidator
 
         HashSet<string> personIds = new HashSet<string>(StringComparer.Ordinal);
         Dictionary<string, string> personBindings = new Dictionary<string, string>(StringComparer.Ordinal);
+        Dictionary<string, string> personResidences = new Dictionary<string, string>(StringComparer.Ordinal);
         HashSet<string> personBoundNpcIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (WorldStatePersonSnapshot person in snapshot.Persons)
         {
@@ -220,6 +221,17 @@ public static class WorldStateInvariantValidator
             }
 
             string personIdentity = string.IsNullOrWhiteSpace(person.PersonId) ? "person" : person.PersonId;
+            if (string.IsNullOrWhiteSpace(person.PersonId) == false)
+            {
+                if (string.IsNullOrWhiteSpace(person.ResidenceSettlementRuntimeId) == false
+                    && settlementIds.Contains(person.ResidenceSettlementRuntimeId) == false)
+                {
+                    AddError(issues, "PersonResidenceSettlementMissing", personIdentity, "Person has a residence in a settlement absent from the snapshot.");
+                }
+
+                personResidences[person.PersonId] = person.ResidenceSettlementRuntimeId;
+            }
+
             if (person.BirthAbsoluteDay.HasValue)
             {
                 if (person.BirthAbsoluteDay.Value < 0L)
@@ -291,6 +303,48 @@ public static class WorldStateInvariantValidator
                 || StringComparer.Ordinal.Equals(boundRuntimeId, npc.RuntimeId) == false)
             {
                 AddError(issues, "PersonBindingMismatch", npcIdentity, "NPC PersonId does not match the Person snapshot binding.");
+            }
+
+            if (personResidences.TryGetValue(npc.PersonId, out string personResidence) == true
+                && string.Equals(personResidence, npc.ResidenceSettlementRuntimeId, StringComparison.Ordinal) == false)
+            {
+                AddError(issues, "PersonNpcResidenceMismatch", npcIdentity, "Person-backed NPC residence diverges from the Person residence authority.");
+            }
+        }
+
+        foreach (WorldStateCitySnapshot city in snapshot.Cities)
+        {
+            if (city == null || string.IsNullOrWhiteSpace(city.RuntimeId))
+            {
+                continue;
+            }
+
+            HashSet<string> representedResidentIds = new HashSet<string>(StringComparer.Ordinal);
+            foreach (WorldStatePersonSnapshot person in snapshot.Persons)
+            {
+                if (person != null
+                    && string.Equals(person.ResidenceSettlementRuntimeId, city.RuntimeId, StringComparison.Ordinal)
+                    && string.IsNullOrWhiteSpace(person.PersonId) == false)
+                {
+                    representedResidentIds.Add("person:" + person.PersonId);
+                }
+            }
+
+            foreach (WorldStateNpcSnapshot npc in snapshot.Npcs)
+            {
+                if (npc != null
+                    && npc.LifeState == NpcLifeState.Alive
+                    && string.IsNullOrWhiteSpace(npc.PersonId) == true
+                    && string.Equals(npc.ResidenceSettlementRuntimeId, city.RuntimeId, StringComparison.Ordinal)
+                    && string.IsNullOrWhiteSpace(npc.RuntimeId) == false)
+                {
+                    representedResidentIds.Add("npc:" + npc.RuntimeId);
+                }
+            }
+
+            if (representedResidentIds.Count > city.CurrentPopulation)
+            {
+                AddError(issues, "RepresentedResidentsExceedPopulation", city.RuntimeId, "Represented residents exceed aggregate settlement population.");
             }
         }
 

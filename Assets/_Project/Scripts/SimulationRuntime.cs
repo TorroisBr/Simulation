@@ -162,6 +162,14 @@ public sealed class SimulationRuntime
             return false;
         }
 
+        if (npcRuntime.PersonId != null
+            && (personStore.TryGet(npcRuntime.PersonId, out PersonRuntime boundPerson) == false
+                || npcRuntime.TryBindPersonRuntime(boundPerson) == false))
+        {
+            failure = WorldNpcRegistryFailure.NpcPersonBindingInvalid;
+            return false;
+        }
+
         npcRegistryById.Add(npcRuntime.RuntimeId, npcRuntime);
         npcRuntimes.Add(npcRuntime);
         return true;
@@ -254,6 +262,24 @@ public sealed class SimulationRuntime
             this,
             personId,
             npcRuntimeId,
+            out failure);
+    }
+
+    public bool TryBindExistingPersonResident(
+        PersonId personId,
+        CityRuntime settlement,
+        out PersonResidenceMembershipFailure failure)
+    {
+        if (personId == null || personStore.TryGet(personId, out PersonRuntime person) == false)
+        {
+            failure = PersonResidenceMembershipFailure.PersonNotRegistered;
+            return false;
+        }
+
+        return PersonResidenceMembershipSystem.TryBindExistingResident(
+            person,
+            settlement,
+            this,
             out failure);
     }
 

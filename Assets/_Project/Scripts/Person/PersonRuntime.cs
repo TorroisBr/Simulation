@@ -6,6 +6,7 @@ using System;
 public sealed class PersonRuntime
 {
     private string materializedNpcRuntimeId;
+    private string residenceSettlementRuntimeId;
     private readonly long? birthAbsoluteDay;
 
     public PersonId PersonId { get; }
@@ -13,6 +14,7 @@ public sealed class PersonRuntime
     public bool HasKnownBirthDay => birthAbsoluteDay.HasValue;
     public string MaterializedNpcRuntimeId => materializedNpcRuntimeId;
     public bool IsMaterialized => string.IsNullOrWhiteSpace(materializedNpcRuntimeId) == false;
+    public string ResidenceSettlementRuntimeId => residenceSettlementRuntimeId;
 
     public PersonRuntime(PersonId personId)
         : this(personId, null)
@@ -50,6 +52,18 @@ public sealed class PersonRuntime
         }
 
         materializedNpcRuntimeId = null;
+        return true;
+    }
+
+    /// <summary>
+    /// Changes residence only through a world-owned membership boundary. The
+    /// identifier is intentionally not publicly mutable.
+    /// </summary>
+    internal bool TrySetResidenceSettlementRuntimeId(string settlementRuntimeId)
+    {
+        residenceSettlementRuntimeId = string.IsNullOrWhiteSpace(settlementRuntimeId)
+            ? null
+            : settlementRuntimeId;
         return true;
     }
 }
