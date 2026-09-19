@@ -142,6 +142,14 @@ public sealed class SuccessionIntegrationTests
         Assert.That(world.TryProposeOfficeSuccession(
                 officeId,
                 child.PersonId,
+                10L,
+                out _,
+                out OfficeSuccessionFailure retroactiveFailure), Is.False);
+        Assert.That(retroactiveFailure.Code, Is.EqualTo(OfficeSuccessionFailureCode.CandidateNotEligible));
+
+        Assert.That(world.TryProposeOfficeSuccession(
+                officeId,
+                child.PersonId,
                 10_000L,
                 out OfficeSuccessionTransition successionTransition,
                 out OfficeSuccessionFailure successionProposalFailure),
@@ -254,6 +262,27 @@ public sealed class SuccessionIntegrationTests
         Assert.That(canonical, Does.Contain("PROPERTY_TRANSFER|cycle-property|cycle-a|cycle-b|100"));
         Assert.That(canonical, Does.Contain("PROPERTY_TRANSFER|cycle-property|cycle-b|cycle-c|100"));
         Assert.That(canonical, Does.Contain("PROPERTY_TRANSFER|cycle-property|cycle-c|cycle-b|100"));
+    }
+
+    [Test]
+    public void RuntimeRejectsFutureDatedPropertyTransferHistory()
+    {
+        PersonStore people = new PersonStore();
+        PersonId firstId = Register(people, "future-history-a", 0L).PersonId;
+        PersonId secondId = Register(people, "future-history-b", 0L).PersonId;
+        PropertyId propertyId = new PropertyId("future-history-property");
+        PropertyOwnershipStore properties = new PropertyOwnershipStore(people);
+        Assert.That(properties.TryRegister(
+            new PropertyOwnershipRecord(propertyId, firstId), out _), Is.True);
+        Assert.That(PropertyTransferSystem.TryTransfer(
+            people, properties, propertyId, secondId, 101L, out _, out _), Is.True);
+
+        Assert.Throws<ArgumentException>(() => new SimulationRuntime(
+            new SimulationTime(100L),
+            Array.Empty<CityRuntime>(),
+            null,
+            personStore: people,
+            propertyOwnershipStore: properties));
     }
 
     private static SimulationRuntime CreateEstateWorld(

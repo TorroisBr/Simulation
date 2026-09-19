@@ -94,6 +94,16 @@ public static class OfficeSuccessionSystem
             return false;
         }
 
+        if (TryValidateCandidateAtStart(
+                world,
+                selectedCandidate,
+                startAbsoluteDay,
+                out OfficeSuccessionFailure startFailure) == false)
+        {
+            failure = startFailure;
+            return false;
+        }
+
         transition = new OfficeSuccessionTransition(
             officeId,
             formerIncumbent,
@@ -192,6 +202,16 @@ public static class OfficeSuccessionSystem
             return false;
         }
 
+        if (TryValidateCandidateAtStart(
+                world,
+                currentCandidate,
+                transition.StartAbsoluteDay,
+                out OfficeSuccessionFailure startFailure) == false)
+        {
+            failure = startFailure;
+            return false;
+        }
+
         if (world.TryAssignIncumbent(
                 transition.OfficeId,
                 transition.SelectedCandidateId,
@@ -223,6 +243,42 @@ public static class OfficeSuccessionSystem
                 ? OfficeSuccessionFailureCode.CandidateNotRegistered
                 : OfficeSuccessionFailureCode.CandidateNotEligible,
             failure?.ToString() ?? "Candidate discovery failed.");
+    }
+
+    private static bool TryValidateCandidateAtStart(
+        SimulationRuntime world,
+        PersonRuntime candidate,
+        long startAbsoluteDay,
+        out OfficeSuccessionFailure failure)
+    {
+        failure = OfficeSuccessionFailure.None;
+        if (candidate == null
+            || (candidate.BirthAbsoluteDay.HasValue
+                && candidate.BirthAbsoluteDay.Value > startAbsoluteDay)
+            || candidate.IsDeadAt(startAbsoluteDay))
+        {
+            failure = OfficeSuccessionFailure.Create(
+                OfficeSuccessionFailureCode.CandidateNotLiving,
+                "The selected candidate must be factually alive on the office start day.");
+            return false;
+        }
+
+        if (PersonMaturityQuery.TryCalculate(
+                candidate,
+                startAbsoluteDay,
+                world.Calendar,
+                world.Configuration.Population.MaturityAgeYears,
+                out PersonMaturitySnapshot maturity,
+                out _) == false
+            || maturity.IsMature == false)
+        {
+            failure = OfficeSuccessionFailure.Create(
+                OfficeSuccessionFailureCode.CandidateNotEligible,
+                "The selected candidate must satisfy maturity semantics on the office start day.");
+            return false;
+        }
+
+        return true;
     }
 }
 

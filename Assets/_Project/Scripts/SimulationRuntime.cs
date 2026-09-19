@@ -128,7 +128,8 @@ public sealed class SimulationRuntime
             resolvedPersonStore);
         PropertyOwnershipStore resolvedPropertyOwnershipStore = ClonePropertyOwnershipStore(
             propertyOwnershipStore,
-            resolvedPersonStore);
+            resolvedPersonStore,
+            simulationTime.AbsoluteDay);
         EstateStore resolvedEstateStore = CloneEstateStore(
             estateStore,
             resolvedPersonStore,
@@ -1240,7 +1241,7 @@ public sealed class SimulationRuntime
             }
         }
 
-        foreach (OfficeTenureRecord tenure in source.TenureHistory)
+        foreach (OfficeTenureRecord tenure in source.TenureHistoryInMutationOrder)
         {
             if (tenure == null || tenure.IsOpen)
             {
@@ -1268,7 +1269,8 @@ public sealed class SimulationRuntime
 
     private static PropertyOwnershipStore ClonePropertyOwnershipStore(
         PropertyOwnershipStore source,
-        PersonStore personStore)
+        PersonStore personStore,
+        long currentDay)
     {
         if (source != null
             && source.PersonStoreForWorldBoundary != null
@@ -1317,6 +1319,16 @@ public sealed class SimulationRuntime
             {
                 throw new ArgumentException(
                     "The SimulationRuntime PropertyOwnershipStore contains invalid transfer history.",
+                    nameof(source));
+            }
+
+            if (history.TransferAbsoluteDay > currentDay
+                || source.TryGet(history.PropertyId, out _) == false
+                || personStore.TryGet(history.PreviousOwnerPersonId, out _) == false
+                || personStore.TryGet(history.NewOwnerPersonId, out _) == false)
+            {
+                throw new ArgumentException(
+                    "The SimulationRuntime PropertyOwnershipStore contains transfer history inconsistent with the world.",
                     nameof(source));
             }
 

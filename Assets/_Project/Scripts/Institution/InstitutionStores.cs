@@ -128,6 +128,15 @@ public sealed class OfficeStore
         }
     }
 
+    internal IReadOnlyList<OfficeTenureRecord> TenureHistoryInMutationOrder
+    {
+        get
+        {
+            return new ReadOnlyCollection<OfficeTenureRecord>(
+                new List<OfficeTenureRecord>(tenureHistory));
+        }
+    }
+
     public bool TryRegister(OfficeRecord record, out InstitutionFoundationFailure failure)
     {
         if (record == null || record.Id == null || record.InstitutionId == null)
