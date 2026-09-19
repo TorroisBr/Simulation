@@ -632,6 +632,13 @@ public sealed class SimulationRuntime
         return officeStore.IsVacant(officeId);
     }
 
+    internal bool TryGetLatestClosedOfficeTenure(
+        OfficeId officeId,
+        out OfficeTenureRecord tenure)
+    {
+        return officeStore.TryGetLatestClosedTenure(officeId, out tenure);
+    }
+
     public bool TryAssignIncumbent(
         OfficeId officeId,
         PersonId incumbent,
@@ -1263,6 +1270,15 @@ public sealed class SimulationRuntime
         PropertyOwnershipStore source,
         PersonStore personStore)
     {
+        if (source != null
+            && source.PersonStoreForWorldBoundary != null
+            && ReferenceEquals(source.PersonStoreForWorldBoundary, personStore) == false)
+        {
+            throw new ArgumentException(
+                "The SimulationRuntime PropertyOwnershipStore must belong to the resolved PersonStore.",
+                nameof(source));
+        }
+
         PropertyOwnershipStore copy = new PropertyOwnershipStore(personStore);
         if (source == null)
         {

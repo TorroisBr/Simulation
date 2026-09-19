@@ -578,7 +578,11 @@ public static class WorldStateInvariantValidator
             string identity = string.IsNullOrWhiteSpace(transfer.PropertyId)
                 ? "property-transfer"
                 : transfer.PropertyId + "@" + transfer.TransferAbsoluteDay;
-            string transferKey = identity + "\u001f" + (transfer.NewOwnerPersonId ?? string.Empty);
+            string transferKey = identity
+                + "\u001f"
+                + (transfer.PreviousOwnerPersonId ?? string.Empty)
+                + "\u001f"
+                + (transfer.NewOwnerPersonId ?? string.Empty);
             if (transferIds.Add(transferKey) == false)
             {
                 AddError(issues, "DuplicatePropertyTransfer", identity, "Property transfer history entry appears more than once.");

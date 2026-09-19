@@ -120,6 +120,8 @@ public sealed class WorldStateSnapshot
                 : transfer.PropertyId + "\u001f"
                     + transfer.TransferAbsoluteDay.ToString(CultureInfo.InvariantCulture)
                     + "\u001f"
+                    + transfer.PreviousOwnerPersonId
+                    + "\u001f"
                     + transfer.NewOwnerPersonId);
         Estates = SnapshotCollections.CopySorted(estates, estate => estate?.EstateId);
     }
@@ -1185,7 +1187,12 @@ public static class WorldStateSnapshotBuilder
                 return day;
             }
 
-            return StringComparer.Ordinal.Compare(
+            int previous = StringComparer.Ordinal.Compare(
+                left.PreviousOwnerPersonId,
+                right.PreviousOwnerPersonId);
+            return previous != 0
+                ? previous
+                : StringComparer.Ordinal.Compare(
                 left.NewOwnerPersonId,
                 right.NewOwnerPersonId);
         });

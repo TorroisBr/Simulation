@@ -204,6 +204,58 @@ public sealed class SuccessionIntegrationTests
         Assert.That(failure.Code, Is.EqualTo(OfficeSuccessionFailureCode.OfficeNotVacant));
     }
 
+    [Test]
+    public void RuntimeRejectsAPropertyStoreBoundToAnotherPersonWorld()
+    {
+        PersonStore worldPeople = new PersonStore();
+        PersonStore foreignPeople = new PersonStore();
+        PersonId ownerId = new PersonId("same-owner-id");
+        Register(worldPeople, ownerId.Value, 0L);
+        Register(foreignPeople, ownerId.Value, 0L);
+        PropertyOwnershipStore foreignProperties = new PropertyOwnershipStore(foreignPeople);
+        Assert.That(foreignProperties.TryRegister(
+            new PropertyOwnershipRecord(new PropertyId("foreign-property"), ownerId),
+            out _), Is.True);
+
+        Assert.Throws<ArgumentException>(() => new SimulationRuntime(
+            new SimulationTime(100L),
+            Array.Empty<CityRuntime>(),
+            null,
+            personStore: worldPeople,
+            propertyOwnershipStore: foreignProperties));
+    }
+
+    [Test]
+    public void PropertyTransferDiagnosticsPreserveSameDayOwnerCycles()
+    {
+        PersonStore people = new PersonStore();
+        PersonId firstId = Register(people, "cycle-a", 0L).PersonId;
+        PersonId secondId = Register(people, "cycle-b", 0L).PersonId;
+        PersonId thirdId = Register(people, "cycle-c", 0L).PersonId;
+        PropertyOwnershipStore properties = new PropertyOwnershipStore(people);
+        PropertyId propertyId = new PropertyId("cycle-property");
+        Assert.That(properties.TryRegister(
+            new PropertyOwnershipRecord(propertyId, firstId), out _), Is.True);
+        Assert.That(PropertyTransferSystem.TryTransfer(
+            people, properties, propertyId, secondId, 100L, out _, out _), Is.True);
+        Assert.That(PropertyTransferSystem.TryTransfer(
+            people, properties, propertyId, thirdId, 100L, out _, out _), Is.True);
+        Assert.That(PropertyTransferSystem.TryTransfer(
+            people, properties, propertyId, secondId, 100L, out _, out _), Is.True);
+
+        WorldStateSnapshot snapshot = WorldStateSnapshotBuilder.BuildSnapshot(
+            new WorldStateSnapshotContext(
+                simulationTime: new SimulationTime(100L),
+                personStore: people,
+                propertyOwnershipStore: properties));
+        Assert.That(snapshot.PropertyTransferCount, Is.EqualTo(3));
+        Assert.That(WorldStateInvariantValidator.Validate(snapshot).IsValid, Is.True);
+        string canonical = WorldStateCanonicalWriter.Write(snapshot);
+        Assert.That(canonical, Does.Contain("PROPERTY_TRANSFER|cycle-property|cycle-a|cycle-b|100"));
+        Assert.That(canonical, Does.Contain("PROPERTY_TRANSFER|cycle-property|cycle-b|cycle-c|100"));
+        Assert.That(canonical, Does.Contain("PROPERTY_TRANSFER|cycle-property|cycle-c|cycle-b|100"));
+    }
+
     private static SimulationRuntime CreateEstateWorld(
         out EstateId estateId,
         out PropertyId propertyId,

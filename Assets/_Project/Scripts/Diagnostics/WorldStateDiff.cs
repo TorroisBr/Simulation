@@ -567,6 +567,8 @@ public sealed class WorldStateDiff
             + "@"
             + WorldStateCanonicalWriter.Int64Value(transfer.TransferAbsoluteDay)
             + ":"
+            + (transfer.PreviousOwnerPersonId ?? string.Empty)
+            + ":"
             + (transfer.NewOwnerPersonId ?? string.Empty);
     }
 }

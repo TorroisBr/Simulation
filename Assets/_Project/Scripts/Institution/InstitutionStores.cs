@@ -190,6 +190,31 @@ public sealed class OfficeStore
             && incumbencies.ContainsKey(officeId.Value) == false;
     }
 
+    internal bool TryGetLatestClosedTenure(
+        OfficeId officeId,
+        out OfficeTenureRecord tenure)
+    {
+        tenure = null;
+        if (officeId == null)
+        {
+            return false;
+        }
+
+        for (int index = tenureHistory.Count - 1; index >= 0; index--)
+        {
+            OfficeTenureRecord candidate = tenureHistory[index];
+            if (candidate != null
+                && candidate.OfficeId == officeId
+                && candidate.IsClosed)
+            {
+                tenure = candidate;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public bool TryAssignIncumbent(
         OfficeId officeId,
         PersonId incumbent,

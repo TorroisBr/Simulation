@@ -212,18 +212,7 @@ public static class OfficeSuccessionSystem
         OfficeId officeId,
         out OfficeTenureRecord formerTenure)
     {
-        formerTenure = null;
-        for (int index = world.OfficeTenureHistory.Count - 1; index >= 0; index--)
-        {
-            OfficeTenureRecord tenure = world.OfficeTenureHistory[index];
-            if (tenure != null && tenure.OfficeId == officeId && tenure.IsClosed)
-            {
-                formerTenure = tenure;
-                return formerTenure.Incumbent != null;
-            }
-        }
-
-        return false;
+        return world.TryGetLatestClosedOfficeTenure(officeId, out formerTenure);
     }
 
     private static OfficeSuccessionFailure MapCandidateFailure(
