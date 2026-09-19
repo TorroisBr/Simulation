@@ -25,6 +25,18 @@ This commit consolidated:
 
 Validated baseline:
 
+- Estate foundation: `9/9`
+- Institutional vacancy: `7/7`
+- Runtime integration: `5/5`
+- Runtime orchestration: `6/6`
+- Diagnostics: `46/46`
+- Long-run: `7/7`
+- ALL EditMode: `1330/1330`
+- official Smoke: `5/5`
+- `git diff --check`: green
+
+Historical demographic baseline before the continuity wave:
+
 - ALL EditMode: `1309/1309`
 - official Smoke: `5/5`
 - `git diff --check`: green
@@ -349,7 +361,7 @@ Before declaring completion:
 - canonical history audit;
 - remote synchronization.
 
-Validated demographic integration gates for this wave:
+Historical demographic integration gates for the earlier demographic wave:
 
 - targeted EditMode: `490/490` across 23 suites;
 - `SimulationRuntimeLongRunTests`: `7/7`;
