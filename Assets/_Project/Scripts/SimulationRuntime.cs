@@ -233,6 +233,41 @@ public sealed class SimulationRuntime
         return personStore.TryRegister(person, out failure);
     }
 
+    public bool TryProposeNamedBirth(
+        CityRuntime settlement,
+        PersonId personId,
+        out PersonBirthTransition transition,
+        out PersonBirthLifecycleFailure failure)
+    {
+        return PersonBirthLifecycleSystem.TryProposeNamedBirth(
+            this,
+            settlement,
+            personId,
+            out transition,
+            out failure);
+    }
+
+    public bool TryApplyNamedBirth(
+        PersonBirthTransition transition,
+        out PersonBirthLifecycleFailure failure)
+    {
+        return PersonBirthLifecycleSystem.TryApplyNamedBirth(this, transition, out failure);
+    }
+
+    public bool TryApplyNamedBirth(
+        CityRuntime settlement,
+        PersonId personId,
+        out PersonBirthTransition transition,
+        out PersonBirthLifecycleFailure failure)
+    {
+        return PersonBirthLifecycleSystem.TryApplyNamedBirth(
+            this,
+            settlement,
+            personId,
+            out transition,
+            out failure);
+    }
+
     public bool TryMaterializePerson(
         PersonId personId,
         NpcData npcData,

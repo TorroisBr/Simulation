@@ -68,6 +68,26 @@ public sealed class PersonStore
             && personsByNpcRuntimeId.TryGetValue(npcRuntimeId, out person);
     }
 
+    /// <summary>
+    /// Removes exactly the registration created for an operation that has not
+    /// yet become externally observable. This is intentionally internal: the
+    /// world must not expose arbitrary Person deletion as a public mutation.
+    /// </summary>
+    internal bool TryRollbackRegistration(PersonRuntime person)
+    {
+        if (person == null
+            || person.IsMaterialized == true
+            || personsById.TryGetValue(person.PersonId, out PersonRuntime registeredPerson) == false
+            || ReferenceEquals(registeredPerson, person) == false)
+        {
+            return false;
+        }
+
+        personsById.Remove(person.PersonId);
+        persons.Remove(person);
+        return true;
+    }
+
     public int CountResidents(string settlementRuntimeId)
     {
         if (string.IsNullOrWhiteSpace(settlementRuntimeId) == true)
