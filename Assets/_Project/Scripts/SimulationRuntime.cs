@@ -189,16 +189,16 @@ public sealed class SimulationRuntime
         }
 
         if (npcRuntime.PersonId != null
-            && (personStore.TryGet(npcRuntime.PersonId, out PersonRuntime boundPerson) == false
-                || npcRuntime.TryBindPersonRuntime(boundPerson) == false))
+            && personStore.TryGet(npcRuntime.PersonId, out PersonRuntime lifeStatePerson)
+            && lifeStatePerson.IsDeadAt(CurrentDay) != npcRuntime.IsDead)
         {
             failure = WorldNpcRegistryFailure.NpcPersonBindingInvalid;
             return false;
         }
 
         if (npcRuntime.PersonId != null
-            && personStore.TryGet(npcRuntime.PersonId, out PersonRuntime lifeStatePerson)
-            && lifeStatePerson.IsDeadAt(CurrentDay) != npcRuntime.IsDead)
+            && (personStore.TryGet(npcRuntime.PersonId, out PersonRuntime boundPerson) == false
+                || npcRuntime.TryBindPersonRuntime(boundPerson) == false))
         {
             failure = WorldNpcRegistryFailure.NpcPersonBindingInvalid;
             return false;

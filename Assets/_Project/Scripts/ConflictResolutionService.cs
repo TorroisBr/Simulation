@@ -352,7 +352,6 @@ public sealed class ConflictResolutionService
                             residenceSettlement,
                             authoritativeRoster,
                             consequence.InjurySeverity,
-                            residentPersonDeathTransitions[consequence.ParticipantId],
                             out _,
                             out lifecycleFailure)
                         : NpcPopulationLifecycleSystem.TryApplyResidentDeathWithConflictInjury(

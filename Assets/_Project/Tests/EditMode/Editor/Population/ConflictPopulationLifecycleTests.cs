@@ -118,6 +118,56 @@ public sealed class ConflictPopulationLifecycleTests
     }
 
     [Test]
+    public void MultipleFatalPersonResidentsInOneSettlementApplyWithoutPartialMutation()
+    {
+        CityRuntime city = CreateCity("fatal-multi-person-city", 5);
+        SimulationRuntime world = CreateWorld(new[] { city });
+        PersonId firstPersonId = new PersonId("fatal-multi-person-first");
+        PersonId secondPersonId = new PersonId("fatal-multi-person-second");
+        Assert.That(world.TryRegisterPerson(new PersonRuntime(firstPersonId, 0L), out _), Is.True);
+        Assert.That(world.TryRegisterPerson(new PersonRuntime(secondPersonId, 0L), out _), Is.True);
+        Assert.That(world.TryBindExistingPersonResident(firstPersonId, city, out _), Is.True);
+        Assert.That(world.TryBindExistingPersonResident(secondPersonId, city, out _), Is.True);
+        Assert.That(world.TryMaterializePerson(
+            firstPersonId,
+            SimulationTestFactory.CreateNpc("fatal-multi-person-first-definition"),
+            "fatal-multi-person-first-npc",
+            null,
+            0f,
+            out NpcRuntime first,
+            out _), Is.True);
+        Assert.That(world.TryMaterializePerson(
+            secondPersonId,
+            SimulationTestFactory.CreateNpc("fatal-multi-person-second-definition"),
+            "fatal-multi-person-second-npc",
+            null,
+            0f,
+            out NpcRuntime second,
+            out _), Is.True);
+
+        NpcConflictConsequenceSystem applier = CreateApplier(world);
+        Conflict conflict = CreateConflict(first, second, ConflictStakes.Existential);
+        ConflictResolutionConstraints constraints = ForceDeathFor(first, NpcInjurySeverity.Injured);
+        constraints.AddParticipantConstraint(new ConflictParticipantResolutionConstraint(second.RuntimeId)
+        {
+            ForceDeath = true,
+            ForcedInjurySeverity = NpcInjurySeverity.Injured
+        });
+
+        Assert.That(applier.TryResolveAndApply(
+            conflict,
+            constraints,
+            out _,
+            out string reason), Is.True, reason);
+        Assert.That(first.IsDead, Is.True);
+        Assert.That(second.IsDead, Is.True);
+        Assert.That(first.ResidenceSettlementRuntimeId, Is.Null);
+        Assert.That(second.ResidenceSettlementRuntimeId, Is.Null);
+        Assert.That(city.CurrentPopulation, Is.EqualTo(3));
+        Assert.That(city.Population.Revision, Is.EqualTo(2L));
+    }
+
+    [Test]
     public void MissingResidenceSettlementRejectsFatalResidentConflictAtomically()
     {
         CityRuntime residenceCity = CreateCity("missing-residence-city", 5);
