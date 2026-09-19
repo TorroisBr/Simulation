@@ -1,0 +1,93 @@
+using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+
+/// <summary>
+/// World-owned registry of explicit property ownership records. This minimal
+/// foundation is append-only; transfer is a later explicit domain transition,
+/// not an incidental effect of death or estate opening.
+/// </summary>
+public sealed class PropertyOwnershipStore
+{
+    private readonly Dictionary<string, PropertyOwnershipRecord> recordsByPropertyId =
+        new Dictionary<string, PropertyOwnershipRecord>(StringComparer.Ordinal);
+
+    public int Count => recordsByPropertyId.Count;
+
+    public IReadOnlyList<PropertyOwnershipRecord> OwnershipRecords
+    {
+        get
+        {
+            List<PropertyOwnershipRecord> snapshot =
+                new List<PropertyOwnershipRecord>(recordsByPropertyId.Values);
+            snapshot.Sort(CompareRecords);
+            return new ReadOnlyCollection<PropertyOwnershipRecord>(snapshot);
+        }
+    }
+
+    public IReadOnlyList<PropertyOwnershipRecord> Records => OwnershipRecords;
+
+    public bool TryRegister(
+        PropertyOwnershipRecord record,
+        out PropertyFoundationFailure failure)
+    {
+        if (record == null || record.PropertyId == null || record.OwnerPersonId == null)
+        {
+            failure = PropertyFoundationFailure.Create(
+                PropertyFoundationFailureCode.InvalidOwnershipRecord,
+                "A property ownership record with valid ids is required.");
+            return false;
+        }
+
+        if (recordsByPropertyId.ContainsKey(record.PropertyId.Value))
+        {
+            failure = PropertyFoundationFailure.Create(
+                PropertyFoundationFailureCode.DuplicatePropertyId,
+                "The property id is already registered.");
+            return false;
+        }
+
+        recordsByPropertyId.Add(record.PropertyId.Value, record);
+        failure = PropertyFoundationFailure.None;
+        return true;
+    }
+
+    public bool TryGet(PropertyId propertyId, out PropertyOwnershipRecord record)
+    {
+        record = null;
+        return propertyId != null
+            && recordsByPropertyId.TryGetValue(propertyId.Value, out record);
+    }
+
+    public IReadOnlyList<PropertyOwnershipRecord> GetOwnedBy(PersonId ownerPersonId)
+    {
+        List<PropertyOwnershipRecord> result = new List<PropertyOwnershipRecord>();
+        if (ownerPersonId == null)
+        {
+            return new ReadOnlyCollection<PropertyOwnershipRecord>(result);
+        }
+
+        foreach (PropertyOwnershipRecord record in recordsByPropertyId.Values)
+        {
+            if (record.OwnerPersonId == ownerPersonId)
+            {
+                result.Add(record);
+            }
+        }
+
+        result.Sort(CompareRecords);
+        return new ReadOnlyCollection<PropertyOwnershipRecord>(result);
+    }
+
+    private static int CompareRecords(
+        PropertyOwnershipRecord left,
+        PropertyOwnershipRecord right)
+    {
+        int propertyComparison = string.CompareOrdinal(
+            left.PropertyId.Value,
+            right.PropertyId.Value);
+        return propertyComparison != 0
+            ? propertyComparison
+            : string.CompareOrdinal(left.OwnerPersonId.Value, right.OwnerPersonId.Value);
+    }
+}
