@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
 
 public enum PersonBirthLifecycleFailure
 {
@@ -15,7 +17,14 @@ public enum PersonBirthLifecycleFailure
     InvalidTransition = 10,
     RepresentedPopulationInvalid = 11,
     RegistrationFailed = 12,
-    PopulationUnderflow = 13
+    PopulationUnderflow = 13,
+    InvalidParentCollection = 14,
+    InvalidParentId = 15,
+    DuplicateParentInput = 16,
+    ParentNotRegistered = 17,
+    SelfParent = 18,
+    ChildAlreadyHasParentage = 19,
+    ParentageMutationFailed = 20
 }
 
 /// <summary>
@@ -32,6 +41,8 @@ public sealed class PersonBirthTransition : IEquatable<PersonBirthTransition>
     public long ExpectedPopulationRevision { get; }
     public int PopulationBefore { get; }
     public int PopulationAfter { get; }
+    public IReadOnlyList<PersonId> ParentIds { get; }
+    public bool HasParents => ParentIds.Count > 0;
 
     internal PersonBirthTransition(
         PersonId personId,
@@ -40,6 +51,25 @@ public sealed class PersonBirthTransition : IEquatable<PersonBirthTransition>
         long expectedPopulationRevision,
         int populationBefore,
         int populationAfter)
+        : this(
+            personId,
+            settlementRuntimeId,
+            expectedAbsoluteDay,
+            expectedPopulationRevision,
+            populationBefore,
+            populationAfter,
+            Array.Empty<PersonId>())
+    {
+    }
+
+    internal PersonBirthTransition(
+        PersonId personId,
+        string settlementRuntimeId,
+        long expectedAbsoluteDay,
+        long expectedPopulationRevision,
+        int populationBefore,
+        int populationAfter,
+        IEnumerable<PersonId> parentIds)
     {
         PersonId = personId;
         SettlementRuntimeId = settlementRuntimeId;
@@ -47,6 +77,10 @@ public sealed class PersonBirthTransition : IEquatable<PersonBirthTransition>
         ExpectedPopulationRevision = expectedPopulationRevision;
         PopulationBefore = populationBefore;
         PopulationAfter = populationAfter;
+        ParentIds = new ReadOnlyCollection<PersonId>(
+            parentIds != null
+                ? new List<PersonId>(parentIds)
+                : new List<PersonId>());
     }
 
     public bool Equals(PersonBirthTransition other)
@@ -61,7 +95,8 @@ public sealed class PersonBirthTransition : IEquatable<PersonBirthTransition>
             && ExpectedAbsoluteDay == other.ExpectedAbsoluteDay
             && ExpectedPopulationRevision == other.ExpectedPopulationRevision
             && PopulationBefore == other.PopulationBefore
-            && PopulationAfter == other.PopulationAfter;
+            && PopulationAfter == other.PopulationAfter
+            && ParentIdsEqual(ParentIds, other.ParentIds);
     }
 
     public override bool Equals(object obj)
@@ -79,8 +114,38 @@ public sealed class PersonBirthTransition : IEquatable<PersonBirthTransition>
             hash = (hash * 397) ^ ExpectedPopulationRevision.GetHashCode();
             hash = (hash * 397) ^ PopulationBefore;
             hash = (hash * 397) ^ PopulationAfter;
+            foreach (PersonId parentId in ParentIds)
+            {
+                hash = (hash * 397) ^ (parentId != null ? parentId.GetHashCode() : 0);
+            }
+
             return hash;
         }
+    }
+
+    private static bool ParentIdsEqual(
+        IReadOnlyList<PersonId> left,
+        IReadOnlyList<PersonId> right)
+    {
+        if (ReferenceEquals(left, right))
+        {
+            return true;
+        }
+
+        if (left == null || right == null || left.Count != right.Count)
+        {
+            return false;
+        }
+
+        for (int index = 0; index < left.Count; index++)
+        {
+            if (left[index] != right[index])
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 }
 
@@ -95,6 +160,43 @@ public static class PersonBirthLifecycleSystem
         SimulationRuntime world,
         CityRuntime settlement,
         PersonId personId,
+        out PersonBirthTransition transition,
+        out PersonBirthLifecycleFailure failure)
+    {
+        return TryProposeNamedBirthCore(
+            world,
+            settlement,
+            personId,
+            null,
+            false,
+            out transition,
+            out failure);
+    }
+
+    public static bool TryProposeNamedBirth(
+        SimulationRuntime world,
+        CityRuntime settlement,
+        PersonId personId,
+        IEnumerable<PersonId> parentIds,
+        out PersonBirthTransition transition,
+        out PersonBirthLifecycleFailure failure)
+    {
+        return TryProposeNamedBirthCore(
+            world,
+            settlement,
+            personId,
+            parentIds,
+            true,
+            out transition,
+            out failure);
+    }
+
+    private static bool TryProposeNamedBirthCore(
+        SimulationRuntime world,
+        CityRuntime settlement,
+        PersonId personId,
+        IEnumerable<PersonId> parentIds,
+        bool parentAware,
         out PersonBirthTransition transition,
         out PersonBirthLifecycleFailure failure)
     {
@@ -131,6 +233,23 @@ public static class PersonBirthLifecycleSystem
             return false;
         }
 
+        if (TryPrepareParentIds(
+                world,
+                personId,
+                parentIds,
+                parentAware,
+                out IReadOnlyList<PersonId> normalizedParentIds,
+                out failure) == false)
+        {
+            return false;
+        }
+
+        if (world.GetGenealogyParents(personId).Count > 0)
+        {
+            failure = PersonBirthLifecycleFailure.ChildAlreadyHasParentage;
+            return false;
+        }
+
         SettlementPopulationPresenceSummary summary = GetPresenceSummary(world, settlement);
         if (summary == null || summary.RepresentedResidentCount > summary.ResidentPopulation)
         {
@@ -157,7 +276,8 @@ public static class PersonBirthLifecycleSystem
             world.CurrentDay,
             population.Revision,
             population.CurrentPopulation,
-            population.CurrentPopulation + 1);
+            population.CurrentPopulation + 1,
+            normalizedParentIds);
         return true;
     }
 
@@ -195,6 +315,17 @@ public static class PersonBirthLifecycleSystem
         if (world.PersonStore.TryGet(transition.PersonId, out _))
         {
             failure = PersonBirthLifecycleFailure.PersonAlreadyExists;
+            return false;
+        }
+
+        if (TryValidateTransitionParents(world, transition, out failure) == false)
+        {
+            return false;
+        }
+
+        if (world.GetGenealogyParents(transition.PersonId).Count > 0)
+        {
+            failure = PersonBirthLifecycleFailure.ChildAlreadyHasParentage;
             return false;
         }
 
@@ -265,13 +396,61 @@ public static class PersonBirthLifecycleSystem
             return false;
         }
 
+        List<PersonId> addedParentIds = new List<PersonId>();
+        foreach (PersonId parentId in transition.ParentIds)
+        {
+            if (PersonGenealogySystem.TryStoreAdd(
+                    world,
+                    parentId,
+                    transition.PersonId,
+                    out PersonGenealogyFailure genealogyFailure) == false)
+            {
+                RollbackParentage(world, addedParentIds, transition.PersonId);
+                world.PersonStore.TryRollbackRegistration(candidate);
+                failure = MapGenealogyFailure(genealogyFailure);
+                return false;
+            }
+
+            addedParentIds.Add(parentId);
+        }
+
         if (SettlementPopulationSystem.TryApply(
                 population,
                 populationTransition,
                 out populationFailure) == false)
         {
+            RollbackParentage(world, addedParentIds, transition.PersonId);
             world.PersonStore.TryRollbackRegistration(candidate);
             failure = MapPopulationFailure(populationFailure);
+            return false;
+        }
+
+        return true;
+    }
+
+    public static bool TryApplyNamedBirth(
+        SimulationRuntime world,
+        CityRuntime settlement,
+        PersonId personId,
+        IEnumerable<PersonId> parentIds,
+        out PersonBirthTransition transition,
+        out PersonBirthLifecycleFailure failure)
+    {
+        transition = null;
+        if (TryProposeNamedBirth(
+                world,
+                settlement,
+                personId,
+                parentIds,
+                out transition,
+                out failure) == false)
+        {
+            return false;
+        }
+
+        if (TryApplyNamedBirth(world, transition, out failure) == false)
+        {
+            transition = null;
             return false;
         }
 
@@ -352,6 +531,158 @@ public static class PersonBirthLifecycleSystem
         }
 
         return settlement != null;
+    }
+
+    private static bool TryPrepareParentIds(
+        SimulationRuntime world,
+        PersonId childId,
+        IEnumerable<PersonId> parentIds,
+        bool parentAware,
+        out IReadOnlyList<PersonId> normalizedParentIds,
+        out PersonBirthLifecycleFailure failure)
+    {
+        normalizedParentIds = null;
+        failure = PersonBirthLifecycleFailure.None;
+
+        if (parentAware == false)
+        {
+            normalizedParentIds = new ReadOnlyCollection<PersonId>(new List<PersonId>());
+            return true;
+        }
+
+        if (parentIds == null)
+        {
+            failure = PersonBirthLifecycleFailure.InvalidParentCollection;
+            return false;
+        }
+
+        List<PersonId> collected = new List<PersonId>();
+        HashSet<PersonId> seen = new HashSet<PersonId>();
+        foreach (PersonId parentId in parentIds)
+        {
+            if (parentId == null)
+            {
+                failure = PersonBirthLifecycleFailure.InvalidParentId;
+                return false;
+            }
+
+            if (parentId == childId)
+            {
+                failure = PersonBirthLifecycleFailure.SelfParent;
+                return false;
+            }
+
+            if (seen.Add(parentId) == false)
+            {
+                failure = PersonBirthLifecycleFailure.DuplicateParentInput;
+                return false;
+            }
+
+            if (world.PersonStore.TryGet(parentId, out _) == false)
+            {
+                failure = PersonBirthLifecycleFailure.ParentNotRegistered;
+                return false;
+            }
+
+            collected.Add(parentId);
+        }
+
+        collected.Sort(ComparePersonIds);
+        normalizedParentIds = new ReadOnlyCollection<PersonId>(collected);
+        return true;
+    }
+
+    private static bool TryValidateTransitionParents(
+        SimulationRuntime world,
+        PersonBirthTransition transition,
+        out PersonBirthLifecycleFailure failure)
+    {
+        failure = PersonBirthLifecycleFailure.None;
+        if (transition.ParentIds == null)
+        {
+            failure = PersonBirthLifecycleFailure.InvalidTransition;
+            return false;
+        }
+
+        PersonId previous = null;
+        HashSet<PersonId> seen = new HashSet<PersonId>();
+        foreach (PersonId parentId in transition.ParentIds)
+        {
+            if (parentId == null)
+            {
+                failure = PersonBirthLifecycleFailure.InvalidParentId;
+                return false;
+            }
+
+            if (parentId == transition.PersonId)
+            {
+                failure = PersonBirthLifecycleFailure.SelfParent;
+                return false;
+            }
+
+            if (seen.Add(parentId) == false)
+            {
+                failure = PersonBirthLifecycleFailure.DuplicateParentInput;
+                return false;
+            }
+
+            if (previous != null && ComparePersonIds(previous, parentId) >= 0)
+            {
+                failure = PersonBirthLifecycleFailure.InvalidTransition;
+                return false;
+            }
+
+            if (world.PersonStore.TryGet(parentId, out _) == false)
+            {
+                failure = PersonBirthLifecycleFailure.ParentNotRegistered;
+                return false;
+            }
+
+            previous = parentId;
+        }
+
+        return true;
+    }
+
+    private static void RollbackParentage(
+        SimulationRuntime world,
+        IReadOnlyList<PersonId> addedParentIds,
+        PersonId childId)
+    {
+        for (int index = addedParentIds.Count - 1; index >= 0; index--)
+        {
+            PersonGenealogySystem.TryStoreRemove(
+                world,
+                addedParentIds[index],
+                childId);
+        }
+    }
+
+    private static int ComparePersonIds(PersonId left, PersonId right)
+    {
+        return string.CompareOrdinal(left.Value, right.Value);
+    }
+
+    private static PersonBirthLifecycleFailure MapGenealogyFailure(
+        PersonGenealogyFailure failure)
+    {
+        switch (failure)
+        {
+            case PersonGenealogyFailure.InvalidParent:
+                return PersonBirthLifecycleFailure.InvalidParentId;
+            case PersonGenealogyFailure.InvalidChild:
+                return PersonBirthLifecycleFailure.InvalidPersonId;
+            case PersonGenealogyFailure.ParentNotRegistered:
+                return PersonBirthLifecycleFailure.ParentNotRegistered;
+            case PersonGenealogyFailure.SelfParent:
+                return PersonBirthLifecycleFailure.SelfParent;
+            case PersonGenealogyFailure.DuplicateParentage:
+                return PersonBirthLifecycleFailure.ParentageMutationFailed;
+            case PersonGenealogyFailure.WouldCreateCycle:
+                return PersonBirthLifecycleFailure.ParentageMutationFailed;
+            default:
+                return PersonBirthLifecycleFailure.ParentageMutationFailed;
+        }
     }
 
     private static bool IsValidTransitionShape(PersonBirthTransition transition)

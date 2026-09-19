@@ -287,6 +287,8 @@ public static class WorldStateInvariantValidator
             }
         }
 
+        ValidateParentages(snapshot.Parentages, personIds, issues);
+
         foreach (WorldStateNpcSnapshot npc in snapshot.Npcs)
         {
             if (npc == null || string.IsNullOrWhiteSpace(npc.PersonId))
@@ -349,6 +351,121 @@ public static class WorldStateInvariantValidator
         }
 
         return new WorldStateInvariantReport(issues);
+    }
+
+    private static void ValidateParentages(
+        IReadOnlyList<WorldStateParentageSnapshot> parentages,
+        HashSet<string> personIds,
+        List<WorldStateInvariantIssue> issues)
+    {
+        HashSet<string> uniqueEdges = new HashSet<string>(StringComparer.Ordinal);
+        Dictionary<string, List<string>> childrenByParent =
+            new Dictionary<string, List<string>>(StringComparer.Ordinal);
+        Dictionary<string, int> incomingCounts =
+            new Dictionary<string, int>(StringComparer.Ordinal);
+
+        foreach (string personId in personIds)
+        {
+            incomingCounts[personId] = 0;
+        }
+
+        if (parentages == null)
+        {
+            return;
+        }
+
+        foreach (WorldStateParentageSnapshot parentage in parentages)
+        {
+            if (parentage == null)
+            {
+                AddError(issues, "ParentageNull", "parentage", "Snapshot contains a null parentage entry.");
+                continue;
+            }
+
+            string parentId = parentage.ParentPersonId;
+            string childId = parentage.ChildPersonId;
+            string identity = (parentId ?? "parent") + " -> " + (childId ?? "child");
+            bool parentValid = string.IsNullOrWhiteSpace(parentId) == false
+                && personIds.Contains(parentId);
+            bool childValid = string.IsNullOrWhiteSpace(childId) == false
+                && personIds.Contains(childId);
+
+            if (string.IsNullOrWhiteSpace(parentId))
+            {
+                AddError(issues, "ParentageParentMissing", identity, "Parentage has no parent PersonId.");
+            }
+            else if (personIds.Contains(parentId) == false)
+            {
+                AddError(issues, "GenealogyParentMissing", identity, "Parentage parent is absent from the Person snapshot.");
+            }
+
+            if (string.IsNullOrWhiteSpace(childId))
+            {
+                AddError(issues, "ParentageChildMissing", identity, "Parentage has no child PersonId.");
+            }
+            else if (personIds.Contains(childId) == false)
+            {
+                AddError(issues, "GenealogyChildMissing", identity, "Parentage child is absent from the Person snapshot.");
+            }
+
+            if (parentValid && childValid && string.Equals(parentId, childId, StringComparison.Ordinal))
+            {
+                AddError(issues, "GenealogySelfParent", identity, "A Person cannot be their own parent.");
+            }
+
+            string edgeKey = (parentId ?? string.Empty) + "\u001f" + (childId ?? string.Empty);
+            if (uniqueEdges.Add(edgeKey) == false)
+            {
+                AddError(issues, "GenealogyDuplicateParentage", identity, "Parentage relation appears more than once.");
+                continue;
+            }
+
+            if (parentValid && childValid && parentId != childId)
+            {
+                if (childrenByParent.TryGetValue(parentId, out List<string> children) == false)
+                {
+                    children = new List<string>();
+                    childrenByParent.Add(parentId, children);
+                }
+
+                children.Add(childId);
+                incomingCounts[childId]++;
+            }
+        }
+
+        Queue<string> ready = new Queue<string>();
+        foreach (KeyValuePair<string, int> entry in incomingCounts)
+        {
+            if (entry.Value == 0)
+            {
+                ready.Enqueue(entry.Key);
+            }
+        }
+
+        int processed = 0;
+        while (ready.Count > 0)
+        {
+            string parentId = ready.Dequeue();
+            processed++;
+            if (childrenByParent.TryGetValue(parentId, out List<string> children) == false)
+            {
+                continue;
+            }
+
+            foreach (string childId in children)
+            {
+                incomingCounts[childId]--;
+                if (incomingCounts[childId] == 0)
+                {
+                    ready.Enqueue(childId);
+                }
+            }
+        }
+
+        if (processed != incomingCounts.Count)
+        {
+            AddError(issues, "GenealogyCycle", "genealogy", "Parentage relations contain a cycle.");
+        }
     }
 
     private static void ValidateMarketStock(WorldStateCitySnapshot city, List<WorldStateInvariantIssue> issues)

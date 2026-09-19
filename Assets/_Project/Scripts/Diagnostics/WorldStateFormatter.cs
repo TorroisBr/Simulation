@@ -53,6 +53,18 @@ public static class WorldStateSnapshotFormatter
             output.Append("Materialized NPC: ").Append(Value(person.MaterializedNpcRuntimeId)).Append('\n');
         }
 
+        foreach (WorldStateParentageSnapshot parentage in snapshot.Parentages)
+        {
+            if (parentage != null)
+            {
+                output.Append("PARENTAGE ")
+                    .Append(Value(parentage.ParentPersonId))
+                    .Append(" -> ")
+                    .Append(Value(parentage.ChildPersonId))
+                    .Append('\n');
+            }
+        }
+
         foreach (WorldStateCitySnapshot city in snapshot.Cities)
         {
             if (city == null)

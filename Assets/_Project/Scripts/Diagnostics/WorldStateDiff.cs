@@ -104,6 +104,11 @@ public sealed class WorldStateDiff
                 CompareValue("Person", identity, "ResidenceSettlementRuntimeId", WorldStateCanonicalWriter.StringValue(left.ResidenceSettlementRuntimeId), WorldStateCanonicalWriter.StringValue(right.ResidenceSettlementRuntimeId), differences);
             }, differences);
 
+        CompareEntities("Parentage", before.Parentages, after.Parentages,
+            parentage => ParentageIdentity(parentage),
+            (identity, left, right) => { },
+            differences);
+
         CompareEntities("City", before.Cities, after.Cities, city => city.RuntimeId,
             (identity, left, right) =>
             {
@@ -473,6 +478,7 @@ public sealed class WorldStateDiff
             case "NpcAction": return 1;
             case "MerchantTradePlan": return 2;
             case "NpcInventory": return 3;
+            case "Parentage": return 4;
             case "Metadata": return 4;
             case "Calendar": return 5;
             case "City": return 6;
@@ -490,5 +496,17 @@ public sealed class WorldStateDiff
             case "LocalConnection": return 18;
             default: return 100;
         }
+    }
+
+    private static string ParentageIdentity(WorldStateParentageSnapshot parentage)
+    {
+        if (parentage == null)
+        {
+            return null;
+        }
+
+        return (parentage.ParentPersonId ?? string.Empty)
+            + " -> "
+            + (parentage.ChildPersonId ?? string.Empty);
     }
 }

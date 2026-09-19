@@ -42,6 +42,13 @@ public static class WorldStateCanonicalWriter
                 person.ResidenceSettlementRuntimeId);
         }
 
+        foreach (WorldStateParentageSnapshot parentage in snapshot.Parentages)
+        {
+            AppendLine(output, "PARENTAGE",
+                parentage.ParentPersonId,
+                parentage.ChildPersonId);
+        }
+
         foreach (WorldStateNpcSnapshot npc in snapshot.Npcs)
         {
             AppendLine(output, "NPC",

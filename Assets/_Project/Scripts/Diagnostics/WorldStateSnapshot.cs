@@ -13,6 +13,8 @@ public sealed class WorldStateSnapshotContext
     public PlaceContentStore PlaceContentStore { get; }
     public LocalTopologyStore LocalTopologyStore { get; }
     public PersonStore PersonStore { get; }
+    public IEnumerable<ParentageRecord> Parentages { get; }
+    public GenealogyStore GenealogyStore { get; }
 
     public WorldStateSnapshotContext(
         SimulationTime simulationTime = null,
@@ -25,7 +27,9 @@ public sealed class WorldStateSnapshotContext
         LocalTopologyStore localTopologyStore = null,
         SimulationCalendar calendar = null,
         CalendarDefinition calendarDefinition = null,
-        PersonStore personStore = null)
+        PersonStore personStore = null,
+        IEnumerable<ParentageRecord> parentages = null,
+        GenealogyStore genealogyStore = null)
     {
         SimulationTime = simulationTime;
         Calendar = calendar ?? (calendarDefinition != null ? new SimulationCalendar(calendarDefinition) : null);
@@ -37,6 +41,10 @@ public sealed class WorldStateSnapshotContext
         PlaceContentStore = placeContentStore;
         LocalTopologyStore = localTopologyStore;
         PersonStore = personStore;
+        GenealogyStore = genealogyStore;
+        Parentages = parentages
+            ?? genealogyStore?.Records
+            ?? Array.Empty<ParentageRecord>();
     }
 }
 
@@ -52,6 +60,8 @@ public sealed class WorldStateSnapshot
     public int KnownNpcCount => Npcs.Count;
     public IReadOnlyList<WorldStatePersonSnapshot> Persons { get; }
     public int PersonCount => Persons.Count;
+    public IReadOnlyList<WorldStateParentageSnapshot> Parentages { get; }
+    public int ParentageCount => Parentages.Count;
     public WorldStateSpatialSnapshot Spatial { get; }
     public IReadOnlyList<WorldStateSiteSnapshot> Sites { get; }
     public IReadOnlyList<WorldStateExpeditionSnapshot> Expeditions { get; }
@@ -70,7 +80,8 @@ public sealed class WorldStateSnapshot
         IEnumerable<WorldStateNotableItemSnapshot> notableItems = null,
         IEnumerable<WorldStateLocalTopologySnapshot> localTopologies = null,
         WorldStateCalendarSnapshot calendarDate = null,
-        IEnumerable<WorldStatePersonSnapshot> persons = null)
+        IEnumerable<WorldStatePersonSnapshot> persons = null,
+        IEnumerable<WorldStateParentageSnapshot> parentages = null)
     {
         Metadata = new WorldStateSnapshotMetadata(absoluteDay, calendarDate);
         Npcs = SnapshotCollections.CopySorted(npcs, npc => npc?.RuntimeId);
@@ -82,6 +93,32 @@ public sealed class WorldStateSnapshot
         NotableItems = SnapshotCollections.CopySorted(notableItems, notable => notable?.RuntimeId);
         LocalTopologies = SnapshotCollections.CopySorted(localTopologies, topology => topology?.StableKey);
         Persons = SnapshotCollections.CopySorted(persons, person => person?.PersonId);
+        Parentages = SortParentages(parentages);
+    }
+
+    private static IReadOnlyList<WorldStateParentageSnapshot> SortParentages(
+        IEnumerable<WorldStateParentageSnapshot> source)
+    {
+        List<WorldStateParentageSnapshot> result = new List<WorldStateParentageSnapshot>();
+        if (source != null)
+        {
+            foreach (WorldStateParentageSnapshot parentage in source)
+            {
+                if (parentage != null)
+                {
+                    result.Add(parentage);
+                }
+            }
+        }
+
+        result.Sort((left, right) =>
+        {
+            int parent = StringComparer.Ordinal.Compare(left.ParentPersonId, right.ParentPersonId);
+            return parent != 0
+                ? parent
+                : StringComparer.Ordinal.Compare(left.ChildPersonId, right.ChildPersonId);
+        });
+        return result.AsReadOnly();
     }
 }
 
@@ -133,6 +170,18 @@ public sealed class WorldStatePersonSnapshot
         CompletedYears = completedYears;
         ResidenceSettlementRuntimeId = residenceSettlementRuntimeId;
         MaterializedNpcRuntimeId = materializedNpcRuntimeId;
+    }
+}
+
+public sealed class WorldStateParentageSnapshot
+{
+    public string ParentPersonId { get; }
+    public string ChildPersonId { get; }
+
+    public WorldStateParentageSnapshot(string parentPersonId, string childPersonId)
+    {
+        ParentPersonId = parentPersonId;
+        ChildPersonId = childPersonId;
     }
 }
 
@@ -813,6 +862,7 @@ public static class WorldStateSnapshotBuilder
             context.PersonStore,
             context.SimulationTime,
             context.Calendar);
+        List<WorldStateParentageSnapshot> parentages = BuildParentageSnapshots(context.Parentages);
         List<WorldStateExpeditionSnapshot> expeditions = BuildExpeditionSnapshots(context.ExpeditionStore);
         WorldStateCalendarSnapshot calendarDate = null;
         if (context.Calendar != null && context.SimulationTime != null)
@@ -831,7 +881,8 @@ public static class WorldStateSnapshotBuilder
             BuildNotableItemSnapshots(context.PlaceContentStore),
             BuildLocalTopologySnapshots(context.LocalTopologyStore),
             calendarDate,
-            persons);
+            persons,
+            parentages);
     }
 
     private static List<WorldStateNpcSnapshot> BuildNpcSnapshots(
@@ -910,6 +961,35 @@ public static class WorldStateSnapshotBuilder
                 person.MaterializedNpcRuntimeId));
         }
 
+        return result;
+    }
+
+    private static List<WorldStateParentageSnapshot> BuildParentageSnapshots(
+        IEnumerable<ParentageRecord> source)
+    {
+        List<WorldStateParentageSnapshot> result = new List<WorldStateParentageSnapshot>();
+        if (source == null)
+        {
+            return result;
+        }
+
+        foreach (ParentageRecord parentage in source)
+        {
+            if (parentage != null)
+            {
+                result.Add(new WorldStateParentageSnapshot(
+                    parentage.ParentId?.Value,
+                    parentage.ChildId?.Value));
+            }
+        }
+
+        result.Sort((left, right) =>
+        {
+            int parent = StringComparer.Ordinal.Compare(left.ParentPersonId, right.ParentPersonId);
+            return parent != 0
+                ? parent
+                : StringComparer.Ordinal.Compare(left.ChildPersonId, right.ChildPersonId);
+        });
         return result;
     }
 

@@ -11,6 +11,7 @@ public sealed class SimulationRuntime
     private readonly Dictionary<string, NpcRuntime> npcRegistryById;
     private readonly EffectiveSimulationConfiguration configuration;
     private readonly PersonStore personStore;
+    private readonly GenealogyStore genealogyStore;
     private readonly List<NpcActionData> configuredActions;
     private readonly ScheduledDirectiveSystem scheduledDirectiveSystem;
     private readonly JusticeSystem justiceSystem;
@@ -33,6 +34,7 @@ public sealed class SimulationRuntime
     public IReadOnlyList<CityRuntime> Cities => cities;
     public EffectiveSimulationConfiguration Configuration => configuration;
     public PersonStore PersonStore => personStore;
+    public IReadOnlyList<ParentageRecord> GenealogyRecords => genealogyStore.Records;
     /// <summary>
     /// Read-only view of every named NPC registered with this world. Registration is
     /// explicit; death and emigration do not remove an NPC from this world roster.
@@ -63,7 +65,8 @@ public sealed class SimulationRuntime
         PlaceContentStore placeContentStore = null,
         AdventureExpeditionAutonomySystem adventureExpeditionAutonomySystem = null,
         EffectiveSimulationConfiguration configuration = null,
-        PersonStore personStore = null)
+        PersonStore personStore = null,
+        GenealogyStore genealogyStore = null)
     {
         this.simulationTime = simulationTime ?? throw new ArgumentNullException(nameof(simulationTime));
 
@@ -90,6 +93,8 @@ public sealed class SimulationRuntime
 
         this.configuration = resolvedConfiguration;
         this.personStore = personStore ?? new PersonStore();
+        this.genealogyStore = genealogyStore ?? new GenealogyStore();
+        ValidateGenealogyStore(this.personStore, this.genealogyStore);
         this.cities = cities != null ? new List<CityRuntime>(cities) : new List<CityRuntime>();
         this.npcRuntimes = new List<NpcRuntime>();
         this.npcRuntimeSnapshot = this.npcRuntimes.AsReadOnly();
@@ -247,6 +252,22 @@ public sealed class SimulationRuntime
             out failure);
     }
 
+    public bool TryProposeNamedBirth(
+        CityRuntime settlement,
+        PersonId personId,
+        System.Collections.Generic.IEnumerable<PersonId> parentIds,
+        out PersonBirthTransition transition,
+        out PersonBirthLifecycleFailure failure)
+    {
+        return PersonBirthLifecycleSystem.TryProposeNamedBirth(
+            this,
+            settlement,
+            personId,
+            parentIds,
+            out transition,
+            out failure);
+    }
+
     public bool TryApplyNamedBirth(
         PersonBirthTransition transition,
         out PersonBirthLifecycleFailure failure)
@@ -266,6 +287,73 @@ public sealed class SimulationRuntime
             personId,
             out transition,
             out failure);
+    }
+
+    public bool TryApplyNamedBirth(
+        CityRuntime settlement,
+        PersonId personId,
+        System.Collections.Generic.IEnumerable<PersonId> parentIds,
+        out PersonBirthTransition transition,
+        out PersonBirthLifecycleFailure failure)
+    {
+        return PersonBirthLifecycleSystem.TryApplyNamedBirth(
+            this,
+            settlement,
+            personId,
+            parentIds,
+            out transition,
+            out failure);
+    }
+
+    public bool TryAddParentage(
+        PersonId parentId,
+        PersonId childId,
+        out PersonGenealogyFailure failure)
+    {
+        return PersonGenealogySystem.TryAddParentage(this, parentId, childId, out failure);
+    }
+
+    public bool TryRemoveParentage(
+        PersonId parentId,
+        PersonId childId,
+        out PersonGenealogyFailure failure)
+    {
+        return PersonGenealogySystem.TryRemoveParentage(this, parentId, childId, out failure);
+    }
+
+    public bool ContainsParentage(PersonId parentId, PersonId childId)
+    {
+        return genealogyStore.ContainsParentage(parentId, childId);
+    }
+
+    public IReadOnlyList<PersonId> GetGenealogyParents(PersonId childId)
+    {
+        return genealogyStore.GetParents(childId);
+    }
+
+    public IReadOnlyList<PersonId> GetGenealogyChildren(PersonId parentId)
+    {
+        return genealogyStore.GetChildren(parentId);
+    }
+
+    public IReadOnlyList<PersonId> GetGenealogyAncestors(PersonId personId)
+    {
+        return genealogyStore.GetAncestors(personId);
+    }
+
+    public IReadOnlyList<PersonId> GetGenealogyDescendants(PersonId personId)
+    {
+        return genealogyStore.GetDescendants(personId);
+    }
+
+    public bool IsGenealogyDirectParent(PersonId parentId, PersonId childId)
+    {
+        return genealogyStore.IsDirectParent(parentId, childId);
+    }
+
+    public bool IsGenealogyAncestorOf(PersonId ancestorId, PersonId descendantId)
+    {
+        return genealogyStore.IsAncestorOf(ancestorId, descendantId);
     }
 
     public bool TryMaterializePerson(
@@ -492,6 +580,23 @@ public sealed class SimulationRuntime
         }
 
         expeditionSystem?.ReconcileAfterTravel(arrivedNpcs);
+    }
+
+    internal GenealogyStore GenealogyStoreForWorldBoundary => genealogyStore;
+
+    private static void ValidateGenealogyStore(PersonStore persons, GenealogyStore genealogy)
+    {
+        foreach (ParentageRecord record in genealogy.Records)
+        {
+            if (record == null
+                || persons.TryGet(record.ParentId, out _) == false
+                || persons.TryGet(record.ChildId, out _) == false)
+            {
+                throw new ArgumentException(
+                    "The SimulationRuntime GenealogyStore contains parentage endpoints absent from PersonStore.",
+                    nameof(genealogy));
+            }
+        }
     }
 
     public void AdvanceDays(int dayCount)
