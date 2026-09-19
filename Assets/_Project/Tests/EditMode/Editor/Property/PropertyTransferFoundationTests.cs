@@ -107,6 +107,28 @@ public sealed class PropertyTransferFoundationTests
     }
 
     [Test]
+    public void TransferRejectsNewOwnerBornAfterTheTransferDay()
+    {
+        PersonStore people = new PersonStore();
+        PersonRuntime owner = Register(people, "future-owner-source");
+        PersonRuntime futureBorn = Register(people, "future-born-successor", 10L);
+        PropertyOwnershipStore properties = new PropertyOwnershipStore(people);
+        Assert.That(properties.TryRegister(
+            new PropertyOwnershipRecord(new PropertyId("future-property"), owner.PersonId),
+            out _), Is.True);
+
+        Assert.That(PropertyTransferSystem.TryProposeTransfer(
+            people,
+            properties,
+            new PropertyId("future-property"),
+            futureBorn.PersonId,
+            5L,
+            out _,
+            out PropertyTransferFailure failure), Is.False);
+        Assert.That(failure.Code, Is.EqualTo(PropertyTransferFailureCode.NewOwnerNotLiving));
+    }
+
+    [Test]
     public void TransferDoesNotRequireNpcMaterialization()
     {
         PersonStore people = new PersonStore();
@@ -131,7 +153,12 @@ public sealed class PropertyTransferFoundationTests
 
     private static PersonRuntime Register(PersonStore people, string id)
     {
-        PersonRuntime person = new PersonRuntime(new PersonId(id), 0L);
+        return Register(people, id, 0L);
+    }
+
+    private static PersonRuntime Register(PersonStore people, string id, long birthAbsoluteDay)
+    {
+        PersonRuntime person = new PersonRuntime(new PersonId(id), birthAbsoluteDay);
         Assert.That(people.TryRegister(person, out _), Is.True);
         return person;
     }

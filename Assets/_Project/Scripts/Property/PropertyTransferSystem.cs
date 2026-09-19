@@ -87,7 +87,7 @@ public static class PropertyTransferSystem
             return false;
         }
 
-        if (newOwner.IsDeadAt(transferAbsoluteDay))
+        if (IsFactuallyLivingAt(newOwner, transferAbsoluteDay) == false)
         {
             failure = PropertyTransferFailure.Create(
                 PropertyTransferFailureCode.NewOwnerNotLiving,
@@ -151,7 +151,7 @@ public static class PropertyTransferSystem
             return false;
         }
 
-        if (currentNewOwner.IsDeadAt(transition.TransferAbsoluteDay))
+        if (IsFactuallyLivingAt(currentNewOwner, transition.TransferAbsoluteDay) == false)
         {
             failure = PropertyTransferFailure.Create(
                 PropertyTransferFailureCode.NewOwnerNotLiving,
@@ -200,5 +200,13 @@ public static class PropertyTransferSystem
 
         propertyStore.TryGet(propertyId, out ownership);
         return ownership != null;
+    }
+
+    private static bool IsFactuallyLivingAt(PersonRuntime person, long absoluteDay)
+    {
+        return person != null
+            && (person.BirthAbsoluteDay.HasValue == false
+                || person.BirthAbsoluteDay.Value <= absoluteDay)
+            && person.IsDeadAt(absoluteDay) == false;
     }
 }
