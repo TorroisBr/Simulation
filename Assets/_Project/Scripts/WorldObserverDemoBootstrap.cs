@@ -162,6 +162,7 @@ public sealed class WorldObserverDemoBootstrap : MonoBehaviour
             new ConflictResolver(new WorldObserverDemoCapabilityModel(), new SeededConflictRandomSource(12)),
             null,
             new DomainEventRecorder(commandRuntimeIds, time, new SimulationRecordSequence(), events));
+        SimulationRuntime runtime = new SimulationRuntime(time, new[] { north, south }, new NpcRuntime[0], economyEnabled: false);
         WorldCommandHandlerRegistration.RegisterCoreHandlers(
             worldCommandService,
             commandRuntimeIds,
@@ -170,8 +171,8 @@ public sealed class WorldObserverDemoBootstrap : MonoBehaviour
             topologies,
             conflictService,
             definitions,
-            domainEventStore: events);
-        SimulationRuntime runtime = new SimulationRuntime(time, new[] { north, south }, new NpcRuntime[0], economyEnabled: false);
+            domainEventStore: events,
+            worldRuntime: runtime);
         WorldObserverQueryService query = new WorldObserverQueryService(
             new[] { north, south },
             new NpcRuntime[0],

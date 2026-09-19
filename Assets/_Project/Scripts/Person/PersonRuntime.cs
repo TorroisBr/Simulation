@@ -78,6 +78,11 @@ public sealed class PersonRuntime
         return true;
     }
 
+    internal void RecordDeathAfterValidation(long absoluteDay)
+    {
+        deathAbsoluteDay = absoluteDay;
+    }
+
     internal bool TryBindMaterializedNpc(string npcRuntimeId)
     {
         if (string.IsNullOrWhiteSpace(npcRuntimeId) == true || IsMaterialized == true)

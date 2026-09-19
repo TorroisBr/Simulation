@@ -137,6 +137,8 @@ public sealed class SimulationRuntime
         this.adventureExpeditionAutonomySystem = adventureExpeditionAutonomySystem;
         this.logger = logger;
 
+        this.expeditionSystem?.BindWorldRuntime(this);
+
         if (npcRuntimes != null)
         {
             foreach (NpcRuntime npcRuntime in npcRuntimes)
@@ -637,10 +639,10 @@ public sealed class SimulationRuntime
         if (npcRuntime?.BoundPersonRuntime != null)
         {
             return NpcPopulationLifecycleSystem.TryApplyResidentPersonDeath(
+                this,
                 npcRuntime,
                 settlement,
                 GetAuthoritativeNpcRoster(),
-                CurrentDay,
                 out transition,
                 out failure);
         }

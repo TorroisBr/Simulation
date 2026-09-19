@@ -25,8 +25,24 @@ public sealed class ExpeditionSystem
     private readonly SimulationLogger logger;
     private readonly PlaceContentStore placeContentStore;
     private readonly LocalTopologyStore localTopologyStore;
+    private SimulationRuntime worldRuntime;
 
     public ExpeditionStore Store => expeditionStore;
+
+    internal void BindWorldRuntime(SimulationRuntime worldRuntime)
+    {
+        if (worldRuntime == null)
+        {
+            throw new ArgumentNullException(nameof(worldRuntime));
+        }
+
+        if (this.worldRuntime != null && ReferenceEquals(this.worldRuntime, worldRuntime) == false)
+        {
+            throw new InvalidOperationException("An ExpeditionSystem cannot be bound to more than one SimulationRuntime.");
+        }
+
+        this.worldRuntime = worldRuntime;
+    }
 
     public ExpeditionSystem(
         ExpeditionStore expeditionStore,
@@ -586,6 +602,8 @@ public sealed class ExpeditionSystem
             opposition,
             conflict,
             conflictResolutionService,
+            null,
+            worldRuntime,
             out result,
             out reason) == false)
         {
