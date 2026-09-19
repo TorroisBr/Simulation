@@ -19,6 +19,8 @@ public static class SimulationConfigurationValidator
         ValidateTravel(configuration.Travel, errors);
         ValidateCrime(configuration.Crime, errors);
         ValidateGuardCrime(configuration.GuardCrime, errors);
+        ValidateNaturalMortality(configuration.NaturalMortality, errors);
+        ValidateAggregateDemography(configuration.AggregateDemography, errors);
         return new SimulationConfigurationValidationResult(errors);
     }
 
@@ -104,6 +106,75 @@ public static class SimulationConfigurationValidator
         if (guardCrime == null)
         {
             errors.Add("Guard crime configuration is required.");
+        }
+    }
+
+    private static void ValidateNaturalMortality(
+        EffectiveNaturalMortalityConfiguration naturalMortality,
+        List<string> errors)
+    {
+        if (naturalMortality == null)
+        {
+            errors.Add("Natural mortality configuration is required.");
+            return;
+        }
+
+        if (naturalMortality.Policy != NaturalMortalityPolicy.Disabled
+            && naturalMortality.Policy != NaturalMortalityPolicy.ConfiguredAnnualProbability)
+        {
+            errors.Add("Natural mortality policy has an unknown value.");
+        }
+
+        if (double.IsNaN(naturalMortality.AnnualProbability)
+            || double.IsInfinity(naturalMortality.AnnualProbability))
+        {
+            errors.Add("Natural mortality annual probability must be finite.");
+        }
+        else if (naturalMortality.AnnualProbability < 0d
+            || naturalMortality.AnnualProbability > 1d)
+        {
+            errors.Add("Natural mortality annual probability must be between zero and one.");
+        }
+    }
+
+    private static void ValidateAggregateDemography(
+        EffectiveAggregateDemographyConfiguration aggregateDemography,
+        List<string> errors)
+    {
+        if (aggregateDemography == null)
+        {
+            errors.Add("Aggregate demography configuration is required.");
+            return;
+        }
+
+        if (aggregateDemography.Policy != AggregateDemographyPolicy.Disabled
+            && aggregateDemography.Policy != AggregateDemographyPolicy.ConfiguredAnnualRates)
+        {
+            errors.Add("Aggregate demography policy has an unknown value.");
+        }
+
+        ValidateNonNegativeFinite(
+            aggregateDemography.AnnualBirthRate,
+            "Aggregate demography annual birth rate",
+            errors);
+        ValidateNonNegativeFinite(
+            aggregateDemography.AnnualDeathRate,
+            "Aggregate demography annual death rate",
+            errors);
+    }
+
+    private static void ValidateNonNegativeFinite(
+        double value,
+        string label,
+        List<string> errors)
+    {
+        if (double.IsNaN(value) || double.IsInfinity(value))
+        {
+            errors.Add(label + " must be finite.");
+        }
+        else if (value < 0d)
+        {
+            errors.Add(label + " cannot be negative.");
         }
     }
 }

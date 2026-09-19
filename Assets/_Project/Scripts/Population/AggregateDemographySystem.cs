@@ -13,6 +13,23 @@ public static class AggregateDemographySystem
         out AggregateDemographyTransition transition,
         out AggregateDemographyFailure failure)
     {
+        return TryPropose(
+            population,
+            representedResidentFloor,
+            provider,
+            0L,
+            out transition,
+            out failure);
+    }
+
+    public static bool TryPropose(
+        SettlementPopulationRuntime population,
+        int representedResidentFloor,
+        IAggregateDemographyProvider provider,
+        long currentAbsoluteDay,
+        out AggregateDemographyTransition transition,
+        out AggregateDemographyFailure failure)
+    {
         transition = null;
         failure = AggregateDemographyFailure.None;
 
@@ -37,7 +54,8 @@ public static class AggregateDemographySystem
             population.SettlementRuntimeId,
             population.Revision,
             population.CurrentPopulation,
-            representedResidentFloor);
+            representedResidentFloor,
+            currentAbsoluteDay);
         AggregateDemographyChange change = provider.GetChange(context);
 
         // A provider is policy, not mutation authority. Detect a provider that caused

@@ -25,6 +25,13 @@ public class SimulationConfigData : ScriptableObject
     public int economySnapshotIntervalDays = 10;
     public SimulationLogSettings logSettings = new SimulationLogSettings();
 
+    [Header("Demography")]
+    public bool naturalMortalityEnabled;
+    [Range(0f, 1f)] public double naturalMortalityAnnualProbability;
+    public bool aggregateDemographyEnabled;
+    public double aggregateAnnualBirthRate;
+    public double aggregateAnnualDeathRate;
+
     [Header("Status References")]
     public NpcStatusData freeStatus;
     public NpcStatusData wantedStatus;
@@ -43,6 +50,24 @@ public class SimulationConfigData : ScriptableObject
     public List<ScheduledDirectiveConfig> ScheduledDirectives => scheduledDirectives ?? (scheduledDirectives = new List<ScheduledDirectiveConfig>());
     public CommercialKnowledgeSettings CommercialKnowledge => commercialKnowledge ?? (commercialKnowledge = new CommercialKnowledgeSettings());
     public SimulationLogSettings LogSettings => logSettings ?? (logSettings = new SimulationLogSettings());
+
+    public bool NaturalMortalityEnabled => naturalMortalityEnabled;
+    public double NaturalMortalityAnnualProbability => naturalMortalityAnnualProbability;
+    public bool AggregateDemographyEnabled => aggregateDemographyEnabled;
+    public double AggregateAnnualBirthRate => aggregateAnnualBirthRate;
+    public double AggregateAnnualDeathRate => aggregateAnnualDeathRate;
+
+    public SimulationConfigurationOverrides CreateDemographyConfigurationOverrides()
+    {
+        return new SimulationConfigurationOverrides(
+            naturalMortality: new NaturalMortalityConfigurationOverrides(
+                enabled: naturalMortalityEnabled,
+                annualProbability: naturalMortalityAnnualProbability),
+            aggregateDemography: new AggregateDemographyConfigurationOverrides(
+                enabled: aggregateDemographyEnabled,
+                annualBirthRate: aggregateAnnualBirthRate,
+                annualDeathRate: aggregateAnnualDeathRate));
+    }
 
     public bool HasModule(SimulationModule module)
     {

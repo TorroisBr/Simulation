@@ -10,6 +10,10 @@ public sealed class SimulationRuntime
     private readonly IReadOnlyList<NpcRuntime> npcRuntimeSnapshot;
     private readonly Dictionary<string, NpcRuntime> npcRegistryById;
     private readonly EffectiveSimulationConfiguration configuration;
+    private readonly SimulationCalendar calendar;
+    private readonly IPersonNaturalMortalitySampleProvider naturalMortalitySamples;
+    private readonly IAggregateDemographyProvider aggregateDemographyProvider;
+    private DailyDemographyReport lastDailyDemographyReport;
     private readonly PersonStore personStore;
     private readonly GenealogyStore genealogyStore;
     private readonly InstitutionStore institutionStore;
@@ -35,6 +39,8 @@ public sealed class SimulationRuntime
     public long CurrentDay => simulationTime.AbsoluteDay;
     public IReadOnlyList<CityRuntime> Cities => cities;
     public EffectiveSimulationConfiguration Configuration => configuration;
+    public SimulationCalendar Calendar => calendar;
+    public DailyDemographyReport LastDailyDemographyReport => lastDailyDemographyReport;
     public PersonStore PersonStore => personStore;
     public IReadOnlyList<ParentageRecord> GenealogyRecords => genealogyStore.Records;
     public IReadOnlyList<InstitutionRecord> InstitutionRecords => institutionStore.Institutions;
@@ -73,7 +79,10 @@ public sealed class SimulationRuntime
         PersonStore personStore = null,
         GenealogyStore genealogyStore = null,
         InstitutionStore institutionStore = null,
-        OfficeStore officeStore = null)
+        OfficeStore officeStore = null,
+        CalendarDefinition calendarDefinition = null,
+        IPersonNaturalMortalitySampleProvider naturalMortalitySamples = null,
+        IAggregateDemographyProvider aggregateDemographyProvider = null)
     {
         this.simulationTime = simulationTime ?? throw new ArgumentNullException(nameof(simulationTime));
 
@@ -110,6 +119,10 @@ public sealed class SimulationRuntime
             resolvedPersonStore);
 
         this.configuration = resolvedConfiguration;
+        this.calendar = new SimulationCalendar(
+            calendarDefinition ?? CalendarDefinition.CreateDefault());
+        this.naturalMortalitySamples = naturalMortalitySamples;
+        this.aggregateDemographyProvider = aggregateDemographyProvider;
         this.personStore = resolvedPersonStore;
         this.genealogyStore = CloneGenealogyStore(resolvedGenealogyStore);
         this.institutionStore = resolvedInstitutionStore;
@@ -696,6 +709,10 @@ public sealed class SimulationRuntime
         placeContentStore?.AdvanceDays(1);
         logger?.BeginDay(CurrentDay);
         BeginSimulationDay();
+        lastDailyDemographyReport = DailyDemographicSystem.Advance(
+            this,
+            naturalMortalitySamples,
+            aggregateDemographyProvider);
         scheduledDirectiveSystem?.PrepareDay(CurrentDay);
 
         if (configuration.Economy.Enabled == true)

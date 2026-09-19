@@ -354,6 +354,8 @@ public static class WorldStateInvariantValidator
             foreach (WorldStatePersonSnapshot person in snapshot.Persons)
             {
                 if (person != null
+                    && (person.DeathAbsoluteDay.HasValue == false
+                        || person.DeathAbsoluteDay.Value > snapshot.AbsoluteDay)
                     && string.Equals(person.ResidenceSettlementRuntimeId, city.RuntimeId, StringComparison.Ordinal)
                     && string.IsNullOrWhiteSpace(person.PersonId) == false)
                 {

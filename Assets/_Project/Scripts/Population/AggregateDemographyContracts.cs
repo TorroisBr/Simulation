@@ -71,6 +71,7 @@ public readonly struct AggregateDemographyChange : IEquatable<AggregateDemograph
 public readonly struct AggregateDemographyContext : IEquatable<AggregateDemographyContext>
 {
     public string SettlementRuntimeId { get; }
+    public long CurrentAbsoluteDay { get; }
     public long PopulationRevision { get; }
     public int CurrentPopulation { get; }
     public int RepresentedResidentFloor { get; }
@@ -80,9 +81,11 @@ public readonly struct AggregateDemographyContext : IEquatable<AggregateDemograp
         string settlementRuntimeId,
         long populationRevision,
         int currentPopulation,
-        int representedResidentFloor)
+        int representedResidentFloor,
+        long currentAbsoluteDay = 0L)
     {
         SettlementRuntimeId = settlementRuntimeId;
+        CurrentAbsoluteDay = currentAbsoluteDay;
         PopulationRevision = populationRevision;
         CurrentPopulation = currentPopulation;
         RepresentedResidentFloor = representedResidentFloor;
@@ -91,6 +94,7 @@ public readonly struct AggregateDemographyContext : IEquatable<AggregateDemograp
     public bool Equals(AggregateDemographyContext other)
     {
         return string.Equals(SettlementRuntimeId, other.SettlementRuntimeId, StringComparison.Ordinal)
+            && CurrentAbsoluteDay == other.CurrentAbsoluteDay
             && PopulationRevision == other.PopulationRevision
             && CurrentPopulation == other.CurrentPopulation
             && RepresentedResidentFloor == other.RepresentedResidentFloor;
@@ -106,6 +110,7 @@ public readonly struct AggregateDemographyContext : IEquatable<AggregateDemograp
         unchecked
         {
             int hash = StringComparer.Ordinal.GetHashCode(SettlementRuntimeId ?? string.Empty);
+            hash = (hash * 397) ^ CurrentAbsoluteDay.GetHashCode();
             hash = (hash * 397) ^ PopulationRevision.GetHashCode();
             hash = (hash * 397) ^ CurrentPopulation;
             return (hash * 397) ^ RepresentedResidentFloor;

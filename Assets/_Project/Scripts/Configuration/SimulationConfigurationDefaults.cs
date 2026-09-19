@@ -12,7 +12,9 @@ public static class SimulationConfigurationDefaults
             new EffectiveEconomyConfiguration(true),
             new EffectiveTravelConfiguration(0f),
             new EffectiveCrimeConfiguration(false, false),
-            new EffectiveGuardCrimeConfiguration(false));
+            new EffectiveGuardCrimeConfiguration(false),
+            new EffectiveNaturalMortalityConfiguration(),
+            new EffectiveAggregateDemographyConfiguration());
     }
 
     public static EffectiveSimulationConfiguration CreateForRuntime(
@@ -25,6 +27,8 @@ public static class SimulationConfigurationDefaults
             new EffectiveEconomyConfiguration(economyEnabled),
             defaults.Travel,
             defaults.Crime,
-            new EffectiveGuardCrimeConfiguration(guardCrimeEnabled));
+            new EffectiveGuardCrimeConfiguration(guardCrimeEnabled),
+            defaults.NaturalMortality,
+            defaults.AggregateDemography);
     }
 }

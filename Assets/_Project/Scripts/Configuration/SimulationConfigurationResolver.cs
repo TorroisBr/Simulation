@@ -127,11 +127,58 @@ public static class SimulationConfigurationResolver
             guardCrimeEnabled = overrides.GuardCrime.Enabled.Value;
         }
 
+        NaturalMortalityPolicy naturalMortalityPolicy = current.NaturalMortality.Policy;
+        if (overrides.NaturalMortality.Policy.HasValue)
+        {
+            naturalMortalityPolicy = overrides.NaturalMortality.Policy.Value;
+        }
+        else if (overrides.NaturalMortality.Enabled.HasValue)
+        {
+            naturalMortalityPolicy = overrides.NaturalMortality.Enabled.Value
+                ? NaturalMortalityPolicy.ConfiguredAnnualProbability
+                : NaturalMortalityPolicy.Disabled;
+        }
+
+        double annualMortalityProbability = current.NaturalMortality.AnnualProbability;
+        if (overrides.NaturalMortality.AnnualProbability.HasValue)
+        {
+            annualMortalityProbability = overrides.NaturalMortality.AnnualProbability.Value;
+        }
+
+        AggregateDemographyPolicy aggregateDemographyPolicy = current.AggregateDemography.Policy;
+        if (overrides.AggregateDemography.Policy.HasValue)
+        {
+            aggregateDemographyPolicy = overrides.AggregateDemography.Policy.Value;
+        }
+        else if (overrides.AggregateDemography.Enabled.HasValue)
+        {
+            aggregateDemographyPolicy = overrides.AggregateDemography.Enabled.Value
+                ? AggregateDemographyPolicy.ConfiguredAnnualRates
+                : AggregateDemographyPolicy.Disabled;
+        }
+
+        double annualBirthRate = current.AggregateDemography.AnnualBirthRate;
+        if (overrides.AggregateDemography.AnnualBirthRate.HasValue)
+        {
+            annualBirthRate = overrides.AggregateDemography.AnnualBirthRate.Value;
+        }
+
+        double annualDeathRate = current.AggregateDemography.AnnualDeathRate;
+        if (overrides.AggregateDemography.AnnualDeathRate.HasValue)
+        {
+            annualDeathRate = overrides.AggregateDemography.AnnualDeathRate.Value;
+        }
+
         return new EffectiveSimulationConfiguration(
             new EffectivePopulationConfiguration(representationMode, decisionScope, maturityAgeYears),
             new EffectiveEconomyConfiguration(economyEnabled),
             new EffectiveTravelConfiguration(travelCostPerDay),
             new EffectiveCrimeConfiguration(crimeEnabled, autonomousCrimeEnabled),
-            new EffectiveGuardCrimeConfiguration(guardCrimeEnabled));
+            new EffectiveGuardCrimeConfiguration(guardCrimeEnabled),
+            new EffectiveNaturalMortalityConfiguration(naturalMortalityPolicy, annualMortalityProbability),
+            new EffectiveAggregateDemographyConfiguration(
+                aggregateDemographyPolicy,
+                annualBirthRate,
+                annualDeathRate));
     }
 }

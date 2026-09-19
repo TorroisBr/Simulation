@@ -164,25 +164,25 @@ public class TesteSimulacao : MonoBehaviour
         BootstrapInitialCommercialKnowledge();
         InitializeJusticeState();
         simulationRuntime = new SimulationRuntime(
-            simulationTime,
-            CityRuntimeList,
-            NpcRuntimeList,
-            enabledModules.IsEnabled(SimulationModule.Economy),
-            ConfiguredActions,
-            scheduledDirectiveSystem,
-            justiceSystem,
-            crimeSystem,
-            npcDecisionSystem,
-            travelSystem,
-            travelPartySystem,
-            merchantSystem,
-            commercialKnowledgeSharingSystem,
-            decisionRecorder,
-            logger,
-            enabledModules.IsEnabled(SimulationModule.GuardCrime),
-            explorableSiteStore,
-            explorableSiteKnowledgeSystem,
-            expeditionSystem);
+            simulationTime: simulationTime,
+            cities: CityRuntimeList,
+            npcRuntimes: NpcRuntimeList,
+            configuredActions: ConfiguredActions,
+            scheduledDirectiveSystem: scheduledDirectiveSystem,
+            justiceSystem: justiceSystem,
+            crimeSystem: crimeSystem,
+            npcDecisionSystem: npcDecisionSystem,
+            travelSystem: travelSystem,
+            travelPartySystem: travelPartySystem,
+            merchantSystem: merchantSystem,
+            commercialKnowledgeSharingSystem: commercialKnowledgeSharingSystem,
+            decisionRecorder: decisionRecorder,
+            logger: logger,
+            explorableSiteStore: explorableSiteStore,
+            explorableSiteKnowledgeSystem: explorableSiteKnowledgeSystem,
+            expeditionSystem: expeditionSystem,
+            configuration: ResolveRuntimeConfiguration(),
+            calendarDefinition: calendarDefinition);
     }
 
     public string GetFullLog()
@@ -268,6 +268,29 @@ public class TesteSimulacao : MonoBehaviour
         }
 
         return resolvedCalendar;
+    }
+
+    private EffectiveSimulationConfiguration ResolveRuntimeConfiguration()
+    {
+        if (simulationConfig == null)
+        {
+            return SimulationConfigurationResolver.ResolveOrThrow();
+        }
+
+        return SimulationConfigurationResolver.ResolveOrThrow(
+            contentOverrides: new SimulationConfigurationOverrides(
+                economy: new EconomyConfigurationOverrides(
+                    enabledModules.IsEnabled(SimulationModule.Economy)),
+                travel: new TravelConfigurationOverrides(simulationConfig.travelCostPerDay),
+                guardCrime: new GuardCrimeConfigurationOverrides(
+                    enabledModules.IsEnabled(SimulationModule.GuardCrime)),
+                naturalMortality: new NaturalMortalityConfigurationOverrides(
+                    enabled: simulationConfig.NaturalMortalityEnabled,
+                    annualProbability: simulationConfig.NaturalMortalityAnnualProbability),
+                aggregateDemography: new AggregateDemographyConfigurationOverrides(
+                    enabled: simulationConfig.AggregateDemographyEnabled,
+                    annualBirthRate: simulationConfig.AggregateAnnualBirthRate,
+                    annualDeathRate: simulationConfig.AggregateAnnualDeathRate)));
     }
 
     private void Simulate(int daysToSimulate)
