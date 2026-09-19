@@ -1,74 +1,271 @@
-# Simulation
+# Simulation — Agent Instructions
 
-Projeto Unity/C# de simulação de mundo inspirada em Dwarf Fortress.
+## Source of truth
 
-## Escala da simulação
+This repository is a persistent-world simulation platform.
 
-- Um tick atualmente representa 1 dia.
-- NPCs executam aproximadamente uma ação relevante por dia.
-- Não simular necessidades pequenas como comer/dormir por enquanto.
-- A população comum das cidades deve ser abstrata.
-- Apenas NPCs relevantes possuem NpcRuntime completo.
+Before doing Phase 5 work, always read:
 
-## Arquitetura
+`docs/PHASE5_STATE.md`
 
-- ScriptableObjects representam definições estáticas.
-- Classes Runtime representam estado mutável da simulação.
-- NpcData não deve guardar estado da simulação.
-- NpcRuntime guarda status, ação atual, localização, inventário etc.
-- SimulationConfigData representa o cenário/mundo configurado: módulos habilitados, cidades, NPCs, ações, status e jobs usados.
-- Módulos de simulação são normalizados em runtime; Merchant depende de Economy.
-- Módulos atuais: Economy, Merchant, Crime e GuardCrime. TravelSystem/TravelActionProvider são core e não são exclusivos de Merchant.
-- JusticeSystem mantém mandados e sentenças runtime; mandados são locais por cidade e não ficam em ScriptableObjects.
-- PROCURADO é um resumo derivado: deve existir quando o NPC possui pelo menos um mandado ativo.
+The authoritative Phase 5 branch is:
 
-## NPC Actions
+`codex/phase5/canonical`
 
-Fluxo atual:
+Feature work must start from the current HEAD of that branch unless an explicit integration task says otherwise.
 
-Status
-→ ações válidas
-→ Utility
-→ sorteio ponderado
-→ NpcActionRuntime
-→ tentativa
-→ sucesso/falha
-→ efeitos de sucesso
+Do not reconstruct current architecture from old branches when `docs/PHASE5_STATE.md` already defines the current state.
 
-- baseUtility representa vontade básica.
-- StatusWeightModifier altera Utility.
-- Utility não representa diretamente porcentagem.
-- A Utility final atualmente é usada como peso no sorteio.
-- Utility decide vontade de tentar; baseSuccessChance decide se a tentativa teve sucesso.
-- Efeitos de status do executor e do TargetNpc só devem ser aplicados quando a ação tem sucesso.
-- Ações contextuais são fornecidas por INpcActionProvider. Ações especiais sem provider habilitado não entram na decisão.
-- NpcActionRuntime é a instância concreta extensível da ação e pode carregar TargetNpc, TargetCity, TargetItem, Amount etc.
-- NpcActionData possui NpcActionCategory para classificar família ampla sem substituir NpcActionType.
-- Ações de crime iniciais: ROUBAR, ESCONDER_SE, FUGIR_DA_CIDADE e FUGIR_DA_PRISAO.
-- Ações neutras como DESCANSAR, PASSEAR e IR_A_TAVERNA usam NpcActionType.Normal e entram no mesmo sorteio ponderado.
-- Utility representa a intenção de tentar uma ação, enquanto Success Chance permanece separado; falhas de fuga aumentam pena e vigilância no estado runtime.
+## Core architecture
 
-## Direção futura
+Preserve these principles:
 
-- Ações podem possuir alvo.
-- Ações podem falhar.
-- Ações podem afetar outro NPC.
-- Exemplo: PRENDER tem um NpcRuntime como alvo.
-- Mercado, viagem e mercadores já existem; mercadores exploram diferenças de preço entre cidades.
-- NpcJobType representa uma família ampla de comportamento; NpcJobData pode especializar preferências, como preferredTradeItems para jobs Merchant.
-- Mercadores usam NpcJobType.Merchant com MerchantBehavior Traveling ou Local. O mercador local compra diretamente de viajantes, mantém estoque e vende ao mercado, sem iniciar viagem comercial.
-- MerchantTradePlan pendente acumula urgência apenas enquanto o mercador está parado e ainda precisa viajar; a urgência é resetada ao criar, concluir ou limpar o plano.
-- O mercador local representa varejo/intermediação: a venda viajante para mercador local usa preço atacadista, valida margem, reserva de caixa, cidade, estoque e dinheiro próprio do comprador; quando não há comprador válido, MarketRuntime permanece como fallback.
-- Prisão usa PrisonSentenceRuntime. Ao cumprir pena, resolve o mandado local e sincroniza PROCURADO conforme outros mandados ativos.
+`WORLD TRUTH != KNOWLEDGE != INSTITUTIONAL RECOGNITION`
 
-## Observabilidade e cenários
+The semantic chain is:
 
-- SimulationLogger filtra Day, NpcAction, Trade, Travel, Crime, Justice, produção, consumo e Market por SimulationConfigData.logSettings; warnings e errors continuam visíveis.
-- GeneralTest é o sandbox integrado com duas cidades, mercadores viajantes e locais, guardas, crime e civis.
-- Economic Network Test é um sandbox econômico de maior escala para observar rede de cidades, especialização regional, capacidade comercial, custo/distância das rotas e convergência de preços.
+`WORLD TRUTH → KNOWLEDGE → DECISION → ACTION/PLAN → EXECUTION CONTEXT → DOMAIN OUTCOME → DOMAIN EVENT → HISTORY/STATS/UI`
 
-## Código
+Decision systems may use knowledge.
 
-- Priorizar soluções simples antes de abstrações genéricas.
-- Não criar uma classe diferente para cada ação sem necessidade.
-- Evitar sistemas excessivamente complexos antes de haver um caso concreto.
+Execution must revalidate current world truth.
+
+Events and history are not primary world truth.
+
+Population representation is:
+
+`Population aggregate → Person → NpcRuntime → Active/Dormant`
+
+A Person may exist without a materialized NpcRuntime.
+
+Materialization must not change aggregate population.
+
+Residence is Person-level demographic truth for Person-backed NPCs.
+
+Age and maturity are derived from birth date/calendar/configuration and must not become mutable state on PersonRuntime.
+
+Genealogy is relation-based world truth using PersonId. Do not put parent/child collections directly on PersonRuntime.
+
+Deep politics is not part of Phase 5.
+
+## Orchestrator behavior
+
+Before starting a new implementation wave:
+
+1. Inspect the current canonical branch and HEAD.
+2. Read `docs/PHASE5_STATE.md`.
+3. Inspect relevant current code.
+4. Reconstruct or update the remaining Phase 5 dependency graph.
+5. Identify every currently unblocked task.
+6. Classify each task as:
+   - MUST WAIT
+   - PARALLEL WITH ISOLATION
+   - PARALLEL SAFE
+7. Evaluate both file/Git conflicts and semantic/architectural conflicts.
+8. Parallelize independent work when that materially saves time.
+9. Do not serialize independent work unnecessarily.
+10. Do not create excessive parallel branches when integration debt would outweigh the benefit.
+
+## Parallel implementation safety
+
+Use subagents freely in parallel for:
+
+- repository exploration;
+- architecture analysis;
+- test discovery;
+- code review;
+- diff review;
+- regression analysis.
+
+Parallel code-writing tasks require isolated Git worktrees.
+
+Never allow two writing agents to modify the same checkout concurrently.
+
+Never allow two parallel implementation agents to own the same architectural hotspot unless their work has been explicitly separated by a stable contract.
+
+Typical shared hotspots include:
+
+- `SimulationRuntime.cs`
+- Diagnostics core
+- daily simulation loop / `AdvanceDay`
+- PersonStore
+- Population stores/systems
+- lifecycle systems
+
+If isolated worktrees cannot be created because of permissions, do not perform concurrent writes in the same checkout.
+
+Request only the permission required to create/use the worktree, or serialize the implementation.
+
+## Branch rules
+
+Feature branches:
+
+`codex/phase5/<FeatureName>`
+
+Integration branches:
+
+`codex/phase5/<FeatureA><FeatureB>Integration`
+
+Canonical:
+
+`codex/phase5/canonical`
+
+Workers never implement directly on canonical.
+
+The canonical branch moves only after:
+
+- implementation is complete;
+- independent review passes;
+- integration passes;
+- required Unity tests pass;
+- `git diff --check` passes.
+
+Never:
+
+- force-push;
+- rewrite shared history;
+- delete main;
+- delete tags;
+- merge or modify main;
+- silently replace canonical with an unvalidated branch.
+
+## Recommended agent roles
+
+Use `phase5_worker` for bounded implementation.
+
+Use `phase5_reviewer` after implementation and before integration.
+
+Use `phase5_integrator` when combining approved independent branches.
+
+Use `phase5_validator` after integration and before canonical promotion.
+
+A worker does not approve its own work.
+
+For meaningful architectural changes, use an independent reviewer.
+
+## Review requirements
+
+Review implementation against its actual base commit.
+
+Inspect:
+
+- full diff;
+- architecture boundaries;
+- mutation authority;
+- transactional/atomic behavior;
+- stale-state handling;
+- deterministic behavior;
+- accidental coupling;
+- scope expansion;
+- missing tests;
+- shared hotspots.
+
+Do not approve solely because tests are green.
+
+## Integration requirements
+
+Before integrating parallel branches:
+
+- establish their common base;
+- inspect changed files;
+- inspect semantic overlap;
+- choose explicit integration order;
+- resolve conflicts intentionally;
+- do not silently discard either branch's behavior.
+
+After integration, rerun relevant targeted suites and full required regression gates.
+
+## Test policy
+
+Current canonical baseline is recorded in:
+
+`docs/PHASE5_STATE.md`
+
+For meaningful Phase 5 changes, run relevant targeted EditMode suites.
+
+Before canonical promotion run:
+
+- all relevant domain suites;
+- ALL EditMode;
+- official `Smoke` filter;
+- `git diff --check`.
+
+Official Smoke must execute the complete current Smoke suite.
+
+Long-run is required only when changes affect the daily loop, long-horizon behavior, or when a regression specifically warrants it.
+
+## Configuration architecture
+
+Configuration resolution is:
+
+`Defaults → Preset → World overrides → Content overrides → EffectiveSimulationConfiguration → Domain systems`
+
+Policy asks whether something may happen or operate autonomously.
+
+Parameters define rates, thresholds, frequency, or intensity.
+
+Content defines concrete game objects and behavior.
+
+Do not introduce special-case preset code.
+
+## Scope discipline
+
+Do not implement roadmap items early merely because they seem related.
+
+Keep separate unless explicitly required:
+
+- reproduction;
+- fertility;
+- pregnancy;
+- deep politics;
+- claims;
+- factions;
+- ideological systems;
+- advanced succession politics;
+- persistence/API;
+- Timeline architecture.
+
+Prefer small foundations followed by explicit integration tasks.
+
+## Canonical promotion
+
+When an integration is fully validated:
+
+1. record its final SHA;
+2. update `docs/PHASE5_STATE.md`;
+3. move `codex/phase5/canonical` to the validated commit;
+4. push;
+5. verify local/remote synchronization;
+6. recompute the remaining dependency graph;
+7. continue Phase 5 without waiting for the user to supply the next task.
+
+Do not ask the user what the next task is when the roadmap already determines it.
+
+## When to stop and ask the user
+
+Stop only for:
+
+- a genuine product/design decision not determined by current architecture;
+- mutually incompatible architecture choices with meaningful consequences;
+- an unrecoverable environment/tooling problem;
+- required permission that cannot be safely obtained automatically;
+- completion of Phase 5.
+
+Do not stop for routine implementation choices, naming, test execution, Git operations, cherry-picks, worktrees, or ordinary conflict resolution.
+
+## Repository commands
+
+You may autonomously use routine read/search commands including:
+
+- `Get-Content`
+- `Get-ChildItem`
+- `Select-String`
+- `rg`
+- `grep`
+- `find`
+- `ls`
+- `cat`
+
+You may use normal Git commands, Unity CLI, compilation and tests as needed under the active permission policy.
+
+Always leave completed worktrees clean and published unless a task explicitly says otherwise.
