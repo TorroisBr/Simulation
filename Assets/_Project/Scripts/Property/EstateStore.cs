@@ -8,11 +8,19 @@ using System.Collections.ObjectModel;
 /// </summary>
 public sealed class EstateStore
 {
+    private readonly PersonStore personStore;
     private readonly Dictionary<string, EstateRecord> recordsById =
         new Dictionary<string, EstateRecord>(StringComparer.Ordinal);
     private readonly Dictionary<PersonId, EstateRecord> recordsByDeceasedPerson =
         new Dictionary<PersonId, EstateRecord>();
     private long revision;
+
+    public EstateStore(PersonStore personStore)
+    {
+        this.personStore = personStore ?? throw new ArgumentNullException(nameof(personStore));
+    }
+
+    internal PersonStore PersonStoreForWorldBoundary => personStore;
 
     public int Count => recordsById.Count;
     public long Revision => revision;

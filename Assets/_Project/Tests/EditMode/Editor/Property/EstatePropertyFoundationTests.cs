@@ -75,7 +75,7 @@ public sealed class EstatePropertyFoundationTests
     {
         PersonStore people = new PersonStore();
         PersonRuntime living = new PersonRuntime(new PersonId("living-person"), 0L);
-        EstateStore estates = new EstateStore();
+        EstateStore estates = new EstateStore(people);
         Assert.That(people.TryRegister(living, out _), Is.True);
 
         Assert.That(EstateOpeningSystem.TryProposeOpening(
@@ -104,7 +104,7 @@ public sealed class EstatePropertyFoundationTests
         PersonStore people = new PersonStore();
         PersonRuntime deceased = new PersonRuntime(
             new PersonId("estate-validation-person"), 0L, 20L);
-        EstateStore estates = new EstateStore();
+        EstateStore estates = new EstateStore(people);
         Assert.That(people.TryRegister(deceased, out _), Is.True);
 
         Assert.That(EstateOpeningSystem.TryProposeOpening(
@@ -127,7 +127,7 @@ public sealed class EstatePropertyFoundationTests
     public void EstateOpeningTransitionRejectsStaleStoreAndCrossWorldPersonAtomically()
     {
         PersonStore firstPeople = new PersonStore();
-        EstateStore firstEstates = new EstateStore();
+        EstateStore firstEstates = new EstateStore(firstPeople);
         PersonRuntime firstPerson = new PersonRuntime(
             new PersonId("shared-dead-person"), 0L, 10L);
         Assert.That(firstPeople.TryRegister(firstPerson, out _), Is.True);
@@ -148,17 +148,16 @@ public sealed class EstatePropertyFoundationTests
         Assert.That(firstEstates.Count, Is.EqualTo(1));
 
         PersonStore secondPeople = new PersonStore();
-        EstateStore secondEstates = new EstateStore();
+        EstateStore secondEstates = new EstateStore(secondPeople);
         PersonRuntime secondPerson = new PersonRuntime(
             new PersonId("shared-dead-person"), 0L, 10L);
         Assert.That(secondPeople.TryRegister(secondPerson, out _), Is.True);
         Assert.That(EstateOpeningSystem.TryProposeOpening(
             firstPeople, secondEstates, new EstateId("cross-world-estate"), firstPerson.PersonId, 11L,
-            out EstateOpeningTransition crossWorldTransition, out _), Is.True);
-        Assert.That(EstateOpeningSystem.TryApplyOpening(
-            secondPeople, secondEstates, crossWorldTransition,
-            out EstateFoundationFailure crossWorldFailure), Is.False);
-        Assert.That(crossWorldFailure.Code, Is.EqualTo(EstateFoundationFailureCode.StalePersonRegistration));
+            out EstateOpeningTransition crossWorldTransition,
+            out EstateFoundationFailure crossWorldProposalFailure), Is.False);
+        Assert.That(crossWorldTransition, Is.Null);
+        Assert.That(crossWorldProposalFailure.Code, Is.EqualTo(EstateFoundationFailureCode.InvalidStore));
         Assert.That(secondEstates.Count, Is.EqualTo(0));
     }
 

@@ -26,6 +26,14 @@ public static class EstateOpeningSystem
             return false;
         }
 
+        if (ReferenceEquals(personStore, estateStore.PersonStoreForWorldBoundary) == false)
+        {
+            failure = EstateFoundationFailure.Create(
+                EstateFoundationFailureCode.InvalidStore,
+                "PersonStore and EstateStore must belong to the same world.");
+            return false;
+        }
+
         if (estateId == null)
         {
             failure = EstateFoundationFailure.Create(
@@ -119,6 +127,14 @@ public static class EstateOpeningSystem
             failure = EstateFoundationFailure.Create(
                 EstateFoundationFailureCode.InvalidStore,
                 "PersonStore and EstateStore are required.");
+            return false;
+        }
+
+        if (ReferenceEquals(personStore, estateStore.PersonStoreForWorldBoundary) == false)
+        {
+            failure = EstateFoundationFailure.Create(
+                EstateFoundationFailureCode.InvalidStore,
+                "PersonStore and EstateStore must belong to the same world.");
             return false;
         }
 
