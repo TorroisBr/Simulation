@@ -322,25 +322,25 @@ public sealed class GenealogyWorldIntegrationTests
     }
 
     [Test]
-    public void BirthRejectsPreExistingEdgesForAChildThatIsNotYetRegistered()
+    public void WorldGenealogyDoesNotAliasInjectedStoreAfterConstruction()
     {
-        CityRuntime city = CreateCity("preexisting-child-edge", 4);
+        CityRuntime city = CreateCity("genealogy-alias-isolation", 4);
         PersonStore persons = new PersonStore();
-        PersonRuntime parent = Register(persons, "parent-existing-edge");
+        PersonRuntime parent = Register(persons, "alias-parent");
+        PersonRuntime firstChild = Register(persons, "alias-child-a");
+        PersonRuntime secondChild = Register(persons, "alias-child-b");
         GenealogyStore injected = new GenealogyStore();
-        SimulationRuntime world = CreateWorld(new[] { city }, persons, injected);
-        PersonId childId = new PersonId("child-existing-edge");
-        Assert.That(injected.TryAddParentage(parent.PersonId, childId, out _), Is.True);
+        Assert.That(injected.TryAddParentage(parent.PersonId, firstChild.PersonId, out _), Is.True);
 
-        Assert.That(world.TryProposeNamedBirth(
-            city,
-            childId,
-            Array.Empty<PersonId>(),
-            out _,
-            out PersonBirthLifecycleFailure failure), Is.False);
-        Assert.That(failure, Is.EqualTo(PersonBirthLifecycleFailure.ChildAlreadyHasParentage));
-        Assert.That(world.PersonStore.TryGet(childId, out _), Is.False);
-        Assert.That(city.CurrentPopulation, Is.EqualTo(4));
+        SimulationRuntime world = CreateWorld(new[] { city }, persons, injected);
+
+        Assert.That(world.ContainsParentage(parent.PersonId, firstChild.PersonId), Is.True);
+        Assert.That(injected.TryRemoveParentage(parent.PersonId, firstChild.PersonId, out _), Is.True);
+        Assert.That(world.ContainsParentage(parent.PersonId, firstChild.PersonId), Is.True);
+
+        Assert.That(injected.TryAddParentage(parent.PersonId, secondChild.PersonId, out _), Is.True);
+        Assert.That(injected.ContainsParentage(parent.PersonId, secondChild.PersonId), Is.True);
+        Assert.That(world.ContainsParentage(parent.PersonId, secondChild.PersonId), Is.False);
         Assert.That(world.GenealogyRecords, Has.Count.EqualTo(1));
     }
 

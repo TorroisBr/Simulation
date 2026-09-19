@@ -91,10 +91,13 @@ public sealed class SimulationRuntime
                 nameof(configuration));
         }
 
+        PersonStore resolvedPersonStore = personStore ?? new PersonStore();
+        GenealogyStore resolvedGenealogyStore = genealogyStore ?? new GenealogyStore();
+        ValidateGenealogyStore(resolvedPersonStore, resolvedGenealogyStore);
+
         this.configuration = resolvedConfiguration;
-        this.personStore = personStore ?? new PersonStore();
-        this.genealogyStore = genealogyStore ?? new GenealogyStore();
-        ValidateGenealogyStore(this.personStore, this.genealogyStore);
+        this.personStore = resolvedPersonStore;
+        this.genealogyStore = CloneGenealogyStore(resolvedGenealogyStore);
         this.cities = cities != null ? new List<CityRuntime>(cities) : new List<CityRuntime>();
         this.npcRuntimes = new List<NpcRuntime>();
         this.npcRuntimeSnapshot = this.npcRuntimes.AsReadOnly();
@@ -597,6 +600,22 @@ public sealed class SimulationRuntime
                     nameof(genealogy));
             }
         }
+    }
+
+    private static GenealogyStore CloneGenealogyStore(GenealogyStore source)
+    {
+        GenealogyStore copy = new GenealogyStore();
+        foreach (ParentageRecord record in source.Records)
+        {
+            if (copy.TryAddParentage(record, out GenealogyFailure failure) == false)
+            {
+                throw new ArgumentException(
+                    "The SimulationRuntime GenealogyStore contains an invalid parentage record.",
+                    nameof(source));
+            }
+        }
+
+        return copy;
     }
 
     public void AdvanceDays(int dayCount)
