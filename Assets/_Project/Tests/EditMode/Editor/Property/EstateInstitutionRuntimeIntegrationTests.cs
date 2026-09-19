@@ -59,6 +59,23 @@ public sealed class EstateInstitutionRuntimeIntegrationTests
     }
 
     [Test]
+    public void ExposedRuntimePropertyStoreCannotBypassPersonOwnershipValidation()
+    {
+        SimulationRuntime world = new SimulationRuntime(
+            new SimulationTime(0L),
+            Array.Empty<CityRuntime>(),
+            null);
+
+        Assert.That(world.PropertyOwnershipStore.TryRegister(
+            new PropertyOwnershipRecord(
+                new PropertyId("unbound-property"),
+                new PersonId("unregistered-owner")),
+            out PropertyFoundationFailure failure), Is.False);
+        Assert.That(failure.Code, Is.EqualTo(PropertyFoundationFailureCode.PersonNotRegistered));
+        Assert.That(world.PropertyOwnershipRecords, Is.Empty);
+    }
+
+    [Test]
     public void RuntimeRequiresExplicitDeathGatedEstateOpeningAndCurrentDay()
     {
         PersonStore people = new PersonStore();

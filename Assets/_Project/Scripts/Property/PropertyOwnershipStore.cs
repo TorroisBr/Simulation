@@ -9,8 +9,18 @@ using System.Collections.ObjectModel;
 /// </summary>
 public sealed class PropertyOwnershipStore
 {
+    private readonly PersonStore personStore;
     private readonly Dictionary<string, PropertyOwnershipRecord> recordsByPropertyId =
         new Dictionary<string, PropertyOwnershipRecord>(StringComparer.Ordinal);
+
+    public PropertyOwnershipStore()
+    {
+    }
+
+    internal PropertyOwnershipStore(PersonStore personStore)
+    {
+        this.personStore = personStore ?? throw new ArgumentNullException(nameof(personStore));
+    }
 
     public int Count => recordsByPropertyId.Count;
 
@@ -36,6 +46,15 @@ public sealed class PropertyOwnershipStore
             failure = PropertyFoundationFailure.Create(
                 PropertyFoundationFailureCode.InvalidOwnershipRecord,
                 "A property ownership record with valid ids is required.");
+            return false;
+        }
+
+        if (personStore != null
+            && personStore.TryGet(record.OwnerPersonId, out _) == false)
+        {
+            failure = PropertyFoundationFailure.Create(
+                PropertyFoundationFailureCode.PersonNotRegistered,
+                "The property owner PersonId must be registered in the bound PersonStore.");
             return false;
         }
 

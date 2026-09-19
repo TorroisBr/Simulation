@@ -1140,7 +1140,7 @@ public sealed class SimulationRuntime
         PropertyOwnershipStore source,
         PersonStore personStore)
     {
-        PropertyOwnershipStore copy = new PropertyOwnershipStore();
+        PropertyOwnershipStore copy = new PropertyOwnershipStore(personStore);
         if (source == null)
         {
             return copy;
