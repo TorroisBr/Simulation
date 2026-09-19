@@ -269,3 +269,106 @@ You may autonomously use routine read/search commands including:
 You may use normal Git commands, Unity CLI, compilation and tests as needed under the active permission policy.
 
 Always leave completed worktrees clean and published unless a task explicitly says otherwise.
+
+## Routine local command authorization
+
+The user explicitly authorizes routine local repository and Unity development operations required to complete approved Phase 5 work.
+
+Do not ask the user for conversational confirmation before performing routine operations listed below.
+
+### Read/search commands
+
+You may autonomously use, including equivalent variants:
+
+- Get-Content
+- Get-ChildItem
+- Select-String
+- Test-Path
+- Resolve-Path
+- rg
+- grep
+- find
+- ls
+- dir
+- cat
+
+You may read all files required for the active task in:
+
+- the canonical Phase 5 worktree;
+- assigned isolated Phase 5 feature worktrees;
+- assigned integration worktrees;
+- repository metadata required for Git operations;
+- Unity project files;
+- Unity logs;
+- Unity test-result files.
+
+### Git authorization
+
+You may autonomously use normal non-destructive Git operations required by the approved workflow, including:
+
+- git status
+- git diff
+- git log
+- git show
+- git rev-parse
+- git branch
+- git fetch
+- git switch
+- git checkout
+- git add
+- git commit
+- git cherry-pick
+- git merge
+- git worktree list
+- git worktree add
+- git worktree remove for clean completed temporary worktrees
+- git push
+
+You may create approved Phase 5 branches and isolated worktrees without asking for conversational confirmation.
+
+You may commit and push completed feature/integration branches and canonical promotions when required by the approved orchestration workflow.
+
+Never:
+
+- force-push;
+- rewrite shared history;
+- delete main;
+- modify or merge main;
+- delete tags;
+- discard user changes;
+- run reset --hard against work that is not explicitly disposable;
+- perform destructive cleanup against uncommitted user work.
+
+If a routine Git operation requires a Codex/OS sandbox approval, request only the minimum technical permission required.
+
+Do not reinterpret a sandbox permission prompt as a product or architecture decision.
+
+### Unity authorization
+
+You may autonomously:
+
+- invoke the installed Unity Editor or Unity CLI;
+- use batchmode;
+- run EditMode tests;
+- run PlayMode tests when required;
+- run filtered or targeted test suites;
+- run the official Smoke suite;
+- run long-run simulation tests when required;
+- inspect Unity-generated logs and test-result files;
+- retry failed Unity invocations when the failure is environmental rather than a test failure.
+
+Do not ask for conversational confirmation before running Unity validation required by AGENTS.md or docs/PHASE5_STATE.md.
+
+A failed test is not by itself a reason to ask the user what to do.
+
+Diagnose whether the failure is caused by implementation, test expectation, environment, or invocation and proceed according to the approved roadmap.
+
+### Permission prompts
+
+These instructions grant task-level authorization.
+
+They do not override operating-system, sandbox, or Codex permission enforcement.
+
+If the runtime itself requires approval for a routine authorized operation, request only that technical approval and continue immediately afterward.
+
+Do not stop an orchestration wave or checkpoint merely because a routine command required environment approval.
