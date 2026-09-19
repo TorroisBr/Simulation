@@ -8,7 +8,7 @@ Canonical branch:
 
 Last validated domain integration commit:
 
-`eb93c7fcd4283f566f840fa1cde7e0269ed804b6`
+`5da60d9`
 
 This commit consolidated:
 
@@ -17,9 +17,11 @@ This commit consolidated:
 - Person Maturity Foundation
 - world-owned GenealogyStore alias hardening
 - Institution World Integration
+- Institutional vacancy recognition and tenure history
 - Natural Mortality Foundation
 - Aggregate Demography Foundation
 - deterministic daily demographic integration
+- minimal property ownership and estate continuity
 
 Validated baseline:
 
