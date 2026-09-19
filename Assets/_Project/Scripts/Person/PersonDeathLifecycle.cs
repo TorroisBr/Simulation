@@ -14,7 +14,9 @@ public enum PersonDeathLifecycleFailure
     ExecutionMirrorAlreadyDead = 9,
     InvalidTransition = 10,
     StalePersonRegistration = 11,
-    InvalidInjury = 12
+    InvalidInjury = 12,
+    InvalidDeathDay = 13,
+    ResidenceSettlementMissing = 14
 }
 
 /// <summary>
@@ -31,16 +33,27 @@ public sealed class PersonDeathTransition : IEquatable<PersonDeathTransition>
     public string ExpectedMaterializedNpcRuntimeId { get; }
     public bool ExpectsMaterializedNpc =>
         string.IsNullOrWhiteSpace(ExpectedMaterializedNpcRuntimeId) == false;
+    public string ExpectedResidenceSettlementRuntimeId { get; }
+    public long ExpectedResidencePopulationRevision { get; }
+    public int ExpectedResidencePopulation { get; }
+    public bool ExpectsResident =>
+        string.IsNullOrWhiteSpace(ExpectedResidenceSettlementRuntimeId) == false;
 
     internal PersonDeathTransition(
         PersonRuntime expectedPerson,
         long expectedAbsoluteDay,
-        string expectedMaterializedNpcRuntimeId)
+        string expectedMaterializedNpcRuntimeId,
+        string expectedResidenceSettlementRuntimeId,
+        long expectedResidencePopulationRevision,
+        int expectedResidencePopulation)
     {
         ExpectedPerson = expectedPerson;
         PersonId = expectedPerson?.PersonId;
         ExpectedAbsoluteDay = expectedAbsoluteDay;
         ExpectedMaterializedNpcRuntimeId = expectedMaterializedNpcRuntimeId;
+        ExpectedResidenceSettlementRuntimeId = expectedResidenceSettlementRuntimeId;
+        ExpectedResidencePopulationRevision = expectedResidencePopulationRevision;
+        ExpectedResidencePopulation = expectedResidencePopulation;
     }
 
     public bool Equals(PersonDeathTransition other)
@@ -51,7 +64,13 @@ public sealed class PersonDeathTransition : IEquatable<PersonDeathTransition>
             && string.Equals(
                 ExpectedMaterializedNpcRuntimeId,
                 other.ExpectedMaterializedNpcRuntimeId,
-                StringComparison.Ordinal);
+                StringComparison.Ordinal)
+            && string.Equals(
+                ExpectedResidenceSettlementRuntimeId,
+                other.ExpectedResidenceSettlementRuntimeId,
+                StringComparison.Ordinal)
+            && ExpectedResidencePopulationRevision == other.ExpectedResidencePopulationRevision
+            && ExpectedResidencePopulation == other.ExpectedResidencePopulation;
     }
 
     public override bool Equals(object obj)
@@ -67,6 +86,10 @@ public sealed class PersonDeathTransition : IEquatable<PersonDeathTransition>
             hash = (hash * 397) ^ ExpectedAbsoluteDay.GetHashCode();
             hash = (hash * 397) ^ StringComparer.Ordinal.GetHashCode(
                 ExpectedMaterializedNpcRuntimeId ?? string.Empty);
+            hash = (hash * 397) ^ StringComparer.Ordinal.GetHashCode(
+                ExpectedResidenceSettlementRuntimeId ?? string.Empty);
+            hash = (hash * 397) ^ ExpectedResidencePopulationRevision.GetHashCode();
+            hash = (hash * 397) ^ ExpectedResidencePopulation.GetHashCode();
             return hash;
         }
     }
@@ -97,10 +120,24 @@ public static class PersonDeathLifecycleSystem
             return false;
         }
 
+        if (TryResolveResidenceSnapshot(
+                world,
+                person,
+                out string residenceSettlementRuntimeId,
+                out long residencePopulationRevision,
+                out int residencePopulation,
+                out failure) == false)
+        {
+            return false;
+        }
+
         transition = new PersonDeathTransition(
             person,
             world.CurrentDay,
-            materializedNpc?.RuntimeId);
+            materializedNpc?.RuntimeId,
+            residenceSettlementRuntimeId,
+            residencePopulationRevision,
+            residencePopulation);
         return true;
     }
 
@@ -206,6 +243,42 @@ public static class PersonDeathLifecycleSystem
             return false;
         }
 
+        if (person.BirthAbsoluteDay.HasValue
+            && transition.DeathAbsoluteDay < person.BirthAbsoluteDay.Value)
+        {
+            failure = PersonDeathLifecycleFailure.InvalidDeathDay;
+            return false;
+        }
+
+        if (string.Equals(
+                person.ResidenceSettlementRuntimeId,
+                transition.ExpectedResidenceSettlementRuntimeId,
+                StringComparison.Ordinal) == false)
+        {
+            failure = PersonDeathLifecycleFailure.StaleMaterialization;
+            return false;
+        }
+
+        if (transition.ExpectsResident)
+        {
+            if (TryResolveSettlement(
+                    world,
+                    transition.ExpectedResidenceSettlementRuntimeId,
+                    out CityRuntime settlement) == false)
+            {
+                failure = PersonDeathLifecycleFailure.ResidenceSettlementMissing;
+                return false;
+            }
+
+            if (settlement.Population.Revision != transition.ExpectedResidencePopulationRevision
+                || settlement.CurrentPopulation != transition.ExpectedResidencePopulation
+                || transition.ExpectedResidencePopulation <= 0)
+            {
+                failure = PersonDeathLifecycleFailure.StalePersonRegistration;
+                return false;
+            }
+        }
+
         if (requireMaterializedNpc && materializedNpc == null)
         {
             failure = PersonDeathLifecycleFailure.InvalidTransition;
@@ -233,12 +306,103 @@ public static class PersonDeathLifecycleSystem
             return false;
         }
 
-        // Every fallible check is complete before either representation mutates.
-        transition.ExpectedPerson.RecordDeathAfterValidation(transition.DeathAbsoluteDay);
+        SettlementPopulationRuntime residentPopulation = null;
+        if (transition.ExpectsResident)
+        {
+            if (TryResolveSettlement(
+                    world,
+                    transition.ExpectedResidenceSettlementRuntimeId,
+                    out CityRuntime settlement) == false
+                || SettlementPopulationSystem.TryPropose(
+                    settlement.Population,
+                    new PopulationChangeSet(0, 1, 0, 0),
+                    out SettlementPopulationTransition aggregateTransition,
+                    out PopulationTransitionFailure aggregateFailure) == false
+                || aggregateTransition.ExpectedRevision != transition.ExpectedResidencePopulationRevision
+                || aggregateTransition.PopulationBefore != transition.ExpectedResidencePopulation
+                || SettlementPopulationSystem.TryApply(
+                    settlement.Population,
+                    aggregateTransition,
+                    out aggregateFailure) == false)
+            {
+                failure = PersonDeathLifecycleFailure.StalePersonRegistration;
+                return false;
+            }
 
-        materializedNpc?.ApplyPersonDeathAfterValidation(
-            applyConflictInjury ? injurySeverity : NpcInjurySeverity.None);
+            residentPopulation = settlement.Population;
+        }
+
+        // Every fallible check is complete before either representation mutates.
+        if (materializedNpc != null && transition.ExpectsResident)
+        {
+            materializedNpc.ApplyPersonBackedResidentDeathAfterPopulationValidation(
+                applyConflictInjury ? injurySeverity : NpcInjurySeverity.None,
+                transition);
+        }
+        else
+        {
+            transition.ExpectedPerson.RecordDeathAfterValidation(transition.DeathAbsoluteDay);
+            materializedNpc?.ApplyPersonDeathAfterValidation(
+                applyConflictInjury ? injurySeverity : NpcInjurySeverity.None);
+            if (residentPopulation != null)
+            {
+                transition.ExpectedPerson.TrySetResidenceSettlementRuntimeId(null);
+            }
+        }
         return true;
+    }
+
+    private static bool TryResolveResidenceSnapshot(
+        SimulationRuntime world,
+        PersonRuntime person,
+        out string settlementRuntimeId,
+        out long populationRevision,
+        out int population,
+        out PersonDeathLifecycleFailure failure)
+    {
+        settlementRuntimeId = person?.ResidenceSettlementRuntimeId;
+        populationRevision = 0L;
+        population = 0;
+        failure = PersonDeathLifecycleFailure.None;
+
+        if (string.IsNullOrWhiteSpace(settlementRuntimeId))
+        {
+            return true;
+        }
+
+        if (TryResolveSettlement(world, settlementRuntimeId, out CityRuntime settlement) == false)
+        {
+            failure = PersonDeathLifecycleFailure.ResidenceSettlementMissing;
+            return false;
+        }
+
+        populationRevision = settlement.Population.Revision;
+        population = settlement.CurrentPopulation;
+        return true;
+    }
+
+    private static bool TryResolveSettlement(
+        SimulationRuntime world,
+        string settlementRuntimeId,
+        out CityRuntime settlement)
+    {
+        settlement = null;
+        if (world == null || string.IsNullOrWhiteSpace(settlementRuntimeId))
+        {
+            return false;
+        }
+
+        foreach (CityRuntime candidate in world.Cities)
+        {
+            if (candidate != null
+                && string.Equals(candidate.RuntimeId, settlementRuntimeId, StringComparison.Ordinal))
+            {
+                settlement = candidate;
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static bool TryResolveLivingPerson(

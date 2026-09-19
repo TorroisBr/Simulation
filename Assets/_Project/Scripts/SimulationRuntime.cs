@@ -196,6 +196,14 @@ public sealed class SimulationRuntime
             return false;
         }
 
+        if (npcRuntime.PersonId != null
+            && personStore.TryGet(npcRuntime.PersonId, out PersonRuntime lifeStatePerson)
+            && lifeStatePerson.IsDeadAt(CurrentDay) != npcRuntime.IsDead)
+        {
+            failure = WorldNpcRegistryFailure.NpcPersonBindingInvalid;
+            return false;
+        }
+
         npcRegistryById.Add(npcRuntime.RuntimeId, npcRuntime);
         npcRuntimes.Add(npcRuntime);
         return true;

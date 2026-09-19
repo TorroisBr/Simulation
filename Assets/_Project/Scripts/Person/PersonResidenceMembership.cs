@@ -9,7 +9,8 @@ public enum PersonResidenceMembershipFailure
     InvalidSettlement = 4,
     SettlementNotInWorld = 5,
     ResidenceAlreadyAssigned = 6,
-    AggregateCapacityExceeded = 7
+    AggregateCapacityExceeded = 7,
+    PersonDead = 8
 }
 
 /// <summary>
@@ -55,6 +56,12 @@ public static class PersonResidenceMembershipSystem
             || ReferenceEquals(registeredPerson, person) == false)
         {
             failure = PersonResidenceMembershipFailure.PersonNotRegistered;
+            return false;
+        }
+
+        if (person.DeathAbsoluteDay.HasValue)
+        {
+            failure = PersonResidenceMembershipFailure.PersonDead;
             return false;
         }
 

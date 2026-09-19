@@ -145,6 +145,59 @@ public sealed class PersonNaturalMortalityFoundationTests
     }
 
     [Test]
+    public void DormantResidentPersonDeathClearsResidenceAndDecrementsAggregateAtomically()
+    {
+        CityData data = SimulationTestFactory.CreateCityData("dormant-resident-death-city-definition");
+        data.initialPopulation = 5;
+        CityRuntime city = new CityRuntime(
+            "dormant-resident-death-city",
+            data,
+            new SpatialLocationRuntime("dormant-resident-death-location"));
+        SimulationRuntime world = new SimulationRuntime(
+            new SimulationTime(12L),
+            new[] { city },
+            null);
+        PersonRuntime person = Register(world, "dormant-resident-death-person", 0L);
+        Assert.That(world.TryBindExistingPersonResident(person.PersonId, city, out _), Is.True);
+
+        Assert.That(world.TryApplyPersonDeath(
+            person.PersonId,
+            out PersonDeathTransition transition,
+            out PersonDeathLifecycleFailure failure), Is.True, failure.ToString());
+
+        Assert.That(transition.ExpectsResident, Is.True);
+        Assert.That(person.DeathAbsoluteDay, Is.EqualTo(12L));
+        Assert.That(person.ResidenceSettlementRuntimeId, Is.Null);
+        Assert.That(city.CurrentPopulation, Is.EqualTo(4));
+        Assert.That(city.Population.Revision, Is.EqualTo(1L));
+    }
+
+    [Test]
+    public void DeadPersonCannotBeAssignedResidence()
+    {
+        CityData data = SimulationTestFactory.CreateCityData("dead-residence-city-definition");
+        data.initialPopulation = 2;
+        CityRuntime city = new CityRuntime(
+            "dead-residence-city",
+            data,
+            new SpatialLocationRuntime("dead-residence-location"));
+        SimulationRuntime world = new SimulationRuntime(
+            new SimulationTime(10L),
+            new[] { city },
+            null);
+        PersonRuntime person = new PersonRuntime(new PersonId("dead-residence-person"), 0L, 9L);
+        Assert.That(world.TryRegisterPerson(person, out _), Is.True);
+
+        Assert.That(world.TryBindExistingPersonResident(
+            person.PersonId,
+            city,
+            out PersonResidenceMembershipFailure failure), Is.False);
+        Assert.That(failure, Is.EqualTo(PersonResidenceMembershipFailure.PersonDead));
+        Assert.That(person.ResidenceSettlementRuntimeId, Is.Null);
+        Assert.That(city.CurrentPopulation, Is.EqualTo(2));
+    }
+
+    [Test]
     public void StaleDayAndMaterializationAreRejectedWithoutPartialMutation()
     {
         SimulationRuntime dayWorld = CreateWorld(5L);

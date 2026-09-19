@@ -83,7 +83,7 @@ public static class SettlementPopulationPresenceQuery
         {
             foreach (PersonRuntime person in persons)
             {
-                if (person == null || person.PersonId == null)
+                if (person == null || person.PersonId == null || person.DeathAbsoluteDay.HasValue)
                 {
                     continue;
                 }
@@ -124,6 +124,11 @@ public static class SettlementPopulationPresenceQuery
                 if (boundPerson != null && boundPerson.PersonId != null)
                 {
                     string personId = boundPerson.PersonId.Value;
+                    if (boundPerson.DeathAbsoluteDay.HasValue)
+                    {
+                        continue;
+                    }
+
                     if (personsById.ContainsKey(personId) == false)
                     {
                         personsById.Add(personId, boundPerson);
@@ -140,7 +145,8 @@ public static class SettlementPopulationPresenceQuery
                 else if (npc.PersonId != null)
                 {
                     string personId = npc.PersonId.Value;
-                    if (personsById.TryGetValue(personId, out PersonRuntime knownPerson) == true)
+                    if (personsById.TryGetValue(personId, out PersonRuntime knownPerson) == true
+                        && knownPerson.DeathAbsoluteDay.HasValue == false)
                     {
                         if (string.Equals(knownPerson.ResidenceSettlementRuntimeId, city.RuntimeId, StringComparison.Ordinal))
                         {

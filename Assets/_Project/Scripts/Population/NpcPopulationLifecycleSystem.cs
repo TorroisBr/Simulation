@@ -539,6 +539,7 @@ public static class NpcPopulationLifecycleSystem
                 ? NpcPopulationLifecycleFailure.PersonAlreadyDead
                 : personFailure == PersonDeathLifecycleFailure.InvalidWorld
                     || personFailure == PersonDeathLifecycleFailure.InvalidTransition
+                    || personFailure == PersonDeathLifecycleFailure.InvalidDeathDay
                     ? NpcPopulationLifecycleFailure.InvalidDeathDay
                     : NpcPopulationLifecycleFailure.InvalidTransition;
             return false;
