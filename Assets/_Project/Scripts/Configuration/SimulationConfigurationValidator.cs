@@ -44,6 +44,11 @@ public static class SimulationConfigurationValidator
         {
             errors.Add("NPC decision simulation scope has an unknown value.");
         }
+
+        if (population.MaturityAgeYears < 0L)
+        {
+            errors.Add("Maturity age in years cannot be negative.");
+        }
     }
 
     private static void ValidateEconomy(

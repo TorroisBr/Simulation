@@ -91,6 +91,12 @@ public static class SimulationConfigurationResolver
             decisionScope = overrides.Population.DecisionScope.Value;
         }
 
+        long maturityAgeYears = current.Population.MaturityAgeYears;
+        if (overrides.Population.MaturityAgeYears.HasValue)
+        {
+            maturityAgeYears = overrides.Population.MaturityAgeYears.Value;
+        }
+
         bool economyEnabled = current.Economy.Enabled;
         if (overrides.Economy.Enabled.HasValue)
         {
@@ -122,7 +128,7 @@ public static class SimulationConfigurationResolver
         }
 
         return new EffectiveSimulationConfiguration(
-            new EffectivePopulationConfiguration(representationMode, decisionScope),
+            new EffectivePopulationConfiguration(representationMode, decisionScope, maturityAgeYears),
             new EffectiveEconomyConfiguration(economyEnabled),
             new EffectiveTravelConfiguration(travelCostPerDay),
             new EffectiveCrimeConfiguration(crimeEnabled, autonomousCrimeEnabled),
