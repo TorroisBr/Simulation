@@ -308,7 +308,7 @@ public static class WorldStateInvariantValidator
 
         ValidateParentages(snapshot.Parentages, personIds, issues);
         ValidatePropertyOwnerships(snapshot.PropertyOwnerships, personIds, issues);
-        ValidateEstates(snapshot.Estates, personIds, snapshot.AbsoluteDay, issues);
+        ValidateEstates(snapshot.Estates, personIds, personDeaths, snapshot.AbsoluteDay, issues);
 
         foreach (WorldStateNpcSnapshot npc in snapshot.Npcs)
         {
@@ -546,6 +546,7 @@ public static class WorldStateInvariantValidator
     private static void ValidateEstates(
         IReadOnlyList<WorldStateEstateSnapshot> estates,
         HashSet<string> personIds,
+        Dictionary<string, long?> personDeaths,
         long absoluteDay,
         List<WorldStateInvariantIssue> issues)
     {
@@ -583,6 +584,13 @@ public static class WorldStateInvariantValidator
                 if (personIds.Contains(estate.DeceasedPersonId) == false)
                 {
                     AddError(issues, "EstateDeceasedPersonAbsent", identity, "Estate deceased PersonId is absent from the Person snapshot.");
+                }
+
+                if (personDeaths.TryGetValue(estate.DeceasedPersonId, out long? deathAbsoluteDay) == false
+                    || deathAbsoluteDay.HasValue == false
+                    || deathAbsoluteDay.Value > estate.OpenedAbsoluteDay)
+                {
+                    AddError(issues, "EstatePersonNotFactuallyDead", identity, "Estate opening requires a factual Person death on or before the opening day.");
                 }
 
                 if (deceasedPersonIds.Add(estate.DeceasedPersonId) == false)
