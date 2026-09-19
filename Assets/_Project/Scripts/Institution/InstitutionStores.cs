@@ -61,6 +61,7 @@ public sealed class OfficeStore
         new Dictionary<string, OfficeRecord>(StringComparer.Ordinal);
     private readonly Dictionary<string, OfficeIncumbency> incumbencies =
         new Dictionary<string, OfficeIncumbency>(StringComparer.Ordinal);
+    private readonly List<OfficeTenureRecord> tenureHistory = new List<OfficeTenureRecord>();
 
     public OfficeStore(InstitutionStore institutionStore)
     {
@@ -84,6 +85,31 @@ public sealed class OfficeStore
             List<OfficeIncumbency> snapshot = new List<OfficeIncumbency>(incumbencies.Values);
             snapshot.Sort((left, right) => string.CompareOrdinal(left.OfficeId.Value, right.OfficeId.Value));
             return new ReadOnlyCollection<OfficeIncumbency>(snapshot);
+        }
+    }
+
+    public IReadOnlyList<OfficeTenureRecord> TenureHistory
+    {
+        get
+        {
+            List<OfficeTenureRecord> snapshot = new List<OfficeTenureRecord>(tenureHistory);
+            snapshot.Sort((left, right) =>
+            {
+                int office = string.CompareOrdinal(left.OfficeId.Value, right.OfficeId.Value);
+                if (office != 0)
+                {
+                    return office;
+                }
+
+                int start = Nullable.Compare(left.StartAbsoluteDay, right.StartAbsoluteDay);
+                if (start != 0)
+                {
+                    return start;
+                }
+
+                return string.CompareOrdinal(left.Incumbent.Value, right.Incumbent.Value);
+            });
+            return new ReadOnlyCollection<OfficeTenureRecord>(snapshot);
         }
     }
 
@@ -187,12 +213,32 @@ public sealed class OfficeStore
             return false;
         }
 
-        incumbencies.Add(officeId.Value, new OfficeIncumbency(officeId, incumbent, startAbsoluteDay));
+        OfficeIncumbency next = new OfficeIncumbency(officeId, incumbent, startAbsoluteDay);
+        incumbencies.Add(officeId.Value, next);
+        tenureHistory.Add(new OfficeTenureRecord(
+            officeId,
+            incumbent,
+            startAbsoluteDay,
+            null,
+            null));
         failure = InstitutionFoundationFailure.None;
         return true;
     }
 
     public bool TryVacateOffice(OfficeId officeId, out InstitutionFoundationFailure failure)
+    {
+        return TryVacateOffice(
+            officeId,
+            null,
+            InstitutionalVacancyRecognitionReason.ExplicitDecision,
+            out failure);
+    }
+
+    public bool TryVacateOffice(
+        OfficeId officeId,
+        long? endAbsoluteDay,
+        InstitutionalVacancyRecognitionReason endReason,
+        out InstitutionFoundationFailure failure)
     {
         if (TryGet(officeId, out _) == false)
         {
@@ -202,12 +248,68 @@ public sealed class OfficeStore
             return false;
         }
 
+        if (incumbencies.ContainsKey(officeId.Value) == false)
+        {
+            failure = InstitutionFoundationFailure.Create(
+                InstitutionFoundationFailureCode.OfficeAlreadyVacant,
+                "The office is already vacant.");
+            return false;
+        }
+
+        if (endAbsoluteDay.HasValue == false
+            && endReason != InstitutionalVacancyRecognitionReason.ExplicitDecision)
+        {
+            failure = InstitutionFoundationFailure.Create(
+                InstitutionFoundationFailureCode.InvalidVacancyRecognitionReason,
+                "A non-default vacancy recognition reason requires an end day.");
+            return false;
+        }
+
+        if (Enum.IsDefined(typeof(InstitutionalVacancyRecognitionReason), endReason) == false)
+        {
+            failure = InstitutionFoundationFailure.Create(
+                InstitutionFoundationFailureCode.InvalidVacancyRecognitionReason,
+                "The vacancy recognition reason is not supported.");
+            return false;
+        }
+
+        OfficeIncumbency current = incumbencies[officeId.Value];
+        if (endAbsoluteDay.HasValue
+            && current.StartAbsoluteDay.HasValue
+            && endAbsoluteDay.Value < current.StartAbsoluteDay.Value)
+        {
+            failure = InstitutionFoundationFailure.Create(
+                InstitutionFoundationFailureCode.InvalidEndAbsoluteDay,
+                "EndAbsoluteDay cannot be earlier than StartAbsoluteDay.");
+            return false;
+        }
+
+        OfficeTenureRecord closed = new OfficeTenureRecord(
+            current.OfficeId,
+            current.Incumbent,
+            current.StartAbsoluteDay,
+            endAbsoluteDay,
+            endAbsoluteDay.HasValue ? endReason : (InstitutionalVacancyRecognitionReason?)null);
+
         if (incumbencies.Remove(officeId.Value) == false)
         {
             failure = InstitutionFoundationFailure.Create(
                 InstitutionFoundationFailureCode.OfficeAlreadyVacant,
                 "The office is already vacant.");
             return false;
+        }
+
+        for (int index = tenureHistory.Count - 1; index >= 0; index--)
+        {
+            OfficeTenureRecord candidate = tenureHistory[index];
+            if (candidate.IsOpen
+                && candidate.OfficeId == current.OfficeId
+                && candidate.Incumbent == current.Incumbent
+                && candidate.StartAbsoluteDay == current.StartAbsoluteDay)
+            {
+                tenureHistory[index] = closed;
+                break;
+            }
         }
 
         failure = InstitutionFoundationFailure.None;
