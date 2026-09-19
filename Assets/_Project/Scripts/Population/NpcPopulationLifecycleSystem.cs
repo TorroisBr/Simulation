@@ -16,7 +16,10 @@ public enum NpcPopulationLifecycleFailure
     RevisionOverflow = 11,
     StaleState = 12,
     InvalidTransition = 13,
-    InvalidInjury = 14
+    InvalidInjury = 14,
+    PersonDeathAuthorityRequired = 15,
+    PersonAlreadyDead = 16,
+    InvalidDeathDay = 17
 }
 
 /// <summary>
@@ -120,6 +123,35 @@ public static class NpcPopulationLifecycleSystem
         return TryApply(npc, settlement, authoritativeRoster, transition, out failure);
     }
 
+    internal static bool TryApplyResidentPersonDeath(
+        NpcRuntime npc,
+        CityRuntime settlement,
+        AuthoritativeNpcRoster authoritativeRoster,
+        long deathAbsoluteDay,
+        out NpcPopulationLifecycleTransition transition,
+        out NpcPopulationLifecycleFailure failure)
+    {
+        if (TryProposeResidentDeath(
+                npc,
+                settlement,
+                authoritativeRoster,
+                out transition,
+                out failure) == false)
+        {
+            return false;
+        }
+
+        return TryApplyInternal(
+            npc,
+            settlement,
+            authoritativeRoster,
+            transition,
+            false,
+            NpcInjurySeverity.None,
+            deathAbsoluteDay,
+            out failure);
+    }
+
     /// <summary>
     /// Applies a conflict injury and resident death as one owner-aware lifecycle
     /// operation. The injury is validated before the aggregate commit and is committed
@@ -180,6 +212,62 @@ public static class NpcPopulationLifecycleSystem
             transition,
             true,
             injurySeverity,
+            null,
+            out failure);
+    }
+
+    internal static bool TryApplyResidentPersonDeathWithConflictInjury(
+        NpcRuntime npc,
+        CityRuntime settlement,
+        AuthoritativeNpcRoster authoritativeRoster,
+        NpcInjurySeverity injurySeverity,
+        long deathAbsoluteDay,
+        NpcPopulationLifecycleTransition transition,
+        out NpcPopulationLifecycleFailure failure)
+    {
+        if (NpcInjuryRules.IsValid(injurySeverity) == false)
+        {
+            failure = NpcPopulationLifecycleFailure.InvalidInjury;
+            return false;
+        }
+
+        return TryApplyInternal(
+            npc,
+            settlement,
+            authoritativeRoster,
+            transition,
+            true,
+            injurySeverity,
+            deathAbsoluteDay,
+            out failure);
+    }
+
+    internal static bool TryApplyResidentPersonDeathWithConflictInjury(
+        NpcRuntime npc,
+        CityRuntime settlement,
+        AuthoritativeNpcRoster authoritativeRoster,
+        NpcInjurySeverity injurySeverity,
+        long deathAbsoluteDay,
+        out NpcPopulationLifecycleTransition transition,
+        out NpcPopulationLifecycleFailure failure)
+    {
+        if (TryProposeResidentDeath(
+                npc,
+                settlement,
+                authoritativeRoster,
+                out transition,
+                out failure) == false)
+        {
+            return false;
+        }
+
+        return TryApplyResidentPersonDeathWithConflictInjury(
+            npc,
+            settlement,
+            authoritativeRoster,
+            injurySeverity,
+            deathAbsoluteDay,
+            transition,
             out failure);
     }
 
@@ -197,6 +285,7 @@ public static class NpcPopulationLifecycleSystem
             transition,
             false,
             NpcInjurySeverity.None,
+            null,
             out failure);
     }
 
@@ -207,6 +296,7 @@ public static class NpcPopulationLifecycleSystem
         NpcPopulationLifecycleTransition transition,
         bool applyConflictInjury,
         NpcInjurySeverity injurySeverity,
+        long? personDeathAbsoluteDay,
         out NpcPopulationLifecycleFailure failure)
     {
         failure = NpcPopulationLifecycleFailure.None;
@@ -229,6 +319,15 @@ public static class NpcPopulationLifecycleSystem
         }
 
         if (ValidateTransitionFacts(npc, settlement, transition, summary, out failure) == false)
+        {
+            return false;
+        }
+
+        if (ValidatePersonDeathAuthority(
+                npc,
+                transition.Operation,
+                personDeathAbsoluteDay,
+                out failure) == false)
         {
             return false;
         }
@@ -272,7 +371,42 @@ public static class NpcPopulationLifecycleSystem
         else
         {
             npc.ApplyResidentDeathAfterPopulationValidation(
-                applyConflictInjury ? injurySeverity : NpcInjurySeverity.None);
+                applyConflictInjury ? injurySeverity : NpcInjurySeverity.None,
+                personDeathAbsoluteDay);
+        }
+
+        return true;
+    }
+
+    private static bool ValidatePersonDeathAuthority(
+        NpcRuntime npc,
+        NpcPopulationLifecycleOperation operation,
+        long? personDeathAbsoluteDay,
+        out NpcPopulationLifecycleFailure failure)
+    {
+        failure = NpcPopulationLifecycleFailure.None;
+        if (operation != NpcPopulationLifecycleOperation.ResidentDeath
+            || npc.BoundPersonRuntime == null)
+        {
+            return true;
+        }
+
+        if (personDeathAbsoluteDay.HasValue == false)
+        {
+            failure = NpcPopulationLifecycleFailure.PersonDeathAuthorityRequired;
+            return false;
+        }
+
+        if (npc.BoundPersonRuntime.DeathAbsoluteDay.HasValue)
+        {
+            failure = NpcPopulationLifecycleFailure.PersonAlreadyDead;
+            return false;
+        }
+
+        if (npc.CanApplyPersonBackedDeath(personDeathAbsoluteDay.Value) == false)
+        {
+            failure = NpcPopulationLifecycleFailure.InvalidDeathDay;
+            return false;
         }
 
         return true;

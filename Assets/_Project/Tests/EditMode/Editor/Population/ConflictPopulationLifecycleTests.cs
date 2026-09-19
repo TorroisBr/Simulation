@@ -49,6 +49,47 @@ public sealed class ConflictPopulationLifecycleTests
     }
 
     [Test]
+    public void FatalResidentConflictRecordsPersonDeathThroughWorldAuthority()
+    {
+        CityRuntime city = CreateCity("fatal-person-resident-city", 5);
+        NpcRuntime opponent = CreateNpc("fatal-person-opponent");
+        SimulationRuntime world = CreateWorld(new[] { city }, opponent);
+        PersonId personId = new PersonId("fatal-person-resident");
+        Assert.That(world.TryRegisterPerson(new PersonRuntime(personId, 0L), out _), Is.True);
+        Assert.That(world.TryBindExistingPersonResident(personId, city, out _), Is.True);
+        Assert.That(world.TryMaterializePerson(
+            personId,
+            SimulationTestFactory.CreateNpc("fatal-person-definition"),
+            "fatal-person-npc",
+            null,
+            0f,
+            out NpcRuntime resident,
+            out _), Is.True);
+        NpcConflictConsequenceSystem applier = CreateApplier(world);
+        Conflict conflict = CreateConflict(resident, opponent, ConflictStakes.Existential);
+        ConflictResolutionConstraints constraints = ForceDeathFor(
+            resident,
+            NpcInjurySeverity.SeriouslyInjured);
+        constraints.AddParticipantConstraint(new ConflictParticipantResolutionConstraint(opponent.RuntimeId)
+        {
+            ForceAlive = true
+        });
+
+        Assert.That(applier.TryResolveAndApply(
+            conflict,
+            constraints,
+            out _,
+            out string reason), Is.True, reason);
+        Assert.That(world.PersonStore.TryGet(personId, out PersonRuntime person), Is.True);
+        Assert.That(person.DeathAbsoluteDay, Is.EqualTo(world.CurrentDay));
+        Assert.That(resident.IsDead, Is.True);
+        Assert.That(resident.InjurySeverity, Is.EqualTo(NpcInjurySeverity.SeriouslyInjured));
+        Assert.That(person.ResidenceSettlementRuntimeId, Is.Null);
+        Assert.That(city.CurrentPopulation, Is.EqualTo(4));
+        Assert.That(world.GetAuthoritativeNpcRoster().Npcs, Does.Contain(resident));
+    }
+
+    [Test]
     public void FatalResidentConflictCannotDecrementPopulationTwice()
     {
         CityRuntime city = CreateCity("fatal-once-city", 5);

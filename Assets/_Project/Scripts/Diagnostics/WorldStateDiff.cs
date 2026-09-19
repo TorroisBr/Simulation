@@ -98,6 +98,7 @@ public sealed class WorldStateDiff
             (identity, left, right) =>
             {
                 CompareValue("Person", identity, "BirthAbsoluteDay", WorldStateCanonicalWriter.NullableInt64Value(left.BirthAbsoluteDay), WorldStateCanonicalWriter.NullableInt64Value(right.BirthAbsoluteDay), differences);
+                CompareValue("Person", identity, "DeathAbsoluteDay", WorldStateCanonicalWriter.NullableInt64Value(left.DeathAbsoluteDay), WorldStateCanonicalWriter.NullableInt64Value(right.DeathAbsoluteDay), differences);
                 CompareValue("Person", identity, "MaterializedNpcRuntimeId", WorldStateCanonicalWriter.StringValue(left.MaterializedNpcRuntimeId), WorldStateCanonicalWriter.StringValue(right.MaterializedNpcRuntimeId), differences);
                 CompareValue("Person", identity, "IsMaterialized", WorldStateCanonicalWriter.BoolValue(left.IsMaterialized), WorldStateCanonicalWriter.BoolValue(right.IsMaterialized), differences);
                 CompareValue("Person", identity, "CompletedYears", WorldStateCanonicalWriter.NullableInt64Value(left.CompletedYears), WorldStateCanonicalWriter.NullableInt64Value(right.CompletedYears), differences);

@@ -228,10 +228,14 @@ public sealed class PersonFoundationTests
             0f,
             out NpcRuntime deadNpc,
             out _), Is.True);
-        Assert.That(deadNpc.TryApplyDeath(), Is.True);
+        Assert.That(deathWorld.TryApplyPersonDeath(
+            deadPersonId,
+            out _,
+            out PersonDeathLifecycleFailure deathFailure), Is.True, deathFailure.ToString());
         Assert.That(deadNpc.PersonId, Is.EqualTo(deadPersonId));
         Assert.That(deathWorld.PersonStore.TryGet(deadPersonId, out PersonRuntime deadPerson), Is.True);
         Assert.That(deadPerson.IsMaterialized, Is.True);
+        Assert.That(deadPerson.DeathAbsoluteDay, Is.EqualTo(deathWorld.CurrentDay));
 
         CityRuntime city = SimulationTestFactory.CreateCity("emigration-city", "emigration-location");
         SimulationRuntime travelWorld = CreateWorld();

@@ -39,7 +39,8 @@ public static class WorldStateCanonicalWriter
                 BoolValue(person.IsMaterialized),
                 person.BirthAbsoluteDay.HasValue ? Int64Value(person.BirthAbsoluteDay.Value) : null,
                 person.CompletedYears.HasValue ? Int64Value(person.CompletedYears.Value) : null,
-                person.ResidenceSettlementRuntimeId);
+                person.ResidenceSettlementRuntimeId,
+                person.DeathAbsoluteDay.HasValue ? Int64Value(person.DeathAbsoluteDay.Value) : null);
         }
 
         foreach (WorldStateParentageSnapshot parentage in snapshot.Parentages)
