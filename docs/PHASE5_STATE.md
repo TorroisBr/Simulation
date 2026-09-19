@@ -8,7 +8,7 @@ Canonical branch:
 
 Last validated domain integration commit:
 
-`a556c365dadb776ebcff29aeced45c22dd1cadfd`
+`57db1ce765fbc864f2c9ef04319e17417a33ac1b`
 
 This commit consolidated:
 
@@ -16,10 +16,11 @@ This commit consolidated:
 - Parent-Aware Named Birth
 - Person Maturity Foundation
 - world-owned GenealogyStore alias hardening
+- Institution World Integration
 
 Validated baseline:
 
-- ALL EditMode: `1259/1259`
+- ALL EditMode: `1265/1265`
 - official Smoke: `5/5`
 - `git diff --check`: green
 
@@ -151,7 +152,14 @@ Completed foundations:
 
 Incumbency references PersonId.
 
-Full world integration remains.
+World integration completed:
+
+- world-owned InstitutionStore and OfficeStore;
+- paired-store validation and copied world state;
+- PersonStore existence validation for incumbencies;
+- deterministic world-level institution and office queries;
+- multi-world isolation;
+- no automatic vacancy recognition from factual death.
 
 ### Diagnostics
 
@@ -198,12 +206,6 @@ Support demographic change for non-individualized population.
 
 Preserve aggregate births without mandatory Person creation.
 
-### Institution world integration
-
-Integrate Institution/Office stores with world runtime ownership and Person validation.
-
-Preserve distinction between factual state and institutional recognition.
-
 ### Death, property and estate
 
 Establish minimal property continuity after Person death.
@@ -224,10 +226,15 @@ Deep politics remains Phase 6.
 
 Reevaluate actual code before every wave.
 
-Potentially independent:
+Current next wave:
 
-- mortality/lifecycle;
-- institution world integration.
+- NaturalMortalityFoundation and AggregateDemographyFoundation are independently
+  bounded and must not modify AdvanceDay.
+- After both foundations are reviewed and integrated, a single daily-demography
+  integration task owns calendar injection, configuration reconciliation, ordering,
+  and AdvanceDay.
+
+Institution world integration is complete and is no longer an active parallel lane.
 
 Potentially conflicting:
 
@@ -236,6 +243,10 @@ Potentially conflicting:
 - vacancy recognition vs institution runtime integration.
 
 Evaluate semantic overlap, not just Git conflicts.
+
+Factual Person death remains separate from institutional vacancy recognition.
+Aggregate demography remains aggregate truth and must not inspect Person/Npc runtime
+state to calculate represented-resident floors.
 
 ## Phase 5 completion gate
 
