@@ -65,6 +65,7 @@ public static class SuccessionCandidateSystem
             new List<SuccessionCandidateRecord>();
         StringBuilder fingerprint = new StringBuilder();
         fingerprint.Append(subject.SubjectPersonId.Value).Append('|');
+        StringBuilder eligibleFingerprint = new StringBuilder();
 
         foreach (PersonId childId in directChildren)
         {
@@ -114,6 +115,7 @@ public static class SuccessionCandidateSystem
                 SuccessionCandidateRelation.DirectChild,
                 maturity.AgeInDays,
                 maturity.CompletedYears));
+            eligibleFingerprint.Append(child.PersonId.Value).Append(';');
         }
 
         candidates.Sort((left, right) => string.CompareOrdinal(
@@ -124,7 +126,7 @@ public static class SuccessionCandidateSystem
             currentAbsoluteDay,
             maturityAgeYears,
             candidates,
-            fingerprint.ToString());
+            fingerprint.Append("eligible:").Append(eligibleFingerprint).ToString());
         return true;
     }
 }
