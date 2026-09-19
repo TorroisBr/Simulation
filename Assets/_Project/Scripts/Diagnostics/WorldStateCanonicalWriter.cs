@@ -57,6 +57,15 @@ public static class WorldStateCanonicalWriter
                 ownership.OwnerPersonId);
         }
 
+        foreach (WorldStatePropertyTransferSnapshot transfer in snapshot.PropertyTransfers)
+        {
+            AppendLine(output, "PROPERTY_TRANSFER",
+                transfer.PropertyId,
+                transfer.PreviousOwnerPersonId,
+                transfer.NewOwnerPersonId,
+                Int64Value(transfer.TransferAbsoluteDay));
+        }
+
         foreach (WorldStateEstateSnapshot estate in snapshot.Estates)
         {
             AppendLine(output, "ESTATE",

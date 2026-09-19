@@ -82,6 +82,22 @@ public static class WorldStateSnapshotFormatter
             }
         }
 
+        foreach (WorldStatePropertyTransferSnapshot transfer in snapshot.PropertyTransfers)
+        {
+            if (transfer != null)
+            {
+                output.Append("PROPERTY TRANSFER ")
+                    .Append(Value(transfer.PropertyId))
+                    .Append(" ")
+                    .Append(Value(transfer.PreviousOwnerPersonId))
+                    .Append(" -> ")
+                    .Append(Value(transfer.NewOwnerPersonId))
+                    .Append(" day ")
+                    .Append(WorldStateCanonicalWriter.Int64Value(transfer.TransferAbsoluteDay))
+                    .Append('\n');
+            }
+        }
+
         foreach (WorldStateEstateSnapshot estate in snapshot.Estates)
         {
             if (estate != null)

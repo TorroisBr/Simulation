@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 
 public sealed class WorldStateSnapshotContext
 {
@@ -70,6 +71,8 @@ public sealed class WorldStateSnapshot
     public int ParentageCount => Parentages.Count;
     public IReadOnlyList<WorldStatePropertyOwnershipSnapshot> PropertyOwnerships { get; }
     public int PropertyOwnershipCount => PropertyOwnerships.Count;
+    public IReadOnlyList<WorldStatePropertyTransferSnapshot> PropertyTransfers { get; }
+    public int PropertyTransferCount => PropertyTransfers.Count;
     public IReadOnlyList<WorldStateEstateSnapshot> Estates { get; }
     public int EstateCount => Estates.Count;
     public WorldStateSpatialSnapshot Spatial { get; }
@@ -93,7 +96,8 @@ public sealed class WorldStateSnapshot
         IEnumerable<WorldStatePersonSnapshot> persons = null,
         IEnumerable<WorldStateParentageSnapshot> parentages = null,
         IEnumerable<WorldStatePropertyOwnershipSnapshot> propertyOwnerships = null,
-        IEnumerable<WorldStateEstateSnapshot> estates = null)
+        IEnumerable<WorldStateEstateSnapshot> estates = null,
+        IEnumerable<WorldStatePropertyTransferSnapshot> propertyTransfers = null)
     {
         Metadata = new WorldStateSnapshotMetadata(absoluteDay, calendarDate);
         Npcs = SnapshotCollections.CopySorted(npcs, npc => npc?.RuntimeId);
@@ -109,6 +113,14 @@ public sealed class WorldStateSnapshot
         PropertyOwnerships = SnapshotCollections.CopySorted(
             propertyOwnerships,
             ownership => ownership?.PropertyId);
+        PropertyTransfers = SnapshotCollections.CopySorted(
+            propertyTransfers,
+            transfer => transfer == null
+                ? null
+                : transfer.PropertyId + "\u001f"
+                    + transfer.TransferAbsoluteDay.ToString(CultureInfo.InvariantCulture)
+                    + "\u001f"
+                    + transfer.NewOwnerPersonId);
         Estates = SnapshotCollections.CopySorted(estates, estate => estate?.EstateId);
     }
 
@@ -232,6 +244,26 @@ public sealed class WorldStatePropertyOwnershipSnapshot
     {
         PropertyId = propertyId;
         OwnerPersonId = ownerPersonId;
+    }
+}
+
+public sealed class WorldStatePropertyTransferSnapshot
+{
+    public string PropertyId { get; }
+    public string PreviousOwnerPersonId { get; }
+    public string NewOwnerPersonId { get; }
+    public long TransferAbsoluteDay { get; }
+
+    public WorldStatePropertyTransferSnapshot(
+        string propertyId,
+        string previousOwnerPersonId,
+        string newOwnerPersonId,
+        long transferAbsoluteDay)
+    {
+        PropertyId = propertyId;
+        PreviousOwnerPersonId = previousOwnerPersonId;
+        NewOwnerPersonId = newOwnerPersonId;
+        TransferAbsoluteDay = transferAbsoluteDay;
     }
 }
 
@@ -951,7 +983,8 @@ public static class WorldStateSnapshotBuilder
             persons,
             parentages,
             BuildPropertyOwnershipSnapshots(context.PropertyOwnershipStore),
-            BuildEstateSnapshots(context.EstateStore));
+            BuildEstateSnapshots(context.EstateStore),
+            BuildPropertyTransferSnapshots(context.PropertyOwnershipStore));
     }
 
     private static List<WorldStateNpcSnapshot> BuildNpcSnapshots(
@@ -1111,6 +1144,51 @@ public static class WorldStateSnapshotBuilder
         result.Sort((left, right) => StringComparer.Ordinal.Compare(
             left.EstateId,
             right.EstateId));
+        return result;
+    }
+
+    private static List<WorldStatePropertyTransferSnapshot> BuildPropertyTransferSnapshots(
+        PropertyOwnershipStore source)
+    {
+        List<WorldStatePropertyTransferSnapshot> result =
+            new List<WorldStatePropertyTransferSnapshot>();
+        if (source == null)
+        {
+            return result;
+        }
+
+        foreach (PropertyOwnershipTransferHistoryRecord transfer in source.TransferHistory)
+        {
+            if (transfer?.PropertyId != null
+                && transfer.PreviousOwnerPersonId != null
+                && transfer.NewOwnerPersonId != null)
+            {
+                result.Add(new WorldStatePropertyTransferSnapshot(
+                    transfer.PropertyId.Value,
+                    transfer.PreviousOwnerPersonId.Value,
+                    transfer.NewOwnerPersonId.Value,
+                    transfer.TransferAbsoluteDay));
+            }
+        }
+
+        result.Sort((left, right) =>
+        {
+            int property = StringComparer.Ordinal.Compare(left.PropertyId, right.PropertyId);
+            if (property != 0)
+            {
+                return property;
+            }
+
+            int day = left.TransferAbsoluteDay.CompareTo(right.TransferAbsoluteDay);
+            if (day != 0)
+            {
+                return day;
+            }
+
+            return StringComparer.Ordinal.Compare(
+                left.NewOwnerPersonId,
+                right.NewOwnerPersonId);
+        });
         return result;
     }
 

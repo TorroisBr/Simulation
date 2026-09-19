@@ -121,6 +121,25 @@ public sealed class WorldStateDiff
             },
             differences);
 
+        CompareEntities("PropertyTransfer", before.PropertyTransfers, after.PropertyTransfers,
+            transfer => PropertyTransferIdentity(transfer),
+            (identity, left, right) =>
+            {
+                CompareValue("PropertyTransfer", identity, "PreviousOwnerPersonId",
+                    WorldStateCanonicalWriter.StringValue(left.PreviousOwnerPersonId),
+                    WorldStateCanonicalWriter.StringValue(right.PreviousOwnerPersonId),
+                    differences);
+                CompareValue("PropertyTransfer", identity, "NewOwnerPersonId",
+                    WorldStateCanonicalWriter.StringValue(left.NewOwnerPersonId),
+                    WorldStateCanonicalWriter.StringValue(right.NewOwnerPersonId),
+                    differences);
+                CompareValue("PropertyTransfer", identity, "TransferAbsoluteDay",
+                    WorldStateCanonicalWriter.Int64Value(left.TransferAbsoluteDay),
+                    WorldStateCanonicalWriter.Int64Value(right.TransferAbsoluteDay),
+                    differences);
+            },
+            differences);
+
         CompareEntities("Estate", before.Estates, after.Estates,
             estate => estate.EstateId,
             (identity, left, right) =>
@@ -535,5 +554,19 @@ public sealed class WorldStateDiff
         return (parentage.ParentPersonId ?? string.Empty)
             + " -> "
             + (parentage.ChildPersonId ?? string.Empty);
+    }
+
+    private static string PropertyTransferIdentity(WorldStatePropertyTransferSnapshot transfer)
+    {
+        if (transfer == null)
+        {
+            return null;
+        }
+
+        return (transfer.PropertyId ?? string.Empty)
+            + "@"
+            + WorldStateCanonicalWriter.Int64Value(transfer.TransferAbsoluteDay)
+            + ":"
+            + (transfer.NewOwnerPersonId ?? string.Empty);
     }
 }

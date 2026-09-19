@@ -307,7 +307,16 @@ public static class WorldStateInvariantValidator
         }
 
         ValidateParentages(snapshot.Parentages, personIds, issues);
-        ValidatePropertyOwnerships(snapshot.PropertyOwnerships, personIds, issues);
+        HashSet<string> propertyIds = ValidatePropertyOwnerships(
+            snapshot.PropertyOwnerships,
+            personIds,
+            issues);
+        ValidatePropertyTransfers(
+            snapshot.PropertyTransfers,
+            propertyIds,
+            personIds,
+            snapshot.AbsoluteDay,
+            issues);
         ValidateEstates(snapshot.Estates, personIds, personDeaths, snapshot.AbsoluteDay, issues);
 
         foreach (WorldStateNpcSnapshot npc in snapshot.Npcs)
@@ -501,7 +510,7 @@ public static class WorldStateInvariantValidator
         }
     }
 
-    private static void ValidatePropertyOwnerships(
+    private static HashSet<string> ValidatePropertyOwnerships(
         IReadOnlyList<WorldStatePropertyOwnershipSnapshot> ownerships,
         HashSet<string> personIds,
         List<WorldStateInvariantIssue> issues)
@@ -509,7 +518,7 @@ public static class WorldStateInvariantValidator
         HashSet<string> propertyIds = new HashSet<string>(StringComparer.Ordinal);
         if (ownerships == null)
         {
-            return;
+            return propertyIds;
         }
 
         foreach (WorldStatePropertyOwnershipSnapshot ownership in ownerships)
@@ -539,6 +548,78 @@ public static class WorldStateInvariantValidator
             else if (personIds.Contains(ownership.OwnerPersonId) == false)
             {
                 AddError(issues, "PropertyOwnerPersonMissing", identity, "Property owner PersonId is absent from the Person snapshot.");
+            }
+        }
+
+        return propertyIds;
+    }
+
+    private static void ValidatePropertyTransfers(
+        IReadOnlyList<WorldStatePropertyTransferSnapshot> transfers,
+        HashSet<string> propertyIds,
+        HashSet<string> personIds,
+        long absoluteDay,
+        List<WorldStateInvariantIssue> issues)
+    {
+        HashSet<string> transferIds = new HashSet<string>(StringComparer.Ordinal);
+        if (transfers == null)
+        {
+            return;
+        }
+
+        foreach (WorldStatePropertyTransferSnapshot transfer in transfers)
+        {
+            if (transfer == null)
+            {
+                AddError(issues, "PropertyTransferNull", "property-transfer", "Snapshot contains a null property transfer entry.");
+                continue;
+            }
+
+            string identity = string.IsNullOrWhiteSpace(transfer.PropertyId)
+                ? "property-transfer"
+                : transfer.PropertyId + "@" + transfer.TransferAbsoluteDay;
+            string transferKey = identity + "\u001f" + (transfer.NewOwnerPersonId ?? string.Empty);
+            if (transferIds.Add(transferKey) == false)
+            {
+                AddError(issues, "DuplicatePropertyTransfer", identity, "Property transfer history entry appears more than once.");
+            }
+
+            if (string.IsNullOrWhiteSpace(transfer.PropertyId))
+            {
+                AddError(issues, "PropertyTransferPropertyMissing", identity, "Property transfer has no PropertyId.");
+            }
+            else if (propertyIds.Contains(transfer.PropertyId) == false)
+            {
+                AddError(issues, "PropertyTransferPropertyAbsent", identity, "Property transfer references a property absent from the snapshot.");
+            }
+
+            if (string.IsNullOrWhiteSpace(transfer.PreviousOwnerPersonId)
+                || personIds.Contains(transfer.PreviousOwnerPersonId) == false)
+            {
+                AddError(issues, "PropertyTransferPreviousOwnerMissing", identity, "Property transfer previous owner is absent from the Person snapshot.");
+            }
+
+            if (string.IsNullOrWhiteSpace(transfer.NewOwnerPersonId)
+                || personIds.Contains(transfer.NewOwnerPersonId) == false)
+            {
+                AddError(issues, "PropertyTransferNewOwnerMissing", identity, "Property transfer new owner is absent from the Person snapshot.");
+            }
+
+            if (string.Equals(
+                    transfer.PreviousOwnerPersonId,
+                    transfer.NewOwnerPersonId,
+                    StringComparison.Ordinal))
+            {
+                AddError(issues, "PropertyTransferSameOwner", identity, "Property transfer previous and new owners must differ.");
+            }
+
+            if (transfer.TransferAbsoluteDay < 0L)
+            {
+                AddError(issues, "NegativePropertyTransferDay", identity, "Property transfer day cannot be negative.");
+            }
+            else if (transfer.TransferAbsoluteDay > absoluteDay)
+            {
+                AddError(issues, "FuturePropertyTransferDay", identity, "Property transfer day cannot be later than the snapshot day.");
             }
         }
     }

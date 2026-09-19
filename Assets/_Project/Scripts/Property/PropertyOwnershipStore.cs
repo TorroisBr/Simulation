@@ -4,8 +4,8 @@ using System.Collections.ObjectModel;
 
 /// <summary>
 /// World-owned registry of explicit property ownership records. This minimal
-/// foundation is append-only; transfer is a later explicit domain transition,
-/// not an incidental effect of death or estate opening.
+/// foundation is explicit and world-owned; transfer is an explicit domain
+/// transition, not an incidental effect of death or estate opening.
 /// </summary>
 public sealed class PropertyOwnershipStore
 {
@@ -196,7 +196,16 @@ public sealed class PropertyOwnershipStore
             return false;
         }
 
+        if (revision == long.MaxValue)
+        {
+            failure = PropertyTransferFailure.Create(
+                PropertyTransferFailureCode.RevisionOverflow,
+                "The property ownership store revision cannot advance further.");
+            return false;
+        }
+
         transferHistory.Add(history);
+        revision++;
         failure = PropertyTransferFailure.None;
         return true;
     }

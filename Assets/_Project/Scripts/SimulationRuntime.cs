@@ -469,6 +469,129 @@ public sealed class SimulationRuntime
         return estate != null;
     }
 
+    public bool TryBuildSuccessionCandidates(
+        PersonId subjectPersonId,
+        out SuccessionCandidateSnapshot snapshot,
+        out SuccessionCandidateQueryFailure failure)
+    {
+        SuccessionSubject subject = subjectPersonId == null
+            ? null
+            : new SuccessionSubject(subjectPersonId);
+        return SuccessionCandidateSystem.TryBuildCandidates(
+            personStore,
+            genealogyStore,
+            subject,
+            CurrentDay,
+            calendar,
+            configuration.Population.MaturityAgeYears,
+            out snapshot,
+            out failure);
+    }
+
+    public bool TryProposePropertyTransfer(
+        PropertyId propertyId,
+        PersonId newOwnerPersonId,
+        long transferAbsoluteDay,
+        out PropertyOwnershipTransferTransition transition,
+        out PropertyTransferFailure failure)
+    {
+        transition = null;
+        if (transferAbsoluteDay < 0L || transferAbsoluteDay > CurrentDay)
+        {
+            failure = PropertyTransferFailure.Create(
+                PropertyTransferFailureCode.InvalidTransferDay,
+                "TransferAbsoluteDay must be within the current world timeline.");
+            return false;
+        }
+
+        return PropertyTransferSystem.TryProposeTransfer(
+            personStore,
+            propertyOwnershipStore,
+            propertyId,
+            newOwnerPersonId,
+            transferAbsoluteDay,
+            out transition,
+            out failure);
+    }
+
+    public bool TryApplyPropertyTransfer(
+        PropertyOwnershipTransferTransition transition,
+        out PropertyTransferFailure failure)
+    {
+        return PropertyTransferSystem.TryApplyTransfer(
+            personStore,
+            propertyOwnershipStore,
+            transition,
+            out failure);
+    }
+
+    public bool TryTransferProperty(
+        PropertyId propertyId,
+        PersonId newOwnerPersonId,
+        long transferAbsoluteDay,
+        out PropertyTransferFailure failure)
+    {
+        if (TryProposePropertyTransfer(
+                propertyId,
+                newOwnerPersonId,
+                transferAbsoluteDay,
+                out PropertyOwnershipTransferTransition transition,
+                out failure) == false)
+        {
+            return false;
+        }
+
+        return TryApplyPropertyTransfer(transition, out failure);
+    }
+
+    public bool TryProposeOfficeSuccession(
+        OfficeId officeId,
+        PersonId selectedCandidateId,
+        long startAbsoluteDay,
+        out OfficeSuccessionTransition transition,
+        out OfficeSuccessionFailure failure)
+    {
+        return OfficeSuccessionSystem.TryPropose(
+            this,
+            officeId,
+            selectedCandidateId,
+            startAbsoluteDay,
+            out transition,
+            out failure);
+    }
+
+    public bool TryApplyOfficeSuccession(
+        OfficeSuccessionTransition transition,
+        out OfficeSuccessionFailure failure)
+    {
+        return OfficeSuccessionSystem.TryApply(this, transition, out failure);
+    }
+
+    public bool TryProposeEstateSuccession(
+        EstateId estateId,
+        PropertyId propertyId,
+        PersonId selectedCandidateId,
+        long transferAbsoluteDay,
+        out EstateSuccessionTransition transition,
+        out EstateSuccessionFailure failure)
+    {
+        return EstateSuccessionSystem.TryPropose(
+            this,
+            estateId,
+            propertyId,
+            selectedCandidateId,
+            transferAbsoluteDay,
+            out transition,
+            out failure);
+    }
+
+    public bool TryApplyEstateSuccession(
+        EstateSuccessionTransition transition,
+        out EstateSuccessionFailure failure)
+    {
+        return EstateSuccessionSystem.TryApply(this, transition, out failure);
+    }
+
     public bool TryRegisterOffice(
         OfficeRecord record,
         out InstitutionFoundationFailure failure)
@@ -1167,6 +1290,42 @@ public sealed class SimulationRuntime
                     + failure + ".",
                     nameof(source));
             }
+        }
+
+        foreach (PropertyOwnershipTransferHistoryRecord history in source.TransferHistory)
+        {
+            if (history == null
+                || history.PropertyId == null
+                || history.PreviousOwnerPersonId == null
+                || history.NewOwnerPersonId == null)
+            {
+                throw new ArgumentException(
+                    "The SimulationRuntime PropertyOwnershipStore contains invalid transfer history.",
+                    nameof(source));
+            }
+
+            PropertyOwnershipTransferHistoryRecord clone =
+                new PropertyOwnershipTransferHistoryRecord(
+                    new PropertyId(history.PropertyId.Value),
+                    new PersonId(history.PreviousOwnerPersonId.Value),
+                    new PersonId(history.NewOwnerPersonId.Value),
+                    history.TransferAbsoluteDay);
+            if (copy.TryAddHistoricalTransfer(
+                    clone,
+                    out PropertyTransferFailure failure) == false)
+            {
+                throw new ArgumentException(
+                    "The SimulationRuntime PropertyOwnershipStore contains invalid transfer history: "
+                    + failure + ".",
+                    nameof(source));
+            }
+        }
+
+        if (copy.Revision != source.Revision)
+        {
+            throw new ArgumentException(
+                "The SimulationRuntime PropertyOwnershipStore revision is inconsistent with its state.",
+                nameof(source));
         }
 
         return copy;
