@@ -75,6 +75,7 @@ public sealed class OfficeSuccessionTransition : IEquatable<OfficeSuccessionTran
 {
     internal PersonRuntime ExpectedCandidate { get; }
     internal SuccessionCandidateSnapshot ExpectedCandidates { get; }
+    internal OfficeTenureRecord ExpectedClosedTenure { get; }
 
     public OfficeId OfficeId { get; }
     public PersonId SubjectPersonId { get; }
@@ -88,6 +89,7 @@ public sealed class OfficeSuccessionTransition : IEquatable<OfficeSuccessionTran
         PersonId subjectPersonId,
         PersonRuntime expectedCandidate,
         SuccessionCandidateSnapshot expectedCandidates,
+        OfficeTenureRecord expectedClosedTenure,
         long expectedWorldDay,
         long startAbsoluteDay)
     {
@@ -95,6 +97,7 @@ public sealed class OfficeSuccessionTransition : IEquatable<OfficeSuccessionTran
         SubjectPersonId = subjectPersonId;
         ExpectedCandidate = expectedCandidate;
         ExpectedCandidates = expectedCandidates;
+        ExpectedClosedTenure = expectedClosedTenure;
         SelectedCandidateId = expectedCandidate?.PersonId;
         ExpectedWorldDay = expectedWorldDay;
         StartAbsoluteDay = startAbsoluteDay;

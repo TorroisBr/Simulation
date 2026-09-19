@@ -60,13 +60,14 @@ public static class OfficeSuccessionSystem
             return false;
         }
 
-        if (TryGetFormerIncumbent(world, officeId, out PersonId formerIncumbent) == false)
+        if (TryGetFormerIncumbent(world, officeId, out OfficeTenureRecord formerTenure) == false)
         {
             failure = OfficeSuccessionFailure.Create(
                 OfficeSuccessionFailureCode.FormerIncumbentMissing,
                 "A vacant office must have a closed tenure before succession.");
             return false;
         }
+        PersonId formerIncumbent = formerTenure.Incumbent;
 
         if (world.TryBuildSuccessionCandidates(
                 formerIncumbent,
@@ -98,6 +99,7 @@ public static class OfficeSuccessionSystem
             formerIncumbent,
             selectedCandidate,
             candidates,
+            formerTenure,
             world.CurrentDay,
             startAbsoluteDay);
         return true;
@@ -122,6 +124,7 @@ public static class OfficeSuccessionSystem
             || transition.SubjectPersonId == null
             || transition.ExpectedCandidate == null
             || transition.ExpectedCandidates == null
+            || transition.ExpectedClosedTenure == null
             || transition.ExpectedWorldDay < 0L
             || transition.StartAbsoluteDay < 0L)
         {
@@ -147,8 +150,9 @@ public static class OfficeSuccessionSystem
             return false;
         }
 
-        if (TryGetFormerIncumbent(world, transition.OfficeId, out PersonId formerIncumbent) == false
-            || formerIncumbent != transition.SubjectPersonId)
+        if (TryGetFormerIncumbent(world, transition.OfficeId, out OfficeTenureRecord formerTenure) == false
+            || formerTenure.Incumbent != transition.SubjectPersonId
+            || ReferenceEquals(formerTenure, transition.ExpectedClosedTenure) == false)
         {
             failure = OfficeSuccessionFailure.Create(
                 OfficeSuccessionFailureCode.StaleOffice,
@@ -206,16 +210,16 @@ public static class OfficeSuccessionSystem
     private static bool TryGetFormerIncumbent(
         SimulationRuntime world,
         OfficeId officeId,
-        out PersonId formerIncumbent)
+        out OfficeTenureRecord formerTenure)
     {
-        formerIncumbent = null;
+        formerTenure = null;
         for (int index = world.OfficeTenureHistory.Count - 1; index >= 0; index--)
         {
             OfficeTenureRecord tenure = world.OfficeTenureHistory[index];
             if (tenure != null && tenure.OfficeId == officeId && tenure.IsClosed)
             {
-                formerIncumbent = tenure.Incumbent;
-                return formerIncumbent != null;
+                formerTenure = tenure;
+                return formerTenure.Incumbent != null;
             }
         }
 
