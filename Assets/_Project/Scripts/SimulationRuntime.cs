@@ -519,6 +519,23 @@ public sealed class SimulationRuntime
         PropertyOwnershipTransferTransition transition,
         out PropertyTransferFailure failure)
     {
+        if (transition == null)
+        {
+            failure = PropertyTransferFailure.Create(
+                PropertyTransferFailureCode.InvalidTransition,
+                "A valid property transfer transition is required.");
+            return false;
+        }
+
+        if (transition.TransferAbsoluteDay < 0L
+            || transition.TransferAbsoluteDay > CurrentDay)
+        {
+            failure = PropertyTransferFailure.Create(
+                PropertyTransferFailureCode.InvalidTransferDay,
+                "TransferAbsoluteDay must be within the current world timeline.");
+            return false;
+        }
+
         return PropertyTransferSystem.TryApplyTransfer(
             personStore,
             propertyOwnershipStore,

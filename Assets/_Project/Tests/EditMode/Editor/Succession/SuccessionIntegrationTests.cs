@@ -285,6 +285,30 @@ public sealed class SuccessionIntegrationTests
             propertyOwnershipStore: properties));
     }
 
+    [Test]
+    public void RuntimeRejectsFutureDatedPropertyTransferApplication()
+    {
+        SimulationRuntime world = CreateEstateWorld(
+            out _,
+            out PropertyId propertyId,
+            out _,
+            out PersonId selectedCandidateId,
+            out _);
+        Assert.That(PropertyTransferSystem.TryProposeTransfer(
+            world.PersonStore,
+            world.PropertyOwnershipStore,
+            propertyId,
+            selectedCandidateId,
+            world.CurrentDay + 1L,
+            out PropertyOwnershipTransferTransition transition,
+            out PropertyTransferFailure proposalFailure), Is.True, proposalFailure.ToString());
+
+        Assert.That(world.TryApplyPropertyTransfer(
+                transition,
+                out PropertyTransferFailure applyFailure), Is.False);
+        Assert.That(applyFailure.Code, Is.EqualTo(PropertyTransferFailureCode.InvalidTransferDay));
+    }
+
     private static SimulationRuntime CreateEstateWorld(
         out EstateId estateId,
         out PropertyId propertyId,
