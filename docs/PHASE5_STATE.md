@@ -8,7 +8,7 @@ Canonical branch:
 
 Last validated domain integration commit:
 
-`57db1ce765fbc864f2c9ef04319e17417a33ac1b`
+`eb93c7fcd4283f566f840fa1cde7e0269ed804b6`
 
 This commit consolidated:
 
@@ -17,10 +17,13 @@ This commit consolidated:
 - Person Maturity Foundation
 - world-owned GenealogyStore alias hardening
 - Institution World Integration
+- Natural Mortality Foundation
+- Aggregate Demography Foundation
+- deterministic daily demographic integration
 
 Validated baseline:
 
-- ALL EditMode: `1265/1265`
+- ALL EditMode: `1309/1309`
 - official Smoke: `5/5`
 - `git diff --check`: green
 
@@ -73,6 +76,10 @@ Completed:
 - date conversion;
 - chronological age calculation.
 
+Runtime ownership is now explicit: `SimulationRuntime` receives the resolved
+calendar definition once and owns an immutable `SimulationCalendar` copy for
+the run. UI/date access uses that runtime copy after initialization.
+
 ### Configuration
 
 Resolution:
@@ -88,6 +95,11 @@ Population configuration includes:
 Default maturity:
 
 `18 completed years`
+
+Demographic policy is resolved through the same precedence chain. Natural
+mortality has an explicit policy and annual probability. Aggregate demography
+has an explicit policy and annual birth/death rates. Invalid finite/range
+constraints are rejected by the effective configuration validator.
 
 ### Person
 
@@ -161,6 +173,53 @@ World integration completed:
 - multi-world isolation;
 - no automatic vacancy recognition from factual death.
 
+Natural factual death remains separate from institutional recognition; offices
+are not vacated by the demographic phase.
+
+### Natural mortality
+
+Completed and integrated:
+
+- `PersonRuntime.DeathAbsoluteDay` is chronological factual truth;
+- alive/dead is derived for a requested absolute day;
+- deterministic calendar-aware mortality evaluation;
+- atomic world-owned death for dormant and materialized resident Persons;
+- aggregate decrement and residence clearing exactly once for represented
+  resident death;
+- deterministic entity/day sample boundary;
+- production conflict paths use world-owned Person death authority.
+
+Unknown-birth Persons are not autonomously evaluated until a birth day exists.
+
+### Aggregate demography
+
+Completed and integrated:
+
+- deterministic aggregate-only birth/death provider and transitions;
+- explicit represented-resident floor supplied by the world boundary;
+- no Person/Npc inspection inside aggregate demography;
+- floor-preserving aggregate deaths;
+- aggregate-only births/deaths do not create or delete Persons/NpcRuntime;
+- provider mutation/exception rollback and stale/revision guards.
+
+### Daily demographic phase
+
+The shared daily-loop owner is the demographic integration in
+`SimulationRuntime.AdvanceDay`. The deterministic ordering is:
+
+1. advance absolute time and existing place-content/day bookkeeping;
+2. evaluate and apply named natural deaths at the new `CurrentDay` from a
+   stable PersonId-sorted snapshot;
+3. compute living represented-resident floors at the world boundary;
+4. apply aggregate-only births/deaths in stable settlement RuntimeId order;
+5. begin remaining day systems, scheduled directives, economy, knowledge,
+   expeditions, NPC decisions/actions, and travel.
+
+Dead NPCs therefore cannot advance merchant urgency or autonomous activity later
+on the same day. The phase exposes deterministic diagnostics and its last
+report through the runtime. Aggregate provider policy is disabled unless the
+effective configuration enables it, even when an implementation is injected.
+
 ### Diagnostics
 
 Completed deterministic diagnostics including parentage.
@@ -192,20 +251,6 @@ The Orchestrator must inspect current code before converting these into tasks.
 
 Likely remaining work:
 
-### Natural mortality
-
-Build age/natural-death foundations using existing Person/calendar/lifecycle architecture.
-
-No mutable age.
-
-No terrestrial 365-day assumptions.
-
-### Aggregate demography
-
-Support demographic change for non-individualized population.
-
-Preserve aggregate births without mandatory Person creation.
-
 ### Death, property and estate
 
 Establish minimal property continuity after Person death.
@@ -228,17 +273,16 @@ Reevaluate actual code before every wave.
 
 Current next wave:
 
-- NaturalMortalityFoundation and AggregateDemographyFoundation are independently
-  bounded and must not modify AdvanceDay.
-- After both foundations are reviewed and integrated, a single daily-demography
-  integration task owns calendar injection, configuration reconciliation, ordering,
-  and AdvanceDay.
+- Death/property/estate continuity is the next bounded Phase 5 area.
+- Institutional vacancy recognition and succession remain downstream of stable
+  factual death/property foundations.
+- Calendar injection, configuration reconciliation, ordering, diagnostics, and
+  `AdvanceDay` integration are complete for the demographic wave.
 
 Institution world integration is complete and is no longer an active parallel lane.
 
 Potentially conflicting:
 
-- natural mortality vs aggregate demography;
 - death/estate vs succession;
 - vacancy recognition vs institution runtime integration.
 
@@ -272,6 +316,17 @@ Before declaring completion:
 - `git diff --check`;
 - canonical history audit;
 - remote synchronization.
+
+Validated demographic integration gates for this wave:
+
+- targeted EditMode: `490/490` across 23 suites;
+- `SimulationRuntimeLongRunTests`: `7/7`;
+- ALL EditMode: `1309/1309`;
+- official Smoke: `5/5`;
+- failures/skips: `0/0`;
+- `git diff --check`: green;
+- local/upstream/remote integration branch synchronized at
+  `eb93c7fcd4283f566f840fa1cde7e0269ed804b6`.
 
 Do not automatically begin Phase 6.
 
