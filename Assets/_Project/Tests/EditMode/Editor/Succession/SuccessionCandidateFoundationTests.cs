@@ -123,6 +123,55 @@ public sealed class SuccessionCandidateFoundationTests
         Assert.That(failure.Code, Is.EqualTo(SuccessionCandidateQueryFailureCode.CandidateNotRegistered));
     }
 
+    [Test]
+    public void CandidateFingerprintIsUnambiguousForDelimitedPersonIds()
+    {
+        SimulationCalendar calendar = new SimulationCalendar(CalendarDefinition.CreateDefault());
+
+        PersonStore oneChildPeople = new PersonStore();
+        PersonRuntime oneChildSubject = Register(oneChildPeople, "delimiter-subject", 0L);
+        PersonRuntime combinedIdChild = Register(oneChildPeople, "a;b", 0L);
+        GenealogyStore oneChildGenealogy = new GenealogyStore();
+        Assert.That(oneChildGenealogy.TryAddParentage(
+            oneChildSubject.PersonId,
+            combinedIdChild.PersonId,
+            out _), Is.True);
+        Assert.That(SuccessionCandidateSystem.TryBuildCandidates(
+            oneChildPeople,
+            oneChildGenealogy,
+            new SuccessionSubject(oneChildSubject.PersonId),
+            10_000L,
+            calendar,
+            18L,
+            out SuccessionCandidateSnapshot oneChild,
+            out _), Is.True);
+
+        PersonStore twoChildrenPeople = new PersonStore();
+        PersonRuntime twoChildrenSubject = Register(twoChildrenPeople, "delimiter-subject", 0L);
+        PersonRuntime firstChild = Register(twoChildrenPeople, "a", 0L);
+        PersonRuntime secondChild = Register(twoChildrenPeople, "b", 0L);
+        GenealogyStore twoChildrenGenealogy = new GenealogyStore();
+        Assert.That(twoChildrenGenealogy.TryAddParentage(
+            twoChildrenSubject.PersonId,
+            firstChild.PersonId,
+            out _), Is.True);
+        Assert.That(twoChildrenGenealogy.TryAddParentage(
+            twoChildrenSubject.PersonId,
+            secondChild.PersonId,
+            out _), Is.True);
+        Assert.That(SuccessionCandidateSystem.TryBuildCandidates(
+            twoChildrenPeople,
+            twoChildrenGenealogy,
+            new SuccessionSubject(twoChildrenSubject.PersonId),
+            10_000L,
+            calendar,
+            18L,
+            out SuccessionCandidateSnapshot twoChildren,
+            out _), Is.True);
+
+        Assert.That(oneChild.DiscoveryFingerprint, Is.Not.EqualTo(twoChildren.DiscoveryFingerprint));
+    }
+
     private static PersonRuntime Register(PersonStore people, string id, long birthAbsoluteDay)
     {
         PersonRuntime person = new PersonRuntime(new PersonId(id), birthAbsoluteDay);
