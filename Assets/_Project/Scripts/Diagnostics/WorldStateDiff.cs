@@ -110,6 +110,32 @@ public sealed class WorldStateDiff
             (identity, left, right) => { },
             differences);
 
+        CompareEntities("PropertyOwnership", before.PropertyOwnerships, after.PropertyOwnerships,
+            ownership => ownership.PropertyId,
+            (identity, left, right) =>
+            {
+                CompareValue("PropertyOwnership", identity, "OwnerPersonId",
+                    WorldStateCanonicalWriter.StringValue(left.OwnerPersonId),
+                    WorldStateCanonicalWriter.StringValue(right.OwnerPersonId),
+                    differences);
+            },
+            differences);
+
+        CompareEntities("Estate", before.Estates, after.Estates,
+            estate => estate.EstateId,
+            (identity, left, right) =>
+            {
+                CompareValue("Estate", identity, "DeceasedPersonId",
+                    WorldStateCanonicalWriter.StringValue(left.DeceasedPersonId),
+                    WorldStateCanonicalWriter.StringValue(right.DeceasedPersonId),
+                    differences);
+                CompareValue("Estate", identity, "OpenedAbsoluteDay",
+                    WorldStateCanonicalWriter.Int64Value(left.OpenedAbsoluteDay),
+                    WorldStateCanonicalWriter.Int64Value(right.OpenedAbsoluteDay),
+                    differences);
+            },
+            differences);
+
         CompareEntities("City", before.Cities, after.Cities, city => city.RuntimeId,
             (identity, left, right) =>
             {

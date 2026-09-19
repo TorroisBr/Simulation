@@ -15,6 +15,8 @@ public sealed class WorldStateSnapshotContext
     public PersonStore PersonStore { get; }
     public IEnumerable<ParentageRecord> Parentages { get; }
     public GenealogyStore GenealogyStore { get; }
+    public PropertyOwnershipStore PropertyOwnershipStore { get; }
+    public EstateStore EstateStore { get; }
 
     public WorldStateSnapshotContext(
         SimulationTime simulationTime = null,
@@ -29,7 +31,9 @@ public sealed class WorldStateSnapshotContext
         CalendarDefinition calendarDefinition = null,
         PersonStore personStore = null,
         IEnumerable<ParentageRecord> parentages = null,
-        GenealogyStore genealogyStore = null)
+        GenealogyStore genealogyStore = null,
+        PropertyOwnershipStore propertyOwnershipStore = null,
+        EstateStore estateStore = null)
     {
         SimulationTime = simulationTime;
         Calendar = calendar ?? (calendarDefinition != null ? new SimulationCalendar(calendarDefinition) : null);
@@ -42,6 +46,8 @@ public sealed class WorldStateSnapshotContext
         LocalTopologyStore = localTopologyStore;
         PersonStore = personStore;
         GenealogyStore = genealogyStore;
+        PropertyOwnershipStore = propertyOwnershipStore;
+        EstateStore = estateStore;
         Parentages = parentages
             ?? genealogyStore?.Records
             ?? Array.Empty<ParentageRecord>();
@@ -62,6 +68,10 @@ public sealed class WorldStateSnapshot
     public int PersonCount => Persons.Count;
     public IReadOnlyList<WorldStateParentageSnapshot> Parentages { get; }
     public int ParentageCount => Parentages.Count;
+    public IReadOnlyList<WorldStatePropertyOwnershipSnapshot> PropertyOwnerships { get; }
+    public int PropertyOwnershipCount => PropertyOwnerships.Count;
+    public IReadOnlyList<WorldStateEstateSnapshot> Estates { get; }
+    public int EstateCount => Estates.Count;
     public WorldStateSpatialSnapshot Spatial { get; }
     public IReadOnlyList<WorldStateSiteSnapshot> Sites { get; }
     public IReadOnlyList<WorldStateExpeditionSnapshot> Expeditions { get; }
@@ -81,7 +91,9 @@ public sealed class WorldStateSnapshot
         IEnumerable<WorldStateLocalTopologySnapshot> localTopologies = null,
         WorldStateCalendarSnapshot calendarDate = null,
         IEnumerable<WorldStatePersonSnapshot> persons = null,
-        IEnumerable<WorldStateParentageSnapshot> parentages = null)
+        IEnumerable<WorldStateParentageSnapshot> parentages = null,
+        IEnumerable<WorldStatePropertyOwnershipSnapshot> propertyOwnerships = null,
+        IEnumerable<WorldStateEstateSnapshot> estates = null)
     {
         Metadata = new WorldStateSnapshotMetadata(absoluteDay, calendarDate);
         Npcs = SnapshotCollections.CopySorted(npcs, npc => npc?.RuntimeId);
@@ -94,6 +106,10 @@ public sealed class WorldStateSnapshot
         LocalTopologies = SnapshotCollections.CopySorted(localTopologies, topology => topology?.StableKey);
         Persons = SnapshotCollections.CopySorted(persons, person => person?.PersonId);
         Parentages = SortParentages(parentages);
+        PropertyOwnerships = SnapshotCollections.CopySorted(
+            propertyOwnerships,
+            ownership => ownership?.PropertyId);
+        Estates = SnapshotCollections.CopySorted(estates, estate => estate?.EstateId);
     }
 
     private static IReadOnlyList<WorldStateParentageSnapshot> SortParentages(
@@ -204,6 +220,35 @@ public sealed class WorldStateParentageSnapshot
     {
         ParentPersonId = parentPersonId;
         ChildPersonId = childPersonId;
+    }
+}
+
+public sealed class WorldStatePropertyOwnershipSnapshot
+{
+    public string PropertyId { get; }
+    public string OwnerPersonId { get; }
+
+    public WorldStatePropertyOwnershipSnapshot(string propertyId, string ownerPersonId)
+    {
+        PropertyId = propertyId;
+        OwnerPersonId = ownerPersonId;
+    }
+}
+
+public sealed class WorldStateEstateSnapshot
+{
+    public string EstateId { get; }
+    public string DeceasedPersonId { get; }
+    public long OpenedAbsoluteDay { get; }
+
+    public WorldStateEstateSnapshot(
+        string estateId,
+        string deceasedPersonId,
+        long openedAbsoluteDay)
+    {
+        EstateId = estateId;
+        DeceasedPersonId = deceasedPersonId;
+        OpenedAbsoluteDay = openedAbsoluteDay;
     }
 }
 
@@ -904,7 +949,9 @@ public static class WorldStateSnapshotBuilder
             BuildLocalTopologySnapshots(context.LocalTopologyStore),
             calendarDate,
             persons,
-            parentages);
+            parentages,
+            BuildPropertyOwnershipSnapshots(context.PropertyOwnershipStore),
+            BuildEstateSnapshots(context.EstateStore));
     }
 
     private static List<WorldStateNpcSnapshot> BuildNpcSnapshots(
@@ -1013,6 +1060,57 @@ public static class WorldStateSnapshotBuilder
                 ? parent
                 : StringComparer.Ordinal.Compare(left.ChildPersonId, right.ChildPersonId);
         });
+        return result;
+    }
+
+    private static List<WorldStatePropertyOwnershipSnapshot> BuildPropertyOwnershipSnapshots(
+        PropertyOwnershipStore source)
+    {
+        List<WorldStatePropertyOwnershipSnapshot> result =
+            new List<WorldStatePropertyOwnershipSnapshot>();
+        if (source == null)
+        {
+            return result;
+        }
+
+        foreach (PropertyOwnershipRecord ownership in source.Records)
+        {
+            if (ownership?.PropertyId != null && ownership.OwnerPersonId != null)
+            {
+                result.Add(new WorldStatePropertyOwnershipSnapshot(
+                    ownership.PropertyId.Value,
+                    ownership.OwnerPersonId.Value));
+            }
+        }
+
+        result.Sort((left, right) => StringComparer.Ordinal.Compare(
+            left.PropertyId,
+            right.PropertyId));
+        return result;
+    }
+
+    private static List<WorldStateEstateSnapshot> BuildEstateSnapshots(EstateStore source)
+    {
+        List<WorldStateEstateSnapshot> result = new List<WorldStateEstateSnapshot>();
+        if (source == null)
+        {
+            return result;
+        }
+
+        foreach (EstateRecord estate in source.Records)
+        {
+            if (estate?.EstateId != null && estate.DeceasedPersonId != null)
+            {
+                result.Add(new WorldStateEstateSnapshot(
+                    estate.EstateId.Value,
+                    estate.DeceasedPersonId.Value,
+                    estate.OpenedAbsoluteDay));
+            }
+        }
+
+        result.Sort((left, right) => StringComparer.Ordinal.Compare(
+            left.EstateId,
+            right.EstateId));
         return result;
     }
 

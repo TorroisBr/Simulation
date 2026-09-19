@@ -50,6 +50,21 @@ public static class WorldStateCanonicalWriter
                 parentage.ChildPersonId);
         }
 
+        foreach (WorldStatePropertyOwnershipSnapshot ownership in snapshot.PropertyOwnerships)
+        {
+            AppendLine(output, "PROPERTY_OWNERSHIP",
+                ownership.PropertyId,
+                ownership.OwnerPersonId);
+        }
+
+        foreach (WorldStateEstateSnapshot estate in snapshot.Estates)
+        {
+            AppendLine(output, "ESTATE",
+                estate.EstateId,
+                estate.DeceasedPersonId,
+                Int64Value(estate.OpenedAbsoluteDay));
+        }
+
         foreach (WorldStateNpcSnapshot npc in snapshot.Npcs)
         {
             AppendLine(output, "NPC",

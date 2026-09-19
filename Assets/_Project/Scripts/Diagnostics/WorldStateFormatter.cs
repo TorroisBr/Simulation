@@ -70,6 +70,32 @@ public static class WorldStateSnapshotFormatter
             }
         }
 
+        foreach (WorldStatePropertyOwnershipSnapshot ownership in snapshot.PropertyOwnerships)
+        {
+            if (ownership != null)
+            {
+                output.Append("PROPERTY ")
+                    .Append(Value(ownership.PropertyId))
+                    .Append(" owner ")
+                    .Append(Value(ownership.OwnerPersonId))
+                    .Append('\n');
+            }
+        }
+
+        foreach (WorldStateEstateSnapshot estate in snapshot.Estates)
+        {
+            if (estate != null)
+            {
+                output.Append("ESTATE ")
+                    .Append(Value(estate.EstateId))
+                    .Append(" deceased ")
+                    .Append(Value(estate.DeceasedPersonId))
+                    .Append(" opened ")
+                    .Append(WorldStateCanonicalWriter.Int64Value(estate.OpenedAbsoluteDay))
+                    .Append('\n');
+            }
+        }
+
         foreach (WorldStateCitySnapshot city in snapshot.Cities)
         {
             if (city == null)

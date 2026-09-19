@@ -176,6 +176,17 @@ World integration completed:
 Natural factual death remains separate from institutional recognition; offices
 are not vacated by the demographic phase.
 
+Institutional continuity foundation now also includes:
+
+- explicit vacancy-recognition proposals and applications;
+- factual-death recognition only through the world PersonStore boundary;
+- deterministic vacancy reasons and stale-incumbency protection;
+- closed `OfficeTenureRecord` history, including legacy explicit vacates;
+- no automatic office vacancy when a Person becomes factually dead.
+
+The institution core does not inspect PersonStore or SimulationRuntime. World
+composition performs the factual-death check before delegating recognition.
+
 ### Natural mortality
 
 Completed and integrated:
@@ -202,6 +213,23 @@ Completed and integrated:
 - aggregate-only births/deaths do not create or delete Persons/NpcRuntime;
 - provider mutation/exception rollback and stale/revision guards.
 
+### Property and estate continuity
+
+The minimal continuity foundation is now integrated with the world boundary:
+
+- property ownership is an immutable PersonId-based world fact;
+- property ownership is separate from NpcRuntime money/inventory custody;
+- estate opening is explicit, deterministic, and gated by factual Person death;
+- estate records preserve the deceased PersonId and opening absolute day;
+- estate state is separate from institutional vacancy recognition;
+- SimulationRuntime clones and validates property/estate stores, including
+  exact EstateStore/PersonStore pairing and current-day constraints;
+- property and estate facts participate in deterministic snapshots, canonical
+  export, diffs, formatting, and invariant validation.
+
+No inheritance law, transfer rules, taxes, creditors, or automatic daily estate
+processing are part of this foundation.
+
 ### Daily demographic phase
 
 The shared daily-loop owner is the demographic integration in
@@ -222,7 +250,9 @@ effective configuration enables it, even when an implementation is injected.
 
 ### Diagnostics
 
-Completed deterministic diagnostics including parentage.
+Completed deterministic diagnostics including parentage, property ownership,
+and estate opening. Institutional tenure history remains a world-owned
+institutional record and is covered by its domain integration tests.
 
 Genealogy validation detects:
 
@@ -253,13 +283,14 @@ Likely remaining work:
 
 ### Death, property and estate
 
-Establish minimal property continuity after Person death.
-
-Avoid premature full inheritance/political claims systems.
+The minimal factual continuity foundation is integrated. Future work may add
+explicit succession transitions only after the ownership and vacancy contracts
+remain stable.
 
 ### Institutional continuity and vacancy recognition
 
-Factual death must not necessarily equal immediately recognized vacancy.
+The minimal recognition/history foundation is integrated. Factual death still
+does not automatically vacate an office.
 
 ### Succession foundation
 
@@ -273,9 +304,8 @@ Reevaluate actual code before every wave.
 
 Current next wave:
 
-- Death/property/estate continuity is the next bounded Phase 5 area.
-- Institutional vacancy recognition and succession remain downstream of stable
-  factual death/property foundations.
+- Minimal succession foundation is the next bounded Phase 5 area, downstream
+  of stable estate/property ownership and institutional vacancy history.
 - Calendar injection, configuration reconciliation, ordering, diagnostics, and
   `AdvanceDay` integration are complete for the demographic wave.
 

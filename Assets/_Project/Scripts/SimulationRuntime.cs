@@ -18,6 +18,8 @@ public sealed class SimulationRuntime
     private readonly GenealogyStore genealogyStore;
     private readonly InstitutionStore institutionStore;
     private readonly OfficeStore officeStore;
+    private readonly PropertyOwnershipStore propertyOwnershipStore;
+    private readonly EstateStore estateStore;
     private readonly List<NpcActionData> configuredActions;
     private readonly ScheduledDirectiveSystem scheduledDirectiveSystem;
     private readonly JusticeSystem justiceSystem;
@@ -47,6 +49,10 @@ public sealed class SimulationRuntime
     public IReadOnlyList<OfficeRecord> OfficeRecords => officeStore.Offices;
     public IReadOnlyList<OfficeIncumbency> OfficeIncumbencies => officeStore.Incumbencies;
     public IReadOnlyList<OfficeTenureRecord> OfficeTenureHistory => officeStore.TenureHistory;
+    public PropertyOwnershipStore PropertyOwnershipStore => propertyOwnershipStore;
+    public EstateStore EstateStore => estateStore;
+    public IReadOnlyList<PropertyOwnershipRecord> PropertyOwnershipRecords => propertyOwnershipStore.Records;
+    public IReadOnlyList<EstateRecord> EstateRecords => estateStore.Records;
     /// <summary>
     /// Read-only view of every named NPC registered with this world. Registration is
     /// explicit; death and emigration do not remove an NPC from this world roster.
@@ -83,7 +89,9 @@ public sealed class SimulationRuntime
         OfficeStore officeStore = null,
         CalendarDefinition calendarDefinition = null,
         IPersonNaturalMortalitySampleProvider naturalMortalitySamples = null,
-        IAggregateDemographyProvider aggregateDemographyProvider = null)
+        IAggregateDemographyProvider aggregateDemographyProvider = null,
+        PropertyOwnershipStore propertyOwnershipStore = null,
+        EstateStore estateStore = null)
     {
         this.simulationTime = simulationTime ?? throw new ArgumentNullException(nameof(simulationTime));
 
@@ -118,6 +126,13 @@ public sealed class SimulationRuntime
             officeStore,
             resolvedInstitutionStore,
             resolvedPersonStore);
+        PropertyOwnershipStore resolvedPropertyOwnershipStore = ClonePropertyOwnershipStore(
+            propertyOwnershipStore,
+            resolvedPersonStore);
+        EstateStore resolvedEstateStore = CloneEstateStore(
+            estateStore,
+            resolvedPersonStore,
+            simulationTime.AbsoluteDay);
 
         this.configuration = resolvedConfiguration;
         this.calendar = new SimulationCalendar(
@@ -128,6 +143,8 @@ public sealed class SimulationRuntime
         this.genealogyStore = CloneGenealogyStore(resolvedGenealogyStore);
         this.institutionStore = resolvedInstitutionStore;
         this.officeStore = resolvedOfficeStore;
+        this.propertyOwnershipStore = resolvedPropertyOwnershipStore;
+        this.estateStore = resolvedEstateStore;
         this.cities = cities != null ? new List<CityRuntime>(cities) : new List<CityRuntime>();
         this.npcRuntimes = new List<NpcRuntime>();
         this.npcRuntimeSnapshot = this.npcRuntimes.AsReadOnly();
@@ -362,6 +379,94 @@ public sealed class SimulationRuntime
         out InstitutionFoundationFailure failure)
     {
         return institutionStore.TryRegister(record, out failure);
+    }
+
+    public bool TryRegisterPropertyOwnership(
+        PropertyOwnershipRecord record,
+        out PropertyFoundationFailure failure)
+    {
+        if (record == null || record.OwnerPersonId == null)
+        {
+            failure = PropertyFoundationFailure.Create(
+                PropertyFoundationFailureCode.InvalidOwnershipRecord,
+                "A property ownership record with a registered Person owner is required.");
+            return false;
+        }
+
+        if (personStore.TryGet(record.OwnerPersonId, out _) == false)
+        {
+            failure = PropertyFoundationFailure.Create(
+                PropertyFoundationFailureCode.PersonNotRegistered,
+                "The property owner PersonId must be registered in this world.");
+            return false;
+        }
+
+        return propertyOwnershipStore.TryRegister(record, out failure);
+    }
+
+    public IReadOnlyList<PropertyOwnershipRecord> GetPropertiesOwnedBy(PersonId ownerPersonId)
+    {
+        return propertyOwnershipStore.GetOwnedBy(ownerPersonId);
+    }
+
+    public bool TryProposeEstateOpening(
+        EstateId estateId,
+        PersonId deceasedPersonId,
+        long openingAbsoluteDay,
+        out EstateOpeningTransition transition,
+        out EstateFoundationFailure failure)
+    {
+        transition = null;
+        if (openingAbsoluteDay > CurrentDay)
+        {
+            failure = EstateFoundationFailure.Create(
+                EstateFoundationFailureCode.InvalidOpeningDay,
+                "An estate cannot be opened in the future relative to the world day.");
+            return false;
+        }
+
+        return EstateOpeningSystem.TryProposeOpening(
+            personStore,
+            estateStore,
+            estateId,
+            deceasedPersonId,
+            openingAbsoluteDay,
+            out transition,
+            out failure);
+    }
+
+    public bool TryApplyEstateOpening(
+        EstateOpeningTransition transition,
+        out EstateFoundationFailure failure)
+    {
+        return EstateOpeningSystem.TryApplyOpening(
+            personStore,
+            estateStore,
+            transition,
+            out failure);
+    }
+
+    public bool TryOpenEstate(
+        EstateId estateId,
+        PersonId deceasedPersonId,
+        long openingAbsoluteDay,
+        out EstateRecord estate,
+        out EstateFoundationFailure failure)
+    {
+        estate = null;
+        if (TryProposeEstateOpening(
+                estateId,
+                deceasedPersonId,
+                openingAbsoluteDay,
+                out EstateOpeningTransition transition,
+                out failure) == false
+            || TryApplyEstateOpening(transition, out failure) == false)
+        {
+            return false;
+        }
+
+        estateStore.TryGet(estateId, out estate);
+        return estate != null;
     }
 
     public bool TryRegisterOffice(
@@ -1023,6 +1128,90 @@ public sealed class SimulationRuntime
             {
                 throw new ArgumentException(
                     "The SimulationRuntime OfficeStore contains invalid historical tenure: "
+                    + failure + ".",
+                    nameof(source));
+            }
+        }
+
+        return copy;
+    }
+
+    private static PropertyOwnershipStore ClonePropertyOwnershipStore(
+        PropertyOwnershipStore source,
+        PersonStore personStore)
+    {
+        PropertyOwnershipStore copy = new PropertyOwnershipStore();
+        if (source == null)
+        {
+            return copy;
+        }
+
+        foreach (PropertyOwnershipRecord record in source.Records)
+        {
+            if (record == null
+                || record.OwnerPersonId == null
+                || personStore.TryGet(record.OwnerPersonId, out _) == false)
+            {
+                throw new ArgumentException(
+                    "The SimulationRuntime PropertyOwnershipStore contains an owner absent from PersonStore.",
+                    nameof(source));
+            }
+
+            PropertyOwnershipRecord clone = new PropertyOwnershipRecord(
+                new PropertyId(record.PropertyId.Value),
+                new PersonId(record.OwnerPersonId.Value));
+            if (copy.TryRegister(clone, out PropertyFoundationFailure failure) == false)
+            {
+                throw new ArgumentException(
+                    "The SimulationRuntime PropertyOwnershipStore contains an invalid record: "
+                    + failure + ".",
+                    nameof(source));
+            }
+        }
+
+        return copy;
+    }
+
+    private static EstateStore CloneEstateStore(
+        EstateStore source,
+        PersonStore personStore,
+        long currentDay)
+    {
+        if (source != null
+            && ReferenceEquals(source.PersonStoreForWorldBoundary, personStore) == false)
+        {
+            throw new ArgumentException(
+                "The SimulationRuntime EstateStore must belong to the resolved PersonStore.",
+                nameof(source));
+        }
+
+        EstateStore copy = new EstateStore(personStore);
+        if (source == null)
+        {
+            return copy;
+        }
+
+        foreach (EstateRecord record in source.Records)
+        {
+            if (record == null
+                || personStore.TryGet(record.DeceasedPersonId, out PersonRuntime deceased) == false
+                || deceased.DeathAbsoluteDay.HasValue == false
+                || record.OpenedAbsoluteDay < deceased.DeathAbsoluteDay.Value
+                || record.OpenedAbsoluteDay > currentDay)
+            {
+                throw new ArgumentException(
+                    "The SimulationRuntime EstateStore contains an estate inconsistent with PersonStore or world time.",
+                    nameof(source));
+            }
+
+            EstateRecord clone = new EstateRecord(
+                new EstateId(record.EstateId.Value),
+                new PersonId(record.DeceasedPersonId.Value),
+                record.OpenedAbsoluteDay);
+            if (copy.TryRegister(clone, out EstateFoundationFailure failure) == false)
+            {
+                throw new ArgumentException(
+                    "The SimulationRuntime EstateStore contains an invalid record: "
                     + failure + ".",
                     nameof(source));
             }

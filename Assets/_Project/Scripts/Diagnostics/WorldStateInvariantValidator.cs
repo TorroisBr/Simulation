@@ -307,6 +307,8 @@ public static class WorldStateInvariantValidator
         }
 
         ValidateParentages(snapshot.Parentages, personIds, issues);
+        ValidatePropertyOwnerships(snapshot.PropertyOwnerships, personIds, issues);
+        ValidateEstates(snapshot.Estates, personIds, snapshot.AbsoluteDay, issues);
 
         foreach (WorldStateNpcSnapshot npc in snapshot.Npcs)
         {
@@ -496,6 +498,107 @@ public static class WorldStateInvariantValidator
         if (processed != incomingCounts.Count)
         {
             AddError(issues, "GenealogyCycle", "genealogy", "Parentage relations contain a cycle.");
+        }
+    }
+
+    private static void ValidatePropertyOwnerships(
+        IReadOnlyList<WorldStatePropertyOwnershipSnapshot> ownerships,
+        HashSet<string> personIds,
+        List<WorldStateInvariantIssue> issues)
+    {
+        HashSet<string> propertyIds = new HashSet<string>(StringComparer.Ordinal);
+        if (ownerships == null)
+        {
+            return;
+        }
+
+        foreach (WorldStatePropertyOwnershipSnapshot ownership in ownerships)
+        {
+            if (ownership == null)
+            {
+                AddError(issues, "PropertyOwnershipNull", "property", "Snapshot contains a null property ownership entry.");
+                continue;
+            }
+
+            string identity = string.IsNullOrWhiteSpace(ownership.PropertyId)
+                ? "property"
+                : ownership.PropertyId;
+            if (string.IsNullOrWhiteSpace(ownership.PropertyId))
+            {
+                AddError(issues, "PropertyIdMissing", identity, "Property ownership has no PropertyId.");
+            }
+            else if (propertyIds.Add(ownership.PropertyId) == false)
+            {
+                AddError(issues, "DuplicatePropertyId", identity, "PropertyId appears more than once.");
+            }
+
+            if (string.IsNullOrWhiteSpace(ownership.OwnerPersonId))
+            {
+                AddError(issues, "PropertyOwnerMissing", identity, "Property ownership has no owner PersonId.");
+            }
+            else if (personIds.Contains(ownership.OwnerPersonId) == false)
+            {
+                AddError(issues, "PropertyOwnerPersonMissing", identity, "Property owner PersonId is absent from the Person snapshot.");
+            }
+        }
+    }
+
+    private static void ValidateEstates(
+        IReadOnlyList<WorldStateEstateSnapshot> estates,
+        HashSet<string> personIds,
+        long absoluteDay,
+        List<WorldStateInvariantIssue> issues)
+    {
+        HashSet<string> estateIds = new HashSet<string>(StringComparer.Ordinal);
+        HashSet<string> deceasedPersonIds = new HashSet<string>(StringComparer.Ordinal);
+        if (estates == null)
+        {
+            return;
+        }
+
+        foreach (WorldStateEstateSnapshot estate in estates)
+        {
+            if (estate == null)
+            {
+                AddError(issues, "EstateNull", "estate", "Snapshot contains a null estate entry.");
+                continue;
+            }
+
+            string identity = string.IsNullOrWhiteSpace(estate.EstateId) ? "estate" : estate.EstateId;
+            if (string.IsNullOrWhiteSpace(estate.EstateId))
+            {
+                AddError(issues, "EstateIdMissing", identity, "Estate has no EstateId.");
+            }
+            else if (estateIds.Add(estate.EstateId) == false)
+            {
+                AddError(issues, "DuplicateEstateId", identity, "EstateId appears more than once.");
+            }
+
+            if (string.IsNullOrWhiteSpace(estate.DeceasedPersonId))
+            {
+                AddError(issues, "EstateDeceasedPersonMissing", identity, "Estate has no deceased PersonId.");
+            }
+            else
+            {
+                if (personIds.Contains(estate.DeceasedPersonId) == false)
+                {
+                    AddError(issues, "EstateDeceasedPersonAbsent", identity, "Estate deceased PersonId is absent from the Person snapshot.");
+                }
+
+                if (deceasedPersonIds.Add(estate.DeceasedPersonId) == false)
+                {
+                    AddError(issues, "DuplicateEstateForPerson", identity, "A Person has more than one estate.");
+                }
+            }
+
+            if (estate.OpenedAbsoluteDay < 0L)
+            {
+                AddError(issues, "NegativeEstateOpeningDay", identity, "Estate opening day cannot be negative.");
+            }
+            else if (estate.OpenedAbsoluteDay > absoluteDay)
+            {
+                AddError(issues, "FutureEstateOpeningDay", identity, "Estate opening day cannot be later than the snapshot day.");
+            }
         }
     }
 
