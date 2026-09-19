@@ -197,7 +197,8 @@ public enum InstitutionFoundationFailureCode
     InvalidPersonId,
     OfficeAlreadyOccupied,
     OfficeAlreadyVacant,
-    InvalidStartAbsoluteDay
+    InvalidStartAbsoluteDay,
+    PersonNotRegistered
 }
 
 /// <summary>

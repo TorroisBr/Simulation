@@ -12,6 +12,8 @@ public sealed class SimulationRuntime
     private readonly EffectiveSimulationConfiguration configuration;
     private readonly PersonStore personStore;
     private readonly GenealogyStore genealogyStore;
+    private readonly InstitutionStore institutionStore;
+    private readonly OfficeStore officeStore;
     private readonly List<NpcActionData> configuredActions;
     private readonly ScheduledDirectiveSystem scheduledDirectiveSystem;
     private readonly JusticeSystem justiceSystem;
@@ -35,6 +37,9 @@ public sealed class SimulationRuntime
     public EffectiveSimulationConfiguration Configuration => configuration;
     public PersonStore PersonStore => personStore;
     public IReadOnlyList<ParentageRecord> GenealogyRecords => genealogyStore.Records;
+    public IReadOnlyList<InstitutionRecord> InstitutionRecords => institutionStore.Institutions;
+    public IReadOnlyList<OfficeRecord> OfficeRecords => officeStore.Offices;
+    public IReadOnlyList<OfficeIncumbency> OfficeIncumbencies => officeStore.Incumbencies;
     /// <summary>
     /// Read-only view of every named NPC registered with this world. Registration is
     /// explicit; death and emigration do not remove an NPC from this world roster.
@@ -66,7 +71,9 @@ public sealed class SimulationRuntime
         AdventureExpeditionAutonomySystem adventureExpeditionAutonomySystem = null,
         EffectiveSimulationConfiguration configuration = null,
         PersonStore personStore = null,
-        GenealogyStore genealogyStore = null)
+        GenealogyStore genealogyStore = null,
+        InstitutionStore institutionStore = null,
+        OfficeStore officeStore = null)
     {
         this.simulationTime = simulationTime ?? throw new ArgumentNullException(nameof(simulationTime));
 
@@ -94,10 +101,19 @@ public sealed class SimulationRuntime
         PersonStore resolvedPersonStore = personStore ?? new PersonStore();
         GenealogyStore resolvedGenealogyStore = genealogyStore ?? new GenealogyStore();
         ValidateGenealogyStore(resolvedPersonStore, resolvedGenealogyStore);
+        InstitutionStore resolvedInstitutionStore = ResolveInstitutionStore(
+            institutionStore,
+            officeStore);
+        OfficeStore resolvedOfficeStore = CloneOfficeStore(
+            officeStore,
+            resolvedInstitutionStore,
+            resolvedPersonStore);
 
         this.configuration = resolvedConfiguration;
         this.personStore = resolvedPersonStore;
         this.genealogyStore = CloneGenealogyStore(resolvedGenealogyStore);
+        this.institutionStore = resolvedInstitutionStore;
+        this.officeStore = resolvedOfficeStore;
         this.cities = cities != null ? new List<CityRuntime>(cities) : new List<CityRuntime>();
         this.npcRuntimes = new List<NpcRuntime>();
         this.npcRuntimeSnapshot = this.npcRuntimes.AsReadOnly();
@@ -239,6 +255,121 @@ public sealed class SimulationRuntime
         }
 
         return personStore.TryRegister(person, out failure);
+    }
+
+    public bool TryRegisterInstitution(
+        InstitutionRecord record,
+        out InstitutionFoundationFailure failure)
+    {
+        return institutionStore.TryRegister(record, out failure);
+    }
+
+    public bool TryRegisterOffice(
+        OfficeRecord record,
+        out InstitutionFoundationFailure failure)
+    {
+        return officeStore.TryRegister(record, out failure);
+    }
+
+    public bool TryGetInstitution(
+        InstitutionId institutionId,
+        out InstitutionRecord record)
+    {
+        return institutionStore.TryGet(institutionId, out record);
+    }
+
+    public bool TryGetOffice(
+        OfficeId officeId,
+        out OfficeRecord record)
+    {
+        return officeStore.TryGet(officeId, out record);
+    }
+
+    public bool TryGetOfficeIncumbency(
+        OfficeId officeId,
+        out OfficeIncumbency incumbency)
+    {
+        return officeStore.TryGetIncumbency(officeId, out incumbency);
+    }
+
+    public bool TryGetCurrentOfficeIncumbent(
+        OfficeId officeId,
+        out PersonId incumbent)
+    {
+        return officeStore.TryGetCurrentIncumbent(officeId, out incumbent);
+    }
+
+    public bool IsOfficeVacant(OfficeId officeId)
+    {
+        return officeStore.IsVacant(officeId);
+    }
+
+    public bool TryAssignIncumbent(
+        OfficeId officeId,
+        PersonId incumbent,
+        long? startAbsoluteDay,
+        out InstitutionFoundationFailure failure)
+    {
+        if (officeStore.TryGet(officeId, out _) == false
+            || incumbent == null
+            || (startAbsoluteDay.HasValue && startAbsoluteDay.Value < 0L)
+            || officeStore.TryGetIncumbency(officeId, out _))
+        {
+            return officeStore.TryAssignIncumbent(
+                officeId,
+                incumbent,
+                startAbsoluteDay,
+                out failure);
+        }
+
+        if (personStore.TryGet(incumbent, out _) == false)
+        {
+            failure = InstitutionFoundationFailure.Create(
+                InstitutionFoundationFailureCode.PersonNotRegistered,
+                "The incumbent PersonId must be registered in this world.");
+            return false;
+        }
+
+        return officeStore.TryAssignIncumbent(
+            officeId,
+            incumbent,
+            startAbsoluteDay,
+            out failure);
+    }
+
+    public bool TryAssignIncumbent(
+        OfficeId officeId,
+        PersonId incumbent,
+        out InstitutionFoundationFailure failure)
+    {
+        return TryAssignIncumbent(
+            officeId,
+            incumbent,
+            CurrentDay,
+            out failure);
+    }
+
+    public bool TryVacateOffice(
+        OfficeId officeId,
+        out InstitutionFoundationFailure failure)
+    {
+        return officeStore.TryVacateOffice(officeId, out failure);
+    }
+
+    public IReadOnlyList<OfficeRecord> GetVacantOffices()
+    {
+        return officeStore.GetVacantOffices();
+    }
+
+    public IReadOnlyList<OfficeRecord> GetOfficesForInstitution(
+        InstitutionId institutionId)
+    {
+        return officeStore.GetOfficesForInstitution(institutionId);
+    }
+
+    public IReadOnlyList<OfficeRecord> GetOfficesHeldBy(PersonId personId)
+    {
+        return officeStore.GetOfficesHeldBy(personId);
     }
 
     public bool TryProposeNamedBirth(
@@ -587,6 +718,10 @@ public sealed class SimulationRuntime
 
     internal GenealogyStore GenealogyStoreForWorldBoundary => genealogyStore;
 
+    internal InstitutionStore InstitutionStoreForWorldBoundary => institutionStore;
+
+    internal OfficeStore OfficeStoreForWorldBoundary => officeStore;
+
     private static void ValidateGenealogyStore(PersonStore persons, GenealogyStore genealogy)
     {
         foreach (ParentageRecord record in genealogy.Records)
@@ -611,6 +746,98 @@ public sealed class SimulationRuntime
             {
                 throw new ArgumentException(
                     "The SimulationRuntime GenealogyStore contains an invalid parentage record.",
+                    nameof(source));
+            }
+        }
+
+        return copy;
+    }
+
+    private static InstitutionStore ResolveInstitutionStore(
+        InstitutionStore institutionStore,
+        OfficeStore officeStore)
+    {
+        if (institutionStore != null
+            && officeStore != null
+            && ReferenceEquals(
+                institutionStore,
+                officeStore.InstitutionStoreForWorldBoundary) == false)
+        {
+            throw new ArgumentException(
+                "The SimulationRuntime InstitutionStore and OfficeStore must belong to the same store pair.",
+                nameof(officeStore));
+        }
+
+        InstitutionStore source = institutionStore
+            ?? officeStore?.InstitutionStoreForWorldBoundary;
+        return CloneInstitutionStore(source ?? new InstitutionStore());
+    }
+
+    private static InstitutionStore CloneInstitutionStore(InstitutionStore source)
+    {
+        InstitutionStore copy = new InstitutionStore();
+        foreach (InstitutionRecord record in source.Institutions)
+        {
+            InstitutionRecord clone = new InstitutionRecord(
+                new InstitutionId(record.Id.Value),
+                record.DisplayName);
+            if (copy.TryRegister(clone, out InstitutionFoundationFailure failure) == false)
+            {
+                throw new ArgumentException(
+                    "The SimulationRuntime InstitutionStore contains an invalid institution record: "
+                    + failure + ".",
+                    nameof(source));
+            }
+        }
+
+        return copy;
+    }
+
+    private static OfficeStore CloneOfficeStore(
+        OfficeStore source,
+        InstitutionStore institutionStore,
+        PersonStore personStore)
+    {
+        OfficeStore copy = new OfficeStore(institutionStore);
+        if (source == null)
+        {
+            return copy;
+        }
+
+        foreach (OfficeRecord record in source.Offices)
+        {
+            OfficeRecord clone = new OfficeRecord(
+                new OfficeId(record.Id.Value),
+                new InstitutionId(record.InstitutionId.Value),
+                record.DisplayName);
+            if (copy.TryRegister(clone, out InstitutionFoundationFailure failure) == false)
+            {
+                throw new ArgumentException(
+                    "The SimulationRuntime OfficeStore contains an invalid office record: "
+                    + failure + ".",
+                    nameof(source));
+            }
+        }
+
+        foreach (OfficeIncumbency incumbency in source.Incumbencies)
+        {
+            if (incumbency == null
+                || personStore.TryGet(incumbency.Incumbent, out _) == false)
+            {
+                throw new ArgumentException(
+                    "The SimulationRuntime OfficeStore contains an incumbent absent from PersonStore.",
+                    nameof(source));
+            }
+
+            if (copy.TryAssignIncumbent(
+                    new OfficeId(incumbency.OfficeId.Value),
+                    new PersonId(incumbency.Incumbent.Value),
+                    incumbency.StartAbsoluteDay,
+                    out InstitutionFoundationFailure failure) == false)
+            {
+                throw new ArgumentException(
+                    "The SimulationRuntime OfficeStore contains an invalid incumbency: "
+                    + failure + ".",
                     nameof(source));
             }
         }

@@ -67,6 +67,8 @@ public sealed class OfficeStore
         this.institutionStore = institutionStore ?? throw new ArgumentNullException(nameof(institutionStore));
     }
 
+    internal InstitutionStore InstitutionStoreForWorldBoundary => institutionStore;
+
     public IReadOnlyList<OfficeRecord> Offices
     {
         get
