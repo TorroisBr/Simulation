@@ -13,7 +13,8 @@ public enum PersonDeathLifecycleFailure
     PersonNpcBindingMismatch = 8,
     ExecutionMirrorAlreadyDead = 9,
     InvalidTransition = 10,
-    StalePersonRegistration = 11
+    StalePersonRegistration = 11,
+    InvalidInjury = 12
 }
 
 /// <summary>
@@ -122,6 +123,41 @@ public static class PersonDeathLifecycleSystem
         PersonDeathTransition transition,
         out PersonDeathLifecycleFailure failure)
     {
+        return TryApplyDeathInternal(
+            world,
+            transition,
+            NpcInjurySeverity.None,
+            false,
+            out failure);
+    }
+
+    public static bool TryApplyDeathWithConflictInjury(
+        SimulationRuntime world,
+        PersonDeathTransition transition,
+        NpcInjurySeverity injurySeverity,
+        out PersonDeathLifecycleFailure failure)
+    {
+        if (NpcInjuryRules.IsValid(injurySeverity) == false)
+        {
+            failure = PersonDeathLifecycleFailure.InvalidInjury;
+            return false;
+        }
+
+        return TryApplyDeathInternal(
+            world,
+            transition,
+            injurySeverity,
+            true,
+            out failure);
+    }
+
+    private static bool TryApplyDeathInternal(
+        SimulationRuntime world,
+        PersonDeathTransition transition,
+        NpcInjurySeverity injurySeverity,
+        bool applyConflictInjury,
+        out PersonDeathLifecycleFailure failure)
+    {
         failure = PersonDeathLifecycleFailure.None;
         if (world == null)
         {
@@ -170,6 +206,12 @@ public static class PersonDeathLifecycleSystem
             return false;
         }
 
+        if (applyConflictInjury && materializedNpc == null)
+        {
+            failure = PersonDeathLifecycleFailure.InvalidTransition;
+            return false;
+        }
+
         // Every fallible check is complete before either representation mutates.
         if (person.TryRecordDeath(transition.DeathAbsoluteDay) == false)
         {
@@ -177,7 +219,8 @@ public static class PersonDeathLifecycleSystem
             return false;
         }
 
-        materializedNpc?.ApplyPersonDeathAfterValidation();
+        materializedNpc?.ApplyPersonDeathAfterValidation(
+            applyConflictInjury ? injurySeverity : NpcInjurySeverity.None);
         return true;
     }
 
