@@ -709,6 +709,53 @@ public sealed class CoreWorldCommandHandlerTests
     }
 
     [Test]
+    public void ResolveConflictCommandRoutesFatalResidentPersonThroughWorldRuntime()
+    {
+        WorldCommandTestFixture fixture = new WorldCommandTestFixture();
+        NpcRuntime resident = fixture.AddPersonResident();
+        int populationBefore = fixture.City.CurrentPopulation;
+
+        WorldCommandResult result = fixture.Execute(
+            WorldCommandKind.ResolveConflict,
+            WorldCommandAuthorityMode.ForceOutcome,
+            new ResolveConflictWorldCommandPayload(
+                fixture.City.Location.RuntimeId,
+                new[]
+                {
+                    new WorldConflictSidePayload(
+                        "attacker",
+                        ConflictObjectiveType.Defeat,
+                        ConflictStakes.Existential,
+                        new[] { new WorldConflictParticipantPayload(resident.RuntimeId) }),
+                    new WorldConflictSidePayload(
+                        "defender",
+                        ConflictObjectiveType.Defend,
+                        ConflictStakes.Existential,
+                        new[] { new WorldConflictParticipantPayload(fixture.Defender.RuntimeId) })
+                },
+                forcedWinningSideId: "attacker",
+                constraints: new[]
+                {
+                    new WorldConflictParticipantConstraintPayload(
+                        resident.RuntimeId,
+                        forcedInjurySeverity: NpcInjurySeverity.Injured,
+                        forceDeath: true),
+                    new WorldConflictParticipantConstraintPayload(
+                        fixture.Defender.RuntimeId,
+                        forceAlive: true)
+                }));
+
+        Assert.That(result.Success, Is.True, result.Diagnostic);
+        Assert.That(fixture.World.PersonStore.TryGet(
+            resident.PersonId,
+            out PersonRuntime person), Is.True);
+        Assert.That(person.DeathAbsoluteDay, Is.EqualTo(fixture.World.CurrentDay));
+        Assert.That(resident.IsDead, Is.True);
+        Assert.That(resident.ResidenceSettlementRuntimeId, Is.Null);
+        Assert.That(fixture.City.CurrentPopulation, Is.EqualTo(populationBefore - 1));
+    }
+
+    [Test]
     public void ForceOutcomeCannotBypassStructuralIdentity()
     {
         WorldCommandTestFixture fixture = new WorldCommandTestFixture();
@@ -1066,6 +1113,7 @@ public sealed class CoreWorldCommandHandlerTests
         public PlaceOppositionRuntime Opposition { get; private set; }
         public WorldCommandDefinitionCatalog Definitions { get; } = new WorldCommandDefinitionCatalog();
         public WorldCommandService Service { get; }
+        public SimulationRuntime World { get; }
         public ExpeditionSystem Expeditions { get; }
         private readonly ExpeditionStore expeditionStore;
 
@@ -1093,6 +1141,11 @@ public sealed class CoreWorldCommandHandlerTests
             Defender.SetCurrentPresence(Site.Location);
             Registry.RegisterNpc(Actor);
             Registry.RegisterNpc(Defender);
+            World = new SimulationRuntime(
+                Records.Time,
+                new[] { City },
+                new[] { Actor, Defender },
+                economyEnabled: false);
 
             Content = new PlaceContentStore(Records.Allocator, Registry);
             Topologies = new LocalTopologyStore(Registry);
@@ -1124,7 +1177,8 @@ public sealed class CoreWorldCommandHandlerTests
                 Definitions,
                 includeExpedition ? Expeditions : null,
                 null,
-                Records.Events), Is.True);
+                Records.Events,
+                World), Is.True);
 
             if (includeOpposition)
             {
@@ -1185,6 +1239,23 @@ public sealed class CoreWorldCommandHandlerTests
                         ConflictStakes.Meaningful,
                         new[] { new WorldConflictParticipantPayload(Defender.RuntimeId) })
                 });
+        }
+
+        public NpcRuntime AddPersonResident()
+        {
+            PersonId personId = new PersonId("command-person-resident");
+            Assert.That(World.TryRegisterPerson(new PersonRuntime(personId, 0L), out _), Is.True);
+            Assert.That(World.TryBindExistingPersonResident(personId, City, out _), Is.True);
+            Assert.That(World.TryMaterializePerson(
+                personId,
+                SimulationTestFactory.CreateNpc("command-person-resident-definition"),
+                "npc-command-person-resident",
+                null,
+                0f,
+                out NpcRuntime npc,
+                out _), Is.True);
+            Assert.That(Registry.RegisterNpc(npc), Is.True);
+            return npc;
         }
 
         public void AddActiveExpeditionForActor()

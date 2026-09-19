@@ -151,13 +151,14 @@ public static class PersonDeathLifecycleSystem
             out failure);
     }
 
-    private static bool TryApplyDeathInternal(
+    internal static bool TryValidateDeath(
         SimulationRuntime world,
         PersonDeathTransition transition,
-        NpcInjurySeverity injurySeverity,
-        bool applyConflictInjury,
+        bool requireMaterializedNpc,
+        out NpcRuntime materializedNpc,
         out PersonDeathLifecycleFailure failure)
     {
+        materializedNpc = null;
         failure = PersonDeathLifecycleFailure.None;
         if (world == null)
         {
@@ -184,7 +185,7 @@ public static class PersonDeathLifecycleSystem
                 world,
                 transition.PersonId,
                 out PersonRuntime person,
-                out NpcRuntime materializedNpc,
+                out materializedNpc,
                 out failure) == false)
         {
             return false;
@@ -196,9 +197,8 @@ public static class PersonDeathLifecycleSystem
             return false;
         }
 
-        string currentNpcRuntimeId = materializedNpc?.RuntimeId;
         if (string.Equals(
-                currentNpcRuntimeId,
+                materializedNpc?.RuntimeId,
                 transition.ExpectedMaterializedNpcRuntimeId,
                 StringComparison.Ordinal) == false)
         {
@@ -206,18 +206,35 @@ public static class PersonDeathLifecycleSystem
             return false;
         }
 
-        if (applyConflictInjury && materializedNpc == null)
+        if (requireMaterializedNpc && materializedNpc == null)
         {
             failure = PersonDeathLifecycleFailure.InvalidTransition;
             return false;
         }
 
-        // Every fallible check is complete before either representation mutates.
-        if (person.TryRecordDeath(transition.DeathAbsoluteDay) == false)
+        return true;
+    }
+
+    private static bool TryApplyDeathInternal(
+        SimulationRuntime world,
+        PersonDeathTransition transition,
+        NpcInjurySeverity injurySeverity,
+        bool applyConflictInjury,
+        out PersonDeathLifecycleFailure failure)
+    {
+        failure = PersonDeathLifecycleFailure.None;
+        if (TryValidateDeath(
+                world,
+                transition,
+                applyConflictInjury,
+                out NpcRuntime materializedNpc,
+                out failure) == false)
         {
-            failure = PersonDeathLifecycleFailure.InvalidTransition;
             return false;
         }
+
+        // Every fallible check is complete before either representation mutates.
+        transition.ExpectedPerson.RecordDeathAfterValidation(transition.DeathAbsoluteDay);
 
         materializedNpc?.ApplyPersonDeathAfterValidation(
             applyConflictInjury ? injurySeverity : NpcInjurySeverity.None);

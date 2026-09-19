@@ -260,7 +260,7 @@ public class NpcRuntime : ICapabilityConditionSource
     /// </summary>
     internal void ApplyResidentDeathAfterPopulationValidation()
     {
-        ApplyResidentDeathAfterPopulationValidation(NpcInjurySeverity.None, null);
+        ApplyResidentDeathAfterPopulationValidation(NpcInjurySeverity.None);
     }
 
     /// <summary>
@@ -269,31 +269,32 @@ public class NpcRuntime : ICapabilityConditionSource
     /// </summary>
     internal void ApplyResidentDeathAfterPopulationValidation(NpcInjurySeverity severity)
     {
-        ApplyResidentDeathAfterPopulationValidation(severity, null);
+        if (NpcInjuryRules.IsValid(severity) == false)
+        {
+            return;
+        }
+
+        if (severity > injurySeverity)
+        {
+            injurySeverity = severity;
+        }
+
+        lifeState = NpcLifeState.Dead;
+        SetResidenceSettlementRuntimeId(null);
+        currentAction = null;
+        currentActionRuntime = null;
     }
 
-    /// <summary>
-    /// Commits a resident death with an explicit factual day when this NPC is a
-    /// Person execution mirror. Validation is completed by the lifecycle system
-    /// before the aggregate transition is applied.
-    /// </summary>
-    internal void ApplyResidentDeathAfterPopulationValidation(
+    internal void ApplyPersonBackedResidentDeathAfterPopulationValidation(
         NpcInjurySeverity severity,
-        long? personDeathAbsoluteDay)
+        PersonDeathTransition personDeathTransition)
     {
         if (NpcInjuryRules.IsValid(severity) == false)
         {
             return;
         }
 
-        if (personRuntime != null)
-        {
-            if (personDeathAbsoluteDay.HasValue == false
-                || personRuntime.TryRecordDeath(personDeathAbsoluteDay.Value) == false)
-            {
-                return;
-            }
-        }
+        personRuntime.RecordDeathAfterValidation(personDeathTransition.DeathAbsoluteDay);
 
         if (severity > injurySeverity)
         {

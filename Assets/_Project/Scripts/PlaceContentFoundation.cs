@@ -1513,6 +1513,27 @@ public sealed class PlaceContentStore
         out ConflictResolutionResult result,
         out string diagnostic)
     {
+        return TryResolveOpposition(
+            owner,
+            opposition,
+            conflict,
+            conflictResolutionService,
+            constraints,
+            null,
+            out result,
+            out diagnostic);
+    }
+
+    public bool TryResolveOpposition(
+        PlaceContentOwnerReference owner,
+        PlaceOppositionRuntime opposition,
+        Conflict conflict,
+        ConflictResolutionService conflictResolutionService,
+        ConflictResolutionConstraints constraints,
+        SimulationRuntime worldRuntime,
+        out ConflictResolutionResult result,
+        out string diagnostic)
+    {
         result = null;
         diagnostic = null;
         if (owner == null || opposition == null || conflict == null || conflictResolutionService == null)
@@ -1544,7 +1565,12 @@ public sealed class PlaceContentStore
             return false;
         }
 
-        if (conflictResolutionService.TryResolveAndApply(conflict, constraints, out result, out diagnostic) == false)
+        if (conflictResolutionService.TryResolveAndApply(
+                conflict,
+                constraints,
+                worldRuntime,
+                out result,
+                out diagnostic) == false)
         {
             return false;
         }

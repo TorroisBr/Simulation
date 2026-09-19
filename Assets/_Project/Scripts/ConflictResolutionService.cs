@@ -130,6 +130,8 @@ public sealed class ConflictResolutionService
             new Dictionary<string, NpcPopulationLifecycleTransition>(StringComparer.Ordinal);
         Dictionary<string, CityRuntime> residentDeathSettlements =
             new Dictionary<string, CityRuntime>(StringComparer.Ordinal);
+        Dictionary<string, PersonDeathTransition> residentPersonDeathTransitions =
+            new Dictionary<string, PersonDeathTransition>(StringComparer.Ordinal);
         Dictionary<string, PersonDeathTransition> personDeathTransitions =
             new Dictionary<string, PersonDeathTransition>(StringComparer.Ordinal);
         AuthoritativeNpcRoster authoritativeRoster = null;
@@ -181,6 +183,20 @@ public sealed class ConflictResolutionService
                 {
                     reason = "Resident conflict consequence lifecycle proposal was rejected: " + lifecycleFailure + ".";
                     return false;
+                }
+
+                if (participant.Npc.BoundPersonRuntime != null)
+                {
+                    if (worldRuntime.TryProposePersonDeath(
+                            participant.Npc.PersonId,
+                            out PersonDeathTransition personDeathTransition,
+                            out PersonDeathLifecycleFailure personDeathFailure) == false)
+                    {
+                        reason = "Resident Person-backed conflict death proposal was rejected: " + personDeathFailure + ".";
+                        return false;
+                    }
+
+                    residentPersonDeathTransitions.Add(consequence.ParticipantId, personDeathTransition);
                 }
 
                 residentDeathTransitions.Add(consequence.ParticipantId, transition);
@@ -261,6 +277,23 @@ public sealed class ConflictResolutionService
                     reason = "Resident conflict consequence preconditions changed before lifecycle application.";
                     return false;
                 }
+
+                if (residentPersonDeathTransitions.TryGetValue(
+                        consequence.ParticipantId,
+                        out PersonDeathTransition residentPersonDeathTransition) == true)
+                {
+                    if (PersonDeathLifecycleSystem.TryValidateDeath(
+                            worldRuntime,
+                            residentPersonDeathTransition,
+                            true,
+                            out NpcRuntime materializedNpc,
+                            out PersonDeathLifecycleFailure personDeathFailure) == false
+                        || ReferenceEquals(materializedNpc, participant.Npc) == false)
+                    {
+                        reason = "Resident Person-backed conflict consequence preconditions changed before lifecycle application.";
+                        return false;
+                    }
+                }
             }
             else if (personDeathTransitions.ContainsKey(consequence.ParticipantId) == true)
             {
@@ -294,11 +327,12 @@ public sealed class ConflictResolutionService
                 {
                     lifecycleApplied = participant.Npc.BoundPersonRuntime != null
                         ? NpcPopulationLifecycleSystem.TryApplyResidentPersonDeathWithConflictInjury(
+                            worldRuntime,
                             participant.Npc,
                             residenceSettlement,
                             authoritativeRoster,
                             consequence.InjurySeverity,
-                            worldRuntime.CurrentDay,
+                            residentPersonDeathTransitions[consequence.ParticipantId],
                             residentDeathTransition,
                             out lifecycleFailure)
                         : NpcPopulationLifecycleSystem.TryApplyResidentDeathWithConflictInjury(
@@ -313,11 +347,12 @@ public sealed class ConflictResolutionService
                 {
                     lifecycleApplied = participant.Npc.BoundPersonRuntime != null
                         ? NpcPopulationLifecycleSystem.TryApplyResidentPersonDeathWithConflictInjury(
+                            worldRuntime,
                             participant.Npc,
                             residenceSettlement,
                             authoritativeRoster,
                             consequence.InjurySeverity,
-                            worldRuntime.CurrentDay,
+                            residentPersonDeathTransitions[consequence.ParticipantId],
                             out _,
                             out lifecycleFailure)
                         : NpcPopulationLifecycleSystem.TryApplyResidentDeathWithConflictInjury(

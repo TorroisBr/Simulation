@@ -105,7 +105,8 @@ public static class WorldCommandHandlerRegistration
         IWorldCommandDefinitionResolver definitionResolver = null,
         ExpeditionSystem expeditionSystem = null,
         TravelPartyStore travelPartyStore = null,
-        DomainEventStore domainEventStore = null)
+        DomainEventStore domainEventStore = null,
+        SimulationRuntime worldRuntime = null)
     {
         if (service == null
             || runtimeIdAllocator == null
@@ -126,7 +127,8 @@ public static class WorldCommandHandlerRegistration
             definitionResolver,
             expeditionSystem,
             travelPartyStore,
-            domainEventStore);
+            domainEventStore,
+            worldRuntime);
 
         bool registered = true;
         registered &= service.RegisterHandler(new RelocateNpcWorldCommandHandler(dependencies));
@@ -153,6 +155,7 @@ public sealed class CoreWorldCommandDependencies
     public ExpeditionSystem ExpeditionSystem { get; }
     public TravelPartyStore TravelPartyStore { get; }
     public DomainEventStore DomainEventStore { get; }
+    public SimulationRuntime WorldRuntime { get; }
 
     public CoreWorldCommandDependencies(
         RuntimeIdAllocator runtimeIdAllocator,
@@ -163,7 +166,8 @@ public sealed class CoreWorldCommandDependencies
         IWorldCommandDefinitionResolver definitionResolver,
         ExpeditionSystem expeditionSystem,
         TravelPartyStore travelPartyStore,
-        DomainEventStore domainEventStore)
+        DomainEventStore domainEventStore,
+        SimulationRuntime worldRuntime)
     {
         RuntimeIdAllocator = runtimeIdAllocator;
         IdentityRegistry = identityRegistry;
@@ -174,6 +178,7 @@ public sealed class CoreWorldCommandDependencies
         ExpeditionSystem = expeditionSystem;
         TravelPartyStore = travelPartyStore;
         DomainEventStore = domainEventStore;
+        WorldRuntime = worldRuntime;
     }
 }
 
@@ -1232,6 +1237,7 @@ public sealed class ResolveConflictWorldCommandHandler : CoreWorldCommandHandler
                 conflict,
                 Dependencies.ConflictResolutionService,
                 constraints,
+                Dependencies.WorldRuntime,
                 out result,
                 out diagnostic) == false)
             {
@@ -1245,6 +1251,7 @@ public sealed class ResolveConflictWorldCommandHandler : CoreWorldCommandHandler
             resolved = Dependencies.ConflictResolutionService.TryResolveAndApply(
                 conflict,
                 constraints,
+                Dependencies.WorldRuntime,
                 out result,
                 out diagnostic);
         }
