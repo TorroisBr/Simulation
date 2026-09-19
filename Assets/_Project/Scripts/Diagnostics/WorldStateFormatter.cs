@@ -39,6 +39,11 @@ public static class WorldStateSnapshotFormatter
                     ? WorldStateCanonicalWriter.Int64Value(person.BirthAbsoluteDay.Value)
                     : "unknown")
                 .Append('\n');
+            output.Append("Death day: ")
+                .Append(person.DeathAbsoluteDay.HasValue
+                    ? WorldStateCanonicalWriter.Int64Value(person.DeathAbsoluteDay.Value)
+                    : "unknown")
+                .Append('\n');
             output.Append("Age in days: ")
                 .Append(person.AgeInDays.HasValue
                     ? WorldStateCanonicalWriter.Int64Value(person.AgeInDays.Value)

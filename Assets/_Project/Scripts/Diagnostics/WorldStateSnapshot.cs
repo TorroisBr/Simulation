@@ -127,6 +127,7 @@ public sealed class WorldStatePersonSnapshot
     public string PersonId { get; }
     public long? BirthAbsoluteDay { get; }
     public bool HasKnownBirthDay => BirthAbsoluteDay.HasValue;
+    public long? DeathAbsoluteDay { get; }
     public long? AgeInDays { get; }
     public long? CompletedYears { get; }
     public string ResidenceSettlementRuntimeId { get; }
@@ -136,7 +137,7 @@ public sealed class WorldStatePersonSnapshot
     public WorldStatePersonSnapshot(
         string personId,
         string materializedNpcRuntimeId)
-        : this(personId, null, null, null, null, materializedNpcRuntimeId)
+        : this(personId, null, null, null, null, materializedNpcRuntimeId, null)
     {
     }
 
@@ -152,7 +153,8 @@ public sealed class WorldStatePersonSnapshot
             ageInDays,
             completedYears,
             null,
-            materializedNpcRuntimeId)
+            materializedNpcRuntimeId,
+            null)
     {
     }
 
@@ -163,9 +165,29 @@ public sealed class WorldStatePersonSnapshot
         long? completedYears,
         string residenceSettlementRuntimeId,
         string materializedNpcRuntimeId)
+        : this(
+            personId,
+            birthAbsoluteDay,
+            ageInDays,
+            completedYears,
+            residenceSettlementRuntimeId,
+            materializedNpcRuntimeId,
+            null)
+    {
+    }
+
+    public WorldStatePersonSnapshot(
+        string personId,
+        long? birthAbsoluteDay,
+        long? ageInDays,
+        long? completedYears,
+        string residenceSettlementRuntimeId,
+        string materializedNpcRuntimeId,
+        long? deathAbsoluteDay)
     {
         PersonId = personId;
         BirthAbsoluteDay = birthAbsoluteDay;
+        DeathAbsoluteDay = deathAbsoluteDay;
         AgeInDays = ageInDays;
         CompletedYears = completedYears;
         ResidenceSettlementRuntimeId = residenceSettlementRuntimeId;
@@ -958,7 +980,8 @@ public static class WorldStateSnapshotBuilder
                 age?.AgeInDays,
                 age?.CompletedYears,
                 person.ResidenceSettlementRuntimeId,
-                person.MaterializedNpcRuntimeId));
+                person.MaterializedNpcRuntimeId,
+                person.DeathAbsoluteDay));
         }
 
         return result;

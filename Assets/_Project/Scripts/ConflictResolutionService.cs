@@ -260,23 +260,41 @@ public sealed class ConflictResolutionService
                 NpcPopulationLifecycleFailure lifecycleFailure;
                 if (usePreparedTransition == true)
                 {
-                    lifecycleApplied = NpcPopulationLifecycleSystem.TryApplyResidentDeathWithConflictInjury(
-                        participant.Npc,
-                        residenceSettlement,
-                        authoritativeRoster,
-                        consequence.InjurySeverity,
-                        residentDeathTransition,
-                        out lifecycleFailure);
+                    lifecycleApplied = participant.Npc.BoundPersonRuntime != null
+                        ? NpcPopulationLifecycleSystem.TryApplyResidentPersonDeathWithConflictInjury(
+                            participant.Npc,
+                            residenceSettlement,
+                            authoritativeRoster,
+                            consequence.InjurySeverity,
+                            worldRuntime.CurrentDay,
+                            residentDeathTransition,
+                            out lifecycleFailure)
+                        : NpcPopulationLifecycleSystem.TryApplyResidentDeathWithConflictInjury(
+                            participant.Npc,
+                            residenceSettlement,
+                            authoritativeRoster,
+                            consequence.InjurySeverity,
+                            residentDeathTransition,
+                            out lifecycleFailure);
                 }
                 else
                 {
-                    lifecycleApplied = NpcPopulationLifecycleSystem.TryApplyResidentDeathWithConflictInjury(
-                        participant.Npc,
-                        residenceSettlement,
-                        authoritativeRoster,
-                        consequence.InjurySeverity,
-                        out _,
-                        out lifecycleFailure);
+                    lifecycleApplied = participant.Npc.BoundPersonRuntime != null
+                        ? NpcPopulationLifecycleSystem.TryApplyResidentPersonDeathWithConflictInjury(
+                            participant.Npc,
+                            residenceSettlement,
+                            authoritativeRoster,
+                            consequence.InjurySeverity,
+                            worldRuntime.CurrentDay,
+                            out _,
+                            out lifecycleFailure)
+                        : NpcPopulationLifecycleSystem.TryApplyResidentDeathWithConflictInjury(
+                            participant.Npc,
+                            residenceSettlement,
+                            authoritativeRoster,
+                            consequence.InjurySeverity,
+                            out _,
+                            out lifecycleFailure);
                 }
 
                 if (lifecycleApplied == false)

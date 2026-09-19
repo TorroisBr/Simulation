@@ -202,6 +202,7 @@ public static class WorldStateInvariantValidator
         HashSet<string> personIds = new HashSet<string>(StringComparer.Ordinal);
         Dictionary<string, string> personBindings = new Dictionary<string, string>(StringComparer.Ordinal);
         Dictionary<string, string> personResidences = new Dictionary<string, string>(StringComparer.Ordinal);
+        Dictionary<string, long?> personDeaths = new Dictionary<string, long?>(StringComparer.Ordinal);
         HashSet<string> personBoundNpcIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (WorldStatePersonSnapshot person in snapshot.Persons)
         {
@@ -230,6 +231,7 @@ public static class WorldStateInvariantValidator
                 }
 
                 personResidences[person.PersonId] = person.ResidenceSettlementRuntimeId;
+                personDeaths[person.PersonId] = person.DeathAbsoluteDay;
             }
 
             if (person.BirthAbsoluteDay.HasValue)
@@ -241,6 +243,23 @@ public static class WorldStateInvariantValidator
                 else if (person.BirthAbsoluteDay.Value > snapshot.AbsoluteDay)
                 {
                     AddError(issues, "FuturePersonBirthAbsoluteDay", personIdentity, "Person BirthAbsoluteDay cannot be later than the snapshot day.");
+                }
+            }
+
+            if (person.DeathAbsoluteDay.HasValue)
+            {
+                if (person.DeathAbsoluteDay.Value < 0L)
+                {
+                    AddError(issues, "NegativePersonDeathAbsoluteDay", personIdentity, "Person DeathAbsoluteDay cannot be negative.");
+                }
+                else if (person.DeathAbsoluteDay.Value > snapshot.AbsoluteDay)
+                {
+                    AddError(issues, "FuturePersonDeathAbsoluteDay", personIdentity, "Person DeathAbsoluteDay cannot be later than the snapshot day.");
+                }
+                else if (person.BirthAbsoluteDay.HasValue
+                    && person.DeathAbsoluteDay.Value < person.BirthAbsoluteDay.Value)
+                {
+                    AddError(issues, "PersonDeathBeforeBirth", personIdentity, "Person DeathAbsoluteDay cannot be earlier than BirthAbsoluteDay.");
                 }
             }
 
@@ -311,6 +330,16 @@ public static class WorldStateInvariantValidator
                 && string.Equals(personResidence, npc.ResidenceSettlementRuntimeId, StringComparison.Ordinal) == false)
             {
                 AddError(issues, "PersonNpcResidenceMismatch", npcIdentity, "Person-backed NPC residence diverges from the Person residence authority.");
+            }
+
+
+            if (personDeaths.TryGetValue(npc.PersonId, out long? personDeath) == true)
+            {
+                bool personIsDead = personDeath.HasValue && personDeath.Value <= snapshot.AbsoluteDay;
+                if (personIsDead != (npc.LifeState == NpcLifeState.Dead))
+                {
+                    AddError(issues, "PersonNpcLifeStateMismatch", npcIdentity, "Person-backed NPC life state diverges from factual Person death.");
+                }
             }
         }
 

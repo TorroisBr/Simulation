@@ -254,7 +254,46 @@ public sealed class SimulationRuntime
             return false;
         }
 
+        if (person != null
+            && person.DeathAbsoluteDay.HasValue
+            && person.DeathAbsoluteDay.Value > CurrentDay)
+        {
+            failure = PersonStoreFailure.DeathAbsoluteDayInFuture;
+            return false;
+        }
+
         return personStore.TryRegister(person, out failure);
+    }
+
+    public bool TryProposePersonDeath(
+        PersonId personId,
+        out PersonDeathTransition transition,
+        out PersonDeathLifecycleFailure failure)
+    {
+        return PersonDeathLifecycleSystem.TryProposeDeath(
+            this,
+            personId,
+            out transition,
+            out failure);
+    }
+
+    public bool TryApplyPersonDeath(
+        PersonDeathTransition transition,
+        out PersonDeathLifecycleFailure failure)
+    {
+        return PersonDeathLifecycleSystem.TryApplyDeath(this, transition, out failure);
+    }
+
+    public bool TryApplyPersonDeath(
+        PersonId personId,
+        out PersonDeathTransition transition,
+        out PersonDeathLifecycleFailure failure)
+    {
+        return PersonDeathLifecycleSystem.TryApplyDeath(
+            this,
+            personId,
+            out transition,
+            out failure);
     }
 
     public bool TryRegisterInstitution(
@@ -583,6 +622,17 @@ public sealed class SimulationRuntime
         out NpcPopulationLifecycleTransition transition,
         out NpcPopulationLifecycleFailure failure)
     {
+        if (npcRuntime?.BoundPersonRuntime != null)
+        {
+            return NpcPopulationLifecycleSystem.TryApplyResidentPersonDeath(
+                npcRuntime,
+                settlement,
+                GetAuthoritativeNpcRoster(),
+                CurrentDay,
+                out transition,
+                out failure);
+        }
+
         return NpcPopulationLifecycleSystem.TryApplyResidentDeath(
             npcRuntime,
             settlement,

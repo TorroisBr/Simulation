@@ -190,7 +190,7 @@ public sealed class PersonDemographicAgeTests
             0f,
             out NpcRuntime npc,
             out _), Is.True);
-        Assert.That(npc.TryApplyDeath(), Is.True);
+        Assert.That(world.TryApplyPersonDeath(personId, out _, out _), Is.True);
 
         Assert.That(world.PersonStore.TryGet(personId, out PersonRuntime person), Is.True);
         Assert.That(PersonAgeQuery.TryCalculate(person, world.SimulationTime, UniformCalendar(), out PersonAgeSnapshot age, out PersonAgeQueryFailure failure), Is.True, failure.ToString());

@@ -214,7 +214,9 @@ public class NpcRuntime : ICapabilityConditionSource
 
     public bool TryApplyDeath()
     {
-        if (IsDead == true || string.IsNullOrWhiteSpace(ResidenceSettlementRuntimeId) == false)
+        if (personRuntime != null
+            || IsDead == true
+            || string.IsNullOrWhiteSpace(ResidenceSettlementRuntimeId) == false)
         {
             return false;
         }
@@ -226,13 +228,24 @@ public class NpcRuntime : ICapabilityConditionSource
     }
 
     /// <summary>
+    /// Mirrors an already-validated factual death from the bound Person. Person
+    /// death remains authoritative; this method cannot be called publicly.
+    /// </summary>
+    internal void ApplyPersonDeathAfterValidation()
+    {
+        lifeState = NpcLifeState.Dead;
+        currentAction = null;
+        currentActionRuntime = null;
+    }
+
+    /// <summary>
     /// Commits a resident death only after NpcPopulationLifecycleSystem has validated
     /// and applied the matching aggregate transition. The residence is cleared so a
     /// dead NPC remains world-known without remaining a living resident member.
     /// </summary>
     internal void ApplyResidentDeathAfterPopulationValidation()
     {
-        ApplyResidentDeathAfterPopulationValidation(NpcInjurySeverity.None);
+        ApplyResidentDeathAfterPopulationValidation(NpcInjurySeverity.None, null);
     }
 
     /// <summary>
@@ -241,9 +254,30 @@ public class NpcRuntime : ICapabilityConditionSource
     /// </summary>
     internal void ApplyResidentDeathAfterPopulationValidation(NpcInjurySeverity severity)
     {
+        ApplyResidentDeathAfterPopulationValidation(severity, null);
+    }
+
+    /// <summary>
+    /// Commits a resident death with an explicit factual day when this NPC is a
+    /// Person execution mirror. Validation is completed by the lifecycle system
+    /// before the aggregate transition is applied.
+    /// </summary>
+    internal void ApplyResidentDeathAfterPopulationValidation(
+        NpcInjurySeverity severity,
+        long? personDeathAbsoluteDay)
+    {
         if (NpcInjuryRules.IsValid(severity) == false)
         {
             return;
+        }
+
+        if (personRuntime != null)
+        {
+            if (personDeathAbsoluteDay.HasValue == false
+                || personRuntime.TryRecordDeath(personDeathAbsoluteDay.Value) == false)
+            {
+                return;
+            }
         }
 
         if (severity > injurySeverity)
@@ -257,12 +291,22 @@ public class NpcRuntime : ICapabilityConditionSource
         currentActionRuntime = null;
     }
 
+    internal bool CanApplyPersonBackedDeath(long absoluteDay)
+    {
+        return personRuntime != null
+            && personRuntime.DeathAbsoluteDay.HasValue == false
+            && absoluteDay >= 0L
+            && (personRuntime.BirthAbsoluteDay.HasValue == false
+                || absoluteDay >= personRuntime.BirthAbsoluteDay.Value);
+    }
+
     public bool CanApplyConflictConsequence(
         NpcInjurySeverity severity,
         bool shouldDie)
     {
         return IsAlive == true
             && NpcInjuryRules.IsValid(severity) == true
+            && (shouldDie == false || personRuntime == null)
             && (shouldDie == false || (lifeState == NpcLifeState.Alive
                 && string.IsNullOrWhiteSpace(ResidenceSettlementRuntimeId) == true));
     }

@@ -151,6 +151,8 @@ public sealed class PersonResidenceFoundationTests
         Assert.That(world.TryApplyImmigration(npc, city, out _, out _), Is.True);
         Assert.That(world.TryApplyResidentDeath(npc, city, out _, out NpcPopulationLifecycleFailure deathFailure), Is.True, deathFailure.ToString());
         Assert.That(npc.IsDead, Is.True);
+        Assert.That(person.DeathAbsoluteDay, Is.EqualTo(world.CurrentDay));
+        Assert.That(person.IsDeadAt(world.CurrentDay), Is.True);
         Assert.That(person.ResidenceSettlementRuntimeId, Is.Null);
         Assert.That(city.CurrentPopulation, Is.EqualTo(populationBefore));
     }

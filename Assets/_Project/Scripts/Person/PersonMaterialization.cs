@@ -15,7 +15,9 @@ public enum PersonMaterializationFailure
     RosterRegistrationFailed = 10,
     InvalidStartingContext = 11,
     NpcNotRegistered = 12,
-    ResidenceConflict = 13
+    ResidenceConflict = 13,
+    PersonDead = 14,
+    LifeStateConflict = 15
 }
 
 /// <summary>
@@ -69,6 +71,12 @@ public static class PersonMaterializationSystem
         if (person.IsMaterialized == true)
         {
             failure = PersonMaterializationFailure.AlreadyMaterialized;
+            return false;
+        }
+
+        if (person.IsDeadAt(world.CurrentDay))
+        {
+            failure = PersonMaterializationFailure.PersonDead;
             return false;
         }
 
@@ -167,6 +175,12 @@ public static class PersonMaterializationSystem
         if (world.PersonStore.TryGet(personId, out PersonRuntime person) == false)
         {
             failure = PersonMaterializationFailure.PersonNotRegistered;
+            return false;
+        }
+
+        if (person.IsDeadAt(world.CurrentDay) != npcRuntime.IsDead)
+        {
+            failure = PersonMaterializationFailure.LifeStateConflict;
             return false;
         }
 
