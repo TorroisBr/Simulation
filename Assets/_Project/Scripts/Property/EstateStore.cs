@@ -3,11 +3,8 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 
 /// <summary>
-/// World-owned registry of explicitly opened estates.
-///
-/// Factual Person death is intentionally not observed here. Estate opening is
-/// controlled by EstateCreationSystem so callers must issue an explicit
-/// downstream transition after validating the deceased Person.
+/// World-owned registry of explicitly opened estates. Factual Person death is
+/// not observed here and never opens an estate implicitly.
 /// </summary>
 public sealed class EstateStore
 {
@@ -18,7 +15,6 @@ public sealed class EstateStore
     private long revision;
 
     public int Count => recordsById.Count;
-
     public long Revision => revision;
 
     public IReadOnlyList<EstateRecord> Estates
@@ -48,13 +44,6 @@ public sealed class EstateStore
         record = null;
         return deceasedPersonId != null
             && recordsByDeceasedPerson.TryGetValue(deceasedPersonId, out record);
-    }
-
-    public bool TryGetForDeceasedPerson(
-        PersonId deceasedPersonId,
-        out EstateRecord record)
-    {
-        return TryGetByDeceasedPerson(deceasedPersonId, out record);
     }
 
     internal bool TryRegister(

@@ -75,30 +75,23 @@ public sealed class EstateId : IEquatable<EstateId>
 public enum EstateFoundationFailureCode
 {
     None = 0,
-    InvalidStore,
-    InvalidEstateId,
-    InvalidPersonId,
-    InvalidDeceasedPersonId,
-    InvalidEstateRecord,
-    InvalidTransition,
-    InvalidOpeningDay,
-    InvalidAbsoluteDay,
-    PersonNotRegistered,
-    PersonStillLiving,
-    PersonNotDeceased,
-    DeathAbsoluteDayInFuture,
-    DuplicateEstateId,
-    EstateAlreadyExistsForPerson,
-    PersonAlreadyHasEstate,
-    EstateNotFound,
-    StalePersonRegistration,
-    StaleEstateStore,
-    StaleAbsoluteDay,
-    RevisionOverflow
+    InvalidStore = 1,
+    InvalidEstateId = 2,
+    InvalidPersonId = 3,
+    InvalidEstateRecord = 4,
+    InvalidTransition = 5,
+    InvalidOpeningDay = 6,
+    PersonNotRegistered = 7,
+    PersonStillLiving = 8,
+    DuplicateEstateId = 9,
+    EstateAlreadyExistsForPerson = 10,
+    StalePersonRegistration = 11,
+    StaleEstateStore = 12,
+    RevisionOverflow = 13
 }
 
 /// <summary>
-/// Structured failure for expected estate registration and opening operations.
+/// Structured failure for explicit estate opening operations.
 /// </summary>
 public sealed class EstateFoundationFailure : IEquatable<EstateFoundationFailure>
 {
@@ -112,11 +105,8 @@ public sealed class EstateFoundationFailure : IEquatable<EstateFoundationFailure
     }
 
     public static EstateFoundationFailure None => none;
-
     public EstateFoundationFailureCode Code { get; }
-
     public string Message { get; }
-
     public bool IsFailure => Code != EstateFoundationFailureCode.None;
 
     public static EstateFoundationFailure Create(
@@ -155,68 +145,38 @@ public sealed class EstateFoundationFailure : IEquatable<EstateFoundationFailure
 }
 
 /// <summary>
-/// Immutable world-truth identity of an opened estate. This record contains no
-/// inheritance decision, creditor state, tax state, or property transfer.
+/// Minimal estate identity linked to one deceased Person. The Person death day
+/// remains factual truth on PersonRuntime; this record stores only the explicit
+/// opening and stable deceased Person linkage.
 /// </summary>
 public sealed class EstateRecord : IEquatable<EstateRecord>
 {
-    public EstateRecord(
-        EstateId estateId,
-        PersonId deceasedPersonId,
-        long openedAbsoluteDay)
-        : this(
-            estateId,
-            deceasedPersonId,
-            openedAbsoluteDay,
-            openedAbsoluteDay)
-    {
-    }
-
-    public EstateRecord(
-        EstateId estateId,
-        PersonId deceasedPersonId,
-        long deathAbsoluteDay,
-        long createdAbsoluteDay)
+    public EstateRecord(EstateId estateId, PersonId deceasedPersonId, long openedAbsoluteDay)
     {
         EstateId = estateId ?? throw new ArgumentNullException(nameof(estateId));
         DeceasedPersonId = deceasedPersonId
             ?? throw new ArgumentNullException(nameof(deceasedPersonId));
 
-        if (deathAbsoluteDay < 0L)
+        if (openedAbsoluteDay < 0L)
         {
             throw new ArgumentOutOfRangeException(
-                nameof(deathAbsoluteDay),
-                "DeathAbsoluteDay cannot be negative.");
+                nameof(openedAbsoluteDay),
+                "OpenedAbsoluteDay cannot be negative.");
         }
 
-        if (createdAbsoluteDay < deathAbsoluteDay)
-        {
-            throw new ArgumentException(
-                "CreatedAbsoluteDay cannot precede DeathAbsoluteDay.",
-                nameof(createdAbsoluteDay));
-        }
-
-        DeathAbsoluteDay = deathAbsoluteDay;
-        CreatedAbsoluteDay = createdAbsoluteDay;
+        OpenedAbsoluteDay = openedAbsoluteDay;
     }
 
     public EstateId EstateId { get; }
-
     public PersonId DeceasedPersonId { get; }
-
-    public long DeathAbsoluteDay { get; }
-
-    public long CreatedAbsoluteDay { get; }
-
-    public long OpenedAbsoluteDay => CreatedAbsoluteDay;
+    public long OpenedAbsoluteDay { get; }
 
     public bool Equals(EstateRecord other)
     {
         return other != null
             && EstateId == other.EstateId
             && DeceasedPersonId == other.DeceasedPersonId
-            && DeathAbsoluteDay == other.DeathAbsoluteDay
-            && CreatedAbsoluteDay == other.CreatedAbsoluteDay;
+            && OpenedAbsoluteDay == other.OpenedAbsoluteDay;
     }
 
     public override bool Equals(object obj)
@@ -231,61 +191,51 @@ public sealed class EstateRecord : IEquatable<EstateRecord>
             int hash = EstateId != null ? EstateId.GetHashCode() : 0;
             hash = (hash * 397)
                 ^ (DeceasedPersonId != null ? DeceasedPersonId.GetHashCode() : 0);
-            hash = (hash * 397) ^ DeathAbsoluteDay.GetHashCode();
-            return (hash * 397) ^ CreatedAbsoluteDay.GetHashCode();
+            return (hash * 397) ^ OpenedAbsoluteDay.GetHashCode();
         }
     }
 }
 
 /// <summary>
-/// Optimistic proposal for explicitly creating an estate for one factual dead
-/// Person. The expected Person reference and death day prevent applying a
-/// proposal to another world or a stale Person registration.
+/// Optimistic proposal for explicitly opening an estate for one factual dead
+/// Person. Applying it revalidates both the Person registration and store.
 /// </summary>
-public sealed class EstateCreationTransition : IEquatable<EstateCreationTransition>
+public sealed class EstateOpeningTransition : IEquatable<EstateOpeningTransition>
 {
     internal PersonRuntime ExpectedPerson { get; }
-
     public EstateId EstateId { get; }
-
     public PersonId DeceasedPersonId { get; }
-
     public long ExpectedDeathAbsoluteDay { get; }
-
-    public long CreatedAbsoluteDay { get; }
-
-    public long OpeningAbsoluteDay => CreatedAbsoluteDay;
-
+    public long OpeningAbsoluteDay { get; }
     public long ExpectedEstateStoreRevision { get; }
 
-    internal EstateCreationTransition(
+    internal EstateOpeningTransition(
         PersonRuntime expectedPerson,
         EstateId estateId,
-        long expectedDeathAbsoluteDay,
-        long createdAbsoluteDay,
+        long openingAbsoluteDay,
         long expectedEstateStoreRevision)
     {
         ExpectedPerson = expectedPerson;
         EstateId = estateId;
         DeceasedPersonId = expectedPerson?.PersonId;
-        ExpectedDeathAbsoluteDay = expectedDeathAbsoluteDay;
-        CreatedAbsoluteDay = createdAbsoluteDay;
+        ExpectedDeathAbsoluteDay = expectedPerson?.DeathAbsoluteDay ?? -1L;
+        OpeningAbsoluteDay = openingAbsoluteDay;
         ExpectedEstateStoreRevision = expectedEstateStoreRevision;
     }
 
-    public bool Equals(EstateCreationTransition other)
+    public bool Equals(EstateOpeningTransition other)
     {
         return other != null
             && EstateId == other.EstateId
             && DeceasedPersonId == other.DeceasedPersonId
             && ExpectedDeathAbsoluteDay == other.ExpectedDeathAbsoluteDay
-            && CreatedAbsoluteDay == other.CreatedAbsoluteDay
+            && OpeningAbsoluteDay == other.OpeningAbsoluteDay
             && ExpectedEstateStoreRevision == other.ExpectedEstateStoreRevision;
     }
 
     public override bool Equals(object obj)
     {
-        return Equals(obj as EstateCreationTransition);
+        return Equals(obj as EstateOpeningTransition);
     }
 
     public override int GetHashCode()
@@ -296,7 +246,7 @@ public sealed class EstateCreationTransition : IEquatable<EstateCreationTransiti
             hash = (hash * 397)
                 ^ (DeceasedPersonId != null ? DeceasedPersonId.GetHashCode() : 0);
             hash = (hash * 397) ^ ExpectedDeathAbsoluteDay.GetHashCode();
-            hash = (hash * 397) ^ CreatedAbsoluteDay.GetHashCode();
+            hash = (hash * 397) ^ OpeningAbsoluteDay.GetHashCode();
             return (hash * 397) ^ ExpectedEstateStoreRevision.GetHashCode();
         }
     }
