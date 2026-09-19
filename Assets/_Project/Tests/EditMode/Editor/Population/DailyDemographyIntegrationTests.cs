@@ -90,6 +90,35 @@ public sealed class DailyDemographyIntegrationTests
         Assert.That(invalid.IsValid, Is.False);
     }
 
+    [Test]
+    public void ProviderMutationIsRestoredAndRuntimeCalendarIsDetachedFromDefinition()
+    {
+        CityRuntime city = CreateCity("provider-rollback-city", 10);
+        CalendarDefinition definition = new CalendarDefinition(2, 1, 2);
+        EffectiveSimulationConfiguration configuration = SimulationConfigurationResolver.ResolveOrThrow(
+            contentOverrides: new SimulationConfigurationOverrides(
+                aggregateDemography: new AggregateDemographyConfigurationOverrides(
+                    enabled: true,
+                    annualBirthRate: 1d,
+                    annualDeathRate: 0d)));
+        MutatingProvider provider = new MutatingProvider(city.Population);
+        SimulationRuntime world = new SimulationRuntime(
+            simulationTime: new SimulationTime(),
+            cities: new[] { city },
+            npcRuntimes: null,
+            configuration: configuration,
+            calendarDefinition: definition,
+            aggregateDemographyProvider: provider);
+
+        definition.daysPerWeek = 9;
+        world.AdvanceDay();
+
+        Assert.That(world.Calendar.DaysPerYear, Is.EqualTo(4L));
+        Assert.That(city.CurrentPopulation, Is.EqualTo(10));
+        Assert.That(city.Population.Revision, Is.EqualTo(0L));
+        Assert.That(world.LastDailyDemographyReport.HasErrors, Is.True);
+    }
+
     private static SimulationRuntime CreateWorld(
         CityRuntime city,
         PersonRuntime person,
@@ -166,6 +195,27 @@ public sealed class DailyDemographyIntegrationTests
         {
             Contexts.Add(context);
             return new AggregateDemographyChange(births, deaths);
+        }
+    }
+
+    private sealed class MutatingProvider : IAggregateDemographyProvider
+    {
+        private readonly SettlementPopulationRuntime population;
+
+        public MutatingProvider(SettlementPopulationRuntime population)
+        {
+            this.population = population;
+        }
+
+        public AggregateDemographyChange GetChange(AggregateDemographyContext context)
+        {
+            SettlementPopulationSystem.TryPropose(
+                population,
+                new PopulationChangeSet(1, 0, 0, 0),
+                out SettlementPopulationTransition transition,
+                out _);
+            SettlementPopulationSystem.TryApply(population, transition, out _);
+            return new AggregateDemographyChange(0, 0);
         }
     }
 }

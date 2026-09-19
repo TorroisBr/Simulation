@@ -69,7 +69,9 @@ public class TesteSimulacao : MonoBehaviour
     public ExpeditionSystem ExpeditionRuntime => expeditionSystem;
     public ExpeditionSystem ExpeditionSystem => expeditionSystem;
     public long CurrentDay => simulationTime.AbsoluteDay;
-    public SimulationDate CurrentDate => calendarDefinition.GetDate(CurrentDay);
+    public SimulationDate CurrentDate => simulationRuntime != null
+        ? simulationRuntime.Calendar.GetDate(CurrentDay)
+        : calendarDefinition.GetDate(CurrentDay);
 
     public bool TryStartTravelParty(ActionExecutionContext context)
     {

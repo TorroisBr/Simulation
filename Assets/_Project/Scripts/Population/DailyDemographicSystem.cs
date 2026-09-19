@@ -21,6 +21,27 @@ public interface IAggregateDemographySampleProvider
 }
 
 /// <summary>
+/// World-boundary snapshot of living represented residents. The aggregate
+/// population system receives these values explicitly and never discovers them.
+/// </summary>
+public sealed class RepresentedResidentFloorSnapshot
+{
+    private readonly Dictionary<string, int> floors;
+
+    internal RepresentedResidentFloorSnapshot(Dictionary<string, int> floors)
+    {
+        this.floors = floors ?? new Dictionary<string, int>(StringComparer.Ordinal);
+    }
+
+    public bool TryGetFloor(string settlementRuntimeId, out int floor)
+    {
+        floor = 0;
+        return string.IsNullOrWhiteSpace(settlementRuntimeId) == false
+            && floors.TryGetValue(settlementRuntimeId, out floor);
+    }
+}
+
+/// <summary>
 /// Stable, registration-order-independent samples for autonomous demographic work.
 /// This is deliberately separate from UnityEngine.Random and from action randomness.
 /// </summary>
@@ -264,14 +285,18 @@ public static class DailyDemographicSystem
         }
 
         EffectiveAggregateDemographyConfiguration aggregate = world.Configuration.AggregateDemography;
-        if ((aggregate != null && aggregate.Enabled) || aggregateProvider != null)
+        if (aggregate != null && aggregate.Enabled)
         {
             IAggregateDemographyProvider provider = aggregateProvider
                 ?? new DeterministicAggregateDemographyProvider(
                     world.Calendar,
                     aggregate.AnnualBirthRate,
                     aggregate.AnnualDeathRate);
-            ApplyAggregateDemography(world, provider, report);
+            ApplyAggregateDemography(
+                world,
+                provider,
+                world.BuildRepresentedResidentFloorSnapshot(),
+                report);
         }
 
         return report;
@@ -359,6 +384,7 @@ public static class DailyDemographicSystem
     private static void ApplyAggregateDemography(
         SimulationRuntime world,
         IAggregateDemographyProvider provider,
+        RepresentedResidentFloorSnapshot floors,
         DailyDemographyReport report)
     {
         List<CityRuntime> settlements = new List<CityRuntime>(world.Cities);
@@ -367,12 +393,16 @@ public static class DailyDemographicSystem
 
         foreach (CityRuntime settlement in settlements)
         {
-            SettlementPopulationPresenceSummary presence =
-                SettlementPopulationPresenceQuery.BuildSummary(
-                    settlement,
-                    world.NpcRuntimes,
-                    world.PersonStore.Persons);
-            int representedResidentFloor = presence?.RepresentedResidentCount ?? 0;
+            if (floors == null
+                || floors.TryGetFloor(settlement.RuntimeId, out int representedResidentFloor) == false)
+            {
+                report.Add(
+                    DailyDemographyDiagnosticSeverity.Error,
+                    "RepresentedResidentFloorMissing",
+                    settlement.RuntimeId,
+                    "The world did not provide a represented-resident floor.");
+                continue;
+            }
 
             try
             {

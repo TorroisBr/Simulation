@@ -14,6 +14,17 @@ public sealed class SettlementPopulationRuntime
     public int CurrentPopulation => currentPopulation;
     public long Revision => revision;
 
+    internal void RestoreSnapshot(int population, long expectedRevision)
+    {
+        if (population < 0 || expectedRevision < 0L)
+        {
+            return;
+        }
+
+        currentPopulation = population;
+        revision = expectedRevision;
+    }
+
     public SettlementPopulationRuntime(string settlementRuntimeId, int currentPopulation)
     {
         if (string.IsNullOrWhiteSpace(settlementRuntimeId) == true)

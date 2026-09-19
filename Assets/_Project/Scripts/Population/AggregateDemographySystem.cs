@@ -56,13 +56,24 @@ public static class AggregateDemographySystem
             population.CurrentPopulation,
             representedResidentFloor,
             currentAbsoluteDay);
-        AggregateDemographyChange change = provider.GetChange(context);
+        AggregateDemographyChange change;
+        try
+        {
+            change = provider.GetChange(context);
+        }
+        catch
+        {
+            population.RestoreSnapshot(context.CurrentPopulation, context.PopulationRevision);
+            failure = AggregateDemographyFailure.InvalidProvider;
+            return false;
+        }
 
         // A provider is policy, not mutation authority. Detect a provider that caused
         // population state to change while deciding instead of accepting a mixed snapshot.
         if (population.Revision != context.PopulationRevision
             || population.CurrentPopulation != context.CurrentPopulation)
         {
+            population.RestoreSnapshot(context.CurrentPopulation, context.PopulationRevision);
             failure = AggregateDemographyFailure.StaleState;
             return false;
         }

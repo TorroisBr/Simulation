@@ -267,6 +267,31 @@ public sealed class SimulationRuntime
             && npcRegistryById.TryGetValue(runtimeId, out npcRuntime);
     }
 
+    /// <summary>
+    /// Computes living represented-resident floors at the world boundary. The
+    /// aggregate population system receives the resulting snapshot explicitly.
+    /// </summary>
+    internal RepresentedResidentFloorSnapshot BuildRepresentedResidentFloorSnapshot()
+    {
+        Dictionary<string, int> floors = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (CityRuntime city in cities)
+        {
+            if (city == null || string.IsNullOrWhiteSpace(city.RuntimeId))
+            {
+                continue;
+            }
+
+            SettlementPopulationPresenceSummary presence =
+                SettlementPopulationPresenceQuery.BuildSummary(
+                    city,
+                    npcRuntimeSnapshot,
+                    personStore.Persons);
+            floors[city.RuntimeId] = presence?.RepresentedResidentCount ?? 0;
+        }
+
+        return new RepresentedResidentFloorSnapshot(floors);
+    }
+
     public bool TryRegisterPerson(PersonRuntime person, out PersonStoreFailure failure)
     {
         if (person != null
@@ -708,11 +733,11 @@ public sealed class SimulationRuntime
         simulationTime.AdvanceDay();
         placeContentStore?.AdvanceDays(1);
         logger?.BeginDay(CurrentDay);
-        BeginSimulationDay();
         lastDailyDemographyReport = DailyDemographicSystem.Advance(
             this,
             naturalMortalitySamples,
             aggregateDemographyProvider);
+        BeginSimulationDay();
         scheduledDirectiveSystem?.PrepareDay(CurrentDay);
 
         if (configuration.Economy.Enabled == true)
@@ -976,7 +1001,10 @@ public sealed class SimulationRuntime
     {
         foreach (NpcRuntime npcRuntime in npcRuntimes)
         {
-            if (npcRuntime == null || npcRuntime.IsTraveling == true || npcRuntime.CurrentCity == null)
+            if (npcRuntime == null
+                || npcRuntime.IsAlive == false
+                || npcRuntime.IsTraveling == true
+                || npcRuntime.CurrentCity == null)
             {
                 continue;
             }
