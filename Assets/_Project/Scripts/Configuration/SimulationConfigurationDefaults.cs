@@ -1,11 +1,14 @@
 public static class SimulationConfigurationDefaults
 {
+    public const long DefaultMaturityAgeYears = 18L;
+
     public static EffectiveSimulationConfiguration Create()
     {
         return new EffectiveSimulationConfiguration(
             new EffectivePopulationConfiguration(
                 PopulationRepresentationMode.Aggregate,
-                NpcDecisionSimulationScope.RelevantOnly),
+                NpcDecisionSimulationScope.RelevantOnly,
+                DefaultMaturityAgeYears),
             new EffectiveEconomyConfiguration(true),
             new EffectiveTravelConfiguration(0f),
             new EffectiveCrimeConfiguration(false, false),

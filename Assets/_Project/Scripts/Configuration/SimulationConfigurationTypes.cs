@@ -17,20 +17,24 @@ public sealed class EffectivePopulationConfiguration : IEquatable<EffectivePopul
 {
     public PopulationRepresentationMode RepresentationMode { get; }
     public NpcDecisionSimulationScope DecisionScope { get; }
+    public long MaturityAgeYears { get; }
 
     public EffectivePopulationConfiguration(
         PopulationRepresentationMode representationMode,
-        NpcDecisionSimulationScope decisionScope)
+        NpcDecisionSimulationScope decisionScope,
+        long maturityAgeYears = SimulationConfigurationDefaults.DefaultMaturityAgeYears)
     {
         RepresentationMode = representationMode;
         DecisionScope = decisionScope;
+        MaturityAgeYears = maturityAgeYears;
     }
 
     public bool Equals(EffectivePopulationConfiguration other)
     {
         return other != null
             && RepresentationMode == other.RepresentationMode
-            && DecisionScope == other.DecisionScope;
+            && DecisionScope == other.DecisionScope
+            && MaturityAgeYears == other.MaturityAgeYears;
     }
 
     public override bool Equals(object obj)
@@ -42,7 +46,8 @@ public sealed class EffectivePopulationConfiguration : IEquatable<EffectivePopul
     {
         unchecked
         {
-            return ((int)RepresentationMode * 397) ^ (int)DecisionScope;
+            int hash = ((int)RepresentationMode * 397) ^ (int)DecisionScope;
+            return (hash * 397) ^ MaturityAgeYears.GetHashCode();
         }
     }
 }
@@ -208,13 +213,16 @@ public sealed class PopulationConfigurationOverrides
 {
     public PopulationRepresentationMode? RepresentationMode { get; }
     public NpcDecisionSimulationScope? DecisionScope { get; }
+    public long? MaturityAgeYears { get; }
 
     public PopulationConfigurationOverrides(
         PopulationRepresentationMode? representationMode = null,
-        NpcDecisionSimulationScope? decisionScope = null)
+        NpcDecisionSimulationScope? decisionScope = null,
+        long? maturityAgeYears = null)
     {
         RepresentationMode = representationMode;
         DecisionScope = decisionScope;
+        MaturityAgeYears = maturityAgeYears;
     }
 }
 
