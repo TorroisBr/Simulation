@@ -207,9 +207,14 @@ public abstract class PoliticalKnowledgeObservation
             throw new ArgumentOutOfRangeException(nameof(currentAbsoluteDay));
         }
 
-        return currentAbsoluteDay <= ObservedAbsoluteDay
-            ? 0L
-            : currentAbsoluteDay - ObservedAbsoluteDay;
+        if (currentAbsoluteDay < ObservedAbsoluteDay)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(currentAbsoluteDay),
+                "The current world day cannot precede the observation day.");
+        }
+
+        return currentAbsoluteDay - ObservedAbsoluteDay;
     }
 
     protected static void ValidateDays(long observedAbsoluteDay, long receivedAbsoluteDay)
@@ -251,7 +256,9 @@ public sealed class PoliticalClaimKnowledgeObservation : PoliticalKnowledgeObser
     public PoliticalClaimType ClaimType { get; }
     public PoliticalClaimTarget Target { get; }
     public PoliticalClaimBasis Basis { get; }
+    public long CreatedAbsoluteDay { get; }
     public PoliticalClaimStatus Status { get; }
+    public long? ResolutionAbsoluteDay { get; }
     public PoliticalClaimRecognitionState RecognitionState { get; }
     public InstitutionId RecognizingInstitutionId { get; }
     public long? RecognitionAbsoluteDay { get; }
@@ -263,7 +270,9 @@ public sealed class PoliticalClaimKnowledgeObservation : PoliticalKnowledgeObser
         PoliticalClaimType claimType,
         PoliticalClaimTarget target,
         PoliticalClaimBasis basis,
+        long createdAbsoluteDay,
         PoliticalClaimStatus status,
+        long? resolutionAbsoluteDay,
         PoliticalClaimRecognitionState recognitionState,
         InstitutionId recognizingInstitutionId,
         long? recognitionAbsoluteDay,
@@ -302,10 +311,23 @@ public sealed class PoliticalClaimKnowledgeObservation : PoliticalKnowledgeObser
             throw new ArgumentOutOfRangeException(nameof(basis));
         }
 
+        if (createdAbsoluteDay < 0L || createdAbsoluteDay > observedAbsoluteDay)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(createdAbsoluteDay),
+                "Claim creation cannot occur after the observation day.");
+        }
+
         if (Enum.IsDefined(typeof(PoliticalClaimStatus), status) == false)
         {
             throw new ArgumentOutOfRangeException(nameof(status));
         }
+
+        ValidateClaimResolution(
+            status,
+            createdAbsoluteDay,
+            resolutionAbsoluteDay,
+            observedAbsoluteDay);
 
         if (Enum.IsDefined(typeof(PoliticalClaimRecognitionState), recognitionState) == false)
         {
@@ -332,13 +354,22 @@ public sealed class PoliticalClaimKnowledgeObservation : PoliticalKnowledgeObser
                 "Recognition cannot occur after the observation day.");
         }
 
+        if (recognitionAbsoluteDay.HasValue && recognitionAbsoluteDay.Value < createdAbsoluteDay)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(recognitionAbsoluteDay),
+                "Recognition cannot occur before claim creation.");
+        }
+
         ClaimId = claimId;
         Exists = exists;
         ClaimantPersonId = claimantPersonId;
         ClaimType = claimType;
         Target = target;
         Basis = basis;
+        CreatedAbsoluteDay = createdAbsoluteDay;
         Status = status;
+        ResolutionAbsoluteDay = resolutionAbsoluteDay;
         RecognitionState = recognitionState;
         RecognizingInstitutionId = recognizingInstitutionId;
         RecognitionAbsoluteDay = recognitionAbsoluteDay;
@@ -357,12 +388,42 @@ public sealed class PoliticalClaimKnowledgeObservation : PoliticalKnowledgeObser
                 ((int)Target.Kind).ToString(), "\u001F",
                 Target.TargetId, "\u001F",
                 ((int)Basis).ToString(), "\u001F",
+                CreatedAbsoluteDay.ToString(), "\u001F",
                 ((int)Status).ToString(), "\u001F",
+                ResolutionAbsoluteDay.HasValue ? ResolutionAbsoluteDay.Value.ToString() : string.Empty, "\u001F",
                 ((int)RecognitionState).ToString(), "\u001F",
                 RecognizingInstitutionId == null ? string.Empty : RecognizingInstitutionId.Value, "\u001F",
                 RecognitionAbsoluteDay.HasValue ? RecognitionAbsoluteDay.Value.ToString() : string.Empty);
+            }
         }
-    }
+
+        private static void ValidateClaimResolution(
+            PoliticalClaimStatus status,
+            long createdAbsoluteDay,
+            long? resolutionAbsoluteDay,
+            long observedAbsoluteDay)
+        {
+            if (status == PoliticalClaimStatus.Active)
+            {
+                if (resolutionAbsoluteDay.HasValue)
+                {
+                    throw new ArgumentException(
+                        "An active claim cannot carry a resolution day.",
+                        nameof(resolutionAbsoluteDay));
+                }
+
+                return;
+            }
+
+            if (resolutionAbsoluteDay.HasValue == false
+                || resolutionAbsoluteDay.Value < createdAbsoluteDay
+                || resolutionAbsoluteDay.Value > observedAbsoluteDay)
+            {
+                throw new ArgumentException(
+                    "A terminal claim requires a resolution day within its observed timeline.",
+                    nameof(resolutionAbsoluteDay));
+            }
+        }
 }
 
 public sealed class FactionKnowledgeObservation : PoliticalKnowledgeObservation
@@ -428,8 +489,8 @@ public sealed class OfficeVacancyKnowledgeObservation : PoliticalKnowledgeObserv
     public OfficeId OfficeId { get; }
     public InstitutionId InstitutionId { get; }
     public bool IsVacant { get; }
-    public bool IsRecognizedVacant => IsVacant;
-    public bool RecognizesVacancy => IsVacant;
+    public bool IsRecognizedVacant { get; }
+    public bool RecognizesVacancy => IsRecognizedVacant;
 
     public OfficeVacancyKnowledgeObservation(
         OfficeId officeId,
@@ -437,7 +498,8 @@ public sealed class OfficeVacancyKnowledgeObservation : PoliticalKnowledgeObserv
         bool isVacant,
         long observedAbsoluteDay,
         long receivedAbsoluteDay,
-        PoliticalKnowledgeProvenance provenance)
+        PoliticalKnowledgeProvenance provenance,
+        bool isRecognizedVacant = false)
         : base(
             PoliticalKnowledgeFactKind.OfficeVacancy,
             observedAbsoluteDay,
@@ -447,6 +509,7 @@ public sealed class OfficeVacancyKnowledgeObservation : PoliticalKnowledgeObserv
         OfficeId = officeId ?? throw new ArgumentNullException(nameof(officeId));
         InstitutionId = institutionId ?? throw new ArgumentNullException(nameof(institutionId));
         IsVacant = isVacant;
+        IsRecognizedVacant = isRecognizedVacant;
     }
 
     internal override string IdentityKey => OfficeId.Value;

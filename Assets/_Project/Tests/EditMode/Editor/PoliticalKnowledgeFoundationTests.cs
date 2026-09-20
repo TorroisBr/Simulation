@@ -77,7 +77,19 @@ public sealed class PoliticalKnowledgeFoundationTests
         Assert.That(observation.ClaimType, Is.EqualTo(PoliticalClaimType.StatusRecognition));
         Assert.That(observation.Target.TargetId, Is.EqualTo("person.claim-target"));
         Assert.That(observation.Basis, Is.EqualTo(PoliticalClaimBasis.ExplicitDecision));
+        Assert.That(observation.CreatedAbsoluteDay, Is.EqualTo(0L));
+        Assert.That(observation.ResolutionAbsoluteDay, Is.Null);
         Assert.That(observation.RecognizingInstitutionId.Value, Is.EqualTo("institution.recognizer"));
+
+        PoliticalClaimKnowledgeObservation terminal = CreateClaimObservation(
+            new PoliticalClaimId("claim.terminal"),
+            false,
+            PoliticalClaimStatus.Rejected,
+            PoliticalClaimRecognitionState.Unrecognized,
+            8L,
+            8L,
+            DirectProvenance());
+        Assert.That(terminal.ResolutionAbsoluteDay, Is.EqualTo(8L));
 
         Assert.Throws<ArgumentException>(() => new PoliticalClaimKnowledgeObservation(
             new PoliticalClaimId("claim.invalid-unrecognized"),
@@ -86,7 +98,9 @@ public sealed class PoliticalKnowledgeFoundationTests
             PoliticalClaimType.StatusRecognition,
             PoliticalClaimTarget.ForPerson(new PersonId("person.claim-target")),
             PoliticalClaimBasis.ExplicitDecision,
+            0L,
             PoliticalClaimStatus.Active,
+            null,
             PoliticalClaimRecognitionState.Unrecognized,
             new InstitutionId("institution.invalid"),
             null,
@@ -101,7 +115,9 @@ public sealed class PoliticalKnowledgeFoundationTests
             PoliticalClaimType.StatusRecognition,
             PoliticalClaimTarget.ForPerson(new PersonId("person.claim-target")),
             PoliticalClaimBasis.ExplicitDecision,
+            0L,
             PoliticalClaimStatus.Active,
+            null,
             PoliticalClaimRecognitionState.Recognized,
             null,
             null,
@@ -116,7 +132,9 @@ public sealed class PoliticalKnowledgeFoundationTests
             PoliticalClaimType.StatusRecognition,
             PoliticalClaimTarget.ForPerson(new PersonId("person.claim-target")),
             PoliticalClaimBasis.ExplicitDecision,
+            0L,
             PoliticalClaimStatus.Active,
+            null,
             PoliticalClaimRecognitionState.Recognized,
             new InstitutionId("institution.recognizer"),
             9L,
@@ -264,7 +282,32 @@ public sealed class PoliticalKnowledgeFoundationTests
         Assert.That(policy.IsFresh(observation, 12L), Is.True);
         Assert.That(policy.GetFreshness(observation, 14L), Is.EqualTo(0.5f).Within(0.0001f));
         Assert.That(policy.GetFreshness(observation, 16L), Is.EqualTo(0f));
+        Assert.Throws<ArgumentOutOfRangeException>(() => policy.GetAgeDays(observation, 9L));
         Assert.Throws<ArgumentOutOfRangeException>(() => observation.GetAgeDays(-1L));
+    }
+
+    [Test]
+    public void VacancyKnowledgeDoesNotImplyInstitutionalRecognition()
+    {
+        OfficeVacancyKnowledgeObservation vacancy = new OfficeVacancyKnowledgeObservation(
+            new OfficeId("office.known"),
+            new InstitutionId("institution.known"),
+            true,
+            0L,
+            0L,
+            DirectProvenance());
+        OfficeVacancyKnowledgeObservation recognized = new OfficeVacancyKnowledgeObservation(
+            new OfficeId("office.recognized"),
+            new InstitutionId("institution.known"),
+            true,
+            0L,
+            0L,
+            DirectProvenance(),
+            true);
+
+        Assert.That(vacancy.IsVacant, Is.True);
+        Assert.That(vacancy.IsRecognizedVacant, Is.False);
+        Assert.That(recognized.IsRecognizedVacant, Is.True);
     }
 
     [Test]
@@ -382,7 +425,9 @@ public sealed class PoliticalKnowledgeFoundationTests
             PoliticalClaimType.StatusRecognition,
             PoliticalClaimTarget.ForPerson(new PersonId("person.claim-target")),
             PoliticalClaimBasis.ExplicitDecision,
+            0L,
             status,
+            status == PoliticalClaimStatus.Active ? (long?)null : observedAbsoluteDay,
             recognitionState,
             hasRecognition ? new InstitutionId("institution.recognizer") : null,
             hasRecognition ? observedAbsoluteDay : (long?)null,
