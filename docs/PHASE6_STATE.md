@@ -10,8 +10,8 @@ Phase 6 bootstraps from the immutable, validated Phase 5 canonical SHA:
 
 `3c3a5a7fa5bac8f301b98ec92307eadb19af25ff`
 
-At bootstrap, no Phase 6 domain implementation has been added. The first
-commit on this branch is limited to orchestration and state documentation.
+The canonical branch now includes the reviewed political claim foundation
+promoted from integration tip `0d01d88`.
 
 The completed prior-phase baseline remains documented in:
 
@@ -81,17 +81,22 @@ Completed:
 - migrated root orchestration instructions to Phase 6 while preserving the
   completed Phase 5 baseline;
 - prepared the Phase 6 state document and Phase 6 agent-role definitions.
+- completed the read-only Phase 6 architecture audit and dependency graph;
+- implemented, independently reviewed, integrated, and validated the
+  PersonId-based political claim foundation;
+- validated the claim wave with focused EditMode `10/10`, ALL EditMode
+  `1358/1358`, complete Smoke `3/3`, and `git diff --check` green.
 
 Pending:
 
-- read-only architecture audit;
-- exact Phase 6 dependency graph;
-- first political truth foundation wave;
-- independent reviews, integrations, validation, and checkpoint promotion.
+- minimal faction identity and PersonId-based affiliation foundation;
+- Checkpoint A promotion after claims plus faction/affiliation truth are
+  canonical and validated.
 
-## Initial dependency graph
+## Phase 6 dependency graph
 
-The graph is provisional until the architecture audit is complete.
+The audit is complete. The graph below records current wave status and
+remaining dependencies.
 
 ### Audit — MUST happen first
 
@@ -102,9 +107,8 @@ points, and semantic conflicts.
 
 ### Political truth foundations — PARALLEL WITH ISOLATION only when contracts remain disjoint
 
-- claim records and claim lifecycle;
-- minimal faction identity and affiliation relations, if the audit confirms a
-  missing foundation;
+- claim records and claim lifecycle — COMPLETE and canonical;
+- minimal faction identity and affiliation relations — NEXT SAFE WAVE;
 - narrowly typed support or alignment relations, only where semantics and
   ownership are explicit;
 - deterministic diagnostics for each stable truth store.
@@ -138,6 +142,20 @@ decision contracts
 Competing claims, faction support, institutional disagreement, conflict state,
 and NPC/institution decisions are later waves. Autonomous daily processing is
 not assumed; explicit transitions and scheduled directives are preferred.
+
+### Current political claim foundation
+
+The canonical claim model is world-owned and keyed by stable `PersonId` plus
+typed office, property, institution, or Person targets. Claim existence does
+not mutate office incumbency, property ownership, genealogy, or factual life.
+Recognition is explicit institutional state with stale store and world-day
+guards. Terminal resolution preserves its resolution day. Runtime construction
+clones and validates claims against current world truth. Deterministic
+snapshots, canonical output, diffs, and invariant validation cover the claim
+records and their captured cross-store references.
+
+No political knowledge, support, legitimacy score, faction autonomy, or
+`AdvanceDay` political processing is included yet.
 
 ## Branch and review policy
 
