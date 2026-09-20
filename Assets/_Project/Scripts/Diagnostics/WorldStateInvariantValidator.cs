@@ -862,8 +862,10 @@ public static class WorldStateInvariantValidator
 
             if (support.IsActive)
             {
-                string pair = (int)support.SourceKind + "\u001f" + support.SourceId
-                    + "\u001f" + (int)support.TargetKind + "\u001f" + support.TargetId;
+                string pair = (int)support.SourceKind + ":"
+                    + support.SourceId.Length + ":" + support.SourceId
+                    + ":" + (int)support.TargetKind + ":"
+                    + support.TargetId.Length + ":" + support.TargetId;
                 if (activePairs.Add(pair) == false)
                 {
                     AddError(issues, "DuplicateActivePoliticalSupportPair", identity, "More than one active support relation exists for a source and target pair.");
