@@ -61,6 +61,7 @@ public sealed class PoliticalKnowledgeStore
     private readonly PoliticalClaimStore politicalClaimStore;
     private readonly FactionStore factionStore;
     private readonly OfficeStore officeStore;
+    private readonly PropertyOwnershipStore propertyOwnershipStore;
     private readonly Dictionary<string, PoliticalKnowledgeRuntime> runtimesByHolder =
         new Dictionary<string, PoliticalKnowledgeRuntime>(StringComparer.Ordinal);
 
@@ -69,13 +70,16 @@ public sealed class PoliticalKnowledgeStore
         InstitutionStore institutionStore,
         PoliticalClaimStore politicalClaimStore,
         FactionStore factionStore,
-        OfficeStore officeStore)
+        OfficeStore officeStore,
+        PropertyOwnershipStore propertyOwnershipStore)
     {
         this.personStore = personStore ?? throw new ArgumentNullException(nameof(personStore));
         this.institutionStore = institutionStore ?? throw new ArgumentNullException(nameof(institutionStore));
         this.politicalClaimStore = politicalClaimStore;
         this.factionStore = factionStore;
         this.officeStore = officeStore;
+        this.propertyOwnershipStore = propertyOwnershipStore
+            ?? throw new ArgumentNullException(nameof(propertyOwnershipStore));
     }
 
     public int Count => runtimesByHolder.Count;
@@ -272,14 +276,16 @@ public sealed class PoliticalKnowledgeStore
         long currentWorldDay,
         PoliticalClaimStore targetPoliticalClaimStore = null,
         FactionStore targetFactionStore = null,
-        OfficeStore targetOfficeStore = null)
+        OfficeStore targetOfficeStore = null,
+        PropertyOwnershipStore targetPropertyOwnershipStore = null)
     {
         PoliticalKnowledgeStore clone = new PoliticalKnowledgeStore(
             targetPersonStore ?? throw new ArgumentNullException(nameof(targetPersonStore)),
             targetInstitutionStore ?? throw new ArgumentNullException(nameof(targetInstitutionStore)),
             targetPoliticalClaimStore,
             targetFactionStore,
-            targetOfficeStore);
+            targetOfficeStore,
+            targetPropertyOwnershipStore);
 
         foreach (PoliticalKnowledgeRuntime runtime in runtimesByHolder.Values)
         {
@@ -426,6 +432,12 @@ public sealed class PoliticalKnowledgeStore
                     && officeStore.TryGet(new OfficeId(claim.Target.TargetId), out _) == false)
                 {
                     return InvalidEndpoint(out failure, "The observed political claim target OfficeId is not registered in this world.");
+                }
+
+                if (claim.Target.Kind == PoliticalClaimTargetKind.Property
+                    && propertyOwnershipStore.TryGet(new PropertyId(claim.Target.TargetId), out _) == false)
+                {
+                    return InvalidEndpoint(out failure, "The observed political claim target PropertyId is not registered in this world.");
                 }
 
                 if (claim.RecognizingInstitutionId != null

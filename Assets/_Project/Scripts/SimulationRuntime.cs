@@ -217,7 +217,8 @@ public sealed class SimulationRuntime
             simulationTime.AbsoluteDay,
             this.politicalClaimStore,
             this.factionStore,
-            this.officeStore);
+            this.officeStore,
+            resolvedPropertyOwnershipStore);
         long initialPoliticalWorldRevision = politicalWorldRevision ?? 0L;
         this.politicalWorldRevision = initialPoliticalWorldRevision;
         lastPoliticalTruthFingerprint = ComputePoliticalTruthFingerprint();
@@ -2188,7 +2189,8 @@ public sealed class SimulationRuntime
         long currentDay,
         PoliticalClaimStore politicalClaimStore,
         FactionStore factionStore,
-        OfficeStore officeStore)
+        OfficeStore officeStore,
+        PropertyOwnershipStore propertyOwnershipStore)
     {
         if (source == null)
         {
@@ -2197,7 +2199,8 @@ public sealed class SimulationRuntime
                 institutionStore,
                 politicalClaimStore,
                 factionStore,
-                officeStore);
+                officeStore,
+                propertyOwnershipStore);
         }
 
         return source.Clone(
@@ -2206,7 +2209,8 @@ public sealed class SimulationRuntime
             currentDay,
             politicalClaimStore,
             factionStore,
-            officeStore);
+            officeStore,
+            propertyOwnershipStore);
     }
 
     private static PoliticalDecisionStore ClonePoliticalDecisionStore(

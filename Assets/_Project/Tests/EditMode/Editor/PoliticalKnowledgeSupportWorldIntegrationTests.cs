@@ -87,6 +87,16 @@ public sealed class PoliticalKnowledgeSupportWorldIntegrationTests
             out PoliticalKnowledgeRuntime personKnowledge), Is.True);
         Assert.That(personKnowledge.ClaimObservations, Has.Count.EqualTo(1));
         Assert.That(personKnowledge.ClaimObservations[0].Target.TargetId, Is.EqualTo(fixture.Candidate.Value));
+        Assert.That(fixture.World.TryRecordPoliticalKnowledge(
+            PoliticalKnowledgeHolder.ForPerson(fixture.Supporter),
+            new FactionAffiliationKnowledgeObservation(
+                fixture.Faction,
+                fixture.Supporter,
+                true,
+                fixture.World.CurrentDay,
+                fixture.World.CurrentDay,
+                new PoliticalKnowledgeProvenance(PoliticalKnowledgeSource.DirectObservation, "affiliation")),
+            out PoliticalKnowledgeFailure affiliationFailure), Is.True, affiliationFailure.ToString());
 
         WorldStateSnapshot knowledgeSnapshot = Capture(fixture.World);
         Assert.That(knowledgeSnapshot.PoliticalKnowledgeHolderCount, Is.EqualTo(2));

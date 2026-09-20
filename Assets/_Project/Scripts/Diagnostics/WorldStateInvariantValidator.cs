@@ -1457,9 +1457,9 @@ public static class WorldStateInvariantValidator
         switch (factKind)
         {
             case PoliticalKnowledgeFactKind.Faction:
+            case PoliticalKnowledgeFactKind.FactionAffiliation:
                 return stateKey == "0" || stateKey == "1";
             case PoliticalKnowledgeFactKind.PoliticalClaim:
-            case PoliticalKnowledgeFactKind.FactionAffiliation:
                 return stateKey.Length > 1
                     && (stateKey[0] == '0' || stateKey[0] == '1')
                     && stateKey[1] == '\u001F';

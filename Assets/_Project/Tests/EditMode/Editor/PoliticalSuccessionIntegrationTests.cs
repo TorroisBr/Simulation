@@ -387,7 +387,8 @@ public sealed class PoliticalSuccessionIntegrationTests
             institutions,
             new PoliticalClaimStore(),
             new FactionStore(people),
-            new OfficeStore(institutions));
+            new OfficeStore(institutions),
+            new PropertyOwnershipStore(people));
         Assert.That(knowledge.TryRegisterHolder(decider, currentDay, out _), Is.True);
 
         PersonId[] candidates = {
