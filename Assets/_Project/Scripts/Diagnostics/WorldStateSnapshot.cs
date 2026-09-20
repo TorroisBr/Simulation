@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Collections.ObjectModel;
 
 public sealed class WorldStateSnapshotContext
 {
@@ -27,6 +28,7 @@ public sealed class WorldStateSnapshotContext
     public IEnumerable<FactionAffiliationRecord> FactionAffiliations { get; }
     public IEnumerable<PoliticalClaimRecord> PoliticalClaims { get; }
     public IEnumerable<PoliticalSupportRelationRecord> PoliticalSupports { get; }
+    public IEnumerable<PoliticalDecisionRecord> PoliticalDecisions { get; }
 
     public WorldStateSnapshotContext(
         SimulationTime simulationTime = null,
@@ -52,7 +54,8 @@ public sealed class WorldStateSnapshotContext
         IEnumerable<string> propertyIds = null,
         IEnumerable<FactionRecord> factions = null,
         IEnumerable<FactionAffiliationRecord> factionAffiliations = null,
-        IEnumerable<PoliticalSupportRelationRecord> politicalSupports = null)
+        IEnumerable<PoliticalSupportRelationRecord> politicalSupports = null,
+        IEnumerable<PoliticalDecisionRecord> politicalDecisions = null)
     {
         SimulationTime = simulationTime;
         Calendar = calendar ?? (calendarDefinition != null ? new SimulationCalendar(calendarDefinition) : null);
@@ -76,6 +79,7 @@ public sealed class WorldStateSnapshotContext
         FactionAffiliations = factionAffiliations;
         PoliticalClaims = politicalClaims ?? Array.Empty<PoliticalClaimRecord>();
         PoliticalSupports = politicalSupports ?? Array.Empty<PoliticalSupportRelationRecord>();
+        PoliticalDecisions = politicalDecisions ?? Array.Empty<PoliticalDecisionRecord>();
         Parentages = parentages
             ?? genealogyStore?.Records
             ?? Array.Empty<ParentageRecord>();
@@ -116,6 +120,8 @@ public sealed class WorldStateSnapshot
     public int FactionAffiliationCount => FactionAffiliations.Count;
     public IReadOnlyList<WorldStatePoliticalSupportSnapshot> PoliticalSupports { get; }
     public int PoliticalSupportCount => PoliticalSupports.Count;
+    public IReadOnlyList<WorldStatePoliticalDecisionSnapshot> PoliticalDecisions { get; }
+    public int PoliticalDecisionCount => PoliticalDecisions.Count;
     public WorldStateSpatialSnapshot Spatial { get; }
     public IReadOnlyList<WorldStateSiteSnapshot> Sites { get; }
     public IReadOnlyList<WorldStateExpeditionSnapshot> Expeditions { get; }
@@ -145,7 +151,8 @@ public sealed class WorldStateSnapshot
         IEnumerable<string> propertyIds = null,
         IEnumerable<WorldStateFactionSnapshot> factions = null,
         IEnumerable<WorldStateFactionAffiliationSnapshot> factionAffiliations = null,
-        IEnumerable<WorldStatePoliticalSupportSnapshot> politicalSupports = null)
+        IEnumerable<WorldStatePoliticalSupportSnapshot> politicalSupports = null,
+        IEnumerable<WorldStatePoliticalDecisionSnapshot> politicalDecisions = null)
     {
         Metadata = new WorldStateSnapshotMetadata(absoluteDay, calendarDate);
         Npcs = SnapshotCollections.CopySorted(npcs, npc => npc?.RuntimeId);
@@ -188,6 +195,9 @@ public sealed class WorldStateSnapshot
         PoliticalSupports = SnapshotCollections.CopySorted(
             politicalSupports,
             support => support?.RelationId);
+        PoliticalDecisions = SnapshotCollections.CopySorted(
+            politicalDecisions,
+            decision => decision?.DecisionId);
     }
 
     private static IReadOnlyList<WorldStateParentageSnapshot> SortParentages(
@@ -500,6 +510,65 @@ public sealed class WorldStatePoliticalSupportSnapshot
         Disposition = disposition;
         StartedAbsoluteDay = startedAbsoluteDay;
         EndedAbsoluteDay = endedAbsoluteDay;
+    }
+}
+
+public sealed class WorldStatePoliticalDecisionSnapshot
+{
+    public string DecisionId { get; }
+    public string DeciderStableId { get; }
+    public PoliticalDecisionKind DecisionKind { get; }
+    public string OfficeId { get; }
+    public string RecognizingInstitutionId { get; }
+    public IReadOnlyList<string> CandidatePersonIds { get; }
+    public string CandidateFingerprint { get; }
+    public PoliticalDecisionOutcomeKind OutcomeKind { get; }
+    public string SelectedCandidatePersonId { get; }
+    public string ReferencedClaimId { get; }
+    public long ObservedAbsoluteDay { get; }
+    public long DecisionAbsoluteDay { get; }
+    public long ExpectedWorldRevision { get; }
+    public long ExpectedKnowledgeRevision { get; }
+
+    public WorldStatePoliticalDecisionSnapshot(
+        string decisionId,
+        string deciderStableId,
+        PoliticalDecisionKind decisionKind,
+        string officeId,
+        string recognizingInstitutionId,
+        IEnumerable<string> candidatePersonIds,
+        string candidateFingerprint,
+        PoliticalDecisionOutcomeKind outcomeKind,
+        string selectedCandidatePersonId,
+        string referencedClaimId,
+        long observedAbsoluteDay,
+        long decisionAbsoluteDay,
+        long expectedWorldRevision,
+        long expectedKnowledgeRevision)
+    {
+        DecisionId = decisionId;
+        DeciderStableId = deciderStableId;
+        DecisionKind = decisionKind;
+        OfficeId = officeId;
+        RecognizingInstitutionId = recognizingInstitutionId;
+        List<string> candidates = new List<string>();
+        if (candidatePersonIds != null)
+        {
+            foreach (string candidate in candidatePersonIds)
+            {
+                candidates.Add(candidate);
+            }
+        }
+
+        CandidatePersonIds = new ReadOnlyCollection<string>(candidates);
+        CandidateFingerprint = candidateFingerprint;
+        OutcomeKind = outcomeKind;
+        SelectedCandidatePersonId = selectedCandidatePersonId;
+        ReferencedClaimId = referencedClaimId;
+        ObservedAbsoluteDay = observedAbsoluteDay;
+        DecisionAbsoluteDay = decisionAbsoluteDay;
+        ExpectedWorldRevision = expectedWorldRevision;
+        ExpectedKnowledgeRevision = expectedKnowledgeRevision;
     }
 }
 
@@ -1188,6 +1257,8 @@ public static class WorldStateSnapshotBuilder
             BuildFactionAffiliationSnapshots(context.FactionAffiliations);
         List<WorldStatePoliticalSupportSnapshot> politicalSupports =
             BuildPoliticalSupportSnapshots(context.PoliticalSupports);
+        List<WorldStatePoliticalDecisionSnapshot> politicalDecisions =
+            BuildPoliticalDecisionSnapshots(context.PoliticalDecisions);
         List<WorldStateExpeditionSnapshot> expeditions = BuildExpeditionSnapshots(context.ExpeditionStore);
         WorldStateCalendarSnapshot calendarDate = null;
         if (context.Calendar != null && context.SimulationTime != null)
@@ -1217,7 +1288,8 @@ public static class WorldStateSnapshotBuilder
             context.PropertyIds ?? BuildPropertyIds(context.PropertyOwnershipStore),
             factions,
             factionAffiliations,
-            politicalSupports);
+            politicalSupports,
+            politicalDecisions);
     }
 
     private static List<WorldStatePoliticalClaimSnapshot> BuildPoliticalClaimSnapshots(
@@ -1331,6 +1403,52 @@ public static class WorldStateSnapshotBuilder
                 support.Disposition,
                 support.StartedAbsoluteDay,
                 support.EndedAbsoluteDay));
+        }
+
+        return result;
+    }
+
+    private static List<WorldStatePoliticalDecisionSnapshot> BuildPoliticalDecisionSnapshots(
+        IEnumerable<PoliticalDecisionRecord> source)
+    {
+        List<WorldStatePoliticalDecisionSnapshot> result =
+            new List<WorldStatePoliticalDecisionSnapshot>();
+        if (source == null)
+        {
+            return result;
+        }
+
+        foreach (PoliticalDecisionRecord decision in source)
+        {
+            if (decision == null || decision.DecisionId == null || decision.Decider == null || decision.Outcome == null)
+            {
+                continue;
+            }
+
+            List<string> candidates = new List<string>();
+            foreach (PersonId candidate in decision.CandidatePersonIds)
+            {
+                if (candidate != null)
+                {
+                    candidates.Add(candidate.Value);
+                }
+            }
+
+            result.Add(new WorldStatePoliticalDecisionSnapshot(
+                decision.DecisionId.Value,
+                decision.Decider.StableId,
+                decision.DecisionKind,
+                decision.OfficeId?.Value,
+                decision.RecognizingInstitutionId?.Value,
+                candidates,
+                decision.CandidateFingerprint,
+                decision.Outcome.Kind,
+                decision.Outcome.SelectedCandidatePersonId?.Value,
+                decision.Outcome.ReferencedClaimId?.Value,
+                decision.ObservedAbsoluteDay,
+                decision.DecisionAbsoluteDay,
+                decision.ExpectedWorldRevision,
+                decision.ExpectedKnowledgeRevision));
         }
 
         return result;

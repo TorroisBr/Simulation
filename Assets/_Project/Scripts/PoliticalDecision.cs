@@ -160,6 +160,8 @@ public sealed class PoliticalDecisionRecord
     public long ExpectedKnowledgeRevision { get; }
     public long WorldRevision => ExpectedWorldRevision;
     public long KnowledgeRevision => ExpectedKnowledgeRevision;
+    public OfficeId OfficeId { get; }
+    public InstitutionId RecognizingInstitutionId { get; }
 
     public PoliticalDecisionRecord(
         PoliticalDecisionId decisionId,
@@ -172,7 +174,9 @@ public sealed class PoliticalDecisionRecord
         IEnumerable<string> evidenceReferences,
         IEnumerable<string> knowledgeReferences,
         long expectedWorldRevision,
-        long expectedKnowledgeRevision)
+        long expectedKnowledgeRevision,
+        OfficeId officeId = null,
+        InstitutionId recognizingInstitutionId = null)
     {
         DecisionId = decisionId ?? throw new ArgumentNullException(nameof(decisionId));
         Decider = decider ?? throw new ArgumentNullException(nameof(decider));
@@ -203,6 +207,46 @@ public sealed class PoliticalDecisionRecord
             throw new ArgumentException("A selected candidate must be present in CandidatePersonIds.", nameof(outcome));
         }
 
+        if ((decisionKind == PoliticalDecisionKind.SuccessionSelection
+                || decisionKind == PoliticalDecisionKind.OfficeSelection)
+            && officeId == null)
+        {
+            throw new ArgumentNullException(nameof(officeId));
+        }
+
+        if (decisionKind == PoliticalDecisionKind.ClaimRecognitionProposal
+            && Outcome.Kind != PoliticalDecisionOutcomeKind.ClaimRecognitionProposed)
+        {
+            throw new ArgumentException(
+                "Claim recognition decisions must carry a claim recognition proposal.",
+                nameof(outcome));
+        }
+
+        if (decisionKind == PoliticalDecisionKind.ClaimRecognitionProposal
+            && recognizingInstitutionId == null)
+        {
+            throw new ArgumentNullException(nameof(recognizingInstitutionId));
+        }
+
+        if (decisionKind != PoliticalDecisionKind.ClaimRecognitionProposal
+            && recognizingInstitutionId != null)
+        {
+            throw new ArgumentException(
+                "Only claim recognition decisions may identify a recognizing institution.",
+                nameof(recognizingInstitutionId));
+        }
+
+        if ((decisionKind == PoliticalDecisionKind.SuccessionSelection
+                || decisionKind == PoliticalDecisionKind.OfficeSelection)
+            && Outcome.Kind != PoliticalDecisionOutcomeKind.CandidateSelected
+            && Outcome.Kind != PoliticalDecisionOutcomeKind.Rejected
+            && Outcome.Kind != PoliticalDecisionOutcomeKind.NoSelection)
+        {
+            throw new ArgumentException(
+                "Office decisions must carry a candidate selection, no selection, or rejection.",
+                nameof(outcome));
+        }
+
         CandidatePersonIds = new ReadOnlyCollection<PersonId>(candidates);
         CandidateFingerprint = BuildCandidateFingerprint(candidates);
         ObservedAbsoluteDay = observedAbsoluteDay;
@@ -211,6 +255,8 @@ public sealed class PoliticalDecisionRecord
         KnowledgeReferences = CreateReferences(knowledgeReferences);
         ExpectedWorldRevision = expectedWorldRevision;
         ExpectedKnowledgeRevision = expectedKnowledgeRevision;
+        OfficeId = officeId;
+        RecognizingInstitutionId = recognizingInstitutionId;
     }
 
     public bool IsStaleFor(long currentAbsoluteDay, long currentWorldRevision, long currentKnowledgeRevision)
@@ -306,7 +352,8 @@ public enum PoliticalDecisionFailureCode
     None = 0,
     InvalidDecision = 1,
     DuplicateDecisionId = 2,
-    RevisionOverflow = 3
+    RevisionOverflow = 3,
+    StaleDecision = 4
 }
 
 public sealed class PoliticalDecisionFailure

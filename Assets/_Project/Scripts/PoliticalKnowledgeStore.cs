@@ -68,6 +68,7 @@ public sealed class PoliticalKnowledgeStore
     }
 
     public int Count => runtimesByHolder.Count;
+    public long Revision { get; private set; }
 
     public IReadOnlyList<PoliticalKnowledgeRuntime> Runtimes
     {
@@ -111,6 +112,16 @@ public sealed class PoliticalKnowledgeStore
         }
 
         runtimesByHolder.Add(holder.StableId, new PoliticalKnowledgeRuntime(holder));
+        if (Revision == long.MaxValue)
+        {
+            runtimesByHolder.Remove(holder.StableId);
+            failure = PoliticalKnowledgeFailure.Create(
+                PoliticalKnowledgeFailureCode.KnowledgeNotImproved,
+                "The political knowledge store revision cannot advance further.");
+            return false;
+        }
+
+        Revision++;
         failure = PoliticalKnowledgeFailure.None;
         return true;
     }
@@ -144,6 +155,16 @@ public sealed class PoliticalKnowledgeStore
         }
 
         runtimesByHolder.Add(runtime.Holder.StableId, runtime.Clone());
+        if (Revision == long.MaxValue)
+        {
+            runtimesByHolder.Remove(runtime.Holder.StableId);
+            failure = PoliticalKnowledgeFailure.Create(
+                PoliticalKnowledgeFailureCode.KnowledgeNotImproved,
+                "The political knowledge store revision cannot advance further.");
+            return false;
+        }
+
+        Revision++;
         return true;
     }
 
@@ -189,6 +210,14 @@ public sealed class PoliticalKnowledgeStore
             return false;
         }
 
+        if (Revision == long.MaxValue)
+        {
+            failure = PoliticalKnowledgeFailure.Create(
+                PoliticalKnowledgeFailureCode.KnowledgeNotImproved,
+                "The political knowledge store revision cannot advance further.");
+            return false;
+        }
+
         bool recorded;
         switch (observation.FactKind)
         {
@@ -222,6 +251,7 @@ public sealed class PoliticalKnowledgeStore
             return false;
         }
 
+        Revision++;
         return true;
     }
 
@@ -241,6 +271,13 @@ public sealed class PoliticalKnowledgeStore
                 throw new ArgumentException(
                     "The SimulationRuntime PoliticalKnowledgeStore contains invalid knowledge: " + failure + ".");
             }
+        }
+
+        clone.Revision = Revision;
+        if (clone.Revision != Revision)
+        {
+            throw new ArgumentException(
+                "The SimulationRuntime PoliticalKnowledgeStore revision is inconsistent with its state.");
         }
 
         return clone;

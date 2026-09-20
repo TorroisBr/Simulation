@@ -20,6 +20,7 @@ public static class WorldStateCanonicalWriter
         AppendLine(output, "METADATA", "FactionCount", IntValue(snapshot.FactionCount));
         AppendLine(output, "METADATA", "FactionAffiliationCount", IntValue(snapshot.FactionAffiliationCount));
         AppendLine(output, "METADATA", "PoliticalSupportCount", IntValue(snapshot.PoliticalSupportCount));
+        AppendLine(output, "METADATA", "PoliticalDecisionCount", IntValue(snapshot.PoliticalDecisionCount));
         if (snapshot.Metadata.CalendarDate != null)
         {
             WorldStateCalendarSnapshot calendar = snapshot.Metadata.CalendarDate;
@@ -128,6 +129,25 @@ public static class WorldStateCanonicalWriter
                 EnumValue(support.Disposition),
                 Int64Value(support.StartedAbsoluteDay),
                 NullableInt64Value(support.EndedAbsoluteDay));
+        }
+
+        foreach (WorldStatePoliticalDecisionSnapshot decision in snapshot.PoliticalDecisions)
+        {
+            AppendLine(output, "POLITICAL_DECISION",
+                decision.DecisionId,
+                decision.DeciderStableId,
+                EnumValue(decision.DecisionKind),
+                decision.OfficeId,
+                decision.RecognizingInstitutionId,
+                StringListValue(decision.CandidatePersonIds),
+                decision.CandidateFingerprint,
+                EnumValue(decision.OutcomeKind),
+                decision.SelectedCandidatePersonId,
+                decision.ReferencedClaimId,
+                Int64Value(decision.ObservedAbsoluteDay),
+                Int64Value(decision.DecisionAbsoluteDay),
+                Int64Value(decision.ExpectedWorldRevision),
+                Int64Value(decision.ExpectedKnowledgeRevision));
         }
 
         foreach (WorldStateNpcSnapshot npc in snapshot.Npcs)

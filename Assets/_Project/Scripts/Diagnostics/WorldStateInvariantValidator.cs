@@ -337,6 +337,16 @@ public static class WorldStateInvariantValidator
             snapshot.PoliticalClaims,
             snapshot.AbsoluteDay,
             issues);
+        ValidatePoliticalDecisions(
+            snapshot.PoliticalDecisions,
+            personIds,
+            snapshot.PoliticalClaims,
+            snapshot.InstitutionIds,
+            snapshot.HasInstitutionCatalog,
+            snapshot.OfficeIds,
+            snapshot.HasOfficeCatalog,
+            snapshot.AbsoluteDay,
+            issues);
 
         foreach (WorldStateNpcSnapshot npc in snapshot.Npcs)
         {
@@ -815,8 +825,9 @@ public static class WorldStateInvariantValidator
                 AddError(issues, "DuplicatePoliticalSupportId", identity, "Political support RelationId appears more than once.");
             }
 
-            if (Enum.IsDefined(typeof(PoliticalSupportSourceKind), support.SourceKind) == false
-                || string.IsNullOrWhiteSpace(support.SourceId))
+            bool validSource = Enum.IsDefined(typeof(PoliticalSupportSourceKind), support.SourceKind)
+                && string.IsNullOrWhiteSpace(support.SourceId) == false;
+            if (validSource == false)
             {
                 AddError(issues, "PoliticalSupportSourceInvalid", identity, "Political support source is invalid.");
             }
@@ -829,8 +840,9 @@ public static class WorldStateInvariantValidator
                 AddError(issues, "PoliticalSupportSourceFactionMissing", identity, "Political support source FactionId is absent.");
             }
 
-            if (Enum.IsDefined(typeof(PoliticalSupportTargetKind), support.TargetKind) == false
-                || string.IsNullOrWhiteSpace(support.TargetId))
+            bool validTarget = Enum.IsDefined(typeof(PoliticalSupportTargetKind), support.TargetKind)
+                && string.IsNullOrWhiteSpace(support.TargetId) == false;
+            if (validTarget == false)
             {
                 AddError(issues, "PoliticalSupportTargetInvalid", identity, "Political support target is invalid.");
             }
@@ -860,7 +872,7 @@ public static class WorldStateInvariantValidator
                 AddError(issues, "PoliticalSupportEndDayInvalid", identity, "Political support end day is inconsistent with the snapshot timeline.");
             }
 
-            if (support.IsActive)
+            if (support.IsActive && validSource && validTarget)
             {
                 string pair = (int)support.SourceKind + ":"
                     + support.SourceId.Length + ":" + support.SourceId
@@ -872,6 +884,183 @@ public static class WorldStateInvariantValidator
                 }
             }
         }
+    }
+
+    private static void ValidatePoliticalDecisions(
+        IReadOnlyList<WorldStatePoliticalDecisionSnapshot> decisions,
+        HashSet<string> personIds,
+        IReadOnlyList<WorldStatePoliticalClaimSnapshot> claims,
+        IReadOnlyList<string> institutionIds,
+        bool hasInstitutionCatalog,
+        IReadOnlyList<string> officeIds,
+        bool hasOfficeCatalog,
+        long absoluteDay,
+        List<WorldStateInvariantIssue> issues)
+    {
+        HashSet<string> decisionIds = new HashSet<string>(StringComparer.Ordinal);
+        HashSet<string> claimIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (WorldStatePoliticalClaimSnapshot claim in claims ?? Array.Empty<WorldStatePoliticalClaimSnapshot>())
+        {
+            if (claim != null && string.IsNullOrWhiteSpace(claim.ClaimId) == false)
+            {
+                claimIds.Add(claim.ClaimId);
+            }
+        }
+
+        foreach (WorldStatePoliticalDecisionSnapshot decision in decisions ?? Array.Empty<WorldStatePoliticalDecisionSnapshot>())
+        {
+            if (decision == null)
+            {
+                AddError(issues, "PoliticalDecisionNull", "decision", "Snapshot contains a null political decision entry.");
+                continue;
+            }
+
+            string identity = string.IsNullOrWhiteSpace(decision.DecisionId) ? "decision" : decision.DecisionId;
+            if (string.IsNullOrWhiteSpace(decision.DecisionId))
+            {
+                AddError(issues, "PoliticalDecisionIdMissing", identity, "Political decision has no DecisionId.");
+            }
+            else if (decisionIds.Add(decision.DecisionId) == false)
+            {
+                AddError(issues, "DuplicatePoliticalDecisionId", identity, "Political DecisionId appears more than once.");
+            }
+
+            if (string.IsNullOrWhiteSpace(decision.DeciderStableId))
+            {
+                AddError(issues, "PoliticalDecisionDeciderMissing", identity, "Political decision has no decider holder.");
+            }
+            else
+            {
+                int separator = decision.DeciderStableId.IndexOf(':');
+                string holderKind = separator < 0 ? string.Empty : decision.DeciderStableId.Substring(0, separator);
+                string holderId = separator < 0 ? string.Empty : decision.DeciderStableId.Substring(separator + 1);
+                if (holderKind == PoliticalKnowledgeHolderKind.Person.ToString())
+                {
+                    if (personIds.Contains(holderId) == false)
+                    {
+                        AddError(issues, "PoliticalDecisionDeciderPersonMissing", identity, "Political decision decider PersonId is absent.");
+                    }
+                }
+                else if (holderKind == PoliticalKnowledgeHolderKind.Institution.ToString())
+                {
+                    if (hasInstitutionCatalog && ContainsString(institutionIds, holderId) == false)
+                    {
+                        AddError(issues, "PoliticalDecisionDeciderInstitutionMissing", identity, "Political decision decider InstitutionId is absent.");
+                    }
+                }
+                else
+                {
+                    AddError(issues, "PoliticalDecisionDeciderInvalid", identity, "Political decision decider holder kind is invalid.");
+                }
+            }
+
+            if (Enum.IsDefined(typeof(PoliticalDecisionKind), decision.DecisionKind) == false)
+            {
+                AddError(issues, "PoliticalDecisionKindInvalid", identity, "Political decision kind is invalid.");
+            }
+
+            if (Enum.IsDefined(typeof(PoliticalDecisionOutcomeKind), decision.OutcomeKind) == false)
+            {
+                AddError(issues, "PoliticalDecisionOutcomeInvalid", identity, "Political decision outcome is invalid.");
+            }
+
+            if (decision.ObservedAbsoluteDay < 0L
+                || decision.ObservedAbsoluteDay > decision.DecisionAbsoluteDay
+                || decision.DecisionAbsoluteDay > absoluteDay)
+            {
+                AddError(issues, "PoliticalDecisionDayInvalid", identity, "Political decision days are outside the snapshot timeline.");
+            }
+
+            if (decision.ExpectedWorldRevision < 0L || decision.ExpectedKnowledgeRevision < 0L)
+            {
+                AddError(issues, "PoliticalDecisionRevisionInvalid", identity, "Political decision revisions cannot be negative.");
+            }
+
+            if ((decision.DecisionKind == PoliticalDecisionKind.SuccessionSelection
+                    || decision.DecisionKind == PoliticalDecisionKind.OfficeSelection)
+                && string.IsNullOrWhiteSpace(decision.OfficeId))
+            {
+                AddError(issues, "PoliticalDecisionOfficeMissing", identity, "Office decisions must identify an office.");
+            }
+            else if (hasOfficeCatalog
+                && string.IsNullOrWhiteSpace(decision.OfficeId) == false
+                && ContainsString(officeIds, decision.OfficeId) == false)
+            {
+                AddError(issues, "PoliticalDecisionOfficeMissing", identity, "Political decision office is absent from the office catalog.");
+            }
+
+            if (decision.DecisionKind == PoliticalDecisionKind.ClaimRecognitionProposal
+                && string.IsNullOrWhiteSpace(decision.RecognizingInstitutionId))
+            {
+                AddError(issues, "PoliticalDecisionRecognizingInstitutionMissing", identity, "Claim recognition decisions must identify a recognizing institution.");
+            }
+            else if (hasInstitutionCatalog
+                && string.IsNullOrWhiteSpace(decision.RecognizingInstitutionId) == false
+                && ContainsString(institutionIds, decision.RecognizingInstitutionId) == false)
+            {
+                AddError(issues, "PoliticalDecisionRecognizingInstitutionMissing", identity, "Political decision recognizing institution is absent from the institution catalog.");
+            }
+
+            foreach (string candidateId in decision.CandidatePersonIds ?? Array.Empty<string>())
+            {
+                if (string.IsNullOrWhiteSpace(candidateId) || personIds.Contains(candidateId) == false)
+                {
+                    AddError(issues, "PoliticalDecisionCandidateMissing", identity, "Political decision candidate PersonId is absent.");
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(decision.SelectedCandidatePersonId) == false
+                && Array.IndexOf(ToArray(decision.CandidatePersonIds), decision.SelectedCandidatePersonId) < 0)
+            {
+                AddError(issues, "PoliticalDecisionSelectionMissing", identity, "Selected political decision candidate is absent from the candidate set.");
+            }
+
+            if (string.IsNullOrWhiteSpace(decision.ReferencedClaimId) == false
+                && claimIds.Contains(decision.ReferencedClaimId) == false)
+            {
+                AddError(issues, "PoliticalDecisionClaimMissing", identity, "Referenced political decision claim is absent.");
+            }
+
+            if (decision.DecisionKind == PoliticalDecisionKind.ClaimRecognitionProposal
+                && string.IsNullOrWhiteSpace(decision.ReferencedClaimId))
+            {
+                AddError(issues, "PoliticalDecisionClaimMissing", identity, "Claim recognition decisions must identify a claim.");
+            }
+        }
+    }
+
+    private static string[] ToArray(IReadOnlyList<string> values)
+    {
+        if (values == null)
+        {
+            return Array.Empty<string>();
+        }
+
+        string[] result = new string[values.Count];
+        for (int index = 0; index < values.Count; index++)
+        {
+            result[index] = values[index];
+        }
+
+        return result;
+    }
+
+    private static bool ContainsString(IReadOnlyList<string> values, string value)
+    {
+        if (values == null)
+        {
+            return false;
+        }
+
+        for (int index = 0; index < values.Count; index++)
+        {
+            if (string.Equals(values[index], value, StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static HashSet<string> ValidatePropertyOwnerships(

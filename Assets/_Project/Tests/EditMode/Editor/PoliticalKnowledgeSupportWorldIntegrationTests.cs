@@ -151,6 +151,67 @@ public sealed class PoliticalKnowledgeSupportWorldIntegrationTests
         Assert.That(diff.IsEmpty, Is.False);
     }
 
+    [Test]
+    public void PoliticalSupportDiagnosticsKeepDistinctDelimiterPairsAndRejectMalformedEndpointsSafely()
+    {
+        Fixture fixture = CreateFixture();
+        PersonId sourceWithColon = new PersonId("support:source");
+        PersonId sourcePlain = new PersonId("support");
+        PersonId candidateWithPrefix = new PersonId("0:candidate");
+        Assert.That(fixture.World.TryRegisterPerson(new PersonRuntime(sourceWithColon, 0L), out _), Is.True);
+        Assert.That(fixture.World.TryRegisterPerson(new PersonRuntime(sourcePlain, 0L), out _), Is.True);
+        Assert.That(fixture.World.TryRegisterPerson(new PersonRuntime(candidateWithPrefix, 0L), out _), Is.True);
+
+        PoliticalClaimId claimId = new PoliticalClaimId("0:candidate");
+        Assert.That(fixture.World.TryRegisterPoliticalClaim(
+            new PoliticalClaimRecord(
+                claimId,
+                fixture.Supporter,
+                PoliticalClaimType.StatusRecognition,
+                PoliticalClaimTarget.ForPerson(fixture.Candidate),
+                PoliticalClaimBasis.ExplicitDecision,
+                "delimiter",
+                fixture.World.CurrentDay,
+                null),
+            out _), Is.True);
+
+        Assert.That(fixture.World.TryRegisterPoliticalSupport(
+            new PoliticalSupportRelationRecord(
+                new PoliticalSupportRelationId("support.delimiter.claim"),
+                PoliticalSupportSource.ForPerson(sourceWithColon),
+                PoliticalSupportTarget.ForPoliticalClaim(claimId),
+                PoliticalSupportDisposition.Support,
+                fixture.World.CurrentDay),
+            out _), Is.True);
+        Assert.That(fixture.World.TryRegisterPoliticalSupport(
+            new PoliticalSupportRelationRecord(
+                new PoliticalSupportRelationId("support.delimiter.candidate"),
+                PoliticalSupportSource.ForPerson(sourcePlain),
+                PoliticalSupportTarget.ForSuccessionCandidate(candidateWithPrefix),
+                PoliticalSupportDisposition.Support,
+                fixture.World.CurrentDay),
+            out _), Is.True);
+
+        WorldStateInvariantReport report = WorldStateInvariantValidator.Validate(Capture(fixture.World));
+        Assert.That(report.IsValid, Is.True, report.ToString());
+
+        WorldStateSnapshot malformed = new WorldStateSnapshot(
+            fixture.World.CurrentDay,
+            politicalSupports: new[] {
+                new WorldStatePoliticalSupportSnapshot(
+                    "support.malformed",
+                    PoliticalSupportSourceKind.Person,
+                    null,
+                    PoliticalSupportTargetKind.SuccessionCandidate,
+                    null,
+                    PoliticalSupportDisposition.Support,
+                    fixture.World.CurrentDay,
+                    null)
+            });
+        Assert.That(() => WorldStateInvariantValidator.Validate(malformed), Throws.Nothing);
+        Assert.That(WorldStateInvariantValidator.Validate(malformed).IsValid, Is.False);
+    }
+
     private static PoliticalClaimId RegisterClaim(
         SimulationRuntime world,
         PersonId claimant,
@@ -180,7 +241,8 @@ public sealed class PoliticalKnowledgeSupportWorldIntegrationTests
             politicalClaims: world.PoliticalClaimRecords,
             factions: world.FactionRecords,
             factionAffiliations: world.FactionAffiliationRecords,
-            politicalSupports: world.PoliticalSupportRecords));
+            politicalSupports: world.PoliticalSupportRecords,
+            politicalDecisions: world.PoliticalDecisionRecords));
     }
 
     private static Fixture CreateFixture()

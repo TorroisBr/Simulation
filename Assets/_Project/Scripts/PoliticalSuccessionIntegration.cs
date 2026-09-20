@@ -13,7 +13,9 @@ public enum PoliticalSuccessionFailureCode
     CandidateFingerprintMismatch = 8,
     InvalidTransition = 9,
     StaleWorldDay = 10,
-    OfficeSuccessionRejected = 11
+    OfficeSuccessionRejected = 11,
+    StaleDecision = 12,
+    DecisionOfficeMismatch = 13
 }
 
 /// <summary>
@@ -193,6 +195,25 @@ public static class PoliticalSuccessionSystem
             return false;
         }
 
+        if (decision.IsStaleFor(
+                world.CurrentDay,
+                world.PoliticalWorldRevision,
+                world.PoliticalKnowledgeRevision))
+        {
+            failure = PoliticalSuccessionFailure.Create(
+                PoliticalSuccessionFailureCode.StaleDecision,
+                "The political succession decision was captured against a stale world or knowledge revision.");
+            return false;
+        }
+
+        if (decision.OfficeId == null || decision.OfficeId != officeId)
+        {
+            failure = PoliticalSuccessionFailure.Create(
+                PoliticalSuccessionFailureCode.DecisionOfficeMismatch,
+                "The succession decision must identify the office it proposes to fill.");
+            return false;
+        }
+
         if (decision.DecisionKind != PoliticalDecisionKind.SuccessionSelection)
         {
             failure = PoliticalSuccessionFailure.Create(
@@ -285,6 +306,17 @@ public static class PoliticalSuccessionSystem
             failure = PoliticalSuccessionFailure.Create(
                 PoliticalSuccessionFailureCode.StaleWorldDay,
                 "The world day changed after political succession was proposed.");
+            return false;
+        }
+
+        if (transition.Decision.IsStaleFor(
+                world.CurrentDay,
+                world.PoliticalWorldRevision,
+                world.PoliticalKnowledgeRevision))
+        {
+            failure = PoliticalSuccessionFailure.Create(
+                PoliticalSuccessionFailureCode.StaleDecision,
+                "The political succession decision became stale before application.");
             return false;
         }
 

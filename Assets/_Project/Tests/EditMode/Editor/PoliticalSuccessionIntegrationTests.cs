@@ -103,7 +103,9 @@ public sealed class PoliticalSuccessionIntegrationTests
             fixture.World.CurrentDay,
             new[] { fixture.SelectedCandidateId },
             fixture.SelectedCandidateId,
-            fixture.Decider);
+            fixture.Decider,
+            fixture.World.PoliticalWorldRevision,
+            fixture.World.PoliticalKnowledgeRevision);
         Assert.That(fixture.World.TryRegisterPoliticalDecision(
             incompleteSet,
             out PoliticalDecisionFailure registrationFailure), Is.True, registrationFailure.ToString());
@@ -128,9 +130,23 @@ public sealed class PoliticalSuccessionIntegrationTests
         Assert.That(fixture.World.TryApplyPoliticalOfficeSuccession(
                 transition,
                 out PoliticalSuccessionFailure applyFailure), Is.False);
-        Assert.That(applyFailure.Code, Is.EqualTo(PoliticalSuccessionFailureCode.OfficeSuccessionRejected));
-        Assert.That(applyFailure.OfficeFailure.Code, Is.EqualTo(OfficeSuccessionFailureCode.StaleCandidateSet));
+        Assert.That(applyFailure.Code, Is.EqualTo(PoliticalSuccessionFailureCode.StaleDecision));
         Assert.That(fixture.World.IsOfficeVacant(fixture.OfficeId), Is.True);
+    }
+
+    [Test]
+    public void PoliticalDecisionHistoryParticipatesInCanonicalDiagnosticsAndDiffs()
+    {
+        Fixture fixture = CreateFixture();
+        WorldStateSnapshot before = Capture(fixture.World);
+        Assert.That(before.PoliticalDecisionCount, Is.EqualTo(1));
+        Assert.That(WorldStateCanonicalWriter.Write(before), Does.Contain("POLITICAL_DECISION"));
+        Assert.That(WorldStateInvariantValidator.Validate(before).IsValid, Is.True);
+
+        WorldStateSnapshot after = new WorldStateSnapshot(
+            fixture.World.CurrentDay,
+            politicalDecisions: new WorldStatePoliticalDecisionSnapshot[0]);
+        Assert.That(WorldStateDiagnostics.Compare(before, after).IsEmpty, Is.False);
     }
 
     [Test]
@@ -157,6 +173,56 @@ public sealed class PoliticalSuccessionIntegrationTests
                 out _,
                 out PoliticalSuccessionFailure missingFailure), Is.False);
         Assert.That(missingFailure.Code, Is.EqualTo(PoliticalSuccessionFailureCode.DecisionNotFound));
+    }
+
+    [Test]
+    public void AuthoritativeKnowledgeRevisionAndOfficeBindingRejectStaleOrWrongTargets()
+    {
+        Fixture fixture = CreateFixture();
+        Assert.That(fixture.World.TryRecordPoliticalKnowledge(
+            fixture.Decider,
+            new FactionKnowledgeObservation(
+                new FactionId("knowledge.faction"),
+                true,
+                fixture.World.CurrentDay,
+                fixture.World.CurrentDay,
+                new PoliticalKnowledgeProvenance(
+                    PoliticalKnowledgeSource.DirectObservation,
+                    "same-day-change")),
+            out PoliticalKnowledgeFailure knowledgeFailure), Is.True, knowledgeFailure.ToString());
+        Assert.That(fixture.World.TryProposePoliticalOfficeSuccession(
+                fixture.Decision.DecisionId,
+                fixture.OfficeId,
+                fixture.World.CurrentDay,
+                out _,
+                out PoliticalSuccessionFailure staleFailure), Is.False);
+        Assert.That(staleFailure.Code, Is.EqualTo(PoliticalSuccessionFailureCode.StaleDecision));
+
+        Fixture wrongOfficeFixture = CreateFixture(includeDecision: false);
+        OfficeId otherOfficeId = new OfficeId("political-office-other");
+        Assert.That(wrongOfficeFixture.World.TryRegisterOffice(
+            new OfficeRecord(otherOfficeId, new InstitutionId("political-institution")),
+            out InstitutionFoundationFailure officeFailure), Is.True, officeFailure.ToString());
+        PoliticalDecisionRecord wrongOfficeDecision = CreateDecision(
+            "decision.other-office",
+            wrongOfficeFixture.World.CurrentDay,
+            wrongOfficeFixture.World.CurrentDay,
+            wrongOfficeFixture.CandidateIds,
+            wrongOfficeFixture.SelectedCandidateId,
+            wrongOfficeFixture.Decider,
+            wrongOfficeFixture.World.PoliticalWorldRevision,
+            wrongOfficeFixture.World.PoliticalKnowledgeRevision,
+            otherOfficeId);
+        Assert.That(wrongOfficeFixture.World.TryRegisterPoliticalDecision(
+            wrongOfficeDecision,
+            out PoliticalDecisionFailure decisionFailure), Is.True, decisionFailure.ToString());
+        Assert.That(wrongOfficeFixture.World.TryProposePoliticalOfficeSuccession(
+                wrongOfficeDecision.DecisionId,
+                wrongOfficeFixture.OfficeId,
+                wrongOfficeFixture.World.CurrentDay,
+                out _,
+                out PoliticalSuccessionFailure officeMismatchFailure), Is.False);
+        Assert.That(officeMismatchFailure.Code, Is.EqualTo(PoliticalSuccessionFailureCode.DecisionOfficeMismatch));
     }
 
     private static Fixture CreateFixture(bool includeDecision = true)
@@ -200,12 +266,10 @@ public sealed class PoliticalSuccessionIntegrationTests
             currentDay,
             candidates,
             selectedCandidate.PersonId,
-            decider);
+            decider,
+            0L,
+            1L);
         PoliticalDecisionStore decisions = new PoliticalDecisionStore();
-        if (includeDecision)
-        {
-            Assert.That(decisions.TryRegister(decision, out _), Is.True);
-        }
 
         SimulationRuntime world = new SimulationRuntime(
             new SimulationTime(currentDay),
@@ -227,6 +291,23 @@ public sealed class PoliticalSuccessionIntegrationTests
             vacancyTransition,
             out InstitutionalVacancyRecognitionFailure vacancyApplyFailure), Is.True, vacancyApplyFailure.ToString());
 
+        decision = CreateDecision(
+            "decision.succession",
+            currentDay,
+            currentDay,
+            candidates,
+            selectedCandidate.PersonId,
+            decider,
+            world.PoliticalWorldRevision,
+            world.PoliticalKnowledgeRevision);
+        if (includeDecision)
+        {
+            Assert.That(world.TryRegisterPoliticalDecision(
+                decision,
+                out PoliticalDecisionFailure worldDecisionFailure), Is.True, worldDecisionFailure.ToString());
+            Assert.That(decisions.TryRegister(decision, out _), Is.True);
+        }
+
         return new Fixture(
             world,
             decisions,
@@ -243,7 +324,10 @@ public sealed class PoliticalSuccessionIntegrationTests
         long decisionDay,
         IEnumerable<PersonId> candidates,
         PersonId selectedCandidate,
-        PoliticalKnowledgeHolder decider)
+        PoliticalKnowledgeHolder decider,
+        long expectedWorldRevision = 0L,
+        long expectedKnowledgeRevision = 1L,
+        OfficeId officeId = null)
     {
         return new PoliticalDecisionRecord(
             new PoliticalDecisionId(id),
@@ -255,8 +339,20 @@ public sealed class PoliticalSuccessionIntegrationTests
             decisionDay,
             new[] { "support:institutional-majority", "legitimacy:threshold" },
             new[] { "knowledge:office-vacancy", "knowledge:candidate-set" },
-            1L,
-            1L);
+            expectedWorldRevision,
+            expectedKnowledgeRevision,
+            officeId ?? new OfficeId("political-office"));
+    }
+
+    private static WorldStateSnapshot Capture(SimulationRuntime world)
+    {
+        return WorldStateDiagnostics.Capture(new WorldStateSnapshotContext(
+            simulationTime: world.SimulationTime,
+            calendar: world.Calendar,
+            personStore: world.PersonStore,
+            institutionIds: new[] { "political-institution" },
+            officeIds: new[] { "political-office" },
+            politicalDecisions: world.PoliticalDecisionRecords));
     }
 
     private static PersonRuntime Register(

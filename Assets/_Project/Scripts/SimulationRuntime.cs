@@ -25,6 +25,7 @@ public sealed class SimulationRuntime
     private readonly PoliticalSupportStore politicalSupportStore;
     private readonly PoliticalKnowledgeStore politicalKnowledgeStore;
     private readonly PoliticalDecisionStore politicalDecisionStore;
+    private long politicalWorldRevision;
     private readonly List<NpcActionData> configuredActions;
     private readonly ScheduledDirectiveSystem scheduledDirectiveSystem;
     private readonly JusticeSystem justiceSystem;
@@ -63,6 +64,8 @@ public sealed class SimulationRuntime
     public IReadOnlyList<FactionAffiliationRecord> FactionAffiliationRecords => factionStore.Affiliations;
     public IReadOnlyList<PoliticalSupportRelationRecord> PoliticalSupportRecords => politicalSupportStore.Records;
     public int PoliticalKnowledgeHolderCount => politicalKnowledgeStore.Count;
+    public long PoliticalKnowledgeRevision => politicalKnowledgeStore.Revision;
+    public long PoliticalWorldRevision => politicalWorldRevision;
     public IReadOnlyList<PoliticalDecisionRecord> PoliticalDecisionRecords => politicalDecisionStore.Records;
     /// <summary>
     /// Read-only view of every named NPC registered with this world. Registration is
@@ -187,7 +190,9 @@ public sealed class SimulationRuntime
         this.politicalDecisionStore = ClonePoliticalDecisionStore(
             politicalDecisionStore,
             this.politicalKnowledgeStore,
-            simulationTime.AbsoluteDay);
+            simulationTime.AbsoluteDay,
+            0L);
+        politicalWorldRevision = 0L;
         this.cities = cities != null ? new List<CityRuntime>(cities) : new List<CityRuntime>();
         this.npcRuntimes = new List<NpcRuntime>();
         this.npcRuntimeSnapshot = this.npcRuntimes.AsReadOnly();
@@ -390,7 +395,13 @@ public sealed class SimulationRuntime
         PersonDeathTransition transition,
         out PersonDeathLifecycleFailure failure)
     {
-        return PersonDeathLifecycleSystem.TryApplyDeath(this, transition, out failure);
+        bool applied = PersonDeathLifecycleSystem.TryApplyDeath(this, transition, out failure);
+        if (applied)
+        {
+            AdvancePoliticalWorldRevision();
+        }
+
+        return applied;
     }
 
     public bool TryApplyPersonDeathWithConflictInjury(
@@ -398,11 +409,17 @@ public sealed class SimulationRuntime
         NpcInjurySeverity injurySeverity,
         out PersonDeathLifecycleFailure failure)
     {
-        return PersonDeathLifecycleSystem.TryApplyDeathWithConflictInjury(
+        bool applied = PersonDeathLifecycleSystem.TryApplyDeathWithConflictInjury(
             this,
             transition,
             injurySeverity,
             out failure);
+        if (applied)
+        {
+            AdvancePoliticalWorldRevision();
+        }
+
+        return applied;
     }
 
     public bool TryApplyPersonDeath(
@@ -410,18 +427,30 @@ public sealed class SimulationRuntime
         out PersonDeathTransition transition,
         out PersonDeathLifecycleFailure failure)
     {
-        return PersonDeathLifecycleSystem.TryApplyDeath(
+        bool applied = PersonDeathLifecycleSystem.TryApplyDeath(
             this,
             personId,
             out transition,
             out failure);
+        if (applied)
+        {
+            AdvancePoliticalWorldRevision();
+        }
+
+        return applied;
     }
 
     public bool TryRegisterInstitution(
         InstitutionRecord record,
         out InstitutionFoundationFailure failure)
     {
-        return institutionStore.TryRegister(record, out failure);
+        bool registered = institutionStore.TryRegister(record, out failure);
+        if (registered)
+        {
+            AdvancePoliticalWorldRevision();
+        }
+
+        return registered;
     }
 
     public bool TryRegisterFaction(
@@ -444,7 +473,13 @@ public sealed class SimulationRuntime
             return false;
         }
 
-        return factionStore.TryRegister(record, out failure);
+        bool registered = factionStore.TryRegister(record, out failure);
+        if (registered)
+        {
+            AdvancePoliticalWorldRevision();
+        }
+
+        return registered;
     }
 
     public bool TryProposeFactionAffiliation(
@@ -491,7 +526,13 @@ public sealed class SimulationRuntime
             return false;
         }
 
-        return FactionAffiliationSystem.TryApplyAdd(factionStore, transition, out failure);
+        bool applied = FactionAffiliationSystem.TryApplyAdd(factionStore, transition, out failure);
+        if (applied)
+        {
+            AdvancePoliticalWorldRevision();
+        }
+
+        return applied;
     }
 
     public bool TryProposeFactionAffiliationEnd(
@@ -538,7 +579,13 @@ public sealed class SimulationRuntime
             return false;
         }
 
-        return FactionAffiliationSystem.TryApplyEnd(factionStore, transition, out failure);
+        bool applied = FactionAffiliationSystem.TryApplyEnd(factionStore, transition, out failure);
+        if (applied)
+        {
+            AdvancePoliticalWorldRevision();
+        }
+
+        return applied;
     }
 
     public bool TryRegisterPoliticalClaim(
@@ -589,7 +636,13 @@ public sealed class SimulationRuntime
             return false;
         }
 
-        return politicalClaimStore.TryRegister(record, out failure);
+        bool registered = politicalClaimStore.TryRegister(record, out failure);
+        if (registered)
+        {
+            AdvancePoliticalWorldRevision();
+        }
+
+        return registered;
     }
 
     public bool TryProposePoliticalClaimRecognition(
@@ -642,10 +695,16 @@ public sealed class SimulationRuntime
             return false;
         }
 
-        return PoliticalClaimSystem.TryApplyRecognition(
+        bool applied = PoliticalClaimSystem.TryApplyRecognition(
             politicalClaimStore,
             transition,
             out failure);
+        if (applied)
+        {
+            AdvancePoliticalWorldRevision();
+        }
+
+        return applied;
     }
 
     public bool TryProposePoliticalClaimResolution(
@@ -684,10 +743,16 @@ public sealed class SimulationRuntime
             return false;
         }
 
-        return PoliticalClaimSystem.TryApplyResolution(
+        bool applied = PoliticalClaimSystem.TryApplyResolution(
             politicalClaimStore,
             transition,
             out failure);
+        if (applied)
+        {
+            AdvancePoliticalWorldRevision();
+        }
+
+        return applied;
     }
 
     /// <summary>
@@ -716,7 +781,13 @@ public sealed class SimulationRuntime
             return false;
         }
 
-        return politicalSupportStore.TryRegister(record, out failure);
+        bool registered = politicalSupportStore.TryRegister(record, out failure);
+        if (registered)
+        {
+            AdvancePoliticalWorldRevision();
+        }
+
+        return registered;
     }
 
     public bool TryProposePoliticalSupportAdd(
@@ -735,7 +806,13 @@ public sealed class SimulationRuntime
         PoliticalSupportAddTransition transition,
         out PoliticalSupportFailure failure)
     {
-        return politicalSupportStore.TryApplyAdd(transition, CurrentDay, out failure);
+        bool applied = politicalSupportStore.TryApplyAdd(transition, CurrentDay, out failure);
+        if (applied)
+        {
+            AdvancePoliticalWorldRevision();
+        }
+
+        return applied;
     }
 
     public bool TryProposePoliticalSupportEnd(
@@ -754,7 +831,13 @@ public sealed class SimulationRuntime
         PoliticalSupportEndTransition transition,
         out PoliticalSupportFailure failure)
     {
-        return politicalSupportStore.TryApplyEnd(transition, CurrentDay, out failure);
+        bool applied = politicalSupportStore.TryApplyEnd(transition, CurrentDay, out failure);
+        if (applied)
+        {
+            AdvancePoliticalWorldRevision();
+        }
+
+        return applied;
     }
 
     public bool TryRecordPoliticalKnowledge(
@@ -816,6 +899,35 @@ public sealed class SimulationRuntime
             failure = PoliticalDecisionFailure.Create(
                 PoliticalDecisionFailureCode.InvalidDecision,
                 "The political decision decider must be registered as a knowledge holder in this world.");
+            return false;
+        }
+
+        if (record.ExpectedWorldRevision != PoliticalWorldRevision
+            || record.ExpectedKnowledgeRevision != PoliticalKnowledgeRevision)
+        {
+            failure = PoliticalDecisionFailure.Create(
+                PoliticalDecisionFailureCode.StaleDecision,
+                "The political decision was captured against a stale world or knowledge revision.");
+            return false;
+        }
+
+        if ((record.DecisionKind == PoliticalDecisionKind.SuccessionSelection
+                || record.DecisionKind == PoliticalDecisionKind.OfficeSelection)
+            && (record.OfficeId == null || officeStore.TryGet(record.OfficeId, out _) == false))
+        {
+            failure = PoliticalDecisionFailure.Create(
+                PoliticalDecisionFailureCode.InvalidDecision,
+                "An office decision must identify an office registered in this world.");
+            return false;
+        }
+
+        if (record.DecisionKind == PoliticalDecisionKind.ClaimRecognitionProposal
+            && (record.RecognizingInstitutionId == null
+                || institutionStore.TryGet(record.RecognizingInstitutionId, out _) == false))
+        {
+            failure = PoliticalDecisionFailure.Create(
+                PoliticalDecisionFailureCode.InvalidDecision,
+                "A claim recognition decision must identify an institution registered in this world.");
             return false;
         }
 
@@ -1029,7 +1141,13 @@ public sealed class SimulationRuntime
         OfficeSuccessionTransition transition,
         out OfficeSuccessionFailure failure)
     {
-        return OfficeSuccessionSystem.TryApply(this, transition, out failure);
+        bool applied = OfficeSuccessionSystem.TryApply(this, transition, out failure);
+        if (applied)
+        {
+            AdvancePoliticalWorldRevision();
+        }
+
+        return applied;
     }
 
     public bool TryProposePoliticalOfficeSuccession(
@@ -1106,7 +1224,13 @@ public sealed class SimulationRuntime
         OfficeRecord record,
         out InstitutionFoundationFailure failure)
     {
-        return officeStore.TryRegister(record, out failure);
+        bool registered = officeStore.TryRegister(record, out failure);
+        if (registered)
+        {
+            AdvancePoliticalWorldRevision();
+        }
+
+        return registered;
     }
 
     public bool TryGetInstitution(
@@ -1175,11 +1299,17 @@ public sealed class SimulationRuntime
             return false;
         }
 
-        return officeStore.TryAssignIncumbent(
+        bool assigned = officeStore.TryAssignIncumbent(
             officeId,
             incumbent,
             startAbsoluteDay,
             out failure);
+        if (assigned)
+        {
+            AdvancePoliticalWorldRevision();
+        }
+
+        return assigned;
     }
 
     public bool TryAssignIncumbent(
@@ -1198,7 +1328,13 @@ public sealed class SimulationRuntime
         OfficeId officeId,
         out InstitutionFoundationFailure failure)
     {
-        return officeStore.TryVacateOffice(officeId, out failure);
+        bool vacated = officeStore.TryVacateOffice(officeId, out failure);
+        if (vacated)
+        {
+            AdvancePoliticalWorldRevision();
+        }
+
+        return vacated;
     }
 
     public bool TryProposeInstitutionalVacancyRecognition(
@@ -1243,10 +1379,16 @@ public sealed class SimulationRuntime
         InstitutionalVacancyRecognitionTransition transition,
         out InstitutionalVacancyRecognitionFailure failure)
     {
-        return InstitutionalVacancyRecognitionSystem.TryApply(
+        bool applied = InstitutionalVacancyRecognitionSystem.TryApply(
             officeStore,
             transition,
             out failure);
+        if (applied)
+        {
+            AdvancePoliticalWorldRevision();
+        }
+
+        return applied;
     }
 
     public IReadOnlyList<OfficeRecord> GetVacantOffices()
@@ -1925,7 +2067,8 @@ public sealed class SimulationRuntime
     private static PoliticalDecisionStore ClonePoliticalDecisionStore(
         PoliticalDecisionStore source,
         PoliticalKnowledgeStore knowledgeStore,
-        long currentDay)
+        long currentDay,
+        long currentWorldRevision)
     {
         PoliticalDecisionStore copy = new PoliticalDecisionStore();
         if (source == null)
@@ -1937,6 +2080,8 @@ public sealed class SimulationRuntime
         {
             if (record == null
                 || record.DecisionAbsoluteDay > currentDay
+                || record.ExpectedWorldRevision != currentWorldRevision
+                || record.ExpectedKnowledgeRevision != knowledgeStore.Revision
                 || record.Decider == null
                 || knowledgeStore.TryGet(record.Decider, out _) == false
                 || copy.TryRegister(record, out PoliticalDecisionFailure failure) == false)
@@ -1955,6 +2100,14 @@ public sealed class SimulationRuntime
         }
 
         return copy;
+    }
+
+    private void AdvancePoliticalWorldRevision()
+    {
+        if (politicalWorldRevision < long.MaxValue)
+        {
+            politicalWorldRevision++;
+        }
     }
 
     private static InstitutionStore ResolveInstitutionStore(

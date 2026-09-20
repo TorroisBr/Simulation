@@ -83,6 +83,10 @@ public sealed class WorldStateDiff
             WorldStateCanonicalWriter.IntValue(before.PoliticalSupportCount),
             WorldStateCanonicalWriter.IntValue(after.PoliticalSupportCount),
             differences);
+        CompareValue("Metadata", "world", "PoliticalDecisionCount",
+            WorldStateCanonicalWriter.IntValue(before.PoliticalDecisionCount),
+            WorldStateCanonicalWriter.IntValue(after.PoliticalDecisionCount),
+            differences);
         CompareCalendar(before.Metadata.CalendarDate, after.Metadata.CalendarDate, differences);
 
         CompareEntities("NPC", before.Npcs, after.Npcs, npc => npc.RuntimeId,
@@ -295,6 +299,61 @@ public sealed class WorldStateDiff
                 CompareValue("PoliticalSupport", identity, "EndedAbsoluteDay",
                     WorldStateCanonicalWriter.NullableInt64Value(left.EndedAbsoluteDay),
                     WorldStateCanonicalWriter.NullableInt64Value(right.EndedAbsoluteDay),
+                    differences);
+            },
+            differences);
+
+        CompareEntities("PoliticalDecision", before.PoliticalDecisions, after.PoliticalDecisions,
+            decision => decision.DecisionId,
+            (identity, left, right) =>
+            {
+                CompareValue("PoliticalDecision", identity, "DeciderStableId",
+                    WorldStateCanonicalWriter.StringValue(left.DeciderStableId),
+                    WorldStateCanonicalWriter.StringValue(right.DeciderStableId),
+                    differences);
+                CompareValue("PoliticalDecision", identity, "DecisionKind",
+                    WorldStateCanonicalWriter.EnumValue(left.DecisionKind),
+                    WorldStateCanonicalWriter.EnumValue(right.DecisionKind),
+                    differences);
+                CompareValue("PoliticalDecision", identity, "OfficeId",
+                    WorldStateCanonicalWriter.StringValue(left.OfficeId),
+                    WorldStateCanonicalWriter.StringValue(right.OfficeId),
+                    differences);
+                CompareValue("PoliticalDecision", identity, "RecognizingInstitutionId",
+                    WorldStateCanonicalWriter.StringValue(left.RecognizingInstitutionId),
+                    WorldStateCanonicalWriter.StringValue(right.RecognizingInstitutionId),
+                    differences);
+                CompareValue("PoliticalDecision", identity, "CandidateFingerprint",
+                    WorldStateCanonicalWriter.StringValue(left.CandidateFingerprint),
+                    WorldStateCanonicalWriter.StringValue(right.CandidateFingerprint),
+                    differences);
+                CompareValue("PoliticalDecision", identity, "OutcomeKind",
+                    WorldStateCanonicalWriter.EnumValue(left.OutcomeKind),
+                    WorldStateCanonicalWriter.EnumValue(right.OutcomeKind),
+                    differences);
+                CompareValue("PoliticalDecision", identity, "SelectedCandidatePersonId",
+                    WorldStateCanonicalWriter.StringValue(left.SelectedCandidatePersonId),
+                    WorldStateCanonicalWriter.StringValue(right.SelectedCandidatePersonId),
+                    differences);
+                CompareValue("PoliticalDecision", identity, "ReferencedClaimId",
+                    WorldStateCanonicalWriter.StringValue(left.ReferencedClaimId),
+                    WorldStateCanonicalWriter.StringValue(right.ReferencedClaimId),
+                    differences);
+                CompareValue("PoliticalDecision", identity, "ObservedAbsoluteDay",
+                    WorldStateCanonicalWriter.Int64Value(left.ObservedAbsoluteDay),
+                    WorldStateCanonicalWriter.Int64Value(right.ObservedAbsoluteDay),
+                    differences);
+                CompareValue("PoliticalDecision", identity, "DecisionAbsoluteDay",
+                    WorldStateCanonicalWriter.Int64Value(left.DecisionAbsoluteDay),
+                    WorldStateCanonicalWriter.Int64Value(right.DecisionAbsoluteDay),
+                    differences);
+                CompareValue("PoliticalDecision", identity, "ExpectedWorldRevision",
+                    WorldStateCanonicalWriter.Int64Value(left.ExpectedWorldRevision),
+                    WorldStateCanonicalWriter.Int64Value(right.ExpectedWorldRevision),
+                    differences);
+                CompareValue("PoliticalDecision", identity, "ExpectedKnowledgeRevision",
+                    WorldStateCanonicalWriter.Int64Value(left.ExpectedKnowledgeRevision),
+                    WorldStateCanonicalWriter.Int64Value(right.ExpectedKnowledgeRevision),
                     differences);
             },
             differences);

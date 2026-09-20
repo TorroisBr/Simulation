@@ -179,6 +179,7 @@ public sealed class PoliticalLegitimacyDecisionFoundationTests
             new[] { "evidence.z", "evidence.a" },
             new[] { "knowledge.z", "knowledge.a" },
             7L,
-            3L);
+            3L,
+            new OfficeId("office.court"));
     }
 }
