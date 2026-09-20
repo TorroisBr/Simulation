@@ -18,6 +18,11 @@ public sealed class WorldStateSnapshotContext
     public GenealogyStore GenealogyStore { get; }
     public PropertyOwnershipStore PropertyOwnershipStore { get; }
     public EstateStore EstateStore { get; }
+    public InstitutionStore InstitutionStore { get; }
+    public OfficeStore OfficeStore { get; }
+    public IEnumerable<string> InstitutionIds { get; }
+    public IEnumerable<string> OfficeIds { get; }
+    public IEnumerable<string> PropertyIds { get; }
     public IEnumerable<PoliticalClaimRecord> PoliticalClaims { get; }
 
     public WorldStateSnapshotContext(
@@ -36,7 +41,12 @@ public sealed class WorldStateSnapshotContext
         GenealogyStore genealogyStore = null,
         PropertyOwnershipStore propertyOwnershipStore = null,
         EstateStore estateStore = null,
-        IEnumerable<PoliticalClaimRecord> politicalClaims = null)
+        IEnumerable<PoliticalClaimRecord> politicalClaims = null,
+        InstitutionStore institutionStore = null,
+        OfficeStore officeStore = null,
+        IEnumerable<string> institutionIds = null,
+        IEnumerable<string> officeIds = null,
+        IEnumerable<string> propertyIds = null)
     {
         SimulationTime = simulationTime;
         Calendar = calendar ?? (calendarDefinition != null ? new SimulationCalendar(calendarDefinition) : null);
@@ -51,6 +61,11 @@ public sealed class WorldStateSnapshotContext
         GenealogyStore = genealogyStore;
         PropertyOwnershipStore = propertyOwnershipStore;
         EstateStore = estateStore;
+        InstitutionStore = institutionStore;
+        OfficeStore = officeStore;
+        InstitutionIds = institutionIds;
+        OfficeIds = officeIds;
+        PropertyIds = propertyIds;
         PoliticalClaims = politicalClaims ?? Array.Empty<PoliticalClaimRecord>();
         Parentages = parentages
             ?? genealogyStore?.Records
@@ -80,6 +95,12 @@ public sealed class WorldStateSnapshot
     public int EstateCount => Estates.Count;
     public IReadOnlyList<WorldStatePoliticalClaimSnapshot> PoliticalClaims { get; }
     public int PoliticalClaimCount => PoliticalClaims.Count;
+    public IReadOnlyList<string> InstitutionIds { get; }
+    public IReadOnlyList<string> OfficeIds { get; }
+    public IReadOnlyList<string> PropertyIds { get; }
+    public bool HasInstitutionCatalog { get; }
+    public bool HasOfficeCatalog { get; }
+    public bool HasPropertyCatalog { get; }
     public WorldStateSpatialSnapshot Spatial { get; }
     public IReadOnlyList<WorldStateSiteSnapshot> Sites { get; }
     public IReadOnlyList<WorldStateExpeditionSnapshot> Expeditions { get; }
@@ -103,7 +124,10 @@ public sealed class WorldStateSnapshot
         IEnumerable<WorldStatePropertyOwnershipSnapshot> propertyOwnerships = null,
         IEnumerable<WorldStateEstateSnapshot> estates = null,
         IEnumerable<WorldStatePropertyTransferSnapshot> propertyTransfers = null,
-        IEnumerable<WorldStatePoliticalClaimSnapshot> politicalClaims = null)
+        IEnumerable<WorldStatePoliticalClaimSnapshot> politicalClaims = null,
+        IEnumerable<string> institutionIds = null,
+        IEnumerable<string> officeIds = null,
+        IEnumerable<string> propertyIds = null)
     {
         Metadata = new WorldStateSnapshotMetadata(absoluteDay, calendarDate);
         Npcs = SnapshotCollections.CopySorted(npcs, npc => npc?.RuntimeId);
@@ -131,6 +155,12 @@ public sealed class WorldStateSnapshot
                     + transfer.NewOwnerPersonId);
         Estates = SnapshotCollections.CopySorted(estates, estate => estate?.EstateId);
         PoliticalClaims = SnapshotCollections.CopySorted(politicalClaims, claim => claim?.ClaimId);
+        HasInstitutionCatalog = institutionIds != null;
+        HasOfficeCatalog = officeIds != null;
+        HasPropertyCatalog = propertyIds != null;
+        InstitutionIds = CopySortedIds(institutionIds);
+        OfficeIds = CopySortedIds(officeIds);
+        PropertyIds = CopySortedIds(propertyIds);
     }
 
     private static IReadOnlyList<WorldStateParentageSnapshot> SortParentages(
@@ -155,6 +185,24 @@ public sealed class WorldStateSnapshot
                 ? parent
                 : StringComparer.Ordinal.Compare(left.ChildPersonId, right.ChildPersonId);
         });
+        return result.AsReadOnly();
+    }
+
+    private static IReadOnlyList<string> CopySortedIds(IEnumerable<string> source)
+    {
+        List<string> result = new List<string>();
+        if (source != null)
+        {
+            foreach (string value in source)
+            {
+                if (string.IsNullOrWhiteSpace(value) == false && result.Contains(value) == false)
+                {
+                    result.Add(value);
+                }
+            }
+        }
+
+        result.Sort(StringComparer.Ordinal);
         return result.AsReadOnly();
     }
 }
@@ -304,6 +352,7 @@ public sealed class WorldStatePoliticalClaimSnapshot
     public string BasisDescription { get; }
     public long CreatedAbsoluteDay { get; }
     public PoliticalClaimStatus Status { get; }
+    public long? ResolutionAbsoluteDay { get; }
     public PoliticalClaimRecognitionState RecognitionState { get; }
     public string RecognizingInstitutionId { get; }
     public long? RecognitionAbsoluteDay { get; }
@@ -320,6 +369,7 @@ public sealed class WorldStatePoliticalClaimSnapshot
         string basisDescription,
         long createdAbsoluteDay,
         PoliticalClaimStatus status,
+        long? resolutionAbsoluteDay,
         PoliticalClaimRecognitionState recognitionState,
         string recognizingInstitutionId,
         long? recognitionAbsoluteDay,
@@ -335,6 +385,7 @@ public sealed class WorldStatePoliticalClaimSnapshot
         BasisDescription = basisDescription ?? string.Empty;
         CreatedAbsoluteDay = createdAbsoluteDay;
         Status = status;
+        ResolutionAbsoluteDay = resolutionAbsoluteDay;
         RecognitionState = recognitionState;
         RecognizingInstitutionId = recognizingInstitutionId;
         RecognitionAbsoluteDay = recognitionAbsoluteDay;
@@ -1060,7 +1111,10 @@ public static class WorldStateSnapshotBuilder
             BuildPropertyOwnershipSnapshots(context.PropertyOwnershipStore),
             BuildEstateSnapshots(context.EstateStore),
             BuildPropertyTransferSnapshots(context.PropertyOwnershipStore),
-            politicalClaims);
+            politicalClaims,
+            context.InstitutionIds ?? BuildInstitutionIds(context.InstitutionStore),
+            context.OfficeIds ?? BuildOfficeIds(context.OfficeStore),
+            context.PropertyIds ?? BuildPropertyIds(context.PropertyOwnershipStore));
     }
 
     private static List<WorldStatePoliticalClaimSnapshot> BuildPoliticalClaimSnapshots(
@@ -1089,11 +1143,69 @@ public static class WorldStateSnapshotBuilder
                 claim.BasisDescription,
                 claim.CreatedAbsoluteDay,
                 claim.Status,
+                claim.ResolutionAbsoluteDay,
                 claim.RecognitionState,
                 claim.RecognizingInstitutionId?.Value,
                 claim.RecognitionAbsoluteDay,
                 claim.RecognitionReason,
                 claim.EvidenceReferences));
+        }
+
+        return result;
+    }
+
+    private static IEnumerable<string> BuildInstitutionIds(InstitutionStore source)
+    {
+        if (source == null)
+        {
+            return null;
+        }
+
+        List<string> result = new List<string>();
+        foreach (InstitutionRecord record in source.Institutions)
+        {
+            if (record?.Id != null)
+            {
+                result.Add(record.Id.Value);
+            }
+        }
+
+        return result;
+    }
+
+    private static IEnumerable<string> BuildOfficeIds(OfficeStore source)
+    {
+        if (source == null)
+        {
+            return null;
+        }
+
+        List<string> result = new List<string>();
+        foreach (OfficeRecord record in source.Offices)
+        {
+            if (record?.Id != null)
+            {
+                result.Add(record.Id.Value);
+            }
+        }
+
+        return result;
+    }
+
+    private static IEnumerable<string> BuildPropertyIds(PropertyOwnershipStore source)
+    {
+        if (source == null)
+        {
+            return null;
+        }
+
+        List<string> result = new List<string>();
+        foreach (PropertyOwnershipRecord record in source.Records)
+        {
+            if (record?.PropertyId != null)
+            {
+                result.Add(record.PropertyId.Value);
+            }
         }
 
         return result;

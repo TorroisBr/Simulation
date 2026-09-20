@@ -318,7 +318,17 @@ public static class WorldStateInvariantValidator
             snapshot.AbsoluteDay,
             issues);
         ValidateEstates(snapshot.Estates, personIds, personDeaths, snapshot.AbsoluteDay, issues);
-        ValidatePoliticalClaims(snapshot.PoliticalClaims, personIds, snapshot.AbsoluteDay, issues);
+        ValidatePoliticalClaims(
+            snapshot.PoliticalClaims,
+            personIds,
+            snapshot.InstitutionIds,
+            snapshot.HasInstitutionCatalog,
+            snapshot.OfficeIds,
+            snapshot.HasOfficeCatalog,
+            snapshot.PropertyIds,
+            snapshot.HasPropertyCatalog,
+            snapshot.AbsoluteDay,
+            issues);
 
         foreach (WorldStateNpcSnapshot npc in snapshot.Npcs)
         {
@@ -514,10 +524,25 @@ public static class WorldStateInvariantValidator
     private static void ValidatePoliticalClaims(
         IReadOnlyList<WorldStatePoliticalClaimSnapshot> claims,
         HashSet<string> personIds,
+        IReadOnlyList<string> institutionIds,
+        bool hasInstitutionCatalog,
+        IReadOnlyList<string> officeIds,
+        bool hasOfficeCatalog,
+        IReadOnlyList<string> propertyIds,
+        bool hasPropertyCatalog,
         long absoluteDay,
         List<WorldStateInvariantIssue> issues)
     {
         HashSet<string> claimIds = new HashSet<string>(StringComparer.Ordinal);
+        HashSet<string> institutionIdSet = hasInstitutionCatalog
+            ? new HashSet<string>(institutionIds, StringComparer.Ordinal)
+            : null;
+        HashSet<string> officeIdSet = hasOfficeCatalog
+            ? new HashSet<string>(officeIds, StringComparer.Ordinal)
+            : null;
+        HashSet<string> propertyIdSet = hasPropertyCatalog
+            ? new HashSet<string>(propertyIds, StringComparer.Ordinal)
+            : null;
         if (claims == null)
         {
             return;
@@ -559,6 +584,30 @@ public static class WorldStateInvariantValidator
                 AddError(issues, "PoliticalClaimTargetTypeMismatch", identity, "Political claim target kind is incompatible with its claim type.");
             }
 
+            if (claim.TargetKind == PoliticalClaimTargetKind.Person
+                && personIds.Contains(claim.TargetId) == false)
+            {
+                AddError(issues, "PoliticalClaimTargetPersonMissing", identity, "Political claim target PersonId is absent from the Person snapshot.");
+            }
+            else if (claim.TargetKind == PoliticalClaimTargetKind.Institution
+                && hasInstitutionCatalog
+                && institutionIdSet.Contains(claim.TargetId) == false)
+            {
+                AddError(issues, "PoliticalClaimTargetInstitutionMissing", identity, "Political claim target InstitutionId is absent from the institution catalog.");
+            }
+            else if (claim.TargetKind == PoliticalClaimTargetKind.Office
+                && hasOfficeCatalog
+                && officeIdSet.Contains(claim.TargetId) == false)
+            {
+                AddError(issues, "PoliticalClaimTargetOfficeMissing", identity, "Political claim target OfficeId is absent from the office catalog.");
+            }
+            else if (claim.TargetKind == PoliticalClaimTargetKind.Property
+                && hasPropertyCatalog
+                && propertyIdSet.Contains(claim.TargetId) == false)
+            {
+                AddError(issues, "PoliticalClaimTargetPropertyMissing", identity, "Political claim target PropertyId is absent from the property catalog.");
+            }
+
             if (claim.CreatedAbsoluteDay < 0L || claim.CreatedAbsoluteDay > absoluteDay)
             {
                 AddError(issues, "PoliticalClaimCreationDayInvalid", identity, "Political claim creation day is outside the snapshot timeline.");
@@ -595,6 +644,28 @@ public static class WorldStateInvariantValidator
                 {
                     AddError(issues, "PoliticalClaimRecognitionDayInvalid", identity, "Political claim recognition day is inconsistent with the claim timeline.");
                 }
+            }
+
+            if (claim.RecognitionState != PoliticalClaimRecognitionState.Unrecognized
+                && hasInstitutionCatalog
+                && (string.IsNullOrWhiteSpace(claim.RecognizingInstitutionId)
+                    || institutionIdSet.Contains(claim.RecognizingInstitutionId) == false))
+            {
+                AddError(issues, "PoliticalClaimRecognizingInstitutionMissing", identity, "Political claim recognizing institution is absent from the institution catalog.");
+            }
+
+            if (claim.Status == PoliticalClaimStatus.Active)
+            {
+                if (claim.ResolutionAbsoluteDay.HasValue)
+                {
+                    AddError(issues, "ActivePoliticalClaimHasResolutionDay", identity, "An active political claim cannot have a resolution day.");
+                }
+            }
+            else if (claim.ResolutionAbsoluteDay.HasValue == false
+                || claim.ResolutionAbsoluteDay.Value < claim.CreatedAbsoluteDay
+                || claim.ResolutionAbsoluteDay.Value > absoluteDay)
+            {
+                AddError(issues, "PoliticalClaimResolutionDayInvalid", identity, "A terminal political claim requires a valid resolution day.");
             }
         }
     }

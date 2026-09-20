@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using NUnit.Framework;
 
 public sealed class PoliticalClaimFoundationTests
@@ -173,6 +174,38 @@ public sealed class PoliticalClaimFoundationTests
     }
 
     [Test]
+    public void RecognitionProposalBecomesStaleWhenWorldDayAdvances()
+    {
+        PersonStore persons = new PersonStore();
+        PersonRuntime claimant = RegisterPerson(persons, "claimant");
+        InstitutionStore institutions = new InstitutionStore();
+        InstitutionId institutionId = RegisterInstitution(institutions, "council");
+        SimulationRuntime world = CreateWorld(persons, institutions);
+        PoliticalClaimRecord claim = new PoliticalClaimRecord(
+            new PoliticalClaimId("claim.day-stale"),
+            claimant.PersonId,
+            PoliticalClaimType.StatusRecognition,
+            PoliticalClaimTarget.ForPerson(claimant.PersonId),
+            PoliticalClaimBasis.Other,
+            null,
+            0L,
+            null);
+        Assert.That(world.TryRegisterPoliticalClaim(claim, out _), Is.True);
+        Assert.That(world.TryProposePoliticalClaimRecognition(
+            claim.ClaimId,
+            institutionId,
+            PoliticalClaimRecognitionState.Recognized,
+            "same-day petition",
+            out PoliticalClaimRecognitionTransition transition,
+            out _), Is.True);
+
+        world.SimulationTime.AdvanceDay();
+
+        Assert.That(world.TryApplyPoliticalClaimRecognition(transition, out PoliticalClaimFailure failure), Is.False);
+        Assert.That(failure.Code, Is.EqualTo(PoliticalClaimFailureCode.StaleClaim));
+    }
+
+    [Test]
     public void ResolutionDoesNotRewriteClaimRecognitionOrUnderlyingTruth()
     {
         PersonStore persons = new PersonStore();
@@ -208,7 +241,38 @@ public sealed class PoliticalClaimFoundationTests
         PoliticalClaimRecord resolvedClaim = GetClaim(world, claim.ClaimId);
         Assert.That(resolvedClaim, Is.Not.Null);
         Assert.That(resolvedClaim.Status, Is.EqualTo(PoliticalClaimStatus.Resolved));
+        Assert.That(resolvedClaim.ResolutionAbsoluteDay, Is.EqualTo(0L));
         Assert.That(resolvedClaim.RecognitionState, Is.EqualTo(PoliticalClaimRecognitionState.Contested));
+    }
+
+    [Test]
+    public void DiagnosticsRejectPoliticalClaimTargetOutsideCapturedWorldCatalog()
+    {
+        WorldStatePoliticalClaimSnapshot claim = new WorldStatePoliticalClaimSnapshot(
+            "claim.missing-target",
+            "claimant",
+            PoliticalClaimType.StatusRecognition,
+            PoliticalClaimTargetKind.Person,
+            "missing-person",
+            PoliticalClaimBasis.Other,
+            "unverified",
+            0L,
+            PoliticalClaimStatus.Active,
+            null,
+            PoliticalClaimRecognitionState.Unrecognized,
+            null,
+            null,
+            null,
+            null);
+
+        WorldStateSnapshot snapshot = new WorldStateSnapshot(
+            0L,
+            politicalClaims: new[] { claim });
+
+        WorldStateInvariantReport report = WorldStateInvariantValidator.Validate(snapshot);
+        Assert.That(report.IsValid, Is.False);
+        Assert.That(report.Issues, Has.Some.Matches<WorldStateInvariantIssue>(issue =>
+            issue.Code == "PoliticalClaimTargetPersonMissing"));
     }
 
     [Test]
@@ -262,7 +326,52 @@ public sealed class PoliticalClaimFoundationTests
             simulationTime: world.SimulationTime,
             calendar: world.Calendar,
             personStore: world.PersonStore,
-            politicalClaims: world.PoliticalClaimRecords));
+            politicalClaims: world.PoliticalClaimRecords,
+            institutionIds: GetInstitutionIds(world),
+            officeIds: GetOfficeIds(world),
+            propertyIds: GetPropertyIds(world)));
+    }
+
+    private static IEnumerable<string> GetInstitutionIds(SimulationRuntime world)
+    {
+        List<string> ids = new List<string>();
+        foreach (InstitutionRecord record in world.InstitutionRecords)
+        {
+            if (record?.Id != null)
+            {
+                ids.Add(record.Id.Value);
+            }
+        }
+
+        return ids;
+    }
+
+    private static IEnumerable<string> GetOfficeIds(SimulationRuntime world)
+    {
+        List<string> ids = new List<string>();
+        foreach (OfficeRecord record in world.OfficeRecords)
+        {
+            if (record?.Id != null)
+            {
+                ids.Add(record.Id.Value);
+            }
+        }
+
+        return ids;
+    }
+
+    private static IEnumerable<string> GetPropertyIds(SimulationRuntime world)
+    {
+        List<string> ids = new List<string>();
+        foreach (PropertyOwnershipRecord record in world.PropertyOwnershipRecords)
+        {
+            if (record?.PropertyId != null)
+            {
+                ids.Add(record.PropertyId.Value);
+            }
+        }
+
+        return ids;
     }
 
     private static PoliticalClaimRecord GetClaim(SimulationRuntime world, PoliticalClaimId claimId)
