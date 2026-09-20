@@ -209,9 +209,9 @@ public sealed class FactionStore
         return true;
     }
 
-    internal FactionStore Clone()
+    internal FactionStore Clone(PersonStore targetPersonStore = null)
     {
-        FactionStore clone = new FactionStore(personStore);
+        FactionStore clone = new FactionStore(targetPersonStore ?? personStore);
         foreach (KeyValuePair<string, FactionRecord> entry in factionsById) clone.factionsById.Add(entry.Key, entry.Value);
         foreach (KeyValuePair<string, FactionAffiliationRecord> entry in affiliationsByKey) clone.affiliationsByKey.Add(entry.Key, entry.Value);
         clone.revision = revision;

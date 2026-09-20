@@ -1661,7 +1661,7 @@ public sealed class SimulationRuntime
                 nameof(source));
         }
 
-        return source.Clone();
+        return source.Clone(personStore);
     }
 
     private static InstitutionStore ResolveInstitutionStore(
