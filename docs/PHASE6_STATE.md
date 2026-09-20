@@ -201,6 +201,11 @@ Feature and integration tips:
 - world-bound succession transition hardening: `da133ef`.
 - final decision-store, diagnostics, invariant, and world-revision hardening:
   `8b7a597`.
+- final knowledge endpoint and decision-reference hardening: `3ba6bf9`.
+- final revision-preservation and world-bound knowledge composition:
+  `78f7cba`.
+- monotonic revision preservation across world composition:
+  `46a1c0c`.
 
 Independent reviews rejected and then verified the resolved issues: malformed
 and delimiter-colliding support diagnostics, claim/office knowledge coverage,
@@ -209,13 +214,15 @@ knowledge/decision mutation boundaries, authoritative stale revisions,
 office/institution decision context, deterministic decision diagnostics, and
 cross-world succession transition rejection. No self-approval was used.
 
-Final validation on the integration tip `8b7a597`:
+Final validation on the integration tip `46a1c0c`:
 
-- Phase 6 political focused suites: `57/57`;
+- Political filter: `49/49`;
+- succession integration: `8/8`;
+- B3 knowledge/support and legitimacy suites: `13/13`;
 - diagnostics, orchestration, institution, and succession regressions:
   `47/47`;
-- B3 political succession/decision/knowledge-support suites: `20/20`;
-- ALL EditMode: `1405/1405`;
+- B3 political succession/decision/knowledge-support suites: `21/21`;
+- ALL EditMode: `1406/1406`;
 - official complete Smoke filter (`EditMode -TestFilter Smoke`): `5/5`;
 - failures/skips: `0/0`;
 - `git diff --check`: green.
