@@ -271,13 +271,6 @@ public sealed class SimulationRuntime
             }
         }
 
-        if (politicalDecisionStore != null
-            && politicalDecisionStore.TryBindToPersonStore(this.personStore) == false)
-        {
-            throw new ArgumentException(
-                "The SimulationRuntime PoliticalDecisionStore could not bind to the resolved PersonStore.",
-                nameof(politicalDecisionStore));
-        }
     }
 
     /// <summary>

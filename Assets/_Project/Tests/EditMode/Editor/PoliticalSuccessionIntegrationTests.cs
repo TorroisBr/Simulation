@@ -252,6 +252,13 @@ public sealed class PoliticalSuccessionIntegrationTests
             null,
             personStore: new PersonStore(),
             politicalDecisionStore: source));
+
+        Assert.DoesNotThrow(() => new SimulationRuntime(
+            new SimulationTime(0L),
+            Array.Empty<CityRuntime>(),
+            null,
+            personStore: new PersonStore(),
+            politicalDecisionStore: source));
     }
 
     [Test]
