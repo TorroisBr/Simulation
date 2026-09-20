@@ -420,6 +420,12 @@ public sealed class PoliticalDecisionStore
         return true;
     }
 
+    internal bool IsCompatibleWithPersonStore(PersonStore personStore)
+    {
+        return personStore != null
+            && (boundPersonStore == null || ReferenceEquals(boundPersonStore, personStore));
+    }
+
     public IReadOnlyList<PoliticalDecisionRecord> Records
     {
         get

@@ -164,6 +164,12 @@ public sealed class PoliticalSuccessionIntegrationTests
             personStore: new PersonStore(),
             politicalWorldRevision: fixture.World.PoliticalWorldRevision,
             politicalDecisionStore: fixture.Decisions));
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => new SimulationRuntime(
+            new SimulationTime(fixture.World.CurrentDay),
+            Array.Empty<CityRuntime>(),
+            null,
+            politicalWorldRevision: -1L));
     }
 
     [Test]

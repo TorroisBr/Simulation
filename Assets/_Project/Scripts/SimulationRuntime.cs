@@ -147,6 +147,14 @@ public sealed class SimulationRuntime
         }
 
         PersonStore resolvedPersonStore = personStore ?? new PersonStore();
+        if (politicalWorldRevision.HasValue && politicalWorldRevision.Value < 0L)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(politicalWorldRevision),
+                politicalWorldRevision.Value,
+                "politicalWorldRevision cannot be negative.");
+        }
+
         if (politicalDecisionStore != null
             && politicalDecisionStore.Count > 0
             && politicalWorldRevision.HasValue == false)
@@ -154,14 +162,6 @@ public sealed class SimulationRuntime
             throw new ArgumentException(
                 "A SimulationRuntime composing political decision history must provide the captured politicalWorldRevision.",
                 nameof(politicalWorldRevision));
-        }
-
-        if (politicalDecisionStore != null
-            && politicalDecisionStore.TryBindToPersonStore(resolvedPersonStore) == false)
-        {
-            throw new ArgumentException(
-                "The SimulationRuntime PoliticalDecisionStore belongs to a different PersonStore/world.",
-                nameof(politicalDecisionStore));
         }
 
         GenealogyStore resolvedGenealogyStore = genealogyStore ?? new GenealogyStore();
@@ -2223,6 +2223,13 @@ public sealed class SimulationRuntime
             return copy;
         }
 
+        if (source.IsCompatibleWithPersonStore(personStore) == false)
+        {
+            throw new ArgumentException(
+                "The SimulationRuntime PoliticalDecisionStore belongs to a different PersonStore/world.",
+                nameof(source));
+        }
+
         if (copy.TryBindToPersonStore(personStore) == false)
         {
             throw new ArgumentException(
@@ -2254,6 +2261,13 @@ public sealed class SimulationRuntime
         {
             throw new ArgumentException(
                 "The SimulationRuntime PoliticalDecisionStore revision is inconsistent with its state.",
+                nameof(source));
+        }
+
+        if (source.TryBindToPersonStore(personStore) == false)
+        {
+            throw new ArgumentException(
+                "The SimulationRuntime PoliticalDecisionStore could not bind to the resolved PersonStore.",
                 nameof(source));
         }
 
