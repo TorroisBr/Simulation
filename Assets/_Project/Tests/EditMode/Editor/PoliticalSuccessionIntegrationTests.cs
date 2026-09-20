@@ -226,9 +226,10 @@ public sealed class PoliticalSuccessionIntegrationTests
         Fixture fixture = CreateFixture();
         Assert.That(fixture.World.TryRecordPoliticalKnowledge(
             fixture.Decider,
-            new FactionKnowledgeObservation(
-                new FactionId("knowledge.faction"),
-                true,
+            new PersonDeathKnowledgeObservation(
+                fixture.SelectedCandidateId,
+                false,
+                null,
                 fixture.World.CurrentDay,
                 fixture.World.CurrentDay,
                 new PoliticalKnowledgeProvenance(

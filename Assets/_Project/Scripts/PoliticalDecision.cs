@@ -214,6 +214,15 @@ public sealed class PoliticalDecisionRecord
             throw new ArgumentNullException(nameof(officeId));
         }
 
+        if (decisionKind != PoliticalDecisionKind.SuccessionSelection
+            && decisionKind != PoliticalDecisionKind.OfficeSelection
+            && officeId != null)
+        {
+            throw new ArgumentException(
+                "Only office decisions may identify an office.",
+                nameof(officeId));
+        }
+
         if (decisionKind == PoliticalDecisionKind.ClaimRecognitionProposal
             && Outcome.Kind != PoliticalDecisionOutcomeKind.ClaimRecognitionProposed)
         {

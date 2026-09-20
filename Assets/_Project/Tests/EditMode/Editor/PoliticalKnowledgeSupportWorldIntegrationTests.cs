@@ -44,6 +44,17 @@ public sealed class PoliticalKnowledgeSupportWorldIntegrationTests
     public void PoliticalKnowledgeIsHolderScopedAndCannotReceiveFutureObservations()
     {
         Fixture fixture = CreateFixture();
+        Assert.That(fixture.World.TryRegisterPoliticalClaim(
+            new PoliticalClaimRecord(
+                new PoliticalClaimId("claim.known"),
+                fixture.Supporter,
+                PoliticalClaimType.StatusRecognition,
+                PoliticalClaimTarget.ForPerson(fixture.Candidate),
+                PoliticalClaimBasis.ExplicitDecision,
+                "known",
+                fixture.World.CurrentDay,
+                null),
+            out PoliticalClaimFailure knownClaimFailure), Is.True, knownClaimFailure.ToString());
         Assert.That(fixture.World.TryRegisterPoliticalKnowledgeHolder(
             PoliticalKnowledgeHolder.ForPerson(fixture.Supporter),
             out PoliticalKnowledgeFailure personHolderFailure), Is.True, personHolderFailure.ToString());

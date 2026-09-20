@@ -58,13 +58,24 @@ public sealed class PoliticalKnowledgeStore
 {
     private readonly PersonStore personStore;
     private readonly InstitutionStore institutionStore;
+    private readonly PoliticalClaimStore politicalClaimStore;
+    private readonly FactionStore factionStore;
+    private readonly OfficeStore officeStore;
     private readonly Dictionary<string, PoliticalKnowledgeRuntime> runtimesByHolder =
         new Dictionary<string, PoliticalKnowledgeRuntime>(StringComparer.Ordinal);
 
-    public PoliticalKnowledgeStore(PersonStore personStore, InstitutionStore institutionStore)
+    public PoliticalKnowledgeStore(
+        PersonStore personStore,
+        InstitutionStore institutionStore,
+        PoliticalClaimStore politicalClaimStore = null,
+        FactionStore factionStore = null,
+        OfficeStore officeStore = null)
     {
         this.personStore = personStore ?? throw new ArgumentNullException(nameof(personStore));
         this.institutionStore = institutionStore ?? throw new ArgumentNullException(nameof(institutionStore));
+        this.politicalClaimStore = politicalClaimStore;
+        this.factionStore = factionStore;
+        this.officeStore = officeStore;
     }
 
     public int Count => runtimesByHolder.Count;
@@ -258,11 +269,17 @@ public sealed class PoliticalKnowledgeStore
     internal PoliticalKnowledgeStore Clone(
         PersonStore targetPersonStore,
         InstitutionStore targetInstitutionStore,
-        long currentWorldDay)
+        long currentWorldDay,
+        PoliticalClaimStore targetPoliticalClaimStore = null,
+        FactionStore targetFactionStore = null,
+        OfficeStore targetOfficeStore = null)
     {
         PoliticalKnowledgeStore clone = new PoliticalKnowledgeStore(
             targetPersonStore ?? throw new ArgumentNullException(nameof(targetPersonStore)),
-            targetInstitutionStore ?? throw new ArgumentNullException(nameof(targetInstitutionStore)));
+            targetInstitutionStore ?? throw new ArgumentNullException(nameof(targetInstitutionStore)),
+            targetPoliticalClaimStore,
+            targetFactionStore,
+            targetOfficeStore);
 
         foreach (PoliticalKnowledgeRuntime runtime in runtimesByHolder.Values)
         {
@@ -325,7 +342,7 @@ public sealed class PoliticalKnowledgeStore
         return true;
     }
 
-    private static bool ValidateObservations(
+    private bool ValidateObservations(
         IReadOnlyList<PoliticalKnowledgeObservation> observations,
         long currentWorldDay,
         out PoliticalKnowledgeFailure failure)
@@ -342,7 +359,7 @@ public sealed class PoliticalKnowledgeStore
         return true;
     }
 
-    private static bool ValidateObservation(
+    private bool ValidateObservation(
         PoliticalKnowledgeObservation observation,
         long currentWorldDay,
         out PoliticalKnowledgeFailure failure)
@@ -366,6 +383,114 @@ public sealed class PoliticalKnowledgeStore
             return false;
         }
 
+        if (ValidateObservationEndpoints(observation, out failure) == false)
+        {
+            return false;
+        }
+
         return true;
+    }
+
+    private bool ValidateObservationEndpoints(
+        PoliticalKnowledgeObservation observation,
+        out PoliticalKnowledgeFailure failure)
+    {
+        failure = PoliticalKnowledgeFailure.None;
+        if (politicalClaimStore == null && factionStore == null && officeStore == null)
+        {
+            return true;
+        }
+
+        switch (observation.FactKind)
+        {
+            case PoliticalKnowledgeFactKind.PoliticalClaim:
+                PoliticalClaimKnowledgeObservation claim = (PoliticalClaimKnowledgeObservation)observation;
+                if (politicalClaimStore != null && politicalClaimStore.TryGet(claim.ClaimId, out _) == false)
+                {
+                    return InvalidEndpoint(out failure, "The observed political claim is not registered in this world.");
+                }
+
+                if (personStore.TryGet(claim.ClaimantPersonId, out _) == false)
+                {
+                    return InvalidEndpoint(out failure, "The observed political claim claimant is not registered in this world.");
+                }
+
+                if (claim.Target.Kind == PoliticalClaimTargetKind.Person
+                    && personStore.TryGet(new PersonId(claim.Target.TargetId), out _) == false)
+                {
+                    return InvalidEndpoint(out failure, "The observed political claim target PersonId is not registered in this world.");
+                }
+
+                if (claim.Target.Kind == PoliticalClaimTargetKind.Institution
+                    && institutionStore.TryGet(new InstitutionId(claim.Target.TargetId), out _) == false)
+                {
+                    return InvalidEndpoint(out failure, "The observed political claim target InstitutionId is not registered in this world.");
+                }
+
+                if (claim.Target.Kind == PoliticalClaimTargetKind.Office
+                    && officeStore != null
+                    && officeStore.TryGet(new OfficeId(claim.Target.TargetId), out _) == false)
+                {
+                    return InvalidEndpoint(out failure, "The observed political claim target OfficeId is not registered in this world.");
+                }
+
+                if (claim.RecognizingInstitutionId != null
+                    && institutionStore.TryGet(claim.RecognizingInstitutionId, out _) == false)
+                {
+                    return InvalidEndpoint(out failure, "The observed political claim recognizing institution is not registered in this world.");
+                }
+                break;
+            case PoliticalKnowledgeFactKind.Faction:
+                FactionKnowledgeObservation faction = (FactionKnowledgeObservation)observation;
+                if (factionStore != null && factionStore.TryGet(faction.FactionId, out _) == false)
+                {
+                    return InvalidEndpoint(out failure, "The observed faction is not registered in this world.");
+                }
+                break;
+            case PoliticalKnowledgeFactKind.FactionAffiliation:
+                FactionAffiliationKnowledgeObservation affiliation =
+                    (FactionAffiliationKnowledgeObservation)observation;
+                if (factionStore != null && factionStore.TryGet(affiliation.FactionId, out _) == false)
+                {
+                    return InvalidEndpoint(out failure, "The observed affiliation faction is not registered in this world.");
+                }
+
+                if (personStore.TryGet(affiliation.PersonId, out _) == false)
+                {
+                    return InvalidEndpoint(out failure, "The observed affiliation PersonId is not registered in this world.");
+                }
+                break;
+            case PoliticalKnowledgeFactKind.OfficeVacancy:
+                OfficeVacancyKnowledgeObservation office = (OfficeVacancyKnowledgeObservation)observation;
+                if (officeStore != null && officeStore.TryGet(office.OfficeId, out _) == false)
+                {
+                    return InvalidEndpoint(out failure, "The observed office is not registered in this world.");
+                }
+
+                if (institutionStore.TryGet(office.InstitutionId, out _) == false)
+                {
+                    return InvalidEndpoint(out failure, "The observed office institution is not registered in this world.");
+                }
+                break;
+            case PoliticalKnowledgeFactKind.PersonDeath:
+                PersonDeathKnowledgeObservation death = (PersonDeathKnowledgeObservation)observation;
+                if (personStore.TryGet(death.PersonId, out _) == false)
+                {
+                    return InvalidEndpoint(out failure, "The observed death PersonId is not registered in this world.");
+                }
+                break;
+        }
+
+        return true;
+    }
+
+    private static bool InvalidEndpoint(
+        out PoliticalKnowledgeFailure failure,
+        string message)
+    {
+        failure = PoliticalKnowledgeFailure.Create(
+            PoliticalKnowledgeFailureCode.InvalidObservation,
+            message);
+        return false;
     }
 }

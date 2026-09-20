@@ -1061,6 +1061,43 @@ public static class WorldStateInvariantValidator
             {
                 AddError(issues, "PoliticalDecisionClaimMissing", identity, "Claim recognition decisions must identify a claim.");
             }
+
+            if (decision.OutcomeKind == PoliticalDecisionOutcomeKind.ClaimRecognitionProposed
+                && string.IsNullOrWhiteSpace(decision.ReferencedClaimId))
+            {
+                AddError(issues, "PoliticalDecisionClaimMissing", identity, "Claim recognition outcomes must identify a claim.");
+            }
+
+            if (decision.OutcomeKind != PoliticalDecisionOutcomeKind.CandidateSelected
+                && hasSelectedCandidate)
+            {
+                AddError(issues, "PoliticalDecisionOutcomeShapeInvalid", identity, "Only candidate-selected outcomes may carry a selected PersonId.");
+            }
+
+            if (decision.OutcomeKind != PoliticalDecisionOutcomeKind.ClaimRecognitionProposed
+                && string.IsNullOrWhiteSpace(decision.ReferencedClaimId) == false)
+            {
+                AddError(issues, "PoliticalDecisionOutcomeShapeInvalid", identity, "Only claim-recognition outcomes may carry a claim reference.");
+            }
+
+            ValidateDecisionReferences(decision.EvidenceReferences, identity, "Evidence", issues);
+            ValidateDecisionReferences(decision.KnowledgeReferences, identity, "Knowledge", issues);
+        }
+    }
+
+    private static void ValidateDecisionReferences(
+        IReadOnlyList<string> references,
+        string identity,
+        string referenceKind,
+        List<WorldStateInvariantIssue> issues)
+    {
+        HashSet<string> seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (string reference in references ?? Array.Empty<string>())
+        {
+            if (string.IsNullOrWhiteSpace(reference) || seen.Add(reference) == false)
+            {
+                AddError(issues, "PoliticalDecisionReferenceInvalid", identity, referenceKind + " decision references must be non-empty and unique.");
+            }
         }
     }
 

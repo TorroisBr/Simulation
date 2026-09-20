@@ -186,7 +186,10 @@ public sealed class SimulationRuntime
             politicalKnowledgeStore,
             resolvedPersonStore,
             resolvedInstitutionStore,
-            simulationTime.AbsoluteDay);
+            simulationTime.AbsoluteDay,
+            this.politicalClaimStore,
+            this.factionStore,
+            this.officeStore);
         this.politicalDecisionStore = ClonePoliticalDecisionStore(
             politicalDecisionStore,
             this.politicalKnowledgeStore,
@@ -2144,14 +2147,28 @@ public sealed class SimulationRuntime
         PoliticalKnowledgeStore source,
         PersonStore personStore,
         InstitutionStore institutionStore,
-        long currentDay)
+        long currentDay,
+        PoliticalClaimStore politicalClaimStore,
+        FactionStore factionStore,
+        OfficeStore officeStore)
     {
         if (source == null)
         {
-            return new PoliticalKnowledgeStore(personStore, institutionStore);
+            return new PoliticalKnowledgeStore(
+                personStore,
+                institutionStore,
+                politicalClaimStore,
+                factionStore,
+                officeStore);
         }
 
-        return source.Clone(personStore, institutionStore, currentDay);
+        return source.Clone(
+            personStore,
+            institutionStore,
+            currentDay,
+            politicalClaimStore,
+            factionStore,
+            officeStore);
     }
 
     private static PoliticalDecisionStore ClonePoliticalDecisionStore(
