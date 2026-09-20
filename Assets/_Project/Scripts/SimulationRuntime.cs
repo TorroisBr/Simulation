@@ -1609,7 +1609,7 @@ public sealed class SimulationRuntime
         PersonStore personStore,
         long currentDay)
     {
-        FactionStore copy = new FactionStore();
+        FactionStore copy = new FactionStore(personStore);
         if (source == null)
         {
             return copy;
