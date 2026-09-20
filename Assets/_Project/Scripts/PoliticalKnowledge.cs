@@ -508,6 +508,13 @@ public sealed class OfficeVacancyKnowledgeObservation : PoliticalKnowledgeObserv
     {
         OfficeId = officeId ?? throw new ArgumentNullException(nameof(officeId));
         InstitutionId = institutionId ?? throw new ArgumentNullException(nameof(institutionId));
+        if (isRecognizedVacant && isVacant == false)
+        {
+            throw new ArgumentException(
+                "Institutional vacancy recognition requires the office to be vacant.",
+                nameof(isRecognizedVacant));
+        }
+
         IsVacant = isVacant;
         IsRecognizedVacant = isRecognizedVacant;
     }
@@ -860,18 +867,27 @@ public sealed class PoliticalKnowledgeRuntime
             return snapshotComparison > 0;
         }
 
-        return StringComparer.Ordinal.Compare(
-            ProvenanceSortKey(incoming.Provenance),
-            ProvenanceSortKey(existing.Provenance)) > 0;
+        return CompareProvenance(incoming.Provenance, existing.Provenance) > 0;
     }
 
-    private static string ProvenanceSortKey(PoliticalKnowledgeProvenance provenance)
+    private static int CompareProvenance(
+        PoliticalKnowledgeProvenance left,
+        PoliticalKnowledgeProvenance right)
     {
-        return string.Concat(
-            ((int)provenance.Source).ToString(), "\u001F",
-            provenance.SourceReference ?? string.Empty, "\u001F",
-            provenance.SourcePersonId == null ? string.Empty : provenance.SourcePersonId.Value, "\u001F",
-            provenance.SourceInstitutionId == null ? string.Empty : provenance.SourceInstitutionId.Value);
+        int source = ((int)left.Source).CompareTo((int)right.Source);
+        if (source != 0) return source;
+
+        int reference = StringComparer.Ordinal.Compare(left.SourceReference, right.SourceReference);
+        if (reference != 0) return reference;
+
+        int person = StringComparer.Ordinal.Compare(
+            left.SourcePersonId == null ? null : left.SourcePersonId.Value,
+            right.SourcePersonId == null ? null : right.SourcePersonId.Value);
+        if (person != 0) return person;
+
+        return StringComparer.Ordinal.Compare(
+            left.SourceInstitutionId == null ? null : left.SourceInstitutionId.Value,
+            right.SourceInstitutionId == null ? null : right.SourceInstitutionId.Value);
     }
 
     public static int GetSourcePriority(PoliticalKnowledgeSource source)

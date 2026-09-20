@@ -308,6 +308,14 @@ public sealed class PoliticalKnowledgeFoundationTests
         Assert.That(vacancy.IsVacant, Is.True);
         Assert.That(vacancy.IsRecognizedVacant, Is.False);
         Assert.That(recognized.IsRecognizedVacant, Is.True);
+        Assert.Throws<ArgumentException>(() => new OfficeVacancyKnowledgeObservation(
+            new OfficeId("office.invalid-recognition"),
+            new InstitutionId("institution.known"),
+            false,
+            0L,
+            0L,
+            DirectProvenance(),
+            true));
     }
 
     [Test]
@@ -352,6 +360,27 @@ public sealed class PoliticalKnowledgeFoundationTests
         Assert.That(provenanceSecond.RecordFactionObservation(alpha), Is.False);
         Assert.That(provenanceFirst.FactionObservations[0].Provenance.SourceReference, Is.EqualTo("zulu"));
         Assert.That(provenanceSecond.FactionObservations[0].Provenance.SourceReference, Is.EqualTo("zulu"));
+
+        PoliticalKnowledgeRuntime collisionFirst = new PoliticalKnowledgeRuntime(new PersonId("person.collision-first"));
+        PoliticalKnowledgeRuntime collisionSecond = new PoliticalKnowledgeRuntime(new PersonId("person.collision-second"));
+        FactionKnowledgeObservation delimiterLeft = new FactionKnowledgeObservation(
+            new FactionId("faction.delimiter"), true, 4L, 4L,
+            new PoliticalKnowledgeProvenance(
+                PoliticalKnowledgeSource.SharedByPerson,
+                "a",
+                new PersonId("b\u001Fc")));
+        FactionKnowledgeObservation delimiterRight = new FactionKnowledgeObservation(
+            new FactionId("faction.delimiter"), true, 4L, 4L,
+            new PoliticalKnowledgeProvenance(
+                PoliticalKnowledgeSource.SharedByPerson,
+                "a\u001Fb",
+                new PersonId("c")));
+        Assert.That(collisionFirst.RecordFactionObservation(delimiterLeft), Is.True);
+        Assert.That(collisionFirst.RecordFactionObservation(delimiterRight), Is.True);
+        Assert.That(collisionSecond.RecordFactionObservation(delimiterRight), Is.True);
+        Assert.That(collisionSecond.RecordFactionObservation(delimiterLeft), Is.False);
+        Assert.That(collisionFirst.FactionObservations[0].Provenance.SourceReference, Is.EqualTo("a\u001Fb"));
+        Assert.That(collisionSecond.FactionObservations[0].Provenance.SourceReference, Is.EqualTo("a\u001Fb"));
     }
 
     [Test]
