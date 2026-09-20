@@ -101,9 +101,9 @@ Completed:
 
 Pending after Checkpoint B:
 
-- external review of this checkpoint;
+- external human review of the canonical Checkpoint B promotion;
 - optional Checkpoint C work only if a substantial autonomous or generalized
-  relationship layer is explicitly justified;
+  relationship layer is explicitly justified after that review;
 - remaining Phase 6 completion candidate and deferred-work record.
 
 ## Phase 6 dependency graph
@@ -184,6 +184,51 @@ succession selection are now integrated for Checkpoint B. Recognition remains
 explicit institutional state: factual death does not itself create vacancy,
 and recognition does not rewrite genealogy, property ownership, or incumbency.
 
+### Authoritative Phase 6 political semantics
+
+The following product and architecture definitions are authoritative for
+Checkpoint B and any later Phase 6 work:
+
+- Multiple competing claims may target the same office, property, institution,
+  or Person. Faction affiliation does not imply support, loyalty, knowledge, or
+  recognition. Eligibility, claim, recognition, support, influence, and final
+  decision remain distinct concepts.
+- Legitimacy and influence are contextual and derived from explicit inputs.
+  There is no universal highest-raw-support winner, universal support threshold,
+  or automatic civil war. Comparable support may leave a dispute unresolved;
+  escalation is an explicit decision and physical conflict reuses existing
+  action/conflict execution.
+- Faction membership is policy-driven per faction and preserves affiliation
+  periods. A faction's official position is governed by explicit authority,
+  influence, or decision rules; it is not a universal Person power score or an
+  automatic sum/majority of support.
+- WORLD TRUTH, KNOWLEDGE, INTERPRETATION, and POLITICAL POSITION remain
+  separate. Knowledge is holder-scoped for Persons, factions, and institutions
+  and is not synchronized through members. A heterodox decision may be
+  deliberate rather than ignorant; minimal decision reasoning is sufficient for
+  the current foundation, without implementing a full ideology model.
+- Recognition and support never make a claim true, and recognition does not
+  resolve a factual dispute. Execution always revalidates current world truth.
+- Selecting a successor and possessing or assuming an office are separate
+  concepts. The architecture may represent a pending or scheduled selection and
+  delayed investiture, but not every office requires delay; the current B
+  integration keeps execution explicit and revalidates at the domain boundary.
+  A selected successor may die or lose validity before assumption.
+- Affiliation, recognition, support, faction positions, institutional decisions,
+  succession selections, and future disputes must remain historically auditable.
+  History is downstream evidence, not primary world truth.
+
+The semantic chain for political reasoning is therefore:
+
+`WORLD TRUTH → KNOWLEDGE → INTERPRETATION → POLITICAL POSITION → COLLECTIVE/INDIVIDUAL DECISION → POLITICAL OUTCOME/SELECTED INTENT → DOMAIN EXECUTION → HISTORY`
+
+Diplomacy, warfare strategy, full government/taxation, macroeconomics,
+religion, culture, romance/fertility, persistence/networking, Timeline
+architecture, procedural narrative, and UI-heavy political screens remain
+outside this checkpoint. Any deferred investiture, richer faction governance,
+or generalized dispute/escalation layer requires an explicit future design
+checkpoint.
+
 ### Checkpoint B integration and review record
 
 The validated integration branch is
@@ -206,23 +251,31 @@ Feature and integration tips:
   `78f7cba`.
 - monotonic revision preservation across world composition:
   `46a1c0c`.
+- political history and knowledge diagnostic hardening:
+  `561c3e1`, `8989cb5`, `1a1a05f`, `b50c9f2`.
+- parsed knowledge diagnostic invariants and complete endpoint catalogs:
+  `8178052`, `b26a204`, `d5136f3`.
+- orphan provenance and future decision-history rejection:
+  `cb573bd`.
+- typed political diagnostics, stale-knowledge separation, and atomic decision
+  binding: `9c28902`, `3e52d76`.
+- caller-store isolation in world composition: `e505b84`.
 
 Independent reviews rejected and then verified the resolved issues: malformed
 and delimiter-colliding support diagnostics, claim/office knowledge coverage,
 deterministic equal-day provenance, vacancy recognition semantics, world-owned
 knowledge/decision mutation boundaries, authoritative stale revisions,
-office/institution decision context, deterministic decision diagnostics, and
-cross-world succession transition rejection. No self-approval was used.
+office/institution decision context, deterministic decision diagnostics,
+cross-world succession transition rejection, orphan provenance, future imported
+history, typed claim-state validation, stale-knowledge separation, atomic
+decision binding, and caller-store alias isolation. The final independent
+review approved `e505b84`; no self-approval was used.
 
-Final validation on the integration tip `46a1c0c`:
+Final validation on the implementation tip `e505b84`:
 
-- Political filter: `49/49`;
-- succession integration: `8/8`;
-- B3 knowledge/support and legitimacy suites: `13/13`;
-- diagnostics, orchestration, institution, and succession regressions:
-  `47/47`;
-- B3 political succession/decision/knowledge-support suites: `21/21`;
-- ALL EditMode: `1406/1406`;
+- Political knowledge/support integration: `6/6`;
+- political succession/decision integration: `13/13`;
+- ALL EditMode: `1412/1412`;
 - official complete Smoke filter (`EditMode -TestFilter Smoke`): `5/5`;
 - failures/skips: `0/0`;
 - `git diff --check`: green.
@@ -262,8 +315,8 @@ recurring political processes, or long-horizon NPC behavior.
   canonical promotion of integration tip `fb69f7c`.
 - Checkpoint B: politics integrates with knowledge, institutions, claims or
   recognition, succession selection, and NPC/institution decisions — REACHED
-  on the validated integration tip documented above; stop for external review
-  after canonical promotion.
+  on implementation tip `e505b84`; promote to canonical only after the final
+  validator, then stop for external human review.
 - Optional Checkpoint C: only for a genuinely substantial new architecture
   layer such as autonomous simulation, generalized political relationships, or
   major knowledge/`AdvanceDay` integration.
