@@ -23,7 +23,10 @@ public static class WorldStateSnapshotFormatter
 
         output.Append("Settlements: ").Append(WorldStateCanonicalWriter.IntValue(snapshot.SettlementCount))
             .Append(" | Known NPCs: ").Append(WorldStateCanonicalWriter.IntValue(snapshot.KnownNpcCount))
-            .Append(" | Political claims: ").Append(WorldStateCanonicalWriter.IntValue(snapshot.PoliticalClaimCount)).Append('\n');
+            .Append(" | Political claims: ").Append(WorldStateCanonicalWriter.IntValue(snapshot.PoliticalClaimCount))
+            .Append(" | Factions: ").Append(WorldStateCanonicalWriter.IntValue(snapshot.FactionCount))
+            .Append(" | Faction affiliations: ").Append(WorldStateCanonicalWriter.IntValue(snapshot.FactionAffiliationCount))
+            .Append('\n');
 
         foreach (WorldStatePersonSnapshot person in snapshot.Persons)
         {
@@ -133,6 +136,36 @@ public static class WorldStateSnapshotFormatter
                     .Append(WorldStateCanonicalWriter.NullableInt64Value(claim.ResolutionAbsoluteDay))
                     .Append(" recognition ")
                     .Append(WorldStateCanonicalWriter.EnumValue(claim.RecognitionState))
+                    .Append('\n');
+            }
+        }
+
+        foreach (WorldStateFactionSnapshot faction in snapshot.Factions)
+        {
+            if (faction != null)
+            {
+                output.Append("FACTION ")
+                    .Append(Value(faction.FactionId))
+                    .Append(" name ")
+                    .Append(Value(faction.DisplayName))
+                    .Append(" created ")
+                    .Append(WorldStateCanonicalWriter.Int64Value(faction.CreatedAbsoluteDay))
+                    .Append('\n');
+            }
+        }
+
+        foreach (WorldStateFactionAffiliationSnapshot affiliation in snapshot.FactionAffiliations)
+        {
+            if (affiliation != null)
+            {
+                output.Append("FACTION AFFILIATION ")
+                    .Append(Value(affiliation.FactionId))
+                    .Append(" person ")
+                    .Append(Value(affiliation.PersonId))
+                    .Append(" joined ")
+                    .Append(WorldStateCanonicalWriter.Int64Value(affiliation.JoinedAbsoluteDay))
+                    .Append(" ended ")
+                    .Append(WorldStateCanonicalWriter.NullableInt64Value(affiliation.EndedAbsoluteDay))
                     .Append('\n');
             }
         }

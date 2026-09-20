@@ -21,6 +21,7 @@ public sealed class SimulationRuntime
     private readonly PropertyOwnershipStore propertyOwnershipStore;
     private readonly EstateStore estateStore;
     private readonly PoliticalClaimStore politicalClaimStore;
+    private readonly FactionStore factionStore;
     private readonly List<NpcActionData> configuredActions;
     private readonly ScheduledDirectiveSystem scheduledDirectiveSystem;
     private readonly JusticeSystem justiceSystem;
@@ -55,6 +56,8 @@ public sealed class SimulationRuntime
     public IReadOnlyList<PropertyOwnershipRecord> PropertyOwnershipRecords => propertyOwnershipStore.Records;
     public IReadOnlyList<EstateRecord> EstateRecords => estateStore.Records;
     public IReadOnlyList<PoliticalClaimRecord> PoliticalClaimRecords => politicalClaimStore.Records;
+    public IReadOnlyList<FactionRecord> FactionRecords => factionStore.Factions;
+    public IReadOnlyList<FactionAffiliationRecord> FactionAffiliationRecords => factionStore.Affiliations;
     /// <summary>
     /// Read-only view of every named NPC registered with this world. Registration is
     /// explicit; death and emigration do not remove an NPC from this world roster.
@@ -94,7 +97,8 @@ public sealed class SimulationRuntime
         IAggregateDemographyProvider aggregateDemographyProvider = null,
         PropertyOwnershipStore propertyOwnershipStore = null,
         EstateStore estateStore = null,
-        PoliticalClaimStore politicalClaimStore = null)
+        PoliticalClaimStore politicalClaimStore = null,
+        FactionStore factionStore = null)
     {
         this.simulationTime = simulationTime ?? throw new ArgumentNullException(nameof(simulationTime));
 
@@ -155,6 +159,10 @@ public sealed class SimulationRuntime
             resolvedInstitutionStore,
             resolvedOfficeStore,
             resolvedPropertyOwnershipStore,
+            simulationTime.AbsoluteDay);
+        this.factionStore = CloneFactionStore(
+            factionStore,
+            resolvedPersonStore,
             simulationTime.AbsoluteDay);
         this.cities = cities != null ? new List<CityRuntime>(cities) : new List<CityRuntime>();
         this.npcRuntimes = new List<NpcRuntime>();
@@ -390,6 +398,123 @@ public sealed class SimulationRuntime
         out InstitutionFoundationFailure failure)
     {
         return institutionStore.TryRegister(record, out failure);
+    }
+
+    public bool TryRegisterFaction(
+        FactionRecord record,
+        out FactionFoundationFailure failure)
+    {
+        if (record == null || record.Id == null)
+        {
+            failure = FactionFoundationFailure.Create(
+                FactionFoundationFailureCode.InvalidFaction,
+                "A faction with a stable FactionId is required.");
+            return false;
+        }
+
+        if (record.CreatedAbsoluteDay > CurrentDay)
+        {
+            failure = FactionFoundationFailure.Create(
+                FactionFoundationFailureCode.InvalidCreationAbsoluteDay,
+                "Faction creation must be within the current world timeline.");
+            return false;
+        }
+
+        return factionStore.TryRegister(record, out failure);
+    }
+
+    public bool TryProposeFactionAffiliation(
+        FactionId factionId,
+        PersonId personId,
+        out FactionAffiliationAddTransition transition,
+        out FactionFoundationFailure failure)
+    {
+        transition = null;
+        if (factionId == null || factionStore.TryGet(factionId, out _) == false)
+        {
+            failure = FactionFoundationFailure.Create(
+                FactionFoundationFailureCode.FactionNotRegistered,
+                "The faction must be registered in this world.");
+            return false;
+        }
+
+        if (personId == null || personStore.TryGet(personId, out _) == false)
+        {
+            failure = FactionFoundationFailure.Create(
+                FactionFoundationFailureCode.PersonNotRegistered,
+                "The affiliated Person must be registered in this world.");
+            return false;
+        }
+
+        return FactionAffiliationSystem.TryProposeAdd(
+            factionStore,
+            factionId,
+            personId,
+            CurrentDay,
+            out transition,
+            out failure);
+    }
+
+    public bool TryApplyFactionAffiliation(
+        FactionAffiliationAddTransition transition,
+        out FactionFoundationFailure failure)
+    {
+        if (transition == null || transition.ExpectedWorldDay != CurrentDay)
+        {
+            failure = FactionFoundationFailure.Create(
+                FactionFoundationFailureCode.StaleAffiliation,
+                "The faction affiliation proposal was created for a different world day.");
+            return false;
+        }
+
+        return FactionAffiliationSystem.TryApplyAdd(factionStore, transition, out failure);
+    }
+
+    public bool TryProposeFactionAffiliationEnd(
+        FactionId factionId,
+        PersonId personId,
+        out FactionAffiliationEndTransition transition,
+        out FactionFoundationFailure failure)
+    {
+        transition = null;
+        if (factionId == null || personId == null)
+        {
+            failure = FactionFoundationFailure.Create(
+                FactionFoundationFailureCode.InvalidTransition,
+                "A faction and PersonId are required.");
+            return false;
+        }
+
+        return FactionAffiliationSystem.TryProposeEnd(
+            factionStore,
+            factionId,
+            personId,
+            CurrentDay,
+            out transition,
+            out failure);
+    }
+
+    public bool TryApplyFactionAffiliationEnd(
+        FactionAffiliationEndTransition transition,
+        out FactionFoundationFailure failure)
+    {
+        if (transition == null || transition.ExpectedWorldDay != CurrentDay)
+        {
+            failure = FactionFoundationFailure.Create(
+                FactionFoundationFailureCode.StaleAffiliation,
+                "The faction affiliation end proposal was created for a different world day.");
+            return false;
+        }
+
+        if (transition.EndedAbsoluteDay > CurrentDay)
+        {
+            failure = FactionFoundationFailure.Create(
+                FactionFoundationFailureCode.InvalidEndAbsoluteDay,
+                "Affiliation end must be within the current world timeline.");
+            return false;
+        }
+
+        return FactionAffiliationSystem.TryApplyEnd(factionStore, transition, out failure);
     }
 
     public bool TryRegisterPoliticalClaim(
@@ -1473,6 +1598,66 @@ public sealed class SimulationRuntime
         {
             throw new ArgumentException(
                 "The SimulationRuntime PoliticalClaimStore was not copied completely.",
+                nameof(source));
+        }
+
+        return source.Clone();
+    }
+
+    private static FactionStore CloneFactionStore(
+        FactionStore source,
+        PersonStore personStore,
+        long currentDay)
+    {
+        FactionStore copy = new FactionStore();
+        if (source == null)
+        {
+            return copy;
+        }
+
+        foreach (FactionRecord faction in source.Factions)
+        {
+            if (faction == null || faction.CreatedAbsoluteDay > currentDay)
+            {
+                throw new ArgumentException(
+                    "The SimulationRuntime FactionStore contains a faction inconsistent with world time.",
+                    nameof(source));
+            }
+
+            if (copy.TryRegister(faction, out FactionFoundationFailure failure) == false)
+            {
+                throw new ArgumentException(
+                    "The SimulationRuntime FactionStore contains an invalid faction: " + failure + ".",
+                    nameof(source));
+            }
+        }
+
+        foreach (FactionAffiliationRecord affiliation in source.Affiliations)
+        {
+            if (affiliation == null
+                || source.TryGet(affiliation.FactionId, out FactionRecord faction) == false
+                || personStore.TryGet(affiliation.PersonId, out _) == false
+                || faction.CreatedAbsoluteDay > affiliation.JoinedAbsoluteDay
+                || affiliation.JoinedAbsoluteDay > currentDay
+                || (affiliation.EndedAbsoluteDay.HasValue && affiliation.EndedAbsoluteDay.Value > currentDay))
+            {
+                throw new ArgumentException(
+                    "The SimulationRuntime FactionStore contains an affiliation inconsistent with world truth or time.",
+                    nameof(source));
+            }
+
+            if (copy.TryRegisterAffiliation(affiliation, out FactionFoundationFailure failure) == false)
+            {
+                throw new ArgumentException(
+                    "The SimulationRuntime FactionStore contains an invalid affiliation: " + failure + ".",
+                    nameof(source));
+            }
+        }
+
+        if (copy.Count != source.Count || copy.AffiliationCount != source.AffiliationCount)
+        {
+            throw new ArgumentException(
+                "The SimulationRuntime FactionStore was not copied completely.",
                 nameof(source));
         }
 

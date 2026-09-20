@@ -71,6 +71,14 @@ public sealed class WorldStateDiff
             WorldStateCanonicalWriter.IntValue(before.PoliticalClaimCount),
             WorldStateCanonicalWriter.IntValue(after.PoliticalClaimCount),
             differences);
+        CompareValue("Metadata", "world", "FactionCount",
+            WorldStateCanonicalWriter.IntValue(before.FactionCount),
+            WorldStateCanonicalWriter.IntValue(after.FactionCount),
+            differences);
+        CompareValue("Metadata", "world", "FactionAffiliationCount",
+            WorldStateCanonicalWriter.IntValue(before.FactionAffiliationCount),
+            WorldStateCanonicalWriter.IntValue(after.FactionAffiliationCount),
+            differences);
         CompareCalendar(before.Metadata.CalendarDate, after.Metadata.CalendarDate, differences);
 
         CompareEntities("NPC", before.Npcs, after.Npcs, npc => npc.RuntimeId,
@@ -218,6 +226,36 @@ public sealed class WorldStateDiff
                 CompareValue("PoliticalClaim", identity, "EvidenceReferences",
                     WorldStateCanonicalWriter.StringListValue(left.EvidenceReferences),
                     WorldStateCanonicalWriter.StringListValue(right.EvidenceReferences),
+                    differences);
+            },
+            differences);
+
+        CompareEntities("Faction", before.Factions, after.Factions,
+            faction => faction.FactionId,
+            (identity, left, right) =>
+            {
+                CompareValue("Faction", identity, "DisplayName",
+                    WorldStateCanonicalWriter.StringValue(left.DisplayName),
+                    WorldStateCanonicalWriter.StringValue(right.DisplayName),
+                    differences);
+                CompareValue("Faction", identity, "CreatedAbsoluteDay",
+                    WorldStateCanonicalWriter.Int64Value(left.CreatedAbsoluteDay),
+                    WorldStateCanonicalWriter.Int64Value(right.CreatedAbsoluteDay),
+                    differences);
+            },
+            differences);
+
+        CompareEntities("FactionAffiliation", before.FactionAffiliations, after.FactionAffiliations,
+            affiliation => affiliation.FactionId + "\u001f" + affiliation.PersonId,
+            (identity, left, right) =>
+            {
+                CompareValue("FactionAffiliation", identity, "JoinedAbsoluteDay",
+                    WorldStateCanonicalWriter.Int64Value(left.JoinedAbsoluteDay),
+                    WorldStateCanonicalWriter.Int64Value(right.JoinedAbsoluteDay),
+                    differences);
+                CompareValue("FactionAffiliation", identity, "EndedAbsoluteDay",
+                    WorldStateCanonicalWriter.NullableInt64Value(left.EndedAbsoluteDay),
+                    WorldStateCanonicalWriter.NullableInt64Value(right.EndedAbsoluteDay),
                     differences);
             },
             differences);
