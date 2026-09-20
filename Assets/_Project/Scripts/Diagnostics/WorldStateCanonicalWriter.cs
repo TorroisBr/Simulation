@@ -16,6 +16,7 @@ public static class WorldStateCanonicalWriter
         AppendLine(output, "METADATA", "AbsoluteDay", Int64Value(snapshot.AbsoluteDay));
         AppendLine(output, "METADATA", "SettlementCount", IntValue(snapshot.SettlementCount));
         AppendLine(output, "METADATA", "KnownNpcCount", IntValue(snapshot.KnownNpcCount));
+        AppendLine(output, "METADATA", "PoliticalClaimCount", IntValue(snapshot.PoliticalClaimCount));
         if (snapshot.Metadata.CalendarDate != null)
         {
             WorldStateCalendarSnapshot calendar = snapshot.Metadata.CalendarDate;
@@ -72,6 +73,27 @@ public static class WorldStateCanonicalWriter
                 estate.EstateId,
                 estate.DeceasedPersonId,
                 Int64Value(estate.OpenedAbsoluteDay));
+        }
+
+        foreach (WorldStatePoliticalClaimSnapshot claim in snapshot.PoliticalClaims)
+        {
+            AppendLine(output, "POLITICAL_CLAIM",
+                claim.ClaimId,
+                claim.ClaimantPersonId,
+                EnumValue(claim.ClaimType),
+                EnumValue(claim.TargetKind),
+                claim.TargetId,
+                EnumValue(claim.Basis),
+                claim.BasisDescription,
+                Int64Value(claim.CreatedAbsoluteDay),
+                EnumValue(claim.Status),
+                EnumValue(claim.RecognitionState),
+                claim.RecognizingInstitutionId,
+                claim.RecognitionAbsoluteDay.HasValue
+                    ? Int64Value(claim.RecognitionAbsoluteDay.Value)
+                    : null,
+                claim.RecognitionReason,
+                StringListValue(claim.EvidenceReferences));
         }
 
         foreach (WorldStateNpcSnapshot npc in snapshot.Npcs)

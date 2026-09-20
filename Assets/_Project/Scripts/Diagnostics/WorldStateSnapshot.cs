@@ -18,6 +18,7 @@ public sealed class WorldStateSnapshotContext
     public GenealogyStore GenealogyStore { get; }
     public PropertyOwnershipStore PropertyOwnershipStore { get; }
     public EstateStore EstateStore { get; }
+    public IEnumerable<PoliticalClaimRecord> PoliticalClaims { get; }
 
     public WorldStateSnapshotContext(
         SimulationTime simulationTime = null,
@@ -34,7 +35,8 @@ public sealed class WorldStateSnapshotContext
         IEnumerable<ParentageRecord> parentages = null,
         GenealogyStore genealogyStore = null,
         PropertyOwnershipStore propertyOwnershipStore = null,
-        EstateStore estateStore = null)
+        EstateStore estateStore = null,
+        IEnumerable<PoliticalClaimRecord> politicalClaims = null)
     {
         SimulationTime = simulationTime;
         Calendar = calendar ?? (calendarDefinition != null ? new SimulationCalendar(calendarDefinition) : null);
@@ -49,6 +51,7 @@ public sealed class WorldStateSnapshotContext
         GenealogyStore = genealogyStore;
         PropertyOwnershipStore = propertyOwnershipStore;
         EstateStore = estateStore;
+        PoliticalClaims = politicalClaims ?? Array.Empty<PoliticalClaimRecord>();
         Parentages = parentages
             ?? genealogyStore?.Records
             ?? Array.Empty<ParentageRecord>();
@@ -75,6 +78,8 @@ public sealed class WorldStateSnapshot
     public int PropertyTransferCount => PropertyTransfers.Count;
     public IReadOnlyList<WorldStateEstateSnapshot> Estates { get; }
     public int EstateCount => Estates.Count;
+    public IReadOnlyList<WorldStatePoliticalClaimSnapshot> PoliticalClaims { get; }
+    public int PoliticalClaimCount => PoliticalClaims.Count;
     public WorldStateSpatialSnapshot Spatial { get; }
     public IReadOnlyList<WorldStateSiteSnapshot> Sites { get; }
     public IReadOnlyList<WorldStateExpeditionSnapshot> Expeditions { get; }
@@ -97,7 +102,8 @@ public sealed class WorldStateSnapshot
         IEnumerable<WorldStateParentageSnapshot> parentages = null,
         IEnumerable<WorldStatePropertyOwnershipSnapshot> propertyOwnerships = null,
         IEnumerable<WorldStateEstateSnapshot> estates = null,
-        IEnumerable<WorldStatePropertyTransferSnapshot> propertyTransfers = null)
+        IEnumerable<WorldStatePropertyTransferSnapshot> propertyTransfers = null,
+        IEnumerable<WorldStatePoliticalClaimSnapshot> politicalClaims = null)
     {
         Metadata = new WorldStateSnapshotMetadata(absoluteDay, calendarDate);
         Npcs = SnapshotCollections.CopySorted(npcs, npc => npc?.RuntimeId);
@@ -124,6 +130,7 @@ public sealed class WorldStateSnapshot
                     + "\u001f"
                     + transfer.NewOwnerPersonId);
         Estates = SnapshotCollections.CopySorted(estates, estate => estate?.EstateId);
+        PoliticalClaims = SnapshotCollections.CopySorted(politicalClaims, claim => claim?.ClaimId);
     }
 
     private static IReadOnlyList<WorldStateParentageSnapshot> SortParentages(
@@ -283,6 +290,70 @@ public sealed class WorldStateEstateSnapshot
         EstateId = estateId;
         DeceasedPersonId = deceasedPersonId;
         OpenedAbsoluteDay = openedAbsoluteDay;
+    }
+}
+
+public sealed class WorldStatePoliticalClaimSnapshot
+{
+    public string ClaimId { get; }
+    public string ClaimantPersonId { get; }
+    public PoliticalClaimType ClaimType { get; }
+    public PoliticalClaimTargetKind TargetKind { get; }
+    public string TargetId { get; }
+    public PoliticalClaimBasis Basis { get; }
+    public string BasisDescription { get; }
+    public long CreatedAbsoluteDay { get; }
+    public PoliticalClaimStatus Status { get; }
+    public PoliticalClaimRecognitionState RecognitionState { get; }
+    public string RecognizingInstitutionId { get; }
+    public long? RecognitionAbsoluteDay { get; }
+    public string RecognitionReason { get; }
+    public IReadOnlyList<string> EvidenceReferences { get; }
+
+    public WorldStatePoliticalClaimSnapshot(
+        string claimId,
+        string claimantPersonId,
+        PoliticalClaimType claimType,
+        PoliticalClaimTargetKind targetKind,
+        string targetId,
+        PoliticalClaimBasis basis,
+        string basisDescription,
+        long createdAbsoluteDay,
+        PoliticalClaimStatus status,
+        PoliticalClaimRecognitionState recognitionState,
+        string recognizingInstitutionId,
+        long? recognitionAbsoluteDay,
+        string recognitionReason,
+        IEnumerable<string> evidenceReferences)
+    {
+        ClaimId = claimId;
+        ClaimantPersonId = claimantPersonId;
+        ClaimType = claimType;
+        TargetKind = targetKind;
+        TargetId = targetId;
+        Basis = basis;
+        BasisDescription = basisDescription ?? string.Empty;
+        CreatedAbsoluteDay = createdAbsoluteDay;
+        Status = status;
+        RecognitionState = recognitionState;
+        RecognizingInstitutionId = recognizingInstitutionId;
+        RecognitionAbsoluteDay = recognitionAbsoluteDay;
+        RecognitionReason = recognitionReason ?? string.Empty;
+
+        List<string> references = new List<string>();
+        if (evidenceReferences != null)
+        {
+            foreach (string reference in evidenceReferences)
+            {
+                if (string.IsNullOrWhiteSpace(reference) == false && references.Contains(reference) == false)
+                {
+                    references.Add(reference);
+                }
+            }
+        }
+
+        references.Sort(StringComparer.Ordinal);
+        EvidenceReferences = references.AsReadOnly();
     }
 }
 
@@ -964,6 +1035,8 @@ public static class WorldStateSnapshotBuilder
             context.SimulationTime,
             context.Calendar);
         List<WorldStateParentageSnapshot> parentages = BuildParentageSnapshots(context.Parentages);
+        List<WorldStatePoliticalClaimSnapshot> politicalClaims =
+            BuildPoliticalClaimSnapshots(context.PoliticalClaims);
         List<WorldStateExpeditionSnapshot> expeditions = BuildExpeditionSnapshots(context.ExpeditionStore);
         WorldStateCalendarSnapshot calendarDate = null;
         if (context.Calendar != null && context.SimulationTime != null)
@@ -986,7 +1059,44 @@ public static class WorldStateSnapshotBuilder
             parentages,
             BuildPropertyOwnershipSnapshots(context.PropertyOwnershipStore),
             BuildEstateSnapshots(context.EstateStore),
-            BuildPropertyTransferSnapshots(context.PropertyOwnershipStore));
+            BuildPropertyTransferSnapshots(context.PropertyOwnershipStore),
+            politicalClaims);
+    }
+
+    private static List<WorldStatePoliticalClaimSnapshot> BuildPoliticalClaimSnapshots(
+        IEnumerable<PoliticalClaimRecord> source)
+    {
+        List<WorldStatePoliticalClaimSnapshot> result = new List<WorldStatePoliticalClaimSnapshot>();
+        if (source == null)
+        {
+            return result;
+        }
+
+        foreach (PoliticalClaimRecord claim in source)
+        {
+            if (claim == null || claim.ClaimId == null || claim.ClaimantPersonId == null || claim.Target == null)
+            {
+                continue;
+            }
+
+            result.Add(new WorldStatePoliticalClaimSnapshot(
+                claim.ClaimId.Value,
+                claim.ClaimantPersonId.Value,
+                claim.ClaimType,
+                claim.Target.Kind,
+                claim.Target.TargetId,
+                claim.Basis,
+                claim.BasisDescription,
+                claim.CreatedAbsoluteDay,
+                claim.Status,
+                claim.RecognitionState,
+                claim.RecognizingInstitutionId?.Value,
+                claim.RecognitionAbsoluteDay,
+                claim.RecognitionReason,
+                claim.EvidenceReferences));
+        }
+
+        return result;
     }
 
     private static List<WorldStateNpcSnapshot> BuildNpcSnapshots(

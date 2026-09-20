@@ -318,6 +318,7 @@ public static class WorldStateInvariantValidator
             snapshot.AbsoluteDay,
             issues);
         ValidateEstates(snapshot.Estates, personIds, personDeaths, snapshot.AbsoluteDay, issues);
+        ValidatePoliticalClaims(snapshot.PoliticalClaims, personIds, snapshot.AbsoluteDay, issues);
 
         foreach (WorldStateNpcSnapshot npc in snapshot.Npcs)
         {
@@ -507,6 +508,94 @@ public static class WorldStateInvariantValidator
         if (processed != incomingCounts.Count)
         {
             AddError(issues, "GenealogyCycle", "genealogy", "Parentage relations contain a cycle.");
+        }
+    }
+
+    private static void ValidatePoliticalClaims(
+        IReadOnlyList<WorldStatePoliticalClaimSnapshot> claims,
+        HashSet<string> personIds,
+        long absoluteDay,
+        List<WorldStateInvariantIssue> issues)
+    {
+        HashSet<string> claimIds = new HashSet<string>(StringComparer.Ordinal);
+        if (claims == null)
+        {
+            return;
+        }
+
+        foreach (WorldStatePoliticalClaimSnapshot claim in claims)
+        {
+            if (claim == null)
+            {
+                AddError(issues, "PoliticalClaimNull", "claim", "Snapshot contains a null political claim entry.");
+                continue;
+            }
+
+            string identity = string.IsNullOrWhiteSpace(claim.ClaimId) ? "claim" : claim.ClaimId;
+            if (string.IsNullOrWhiteSpace(claim.ClaimId))
+            {
+                AddError(issues, "PoliticalClaimIdMissing", identity, "Political claim has no ClaimId.");
+            }
+            else if (claimIds.Add(claim.ClaimId) == false)
+            {
+                AddError(issues, "DuplicatePoliticalClaimId", identity, "Political ClaimId appears more than once.");
+            }
+
+            if (string.IsNullOrWhiteSpace(claim.ClaimantPersonId))
+            {
+                AddError(issues, "PoliticalClaimantMissing", identity, "Political claim has no claimant PersonId.");
+            }
+            else if (personIds.Contains(claim.ClaimantPersonId) == false)
+            {
+                AddError(issues, "PoliticalClaimantPersonMissing", identity, "Political claim claimant is absent from the Person snapshot.");
+            }
+
+            if (string.IsNullOrWhiteSpace(claim.TargetId))
+            {
+                AddError(issues, "PoliticalClaimTargetMissing", identity, "Political claim has no target id.");
+            }
+            else if (PoliticalClaimRecord.IsTargetCompatible(claim.ClaimType, claim.TargetKind) == false)
+            {
+                AddError(issues, "PoliticalClaimTargetTypeMismatch", identity, "Political claim target kind is incompatible with its claim type.");
+            }
+
+            if (claim.CreatedAbsoluteDay < 0L || claim.CreatedAbsoluteDay > absoluteDay)
+            {
+                AddError(issues, "PoliticalClaimCreationDayInvalid", identity, "Political claim creation day is outside the snapshot timeline.");
+            }
+
+            if (Enum.IsDefined(typeof(PoliticalClaimStatus), claim.Status) == false)
+            {
+                AddError(issues, "PoliticalClaimStatusInvalid", identity, "Political claim status is invalid.");
+            }
+
+            if (Enum.IsDefined(typeof(PoliticalClaimRecognitionState), claim.RecognitionState) == false)
+            {
+                AddError(issues, "PoliticalClaimRecognitionInvalid", identity, "Political claim recognition state is invalid.");
+            }
+            else if (claim.RecognitionState == PoliticalClaimRecognitionState.Unrecognized)
+            {
+                if (string.IsNullOrWhiteSpace(claim.RecognizingInstitutionId) == false
+                    || claim.RecognitionAbsoluteDay.HasValue
+                    || string.IsNullOrWhiteSpace(claim.RecognitionReason) == false)
+                {
+                    AddError(issues, "UnrecognizedClaimHasRecognitionMetadata", identity, "An unrecognized claim cannot carry recognition metadata.");
+                }
+            }
+            else
+            {
+                if (string.IsNullOrWhiteSpace(claim.RecognizingInstitutionId))
+                {
+                    AddError(issues, "RecognizedClaimInstitutionMissing", identity, "Recognized political claims require a recognizing institution.");
+                }
+
+                if (claim.RecognitionAbsoluteDay.HasValue == false
+                    || claim.RecognitionAbsoluteDay.Value < claim.CreatedAbsoluteDay
+                    || claim.RecognitionAbsoluteDay.Value > absoluteDay)
+                {
+                    AddError(issues, "PoliticalClaimRecognitionDayInvalid", identity, "Political claim recognition day is inconsistent with the claim timeline.");
+                }
+            }
         }
     }
 

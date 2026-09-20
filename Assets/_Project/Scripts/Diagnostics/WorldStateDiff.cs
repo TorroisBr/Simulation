@@ -67,6 +67,10 @@ public sealed class WorldStateDiff
             WorldStateCanonicalWriter.IntValue(before.KnownNpcCount),
             WorldStateCanonicalWriter.IntValue(after.KnownNpcCount),
             differences);
+        CompareValue("Metadata", "world", "PoliticalClaimCount",
+            WorldStateCanonicalWriter.IntValue(before.PoliticalClaimCount),
+            WorldStateCanonicalWriter.IntValue(after.PoliticalClaimCount),
+            differences);
         CompareCalendar(before.Metadata.CalendarDate, after.Metadata.CalendarDate, differences);
 
         CompareEntities("NPC", before.Npcs, after.Npcs, npc => npc.RuntimeId,
@@ -151,6 +155,65 @@ public sealed class WorldStateDiff
                 CompareValue("Estate", identity, "OpenedAbsoluteDay",
                     WorldStateCanonicalWriter.Int64Value(left.OpenedAbsoluteDay),
                     WorldStateCanonicalWriter.Int64Value(right.OpenedAbsoluteDay),
+                    differences);
+            },
+            differences);
+
+        CompareEntities("PoliticalClaim", before.PoliticalClaims, after.PoliticalClaims,
+            claim => claim.ClaimId,
+            (identity, left, right) =>
+            {
+                CompareValue("PoliticalClaim", identity, "ClaimantPersonId",
+                    WorldStateCanonicalWriter.StringValue(left.ClaimantPersonId),
+                    WorldStateCanonicalWriter.StringValue(right.ClaimantPersonId),
+                    differences);
+                CompareValue("PoliticalClaim", identity, "ClaimType",
+                    WorldStateCanonicalWriter.EnumValue(left.ClaimType),
+                    WorldStateCanonicalWriter.EnumValue(right.ClaimType),
+                    differences);
+                CompareValue("PoliticalClaim", identity, "TargetKind",
+                    WorldStateCanonicalWriter.EnumValue(left.TargetKind),
+                    WorldStateCanonicalWriter.EnumValue(right.TargetKind),
+                    differences);
+                CompareValue("PoliticalClaim", identity, "TargetId",
+                    WorldStateCanonicalWriter.StringValue(left.TargetId),
+                    WorldStateCanonicalWriter.StringValue(right.TargetId),
+                    differences);
+                CompareValue("PoliticalClaim", identity, "Basis",
+                    WorldStateCanonicalWriter.EnumValue(left.Basis),
+                    WorldStateCanonicalWriter.EnumValue(right.Basis),
+                    differences);
+                CompareValue("PoliticalClaim", identity, "BasisDescription",
+                    WorldStateCanonicalWriter.StringValue(left.BasisDescription),
+                    WorldStateCanonicalWriter.StringValue(right.BasisDescription),
+                    differences);
+                CompareValue("PoliticalClaim", identity, "CreatedAbsoluteDay",
+                    WorldStateCanonicalWriter.Int64Value(left.CreatedAbsoluteDay),
+                    WorldStateCanonicalWriter.Int64Value(right.CreatedAbsoluteDay),
+                    differences);
+                CompareValue("PoliticalClaim", identity, "Status",
+                    WorldStateCanonicalWriter.EnumValue(left.Status),
+                    WorldStateCanonicalWriter.EnumValue(right.Status),
+                    differences);
+                CompareValue("PoliticalClaim", identity, "RecognitionState",
+                    WorldStateCanonicalWriter.EnumValue(left.RecognitionState),
+                    WorldStateCanonicalWriter.EnumValue(right.RecognitionState),
+                    differences);
+                CompareValue("PoliticalClaim", identity, "RecognizingInstitutionId",
+                    WorldStateCanonicalWriter.StringValue(left.RecognizingInstitutionId),
+                    WorldStateCanonicalWriter.StringValue(right.RecognizingInstitutionId),
+                    differences);
+                CompareValue("PoliticalClaim", identity, "RecognitionAbsoluteDay",
+                    WorldStateCanonicalWriter.NullableInt64Value(left.RecognitionAbsoluteDay),
+                    WorldStateCanonicalWriter.NullableInt64Value(right.RecognitionAbsoluteDay),
+                    differences);
+                CompareValue("PoliticalClaim", identity, "RecognitionReason",
+                    WorldStateCanonicalWriter.StringValue(left.RecognitionReason),
+                    WorldStateCanonicalWriter.StringValue(right.RecognitionReason),
+                    differences);
+                CompareValue("PoliticalClaim", identity, "EvidenceReferences",
+                    WorldStateCanonicalWriter.StringListValue(left.EvidenceReferences),
+                    WorldStateCanonicalWriter.StringListValue(right.EvidenceReferences),
                     differences);
             },
             differences);
