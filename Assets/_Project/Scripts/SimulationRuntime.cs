@@ -24,6 +24,7 @@ public sealed class SimulationRuntime
     private readonly FactionStore factionStore;
     private readonly PoliticalSupportStore politicalSupportStore;
     private readonly PoliticalKnowledgeStore politicalKnowledgeStore;
+    private readonly PoliticalDecisionStore politicalDecisionStore;
     private readonly List<NpcActionData> configuredActions;
     private readonly ScheduledDirectiveSystem scheduledDirectiveSystem;
     private readonly JusticeSystem justiceSystem;
@@ -62,6 +63,7 @@ public sealed class SimulationRuntime
     public IReadOnlyList<FactionAffiliationRecord> FactionAffiliationRecords => factionStore.Affiliations;
     public IReadOnlyList<PoliticalSupportRelationRecord> PoliticalSupportRecords => politicalSupportStore.Records;
     public int PoliticalKnowledgeHolderCount => politicalKnowledgeStore.Count;
+    public IReadOnlyList<PoliticalDecisionRecord> PoliticalDecisionRecords => politicalDecisionStore.Records;
     /// <summary>
     /// Read-only view of every named NPC registered with this world. Registration is
     /// explicit; death and emigration do not remove an NPC from this world roster.
@@ -104,7 +106,8 @@ public sealed class SimulationRuntime
         PoliticalClaimStore politicalClaimStore = null,
         FactionStore factionStore = null,
         PoliticalSupportStore politicalSupportStore = null,
-        PoliticalKnowledgeStore politicalKnowledgeStore = null)
+        PoliticalKnowledgeStore politicalKnowledgeStore = null,
+        PoliticalDecisionStore politicalDecisionStore = null)
     {
         this.simulationTime = simulationTime ?? throw new ArgumentNullException(nameof(simulationTime));
 
@@ -180,6 +183,10 @@ public sealed class SimulationRuntime
             politicalKnowledgeStore,
             resolvedPersonStore,
             resolvedInstitutionStore,
+            simulationTime.AbsoluteDay);
+        this.politicalDecisionStore = ClonePoliticalDecisionStore(
+            politicalDecisionStore,
+            this.politicalKnowledgeStore,
             simulationTime.AbsoluteDay);
         this.cities = cities != null ? new List<CityRuntime>(cities) : new List<CityRuntime>();
         this.npcRuntimes = new List<NpcRuntime>();
@@ -779,6 +786,49 @@ public sealed class SimulationRuntime
         return politicalKnowledgeStore.TryGet(holder, out runtime);
     }
 
+    /// <summary>
+    /// Registers an immutable political decision record in the world-owned
+    /// decision history. Decision registration never executes its outcome.
+    /// </summary>
+    public bool TryRegisterPoliticalDecision(
+        PoliticalDecisionRecord record,
+        out PoliticalDecisionFailure failure)
+    {
+        failure = PoliticalDecisionFailure.None;
+        if (record == null || record.DecisionId == null || record.Decider == null)
+        {
+            failure = PoliticalDecisionFailure.Create(
+                PoliticalDecisionFailureCode.InvalidDecision,
+                "A political decision with an id and decider is required.");
+            return false;
+        }
+
+        if (record.DecisionAbsoluteDay > CurrentDay)
+        {
+            failure = PoliticalDecisionFailure.Create(
+                PoliticalDecisionFailureCode.InvalidDecision,
+                "A political decision cannot be registered in the future of the world timeline.");
+            return false;
+        }
+
+        if (politicalKnowledgeStore.TryGet(record.Decider, out _) == false)
+        {
+            failure = PoliticalDecisionFailure.Create(
+                PoliticalDecisionFailureCode.InvalidDecision,
+                "The political decision decider must be registered as a knowledge holder in this world.");
+            return false;
+        }
+
+        return politicalDecisionStore.TryRegister(record, out failure);
+    }
+
+    public bool TryGetPoliticalDecision(
+        PoliticalDecisionId decisionId,
+        out PoliticalDecisionRecord record)
+    {
+        return politicalDecisionStore.TryGet(decisionId, out record);
+    }
+
     public bool TryRegisterPropertyOwnership(
         PropertyOwnershipRecord record,
         out PropertyFoundationFailure failure)
@@ -980,6 +1030,51 @@ public sealed class SimulationRuntime
         out OfficeSuccessionFailure failure)
     {
         return OfficeSuccessionSystem.TryApply(this, transition, out failure);
+    }
+
+    public bool TryProposePoliticalOfficeSuccession(
+        PoliticalDecisionId decisionId,
+        OfficeId officeId,
+        long startAbsoluteDay,
+        out PoliticalOfficeSuccessionTransition transition,
+        out PoliticalSuccessionFailure failure)
+    {
+        return PoliticalSuccessionSystem.TryPropose(
+            this,
+            decisionId,
+            officeId,
+            startAbsoluteDay,
+            out transition,
+            out failure);
+    }
+
+    public bool TryApplyPoliticalOfficeSuccession(
+        PoliticalOfficeSuccessionTransition transition,
+        out PoliticalSuccessionFailure failure)
+    {
+        return PoliticalSuccessionSystem.TryApply(this, transition, out failure);
+    }
+
+    public bool TryProposePoliticalSuccession(
+        PoliticalDecisionId decisionId,
+        OfficeId officeId,
+        long startAbsoluteDay,
+        out PoliticalOfficeSuccessionTransition transition,
+        out PoliticalSuccessionFailure failure)
+    {
+        return TryProposePoliticalOfficeSuccession(
+            decisionId,
+            officeId,
+            startAbsoluteDay,
+            out transition,
+            out failure);
+    }
+
+    public bool TryApplyPoliticalSuccession(
+        PoliticalOfficeSuccessionTransition transition,
+        out PoliticalSuccessionFailure failure)
+    {
+        return TryApplyPoliticalOfficeSuccession(transition, out failure);
     }
 
     public bool TryProposeEstateSuccession(
@@ -1825,6 +1920,41 @@ public sealed class SimulationRuntime
         }
 
         return source.Clone(personStore, institutionStore, currentDay);
+    }
+
+    private static PoliticalDecisionStore ClonePoliticalDecisionStore(
+        PoliticalDecisionStore source,
+        PoliticalKnowledgeStore knowledgeStore,
+        long currentDay)
+    {
+        PoliticalDecisionStore copy = new PoliticalDecisionStore();
+        if (source == null)
+        {
+            return copy;
+        }
+
+        foreach (PoliticalDecisionRecord record in source.Records)
+        {
+            if (record == null
+                || record.DecisionAbsoluteDay > currentDay
+                || record.Decider == null
+                || knowledgeStore.TryGet(record.Decider, out _) == false
+                || copy.TryRegister(record, out PoliticalDecisionFailure failure) == false)
+            {
+                throw new ArgumentException(
+                    "The SimulationRuntime PoliticalDecisionStore contains an invalid decision, future history, or unregistered decider.",
+                    nameof(source));
+            }
+        }
+
+        if (copy.Revision != source.Revision)
+        {
+            throw new ArgumentException(
+                "The SimulationRuntime PoliticalDecisionStore revision is inconsistent with its state.",
+                nameof(source));
+        }
+
+        return copy;
     }
 
     private static InstitutionStore ResolveInstitutionStore(
