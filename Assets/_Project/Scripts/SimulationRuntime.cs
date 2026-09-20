@@ -1005,6 +1005,14 @@ public sealed class SimulationRuntime
             return false;
         }
 
+        if (record.TryBindToPersonStore(personStore) == false)
+        {
+            failure = PoliticalDecisionFailure.Create(
+                PoliticalDecisionFailureCode.WorldMismatch,
+                "The political decision belongs to a different PersonStore/world.");
+            return false;
+        }
+
         return politicalDecisionStore.TryRegister(record, out failure);
     }
 
@@ -2256,6 +2264,7 @@ public sealed class SimulationRuntime
         foreach (PoliticalDecisionRecord record in source.Records)
         {
             if (record == null
+                || record.IsCompatibleWithPersonStore(personStore) == false
                 || record.DecisionAbsoluteDay > currentDay
                 || record.ExpectedWorldRevision > currentWorldRevision
                 || record.ExpectedKnowledgeRevision > currentKnowledgeRevision
@@ -2267,7 +2276,7 @@ public sealed class SimulationRuntime
                     institutionStore,
                     officeStore,
                     politicalClaimStore)
-                || copy.TryRegister(record, out PoliticalDecisionFailure failure) == false)
+                || copy.TryRegister(record.Clone(), out PoliticalDecisionFailure failure) == false)
             {
                 throw new ArgumentException(
                     "The SimulationRuntime PoliticalDecisionStore contains an invalid decision, future history, or unregistered decider.",

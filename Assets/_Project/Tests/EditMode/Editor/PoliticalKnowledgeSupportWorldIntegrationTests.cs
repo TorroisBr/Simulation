@@ -254,6 +254,96 @@ public sealed class PoliticalKnowledgeSupportWorldIntegrationTests
         Assert.That(WorldStateInvariantValidator.Validate(malformed).IsValid, Is.False);
     }
 
+    [Test]
+    public void PoliticalKnowledgeDiagnosticsRejectForgedClaimStateAndOrphanProvenance()
+    {
+        Fixture fixture = CreateFixture();
+        PoliticalClaimId claimId = RegisterClaim(fixture.World, fixture.Supporter, fixture.Candidate);
+        Assert.That(fixture.World.TryRegisterPoliticalKnowledgeHolder(
+            PoliticalKnowledgeHolder.ForPerson(fixture.Supporter),
+            out _), Is.True);
+        Assert.That(fixture.World.TryRecordPoliticalKnowledge(
+            PoliticalKnowledgeHolder.ForPerson(fixture.Supporter),
+            new PoliticalClaimKnowledgeObservation(
+                claimId,
+                true,
+                fixture.Supporter,
+                PoliticalClaimType.StatusRecognition,
+                PoliticalClaimTarget.ForPerson(fixture.Candidate),
+                PoliticalClaimBasis.ExplicitDecision,
+                fixture.World.CurrentDay,
+                PoliticalClaimStatus.Active,
+                null,
+                PoliticalClaimRecognitionState.Unrecognized,
+                null,
+                null,
+                fixture.World.CurrentDay,
+                fixture.World.CurrentDay,
+                new PoliticalKnowledgeProvenance(PoliticalKnowledgeSource.DirectObservation, "claim")),
+            out PoliticalKnowledgeFailure recordFailure), Is.True, recordFailure.ToString());
+
+        WorldStateSnapshot valid = Capture(fixture.World);
+        WorldStatePoliticalKnowledgeSnapshot holder = valid.PoliticalKnowledge[0];
+        WorldStatePoliticalKnowledgeObservationSnapshot claimObservation = holder.Observations[0];
+        string[] forgedFields = claimObservation.StateKey.Split(new[] { '\u001F' });
+        forgedFields[5] = "999";
+        WorldStatePoliticalKnowledgeObservationSnapshot forgedClaim = new WorldStatePoliticalKnowledgeObservationSnapshot(
+            claimObservation.IdentityKey,
+            claimObservation.FactKind,
+            claimObservation.ObservedAbsoluteDay,
+            claimObservation.ReceivedAbsoluteDay,
+            claimObservation.Source,
+            claimObservation.SourceReference,
+            claimObservation.SourcePersonId,
+            claimObservation.SourceInstitutionId,
+            string.Join("\u001F", forgedFields));
+        WorldStateSnapshot forged = new WorldStateSnapshot(
+            valid.AbsoluteDay,
+            persons: valid.Persons,
+            politicalClaims: valid.PoliticalClaims,
+            institutionIds: valid.InstitutionIds,
+            politicalKnowledge: new[] {
+                new WorldStatePoliticalKnowledgeSnapshot(
+                    holder.HolderStableId,
+                    holder.HolderKind,
+                    holder.HolderPersonId,
+                    holder.HolderInstitutionId,
+                    new[] { forgedClaim })
+            },
+            politicalKnowledgeRevision: valid.PoliticalKnowledgeRevision,
+            hasPoliticalKnowledgeState: true);
+        WorldStateInvariantReport forgedReport = WorldStateInvariantValidator.Validate(forged);
+        Assert.That(HasIssueCode(forgedReport, "PoliticalKnowledgeClaimStateMismatch"), Is.True, forgedReport.ToString());
+
+        WorldStatePoliticalKnowledgeObservationSnapshot orphan = new WorldStatePoliticalKnowledgeObservationSnapshot(
+            claimObservation.IdentityKey,
+            claimObservation.FactKind,
+            claimObservation.ObservedAbsoluteDay,
+            claimObservation.ReceivedAbsoluteDay,
+            PoliticalKnowledgeSource.SharedByPerson,
+            "orphan",
+            "person.unknown",
+            null,
+            claimObservation.StateKey);
+        WorldStateSnapshot orphanSnapshot = new WorldStateSnapshot(
+            valid.AbsoluteDay,
+            persons: valid.Persons,
+            politicalClaims: valid.PoliticalClaims,
+            institutionIds: valid.InstitutionIds,
+            politicalKnowledge: new[] {
+                new WorldStatePoliticalKnowledgeSnapshot(
+                    holder.HolderStableId,
+                    holder.HolderKind,
+                    holder.HolderPersonId,
+                    holder.HolderInstitutionId,
+                    new[] { orphan })
+            },
+            politicalKnowledgeRevision: valid.PoliticalKnowledgeRevision,
+            hasPoliticalKnowledgeState: true);
+        WorldStateInvariantReport orphanReport = WorldStateInvariantValidator.Validate(orphanSnapshot);
+        Assert.That(HasIssueCode(orphanReport, "PoliticalKnowledgeProvenancePersonMissing"), Is.True, orphanReport.ToString());
+    }
+
     private static PoliticalClaimId RegisterClaim(
         SimulationRuntime world,
         PersonId claimant,
@@ -280,6 +370,7 @@ public sealed class PoliticalKnowledgeSupportWorldIntegrationTests
             simulationTime: world.SimulationTime,
             calendar: world.Calendar,
             personStore: world.PersonStore,
+            institutionIds: new[] { "institution.court" },
             politicalClaims: world.PoliticalClaimRecords,
             factions: world.FactionRecords,
             factionAffiliations: world.FactionAffiliationRecords,
@@ -287,6 +378,19 @@ public sealed class PoliticalKnowledgeSupportWorldIntegrationTests
             politicalDecisions: world.PoliticalDecisionRecords,
             politicalKnowledgeRuntimes: world.PoliticalKnowledgeRuntimes,
             politicalKnowledgeRevision: world.PoliticalKnowledgeRevision));
+    }
+
+    private static bool HasIssueCode(WorldStateInvariantReport report, string code)
+    {
+        foreach (WorldStateInvariantIssue issue in report.Issues)
+        {
+            if (issue != null && issue.Code == code)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static Fixture CreateFixture()

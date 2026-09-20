@@ -145,6 +145,8 @@ public sealed class PoliticalDecisionOutcome : IEquatable<PoliticalDecisionOutco
 /// </summary>
 public sealed class PoliticalDecisionRecord
 {
+    private PersonStore boundPersonStore;
+
     public PoliticalDecisionId DecisionId { get; }
     public PoliticalKnowledgeHolder Decider { get; }
     public PoliticalDecisionKind DecisionKind { get; }
@@ -162,6 +164,29 @@ public sealed class PoliticalDecisionRecord
     public long KnowledgeRevision => ExpectedKnowledgeRevision;
     public OfficeId OfficeId { get; }
     public InstitutionId RecognizingInstitutionId { get; }
+
+    internal bool TryBindToPersonStore(PersonStore personStore)
+    {
+        if (personStore == null)
+        {
+            return false;
+        }
+
+        if (boundPersonStore != null
+            && ReferenceEquals(boundPersonStore, personStore) == false)
+        {
+            return false;
+        }
+
+        boundPersonStore = personStore;
+        return true;
+    }
+
+    internal bool IsCompatibleWithPersonStore(PersonStore personStore)
+    {
+        return personStore != null
+            && (boundPersonStore == null || ReferenceEquals(boundPersonStore, personStore));
+    }
 
     public PoliticalDecisionRecord(
         PoliticalDecisionId decisionId,
@@ -280,6 +305,26 @@ public sealed class PoliticalDecisionRecord
             || currentKnowledgeRevision != ExpectedKnowledgeRevision;
     }
 
+    internal PoliticalDecisionRecord Clone()
+    {
+        PoliticalDecisionRecord clone = new PoliticalDecisionRecord(
+            DecisionId,
+            Decider,
+            DecisionKind,
+            CandidatePersonIds,
+            Outcome,
+            ObservedAbsoluteDay,
+            DecisionAbsoluteDay,
+            EvidenceReferences,
+            KnowledgeReferences,
+            ExpectedWorldRevision,
+            ExpectedKnowledgeRevision,
+            OfficeId,
+            RecognizingInstitutionId);
+        clone.boundPersonStore = boundPersonStore;
+        return clone;
+    }
+
     public static string BuildCandidateFingerprint(IEnumerable<PersonId> candidatePersonIds)
     {
         return BuildCandidateFingerprint(CanonicalizeCandidates(candidatePersonIds));
@@ -362,7 +407,8 @@ public enum PoliticalDecisionFailureCode
     InvalidDecision = 1,
     DuplicateDecisionId = 2,
     RevisionOverflow = 3,
-    StaleDecision = 4
+    StaleDecision = 4,
+    WorldMismatch = 5
 }
 
 public sealed class PoliticalDecisionFailure
@@ -446,6 +492,14 @@ public sealed class PoliticalDecisionStore
             return false;
         }
 
+        if (boundPersonStore != null && record.TryBindToPersonStore(boundPersonStore) == false)
+        {
+            failure = PoliticalDecisionFailure.Create(
+                PoliticalDecisionFailureCode.WorldMismatch,
+                "The political decision belongs to a different PersonStore/world.");
+            return false;
+        }
+
         if (recordsById.ContainsKey(record.DecisionId.Value))
         {
             failure = PoliticalDecisionFailure.Create(
@@ -479,7 +533,7 @@ public sealed class PoliticalDecisionStore
         PoliticalDecisionStore clone = new PoliticalDecisionStore();
         foreach (KeyValuePair<string, PoliticalDecisionRecord> entry in recordsById)
         {
-            clone.recordsById.Add(entry.Key, entry.Value);
+            clone.recordsById.Add(entry.Key, entry.Value.Clone());
         }
 
         clone.revision = revision;

@@ -86,6 +86,21 @@ public sealed class PoliticalSuccessionIntegrationTests
     }
 
     [Test]
+    public void DecisionRegistrationRejectsARecordBoundToAnotherWorld()
+    {
+        Fixture source = CreateFixture(includeDecision: false);
+        Assert.That(source.World.TryRegisterPoliticalDecision(
+            source.Decision,
+            out PoliticalDecisionFailure sourceFailure), Is.True, sourceFailure.ToString());
+
+        Fixture other = CreateFixture(includeDecision: false);
+        Assert.That(other.World.TryRegisterPoliticalDecision(
+            source.Decision,
+            out PoliticalDecisionFailure otherFailure), Is.False);
+        Assert.That(otherFailure.Code, Is.EqualTo(PoliticalDecisionFailureCode.WorldMismatch));
+    }
+
+    [Test]
     public void PoliticalDecisionCloneDoesNotShareMutableHistoryAndAdvanceDayDoesNotExecutePolitics()
     {
         Fixture fixture = CreateFixture();
@@ -293,6 +308,56 @@ public sealed class PoliticalSuccessionIntegrationTests
             fixture.World.CurrentDay,
             politicalDecisions: new WorldStatePoliticalDecisionSnapshot[0]);
         Assert.That(WorldStateDiagnostics.Compare(before, after).IsEmpty, Is.False);
+    }
+
+    [Test]
+    public void PoliticalKnowledgeDiagnosticsRejectOfficeInstitutionMismatch()
+    {
+        Fixture fixture = CreateFixture();
+        Assert.That(fixture.World.TryRecordPoliticalKnowledge(
+            fixture.Decider,
+            new OfficeVacancyKnowledgeObservation(
+                fixture.OfficeId,
+                new InstitutionId("political-institution"),
+                true,
+                fixture.World.CurrentDay,
+                fixture.World.CurrentDay,
+                new PoliticalKnowledgeProvenance(
+                    PoliticalKnowledgeSource.DirectObservation,
+                    "office")),
+            out PoliticalKnowledgeFailure recordFailure), Is.True, recordFailure.ToString());
+
+        WorldStateSnapshot valid = Capture(fixture.World);
+        WorldStatePoliticalKnowledgeSnapshot holder = valid.PoliticalKnowledge[0];
+        WorldStatePoliticalKnowledgeObservationSnapshot observation = holder.Observations[0];
+        WorldStatePoliticalKnowledgeObservationSnapshot forged = new WorldStatePoliticalKnowledgeObservationSnapshot(
+            observation.IdentityKey,
+            observation.FactKind,
+            observation.ObservedAbsoluteDay,
+            observation.ReceivedAbsoluteDay,
+            observation.Source,
+            observation.SourceReference,
+            observation.SourcePersonId,
+            observation.SourceInstitutionId,
+            "5:other\u001F1\u001F1");
+        WorldStateSnapshot malformed = new WorldStateSnapshot(
+            valid.AbsoluteDay,
+            persons: valid.Persons,
+            institutionIds: valid.InstitutionIds,
+            officeIds: valid.OfficeIds,
+            officeInstitutionIds: valid.OfficeInstitutionIds,
+            politicalKnowledge: new[] {
+                new WorldStatePoliticalKnowledgeSnapshot(
+                    holder.HolderStableId,
+                    holder.HolderKind,
+                    holder.HolderPersonId,
+                    holder.HolderInstitutionId,
+                    new[] { forged })
+            },
+            politicalKnowledgeRevision: valid.PoliticalKnowledgeRevision,
+            hasPoliticalKnowledgeState: true);
+        WorldStateInvariantReport report = WorldStateInvariantValidator.Validate(malformed);
+        Assert.That(HasIssueCode(report, "PoliticalKnowledgeOfficeInstitutionMismatch"), Is.True, report.ToString());
     }
 
     [Test]
@@ -516,9 +581,25 @@ public sealed class PoliticalSuccessionIntegrationTests
             personStore: world.PersonStore,
             institutionIds: new[] { "political-institution" },
             officeIds: new[] { "political-office" },
+            officeInstitutionIds: new Dictionary<string, string> {
+                ["political-office"] = "political-institution"
+            },
             politicalDecisions: world.PoliticalDecisionRecords,
             politicalKnowledgeRuntimes: world.PoliticalKnowledgeRuntimes,
             politicalKnowledgeRevision: world.PoliticalKnowledgeRevision));
+    }
+
+    private static bool HasIssueCode(WorldStateInvariantReport report, string code)
+    {
+        foreach (WorldStateInvariantIssue issue in report.Issues)
+        {
+            if (issue != null && issue.Code == code)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static PersonRuntime Register(

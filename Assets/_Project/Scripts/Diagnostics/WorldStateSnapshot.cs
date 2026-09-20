@@ -23,6 +23,7 @@ public sealed class WorldStateSnapshotContext
     public OfficeStore OfficeStore { get; }
     public IEnumerable<string> InstitutionIds { get; }
     public IEnumerable<string> OfficeIds { get; }
+    public IReadOnlyDictionary<string, string> OfficeInstitutionIds { get; }
     public IEnumerable<string> PropertyIds { get; }
     public IEnumerable<FactionRecord> Factions { get; }
     public IEnumerable<FactionAffiliationRecord> FactionAffiliations { get; }
@@ -53,6 +54,7 @@ public sealed class WorldStateSnapshotContext
         OfficeStore officeStore = null,
         IEnumerable<string> institutionIds = null,
         IEnumerable<string> officeIds = null,
+        IReadOnlyDictionary<string, string> officeInstitutionIds = null,
         IEnumerable<string> propertyIds = null,
         IEnumerable<FactionRecord> factions = null,
         IEnumerable<FactionAffiliationRecord> factionAffiliations = null,
@@ -78,6 +80,7 @@ public sealed class WorldStateSnapshotContext
         OfficeStore = officeStore;
         InstitutionIds = institutionIds;
         OfficeIds = officeIds;
+        OfficeInstitutionIds = officeInstitutionIds;
         PropertyIds = propertyIds;
         Factions = factions;
         FactionAffiliations = factionAffiliations;
@@ -116,6 +119,7 @@ public sealed class WorldStateSnapshot
     public int PoliticalClaimCount => PoliticalClaims.Count;
     public IReadOnlyList<string> InstitutionIds { get; }
     public IReadOnlyList<string> OfficeIds { get; }
+    public IReadOnlyDictionary<string, string> OfficeInstitutionIds { get; }
     public IReadOnlyList<string> PropertyIds { get; }
     public bool HasInstitutionCatalog { get; }
     public bool HasOfficeCatalog { get; }
@@ -165,7 +169,8 @@ public sealed class WorldStateSnapshot
         IEnumerable<WorldStatePoliticalDecisionSnapshot> politicalDecisions = null,
         IEnumerable<WorldStatePoliticalKnowledgeSnapshot> politicalKnowledge = null,
         long politicalKnowledgeRevision = 0L,
-        bool hasPoliticalKnowledgeState = false)
+        bool hasPoliticalKnowledgeState = false,
+        IReadOnlyDictionary<string, string> officeInstitutionIds = null)
     {
         Metadata = new WorldStateSnapshotMetadata(absoluteDay, calendarDate);
         Npcs = SnapshotCollections.CopySorted(npcs, npc => npc?.RuntimeId);
@@ -198,6 +203,7 @@ public sealed class WorldStateSnapshot
         HasPropertyCatalog = propertyIds != null;
         InstitutionIds = CopySortedIds(institutionIds);
         OfficeIds = CopySortedIds(officeIds);
+        OfficeInstitutionIds = CopyDictionary(officeInstitutionIds);
         PropertyIds = CopySortedIds(propertyIds);
         Factions = SnapshotCollections.CopySorted(factions, faction => faction?.FactionId);
         FactionAffiliations = SnapshotCollections.CopySorted(
@@ -259,6 +265,25 @@ public sealed class WorldStateSnapshot
 
         result.Sort(StringComparer.Ordinal);
         return result.AsReadOnly();
+    }
+
+    private static IReadOnlyDictionary<string, string> CopyDictionary(
+        IReadOnlyDictionary<string, string> source)
+    {
+        Dictionary<string, string> result = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (source != null)
+        {
+            foreach (KeyValuePair<string, string> entry in source)
+            {
+                if (string.IsNullOrWhiteSpace(entry.Key) == false
+                    && string.IsNullOrWhiteSpace(entry.Value) == false)
+                {
+                    result[entry.Key] = entry.Value;
+                }
+            }
+        }
+
+        return new ReadOnlyDictionary<string, string>(result);
     }
 }
 
@@ -1408,7 +1433,8 @@ public static class WorldStateSnapshotBuilder
             politicalKnowledge,
             context.PoliticalKnowledgeRevision ?? 0L,
             context.PoliticalKnowledgeRuntimes != null
-                || context.PoliticalKnowledgeRevision.HasValue);
+                || context.PoliticalKnowledgeRevision.HasValue,
+            context.OfficeInstitutionIds ?? BuildOfficeInstitutionIds(context.OfficeStore));
     }
 
     private static List<WorldStatePoliticalClaimSnapshot> BuildPoliticalClaimSnapshots(
@@ -1658,6 +1684,25 @@ public static class WorldStateSnapshotBuilder
             if (record?.Id != null)
             {
                 result.Add(record.Id.Value);
+            }
+        }
+
+        return result;
+    }
+
+    private static IReadOnlyDictionary<string, string> BuildOfficeInstitutionIds(OfficeStore source)
+    {
+        if (source == null)
+        {
+            return null;
+        }
+
+        Dictionary<string, string> result = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (OfficeRecord record in source.Offices)
+        {
+            if (record?.Id != null && record.InstitutionId != null)
+            {
+                result[record.Id.Value] = record.InstitutionId.Value;
             }
         }
 
