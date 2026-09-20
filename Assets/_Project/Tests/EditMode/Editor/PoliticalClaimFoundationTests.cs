@@ -77,6 +77,33 @@ public sealed class PoliticalClaimFoundationTests
     }
 
     [Test]
+    public void WorldRejectsTerminalClaimResolvedInTheFuture()
+    {
+        PersonStore persons = new PersonStore();
+        PersonRuntime claimant = RegisterPerson(persons, "claimant");
+        SimulationRuntime world = CreateWorld(persons);
+        PoliticalClaimRecord futureResolution = new PoliticalClaimRecord(
+            new PoliticalClaimId("claim.future-resolution"),
+            claimant.PersonId,
+            PoliticalClaimType.StatusRecognition,
+            PoliticalClaimTarget.ForPerson(claimant.PersonId),
+            PoliticalClaimBasis.Other,
+            null,
+            0L,
+            null,
+            PoliticalClaimStatus.Resolved,
+            PoliticalClaimRecognitionState.Unrecognized,
+            null,
+            null,
+            null,
+            1L);
+
+        Assert.That(world.TryRegisterPoliticalClaim(futureResolution, out PoliticalClaimFailure failure), Is.False);
+        Assert.That(failure.Code, Is.EqualTo(PoliticalClaimFailureCode.InvalidResolutionAbsoluteDay));
+        Assert.That(world.PoliticalClaimRecords, Is.Empty);
+    }
+
+    [Test]
     public void WorldClonesPoliticalClaimsAndDoesNotExposeMutableStoreAuthority()
     {
         PersonStore persons = new PersonStore();

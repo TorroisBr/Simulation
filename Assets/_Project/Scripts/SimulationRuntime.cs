@@ -431,6 +431,15 @@ public sealed class SimulationRuntime
             return false;
         }
 
+        if (record.ResolutionAbsoluteDay.HasValue
+            && record.ResolutionAbsoluteDay.Value > CurrentDay)
+        {
+            failure = PoliticalClaimFailure.Create(
+                PoliticalClaimFailureCode.InvalidResolutionAbsoluteDay,
+                "Claim resolution must be within the current world timeline.");
+            return false;
+        }
+
         return politicalClaimStore.TryRegister(record, out failure);
     }
 
@@ -1442,6 +1451,7 @@ public sealed class SimulationRuntime
 
             if (targetExists == false
                 || (record.RecognitionAbsoluteDay.HasValue && record.RecognitionAbsoluteDay.Value > currentDay)
+                || (record.ResolutionAbsoluteDay.HasValue && record.ResolutionAbsoluteDay.Value > currentDay)
                 || (record.RecognitionState != PoliticalClaimRecognitionState.Unrecognized
                     && (record.RecognizingInstitutionId == null
                         || institutionStore.TryGet(record.RecognizingInstitutionId, out _) == false)))
