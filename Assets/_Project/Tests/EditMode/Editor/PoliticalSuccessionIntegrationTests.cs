@@ -173,6 +173,25 @@ public sealed class PoliticalSuccessionIntegrationTests
     }
 
     [Test]
+    public void FailedWorldCompositionDoesNotBindCallerDecisionStore()
+    {
+        PoliticalDecisionStore source = new PoliticalDecisionStore();
+
+        Assert.Throws<ArgumentException>(() => new SimulationRuntime(
+            new SimulationTime(0L),
+            Array.Empty<CityRuntime>(),
+            new NpcRuntime[] { null },
+            politicalDecisionStore: source));
+
+        Assert.DoesNotThrow(() => new SimulationRuntime(
+            new SimulationTime(0L),
+            Array.Empty<CityRuntime>(),
+            null,
+            personStore: new PersonStore(),
+            politicalDecisionStore: source));
+    }
+
+    [Test]
     public void PoliticalSelectionUsesCandidateFingerprintAndRevalidatesDeadCandidate()
     {
         Fixture fixture = CreateFixture();
