@@ -170,6 +170,29 @@ public sealed class PoliticalSuccessionIntegrationTests
             Array.Empty<CityRuntime>(),
             null,
             politicalWorldRevision: -1L));
+
+        PoliticalDecisionStore futureHistory = new PoliticalDecisionStore();
+        PoliticalDecisionRecord futureRevision = CreateDecision(
+            "decision.future-revision-history",
+            fixture.World.CurrentDay,
+            fixture.World.CurrentDay,
+            fixture.CandidateIds,
+            fixture.SelectedCandidateId,
+            fixture.Decider,
+            fixture.World.PoliticalWorldRevision + 1L,
+            fixture.World.PoliticalKnowledgeRevision);
+        Assert.That(futureHistory.TryRegister(futureRevision, out _), Is.True);
+        Assert.Throws<ArgumentException>(() => new SimulationRuntime(
+            new SimulationTime(fixture.World.CurrentDay),
+            Array.Empty<CityRuntime>(),
+            null,
+            personStore: fixture.People,
+            genealogyStore: fixture.Genealogy,
+            institutionStore: fixture.Institutions,
+            officeStore: fixture.Offices,
+            politicalKnowledgeStore: fixture.Knowledge,
+            politicalDecisionStore: futureHistory,
+            politicalWorldRevision: fixture.World.PoliticalWorldRevision));
     }
 
     [Test]

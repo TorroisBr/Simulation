@@ -89,6 +89,20 @@ public sealed class PoliticalKnowledgeSupportWorldIntegrationTests
         Assert.That(personKnowledge.ClaimObservations[0].Target.TargetId, Is.EqualTo(fixture.Candidate.Value));
         Assert.That(fixture.World.TryRecordPoliticalKnowledge(
             PoliticalKnowledgeHolder.ForPerson(fixture.Supporter),
+            new PersonDeathKnowledgeObservation(
+                fixture.Candidate,
+                false,
+                null,
+                fixture.World.CurrentDay,
+                fixture.World.CurrentDay,
+                new PoliticalKnowledgeProvenance(
+                    PoliticalKnowledgeSource.SharedByPerson,
+                    "orphan-source",
+                    new PersonId("person.unknown"))),
+            out PoliticalKnowledgeFailure orphanProvenanceFailure), Is.False);
+        Assert.That(orphanProvenanceFailure.Code, Is.EqualTo(PoliticalKnowledgeFailureCode.InvalidObservation));
+        Assert.That(fixture.World.TryRecordPoliticalKnowledge(
+            PoliticalKnowledgeHolder.ForPerson(fixture.Supporter),
             new FactionAffiliationKnowledgeObservation(
                 fixture.Faction,
                 fixture.Supporter,

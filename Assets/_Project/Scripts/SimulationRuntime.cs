@@ -230,7 +230,9 @@ public sealed class SimulationRuntime
             this.personStore,
             this.institutionStore,
             this.officeStore,
-            this.politicalClaimStore);
+            this.politicalClaimStore,
+            initialPoliticalWorldRevision,
+            this.politicalKnowledgeStore.Revision);
         this.cities = cities != null ? new List<CityRuntime>(cities) : new List<CityRuntime>();
         this.npcRuntimes = new List<NpcRuntime>();
         this.npcRuntimeSnapshot = this.npcRuntimes.AsReadOnly();
@@ -2220,7 +2222,9 @@ public sealed class SimulationRuntime
         PersonStore personStore,
         InstitutionStore institutionStore,
         OfficeStore officeStore,
-        PoliticalClaimStore politicalClaimStore)
+        PoliticalClaimStore politicalClaimStore,
+        long currentWorldRevision,
+        long currentKnowledgeRevision)
     {
         PoliticalDecisionStore copy = new PoliticalDecisionStore();
         if (source == null)
@@ -2253,6 +2257,8 @@ public sealed class SimulationRuntime
         {
             if (record == null
                 || record.DecisionAbsoluteDay > currentDay
+                || record.ExpectedWorldRevision > currentWorldRevision
+                || record.ExpectedKnowledgeRevision > currentKnowledgeRevision
                 || record.Decider == null
                 || knowledgeStore.TryGet(record.Decider, out _) == false
                 || HasUnregisteredPoliticalDecisionReference(

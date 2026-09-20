@@ -405,6 +405,18 @@ public sealed class PoliticalKnowledgeStore
         out PoliticalKnowledgeFailure failure)
     {
         failure = PoliticalKnowledgeFailure.None;
+        if (observation.Provenance.SourcePersonId != null
+            && personStore.TryGet(observation.Provenance.SourcePersonId, out _) == false)
+        {
+            return InvalidEndpoint(out failure, "The political knowledge provenance source PersonId is not registered in this world.");
+        }
+
+        if (observation.Provenance.SourceInstitutionId != null
+            && institutionStore.TryGet(observation.Provenance.SourceInstitutionId, out _) == false)
+        {
+            return InvalidEndpoint(out failure, "The political knowledge provenance source InstitutionId is not registered in this world.");
+        }
+
         switch (observation.FactKind)
         {
             case PoliticalKnowledgeFactKind.PoliticalClaim:
