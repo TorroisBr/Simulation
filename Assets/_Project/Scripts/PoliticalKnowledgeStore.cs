@@ -75,9 +75,12 @@ public sealed class PoliticalKnowledgeStore
     {
         this.personStore = personStore ?? throw new ArgumentNullException(nameof(personStore));
         this.institutionStore = institutionStore ?? throw new ArgumentNullException(nameof(institutionStore));
-        this.politicalClaimStore = politicalClaimStore;
-        this.factionStore = factionStore;
-        this.officeStore = officeStore;
+        this.politicalClaimStore = politicalClaimStore
+            ?? throw new ArgumentNullException(nameof(politicalClaimStore));
+        this.factionStore = factionStore
+            ?? throw new ArgumentNullException(nameof(factionStore));
+        this.officeStore = officeStore
+            ?? throw new ArgumentNullException(nameof(officeStore));
         this.propertyOwnershipStore = propertyOwnershipStore
             ?? throw new ArgumentNullException(nameof(propertyOwnershipStore));
     }
@@ -274,10 +277,10 @@ public sealed class PoliticalKnowledgeStore
         PersonStore targetPersonStore,
         InstitutionStore targetInstitutionStore,
         long currentWorldDay,
-        PoliticalClaimStore targetPoliticalClaimStore = null,
-        FactionStore targetFactionStore = null,
-        OfficeStore targetOfficeStore = null,
-        PropertyOwnershipStore targetPropertyOwnershipStore = null)
+        PoliticalClaimStore targetPoliticalClaimStore,
+        FactionStore targetFactionStore,
+        OfficeStore targetOfficeStore,
+        PropertyOwnershipStore targetPropertyOwnershipStore)
     {
         PoliticalKnowledgeStore clone = new PoliticalKnowledgeStore(
             targetPersonStore ?? throw new ArgumentNullException(nameof(targetPersonStore)),
@@ -468,7 +471,7 @@ public sealed class PoliticalKnowledgeStore
                 break;
             case PoliticalKnowledgeFactKind.OfficeVacancy:
                 OfficeVacancyKnowledgeObservation office = (OfficeVacancyKnowledgeObservation)observation;
-                if (officeStore.TryGet(office.OfficeId, out _) == false)
+                if (officeStore.TryGet(office.OfficeId, out OfficeRecord officeRecord) == false)
                 {
                     return InvalidEndpoint(out failure, "The observed office is not registered in this world.");
                 }
@@ -476,6 +479,11 @@ public sealed class PoliticalKnowledgeStore
                 if (institutionStore.TryGet(office.InstitutionId, out _) == false)
                 {
                     return InvalidEndpoint(out failure, "The observed office institution is not registered in this world.");
+                }
+
+                if (officeRecord.InstitutionId != office.InstitutionId)
+                {
+                    return InvalidEndpoint(out failure, "The observed office institution does not own the referenced office.");
                 }
                 break;
             case PoliticalKnowledgeFactKind.PersonDeath:
