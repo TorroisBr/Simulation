@@ -10,8 +10,9 @@ Phase 6 bootstraps from the immutable, validated Phase 5 canonical SHA:
 
 `3c3a5a7fa5bac8f301b98ec92307eadb19af25ff`
 
-The canonical branch now includes the reviewed political claim and faction /
-affiliation foundations promoted from integration tip `a155392`.
+The canonical branch includes Checkpoint A political truth foundations at
+`fb69f7c` (`Record Phase 6 Checkpoint A`). Checkpoint B is validated on the
+Phase 6 integration tip before canonical promotion.
 
 The completed prior-phase baseline remains documented in:
 
@@ -90,11 +91,17 @@ Completed:
   `1358/1358`, complete Smoke `3/3`, and `git diff --check` green.
 - reached Checkpoint A with faction-focused EditMode `9/9`, combined ALL
   EditMode `1367/1367`, complete Smoke `3/3`, and `git diff --check` green.
+- completed, independently reviewed, integrated, and validated political
+  knowledge and support foundations;
+- completed, independently reviewed, integrated, and validated derived
+  legitimacy, typed political decision history, and office-bound succession
+  selection;
+- integrated world-owned decision history with authoritative world/knowledge
+  revision checks and deterministic diagnostics.
 
-Pending after Checkpoint A:
+Pending after Checkpoint B:
 
-- Checkpoint B work: political knowledge, recognition/legitimacy contracts,
-  succession selection integration, and political decision boundaries;
+- external review of this checkpoint;
 - optional Checkpoint C work only if a substantial autonomous or generalized
   relationship layer is explicitly justified;
 - remaining Phase 6 completion candidate and deferred-work record.
@@ -115,39 +122,44 @@ points, and semantic conflicts.
 
 - claim records and claim lifecycle — COMPLETE and canonical;
 - minimal faction identity and affiliation relations — COMPLETE and canonical;
-- narrowly typed support or alignment relations, only where semantics and
-  ownership are explicit;
-- deterministic diagnostics for each stable truth store.
+- narrowly typed support relations — COMPLETE for Checkpoint B;
+- deterministic diagnostics for each stable truth store — COMPLETE for
+  Checkpoint B.
 
 Avoid shared edits to `SimulationRuntime.cs`, diagnostics core, and
 configuration core in parallel. Integrate these foundations intentionally.
 
-### Recognition and derived legitimacy — MUST WAIT for political truth
+### Recognition and derived legitimacy — COMPLETE for Checkpoint B
 
 Recognition state, recognized authority, and any legitimacy output must consume
-explicit claims, factual eligibility, support, and institutional context. A
-numeric legitimacy score is not primary truth unless later architecture proves
-that stored state is necessary.
+explicit claims, factual eligibility, support, and institutional context. The
+legitimacy score is derived and is not stored as primary world truth.
 
-### Knowledge — MUST WAIT for stable political truth
+### Knowledge — COMPLETE for Checkpoint B
 
-Add only the political facts and claims that existing knowledge architecture can
-represent. Do not build a complete information-propagation simulation before
-truth ownership is stable.
+Political knowledge is holder-scoped by stable PersonId or InstitutionId. It
+stores typed observations with observed/received days and deterministic
+provenance replacement. The world owns the authoritative store, exposes
+defensive snapshots, and increments a knowledge revision on holder or
+observation changes. Future observations and unregistered holders are rejected.
 
-### Political decisions and succession selection — MUST WAIT for recognition and
-knowledge contracts
+### Political decisions and succession selection — COMPLETE for Checkpoint B
 
-Political systems may propose or select a candidate or recognized claimant.
-Existing vacancy, office assignment, property, estate, and succession execution
-must remain the validation and mutation boundary.
+Political decisions are immutable proposal/selection history. Succession
+decisions identify their office, decider, candidate set, evidence/knowledge
+references, and captured world/knowledge revisions. Registration rejects stale
+or cross-world context. Political succession wraps the existing office
+succession transition, rechecks current day, candidate fingerprint, office
+identity, world ownership, and current domain truth, then delegates mutation to
+the existing office API.
 
-### Political interaction and autonomous behavior — MUST WAIT for explicit
-decision contracts
+### Political interaction and autonomous behavior — DEFERRED
 
-Competing claims, faction support, institutional disagreement, conflict state,
-and NPC/institution decisions are later waves. Autonomous daily processing is
-not assumed; explicit transitions and scheduled directives are preferred.
+Diplomacy, warfare, macroeconomics, full government/taxation, religion,
+culture, romance/fertility, persistence/networking, Timeline architecture,
+procedural narrative/UI-heavy political screens, and autonomous daily political
+processing remain outside Checkpoint B. `SimulationRuntime.AdvanceDay` was not
+modified for politics.
 
 ### Current political claim foundation
 
@@ -167,9 +179,49 @@ store. Runtime clones rebind the faction store to the receiving PersonStore;
 diagnostics cover deterministic faction and affiliation snapshots, output,
 diffs, and invariants.
 
-No political knowledge, support, legitimacy score, faction autonomy, or
-`AdvanceDay` political processing is included yet. Those are Checkpoint B or
-later work.
+Political knowledge, support, derived legitimacy, decision history, and
+succession selection are now integrated for Checkpoint B. Recognition remains
+explicit institutional state: factual death does not itself create vacancy,
+and recognition does not rewrite genealogy, property ownership, or incumbency.
+
+### Checkpoint B integration and review record
+
+The validated integration branch is
+`codex/phase6/PoliticalSuccessionIntegration`.
+
+Feature and integration tips:
+
+- knowledge foundation: `68cc100`;
+- support foundation: `6926272`;
+- B1 knowledge/support integration: `59be917`;
+- legitimacy/decision foundation: `60cc622`;
+- B1+B2 integration before succession: `34388e3`;
+- succession integration worker: `f38a380`;
+- authoritative decision/diagnostics hardening: `d5dfa9c`;
+- world-bound succession transition hardening: `da133ef`.
+
+Independent reviews rejected and then verified the resolved issues: malformed
+and delimiter-colliding support diagnostics, claim/office knowledge coverage,
+deterministic equal-day provenance, vacancy recognition semantics, world-owned
+knowledge/decision mutation boundaries, authoritative stale revisions,
+office/institution decision context, deterministic decision diagnostics, and
+cross-world succession transition rejection. No self-approval was used.
+
+Final validation on the integration tip:
+
+- Phase 6 political focused suites: `57/57`;
+- diagnostics, orchestration, institution, and succession regressions:
+  `47/47`;
+- B3 political succession/decision/knowledge-support suites: `20/20`;
+- ALL EditMode: `1405/1405`;
+- official complete Smoke filter (`EditMode -TestFilter Smoke`): `5/5`;
+- failures/skips: `0/0`;
+- `git diff --check`: green.
+
+The complete Smoke suite is the five-test EditMode `Smoke` filter. The
+separate narrower `PlayModeSmokeTests` class previously passed `3/3`; the
+PlayMode platform itself discovers zero tests because those smoke tests are
+EditMode tests that enter play mode manually.
 
 ## Branch and review policy
 
@@ -198,9 +250,11 @@ recurring political processes, or long-horizon NPC behavior.
 ## Human checkpoints
 
 - Checkpoint A: stable political truth foundations are canonical — REACHED at
-  canonical promotion of integration tip `a155392`.
+  canonical promotion of integration tip `fb69f7c`.
 - Checkpoint B: politics integrates with knowledge, institutions, claims or
-  recognition, succession selection, and NPC/institution decisions.
+  recognition, succession selection, and NPC/institution decisions — REACHED
+  on the validated integration tip documented above; stop for external review
+  after canonical promotion.
 - Optional Checkpoint C: only for a genuinely substantial new architecture
   layer such as autonomous simulation, generalized political relationships, or
   major knowledge/`AdvanceDay` integration.

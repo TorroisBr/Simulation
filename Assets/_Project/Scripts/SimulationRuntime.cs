@@ -931,6 +931,26 @@ public sealed class SimulationRuntime
             return false;
         }
 
+        foreach (PersonId candidatePersonId in record.CandidatePersonIds)
+        {
+            if (candidatePersonId == null || personStore.TryGet(candidatePersonId, out _) == false)
+            {
+                failure = PoliticalDecisionFailure.Create(
+                    PoliticalDecisionFailureCode.InvalidDecision,
+                    "Every political decision candidate must be registered in this world.");
+                return false;
+            }
+        }
+
+        if (record.Outcome.ReferencedClaimId != null
+            && politicalClaimStore.TryGet(record.Outcome.ReferencedClaimId, out _) == false)
+        {
+            failure = PoliticalDecisionFailure.Create(
+                PoliticalDecisionFailureCode.InvalidDecision,
+                "A political decision claim reference must be registered in this world.");
+            return false;
+        }
+
         return politicalDecisionStore.TryRegister(record, out failure);
     }
 

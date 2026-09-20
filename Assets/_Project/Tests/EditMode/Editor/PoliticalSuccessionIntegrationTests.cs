@@ -69,6 +69,20 @@ public sealed class PoliticalSuccessionIntegrationTests
                 future,
                 out PoliticalDecisionFailure futureFailure), Is.False);
         Assert.That(futureFailure.Code, Is.EqualTo(PoliticalDecisionFailureCode.InvalidDecision));
+
+        PoliticalDecisionRecord unknownCandidate = CreateDecision(
+            "decision.unknown-candidate",
+            fixture.World.CurrentDay,
+            fixture.World.CurrentDay,
+            new[] { new PersonId("person.unknown") },
+            new PersonId("person.unknown"),
+            fixture.Decider,
+            fixture.World.PoliticalWorldRevision,
+            fixture.World.PoliticalKnowledgeRevision);
+        Assert.That(fixture.World.TryRegisterPoliticalDecision(
+                unknownCandidate,
+                out PoliticalDecisionFailure unknownCandidateFailure), Is.False);
+        Assert.That(unknownCandidateFailure.Code, Is.EqualTo(PoliticalDecisionFailureCode.InvalidDecision));
     }
 
     [Test]
