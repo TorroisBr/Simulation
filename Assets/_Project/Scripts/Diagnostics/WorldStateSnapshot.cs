@@ -26,6 +26,7 @@ public sealed class WorldStateSnapshotContext
     public IEnumerable<FactionRecord> Factions { get; }
     public IEnumerable<FactionAffiliationRecord> FactionAffiliations { get; }
     public IEnumerable<PoliticalClaimRecord> PoliticalClaims { get; }
+    public IEnumerable<PoliticalSupportRelationRecord> PoliticalSupports { get; }
 
     public WorldStateSnapshotContext(
         SimulationTime simulationTime = null,
@@ -50,7 +51,8 @@ public sealed class WorldStateSnapshotContext
         IEnumerable<string> officeIds = null,
         IEnumerable<string> propertyIds = null,
         IEnumerable<FactionRecord> factions = null,
-        IEnumerable<FactionAffiliationRecord> factionAffiliations = null)
+        IEnumerable<FactionAffiliationRecord> factionAffiliations = null,
+        IEnumerable<PoliticalSupportRelationRecord> politicalSupports = null)
     {
         SimulationTime = simulationTime;
         Calendar = calendar ?? (calendarDefinition != null ? new SimulationCalendar(calendarDefinition) : null);
@@ -73,6 +75,7 @@ public sealed class WorldStateSnapshotContext
         Factions = factions;
         FactionAffiliations = factionAffiliations;
         PoliticalClaims = politicalClaims ?? Array.Empty<PoliticalClaimRecord>();
+        PoliticalSupports = politicalSupports ?? Array.Empty<PoliticalSupportRelationRecord>();
         Parentages = parentages
             ?? genealogyStore?.Records
             ?? Array.Empty<ParentageRecord>();
@@ -111,6 +114,8 @@ public sealed class WorldStateSnapshot
     public int FactionCount => Factions.Count;
     public IReadOnlyList<WorldStateFactionAffiliationSnapshot> FactionAffiliations { get; }
     public int FactionAffiliationCount => FactionAffiliations.Count;
+    public IReadOnlyList<WorldStatePoliticalSupportSnapshot> PoliticalSupports { get; }
+    public int PoliticalSupportCount => PoliticalSupports.Count;
     public WorldStateSpatialSnapshot Spatial { get; }
     public IReadOnlyList<WorldStateSiteSnapshot> Sites { get; }
     public IReadOnlyList<WorldStateExpeditionSnapshot> Expeditions { get; }
@@ -139,7 +144,8 @@ public sealed class WorldStateSnapshot
         IEnumerable<string> officeIds = null,
         IEnumerable<string> propertyIds = null,
         IEnumerable<WorldStateFactionSnapshot> factions = null,
-        IEnumerable<WorldStateFactionAffiliationSnapshot> factionAffiliations = null)
+        IEnumerable<WorldStateFactionAffiliationSnapshot> factionAffiliations = null,
+        IEnumerable<WorldStatePoliticalSupportSnapshot> politicalSupports = null)
     {
         Metadata = new WorldStateSnapshotMetadata(absoluteDay, calendarDate);
         Npcs = SnapshotCollections.CopySorted(npcs, npc => npc?.RuntimeId);
@@ -179,6 +185,9 @@ public sealed class WorldStateSnapshot
             affiliation => affiliation == null
                 ? null
                 : affiliation.FactionId + "\u001f" + affiliation.PersonId);
+        PoliticalSupports = SnapshotCollections.CopySorted(
+            politicalSupports,
+            support => support?.RelationId);
     }
 
     private static IReadOnlyList<WorldStateParentageSnapshot> SortParentages(
@@ -457,6 +466,39 @@ public sealed class WorldStateFactionAffiliationSnapshot
         FactionId = factionId;
         PersonId = personId;
         JoinedAbsoluteDay = joinedAbsoluteDay;
+        EndedAbsoluteDay = endedAbsoluteDay;
+    }
+}
+
+public sealed class WorldStatePoliticalSupportSnapshot
+{
+    public string RelationId { get; }
+    public PoliticalSupportSourceKind SourceKind { get; }
+    public string SourceId { get; }
+    public PoliticalSupportTargetKind TargetKind { get; }
+    public string TargetId { get; }
+    public PoliticalSupportDisposition Disposition { get; }
+    public long StartedAbsoluteDay { get; }
+    public long? EndedAbsoluteDay { get; }
+    public bool IsActive => EndedAbsoluteDay.HasValue == false;
+
+    public WorldStatePoliticalSupportSnapshot(
+        string relationId,
+        PoliticalSupportSourceKind sourceKind,
+        string sourceId,
+        PoliticalSupportTargetKind targetKind,
+        string targetId,
+        PoliticalSupportDisposition disposition,
+        long startedAbsoluteDay,
+        long? endedAbsoluteDay)
+    {
+        RelationId = relationId;
+        SourceKind = sourceKind;
+        SourceId = sourceId;
+        TargetKind = targetKind;
+        TargetId = targetId;
+        Disposition = disposition;
+        StartedAbsoluteDay = startedAbsoluteDay;
         EndedAbsoluteDay = endedAbsoluteDay;
     }
 }
@@ -1144,6 +1186,8 @@ public static class WorldStateSnapshotBuilder
         List<WorldStateFactionSnapshot> factions = BuildFactionSnapshots(context.Factions);
         List<WorldStateFactionAffiliationSnapshot> factionAffiliations =
             BuildFactionAffiliationSnapshots(context.FactionAffiliations);
+        List<WorldStatePoliticalSupportSnapshot> politicalSupports =
+            BuildPoliticalSupportSnapshots(context.PoliticalSupports);
         List<WorldStateExpeditionSnapshot> expeditions = BuildExpeditionSnapshots(context.ExpeditionStore);
         WorldStateCalendarSnapshot calendarDate = null;
         if (context.Calendar != null && context.SimulationTime != null)
@@ -1172,7 +1216,8 @@ public static class WorldStateSnapshotBuilder
             context.OfficeIds ?? BuildOfficeIds(context.OfficeStore),
             context.PropertyIds ?? BuildPropertyIds(context.PropertyOwnershipStore),
             factions,
-            factionAffiliations);
+            factionAffiliations,
+            politicalSupports);
     }
 
     private static List<WorldStatePoliticalClaimSnapshot> BuildPoliticalClaimSnapshots(
@@ -1255,6 +1300,37 @@ public static class WorldStateSnapshotBuilder
                     affiliation.JoinedAbsoluteDay,
                     affiliation.EndedAbsoluteDay));
             }
+        }
+
+        return result;
+    }
+
+    private static List<WorldStatePoliticalSupportSnapshot> BuildPoliticalSupportSnapshots(
+        IEnumerable<PoliticalSupportRelationRecord> source)
+    {
+        List<WorldStatePoliticalSupportSnapshot> result =
+            new List<WorldStatePoliticalSupportSnapshot>();
+        if (source == null)
+        {
+            return result;
+        }
+
+        foreach (PoliticalSupportRelationRecord support in source)
+        {
+            if (support?.RelationId == null || support.Source == null || support.Target == null)
+            {
+                continue;
+            }
+
+            result.Add(new WorldStatePoliticalSupportSnapshot(
+                support.RelationId.Value,
+                support.Source.Kind,
+                support.Source.Value,
+                support.Target.Kind,
+                support.Target.Value,
+                support.Disposition,
+                support.StartedAbsoluteDay,
+                support.EndedAbsoluteDay));
         }
 
         return result;

@@ -22,6 +22,8 @@ public sealed class SimulationRuntime
     private readonly EstateStore estateStore;
     private readonly PoliticalClaimStore politicalClaimStore;
     private readonly FactionStore factionStore;
+    private readonly PoliticalSupportStore politicalSupportStore;
+    private readonly PoliticalKnowledgeStore politicalKnowledgeStore;
     private readonly List<NpcActionData> configuredActions;
     private readonly ScheduledDirectiveSystem scheduledDirectiveSystem;
     private readonly JusticeSystem justiceSystem;
@@ -58,6 +60,8 @@ public sealed class SimulationRuntime
     public IReadOnlyList<PoliticalClaimRecord> PoliticalClaimRecords => politicalClaimStore.Records;
     public IReadOnlyList<FactionRecord> FactionRecords => factionStore.Factions;
     public IReadOnlyList<FactionAffiliationRecord> FactionAffiliationRecords => factionStore.Affiliations;
+    public IReadOnlyList<PoliticalSupportRelationRecord> PoliticalSupportRecords => politicalSupportStore.Records;
+    public PoliticalKnowledgeStore PoliticalKnowledgeStore => politicalKnowledgeStore;
     /// <summary>
     /// Read-only view of every named NPC registered with this world. Registration is
     /// explicit; death and emigration do not remove an NPC from this world roster.
@@ -98,7 +102,9 @@ public sealed class SimulationRuntime
         PropertyOwnershipStore propertyOwnershipStore = null,
         EstateStore estateStore = null,
         PoliticalClaimStore politicalClaimStore = null,
-        FactionStore factionStore = null)
+        FactionStore factionStore = null,
+        PoliticalSupportStore politicalSupportStore = null,
+        PoliticalKnowledgeStore politicalKnowledgeStore = null)
     {
         this.simulationTime = simulationTime ?? throw new ArgumentNullException(nameof(simulationTime));
 
@@ -163,6 +169,17 @@ public sealed class SimulationRuntime
         this.factionStore = CloneFactionStore(
             factionStore,
             resolvedPersonStore,
+            simulationTime.AbsoluteDay);
+        this.politicalSupportStore = ClonePoliticalSupportStore(
+            politicalSupportStore,
+            resolvedPersonStore,
+            this.factionStore,
+            this.politicalClaimStore,
+            simulationTime.AbsoluteDay);
+        this.politicalKnowledgeStore = ClonePoliticalKnowledgeStore(
+            politicalKnowledgeStore,
+            resolvedPersonStore,
+            resolvedInstitutionStore,
             simulationTime.AbsoluteDay);
         this.cities = cities != null ? new List<CityRuntime>(cities) : new List<CityRuntime>();
         this.npcRuntimes = new List<NpcRuntime>();
@@ -663,6 +680,97 @@ public sealed class SimulationRuntime
         return PoliticalClaimSystem.TryApplyResolution(
             politicalClaimStore,
             transition,
+            out failure);
+    }
+
+    /// <summary>
+    /// Registers an existing support relation while loading or composing world state.
+    /// New in-world additions must use the proposal/apply pair below so the current
+    /// world day and store revision are revalidated atomically.
+    /// </summary>
+    public bool TryRegisterPoliticalSupport(
+        PoliticalSupportRelationRecord record,
+        out PoliticalSupportFailure failure)
+    {
+        if (record == null)
+        {
+            failure = PoliticalSupportFailure.Create(
+                PoliticalSupportFailureCode.InvalidRelation,
+                "A political support relation is required.");
+            return false;
+        }
+
+        if (record.StartedAbsoluteDay > CurrentDay
+            || (record.EndedAbsoluteDay.HasValue && record.EndedAbsoluteDay.Value > CurrentDay))
+        {
+            failure = PoliticalSupportFailure.Create(
+                PoliticalSupportFailureCode.StaleWorldDay,
+                "Political support history cannot extend into the future of the world timeline.");
+            return false;
+        }
+
+        return politicalSupportStore.TryRegister(record, out failure);
+    }
+
+    public bool TryProposePoliticalSupportAdd(
+        PoliticalSupportRelationRecord record,
+        out PoliticalSupportAddTransition transition,
+        out PoliticalSupportFailure failure)
+    {
+        return politicalSupportStore.TryProposeAdd(
+            record,
+            CurrentDay,
+            out transition,
+            out failure);
+    }
+
+    public bool TryApplyPoliticalSupportAdd(
+        PoliticalSupportAddTransition transition,
+        out PoliticalSupportFailure failure)
+    {
+        return politicalSupportStore.TryApplyAdd(transition, CurrentDay, out failure);
+    }
+
+    public bool TryProposePoliticalSupportEnd(
+        PoliticalSupportRelationId relationId,
+        out PoliticalSupportEndTransition transition,
+        out PoliticalSupportFailure failure)
+    {
+        return politicalSupportStore.TryProposeEnd(
+            relationId,
+            CurrentDay,
+            out transition,
+            out failure);
+    }
+
+    public bool TryApplyPoliticalSupportEnd(
+        PoliticalSupportEndTransition transition,
+        out PoliticalSupportFailure failure)
+    {
+        return politicalSupportStore.TryApplyEnd(transition, CurrentDay, out failure);
+    }
+
+    public bool TryRecordPoliticalKnowledge(
+        PoliticalKnowledgeHolder holder,
+        PoliticalKnowledgeObservation observation,
+        out PoliticalKnowledgeFailure failure)
+    {
+        return politicalKnowledgeStore.TryRecordObservation(
+            holder,
+            observation,
+            CurrentDay,
+            out failure);
+    }
+
+    public bool TryRegisterPoliticalKnowledgeHolder(
+        PoliticalKnowledgeHolder holder,
+        out PoliticalKnowledgeRuntime runtime,
+        out PoliticalKnowledgeFailure failure)
+    {
+        return politicalKnowledgeStore.TryRegisterHolder(
+            holder,
+            CurrentDay,
+            out runtime,
             out failure);
     }
 
@@ -1662,6 +1770,56 @@ public sealed class SimulationRuntime
         }
 
         return source.Clone(personStore);
+    }
+
+    private static PoliticalSupportStore ClonePoliticalSupportStore(
+        PoliticalSupportStore source,
+        PersonStore personStore,
+        FactionStore factionStore,
+        PoliticalClaimStore politicalClaimStore,
+        long currentDay)
+    {
+        PoliticalSupportStore empty = new PoliticalSupportStore(
+            personStore,
+            factionStore,
+            politicalClaimStore);
+        if (source == null)
+        {
+            return empty;
+        }
+
+        PoliticalSupportStore validation = new PoliticalSupportStore(
+            personStore,
+            factionStore,
+            politicalClaimStore);
+        foreach (PoliticalSupportRelationRecord record in source.Records)
+        {
+            if (record == null
+                || record.StartedAbsoluteDay > currentDay
+                || (record.EndedAbsoluteDay.HasValue && record.EndedAbsoluteDay.Value > currentDay)
+                || validation.TryRegister(record, out PoliticalSupportFailure failure) == false)
+            {
+                throw new ArgumentException(
+                    "The SimulationRuntime PoliticalSupportStore contains an invalid relation or future history.",
+                    nameof(source));
+            }
+        }
+
+        return source.Clone(personStore, factionStore, politicalClaimStore);
+    }
+
+    private static PoliticalKnowledgeStore ClonePoliticalKnowledgeStore(
+        PoliticalKnowledgeStore source,
+        PersonStore personStore,
+        InstitutionStore institutionStore,
+        long currentDay)
+    {
+        if (source == null)
+        {
+            return new PoliticalKnowledgeStore(personStore, institutionStore);
+        }
+
+        return source.Clone(personStore, institutionStore, currentDay);
     }
 
     private static InstitutionStore ResolveInstitutionStore(

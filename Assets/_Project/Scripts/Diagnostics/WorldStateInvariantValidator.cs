@@ -330,6 +330,13 @@ public static class WorldStateInvariantValidator
             snapshot.AbsoluteDay,
             issues);
         ValidateFactions(snapshot.Factions, snapshot.FactionAffiliations, personIds, snapshot.AbsoluteDay, issues);
+        ValidatePoliticalSupports(
+            snapshot.PoliticalSupports,
+            personIds,
+            snapshot.Factions,
+            snapshot.PoliticalClaims,
+            snapshot.AbsoluteDay,
+            issues);
 
         foreach (WorldStateNpcSnapshot npc in snapshot.Npcs)
         {
@@ -758,6 +765,109 @@ public static class WorldStateInvariantValidator
                     || affiliation.EndedAbsoluteDay.Value > absoluteDay))
             {
                 AddError(issues, "FactionAffiliationEndDayInvalid", identity, "Faction affiliation end day is inconsistent with the snapshot timeline.");
+            }
+        }
+    }
+
+    private static void ValidatePoliticalSupports(
+        IReadOnlyList<WorldStatePoliticalSupportSnapshot> supports,
+        HashSet<string> personIds,
+        IReadOnlyList<WorldStateFactionSnapshot> factions,
+        IReadOnlyList<WorldStatePoliticalClaimSnapshot> claims,
+        long absoluteDay,
+        List<WorldStateInvariantIssue> issues)
+    {
+        HashSet<string> factionIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (WorldStateFactionSnapshot faction in factions ?? Array.Empty<WorldStateFactionSnapshot>())
+        {
+            if (faction != null && string.IsNullOrWhiteSpace(faction.FactionId) == false)
+            {
+                factionIds.Add(faction.FactionId);
+            }
+        }
+
+        HashSet<string> claimIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (WorldStatePoliticalClaimSnapshot claim in claims ?? Array.Empty<WorldStatePoliticalClaimSnapshot>())
+        {
+            if (claim != null && string.IsNullOrWhiteSpace(claim.ClaimId) == false)
+            {
+                claimIds.Add(claim.ClaimId);
+            }
+        }
+
+        HashSet<string> relationIds = new HashSet<string>(StringComparer.Ordinal);
+        HashSet<string> activePairs = new HashSet<string>(StringComparer.Ordinal);
+        foreach (WorldStatePoliticalSupportSnapshot support in supports ?? Array.Empty<WorldStatePoliticalSupportSnapshot>())
+        {
+            if (support == null)
+            {
+                AddError(issues, "PoliticalSupportNull", "support", "Snapshot contains a null political support entry.");
+                continue;
+            }
+
+            string identity = string.IsNullOrWhiteSpace(support.RelationId) ? "support" : support.RelationId;
+            if (string.IsNullOrWhiteSpace(support.RelationId))
+            {
+                AddError(issues, "PoliticalSupportIdMissing", identity, "Political support relation has no RelationId.");
+            }
+            else if (relationIds.Add(support.RelationId) == false)
+            {
+                AddError(issues, "DuplicatePoliticalSupportId", identity, "Political support RelationId appears more than once.");
+            }
+
+            if (Enum.IsDefined(typeof(PoliticalSupportSourceKind), support.SourceKind) == false
+                || string.IsNullOrWhiteSpace(support.SourceId))
+            {
+                AddError(issues, "PoliticalSupportSourceInvalid", identity, "Political support source is invalid.");
+            }
+            else if (support.SourceKind == PoliticalSupportSourceKind.Person && personIds.Contains(support.SourceId) == false)
+            {
+                AddError(issues, "PoliticalSupportSourcePersonMissing", identity, "Political support source PersonId is absent.");
+            }
+            else if (support.SourceKind == PoliticalSupportSourceKind.Faction && factionIds.Contains(support.SourceId) == false)
+            {
+                AddError(issues, "PoliticalSupportSourceFactionMissing", identity, "Political support source FactionId is absent.");
+            }
+
+            if (Enum.IsDefined(typeof(PoliticalSupportTargetKind), support.TargetKind) == false
+                || string.IsNullOrWhiteSpace(support.TargetId))
+            {
+                AddError(issues, "PoliticalSupportTargetInvalid", identity, "Political support target is invalid.");
+            }
+            else if (support.TargetKind == PoliticalSupportTargetKind.PoliticalClaim && claimIds.Contains(support.TargetId) == false)
+            {
+                AddError(issues, "PoliticalSupportTargetClaimMissing", identity, "Political support target claim is absent.");
+            }
+            else if (support.TargetKind == PoliticalSupportTargetKind.SuccessionCandidate && personIds.Contains(support.TargetId) == false)
+            {
+                AddError(issues, "PoliticalSupportTargetCandidateMissing", identity, "Political support target candidate PersonId is absent.");
+            }
+
+            if (Enum.IsDefined(typeof(PoliticalSupportDisposition), support.Disposition) == false)
+            {
+                AddError(issues, "PoliticalSupportDispositionInvalid", identity, "Political support disposition is invalid.");
+            }
+
+            if (support.StartedAbsoluteDay < 0L || support.StartedAbsoluteDay > absoluteDay)
+            {
+                AddError(issues, "PoliticalSupportStartDayInvalid", identity, "Political support start day is outside the snapshot timeline.");
+            }
+
+            if (support.EndedAbsoluteDay.HasValue
+                && (support.EndedAbsoluteDay.Value < support.StartedAbsoluteDay
+                    || support.EndedAbsoluteDay.Value > absoluteDay))
+            {
+                AddError(issues, "PoliticalSupportEndDayInvalid", identity, "Political support end day is inconsistent with the snapshot timeline.");
+            }
+
+            if (support.IsActive)
+            {
+                string pair = (int)support.SourceKind + "\u001f" + support.SourceId
+                    + "\u001f" + (int)support.TargetKind + "\u001f" + support.TargetId;
+                if (activePairs.Add(pair) == false)
+                {
+                    AddError(issues, "DuplicateActivePoliticalSupportPair", identity, "More than one active support relation exists for a source and target pair.");
+                }
             }
         }
     }

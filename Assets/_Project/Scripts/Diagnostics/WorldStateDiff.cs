@@ -79,6 +79,10 @@ public sealed class WorldStateDiff
             WorldStateCanonicalWriter.IntValue(before.FactionAffiliationCount),
             WorldStateCanonicalWriter.IntValue(after.FactionAffiliationCount),
             differences);
+        CompareValue("Metadata", "world", "PoliticalSupportCount",
+            WorldStateCanonicalWriter.IntValue(before.PoliticalSupportCount),
+            WorldStateCanonicalWriter.IntValue(after.PoliticalSupportCount),
+            differences);
         CompareCalendar(before.Metadata.CalendarDate, after.Metadata.CalendarDate, differences);
 
         CompareEntities("NPC", before.Npcs, after.Npcs, npc => npc.RuntimeId,
@@ -254,6 +258,41 @@ public sealed class WorldStateDiff
                     WorldStateCanonicalWriter.Int64Value(right.JoinedAbsoluteDay),
                     differences);
                 CompareValue("FactionAffiliation", identity, "EndedAbsoluteDay",
+                    WorldStateCanonicalWriter.NullableInt64Value(left.EndedAbsoluteDay),
+                    WorldStateCanonicalWriter.NullableInt64Value(right.EndedAbsoluteDay),
+                    differences);
+            },
+            differences);
+
+        CompareEntities("PoliticalSupport", before.PoliticalSupports, after.PoliticalSupports,
+            support => support.RelationId,
+            (identity, left, right) =>
+            {
+                CompareValue("PoliticalSupport", identity, "SourceKind",
+                    WorldStateCanonicalWriter.EnumValue(left.SourceKind),
+                    WorldStateCanonicalWriter.EnumValue(right.SourceKind),
+                    differences);
+                CompareValue("PoliticalSupport", identity, "SourceId",
+                    WorldStateCanonicalWriter.StringValue(left.SourceId),
+                    WorldStateCanonicalWriter.StringValue(right.SourceId),
+                    differences);
+                CompareValue("PoliticalSupport", identity, "TargetKind",
+                    WorldStateCanonicalWriter.EnumValue(left.TargetKind),
+                    WorldStateCanonicalWriter.EnumValue(right.TargetKind),
+                    differences);
+                CompareValue("PoliticalSupport", identity, "TargetId",
+                    WorldStateCanonicalWriter.StringValue(left.TargetId),
+                    WorldStateCanonicalWriter.StringValue(right.TargetId),
+                    differences);
+                CompareValue("PoliticalSupport", identity, "Disposition",
+                    WorldStateCanonicalWriter.EnumValue(left.Disposition),
+                    WorldStateCanonicalWriter.EnumValue(right.Disposition),
+                    differences);
+                CompareValue("PoliticalSupport", identity, "StartedAbsoluteDay",
+                    WorldStateCanonicalWriter.Int64Value(left.StartedAbsoluteDay),
+                    WorldStateCanonicalWriter.Int64Value(right.StartedAbsoluteDay),
+                    differences);
+                CompareValue("PoliticalSupport", identity, "EndedAbsoluteDay",
                     WorldStateCanonicalWriter.NullableInt64Value(left.EndedAbsoluteDay),
                     WorldStateCanonicalWriter.NullableInt64Value(right.EndedAbsoluteDay),
                     differences);
