@@ -53,7 +53,7 @@ public sealed class FactionFoundationTests
     {
         PersonStore persons = new PersonStore();
         PersonRuntime person = RegisterPerson(persons, "person.member");
-        FactionStore source = new FactionStore();
+        FactionStore source = new FactionStore(persons);
         FactionId factionId = new FactionId("faction.council");
         Assert.That(source.TryRegister(new FactionRecord(factionId, "Council", 0L), out _), Is.True);
         Assert.That(source.TryRegisterAffiliation(
@@ -67,6 +67,59 @@ public sealed class FactionFoundationTests
         Assert.That(source.TryRegister(new FactionRecord(new FactionId("faction.second"), "Second", 0L), out _), Is.True);
         Assert.That(source.Factions, Has.Count.EqualTo(2));
         Assert.That(world.FactionRecords, Has.Count.EqualTo(1));
+    }
+
+    [Test]
+    public void CrossWorldAffiliationTransitionsAreRejected()
+    {
+        PersonStore persons = new PersonStore();
+        PersonRuntime person = RegisterPerson(persons, "person.member");
+        SimulationRuntime firstWorld = CreateWorld(persons);
+        SimulationRuntime secondWorld = CreateWorld(persons);
+        FactionId factionId = RegisterFaction(firstWorld, "faction.council");
+        RegisterFaction(secondWorld, "faction.council");
+
+        Assert.That(firstWorld.TryProposeFactionAffiliation(
+            factionId,
+            person.PersonId,
+            out FactionAffiliationAddTransition firstAdd,
+            out _), Is.True);
+        Assert.That(secondWorld.TryApplyFactionAffiliation(firstAdd, out FactionFoundationFailure crossWorldAddFailure), Is.False);
+        Assert.That(crossWorldAddFailure.Code, Is.EqualTo(FactionFoundationFailureCode.WrongFactionStore));
+        Assert.That(firstWorld.TryApplyFactionAffiliation(firstAdd, out _), Is.True);
+
+        Assert.That(secondWorld.TryProposeFactionAffiliation(
+            factionId,
+            person.PersonId,
+            out FactionAffiliationAddTransition secondAdd,
+            out _), Is.True);
+        Assert.That(secondWorld.TryApplyFactionAffiliation(secondAdd, out _), Is.True);
+
+        Assert.That(firstWorld.TryProposeFactionAffiliationEnd(
+            factionId,
+            person.PersonId,
+            out FactionAffiliationEndTransition firstEnd,
+            out _), Is.True);
+        Assert.That(secondWorld.TryApplyFactionAffiliationEnd(firstEnd, out FactionFoundationFailure crossWorldEndFailure), Is.False);
+        Assert.That(crossWorldEndFailure.Code, Is.EqualTo(FactionFoundationFailureCode.WrongFactionStore));
+    }
+
+    [Test]
+    public void FactionStoreRejectsMalformedDirectAffiliationEndpoints()
+    {
+        PersonStore persons = new PersonStore();
+        FactionStore store = new FactionStore(persons);
+        Assert.That(store.TryRegisterAffiliation(
+            new FactionAffiliationRecord(new FactionId("missing.faction"), new PersonId("missing.person"), 0L),
+            out FactionFoundationFailure missingFactionFailure), Is.False);
+        Assert.That(missingFactionFailure.Code, Is.EqualTo(FactionFoundationFailureCode.FactionNotRegistered));
+
+        FactionId factionId = new FactionId("faction.council");
+        Assert.That(store.TryRegister(new FactionRecord(factionId, "Council", 0L), out _), Is.True);
+        Assert.That(store.TryRegisterAffiliation(
+            new FactionAffiliationRecord(factionId, new PersonId("missing.person"), 0L),
+            out FactionFoundationFailure missingPersonFailure), Is.False);
+        Assert.That(missingPersonFailure.Code, Is.EqualTo(FactionFoundationFailureCode.PersonNotRegistered));
     }
 
     [Test]
@@ -122,7 +175,7 @@ public sealed class FactionFoundationTests
             out FactionFoundationFailure failure), Is.False);
         Assert.That(failure.Code, Is.EqualTo(FactionFoundationFailureCode.InvalidCreationAbsoluteDay));
 
-        FactionStore source = new FactionStore();
+        FactionStore source = new FactionStore(persons);
         FactionId factionId = new FactionId("faction.council");
         Assert.That(source.TryRegister(new FactionRecord(factionId, "Council", 0L), out _), Is.True);
         Assert.That(source.TryRegisterAffiliation(
@@ -156,6 +209,32 @@ public sealed class FactionFoundationTests
             && difference.Identity == "faction.council\u001fperson.member"
             && difference.Field == "EndedAbsoluteDay"));
         Assert.That(WorldStateInvariantValidator.Validate(after).IsValid, Is.True);
+    }
+
+    [Test]
+    public void FactionDiagnosticOutputIsIndependentOfRegistrationOrder()
+    {
+        PersonStore firstPersons = new PersonStore();
+        PersonRuntime firstPerson = RegisterPerson(firstPersons, "person.member");
+        SimulationRuntime firstWorld = CreateWorld(firstPersons);
+        FactionId firstA = RegisterFaction(firstWorld, "faction.a");
+        FactionId firstB = RegisterFaction(firstWorld, "faction.b");
+        Assert.That(firstWorld.TryProposeFactionAffiliation(firstB, firstPerson.PersonId, out FactionAffiliationAddTransition firstAddB, out _), Is.True);
+        Assert.That(firstWorld.TryApplyFactionAffiliation(firstAddB, out _), Is.True);
+        Assert.That(firstWorld.TryProposeFactionAffiliation(firstA, firstPerson.PersonId, out FactionAffiliationAddTransition firstAddA, out _), Is.True);
+        Assert.That(firstWorld.TryApplyFactionAffiliation(firstAddA, out _), Is.True);
+
+        PersonStore secondPersons = new PersonStore();
+        PersonRuntime secondPerson = RegisterPerson(secondPersons, "person.member");
+        SimulationRuntime secondWorld = CreateWorld(secondPersons);
+        FactionId secondB = RegisterFaction(secondWorld, "faction.b");
+        FactionId secondA = RegisterFaction(secondWorld, "faction.a");
+        Assert.That(secondWorld.TryProposeFactionAffiliation(secondA, secondPerson.PersonId, out FactionAffiliationAddTransition secondAddA, out _), Is.True);
+        Assert.That(secondWorld.TryApplyFactionAffiliation(secondAddA, out _), Is.True);
+        Assert.That(secondWorld.TryProposeFactionAffiliation(secondB, secondPerson.PersonId, out FactionAffiliationAddTransition secondAddB, out _), Is.True);
+        Assert.That(secondWorld.TryApplyFactionAffiliation(secondAddB, out _), Is.True);
+
+        Assert.That(WorldStateDiagnostics.Export(Capture(firstWorld)), Is.EqualTo(WorldStateDiagnostics.Export(Capture(secondWorld))));
     }
 
     private static SimulationRuntime CreateWorld(PersonStore persons, FactionStore factions = null)

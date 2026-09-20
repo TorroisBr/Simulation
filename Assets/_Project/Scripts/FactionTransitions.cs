@@ -2,14 +2,16 @@ using System;
 
 public sealed class FactionAffiliationAddTransition : IEquatable<FactionAffiliationAddTransition>
 {
+    internal FactionStore ExpectedStore { get; }
     internal long ExpectedStoreRevision { get; }
     public FactionAffiliationRecord Affiliation { get; }
     public FactionId FactionId => Affiliation?.FactionId;
     public PersonId PersonId => Affiliation?.PersonId;
     public long ExpectedWorldDay { get; }
 
-    internal FactionAffiliationAddTransition(FactionAffiliationRecord affiliation, long expectedStoreRevision, long expectedWorldDay)
+    internal FactionAffiliationAddTransition(FactionStore expectedStore, FactionAffiliationRecord affiliation, long expectedStoreRevision, long expectedWorldDay)
     {
+        ExpectedStore = expectedStore;
         Affiliation = affiliation;
         ExpectedStoreRevision = expectedStoreRevision;
         ExpectedWorldDay = expectedWorldDay;
@@ -25,6 +27,7 @@ public sealed class FactionAffiliationAddTransition : IEquatable<FactionAffiliat
 
 public sealed class FactionAffiliationEndTransition : IEquatable<FactionAffiliationEndTransition>
 {
+    internal FactionStore ExpectedStore { get; }
     internal FactionAffiliationRecord ExpectedAffiliation { get; }
     internal long ExpectedStoreRevision { get; }
     public FactionId FactionId => ExpectedAffiliation?.FactionId;
@@ -32,8 +35,9 @@ public sealed class FactionAffiliationEndTransition : IEquatable<FactionAffiliat
     public long ExpectedWorldDay { get; }
     public long EndedAbsoluteDay { get; }
 
-    internal FactionAffiliationEndTransition(FactionAffiliationRecord expectedAffiliation, long expectedStoreRevision, long expectedWorldDay, long endedAbsoluteDay)
+    internal FactionAffiliationEndTransition(FactionStore expectedStore, FactionAffiliationRecord expectedAffiliation, long expectedStoreRevision, long expectedWorldDay, long endedAbsoluteDay)
     {
+        ExpectedStore = expectedStore;
         ExpectedAffiliation = expectedAffiliation;
         ExpectedStoreRevision = expectedStoreRevision;
         ExpectedWorldDay = expectedWorldDay;
@@ -68,11 +72,19 @@ internal static class FactionAffiliationSystem
 
         if (store.TryGetAffiliation(factionId, personId, out FactionAffiliationRecord existing))
         {
-            failure = FactionFoundationFailure.Create(existing.IsActive ? FactionFoundationFailureCode.DuplicateAffiliation : FactionFoundationFailureCode.DuplicateAffiliation, "The faction/person affiliation is already registered.");
+            failure = FactionFoundationFailure.Create(
+                FactionFoundationFailureCode.DuplicateAffiliation,
+                existing.IsActive
+                    ? "The faction/person affiliation is already active."
+                    : "The faction/person affiliation already has a recorded lifecycle.");
             return false;
         }
 
-        transition = new FactionAffiliationAddTransition(new FactionAffiliationRecord(factionId, personId, expectedWorldDay), store.Revision, expectedWorldDay);
+        transition = new FactionAffiliationAddTransition(
+            store,
+            new FactionAffiliationRecord(factionId, personId, expectedWorldDay),
+            store.Revision,
+            expectedWorldDay);
         failure = FactionFoundationFailure.None;
         return true;
     }
@@ -111,7 +123,12 @@ internal static class FactionAffiliationSystem
             return false;
         }
 
-        transition = new FactionAffiliationEndTransition(existing, store.Revision, expectedWorldDay, expectedWorldDay);
+        transition = new FactionAffiliationEndTransition(
+            store,
+            existing,
+            store.Revision,
+            expectedWorldDay,
+            expectedWorldDay);
         failure = FactionFoundationFailure.None;
         return true;
     }
