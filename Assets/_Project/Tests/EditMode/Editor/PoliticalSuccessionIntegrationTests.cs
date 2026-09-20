@@ -108,6 +108,40 @@ public sealed class PoliticalSuccessionIntegrationTests
     }
 
     [Test]
+    public void ComposingPoliticalWorldPreservesCapturedRevisionAndAcceptsFreshDecision()
+    {
+        Fixture fixture = CreateFixture();
+        long capturedRevision = fixture.World.PoliticalWorldRevision;
+
+        SimulationRuntime composed = new SimulationRuntime(
+            new SimulationTime(fixture.World.CurrentDay),
+            Array.Empty<CityRuntime>(),
+            null,
+            personStore: fixture.People,
+            genealogyStore: fixture.Genealogy,
+            institutionStore: fixture.Institutions,
+            officeStore: fixture.Offices,
+            politicalKnowledgeStore: fixture.Knowledge,
+            politicalDecisionStore: fixture.Decisions,
+            politicalWorldRevision: capturedRevision);
+
+        Assert.That(composed.PoliticalWorldRevision, Is.EqualTo(capturedRevision));
+
+        PoliticalDecisionRecord freshDecision = CreateDecision(
+            "decision.after-composition",
+            composed.CurrentDay,
+            composed.CurrentDay,
+            fixture.CandidateIds,
+            fixture.SelectedCandidateId,
+            fixture.Decider,
+            capturedRevision,
+            composed.PoliticalKnowledgeRevision);
+        Assert.That(composed.TryRegisterPoliticalDecision(
+                freshDecision,
+                out PoliticalDecisionFailure failure), Is.True, failure.ToString());
+    }
+
+    [Test]
     public void PoliticalSelectionUsesCandidateFingerprintAndRevalidatesDeadCandidate()
     {
         Fixture fixture = CreateFixture();
@@ -366,7 +400,12 @@ public sealed class PoliticalSuccessionIntegrationTests
             decider,
             officeId,
             new[] { firstCandidate.PersonId, selectedCandidate.PersonId, thirdCandidate.PersonId },
-            selectedCandidate.PersonId);
+            selectedCandidate.PersonId,
+            people,
+            genealogy,
+            institutions,
+            offices,
+            knowledge);
     }
 
     private static PoliticalDecisionRecord CreateDecision(
@@ -426,7 +465,12 @@ public sealed class PoliticalSuccessionIntegrationTests
             PoliticalKnowledgeHolder decider,
             OfficeId officeId,
             PersonId[] candidateIds,
-            PersonId selectedCandidateId)
+            PersonId selectedCandidateId,
+            PersonStore people,
+            GenealogyStore genealogy,
+            InstitutionStore institutions,
+            OfficeStore offices,
+            PoliticalKnowledgeStore knowledge)
         {
             World = world;
             Decisions = decisions;
@@ -435,6 +479,11 @@ public sealed class PoliticalSuccessionIntegrationTests
             OfficeId = officeId;
             CandidateIds = candidateIds;
             SelectedCandidateId = selectedCandidateId;
+            People = people;
+            Genealogy = genealogy;
+            Institutions = institutions;
+            Offices = offices;
+            Knowledge = knowledge;
         }
 
         public SimulationRuntime World { get; }
@@ -444,5 +493,10 @@ public sealed class PoliticalSuccessionIntegrationTests
         public OfficeId OfficeId { get; }
         public PersonId[] CandidateIds { get; }
         public PersonId SelectedCandidateId { get; }
+        public PersonStore People { get; }
+        public GenealogyStore Genealogy { get; }
+        public InstitutionStore Institutions { get; }
+        public OfficeStore Offices { get; }
+        public PoliticalKnowledgeStore Knowledge { get; }
     }
 }

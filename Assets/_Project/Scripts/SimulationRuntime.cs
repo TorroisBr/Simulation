@@ -26,6 +26,8 @@ public sealed class SimulationRuntime
     private readonly PoliticalKnowledgeStore politicalKnowledgeStore;
     private readonly PoliticalDecisionStore politicalDecisionStore;
     private long politicalWorldRevision;
+    private long lastPoliticalTruthFingerprint;
+    private bool hasPoliticalTruthFingerprint;
     private readonly List<NpcActionData> configuredActions;
     private readonly ScheduledDirectiveSystem scheduledDirectiveSystem;
     private readonly JusticeSystem justiceSystem;
@@ -65,7 +67,14 @@ public sealed class SimulationRuntime
     public IReadOnlyList<PoliticalSupportRelationRecord> PoliticalSupportRecords => politicalSupportStore.Records;
     public int PoliticalKnowledgeHolderCount => politicalKnowledgeStore.Count;
     public long PoliticalKnowledgeRevision => politicalKnowledgeStore.Revision;
-    public long PoliticalWorldRevision => GetEffectivePoliticalWorldRevision();
+    public long PoliticalWorldRevision
+    {
+        get
+        {
+            RefreshPoliticalWorldRevisionFromExposedStores();
+            return politicalWorldRevision;
+        }
+    }
     public IReadOnlyList<PoliticalDecisionRecord> PoliticalDecisionRecords => politicalDecisionStore.Records;
     /// <summary>
     /// Read-only view of every named NPC registered with this world. Registration is
@@ -194,6 +203,8 @@ public sealed class SimulationRuntime
         long initialPoliticalWorldRevision = politicalWorldRevision
             ?? ResolveInitialPoliticalWorldRevision(politicalDecisionStore);
         this.politicalWorldRevision = initialPoliticalWorldRevision;
+        lastPoliticalTruthFingerprint = ComputePoliticalTruthFingerprint();
+        hasPoliticalTruthFingerprint = true;
         this.politicalDecisionStore = ClonePoliticalDecisionStore(
             politicalDecisionStore,
             this.politicalKnowledgeStore,
@@ -2281,9 +2292,35 @@ public sealed class SimulationRuntime
         {
             politicalWorldRevision++;
         }
+
+        lastPoliticalTruthFingerprint = ComputePoliticalTruthFingerprint();
+        hasPoliticalTruthFingerprint = true;
     }
 
-    private long GetEffectivePoliticalWorldRevision()
+    private void RefreshPoliticalWorldRevisionFromExposedStores()
+    {
+        long currentFingerprint = ComputePoliticalTruthFingerprint();
+        if (hasPoliticalTruthFingerprint == false)
+        {
+            lastPoliticalTruthFingerprint = currentFingerprint;
+            hasPoliticalTruthFingerprint = true;
+            return;
+        }
+
+        if (currentFingerprint == lastPoliticalTruthFingerprint)
+        {
+            return;
+        }
+
+        if (politicalWorldRevision < long.MaxValue)
+        {
+            politicalWorldRevision++;
+        }
+
+        lastPoliticalTruthFingerprint = currentFingerprint;
+    }
+
+    private long ComputePoliticalTruthFingerprint()
     {
         unchecked
         {
@@ -2309,8 +2346,7 @@ public sealed class SimulationRuntime
 
             fingerprint = fingerprint * 31L + propertyOwnershipStore.Revision;
             fingerprint = fingerprint * 31L + estateStore.Revision;
-            long result = (politicalWorldRevision * 397L) ^ fingerprint;
-            return result & long.MaxValue;
+            return fingerprint & long.MaxValue;
         }
     }
 
