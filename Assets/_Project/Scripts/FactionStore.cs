@@ -4,9 +4,18 @@ using System.Collections.ObjectModel;
 
 public sealed class FactionStore
 {
+    private readonly PersonStore personStore;
+    private readonly object ownerToken = new object();
     private readonly Dictionary<string, FactionRecord> factionsById = new Dictionary<string, FactionRecord>(StringComparer.Ordinal);
     private readonly Dictionary<string, FactionAffiliationRecord> affiliationsByKey = new Dictionary<string, FactionAffiliationRecord>(StringComparer.Ordinal);
     private long revision;
+
+    public FactionStore(PersonStore personStore)
+    {
+        this.personStore = personStore ?? throw new ArgumentNullException(nameof(personStore));
+    }
+
+    internal object OwnerToken => ownerToken;
 
     public int Count => factionsById.Count;
     public int AffiliationCount => affiliationsByKey.Count;
@@ -81,6 +90,22 @@ public sealed class FactionStore
             return false;
         }
 
+        if (factionsById.ContainsKey(record.FactionId.Value) == false)
+        {
+            failure = FactionFoundationFailure.Create(
+                FactionFoundationFailureCode.FactionNotRegistered,
+                "The affiliation faction is not registered.");
+            return false;
+        }
+
+        if (personStore.TryGet(record.PersonId, out _) == false)
+        {
+            failure = FactionFoundationFailure.Create(
+                FactionFoundationFailureCode.PersonNotRegistered,
+                "The affiliation PersonId is not registered.");
+            return false;
+        }
+
         string key = Key(record.FactionId, record.PersonId);
         if (affiliationsByKey.ContainsKey(key))
         {
@@ -105,6 +130,14 @@ public sealed class FactionStore
         if (transition == null || transition.Affiliation == null)
         {
             failure = FactionFoundationFailure.Create(FactionFoundationFailureCode.InvalidTransition, "A valid affiliation add transition is required.");
+            return false;
+        }
+
+        if (ReferenceEquals(transition.ExpectedStore, this) == false)
+        {
+            failure = FactionFoundationFailure.Create(
+                FactionFoundationFailureCode.WrongFactionStore,
+                "The affiliation transition belongs to another faction store.");
             return false;
         }
 
@@ -141,6 +174,14 @@ public sealed class FactionStore
             return false;
         }
 
+        if (ReferenceEquals(transition.ExpectedStore, this) == false)
+        {
+            failure = FactionFoundationFailure.Create(
+                FactionFoundationFailureCode.WrongFactionStore,
+                "The affiliation transition belongs to another faction store.");
+            return false;
+        }
+
         if (revision != transition.ExpectedStoreRevision)
         {
             failure = FactionFoundationFailure.Create(FactionFoundationFailureCode.StaleAffiliation, "The faction store changed after the affiliation end was proposed.");
@@ -170,7 +211,7 @@ public sealed class FactionStore
 
     internal FactionStore Clone()
     {
-        FactionStore clone = new FactionStore();
+        FactionStore clone = new FactionStore(personStore);
         foreach (KeyValuePair<string, FactionRecord> entry in factionsById) clone.factionsById.Add(entry.Key, entry.Value);
         foreach (KeyValuePair<string, FactionAffiliationRecord> entry in affiliationsByKey) clone.affiliationsByKey.Add(entry.Key, entry.Value);
         clone.revision = revision;

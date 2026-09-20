@@ -129,7 +129,8 @@ public enum FactionFoundationFailureCode
     AffiliationAlreadyEnded = 10,
     InvalidTransition = 11,
     StaleAffiliation = 12,
-    RevisionOverflow = 13
+    RevisionOverflow = 13,
+    WrongFactionStore = 14
 }
 
 public sealed class FactionFoundationFailure : IEquatable<FactionFoundationFailure>
