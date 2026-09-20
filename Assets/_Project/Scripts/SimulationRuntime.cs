@@ -65,7 +65,7 @@ public sealed class SimulationRuntime
     public IReadOnlyList<PoliticalSupportRelationRecord> PoliticalSupportRecords => politicalSupportStore.Records;
     public int PoliticalKnowledgeHolderCount => politicalKnowledgeStore.Count;
     public long PoliticalKnowledgeRevision => politicalKnowledgeStore.Revision;
-    public long PoliticalWorldRevision => politicalWorldRevision;
+    public long PoliticalWorldRevision => GetEffectivePoliticalWorldRevision();
     public IReadOnlyList<PoliticalDecisionRecord> PoliticalDecisionRecords => politicalDecisionStore.Records;
     /// <summary>
     /// Read-only view of every named NPC registered with this world. Registration is
@@ -110,7 +110,8 @@ public sealed class SimulationRuntime
         FactionStore factionStore = null,
         PoliticalSupportStore politicalSupportStore = null,
         PoliticalKnowledgeStore politicalKnowledgeStore = null,
-        PoliticalDecisionStore politicalDecisionStore = null)
+        PoliticalDecisionStore politicalDecisionStore = null,
+        long? politicalWorldRevision = null)
     {
         this.simulationTime = simulationTime ?? throw new ArgumentNullException(nameof(simulationTime));
 
@@ -190,16 +191,17 @@ public sealed class SimulationRuntime
             this.politicalClaimStore,
             this.factionStore,
             this.officeStore);
+        long initialPoliticalWorldRevision = politicalWorldRevision
+            ?? ResolveInitialPoliticalWorldRevision(politicalDecisionStore);
+        this.politicalWorldRevision = initialPoliticalWorldRevision;
         this.politicalDecisionStore = ClonePoliticalDecisionStore(
             politicalDecisionStore,
             this.politicalKnowledgeStore,
             simulationTime.AbsoluteDay,
-            0L,
             this.personStore,
             this.institutionStore,
             this.officeStore,
             this.politicalClaimStore);
-        politicalWorldRevision = 0L;
         this.cities = cities != null ? new List<CityRuntime>(cities) : new List<CityRuntime>();
         this.npcRuntimes = new List<NpcRuntime>();
         this.npcRuntimeSnapshot = this.npcRuntimes.AsReadOnly();
@@ -2175,7 +2177,6 @@ public sealed class SimulationRuntime
         PoliticalDecisionStore source,
         PoliticalKnowledgeStore knowledgeStore,
         long currentDay,
-        long currentWorldRevision,
         PersonStore personStore,
         InstitutionStore institutionStore,
         OfficeStore officeStore,
@@ -2191,8 +2192,6 @@ public sealed class SimulationRuntime
         {
             if (record == null
                 || record.DecisionAbsoluteDay > currentDay
-                || record.ExpectedWorldRevision != currentWorldRevision
-                || record.ExpectedKnowledgeRevision != knowledgeStore.Revision
                 || record.Decider == null
                 || knowledgeStore.TryGet(record.Decider, out _) == false
                 || HasUnregisteredPoliticalDecisionReference(
@@ -2217,6 +2216,25 @@ public sealed class SimulationRuntime
         }
 
         return copy;
+    }
+
+    private static long ResolveInitialPoliticalWorldRevision(PoliticalDecisionStore source)
+    {
+        long revision = 0L;
+        if (source == null)
+        {
+            return revision;
+        }
+
+        foreach (PoliticalDecisionRecord record in source.Records)
+        {
+            if (record != null && record.ExpectedWorldRevision > revision)
+            {
+                revision = record.ExpectedWorldRevision;
+            }
+        }
+
+        return revision;
     }
 
     private static bool HasUnregisteredPoliticalDecisionReference(
@@ -2262,6 +2280,52 @@ public sealed class SimulationRuntime
         if (politicalWorldRevision < long.MaxValue)
         {
             politicalWorldRevision++;
+        }
+    }
+
+    private long GetEffectivePoliticalWorldRevision()
+    {
+        unchecked
+        {
+            long fingerprint = 17L;
+            List<PersonRuntime> people = new List<PersonRuntime>(personStore.Persons);
+            people.Sort((left, right) => StringComparer.Ordinal.Compare(
+                left?.PersonId?.Value,
+                right?.PersonId?.Value));
+            foreach (PersonRuntime person in people)
+            {
+                AppendStableString(ref fingerprint, person?.PersonId?.Value);
+                fingerprint = fingerprint * 31L
+                    + (person != null && person.DeathAbsoluteDay.HasValue
+                        ? person.DeathAbsoluteDay.Value
+                        : -1L);
+            }
+
+            foreach (ParentageRecord parentage in genealogyStore.Records)
+            {
+                AppendStableString(ref fingerprint, parentage?.ParentId?.Value);
+                AppendStableString(ref fingerprint, parentage?.ChildId?.Value);
+            }
+
+            fingerprint = fingerprint * 31L + propertyOwnershipStore.Revision;
+            fingerprint = fingerprint * 31L + estateStore.Revision;
+            long result = (politicalWorldRevision * 397L) ^ fingerprint;
+            return result & long.MaxValue;
+        }
+    }
+
+    private static void AppendStableString(ref long hash, string value)
+    {
+        unchecked
+        {
+            hash = hash * 31L + (value == null ? 0L : value.Length);
+            if (value != null)
+            {
+                foreach (char character in value)
+                {
+                    hash = hash * 31L + character;
+                }
+            }
         }
     }
 

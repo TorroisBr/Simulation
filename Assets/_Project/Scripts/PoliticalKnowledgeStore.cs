@@ -67,9 +67,9 @@ public sealed class PoliticalKnowledgeStore
     public PoliticalKnowledgeStore(
         PersonStore personStore,
         InstitutionStore institutionStore,
-        PoliticalClaimStore politicalClaimStore = null,
-        FactionStore factionStore = null,
-        OfficeStore officeStore = null)
+        PoliticalClaimStore politicalClaimStore,
+        FactionStore factionStore,
+        OfficeStore officeStore)
     {
         this.personStore = personStore ?? throw new ArgumentNullException(nameof(personStore));
         this.institutionStore = institutionStore ?? throw new ArgumentNullException(nameof(institutionStore));
@@ -396,16 +396,11 @@ public sealed class PoliticalKnowledgeStore
         out PoliticalKnowledgeFailure failure)
     {
         failure = PoliticalKnowledgeFailure.None;
-        if (politicalClaimStore == null && factionStore == null && officeStore == null)
-        {
-            return true;
-        }
-
         switch (observation.FactKind)
         {
             case PoliticalKnowledgeFactKind.PoliticalClaim:
                 PoliticalClaimKnowledgeObservation claim = (PoliticalClaimKnowledgeObservation)observation;
-                if (politicalClaimStore != null && politicalClaimStore.TryGet(claim.ClaimId, out _) == false)
+                if (politicalClaimStore.TryGet(claim.ClaimId, out _) == false)
                 {
                     return InvalidEndpoint(out failure, "The observed political claim is not registered in this world.");
                 }
@@ -428,7 +423,6 @@ public sealed class PoliticalKnowledgeStore
                 }
 
                 if (claim.Target.Kind == PoliticalClaimTargetKind.Office
-                    && officeStore != null
                     && officeStore.TryGet(new OfficeId(claim.Target.TargetId), out _) == false)
                 {
                     return InvalidEndpoint(out failure, "The observed political claim target OfficeId is not registered in this world.");
@@ -442,7 +436,7 @@ public sealed class PoliticalKnowledgeStore
                 break;
             case PoliticalKnowledgeFactKind.Faction:
                 FactionKnowledgeObservation faction = (FactionKnowledgeObservation)observation;
-                if (factionStore != null && factionStore.TryGet(faction.FactionId, out _) == false)
+                if (factionStore.TryGet(faction.FactionId, out _) == false)
                 {
                     return InvalidEndpoint(out failure, "The observed faction is not registered in this world.");
                 }
@@ -450,7 +444,7 @@ public sealed class PoliticalKnowledgeStore
             case PoliticalKnowledgeFactKind.FactionAffiliation:
                 FactionAffiliationKnowledgeObservation affiliation =
                     (FactionAffiliationKnowledgeObservation)observation;
-                if (factionStore != null && factionStore.TryGet(affiliation.FactionId, out _) == false)
+                if (factionStore.TryGet(affiliation.FactionId, out _) == false)
                 {
                     return InvalidEndpoint(out failure, "The observed affiliation faction is not registered in this world.");
                 }
@@ -462,7 +456,7 @@ public sealed class PoliticalKnowledgeStore
                 break;
             case PoliticalKnowledgeFactKind.OfficeVacancy:
                 OfficeVacancyKnowledgeObservation office = (OfficeVacancyKnowledgeObservation)observation;
-                if (officeStore != null && officeStore.TryGet(office.OfficeId, out _) == false)
+                if (officeStore.TryGet(office.OfficeId, out _) == false)
                 {
                     return InvalidEndpoint(out failure, "The observed office is not registered in this world.");
                 }

@@ -298,7 +298,12 @@ public sealed class PoliticalSuccessionIntegrationTests
             out _), Is.True);
 
         PoliticalKnowledgeHolder decider = PoliticalKnowledgeHolder.ForInstitution(institutionId);
-        PoliticalKnowledgeStore knowledge = new PoliticalKnowledgeStore(people, institutions);
+        PoliticalKnowledgeStore knowledge = new PoliticalKnowledgeStore(
+            people,
+            institutions,
+            new PoliticalClaimStore(),
+            new FactionStore(people),
+            new OfficeStore(institutions));
         Assert.That(knowledge.TryRegisterHolder(decider, currentDay, out _), Is.True);
 
         PersonId[] candidates = {
