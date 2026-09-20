@@ -1009,10 +1009,45 @@ public static class WorldStateInvariantValidator
                 }
             }
 
-            if (string.IsNullOrWhiteSpace(decision.SelectedCandidatePersonId) == false
-                && Array.IndexOf(ToArray(decision.CandidatePersonIds), decision.SelectedCandidatePersonId) < 0)
+            if (TryBuildCandidateFingerprint(decision.CandidatePersonIds, out string expectedFingerprint) == false
+                || string.Equals(expectedFingerprint, decision.CandidateFingerprint, StringComparison.Ordinal) == false)
+            {
+                AddError(issues, "PoliticalDecisionFingerprintInvalid", identity, "Political decision candidate fingerprint does not match its candidate set.");
+            }
+
+            bool hasSelectedCandidate = string.IsNullOrWhiteSpace(decision.SelectedCandidatePersonId) == false;
+            bool selectedCandidateListed = hasSelectedCandidate
+                && Array.IndexOf(ToArray(decision.CandidatePersonIds), decision.SelectedCandidatePersonId) >= 0;
+            if (hasSelectedCandidate && selectedCandidateListed == false)
             {
                 AddError(issues, "PoliticalDecisionSelectionMissing", identity, "Selected political decision candidate is absent from the candidate set.");
+            }
+
+            if (decision.OutcomeKind == PoliticalDecisionOutcomeKind.CandidateSelected && hasSelectedCandidate == false)
+            {
+                AddError(issues, "PoliticalDecisionSelectionMissing", identity, "CandidateSelected decisions must identify a candidate.");
+            }
+
+            if ((decision.OutcomeKind == PoliticalDecisionOutcomeKind.NoSelection
+                    || decision.OutcomeKind == PoliticalDecisionOutcomeKind.Rejected)
+                && (hasSelectedCandidate || string.IsNullOrWhiteSpace(decision.ReferencedClaimId) == false))
+            {
+                AddError(issues, "PoliticalDecisionOutcomeShapeInvalid", identity, "NoSelection and Rejected decisions cannot carry a candidate or claim reference.");
+            }
+
+            if ((decision.DecisionKind == PoliticalDecisionKind.SuccessionSelection
+                    || decision.DecisionKind == PoliticalDecisionKind.OfficeSelection)
+                && decision.OutcomeKind != PoliticalDecisionOutcomeKind.CandidateSelected
+                && decision.OutcomeKind != PoliticalDecisionOutcomeKind.NoSelection
+                && decision.OutcomeKind != PoliticalDecisionOutcomeKind.Rejected)
+            {
+                AddError(issues, "PoliticalDecisionOutcomeShapeInvalid", identity, "Office decisions require candidate selection, no selection, or rejection.");
+            }
+
+            if (decision.DecisionKind == PoliticalDecisionKind.ClaimRecognitionProposal
+                && decision.OutcomeKind != PoliticalDecisionOutcomeKind.ClaimRecognitionProposed)
+            {
+                AddError(issues, "PoliticalDecisionOutcomeShapeInvalid", identity, "Claim recognition decisions require a claim recognition proposal.");
             }
 
             if (string.IsNullOrWhiteSpace(decision.ReferencedClaimId) == false
@@ -1027,6 +1062,32 @@ public static class WorldStateInvariantValidator
                 AddError(issues, "PoliticalDecisionClaimMissing", identity, "Claim recognition decisions must identify a claim.");
             }
         }
+    }
+
+    private static bool TryBuildCandidateFingerprint(
+        IReadOnlyList<string> candidateIds,
+        out string fingerprint)
+    {
+        fingerprint = null;
+        if (candidateIds == null)
+        {
+            return false;
+        }
+
+        List<PersonId> people = new List<PersonId>();
+        HashSet<string> seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (string candidateId in candidateIds)
+        {
+            if (string.IsNullOrWhiteSpace(candidateId) || seen.Add(candidateId) == false)
+            {
+                return false;
+            }
+
+            people.Add(new PersonId(candidateId));
+        }
+
+        fingerprint = PoliticalDecisionRecord.BuildCandidateFingerprint(people);
+        return true;
     }
 
     private static string[] ToArray(IReadOnlyList<string> values)

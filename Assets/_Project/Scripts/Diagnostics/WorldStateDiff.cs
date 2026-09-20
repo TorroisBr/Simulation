@@ -339,6 +339,14 @@ public sealed class WorldStateDiff
                     WorldStateCanonicalWriter.StringValue(left.ReferencedClaimId),
                     WorldStateCanonicalWriter.StringValue(right.ReferencedClaimId),
                     differences);
+                CompareValue("PoliticalDecision", identity, "EvidenceReferences",
+                    WorldStateCanonicalWriter.StringListValue(left.EvidenceReferences),
+                    WorldStateCanonicalWriter.StringListValue(right.EvidenceReferences),
+                    differences);
+                CompareValue("PoliticalDecision", identity, "KnowledgeReferences",
+                    WorldStateCanonicalWriter.StringListValue(left.KnowledgeReferences),
+                    WorldStateCanonicalWriter.StringListValue(right.KnowledgeReferences),
+                    differences);
                 CompareValue("PoliticalDecision", identity, "ObservedAbsoluteDay",
                     WorldStateCanonicalWriter.Int64Value(left.ObservedAbsoluteDay),
                     WorldStateCanonicalWriter.Int64Value(right.ObservedAbsoluteDay),

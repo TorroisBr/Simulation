@@ -525,6 +525,8 @@ public sealed class WorldStatePoliticalDecisionSnapshot
     public PoliticalDecisionOutcomeKind OutcomeKind { get; }
     public string SelectedCandidatePersonId { get; }
     public string ReferencedClaimId { get; }
+    public IReadOnlyList<string> EvidenceReferences { get; }
+    public IReadOnlyList<string> KnowledgeReferences { get; }
     public long ObservedAbsoluteDay { get; }
     public long DecisionAbsoluteDay { get; }
     public long ExpectedWorldRevision { get; }
@@ -541,6 +543,8 @@ public sealed class WorldStatePoliticalDecisionSnapshot
         PoliticalDecisionOutcomeKind outcomeKind,
         string selectedCandidatePersonId,
         string referencedClaimId,
+        IEnumerable<string> evidenceReferences,
+        IEnumerable<string> knowledgeReferences,
         long observedAbsoluteDay,
         long decisionAbsoluteDay,
         long expectedWorldRevision,
@@ -565,10 +569,27 @@ public sealed class WorldStatePoliticalDecisionSnapshot
         OutcomeKind = outcomeKind;
         SelectedCandidatePersonId = selectedCandidatePersonId;
         ReferencedClaimId = referencedClaimId;
+        EvidenceReferences = CopyStrings(evidenceReferences);
+        KnowledgeReferences = CopyStrings(knowledgeReferences);
         ObservedAbsoluteDay = observedAbsoluteDay;
         DecisionAbsoluteDay = decisionAbsoluteDay;
         ExpectedWorldRevision = expectedWorldRevision;
         ExpectedKnowledgeRevision = expectedKnowledgeRevision;
+    }
+
+    private static IReadOnlyList<string> CopyStrings(IEnumerable<string> source)
+    {
+        List<string> result = new List<string>();
+        if (source != null)
+        {
+            foreach (string value in source)
+            {
+                result.Add(value);
+            }
+        }
+
+        result.Sort(StringComparer.Ordinal);
+        return new ReadOnlyCollection<string>(result);
     }
 }
 
@@ -1445,6 +1466,8 @@ public static class WorldStateSnapshotBuilder
                 decision.Outcome.Kind,
                 decision.Outcome.SelectedCandidatePersonId?.Value,
                 decision.Outcome.ReferencedClaimId?.Value,
+                decision.EvidenceReferences,
+                decision.KnowledgeReferences,
                 decision.ObservedAbsoluteDay,
                 decision.DecisionAbsoluteDay,
                 decision.ExpectedWorldRevision,

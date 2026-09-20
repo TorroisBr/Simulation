@@ -191,7 +191,11 @@ public sealed class SimulationRuntime
             politicalDecisionStore,
             this.politicalKnowledgeStore,
             simulationTime.AbsoluteDay,
-            0L);
+            0L,
+            this.personStore,
+            this.institutionStore,
+            this.officeStore,
+            this.politicalClaimStore);
         politicalWorldRevision = 0L;
         this.cities = cities != null ? new List<CityRuntime>(cities) : new List<CityRuntime>();
         this.npcRuntimes = new List<NpcRuntime>();
@@ -376,7 +380,13 @@ public sealed class SimulationRuntime
             return false;
         }
 
-        return personStore.TryRegister(person, out failure);
+        bool registered = personStore.TryRegister(person, out failure);
+        if (registered)
+        {
+            AdvancePoliticalWorldRevision();
+        }
+
+        return registered;
     }
 
     public bool TryProposePersonDeath(
@@ -981,7 +991,13 @@ public sealed class SimulationRuntime
             return false;
         }
 
-        return propertyOwnershipStore.TryRegister(record, out failure);
+        bool registered = propertyOwnershipStore.TryRegister(record, out failure);
+        if (registered)
+        {
+            AdvancePoliticalWorldRevision();
+        }
+
+        return registered;
     }
 
     public IReadOnlyList<PropertyOwnershipRecord> GetPropertiesOwnedBy(PersonId ownerPersonId)
@@ -1019,11 +1035,17 @@ public sealed class SimulationRuntime
         EstateOpeningTransition transition,
         out EstateFoundationFailure failure)
     {
-        return EstateOpeningSystem.TryApplyOpening(
+        bool applied = EstateOpeningSystem.TryApplyOpening(
             personStore,
             estateStore,
             transition,
             out failure);
+        if (applied)
+        {
+            AdvancePoliticalWorldRevision();
+        }
+
+        return applied;
     }
 
     public bool TryOpenEstate(
@@ -1115,11 +1137,17 @@ public sealed class SimulationRuntime
             return false;
         }
 
-        return PropertyTransferSystem.TryApplyTransfer(
+        bool applied = PropertyTransferSystem.TryApplyTransfer(
             personStore,
             propertyOwnershipStore,
             transition,
             out failure);
+        if (applied)
+        {
+            AdvancePoliticalWorldRevision();
+        }
+
+        return applied;
     }
 
     public bool TryTransferProperty(
@@ -1485,13 +1513,19 @@ public sealed class SimulationRuntime
         out PersonBirthTransition transition,
         out PersonBirthLifecycleFailure failure)
     {
-        return PersonBirthLifecycleSystem.TryApplyNamedBirth(
+        bool applied = PersonBirthLifecycleSystem.TryApplyNamedBirth(
             this,
             settlement,
             personId,
             parentIds,
             out transition,
             out failure);
+        if (applied)
+        {
+            AdvancePoliticalWorldRevision();
+        }
+
+        return applied;
     }
 
     public bool TryAddParentage(
@@ -1499,7 +1533,13 @@ public sealed class SimulationRuntime
         PersonId childId,
         out PersonGenealogyFailure failure)
     {
-        return PersonGenealogySystem.TryAddParentage(this, parentId, childId, out failure);
+        bool added = PersonGenealogySystem.TryAddParentage(this, parentId, childId, out failure);
+        if (added)
+        {
+            AdvancePoliticalWorldRevision();
+        }
+
+        return added;
     }
 
     public bool TryRemoveParentage(
@@ -1507,7 +1547,13 @@ public sealed class SimulationRuntime
         PersonId childId,
         out PersonGenealogyFailure failure)
     {
-        return PersonGenealogySystem.TryRemoveParentage(this, parentId, childId, out failure);
+        bool removed = PersonGenealogySystem.TryRemoveParentage(this, parentId, childId, out failure);
+        if (removed)
+        {
+            AdvancePoliticalWorldRevision();
+        }
+
+        return removed;
     }
 
     public bool ContainsParentage(PersonId parentId, PersonId childId)
@@ -2088,7 +2134,11 @@ public sealed class SimulationRuntime
         PoliticalDecisionStore source,
         PoliticalKnowledgeStore knowledgeStore,
         long currentDay,
-        long currentWorldRevision)
+        long currentWorldRevision,
+        PersonStore personStore,
+        InstitutionStore institutionStore,
+        OfficeStore officeStore,
+        PoliticalClaimStore politicalClaimStore)
     {
         PoliticalDecisionStore copy = new PoliticalDecisionStore();
         if (source == null)
@@ -2104,6 +2154,12 @@ public sealed class SimulationRuntime
                 || record.ExpectedKnowledgeRevision != knowledgeStore.Revision
                 || record.Decider == null
                 || knowledgeStore.TryGet(record.Decider, out _) == false
+                || HasUnregisteredPoliticalDecisionReference(
+                    record,
+                    personStore,
+                    institutionStore,
+                    officeStore,
+                    politicalClaimStore)
                 || copy.TryRegister(record, out PoliticalDecisionFailure failure) == false)
             {
                 throw new ArgumentException(
@@ -2120,6 +2176,44 @@ public sealed class SimulationRuntime
         }
 
         return copy;
+    }
+
+    private static bool HasUnregisteredPoliticalDecisionReference(
+        PoliticalDecisionRecord record,
+        PersonStore personStore,
+        InstitutionStore institutionStore,
+        OfficeStore officeStore,
+        PoliticalClaimStore politicalClaimStore)
+    {
+        if (record == null || record.Outcome == null || record.CandidatePersonIds == null)
+        {
+            return true;
+        }
+
+        foreach (PersonId candidate in record.CandidatePersonIds)
+        {
+            if (candidate == null || personStore.TryGet(candidate, out _) == false)
+            {
+                return true;
+            }
+        }
+
+        if ((record.DecisionKind == PoliticalDecisionKind.SuccessionSelection
+                || record.DecisionKind == PoliticalDecisionKind.OfficeSelection)
+            && (record.OfficeId == null || officeStore.TryGet(record.OfficeId, out _) == false))
+        {
+            return true;
+        }
+
+        if (record.DecisionKind == PoliticalDecisionKind.ClaimRecognitionProposal
+            && (record.RecognizingInstitutionId == null
+                || institutionStore.TryGet(record.RecognizingInstitutionId, out _) == false))
+        {
+            return true;
+        }
+
+        return record.Outcome.ReferencedClaimId != null
+            && politicalClaimStore.TryGet(record.Outcome.ReferencedClaimId, out _) == false;
     }
 
     private void AdvancePoliticalWorldRevision()

@@ -155,7 +155,32 @@ public sealed class PoliticalSuccessionIntegrationTests
         WorldStateSnapshot before = Capture(fixture.World);
         Assert.That(before.PoliticalDecisionCount, Is.EqualTo(1));
         Assert.That(WorldStateCanonicalWriter.Write(before), Does.Contain("POLITICAL_DECISION"));
+        Assert.That(WorldStateCanonicalWriter.Write(before), Does.Contain("support:institutional-majority"));
         Assert.That(WorldStateInvariantValidator.Validate(before).IsValid, Is.True);
+
+        WorldStatePoliticalDecisionSnapshot original = before.PoliticalDecisions[0];
+        WorldStateSnapshot evidenceChanged = new WorldStateSnapshot(
+            fixture.World.CurrentDay,
+            politicalDecisions: new[] {
+                new WorldStatePoliticalDecisionSnapshot(
+                    original.DecisionId,
+                    original.DeciderStableId,
+                    original.DecisionKind,
+                    original.OfficeId,
+                    original.RecognizingInstitutionId,
+                    original.CandidatePersonIds,
+                    original.CandidateFingerprint,
+                    original.OutcomeKind,
+                    original.SelectedCandidatePersonId,
+                    original.ReferencedClaimId,
+                    new[] { "evidence.changed" },
+                    original.KnowledgeReferences,
+                    original.ObservedAbsoluteDay,
+                    original.DecisionAbsoluteDay,
+                    original.ExpectedWorldRevision,
+                    original.ExpectedKnowledgeRevision)
+            });
+        Assert.That(WorldStateDiagnostics.Compare(before, evidenceChanged).IsEmpty, Is.False);
 
         WorldStateSnapshot after = new WorldStateSnapshot(
             fixture.World.CurrentDay,

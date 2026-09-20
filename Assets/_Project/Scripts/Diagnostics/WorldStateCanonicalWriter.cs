@@ -144,6 +144,8 @@ public static class WorldStateCanonicalWriter
                 EnumValue(decision.OutcomeKind),
                 decision.SelectedCandidatePersonId,
                 decision.ReferencedClaimId,
+                StringListValue(decision.EvidenceReferences),
+                StringListValue(decision.KnowledgeReferences),
                 Int64Value(decision.ObservedAbsoluteDay),
                 Int64Value(decision.DecisionAbsoluteDay),
                 Int64Value(decision.ExpectedWorldRevision),
