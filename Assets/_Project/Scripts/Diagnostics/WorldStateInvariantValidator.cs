@@ -360,6 +360,8 @@ public static class WorldStateInvariantValidator
             snapshot.OfficeIds,
             snapshot.HasOfficeCatalog,
             snapshot.OfficeInstitutionIds,
+            snapshot.PropertyIds,
+            snapshot.HasPropertyCatalog,
             snapshot.AbsoluteDay,
             issues);
 
@@ -1112,18 +1114,17 @@ public static class WorldStateInvariantValidator
         IReadOnlyList<string> officeIds,
         bool hasOfficeCatalog,
         IReadOnlyDictionary<string, string> officeInstitutionIds,
+        IReadOnlyList<string> propertyIds,
+        bool hasPropertyCatalog,
         long absoluteDay,
         List<WorldStateInvariantIssue> issues)
     {
         HashSet<string> claimIds = new HashSet<string>(StringComparer.Ordinal);
-        Dictionary<string, WorldStatePoliticalClaimSnapshot> claimsById =
-            new Dictionary<string, WorldStatePoliticalClaimSnapshot>(StringComparer.Ordinal);
         foreach (WorldStatePoliticalClaimSnapshot claim in claims ?? Array.Empty<WorldStatePoliticalClaimSnapshot>())
         {
             if (claim != null && string.IsNullOrWhiteSpace(claim.ClaimId) == false)
             {
                 claimIds.Add(claim.ClaimId);
-                claimsById[claim.ClaimId] = claim;
             }
         }
 
@@ -1255,12 +1256,15 @@ public static class WorldStateInvariantValidator
                         observation,
                         rawIdentity,
                         claimIds,
-                        claimsById,
                         factionIds,
                         personIds,
+                        institutionIds,
+                        hasInstitutionCatalog,
                         officeIds,
                         hasOfficeCatalog,
                         officeInstitutionIds,
+                        propertyIds,
+                        hasPropertyCatalog,
                         observationIdentity,
                         issues);
                 }
@@ -1327,12 +1331,15 @@ public static class WorldStateInvariantValidator
         WorldStatePoliticalKnowledgeObservationSnapshot observation,
         string rawIdentity,
         HashSet<string> claimIds,
-        IReadOnlyDictionary<string, WorldStatePoliticalClaimSnapshot> claimsById,
         HashSet<string> factionIds,
         HashSet<string> personIds,
+        IReadOnlyList<string> institutionIds,
+        bool hasInstitutionCatalog,
         IReadOnlyList<string> officeIds,
         bool hasOfficeCatalog,
         IReadOnlyDictionary<string, string> officeInstitutionIds,
+        IReadOnlyList<string> propertyIds,
+        bool hasPropertyCatalog,
         string identity,
         List<WorldStateInvariantIssue> issues)
     {
@@ -1343,17 +1350,18 @@ public static class WorldStateInvariantValidator
                 {
                     AddError(issues, "PoliticalKnowledgeClaimMissing", identity, "Political knowledge claim endpoint is absent from the snapshot.");
                 }
-                else if (claimsById.TryGetValue(rawIdentity, out WorldStatePoliticalClaimSnapshot claim))
-                {
-                    if (TryReadBoolPrefix(observation.StateKey, out bool exists) == false
-                        || string.Equals(
-                            observation.StateKey,
-                            BuildPoliticalClaimStateKey(claim, exists),
-                            StringComparison.Ordinal) == false)
-                    {
-                        AddError(issues, "PoliticalKnowledgeClaimStateMismatch", identity, "Political knowledge claim state does not match the authoritative claim snapshot.");
-                    }
-                }
+                ValidatePoliticalClaimState(
+                    observation.StateKey,
+                    observation.ObservedAbsoluteDay,
+                    personIds,
+                    institutionIds,
+                    hasInstitutionCatalog,
+                    officeIds,
+                    hasOfficeCatalog,
+                    propertyIds,
+                    hasPropertyCatalog,
+                    identity,
+                    issues);
                 break;
             case PoliticalKnowledgeFactKind.Faction:
                 if (factionIds.Contains(rawIdentity) == false)
@@ -1496,58 +1504,165 @@ public static class WorldStateInvariantValidator
         return true;
     }
 
-    private static bool TryReadBoolPrefix(string stateKey, out bool value)
+    private static void ValidatePoliticalClaimState(
+        string stateKey,
+        long observedAbsoluteDay,
+        HashSet<string> personIds,
+        IReadOnlyList<string> institutionIds,
+        bool hasInstitutionCatalog,
+        IReadOnlyList<string> officeIds,
+        bool hasOfficeCatalog,
+        IReadOnlyList<string> propertyIds,
+        bool hasPropertyCatalog,
+        string identity,
+        List<WorldStateInvariantIssue> issues)
     {
-        value = false;
-        if (string.IsNullOrWhiteSpace(stateKey) || stateKey.Length < 2 || stateKey[1] != '\u001F')
+        string[] fields = stateKey?.Split(new[] { '\u001F' });
+        if (fields == null || fields.Length != 12
+            || TryReadBooleanToken(fields[0], out _) == false
+            || TryReadLengthPrefixedWhole(fields[1], out string claimantPersonId) == false
+            || int.TryParse(fields[2], NumberStyles.None, CultureInfo.InvariantCulture, out int claimTypeValue) == false
+            || int.TryParse(fields[3], NumberStyles.None, CultureInfo.InvariantCulture, out int targetKindValue) == false
+            || TryReadLengthPrefixedWhole(fields[4], out string targetId) == false
+            || int.TryParse(fields[5], NumberStyles.None, CultureInfo.InvariantCulture, out int basisValue) == false
+            || long.TryParse(fields[6], NumberStyles.Integer, CultureInfo.InvariantCulture, out long createdAbsoluteDay) == false
+            || int.TryParse(fields[7], NumberStyles.None, CultureInfo.InvariantCulture, out int statusValue) == false
+            || TryReadOptionalLong(fields[8], out long? resolutionAbsoluteDay) == false
+            || int.TryParse(fields[9], NumberStyles.None, CultureInfo.InvariantCulture, out int recognitionStateValue) == false
+            || TryReadOptionalLengthPrefixed(fields[10], out string recognizingInstitutionId) == false
+            || TryReadOptionalLong(fields[11], out long? recognitionAbsoluteDay) == false)
         {
-            return false;
+            AddError(issues, "PoliticalKnowledgeClaimStateInvalid", identity, "Political knowledge claim state is not a complete typed payload.");
+            return;
         }
 
-        if (stateKey[0] == '0')
+        PoliticalClaimType claimType = (PoliticalClaimType)claimTypeValue;
+        PoliticalClaimTargetKind targetKind = (PoliticalClaimTargetKind)targetKindValue;
+        PoliticalClaimBasis basis = (PoliticalClaimBasis)basisValue;
+        PoliticalClaimStatus status = (PoliticalClaimStatus)statusValue;
+        PoliticalClaimRecognitionState recognitionState = (PoliticalClaimRecognitionState)recognitionStateValue;
+        if (Enum.IsDefined(typeof(PoliticalClaimType), claimType) == false
+            || Enum.IsDefined(typeof(PoliticalClaimTargetKind), targetKind) == false
+            || Enum.IsDefined(typeof(PoliticalClaimBasis), basis) == false
+            || Enum.IsDefined(typeof(PoliticalClaimStatus), status) == false
+            || Enum.IsDefined(typeof(PoliticalClaimRecognitionState), recognitionState) == false
+            || PoliticalClaimRecord.IsTargetCompatible(claimType, targetKind) == false
+            || string.IsNullOrWhiteSpace(claimantPersonId)
+            || string.IsNullOrWhiteSpace(targetId)
+            || createdAbsoluteDay < 0L
+            || createdAbsoluteDay > observedAbsoluteDay
+            || observedAbsoluteDay < 0L)
         {
-            return true;
+            AddError(issues, "PoliticalKnowledgeClaimStateInvalid", identity, "Political knowledge claim state contains an invalid typed value or timeline.");
+            return;
         }
 
-        if (stateKey[0] == '1')
+        if (personIds.Contains(claimantPersonId) == false)
         {
-            value = true;
-            return true;
+            AddError(issues, "PoliticalKnowledgeClaimantPersonMissing", identity, "Political knowledge claim claimant PersonId is absent from the snapshot.");
         }
 
-        return false;
-    }
+        if (targetKind == PoliticalClaimTargetKind.Person
+            && personIds.Contains(targetId) == false)
+        {
+            AddError(issues, "PoliticalKnowledgeClaimTargetPersonMissing", identity, "Political knowledge claim target PersonId is absent from the snapshot.");
+        }
+        else if (targetKind == PoliticalClaimTargetKind.Institution
+            && hasInstitutionCatalog
+            && ContainsString(institutionIds, targetId) == false)
+        {
+            AddError(issues, "PoliticalKnowledgeClaimTargetInstitutionMissing", identity, "Political knowledge claim target InstitutionId is absent from the institution catalog.");
+        }
+        else if (targetKind == PoliticalClaimTargetKind.Office
+            && hasOfficeCatalog
+            && ContainsString(officeIds, targetId) == false)
+        {
+            AddError(issues, "PoliticalKnowledgeClaimTargetOfficeMissing", identity, "Political knowledge claim target OfficeId is absent from the office catalog.");
+        }
+        else if (targetKind == PoliticalClaimTargetKind.Property
+            && hasPropertyCatalog
+            && ContainsString(propertyIds, targetId) == false)
+        {
+            AddError(issues, "PoliticalKnowledgeClaimTargetPropertyMissing", identity, "Political knowledge claim target PropertyId is absent from the property catalog.");
+        }
 
-    private static string BuildPoliticalClaimStateKey(
-        WorldStatePoliticalClaimSnapshot claim,
-        bool exists)
-    {
-        return string.Concat(
-            exists ? "1" : "0", "\u001F",
-            LengthKey(claim.ClaimantPersonId), "\u001F",
-            ((int)claim.ClaimType).ToString(CultureInfo.InvariantCulture), "\u001F",
-            ((int)claim.TargetKind).ToString(CultureInfo.InvariantCulture), "\u001F",
-            LengthKey(claim.TargetId), "\u001F",
-            ((int)claim.Basis).ToString(CultureInfo.InvariantCulture), "\u001F",
-            claim.CreatedAbsoluteDay.ToString(CultureInfo.InvariantCulture), "\u001F",
-            ((int)claim.Status).ToString(CultureInfo.InvariantCulture), "\u001F",
-            claim.ResolutionAbsoluteDay.HasValue
-                ? claim.ResolutionAbsoluteDay.Value.ToString(CultureInfo.InvariantCulture)
-                : string.Empty,
-            "\u001F",
-            ((int)claim.RecognitionState).ToString(CultureInfo.InvariantCulture), "\u001F",
-            string.IsNullOrWhiteSpace(claim.RecognizingInstitutionId)
-                ? string.Empty
-                : LengthKey(claim.RecognizingInstitutionId),
-            "\u001F",
-            claim.RecognitionAbsoluteDay.HasValue
-                ? claim.RecognitionAbsoluteDay.Value.ToString(CultureInfo.InvariantCulture)
-                : string.Empty);
+        if (status == PoliticalClaimStatus.Active)
+        {
+            if (resolutionAbsoluteDay.HasValue)
+            {
+                AddError(issues, "PoliticalKnowledgeClaimStateInvalid", identity, "An active political knowledge claim cannot carry a resolution day.");
+            }
+        }
+        else if (resolutionAbsoluteDay.HasValue == false
+            || resolutionAbsoluteDay.Value < createdAbsoluteDay
+            || resolutionAbsoluteDay.Value > observedAbsoluteDay)
+        {
+            AddError(issues, "PoliticalKnowledgeClaimStateInvalid", identity, "A terminal political knowledge claim requires a valid resolution day.");
+        }
+
+        if (recognitionState == PoliticalClaimRecognitionState.Unrecognized)
+        {
+            if (recognizingInstitutionId != null || recognitionAbsoluteDay.HasValue)
+            {
+                AddError(issues, "PoliticalKnowledgeClaimStateInvalid", identity, "An unrecognized political knowledge claim cannot carry recognition metadata.");
+            }
+        }
+        else
+        {
+            if (string.IsNullOrWhiteSpace(recognizingInstitutionId)
+                || recognitionAbsoluteDay.HasValue == false
+                || recognitionAbsoluteDay.Value < createdAbsoluteDay
+                || recognitionAbsoluteDay.Value > observedAbsoluteDay)
+            {
+                AddError(issues, "PoliticalKnowledgeClaimStateInvalid", identity, "A recognized political knowledge claim requires valid recognition metadata.");
+            }
+            else if (hasInstitutionCatalog
+                && ContainsString(institutionIds, recognizingInstitutionId) == false)
+            {
+                AddError(issues, "PoliticalKnowledgeClaimRecognizingInstitutionMissing", identity, "Political knowledge claim recognizing institution is absent from the institution catalog.");
+            }
+        }
     }
 
     private static string LengthKey(string value)
     {
         return value.Length.ToString(CultureInfo.InvariantCulture) + ":" + value;
+    }
+
+    private static bool TryReadLengthPrefixedWhole(string value, out string component)
+    {
+        component = null;
+        return value != null
+            && TryReadLengthPrefixed(value, 0, out component, out int end)
+            && end == value.Length;
+    }
+
+    private static bool TryReadOptionalLengthPrefixed(string value, out string component)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            component = null;
+            return true;
+        }
+
+        return TryReadLengthPrefixedWhole(value, out component);
+    }
+
+    private static bool TryReadOptionalLong(string value, out long? result)
+    {
+        result = null;
+        if (string.IsNullOrEmpty(value))
+        {
+            return true;
+        }
+
+        if (long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out long parsed) == false)
+        {
+            return false;
+        }
+
+        result = parsed;
+        return true;
     }
 
     private static bool TryParseOfficeVacancyState(

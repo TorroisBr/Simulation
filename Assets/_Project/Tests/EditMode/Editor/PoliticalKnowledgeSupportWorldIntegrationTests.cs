@@ -285,6 +285,37 @@ public sealed class PoliticalKnowledgeSupportWorldIntegrationTests
         WorldStateSnapshot valid = Capture(fixture.World);
         WorldStatePoliticalKnowledgeSnapshot holder = valid.PoliticalKnowledge[0];
         WorldStatePoliticalKnowledgeObservationSnapshot claimObservation = holder.Observations[0];
+        string[] staleFields = claimObservation.StateKey.Split(new[] { '\u001F' });
+        staleFields[7] = "1";
+        staleFields[8] = fixture.World.CurrentDay.ToString();
+        WorldStateSnapshot staleKnowledge = new WorldStateSnapshot(
+            valid.AbsoluteDay,
+            persons: valid.Persons,
+            politicalClaims: valid.PoliticalClaims,
+            institutionIds: valid.InstitutionIds,
+            politicalKnowledge: new[] {
+                new WorldStatePoliticalKnowledgeSnapshot(
+                    holder.HolderStableId,
+                    holder.HolderKind,
+                    holder.HolderPersonId,
+                    holder.HolderInstitutionId,
+                    new[] {
+                        new WorldStatePoliticalKnowledgeObservationSnapshot(
+                            claimObservation.IdentityKey,
+                            claimObservation.FactKind,
+                            claimObservation.ObservedAbsoluteDay,
+                            claimObservation.ReceivedAbsoluteDay,
+                            claimObservation.Source,
+                            claimObservation.SourceReference,
+                            claimObservation.SourcePersonId,
+                            claimObservation.SourceInstitutionId,
+                            string.Join("\u001F", staleFields))
+                    })
+            },
+            politicalKnowledgeRevision: valid.PoliticalKnowledgeRevision,
+            hasPoliticalKnowledgeState: true);
+        Assert.That(WorldStateInvariantValidator.Validate(staleKnowledge).IsValid, Is.True);
+
         string[] forgedFields = claimObservation.StateKey.Split(new[] { '\u001F' });
         forgedFields[5] = "999";
         WorldStatePoliticalKnowledgeObservationSnapshot forgedClaim = new WorldStatePoliticalKnowledgeObservationSnapshot(
@@ -313,7 +344,7 @@ public sealed class PoliticalKnowledgeSupportWorldIntegrationTests
             politicalKnowledgeRevision: valid.PoliticalKnowledgeRevision,
             hasPoliticalKnowledgeState: true);
         WorldStateInvariantReport forgedReport = WorldStateInvariantValidator.Validate(forged);
-        Assert.That(HasIssueCode(forgedReport, "PoliticalKnowledgeClaimStateMismatch"), Is.True, forgedReport.ToString());
+        Assert.That(HasIssueCode(forgedReport, "PoliticalKnowledgeClaimStateInvalid"), Is.True, forgedReport.ToString());
 
         WorldStatePoliticalKnowledgeObservationSnapshot orphan = new WorldStatePoliticalKnowledgeObservationSnapshot(
             claimObservation.IdentityKey,

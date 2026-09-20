@@ -492,14 +492,6 @@ public sealed class PoliticalDecisionStore
             return false;
         }
 
-        if (boundPersonStore != null && record.TryBindToPersonStore(boundPersonStore) == false)
-        {
-            failure = PoliticalDecisionFailure.Create(
-                PoliticalDecisionFailureCode.WorldMismatch,
-                "The political decision belongs to a different PersonStore/world.");
-            return false;
-        }
-
         if (recordsById.ContainsKey(record.DecisionId.Value))
         {
             failure = PoliticalDecisionFailure.Create(
@@ -513,6 +505,14 @@ public sealed class PoliticalDecisionStore
             failure = PoliticalDecisionFailure.Create(
                 PoliticalDecisionFailureCode.RevisionOverflow,
                 "The political decision store revision cannot advance further.");
+            return false;
+        }
+
+        if (boundPersonStore != null && record.TryBindToPersonStore(boundPersonStore) == false)
+        {
+            failure = PoliticalDecisionFailure.Create(
+                PoliticalDecisionFailureCode.WorldMismatch,
+                "The political decision belongs to a different PersonStore/world.");
             return false;
         }
 

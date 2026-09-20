@@ -101,6 +101,31 @@ public sealed class PoliticalSuccessionIntegrationTests
     }
 
     [Test]
+    public void FailedDuplicateRegistrationDoesNotBindTheCallerDecisionRecord()
+    {
+        Fixture first = CreateFixture();
+        PoliticalDecisionRecord duplicate = CreateDecision(
+            "decision.succession",
+            first.World.CurrentDay,
+            first.World.CurrentDay,
+            first.CandidateIds,
+            first.SelectedCandidateId,
+            first.Decider,
+            first.World.PoliticalWorldRevision,
+            first.World.PoliticalKnowledgeRevision);
+
+        Assert.That(first.World.TryRegisterPoliticalDecision(
+            duplicate,
+            out PoliticalDecisionFailure duplicateFailure), Is.False);
+        Assert.That(duplicateFailure.Code, Is.EqualTo(PoliticalDecisionFailureCode.DuplicateDecisionId));
+
+        Fixture second = CreateFixture(includeDecision: false);
+        Assert.That(second.World.TryRegisterPoliticalDecision(
+            duplicate,
+            out PoliticalDecisionFailure secondFailure), Is.True, secondFailure.ToString());
+    }
+
+    [Test]
     public void PoliticalDecisionCloneDoesNotShareMutableHistoryAndAdvanceDayDoesNotExecutePolitics()
     {
         Fixture fixture = CreateFixture();

@@ -1005,14 +1005,6 @@ public sealed class SimulationRuntime
             return false;
         }
 
-        if (record.TryBindToPersonStore(personStore) == false)
-        {
-            failure = PoliticalDecisionFailure.Create(
-                PoliticalDecisionFailureCode.WorldMismatch,
-                "The political decision belongs to a different PersonStore/world.");
-            return false;
-        }
-
         return politicalDecisionStore.TryRegister(record, out failure);
     }
 
