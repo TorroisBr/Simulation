@@ -17,6 +17,8 @@ public static class WorldStateCanonicalWriter
         AppendLine(output, "METADATA", "SettlementCount", IntValue(snapshot.SettlementCount));
         AppendLine(output, "METADATA", "KnownNpcCount", IntValue(snapshot.KnownNpcCount));
         AppendLine(output, "METADATA", "PoliticalClaimCount", IntValue(snapshot.PoliticalClaimCount));
+        AppendLine(output, "METADATA", "FactionCount", IntValue(snapshot.FactionCount));
+        AppendLine(output, "METADATA", "FactionAffiliationCount", IntValue(snapshot.FactionAffiliationCount));
         if (snapshot.Metadata.CalendarDate != null)
         {
             WorldStateCalendarSnapshot calendar = snapshot.Metadata.CalendarDate;
@@ -95,6 +97,23 @@ public static class WorldStateCanonicalWriter
                     : null,
                 claim.RecognitionReason,
                 StringListValue(claim.EvidenceReferences));
+        }
+
+        foreach (WorldStateFactionSnapshot faction in snapshot.Factions)
+        {
+            AppendLine(output, "FACTION",
+                faction.FactionId,
+                faction.DisplayName,
+                Int64Value(faction.CreatedAbsoluteDay));
+        }
+
+        foreach (WorldStateFactionAffiliationSnapshot affiliation in snapshot.FactionAffiliations)
+        {
+            AppendLine(output, "FACTION_AFFILIATION",
+                affiliation.FactionId,
+                affiliation.PersonId,
+                Int64Value(affiliation.JoinedAbsoluteDay),
+                NullableInt64Value(affiliation.EndedAbsoluteDay));
         }
 
         foreach (WorldStateNpcSnapshot npc in snapshot.Npcs)

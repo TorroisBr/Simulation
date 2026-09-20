@@ -329,6 +329,7 @@ public static class WorldStateInvariantValidator
             snapshot.HasPropertyCatalog,
             snapshot.AbsoluteDay,
             issues);
+        ValidateFactions(snapshot.Factions, snapshot.FactionAffiliations, personIds, snapshot.AbsoluteDay, issues);
 
         foreach (WorldStateNpcSnapshot npc in snapshot.Npcs)
         {
@@ -666,6 +667,97 @@ public static class WorldStateInvariantValidator
                 || claim.ResolutionAbsoluteDay.Value > absoluteDay)
             {
                 AddError(issues, "PoliticalClaimResolutionDayInvalid", identity, "A terminal political claim requires a valid resolution day.");
+            }
+        }
+    }
+
+    private static void ValidateFactions(
+        IReadOnlyList<WorldStateFactionSnapshot> factions,
+        IReadOnlyList<WorldStateFactionAffiliationSnapshot> affiliations,
+        HashSet<string> personIds,
+        long absoluteDay,
+        List<WorldStateInvariantIssue> issues)
+    {
+        HashSet<string> factionIds = new HashSet<string>(StringComparer.Ordinal);
+        Dictionary<string, long> factionCreationDays = new Dictionary<string, long>(StringComparer.Ordinal);
+        if (factions != null)
+        {
+            foreach (WorldStateFactionSnapshot faction in factions)
+            {
+                if (faction == null)
+                {
+                    AddError(issues, "FactionNull", "faction", "Snapshot contains a null faction entry.");
+                    continue;
+                }
+
+                string identity = string.IsNullOrWhiteSpace(faction.FactionId) ? "faction" : faction.FactionId;
+                if (string.IsNullOrWhiteSpace(faction.FactionId))
+                {
+                    AddError(issues, "FactionIdMissing", identity, "Faction has no FactionId.");
+                }
+                else if (factionIds.Add(faction.FactionId) == false)
+                {
+                    AddError(issues, "DuplicateFactionId", identity, "FactionId appears more than once.");
+                }
+                else
+                {
+                    factionCreationDays[faction.FactionId] = faction.CreatedAbsoluteDay;
+                }
+
+                if (faction.CreatedAbsoluteDay < 0L || faction.CreatedAbsoluteDay > absoluteDay)
+                {
+                    AddError(issues, "FactionCreationDayInvalid", identity, "Faction creation day is outside the snapshot timeline.");
+                }
+            }
+        }
+
+        HashSet<string> affiliationKeys = new HashSet<string>(StringComparer.Ordinal);
+        if (affiliations == null)
+        {
+            return;
+        }
+
+        foreach (WorldStateFactionAffiliationSnapshot affiliation in affiliations)
+        {
+            if (affiliation == null)
+            {
+                AddError(issues, "FactionAffiliationNull", "affiliation", "Snapshot contains a null faction affiliation entry.");
+                continue;
+            }
+
+            string identity = (affiliation.FactionId ?? "faction") + "/" + (affiliation.PersonId ?? "person");
+            string key = (affiliation.FactionId ?? string.Empty) + "\u001f" + (affiliation.PersonId ?? string.Empty);
+            if (affiliationKeys.Add(key) == false)
+            {
+                AddError(issues, "DuplicateFactionAffiliation", identity, "Faction/person affiliation appears more than once.");
+            }
+
+            if (factionIds.Contains(affiliation.FactionId) == false)
+            {
+                AddError(issues, "FactionAffiliationFactionMissing", identity, "Faction affiliation references a faction absent from the snapshot.");
+            }
+            else if (factionCreationDays.TryGetValue(affiliation.FactionId, out long createdDay)
+                && affiliation.JoinedAbsoluteDay < createdDay)
+            {
+                AddError(issues, "FactionAffiliationBeforeFactionCreation", identity, "Faction affiliation begins before the faction was created.");
+            }
+
+            if (string.IsNullOrWhiteSpace(affiliation.PersonId)
+                || personIds.Contains(affiliation.PersonId) == false)
+            {
+                AddError(issues, "FactionAffiliationPersonMissing", identity, "Faction affiliation PersonId is absent from the Person snapshot.");
+            }
+
+            if (affiliation.JoinedAbsoluteDay < 0L || affiliation.JoinedAbsoluteDay > absoluteDay)
+            {
+                AddError(issues, "FactionAffiliationJoinDayInvalid", identity, "Faction affiliation join day is outside the snapshot timeline.");
+            }
+
+            if (affiliation.EndedAbsoluteDay.HasValue
+                && (affiliation.EndedAbsoluteDay.Value < affiliation.JoinedAbsoluteDay
+                    || affiliation.EndedAbsoluteDay.Value > absoluteDay))
+            {
+                AddError(issues, "FactionAffiliationEndDayInvalid", identity, "Faction affiliation end day is inconsistent with the snapshot timeline.");
             }
         }
     }
