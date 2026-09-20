@@ -95,11 +95,13 @@ public sealed class PoliticalSuccessionFailure : IEquatable<PoliticalSuccessionF
 public sealed class PoliticalOfficeSuccessionTransition : IEquatable<PoliticalOfficeSuccessionTransition>
 {
     internal PoliticalOfficeSuccessionTransition(
+        SimulationRuntime expectedWorld,
         PoliticalDecisionRecord decision,
         OfficeSuccessionTransition officeTransition,
         long expectedWorldDay,
         string expectedCandidateFingerprint)
     {
+        ExpectedWorld = expectedWorld ?? throw new ArgumentNullException(nameof(expectedWorld));
         Decision = decision ?? throw new ArgumentNullException(nameof(decision));
         OfficeTransition = officeTransition ?? throw new ArgumentNullException(nameof(officeTransition));
         ExpectedWorldDay = expectedWorldDay;
@@ -108,6 +110,7 @@ public sealed class PoliticalOfficeSuccessionTransition : IEquatable<PoliticalOf
     }
 
     public PoliticalDecisionRecord Decision { get; }
+    internal SimulationRuntime ExpectedWorld { get; }
     public PoliticalDecisionRecord DecisionRecord => Decision;
     public OfficeSuccessionTransition OfficeTransition { get; }
     public OfficeSuccessionTransition DomainTransition => OfficeTransition;
@@ -269,6 +272,7 @@ public static class PoliticalSuccessionSystem
         }
 
         transition = new PoliticalOfficeSuccessionTransition(
+            world,
             decision,
             officeTransition,
             world.CurrentDay,
@@ -298,6 +302,14 @@ public static class PoliticalSuccessionSystem
             failure = PoliticalSuccessionFailure.Create(
                 PoliticalSuccessionFailureCode.InvalidTransition,
                 "A valid political office succession transition is required.");
+            return false;
+        }
+
+        if (ReferenceEquals(transition.ExpectedWorld, world) == false)
+        {
+            failure = PoliticalSuccessionFailure.Create(
+                PoliticalSuccessionFailureCode.InvalidTransition,
+                "A political succession transition belongs to a different world.");
             return false;
         }
 

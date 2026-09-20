@@ -166,6 +166,12 @@ public sealed class PoliticalSuccessionIntegrationTests
         Assert.That(staleFailure.Code, Is.EqualTo(PoliticalSuccessionFailureCode.StaleWorldDay));
         Assert.That(fixture.World.IsOfficeVacant(fixture.OfficeId), Is.True);
 
+        Fixture otherWorld = CreateFixture();
+        Assert.That(otherWorld.World.TryApplyPoliticalOfficeSuccession(
+                transition,
+                out PoliticalSuccessionFailure crossWorldFailure), Is.False);
+        Assert.That(crossWorldFailure.Code, Is.EqualTo(PoliticalSuccessionFailureCode.InvalidTransition));
+
         Assert.That(fixture.World.TryProposePoliticalOfficeSuccession(
                 new PoliticalDecisionId("decision.missing"),
                 fixture.OfficeId,
