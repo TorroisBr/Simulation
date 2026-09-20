@@ -10,8 +10,8 @@ Phase 6 bootstraps from the immutable, validated Phase 5 canonical SHA:
 
 `3c3a5a7fa5bac8f301b98ec92307eadb19af25ff`
 
-The canonical branch now includes the reviewed political claim foundation
-promoted from integration tip `0d01d88`.
+The canonical branch now includes the reviewed political claim and faction /
+affiliation foundations promoted from integration tip `a155392`.
 
 The completed prior-phase baseline remains documented in:
 
@@ -84,14 +84,20 @@ Completed:
 - completed the read-only Phase 6 architecture audit and dependency graph;
 - implemented, independently reviewed, integrated, and validated the
   PersonId-based political claim foundation;
+- implemented, independently reviewed, integrated, and validated the
+  PersonId-based faction and affiliation foundation;
 - validated the claim wave with focused EditMode `10/10`, ALL EditMode
   `1358/1358`, complete Smoke `3/3`, and `git diff --check` green.
+- reached Checkpoint A with faction-focused EditMode `9/9`, combined ALL
+  EditMode `1367/1367`, complete Smoke `3/3`, and `git diff --check` green.
 
-Pending:
+Pending after Checkpoint A:
 
-- minimal faction identity and PersonId-based affiliation foundation;
-- Checkpoint A promotion after claims plus faction/affiliation truth are
-  canonical and validated.
+- Checkpoint B work: political knowledge, recognition/legitimacy contracts,
+  succession selection integration, and political decision boundaries;
+- optional Checkpoint C work only if a substantial autonomous or generalized
+  relationship layer is explicitly justified;
+- remaining Phase 6 completion candidate and deferred-work record.
 
 ## Phase 6 dependency graph
 
@@ -108,7 +114,7 @@ points, and semantic conflicts.
 ### Political truth foundations — PARALLEL WITH ISOLATION only when contracts remain disjoint
 
 - claim records and claim lifecycle — COMPLETE and canonical;
-- minimal faction identity and affiliation relations — NEXT SAFE WAVE;
+- minimal faction identity and affiliation relations — COMPLETE and canonical;
 - narrowly typed support or alignment relations, only where semantics and
   ownership are explicit;
 - deterministic diagnostics for each stable truth store.
@@ -154,8 +160,16 @@ clones and validates claims against current world truth. Deterministic
 snapshots, canonical output, diffs, and invariant validation cover the claim
 records and their captured cross-store references.
 
+Faction truth is world-owned by stable `FactionId` records and a separate
+PersonId-based affiliation relation store. Affiliation add/end operations are
+explicit, stale-safe, world-day guarded, and bound to the originating world
+store. Runtime clones rebind the faction store to the receiving PersonStore;
+diagnostics cover deterministic faction and affiliation snapshots, output,
+diffs, and invariants.
+
 No political knowledge, support, legitimacy score, faction autonomy, or
-`AdvanceDay` political processing is included yet.
+`AdvanceDay` political processing is included yet. Those are Checkpoint B or
+later work.
 
 ## Branch and review policy
 
@@ -183,7 +197,8 @@ recurring political processes, or long-horizon NPC behavior.
 
 ## Human checkpoints
 
-- Checkpoint A: stable political truth foundations are canonical.
+- Checkpoint A: stable political truth foundations are canonical — REACHED at
+  canonical promotion of integration tip `a155392`.
 - Checkpoint B: politics integrates with knowledge, institutions, claims or
   recognition, succession selection, and NPC/institution decisions.
 - Optional Checkpoint C: only for a genuinely substantial new architecture
