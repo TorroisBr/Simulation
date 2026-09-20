@@ -1656,12 +1656,18 @@ public sealed class SimulationRuntime
         out NpcPopulationLifecycleTransition transition,
         out NpcPopulationLifecycleFailure failure)
     {
-        return NpcPopulationLifecycleSystem.TryApplyImmigration(
+        bool applied = NpcPopulationLifecycleSystem.TryApplyImmigration(
             npcRuntime,
             settlement,
             GetAuthoritativeNpcRoster(),
             out transition,
             out failure);
+        if (applied)
+        {
+            AdvancePoliticalWorldRevision();
+        }
+
+        return applied;
     }
 
     public bool TryApplyEmigration(
@@ -1670,12 +1676,18 @@ public sealed class SimulationRuntime
         out NpcPopulationLifecycleTransition transition,
         out NpcPopulationLifecycleFailure failure)
     {
-        return NpcPopulationLifecycleSystem.TryApplyEmigration(
+        bool applied = NpcPopulationLifecycleSystem.TryApplyEmigration(
             npcRuntime,
             settlement,
             GetAuthoritativeNpcRoster(),
             out transition,
             out failure);
+        if (applied)
+        {
+            AdvancePoliticalWorldRevision();
+        }
+
+        return applied;
     }
 
     public bool TryApplyResidentDeath(
@@ -1686,21 +1698,33 @@ public sealed class SimulationRuntime
     {
         if (npcRuntime?.BoundPersonRuntime != null)
         {
-            return NpcPopulationLifecycleSystem.TryApplyResidentPersonDeath(
+            bool applied = NpcPopulationLifecycleSystem.TryApplyResidentPersonDeath(
                 this,
                 npcRuntime,
                 settlement,
                 GetAuthoritativeNpcRoster(),
                 out transition,
                 out failure);
+            if (applied)
+            {
+                AdvancePoliticalWorldRevision();
+            }
+
+            return applied;
         }
 
-        return NpcPopulationLifecycleSystem.TryApplyResidentDeath(
+        bool residentDeathApplied = NpcPopulationLifecycleSystem.TryApplyResidentDeath(
             npcRuntime,
             settlement,
             GetAuthoritativeNpcRoster(),
             out transition,
             out failure);
+        if (residentDeathApplied)
+        {
+            AdvancePoliticalWorldRevision();
+        }
+
+        return residentDeathApplied;
     }
 
     public bool TryStartTravelParty(ActionExecutionContext context)

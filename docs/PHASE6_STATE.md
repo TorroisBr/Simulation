@@ -199,6 +199,8 @@ Feature and integration tips:
 - succession integration worker: `f38a380`;
 - authoritative decision/diagnostics hardening: `d5dfa9c`;
 - world-bound succession transition hardening: `da133ef`.
+- final decision-store, diagnostics, invariant, and world-revision hardening:
+  `8b7a597`.
 
 Independent reviews rejected and then verified the resolved issues: malformed
 and delimiter-colliding support diagnostics, claim/office knowledge coverage,
@@ -207,7 +209,7 @@ knowledge/decision mutation boundaries, authoritative stale revisions,
 office/institution decision context, deterministic decision diagnostics, and
 cross-world succession transition rejection. No self-approval was used.
 
-Final validation on the integration tip:
+Final validation on the integration tip `8b7a597`:
 
 - Phase 6 political focused suites: `57/57`;
 - diagnostics, orchestration, institution, and succession regressions:
