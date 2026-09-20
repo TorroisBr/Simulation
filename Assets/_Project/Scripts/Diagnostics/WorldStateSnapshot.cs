@@ -1601,8 +1601,10 @@ public static class WorldStateSnapshotBuilder
                     continue;
                 }
 
+                string diagnosticIdentityKey = ((int)observation.FactKind).ToString()
+                    + ":" + observation.IdentityKey.Length + ":" + observation.IdentityKey;
                 observations.Add(new WorldStatePoliticalKnowledgeObservationSnapshot(
-                    observation.IdentityKey,
+                    diagnosticIdentityKey,
                     observation.FactKind,
                     observation.ObservedAbsoluteDay,
                     observation.ReceivedAbsoluteDay,

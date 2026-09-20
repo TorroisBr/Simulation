@@ -2213,7 +2213,21 @@ public sealed class SimulationRuntime
         PoliticalDecisionStore copy = new PoliticalDecisionStore();
         if (source == null)
         {
+            if (copy.TryBindToPersonStore(personStore) == false)
+            {
+                throw new ArgumentException(
+                    "The SimulationRuntime PoliticalDecisionStore could not bind to the resolved PersonStore.",
+                    nameof(personStore));
+            }
+
             return copy;
+        }
+
+        if (copy.TryBindToPersonStore(personStore) == false)
+        {
+            throw new ArgumentException(
+                "The SimulationRuntime PoliticalDecisionStore could not bind to the resolved PersonStore.",
+                nameof(personStore));
         }
 
         foreach (PoliticalDecisionRecord record in source.Records)
