@@ -20,6 +20,7 @@ public sealed class SimulationRuntime
     private readonly OfficeStore officeStore;
     private readonly PropertyOwnershipStore propertyOwnershipStore;
     private readonly EstateStore estateStore;
+    private readonly PoliticalClaimStore politicalClaimStore;
     private readonly List<NpcActionData> configuredActions;
     private readonly ScheduledDirectiveSystem scheduledDirectiveSystem;
     private readonly JusticeSystem justiceSystem;
@@ -53,6 +54,7 @@ public sealed class SimulationRuntime
     public EstateStore EstateStore => estateStore;
     public IReadOnlyList<PropertyOwnershipRecord> PropertyOwnershipRecords => propertyOwnershipStore.Records;
     public IReadOnlyList<EstateRecord> EstateRecords => estateStore.Records;
+    public IReadOnlyList<PoliticalClaimRecord> PoliticalClaimRecords => politicalClaimStore.Records;
     /// <summary>
     /// Read-only view of every named NPC registered with this world. Registration is
     /// explicit; death and emigration do not remove an NPC from this world roster.
@@ -91,7 +93,8 @@ public sealed class SimulationRuntime
         IPersonNaturalMortalitySampleProvider naturalMortalitySamples = null,
         IAggregateDemographyProvider aggregateDemographyProvider = null,
         PropertyOwnershipStore propertyOwnershipStore = null,
-        EstateStore estateStore = null)
+        EstateStore estateStore = null,
+        PoliticalClaimStore politicalClaimStore = null)
     {
         this.simulationTime = simulationTime ?? throw new ArgumentNullException(nameof(simulationTime));
 
@@ -146,6 +149,13 @@ public sealed class SimulationRuntime
         this.officeStore = resolvedOfficeStore;
         this.propertyOwnershipStore = resolvedPropertyOwnershipStore;
         this.estateStore = resolvedEstateStore;
+        this.politicalClaimStore = ClonePoliticalClaimStore(
+            politicalClaimStore,
+            resolvedPersonStore,
+            resolvedInstitutionStore,
+            resolvedOfficeStore,
+            resolvedPropertyOwnershipStore,
+            simulationTime.AbsoluteDay);
         this.cities = cities != null ? new List<CityRuntime>(cities) : new List<CityRuntime>();
         this.npcRuntimes = new List<NpcRuntime>();
         this.npcRuntimeSnapshot = this.npcRuntimes.AsReadOnly();
@@ -380,6 +390,128 @@ public sealed class SimulationRuntime
         out InstitutionFoundationFailure failure)
     {
         return institutionStore.TryRegister(record, out failure);
+    }
+
+    public bool TryRegisterPoliticalClaim(
+        PoliticalClaimRecord record,
+        out PoliticalClaimFailure failure)
+    {
+        failure = PoliticalClaimFailure.None;
+        if (record == null || record.ClaimId == null || record.ClaimantPersonId == null)
+        {
+            failure = PoliticalClaimFailure.Create(
+                PoliticalClaimFailureCode.InvalidClaim,
+                "A political claim with a claimant and claim id is required.");
+            return false;
+        }
+
+        if (record.CreatedAbsoluteDay < 0L || record.CreatedAbsoluteDay > CurrentDay)
+        {
+            failure = PoliticalClaimFailure.Create(
+                PoliticalClaimFailureCode.InvalidCreationAbsoluteDay,
+                "Claim creation must be within the current world timeline.");
+            return false;
+        }
+
+        if (personStore.TryGet(record.ClaimantPersonId, out _) == false)
+        {
+            failure = PoliticalClaimFailure.Create(
+                PoliticalClaimFailureCode.ClaimantNotRegistered,
+                "The political claim claimant must be registered in this world.");
+            return false;
+        }
+
+        if (TryValidatePoliticalClaimTarget(record, out failure) == false)
+        {
+            return false;
+        }
+
+        if (TryValidatePoliticalClaimRecognition(record, out failure) == false)
+        {
+            return false;
+        }
+
+        return politicalClaimStore.TryRegister(record, out failure);
+    }
+
+    public bool TryProposePoliticalClaimRecognition(
+        PoliticalClaimId claimId,
+        InstitutionId recognizingInstitutionId,
+        PoliticalClaimRecognitionState recognitionState,
+        string reason,
+        out PoliticalClaimRecognitionTransition transition,
+        out PoliticalClaimFailure failure)
+    {
+        transition = null;
+        if (recognizingInstitutionId == null
+            || institutionStore.TryGet(recognizingInstitutionId, out _) == false)
+        {
+            failure = PoliticalClaimFailure.Create(
+                PoliticalClaimFailureCode.ClaimTargetNotFound,
+                "The recognizing institution must be registered in this world.");
+            return false;
+        }
+
+        return PoliticalClaimSystem.TryProposeRecognition(
+            politicalClaimStore,
+            claimId,
+            recognizingInstitutionId,
+            recognitionState,
+            CurrentDay,
+            reason,
+            out transition,
+            out failure);
+    }
+
+    public bool TryApplyPoliticalClaimRecognition(
+        PoliticalClaimRecognitionTransition transition,
+        out PoliticalClaimFailure failure)
+    {
+        if (transition == null || transition.RecognitionAbsoluteDay > CurrentDay)
+        {
+            failure = PoliticalClaimFailure.Create(
+                PoliticalClaimFailureCode.InvalidRecognitionAbsoluteDay,
+                "Claim recognition must be applied within the current world timeline.");
+            return false;
+        }
+
+        return PoliticalClaimSystem.TryApplyRecognition(
+            politicalClaimStore,
+            transition,
+            out failure);
+    }
+
+    public bool TryProposePoliticalClaimResolution(
+        PoliticalClaimId claimId,
+        PoliticalClaimStatus status,
+        out PoliticalClaimResolutionTransition transition,
+        out PoliticalClaimFailure failure)
+    {
+        return PoliticalClaimSystem.TryProposeResolution(
+            politicalClaimStore,
+            claimId,
+            status,
+            CurrentDay,
+            out transition,
+            out failure);
+    }
+
+    public bool TryApplyPoliticalClaimResolution(
+        PoliticalClaimResolutionTransition transition,
+        out PoliticalClaimFailure failure)
+    {
+        if (transition == null || transition.ResolutionAbsoluteDay > CurrentDay)
+        {
+            failure = PoliticalClaimFailure.Create(
+                PoliticalClaimFailureCode.InvalidResolutionAbsoluteDay,
+                "Claim resolution must be applied within the current world timeline.");
+            return false;
+        }
+
+        return PoliticalClaimSystem.TryApplyResolution(
+            politicalClaimStore,
+            transition,
+            out failure);
     }
 
     public bool TryRegisterPropertyOwnership(
@@ -1138,6 +1270,82 @@ public sealed class SimulationRuntime
 
     internal OfficeStore OfficeStoreForWorldBoundary => officeStore;
 
+    private bool TryValidatePoliticalClaimTarget(
+        PoliticalClaimRecord record,
+        out PoliticalClaimFailure failure)
+    {
+        failure = PoliticalClaimFailure.None;
+        if (record.Target == null
+            || PoliticalClaimRecord.IsTargetCompatible(record.ClaimType, record.Target.Kind) == false)
+        {
+            failure = PoliticalClaimFailure.Create(
+                PoliticalClaimFailureCode.ClaimTargetTypeMismatch,
+                "The political claim target kind does not match the claim type.");
+            return false;
+        }
+
+        bool found;
+        switch (record.Target.Kind)
+        {
+            case PoliticalClaimTargetKind.Office:
+                found = officeStore.TryGet(new OfficeId(record.Target.TargetId), out _);
+                break;
+            case PoliticalClaimTargetKind.Property:
+                found = propertyOwnershipStore.TryGet(new PropertyId(record.Target.TargetId), out _);
+                break;
+            case PoliticalClaimTargetKind.Institution:
+                found = institutionStore.TryGet(new InstitutionId(record.Target.TargetId), out _);
+                break;
+            case PoliticalClaimTargetKind.Person:
+                found = personStore.TryGet(new PersonId(record.Target.TargetId), out _);
+                break;
+            default:
+                found = false;
+                break;
+        }
+
+        if (found == false)
+        {
+            failure = PoliticalClaimFailure.Create(
+                PoliticalClaimFailureCode.ClaimTargetNotFound,
+                "The political claim target must exist in this world.");
+            return false;
+        }
+
+        return true;
+    }
+
+    private bool TryValidatePoliticalClaimRecognition(
+        PoliticalClaimRecord record,
+        out PoliticalClaimFailure failure)
+    {
+        failure = PoliticalClaimFailure.None;
+        if (record.RecognitionState == PoliticalClaimRecognitionState.Unrecognized)
+        {
+            return true;
+        }
+
+        if (record.RecognizingInstitutionId == null
+            || institutionStore.TryGet(record.RecognizingInstitutionId, out _) == false)
+        {
+            failure = PoliticalClaimFailure.Create(
+                PoliticalClaimFailureCode.ClaimTargetNotFound,
+                "The political claim recognizing institution must exist in this world.");
+            return false;
+        }
+
+        if (record.RecognitionAbsoluteDay.HasValue == false
+            || record.RecognitionAbsoluteDay.Value > CurrentDay)
+        {
+            failure = PoliticalClaimFailure.Create(
+                PoliticalClaimFailureCode.InvalidRecognitionAbsoluteDay,
+                "Claim recognition must be within the current world timeline.");
+            return false;
+        }
+
+        return true;
+    }
+
     private static void ValidateGenealogyStore(PersonStore persons, GenealogyStore genealogy)
     {
         foreach (ParentageRecord record in genealogy.Records)
@@ -1167,6 +1375,80 @@ public sealed class SimulationRuntime
         }
 
         return copy;
+    }
+
+    private static PoliticalClaimStore ClonePoliticalClaimStore(
+        PoliticalClaimStore source,
+        PersonStore personStore,
+        InstitutionStore institutionStore,
+        OfficeStore officeStore,
+        PropertyOwnershipStore propertyOwnershipStore,
+        long currentDay)
+    {
+        PoliticalClaimStore copy = new PoliticalClaimStore();
+        if (source == null)
+        {
+            return copy;
+        }
+
+        foreach (PoliticalClaimRecord record in source.Records)
+        {
+            if (record == null
+                || record.CreatedAbsoluteDay > currentDay
+                || personStore.TryGet(record.ClaimantPersonId, out _) == false)
+            {
+                throw new ArgumentException(
+                    "The SimulationRuntime PoliticalClaimStore contains a claim inconsistent with PersonStore or world time.",
+                    nameof(source));
+            }
+
+            bool targetExists;
+            switch (record.Target.Kind)
+            {
+                case PoliticalClaimTargetKind.Office:
+                    targetExists = officeStore.TryGet(new OfficeId(record.Target.TargetId), out _);
+                    break;
+                case PoliticalClaimTargetKind.Property:
+                    targetExists = propertyOwnershipStore.TryGet(new PropertyId(record.Target.TargetId), out _);
+                    break;
+                case PoliticalClaimTargetKind.Institution:
+                    targetExists = institutionStore.TryGet(new InstitutionId(record.Target.TargetId), out _);
+                    break;
+                case PoliticalClaimTargetKind.Person:
+                    targetExists = personStore.TryGet(new PersonId(record.Target.TargetId), out _);
+                    break;
+                default:
+                    targetExists = false;
+                    break;
+            }
+
+            if (targetExists == false
+                || (record.RecognitionAbsoluteDay.HasValue && record.RecognitionAbsoluteDay.Value > currentDay)
+                || (record.RecognitionState != PoliticalClaimRecognitionState.Unrecognized
+                    && (record.RecognizingInstitutionId == null
+                        || institutionStore.TryGet(record.RecognizingInstitutionId, out _) == false)))
+            {
+                throw new ArgumentException(
+                    "The SimulationRuntime PoliticalClaimStore contains a claim target or recognition state inconsistent with the world.",
+                    nameof(source));
+            }
+
+            if (copy.TryRegister(record, out PoliticalClaimFailure failure) == false)
+            {
+                throw new ArgumentException(
+                    "The SimulationRuntime PoliticalClaimStore contains an invalid claim: " + failure + ".",
+                    nameof(source));
+            }
+        }
+
+        if (copy.Count != source.Count)
+        {
+            throw new ArgumentException(
+                "The SimulationRuntime PoliticalClaimStore was not copied completely.",
+                nameof(source));
+        }
+
+        return source.Clone();
     }
 
     private static InstitutionStore ResolveInstitutionStore(

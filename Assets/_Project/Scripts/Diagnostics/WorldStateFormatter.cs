@@ -22,7 +22,8 @@ public static class WorldStateSnapshotFormatter
         }
 
         output.Append("Settlements: ").Append(WorldStateCanonicalWriter.IntValue(snapshot.SettlementCount))
-            .Append(" | Known NPCs: ").Append(WorldStateCanonicalWriter.IntValue(snapshot.KnownNpcCount)).Append('\n');
+            .Append(" | Known NPCs: ").Append(WorldStateCanonicalWriter.IntValue(snapshot.KnownNpcCount))
+            .Append(" | Political claims: ").Append(WorldStateCanonicalWriter.IntValue(snapshot.PoliticalClaimCount)).Append('\n');
 
         foreach (WorldStatePersonSnapshot person in snapshot.Persons)
         {
@@ -108,6 +109,28 @@ public static class WorldStateSnapshotFormatter
                     .Append(Value(estate.DeceasedPersonId))
                     .Append(" opened ")
                     .Append(WorldStateCanonicalWriter.Int64Value(estate.OpenedAbsoluteDay))
+                    .Append('\n');
+            }
+        }
+
+        foreach (WorldStatePoliticalClaimSnapshot claim in snapshot.PoliticalClaims)
+        {
+            if (claim != null)
+            {
+                output.Append("POLITICAL CLAIM ")
+                    .Append(Value(claim.ClaimId))
+                    .Append(" claimant ")
+                    .Append(Value(claim.ClaimantPersonId))
+                    .Append(" type ")
+                    .Append(WorldStateCanonicalWriter.EnumValue(claim.ClaimType))
+                    .Append(" target ")
+                    .Append(WorldStateCanonicalWriter.EnumValue(claim.TargetKind))
+                    .Append(":")
+                    .Append(Value(claim.TargetId))
+                    .Append(" status ")
+                    .Append(WorldStateCanonicalWriter.EnumValue(claim.Status))
+                    .Append(" recognition ")
+                    .Append(WorldStateCanonicalWriter.EnumValue(claim.RecognitionState))
                     .Append('\n');
             }
         }
