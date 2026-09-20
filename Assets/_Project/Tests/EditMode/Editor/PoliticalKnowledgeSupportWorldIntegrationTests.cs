@@ -46,11 +46,9 @@ public sealed class PoliticalKnowledgeSupportWorldIntegrationTests
         Fixture fixture = CreateFixture();
         Assert.That(fixture.World.TryRegisterPoliticalKnowledgeHolder(
             PoliticalKnowledgeHolder.ForPerson(fixture.Supporter),
-            out PoliticalKnowledgeRuntime personKnowledge,
             out PoliticalKnowledgeFailure personHolderFailure), Is.True, personHolderFailure.ToString());
         Assert.That(fixture.World.TryRegisterPoliticalKnowledgeHolder(
             PoliticalKnowledgeHolder.ForInstitution(fixture.Institution),
-            out _,
             out PoliticalKnowledgeFailure institutionHolderFailure), Is.True, institutionHolderFailure.ToString());
 
         PoliticalClaimKnowledgeObservation current = new PoliticalClaimKnowledgeObservation(
@@ -73,6 +71,9 @@ public sealed class PoliticalKnowledgeSupportWorldIntegrationTests
             PoliticalKnowledgeHolder.ForPerson(fixture.Supporter),
             current,
             out PoliticalKnowledgeFailure recordFailure), Is.True, recordFailure.ToString());
+        Assert.That(fixture.World.TryGetPoliticalKnowledge(
+            PoliticalKnowledgeHolder.ForPerson(fixture.Supporter),
+            out PoliticalKnowledgeRuntime personKnowledge), Is.True);
         Assert.That(personKnowledge.ClaimObservations, Has.Count.EqualTo(1));
         Assert.That(personKnowledge.ClaimObservations[0].Target.TargetId, Is.EqualTo(fixture.Candidate.Value));
 
@@ -97,8 +98,30 @@ public sealed class PoliticalKnowledgeSupportWorldIntegrationTests
             future,
             out PoliticalKnowledgeFailure futureFailure), Is.False);
         Assert.That(futureFailure.Code, Is.EqualTo(PoliticalKnowledgeFailureCode.FutureObservation));
-        Assert.That(fixture.World.PoliticalKnowledgeStore.Runtimes, Has.Count.EqualTo(2));
+        Assert.That(fixture.World.PoliticalKnowledgeHolderCount, Is.EqualTo(2));
         Assert.That(typeof(PoliticalKnowledgeRuntime).GetProperty("NpcRuntimeId"), Is.Null);
+    }
+
+    [Test]
+    public void ConsumerKnowledgeSnapshotsCannotMutateWorldKnowledge()
+    {
+        Fixture fixture = CreateFixture();
+        Assert.That(fixture.World.TryRegisterPoliticalKnowledgeHolder(
+            PoliticalKnowledgeHolder.ForPerson(fixture.Supporter),
+            out _), Is.True);
+        Assert.That(fixture.World.TryGetPoliticalKnowledge(
+            PoliticalKnowledgeHolder.ForPerson(fixture.Supporter),
+            out PoliticalKnowledgeRuntime snapshot), Is.True);
+        Assert.That(snapshot.RecordFactionObservation(new FactionKnowledgeObservation(
+            fixture.Faction,
+            true,
+            fixture.World.CurrentDay + 1L,
+            fixture.World.CurrentDay + 1L,
+            new PoliticalKnowledgeProvenance(PoliticalKnowledgeSource.DirectObservation, "consumer"))), Is.True);
+        Assert.That(fixture.World.TryGetPoliticalKnowledge(
+            PoliticalKnowledgeHolder.ForPerson(fixture.Supporter),
+            out PoliticalKnowledgeRuntime unchanged), Is.True);
+        Assert.That(unchanged.FactionObservations, Is.Empty);
     }
 
     [Test]

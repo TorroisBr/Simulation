@@ -73,7 +73,12 @@ public sealed class PoliticalKnowledgeStore
     {
         get
         {
-            List<PoliticalKnowledgeRuntime> result = new List<PoliticalKnowledgeRuntime>(runtimesByHolder.Values);
+            List<PoliticalKnowledgeRuntime> result = new List<PoliticalKnowledgeRuntime>();
+            foreach (PoliticalKnowledgeRuntime runtime in runtimesByHolder.Values)
+            {
+                result.Add(runtime.Clone());
+            }
+
             result.Sort((left, right) => StringComparer.Ordinal.Compare(left.Holder.StableId, right.Holder.StableId));
             return new ReadOnlyCollection<PoliticalKnowledgeRuntime>(result);
         }
@@ -82,10 +87,8 @@ public sealed class PoliticalKnowledgeStore
     public bool TryRegisterHolder(
         PoliticalKnowledgeHolder holder,
         long currentWorldDay,
-        out PoliticalKnowledgeRuntime runtime,
         out PoliticalKnowledgeFailure failure)
     {
-        runtime = null;
         if (ValidateHolder(holder, out failure) == false)
         {
             return false;
@@ -107,8 +110,7 @@ public sealed class PoliticalKnowledgeStore
             return false;
         }
 
-        runtime = new PoliticalKnowledgeRuntime(holder);
-        runtimesByHolder.Add(holder.StableId, runtime);
+        runtimesByHolder.Add(holder.StableId, new PoliticalKnowledgeRuntime(holder));
         failure = PoliticalKnowledgeFailure.None;
         return true;
     }
@@ -150,7 +152,13 @@ public sealed class PoliticalKnowledgeStore
         out PoliticalKnowledgeRuntime runtime)
     {
         runtime = null;
-        return holder != null && runtimesByHolder.TryGetValue(holder.StableId, out runtime);
+        if (holder == null || runtimesByHolder.TryGetValue(holder.StableId, out PoliticalKnowledgeRuntime owned) == false)
+        {
+            return false;
+        }
+
+        runtime = owned.Clone();
+        return true;
     }
 
     public bool TryRecordObservation(
@@ -169,7 +177,7 @@ public sealed class PoliticalKnowledgeStore
         }
 
         if (ValidateObservation(observation, currentWorldDay, out failure) == false
-            || TryGet(holder, out PoliticalKnowledgeRuntime runtime) == false)
+            || TryGetOwned(holder, out PoliticalKnowledgeRuntime runtime) == false)
         {
             if (failure.Code == PoliticalKnowledgeFailureCode.None)
             {
@@ -236,6 +244,14 @@ public sealed class PoliticalKnowledgeStore
         }
 
         return clone;
+    }
+
+    private bool TryGetOwned(
+        PoliticalKnowledgeHolder holder,
+        out PoliticalKnowledgeRuntime runtime)
+    {
+        runtime = null;
+        return holder != null && runtimesByHolder.TryGetValue(holder.StableId, out runtime);
     }
 
     private bool ValidateHolder(

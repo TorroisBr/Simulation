@@ -61,7 +61,7 @@ public sealed class SimulationRuntime
     public IReadOnlyList<FactionRecord> FactionRecords => factionStore.Factions;
     public IReadOnlyList<FactionAffiliationRecord> FactionAffiliationRecords => factionStore.Affiliations;
     public IReadOnlyList<PoliticalSupportRelationRecord> PoliticalSupportRecords => politicalSupportStore.Records;
-    public PoliticalKnowledgeStore PoliticalKnowledgeStore => politicalKnowledgeStore;
+    public int PoliticalKnowledgeHolderCount => politicalKnowledgeStore.Count;
     /// <summary>
     /// Read-only view of every named NPC registered with this world. Registration is
     /// explicit; death and emigration do not remove an NPC from this world roster.
@@ -764,14 +764,19 @@ public sealed class SimulationRuntime
 
     public bool TryRegisterPoliticalKnowledgeHolder(
         PoliticalKnowledgeHolder holder,
-        out PoliticalKnowledgeRuntime runtime,
         out PoliticalKnowledgeFailure failure)
     {
         return politicalKnowledgeStore.TryRegisterHolder(
             holder,
             CurrentDay,
-            out runtime,
             out failure);
+    }
+
+    public bool TryGetPoliticalKnowledge(
+        PoliticalKnowledgeHolder holder,
+        out PoliticalKnowledgeRuntime runtime)
+    {
+        return politicalKnowledgeStore.TryGet(holder, out runtime);
     }
 
     public bool TryRegisterPropertyOwnership(
