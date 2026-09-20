@@ -142,6 +142,31 @@ public sealed class PoliticalSuccessionIntegrationTests
     }
 
     [Test]
+    public void ImportedPoliticalDecisionHistoryRequiresExplicitRevisionAndWorldPersonStore()
+    {
+        Fixture fixture = CreateFixture();
+
+        Assert.Throws<ArgumentException>(() => new SimulationRuntime(
+            new SimulationTime(fixture.World.CurrentDay),
+            Array.Empty<CityRuntime>(),
+            null,
+            personStore: fixture.People,
+            genealogyStore: fixture.Genealogy,
+            institutionStore: fixture.Institutions,
+            officeStore: fixture.Offices,
+            politicalKnowledgeStore: fixture.Knowledge,
+            politicalDecisionStore: fixture.Decisions));
+
+        Assert.Throws<ArgumentException>(() => new SimulationRuntime(
+            new SimulationTime(fixture.World.CurrentDay),
+            Array.Empty<CityRuntime>(),
+            null,
+            personStore: new PersonStore(),
+            politicalWorldRevision: fixture.World.PoliticalWorldRevision,
+            politicalDecisionStore: fixture.Decisions));
+    }
+
+    [Test]
     public void PoliticalSelectionUsesCandidateFingerprintAndRevalidatesDeadCandidate()
     {
         Fixture fixture = CreateFixture();
@@ -442,7 +467,9 @@ public sealed class PoliticalSuccessionIntegrationTests
             personStore: world.PersonStore,
             institutionIds: new[] { "political-institution" },
             officeIds: new[] { "political-office" },
-            politicalDecisions: world.PoliticalDecisionRecords));
+            politicalDecisions: world.PoliticalDecisionRecords,
+            politicalKnowledgeRuntimes: world.PoliticalKnowledgeRuntimes,
+            politicalKnowledgeRevision: world.PoliticalKnowledgeRevision));
     }
 
     private static PersonRuntime Register(

@@ -347,6 +347,15 @@ public static class WorldStateInvariantValidator
             snapshot.HasOfficeCatalog,
             snapshot.AbsoluteDay,
             issues);
+        ValidatePoliticalKnowledge(
+            snapshot.PoliticalKnowledge,
+            snapshot.HasPoliticalKnowledgeState,
+            snapshot.PoliticalKnowledgeRevision,
+            personIds,
+            snapshot.InstitutionIds,
+            snapshot.HasInstitutionCatalog,
+            snapshot.AbsoluteDay,
+            issues);
 
         foreach (WorldStateNpcSnapshot npc in snapshot.Npcs)
         {
@@ -1082,6 +1091,146 @@ public static class WorldStateInvariantValidator
 
             ValidateDecisionReferences(decision.EvidenceReferences, identity, "Evidence", issues);
             ValidateDecisionReferences(decision.KnowledgeReferences, identity, "Knowledge", issues);
+        }
+    }
+
+    private static void ValidatePoliticalKnowledge(
+        IReadOnlyList<WorldStatePoliticalKnowledgeSnapshot> knowledge,
+        bool hasKnowledgeState,
+        long knowledgeRevision,
+        HashSet<string> personIds,
+        IReadOnlyList<string> institutionIds,
+        bool hasInstitutionCatalog,
+        long absoluteDay,
+        List<WorldStateInvariantIssue> issues)
+    {
+        if (knowledgeRevision < 0L)
+        {
+            AddError(issues, "PoliticalKnowledgeRevisionInvalid", "world", "Political knowledge revision cannot be negative.");
+        }
+
+        if (hasKnowledgeState == false
+            && (knowledge.Count > 0 || knowledgeRevision != 0L))
+        {
+            AddError(issues, "PoliticalKnowledgeStateMissing", "world", "Political knowledge data is present without a knowledge state marker.");
+        }
+
+        HashSet<string> holderIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (WorldStatePoliticalKnowledgeSnapshot holder in knowledge ?? Array.Empty<WorldStatePoliticalKnowledgeSnapshot>())
+        {
+            if (holder == null)
+            {
+                AddError(issues, "PoliticalKnowledgeHolderNull", "knowledge", "Snapshot contains a null political knowledge holder.");
+                continue;
+            }
+
+            string identity = string.IsNullOrWhiteSpace(holder.HolderStableId)
+                ? "knowledge"
+                : holder.HolderStableId;
+            if (string.IsNullOrWhiteSpace(holder.HolderStableId))
+            {
+                AddError(issues, "PoliticalKnowledgeHolderIdMissing", identity, "Political knowledge holder StableId is empty.");
+            }
+            else if (holderIds.Add(holder.HolderStableId) == false)
+            {
+                AddError(issues, "DuplicatePoliticalKnowledgeHolder", identity, "Political knowledge holder appears more than once.");
+            }
+
+            if (Enum.IsDefined(typeof(PoliticalKnowledgeHolderKind), holder.HolderKind) == false)
+            {
+                AddError(issues, "PoliticalKnowledgeHolderKindInvalid", identity, "Political knowledge holder kind is invalid.");
+            }
+
+            string expectedStableId = holder.HolderKind + ":"
+                + (holder.HolderKind == PoliticalKnowledgeHolderKind.Person
+                    ? holder.HolderPersonId
+                    : holder.HolderInstitutionId);
+            if (string.IsNullOrWhiteSpace(holder.HolderStableId) == false
+                && string.Equals(holder.HolderStableId, expectedStableId, StringComparison.Ordinal) == false)
+            {
+                AddError(issues, "PoliticalKnowledgeHolderIdentityInvalid", identity, "Political knowledge holder StableId does not match its typed endpoint.");
+            }
+
+            if (holder.HolderKind == PoliticalKnowledgeHolderKind.Person)
+            {
+                if (string.IsNullOrWhiteSpace(holder.HolderPersonId))
+                {
+                    AddError(issues, "PoliticalKnowledgeHolderPersonMissing", identity, "Person knowledge holder has no PersonId.");
+                }
+                else if (personIds.Contains(holder.HolderPersonId) == false)
+                {
+                    AddError(issues, "PoliticalKnowledgeHolderPersonMissing", identity, "Political knowledge holder PersonId is absent from the snapshot.");
+                }
+
+                if (holder.HolderInstitutionId != null)
+                {
+                    AddError(issues, "PoliticalKnowledgeHolderShapeInvalid", identity, "Person knowledge holder cannot carry an InstitutionId.");
+                }
+            }
+            else if (holder.HolderKind == PoliticalKnowledgeHolderKind.Institution)
+            {
+                if (string.IsNullOrWhiteSpace(holder.HolderInstitutionId))
+                {
+                    AddError(issues, "PoliticalKnowledgeHolderInstitutionMissing", identity, "Institution knowledge holder has no InstitutionId.");
+                }
+                else if (hasInstitutionCatalog
+                    && ContainsString(institutionIds, holder.HolderInstitutionId) == false)
+                {
+                    AddError(issues, "PoliticalKnowledgeHolderInstitutionMissing", identity, "Political knowledge holder InstitutionId is absent from the snapshot.");
+                }
+
+                if (holder.HolderPersonId != null)
+                {
+                    AddError(issues, "PoliticalKnowledgeHolderShapeInvalid", identity, "Institution knowledge holder cannot carry a PersonId.");
+                }
+            }
+
+            HashSet<string> observationIds = new HashSet<string>(StringComparer.Ordinal);
+            foreach (WorldStatePoliticalKnowledgeObservationSnapshot observation in holder.Observations ?? Array.Empty<WorldStatePoliticalKnowledgeObservationSnapshot>())
+            {
+                if (observation == null)
+                {
+                    AddError(issues, "PoliticalKnowledgeObservationNull", identity, "Political knowledge holder contains a null observation.");
+                    continue;
+                }
+
+                string observationIdentity = identity + "/" + observation.IdentityKey;
+                if (string.IsNullOrWhiteSpace(observation.IdentityKey))
+                {
+                    AddError(issues, "PoliticalKnowledgeObservationIdMissing", observationIdentity, "Political knowledge observation identity is empty.");
+                }
+                else if (observationIds.Add(observation.IdentityKey) == false)
+                {
+                    AddError(issues, "DuplicatePoliticalKnowledgeObservation", observationIdentity, "Political knowledge observation identity appears more than once for a holder.");
+                }
+
+                if (Enum.IsDefined(typeof(PoliticalKnowledgeFactKind), observation.FactKind) == false)
+                {
+                    AddError(issues, "PoliticalKnowledgeFactKindInvalid", observationIdentity, "Political knowledge observation fact kind is invalid.");
+                }
+
+                if (observation.ObservedAbsoluteDay < 0L
+                    || observation.ReceivedAbsoluteDay < observation.ObservedAbsoluteDay
+                    || observation.ReceivedAbsoluteDay > absoluteDay)
+                {
+                    AddError(issues, "PoliticalKnowledgeObservationDayInvalid", observationIdentity, "Political knowledge observation days are outside the snapshot timeline.");
+                }
+
+                if (Enum.IsDefined(typeof(PoliticalKnowledgeSource), observation.Source) == false)
+                {
+                    AddError(issues, "PoliticalKnowledgeSourceInvalid", observationIdentity, "Political knowledge observation source is invalid.");
+                }
+
+                if (observation.SourcePersonId != null && observation.SourceInstitutionId != null)
+                {
+                    AddError(issues, "PoliticalKnowledgeProvenanceShapeInvalid", observationIdentity, "Political knowledge provenance cannot identify both a Person and an Institution.");
+                }
+
+                if (string.IsNullOrWhiteSpace(observation.StateKey))
+                {
+                    AddError(issues, "PoliticalKnowledgeObservationStateMissing", observationIdentity, "Political knowledge observation state key is empty.");
+                }
+            }
         }
     }
 

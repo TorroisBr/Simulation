@@ -87,6 +87,18 @@ public sealed class WorldStateDiff
             WorldStateCanonicalWriter.IntValue(before.PoliticalDecisionCount),
             WorldStateCanonicalWriter.IntValue(after.PoliticalDecisionCount),
             differences);
+        CompareValue("Metadata", "world", "PoliticalKnowledgeStatePresent",
+            WorldStateCanonicalWriter.BoolValue(before.HasPoliticalKnowledgeState),
+            WorldStateCanonicalWriter.BoolValue(after.HasPoliticalKnowledgeState),
+            differences);
+        CompareValue("Metadata", "world", "PoliticalKnowledgeHolderCount",
+            WorldStateCanonicalWriter.IntValue(before.PoliticalKnowledgeHolderCount),
+            WorldStateCanonicalWriter.IntValue(after.PoliticalKnowledgeHolderCount),
+            differences);
+        CompareValue("Metadata", "world", "PoliticalKnowledgeRevision",
+            WorldStateCanonicalWriter.Int64Value(before.PoliticalKnowledgeRevision),
+            WorldStateCanonicalWriter.Int64Value(after.PoliticalKnowledgeRevision),
+            differences);
         CompareCalendar(before.Metadata.CalendarDate, after.Metadata.CalendarDate, differences);
 
         CompareEntities("NPC", before.Npcs, after.Npcs, npc => npc.RuntimeId,
@@ -362,6 +374,63 @@ public sealed class WorldStateDiff
                 CompareValue("PoliticalDecision", identity, "ExpectedKnowledgeRevision",
                     WorldStateCanonicalWriter.Int64Value(left.ExpectedKnowledgeRevision),
                     WorldStateCanonicalWriter.Int64Value(right.ExpectedKnowledgeRevision),
+                    differences);
+            },
+            differences);
+
+        CompareEntities("PoliticalKnowledge", before.PoliticalKnowledge, after.PoliticalKnowledge,
+            knowledge => knowledge.HolderStableId,
+            (identity, left, right) =>
+            {
+                CompareValue("PoliticalKnowledge", identity, "HolderKind",
+                    WorldStateCanonicalWriter.EnumValue(left.HolderKind),
+                    WorldStateCanonicalWriter.EnumValue(right.HolderKind),
+                    differences);
+                CompareValue("PoliticalKnowledge", identity, "HolderPersonId",
+                    WorldStateCanonicalWriter.StringValue(left.HolderPersonId),
+                    WorldStateCanonicalWriter.StringValue(right.HolderPersonId),
+                    differences);
+                CompareValue("PoliticalKnowledge", identity, "HolderInstitutionId",
+                    WorldStateCanonicalWriter.StringValue(left.HolderInstitutionId),
+                    WorldStateCanonicalWriter.StringValue(right.HolderInstitutionId),
+                    differences);
+                CompareEntities("PoliticalKnowledgeObservation", left.Observations, right.Observations,
+                    observation => identity + "/" + observation.IdentityKey,
+                    (observationIdentity, observationLeft, observationRight) =>
+                    {
+                        CompareValue("PoliticalKnowledgeObservation", observationIdentity, "FactKind",
+                            WorldStateCanonicalWriter.EnumValue(observationLeft.FactKind),
+                            WorldStateCanonicalWriter.EnumValue(observationRight.FactKind),
+                            differences);
+                        CompareValue("PoliticalKnowledgeObservation", observationIdentity, "StateKey",
+                            WorldStateCanonicalWriter.StringValue(observationLeft.StateKey),
+                            WorldStateCanonicalWriter.StringValue(observationRight.StateKey),
+                            differences);
+                        CompareValue("PoliticalKnowledgeObservation", observationIdentity, "ObservedAbsoluteDay",
+                            WorldStateCanonicalWriter.Int64Value(observationLeft.ObservedAbsoluteDay),
+                            WorldStateCanonicalWriter.Int64Value(observationRight.ObservedAbsoluteDay),
+                            differences);
+                        CompareValue("PoliticalKnowledgeObservation", observationIdentity, "ReceivedAbsoluteDay",
+                            WorldStateCanonicalWriter.Int64Value(observationLeft.ReceivedAbsoluteDay),
+                            WorldStateCanonicalWriter.Int64Value(observationRight.ReceivedAbsoluteDay),
+                            differences);
+                        CompareValue("PoliticalKnowledgeObservation", observationIdentity, "Source",
+                            WorldStateCanonicalWriter.EnumValue(observationLeft.Source),
+                            WorldStateCanonicalWriter.EnumValue(observationRight.Source),
+                            differences);
+                        CompareValue("PoliticalKnowledgeObservation", observationIdentity, "SourceReference",
+                            WorldStateCanonicalWriter.StringValue(observationLeft.SourceReference),
+                            WorldStateCanonicalWriter.StringValue(observationRight.SourceReference),
+                            differences);
+                        CompareValue("PoliticalKnowledgeObservation", observationIdentity, "SourcePersonId",
+                            WorldStateCanonicalWriter.StringValue(observationLeft.SourcePersonId),
+                            WorldStateCanonicalWriter.StringValue(observationRight.SourcePersonId),
+                            differences);
+                        CompareValue("PoliticalKnowledgeObservation", observationIdentity, "SourceInstitutionId",
+                            WorldStateCanonicalWriter.StringValue(observationLeft.SourceInstitutionId),
+                            WorldStateCanonicalWriter.StringValue(observationRight.SourceInstitutionId),
+                            differences);
+                    },
                     differences);
             },
             differences);

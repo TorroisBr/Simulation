@@ -397,10 +397,28 @@ public sealed class PoliticalDecisionStore
 {
     private readonly Dictionary<string, PoliticalDecisionRecord> recordsById =
         new Dictionary<string, PoliticalDecisionRecord>(StringComparer.Ordinal);
+    private PersonStore boundPersonStore;
     private long revision;
 
     public int Count => recordsById.Count;
     public long Revision => revision;
+
+    internal bool TryBindToPersonStore(PersonStore personStore)
+    {
+        if (personStore == null)
+        {
+            return false;
+        }
+
+        if (boundPersonStore != null
+            && ReferenceEquals(boundPersonStore, personStore) == false)
+        {
+            return false;
+        }
+
+        boundPersonStore = personStore;
+        return true;
+    }
 
     public IReadOnlyList<PoliticalDecisionRecord> Records
     {
@@ -459,6 +477,7 @@ public sealed class PoliticalDecisionStore
         }
 
         clone.revision = revision;
+        clone.boundPersonStore = boundPersonStore;
         return clone;
     }
 

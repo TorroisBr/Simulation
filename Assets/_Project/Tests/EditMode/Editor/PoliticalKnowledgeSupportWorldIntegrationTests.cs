@@ -88,6 +88,13 @@ public sealed class PoliticalKnowledgeSupportWorldIntegrationTests
         Assert.That(personKnowledge.ClaimObservations, Has.Count.EqualTo(1));
         Assert.That(personKnowledge.ClaimObservations[0].Target.TargetId, Is.EqualTo(fixture.Candidate.Value));
 
+        WorldStateSnapshot knowledgeSnapshot = Capture(fixture.World);
+        Assert.That(knowledgeSnapshot.PoliticalKnowledgeHolderCount, Is.EqualTo(2));
+        Assert.That(knowledgeSnapshot.PoliticalKnowledgeRevision, Is.EqualTo(fixture.World.PoliticalKnowledgeRevision));
+        Assert.That(WorldStateCanonicalWriter.Write(knowledgeSnapshot), Does.Contain("POLITICAL_KNOWLEDGE"));
+        Assert.That(WorldStateCanonicalWriter.Write(knowledgeSnapshot), Does.Contain("POLITICAL_KNOWLEDGE_OBSERVATION"));
+        Assert.That(WorldStateInvariantValidator.Validate(knowledgeSnapshot).IsValid, Is.True);
+
         PoliticalClaimKnowledgeObservation future = new PoliticalClaimKnowledgeObservation(
             new PoliticalClaimId("claim.future"),
             true,
@@ -253,7 +260,9 @@ public sealed class PoliticalKnowledgeSupportWorldIntegrationTests
             factions: world.FactionRecords,
             factionAffiliations: world.FactionAffiliationRecords,
             politicalSupports: world.PoliticalSupportRecords,
-            politicalDecisions: world.PoliticalDecisionRecords));
+            politicalDecisions: world.PoliticalDecisionRecords,
+            politicalKnowledgeRuntimes: world.PoliticalKnowledgeRuntimes,
+            politicalKnowledgeRevision: world.PoliticalKnowledgeRevision));
     }
 
     private static Fixture CreateFixture()

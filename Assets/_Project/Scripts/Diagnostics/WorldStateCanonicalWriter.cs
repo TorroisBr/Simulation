@@ -21,6 +21,9 @@ public static class WorldStateCanonicalWriter
         AppendLine(output, "METADATA", "FactionAffiliationCount", IntValue(snapshot.FactionAffiliationCount));
         AppendLine(output, "METADATA", "PoliticalSupportCount", IntValue(snapshot.PoliticalSupportCount));
         AppendLine(output, "METADATA", "PoliticalDecisionCount", IntValue(snapshot.PoliticalDecisionCount));
+        AppendLine(output, "METADATA", "PoliticalKnowledgeStatePresent", BoolValue(snapshot.HasPoliticalKnowledgeState));
+        AppendLine(output, "METADATA", "PoliticalKnowledgeHolderCount", IntValue(snapshot.PoliticalKnowledgeHolderCount));
+        AppendLine(output, "METADATA", "PoliticalKnowledgeRevision", Int64Value(snapshot.PoliticalKnowledgeRevision));
         if (snapshot.Metadata.CalendarDate != null)
         {
             WorldStateCalendarSnapshot calendar = snapshot.Metadata.CalendarDate;
@@ -150,6 +153,30 @@ public static class WorldStateCanonicalWriter
                 Int64Value(decision.DecisionAbsoluteDay),
                 Int64Value(decision.ExpectedWorldRevision),
                 Int64Value(decision.ExpectedKnowledgeRevision));
+        }
+
+        foreach (WorldStatePoliticalKnowledgeSnapshot knowledge in snapshot.PoliticalKnowledge)
+        {
+            AppendLine(output, "POLITICAL_KNOWLEDGE",
+                knowledge.HolderStableId,
+                EnumValue(knowledge.HolderKind),
+                knowledge.HolderPersonId,
+                knowledge.HolderInstitutionId);
+
+            foreach (WorldStatePoliticalKnowledgeObservationSnapshot observation in knowledge.Observations)
+            {
+                AppendLine(output, "POLITICAL_KNOWLEDGE_OBSERVATION",
+                    knowledge.HolderStableId,
+                    EnumValue(observation.FactKind),
+                    observation.IdentityKey,
+                    observation.StateKey,
+                    Int64Value(observation.ObservedAbsoluteDay),
+                    Int64Value(observation.ReceivedAbsoluteDay),
+                    EnumValue(observation.Source),
+                    observation.SourceReference,
+                    observation.SourcePersonId,
+                    observation.SourceInstitutionId);
+            }
         }
 
         foreach (WorldStateNpcSnapshot npc in snapshot.Npcs)

@@ -67,6 +67,7 @@ public sealed class SimulationRuntime
     public IReadOnlyList<PoliticalSupportRelationRecord> PoliticalSupportRecords => politicalSupportStore.Records;
     public int PoliticalKnowledgeHolderCount => politicalKnowledgeStore.Count;
     public long PoliticalKnowledgeRevision => politicalKnowledgeStore.Revision;
+    public IReadOnlyList<PoliticalKnowledgeRuntime> PoliticalKnowledgeRuntimes => politicalKnowledgeStore.Runtimes;
     public long PoliticalWorldRevision
     {
         get
@@ -146,6 +147,23 @@ public sealed class SimulationRuntime
         }
 
         PersonStore resolvedPersonStore = personStore ?? new PersonStore();
+        if (politicalDecisionStore != null
+            && politicalDecisionStore.Count > 0
+            && politicalWorldRevision.HasValue == false)
+        {
+            throw new ArgumentException(
+                "A SimulationRuntime composing political decision history must provide the captured politicalWorldRevision.",
+                nameof(politicalWorldRevision));
+        }
+
+        if (politicalDecisionStore != null
+            && politicalDecisionStore.TryBindToPersonStore(resolvedPersonStore) == false)
+        {
+            throw new ArgumentException(
+                "The SimulationRuntime PoliticalDecisionStore belongs to a different PersonStore/world.",
+                nameof(politicalDecisionStore));
+        }
+
         GenealogyStore resolvedGenealogyStore = genealogyStore ?? new GenealogyStore();
         ValidateGenealogyStore(resolvedPersonStore, resolvedGenealogyStore);
         InstitutionStore resolvedInstitutionStore = ResolveInstitutionStore(
@@ -200,8 +218,7 @@ public sealed class SimulationRuntime
             this.politicalClaimStore,
             this.factionStore,
             this.officeStore);
-        long initialPoliticalWorldRevision = politicalWorldRevision
-            ?? ResolveInitialPoliticalWorldRevision(politicalDecisionStore);
+        long initialPoliticalWorldRevision = politicalWorldRevision ?? 0L;
         this.politicalWorldRevision = initialPoliticalWorldRevision;
         lastPoliticalTruthFingerprint = ComputePoliticalTruthFingerprint();
         hasPoliticalTruthFingerprint = true;
@@ -2227,25 +2244,6 @@ public sealed class SimulationRuntime
         }
 
         return copy;
-    }
-
-    private static long ResolveInitialPoliticalWorldRevision(PoliticalDecisionStore source)
-    {
-        long revision = 0L;
-        if (source == null)
-        {
-            return revision;
-        }
-
-        foreach (PoliticalDecisionRecord record in source.Records)
-        {
-            if (record != null && record.ExpectedWorldRevision > revision)
-            {
-                revision = record.ExpectedWorldRevision;
-            }
-        }
-
-        return revision;
     }
 
     private static bool HasUnregisteredPoliticalDecisionReference(

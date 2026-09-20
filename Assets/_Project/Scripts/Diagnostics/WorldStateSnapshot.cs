@@ -29,6 +29,8 @@ public sealed class WorldStateSnapshotContext
     public IEnumerable<PoliticalClaimRecord> PoliticalClaims { get; }
     public IEnumerable<PoliticalSupportRelationRecord> PoliticalSupports { get; }
     public IEnumerable<PoliticalDecisionRecord> PoliticalDecisions { get; }
+    public IEnumerable<PoliticalKnowledgeRuntime> PoliticalKnowledgeRuntimes { get; }
+    public long? PoliticalKnowledgeRevision { get; }
 
     public WorldStateSnapshotContext(
         SimulationTime simulationTime = null,
@@ -55,7 +57,9 @@ public sealed class WorldStateSnapshotContext
         IEnumerable<FactionRecord> factions = null,
         IEnumerable<FactionAffiliationRecord> factionAffiliations = null,
         IEnumerable<PoliticalSupportRelationRecord> politicalSupports = null,
-        IEnumerable<PoliticalDecisionRecord> politicalDecisions = null)
+        IEnumerable<PoliticalDecisionRecord> politicalDecisions = null,
+        IEnumerable<PoliticalKnowledgeRuntime> politicalKnowledgeRuntimes = null,
+        long? politicalKnowledgeRevision = null)
     {
         SimulationTime = simulationTime;
         Calendar = calendar ?? (calendarDefinition != null ? new SimulationCalendar(calendarDefinition) : null);
@@ -80,6 +84,8 @@ public sealed class WorldStateSnapshotContext
         PoliticalClaims = politicalClaims ?? Array.Empty<PoliticalClaimRecord>();
         PoliticalSupports = politicalSupports ?? Array.Empty<PoliticalSupportRelationRecord>();
         PoliticalDecisions = politicalDecisions ?? Array.Empty<PoliticalDecisionRecord>();
+        PoliticalKnowledgeRuntimes = politicalKnowledgeRuntimes;
+        PoliticalKnowledgeRevision = politicalKnowledgeRevision;
         Parentages = parentages
             ?? genealogyStore?.Records
             ?? Array.Empty<ParentageRecord>();
@@ -122,6 +128,10 @@ public sealed class WorldStateSnapshot
     public int PoliticalSupportCount => PoliticalSupports.Count;
     public IReadOnlyList<WorldStatePoliticalDecisionSnapshot> PoliticalDecisions { get; }
     public int PoliticalDecisionCount => PoliticalDecisions.Count;
+    public IReadOnlyList<WorldStatePoliticalKnowledgeSnapshot> PoliticalKnowledge { get; }
+    public int PoliticalKnowledgeHolderCount => PoliticalKnowledge.Count;
+    public long PoliticalKnowledgeRevision { get; }
+    public bool HasPoliticalKnowledgeState { get; }
     public WorldStateSpatialSnapshot Spatial { get; }
     public IReadOnlyList<WorldStateSiteSnapshot> Sites { get; }
     public IReadOnlyList<WorldStateExpeditionSnapshot> Expeditions { get; }
@@ -152,7 +162,10 @@ public sealed class WorldStateSnapshot
         IEnumerable<WorldStateFactionSnapshot> factions = null,
         IEnumerable<WorldStateFactionAffiliationSnapshot> factionAffiliations = null,
         IEnumerable<WorldStatePoliticalSupportSnapshot> politicalSupports = null,
-        IEnumerable<WorldStatePoliticalDecisionSnapshot> politicalDecisions = null)
+        IEnumerable<WorldStatePoliticalDecisionSnapshot> politicalDecisions = null,
+        IEnumerable<WorldStatePoliticalKnowledgeSnapshot> politicalKnowledge = null,
+        long politicalKnowledgeRevision = 0L,
+        bool hasPoliticalKnowledgeState = false)
     {
         Metadata = new WorldStateSnapshotMetadata(absoluteDay, calendarDate);
         Npcs = SnapshotCollections.CopySorted(npcs, npc => npc?.RuntimeId);
@@ -198,6 +211,11 @@ public sealed class WorldStateSnapshot
         PoliticalDecisions = SnapshotCollections.CopySorted(
             politicalDecisions,
             decision => decision?.DecisionId);
+        PoliticalKnowledge = SnapshotCollections.CopySorted(
+            politicalKnowledge,
+            knowledge => knowledge?.HolderStableId);
+        PoliticalKnowledgeRevision = politicalKnowledgeRevision;
+        HasPoliticalKnowledgeState = hasPoliticalKnowledgeState || politicalKnowledge != null;
     }
 
     private static IReadOnlyList<WorldStateParentageSnapshot> SortParentages(
@@ -590,6 +608,80 @@ public sealed class WorldStatePoliticalDecisionSnapshot
 
         result.Sort(StringComparer.Ordinal);
         return new ReadOnlyCollection<string>(result);
+    }
+}
+
+public sealed class WorldStatePoliticalKnowledgeSnapshot
+{
+    public string HolderStableId { get; }
+    public PoliticalKnowledgeHolderKind HolderKind { get; }
+    public string HolderPersonId { get; }
+    public string HolderInstitutionId { get; }
+    public IReadOnlyList<WorldStatePoliticalKnowledgeObservationSnapshot> Observations { get; }
+
+    public WorldStatePoliticalKnowledgeSnapshot(
+        string holderStableId,
+        PoliticalKnowledgeHolderKind holderKind,
+        string holderPersonId,
+        string holderInstitutionId,
+        IEnumerable<WorldStatePoliticalKnowledgeObservationSnapshot> observations)
+    {
+        HolderStableId = holderStableId;
+        HolderKind = holderKind;
+        HolderPersonId = holderPersonId;
+        HolderInstitutionId = holderInstitutionId;
+        List<WorldStatePoliticalKnowledgeObservationSnapshot> copied =
+            new List<WorldStatePoliticalKnowledgeObservationSnapshot>();
+        if (observations != null)
+        {
+            foreach (WorldStatePoliticalKnowledgeObservationSnapshot observation in observations)
+            {
+                if (observation != null)
+                {
+                    copied.Add(observation);
+                }
+            }
+        }
+
+        copied.Sort((left, right) => StringComparer.Ordinal.Compare(
+            left.IdentityKey,
+            right.IdentityKey));
+        Observations = copied.AsReadOnly();
+    }
+}
+
+public sealed class WorldStatePoliticalKnowledgeObservationSnapshot
+{
+    public string IdentityKey { get; }
+    public PoliticalKnowledgeFactKind FactKind { get; }
+    public long ObservedAbsoluteDay { get; }
+    public long ReceivedAbsoluteDay { get; }
+    public PoliticalKnowledgeSource Source { get; }
+    public string SourceReference { get; }
+    public string SourcePersonId { get; }
+    public string SourceInstitutionId { get; }
+    public string StateKey { get; }
+
+    public WorldStatePoliticalKnowledgeObservationSnapshot(
+        string identityKey,
+        PoliticalKnowledgeFactKind factKind,
+        long observedAbsoluteDay,
+        long receivedAbsoluteDay,
+        PoliticalKnowledgeSource source,
+        string sourceReference,
+        string sourcePersonId,
+        string sourceInstitutionId,
+        string stateKey)
+    {
+        IdentityKey = identityKey;
+        FactKind = factKind;
+        ObservedAbsoluteDay = observedAbsoluteDay;
+        ReceivedAbsoluteDay = receivedAbsoluteDay;
+        Source = source;
+        SourceReference = sourceReference;
+        SourcePersonId = sourcePersonId;
+        SourceInstitutionId = sourceInstitutionId;
+        StateKey = stateKey;
     }
 }
 
@@ -1280,6 +1372,8 @@ public static class WorldStateSnapshotBuilder
             BuildPoliticalSupportSnapshots(context.PoliticalSupports);
         List<WorldStatePoliticalDecisionSnapshot> politicalDecisions =
             BuildPoliticalDecisionSnapshots(context.PoliticalDecisions);
+        List<WorldStatePoliticalKnowledgeSnapshot> politicalKnowledge =
+            BuildPoliticalKnowledgeSnapshots(context.PoliticalKnowledgeRuntimes);
         List<WorldStateExpeditionSnapshot> expeditions = BuildExpeditionSnapshots(context.ExpeditionStore);
         WorldStateCalendarSnapshot calendarDate = null;
         if (context.Calendar != null && context.SimulationTime != null)
@@ -1310,7 +1404,11 @@ public static class WorldStateSnapshotBuilder
             factions,
             factionAffiliations,
             politicalSupports,
-            politicalDecisions);
+            politicalDecisions,
+            politicalKnowledge,
+            context.PoliticalKnowledgeRevision ?? 0L,
+            context.PoliticalKnowledgeRuntimes != null
+                || context.PoliticalKnowledgeRevision.HasValue);
     }
 
     private static List<WorldStatePoliticalClaimSnapshot> BuildPoliticalClaimSnapshots(
@@ -1472,6 +1570,55 @@ public static class WorldStateSnapshotBuilder
                 decision.DecisionAbsoluteDay,
                 decision.ExpectedWorldRevision,
                 decision.ExpectedKnowledgeRevision));
+        }
+
+        return result;
+    }
+
+    private static List<WorldStatePoliticalKnowledgeSnapshot> BuildPoliticalKnowledgeSnapshots(
+        IEnumerable<PoliticalKnowledgeRuntime> source)
+    {
+        List<WorldStatePoliticalKnowledgeSnapshot> result =
+            new List<WorldStatePoliticalKnowledgeSnapshot>();
+        if (source == null)
+        {
+            return result;
+        }
+
+        foreach (PoliticalKnowledgeRuntime runtime in source)
+        {
+            if (runtime == null || runtime.Holder == null)
+            {
+                continue;
+            }
+
+            List<WorldStatePoliticalKnowledgeObservationSnapshot> observations =
+                new List<WorldStatePoliticalKnowledgeObservationSnapshot>();
+            foreach (PoliticalKnowledgeObservation observation in runtime.Observations)
+            {
+                if (observation == null || observation.Provenance == null)
+                {
+                    continue;
+                }
+
+                observations.Add(new WorldStatePoliticalKnowledgeObservationSnapshot(
+                    observation.IdentityKey,
+                    observation.FactKind,
+                    observation.ObservedAbsoluteDay,
+                    observation.ReceivedAbsoluteDay,
+                    observation.Provenance.Source,
+                    observation.Provenance.SourceReference,
+                    observation.Provenance.SourcePersonId?.Value,
+                    observation.Provenance.SourceInstitutionId?.Value,
+                    observation.SnapshotSortKey));
+            }
+
+            result.Add(new WorldStatePoliticalKnowledgeSnapshot(
+                runtime.Holder.StableId,
+                runtime.Holder.Kind,
+                runtime.HolderPersonId?.Value,
+                runtime.HolderInstitutionId?.Value,
+                observations));
         }
 
         return result;
