@@ -17,7 +17,8 @@ public sealed class PoliticalKnowledgeHolder : IEquatable<PoliticalKnowledgeHold
     public PoliticalKnowledgeHolderKind Kind => kind;
     public PersonId PersonId => personId;
     public InstitutionId InstitutionId => institutionId;
-    public string StableId => personId != null ? personId.Value : institutionId.Value;
+    public string RawStableId => personId != null ? personId.Value : institutionId.Value;
+    public string StableId => kind + ":" + RawStableId;
 
     private PoliticalKnowledgeHolder(PersonId personId)
     {
@@ -64,7 +65,7 @@ public sealed class PoliticalKnowledgeHolder : IEquatable<PoliticalKnowledgeHold
 
     public override string ToString()
     {
-        return kind + ":" + StableId;
+        return StableId;
     }
 }
 
@@ -246,6 +247,10 @@ public sealed class PoliticalClaimKnowledgeObservation : PoliticalKnowledgeObser
 {
     public PoliticalClaimId ClaimId { get; }
     public bool Exists { get; }
+    public PersonId ClaimantPersonId { get; }
+    public PoliticalClaimType ClaimType { get; }
+    public PoliticalClaimTarget Target { get; }
+    public PoliticalClaimBasis Basis { get; }
     public PoliticalClaimStatus Status { get; }
     public PoliticalClaimRecognitionState RecognitionState { get; }
     public InstitutionId RecognizingInstitutionId { get; }
@@ -254,27 +259,10 @@ public sealed class PoliticalClaimKnowledgeObservation : PoliticalKnowledgeObser
     public PoliticalClaimKnowledgeObservation(
         PoliticalClaimId claimId,
         bool exists,
-        PoliticalClaimStatus status,
-        PoliticalClaimRecognitionState recognitionState,
-        long observedAbsoluteDay,
-        long receivedAbsoluteDay,
-        PoliticalKnowledgeProvenance provenance)
-        : this(
-            claimId,
-            exists,
-            status,
-            recognitionState,
-            null,
-            null,
-            observedAbsoluteDay,
-            receivedAbsoluteDay,
-            provenance)
-    {
-    }
-
-    public PoliticalClaimKnowledgeObservation(
-        PoliticalClaimId claimId,
-        bool exists,
+        PersonId claimantPersonId,
+        PoliticalClaimType claimType,
+        PoliticalClaimTarget target,
+        PoliticalClaimBasis basis,
         PoliticalClaimStatus status,
         PoliticalClaimRecognitionState recognitionState,
         InstitutionId recognizingInstitutionId,
@@ -293,6 +281,27 @@ public sealed class PoliticalClaimKnowledgeObservation : PoliticalKnowledgeObser
             throw new ArgumentNullException(nameof(claimId));
         }
 
+        if (claimantPersonId == null)
+        {
+            throw new ArgumentNullException(nameof(claimantPersonId));
+        }
+
+        if (target == null)
+        {
+            throw new ArgumentNullException(nameof(target));
+        }
+
+        if (Enum.IsDefined(typeof(PoliticalClaimType), claimType) == false
+            || PoliticalClaimRecord.IsTargetCompatible(claimType, target.Kind) == false)
+        {
+            throw new ArgumentException("Claim type and target kind are incompatible.", nameof(claimType));
+        }
+
+        if (Enum.IsDefined(typeof(PoliticalClaimBasis), basis) == false)
+        {
+            throw new ArgumentOutOfRangeException(nameof(basis));
+        }
+
         if (Enum.IsDefined(typeof(PoliticalClaimStatus), status) == false)
         {
             throw new ArgumentOutOfRangeException(nameof(status));
@@ -304,9 +313,31 @@ public sealed class PoliticalClaimKnowledgeObservation : PoliticalKnowledgeObser
         }
 
         ValidateOptionalDay(recognitionAbsoluteDay, nameof(recognitionAbsoluteDay));
+        if (recognitionState == PoliticalClaimRecognitionState.Unrecognized
+            && (recognizingInstitutionId != null || recognitionAbsoluteDay.HasValue))
+        {
+            throw new ArgumentException("An unrecognized claim cannot carry recognition metadata.");
+        }
+
+        if (recognitionState != PoliticalClaimRecognitionState.Unrecognized
+            && (recognizingInstitutionId == null || recognitionAbsoluteDay.HasValue == false))
+        {
+            throw new ArgumentException("A recognized, contested, or rejected claim requires recognition metadata.");
+        }
+
+        if (recognitionAbsoluteDay.HasValue && recognitionAbsoluteDay.Value > observedAbsoluteDay)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(recognitionAbsoluteDay),
+                "Recognition cannot occur after the observation day.");
+        }
 
         ClaimId = claimId;
         Exists = exists;
+        ClaimantPersonId = claimantPersonId;
+        ClaimType = claimType;
+        Target = target;
+        Basis = basis;
         Status = status;
         RecognitionState = recognitionState;
         RecognizingInstitutionId = recognizingInstitutionId;
@@ -321,6 +352,11 @@ public sealed class PoliticalClaimKnowledgeObservation : PoliticalKnowledgeObser
         {
             return string.Concat(
                 BoolKey(Exists), "\u001F",
+                ClaimantPersonId.Value, "\u001F",
+                ((int)ClaimType).ToString(), "\u001F",
+                ((int)Target.Kind).ToString(), "\u001F",
+                Target.TargetId, "\u001F",
+                ((int)Basis).ToString(), "\u001F",
                 ((int)Status).ToString(), "\u001F",
                 ((int)RecognitionState).ToString(), "\u001F",
                 RecognizingInstitutionId == null ? string.Empty : RecognizingInstitutionId.Value, "\u001F",
@@ -378,8 +414,13 @@ public sealed class FactionAffiliationKnowledgeObservation : PoliticalKnowledgeO
         IsActive = isActive;
     }
 
-    internal override string IdentityKey => FactionId.Value + "\u001F" + PersonId.Value;
+    internal override string IdentityKey => ComposeIdentityKey(FactionId.Value, PersonId.Value);
     internal override string SnapshotSortKey => BoolKey(IsActive);
+
+    private static string ComposeIdentityKey(string factionId, string personId)
+    {
+        return factionId.Length + ":" + factionId + personId.Length + ":" + personId;
+    }
 }
 
 public sealed class OfficeVacancyKnowledgeObservation : PoliticalKnowledgeObservation
@@ -443,6 +484,15 @@ public sealed class PersonDeathKnowledgeObservation : PoliticalKnowledgeObservat
             throw new ArgumentException(
                 "An alive snapshot cannot include a death day.",
                 nameof(deathAbsoluteDay));
+        }
+
+        if (isDead == true
+            && deathAbsoluteDay.HasValue
+            && deathAbsoluteDay.Value > observedAbsoluteDay)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(deathAbsoluteDay),
+                "A death snapshot cannot place death after the observation day.");
         }
 
         PersonId = personId;
@@ -583,7 +633,7 @@ public sealed class PoliticalKnowledgeRuntime
     {
         string key = factionId == null || personId == null
             ? null
-            : factionId.Value + "\u001F" + personId.Value;
+            : factionId.Value.Length + ":" + factionId.Value + personId.Value.Length + ":" + personId.Value;
         return TryGet(affiliationObservations, key, out observation);
     }
 

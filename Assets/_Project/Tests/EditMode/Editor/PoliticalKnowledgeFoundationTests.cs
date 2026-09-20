@@ -16,11 +16,11 @@ public sealed class PoliticalKnowledgeFoundationTests
         Assert.That(personKnowledge.HolderKind, Is.EqualTo(PoliticalKnowledgeHolderKind.Person));
         Assert.That(personKnowledge.HolderPersonId, Is.EqualTo(personId));
         Assert.That(personKnowledge.HolderInstitutionId, Is.Null);
-        Assert.That(personKnowledge.Holder.StableId, Is.EqualTo("person.holder"));
+        Assert.That(personKnowledge.Holder.StableId, Is.EqualTo("Person:person.holder"));
         Assert.That(institutionKnowledge.HolderKind, Is.EqualTo(PoliticalKnowledgeHolderKind.Institution));
         Assert.That(institutionKnowledge.HolderInstitutionId, Is.EqualTo(institutionId));
         Assert.That(institutionKnowledge.HolderPersonId, Is.Null);
-        Assert.That(institutionKnowledge.Holder.StableId, Is.EqualTo("institution.archive"));
+        Assert.That(institutionKnowledge.Holder.StableId, Is.EqualTo("Institution:institution.archive"));
         Assert.That(typeof(PoliticalKnowledgeRuntime).GetProperty("NpcRuntimeId"), Is.Null);
     }
 
@@ -35,7 +35,7 @@ public sealed class PoliticalKnowledgeFoundationTests
         PoliticalKnowledgeProvenance provenance = DirectProvenance();
         PoliticalKnowledgeRuntime knowledge = new PoliticalKnowledgeRuntime(personId);
 
-        Assert.That(knowledge.RecordClaimObservation(new PoliticalClaimKnowledgeObservation(
+        Assert.That(knowledge.RecordClaimObservation(CreateClaimObservation(
             claimId,
             true,
             PoliticalClaimStatus.Active,
@@ -59,6 +59,91 @@ public sealed class PoliticalKnowledgeFoundationTests
         Assert.That(knowledge.OfficeVacancyObservations[0].OfficeId, Is.EqualTo(officeId));
         Assert.That(knowledge.OfficeVacancyObservations[0].InstitutionId, Is.EqualTo(institutionId));
         Assert.That(knowledge.PersonDeathObservations[0].PersonId, Is.EqualTo(personId));
+    }
+
+    [Test]
+    public void ClaimKnowledgeCarriesTheAssertionAndRejectsMalformedRecognitionMetadata()
+    {
+        PoliticalClaimKnowledgeObservation observation = CreateClaimObservation(
+            new PoliticalClaimId("claim.assertion"),
+            true,
+            PoliticalClaimStatus.Active,
+            PoliticalClaimRecognitionState.Recognized,
+            8L,
+            8L,
+            DirectProvenance());
+
+        Assert.That(observation.ClaimantPersonId.Value, Is.EqualTo("person.claimant"));
+        Assert.That(observation.ClaimType, Is.EqualTo(PoliticalClaimType.StatusRecognition));
+        Assert.That(observation.Target.TargetId, Is.EqualTo("person.claim-target"));
+        Assert.That(observation.Basis, Is.EqualTo(PoliticalClaimBasis.ExplicitDecision));
+        Assert.That(observation.RecognizingInstitutionId.Value, Is.EqualTo("institution.recognizer"));
+
+        Assert.Throws<ArgumentException>(() => new PoliticalClaimKnowledgeObservation(
+            new PoliticalClaimId("claim.invalid-unrecognized"),
+            true,
+            new PersonId("person.claimant"),
+            PoliticalClaimType.StatusRecognition,
+            PoliticalClaimTarget.ForPerson(new PersonId("person.claim-target")),
+            PoliticalClaimBasis.ExplicitDecision,
+            PoliticalClaimStatus.Active,
+            PoliticalClaimRecognitionState.Unrecognized,
+            new InstitutionId("institution.invalid"),
+            null,
+            8L,
+            8L,
+            DirectProvenance()));
+
+        Assert.Throws<ArgumentException>(() => new PoliticalClaimKnowledgeObservation(
+            new PoliticalClaimId("claim.invalid-recognized"),
+            true,
+            new PersonId("person.claimant"),
+            PoliticalClaimType.StatusRecognition,
+            PoliticalClaimTarget.ForPerson(new PersonId("person.claim-target")),
+            PoliticalClaimBasis.ExplicitDecision,
+            PoliticalClaimStatus.Active,
+            PoliticalClaimRecognitionState.Recognized,
+            null,
+            null,
+            8L,
+            8L,
+            DirectProvenance()));
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => new PoliticalClaimKnowledgeObservation(
+            new PoliticalClaimId("claim.invalid-future-recognition"),
+            true,
+            new PersonId("person.claimant"),
+            PoliticalClaimType.StatusRecognition,
+            PoliticalClaimTarget.ForPerson(new PersonId("person.claim-target")),
+            PoliticalClaimBasis.ExplicitDecision,
+            PoliticalClaimStatus.Active,
+            PoliticalClaimRecognitionState.Recognized,
+            new InstitutionId("institution.recognizer"),
+            9L,
+            8L,
+            8L,
+            DirectProvenance()));
+    }
+
+    [Test]
+    public void AffiliationIdentitySeparatesDelimiterContainingIds()
+    {
+        PoliticalKnowledgeRuntime knowledge = new PoliticalKnowledgeRuntime(new PersonId("person.reader"));
+        FactionId firstFaction = new FactionId("faction");
+        PersonId firstPerson = new PersonId("person\u001Fmember");
+        FactionId secondFaction = new FactionId("faction\u001Fperson");
+        PersonId secondPerson = new PersonId("member");
+
+        Assert.That(knowledge.RecordFactionAffiliationObservation(new FactionAffiliationKnowledgeObservation(
+            firstFaction, firstPerson, true, 0L, 0L, DirectProvenance())), Is.True);
+        Assert.That(knowledge.RecordFactionAffiliationObservation(new FactionAffiliationKnowledgeObservation(
+            secondFaction, secondPerson, true, 0L, 0L, DirectProvenance())), Is.True);
+
+        Assert.That(knowledge.FactionAffiliationObservations, Has.Count.EqualTo(2));
+        Assert.That(knowledge.TryGetLatestFactionAffiliationObservation(firstFaction, firstPerson, out FactionAffiliationKnowledgeObservation first), Is.True);
+        Assert.That(knowledge.TryGetLatestFactionAffiliationObservation(secondFaction, secondPerson, out FactionAffiliationKnowledgeObservation second), Is.True);
+        Assert.That(first.PersonId, Is.EqualTo(firstPerson));
+        Assert.That(second.PersonId, Is.EqualTo(secondPerson));
     }
 
     [Test]
@@ -98,7 +183,7 @@ public sealed class PoliticalKnowledgeFoundationTests
         PoliticalClaimId claimId = new PoliticalClaimId("claim.latest");
         PoliticalKnowledgeRuntime knowledge = new PoliticalKnowledgeRuntime(new PersonId("person.reader"));
 
-        Assert.That(knowledge.RecordClaimObservation(new PoliticalClaimKnowledgeObservation(
+        Assert.That(knowledge.RecordClaimObservation(CreateClaimObservation(
             claimId,
             true,
             PoliticalClaimStatus.Active,
@@ -106,7 +191,7 @@ public sealed class PoliticalKnowledgeFoundationTests
             10L,
             10L,
             InitialProvenance())), Is.True);
-        Assert.That(knowledge.RecordClaimObservation(new PoliticalClaimKnowledgeObservation(
+        Assert.That(knowledge.RecordClaimObservation(CreateClaimObservation(
             claimId,
             false,
             PoliticalClaimStatus.Rejected,
@@ -114,7 +199,7 @@ public sealed class PoliticalKnowledgeFoundationTests
             9L,
             30L,
             DirectProvenance())), Is.False);
-        Assert.That(knowledge.RecordClaimObservation(new PoliticalClaimKnowledgeObservation(
+        Assert.That(knowledge.RecordClaimObservation(CreateClaimObservation(
             claimId,
             false,
             PoliticalClaimStatus.Rejected,
@@ -122,7 +207,7 @@ public sealed class PoliticalKnowledgeFoundationTests
             10L,
             11L,
             SharedByPersonProvenance("person.source"))), Is.True);
-        Assert.That(knowledge.RecordClaimObservation(new PoliticalClaimKnowledgeObservation(
+        Assert.That(knowledge.RecordClaimObservation(CreateClaimObservation(
             claimId,
             false,
             PoliticalClaimStatus.Rejected,
@@ -137,7 +222,7 @@ public sealed class PoliticalKnowledgeFoundationTests
 
         PoliticalKnowledgeRuntime first = new PoliticalKnowledgeRuntime(new PersonId("person.first"));
         PoliticalKnowledgeRuntime second = new PoliticalKnowledgeRuntime(new PersonId("person.second"));
-        PoliticalClaimKnowledgeObservation falseSnapshot = new PoliticalClaimKnowledgeObservation(
+        PoliticalClaimKnowledgeObservation falseSnapshot = CreateClaimObservation(
             claimId,
             false,
             PoliticalClaimStatus.Active,
@@ -145,7 +230,7 @@ public sealed class PoliticalKnowledgeFoundationTests
             5L,
             5L,
             DirectProvenance());
-        PoliticalClaimKnowledgeObservation trueSnapshot = new PoliticalClaimKnowledgeObservation(
+        PoliticalClaimKnowledgeObservation trueSnapshot = CreateClaimObservation(
             claimId,
             true,
             PoliticalClaimStatus.Active,
@@ -212,6 +297,13 @@ public sealed class PoliticalKnowledgeFoundationTests
             1L,
             1L,
             DirectProvenance()));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new PersonDeathKnowledgeObservation(
+            new PersonId("person.future-death"),
+            true,
+            5L,
+            4L,
+            4L,
+            DirectProvenance()));
         Assert.Throws<ArgumentException>(() => new PoliticalKnowledgeProvenance(
             PoliticalKnowledgeSource.SharedByPerson));
         Assert.Throws<ArgumentException>(() => new PoliticalKnowledgeProvenance(
@@ -271,6 +363,32 @@ public sealed class PoliticalKnowledgeFoundationTests
         Assert.That(observation.PersonId, Is.EqualTo(subjectId));
         Assert.That(observation.IsDead, Is.True);
         Assert.That(holder.IsMaterialized, Is.False);
+    }
+
+    private static PoliticalClaimKnowledgeObservation CreateClaimObservation(
+        PoliticalClaimId claimId,
+        bool exists,
+        PoliticalClaimStatus status,
+        PoliticalClaimRecognitionState recognitionState,
+        long observedAbsoluteDay,
+        long receivedAbsoluteDay,
+        PoliticalKnowledgeProvenance provenance)
+    {
+        bool hasRecognition = recognitionState != PoliticalClaimRecognitionState.Unrecognized;
+        return new PoliticalClaimKnowledgeObservation(
+            claimId,
+            exists,
+            new PersonId("person.claimant"),
+            PoliticalClaimType.StatusRecognition,
+            PoliticalClaimTarget.ForPerson(new PersonId("person.claim-target")),
+            PoliticalClaimBasis.ExplicitDecision,
+            status,
+            recognitionState,
+            hasRecognition ? new InstitutionId("institution.recognizer") : null,
+            hasRecognition ? observedAbsoluteDay : (long?)null,
+            observedAbsoluteDay,
+            receivedAbsoluteDay,
+            provenance);
     }
 
     private static PoliticalKnowledgeProvenance DirectProvenance()
