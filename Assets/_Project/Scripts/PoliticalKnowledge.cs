@@ -246,6 +246,13 @@ public abstract class PoliticalKnowledgeObservation
     {
         return value ? "1" : "0";
     }
+
+    protected static string LengthKey(string value)
+    {
+        return value == null
+            ? "-1:"
+            : value.Length.ToString() + ":" + value;
+    }
 }
 
 public sealed class PoliticalClaimKnowledgeObservation : PoliticalKnowledgeObservation
@@ -383,16 +390,16 @@ public sealed class PoliticalClaimKnowledgeObservation : PoliticalKnowledgeObser
         {
             return string.Concat(
                 BoolKey(Exists), "\u001F",
-                ClaimantPersonId.Value, "\u001F",
+                LengthKey(ClaimantPersonId.Value), "\u001F",
                 ((int)ClaimType).ToString(), "\u001F",
                 ((int)Target.Kind).ToString(), "\u001F",
-                Target.TargetId, "\u001F",
+                LengthKey(Target.TargetId), "\u001F",
                 ((int)Basis).ToString(), "\u001F",
                 CreatedAbsoluteDay.ToString(), "\u001F",
                 ((int)Status).ToString(), "\u001F",
                 ResolutionAbsoluteDay.HasValue ? ResolutionAbsoluteDay.Value.ToString() : string.Empty, "\u001F",
                 ((int)RecognitionState).ToString(), "\u001F",
-                RecognizingInstitutionId == null ? string.Empty : RecognizingInstitutionId.Value, "\u001F",
+                RecognizingInstitutionId == null ? string.Empty : LengthKey(RecognizingInstitutionId.Value), "\u001F",
                 RecognitionAbsoluteDay.HasValue ? RecognitionAbsoluteDay.Value.ToString() : string.Empty);
             }
         }
@@ -521,7 +528,7 @@ public sealed class OfficeVacancyKnowledgeObservation : PoliticalKnowledgeObserv
 
     internal override string IdentityKey => OfficeId.Value;
     internal override string SnapshotSortKey =>
-        InstitutionId.Value + "\u001F" + BoolKey(IsVacant) + "\u001F" + BoolKey(IsRecognizedVacant);
+        LengthKey(InstitutionId.Value) + "\u001F" + BoolKey(IsVacant) + "\u001F" + BoolKey(IsRecognizedVacant);
 }
 
 public sealed class PersonDeathKnowledgeObservation : PoliticalKnowledgeObservation

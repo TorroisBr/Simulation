@@ -381,6 +381,45 @@ public sealed class PoliticalKnowledgeFoundationTests
         Assert.That(collisionSecond.RecordFactionObservation(delimiterLeft), Is.False);
         Assert.That(collisionFirst.FactionObservations[0].Provenance.SourceReference, Is.EqualTo("a\u001Fb"));
         Assert.That(collisionSecond.FactionObservations[0].Provenance.SourceReference, Is.EqualTo("a\u001Fb"));
+
+        PoliticalKnowledgeRuntime claimFirst = new PoliticalKnowledgeRuntime(new PersonId("person.claim-collision-first"));
+        PoliticalKnowledgeRuntime claimSecond = new PoliticalKnowledgeRuntime(new PersonId("person.claim-collision-second"));
+        PoliticalClaimKnowledgeObservation claimLeft = new PoliticalClaimKnowledgeObservation(
+            new PoliticalClaimId("claim.delimiter"), true,
+            new PersonId("a"),
+            PoliticalClaimType.StatusRecognition,
+            PoliticalClaimTarget.ForPerson(new PersonId("b\u001Fc")),
+            PoliticalClaimBasis.ExplicitDecision,
+            0L,
+            PoliticalClaimStatus.Active,
+            null,
+            PoliticalClaimRecognitionState.Unrecognized,
+            null,
+            null,
+            4L,
+            4L,
+            DirectProvenance());
+        PoliticalClaimKnowledgeObservation claimRight = new PoliticalClaimKnowledgeObservation(
+            new PoliticalClaimId("claim.delimiter"), true,
+            new PersonId("a\u001Fb"),
+            PoliticalClaimType.StatusRecognition,
+            PoliticalClaimTarget.ForPerson(new PersonId("c")),
+            PoliticalClaimBasis.ExplicitDecision,
+            0L,
+            PoliticalClaimStatus.Active,
+            null,
+            PoliticalClaimRecognitionState.Unrecognized,
+            null,
+            null,
+            4L,
+            4L,
+            DirectProvenance());
+        Assert.That(claimFirst.RecordClaimObservation(claimLeft), Is.True);
+        Assert.That(claimFirst.RecordClaimObservation(claimRight), Is.True);
+        Assert.That(claimSecond.RecordClaimObservation(claimRight), Is.True);
+        Assert.That(claimSecond.RecordClaimObservation(claimLeft), Is.False);
+        Assert.That(claimFirst.ClaimObservations[0].ClaimantPersonId.Value, Is.EqualTo("a\u001Fb"));
+        Assert.That(claimSecond.ClaimObservations[0].ClaimantPersonId.Value, Is.EqualTo("a\u001Fb"));
     }
 
     [Test]
