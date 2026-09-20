@@ -196,6 +196,42 @@ public sealed class PoliticalSupportFoundationTests
         Assert.That(first.GetForSource(PoliticalSupportSource.ForPerson(new PersonId("person.supporter"))), Has.Count.EqualTo(1));
     }
 
+    [Test]
+    public void AddTransitionsValidateDayRevisionEndpointsAndCommitAtomically()
+    {
+        PoliticalSupportStore store = CreateStore();
+        PoliticalSupportRelationRecord relation = new PoliticalSupportRelationRecord(
+            new PoliticalSupportRelationId("relation.add"),
+            PoliticalSupportSource.ForPerson(new PersonId("person.supporter")),
+            PoliticalSupportTarget.ForSuccessionCandidate(new PersonId("person.candidate")),
+            PoliticalSupportDisposition.Support,
+            4L);
+
+        Assert.That(store.TryProposeAdd(relation, 3L, out _, out PoliticalSupportFailure wrongDay), Is.False);
+        Assert.That(wrongDay.Code, Is.EqualTo(PoliticalSupportFailureCode.StaleWorldDay));
+        Assert.That(store.Count, Is.EqualTo(0));
+
+        Assert.That(store.TryProposeAdd(relation, 4L, out PoliticalSupportAddTransition transition, out PoliticalSupportFailure proposalFailure), Is.True, proposalFailure.ToString());
+        Assert.That(store.TryApplyAdd(transition, 5L, out PoliticalSupportFailure staleDay), Is.False);
+        Assert.That(staleDay.Code, Is.EqualTo(PoliticalSupportFailureCode.StaleWorldDay));
+        Assert.That(store.Count, Is.EqualTo(0));
+
+        Assert.That(store.TryApplyAdd(transition, 4L, out PoliticalSupportFailure applyFailure), Is.True, applyFailure.ToString());
+        Assert.That(store.Count, Is.EqualTo(1));
+
+        Assert.That(store.TryProposeAdd(
+            new PoliticalSupportRelationRecord(
+                new PoliticalSupportRelationId("relation.add-duplicate-pair"),
+                relation.Source,
+                relation.Target,
+                PoliticalSupportDisposition.Oppose,
+                4L),
+            4L,
+            out _,
+            out PoliticalSupportFailure duplicatePair), Is.False);
+        Assert.That(duplicatePair.Code, Is.EqualTo(PoliticalSupportFailureCode.DuplicateActiveRelation));
+    }
+
     private static void Register(
         PoliticalSupportStore store,
         string relationId,

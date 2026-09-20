@@ -126,6 +126,126 @@ public sealed class PoliticalSupportStore
         return relationId != null && recordsById.TryGetValue(relationId.Value, out record);
     }
 
+    public bool TryProposeAdd(
+        PoliticalSupportRelationRecord relation,
+        long expectedWorldDay,
+        out PoliticalSupportAddTransition transition,
+        out PoliticalSupportFailure failure)
+    {
+        transition = null;
+        if (relation == null || expectedWorldDay < 0L)
+        {
+            failure = PoliticalSupportFailure.Create(
+                PoliticalSupportFailureCode.InvalidTransition,
+                "A relation and non-negative expected world day are required.");
+            return false;
+        }
+
+        if (relation.IsActive == false || relation.StartedAbsoluteDay != expectedWorldDay)
+        {
+            failure = PoliticalSupportFailure.Create(
+                PoliticalSupportFailureCode.StaleWorldDay,
+                "A political support add proposal must start on the expected world day and remain active.");
+            return false;
+        }
+
+        if (recordsById.ContainsKey(relation.RelationId.Value))
+        {
+            failure = PoliticalSupportFailure.Create(
+                PoliticalSupportFailureCode.DuplicateRelationId,
+                "The political support relation id is already registered.");
+            return false;
+        }
+
+        if (ValidateEndpoints(relation, out failure) == false)
+        {
+            return false;
+        }
+
+        if (activeByPair.ContainsKey(PairKey(relation.Source, relation.Target)))
+        {
+            failure = PoliticalSupportFailure.Create(
+                PoliticalSupportFailureCode.DuplicateActiveRelation,
+                "An active political support relation already exists for the source and target.");
+            return false;
+        }
+
+        transition = new PoliticalSupportAddTransition(
+            this,
+            relation,
+            revision,
+            expectedWorldDay);
+        failure = PoliticalSupportFailure.None;
+        return true;
+    }
+
+    public bool TryApplyAdd(
+        PoliticalSupportAddTransition transition,
+        long currentWorldDay,
+        out PoliticalSupportFailure failure)
+    {
+        if (transition == null || transition.ExpectedRelation == null)
+        {
+            failure = PoliticalSupportFailure.Create(
+                PoliticalSupportFailureCode.InvalidTransition,
+                "A valid political support relation add transition is required.");
+            return false;
+        }
+
+        if (ReferenceEquals(transition.ExpectedStore, this) == false)
+        {
+            failure = PoliticalSupportFailure.Create(
+                PoliticalSupportFailureCode.WrongSupportStore,
+                "The political support transition belongs to another support store.");
+            return false;
+        }
+
+        if (currentWorldDay < 0L || currentWorldDay != transition.ExpectedWorldDay)
+        {
+            failure = PoliticalSupportFailure.Create(
+                PoliticalSupportFailureCode.StaleWorldDay,
+                "The political support relation add proposal was created for a different world day.");
+            return false;
+        }
+
+        if (revision != transition.ExpectedStoreRevision)
+        {
+            failure = PoliticalSupportFailure.Create(
+                PoliticalSupportFailureCode.StaleRelation,
+                "The political support store changed after the add proposal was created.");
+            return false;
+        }
+
+        PoliticalSupportRelationRecord relation = transition.ExpectedRelation;
+        if (recordsById.ContainsKey(relation.RelationId.Value)
+            || activeByPair.ContainsKey(PairKey(relation.Source, relation.Target)))
+        {
+            failure = PoliticalSupportFailure.Create(
+                PoliticalSupportFailureCode.StaleRelation,
+                "The political support relation changed after the add proposal was created.");
+            return false;
+        }
+
+        if (ValidateEndpoints(relation, out failure) == false)
+        {
+            return false;
+        }
+
+        if (revision == long.MaxValue)
+        {
+            failure = PoliticalSupportFailure.Create(
+                PoliticalSupportFailureCode.RevisionOverflow,
+                "The political support store revision cannot advance further.");
+            return false;
+        }
+
+        recordsById.Add(relation.RelationId.Value, relation);
+        activeByPair.Add(PairKey(relation.Source, relation.Target), relation);
+        revision++;
+        failure = PoliticalSupportFailure.None;
+        return true;
+    }
+
     public bool TryGetActive(
         PoliticalSupportSource source,
         PoliticalSupportTarget target,
@@ -333,6 +453,29 @@ public sealed class PoliticalSupportStore
         revision++;
         failure = PoliticalSupportFailure.None;
         return true;
+    }
+
+    internal PoliticalSupportStore Clone(
+        PersonStore targetPersonStore,
+        FactionStore targetFactionStore,
+        PoliticalClaimStore targetPoliticalClaimStore)
+    {
+        PoliticalSupportStore clone = new PoliticalSupportStore(
+            targetPersonStore ?? throw new ArgumentNullException(nameof(targetPersonStore)),
+            targetFactionStore ?? throw new ArgumentNullException(nameof(targetFactionStore)),
+            targetPoliticalClaimStore ?? throw new ArgumentNullException(nameof(targetPoliticalClaimStore)));
+
+        foreach (KeyValuePair<string, PoliticalSupportRelationRecord> entry in recordsById)
+        {
+            clone.recordsById.Add(entry.Key, entry.Value);
+            if (entry.Value.IsActive)
+            {
+                clone.activeByPair.Add(PairKey(entry.Value.Source, entry.Value.Target), entry.Value);
+            }
+        }
+
+        clone.revision = revision;
+        return clone;
     }
 
     private bool ValidateEndpoints(
