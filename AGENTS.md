@@ -4,15 +4,15 @@
 
 This repository is a persistent-world simulation platform.
 
-Before doing Phase 5 work, always read:
+Before doing Phase 6 work, always read:
 
-`docs/PHASE5_STATE.md`
+`docs/PHASE6_STATE.md`
 
-The authoritative Phase 5 branch is:
+The authoritative Phase 6 branch is:
 
-`codex/phase5/canonical`
+`codex/phase6/canonical`
 
-Feature work must start from the current HEAD of that branch unless an explicit integration task says otherwise.
+Phase 6 feature work must start from the current HEAD of that branch unless an explicit integration task says otherwise. `docs/PHASE5_STATE.md` and `codex/phase5/canonical` are the completed Phase 5 baseline and are not active Phase 6 work.
 
 Do not reconstruct current architecture from old branches when `docs/PHASE5_STATE.md` already defines the current state.
 
@@ -46,16 +46,26 @@ Age and maturity are derived from birth date/calendar/configuration and must not
 
 Genealogy is relation-based world truth using PersonId. Do not put parent/child collections directly on PersonRuntime.
 
-Deep politics is not part of Phase 5.
+Phase 6 establishes minimal, composable foundations for politics, claims, legitimacy, factions, support, recognition, and institutional power. Do not absorb diplomacy, warfare, macroeconomics, fertility, persistence, networking, UI-heavy political screens, or Timeline architecture into Phase 6.
+
+Political architecture must preserve these boundaries:
+
+- a claim does not make its assertion true;
+- factual truth, knowledge, and institutional recognition remain separate;
+- faction membership and support are relation/store-owned facts, not redundant PersonRuntime collections;
+- legitimacy is derived from explicit inputs unless stored state is justified by architecture;
+- political decisions propose or select outcomes, while existing domain systems execute validated world mutations;
+- factual death does not directly create vacancy, and political recognition does not directly rewrite genealogy, property ownership, or office incumbency;
+- PersonId identity persists across materialization, dormancy, and death.
 
 ## Orchestrator behavior
 
 Before starting a new implementation wave:
 
 1. Inspect the current canonical branch and HEAD.
-2. Read `docs/PHASE5_STATE.md`.
+2. Read `docs/PHASE6_STATE.md` and consult `docs/PHASE5_STATE.md` for the completed baseline.
 3. Inspect relevant current code.
-4. Reconstruct or update the remaining Phase 5 dependency graph.
+4. Reconstruct or update the remaining Phase 6 dependency graph.
 5. Identify every currently unblocked task.
 6. Classify each task as:
    - MUST WAIT
@@ -100,15 +110,15 @@ Request only the permission required to create/use the worktree, or serialize th
 
 Feature branches:
 
-`codex/phase5/<FeatureName>`
+`codex/phase6/<FeatureName>`
 
 Integration branches:
 
-`codex/phase5/<FeatureA><FeatureB>Integration`
+`codex/phase6/<FeatureA><FeatureB>Integration`
 
 Canonical:
 
-`codex/phase5/canonical`
+`codex/phase6/canonical`
 
 Workers never implement directly on canonical.
 
@@ -131,13 +141,13 @@ Never:
 
 ## Recommended agent roles
 
-Use `phase5_worker` for bounded implementation.
+Use `phase6_worker` for bounded implementation.
 
-Use `phase5_reviewer` after implementation and before integration.
+Use `phase6_reviewer` after implementation and before integration.
 
-Use `phase5_integrator` when combining approved independent branches.
+Use `phase6_integrator` when combining approved independent branches.
 
-Use `phase5_validator` after integration and before canonical promotion.
+Use `phase6_validator` after integration and before canonical promotion.
 
 A worker does not approve its own work.
 
@@ -181,7 +191,7 @@ Current canonical baseline is recorded in:
 
 `docs/PHASE5_STATE.md`
 
-For meaningful Phase 5 changes, run relevant targeted EditMode suites.
+For meaningful Phase 6 changes, run relevant targeted EditMode suites and affected Phase 5 regression suites.
 
 Before canonical promotion run:
 
@@ -210,34 +220,31 @@ Do not introduce special-case preset code.
 
 ## Scope discipline
 
-Do not implement roadmap items early merely because they seem related.
+Phase 5 foundations are completed and immutable in concept. Do not redesign them merely because Phase 6 political features depend on them.
 
-Keep separate unless explicitly required:
+Do not implement later roadmap items early merely because they seem related. Keep separate unless explicitly required:
 
-- reproduction;
-- fertility;
-- pregnancy;
-- deep politics;
-- claims;
-- factions;
-- ideological systems;
-- advanced succession politics;
-- persistence/API;
-- Timeline architecture.
+- diplomacy between nations;
+- warfare strategy or a second combat system;
+- full government, taxation, or macroeconomics;
+- religion, culture, romance, fertility, or pregnancy;
+- persistence/API or multiplayer/networking;
+- Timeline architecture;
+- procedural narrative generation or UI-heavy political screens.
 
-Prefer small foundations followed by explicit integration tasks.
+Within Phase 6, prefer small political truth foundations followed by explicit recognition, knowledge, decision, and integration tasks. Do not turn `SimulationRuntime.AdvanceDay` into a political dumping ground; autonomous daily behavior requires explicit semantics, ordering tests, and long-run validation.
 
 ## Canonical promotion
 
-When an integration is fully validated:
+When a Phase 6 integration is fully validated:
 
 1. record its final SHA;
-2. update `docs/PHASE5_STATE.md`;
-3. move `codex/phase5/canonical` to the validated commit;
+2. update `docs/PHASE6_STATE.md`;
+3. move `codex/phase6/canonical` to the validated commit;
 4. push;
 5. verify local/remote synchronization;
 6. recompute the remaining dependency graph;
-7. continue Phase 5 without waiting for the user to supply the next task.
+7. continue Phase 6 without waiting for the user to supply the next task.
 
 Do not ask the user what the next task is when the roadmap already determines it.
 
@@ -249,7 +256,7 @@ Stop only for:
 - mutually incompatible architecture choices with meaningful consequences;
 - an unrecoverable environment/tooling problem;
 - required permission that cannot be safely obtained automatically;
-- completion of Phase 5.
+- a defined Phase 6 human checkpoint or completion of Phase 6.
 
 Do not stop for routine implementation choices, naming, test execution, Git operations, cherry-picks, worktrees, or ordinary conflict resolution.
 
@@ -272,7 +279,7 @@ Always leave completed worktrees clean and published unless a task explicitly sa
 
 ## Routine local command authorization
 
-The user explicitly authorizes routine local repository and Unity development operations required to complete approved Phase 5 work.
+The user explicitly authorizes routine local repository and Unity development operations required to complete approved Phase 6 work.
 
 Do not ask the user for conversational confirmation before performing routine operations listed below.
 
@@ -294,8 +301,8 @@ You may autonomously use, including equivalent variants:
 
 You may read all files required for the active task in:
 
-- the canonical Phase 5 worktree;
-- assigned isolated Phase 5 feature worktrees;
+- the canonical Phase 6 worktree;
+- assigned isolated Phase 6 feature worktrees;
 - assigned integration worktrees;
 - repository metadata required for Git operations;
 - Unity project files;
@@ -324,7 +331,7 @@ You may autonomously use normal non-destructive Git operations required by the a
 - git worktree remove for clean completed temporary worktrees
 - git push
 
-You may create approved Phase 5 branches and isolated worktrees without asking for conversational confirmation.
+You may create approved Phase 6 branches and isolated worktrees without asking for conversational confirmation.
 
 You may commit and push completed feature/integration branches and canonical promotions when required by the approved orchestration workflow.
 
@@ -357,7 +364,7 @@ You may autonomously:
 - inspect Unity-generated logs and test-result files;
 - retry failed Unity invocations when the failure is environmental rather than a test failure.
 
-Do not ask for conversational confirmation before running Unity validation required by AGENTS.md or docs/PHASE5_STATE.md.
+Do not ask for conversational confirmation before running Unity validation required by AGENTS.md, docs/PHASE6_STATE.md, or affected Phase 5 baseline suites.
 
 A failed test is not by itself a reason to ask the user what to do.
 

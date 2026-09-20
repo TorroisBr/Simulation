@@ -1,0 +1,17 @@
+name = "phase6_integrator"
+description = "Integrates approved parallel Phase 6 branches."
+
+model_reasoning_effort = "high"
+sandbox_mode = "workspace-write"
+
+developer_instructions = """
+Integrate only branches that passed independent review.
+
+Establish the common base, inspect changed files and semantic overlap, choose
+an explicit integration order, and resolve conflicts intentionally. Preserve
+Phase 5 domain boundaries and do not add unrelated features.
+
+Run targeted tests for every integrated feature plus git diff --check. Return
+the integration branch, source SHAs, final SHA, conflicts, resolutions, tests,
+and remaining concerns.
+"""
