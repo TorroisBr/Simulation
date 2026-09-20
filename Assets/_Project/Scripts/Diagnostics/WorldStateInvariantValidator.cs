@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 
 public enum WorldStateInvariantSeverity
 {
@@ -354,6 +355,10 @@ public static class WorldStateInvariantValidator
             personIds,
             snapshot.InstitutionIds,
             snapshot.HasInstitutionCatalog,
+            snapshot.PoliticalClaims,
+            snapshot.Factions,
+            snapshot.OfficeIds,
+            snapshot.HasOfficeCatalog,
             snapshot.AbsoluteDay,
             issues);
 
@@ -1101,9 +1106,31 @@ public static class WorldStateInvariantValidator
         HashSet<string> personIds,
         IReadOnlyList<string> institutionIds,
         bool hasInstitutionCatalog,
+        IReadOnlyList<WorldStatePoliticalClaimSnapshot> claims,
+        IReadOnlyList<WorldStateFactionSnapshot> factions,
+        IReadOnlyList<string> officeIds,
+        bool hasOfficeCatalog,
         long absoluteDay,
         List<WorldStateInvariantIssue> issues)
     {
+        HashSet<string> claimIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (WorldStatePoliticalClaimSnapshot claim in claims ?? Array.Empty<WorldStatePoliticalClaimSnapshot>())
+        {
+            if (claim != null && string.IsNullOrWhiteSpace(claim.ClaimId) == false)
+            {
+                claimIds.Add(claim.ClaimId);
+            }
+        }
+
+        HashSet<string> factionIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (WorldStateFactionSnapshot faction in factions ?? Array.Empty<WorldStateFactionSnapshot>())
+        {
+            if (faction != null && string.IsNullOrWhiteSpace(faction.FactionId) == false)
+            {
+                factionIds.Add(faction.FactionId);
+            }
+        }
+
         if (knowledgeRevision < 0L)
         {
             AddError(issues, "PoliticalKnowledgeRevisionInvalid", "world", "Political knowledge revision cannot be negative.");
@@ -1209,6 +1236,28 @@ public static class WorldStateInvariantValidator
                     AddError(issues, "PoliticalKnowledgeFactKindInvalid", observationIdentity, "Political knowledge observation fact kind is invalid.");
                 }
 
+                bool validIdentity = TryParsePoliticalKnowledgeIdentity(
+                    observation.IdentityKey,
+                    observation.FactKind,
+                    out string rawIdentity);
+                if (validIdentity == false)
+                {
+                    AddError(issues, "PoliticalKnowledgeObservationIdentityInvalid", observationIdentity, "Political knowledge observation identity does not match its fact-kind composite format.");
+                }
+                else
+                {
+                    ValidatePoliticalKnowledgeEndpoint(
+                        observation,
+                        rawIdentity,
+                        claimIds,
+                        factionIds,
+                        personIds,
+                        officeIds,
+                        hasOfficeCatalog,
+                        observationIdentity,
+                        issues);
+                }
+
                 if (observation.ObservedAbsoluteDay < 0L
                     || observation.ReceivedAbsoluteDay < observation.ObservedAbsoluteDay
                     || observation.ReceivedAbsoluteDay > absoluteDay)
@@ -1226,11 +1275,224 @@ public static class WorldStateInvariantValidator
                     AddError(issues, "PoliticalKnowledgeProvenanceShapeInvalid", observationIdentity, "Political knowledge provenance cannot identify both a Person and an Institution.");
                 }
 
-                if (string.IsNullOrWhiteSpace(observation.StateKey))
+                if (observation.Source == PoliticalKnowledgeSource.SharedByPerson
+                    && string.IsNullOrWhiteSpace(observation.SourcePersonId))
                 {
-                    AddError(issues, "PoliticalKnowledgeObservationStateMissing", observationIdentity, "Political knowledge observation state key is empty.");
+                    AddError(issues, "PoliticalKnowledgeProvenanceShapeInvalid", observationIdentity, "SharedByPerson knowledge requires a source PersonId.");
+                }
+
+                if ((observation.Source == PoliticalKnowledgeSource.SharedByInstitution
+                        || observation.Source == PoliticalKnowledgeSource.InstitutionalRecord)
+                    && string.IsNullOrWhiteSpace(observation.SourceInstitutionId))
+                {
+                    AddError(issues, "PoliticalKnowledgeProvenanceShapeInvalid", observationIdentity, "Institutional knowledge requires a source InstitutionId.");
+                }
+
+                if ((observation.Source == PoliticalKnowledgeSource.DirectObservation
+                        || observation.Source == PoliticalKnowledgeSource.InitialScenarioKnowledge)
+                    && (observation.SourcePersonId != null || observation.SourceInstitutionId != null))
+                {
+                    AddError(issues, "PoliticalKnowledgeProvenanceShapeInvalid", observationIdentity, "Direct and initial knowledge cannot carry a transmission holder.");
+                }
+
+                if (IsValidPoliticalKnowledgeStateKey(observation.FactKind, observation.StateKey) == false)
+                {
+                    AddError(issues, "PoliticalKnowledgeObservationStateInvalid", observationIdentity, "Political knowledge observation state key is invalid for its fact kind.");
                 }
             }
+        }
+    }
+
+    private static void ValidatePoliticalKnowledgeEndpoint(
+        WorldStatePoliticalKnowledgeObservationSnapshot observation,
+        string rawIdentity,
+        HashSet<string> claimIds,
+        HashSet<string> factionIds,
+        HashSet<string> personIds,
+        IReadOnlyList<string> officeIds,
+        bool hasOfficeCatalog,
+        string identity,
+        List<WorldStateInvariantIssue> issues)
+    {
+        switch (observation.FactKind)
+        {
+            case PoliticalKnowledgeFactKind.PoliticalClaim:
+                if (claimIds.Contains(rawIdentity) == false)
+                {
+                    AddError(issues, "PoliticalKnowledgeClaimMissing", identity, "Political knowledge claim endpoint is absent from the snapshot.");
+                }
+                break;
+            case PoliticalKnowledgeFactKind.Faction:
+                if (factionIds.Contains(rawIdentity) == false)
+                {
+                    AddError(issues, "PoliticalKnowledgeFactionMissing", identity, "Political knowledge faction endpoint is absent from the snapshot.");
+                }
+                break;
+            case PoliticalKnowledgeFactKind.FactionAffiliation:
+                if (TryParseLengthPrefixedPair(rawIdentity, out string factionId, out string personId) == false)
+                {
+                    AddError(issues, "PoliticalKnowledgeAffiliationIdentityInvalid", identity, "Political knowledge affiliation identity is malformed.");
+                }
+                else
+                {
+                    if (factionIds.Contains(factionId) == false)
+                    {
+                        AddError(issues, "PoliticalKnowledgeFactionMissing", identity, "Political knowledge affiliation faction endpoint is absent from the snapshot.");
+                    }
+
+                    if (personIds.Contains(personId) == false)
+                    {
+                        AddError(issues, "PoliticalKnowledgePersonMissing", identity, "Political knowledge affiliation PersonId is absent from the snapshot.");
+                    }
+                }
+                break;
+            case PoliticalKnowledgeFactKind.OfficeVacancy:
+                if (hasOfficeCatalog && ContainsString(officeIds, rawIdentity) == false)
+                {
+                    AddError(issues, "PoliticalKnowledgeOfficeMissing", identity, "Political knowledge office endpoint is absent from the snapshot.");
+                }
+                break;
+            case PoliticalKnowledgeFactKind.PersonDeath:
+                if (personIds.Contains(rawIdentity) == false)
+                {
+                    AddError(issues, "PoliticalKnowledgePersonMissing", identity, "Political knowledge death PersonId is absent from the snapshot.");
+                }
+                break;
+        }
+    }
+
+    private static bool TryParsePoliticalKnowledgeIdentity(
+        string composite,
+        PoliticalKnowledgeFactKind factKind,
+        out string rawIdentity)
+    {
+        rawIdentity = null;
+        if (string.IsNullOrWhiteSpace(composite)
+            || Enum.IsDefined(typeof(PoliticalKnowledgeFactKind), factKind) == false)
+        {
+            return false;
+        }
+
+        string prefix = ((int)factKind).ToString(CultureInfo.InvariantCulture) + ":";
+        if (composite.StartsWith(prefix, StringComparison.Ordinal) == false)
+        {
+            return false;
+        }
+
+        string lengthPrefixed = composite.Substring(prefix.Length);
+        if (TryReadLengthPrefixed(lengthPrefixed, 0, out rawIdentity, out int end) == false
+            || end != lengthPrefixed.Length)
+        {
+            rawIdentity = null;
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool TryParseLengthPrefixedPair(
+        string value,
+        out string first,
+        out string second)
+    {
+        first = null;
+        second = null;
+        if (TryReadLengthPrefixed(value, 0, out first, out int firstEnd) == false
+            || TryReadLengthPrefixed(value, firstEnd, out second, out int secondEnd) == false
+            || secondEnd != value.Length)
+        {
+            first = null;
+            second = null;
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool TryReadLengthPrefixed(
+        string value,
+        int start,
+        out string component,
+        out int end)
+    {
+        component = null;
+        end = start;
+        if (value == null || start < 0 || start >= value.Length)
+        {
+            return false;
+        }
+
+        int separator = value.IndexOf(':', start);
+        if (separator <= start
+            || int.TryParse(
+                value.Substring(start, separator - start),
+                NumberStyles.None,
+                CultureInfo.InvariantCulture,
+                out int length) == false
+            || length < 0)
+        {
+            return false;
+        }
+
+        int componentStart = separator + 1;
+        if (componentStart + length > value.Length)
+        {
+            return false;
+        }
+
+        component = value.Substring(componentStart, length);
+        end = componentStart + length;
+        return true;
+    }
+
+    private static bool IsValidPoliticalKnowledgeStateKey(
+        PoliticalKnowledgeFactKind factKind,
+        string stateKey)
+    {
+        if (string.IsNullOrWhiteSpace(stateKey))
+        {
+            return false;
+        }
+
+        switch (factKind)
+        {
+            case PoliticalKnowledgeFactKind.Faction:
+                return stateKey == "0" || stateKey == "1";
+            case PoliticalKnowledgeFactKind.PoliticalClaim:
+            case PoliticalKnowledgeFactKind.FactionAffiliation:
+                return stateKey.Length > 1
+                    && (stateKey[0] == '0' || stateKey[0] == '1')
+                    && stateKey[1] == '\u001F';
+            case PoliticalKnowledgeFactKind.OfficeVacancy:
+                int firstSeparator = stateKey.IndexOf('\u001F');
+                int secondSeparator = firstSeparator < 0
+                    ? -1
+                    : stateKey.IndexOf('\u001F', firstSeparator + 1);
+                return firstSeparator > 0
+                    && secondSeparator > firstSeparator + 1
+                    && TryReadLengthPrefixed(
+                        stateKey.Substring(0, firstSeparator),
+                        0,
+                        out _,
+                        out int institutionEnd)
+                    && institutionEnd == firstSeparator
+                    && (stateKey[firstSeparator + 1] == '0' || stateKey[firstSeparator + 1] == '1')
+                    && (stateKey[secondSeparator + 1] == '0' || stateKey[secondSeparator + 1] == '1')
+                    && secondSeparator + 2 == stateKey.Length;
+            case PoliticalKnowledgeFactKind.PersonDeath:
+                int separator = stateKey.IndexOf('\u001F');
+                if (separator != 1 || (stateKey[0] != '0' && stateKey[0] != '1'))
+                {
+                    return false;
+                }
+
+                string deathDay = stateKey.Substring(separator + 1);
+                return stateKey[0] == '0'
+                    ? deathDay.Length == 0
+                    : deathDay.Length == 0
+                        || long.TryParse(deathDay, NumberStyles.Integer, CultureInfo.InvariantCulture, out _);
+            default:
+                return false;
         }
     }
 
