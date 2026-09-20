@@ -311,6 +311,50 @@ public sealed class PoliticalKnowledgeFoundationTests
     }
 
     [Test]
+    public void EqualDayKnowledgeMergesDeterministicallyAcrossRecognitionAndProvenance()
+    {
+        PoliticalKnowledgeRuntime first = new PoliticalKnowledgeRuntime(new PersonId("person.first"));
+        PoliticalKnowledgeRuntime second = new PoliticalKnowledgeRuntime(new PersonId("person.second"));
+        OfficeVacancyKnowledgeObservation unrecognized = new OfficeVacancyKnowledgeObservation(
+            new OfficeId("office.equal"),
+            new InstitutionId("institution.equal"),
+            true,
+            4L,
+            4L,
+            DirectProvenance());
+        OfficeVacancyKnowledgeObservation recognized = new OfficeVacancyKnowledgeObservation(
+            new OfficeId("office.equal"),
+            new InstitutionId("institution.equal"),
+            true,
+            4L,
+            4L,
+            DirectProvenance(),
+            true);
+
+        Assert.That(first.RecordOfficeVacancyObservation(unrecognized), Is.True);
+        Assert.That(first.RecordOfficeVacancyObservation(recognized), Is.True);
+        Assert.That(second.RecordOfficeVacancyObservation(recognized), Is.True);
+        Assert.That(second.RecordOfficeVacancyObservation(unrecognized), Is.False);
+        Assert.That(first.OfficeVacancyObservations[0].IsRecognizedVacant, Is.True);
+        Assert.That(second.OfficeVacancyObservations[0].IsRecognizedVacant, Is.True);
+
+        PoliticalKnowledgeRuntime provenanceFirst = new PoliticalKnowledgeRuntime(new PersonId("person.provenance-first"));
+        PoliticalKnowledgeRuntime provenanceSecond = new PoliticalKnowledgeRuntime(new PersonId("person.provenance-second"));
+        FactionKnowledgeObservation alpha = new FactionKnowledgeObservation(
+            new FactionId("faction.equal"), true, 4L, 4L,
+            new PoliticalKnowledgeProvenance(PoliticalKnowledgeSource.SharedByPerson, "alpha", new PersonId("person.source")));
+        FactionKnowledgeObservation zulu = new FactionKnowledgeObservation(
+            new FactionId("faction.equal"), true, 4L, 4L,
+            new PoliticalKnowledgeProvenance(PoliticalKnowledgeSource.SharedByPerson, "zulu", new PersonId("person.source")));
+        Assert.That(provenanceFirst.RecordFactionObservation(alpha), Is.True);
+        Assert.That(provenanceFirst.RecordFactionObservation(zulu), Is.True);
+        Assert.That(provenanceSecond.RecordFactionObservation(zulu), Is.True);
+        Assert.That(provenanceSecond.RecordFactionObservation(alpha), Is.False);
+        Assert.That(provenanceFirst.FactionObservations[0].Provenance.SourceReference, Is.EqualTo("zulu"));
+        Assert.That(provenanceSecond.FactionObservations[0].Provenance.SourceReference, Is.EqualTo("zulu"));
+    }
+
+    [Test]
     public void InvalidIdentityAndDayInputsAreRejected()
     {
         Assert.Throws<ArgumentNullException>(() => PoliticalKnowledgeHolder.ForPerson(null));

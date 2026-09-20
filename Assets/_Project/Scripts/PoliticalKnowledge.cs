@@ -513,7 +513,8 @@ public sealed class OfficeVacancyKnowledgeObservation : PoliticalKnowledgeObserv
     }
 
     internal override string IdentityKey => OfficeId.Value;
-    internal override string SnapshotSortKey => InstitutionId.Value + "\u001F" + BoolKey(IsVacant);
+    internal override string SnapshotSortKey =>
+        InstitutionId.Value + "\u001F" + BoolKey(IsVacant) + "\u001F" + BoolKey(IsRecognizedVacant);
 }
 
 public sealed class PersonDeathKnowledgeObservation : PoliticalKnowledgeObservation
@@ -851,7 +852,26 @@ public sealed class PoliticalKnowledgeRuntime
             return incoming.ReceivedAbsoluteDay > existing.ReceivedAbsoluteDay;
         }
 
-        return StringComparer.Ordinal.Compare(incoming.SnapshotSortKey, existing.SnapshotSortKey) > 0;
+        int snapshotComparison = StringComparer.Ordinal.Compare(
+            incoming.SnapshotSortKey,
+            existing.SnapshotSortKey);
+        if (snapshotComparison != 0)
+        {
+            return snapshotComparison > 0;
+        }
+
+        return StringComparer.Ordinal.Compare(
+            ProvenanceSortKey(incoming.Provenance),
+            ProvenanceSortKey(existing.Provenance)) > 0;
+    }
+
+    private static string ProvenanceSortKey(PoliticalKnowledgeProvenance provenance)
+    {
+        return string.Concat(
+            ((int)provenance.Source).ToString(), "\u001F",
+            provenance.SourceReference ?? string.Empty, "\u001F",
+            provenance.SourcePersonId == null ? string.Empty : provenance.SourcePersonId.Value, "\u001F",
+            provenance.SourceInstitutionId == null ? string.Empty : provenance.SourceInstitutionId.Value);
     }
 
     public static int GetSourcePriority(PoliticalKnowledgeSource source)
