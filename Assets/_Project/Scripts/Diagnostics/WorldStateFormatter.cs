@@ -129,6 +129,8 @@ public static class WorldStateSnapshotFormatter
                     .Append(Value(claim.TargetId))
                     .Append(" status ")
                     .Append(WorldStateCanonicalWriter.EnumValue(claim.Status))
+                    .Append(" resolved-day ")
+                    .Append(WorldStateCanonicalWriter.NullableInt64Value(claim.ResolutionAbsoluteDay))
                     .Append(" recognition ")
                     .Append(WorldStateCanonicalWriter.EnumValue(claim.RecognitionState))
                     .Append('\n');

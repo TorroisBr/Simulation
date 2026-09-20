@@ -284,6 +284,7 @@ public sealed class PoliticalClaimRecord : IEquatable<PoliticalClaimRecord>
     public string BasisDescription { get; }
     public long CreatedAbsoluteDay { get; }
     public PoliticalClaimStatus Status { get; }
+    public long? ResolutionAbsoluteDay { get; }
     public PoliticalClaimRecognitionState RecognitionState { get; }
     public InstitutionId RecognizingInstitutionId { get; }
     public long? RecognitionAbsoluteDay { get; }
@@ -303,7 +304,8 @@ public sealed class PoliticalClaimRecord : IEquatable<PoliticalClaimRecord>
         PoliticalClaimRecognitionState recognitionState = PoliticalClaimRecognitionState.Unrecognized,
         InstitutionId recognizingInstitutionId = null,
         long? recognitionAbsoluteDay = null,
-        string recognitionReason = null)
+        string recognitionReason = null,
+        long? resolutionAbsoluteDay = null)
     {
         ClaimId = claimId ?? throw new ArgumentNullException(nameof(claimId));
         ClaimantPersonId = claimantPersonId ?? throw new ArgumentNullException(nameof(claimantPersonId));
@@ -332,6 +334,19 @@ public sealed class PoliticalClaimRecord : IEquatable<PoliticalClaimRecord>
             || Enum.IsDefined(typeof(PoliticalClaimRecognitionState), recognitionState) == false)
         {
             throw new ArgumentException("Claim state is invalid.");
+        }
+
+        if (status == PoliticalClaimStatus.Active && resolutionAbsoluteDay.HasValue)
+        {
+            throw new ArgumentException("An active claim cannot carry a resolution day.", nameof(resolutionAbsoluteDay));
+        }
+
+        if (status != PoliticalClaimStatus.Active
+            && (resolutionAbsoluteDay.HasValue == false
+                || resolutionAbsoluteDay.Value < createdAbsoluteDay
+                || resolutionAbsoluteDay.Value < 0L))
+        {
+            throw new ArgumentException("A terminal claim requires a valid resolution day.", nameof(resolutionAbsoluteDay));
         }
 
         if (recognitionState == PoliticalClaimRecognitionState.Unrecognized
@@ -371,6 +386,7 @@ public sealed class PoliticalClaimRecord : IEquatable<PoliticalClaimRecord>
         Basis = basis;
         CreatedAbsoluteDay = createdAbsoluteDay;
         Status = status;
+        ResolutionAbsoluteDay = resolutionAbsoluteDay;
         RecognitionState = recognitionState;
         RecognizingInstitutionId = recognizingInstitutionId;
         RecognitionAbsoluteDay = recognitionAbsoluteDay;
@@ -396,10 +412,11 @@ public sealed class PoliticalClaimRecord : IEquatable<PoliticalClaimRecord>
             recognitionState,
             recognizingInstitutionId,
             recognitionAbsoluteDay,
-            recognitionReason);
+            recognitionReason,
+            ResolutionAbsoluteDay);
     }
 
-    internal PoliticalClaimRecord WithStatus(PoliticalClaimStatus status)
+    internal PoliticalClaimRecord WithStatus(PoliticalClaimStatus status, long resolutionAbsoluteDay)
     {
         return new PoliticalClaimRecord(
             ClaimId,
@@ -414,7 +431,8 @@ public sealed class PoliticalClaimRecord : IEquatable<PoliticalClaimRecord>
             RecognitionState,
             RecognizingInstitutionId,
             RecognitionAbsoluteDay,
-            RecognitionReason);
+            RecognitionReason,
+            resolutionAbsoluteDay);
     }
 
     public bool Equals(PoliticalClaimRecord other)
@@ -428,6 +446,7 @@ public sealed class PoliticalClaimRecord : IEquatable<PoliticalClaimRecord>
             && string.Equals(BasisDescription, other.BasisDescription, StringComparison.Ordinal)
             && CreatedAbsoluteDay == other.CreatedAbsoluteDay
             && Status == other.Status
+            && ResolutionAbsoluteDay == other.ResolutionAbsoluteDay
             && RecognitionState == other.RecognitionState
             && RecognizingInstitutionId == other.RecognizingInstitutionId
             && RecognitionAbsoluteDay == other.RecognitionAbsoluteDay
