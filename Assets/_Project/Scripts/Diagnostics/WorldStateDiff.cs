@@ -195,6 +195,10 @@ public sealed class WorldStateDiff
                     WorldStateCanonicalWriter.EnumValue(left.Status),
                     WorldStateCanonicalWriter.EnumValue(right.Status),
                     differences);
+                CompareValue("PoliticalClaim", identity, "ResolutionAbsoluteDay",
+                    WorldStateCanonicalWriter.NullableInt64Value(left.ResolutionAbsoluteDay),
+                    WorldStateCanonicalWriter.NullableInt64Value(right.ResolutionAbsoluteDay),
+                    differences);
                 CompareValue("PoliticalClaim", identity, "RecognitionState",
                     WorldStateCanonicalWriter.EnumValue(left.RecognitionState),
                     WorldStateCanonicalWriter.EnumValue(right.RecognitionState),

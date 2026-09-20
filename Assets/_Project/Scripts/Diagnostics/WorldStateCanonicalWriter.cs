@@ -87,6 +87,7 @@ public static class WorldStateCanonicalWriter
                 claim.BasisDescription,
                 Int64Value(claim.CreatedAbsoluteDay),
                 EnumValue(claim.Status),
+                NullableInt64Value(claim.ResolutionAbsoluteDay),
                 EnumValue(claim.RecognitionState),
                 claim.RecognizingInstitutionId,
                 claim.RecognitionAbsoluteDay.HasValue

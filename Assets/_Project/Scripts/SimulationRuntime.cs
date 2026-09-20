@@ -458,6 +458,7 @@ public sealed class SimulationRuntime
             recognizingInstitutionId,
             recognitionState,
             CurrentDay,
+            CurrentDay,
             reason,
             out transition,
             out failure);
@@ -467,7 +468,15 @@ public sealed class SimulationRuntime
         PoliticalClaimRecognitionTransition transition,
         out PoliticalClaimFailure failure)
     {
-        if (transition == null || transition.RecognitionAbsoluteDay > CurrentDay)
+        if (transition == null || transition.ExpectedWorldDay != CurrentDay)
+        {
+            failure = PoliticalClaimFailure.Create(
+                PoliticalClaimFailureCode.StaleClaim,
+                "The political claim recognition proposal was created for a different world day.");
+            return false;
+        }
+
+        if (transition.RecognitionAbsoluteDay > CurrentDay)
         {
             failure = PoliticalClaimFailure.Create(
                 PoliticalClaimFailureCode.InvalidRecognitionAbsoluteDay,
@@ -492,6 +501,7 @@ public sealed class SimulationRuntime
             claimId,
             status,
             CurrentDay,
+            CurrentDay,
             out transition,
             out failure);
     }
@@ -500,7 +510,15 @@ public sealed class SimulationRuntime
         PoliticalClaimResolutionTransition transition,
         out PoliticalClaimFailure failure)
     {
-        if (transition == null || transition.ResolutionAbsoluteDay > CurrentDay)
+        if (transition == null || transition.ExpectedWorldDay != CurrentDay)
+        {
+            failure = PoliticalClaimFailure.Create(
+                PoliticalClaimFailureCode.StaleClaim,
+                "The political claim resolution proposal was created for a different world day.");
+            return false;
+        }
+
+        if (transition.ResolutionAbsoluteDay > CurrentDay)
         {
             failure = PoliticalClaimFailure.Create(
                 PoliticalClaimFailureCode.InvalidResolutionAbsoluteDay,

@@ -5,6 +5,7 @@ public sealed class PoliticalClaimRecognitionTransition : IEquatable<PoliticalCl
     internal PoliticalClaimRecord ExpectedClaim { get; }
     internal long ExpectedStoreRevision { get; }
     public PoliticalClaimId ClaimId { get; }
+    public long ExpectedWorldDay { get; }
     public InstitutionId RecognizingInstitutionId { get; }
     public PoliticalClaimRecognitionState RecognitionState { get; }
     public long RecognitionAbsoluteDay { get; }
@@ -13,6 +14,7 @@ public sealed class PoliticalClaimRecognitionTransition : IEquatable<PoliticalCl
     internal PoliticalClaimRecognitionTransition(
         PoliticalClaimRecord expectedClaim,
         long expectedStoreRevision,
+        long expectedWorldDay,
         InstitutionId recognizingInstitutionId,
         PoliticalClaimRecognitionState recognitionState,
         long recognitionAbsoluteDay,
@@ -20,6 +22,7 @@ public sealed class PoliticalClaimRecognitionTransition : IEquatable<PoliticalCl
     {
         ExpectedClaim = expectedClaim;
         ExpectedStoreRevision = expectedStoreRevision;
+        ExpectedWorldDay = expectedWorldDay;
         ClaimId = expectedClaim?.ClaimId;
         RecognizingInstitutionId = recognizingInstitutionId;
         RecognitionState = recognitionState;
@@ -35,7 +38,8 @@ public sealed class PoliticalClaimRecognitionTransition : IEquatable<PoliticalCl
             && RecognitionState == other.RecognitionState
             && RecognitionAbsoluteDay == other.RecognitionAbsoluteDay
             && string.Equals(Reason, other.Reason, StringComparison.Ordinal)
-            && ExpectedStoreRevision == other.ExpectedStoreRevision;
+            && ExpectedStoreRevision == other.ExpectedStoreRevision
+            && ExpectedWorldDay == other.ExpectedWorldDay;
     }
 
     public override bool Equals(object obj)
@@ -50,7 +54,8 @@ public sealed class PoliticalClaimRecognitionTransition : IEquatable<PoliticalCl
             int hash = ClaimId?.GetHashCode() ?? 0;
             hash = (hash * 397) ^ (RecognizingInstitutionId?.GetHashCode() ?? 0);
             hash = (hash * 397) ^ (int)RecognitionState;
-            return (hash * 397) ^ RecognitionAbsoluteDay.GetHashCode();
+            hash = (hash * 397) ^ RecognitionAbsoluteDay.GetHashCode();
+            return (hash * 397) ^ ExpectedWorldDay.GetHashCode();
         }
     }
 }
@@ -60,17 +65,20 @@ public sealed class PoliticalClaimResolutionTransition : IEquatable<PoliticalCla
     internal PoliticalClaimRecord ExpectedClaim { get; }
     internal long ExpectedStoreRevision { get; }
     public PoliticalClaimId ClaimId { get; }
+    public long ExpectedWorldDay { get; }
     public PoliticalClaimStatus Status { get; }
     public long ResolutionAbsoluteDay { get; }
 
     internal PoliticalClaimResolutionTransition(
         PoliticalClaimRecord expectedClaim,
         long expectedStoreRevision,
+        long expectedWorldDay,
         PoliticalClaimStatus status,
         long resolutionAbsoluteDay)
     {
         ExpectedClaim = expectedClaim;
         ExpectedStoreRevision = expectedStoreRevision;
+        ExpectedWorldDay = expectedWorldDay;
         ClaimId = expectedClaim?.ClaimId;
         Status = status;
         ResolutionAbsoluteDay = resolutionAbsoluteDay;
@@ -82,7 +90,8 @@ public sealed class PoliticalClaimResolutionTransition : IEquatable<PoliticalCla
             && ClaimId == other.ClaimId
             && Status == other.Status
             && ResolutionAbsoluteDay == other.ResolutionAbsoluteDay
-            && ExpectedStoreRevision == other.ExpectedStoreRevision;
+            && ExpectedStoreRevision == other.ExpectedStoreRevision
+            && ExpectedWorldDay == other.ExpectedWorldDay;
     }
 
     public override bool Equals(object obj)
@@ -94,13 +103,14 @@ public sealed class PoliticalClaimResolutionTransition : IEquatable<PoliticalCla
     {
         unchecked
         {
-            return (((ClaimId?.GetHashCode() ?? 0) * 397) ^ (int)Status) * 397
+            int hash = (((ClaimId?.GetHashCode() ?? 0) * 397) ^ (int)Status) * 397
                 ^ ResolutionAbsoluteDay.GetHashCode();
+            return (hash * 397) ^ ExpectedWorldDay.GetHashCode();
         }
     }
 }
 
-public static class PoliticalClaimSystem
+internal static class PoliticalClaimSystem
 {
     public static bool TryProposeRecognition(
         PoliticalClaimStore store,
@@ -108,6 +118,7 @@ public static class PoliticalClaimSystem
         InstitutionId recognizingInstitutionId,
         PoliticalClaimRecognitionState recognitionState,
         long recognitionAbsoluteDay,
+        long expectedWorldDay,
         string reason,
         out PoliticalClaimRecognitionTransition transition,
         out PoliticalClaimFailure failure)
@@ -146,6 +157,14 @@ public static class PoliticalClaimSystem
             return false;
         }
 
+        if (expectedWorldDay < 0L)
+        {
+            failure = PoliticalClaimFailure.Create(
+                PoliticalClaimFailureCode.InvalidRecognitionAbsoluteDay,
+                "ExpectedWorldDay cannot be negative.");
+            return false;
+        }
+
         if (store.TryGet(claimId, out PoliticalClaimRecord claim) == false)
         {
             failure = PoliticalClaimFailure.Create(
@@ -165,6 +184,7 @@ public static class PoliticalClaimSystem
         transition = new PoliticalClaimRecognitionTransition(
             claim,
             store.Revision,
+            expectedWorldDay,
             recognizingInstitutionId,
             recognitionState,
             recognitionAbsoluteDay,
@@ -199,6 +219,7 @@ public static class PoliticalClaimSystem
         PoliticalClaimId claimId,
         PoliticalClaimStatus status,
         long resolutionAbsoluteDay,
+        long expectedWorldDay,
         out PoliticalClaimResolutionTransition transition,
         out PoliticalClaimFailure failure)
     {
@@ -225,6 +246,14 @@ public static class PoliticalClaimSystem
             failure = PoliticalClaimFailure.Create(
                 PoliticalClaimFailureCode.InvalidResolutionAbsoluteDay,
                 "ResolutionAbsoluteDay cannot be negative.");
+            return false;
+        }
+
+        if (expectedWorldDay < 0L)
+        {
+            failure = PoliticalClaimFailure.Create(
+                PoliticalClaimFailureCode.InvalidResolutionAbsoluteDay,
+                "ExpectedWorldDay cannot be negative.");
             return false;
         }
 
@@ -255,6 +284,7 @@ public static class PoliticalClaimSystem
         transition = new PoliticalClaimResolutionTransition(
             claim,
             store.Revision,
+            expectedWorldDay,
             status,
             resolutionAbsoluteDay);
         failure = PoliticalClaimFailure.None;
@@ -276,7 +306,7 @@ public static class PoliticalClaimSystem
 
         return store.TryApplyResolution(
             transition,
-            transition.ExpectedClaim.WithStatus(transition.Status),
+            transition.ExpectedClaim.WithStatus(transition.Status, transition.ResolutionAbsoluteDay),
             out failure);
     }
 }
