@@ -8,7 +8,7 @@ Canonical branch:
 
 Last validated domain integration commit:
 
-`5da60d9`
+`29b5100`
 
 This commit consolidated:
 
@@ -22,18 +22,28 @@ This commit consolidated:
 - Aggregate Demography Foundation
 - deterministic daily demographic integration
 - minimal property ownership and estate continuity
+- deterministic succession candidate discovery
+- explicit property transfer foundation
+- office succession after recognized vacancy
+- estate succession composed with explicit property transfer
 
 Validated baseline:
 
+- Property transfer foundation: `5/5`
+- Succession candidate foundation: `5/5`
+- Succession integration: `8/8`
 - Estate foundation: `9/9`
 - Institutional vacancy: `7/7`
 - Runtime integration: `5/5`
 - Runtime orchestration: `6/6`
 - Diagnostics: `46/46`
 - Long-run: `7/7`
-- ALL EditMode: `1330/1330`
+- ALL EditMode: `1348/1348`
 - official Smoke: `5/5`
 - `git diff --check`: green
+
+The succession wave did not modify `SimulationRuntime.AdvanceDay`; the prior
+long-run gate therefore remains the applicable daily-loop validation.
 
 Historical demographic baseline before the continuity wave:
 
@@ -244,6 +254,18 @@ The minimal continuity foundation is now integrated with the world boundary:
 No inheritance law, transfer rules, taxes, creditors, or automatic daily estate
 processing are part of this foundation.
 
+Succession continuity now also includes:
+
+- explicit deterministic PersonId-based property transfer transitions;
+- factual birth/death-day validation for new property owners;
+- property-store revision and stale-ownership guards;
+- immutable transfer history exposed to deterministic diagnostics;
+- explicit office succession only after institutional vacancy recognition;
+- explicit estate succession that transfers a named property only after factual
+  death and direct-child candidate validation;
+- no automatic selection, inheritance law, estate administration, or daily
+  succession processing.
+
 ### Daily demographic phase
 
 The shared daily-loop owner is the demographic integration in
@@ -277,6 +299,27 @@ Genealogy validation detects:
 
 Maturity is intentionally derived rather than stored in diagnostics.
 
+Property transfer history includes previous owner, new owner, property, and
+absolute day in snapshots, canonical output, diffs, and invariant validation.
+
+### Succession foundation
+
+Completed:
+
+- deterministic direct-child candidate discovery from PersonId genealogy;
+- factual alive filtering from `DeathAbsoluteDay`;
+- derived calendar/configuration maturity filtering;
+- eligibility-sensitive, delimiter-safe discovery fingerprints;
+- explicit selected-candidate office succession transitions;
+- explicit selected-candidate estate succession transitions;
+- stale world-day, candidate-set, tenure, estate, PersonStore, and property
+  ownership validation;
+- world-owned property transfer history and diagnostics integration.
+
+The candidate foundation is domain-neutral and performs no mutation or automatic
+selection. Office succession composes recognized vacancy. Estate succession
+composes an explicit property transfer. Deep politics remains outside Phase 5.
+
 ## Architecture
 
 `WORLD TRUTH != KNOWLEDGE != INSTITUTIONAL RECOGNITION`
@@ -291,26 +334,11 @@ Events/history are not primary truth.
 
 ## Remaining Phase 5 areas
 
-The Orchestrator must inspect current code before converting these into tasks.
+No implementation area remains on the Phase 5 roadmap after promotion of the
+validated succession integration. The orchestrator must perform the final
+canonical history/remote synchronization audit and then stop Phase 5.
 
-Likely remaining work:
-
-### Death, property and estate
-
-The minimal factual continuity foundation is integrated. Future work may add
-explicit succession transitions only after the ownership and vacancy contracts
-remain stable.
-
-### Institutional continuity and vacancy recognition
-
-The minimal recognition/history foundation is integrated. Factual death still
-does not automatically vacate an office.
-
-### Succession foundation
-
-After genealogy, death/estate and institutions are stable, implement minimal succession foundation.
-
-Deep politics remains Phase 6.
+Deep politics remains Phase 6 and must not be started automatically.
 
 ## Parallelism guidance
 
@@ -318,19 +346,10 @@ Reevaluate actual code before every wave.
 
 Current next wave:
 
-- Minimal succession foundation is the next bounded Phase 5 area, downstream
-  of stable estate/property ownership and institutional vacancy history.
-- Calendar injection, configuration reconciliation, ordering, diagnostics, and
-  `AdvanceDay` integration are complete for the demographic wave.
+- None. Succession is the final bounded Phase 5 wave and is validated on the
+  integration branch.
 
 Institution world integration is complete and is no longer an active parallel lane.
-
-Potentially conflicting:
-
-- death/estate vs succession;
-- vacancy recognition vs institution runtime integration.
-
-Evaluate semantic overlap, not just Git conflicts.
 
 Factual Person death remains separate from institutional vacancy recognition.
 Aggregate demography remains aggregate truth and must not inspect Person/Npc runtime
@@ -371,6 +390,17 @@ Historical demographic integration gates for the earlier demographic wave:
 - `git diff --check`: green;
 - local/upstream/remote integration branch synchronized at
   `eb93c7fcd4283f566f840fa1cde7e0269ed804b6`.
+
+Final succession validation gates:
+
+- Property transfer foundation: `5/5`;
+- Succession candidate foundation: `5/5`;
+- Succession integration: `8/8`;
+- ALL EditMode: `1348/1348`;
+- official Smoke: `5/5`;
+- failures/skips: `0/0`;
+- `git diff --check`: green;
+- no `AdvanceDay` or long-run behavior changes in the succession wave.
 
 Do not automatically begin Phase 6.
 

@@ -128,6 +128,15 @@ public sealed class OfficeStore
         }
     }
 
+    internal IReadOnlyList<OfficeTenureRecord> TenureHistoryInMutationOrder
+    {
+        get
+        {
+            return new ReadOnlyCollection<OfficeTenureRecord>(
+                new List<OfficeTenureRecord>(tenureHistory));
+        }
+    }
+
     public bool TryRegister(OfficeRecord record, out InstitutionFoundationFailure failure)
     {
         if (record == null || record.Id == null || record.InstitutionId == null)
@@ -188,6 +197,31 @@ public sealed class OfficeStore
         return officeId != null
             && records.ContainsKey(officeId.Value)
             && incumbencies.ContainsKey(officeId.Value) == false;
+    }
+
+    internal bool TryGetLatestClosedTenure(
+        OfficeId officeId,
+        out OfficeTenureRecord tenure)
+    {
+        tenure = null;
+        if (officeId == null)
+        {
+            return false;
+        }
+
+        for (int index = tenureHistory.Count - 1; index >= 0; index--)
+        {
+            OfficeTenureRecord candidate = tenureHistory[index];
+            if (candidate != null
+                && candidate.OfficeId == officeId
+                && candidate.IsClosed)
+            {
+                tenure = candidate;
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public bool TryAssignIncumbent(

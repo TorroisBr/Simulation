@@ -4,25 +4,31 @@ using System.Collections.ObjectModel;
 
 /// <summary>
 /// World-owned registry of explicit property ownership records. This minimal
-/// foundation is append-only; transfer is a later explicit domain transition,
-/// not an incidental effect of death or estate opening.
+/// foundation is explicit and world-owned; transfer is an explicit domain
+/// transition, not an incidental effect of death or estate opening.
 /// </summary>
 public sealed class PropertyOwnershipStore
 {
     private readonly PersonStore personStore;
     private readonly Dictionary<string, PropertyOwnershipRecord> recordsByPropertyId =
         new Dictionary<string, PropertyOwnershipRecord>(StringComparer.Ordinal);
+    private readonly List<PropertyOwnershipTransferHistoryRecord> transferHistory =
+        new List<PropertyOwnershipTransferHistoryRecord>();
+    private long revision;
 
     public PropertyOwnershipStore()
     {
     }
 
-    internal PropertyOwnershipStore(PersonStore personStore)
+    public PropertyOwnershipStore(PersonStore personStore)
     {
         this.personStore = personStore ?? throw new ArgumentNullException(nameof(personStore));
     }
 
+    internal PersonStore PersonStoreForWorldBoundary => personStore;
+
     public int Count => recordsByPropertyId.Count;
+    public long Revision => revision;
 
     public IReadOnlyList<PropertyOwnershipRecord> OwnershipRecords
     {
@@ -36,6 +42,17 @@ public sealed class PropertyOwnershipStore
     }
 
     public IReadOnlyList<PropertyOwnershipRecord> Records => OwnershipRecords;
+
+    public IReadOnlyList<PropertyOwnershipTransferHistoryRecord> TransferHistory
+    {
+        get
+        {
+            List<PropertyOwnershipTransferHistoryRecord> snapshot =
+                new List<PropertyOwnershipTransferHistoryRecord>(transferHistory);
+            snapshot.Sort(PropertyOwnershipTransferHistoryRecord.Compare);
+            return new ReadOnlyCollection<PropertyOwnershipTransferHistoryRecord>(snapshot);
+        }
+    }
 
     public bool TryRegister(
         PropertyOwnershipRecord record,
@@ -67,6 +84,16 @@ public sealed class PropertyOwnershipStore
         }
 
         recordsByPropertyId.Add(record.PropertyId.Value, record);
+        if (revision == long.MaxValue)
+        {
+            recordsByPropertyId.Remove(record.PropertyId.Value);
+            failure = PropertyFoundationFailure.Create(
+                PropertyFoundationFailureCode.RevisionOverflow,
+                "The property ownership store revision cannot advance further.");
+            return false;
+        }
+
+        revision++;
         failure = PropertyFoundationFailure.None;
         return true;
     }
@@ -108,5 +135,78 @@ public sealed class PropertyOwnershipStore
         return propertyComparison != 0
             ? propertyComparison
             : string.CompareOrdinal(left.OwnerPersonId.Value, right.OwnerPersonId.Value);
+    }
+
+    internal bool TryApplyTransfer(
+        PropertyOwnershipTransferTransition transition,
+        PropertyOwnershipRecord nextOwnership,
+        PropertyOwnershipTransferHistoryRecord history,
+        out PropertyTransferFailure failure)
+    {
+        if (transition == null || nextOwnership == null || history == null)
+        {
+            failure = PropertyTransferFailure.Create(
+                PropertyTransferFailureCode.InvalidTransition,
+                "A valid property transfer transition is required.");
+            return false;
+        }
+
+        if (revision != transition.ExpectedPropertyStoreRevision)
+        {
+            failure = PropertyTransferFailure.Create(
+                PropertyTransferFailureCode.StalePropertyStore,
+                "The property ownership store changed after the transition was proposed.");
+            return false;
+        }
+
+        if (recordsByPropertyId.TryGetValue(transition.PropertyId.Value, out PropertyOwnershipRecord current) == false
+            || ReferenceEquals(current, transition.ExpectedOwnership) == false
+            || current.OwnerPersonId != transition.ExpectedOwnerPersonId)
+        {
+            failure = PropertyTransferFailure.Create(
+                PropertyTransferFailureCode.StalePropertyOwnership,
+                "The property ownership changed after the transition was proposed.");
+            return false;
+        }
+
+        if (revision == long.MaxValue)
+        {
+            failure = PropertyTransferFailure.Create(
+                PropertyTransferFailureCode.RevisionOverflow,
+                "The property ownership store revision cannot advance further.");
+            return false;
+        }
+
+        recordsByPropertyId[transition.PropertyId.Value] = nextOwnership;
+        transferHistory.Add(history);
+        revision++;
+        failure = PropertyTransferFailure.None;
+        return true;
+    }
+
+    internal bool TryAddHistoricalTransfer(
+        PropertyOwnershipTransferHistoryRecord history,
+        out PropertyTransferFailure failure)
+    {
+        if (history == null)
+        {
+            failure = PropertyTransferFailure.Create(
+                PropertyTransferFailureCode.InvalidTransition,
+                "A valid property transfer history record is required.");
+            return false;
+        }
+
+        if (revision == long.MaxValue)
+        {
+            failure = PropertyTransferFailure.Create(
+                PropertyTransferFailureCode.RevisionOverflow,
+                "The property ownership store revision cannot advance further.");
+            return false;
+        }
+
+        transferHistory.Add(history);
+        revision++;
+        failure = PropertyTransferFailure.None;
+        return true;
     }
 }
