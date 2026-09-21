@@ -1808,14 +1808,15 @@ public static class WorldStateInvariantValidator
 
         if (recognitionState == PoliticalClaimRecognitionState.Unrecognized)
         {
-            if ((recognizingInstitutionId == null) != recognitionAbsoluteDay.HasValue
+            bool hasRecognitionPerspective = string.IsNullOrWhiteSpace(recognizingInstitutionId) == false;
+            if (hasRecognitionPerspective != recognitionAbsoluteDay.HasValue
                 || (recognitionAbsoluteDay.HasValue
                     && (recognitionAbsoluteDay.Value < createdAbsoluteDay
                         || recognitionAbsoluteDay.Value > observedAbsoluteDay)))
             {
                 AddError(issues, "PoliticalKnowledgeClaimStateInvalid", identity, "An unrecognized political knowledge claim must carry either no recognition perspective or a valid institution and recognition day.");
             }
-            else if (recognizingInstitutionId != null
+            else if (hasRecognitionPerspective
                 && hasInstitutionCatalog
                 && ContainsString(institutionIds, recognizingInstitutionId) == false)
             {
