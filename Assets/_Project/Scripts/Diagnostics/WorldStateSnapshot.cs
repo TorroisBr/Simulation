@@ -33,6 +33,7 @@ public sealed class WorldStateSnapshotContext
     public IEnumerable<PoliticalDecisionRecord> PoliticalDecisions { get; }
     public IEnumerable<PoliticalKnowledgeRuntime> PoliticalKnowledgeRuntimes { get; }
     public long? PoliticalKnowledgeRevision { get; }
+    public CrimeSocialAppraisalWorldState CrimeSocialAppraisal { get; }
 
     public WorldStateSnapshotContext(
         SimulationTime simulationTime = null,
@@ -63,7 +64,8 @@ public sealed class WorldStateSnapshotContext
         IEnumerable<PoliticalDecisionRecord> politicalDecisions = null,
         IEnumerable<PoliticalKnowledgeRuntime> politicalKnowledgeRuntimes = null,
         long? politicalKnowledgeRevision = null,
-        IEnumerable<PoliticalClaimRecognitionRecord> politicalClaimRecognitions = null)
+        IEnumerable<PoliticalClaimRecognitionRecord> politicalClaimRecognitions = null,
+        CrimeSocialAppraisalWorldState crimeSocialAppraisal = null)
     {
         SimulationTime = simulationTime;
         Calendar = calendar ?? (calendarDefinition != null ? new SimulationCalendar(calendarDefinition) : null);
@@ -92,6 +94,7 @@ public sealed class WorldStateSnapshotContext
         PoliticalDecisions = politicalDecisions ?? Array.Empty<PoliticalDecisionRecord>();
         PoliticalKnowledgeRuntimes = politicalKnowledgeRuntimes;
         PoliticalKnowledgeRevision = politicalKnowledgeRevision;
+        CrimeSocialAppraisal = crimeSocialAppraisal;
         Parentages = parentages
             ?? genealogyStore?.Records
             ?? Array.Empty<ParentageRecord>();
@@ -140,6 +143,12 @@ public sealed class WorldStateSnapshot
     public int PoliticalKnowledgeHolderCount => PoliticalKnowledge.Count;
     public long PoliticalKnowledgeRevision { get; }
     public bool HasPoliticalKnowledgeState { get; }
+    public IReadOnlyList<WorldStateTheftOutcomeSnapshot> TheftOutcomes { get; }
+    public int TheftOutcomeCount => TheftOutcomes.Count;
+    public IReadOnlyList<WorldStateCrimeKnowledgeSnapshot> CrimeKnowledge { get; }
+    public int CrimeKnowledgeCount => CrimeKnowledge.Count;
+    public IReadOnlyList<WorldStateSocialReactionSnapshot> SocialReactions { get; }
+    public int SocialReactionCount => SocialReactions.Count;
     public WorldStateSpatialSnapshot Spatial { get; }
     public IReadOnlyList<WorldStateSiteSnapshot> Sites { get; }
     public IReadOnlyList<WorldStateExpeditionSnapshot> Expeditions { get; }
@@ -175,7 +184,10 @@ public sealed class WorldStateSnapshot
         long politicalKnowledgeRevision = 0L,
         bool hasPoliticalKnowledgeState = false,
         IReadOnlyDictionary<string, string> officeInstitutionIds = null,
-        IEnumerable<WorldStatePoliticalClaimRecognitionSnapshot> politicalClaimRecognitions = null)
+        IEnumerable<WorldStatePoliticalClaimRecognitionSnapshot> politicalClaimRecognitions = null,
+        IEnumerable<WorldStateTheftOutcomeSnapshot> theftOutcomes = null,
+        IEnumerable<WorldStateCrimeKnowledgeSnapshot> crimeKnowledge = null,
+        IEnumerable<WorldStateSocialReactionSnapshot> socialReactions = null)
     {
         Metadata = new WorldStateSnapshotMetadata(absoluteDay, calendarDate);
         Npcs = SnapshotCollections.CopySorted(npcs, npc => npc?.RuntimeId);
@@ -230,6 +242,13 @@ public sealed class WorldStateSnapshot
             knowledge => knowledge?.HolderStableId);
         PoliticalKnowledgeRevision = politicalKnowledgeRevision;
         HasPoliticalKnowledgeState = hasPoliticalKnowledgeState || politicalKnowledge != null;
+        TheftOutcomes = SnapshotCollections.CopySorted(theftOutcomes, outcome => outcome?.OutcomeId);
+        CrimeKnowledge = SnapshotCollections.CopySorted(
+            crimeKnowledge,
+            observation => observation == null
+                ? null
+                : observation.EvaluatorPersonId + "\u001f" + observation.OutcomeId);
+        SocialReactions = SnapshotCollections.CopySorted(socialReactions, reaction => reaction?.ReactionId);
     }
 
     private static IReadOnlyList<WorldStateParentageSnapshot> SortParentages(
@@ -785,6 +804,141 @@ public sealed class WorldStatePoliticalKnowledgeObservationSnapshot
         SourcePersonId = sourcePersonId;
         SourceInstitutionId = sourceInstitutionId;
         StateKey = stateKey;
+    }
+}
+
+public sealed class WorldStateTheftOutcomeSnapshot
+{
+    public string OutcomeId { get; }
+    public string PerpetratorPersonId { get; }
+    public string VictimPersonId { get; }
+    public int LossAmount { get; }
+    public long OccurredAbsoluteDay { get; }
+    public string OriginDecisionId { get; }
+
+    public WorldStateTheftOutcomeSnapshot(
+        string outcomeId,
+        string perpetratorPersonId,
+        string victimPersonId,
+        int lossAmount,
+        long occurredAbsoluteDay,
+        string originDecisionId)
+    {
+        OutcomeId = outcomeId;
+        PerpetratorPersonId = perpetratorPersonId;
+        VictimPersonId = victimPersonId;
+        LossAmount = lossAmount;
+        OccurredAbsoluteDay = occurredAbsoluteDay;
+        OriginDecisionId = originDecisionId;
+    }
+}
+
+public sealed class WorldStateCrimeKnowledgeSnapshot
+{
+    public string EvaluatorPersonId { get; }
+    public string OutcomeId { get; }
+    public CrimeKnowledgeRole Role { get; }
+    public bool KnowsLoss { get; }
+    public SocialPerceivedAttributionKind PerceivedPerpetratorKind { get; }
+    public string PerceivedPerpetratorPersonId { get; }
+    public string PerceivedPerpetratorInstitutionId { get; }
+    public string KnownInvestigatorPersonId { get; }
+    public string KnownInvestigatorInstitutionId { get; }
+    public SocialCognitiveBasisKind CognitiveBasisKind { get; }
+    public string CognitiveBasisReference { get; }
+    public string CognitiveBasisSourcePersonId { get; }
+    public string CognitiveBasisSourceInstitutionId { get; }
+    public long ObservedAbsoluteDay { get; }
+
+    public WorldStateCrimeKnowledgeSnapshot(
+        string evaluatorPersonId,
+        string outcomeId,
+        CrimeKnowledgeRole role,
+        bool knowsLoss,
+        SocialPerceivedAttributionKind perceivedPerpetratorKind,
+        string perceivedPerpetratorPersonId,
+        string perceivedPerpetratorInstitutionId,
+        string knownInvestigatorPersonId,
+        string knownInvestigatorInstitutionId,
+        SocialCognitiveBasisKind cognitiveBasisKind,
+        string cognitiveBasisReference,
+        string cognitiveBasisSourcePersonId,
+        string cognitiveBasisSourceInstitutionId,
+        long observedAbsoluteDay)
+    {
+        EvaluatorPersonId = evaluatorPersonId;
+        OutcomeId = outcomeId;
+        Role = role;
+        KnowsLoss = knowsLoss;
+        PerceivedPerpetratorKind = perceivedPerpetratorKind;
+        PerceivedPerpetratorPersonId = perceivedPerpetratorPersonId;
+        PerceivedPerpetratorInstitutionId = perceivedPerpetratorInstitutionId;
+        KnownInvestigatorPersonId = knownInvestigatorPersonId;
+        KnownInvestigatorInstitutionId = knownInvestigatorInstitutionId;
+        CognitiveBasisKind = cognitiveBasisKind;
+        CognitiveBasisReference = cognitiveBasisReference;
+        CognitiveBasisSourcePersonId = cognitiveBasisSourcePersonId;
+        CognitiveBasisSourceInstitutionId = cognitiveBasisSourceInstitutionId;
+        ObservedAbsoluteDay = observedAbsoluteDay;
+    }
+}
+
+public sealed class WorldStateSocialReactionSnapshot
+{
+    public string ReactionId { get; }
+    public string EvaluatorPersonId { get; }
+    public string SourceDomain { get; }
+    public string SourceStableId { get; }
+    public SocialReactionTargetKind TargetKind { get; }
+    public string TargetStableId { get; }
+    public SocialPerceivedAttributionKind AttributionKind { get; }
+    public string AttributionPersonId { get; }
+    public string AttributionInstitutionId { get; }
+    public SocialReactionValence Valence { get; }
+    public SocialReactionSalience Salience { get; }
+    public SocialCognitiveBasisKind CognitiveBasisKind { get; }
+    public string CognitiveBasisReference { get; }
+    public string CognitiveBasisSourcePersonId { get; }
+    public string CognitiveBasisSourceInstitutionId { get; }
+    public long CreatedAbsoluteDay { get; }
+    public string SupersedesReactionId { get; }
+
+    public WorldStateSocialReactionSnapshot(
+        string reactionId,
+        string evaluatorPersonId,
+        string sourceDomain,
+        string sourceStableId,
+        SocialReactionTargetKind targetKind,
+        string targetStableId,
+        SocialPerceivedAttributionKind attributionKind,
+        string attributionPersonId,
+        string attributionInstitutionId,
+        SocialReactionValence valence,
+        SocialReactionSalience salience,
+        SocialCognitiveBasisKind cognitiveBasisKind,
+        string cognitiveBasisReference,
+        string cognitiveBasisSourcePersonId,
+        string cognitiveBasisSourceInstitutionId,
+        long createdAbsoluteDay,
+        string supersedesReactionId)
+    {
+        ReactionId = reactionId;
+        EvaluatorPersonId = evaluatorPersonId;
+        SourceDomain = sourceDomain;
+        SourceStableId = sourceStableId;
+        TargetKind = targetKind;
+        TargetStableId = targetStableId;
+        AttributionKind = attributionKind;
+        AttributionPersonId = attributionPersonId;
+        AttributionInstitutionId = attributionInstitutionId;
+        Valence = valence;
+        Salience = salience;
+        CognitiveBasisKind = cognitiveBasisKind;
+        CognitiveBasisReference = cognitiveBasisReference;
+        CognitiveBasisSourcePersonId = cognitiveBasisSourcePersonId;
+        CognitiveBasisSourceInstitutionId = cognitiveBasisSourceInstitutionId;
+        CreatedAbsoluteDay = createdAbsoluteDay;
+        SupersedesReactionId = supersedesReactionId;
     }
 }
 
@@ -1479,6 +1633,12 @@ public static class WorldStateSnapshotBuilder
             BuildPoliticalDecisionSnapshots(context.PoliticalDecisions);
         List<WorldStatePoliticalKnowledgeSnapshot> politicalKnowledge =
             BuildPoliticalKnowledgeSnapshots(context.PoliticalKnowledgeRuntimes);
+        List<WorldStateTheftOutcomeSnapshot> theftOutcomes =
+            BuildTheftOutcomeSnapshots(context.CrimeSocialAppraisal);
+        List<WorldStateCrimeKnowledgeSnapshot> crimeKnowledge =
+            BuildCrimeKnowledgeSnapshots(context.CrimeSocialAppraisal);
+        List<WorldStateSocialReactionSnapshot> socialReactions =
+            BuildSocialReactionSnapshots(context.CrimeSocialAppraisal);
         List<WorldStateExpeditionSnapshot> expeditions = BuildExpeditionSnapshots(context.ExpeditionStore);
         WorldStateCalendarSnapshot calendarDate = null;
         if (context.Calendar != null && context.SimulationTime != null)
@@ -1515,7 +1675,107 @@ public static class WorldStateSnapshotBuilder
             context.PoliticalKnowledgeRuntimes != null
                 || context.PoliticalKnowledgeRevision.HasValue,
             context.OfficeInstitutionIds ?? BuildOfficeInstitutionIds(context.OfficeStore),
-            politicalClaimRecognitions);
+            politicalClaimRecognitions,
+            theftOutcomes,
+            crimeKnowledge,
+            socialReactions);
+    }
+
+    private static List<WorldStateTheftOutcomeSnapshot> BuildTheftOutcomeSnapshots(
+        CrimeSocialAppraisalWorldState worldState)
+    {
+        List<WorldStateTheftOutcomeSnapshot> result = new List<WorldStateTheftOutcomeSnapshot>();
+        if (worldState?.TheftOutcomes?.Outcomes == null)
+        {
+            return result;
+        }
+
+        foreach (TheftOutcome outcome in worldState.TheftOutcomes.Outcomes)
+        {
+            if (outcome != null)
+            {
+                result.Add(new WorldStateTheftOutcomeSnapshot(
+                    outcome.OutcomeId.Value,
+                    outcome.PerpetratorPersonId.Value,
+                    outcome.VictimPersonId.Value,
+                    outcome.LossAmount,
+                    outcome.OccurredAbsoluteDay,
+                    outcome.OriginDecisionId));
+            }
+        }
+
+        return result;
+    }
+
+    private static List<WorldStateCrimeKnowledgeSnapshot> BuildCrimeKnowledgeSnapshots(
+        CrimeSocialAppraisalWorldState worldState)
+    {
+        List<WorldStateCrimeKnowledgeSnapshot> result = new List<WorldStateCrimeKnowledgeSnapshot>();
+        if (worldState?.CrimeKnowledge?.CurrentObservations == null)
+        {
+            return result;
+        }
+
+        foreach (CrimeKnowledgeObservation observation in worldState.CrimeKnowledge.CurrentObservations)
+        {
+            if (observation != null)
+            {
+                result.Add(new WorldStateCrimeKnowledgeSnapshot(
+                    observation.EvaluatorPersonId.Value,
+                    observation.OutcomeId.Value,
+                    observation.Role,
+                    observation.KnowsLoss,
+                    observation.PerceivedPerpetrator.Kind,
+                    observation.PerceivedPerpetrator.PersonId?.Value,
+                    observation.PerceivedPerpetrator.InstitutionId?.Value,
+                    observation.KnownInvestigatorPersonId?.Value,
+                    observation.KnownInvestigatorInstitutionId?.Value,
+                    observation.CognitiveBasis.Kind,
+                    observation.CognitiveBasis.Reference,
+                    observation.CognitiveBasis.SourcePersonId?.Value,
+                    observation.CognitiveBasis.SourceInstitutionId?.Value,
+                    observation.ObservedAbsoluteDay));
+            }
+        }
+
+        return result;
+    }
+
+    private static List<WorldStateSocialReactionSnapshot> BuildSocialReactionSnapshots(
+        CrimeSocialAppraisalWorldState worldState)
+    {
+        List<WorldStateSocialReactionSnapshot> result = new List<WorldStateSocialReactionSnapshot>();
+        if (worldState?.SocialReactions?.HistoricalReactions == null)
+        {
+            return result;
+        }
+
+        foreach (SocialReaction reaction in worldState.SocialReactions.HistoricalReactions)
+        {
+            if (reaction != null)
+            {
+                result.Add(new WorldStateSocialReactionSnapshot(
+                    reaction.ReactionId.Value,
+                    reaction.EvaluatorPersonId.Value,
+                    reaction.Source.Domain,
+                    reaction.Source.StableId,
+                    reaction.Target.Kind,
+                    reaction.Target.StableId,
+                    reaction.PerceivedAttribution.Kind,
+                    reaction.PerceivedAttribution.PersonId?.Value,
+                    reaction.PerceivedAttribution.InstitutionId?.Value,
+                    reaction.Valence,
+                    reaction.Salience,
+                    reaction.CognitiveBasis.Kind,
+                    reaction.CognitiveBasis.Reference,
+                    reaction.CognitiveBasis.SourcePersonId?.Value,
+                    reaction.CognitiveBasis.SourceInstitutionId?.Value,
+                    reaction.CreatedAbsoluteDay,
+                    reaction.SupersedesReactionId?.Value));
+            }
+        }
+
+        return result;
     }
 
     private static List<WorldStatePoliticalClaimSnapshot> BuildPoliticalClaimSnapshots(

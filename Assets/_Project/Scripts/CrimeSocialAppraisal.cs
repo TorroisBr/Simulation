@@ -378,12 +378,12 @@ public sealed class CrimeKnowledgeStore
         PersonStore personStore,
         TheftOutcomeStore outcomeStore,
         SimulationTime simulationTime,
-        InstitutionStore institutionStore = null)
+        InstitutionStore institutionStore)
     {
         this.personStore = personStore ?? throw new ArgumentNullException(nameof(personStore));
         this.outcomeStore = outcomeStore ?? throw new ArgumentNullException(nameof(outcomeStore));
         this.simulationTime = simulationTime ?? throw new ArgumentNullException(nameof(simulationTime));
-        this.institutionStore = institutionStore;
+        this.institutionStore = institutionStore ?? throw new ArgumentNullException(nameof(institutionStore));
         if (ReferenceEquals(personStore, outcomeStore.PersonStore) == false
             || ReferenceEquals(simulationTime, outcomeStore.SimulationTime) == false)
         {
@@ -418,7 +418,7 @@ public sealed class CrimeKnowledgeStore
             && currentByKey.TryGetValue(Key(evaluatorPersonId, outcomeId), out observation);
     }
 
-    public bool TryRecord(
+    public bool CanRecord(
         CrimeKnowledgeObservation observation,
         out CrimeKnowledgeStoreFailure failure)
     {
@@ -444,6 +444,32 @@ public sealed class CrimeKnowledgeStore
             failure = CrimeKnowledgeStoreFailure.Create(
                 CrimeKnowledgeStoreFailureCode.OutcomeNotRegistered,
                 "The crime knowledge outcome is not registered.");
+            return false;
+        }
+
+        return CanRecordAgainstOutcome(observation, outcome, out failure);
+    }
+
+    internal bool CanRecordAgainstOutcome(
+        CrimeKnowledgeObservation observation,
+        TheftOutcome outcome,
+        out CrimeKnowledgeStoreFailure failure)
+    {
+        failure = CrimeKnowledgeStoreFailure.None;
+        if (observation == null || outcome == null
+            || observation.OutcomeId.Equals(outcome.OutcomeId) == false)
+        {
+            failure = CrimeKnowledgeStoreFailure.Create(
+                CrimeKnowledgeStoreFailureCode.OutcomeNotRegistered,
+                "The crime knowledge outcome does not match the supplied outcome.");
+            return false;
+        }
+
+        if (personStore.TryGet(observation.EvaluatorPersonId, out _) == false)
+        {
+            failure = CrimeKnowledgeStoreFailure.Create(
+                CrimeKnowledgeStoreFailureCode.EvaluatorNotRegistered,
+                "The crime knowledge evaluator PersonId is not registered.");
             return false;
         }
 
@@ -491,7 +517,6 @@ public sealed class CrimeKnowledgeStore
         }
 
         if (observation.PerceivedPerpetrator.Kind == SocialPerceivedAttributionKind.BelievedInstitution
-            && institutionStore != null
             && institutionStore.TryGet(observation.PerceivedPerpetrator.InstitutionId, out _) == false)
         {
             failure = CrimeKnowledgeStoreFailure.Create(
@@ -510,7 +535,6 @@ public sealed class CrimeKnowledgeStore
         }
 
         if (observation.KnownInvestigatorInstitutionId != null
-            && institutionStore != null
             && institutionStore.TryGet(observation.KnownInvestigatorInstitutionId, out _) == false)
         {
             failure = CrimeKnowledgeStoreFailure.Create(
@@ -531,7 +555,20 @@ public sealed class CrimeKnowledgeStore
             return false;
         }
 
-        currentByKey[key] = observation;
+        return true;
+    }
+
+    public bool TryRecord(
+        CrimeKnowledgeObservation observation,
+        out CrimeKnowledgeStoreFailure failure)
+    {
+        if (CanRecord(observation, out failure) == false)
+        {
+            return false;
+        }
+
+        currentByKey[Key(observation.EvaluatorPersonId, observation.OutcomeId)] = observation;
+        failure = CrimeKnowledgeStoreFailure.None;
         return true;
     }
 
@@ -540,6 +577,17 @@ public sealed class CrimeKnowledgeStore
         return evaluatorPersonId != null
             && outcomeId != null
             && currentByKey.Remove(Key(evaluatorPersonId, outcomeId));
+    }
+
+    internal bool TryRestore(CrimeKnowledgeObservation observation)
+    {
+        if (observation == null)
+        {
+            return false;
+        }
+
+        currentByKey[Key(observation.EvaluatorPersonId, observation.OutcomeId)] = observation;
+        return true;
     }
 
     private static string Key(PersonId evaluatorPersonId, TheftOutcomeId outcomeId)
@@ -576,11 +624,31 @@ public sealed class CrimeSocialAppraisalIntegration : ITheftOutcomeSink
 
     public bool CanAcceptTheftOutcome(TheftOutcome outcome)
     {
-        return outcomeStore.CanRecord(outcome, out _);
+        if (outcomeStore.CanRecord(outcome, out _) == false)
+        {
+            return false;
+        }
+
+        CrimeKnowledgeObservation victimKnowledge = CrimeKnowledgeObservation.VictimKnowsLoss(
+            outcome,
+            new SocialCognitiveBasis(
+                SocialCognitiveBasisKind.DirectExperience,
+                "theft-loss"),
+            outcome.OccurredAbsoluteDay);
+        return knowledgeStore.CanRecordAgainstOutcome(
+                victimKnowledge,
+                outcome,
+                out _)
+            && CanAppraiseKnowledge(victimKnowledge, outcome, out _);
     }
 
     public bool TryAcceptTheftOutcome(TheftOutcome outcome)
     {
+        if (CanAcceptTheftOutcome(outcome) == false)
+        {
+            return false;
+        }
+
         if (outcomeStore.TryRecord(outcome, out _) == false)
         {
             return false;
@@ -592,32 +660,21 @@ public sealed class CrimeSocialAppraisalIntegration : ITheftOutcomeSink
                 SocialCognitiveBasisKind.DirectExperience,
                 "theft-loss"),
             outcome.OccurredAbsoluteDay);
-        if (TryRecordKnowledgeAndAppraise(victimKnowledge, out _) == true)
+        if (TryRecordKnowledgeAndAppraise(victimKnowledge, out _) == false)
         {
-            return true;
+            outcomeStore.TryRemove(outcome.OutcomeId);
+            return false;
         }
 
-        foreach (SocialReaction reaction in reactionStore.HistoricalReactions)
-        {
-            if (reaction.EvaluatorPersonId == victimKnowledge.EvaluatorPersonId
-                && reaction.Source.Domain == "crime.theft"
-                && reaction.Source.StableId == outcome.OutcomeId.Value)
-            {
-                reactionStore.TryRemove(reaction.ReactionId);
-            }
-        }
-
-        knowledgeStore.TryRemove(victimKnowledge.EvaluatorPersonId, victimKnowledge.OutcomeId);
-        outcomeStore.TryRemove(outcome.OutcomeId);
-        return false;
+        return true;
     }
 
-    public bool TryRecordKnowledgeAndAppraise(
+    public bool CanRecordKnowledgeAndAppraise(
         CrimeKnowledgeObservation observation,
         out SocialReactionStoreFailure failure)
     {
         failure = SocialReactionStoreFailure.None;
-        if (knowledgeStore.TryRecord(observation, out CrimeKnowledgeStoreFailure knowledgeFailure) == false)
+        if (knowledgeStore.CanRecord(observation, out CrimeKnowledgeStoreFailure knowledgeFailure) == false)
         {
             failure = SocialReactionStoreFailure.Create(
                 SocialReactionStoreFailureCode.InvalidReaction,
@@ -630,6 +687,44 @@ public sealed class CrimeSocialAppraisalIntegration : ITheftOutcomeSink
             failure = SocialReactionStoreFailure.Create(
                 SocialReactionStoreFailureCode.InvalidReaction,
                 "Theft outcome is not registered.");
+            return false;
+        }
+
+        return CanAppraiseKnowledge(observation, outcome, out failure);
+    }
+
+    public bool TryRecordKnowledgeAndAppraise(
+        CrimeKnowledgeObservation observation,
+        out SocialReactionStoreFailure failure)
+    {
+        if (CanRecordKnowledgeAndAppraise(observation, out failure) == false)
+        {
+            return false;
+        }
+
+        if (outcomeStore.TryGet(observation.OutcomeId, out TheftOutcome outcome) == false)
+        {
+            failure = SocialReactionStoreFailure.Create(
+                SocialReactionStoreFailureCode.InvalidReaction,
+                "Theft outcome is not registered.");
+            return false;
+        }
+
+        knowledgeStore.TryGet(
+            observation.EvaluatorPersonId,
+            observation.OutcomeId,
+            out CrimeKnowledgeObservation previousKnowledge);
+        HashSet<string> existingReactionIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (SocialReaction existingReaction in reactionStore.HistoricalReactions)
+        {
+            existingReactionIds.Add(existingReaction.ReactionId.Value);
+        }
+
+        if (knowledgeStore.TryRecord(observation, out CrimeKnowledgeStoreFailure knowledgeFailure) == false)
+        {
+            failure = SocialReactionStoreFailure.Create(
+                SocialReactionStoreFailureCode.InvalidReaction,
+                knowledgeFailure.ToString());
             return false;
         }
 
@@ -655,6 +750,7 @@ public sealed class CrimeSocialAppraisalIntegration : ITheftOutcomeSink
                 out _,
                 out failure) == false)
             {
+                RollbackObservation(observation, previousKnowledge, existingReactionIds);
                 return false;
             }
         }
@@ -676,7 +772,7 @@ public sealed class CrimeSocialAppraisalIntegration : ITheftOutcomeSink
             observation.EvaluatorPersonId,
             investigationSource,
             investigatorTarget);
-        return reactionStore.TryRecordAppraisal(
+        if (reactionStore.TryRecordAppraisal(
             observation.EvaluatorPersonId,
             investigationSource,
             investigatorTarget,
@@ -690,7 +786,103 @@ public sealed class CrimeSocialAppraisalIntegration : ITheftOutcomeSink
             observation.ObservedAbsoluteDay,
             investigatorPrevious,
             out _,
+            out failure) == false)
+        {
+            RollbackObservation(observation, previousKnowledge, existingReactionIds);
+            return false;
+        }
+
+        return true;
+    }
+
+    private bool CanAppraiseKnowledge(
+        CrimeKnowledgeObservation observation,
+        TheftOutcome outcome,
+        out SocialReactionStoreFailure failure)
+    {
+        failure = SocialReactionStoreFailure.None;
+        SocialReactionTarget theftTarget = SocialReactionTarget.ForTheftOutcome(
+            outcome.OutcomeId.Value);
+        if (observation.KnowsLoss)
+        {
+            SocialSourceReference theftSource = new SocialSourceReference(
+                "crime.theft",
+                outcome.OutcomeId.Value);
+            SocialReactionId previous = FindCurrent(
+                observation.EvaluatorPersonId,
+                theftSource,
+                theftTarget);
+            if (reactionStore.CanRecordAppraisal(
+                observation.EvaluatorPersonId,
+                theftSource,
+                theftTarget,
+                observation.PerceivedPerpetrator,
+                observation.CognitiveBasis,
+                SocialAppraisalResult.Reaction(
+                    SocialReactionValence.Negative,
+                    SocialReactionSalience.High),
+                observation.ObservedAbsoluteDay,
+                previous,
+                out failure) == false)
+            {
+                return false;
+            }
+        }
+
+        SocialReactionTarget investigatorTarget = observation.KnownInvestigatorPersonId != null
+            ? SocialReactionTarget.ForPerson(observation.KnownInvestigatorPersonId)
+            : observation.KnownInvestigatorInstitutionId != null
+                ? SocialReactionTarget.ForInstitution(observation.KnownInvestigatorInstitutionId)
+                : null;
+        if (investigatorTarget == null)
+        {
+            return true;
+        }
+
+        SocialSourceReference investigationSource = new SocialSourceReference(
+            "crime.investigation",
+            outcome.OutcomeId.Value);
+        SocialReactionId investigatorPrevious = FindCurrent(
+            observation.EvaluatorPersonId,
+            investigationSource,
+            investigatorTarget);
+        return reactionStore.CanRecordAppraisal(
+            observation.EvaluatorPersonId,
+            investigationSource,
+            investigatorTarget,
+            SocialPerceivedAttribution.NotApplicable(),
+            observation.CognitiveBasis,
+            SocialAppraisalResult.Reaction(
+                observation.Role == CrimeKnowledgeRole.Perpetrator
+                    ? SocialReactionValence.Negative
+                    : SocialReactionValence.Positive,
+                SocialReactionSalience.Medium),
+            observation.ObservedAbsoluteDay,
+            investigatorPrevious,
             out failure);
+    }
+
+    private void RollbackObservation(
+        CrimeKnowledgeObservation observation,
+        CrimeKnowledgeObservation previousKnowledge,
+        HashSet<string> existingReactionIds)
+    {
+        foreach (SocialReaction reaction in reactionStore.HistoricalReactions)
+        {
+            if (existingReactionIds.Contains(reaction.ReactionId.Value) == false)
+            {
+                reactionStore.TryRemove(reaction.ReactionId);
+            }
+        }
+
+        if (previousKnowledge == null)
+        {
+            knowledgeStore.TryRemove(observation.EvaluatorPersonId, observation.OutcomeId);
+        }
+        else
+        {
+            knowledgeStore.TryRestore(previousKnowledge);
+        }
     }
 
     private SocialReactionId FindCurrent(

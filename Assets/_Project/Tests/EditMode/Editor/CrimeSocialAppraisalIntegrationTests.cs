@@ -10,7 +10,7 @@ public sealed class CrimeSocialAppraisalIntegrationTests
         TheftOutcomeStore outcomes = new TheftOutcomeStore(persons, time);
         TheftOutcome outcome = CreateOutcome(maria, joao, "theft.maria.1");
         Assert.That(outcomes.TryRecord(outcome, out CrimeOutcomeStoreFailure outcomeFailure), Is.True, outcomeFailure.ToString());
-        CrimeKnowledgeStore knowledge = new CrimeKnowledgeStore(persons, outcomes, time);
+        CrimeKnowledgeStore knowledge = new CrimeKnowledgeStore(persons, outcomes, time, new InstitutionStore());
         SocialReactionStore reactions = new SocialReactionStore(persons, time);
         CrimeSocialAppraisalIntegration integration = new CrimeSocialAppraisalIntegration(outcomes, knowledge, reactions);
 
@@ -48,7 +48,7 @@ public sealed class CrimeSocialAppraisalIntegrationTests
         TheftOutcomeStore outcomes = new TheftOutcomeStore(persons, time);
         TheftOutcome outcome = CreateOutcome(maria, joao, "theft.false-belief");
         outcomes.TryRecord(outcome, out _);
-        CrimeKnowledgeStore knowledge = new CrimeKnowledgeStore(persons, outcomes, time);
+        CrimeKnowledgeStore knowledge = new CrimeKnowledgeStore(persons, outcomes, time, new InstitutionStore());
         SocialReactionStore reactions = new SocialReactionStore(persons, time);
         CrimeSocialAppraisalIntegration integration = new CrimeSocialAppraisalIntegration(outcomes, knowledge, reactions);
 
@@ -74,7 +74,7 @@ public sealed class CrimeSocialAppraisalIntegrationTests
         TheftOutcomeStore outcomes = new TheftOutcomeStore(persons, time);
         TheftOutcome outcome = CreateOutcome(maria, joao, "theft.investigation");
         outcomes.TryRecord(outcome, out _);
-        CrimeKnowledgeStore knowledge = new CrimeKnowledgeStore(persons, outcomes, time);
+        CrimeKnowledgeStore knowledge = new CrimeKnowledgeStore(persons, outcomes, time, new InstitutionStore());
         SocialReactionStore reactions = new SocialReactionStore(persons, time);
         CrimeSocialAppraisalIntegration integration = new CrimeSocialAppraisalIntegration(outcomes, knowledge, reactions);
 
@@ -140,7 +140,7 @@ public sealed class CrimeSocialAppraisalIntegrationTests
         TheftOutcomeStore outcomes = new TheftOutcomeStore(persons, time);
         CrimeSocialAppraisalIntegration integration = new CrimeSocialAppraisalIntegration(
             outcomes,
-            new CrimeKnowledgeStore(persons, outcomes, time),
+            new CrimeKnowledgeStore(persons, outcomes, time, new InstitutionStore()),
             new SocialReactionStore(persons, time));
         CityRuntime city = SimulationTestFactory.CreateCity("crime-social-city", "crime-social-location");
         SimulationRuntime world = new SimulationRuntime(
@@ -203,7 +203,7 @@ public sealed class CrimeSocialAppraisalIntegrationTests
         TheftOutcomeStore outcomes = new TheftOutcomeStore(persons, time);
         TheftOutcome outcome = CreateOutcome(maria, joao, "theft-guards");
         outcomes.TryRecord(outcome, out _);
-        CrimeKnowledgeStore knowledge = new CrimeKnowledgeStore(persons, outcomes, time);
+        CrimeKnowledgeStore knowledge = new CrimeKnowledgeStore(persons, outcomes, time, new InstitutionStore());
 
         CrimeKnowledgeObservation beforeOutcome = new CrimeKnowledgeObservation(
             maria,
@@ -246,6 +246,77 @@ public sealed class CrimeSocialAppraisalIntegrationTests
         Assert.That(world.CrimeSocialAppraisal.TheftOutcomes.PersonStore, Is.SameAs(world.PersonStore));
         Assert.That(world.CrimeSocialAppraisal.CrimeKnowledge.OutcomeStore, Is.SameAs(world.CrimeSocialAppraisal.TheftOutcomes));
         Assert.That(world.CrimeSocialAppraisal.SocialReactions.PersonStore, Is.SameAs(world.PersonStore));
+    }
+
+    [Test]
+    public void CrimeAppraisalIsRepresentedInDeterministicDiagnostics()
+    {
+        PersonStore persons = CreatePersons(out PersonId maria, out PersonId joao, out _);
+        InstitutionStore institutions = new InstitutionStore();
+        SimulationTime time = new SimulationTime(200L);
+        CrimeSocialAppraisalWorldState state = new CrimeSocialAppraisalWorldState(
+            persons,
+            institutions,
+            time);
+        TheftOutcome outcome = CreateOutcome(maria, joao, "theft-diagnostics");
+
+        Assert.That(state.Integration.TryAcceptTheftOutcome(outcome), Is.True);
+        WorldStateSnapshot snapshot = WorldStateDiagnostics.Capture(new WorldStateSnapshotContext(
+            simulationTime: time,
+            personStore: persons,
+            institutionStore: institutions,
+            crimeSocialAppraisal: state));
+
+        Assert.That(snapshot.TheftOutcomeCount, Is.EqualTo(1));
+        Assert.That(snapshot.CrimeKnowledgeCount, Is.EqualTo(1));
+        Assert.That(snapshot.SocialReactionCount, Is.EqualTo(1));
+        Assert.That(WorldStateDiagnostics.Export(snapshot), Does.Contain("THEFT_OUTCOME|"));
+        Assert.That(WorldStateDiagnostics.Export(snapshot), Does.Contain("CRIME_KNOWLEDGE|"));
+        Assert.That(WorldStateDiagnostics.Export(snapshot), Does.Contain("SOCIAL_REACTION|"));
+        Assert.That(WorldStateDiagnostics.Validate(snapshot).HasErrors, Is.False);
+
+        Assert.That(state.Integration.TryAcceptTheftOutcome(
+            CreateOutcome(maria, joao, "theft-diagnostics-2")), Is.True);
+        WorldStateSnapshot after = WorldStateDiagnostics.Capture(new WorldStateSnapshotContext(
+            simulationTime: time,
+            personStore: persons,
+            institutionStore: institutions,
+            crimeSocialAppraisal: state));
+        bool foundOutcomeChange = false;
+        foreach (WorldStateDifference difference in WorldStateDiagnostics.Compare(snapshot, after).Differences)
+        {
+            if (difference.Section == "TheftOutcome")
+            {
+                foundOutcomeChange = true;
+                break;
+            }
+        }
+
+        Assert.That(foundOutcomeChange, Is.True);
+    }
+
+    [Test]
+    public void SimulationRuntimeRejectsCrimeSystemBoundToForeignAppraisalWorld()
+    {
+        PersonStore foreignPersons = CreatePersons(out _, out _, out _);
+        SimulationTime foreignTime = new SimulationTime();
+        CrimeSocialAppraisalWorldState foreignState = new CrimeSocialAppraisalWorldState(
+            foreignPersons,
+            new InstitutionStore(),
+            foreignTime);
+        CrimeSystem crime = new CrimeSystem(
+            new JusticeSystem(null, null, null, null),
+            null,
+            null,
+            simulationTime: foreignTime,
+            theftOutcomeSink: foreignState.Integration);
+
+        Assert.Throws<System.ArgumentException>(() => new SimulationRuntime(
+            new SimulationTime(),
+            null,
+            null,
+            personStore: new PersonStore(),
+            crimeSystem: crime));
     }
 
     private static TheftOutcome CreateOutcome(PersonId victim, PersonId perpetrator, string key)

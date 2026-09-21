@@ -103,6 +103,18 @@ public sealed class WorldStateDiff
             WorldStateCanonicalWriter.Int64Value(before.PoliticalKnowledgeRevision),
             WorldStateCanonicalWriter.Int64Value(after.PoliticalKnowledgeRevision),
             differences);
+        CompareValue("Metadata", "world", "TheftOutcomeCount",
+            WorldStateCanonicalWriter.IntValue(before.TheftOutcomeCount),
+            WorldStateCanonicalWriter.IntValue(after.TheftOutcomeCount),
+            differences);
+        CompareValue("Metadata", "world", "CrimeKnowledgeCount",
+            WorldStateCanonicalWriter.IntValue(before.CrimeKnowledgeCount),
+            WorldStateCanonicalWriter.IntValue(after.CrimeKnowledgeCount),
+            differences);
+        CompareValue("Metadata", "world", "SocialReactionCount",
+            WorldStateCanonicalWriter.IntValue(before.SocialReactionCount),
+            WorldStateCanonicalWriter.IntValue(after.SocialReactionCount),
+            differences);
         CompareCalendar(before.Metadata.CalendarDate, after.Metadata.CalendarDate, differences);
 
         CompareEntities("NPC", before.Npcs, after.Npcs, npc => npc.RuntimeId,
@@ -479,6 +491,60 @@ public sealed class WorldStateDiff
                             differences);
                     },
                     differences);
+            },
+            differences);
+
+        CompareEntities("TheftOutcome", before.TheftOutcomes, after.TheftOutcomes,
+            outcome => outcome.OutcomeId,
+            (identity, left, right) =>
+            {
+                CompareValue("TheftOutcome", identity, "PerpetratorPersonId", WorldStateCanonicalWriter.StringValue(left.PerpetratorPersonId), WorldStateCanonicalWriter.StringValue(right.PerpetratorPersonId), differences);
+                CompareValue("TheftOutcome", identity, "VictimPersonId", WorldStateCanonicalWriter.StringValue(left.VictimPersonId), WorldStateCanonicalWriter.StringValue(right.VictimPersonId), differences);
+                CompareValue("TheftOutcome", identity, "LossAmount", WorldStateCanonicalWriter.IntValue(left.LossAmount), WorldStateCanonicalWriter.IntValue(right.LossAmount), differences);
+                CompareValue("TheftOutcome", identity, "OccurredAbsoluteDay", WorldStateCanonicalWriter.Int64Value(left.OccurredAbsoluteDay), WorldStateCanonicalWriter.Int64Value(right.OccurredAbsoluteDay), differences);
+                CompareValue("TheftOutcome", identity, "OriginDecisionId", WorldStateCanonicalWriter.StringValue(left.OriginDecisionId), WorldStateCanonicalWriter.StringValue(right.OriginDecisionId), differences);
+            },
+            differences);
+
+        CompareEntities("CrimeKnowledge", before.CrimeKnowledge, after.CrimeKnowledge,
+            observation => observation.EvaluatorPersonId + "\u001f" + observation.OutcomeId,
+            (identity, left, right) =>
+            {
+                CompareValue("CrimeKnowledge", identity, "Role", WorldStateCanonicalWriter.EnumValue(left.Role), WorldStateCanonicalWriter.EnumValue(right.Role), differences);
+                CompareValue("CrimeKnowledge", identity, "KnowsLoss", WorldStateCanonicalWriter.BoolValue(left.KnowsLoss), WorldStateCanonicalWriter.BoolValue(right.KnowsLoss), differences);
+                CompareValue("CrimeKnowledge", identity, "PerceivedPerpetratorKind", WorldStateCanonicalWriter.EnumValue(left.PerceivedPerpetratorKind), WorldStateCanonicalWriter.EnumValue(right.PerceivedPerpetratorKind), differences);
+                CompareValue("CrimeKnowledge", identity, "PerceivedPerpetratorPersonId", WorldStateCanonicalWriter.StringValue(left.PerceivedPerpetratorPersonId), WorldStateCanonicalWriter.StringValue(right.PerceivedPerpetratorPersonId), differences);
+                CompareValue("CrimeKnowledge", identity, "PerceivedPerpetratorInstitutionId", WorldStateCanonicalWriter.StringValue(left.PerceivedPerpetratorInstitutionId), WorldStateCanonicalWriter.StringValue(right.PerceivedPerpetratorInstitutionId), differences);
+                CompareValue("CrimeKnowledge", identity, "KnownInvestigatorPersonId", WorldStateCanonicalWriter.StringValue(left.KnownInvestigatorPersonId), WorldStateCanonicalWriter.StringValue(right.KnownInvestigatorPersonId), differences);
+                CompareValue("CrimeKnowledge", identity, "KnownInvestigatorInstitutionId", WorldStateCanonicalWriter.StringValue(left.KnownInvestigatorInstitutionId), WorldStateCanonicalWriter.StringValue(right.KnownInvestigatorInstitutionId), differences);
+                CompareValue("CrimeKnowledge", identity, "CognitiveBasisKind", WorldStateCanonicalWriter.EnumValue(left.CognitiveBasisKind), WorldStateCanonicalWriter.EnumValue(right.CognitiveBasisKind), differences);
+                CompareValue("CrimeKnowledge", identity, "CognitiveBasisReference", WorldStateCanonicalWriter.StringValue(left.CognitiveBasisReference), WorldStateCanonicalWriter.StringValue(right.CognitiveBasisReference), differences);
+                CompareValue("CrimeKnowledge", identity, "CognitiveBasisSourcePersonId", WorldStateCanonicalWriter.StringValue(left.CognitiveBasisSourcePersonId), WorldStateCanonicalWriter.StringValue(right.CognitiveBasisSourcePersonId), differences);
+                CompareValue("CrimeKnowledge", identity, "CognitiveBasisSourceInstitutionId", WorldStateCanonicalWriter.StringValue(left.CognitiveBasisSourceInstitutionId), WorldStateCanonicalWriter.StringValue(right.CognitiveBasisSourceInstitutionId), differences);
+                CompareValue("CrimeKnowledge", identity, "ObservedAbsoluteDay", WorldStateCanonicalWriter.Int64Value(left.ObservedAbsoluteDay), WorldStateCanonicalWriter.Int64Value(right.ObservedAbsoluteDay), differences);
+            },
+            differences);
+
+        CompareEntities("SocialReaction", before.SocialReactions, after.SocialReactions,
+            reaction => reaction.ReactionId,
+            (identity, left, right) =>
+            {
+                CompareValue("SocialReaction", identity, "EvaluatorPersonId", WorldStateCanonicalWriter.StringValue(left.EvaluatorPersonId), WorldStateCanonicalWriter.StringValue(right.EvaluatorPersonId), differences);
+                CompareValue("SocialReaction", identity, "SourceDomain", WorldStateCanonicalWriter.StringValue(left.SourceDomain), WorldStateCanonicalWriter.StringValue(right.SourceDomain), differences);
+                CompareValue("SocialReaction", identity, "SourceStableId", WorldStateCanonicalWriter.StringValue(left.SourceStableId), WorldStateCanonicalWriter.StringValue(right.SourceStableId), differences);
+                CompareValue("SocialReaction", identity, "TargetKind", WorldStateCanonicalWriter.EnumValue(left.TargetKind), WorldStateCanonicalWriter.EnumValue(right.TargetKind), differences);
+                CompareValue("SocialReaction", identity, "TargetStableId", WorldStateCanonicalWriter.StringValue(left.TargetStableId), WorldStateCanonicalWriter.StringValue(right.TargetStableId), differences);
+                CompareValue("SocialReaction", identity, "AttributionKind", WorldStateCanonicalWriter.EnumValue(left.AttributionKind), WorldStateCanonicalWriter.EnumValue(right.AttributionKind), differences);
+                CompareValue("SocialReaction", identity, "AttributionPersonId", WorldStateCanonicalWriter.StringValue(left.AttributionPersonId), WorldStateCanonicalWriter.StringValue(right.AttributionPersonId), differences);
+                CompareValue("SocialReaction", identity, "AttributionInstitutionId", WorldStateCanonicalWriter.StringValue(left.AttributionInstitutionId), WorldStateCanonicalWriter.StringValue(right.AttributionInstitutionId), differences);
+                CompareValue("SocialReaction", identity, "Valence", WorldStateCanonicalWriter.EnumValue(left.Valence), WorldStateCanonicalWriter.EnumValue(right.Valence), differences);
+                CompareValue("SocialReaction", identity, "Salience", WorldStateCanonicalWriter.EnumValue(left.Salience), WorldStateCanonicalWriter.EnumValue(right.Salience), differences);
+                CompareValue("SocialReaction", identity, "CognitiveBasisKind", WorldStateCanonicalWriter.EnumValue(left.CognitiveBasisKind), WorldStateCanonicalWriter.EnumValue(right.CognitiveBasisKind), differences);
+                CompareValue("SocialReaction", identity, "CognitiveBasisReference", WorldStateCanonicalWriter.StringValue(left.CognitiveBasisReference), WorldStateCanonicalWriter.StringValue(right.CognitiveBasisReference), differences);
+                CompareValue("SocialReaction", identity, "CognitiveBasisSourcePersonId", WorldStateCanonicalWriter.StringValue(left.CognitiveBasisSourcePersonId), WorldStateCanonicalWriter.StringValue(right.CognitiveBasisSourcePersonId), differences);
+                CompareValue("SocialReaction", identity, "CognitiveBasisSourceInstitutionId", WorldStateCanonicalWriter.StringValue(left.CognitiveBasisSourceInstitutionId), WorldStateCanonicalWriter.StringValue(right.CognitiveBasisSourceInstitutionId), differences);
+                CompareValue("SocialReaction", identity, "CreatedAbsoluteDay", WorldStateCanonicalWriter.Int64Value(left.CreatedAbsoluteDay), WorldStateCanonicalWriter.Int64Value(right.CreatedAbsoluteDay), differences);
+                CompareValue("SocialReaction", identity, "SupersedesReactionId", WorldStateCanonicalWriter.StringValue(left.SupersedesReactionId), WorldStateCanonicalWriter.StringValue(right.SupersedesReactionId), differences);
             },
             differences);
 

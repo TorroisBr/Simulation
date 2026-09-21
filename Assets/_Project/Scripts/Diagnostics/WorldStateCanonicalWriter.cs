@@ -25,6 +25,9 @@ public static class WorldStateCanonicalWriter
         AppendLine(output, "METADATA", "PoliticalKnowledgeStatePresent", BoolValue(snapshot.HasPoliticalKnowledgeState));
         AppendLine(output, "METADATA", "PoliticalKnowledgeHolderCount", IntValue(snapshot.PoliticalKnowledgeHolderCount));
         AppendLine(output, "METADATA", "PoliticalKnowledgeRevision", Int64Value(snapshot.PoliticalKnowledgeRevision));
+        AppendLine(output, "METADATA", "TheftOutcomeCount", IntValue(snapshot.TheftOutcomeCount));
+        AppendLine(output, "METADATA", "CrimeKnowledgeCount", IntValue(snapshot.CrimeKnowledgeCount));
+        AppendLine(output, "METADATA", "SocialReactionCount", IntValue(snapshot.SocialReactionCount));
         if (snapshot.Metadata.CalendarDate != null)
         {
             WorldStateCalendarSnapshot calendar = snapshot.Metadata.CalendarDate;
@@ -194,6 +197,58 @@ public static class WorldStateCanonicalWriter
                     observation.SourcePersonId,
                     observation.SourceInstitutionId);
             }
+        }
+
+        foreach (WorldStateTheftOutcomeSnapshot outcome in snapshot.TheftOutcomes)
+        {
+            AppendLine(output, "THEFT_OUTCOME",
+                outcome.OutcomeId,
+                outcome.PerpetratorPersonId,
+                outcome.VictimPersonId,
+                IntValue(outcome.LossAmount),
+                Int64Value(outcome.OccurredAbsoluteDay),
+                outcome.OriginDecisionId);
+        }
+
+        foreach (WorldStateCrimeKnowledgeSnapshot knowledge in snapshot.CrimeKnowledge)
+        {
+            AppendLine(output, "CRIME_KNOWLEDGE",
+                knowledge.EvaluatorPersonId,
+                knowledge.OutcomeId,
+                EnumValue(knowledge.Role),
+                BoolValue(knowledge.KnowsLoss),
+                EnumValue(knowledge.PerceivedPerpetratorKind),
+                knowledge.PerceivedPerpetratorPersonId,
+                knowledge.PerceivedPerpetratorInstitutionId,
+                knowledge.KnownInvestigatorPersonId,
+                knowledge.KnownInvestigatorInstitutionId,
+                EnumValue(knowledge.CognitiveBasisKind),
+                knowledge.CognitiveBasisReference,
+                knowledge.CognitiveBasisSourcePersonId,
+                knowledge.CognitiveBasisSourceInstitutionId,
+                Int64Value(knowledge.ObservedAbsoluteDay));
+        }
+
+        foreach (WorldStateSocialReactionSnapshot reaction in snapshot.SocialReactions)
+        {
+            AppendLine(output, "SOCIAL_REACTION",
+                reaction.ReactionId,
+                reaction.EvaluatorPersonId,
+                reaction.SourceDomain,
+                reaction.SourceStableId,
+                EnumValue(reaction.TargetKind),
+                reaction.TargetStableId,
+                EnumValue(reaction.AttributionKind),
+                reaction.AttributionPersonId,
+                reaction.AttributionInstitutionId,
+                EnumValue(reaction.Valence),
+                EnumValue(reaction.Salience),
+                EnumValue(reaction.CognitiveBasisKind),
+                reaction.CognitiveBasisReference,
+                reaction.CognitiveBasisSourcePersonId,
+                reaction.CognitiveBasisSourceInstitutionId,
+                Int64Value(reaction.CreatedAbsoluteDay),
+                reaction.SupersedesReactionId);
         }
 
         foreach (WorldStateNpcSnapshot npc in snapshot.Npcs)

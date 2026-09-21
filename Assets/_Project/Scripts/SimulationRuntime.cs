@@ -255,7 +255,16 @@ public sealed class SimulationRuntime
         this.scheduledDirectiveSystem = scheduledDirectiveSystem;
         this.justiceSystem = justiceSystem;
         this.crimeSystem = crimeSystem;
-        this.crimeSystem?.TryBindTheftOutcomeSink(this.crimeSocialAppraisalWorldState.Integration);
+        if (this.crimeSystem != null
+            && this.crimeSystem.TryBindTheftOutcomeSink(this.crimeSocialAppraisalWorldState.Integration) == false
+            && ReferenceEquals(
+                this.crimeSystem.TheftOutcomeSink,
+                this.crimeSocialAppraisalWorldState.Integration) == false)
+        {
+            throw new ArgumentException(
+                "CrimeSystem outcome sink must belong to the SimulationRuntime crime appraisal world.",
+                nameof(crimeSystem));
+        }
         this.npcDecisionSystem = npcDecisionSystem;
         this.travelSystem = travelSystem;
         this.travelPartySystem = travelPartySystem;

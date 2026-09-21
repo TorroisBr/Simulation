@@ -371,6 +371,15 @@ public static class WorldStateInvariantValidator
             snapshot.HasPropertyCatalog,
             snapshot.AbsoluteDay,
             issues);
+        ValidateCrimeSocialAppraisal(
+            snapshot.TheftOutcomes,
+            snapshot.CrimeKnowledge,
+            snapshot.SocialReactions,
+            personIds,
+            snapshot.InstitutionIds,
+            snapshot.HasInstitutionCatalog,
+            snapshot.AbsoluteDay,
+            issues);
 
         foreach (WorldStateNpcSnapshot npc in snapshot.Npcs)
         {
@@ -2068,6 +2077,242 @@ public static class WorldStateInvariantValidator
         }
 
         return false;
+    }
+
+    private static void ValidateCrimeSocialAppraisal(
+        IReadOnlyList<WorldStateTheftOutcomeSnapshot> outcomes,
+        IReadOnlyList<WorldStateCrimeKnowledgeSnapshot> knowledge,
+        IReadOnlyList<WorldStateSocialReactionSnapshot> reactions,
+        HashSet<string> personIds,
+        IReadOnlyList<string> institutionIds,
+        bool hasInstitutionCatalog,
+        long absoluteDay,
+        List<WorldStateInvariantIssue> issues)
+    {
+        Dictionary<string, WorldStateTheftOutcomeSnapshot> outcomesById =
+            new Dictionary<string, WorldStateTheftOutcomeSnapshot>(StringComparer.Ordinal);
+        foreach (WorldStateTheftOutcomeSnapshot outcome in outcomes ?? Array.Empty<WorldStateTheftOutcomeSnapshot>())
+        {
+            if (outcome == null)
+            {
+                AddError(issues, "TheftOutcomeNull", "theft-outcome", "Snapshot contains a null theft outcome entry.");
+                continue;
+            }
+
+            string identity = string.IsNullOrWhiteSpace(outcome.OutcomeId) ? "theft-outcome" : outcome.OutcomeId;
+            if (string.IsNullOrWhiteSpace(outcome.OutcomeId))
+            {
+                AddError(issues, "TheftOutcomeIdMissing", identity, "Theft outcome has no stable OutcomeId.");
+            }
+            else if (outcomesById.ContainsKey(outcome.OutcomeId))
+            {
+                AddError(issues, "DuplicateTheftOutcomeId", identity, "Theft outcome OutcomeId appears more than once.");
+            }
+            else
+            {
+                outcomesById.Add(outcome.OutcomeId, outcome);
+            }
+
+            if (string.IsNullOrWhiteSpace(outcome.PerpetratorPersonId)
+                || personIds.Contains(outcome.PerpetratorPersonId) == false)
+            {
+                AddError(issues, "TheftOutcomePerpetratorMissing", identity, "Theft outcome perpetrator PersonId is absent.");
+            }
+
+            if (string.IsNullOrWhiteSpace(outcome.VictimPersonId)
+                || personIds.Contains(outcome.VictimPersonId) == false)
+            {
+                AddError(issues, "TheftOutcomeVictimMissing", identity, "Theft outcome victim PersonId is absent.");
+            }
+
+            if (string.Equals(outcome.PerpetratorPersonId, outcome.VictimPersonId, StringComparison.Ordinal))
+            {
+                AddError(issues, "TheftOutcomeSameEndpoint", identity, "Theft outcome perpetrator and victim must differ.");
+            }
+
+            if (outcome.LossAmount <= 0)
+            {
+                AddError(issues, "TheftOutcomeLossInvalid", identity, "Theft outcome loss amount must be positive.");
+            }
+
+            if (outcome.OccurredAbsoluteDay < 0L || outcome.OccurredAbsoluteDay > absoluteDay)
+            {
+                AddError(issues, "TheftOutcomeDayInvalid", identity, "Theft outcome day is outside the snapshot timeline.");
+            }
+        }
+
+        HashSet<string> knowledgeKeys = new HashSet<string>(StringComparer.Ordinal);
+        foreach (WorldStateCrimeKnowledgeSnapshot observation in knowledge ?? Array.Empty<WorldStateCrimeKnowledgeSnapshot>())
+        {
+            if (observation == null)
+            {
+                AddError(issues, "CrimeKnowledgeNull", "crime-knowledge", "Snapshot contains a null crime knowledge entry.");
+                continue;
+            }
+
+            string identity = (observation.EvaluatorPersonId ?? "person") + "/" + (observation.OutcomeId ?? "outcome");
+            string key = identity;
+            if (knowledgeKeys.Add(key) == false)
+            {
+                AddError(issues, "DuplicateCrimeKnowledge", identity, "Crime knowledge evaluator/outcome pair appears more than once.");
+            }
+
+            if (string.IsNullOrWhiteSpace(observation.EvaluatorPersonId)
+                || personIds.Contains(observation.EvaluatorPersonId) == false)
+            {
+                AddError(issues, "CrimeKnowledgeEvaluatorMissing", identity, "Crime knowledge evaluator PersonId is absent.");
+            }
+
+            if (outcomesById.TryGetValue(observation.OutcomeId ?? string.Empty, out WorldStateTheftOutcomeSnapshot outcome) == false)
+            {
+                AddError(issues, "CrimeKnowledgeOutcomeMissing", identity, "Crime knowledge references an absent theft outcome.");
+            }
+            else
+            {
+                if (observation.Role == CrimeKnowledgeRole.Victim
+                    && observation.EvaluatorPersonId != outcome.VictimPersonId)
+                {
+                    AddError(issues, "CrimeKnowledgeVictimMismatch", identity, "Victim crime knowledge evaluator must be the theft victim.");
+                }
+
+                if (observation.Role == CrimeKnowledgeRole.Perpetrator
+                    && observation.EvaluatorPersonId != outcome.PerpetratorPersonId)
+                {
+                    AddError(issues, "CrimeKnowledgePerpetratorMismatch", identity, "Perpetrator crime knowledge evaluator must be the factual perpetrator.");
+                }
+
+                if (observation.ObservedAbsoluteDay < outcome.OccurredAbsoluteDay)
+                {
+                    AddError(issues, "CrimeKnowledgeBeforeOutcome", identity, "Crime knowledge cannot predate its outcome.");
+                }
+            }
+
+            if (Enum.IsDefined(typeof(CrimeKnowledgeRole), observation.Role) == false)
+            {
+                AddError(issues, "CrimeKnowledgeRoleInvalid", identity, "Crime knowledge role is invalid.");
+            }
+
+            if (Enum.IsDefined(typeof(SocialPerceivedAttributionKind), observation.PerceivedPerpetratorKind) == false)
+            {
+                AddError(issues, "CrimeKnowledgeAttributionInvalid", identity, "Crime knowledge attribution kind is invalid.");
+            }
+
+            if (observation.KnowsLoss == false
+                && observation.PerceivedPerpetratorKind != SocialPerceivedAttributionKind.NotApplicable)
+            {
+                AddError(issues, "CrimeKnowledgeAttributionWithoutLoss", identity, "Crime knowledge without known loss must not carry perpetrator attribution.");
+            }
+
+            if (observation.PerceivedPerpetratorKind == SocialPerceivedAttributionKind.BelievedPerson
+                && (string.IsNullOrWhiteSpace(observation.PerceivedPerpetratorPersonId)
+                    || personIds.Contains(observation.PerceivedPerpetratorPersonId) == false))
+            {
+                AddError(issues, "CrimeKnowledgeBelievedPersonMissing", identity, "Believed perpetrator PersonId is absent.");
+            }
+
+            if (observation.PerceivedPerpetratorKind == SocialPerceivedAttributionKind.BelievedInstitution
+                && (string.IsNullOrWhiteSpace(observation.PerceivedPerpetratorInstitutionId)
+                    || (hasInstitutionCatalog && ContainsString(institutionIds, observation.PerceivedPerpetratorInstitutionId) == false)))
+            {
+                AddError(issues, "CrimeKnowledgeBelievedInstitutionMissing", identity, "Believed perpetrator InstitutionId is absent.");
+            }
+
+            if (observation.KnownInvestigatorPersonId != null
+                && (string.IsNullOrWhiteSpace(observation.KnownInvestigatorPersonId)
+                    || personIds.Contains(observation.KnownInvestigatorPersonId) == false))
+            {
+                AddError(issues, "CrimeKnowledgeInvestigatorPersonMissing", identity, "Known investigator PersonId is absent.");
+            }
+
+            if (observation.KnownInvestigatorInstitutionId != null
+                && (string.IsNullOrWhiteSpace(observation.KnownInvestigatorInstitutionId)
+                    || (hasInstitutionCatalog && ContainsString(institutionIds, observation.KnownInvestigatorInstitutionId) == false)))
+            {
+                AddError(issues, "CrimeKnowledgeInvestigatorInstitutionMissing", identity, "Known investigator InstitutionId is absent.");
+            }
+
+            if (observation.ObservedAbsoluteDay < 0L || observation.ObservedAbsoluteDay > absoluteDay)
+            {
+                AddError(issues, "CrimeKnowledgeDayInvalid", identity, "Crime knowledge observation day is outside the snapshot timeline.");
+            }
+        }
+
+        Dictionary<string, WorldStateSocialReactionSnapshot> reactionsById =
+            new Dictionary<string, WorldStateSocialReactionSnapshot>(StringComparer.Ordinal);
+        foreach (WorldStateSocialReactionSnapshot reaction in reactions ?? Array.Empty<WorldStateSocialReactionSnapshot>())
+        {
+            if (reaction == null)
+            {
+                AddError(issues, "SocialReactionNull", "social-reaction", "Snapshot contains a null social reaction entry.");
+                continue;
+            }
+
+            string identity = string.IsNullOrWhiteSpace(reaction.ReactionId) ? "social-reaction" : reaction.ReactionId;
+            if (string.IsNullOrWhiteSpace(reaction.ReactionId))
+            {
+                AddError(issues, "SocialReactionIdMissing", identity, "Social reaction has no stable ReactionId.");
+            }
+            else if (reactionsById.ContainsKey(reaction.ReactionId))
+            {
+                AddError(issues, "DuplicateSocialReactionId", identity, "Social reaction ReactionId appears more than once.");
+            }
+            else
+            {
+                reactionsById.Add(reaction.ReactionId, reaction);
+            }
+
+            if (string.IsNullOrWhiteSpace(reaction.EvaluatorPersonId)
+                || personIds.Contains(reaction.EvaluatorPersonId) == false)
+            {
+                AddError(issues, "SocialReactionEvaluatorMissing", identity, "Social reaction evaluator PersonId is absent.");
+            }
+
+            if (string.IsNullOrWhiteSpace(reaction.SourceDomain) || string.IsNullOrWhiteSpace(reaction.SourceStableId))
+            {
+                AddError(issues, "SocialReactionSourceInvalid", identity, "Social reaction source reference is invalid.");
+            }
+
+            if (Enum.IsDefined(typeof(SocialReactionTargetKind), reaction.TargetKind)
+                == false || string.IsNullOrWhiteSpace(reaction.TargetStableId))
+            {
+                AddError(issues, "SocialReactionTargetInvalid", identity, "Social reaction target reference is invalid.");
+            }
+
+            if (Enum.IsDefined(typeof(SocialPerceivedAttributionKind), reaction.AttributionKind) == false)
+            {
+                AddError(issues, "SocialReactionAttributionInvalid", identity, "Social reaction attribution kind is invalid.");
+            }
+            else if (reaction.AttributionKind == SocialPerceivedAttributionKind.BelievedPerson
+                && (string.IsNullOrWhiteSpace(reaction.AttributionPersonId)
+                    || personIds.Contains(reaction.AttributionPersonId) == false))
+            {
+                AddError(issues, "SocialReactionBelievedPersonMissing", identity, "Social reaction believed PersonId is absent.");
+            }
+            else if (reaction.AttributionKind == SocialPerceivedAttributionKind.BelievedInstitution
+                && (string.IsNullOrWhiteSpace(reaction.AttributionInstitutionId)
+                    || (hasInstitutionCatalog && ContainsString(institutionIds, reaction.AttributionInstitutionId) == false)))
+            {
+                AddError(issues, "SocialReactionBelievedInstitutionMissing", identity, "Social reaction believed InstitutionId is absent.");
+            }
+
+            if (Enum.IsDefined(typeof(SocialReactionValence), reaction.Valence) == false
+                || Enum.IsDefined(typeof(SocialReactionSalience), reaction.Salience) == false
+                || Enum.IsDefined(typeof(SocialCognitiveBasisKind), reaction.CognitiveBasisKind) == false)
+            {
+                AddError(issues, "SocialReactionClassificationInvalid", identity, "Social reaction classification is invalid.");
+            }
+
+            if (reaction.CreatedAbsoluteDay < 0L || reaction.CreatedAbsoluteDay > absoluteDay)
+            {
+                AddError(issues, "SocialReactionDayInvalid", identity, "Social reaction day is outside the snapshot timeline.");
+            }
+
+            if (reaction.SupersedesReactionId != null
+                && reactionsById.ContainsKey(reaction.SupersedesReactionId) == false)
+            {
+                AddError(issues, "SocialReactionSupersededMissing", identity, "Social reaction supersession predecessor is absent.");
+            }
+        }
     }
 
     private static HashSet<string> ValidatePropertyOwnerships(

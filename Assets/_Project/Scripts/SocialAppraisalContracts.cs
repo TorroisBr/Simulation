@@ -529,7 +529,7 @@ public sealed class SocialReactionStore
     public IReadOnlyList<SocialReaction> HistoricalReactions =>
         SortedSnapshot(reactionsById.Values);
 
-    public bool TryRecord(
+    public bool CanRecord(
         SocialReaction reaction,
         out SocialReactionStoreFailure failure)
     {
@@ -616,7 +616,20 @@ public sealed class SocialReactionStore
             }
         }
 
+        return true;
+    }
+
+    public bool TryRecord(
+        SocialReaction reaction,
+        out SocialReactionStoreFailure failure)
+    {
+        if (CanRecord(reaction, out failure) == false)
+        {
+            return false;
+        }
+
         reactionsById.Add(reaction.ReactionId.Value, reaction);
+        failure = SocialReactionStoreFailure.None;
         return true;
     }
 
@@ -626,6 +639,76 @@ public sealed class SocialReactionStore
     }
 
     public bool TryRecordAppraisal(
+        PersonId evaluatorPersonId,
+        SocialSourceReference source,
+        SocialReactionTarget target,
+        SocialPerceivedAttribution attribution,
+        SocialCognitiveBasis basis,
+        SocialAppraisalResult appraisal,
+        long createdAbsoluteDay,
+        SocialReactionId supersedesReactionId,
+        out SocialReaction reaction,
+        out SocialReactionStoreFailure failure)
+    {
+        if (TryBuildAppraisalReaction(
+            evaluatorPersonId,
+            source,
+            target,
+            attribution,
+            basis,
+            appraisal,
+            createdAbsoluteDay,
+            supersedesReactionId,
+            out reaction,
+            out failure) == false)
+        {
+            return false;
+        }
+
+        if (reaction == null)
+        {
+            return true;
+        }
+
+        if (TryRecord(reaction, out failure) == false)
+        {
+            reaction = null;
+            return false;
+        }
+
+        return true;
+    }
+
+    public bool CanRecordAppraisal(
+        PersonId evaluatorPersonId,
+        SocialSourceReference source,
+        SocialReactionTarget target,
+        SocialPerceivedAttribution attribution,
+        SocialCognitiveBasis basis,
+        SocialAppraisalResult appraisal,
+        long createdAbsoluteDay,
+        SocialReactionId supersedesReactionId,
+        out SocialReactionStoreFailure failure)
+    {
+        if (TryBuildAppraisalReaction(
+            evaluatorPersonId,
+            source,
+            target,
+            attribution,
+            basis,
+            appraisal,
+            createdAbsoluteDay,
+            supersedesReactionId,
+            out SocialReaction reaction,
+            out failure) == false)
+        {
+            return false;
+        }
+
+        return reaction == null || CanRecord(reaction, out failure);
+    }
+
+    private static bool TryBuildAppraisalReaction(
         PersonId evaluatorPersonId,
         SocialSourceReference source,
         SocialReactionTarget target,
@@ -672,13 +755,6 @@ public sealed class SocialReactionStore
             basis,
             createdAbsoluteDay,
             supersedesReactionId);
-
-        if (TryRecord(reaction, out failure) == false)
-        {
-            reaction = null;
-            return false;
-        }
-
         return true;
     }
 

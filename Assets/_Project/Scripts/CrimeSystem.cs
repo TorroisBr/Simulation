@@ -52,6 +52,8 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
         return true;
     }
 
+    public ITheftOutcomeSink TheftOutcomeSink => theftOutcomeSink;
+
     public bool HandlesAction(NpcActionData action)
     {
         if (action == null)
@@ -204,7 +206,16 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
         }
 
         utility = Mathf.Max(0f, utility) + GetMoneyPressureBonus(npcRuntime) + Mathf.Min(8f, amount * 0.2f);
-        return new NpcActionRuntime(action, target, amount);
+        NpcActionRuntime runtime = new NpcActionRuntime(action, target, amount);
+        if (npcRuntime.PersonId != null && target.PersonId != null)
+        {
+            runtime.SetStableOccurrenceKey(BuildAutonomousTheftOccurrenceKey(
+                npcRuntime.PersonId,
+                target.PersonId,
+                amount));
+        }
+
+        return runtime;
     }
 
     private NpcActionRuntime CreateHideAction(NpcRuntime npcRuntime, NpcActionData action, ref float utility)
@@ -291,7 +302,16 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
         if (theftOutcome != null
             && theftOutcomeSink.TryAcceptTheftOutcome(theftOutcome) == false)
         {
-            logger.LogWarning("O roubo foi aplicado, mas seu outcome social nao pode ser registrado.");
+            EconomyTransactionResult rollback = transactionService.TryTransferMoney(
+                npcRuntime,
+                actionRuntime.TargetNpc,
+                amount);
+            if (rollback.Success == false)
+            {
+                logger.LogWarning("O outcome social do roubo falhou e a reversao monetaria tambem falhou.");
+            }
+
+            return NpcActionResult.Failed();
         }
         justiceSystem.CreateOrIncreaseWarrant(npcRuntime, npcRuntime.CurrentCity, settings.bounty, settings.sentenceDays);
         return NpcActionResult.Succeeded();
@@ -331,6 +351,21 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
             amount,
             absoluteDay,
             actionRuntime.OriginDecisionId);
+    }
+
+    private string BuildAutonomousTheftOccurrenceKey(
+        PersonId perpetratorPersonId,
+        PersonId victimPersonId,
+        int amount)
+    {
+        return "autonomous|day|"
+            + (simulationTime?.AbsoluteDay ?? 0L).ToString(System.Globalization.CultureInfo.InvariantCulture)
+            + "|perp|"
+            + perpetratorPersonId.Value
+            + "|victim|"
+            + victimPersonId.Value
+            + "|amount|"
+            + amount.ToString(System.Globalization.CultureInfo.InvariantCulture);
     }
 
     private NpcActionResult TryExecuteHide(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime)
