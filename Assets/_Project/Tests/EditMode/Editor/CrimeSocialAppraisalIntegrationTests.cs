@@ -373,6 +373,31 @@ public sealed class CrimeSocialAppraisalIntegrationTests
             crimeSystem: crime));
     }
 
+    [Test]
+    public void SimulationRuntimeBindsCrimeSystemToOneSimulationTimeBoundary()
+    {
+        SimulationTime time = new SimulationTime(17L);
+        CrimeSystem unboundCrime = new CrimeSystem(null, null, null);
+        SimulationRuntime world = new SimulationRuntime(
+            time,
+            null,
+            null,
+            crimeSystem: unboundCrime);
+
+        Assert.That(unboundCrime.SimulationTime, Is.SameAs(world.SimulationTime));
+
+        CrimeSystem foreignCrime = new CrimeSystem(
+            null,
+            null,
+            null,
+            simulationTime: new SimulationTime(17L));
+        Assert.Throws<System.ArgumentException>(() => new SimulationRuntime(
+            time,
+            null,
+            null,
+            crimeSystem: foreignCrime));
+    }
+
     private static TheftOutcome CreateOutcome(PersonId victim, PersonId perpetrator, string key)
     {
         return new TheftOutcome(

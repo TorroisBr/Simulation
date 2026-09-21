@@ -256,6 +256,13 @@ public sealed class SimulationRuntime
         this.justiceSystem = justiceSystem;
         this.crimeSystem = crimeSystem;
         if (this.crimeSystem != null
+            && this.crimeSystem.TryBindSimulationTime(this.simulationTime) == false)
+        {
+            throw new ArgumentException(
+                "CrimeSystem must belong to the SimulationRuntime time boundary.",
+                nameof(crimeSystem));
+        }
+        if (this.crimeSystem != null
             && this.crimeSystem.TryBindTheftOutcomeSink(this.crimeSocialAppraisalWorldState.Integration) == false
             && ReferenceEquals(
                 this.crimeSystem.TheftOutcomeSink,

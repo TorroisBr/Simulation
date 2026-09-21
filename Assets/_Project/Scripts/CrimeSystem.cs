@@ -11,7 +11,7 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
     private readonly EconomyTransactionService transactionService;
     private readonly EffectiveCrimeConfiguration configuration;
     private readonly IAuthoritativeRandomSource randomSource;
-    private readonly SimulationTime simulationTime;
+    private SimulationTime simulationTime;
     private ITheftOutcomeSink theftOutcomeSink;
 
     public CrimeSystem(
@@ -53,6 +53,23 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
     }
 
     public ITheftOutcomeSink TheftOutcomeSink => theftOutcomeSink;
+    public SimulationTime SimulationTime => simulationTime;
+
+    public bool TryBindSimulationTime(SimulationTime worldSimulationTime)
+    {
+        if (worldSimulationTime == null)
+        {
+            return false;
+        }
+
+        if (simulationTime == null)
+        {
+            simulationTime = worldSimulationTime;
+            return true;
+        }
+
+        return ReferenceEquals(simulationTime, worldSimulationTime);
+    }
 
     public bool HandlesAction(NpcActionData action)
     {

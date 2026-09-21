@@ -2140,6 +2140,23 @@ public static class WorldStateInvariantValidator
                 AddError(issues, "TheftOutcomeOccurrenceKeyMissing", identity, "Theft outcome has no stable semantic occurrence key.");
             }
 
+            if (string.IsNullOrWhiteSpace(outcome.OutcomeId) == false
+                && string.IsNullOrWhiteSpace(outcome.PerpetratorPersonId) == false
+                && string.IsNullOrWhiteSpace(outcome.VictimPersonId) == false
+                && string.IsNullOrWhiteSpace(outcome.OccurrenceKey) == false
+                && outcome.OccurredAbsoluteDay >= 0L)
+            {
+                string expectedOutcomeId = TheftOutcomeId.Create(
+                    new PersonId(outcome.PerpetratorPersonId),
+                    new PersonId(outcome.VictimPersonId),
+                    outcome.OccurredAbsoluteDay,
+                    outcome.OccurrenceKey).Value;
+                if (string.Equals(expectedOutcomeId, outcome.OutcomeId, StringComparison.Ordinal) == false)
+                {
+                    AddError(issues, "TheftOutcomeIdentityMismatch", identity, "Theft outcome OutcomeId does not match its canonical semantic identity.");
+                }
+            }
+
             if (outcome.OccurredAbsoluteDay < 0L || outcome.OccurredAbsoluteDay > absoluteDay)
             {
                 AddError(issues, "TheftOutcomeDayInvalid", identity, "Theft outcome day is outside the snapshot timeline.");
