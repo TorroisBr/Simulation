@@ -513,6 +513,44 @@ C3 persistent relationship projection, including any future generalized
 relationship layer or daily projection, remains explicitly deferred and is
 not part of this canonical promotion.
 
+## Phase 6 — final closure
+
+Phase 6 is **COMPLETED** in the architectural and functional scope defined by
+this document and the current canonical implementation.
+
+The closing canonical is:
+
+`eab45a55931c1b87bbefa3a7b2d24aabfdf2971e`
+
+The closure status is:
+
+- Checkpoint A: completed and approved;
+- Checkpoint B: completed and externally approved;
+- Architecture Alignment / Foundation Hardening: completed and approved;
+- C1 Social Appraisal Foundation: completed and approved;
+- C2 Crime/Justice vertical slice: completed and approved;
+- C3 Persistent Relationship Projection: **DEFERRED** and not required for
+  Phase 6 closure;
+- no open `BLOCKING` or `IMPORTANT` findings remain for the defined Phase 6
+  scope;
+- no known Phase 5 regressions remain in the canonical validation record.
+
+The following remain future or deferred work and are not Phase 6 closure
+pending work:
+
+- C3 persistent relationships;
+- Active/Dormant expansion;
+- persistence, replay, and networking;
+- broader autonomous politics;
+- polity/realm/government;
+- diplomacy and war;
+- social memory, rumor, propaganda, ideology, and public opinion;
+- generic Organization;
+- capability discovery.
+
+These items preserve the architectural boundaries already recorded above and
+do not reduce the completed status of Phase 6.
+
 ## Branch and review policy
 
 Feature branches use:
@@ -540,17 +578,24 @@ recurring political processes, or long-horizon NPC behavior.
 ## Human checkpoints
 
 - Checkpoint A: stable political truth foundations are canonical — REACHED at
-  canonical promotion of integration tip `fb69f7c`.
+  canonical promotion of integration tip `fb69f7c`; completed and approved.
 - Checkpoint B: externally approved. The historical baseline integration
   remains `e505b84` on `PoliticalSuccessionIntegration`; the current fix
   integration is `PoliticalRecognitionFactionTenureIntegration`, and its
   validated result is promoted to `codex/phase6/canonical`. Checkpoint B is
-  complete; do not begin Checkpoint C in this task.
-- Optional Checkpoint C: only for a genuinely substantial new architecture
-  layer such as autonomous simulation, generalized political relationships, or
-  major knowledge/`AdvanceDay` integration.
-- Final checkpoint: Phase 6 completion candidate, with all required validation
-  and intentionally deferred future work recorded.
+  complete and externally approved.
+- Architecture Alignment / Foundation Hardening: completed and approved.
+- C1 Social Appraisal Foundation and C2 Crime/Justice vertical slice:
+  completed and approved.
+- C3 Persistent Relationship Projection remains explicitly deferred and was
+  not required for closure.
+- Final checkpoint: Phase 6 is **COMPLETED** at canonical
+  `eab45a55931c1b87bbefa3a7b2d24aabfdf2971e`, with no open `BLOCKING` or
+  `IMPORTANT` findings and no known Phase 5 regressions.
+
+Earlier planning references to an optional Checkpoint C or to a completion
+candidate are preserved in the historical record above; this final status
+supersedes them for the current canonical.
 
 Do not stop after ordinary feature work, reviews, integrations, or promotions.
 Continue autonomously until a defined checkpoint or an exceptional stop
