@@ -220,7 +220,14 @@ public sealed class DefaultConflictConsequenceResolver : IConflictConsequenceRes
                         sideResult.Disposition,
                         scoreMargin,
                         participantInjuryRank);
-                    bool isDead = ShouldDie(side, sideResult, scoreMargin, participantInjuryRank);
+                    bool isDead = ShouldDie(
+                        conflict,
+                        resolution,
+                        side,
+                        sideResult,
+                        participantResult,
+                        scoreMargin,
+                        participantInjuryRank);
 
                     if (constraint != null)
                     {
@@ -282,8 +289,11 @@ public sealed class DefaultConflictConsequenceResolver : IConflictConsequenceRes
     }
 
     private bool ShouldDie(
+        Conflict conflict,
+        ConflictResolutionResult resolution,
         ConflictSide side,
         ConflictSideResolutionResult sideResult,
+        ConflictParticipantCapabilityResult participantResult,
         float scoreMargin,
         int injuryRank)
     {
@@ -310,7 +320,18 @@ public sealed class DefaultConflictConsequenceResolver : IConflictConsequenceRes
             deathChance = Math.Min(0.65f, 0.15f + scoreMargin * 0.25f);
         }
 
-        return randomSource.NextUnit() < deathChance;
+        string operationKey = "fatal-consequence"
+            + "|conflict|" + conflict.ConflictId
+            + "|outcome|" + resolution.Outcome
+            + "|winner|" + (resolution.WinningSideId ?? string.Empty)
+            + "|side|" + sideResult.SideId
+            + "|participant|" + participantResult.ParticipantId
+            + "|kind|npc-death";
+
+        float unit = randomSource is IContextualConflictRandomSource contextualRandomSource
+            ? contextualRandomSource.NextUnit(operationKey)
+            : randomSource.NextUnit();
+        return unit < deathChance;
     }
 
     private static int GetBaseInjuryRank(

@@ -1010,7 +1010,7 @@ public class TesteSimulacao : MonoBehaviour
             actionProviders.Add(merchantSystem);
         }
 
-        if (configuration.Crime.Enabled == true && justiceSystem != null)
+        if (justiceSystem != null)
         {
             crimeSystem = new CrimeSystem(
                 justiceSystem,
@@ -1021,7 +1021,15 @@ public class TesteSimulacao : MonoBehaviour
                 configuration.Crime,
                 authoritativeRandomSource,
                 simulationTime);
-            actionProviders.Add(crimeSystem);
+
+            // Crime infrastructure owns temporal state such as an existing hidden
+            // timer even while the domain is disabled. It is not an action provider
+            // until Crime.Enabled is true, so infrastructure availability cannot
+            // re-enable normal or autonomous crime origination.
+            if (configuration.Crime.Enabled == true)
+            {
+                actionProviders.Add(crimeSystem);
+            }
         }
 
         if (configuration.GuardCrime.Enabled == true && justiceSystem != null)
