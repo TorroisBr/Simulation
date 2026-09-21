@@ -12,6 +12,7 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
     private readonly EffectiveCrimeConfiguration configuration;
     private readonly IAuthoritativeRandomSource randomSource;
     private readonly SimulationTime simulationTime;
+    private readonly ITheftOutcomeSink theftOutcomeSink;
 
     public CrimeSystem(
         JusticeSystem justiceSystem,
@@ -21,7 +22,8 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
         EconomyTransactionService transactionService = null,
         EffectiveCrimeConfiguration configuration = null,
         IAuthoritativeRandomSource randomSource = null,
-        SimulationTime simulationTime = null)
+        SimulationTime simulationTime = null,
+        ITheftOutcomeSink theftOutcomeSink = null)
     {
         this.justiceSystem = justiceSystem;
         this.travelSystem = travelSystem;
@@ -31,6 +33,7 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
         this.configuration = configuration ?? new EffectiveCrimeConfiguration(true, true);
         this.randomSource = randomSource ?? new DeterministicRandomSource();
         this.simulationTime = simulationTime;
+        this.theftOutcomeSink = theftOutcomeSink;
     }
 
     public bool AllowAutonomousAction(NpcActionData action)
@@ -267,8 +270,44 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
 
         CrimeActionSettings settings = GetCrimeSettings(actionRuntime.Action);
         logger.Log(SimulationLogCategory.Crime, $"{npcRuntime.NpcName} roubou {actionRuntime.TargetNpc.NpcName} e levou {amount} moedas.");
+        RecordTheftOutcome(npcRuntime, actionRuntime, amount);
         justiceSystem.CreateOrIncreaseWarrant(npcRuntime, npcRuntime.CurrentCity, settings.bounty, settings.sentenceDays);
         return NpcActionResult.Succeeded();
+    }
+
+    private void RecordTheftOutcome(
+        NpcRuntime perpetratorRuntime,
+        NpcActionRuntime actionRuntime,
+        int amount)
+    {
+        if (theftOutcomeSink == null
+            || perpetratorRuntime?.PersonId == null
+            || actionRuntime?.TargetNpc?.PersonId == null)
+        {
+            return;
+        }
+
+        long absoluteDay = simulationTime?.AbsoluteDay ?? 0L;
+        string occurrenceKey = actionRuntime.OriginDecisionId;
+        if (string.IsNullOrWhiteSpace(occurrenceKey))
+        {
+            occurrenceKey = (actionRuntime.Action?.DefinitionId ?? "steal")
+                + "|amount|"
+                + amount.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        TheftOutcome outcome = new TheftOutcome(
+            TheftOutcomeId.Create(
+                perpetratorRuntime.PersonId,
+                actionRuntime.TargetNpc.PersonId,
+                absoluteDay,
+                occurrenceKey),
+            perpetratorRuntime.PersonId,
+            actionRuntime.TargetNpc.PersonId,
+            amount,
+            absoluteDay,
+            actionRuntime.OriginDecisionId);
+        theftOutcomeSink.TryAcceptTheftOutcome(outcome);
     }
 
     private NpcActionResult TryExecuteHide(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime)
