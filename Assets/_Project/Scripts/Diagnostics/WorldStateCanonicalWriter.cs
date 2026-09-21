@@ -133,7 +133,8 @@ public static class WorldStateCanonicalWriter
                 affiliation.PersonId,
                 affiliation.AffiliationId,
                 Int64Value(affiliation.JoinedAbsoluteDay),
-                NullableInt64Value(affiliation.EndedAbsoluteDay));
+                NullableInt64Value(affiliation.EndedAbsoluteDay),
+                EnumValueOrNull(affiliation.EndReason));
         }
 
         foreach (WorldStatePoliticalSupportSnapshot support in snapshot.PoliticalSupports)

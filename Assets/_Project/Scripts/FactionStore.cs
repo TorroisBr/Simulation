@@ -200,7 +200,9 @@ public sealed class FactionStore
             return false;
         }
 
-        affiliationsById[current.AffiliationId.Value] = current.WithEnd(transition.EndedAbsoluteDay);
+        affiliationsById[current.AffiliationId.Value] = current.WithEnd(
+            transition.EndedAbsoluteDay,
+            transition.EndReason);
         activeAffiliationIdByPair.Remove(Key(current.FactionId, current.PersonId));
         revision++;
         failure = FactionFoundationFailure.None;

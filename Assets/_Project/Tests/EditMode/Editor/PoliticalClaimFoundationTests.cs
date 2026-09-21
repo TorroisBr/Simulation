@@ -331,13 +331,85 @@ public sealed class PoliticalClaimFoundationTests
     }
 
     [Test]
+    public void RecognitionCanWithdrawAndRestoreOneInstitutionWithoutTouchingAnother()
+    {
+        PersonStore persons = new PersonStore();
+        PersonRuntime claimant = RegisterPerson(persons, "claimant");
+        InstitutionStore institutions = new InstitutionStore();
+        InstitutionId firstInstitution = RegisterInstitution(institutions, "institution.first");
+        InstitutionId secondInstitution = RegisterInstitution(institutions, "institution.second");
+        SimulationRuntime world = CreateWorld(persons, institutions);
+        PoliticalClaimRecord claim = new PoliticalClaimRecord(
+            new PoliticalClaimId("claim.withdrawal"),
+            claimant.PersonId,
+            PoliticalClaimType.StatusRecognition,
+            PoliticalClaimTarget.ForPerson(claimant.PersonId),
+            PoliticalClaimBasis.ExplicitDecision,
+            "withdrawable recognition",
+            0L,
+            null);
+        Assert.That(world.TryRegisterPoliticalClaim(claim, out _), Is.True);
+
+        Assert.That(world.TryProposePoliticalClaimRecognition(
+            claim.ClaimId,
+            firstInstitution,
+            PoliticalClaimRecognitionState.Recognized,
+            "first recognizes",
+            out PoliticalClaimRecognitionTransition firstRecognition,
+            out _), Is.True);
+        Assert.That(world.TryApplyPoliticalClaimRecognition(firstRecognition, out _), Is.True);
+        Assert.That(world.TryProposePoliticalClaimRecognition(
+            claim.ClaimId,
+            secondInstitution,
+            PoliticalClaimRecognitionState.Recognized,
+            "second recognizes",
+            out PoliticalClaimRecognitionTransition secondRecognition,
+            out _), Is.True);
+        Assert.That(world.TryApplyPoliticalClaimRecognition(secondRecognition, out _), Is.True);
+
+        world.AdvanceDay();
+        Assert.That(world.TryProposePoliticalClaimRecognition(
+            claim.ClaimId,
+            firstInstitution,
+            PoliticalClaimRecognitionState.Unrecognized,
+            "first withdraws recognition",
+            out PoliticalClaimRecognitionTransition withdrawal,
+            out PoliticalClaimFailure withdrawalFailure), Is.True, withdrawalFailure.ToString());
+        Assert.That(world.TryApplyPoliticalClaimRecognition(withdrawal, out _), Is.True);
+
+        world.AdvanceDay();
+        Assert.That(world.TryProposePoliticalClaimRecognition(
+            claim.ClaimId,
+            firstInstitution,
+            PoliticalClaimRecognitionState.Recognized,
+            "first recognizes again",
+            out PoliticalClaimRecognitionTransition restored,
+            out _), Is.True);
+        Assert.That(world.TryApplyPoliticalClaimRecognition(restored, out _), Is.True);
+
+        Assert.That(world.PoliticalClaimRecognitionRecords, Has.Count.EqualTo(2));
+        PoliticalClaimRecognitionRecord firstRecord = world.PoliticalClaimRecognitionRecords[0];
+        PoliticalClaimRecognitionRecord secondRecord = world.PoliticalClaimRecognitionRecords[1];
+        Assert.That(firstRecord.InstitutionId, Is.EqualTo(firstInstitution));
+        Assert.That(firstRecord.State, Is.EqualTo(PoliticalClaimRecognitionState.Recognized));
+        Assert.That(firstRecord.History, Has.Count.EqualTo(3));
+        Assert.That(firstRecord.History[0].State, Is.EqualTo(PoliticalClaimRecognitionState.Recognized));
+        Assert.That(firstRecord.History[1].State, Is.EqualTo(PoliticalClaimRecognitionState.Unrecognized));
+        Assert.That(firstRecord.History[2].State, Is.EqualTo(PoliticalClaimRecognitionState.Recognized));
+        Assert.That(secondRecord.InstitutionId, Is.EqualTo(secondInstitution));
+        Assert.That(secondRecord.State, Is.EqualTo(PoliticalClaimRecognitionState.Recognized));
+        Assert.That(secondRecord.History, Has.Count.EqualTo(1));
+    }
+
+    [Test]
     public void ClaimKnowledgeKeepsInstitutionRecognitionPerspectivesSeparate()
     {
         PoliticalKnowledgeRuntime knowledge = new PoliticalKnowledgeRuntime(new PersonId("person.reader"));
         PoliticalClaimId claimId = new PoliticalClaimId("claim.knowledge-perspectives");
+        InstitutionId firstPerspective = new InstitutionId("institution.first");
         PoliticalClaimKnowledgeObservation first = CreateClaimKnowledgeObservation(
             claimId,
-            new InstitutionId("institution.first"),
+            firstPerspective,
             PoliticalClaimRecognitionState.Recognized,
             10L);
         PoliticalClaimKnowledgeObservation second = CreateClaimKnowledgeObservation(
@@ -358,6 +430,26 @@ public sealed class PoliticalClaimFoundationTests
             second.RecognizingInstitutionId,
             out PoliticalClaimKnowledgeObservation secondCurrent), Is.True);
         Assert.That(secondCurrent.RecognitionState, Is.EqualTo(PoliticalClaimRecognitionState.Rejected));
+
+        PoliticalKnowledgeRuntime noKnowledge = new PoliticalKnowledgeRuntime(new PersonId("person.no-knowledge"));
+        Assert.That(noKnowledge.TryGetLatestClaimRecognitionObservation(
+            claimId,
+            firstPerspective,
+            out _), Is.False);
+
+        PoliticalClaimKnowledgeObservation knownWithdrawal = CreateClaimKnowledgeObservation(
+            claimId,
+            firstPerspective,
+            PoliticalClaimRecognitionState.Unrecognized,
+            11L);
+        Assert.That(knowledge.RecordClaimObservation(knownWithdrawal), Is.True);
+        Assert.That(knowledge.TryGetLatestClaimRecognitionObservation(
+            claimId,
+            firstPerspective,
+            out PoliticalClaimKnowledgeObservation currentWithdrawal), Is.True);
+        Assert.That(currentWithdrawal.RecognitionState, Is.EqualTo(PoliticalClaimRecognitionState.Unrecognized));
+        Assert.That(currentWithdrawal.RecognizingInstitutionId, Is.EqualTo(firstPerspective));
+        Assert.That(knowledge.ClaimObservations, Has.Count.EqualTo(2));
     }
 
     [Test]
@@ -535,7 +627,9 @@ public sealed class PoliticalClaimFoundationTests
             null,
             recognitionState,
             institutionId,
-            0L,
+            recognitionState == PoliticalClaimRecognitionState.Unrecognized
+                ? observedAbsoluteDay
+                : 0L,
             observedAbsoluteDay,
             observedAbsoluteDay,
             new PoliticalKnowledgeProvenance(PoliticalKnowledgeSource.DirectObservation, "perspective"));

@@ -134,12 +134,11 @@ internal static class PoliticalClaimSystem
             return false;
         }
 
-        if (Enum.IsDefined(typeof(PoliticalClaimRecognitionState), recognitionState) == false
-            || recognitionState == PoliticalClaimRecognitionState.Unrecognized)
+        if (Enum.IsDefined(typeof(PoliticalClaimRecognitionState), recognitionState) == false)
         {
             failure = PoliticalClaimFailure.Create(
                 PoliticalClaimFailureCode.InvalidRecognitionState,
-                "An explicit recognition transition must set a recognized, contested, or rejected state.");
+                "An explicit recognition transition must set a defined recognition state.");
             return false;
         }
 

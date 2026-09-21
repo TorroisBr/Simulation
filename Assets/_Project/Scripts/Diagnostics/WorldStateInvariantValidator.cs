@@ -821,6 +821,17 @@ public static class WorldStateInvariantValidator
             {
                 AddError(issues, "FactionAffiliationEndDayInvalid", identity, "Faction affiliation end day is inconsistent with the snapshot timeline.");
             }
+
+            if (affiliation.EndReason.HasValue
+                && Enum.IsDefined(typeof(FactionAffiliationEndReason), affiliation.EndReason.Value) == false)
+            {
+                AddError(issues, "FactionAffiliationEndReasonInvalid", identity, "Faction affiliation end reason is invalid.");
+            }
+
+            if (affiliation.EndReason.HasValue && affiliation.EndedAbsoluteDay.HasValue == false)
+            {
+                AddError(issues, "FactionAffiliationEndReasonInvalid", identity, "An active faction affiliation cannot carry an end reason.");
+            }
         }
     }
 
@@ -1569,9 +1580,9 @@ public static class WorldStateInvariantValidator
                 AddError(issues, "PoliticalClaimRecognitionInstitutionMissing", identity, "Claim recognition institution is absent from the institution catalog.");
             }
             if (Enum.IsDefined(typeof(PoliticalClaimRecognitionState), recognition.State)
-                == false || recognition.State == PoliticalClaimRecognitionState.Unrecognized)
+                == false)
             {
-                AddError(issues, "PoliticalClaimRecognitionStateInvalid", identity, "Claim recognition relation must have an explicit recognition state.");
+                AddError(issues, "PoliticalClaimRecognitionStateInvalid", identity, "Claim recognition relation has an invalid recognition state.");
             }
             if (recognition.RecognitionAbsoluteDay < 0L || recognition.RecognitionAbsoluteDay > absoluteDay)
             {
@@ -1583,7 +1594,6 @@ public static class WorldStateInvariantValidator
             foreach (WorldStatePoliticalClaimRecognitionHistorySnapshot entry in recognition.History ?? Array.Empty<WorldStatePoliticalClaimRecognitionHistorySnapshot>())
             {
                 if (entry == null || Enum.IsDefined(typeof(PoliticalClaimRecognitionState), entry.State) == false
-                    || entry.State == PoliticalClaimRecognitionState.Unrecognized
                     || entry.RecognitionAbsoluteDay < previousDay)
                 {
                     AddError(issues, "PoliticalClaimRecognitionHistoryInvalid", identity, "Claim recognition history is malformed or not chronological.");
@@ -1798,9 +1808,18 @@ public static class WorldStateInvariantValidator
 
         if (recognitionState == PoliticalClaimRecognitionState.Unrecognized)
         {
-            if (recognizingInstitutionId != null || recognitionAbsoluteDay.HasValue)
+            if ((recognizingInstitutionId == null) != recognitionAbsoluteDay.HasValue
+                || (recognitionAbsoluteDay.HasValue
+                    && (recognitionAbsoluteDay.Value < createdAbsoluteDay
+                        || recognitionAbsoluteDay.Value > observedAbsoluteDay)))
             {
-                AddError(issues, "PoliticalKnowledgeClaimStateInvalid", identity, "An unrecognized political knowledge claim cannot carry recognition metadata.");
+                AddError(issues, "PoliticalKnowledgeClaimStateInvalid", identity, "An unrecognized political knowledge claim must carry either no recognition perspective or a valid institution and recognition day.");
+            }
+            else if (recognizingInstitutionId != null
+                && hasInstitutionCatalog
+                && ContainsString(institutionIds, recognizingInstitutionId) == false)
+            {
+                AddError(issues, "PoliticalKnowledgeClaimRecognizingInstitutionMissing", identity, "Political knowledge claim recognizing institution is absent from the institution catalog.");
             }
         }
         else

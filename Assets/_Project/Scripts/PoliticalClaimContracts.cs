@@ -494,8 +494,7 @@ public sealed class PoliticalClaimRecognitionHistoryEntry : IEquatable<Political
         long recognitionAbsoluteDay,
         string reason)
     {
-        if (Enum.IsDefined(typeof(PoliticalClaimRecognitionState), state) == false
-            || state == PoliticalClaimRecognitionState.Unrecognized)
+        if (Enum.IsDefined(typeof(PoliticalClaimRecognitionState), state) == false)
         {
             throw new ArgumentOutOfRangeException(nameof(state));
         }
@@ -542,8 +541,7 @@ public sealed class PoliticalClaimRecognitionRecord : IEquatable<PoliticalClaimR
     {
         ClaimId = claimId ?? throw new ArgumentNullException(nameof(claimId));
         InstitutionId = institutionId ?? throw new ArgumentNullException(nameof(institutionId));
-        if (Enum.IsDefined(typeof(PoliticalClaimRecognitionState), state) == false
-            || state == PoliticalClaimRecognitionState.Unrecognized)
+        if (Enum.IsDefined(typeof(PoliticalClaimRecognitionState), state) == false)
         {
             throw new ArgumentOutOfRangeException(nameof(state));
         }
