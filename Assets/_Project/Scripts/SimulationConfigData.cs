@@ -18,6 +18,11 @@ public class SimulationConfigData : ScriptableObject
     public List<ScheduledDirectiveConfig> scheduledDirectives = new List<ScheduledDirectiveConfig>();
     public float travelCostPerDay = 10f;
     public bool allowMerchantTradeRepositioning;
+    public int maxMerchantTradeAmount = 5;
+    public float localMerchantWholesalePriceMultiplier = 0.70f;
+    public float localMerchantReserveRatio = 0.25f;
+    public int maxUnprofitablePlanWaitDays = 3;
+    public bool crimeAutonomousEnabled = true;
     public CommercialKnowledgeSettings commercialKnowledge = new CommercialKnowledgeSettings();
     public bool useFixedSimulationSeed;
     public int simulationSeed = 12345;
@@ -56,6 +61,39 @@ public class SimulationConfigData : ScriptableObject
     public bool AggregateDemographyEnabled => aggregateDemographyEnabled;
     public double AggregateAnnualBirthRate => aggregateAnnualBirthRate;
     public double AggregateAnnualDeathRate => aggregateAnnualDeathRate;
+
+    public SimulationConfigurationOverrides CreateConfigurationOverrides()
+    {
+        bool crimeEnabled = HasModule(SimulationModule.Crime);
+
+        return new SimulationConfigurationOverrides(
+            economy: new EconomyConfigurationOverrides(
+                HasModule(SimulationModule.Economy)),
+            travel: new TravelConfigurationOverrides(travelCostPerDay),
+            crime: new CrimeConfigurationOverrides(
+                crimeEnabled,
+                crimeEnabled && crimeAutonomousEnabled),
+            guardCrime: new GuardCrimeConfigurationOverrides(
+                HasModule(SimulationModule.GuardCrime)),
+            merchantTrade: new MerchantTradeConfigurationOverrides(
+                enabled: HasModule(SimulationModule.Merchant),
+                allowAutonomousTradeRepositioning: allowMerchantTradeRepositioning,
+                maxTradeAmount: maxMerchantTradeAmount,
+                localWholesalePriceMultiplier: localMerchantWholesalePriceMultiplier,
+                localReserveRatio: localMerchantReserveRatio,
+                maxUnprofitablePlanWaitDays: maxUnprofitablePlanWaitDays),
+            commercialKnowledge: new CommercialKnowledgeConfigurationOverrides(
+                freshForDays: CommercialKnowledge.freshForDays,
+                maxUsefulAgeDays: CommercialKnowledge.maxUsefulAgeDays,
+                maxSharedObservationsPerInteraction: CommercialKnowledge.maxSharedObservationsPerInteraction),
+            naturalMortality: new NaturalMortalityConfigurationOverrides(
+                enabled: naturalMortalityEnabled,
+                annualProbability: naturalMortalityAnnualProbability),
+            aggregateDemography: new AggregateDemographyConfigurationOverrides(
+                enabled: aggregateDemographyEnabled,
+                annualBirthRate: aggregateAnnualBirthRate,
+                annualDeathRate: aggregateAnnualDeathRate));
+    }
 
     public SimulationConfigurationOverrides CreateDemographyConfigurationOverrides()
     {

@@ -283,15 +283,20 @@ public static class SimulationTestFactory
         SimulationTime simulationTime,
         NpcDecisionRecorder decisionRecorder = null,
         CommercialKnowledgeSettings knowledgeSettings = null,
-        bool allowTradeRepositioning = false)
+        bool allowTradeRepositioning = false,
+        int maxTradeAmount = 5)
     {
         return new MerchantSystem(
-            5,
-            1f,
-            allowTradeRepositioning,
+            new EffectiveMerchantTradeConfiguration(
+                enabled: true,
+                allowAutonomousTradeRepositioning: allowTradeRepositioning,
+                maxTradeAmount: maxTradeAmount),
+            new EffectiveCommercialKnowledgeConfiguration(
+                knowledgeSettings != null ? knowledgeSettings.freshForDays : 7,
+                knowledgeSettings != null ? knowledgeSettings.maxUsefulAgeDays : 30,
+                knowledgeSettings != null ? knowledgeSettings.maxSharedObservationsPerInteraction : 2),
             travelSystem,
             simulationTime,
-            knowledgeSettings ?? new CommercialKnowledgeSettings(),
             decisionRecorder);
     }
 

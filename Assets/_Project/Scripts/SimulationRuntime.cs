@@ -37,6 +37,7 @@ public sealed class SimulationRuntime
     private readonly TravelPartySystem travelPartySystem;
     private readonly MerchantSystem merchantSystem;
     private readonly CommercialKnowledgeSharingSystem commercialKnowledgeSharingSystem;
+    private readonly IAuthoritativeRandomSource randomSource;
     private readonly ExplorableSiteStore explorableSiteStore;
     private readonly ExplorableSiteKnowledgeSystem explorableSiteKnowledgeSystem;
     private readonly ExpeditionSystem expeditionSystem;
@@ -108,6 +109,7 @@ public sealed class SimulationRuntime
         PlaceContentStore placeContentStore = null,
         AdventureExpeditionAutonomySystem adventureExpeditionAutonomySystem = null,
         EffectiveSimulationConfiguration configuration = null,
+        IAuthoritativeRandomSource randomSource = null,
         PersonStore personStore = null,
         GenealogyStore genealogyStore = null,
         InstitutionStore institutionStore = null,
@@ -235,6 +237,9 @@ public sealed class SimulationRuntime
             initialPoliticalWorldRevision,
             this.politicalKnowledgeStore.Revision);
         this.cities = cities != null ? new List<CityRuntime>(cities) : new List<CityRuntime>();
+        this.cities.Sort((left, right) => string.CompareOrdinal(
+            left?.RuntimeId ?? string.Empty,
+            right?.RuntimeId ?? string.Empty));
         this.npcRuntimes = new List<NpcRuntime>();
         this.npcRuntimeSnapshot = this.npcRuntimes.AsReadOnly();
         this.npcRegistryById = new Dictionary<string, NpcRuntime>(StringComparer.Ordinal);
@@ -249,6 +254,7 @@ public sealed class SimulationRuntime
         this.travelPartySystem = travelPartySystem;
         this.merchantSystem = merchantSystem;
         this.commercialKnowledgeSharingSystem = commercialKnowledgeSharingSystem;
+        this.randomSource = randomSource ?? new DeterministicRandomSource();
         this.explorableSiteStore = explorableSiteStore;
         this.explorableSiteKnowledgeSystem = explorableSiteKnowledgeSystem;
         this.expeditionSystem = expeditionSystem;
@@ -256,6 +262,22 @@ public sealed class SimulationRuntime
         this.decisionRecorder = decisionRecorder;
         this.adventureExpeditionAutonomySystem = adventureExpeditionAutonomySystem;
         this.logger = logger;
+
+        IReadOnlyList<string> compositionErrors = SimulationCompositionValidator.Validate(
+            this.configuration,
+            new SimulationCompositionCapabilities(
+                merchantTradeAvailable: merchantSystem != null,
+                crimeAvailable: crimeSystem != null,
+                guardCrimeAvailable: justiceSystem != null
+                    && npcDecisionSystem != null
+                    && npcDecisionSystem.HasProvider<GuardSystem>()));
+        if (compositionErrors.Count > 0)
+        {
+            throw new ArgumentException(
+                "The SimulationRuntime composition is invalid: "
+                + string.Join("; ", compositionErrors),
+                nameof(configuration));
+        }
 
         this.expeditionSystem?.BindWorldRuntime(this);
 
@@ -271,6 +293,10 @@ public sealed class SimulationRuntime
                 }
             }
         }
+
+        this.npcRuntimes.Sort((left, right) => string.CompareOrdinal(
+            left?.RuntimeId ?? string.Empty,
+            right?.RuntimeId ?? string.Empty));
 
     }
 
@@ -1878,7 +1904,10 @@ public sealed class SimulationRuntime
             }
 
             EvaluateStatus(npcRuntime);
-            merchantSystem?.AdvanceNpcTradeState(npcRuntime);
+            if (configuration.MerchantTrade.Enabled)
+            {
+                merchantSystem?.AdvanceNpcTradeState(npcRuntime);
+            }
 
             if (TryProcessScheduledDirective(npcRuntime) == true)
             {
@@ -1907,7 +1936,10 @@ public sealed class SimulationRuntime
 
             if (arrivedNpc?.CurrentCity != null)
             {
-                merchantSystem?.ObserveCurrentMarket(arrivedNpc);
+                if (configuration.MerchantTrade.Enabled)
+                {
+                    merchantSystem?.ObserveCurrentMarket(arrivedNpc);
+                }
             }
         }
 
@@ -2679,12 +2711,13 @@ public sealed class SimulationRuntime
             justiceSystem.BeginDay();
         }
 
-        if (crimeSystem != null)
-        {
-            crimeSystem.AdvanceHiddenStatuses(npcRuntimes);
-        }
+        // Hidden-state expiration is a previously established consequence/timer,
+        // not autonomous crime origination. It must continue to advance whenever
+        // the composed crime system owns the state, independently of policy that
+        // filters new criminal decisions.
+        crimeSystem?.AdvanceHiddenStatuses(npcRuntimes);
 
-        if (configuration.GuardCrime.Enabled == true && justiceSystem != null)
+        if (justiceSystem != null)
         {
             justiceSystem.AdvanceSentences(npcRuntimes);
         }
@@ -2699,6 +2732,11 @@ public sealed class SimulationRuntime
 
     private void AdvanceMerchantPlanUrgency()
     {
+        if (configuration.MerchantTrade.Enabled == false)
+        {
+            return;
+        }
+
         foreach (NpcRuntime npcRuntime in npcRuntimes)
         {
             if (npcRuntime == null
@@ -2755,11 +2793,17 @@ public sealed class SimulationRuntime
 
             if (npcRuntime.CurrentCity != null)
             {
-                merchantSystem?.ObserveCurrentMarket(npcRuntime);
+                if (configuration.MerchantTrade.Enabled)
+                {
+                    merchantSystem?.ObserveCurrentMarket(npcRuntime);
+                }
             }
         }
 
-        commercialKnowledgeSharingSystem?.ShareAmongPresentMerchants(npcRuntimes);
+        if (configuration.MerchantTrade.Enabled)
+        {
+            commercialKnowledgeSharingSystem?.ShareAmongPresentMerchants(npcRuntimes);
+        }
     }
 
     private bool IsDeadNpc(string runtimeId)
@@ -2804,7 +2848,10 @@ public sealed class SimulationRuntime
             return;
         }
 
-        NpcActionRuntime chosenAction = npcDecisionSystem.ChooseAction(npcRuntime, configuredActions);
+        NpcActionRuntime chosenAction = npcDecisionSystem.ChooseAction(
+            npcRuntime,
+            GetConfiguredActionsEnabledForRuntime(),
+            CurrentDay);
         decisionRecorder?.RecordChosenAction(npcRuntime, chosenAction, NpcDecisionOrigin.Autonomous);
         npcRuntime.SetCurrentActionRuntime(chosenAction);
     }
@@ -2864,6 +2911,7 @@ public sealed class SimulationRuntime
     private void ProcessRequestedActionDirective(NpcRuntime npcRuntime, ScheduledDirective directive)
     {
         NpcActionRuntime requestedAction = npcDecisionSystem != null
+            && IsActionEnabledForRuntime(directive.Action)
             ? npcDecisionSystem.CreateRequestedAction(npcRuntime, directive.Action)
             : null;
 
@@ -2932,6 +2980,11 @@ public sealed class SimulationRuntime
 
     private NpcActionResult TryExecuteAction(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime, NpcActionData action)
     {
+        if (IsActionEnabledForRuntime(action) == false)
+        {
+            return NpcActionResult.Failed();
+        }
+
         INpcActionProvider actionProvider = action.actionType == NpcActionType.Normal
             ? null
             : npcDecisionSystem?.GetProviderForAction(action);
@@ -2941,7 +2994,7 @@ public sealed class SimulationRuntime
             return NpcActionResult.Failed();
         }
 
-        if (RollActionSuccess(action, actionRuntime) == false)
+        if (RollActionSuccess(npcRuntime, action, actionRuntime) == false)
         {
             if (actionProvider is INpcActionFailureHandler failureHandler)
             {
@@ -2964,7 +3017,54 @@ public sealed class SimulationRuntime
         return actionProvider.TryExecuteAction(npcRuntime, actionRuntime);
     }
 
-    private bool RollActionSuccess(NpcActionData action, NpcActionRuntime actionRuntime)
+    private List<NpcActionData> GetConfiguredActionsEnabledForRuntime()
+    {
+        List<NpcActionData> enabledActions = new List<NpcActionData>();
+
+        if (configuredActions == null)
+        {
+            return enabledActions;
+        }
+
+        foreach (NpcActionData action in configuredActions)
+        {
+            if (IsActionEnabledForRuntime(action))
+            {
+                enabledActions.Add(action);
+            }
+        }
+
+        return enabledActions;
+    }
+
+    private bool IsActionEnabledForRuntime(NpcActionData action)
+    {
+        if (action == null)
+        {
+            return false;
+        }
+
+        switch (action.actionType)
+        {
+            case NpcActionType.BuyGoods:
+            case NpcActionType.SellGoods:
+                return configuration.MerchantTrade.Enabled;
+            case NpcActionType.Steal:
+            case NpcActionType.Hide:
+            case NpcActionType.FleeCity:
+            case NpcActionType.EscapePrison:
+                return configuration.Crime.Enabled;
+            case NpcActionType.Arrest:
+                return configuration.GuardCrime.Enabled;
+            default:
+                return true;
+        }
+    }
+
+    private bool RollActionSuccess(
+        NpcRuntime npcRuntime,
+        NpcActionData action,
+        NpcActionRuntime actionRuntime)
     {
         if (action == null || action.canFail == false)
         {
@@ -2973,7 +3073,14 @@ public sealed class SimulationRuntime
 
         float contextualMultiplier = actionRuntime != null ? actionRuntime.SuccessChanceMultiplier : 1f;
         float effectiveChance = Mathf.Clamp01(action.baseSuccessChance * Mathf.Max(0f, contextualMultiplier));
-        return UnityEngine.Random.value <= effectiveChance;
+        string actorKey = npcRuntime?.RuntimeId ?? "unknown-actor";
+        string decisionKey = actionRuntime?.OriginDecisionId
+            ?? actionRuntime?.Action?.DefinitionId
+            ?? "unbound";
+        string actionKey = action?.DefinitionId ?? action?.actionType.ToString() ?? "unknown";
+        float randomValue = randomSource.NextUnit(
+            "action-success|" + actorKey + "|" + decisionKey + "|" + actionKey + "|" + CurrentDay);
+        return randomValue <= effectiveChance;
     }
 
     private void ApplySuccessStatusChanges(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime, NpcActionData action)

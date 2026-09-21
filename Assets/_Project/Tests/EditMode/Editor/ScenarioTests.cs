@@ -23,7 +23,9 @@ public sealed class ScenarioTests
         NpcRuntime bruno = new NpcRuntime("npc-bruno", SimulationTestFactory.CreateNpc("bruno", NpcJobType.Merchant), city, 100f);
         NpcRuntime caio = new NpcRuntime("npc-caio", SimulationTestFactory.CreateNpc("caio", NpcJobType.Merchant), city, 100f);
         SimulationTime time = new SimulationTime(20L);
-        CommercialKnowledgeSharingSystem sharing = new CommercialKnowledgeSharingSystem(time, null);
+        CommercialKnowledgeSharingSystem sharing = new CommercialKnowledgeSharingSystem(
+            time,
+            new EffectiveCommercialKnowledgeConfiguration());
         bruno.CommercialKnowledge.RecordObservation(SimulationTestFactory.CreateObservation(
             city.Location.RuntimeId, item, 51f, 10, 10, 10));
 
@@ -87,7 +89,11 @@ public sealed class ScenarioTests
             world.B.Location.RuntimeId, item, 90f, 1, 0, 0));
         TravelSystem travel = world.CreateTravelSystem(time, records.EventRecorder);
         MerchantSystem merchantSystem = new MerchantSystem(
-            5, 1f, false, travel, time, new CommercialKnowledgeSettings(), records.DecisionRecorder);
+            new EffectiveMerchantTradeConfiguration(enabled: true),
+            new EffectiveCommercialKnowledgeConfiguration(),
+            travel,
+            time,
+            records.DecisionRecorder);
         NpcActionData travelAction = SimulationTestFactory.CreateAction("travel", NpcActionType.Travel, NpcActionCategory.Travel);
         float utility = 0f;
         NpcActionRuntime scouting = merchantSystem.CreateMerchantTravelAction(merchant, travelAction, ref utility);

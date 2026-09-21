@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -249,7 +250,9 @@ public sealed class SimulationConfigurationFoundationTests
             typeof(EffectiveEconomyConfiguration),
             typeof(EffectiveTravelConfiguration),
             typeof(EffectiveCrimeConfiguration),
-            typeof(EffectiveGuardCrimeConfiguration)
+            typeof(EffectiveGuardCrimeConfiguration),
+            typeof(EffectiveMerchantTradeConfiguration),
+            typeof(EffectiveCommercialKnowledgeConfiguration)
         };
 
         foreach (Type type in types)
@@ -335,6 +338,79 @@ public sealed class SimulationConfigurationFoundationTests
         Assert.That(economyWorldCity.Market.GetAmount(item), Is.EqualTo(1));
         Assert.That(noEconomyWorldCity.Market.GetAmount(item), Is.EqualTo(0));
         Assert.That(economyWorld.Configuration, Is.Not.EqualTo(noEconomyWorld.Configuration));
+    }
+
+    [Test]
+    public void EffectiveMerchantAndCommercialConfigurationUsesResolvedValuesOverAuthoringValues()
+    {
+        SimulationConfigData authoring = SimulationTestFactory.CreateSimulationConfig();
+        authoring.enabledModules.Add(SimulationModule.Merchant);
+        authoring.maxMerchantTradeAmount = 11;
+        authoring.allowMerchantTradeRepositioning = true;
+        authoring.commercialKnowledge.freshForDays = 4;
+        authoring.commercialKnowledge.maxUsefulAgeDays = 18;
+        authoring.commercialKnowledge.maxSharedObservationsPerInteraction = 3;
+
+        SimulationConfigurationResolutionResult result = SimulationConfigurationResolver.Resolve(
+            null,
+            authoring.CreateConfigurationOverrides(),
+            new SimulationConfigurationOverrides(
+                merchantTrade: new MerchantTradeConfigurationOverrides(maxTradeAmount: 2),
+                commercialKnowledge: new CommercialKnowledgeConfigurationOverrides(freshForDays: 9)));
+
+        Assert.That(result.IsValid, Is.True);
+        Assert.That(result.Configuration.MerchantTrade.Enabled, Is.True);
+        Assert.That(result.Configuration.MerchantTrade.MaxTradeAmount, Is.EqualTo(2));
+        Assert.That(result.Configuration.MerchantTrade.AllowAutonomousTradeRepositioning, Is.True);
+        Assert.That(result.Configuration.CommercialKnowledge.FreshForDays, Is.EqualTo(9));
+        Assert.That(result.Configuration.CommercialKnowledge.MaxUsefulAgeDays, Is.EqualTo(18));
+        Assert.That(result.Configuration.CommercialKnowledge.MaxSharedObservationsPerInteraction, Is.EqualTo(3));
+    }
+
+    [Test]
+    public void EnabledCapabilityWithoutImplementationFailsCompositionExplicitly()
+    {
+        EffectiveSimulationConfiguration configuration = SimulationConfigurationResolver.ResolveOrThrow(
+            contentOverrides: new SimulationConfigurationOverrides(
+                merchantTrade: new MerchantTradeConfigurationOverrides(enabled: true),
+                crime: new CrimeConfigurationOverrides(enabled: true),
+                guardCrime: new GuardCrimeConfigurationOverrides(enabled: true)));
+
+        IReadOnlyList<string> errors = SimulationCompositionValidator.Validate(
+            configuration,
+            new SimulationCompositionCapabilities(false, false, false));
+
+        Assert.That(errors, Has.Count.EqualTo(3));
+        Assert.That(errors, Has.Some.Contains("Merchant trade"));
+        Assert.That(errors, Has.Some.Contains("Crime"));
+        Assert.That(errors, Has.Some.Contains("Guard crime"));
+    }
+
+    [Test]
+    public void DisabledCapabilityDoesNotBecomeEnabledFromProviderAvailability()
+    {
+        EffectiveSimulationConfiguration configuration = SimulationConfigurationDefaults.Create();
+
+        IReadOnlyList<string> errors = SimulationCompositionValidator.Validate(
+            configuration,
+            new SimulationCompositionCapabilities(true, true, true));
+
+        Assert.That(errors, Is.Empty);
+        Assert.That(configuration.MerchantTrade.Enabled, Is.False);
+        Assert.That(configuration.Crime.Enabled, Is.False);
+        Assert.That(configuration.GuardCrime.Enabled, Is.False);
+    }
+
+    [Test]
+    public void SimulationModuleSetDoesNotSilentlyRemoveMerchantWhenEconomyIsDisabled()
+    {
+        SimulationConfigData authoring = SimulationTestFactory.CreateSimulationConfig();
+        authoring.enabledModules.Add(SimulationModule.Merchant);
+
+        SimulationModuleSet modules = new SimulationModuleSet(authoring);
+
+        Assert.That(modules.IsEnabled(SimulationModule.Merchant), Is.True);
+        Assert.That(modules.IsEnabled(SimulationModule.Economy), Is.False);
     }
 
     private static EffectiveSimulationConfiguration CreateRuntimeConfiguration(bool economyEnabled)

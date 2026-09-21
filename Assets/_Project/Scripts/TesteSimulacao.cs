@@ -7,8 +7,6 @@ public class TesteSimulacao : MonoBehaviour
 {
     [SerializeField] private SimulationConfigData simulationConfig;
     [SerializeField] private int daysToSimulate = 1;
-    [SerializeField] private int maxMerchantTradeAmount = 5;
-    [SerializeField] private float minimumProfitPerItem = 1f;
 
     private List<NpcRuntime> npcRuntimeList = new List<NpcRuntime>();
     private List<CityRuntime> cityRuntimeList = new List<CityRuntime>();
@@ -49,6 +47,8 @@ public class TesteSimulacao : MonoBehaviour
     private SimulationRuntime simulationRuntime;
     private SimulationTime simulationTime = new SimulationTime();
     private CalendarDefinition calendarDefinition = CalendarDefinition.CreateDefault();
+    private EffectiveSimulationConfiguration effectiveConfiguration;
+    private IAuthoritativeRandomSource authoritativeRandomSource;
     private long lastEconomySnapshotDay;
 
     public string FullLog => logger != null ? logger.FullLog : string.Empty;
@@ -109,12 +109,11 @@ public class TesteSimulacao : MonoBehaviour
 
     private void InitializeSimulation()
     {
-        if (simulationConfig != null && simulationConfig.useFixedSimulationSeed == true)
-        {
-            Random.InitState(simulationConfig.simulationSeed);
-        }
-
         simulationTime = new SimulationTime();
+        authoritativeRandomSource = new DeterministicRandomSource(
+            simulationConfig != null && simulationConfig.useFixedSimulationSeed
+                ? simulationConfig.simulationSeed
+                : 0);
         lastEconomySnapshotDay = 0;
         logger = new SimulationLogger(simulationConfig != null ? simulationConfig.LogSettings : null);
         logger.BeginSimulation(
@@ -122,9 +121,10 @@ public class TesteSimulacao : MonoBehaviour
             simulationConfig != null ? simulationConfig.EnabledModules : null,
             simulationConfig != null ? simulationConfig.Cities.Count : 0,
             simulationConfig != null ? simulationConfig.Npcs.Count : 0);
-        AppendScenarioDiagnostics();
         calendarDefinition = ResolveCalendarDefinition();
         enabledModules = new SimulationModuleSet(simulationConfig, logger);
+        effectiveConfiguration = ResolveRuntimeConfiguration();
+        AppendScenarioDiagnostics(effectiveConfiguration);
         runtimeIdAllocator = new RuntimeIdAllocator();
         explorableSiteKnowledgeSystem = new ExplorableSiteKnowledgeSystem();
         recordSequence = new SimulationRecordSequence();
@@ -160,7 +160,7 @@ public class TesteSimulacao : MonoBehaviour
         economyTransactionService = new EconomyTransactionService();
         expeditionStore = new ExpeditionStore();
 
-        RebuildSystems();
+        RebuildSystems(effectiveConfiguration);
         BootstrapInitialSpatialKnowledge();
         BootstrapInitialExplorableSiteKnowledge();
         BootstrapInitialCommercialKnowledge();
@@ -183,7 +183,8 @@ public class TesteSimulacao : MonoBehaviour
             explorableSiteStore: explorableSiteStore,
             explorableSiteKnowledgeSystem: explorableSiteKnowledgeSystem,
             expeditionSystem: expeditionSystem,
-            configuration: ResolveRuntimeConfiguration(),
+            configuration: effectiveConfiguration,
+            randomSource: authoritativeRandomSource,
             calendarDefinition: calendarDefinition);
     }
 
@@ -280,19 +281,7 @@ public class TesteSimulacao : MonoBehaviour
         }
 
         return SimulationConfigurationResolver.ResolveOrThrow(
-            contentOverrides: new SimulationConfigurationOverrides(
-                economy: new EconomyConfigurationOverrides(
-                    enabledModules.IsEnabled(SimulationModule.Economy)),
-                travel: new TravelConfigurationOverrides(simulationConfig.travelCostPerDay),
-                guardCrime: new GuardCrimeConfigurationOverrides(
-                    enabledModules.IsEnabled(SimulationModule.GuardCrime)),
-                naturalMortality: new NaturalMortalityConfigurationOverrides(
-                    enabled: simulationConfig.NaturalMortalityEnabled,
-                    annualProbability: simulationConfig.NaturalMortalityAnnualProbability),
-                aggregateDemography: new AggregateDemographyConfigurationOverrides(
-                    enabled: simulationConfig.AggregateDemographyEnabled,
-                    annualBirthRate: simulationConfig.AggregateAnnualBirthRate,
-                    annualDeathRate: simulationConfig.AggregateAnnualDeathRate)));
+            contentOverrides: simulationConfig.CreateConfigurationOverrides());
     }
 
     private void Simulate(int daysToSimulate)
@@ -319,16 +308,16 @@ public class TesteSimulacao : MonoBehaviour
         SaveSimulationLog();
     }
 
-    private void AppendScenarioDiagnostics()
+    private void AppendScenarioDiagnostics(EffectiveSimulationConfiguration configuration)
     {
         if (simulationConfig == null || simulationConfig.includeEconomySnapshots == false)
         {
             return;
         }
 
-        logger.AddReportLine("Max Merchant Trade Amount: " + maxMerchantTradeAmount);
-        logger.AddReportLine("Travel Cost Per Day: " + simulationConfig.travelCostPerDay.ToString("0.##"));
-        logger.AddReportLine("Merchant Trade Repositioning: " + (simulationConfig.allowMerchantTradeRepositioning ? "ON" : "OFF"));
+        logger.AddReportLine("Max Merchant Trade Amount: " + configuration.MerchantTrade.MaxTradeAmount);
+        logger.AddReportLine("Travel Cost Per Day: " + configuration.Travel.TravelCostPerDay.ToString("0.##"));
+        logger.AddReportLine("Merchant Trade Repositioning: " + (configuration.MerchantTrade.AllowAutonomousTradeRepositioning ? "ON" : "OFF"));
 
         if (simulationConfig.useFixedSimulationSeed == true)
         {
@@ -958,13 +947,17 @@ public class TesteSimulacao : MonoBehaviour
         }
     }
 
-    private void RebuildSystems()
+    private void RebuildSystems(EffectiveSimulationConfiguration configuration)
     {
-        enabledModules = new SimulationModuleSet(simulationConfig, logger);
         logger = logger ?? new SimulationLogger(simulationConfig != null ? simulationConfig.LogSettings : null);
-        float travelCostPerDay = simulationConfig != null ? simulationConfig.travelCostPerDay : 0f;
         economyTransactionService = economyTransactionService ?? new EconomyTransactionService();
-        travelSystem = new TravelSystem(spatialNetwork, GetCityRuntimeByLocation, travelCostPerDay, domainEventRecorder, logger, economyTransactionService);
+        travelSystem = new TravelSystem(
+            spatialNetwork,
+            GetCityRuntimeByLocation,
+            configuration.Travel,
+            domainEventRecorder,
+            logger,
+            economyTransactionService);
         travelPartyStore = new TravelPartyStore();
         travelPartySystem = new TravelPartySystem(
             travelPartyStore,
@@ -995,21 +988,19 @@ public class TesteSimulacao : MonoBehaviour
         commercialKnowledgeSharingSystem = null;
         actionProviders.Clear();
 
-        if (enabledModules.IsEnabled(SimulationModule.Merchant) == true)
+        if (configuration.MerchantTrade.Enabled == true)
         {
-            bool allowTradeRepositioning = simulationConfig != null && simulationConfig.allowMerchantTradeRepositioning == true;
-            CommercialKnowledgeSettings knowledgeSettings = simulationConfig != null ? simulationConfig.CommercialKnowledge : null;
             merchantSystem = new MerchantSystem(
-                maxMerchantTradeAmount,
-                minimumProfitPerItem,
-                allowTradeRepositioning,
+                configuration.MerchantTrade,
+                configuration.CommercialKnowledge,
                 travelSystem,
                 simulationTime,
-                knowledgeSettings,
                 decisionRecorder,
                 logger,
                 economyTransactionService);
-            commercialKnowledgeSharingSystem = new CommercialKnowledgeSharingSystem(simulationTime, knowledgeSettings);
+            commercialKnowledgeSharingSystem = new CommercialKnowledgeSharingSystem(
+                simulationTime,
+                configuration.CommercialKnowledge);
         }
 
         actionProviders.Add(new TravelActionProvider(travelSystem, merchantSystem));
@@ -1019,18 +1010,29 @@ public class TesteSimulacao : MonoBehaviour
             actionProviders.Add(merchantSystem);
         }
 
-        if (enabledModules.IsEnabled(SimulationModule.Crime) == true && justiceSystem != null)
+        if (configuration.Crime.Enabled == true && justiceSystem != null)
         {
-            crimeSystem = new CrimeSystem(justiceSystem, travelSystem, simulationConfig.hiddenStatus, logger, economyTransactionService);
+            crimeSystem = new CrimeSystem(
+                justiceSystem,
+                travelSystem,
+                simulationConfig.hiddenStatus,
+                logger,
+                economyTransactionService,
+                configuration.Crime,
+                authoritativeRandomSource,
+                simulationTime);
             actionProviders.Add(crimeSystem);
         }
 
-        if (enabledModules.IsEnabled(SimulationModule.GuardCrime) == true && justiceSystem != null)
+        if (configuration.GuardCrime.Enabled == true && justiceSystem != null)
         {
-            actionProviders.Add(new GuardSystem(justiceSystem, simulationConfig.hiddenStatus));
+            actionProviders.Add(new GuardSystem(
+                justiceSystem,
+                simulationConfig.hiddenStatus,
+                configuration.GuardCrime));
         }
 
-        npcDecisionSystem = new NpcDecisionSystem(actionProviders);
+        npcDecisionSystem = new NpcDecisionSystem(actionProviders, authoritativeRandomSource);
     }
 
     private void InitializeJusticeState()

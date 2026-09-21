@@ -9,6 +9,7 @@ public class NpcJobData : ScriptableObject
     public string jobName;
     public NpcJobType jobType = NpcJobType.None;
     public MerchantBehavior merchantBehavior = MerchantBehavior.Traveling;
+    public float minimumProfitPerItem = 1f;
     public NpcActionData workAction;
     public float workUtility = 50;
     public List<TradeItemPreference> preferredTradeItems = new List<TradeItemPreference>();

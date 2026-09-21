@@ -4,11 +4,21 @@ public class GuardSystem : INpcActionProvider
 {
     private readonly JusticeSystem justiceSystem;
     private readonly NpcStatusData hiddenStatus;
+    private readonly EffectiveGuardCrimeConfiguration configuration;
 
     public GuardSystem(JusticeSystem justiceSystem, NpcStatusData hiddenStatus)
+        : this(justiceSystem, hiddenStatus, new EffectiveGuardCrimeConfiguration(true))
+    {
+    }
+
+    public GuardSystem(
+        JusticeSystem justiceSystem,
+        NpcStatusData hiddenStatus,
+        EffectiveGuardCrimeConfiguration configuration)
     {
         this.justiceSystem = justiceSystem;
         this.hiddenStatus = hiddenStatus;
+        this.configuration = configuration ?? new EffectiveGuardCrimeConfiguration(true);
     }
 
     public bool HandlesAction(NpcActionData action)
@@ -18,7 +28,11 @@ public class GuardSystem : INpcActionProvider
 
     public NpcActionRuntime CreateAction(NpcRuntime npcRuntime, NpcActionData action, ref float utility)
     {
-        if (IsGuard(npcRuntime) == false || npcRuntime.CurrentCity == null || IsHidden(npcRuntime) == true || justiceSystem == null)
+        if (configuration.Enabled == false
+            || IsGuard(npcRuntime) == false
+            || npcRuntime.CurrentCity == null
+            || IsHidden(npcRuntime) == true
+            || justiceSystem == null)
         {
             utility = 0f;
             return null;
@@ -38,7 +52,10 @@ public class GuardSystem : INpcActionProvider
 
     public NpcActionResult TryExecuteAction(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime)
     {
-        if (IsGuard(npcRuntime) == false || actionRuntime == null || IsValidArrestTarget(npcRuntime, actionRuntime.TargetNpc) == false)
+        if (configuration.Enabled == false
+            || IsGuard(npcRuntime) == false
+            || actionRuntime == null
+            || IsValidArrestTarget(npcRuntime, actionRuntime.TargetNpc) == false)
         {
             return NpcActionResult.Failed();
         }
@@ -68,7 +85,10 @@ public class GuardSystem : INpcActionProvider
 
             float bounty = justiceSystem.GetBounty(candidate, guardRuntime.CurrentCity);
 
-            if (bestTarget == null || bounty > bestBounty)
+            if (bestTarget == null
+                || bounty > bestBounty
+                || (Mathf.Approximately(bounty, bestBounty)
+                    && string.CompareOrdinal(candidate.RuntimeId, bestTarget.RuntimeId) < 0))
             {
                 bestTarget = candidate;
                 bestBounty = bounty;

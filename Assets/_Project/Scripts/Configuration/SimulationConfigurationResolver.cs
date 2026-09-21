@@ -127,6 +127,60 @@ public static class SimulationConfigurationResolver
             guardCrimeEnabled = overrides.GuardCrime.Enabled.Value;
         }
 
+        bool merchantEnabled = current.MerchantTrade.Enabled;
+        if (overrides.MerchantTrade.Enabled.HasValue)
+        {
+            merchantEnabled = overrides.MerchantTrade.Enabled.Value;
+        }
+
+        bool allowAutonomousTradeRepositioning = current.MerchantTrade.AllowAutonomousTradeRepositioning;
+        if (overrides.MerchantTrade.AllowAutonomousTradeRepositioning.HasValue)
+        {
+            allowAutonomousTradeRepositioning = overrides.MerchantTrade.AllowAutonomousTradeRepositioning.Value;
+        }
+
+        int maxTradeAmount = current.MerchantTrade.MaxTradeAmount;
+        if (overrides.MerchantTrade.MaxTradeAmount.HasValue)
+        {
+            maxTradeAmount = overrides.MerchantTrade.MaxTradeAmount.Value;
+        }
+
+        float localWholesalePriceMultiplier = current.MerchantTrade.LocalWholesalePriceMultiplier;
+        if (overrides.MerchantTrade.LocalWholesalePriceMultiplier.HasValue)
+        {
+            localWholesalePriceMultiplier = overrides.MerchantTrade.LocalWholesalePriceMultiplier.Value;
+        }
+
+        float localReserveRatio = current.MerchantTrade.LocalReserveRatio;
+        if (overrides.MerchantTrade.LocalReserveRatio.HasValue)
+        {
+            localReserveRatio = overrides.MerchantTrade.LocalReserveRatio.Value;
+        }
+
+        int maxUnprofitablePlanWaitDays = current.MerchantTrade.MaxUnprofitablePlanWaitDays;
+        if (overrides.MerchantTrade.MaxUnprofitablePlanWaitDays.HasValue)
+        {
+            maxUnprofitablePlanWaitDays = overrides.MerchantTrade.MaxUnprofitablePlanWaitDays.Value;
+        }
+
+        int freshForDays = current.CommercialKnowledge.FreshForDays;
+        if (overrides.CommercialKnowledge.FreshForDays.HasValue)
+        {
+            freshForDays = overrides.CommercialKnowledge.FreshForDays.Value;
+        }
+
+        int maxUsefulAgeDays = current.CommercialKnowledge.MaxUsefulAgeDays;
+        if (overrides.CommercialKnowledge.MaxUsefulAgeDays.HasValue)
+        {
+            maxUsefulAgeDays = overrides.CommercialKnowledge.MaxUsefulAgeDays.Value;
+        }
+
+        int maxSharedObservationsPerInteraction = current.CommercialKnowledge.MaxSharedObservationsPerInteraction;
+        if (overrides.CommercialKnowledge.MaxSharedObservationsPerInteraction.HasValue)
+        {
+            maxSharedObservationsPerInteraction = overrides.CommercialKnowledge.MaxSharedObservationsPerInteraction.Value;
+        }
+
         NaturalMortalityPolicy naturalMortalityPolicy = current.NaturalMortality.Policy;
         if (overrides.NaturalMortality.Policy.HasValue)
         {
@@ -179,6 +233,17 @@ public static class SimulationConfigurationResolver
             new EffectiveAggregateDemographyConfiguration(
                 aggregateDemographyPolicy,
                 annualBirthRate,
-                annualDeathRate));
+                annualDeathRate),
+            new EffectiveMerchantTradeConfiguration(
+                merchantEnabled,
+                allowAutonomousTradeRepositioning,
+                maxTradeAmount,
+                localWholesalePriceMultiplier,
+                localReserveRatio,
+                maxUnprofitablePlanWaitDays),
+            new EffectiveCommercialKnowledgeConfiguration(
+                freshForDays,
+                maxUsefulAgeDays,
+                maxSharedObservationsPerInteraction));
     }
 }

@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler
+public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutonomousNpcActionPolicy
 {
     private const float EscapeSuccessMultiplierPerFailure = 0.8f;
     private readonly JusticeSystem justiceSystem;
@@ -9,19 +9,33 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler
     private readonly NpcStatusData hiddenStatus;
     private readonly SimulationLogger logger;
     private readonly EconomyTransactionService transactionService;
+    private readonly EffectiveCrimeConfiguration configuration;
+    private readonly IAuthoritativeRandomSource randomSource;
+    private readonly SimulationTime simulationTime;
 
     public CrimeSystem(
         JusticeSystem justiceSystem,
         TravelSystem travelSystem,
         NpcStatusData hiddenStatus,
         SimulationLogger logger = null,
-        EconomyTransactionService transactionService = null)
+        EconomyTransactionService transactionService = null,
+        EffectiveCrimeConfiguration configuration = null,
+        IAuthoritativeRandomSource randomSource = null,
+        SimulationTime simulationTime = null)
     {
         this.justiceSystem = justiceSystem;
         this.travelSystem = travelSystem;
         this.hiddenStatus = hiddenStatus;
         this.logger = logger ?? new SimulationLogger(null);
         this.transactionService = transactionService ?? new EconomyTransactionService();
+        this.configuration = configuration ?? new EffectiveCrimeConfiguration(true, true);
+        this.randomSource = randomSource ?? new DeterministicRandomSource();
+        this.simulationTime = simulationTime;
+    }
+
+    public bool AllowAutonomousAction(NpcActionData action)
+    {
+        return configuration.Enabled && configuration.AutonomousEnabled;
     }
 
     public bool HandlesAction(NpcActionData action)
@@ -39,7 +53,7 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler
 
     public NpcActionRuntime CreateAction(NpcRuntime npcRuntime, NpcActionData action, ref float utility)
     {
-        if (action == null || justiceSystem == null)
+        if (action == null || configuration.Enabled == false)
         {
             utility = 0f;
             return null;
@@ -71,7 +85,7 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler
 
     public NpcActionResult TryExecuteAction(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime)
     {
-        if (actionRuntime == null || actionRuntime.Action == null)
+        if (configuration.Enabled == false || actionRuntime == null || actionRuntime.Action == null)
         {
             return NpcActionResult.Failed();
         }
@@ -109,7 +123,7 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler
         CrimeActionSettings settings = GetCrimeSettings(actionRuntime.Action);
         int sentencePenalty = Mathf.Max(0, settings.failedEscapeSentencePenalty);
 
-        if (justiceSystem.RegisterFailedEscape(npcRuntime, sentencePenalty) == false)
+        if (justiceSystem == null || justiceSystem.RegisterFailedEscape(npcRuntime, sentencePenalty) == false)
         {
             return null;
         }
@@ -305,6 +319,7 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler
     private NpcRuntime FindStealTarget(NpcRuntime thiefRuntime)
     {
         float totalWeight = 0f;
+        List<NpcRuntime> candidates = new List<NpcRuntime>();
 
         foreach (NpcRuntime candidate in thiefRuntime.CurrentCity.ImportantNpcs)
         {
@@ -314,6 +329,7 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler
             }
 
             totalWeight += GetStealTargetWeight(candidate);
+            candidates.Add(candidate);
         }
 
         if (totalWeight <= 0f)
@@ -321,10 +337,12 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler
             return null;
         }
 
-        float randomValue = Random.Range(0f, totalWeight);
+        candidates.Sort((left, right) => string.CompareOrdinal(left.RuntimeId, right.RuntimeId));
+        float randomValue = randomSource.NextUnit(
+            "crime-steal|" + thiefRuntime.RuntimeId + "|" + (simulationTime?.AbsoluteDay ?? 0L)) * totalWeight;
         float currentWeight = 0f;
 
-        foreach (NpcRuntime candidate in thiefRuntime.CurrentCity.ImportantNpcs)
+        foreach (NpcRuntime candidate in candidates)
         {
             if (IsValidStealTarget(thiefRuntime, candidate) == false)
             {
@@ -393,7 +411,12 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler
 
             float utility = 30f + score;
 
-            if (bestOption == null || utility > bestOption.Utility)
+            if (bestOption == null
+                || utility > bestOption.Utility
+                || (Mathf.Approximately(utility, bestOption.Utility)
+                    && string.CompareOrdinal(
+                        targetCity.RuntimeId,
+                        bestOption.TargetCity?.RuntimeId ?? string.Empty) < 0))
             {
                 bestOption = new FleeDestinationOption(targetCity, travelCost, utility);
             }
@@ -404,7 +427,8 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler
 
     private bool CanActInCity(NpcRuntime npcRuntime)
     {
-        return npcRuntime != null
+        return justiceSystem != null
+            && npcRuntime != null
             && npcRuntime.IsAlive == true
             && npcRuntime.CurrentCity != null
             && npcRuntime.IsTraveling == false
