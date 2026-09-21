@@ -12,8 +12,8 @@ Phase 6 bootstraps from the immutable, validated Phase 5 canonical SHA:
 
 The canonical branch includes Checkpoint A political truth foundations at
 `fb69f7c` (`Record Phase 6 Checkpoint A`), the historical Checkpoint B
-baseline integration at `e505b84`, and the promoted Checkpoint B final
-approval candidate from the current recognition/faction-tenure integration.
+baseline integration at `e505b84`, and the externally approved Checkpoint B
+final state from the current recognition/faction-tenure integration.
 The historical baseline and the current fix integration are recorded below
 separately.
 
@@ -102,13 +102,12 @@ Completed:
 - integrated world-owned decision history with authoritative world/knowledge
   revision checks and deterministic diagnostics.
 
-Pending at the final Checkpoint B approval boundary:
+Checkpoint B external approval is complete:
 
-- external human approval of the promoted Checkpoint B final approval
-  candidate;
-- no Checkpoint C work before that approval;
-- remaining Phase 6 completion candidate and deferred-work record after the
-  defined human checkpoint.
+- no further Checkpoint B code changes are pending;
+- do not begin Checkpoint C in this task;
+- the remaining Phase 6 completion candidate and deferred-work record remain
+  future work.
 
 ## Phase 6 dependency graph
 
@@ -343,12 +342,12 @@ Validation on the integration tip:
 - `git diff --check`: green;
 - `SimulationRuntime.AdvanceDay` untouched.
 
-### Checkpoint B — final external review candidate
+### Checkpoint B — externally approved final state
 
-The final external review of canonical `dcf5f222` required two minimal
-semantic completions. They are implemented on the current integration branch
-`codex/phase6/PoliticalRecognitionFactionTenureIntegration` and included in
-the promoted canonical state:
+The final external review of canonical `e132eae` is complete and Checkpoint B
+is externally approved. The reviewed final state is implemented on the
+integration branch `codex/phase6/PoliticalRecognitionFactionTenureIntegration`
+and included in canonical:
 
 - institution-scoped recognition can transition
   `Recognized → Unrecognized → Recognized` while preserving stable relation
@@ -358,6 +357,9 @@ the promoted canonical state:
   `Unrecognized` position, while absence of an observation remains distinct;
 - faction affiliation history preserves `VoluntaryLeave` versus `Expulsion`
   without introducing a generic event/reason framework.
+- Faction remains an independent political knowledge holder;
+- political decisions remain separate from execution;
+- `SimulationRuntime.AdvanceDay` remains unchanged.
 
 Focused coverage includes the withdrawal/restoration history, untouched
 parallel institution, explicit known-unrecognized knowledge, absence-versus-
@@ -376,8 +378,7 @@ Final validation on the current integration tip:
 `SimulationRuntime.AdvanceDay` remains unchanged, so no long-run validation
 was required for this fix.
 
-This is the promoted Checkpoint B final approval candidate. Do not begin
-Checkpoint C before the external human review of this candidate is complete.
+Checkpoint B is externally approved. Do not begin Checkpoint C in this task.
 
 ## Branch and review policy
 
@@ -407,11 +408,11 @@ recurring political processes, or long-horizon NPC behavior.
 
 - Checkpoint A: stable political truth foundations are canonical — REACHED at
   canonical promotion of integration tip `fb69f7c`.
-- Checkpoint B final approval candidate: the historical baseline integration
+- Checkpoint B: externally approved. The historical baseline integration
   remains `e505b84` on `PoliticalSuccessionIntegration`; the current fix
   integration is `PoliticalRecognitionFactionTenureIntegration`, and its
-  validated result is promoted to `codex/phase6/canonical`. Stop for external
-  human review of this candidate.
+  validated result is promoted to `codex/phase6/canonical`. Checkpoint B is
+  complete; do not begin Checkpoint C in this task.
 - Optional Checkpoint C: only for a genuinely substantial new architecture
   layer such as autonomous simulation, generalized political relationships, or
   major knowledge/`AdvanceDay` integration.
