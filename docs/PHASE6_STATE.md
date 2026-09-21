@@ -11,10 +11,11 @@ Phase 6 bootstraps from the immutable, validated Phase 5 canonical SHA:
 `3c3a5a7fa5bac8f301b98ec92307eadb19af25ff`
 
 The canonical branch includes Checkpoint A political truth foundations at
-`fb69f7c` (`Record Phase 6 Checkpoint A`) and the Checkpoint B baseline at
-`9bbf371`. The external review of that B baseline identified two blocking
-architecture gaps; the validated fix candidate is recorded below before
-canonical promotion.
+`fb69f7c` (`Record Phase 6 Checkpoint A`), the historical Checkpoint B
+baseline integration at `e505b84`, and the promoted Checkpoint B final
+approval candidate from the current recognition/faction-tenure integration.
+The historical baseline and the current fix integration are recorded below
+separately.
 
 The completed prior-phase baseline remains documented in:
 
@@ -101,13 +102,13 @@ Completed:
 - integrated world-owned decision history with authoritative world/knowledge
   revision checks and deterministic diagnostics.
 
-Pending after the external Checkpoint B review:
+Pending at the final Checkpoint B approval boundary:
 
-- promote the validated Checkpoint B fix candidate to canonical;
-- optional Checkpoint C work only if a substantial autonomous or generalized
-  relationship layer is explicitly justified after that review;
-- external human review of the promoted fix candidate;
-- remaining Phase 6 completion candidate and deferred-work record.
+- external human approval of the promoted Checkpoint B final approval
+  candidate;
+- no Checkpoint C work before that approval;
+- remaining Phase 6 completion candidate and deferred-work record after the
+  defined human checkpoint.
 
 ## Phase 6 dependency graph
 
@@ -173,12 +174,14 @@ typed office, property, institution, or Person targets. Claim existence does
 not mutate office incumbency, property ownership, genealogy, or factual life.
 Recognition is a separate institution-scoped relation keyed by stable
 `(ClaimId, InstitutionId)` identity. The same claim may be recognized,
-contested, or rejected by different institutions at the same time; each
-relation has stale-safe transitions and auditable history. Terminal resolution
-preserves its resolution day. Runtime construction clones and validates claims
-and recognition relations against current world truth. Deterministic snapshots,
+withdrawn to `Unrecognized`, recognized again, or contested/rejected by
+different institutions at the same time; each relation has stale-safe
+transitions and auditable history. Terminal resolution preserves its
+resolution day. Runtime construction clones and validates claims and
+recognition relations against current world truth. Deterministic snapshots,
 canonical output, diffs, and invariant validation cover both claim lifecycle
-and recognition relations.
+and recognition relations. Knowledge can record an institution-specific
+`Unrecognized` perspective, which remains distinct from no observation.
 
 Faction truth is world-owned by stable `FactionId` records and a separate
 PersonId-based affiliation relation store. The store keeps stable affiliation
@@ -187,9 +190,10 @@ policy is evaluated by the proposal system rather than embedded in storage.
 Supported policy semantics are cannot-leave, leave-without-rejoin, and
 leave-and-rejoin, with explicit expulsion permission. Affiliation add/end
 operations are stale-safe, world-day guarded, and bound to the originating
-world store. Runtime clones rebind the faction store to the receiving
-PersonStore; diagnostics cover deterministic faction and affiliation
-snapshots, output, diffs, and invariants.
+world store. Completed affiliation records preserve the explicit historical
+end reason `VoluntaryLeave` or `Expulsion`. Runtime clones rebind the faction
+store to the receiving PersonStore; diagnostics cover deterministic faction
+and affiliation snapshots, output, diffs, and invariants.
 
 Political knowledge, support, derived legitimacy, decision history, and
 succession selection are now integrated for Checkpoint B. Recognition remains
@@ -241,9 +245,9 @@ outside this checkpoint. Any deferred investiture, richer faction governance,
 or generalized dispute/escalation layer requires an explicit future design
 checkpoint.
 
-### Checkpoint B integration and review record
+### Checkpoint B historical baseline integration and review record
 
-The validated integration branch is
+The historical baseline integration branch was
 `codex/phase6/PoliticalSuccessionIntegration`.
 
 Feature and integration tips:
@@ -283,7 +287,7 @@ history, typed claim-state validation, stale-knowledge separation, atomic
 decision binding, and caller-store alias isolation. The final independent
 review approved `e505b84`; no self-approval was used.
 
-Final validation on the implementation tip `e505b84`:
+Final validation on the historical baseline implementation tip `e505b84`:
 
 - Political knowledge/support integration: `6/6`;
 - political succession/decision integration: `13/13`;
@@ -297,11 +301,11 @@ separate narrower `PlayModeSmokeTests` class previously passed `3/3`; the
 PlayMode platform itself discovers zero tests because those smoke tests are
 EditMode tests that enter play mode manually.
 
-### Checkpoint B — external review fix candidate
+### Checkpoint B — external review fix candidate (historical record)
 
 The external architecture review accepted the existing decision, support,
 stale-guard, diagnostics, Smoke, and no-political-`AdvanceDay` boundaries but
-blocked promotion of canonical `9bbf371` on two issues:
+blocked the then-current Checkpoint B baseline `9bbf371` on two issues:
 
 - `PoliticalClaimRecord` no longer owns a single global recognition. The
   authoritative `PoliticalClaimRecognitionRecord` is keyed by stable
@@ -317,10 +321,12 @@ blocked promotion of canonical `9bbf371` on two issues:
 Faction is also a first-class political knowledge holder, independent of its
 members; no membership-to-knowledge propagation was introduced.
 
-The isolated implementation branch is
+The earlier isolated implementation branch was
 `codex/phase6/PoliticalRecognitionFactionTenure`, reviewed independently and
 integrated on `codex/phase6/PoliticalRecognitionFactionTenureIntegration`.
-The implementation tip before this state-document commit is `12d0fd1`.
+Its pre-withdrawal/end-cause implementation tip was `12d0fd1`, and it was
+already promoted to canonical as `dcf5f222` before the final external review
+below.
 
 Focused coverage includes multi-institution recognition and history
 isolation, institution-specific knowledge and legitimacy perspective,
@@ -337,8 +343,29 @@ Validation on the integration tip:
 - `git diff --check`: green;
 - `SimulationRuntime.AdvanceDay` untouched.
 
-This is a Checkpoint B fix candidate only. Do not begin Checkpoint C until the
-external human review of the promoted candidate is complete.
+### Checkpoint B — final external review candidate
+
+The final external review of canonical `dcf5f222` required two minimal
+semantic completions. They are implemented on the current integration branch
+`codex/phase6/PoliticalRecognitionFactionTenureIntegration` and included in
+the promoted canonical state:
+
+- institution-scoped recognition can transition
+  `Recognized → Unrecognized → Recognized` while preserving stable relation
+  identity, history, stale guards, independent institutional perspectives,
+  and deterministic diagnostics;
+- political knowledge can explicitly record institution A's known
+  `Unrecognized` position, while absence of an observation remains distinct;
+- faction affiliation history preserves `VoluntaryLeave` versus `Expulsion`
+  without introducing a generic event/reason framework.
+
+Focused coverage includes the withdrawal/restoration history, untouched
+parallel institution, explicit known-unrecognized knowledge, absence-versus-
+known-unrecognized distinction, affiliation end reasons, and diagnostic
+end-reason output. `SimulationRuntime.AdvanceDay` remains unchanged.
+
+This is the promoted Checkpoint B final approval candidate. Do not begin
+Checkpoint C before the external human review of this candidate is complete.
 
 ## Branch and review policy
 
@@ -368,11 +395,11 @@ recurring political processes, or long-horizon NPC behavior.
 
 - Checkpoint A: stable political truth foundations are canonical — REACHED at
   canonical promotion of integration tip `fb69f7c`.
-- Checkpoint B: the baseline integration was reached on `e505b84`, but the
-  external review blocked canonical promotion on global recognition scope and
-  permanent affiliation identity. The reviewed and fully validated fix
-  candidate is the integration tip recorded above; promote it to canonical,
-  then stop for external human review.
+- Checkpoint B final approval candidate: the historical baseline integration
+  remains `e505b84` on `PoliticalSuccessionIntegration`; the current fix
+  integration is `PoliticalRecognitionFactionTenureIntegration`, and its
+  validated result is promoted to `codex/phase6/canonical`. Stop for external
+  human review of this candidate.
 - Optional Checkpoint C: only for a genuinely substantial new architecture
   layer such as autonomous simulation, generalized political relationships, or
   major knowledge/`AdvanceDay` integration.
