@@ -432,6 +432,48 @@ The complete validation record for this wave is maintained with the promotion
 commit and includes ALL EditMode, official Smoke, long-run regression, and
 `git diff --check`.
 
+### Architecture alignment conformance closure — validated
+
+The local conformance audit blockers are resolved on the integration tip
+`4f5521e` and are part of the current canonical promotion candidate. The Unity
+bootstrap now composes the CrimeSystem infrastructure whenever Justice exists,
+including when `Crime.Enabled` is false, so existing hidden-state timers still
+progress. The CrimeSystem is registered as an NPC action provider only when
+Crime is enabled; infrastructure availability therefore does not re-enable
+normal or autonomous crime origination. A real `TesteSimulacao` composition
+test covers timer expiration, provider absence, and the absence of a new
+criminal decision.
+
+Fatal conflict consequences retain their existing injury algorithm and
+probabilities, but contextual conflict random sources derive each fatal draw
+from stable conflict, resolution, side, participant, and consequence identity.
+Unrelated sequential stream consumption and semantically irrelevant
+participant insertion order therefore do not shift an independent fatal draw.
+Sources without contextual support retain the legacy test-double fallback.
+`SimulationRuntime.AdvanceDay` remains unchanged.
+
+Final conformance-closure validation on the integration tip:
+
+- focused bootstrap composition: `1/1`;
+- Conflict suites: `129/129`;
+- Crime suites: `7/7`;
+- DeterministicRandom: `4/4`;
+- SimulationRuntime orchestration: `10/10`;
+- long-run regression: `7/7`;
+- ALL EditMode: `1441/1441`;
+- official complete Smoke filter: `5/5`;
+- failures/skips: `0/0`;
+- `git diff --check`: green;
+- no changes to `SimulationRuntime.AdvanceDay`.
+
+This closes the architecture-alignment/foundation-hardening follow-up only.
+Checkpoint C has not started. Known deferred work remains categorized as
+optional cleanup (legacy capability/configuration paths and related naming),
+deferred architecture (calendar fallback, capability discovery, lazy loading,
+Active/Dormant expansion, generic Organization, and future political daily
+processing), and future persistence/platform work (RNG/config persistence,
+replay/save, networking, and multiplayer concerns).
+
 ## Branch and review policy
 
 Feature branches use:
