@@ -380,6 +380,58 @@ was required for this fix.
 
 Checkpoint B is externally approved. Do not begin Checkpoint C in this task.
 
+### Post-Checkpoint B — architecture alignment and foundation hardening
+
+The post-Checkpoint-B architecture alignment is integrated and validated on
+the current canonical promotion candidate. It is a technical hardening wave,
+not Checkpoint C and not a new political feature layer.
+
+The authoritative configuration flow is now:
+
+`authoring/assets → defaults/preset/world/content overrides → EffectiveSimulationConfiguration → composition validation → domain projections/systems`
+
+Travel, crime, guard enforcement, merchant trade, and commercial knowledge no
+longer consume competing raw bootstrap policy values after resolution.
+`SimulationModuleSet` remains only as a local Unity bootstrap compatibility
+view; it preserves requested modules and does not normalize away Merchant when
+Economy is disabled or define semantic enablement. Enabled capability without
+an available implementation fails composition explicitly.
+
+The effective projections now include merchant trade policy and commercial
+knowledge settings. Merchant repositioning authorizes only a new autonomous
+reposition intention; existing plans may still execute or replan. Global trade
+amount and former hidden merchant constants are effective configuration, while
+`minimumProfitPerItem` is content on `NpcJobData` and can vary by merchant/job.
+
+Crime enablement and crime autonomy are separate. Explicitly requested crime
+actions remain eligible when Crime is enabled but autonomous crime is disabled;
+disabled crime does not stop existing hidden-state timers. Sentence progression
+is independent of GuardCrime enablement. No guard-autonomy policy was invented;
+GuardCrime remains an enforcement capability.
+
+Authoritative runtime randomness is pure C# and context/stream scoped. NPC
+decision, crime target selection, action success, and seeded conflict draws no
+longer depend on Unity's global random state. Demographic sampling remains its
+existing stable identity/day-scoped implementation. Ordering that can affect
+truth is stabilized by runtime IDs, action IDs, or domain keys; diagnostics,
+queries, previews, and recording do not consume authoritative randomness.
+
+The historical Checkpoint-B baseline integration remains
+`codex/phase6/PoliticalSuccessionIntegration`; the later institution-scoped
+recognition/faction-tenure fix integration remains
+`codex/phase6/PoliticalRecognitionFactionTenureIntegration`. This alignment
+wave is integrated separately as
+`codex/phase6/ArchitectureAlignmentFoundationHardeningIntegration`.
+
+Focused alignment coverage includes effective configuration precedence and
+immutability, explicit composition failures, effective travel cost, Crime
+autonomy/explicit actions, disabled-crime consequences, sentence progression,
+merchant limits/repositioning/content margin, commercial knowledge settings,
+deterministic random streams, conflict randomness, and stable insertion order.
+The complete validation record for this wave is maintained with the promotion
+commit and includes ALL EditMode, official Smoke, long-run regression, and
+`git diff --check`.
+
 ## Branch and review policy
 
 Feature branches use:
