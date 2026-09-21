@@ -502,6 +502,7 @@ public sealed class WorldStateDiff
                 CompareValue("TheftOutcome", identity, "VictimPersonId", WorldStateCanonicalWriter.StringValue(left.VictimPersonId), WorldStateCanonicalWriter.StringValue(right.VictimPersonId), differences);
                 CompareValue("TheftOutcome", identity, "LossAmount", WorldStateCanonicalWriter.IntValue(left.LossAmount), WorldStateCanonicalWriter.IntValue(right.LossAmount), differences);
                 CompareValue("TheftOutcome", identity, "OccurredAbsoluteDay", WorldStateCanonicalWriter.Int64Value(left.OccurredAbsoluteDay), WorldStateCanonicalWriter.Int64Value(right.OccurredAbsoluteDay), differences);
+                CompareValue("TheftOutcome", identity, "OccurrenceKey", WorldStateCanonicalWriter.StringValue(left.OccurrenceKey), WorldStateCanonicalWriter.StringValue(right.OccurrenceKey), differences);
                 CompareValue("TheftOutcome", identity, "OriginDecisionId", WorldStateCanonicalWriter.StringValue(left.OriginDecisionId), WorldStateCanonicalWriter.StringValue(right.OriginDecisionId), differences);
             },
             differences);

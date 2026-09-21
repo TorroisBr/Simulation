@@ -57,6 +57,7 @@ public sealed class TheftOutcome
     public PersonId VictimPersonId { get; }
     public int LossAmount { get; }
     public long OccurredAbsoluteDay { get; }
+    public string OccurrenceKey { get; }
     public string OriginDecisionId { get; }
 
     public TheftOutcome(
@@ -65,6 +66,7 @@ public sealed class TheftOutcome
         PersonId victimPersonId,
         int lossAmount,
         long occurredAbsoluteDay,
+        string occurrenceKey,
         string originDecisionId = null)
     {
         OutcomeId = outcomeId ?? throw new ArgumentNullException(nameof(outcomeId));
@@ -72,8 +74,26 @@ public sealed class TheftOutcome
         VictimPersonId = victimPersonId ?? throw new ArgumentNullException(nameof(victimPersonId));
         if (lossAmount <= 0) throw new ArgumentOutOfRangeException(nameof(lossAmount));
         if (occurredAbsoluteDay < 0L) throw new ArgumentOutOfRangeException(nameof(occurredAbsoluteDay));
+        if (string.IsNullOrWhiteSpace(occurrenceKey))
+        {
+            throw new ArgumentException("A stable occurrence key is required.", nameof(occurrenceKey));
+        }
+
+        TheftOutcomeId expectedOutcomeId = TheftOutcomeId.Create(
+            perpetratorPersonId,
+            victimPersonId,
+            occurredAbsoluteDay,
+            occurrenceKey);
+        if (expectedOutcomeId.Equals(outcomeId) == false)
+        {
+            throw new ArgumentException(
+                "The theft outcome id does not match the outcome's semantic identity.",
+                nameof(outcomeId));
+        }
+
         LossAmount = lossAmount;
         OccurredAbsoluteDay = occurredAbsoluteDay;
+        OccurrenceKey = occurrenceKey;
         OriginDecisionId = string.IsNullOrWhiteSpace(originDecisionId) ? null : originDecisionId;
     }
 }

@@ -814,6 +814,7 @@ public sealed class WorldStateTheftOutcomeSnapshot
     public string VictimPersonId { get; }
     public int LossAmount { get; }
     public long OccurredAbsoluteDay { get; }
+    public string OccurrenceKey { get; }
     public string OriginDecisionId { get; }
 
     public WorldStateTheftOutcomeSnapshot(
@@ -822,6 +823,7 @@ public sealed class WorldStateTheftOutcomeSnapshot
         string victimPersonId,
         int lossAmount,
         long occurredAbsoluteDay,
+        string occurrenceKey,
         string originDecisionId)
     {
         OutcomeId = outcomeId;
@@ -829,6 +831,7 @@ public sealed class WorldStateTheftOutcomeSnapshot
         VictimPersonId = victimPersonId;
         LossAmount = lossAmount;
         OccurredAbsoluteDay = occurredAbsoluteDay;
+        OccurrenceKey = occurrenceKey;
         OriginDecisionId = originDecisionId;
     }
 }
@@ -1700,6 +1703,7 @@ public static class WorldStateSnapshotBuilder
                     outcome.VictimPersonId.Value,
                     outcome.LossAmount,
                     outcome.OccurredAbsoluteDay,
+                    outcome.OccurrenceKey,
                     outcome.OriginDecisionId));
             }
         }

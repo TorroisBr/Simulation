@@ -207,6 +207,7 @@ public static class WorldStateCanonicalWriter
                 outcome.VictimPersonId,
                 IntValue(outcome.LossAmount),
                 Int64Value(outcome.OccurredAbsoluteDay),
+                outcome.OccurrenceKey,
                 outcome.OriginDecisionId);
         }
 

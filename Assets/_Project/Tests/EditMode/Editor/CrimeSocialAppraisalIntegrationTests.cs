@@ -181,6 +181,53 @@ public sealed class CrimeSocialAppraisalIntegrationTests
     }
 
     [Test]
+    public void BoundCrimeSystemRejectsTheftWithoutSemanticOccurrenceKeyBeforeMutation()
+    {
+        PersonStore persons = CreatePersons(out PersonId maria, out PersonId joao, out _);
+        SimulationTime time = new SimulationTime();
+        CrimeSocialAppraisalWorldState state = new CrimeSocialAppraisalWorldState(
+            persons,
+            new InstitutionStore(),
+            time);
+        CityRuntime city = SimulationTestFactory.CreateCity("crime-key-city", "crime-key-location");
+        SimulationRuntime world = new SimulationRuntime(
+            time,
+            new[] { city },
+            null,
+            personStore: persons);
+        Assert.That(world.TryMaterializePerson(
+            joao,
+            SimulationTestFactory.CreateNpc("key-thief"),
+            "runtime-key-joao",
+            city,
+            0f,
+            out NpcRuntime thief,
+            out PersonMaterializationFailure thiefFailure), Is.True, thiefFailure.ToString());
+        Assert.That(world.TryMaterializePerson(
+            maria,
+            SimulationTestFactory.CreateNpc("key-victim"),
+            "runtime-key-maria",
+            city,
+            50f,
+            out NpcRuntime victim,
+            out PersonMaterializationFailure victimFailure), Is.True, victimFailure.ToString());
+
+        CrimeSystem crime = new CrimeSystem(
+            new JusticeSystem(null, null, null, null),
+            null,
+            null,
+            simulationTime: time,
+            theftOutcomeSink: state.Integration);
+        NpcActionData action = SimulationTestFactory.CreateAction("steal-without-key", NpcActionType.Steal, NpcActionCategory.Crime);
+        NpcActionResult result = crime.TryExecuteAction(thief, new NpcActionRuntime(action, victim, 20));
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(thief.Money, Is.EqualTo(0f));
+        Assert.That(victim.Money, Is.EqualTo(50f));
+        Assert.That(state.TheftOutcomes.Count, Is.EqualTo(0));
+    }
+
+    [Test]
     public void TheftOutcomeIdentityUsesExplicitSemanticOccurrenceAndIsNotDecisionSequenceBased()
     {
         PersonId perpetrator = new PersonId("person.joao");
@@ -193,6 +240,13 @@ public sealed class CrimeSocialAppraisalIntegrationTests
         Assert.That(first, Is.Not.EqualTo(second));
         Assert.That(first.Value, Does.Not.Contain("decision-"));
         Assert.That(first.Value, Does.Not.Contain("npc-"));
+        Assert.Throws<System.ArgumentException>(() => new TheftOutcome(
+            first,
+            perpetrator,
+            victim,
+            20,
+            100L,
+            "different-semantic-occurrence"));
     }
 
     [Test]
@@ -326,7 +380,8 @@ public sealed class CrimeSocialAppraisalIntegrationTests
             perpetrator,
             victim,
             20,
-            100L);
+            100L,
+            key);
     }
 
     private static PersonStore CreatePersons(

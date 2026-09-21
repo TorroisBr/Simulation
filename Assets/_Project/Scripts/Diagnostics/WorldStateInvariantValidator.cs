@@ -2135,6 +2135,11 @@ public static class WorldStateInvariantValidator
                 AddError(issues, "TheftOutcomeLossInvalid", identity, "Theft outcome loss amount must be positive.");
             }
 
+            if (string.IsNullOrWhiteSpace(outcome.OccurrenceKey))
+            {
+                AddError(issues, "TheftOutcomeOccurrenceKeyMissing", identity, "Theft outcome has no stable semantic occurrence key.");
+            }
+
             if (outcome.OccurredAbsoluteDay < 0L || outcome.OccurredAbsoluteDay > absoluteDay)
             {
                 AddError(issues, "TheftOutcomeDayInvalid", identity, "Theft outcome day is outside the snapshot timeline.");
@@ -2339,6 +2344,39 @@ public static class WorldStateInvariantValidator
                 || reaction.TargetStableId != predecessor.TargetStableId)
             {
                 AddError(issues, "SocialReactionSupersessionThreadInvalid", identity, "A superseding social reaction must remain in the evaluator/source/target thread.");
+            }
+        }
+
+        HashSet<string> supersededPredecessors = new HashSet<string>(StringComparer.Ordinal);
+        foreach (WorldStateSocialReactionSnapshot reaction in reactions ?? Array.Empty<WorldStateSocialReactionSnapshot>())
+        {
+            if (reaction == null || reaction.SupersedesReactionId == null)
+            {
+                continue;
+            }
+
+            string identity = string.IsNullOrWhiteSpace(reaction.ReactionId)
+                ? "social-reaction"
+                : reaction.ReactionId;
+            if (supersededPredecessors.Add(reaction.SupersedesReactionId) == false)
+            {
+                AddError(issues, "SocialReactionSupersessionBranch", identity, "A social reaction predecessor has more than one superseding reaction.");
+            }
+
+            HashSet<string> lineage = new HashSet<string>(StringComparer.Ordinal);
+            WorldStateSocialReactionSnapshot current = reaction;
+            while (current != null && current.SupersedesReactionId != null)
+            {
+                if (lineage.Add(current.ReactionId ?? string.Empty) == false)
+                {
+                    AddError(issues, "SocialReactionSupersessionCycle", identity, "Social reaction supersession lineage contains a cycle.");
+                    break;
+                }
+
+                if (reactionsById.TryGetValue(current.SupersedesReactionId, out current) == false)
+                {
+                    break;
+                }
             }
         }
     }

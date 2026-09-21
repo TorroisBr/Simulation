@@ -212,7 +212,8 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
             runtime.SetStableOccurrenceKey(BuildAutonomousTheftOccurrenceKey(
                 npcRuntime.PersonId,
                 target.PersonId,
-                amount));
+                amount,
+                action.DefinitionId));
         }
 
         return runtime;
@@ -284,6 +285,14 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
         }
 
         int amount = Mathf.Min(actionRuntime.Amount, Mathf.FloorToInt(actionRuntime.TargetNpc.Money));
+        if (theftOutcomeSink != null
+            && (npcRuntime.PersonId == null
+                || actionRuntime.TargetNpc.PersonId == null
+                || string.IsNullOrWhiteSpace(actionRuntime.StableOccurrenceKey)))
+        {
+            return NpcActionResult.Failed();
+        }
+
         TheftOutcome theftOutcome = CreateTheftOutcome(npcRuntime, actionRuntime, amount);
 
         if (theftOutcome != null
@@ -350,13 +359,15 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
             actionRuntime.TargetNpc.PersonId,
             amount,
             absoluteDay,
+            actionRuntime.StableOccurrenceKey,
             actionRuntime.OriginDecisionId);
     }
 
     private string BuildAutonomousTheftOccurrenceKey(
         PersonId perpetratorPersonId,
         PersonId victimPersonId,
-        int amount)
+        int amount,
+        string actionDefinitionId)
     {
         return "autonomous|day|"
             + (simulationTime?.AbsoluteDay ?? 0L).ToString(System.Globalization.CultureInfo.InvariantCulture)
@@ -365,7 +376,9 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
             + "|victim|"
             + victimPersonId.Value
             + "|amount|"
-            + amount.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            + amount.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            + "|action|"
+            + (actionDefinitionId ?? string.Empty);
     }
 
     private NpcActionResult TryExecuteHide(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime)
