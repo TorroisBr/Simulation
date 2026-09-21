@@ -760,7 +760,9 @@ public sealed class CrimeSocialAppraisalIntegration : ITheftOutcomeSink
             : observation.KnownInvestigatorInstitutionId != null
                 ? SocialReactionTarget.ForInstitution(observation.KnownInvestigatorInstitutionId)
                 : null;
-        if (investigatorTarget == null)
+        if (investigatorTarget == null
+            || (observation.Role != CrimeKnowledgeRole.Victim
+                && observation.Role != CrimeKnowledgeRole.Perpetrator))
         {
             return true;
         }
@@ -834,7 +836,9 @@ public sealed class CrimeSocialAppraisalIntegration : ITheftOutcomeSink
             : observation.KnownInvestigatorInstitutionId != null
                 ? SocialReactionTarget.ForInstitution(observation.KnownInvestigatorInstitutionId)
                 : null;
-        if (investigatorTarget == null)
+        if (investigatorTarget == null
+            || (observation.Role != CrimeKnowledgeRole.Victim
+                && observation.Role != CrimeKnowledgeRole.Perpetrator))
         {
             return true;
         }

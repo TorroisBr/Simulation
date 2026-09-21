@@ -159,7 +159,7 @@ public sealed class SocialAppraisalFoundationTests
                 SocialReactionValence.Negative,
                 SocialReactionSalience.High,
                 102L,
-                first.ReactionId),
+                new SocialReactionId(first.ReactionId.Value)),
             maria,
             second.Source,
             second.Target,
@@ -168,7 +168,7 @@ public sealed class SocialAppraisalFoundationTests
             SocialReactionSalience.High,
             basis,
             102L,
-            first.ReactionId);
+            new SocialReactionId(first.ReactionId.Value));
 
         Assert.That(store.TryRecord(branch, out SocialReactionStoreFailure failure), Is.False);
         Assert.That(failure.Code, Is.EqualTo(SocialReactionStoreFailureCode.SupersessionAlreadyUsed));

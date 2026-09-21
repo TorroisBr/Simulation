@@ -606,7 +606,8 @@ public sealed class SocialReactionStore
 
             foreach (SocialReaction existing in reactionsById.Values)
             {
-                if (existing.SupersedesReactionId == reaction.SupersedesReactionId)
+                if (existing.SupersedesReactionId != null
+                    && existing.SupersedesReactionId.Equals(reaction.SupersedesReactionId))
                 {
                     failure = SocialReactionStoreFailure.Create(
                         SocialReactionStoreFailureCode.SupersessionAlreadyUsed,
