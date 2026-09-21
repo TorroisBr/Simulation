@@ -2,35 +2,23 @@ using System.Collections.Generic;
 
 public class SimulationModuleSet
 {
-    private readonly HashSet<SimulationModule> enabledModules = new HashSet<SimulationModule>();
-    private readonly SimulationLogger logger;
+    private readonly HashSet<SimulationModule> requestedModules = new HashSet<SimulationModule>();
 
     public SimulationModuleSet(SimulationConfigData config, SimulationLogger logger = null)
     {
-        this.logger = logger ?? new SimulationLogger(null);
-
         if (config != null)
         {
             foreach (SimulationModule module in config.EnabledModules)
             {
-                enabledModules.Add(module);
+                requestedModules.Add(module);
             }
         }
-
-        NormalizeDependencies();
     }
 
+    // This is a bootstrap compatibility view only. EffectiveSimulationConfiguration
+    // is the semantic authority after composition.
     public bool IsEnabled(SimulationModule module)
     {
-        return enabledModules.Contains(module);
-    }
-
-    private void NormalizeDependencies()
-    {
-        if (enabledModules.Contains(SimulationModule.Merchant) == true && enabledModules.Contains(SimulationModule.Economy) == false)
-        {
-            enabledModules.Remove(SimulationModule.Merchant);
-            logger.LogWarning("Modulo Merchant desabilitado porque Economy nao esta ativo.");
-        }
+        return requestedModules.Contains(module);
     }
 }

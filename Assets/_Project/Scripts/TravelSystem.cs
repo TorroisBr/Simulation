@@ -6,7 +6,7 @@ public class TravelSystem
 {
     private readonly SpatialNetworkRuntime spatialNetwork;
     private readonly Func<SpatialLocationRuntime, CityRuntime> getCityRuntimeByLocation;
-    private readonly float travelCostPerDay;
+    private readonly EffectiveTravelConfiguration travelConfiguration;
     private readonly DomainEventRecorder domainEventRecorder;
     private readonly SimulationLogger logger;
     private readonly EconomyTransactionService transactionService;
@@ -18,8 +18,30 @@ public class TravelSystem
         float travelCostPerDay = 0f,
         SimulationLogger logger = null,
         EconomyTransactionService transactionService = null)
-        : this(spatialNetwork, getCityRuntimeByLocation, travelCostPerDay, null, logger, transactionService)
+        : this(
+            spatialNetwork,
+            getCityRuntimeByLocation,
+            new EffectiveTravelConfiguration(travelCostPerDay),
+            null,
+            logger,
+            transactionService)
     {
+    }
+
+    public TravelSystem(
+        SpatialNetworkRuntime spatialNetwork,
+        Func<SpatialLocationRuntime, CityRuntime> getCityRuntimeByLocation,
+        EffectiveTravelConfiguration travelConfiguration,
+        DomainEventRecorder domainEventRecorder,
+        SimulationLogger logger,
+        EconomyTransactionService transactionService = null)
+    {
+        this.spatialNetwork = spatialNetwork;
+        this.getCityRuntimeByLocation = getCityRuntimeByLocation;
+        this.travelConfiguration = travelConfiguration ?? new EffectiveTravelConfiguration(0f);
+        this.domainEventRecorder = domainEventRecorder;
+        this.logger = logger ?? new SimulationLogger(null);
+        this.transactionService = transactionService ?? new EconomyTransactionService();
     }
 
     public TravelSystem(
@@ -29,13 +51,14 @@ public class TravelSystem
         DomainEventRecorder domainEventRecorder,
         SimulationLogger logger,
         EconomyTransactionService transactionService = null)
+        : this(
+            spatialNetwork,
+            getCityRuntimeByLocation,
+            new EffectiveTravelConfiguration(travelCostPerDay),
+            domainEventRecorder,
+            logger,
+            transactionService)
     {
-        this.spatialNetwork = spatialNetwork;
-        this.getCityRuntimeByLocation = getCityRuntimeByLocation;
-        this.travelCostPerDay = Mathf.Max(0f, travelCostPerDay);
-        this.domainEventRecorder = domainEventRecorder;
-        this.logger = logger ?? new SimulationLogger(null);
-        this.transactionService = transactionService ?? new EconomyTransactionService();
     }
 
     public void AttachTravelPartyStore(TravelPartyStore store)
@@ -191,8 +214,12 @@ public class TravelSystem
         }
 
         List<NpcRuntime> arrivedNpcs = new List<NpcRuntime>();
+        List<NpcRuntime> orderedNpcs = new List<NpcRuntime>(npcRuntimeList);
+        orderedNpcs.Sort((left, right) => string.CompareOrdinal(
+            left?.RuntimeId ?? string.Empty,
+            right?.RuntimeId ?? string.Empty));
 
-        foreach (NpcRuntime npcRuntime in npcRuntimeList)
+        foreach (NpcRuntime npcRuntime in orderedNpcs)
         {
             if (npcRuntime == null || npcRuntime.IsAlive == false || npcRuntime.IsTraveling == false || IsManagedByTravelParty(npcRuntime))
             {
@@ -283,6 +310,10 @@ public class TravelSystem
             }
         }
 
+        destinationCities.Sort((left, right) => string.CompareOrdinal(
+            left?.RuntimeId ?? string.Empty,
+            right?.RuntimeId ?? string.Empty));
+
         return destinationCities;
     }
 
@@ -318,6 +349,10 @@ public class TravelSystem
 
             knownRoutes.Add(route);
         }
+
+        knownRoutes.Sort((left, right) => string.CompareOrdinal(
+            left?.RuntimeId ?? string.Empty,
+            right?.RuntimeId ?? string.Empty));
 
         return knownRoutes.AsReadOnly();
     }
@@ -432,7 +467,7 @@ public class TravelSystem
 
     public float GetTravelCost(int travelDays)
     {
-        return Mathf.Max(1, travelDays) * travelCostPerDay;
+        return Mathf.Max(1, travelDays) * travelConfiguration.TravelCostPerDay;
     }
 
     public bool TryGetDirectRoute(

@@ -3,18 +3,19 @@ using System.Collections.Generic;
 
 public sealed class CommercialKnowledgeSharingSystem
 {
-    private const int DefaultMaxSharedObservationsPerInteraction = 2;
-
     private readonly SimulationTime simulationTime;
     private readonly int maxSharedObservationsPerInteraction;
     private readonly CommercialKnowledgePolicy knowledgePolicy;
 
-    public CommercialKnowledgeSharingSystem(SimulationTime simulationTime, CommercialKnowledgeSettings settings)
+    public CommercialKnowledgeSharingSystem(
+        SimulationTime simulationTime,
+        EffectiveCommercialKnowledgeConfiguration configuration)
     {
         this.simulationTime = simulationTime ?? throw new ArgumentNullException(nameof(simulationTime));
-        knowledgePolicy = new CommercialKnowledgePolicy(settings);
-        int configuredLimit = settings != null ? settings.maxSharedObservationsPerInteraction : DefaultMaxSharedObservationsPerInteraction;
-        maxSharedObservationsPerInteraction = Math.Max(1, configuredLimit);
+        knowledgePolicy = new CommercialKnowledgePolicy(configuration);
+        maxSharedObservationsPerInteraction = configuration != null
+            ? Math.Max(1, configuration.MaxSharedObservationsPerInteraction)
+            : 2;
     }
 
     public void ShareAmongPresentMerchants(IReadOnlyList<NpcRuntime> npcRuntimes)

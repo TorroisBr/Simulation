@@ -400,10 +400,14 @@ public sealed class CommercialKnowledgePolicy
     public int FreshForDays => freshForDays;
     public int MaxUsefulAgeDays => maxUsefulAgeDays;
 
-    public CommercialKnowledgePolicy(CommercialKnowledgeSettings settings)
+    public CommercialKnowledgePolicy(EffectiveCommercialKnowledgeConfiguration configuration)
     {
-        int configuredFreshDays = settings != null ? settings.freshForDays : DefaultFreshForDays;
-        int configuredMaxAge = settings != null ? settings.maxUsefulAgeDays : DefaultMaxUsefulAgeDays;
+        int configuredFreshDays = configuration != null
+            ? configuration.FreshForDays
+            : DefaultFreshForDays;
+        int configuredMaxAge = configuration != null
+            ? configuration.MaxUsefulAgeDays
+            : DefaultMaxUsefulAgeDays;
 
         freshForDays = Math.Min(Math.Max(0, configuredFreshDays), int.MaxValue - 1);
 

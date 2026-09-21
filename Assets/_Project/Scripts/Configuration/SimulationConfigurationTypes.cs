@@ -171,6 +171,99 @@ public sealed class EffectiveGuardCrimeConfiguration : IEquatable<EffectiveGuard
     }
 }
 
+public sealed class EffectiveMerchantTradeConfiguration : IEquatable<EffectiveMerchantTradeConfiguration>
+{
+    public bool Enabled { get; }
+    public bool AllowAutonomousTradeRepositioning { get; }
+    public int MaxTradeAmount { get; }
+    public float LocalWholesalePriceMultiplier { get; }
+    public float LocalReserveRatio { get; }
+    public int MaxUnprofitablePlanWaitDays { get; }
+
+    public EffectiveMerchantTradeConfiguration(
+        bool enabled = false,
+        bool allowAutonomousTradeRepositioning = false,
+        int maxTradeAmount = 5,
+        float localWholesalePriceMultiplier = 0.70f,
+        float localReserveRatio = 0.25f,
+        int maxUnprofitablePlanWaitDays = 3)
+    {
+        Enabled = enabled;
+        AllowAutonomousTradeRepositioning = allowAutonomousTradeRepositioning;
+        MaxTradeAmount = maxTradeAmount;
+        LocalWholesalePriceMultiplier = localWholesalePriceMultiplier;
+        LocalReserveRatio = localReserveRatio;
+        MaxUnprofitablePlanWaitDays = maxUnprofitablePlanWaitDays;
+    }
+
+    public bool Equals(EffectiveMerchantTradeConfiguration other)
+    {
+        return other != null
+            && Enabled == other.Enabled
+            && AllowAutonomousTradeRepositioning == other.AllowAutonomousTradeRepositioning
+            && MaxTradeAmount == other.MaxTradeAmount
+            && LocalWholesalePriceMultiplier.Equals(other.LocalWholesalePriceMultiplier)
+            && LocalReserveRatio.Equals(other.LocalReserveRatio)
+            && MaxUnprofitablePlanWaitDays == other.MaxUnprofitablePlanWaitDays;
+    }
+
+    public override bool Equals(object obj)
+    {
+        return Equals(obj as EffectiveMerchantTradeConfiguration);
+    }
+
+    public override int GetHashCode()
+    {
+        unchecked
+        {
+            int hash = (Enabled ? 1 : 0) * 397 ^ (AllowAutonomousTradeRepositioning ? 1 : 0);
+            hash = (hash * 397) ^ MaxTradeAmount;
+            hash = (hash * 397) ^ LocalWholesalePriceMultiplier.GetHashCode();
+            hash = (hash * 397) ^ LocalReserveRatio.GetHashCode();
+            return (hash * 397) ^ MaxUnprofitablePlanWaitDays;
+        }
+    }
+}
+
+public sealed class EffectiveCommercialKnowledgeConfiguration : IEquatable<EffectiveCommercialKnowledgeConfiguration>
+{
+    public int FreshForDays { get; }
+    public int MaxUsefulAgeDays { get; }
+    public int MaxSharedObservationsPerInteraction { get; }
+
+    public EffectiveCommercialKnowledgeConfiguration(
+        int freshForDays = 7,
+        int maxUsefulAgeDays = 30,
+        int maxSharedObservationsPerInteraction = 2)
+    {
+        FreshForDays = freshForDays;
+        MaxUsefulAgeDays = maxUsefulAgeDays;
+        MaxSharedObservationsPerInteraction = maxSharedObservationsPerInteraction;
+    }
+
+    public bool Equals(EffectiveCommercialKnowledgeConfiguration other)
+    {
+        return other != null
+            && FreshForDays == other.FreshForDays
+            && MaxUsefulAgeDays == other.MaxUsefulAgeDays
+            && MaxSharedObservationsPerInteraction == other.MaxSharedObservationsPerInteraction;
+    }
+
+    public override bool Equals(object obj)
+    {
+        return Equals(obj as EffectiveCommercialKnowledgeConfiguration);
+    }
+
+    public override int GetHashCode()
+    {
+        unchecked
+        {
+            int hash = FreshForDays * 397 ^ MaxUsefulAgeDays;
+            return (hash * 397) ^ MaxSharedObservationsPerInteraction;
+        }
+    }
+}
+
 public sealed class EffectiveNaturalMortalityConfiguration : IEquatable<EffectiveNaturalMortalityConfiguration>
 {
     public NaturalMortalityPolicy Policy { get; }
@@ -275,6 +368,8 @@ public sealed class EffectiveSimulationConfiguration : IEquatable<EffectiveSimul
     public EffectiveTravelConfiguration Travel { get; }
     public EffectiveCrimeConfiguration Crime { get; }
     public EffectiveGuardCrimeConfiguration GuardCrime { get; }
+    public EffectiveMerchantTradeConfiguration MerchantTrade { get; }
+    public EffectiveCommercialKnowledgeConfiguration CommercialKnowledge { get; }
     public EffectiveNaturalMortalityConfiguration NaturalMortality { get; }
     public EffectiveAggregateDemographyConfiguration AggregateDemography { get; }
 
@@ -285,13 +380,17 @@ public sealed class EffectiveSimulationConfiguration : IEquatable<EffectiveSimul
         EffectiveCrimeConfiguration crime,
         EffectiveGuardCrimeConfiguration guardCrime,
         EffectiveNaturalMortalityConfiguration naturalMortality = null,
-        EffectiveAggregateDemographyConfiguration aggregateDemography = null)
+        EffectiveAggregateDemographyConfiguration aggregateDemography = null,
+        EffectiveMerchantTradeConfiguration merchantTrade = null,
+        EffectiveCommercialKnowledgeConfiguration commercialKnowledge = null)
     {
         Population = population;
         Economy = economy;
         Travel = travel;
         Crime = crime;
         GuardCrime = guardCrime;
+        MerchantTrade = merchantTrade ?? new EffectiveMerchantTradeConfiguration();
+        CommercialKnowledge = commercialKnowledge ?? new EffectiveCommercialKnowledgeConfiguration();
         NaturalMortality = naturalMortality ?? new EffectiveNaturalMortalityConfiguration();
         AggregateDemography = aggregateDemography ?? new EffectiveAggregateDemographyConfiguration();
     }
@@ -304,6 +403,8 @@ public sealed class EffectiveSimulationConfiguration : IEquatable<EffectiveSimul
             && Equals(Travel, other.Travel)
             && Equals(Crime, other.Crime)
             && Equals(GuardCrime, other.GuardCrime)
+            && Equals(MerchantTrade, other.MerchantTrade)
+            && Equals(CommercialKnowledge, other.CommercialKnowledge)
             && Equals(NaturalMortality, other.NaturalMortality)
             && Equals(AggregateDemography, other.AggregateDemography);
     }
@@ -322,6 +423,8 @@ public sealed class EffectiveSimulationConfiguration : IEquatable<EffectiveSimul
             hash = (hash * 397) ^ (Travel == null ? 0 : Travel.GetHashCode());
             hash = (hash * 397) ^ (Crime == null ? 0 : Crime.GetHashCode());
             hash = (hash * 397) ^ (GuardCrime == null ? 0 : GuardCrime.GetHashCode());
+            hash = (hash * 397) ^ (MerchantTrade == null ? 0 : MerchantTrade.GetHashCode());
+            hash = (hash * 397) ^ (CommercialKnowledge == null ? 0 : CommercialKnowledge.GetHashCode());
             hash = (hash * 397) ^ (NaturalMortality == null ? 0 : NaturalMortality.GetHashCode());
             return (hash * 397) ^ (AggregateDemography == null ? 0 : AggregateDemography.GetHashCode());
         }
@@ -389,6 +492,49 @@ public sealed class GuardCrimeConfigurationOverrides
     }
 }
 
+public sealed class MerchantTradeConfigurationOverrides
+{
+    public bool? Enabled { get; }
+    public bool? AllowAutonomousTradeRepositioning { get; }
+    public int? MaxTradeAmount { get; }
+    public float? LocalWholesalePriceMultiplier { get; }
+    public float? LocalReserveRatio { get; }
+    public int? MaxUnprofitablePlanWaitDays { get; }
+
+    public MerchantTradeConfigurationOverrides(
+        bool? enabled = null,
+        bool? allowAutonomousTradeRepositioning = null,
+        int? maxTradeAmount = null,
+        float? localWholesalePriceMultiplier = null,
+        float? localReserveRatio = null,
+        int? maxUnprofitablePlanWaitDays = null)
+    {
+        Enabled = enabled;
+        AllowAutonomousTradeRepositioning = allowAutonomousTradeRepositioning;
+        MaxTradeAmount = maxTradeAmount;
+        LocalWholesalePriceMultiplier = localWholesalePriceMultiplier;
+        LocalReserveRatio = localReserveRatio;
+        MaxUnprofitablePlanWaitDays = maxUnprofitablePlanWaitDays;
+    }
+}
+
+public sealed class CommercialKnowledgeConfigurationOverrides
+{
+    public int? FreshForDays { get; }
+    public int? MaxUsefulAgeDays { get; }
+    public int? MaxSharedObservationsPerInteraction { get; }
+
+    public CommercialKnowledgeConfigurationOverrides(
+        int? freshForDays = null,
+        int? maxUsefulAgeDays = null,
+        int? maxSharedObservationsPerInteraction = null)
+    {
+        FreshForDays = freshForDays;
+        MaxUsefulAgeDays = maxUsefulAgeDays;
+        MaxSharedObservationsPerInteraction = maxSharedObservationsPerInteraction;
+    }
+}
+
 public sealed class NaturalMortalityConfigurationOverrides
 {
     public NaturalMortalityPolicy? Policy { get; }
@@ -435,6 +581,8 @@ public sealed class SimulationConfigurationOverrides
     public TravelConfigurationOverrides Travel { get; }
     public CrimeConfigurationOverrides Crime { get; }
     public GuardCrimeConfigurationOverrides GuardCrime { get; }
+    public MerchantTradeConfigurationOverrides MerchantTrade { get; }
+    public CommercialKnowledgeConfigurationOverrides CommercialKnowledge { get; }
     public NaturalMortalityConfigurationOverrides NaturalMortality { get; }
     public AggregateDemographyConfigurationOverrides AggregateDemography { get; }
 
@@ -444,6 +592,8 @@ public sealed class SimulationConfigurationOverrides
         TravelConfigurationOverrides travel = null,
         CrimeConfigurationOverrides crime = null,
         GuardCrimeConfigurationOverrides guardCrime = null,
+        MerchantTradeConfigurationOverrides merchantTrade = null,
+        CommercialKnowledgeConfigurationOverrides commercialKnowledge = null,
         NaturalMortalityConfigurationOverrides naturalMortality = null,
         AggregateDemographyConfigurationOverrides aggregateDemography = null)
     {
@@ -452,6 +602,8 @@ public sealed class SimulationConfigurationOverrides
         Travel = travel ?? new TravelConfigurationOverrides();
         Crime = crime ?? new CrimeConfigurationOverrides();
         GuardCrime = guardCrime ?? new GuardCrimeConfigurationOverrides();
+        MerchantTrade = merchantTrade ?? new MerchantTradeConfigurationOverrides();
+        CommercialKnowledge = commercialKnowledge ?? new CommercialKnowledgeConfigurationOverrides();
         NaturalMortality = naturalMortality ?? new NaturalMortalityConfigurationOverrides();
         AggregateDemography = aggregateDemography ?? new AggregateDemographyConfigurationOverrides();
     }

@@ -353,7 +353,7 @@ public sealed class ConflictConsequencesTests
 
         CommercialKnowledgeSharingSystem sharing = new CommercialKnowledgeSharingSystem(
             new SimulationTime(),
-            new CommercialKnowledgeSettings());
+            new EffectiveCommercialKnowledgeConfiguration());
 
         Assert.That(new EconomyTransactionService().TryExecuteNpcTrade(livingMerchant, deadMerchant, item, 1, 1f).Success, Is.False);
         sharing.ShareAmongPresentMerchants(new[] { deadMerchant, livingMerchant });

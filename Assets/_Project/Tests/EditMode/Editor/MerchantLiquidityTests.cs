@@ -30,6 +30,14 @@ public sealed class MerchantLiquidityTests
     }
 
     [Test]
+    public void Planning_UsesEffectiveGlobalTradeAmountLimit()
+    {
+        Fixture fixture = new Fixture(100f, 0L, 2);
+
+        Assert.That(fixture.CreateSaleAction().Amount, Is.EqualTo(2));
+    }
+
+    [Test]
     public void Planning_KnownZeroLiquidityBlocksMarketSale()
     {
         Fixture fixture = new Fixture(0f);
@@ -185,7 +193,7 @@ public sealed class MerchantLiquidityTests
 
         private readonly SimulationTime time;
 
-        public Fixture(float settlementMoney, long absoluteDay = 0L)
+        public Fixture(float settlementMoney, long absoluteDay = 0L, int maxTradeAmount = 5)
         {
             Item = SimulationTestFactory.CreateItem("liquidity-item", 10f);
             City = SimulationTestFactory.CreateAccountBackedCity(
@@ -200,7 +208,7 @@ public sealed class MerchantLiquidityTests
                 0f);
             Merchant.Inventory.AddItem(Item, 5, 1f);
             time = new SimulationTime(absoluteDay);
-            System = SimulationTestFactory.CreateMerchantSystem(null, time);
+            System = SimulationTestFactory.CreateMerchantSystem(null, time, maxTradeAmount: maxTradeAmount);
             Merchant.CommercialKnowledge.RecordObservation(SimulationTestFactory.CreateObservation(
                 City.Location.RuntimeId,
                 Item,

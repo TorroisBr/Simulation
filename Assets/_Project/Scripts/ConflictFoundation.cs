@@ -631,6 +631,11 @@ public interface IConflictRandomSource
     float NextUnit();
 }
 
+public interface IContextualConflictRandomSource : IConflictRandomSource
+{
+    float NextUnit(string operationKey);
+}
+
 public sealed class SequenceConflictRandomSource : IConflictRandomSource
 {
     private readonly Queue<float> values;
@@ -666,18 +671,28 @@ public sealed class SequenceConflictRandomSource : IConflictRandomSource
     }
 }
 
-public sealed class SeededConflictRandomSource : IConflictRandomSource
+public sealed class SeededConflictRandomSource : IContextualConflictRandomSource
 {
-    private readonly System.Random random;
+    private readonly DeterministicRandomSource source;
+    private readonly DeterministicRandomStream sequentialStream;
+    private readonly string streamKey;
 
-    public SeededConflictRandomSource(int seed)
+    public SeededConflictRandomSource(int seed, string streamKey = "conflict")
     {
-        random = new System.Random(seed);
+        this.streamKey = string.IsNullOrWhiteSpace(streamKey) ? "conflict" : streamKey;
+        source = new DeterministicRandomSource(seed);
+        sequentialStream = source.CreateStream(this.streamKey);
     }
 
     public float NextUnit()
     {
-        return (float)random.NextDouble();
+        return sequentialStream.NextUnit();
+    }
+
+    public float NextUnit(string operationKey)
+    {
+        return source.NextUnit(
+            streamKey + "|" + (string.IsNullOrWhiteSpace(operationKey) ? "operation" : operationKey));
     }
 }
 
@@ -970,7 +985,8 @@ public sealed class ConflictResolver
 
         foreach (SideComputation computation in computations)
         {
-            computation.RandomFactor = CalculateRandomFactor();
+            computation.RandomFactor = CalculateRandomFactor(
+                "conflict|" + conflict.ConflictId + "|side|" + computation.Side.SideId);
             computation.FinalScore = computation.ModifierAdjustedCapability * computation.RandomFactor;
         }
 
@@ -1085,9 +1101,12 @@ public sealed class ConflictResolver
         return computation;
     }
 
-    private float CalculateRandomFactor()
+    private float CalculateRandomFactor(string operationKey)
     {
-        float unit = Math.Max(0f, Math.Min(1f, randomSource.NextUnit()));
+        float unit = randomSource is IContextualConflictRandomSource contextualRandomSource
+            ? contextualRandomSource.NextUnit(operationKey)
+            : randomSource.NextUnit();
+        unit = Math.Max(0f, Math.Min(1f, unit));
         return 1f - settings.MaxRandomSwingFraction + (2f * settings.MaxRandomSwingFraction * unit);
     }
 

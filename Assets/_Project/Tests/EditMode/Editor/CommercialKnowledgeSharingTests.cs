@@ -27,7 +27,9 @@ public sealed class CommercialKnowledgeSharingTests
         NpcRuntime caio = new NpcRuntime("npc-caio", SimulationTestFactory.CreateNpc("caio", NpcJobType.Merchant), city, 100f);
         bruno.CommercialKnowledge.RecordObservation(SimulationTestFactory.CreateObservation(
             city.Location.RuntimeId, item, 51f, 12, 10, 10));
-        CommercialKnowledgeSharingSystem sharing = new CommercialKnowledgeSharingSystem(new SimulationTime(20L), null);
+        CommercialKnowledgeSharingSystem sharing = new CommercialKnowledgeSharingSystem(
+            new SimulationTime(20L),
+            new EffectiveCommercialKnowledgeConfiguration());
 
         sharing.ShareAmongPresentMerchants(new[] { bruno, caio });
 
@@ -53,7 +55,9 @@ public sealed class CommercialKnowledgeSharingTests
         caio.CommercialKnowledge.RecordObservation(SimulationTestFactory.CreateObservation(
             city.Location.RuntimeId, item, 35f, 8, 15, 15));
 
-        new CommercialKnowledgeSharingSystem(new SimulationTime(20L), null)
+        new CommercialKnowledgeSharingSystem(
+            new SimulationTime(20L),
+            new EffectiveCommercialKnowledgeConfiguration())
             .ShareAmongPresentMerchants(new[] { bruno, caio });
 
         caio.CommercialKnowledge.TryGetObservation(city.Location.RuntimeId, item.DefinitionId, out CommercialMarketObservation current);
@@ -75,7 +79,7 @@ public sealed class CommercialKnowledgeSharingTests
             city.Location.RuntimeId, newerItem, 20f, 1, 8, 8));
         CommercialKnowledgeSharingSystem sharing = new CommercialKnowledgeSharingSystem(
             new SimulationTime(10L),
-            new CommercialKnowledgeSettings { maxSharedObservationsPerInteraction = 1 });
+            new EffectiveCommercialKnowledgeConfiguration(maxSharedObservationsPerInteraction: 1));
 
         sharing.ShareAmongPresentMerchants(new[] { sender, receiver });
 
@@ -94,7 +98,9 @@ public sealed class CommercialKnowledgeSharingTests
         NpcRuntime marta = new NpcRuntime("npc-marta", SimulationTestFactory.CreateNpc("marta", NpcJobType.Merchant), city, 100f);
         bruno.CommercialKnowledge.RecordObservation(SimulationTestFactory.CreateObservation(
             city.Location.RuntimeId, item, 51f, 10, 10, 10));
-        CommercialKnowledgeSharingSystem sharing = new CommercialKnowledgeSharingSystem(new SimulationTime(20L), null);
+        CommercialKnowledgeSharingSystem sharing = new CommercialKnowledgeSharingSystem(
+            new SimulationTime(20L),
+            new EffectiveCommercialKnowledgeConfiguration());
 
         sharing.ShareAmongPresentMerchants(new[] { bruno, caio });
         sharing.ShareAmongPresentMerchants(new[] { caio, marta });
@@ -119,7 +125,9 @@ public sealed class CommercialKnowledgeSharingTests
         sender.CommercialKnowledge.RecordObservation(SimulationTestFactory.CreateObservation(
             firstCity.Location.RuntimeId, item, 51f, 10, 10, 10));
 
-        new CommercialKnowledgeSharingSystem(new SimulationTime(20L), null)
+        new CommercialKnowledgeSharingSystem(
+            new SimulationTime(20L),
+            new EffectiveCommercialKnowledgeConfiguration())
             .ShareAmongPresentMerchants(new List<NpcRuntime> { sender, differentCity, traveler });
 
         Assert.That(differentCity.CommercialKnowledge.Observations, Is.Empty);
@@ -135,7 +143,9 @@ public sealed class CommercialKnowledgeSharingTests
         sender.CommercialKnowledge.RecordLiquidityObservation(SimulationTestFactory.CreateLiquidityObservation(
             "location-market", MarketLiquidityMode.AccountBacked, 42f, 10L, 10L));
 
-        new CommercialKnowledgeSharingSystem(new SimulationTime(20L), null)
+        new CommercialKnowledgeSharingSystem(
+            new SimulationTime(20L),
+            new EffectiveCommercialKnowledgeConfiguration())
             .ShareAmongPresentMerchants(new[] { sender, receiver });
 
         Assert.That(receiver.CommercialKnowledge.TryGetLiquidityObservation(
@@ -157,7 +167,9 @@ public sealed class CommercialKnowledgeSharingTests
         NpcRuntime third = new NpcRuntime("npc-third", SimulationTestFactory.CreateNpc("third", NpcJobType.Merchant), city, 100f);
         first.CommercialKnowledge.RecordLiquidityObservation(SimulationTestFactory.CreateLiquidityObservation(
             "location-market", MarketLiquidityMode.AccountBacked, 42f, 10L, 10L));
-        CommercialKnowledgeSharingSystem sharing = new CommercialKnowledgeSharingSystem(new SimulationTime(20L), null);
+        CommercialKnowledgeSharingSystem sharing = new CommercialKnowledgeSharingSystem(
+            new SimulationTime(20L),
+            new EffectiveCommercialKnowledgeConfiguration());
 
         sharing.ShareAmongPresentMerchants(new[] { first, second });
         sharing.ShareAmongPresentMerchants(new[] { second, third });

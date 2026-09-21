@@ -19,6 +19,8 @@ public static class SimulationConfigurationValidator
         ValidateTravel(configuration.Travel, errors);
         ValidateCrime(configuration.Crime, errors);
         ValidateGuardCrime(configuration.GuardCrime, errors);
+        ValidateMerchantTrade(configuration.MerchantTrade, errors);
+        ValidateCommercialKnowledge(configuration.CommercialKnowledge, errors);
         ValidateNaturalMortality(configuration.NaturalMortality, errors);
         ValidateAggregateDemography(configuration.AggregateDemography, errors);
         return new SimulationConfigurationValidationResult(errors);
@@ -106,6 +108,68 @@ public static class SimulationConfigurationValidator
         if (guardCrime == null)
         {
             errors.Add("Guard crime configuration is required.");
+        }
+    }
+
+    private static void ValidateMerchantTrade(
+        EffectiveMerchantTradeConfiguration merchantTrade,
+        List<string> errors)
+    {
+        if (merchantTrade == null)
+        {
+            errors.Add("Merchant trade configuration is required.");
+            return;
+        }
+
+        if (merchantTrade.MaxTradeAmount <= 0)
+        {
+            errors.Add("Merchant trade maximum amount must be positive.");
+        }
+
+        if (float.IsNaN(merchantTrade.LocalWholesalePriceMultiplier)
+            || float.IsInfinity(merchantTrade.LocalWholesalePriceMultiplier)
+            || merchantTrade.LocalWholesalePriceMultiplier < 0f)
+        {
+            errors.Add("Merchant wholesale price multiplier must be finite and non-negative.");
+        }
+
+        if (float.IsNaN(merchantTrade.LocalReserveRatio)
+            || float.IsInfinity(merchantTrade.LocalReserveRatio)
+            || merchantTrade.LocalReserveRatio < 0f
+            || merchantTrade.LocalReserveRatio > 1f)
+        {
+            errors.Add("Merchant reserve ratio must be between zero and one.");
+        }
+
+        if (merchantTrade.MaxUnprofitablePlanWaitDays < 0)
+        {
+            errors.Add("Merchant unprofitable-plan wait days cannot be negative.");
+        }
+    }
+
+    private static void ValidateCommercialKnowledge(
+        EffectiveCommercialKnowledgeConfiguration commercialKnowledge,
+        List<string> errors)
+    {
+        if (commercialKnowledge == null)
+        {
+            errors.Add("Commercial knowledge configuration is required.");
+            return;
+        }
+
+        if (commercialKnowledge.FreshForDays < 0)
+        {
+            errors.Add("Commercial knowledge fresh days cannot be negative.");
+        }
+
+        if (commercialKnowledge.MaxUsefulAgeDays <= commercialKnowledge.FreshForDays)
+        {
+            errors.Add("Commercial knowledge maximum useful age must exceed fresh days.");
+        }
+
+        if (commercialKnowledge.MaxSharedObservationsPerInteraction <= 0)
+        {
+            errors.Add("Commercial knowledge shared-observation limit must be positive.");
         }
     }
 

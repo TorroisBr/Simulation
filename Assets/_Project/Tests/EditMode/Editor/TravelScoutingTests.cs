@@ -32,6 +32,23 @@ public sealed class TravelScoutingTests
     }
 
     [Test]
+    public void TravelUsesEffectiveCostInsteadOfRawBootstrapValue()
+    {
+        ThreeCityFixture world = new ThreeCityFixture();
+        EffectiveSimulationConfiguration configuration = SimulationConfigurationResolver.ResolveOrThrow(
+            contentOverrides: new SimulationConfigurationOverrides(
+                travel: new TravelConfigurationOverrides(7f)));
+        TravelSystem travel = new TravelSystem(
+            world.Network,
+            location => world.CitiesByLocation.TryGetValue(location, out CityRuntime city) ? city : null,
+            configuration.Travel,
+            null,
+            null);
+
+        Assert.That(travel.GetTravelCost(2), Is.EqualTo(14f));
+    }
+
+    [Test]
     public void TravelExecution_UsesTruthAndDiscoversRouteOnlyWhenTravelStarts()
     {
         ThreeCityFixture world = new ThreeCityFixture();
@@ -108,7 +125,11 @@ public sealed class TravelScoutingTests
             world.C.Location.RuntimeId, item, 30f, 5, 40, 40));
         SimulationTime time = new SimulationTime(40L);
         MerchantSystem merchantSystem = new MerchantSystem(
-            5, 1f, false, world.CreateTravelSystem(time), time, new CommercialKnowledgeSettings(), null);
+            new EffectiveMerchantTradeConfiguration(enabled: true),
+            new EffectiveCommercialKnowledgeConfiguration(),
+            world.CreateTravelSystem(time),
+            time,
+            null);
         float utility = 0f;
         NpcActionData travelAction = SimulationTestFactory.CreateAction("travel", NpcActionType.Travel, NpcActionCategory.Travel);
 
@@ -133,7 +154,11 @@ public sealed class TravelScoutingTests
         merchant.SpatialKnowledge.DiscoverRoute(world.RouteAB.RuntimeId);
         SimulationTime time = new SimulationTime(10L);
         MerchantSystem merchantSystem = new MerchantSystem(
-            5, 1f, false, world.CreateTravelSystem(time), time, new CommercialKnowledgeSettings(), null);
+            new EffectiveMerchantTradeConfiguration(enabled: true),
+            new EffectiveCommercialKnowledgeConfiguration(),
+            world.CreateTravelSystem(time),
+            time,
+            null);
         float utility = 0f;
 
         NpcActionRuntime scouting = merchantSystem.CreateMerchantTravelAction(
@@ -145,6 +170,106 @@ public sealed class TravelScoutingTests
         Assert.That(scouting.TargetCity, Is.SameAs(world.B));
         Assert.That(scouting.CommercialScoutingEvidence.UnknownObservationCount, Is.EqualTo(1));
         Assert.That(scouting.CommercialScoutingEvidence.StaleObservationCount, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void MerchantMinimumProfitIsContentSpecificAndDoesNotChangeGlobalTradePolicy()
+    {
+        ThreeCityFixture world = new ThreeCityFixture(false);
+        ItemData item = SimulationTestFactory.CreateItem("item-margin", 10f);
+        SimulationTime time = new SimulationTime();
+        TravelSystem travel = world.CreateTravelSystem(time);
+        EffectiveMerchantTradeConfiguration tradeConfiguration = new EffectiveMerchantTradeConfiguration(
+            enabled: true,
+            maxTradeAmount: 5);
+        EffectiveCommercialKnowledgeConfiguration knowledgeConfiguration = new EffectiveCommercialKnowledgeConfiguration();
+        MerchantSystem merchantSystem = new MerchantSystem(
+            tradeConfiguration,
+            knowledgeConfiguration,
+            travel,
+            time,
+            null);
+
+        NpcData lowMarginData = SimulationTestFactory.CreateNpc("low-margin", NpcJobType.Merchant, MerchantBehavior.Traveling);
+        lowMarginData.job.minimumProfitPerItem = 1f;
+        NpcRuntime lowMarginMerchant = new NpcRuntime("npc-low-margin", lowMarginData, world.A, 100f);
+        NpcData highMarginData = SimulationTestFactory.CreateNpc("high-margin", NpcJobType.Merchant, MerchantBehavior.Traveling);
+        highMarginData.job.minimumProfitPerItem = 4f;
+        NpcRuntime highMarginMerchant = new NpcRuntime("npc-high-margin", highMarginData, world.A, 100f);
+
+        foreach (NpcRuntime merchant in new[] { lowMarginMerchant, highMarginMerchant })
+        {
+            merchant.SpatialKnowledge.DiscoverLocation(world.A.Location.RuntimeId);
+            merchant.SpatialKnowledge.DiscoverLocation(world.B.Location.RuntimeId);
+            merchant.SpatialKnowledge.DiscoverRoute(world.RouteAB.RuntimeId);
+            merchant.CommercialKnowledge.RecordObservation(SimulationTestFactory.CreateObservation(
+                world.A.Location.RuntimeId, item, 10f, 10, 0L, 0L));
+            merchant.CommercialKnowledge.RecordObservation(SimulationTestFactory.CreateObservation(
+                world.B.Location.RuntimeId, item, 13f, 10, 0L, 0L));
+        }
+
+        float lowUtility = 0f;
+        float highUtility = 0f;
+        NpcActionRuntime lowAction = merchantSystem.CreateAction(
+            lowMarginMerchant,
+            SimulationTestFactory.CreateAction("buy-low-margin", NpcActionType.BuyGoods, NpcActionCategory.Commerce),
+            ref lowUtility);
+        NpcActionRuntime highAction = merchantSystem.CreateAction(
+            highMarginMerchant,
+            SimulationTestFactory.CreateAction("buy-high-margin", NpcActionType.BuyGoods, NpcActionCategory.Commerce),
+            ref highUtility);
+
+        Assert.That(lowAction, Is.Not.Null);
+        Assert.That(lowAction.Amount, Is.EqualTo(5));
+        Assert.That(highAction, Is.Null);
+    }
+
+    [Test]
+    public void TradeRepositionPolicyControlsOnlyNewAutonomousRepositionIntent()
+    {
+        ThreeCityFixture world = new ThreeCityFixture(false);
+        SpatialRouteRuntime routeBC = SimulationTestFactory.CreateRoute("route-b-c", world.B, world.C, 1);
+        Assert.That(world.Network.RegisterRoute(routeBC), Is.True);
+        ItemData item = SimulationTestFactory.CreateItem("item-reposition", 10f);
+        NpcRuntime merchant = new NpcRuntime(
+            "npc-reposition",
+            SimulationTestFactory.CreateNpc("reposition", NpcJobType.Merchant, MerchantBehavior.Traveling),
+            world.A,
+            100f);
+        merchant.SpatialKnowledge.DiscoverLocation(world.A.Location.RuntimeId);
+        merchant.SpatialKnowledge.DiscoverLocation(world.B.Location.RuntimeId);
+        merchant.SpatialKnowledge.DiscoverLocation(world.C.Location.RuntimeId);
+        merchant.SpatialKnowledge.DiscoverRoute(world.RouteAB.RuntimeId);
+        merchant.SpatialKnowledge.DiscoverRoute(routeBC.RuntimeId);
+        merchant.CommercialKnowledge.RecordObservation(SimulationTestFactory.CreateObservation(
+            world.B.Location.RuntimeId, item, 10f, 10, 0L, 0L));
+        merchant.CommercialKnowledge.RecordObservation(SimulationTestFactory.CreateObservation(
+            world.C.Location.RuntimeId, item, 20f, 10, 0L, 0L));
+        SimulationTime time = new SimulationTime();
+        TravelSystem travel = world.CreateTravelSystem(time);
+        NpcActionData travelAction = SimulationTestFactory.CreateAction("reposition-travel", NpcActionType.Travel, NpcActionCategory.Travel);
+        float disabledUtility = 0f;
+        MerchantSystem disabledPolicy = new MerchantSystem(
+            new EffectiveMerchantTradeConfiguration(enabled: true, allowAutonomousTradeRepositioning: false),
+            new EffectiveCommercialKnowledgeConfiguration(),
+            travel,
+            time,
+            null);
+        NpcActionRuntime disabledAction = disabledPolicy.CreateMerchantTravelAction(merchant, travelAction, ref disabledUtility);
+
+        float enabledUtility = 0f;
+        MerchantSystem enabledPolicy = new MerchantSystem(
+            new EffectiveMerchantTradeConfiguration(enabled: true, allowAutonomousTradeRepositioning: true),
+            new EffectiveCommercialKnowledgeConfiguration(),
+            travel,
+            time,
+            null);
+        NpcActionRuntime enabledAction = enabledPolicy.CreateMerchantTravelAction(merchant, travelAction, ref enabledUtility);
+
+        Assert.That(disabledAction, Is.Null);
+        Assert.That(enabledAction, Is.Not.Null);
+        Assert.That(enabledAction.TravelReason, Is.EqualTo(NpcTravelReason.TradeReposition));
+        Assert.That(enabledAction.TargetCity, Is.SameAs(world.B));
     }
 
     [Test]
@@ -162,7 +287,11 @@ public sealed class TravelScoutingTests
         merchant.SpatialKnowledge.DiscoverRoute(world.RouteAC.RuntimeId);
         SimulationTime time = new SimulationTime(40L);
         MerchantSystem merchantSystem = new MerchantSystem(
-            5, 1f, false, world.CreateTravelSystem(time), time, new CommercialKnowledgeSettings(), null);
+            new EffectiveMerchantTradeConfiguration(enabled: true),
+            new EffectiveCommercialKnowledgeConfiguration(),
+            world.CreateTravelSystem(time),
+            time,
+            null);
         NpcActionData travelAction = SimulationTestFactory.CreateAction("travel", NpcActionType.Travel, NpcActionCategory.Travel);
         float firstUtility = 0f;
         NpcActionRuntime first = merchantSystem.CreateMerchantTravelAction(merchant, travelAction, ref firstUtility);
@@ -190,7 +319,11 @@ public sealed class TravelScoutingTests
         SimulationTime time = new SimulationTime(10L);
         RecordFixture records = SimulationTestFactory.CreateRecordFixture(10L);
         MerchantSystem merchantSystem = new MerchantSystem(
-            5, 1f, false, world.CreateTravelSystem(time), time, new CommercialKnowledgeSettings(), records.DecisionRecorder);
+            new EffectiveMerchantTradeConfiguration(enabled: true),
+            new EffectiveCommercialKnowledgeConfiguration(),
+            world.CreateTravelSystem(time),
+            time,
+            records.DecisionRecorder);
         float utility = 0f;
         NpcActionRuntime scouting = merchantSystem.CreateMerchantTravelAction(
             merchant,

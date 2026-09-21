@@ -99,11 +99,8 @@ public sealed class CommercialKnowledgeTests
         ItemData item = SimulationTestFactory.CreateItem("item-wine");
         CommercialMarketObservation observation = SimulationTestFactory.CreateObservation(
             "location-a", item, 50f, 10, 10, 20, CommercialKnowledgeSource.SharedByNpc, "npc-bruno");
-        CommercialKnowledgePolicy policy = new CommercialKnowledgePolicy(new CommercialKnowledgeSettings
-        {
-            freshForDays = 7,
-            maxUsefulAgeDays = 30
-        });
+        CommercialKnowledgePolicy policy = new CommercialKnowledgePolicy(
+            new EffectiveCommercialKnowledgeConfiguration(7, 30, 2));
 
         Assert.That(policy.GetAgeDays(observation, 25L), Is.EqualTo(15L));
         Assert.That(policy.GetFreshness(observation, 25L), Is.LessThan(1f));
@@ -166,7 +163,11 @@ public sealed class CommercialKnowledgeTests
         merchant.SpatialKnowledge.DiscoverRoute(world.RouteAB.RuntimeId);
         SimulationTime time = new SimulationTime();
         MerchantSystem system = new MerchantSystem(
-            5, 1f, false, world.CreateTravelSystem(time), time, new CommercialKnowledgeSettings(), null);
+            new EffectiveMerchantTradeConfiguration(enabled: true),
+            new EffectiveCommercialKnowledgeConfiguration(),
+            world.CreateTravelSystem(time),
+            time,
+            null);
 
         system.BootstrapInitialKnowledge(merchant);
 
@@ -223,11 +224,8 @@ public sealed class CommercialKnowledgeTests
         CommercialLiquidityObservation observation = SimulationTestFactory.CreateLiquidityObservation(
             "location-a", MarketLiquidityMode.AccountBacked, 50f, 10L, 20L,
             CommercialKnowledgeSource.SharedByNpc, "npc-source");
-        CommercialKnowledgePolicy policy = new CommercialKnowledgePolicy(new CommercialKnowledgeSettings
-        {
-            freshForDays = 7,
-            maxUsefulAgeDays = 30
-        });
+        CommercialKnowledgePolicy policy = new CommercialKnowledgePolicy(
+            new EffectiveCommercialKnowledgeConfiguration(7, 30, 2));
 
         Assert.That(policy.GetAgeDays(observation, 25L), Is.EqualTo(15L));
         Assert.That(policy.GetFreshness(observation, 25L), Is.InRange(0.01f, 0.99f));

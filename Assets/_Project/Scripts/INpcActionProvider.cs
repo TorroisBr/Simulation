@@ -9,3 +9,8 @@ public interface INpcActionFailureHandler
 {
     NpcActionResult HandleActionFailure(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime);
 }
+
+public interface IAutonomousNpcActionPolicy
+{
+    bool AllowAutonomousAction(NpcActionData action);
+}

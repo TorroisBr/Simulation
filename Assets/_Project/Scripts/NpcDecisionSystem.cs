@@ -4,9 +4,14 @@ using UnityEngine;
 public class NpcDecisionSystem
 {
     private readonly List<INpcActionProvider> actionProviders = new List<INpcActionProvider>();
+    private readonly IAuthoritativeRandomSource randomSource;
 
-    public NpcDecisionSystem(List<INpcActionProvider> actionProviders)
+    public NpcDecisionSystem(
+        List<INpcActionProvider> actionProviders,
+        IAuthoritativeRandomSource randomSource = null)
     {
+        this.randomSource = randomSource ?? new DeterministicRandomSource();
+
         if (actionProviders == null)
         {
             return;
@@ -23,14 +28,27 @@ public class NpcDecisionSystem
 
     public NpcActionRuntime ChooseAction(NpcRuntime npcRuntime, List<NpcActionData> availableActions)
     {
+        return ChooseAction(npcRuntime, availableActions, 0L);
+    }
+
+    public NpcActionRuntime ChooseAction(
+        NpcRuntime npcRuntime,
+        List<NpcActionData> availableActions,
+        long currentAbsoluteDay)
+    {
         if (npcRuntime == null || npcRuntime.IsAlive == false)
         {
             return null;
         }
 
         List<NpcActionData> validActions = GetAllValidActions(npcRuntime.CurrentStatus, availableActions);
-        Dictionary<NpcActionRuntime, float> utilities = CalculateActionUtilities(npcRuntime, validActions);
-        return ChooseWeightedAction(utilities);
+        Dictionary<NpcActionRuntime, float> utilities = CalculateActionUtilities(
+            npcRuntime,
+            validActions,
+            true);
+        return ChooseWeightedAction(
+            utilities,
+            "npc-decision|" + npcRuntime.RuntimeId + "|" + currentAbsoluteDay);
     }
 
     public NpcActionRuntime CreateRequestedAction(NpcRuntime npcRuntime, NpcActionData action)
@@ -41,17 +59,20 @@ public class NpcDecisionSystem
         }
 
         float ignoredUtility = 0f;
-        return CreateRuntimeAction(npcRuntime, action, ref ignoredUtility);
+        return CreateRuntimeAction(npcRuntime, action, ref ignoredUtility, false);
     }
 
-    private Dictionary<NpcActionRuntime, float> CalculateActionUtilities(NpcRuntime npcRuntime, List<NpcActionData> validActions)
+    private Dictionary<NpcActionRuntime, float> CalculateActionUtilities(
+        NpcRuntime npcRuntime,
+        List<NpcActionData> validActions,
+        bool autonomous)
     {
         Dictionary<NpcActionRuntime, float> utilities = new Dictionary<NpcActionRuntime, float>();
 
         foreach (NpcActionData action in validActions)
         {
             float utility = CalculateBaseActionUtility(npcRuntime, action);
-            NpcActionRuntime actionRuntime = CreateRuntimeAction(npcRuntime, action, ref utility);
+            NpcActionRuntime actionRuntime = CreateRuntimeAction(npcRuntime, action, ref utility, autonomous);
 
             if (actionRuntime == null)
             {
@@ -125,7 +146,11 @@ public class NpcDecisionSystem
         return true;
     }
 
-    private NpcActionRuntime CreateRuntimeAction(NpcRuntime npcRuntime, NpcActionData action, ref float utility)
+    private NpcActionRuntime CreateRuntimeAction(
+        NpcRuntime npcRuntime,
+        NpcActionData action,
+        ref float utility,
+        bool autonomous)
     {
         if (action.actionType == NpcActionType.Normal)
         {
@@ -135,6 +160,14 @@ public class NpcDecisionSystem
         INpcActionProvider actionProvider = GetProviderForAction(action);
 
         if (actionProvider == null)
+        {
+            utility = 0f;
+            return null;
+        }
+
+        if (autonomous
+            && actionProvider is IAutonomousNpcActionPolicy autonomousPolicy
+            && autonomousPolicy.AllowAutonomousAction(action) == false)
         {
             utility = 0f;
             return null;
@@ -161,6 +194,19 @@ public class NpcDecisionSystem
         return null;
     }
 
+    public bool HasProvider<TProvider>() where TProvider : class, INpcActionProvider
+    {
+        foreach (INpcActionProvider actionProvider in actionProviders)
+        {
+            if (actionProvider is TProvider)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private List<NpcActionData> GetAllValidActions(List<NpcStatusData> npcCurrentStatus, List<NpcActionData> availableActions)
     {
         List<NpcActionData> validActions = new List<NpcActionData>();
@@ -180,6 +226,7 @@ public class NpcDecisionSystem
             validActions.Add(action);
         }
 
+        validActions.Sort(CompareActions);
         return validActions;
     }
 
@@ -206,11 +253,15 @@ public class NpcDecisionSystem
         return true;
     }
 
-    private NpcActionRuntime ChooseWeightedAction(Dictionary<NpcActionRuntime, float> utilities)
+    private NpcActionRuntime ChooseWeightedAction(
+        Dictionary<NpcActionRuntime, float> utilities,
+        string randomStreamKey)
     {
+        List<KeyValuePair<NpcActionRuntime, float>> orderedUtilities = new List<KeyValuePair<NpcActionRuntime, float>>(utilities);
+        orderedUtilities.Sort(CompareUtilities);
         float totalWeight = 0f;
 
-        foreach (KeyValuePair<NpcActionRuntime, float> pair in utilities)
+        foreach (KeyValuePair<NpcActionRuntime, float> pair in orderedUtilities)
         {
             if (pair.Value > 0f)
             {
@@ -223,10 +274,10 @@ public class NpcDecisionSystem
             return null;
         }
 
-        float randomValue = Random.Range(0f, totalWeight);
+        float randomValue = randomSource.NextUnit(randomStreamKey) * totalWeight;
         float currentWeight = 0f;
 
-        foreach (KeyValuePair<NpcActionRuntime, float> pair in utilities)
+        foreach (KeyValuePair<NpcActionRuntime, float> pair in orderedUtilities)
         {
             if (pair.Value <= 0f)
             {
@@ -242,5 +293,29 @@ public class NpcDecisionSystem
         }
 
         return null;
+    }
+
+    private static int CompareActions(NpcActionData left, NpcActionData right)
+    {
+        int idComparison = string.CompareOrdinal(left?.DefinitionId ?? string.Empty, right?.DefinitionId ?? string.Empty);
+        if (idComparison != 0)
+        {
+            return idComparison;
+        }
+
+        int nameComparison = string.CompareOrdinal(left?.actionName ?? string.Empty, right?.actionName ?? string.Empty);
+        if (nameComparison != 0)
+        {
+            return nameComparison;
+        }
+
+        return (left?.actionType ?? NpcActionType.Normal).CompareTo(right?.actionType ?? NpcActionType.Normal);
+    }
+
+    private static int CompareUtilities(
+        KeyValuePair<NpcActionRuntime, float> left,
+        KeyValuePair<NpcActionRuntime, float> right)
+    {
+        return CompareActions(left.Key?.Action, right.Key?.Action);
     }
 }

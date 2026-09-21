@@ -14,7 +14,9 @@ public static class SimulationConfigurationDefaults
             new EffectiveCrimeConfiguration(false, false),
             new EffectiveGuardCrimeConfiguration(false),
             new EffectiveNaturalMortalityConfiguration(),
-            new EffectiveAggregateDemographyConfiguration());
+            new EffectiveAggregateDemographyConfiguration(),
+            new EffectiveMerchantTradeConfiguration(),
+            new EffectiveCommercialKnowledgeConfiguration());
     }
 
     public static EffectiveSimulationConfiguration CreateForRuntime(
@@ -29,6 +31,8 @@ public static class SimulationConfigurationDefaults
             defaults.Crime,
             new EffectiveGuardCrimeConfiguration(guardCrimeEnabled),
             defaults.NaturalMortality,
-            defaults.AggregateDemography);
+            defaults.AggregateDemography,
+            defaults.MerchantTrade,
+            defaults.CommercialKnowledge);
     }
 }
