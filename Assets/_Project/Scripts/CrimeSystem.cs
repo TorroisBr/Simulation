@@ -386,6 +386,9 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
         int amount,
         string actionDefinitionId)
     {
+        // One autonomous crime action owns one semantic occurrence slot for a
+        // day/source/target/amount/content tuple. A repeated slot is a
+        // duplicate outcome and is rejected before money is mutated.
         return "autonomous|day|"
             + (simulationTime?.AbsoluteDay ?? 0L).ToString(System.Globalization.CultureInfo.InvariantCulture)
             + "|perp|"

@@ -398,6 +398,18 @@ public sealed class CrimeSocialAppraisalIntegrationTests
             crimeSystem: foreignCrime));
     }
 
+    [Test]
+    public void CrimeAppraisalIntegrationRejectsUnboundReactionStore()
+    {
+        PersonStore persons = CreatePersons(out PersonId maria, out PersonId joao, out _);
+        SimulationTime time = new SimulationTime(200L);
+        TheftOutcomeStore outcomes = new TheftOutcomeStore(persons, time);
+        Assert.Throws<System.ArgumentException>(() => new CrimeSocialAppraisalIntegration(
+            outcomes,
+            new CrimeKnowledgeStore(persons, outcomes, time, new InstitutionStore()),
+            new SocialReactionStore()));
+    }
+
     private static TheftOutcome CreateOutcome(PersonId victim, PersonId perpetrator, string key)
     {
         return new TheftOutcome(

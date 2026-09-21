@@ -633,12 +633,12 @@ public sealed class CrimeSocialAppraisalIntegration : ITheftOutcomeSink
         this.reactionStore = reactionStore ?? throw new ArgumentNullException(nameof(reactionStore));
         if (ReferenceEquals(outcomeStore.PersonStore, knowledgeStore.PersonStore) == false
             || ReferenceEquals(outcomeStore.SimulationTime, knowledgeStore.SimulationTime) == false
-            || (reactionStore.PersonStore != null
-                && ReferenceEquals(outcomeStore.PersonStore, reactionStore.PersonStore) == false)
-            || (reactionStore.SimulationTime != null
-                && ReferenceEquals(outcomeStore.SimulationTime, reactionStore.SimulationTime) == false))
+            || reactionStore.PersonStore == null
+            || reactionStore.SimulationTime == null
+            || ReferenceEquals(outcomeStore.PersonStore, reactionStore.PersonStore) == false
+            || ReferenceEquals(outcomeStore.SimulationTime, reactionStore.SimulationTime) == false)
         {
-            throw new ArgumentException("Crime appraisal stores must belong to the same world boundary.");
+            throw new ArgumentException("Crime appraisal stores must be bound to the same world boundary.");
         }
     }
 
