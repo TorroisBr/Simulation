@@ -131,6 +131,67 @@ public sealed class ConflictConsequencesTests
     }
 
     [Test]
+    public void FatalConsequenceIsStableForTheSameSemanticConflictContext()
+    {
+        Conflict firstConflict = CreateNpcConflict(
+            CreateNpc("context-stable-winner"),
+            CreateNpc("context-stable-loser"),
+            ConflictStakes.Existential,
+            102f,
+            100f);
+        Conflict secondConflict = CreateNpcConflict(
+            CreateNpc("context-stable-winner"),
+            CreateNpc("context-stable-loser"),
+            ConflictStakes.Existential,
+            102f,
+            100f);
+
+        ConflictResolutionResult first = CreateService(new SeededConflictRandomSource(451)).Compute(firstConflict);
+        ConflictResolutionResult second = CreateService(new SeededConflictRandomSource(451)).Compute(secondConflict);
+
+        AssertConsequencesEqualByParticipant(first, second);
+    }
+
+    [Test]
+    public void UnrelatedConflictRandomConsumptionDoesNotShiftFatalConsequence()
+    {
+        Conflict expectedConflict = CreateNpcConflict(
+            CreateNpc("context-isolated-winner"),
+            CreateNpc("context-isolated-loser"),
+            ConflictStakes.Existential,
+            102f,
+            100f);
+        Conflict shiftedConflict = CreateNpcConflict(
+            CreateNpc("context-isolated-winner"),
+            CreateNpc("context-isolated-loser"),
+            ConflictStakes.Existential,
+            102f,
+            100f);
+        SeededConflictRandomSource expectedRandom = new SeededConflictRandomSource(452);
+        SeededConflictRandomSource shiftedRandom = new SeededConflictRandomSource(452);
+        shiftedRandom.NextUnit();
+        shiftedRandom.NextUnit();
+        shiftedRandom.NextUnit("unrelated-operation");
+
+        ConflictResolutionResult expected = CreateService(expectedRandom).Compute(expectedConflict);
+        ConflictResolutionResult shifted = CreateService(shiftedRandom).Compute(shiftedConflict);
+
+        AssertConsequencesEqualByParticipant(expected, shifted);
+    }
+
+    [Test]
+    public void SemanticallyEquivalentParticipantInsertionOrderDoesNotShiftFatalConsequence()
+    {
+        Conflict firstConflict = CreateMultiParticipantExistentialConflict(false);
+        Conflict reversedConflict = CreateMultiParticipantExistentialConflict(true);
+
+        ConflictResolutionResult first = CreateService(new SeededConflictRandomSource(453)).Compute(firstConflict);
+        ConflictResolutionResult reversed = CreateService(new SeededConflictRandomSource(453)).Compute(reversedConflict);
+
+        AssertConsequencesEqualByParticipant(first, reversed);
+    }
+
+    [Test]
     public void ForceAliveStillPreventsWinnerDeath()
     {
         NpcRuntime winner = CreateNpc("force-alive-winner");
@@ -724,6 +785,56 @@ public sealed class ConflictConsequencesTests
         capabilityOverrides[first.RuntimeId] = firstCapability;
         capabilityOverrides[second.RuntimeId] = secondCapability;
         return conflict;
+    }
+
+    private static Conflict CreateMultiParticipantExistentialConflict(bool reverseInsertionOrder)
+    {
+        NpcRuntime first = CreateNpc("insertion-first");
+        NpcRuntime second = CreateNpc("insertion-second");
+        NpcRuntime opponentFirst = CreateNpc("insertion-opponent-first");
+        NpcRuntime opponentSecond = CreateNpc("insertion-opponent-second");
+        capabilityOverrides[first.RuntimeId] = 101f;
+        capabilityOverrides[second.RuntimeId] = 101f;
+        capabilityOverrides[opponentFirst.RuntimeId] = 100f;
+        capabilityOverrides[opponentSecond.RuntimeId] = 100f;
+
+        Conflict conflict = new Conflict("conflict-insertion-order");
+        ConflictSide sideA = conflict.AddSide("a", ConflictObjectiveType.Defeat, ConflictStakes.Existential);
+        ConflictSide sideB = conflict.AddSide("b", ConflictObjectiveType.Defeat, ConflictStakes.Existential);
+        if (reverseInsertionOrder == false)
+        {
+            sideA.AddNpc(first);
+            sideA.AddNpc(second);
+            sideB.AddNpc(opponentFirst);
+            sideB.AddNpc(opponentSecond);
+        }
+        else
+        {
+            sideA.AddNpc(second);
+            sideA.AddNpc(first);
+            sideB.AddNpc(opponentSecond);
+            sideB.AddNpc(opponentFirst);
+        }
+
+        return conflict;
+    }
+
+    private static void AssertConsequencesEqualByParticipant(
+        ConflictResolutionResult expected,
+        ConflictResolutionResult actual)
+    {
+        Assert.That(actual.Outcome, Is.EqualTo(expected.Outcome));
+        Assert.That(actual.WinningSideId, Is.EqualTo(expected.WinningSideId));
+        Assert.That(actual.NpcConsequences, Has.Count.EqualTo(expected.NpcConsequences.Count));
+
+        foreach (ConflictNpcConsequence expectedConsequence in expected.NpcConsequences)
+        {
+            ConflictNpcConsequence actualConsequence = actual.NpcConsequences.FindByRuntimeId(expectedConsequence.RuntimeId);
+            Assert.That(actualConsequence, Is.Not.Null);
+            Assert.That(actualConsequence.IsDead, Is.EqualTo(expectedConsequence.IsDead));
+            Assert.That(actualConsequence.InjurySeverity, Is.EqualTo(expectedConsequence.InjurySeverity));
+            Assert.That(actualConsequence.Disposition, Is.EqualTo(expectedConsequence.Disposition));
+        }
     }
 
     private static NpcRuntime CreateNpc(string id)
