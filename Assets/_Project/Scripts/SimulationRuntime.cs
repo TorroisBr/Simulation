@@ -32,6 +32,7 @@ public sealed class SimulationRuntime
     private readonly ScheduledDirectiveSystem scheduledDirectiveSystem;
     private readonly JusticeSystem justiceSystem;
     private readonly CrimeSystem crimeSystem;
+    private readonly CrimeSocialAppraisalWorldState crimeSocialAppraisalWorldState;
     private readonly NpcDecisionSystem npcDecisionSystem;
     private readonly TravelSystem travelSystem;
     private readonly TravelPartySystem travelPartySystem;
@@ -85,6 +86,7 @@ public sealed class SimulationRuntime
     /// </summary>
     public IReadOnlyList<NpcRuntime> NpcRuntimes => npcRuntimeSnapshot;
     public PlaceContentStore PlaceContentStore => placeContentStore;
+    public CrimeSocialAppraisalWorldState CrimeSocialAppraisal => crimeSocialAppraisalWorldState;
 
     public SimulationRuntime(
         SimulationTime simulationTime,
@@ -236,6 +238,10 @@ public sealed class SimulationRuntime
             this.politicalClaimStore,
             initialPoliticalWorldRevision,
             this.politicalKnowledgeStore.Revision);
+        this.crimeSocialAppraisalWorldState = new CrimeSocialAppraisalWorldState(
+            this.personStore,
+            this.institutionStore,
+            this.simulationTime);
         this.cities = cities != null ? new List<CityRuntime>(cities) : new List<CityRuntime>();
         this.cities.Sort((left, right) => string.CompareOrdinal(
             left?.RuntimeId ?? string.Empty,
@@ -249,6 +255,7 @@ public sealed class SimulationRuntime
         this.scheduledDirectiveSystem = scheduledDirectiveSystem;
         this.justiceSystem = justiceSystem;
         this.crimeSystem = crimeSystem;
+        this.crimeSystem?.TryBindTheftOutcomeSink(this.crimeSocialAppraisalWorldState.Integration);
         this.npcDecisionSystem = npcDecisionSystem;
         this.travelSystem = travelSystem;
         this.travelPartySystem = travelPartySystem;

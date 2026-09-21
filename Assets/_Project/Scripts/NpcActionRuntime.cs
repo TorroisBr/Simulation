@@ -14,6 +14,7 @@ public class NpcActionRuntime
     [SerializeField] private NpcTravelReason travelReason;
     [SerializeField] private float expectedNetValue;
     [SerializeField] private string originDecisionId;
+    [SerializeField] private string stableOccurrenceKey;
     [NonSerialized] private CommercialDecisionEvidence commercialDecisionEvidence;
     [NonSerialized] private CommercialScoutingEvidence commercialScoutingEvidence;
 
@@ -28,6 +29,7 @@ public class NpcActionRuntime
     public NpcTravelReason TravelReason => travelReason;
     public float ExpectedNetValue => expectedNetValue;
     public string OriginDecisionId => originDecisionId;
+    public string StableOccurrenceKey => stableOccurrenceKey;
     public CommercialDecisionEvidence CommercialDecisionEvidence => commercialDecisionEvidence;
     public CommercialScoutingEvidence CommercialScoutingEvidence => commercialScoutingEvidence;
 
@@ -66,6 +68,17 @@ public class NpcActionRuntime
     public void SetOriginDecisionId(string decisionId)
     {
         originDecisionId = string.IsNullOrWhiteSpace(decisionId) == true ? null : decisionId;
+    }
+
+    /// <summary>
+    /// Supplies semantic occurrence identity for domain outcomes. This is
+    /// intentionally separate from the decision history id.
+    /// </summary>
+    public void SetStableOccurrenceKey(string occurrenceKey)
+    {
+        stableOccurrenceKey = string.IsNullOrWhiteSpace(occurrenceKey) == true
+            ? null
+            : occurrenceKey;
     }
 
     public void SetCommercialDecisionEvidence(CommercialDecisionEvidence evidence)

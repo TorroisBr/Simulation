@@ -6,11 +6,12 @@ public sealed class CrimeSocialAppraisalIntegrationTests
     public void VictimKnowsLossWithoutPerpetratorAndLaterAttributionSupersedesReaction()
     {
         PersonStore persons = CreatePersons(out PersonId maria, out PersonId joao, out _);
-        TheftOutcomeStore outcomes = new TheftOutcomeStore(persons);
+        SimulationTime time = new SimulationTime(200L);
+        TheftOutcomeStore outcomes = new TheftOutcomeStore(persons, time);
         TheftOutcome outcome = CreateOutcome(maria, joao, "theft.maria.1");
         Assert.That(outcomes.TryRecord(outcome, out CrimeOutcomeStoreFailure outcomeFailure), Is.True, outcomeFailure.ToString());
-        CrimeKnowledgeStore knowledge = new CrimeKnowledgeStore(persons, outcomes);
-        SocialReactionStore reactions = new SocialReactionStore(persons);
+        CrimeKnowledgeStore knowledge = new CrimeKnowledgeStore(persons, outcomes, time);
+        SocialReactionStore reactions = new SocialReactionStore(persons, time);
         CrimeSocialAppraisalIntegration integration = new CrimeSocialAppraisalIntegration(outcomes, knowledge, reactions);
 
         CrimeKnowledgeObservation lossOnly = CrimeKnowledgeObservation.VictimKnowsLoss(
@@ -43,11 +44,12 @@ public sealed class CrimeSocialAppraisalIntegrationTests
     public void FalseAttributionIsRecordedAsBeliefWithoutChangingFactualPerpetrator()
     {
         PersonStore persons = CreatePersons(out PersonId maria, out PersonId joao, out PersonId pedro);
-        TheftOutcomeStore outcomes = new TheftOutcomeStore(persons);
+        SimulationTime time = new SimulationTime(200L);
+        TheftOutcomeStore outcomes = new TheftOutcomeStore(persons, time);
         TheftOutcome outcome = CreateOutcome(maria, joao, "theft.false-belief");
         outcomes.TryRecord(outcome, out _);
-        CrimeKnowledgeStore knowledge = new CrimeKnowledgeStore(persons, outcomes);
-        SocialReactionStore reactions = new SocialReactionStore(persons);
+        CrimeKnowledgeStore knowledge = new CrimeKnowledgeStore(persons, outcomes, time);
+        SocialReactionStore reactions = new SocialReactionStore(persons, time);
         CrimeSocialAppraisalIntegration integration = new CrimeSocialAppraisalIntegration(outcomes, knowledge, reactions);
 
         CrimeKnowledgeObservation falseBelief = new CrimeKnowledgeObservation(
@@ -68,11 +70,12 @@ public sealed class CrimeSocialAppraisalIntegrationTests
     public void InvestigatorReactionRequiresExplicitKnowledgeAndUsesEvaluatorRole()
     {
         PersonStore persons = CreatePersons(out PersonId maria, out PersonId joao, out PersonId investigator);
-        TheftOutcomeStore outcomes = new TheftOutcomeStore(persons);
+        SimulationTime time = new SimulationTime(200L);
+        TheftOutcomeStore outcomes = new TheftOutcomeStore(persons, time);
         TheftOutcome outcome = CreateOutcome(maria, joao, "theft.investigation");
         outcomes.TryRecord(outcome, out _);
-        CrimeKnowledgeStore knowledge = new CrimeKnowledgeStore(persons, outcomes);
-        SocialReactionStore reactions = new SocialReactionStore(persons);
+        CrimeKnowledgeStore knowledge = new CrimeKnowledgeStore(persons, outcomes, time);
+        SocialReactionStore reactions = new SocialReactionStore(persons, time);
         CrimeSocialAppraisalIntegration integration = new CrimeSocialAppraisalIntegration(outcomes, knowledge, reactions);
 
         CrimeKnowledgeObservation unawareVictim = CrimeKnowledgeObservation.VictimKnowsLoss(
@@ -133,11 +136,12 @@ public sealed class CrimeSocialAppraisalIntegrationTests
     public void CrimeSystemEmitsPersonBasedOutcomeWithoutUsingRuntimeIdentity()
     {
         PersonStore persons = CreatePersons(out PersonId maria, out PersonId joao, out _);
-        TheftOutcomeStore outcomes = new TheftOutcomeStore(persons);
+        SimulationTime time = new SimulationTime();
+        TheftOutcomeStore outcomes = new TheftOutcomeStore(persons, time);
         CrimeSocialAppraisalIntegration integration = new CrimeSocialAppraisalIntegration(
             outcomes,
-            new CrimeKnowledgeStore(persons, outcomes),
-            new SocialReactionStore(persons));
+            new CrimeKnowledgeStore(persons, outcomes, time),
+            new SocialReactionStore(persons, time));
         CityRuntime city = SimulationTestFactory.CreateCity("crime-social-city", "crime-social-location");
         SimulationRuntime world = new SimulationRuntime(
             new SimulationTime(),
@@ -160,18 +164,88 @@ public sealed class CrimeSocialAppraisalIntegrationTests
             50f,
             out NpcRuntime victim,
             out PersonMaterializationFailure victimFailure), Is.True, victimFailure.ToString());
-        SimulationTime time = world.SimulationTime;
+        SimulationTime crimeTime = new SimulationTime();
         JusticeSystem justice = new JusticeSystem(null, null, null, null);
-        CrimeSystem crime = new CrimeSystem(justice, null, null, theftOutcomeSink: integration, simulationTime: time);
+        CrimeSystem crime = new CrimeSystem(justice, null, null, theftOutcomeSink: integration, simulationTime: crimeTime);
         NpcActionData action = SimulationTestFactory.CreateAction("steal-social", NpcActionType.Steal, NpcActionCategory.Crime);
         action.crimeSettings.amount = 20;
 
-        Assert.That(crime.TryExecuteAction(thief, new NpcActionRuntime(action, victim, 20)), Is.Not.Null);
+        NpcActionRuntime theftAction = new NpcActionRuntime(action, victim, 20);
+        theftAction.SetStableOccurrenceKey("explicit-theft-1");
+        Assert.That(crime.TryExecuteAction(thief, theftAction), Is.Not.Null);
         Assert.That(outcomes.Count, Is.EqualTo(1));
         Assert.That(outcomes.Outcomes[0].PerpetratorPersonId, Is.EqualTo(joao));
         Assert.That(outcomes.Outcomes[0].VictimPersonId, Is.EqualTo(maria));
         Assert.That(outcomes.Outcomes[0].OutcomeId.Value, Does.Not.Contain(thief.RuntimeId));
         Assert.That(outcomes.Outcomes[0].OutcomeId.Value, Does.Not.Contain(victim.RuntimeId));
+    }
+
+    [Test]
+    public void TheftOutcomeIdentityUsesExplicitSemanticOccurrenceAndIsNotDecisionSequenceBased()
+    {
+        PersonId perpetrator = new PersonId("person.joao");
+        PersonId victim = new PersonId("person.maria");
+        TheftOutcomeId first = TheftOutcomeId.Create(perpetrator, victim, 100L, "theft-slot-a");
+        TheftOutcomeId same = TheftOutcomeId.Create(perpetrator, victim, 100L, "theft-slot-a");
+        TheftOutcomeId second = TheftOutcomeId.Create(perpetrator, victim, 100L, "theft-slot-b");
+
+        Assert.That(first, Is.EqualTo(same));
+        Assert.That(first, Is.Not.EqualTo(second));
+        Assert.That(first.Value, Does.Not.Contain("decision-"));
+        Assert.That(first.Value, Does.Not.Contain("npc-"));
+    }
+
+    [Test]
+    public void CrimeKnowledgeRejectsFutureBeforeOutcomeAndMismatchedRoleWithoutMutation()
+    {
+        PersonStore persons = CreatePersons(out PersonId maria, out PersonId joao, out _);
+        SimulationTime time = new SimulationTime(200L);
+        TheftOutcomeStore outcomes = new TheftOutcomeStore(persons, time);
+        TheftOutcome outcome = CreateOutcome(maria, joao, "theft-guards");
+        outcomes.TryRecord(outcome, out _);
+        CrimeKnowledgeStore knowledge = new CrimeKnowledgeStore(persons, outcomes, time);
+
+        CrimeKnowledgeObservation beforeOutcome = new CrimeKnowledgeObservation(
+            maria,
+            outcome.OutcomeId,
+            CrimeKnowledgeRole.Victim,
+            true,
+            SocialPerceivedAttribution.Unknown(),
+            new SocialCognitiveBasis(SocialCognitiveBasisKind.DirectExperience, "too-early"),
+            99L);
+        Assert.That(knowledge.TryRecord(beforeOutcome, out CrimeKnowledgeStoreFailure beforeFailure), Is.False);
+        Assert.That(beforeFailure.Code, Is.EqualTo(CrimeKnowledgeStoreFailureCode.BeforeOutcome));
+
+        CrimeKnowledgeObservation wrongRole = new CrimeKnowledgeObservation(
+            maria,
+            outcome.OutcomeId,
+            CrimeKnowledgeRole.Perpetrator,
+            false,
+            SocialPerceivedAttribution.NotApplicable(),
+            new SocialCognitiveBasis(SocialCognitiveBasisKind.DirectObservation, "wrong-role"),
+            100L);
+        Assert.That(knowledge.TryRecord(wrongRole, out CrimeKnowledgeStoreFailure roleFailure), Is.False);
+        Assert.That(roleFailure.Code, Is.EqualTo(CrimeKnowledgeStoreFailureCode.RoleEndpointMismatch));
+        Assert.That(knowledge.CurrentObservations, Is.Empty);
+    }
+
+    [Test]
+    public void SimulationRuntimeOwnsOneSharedCrimeAppraisalWorldBoundary()
+    {
+        PersonStore persons = new PersonStore();
+        SimulationTime time = new SimulationTime();
+        SimulationRuntime world = new SimulationRuntime(
+            time,
+            null,
+            null,
+            personStore: persons);
+
+        Assert.That(world.CrimeSocialAppraisal, Is.Not.Null);
+        Assert.That(world.CrimeSocialAppraisal.PersonStore, Is.SameAs(world.PersonStore));
+        Assert.That(world.CrimeSocialAppraisal.SimulationTime, Is.SameAs(world.SimulationTime));
+        Assert.That(world.CrimeSocialAppraisal.TheftOutcomes.PersonStore, Is.SameAs(world.PersonStore));
+        Assert.That(world.CrimeSocialAppraisal.CrimeKnowledge.OutcomeStore, Is.SameAs(world.CrimeSocialAppraisal.TheftOutcomes));
+        Assert.That(world.CrimeSocialAppraisal.SocialReactions.PersonStore, Is.SameAs(world.PersonStore));
     }
 
     private static TheftOutcome CreateOutcome(PersonId victim, PersonId perpetrator, string key)

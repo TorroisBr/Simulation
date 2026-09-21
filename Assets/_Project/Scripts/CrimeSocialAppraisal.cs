@@ -84,7 +84,8 @@ public enum CrimeOutcomeStoreFailureCode
     InvalidOutcome = 1,
     DuplicateOutcomeId = 2,
     PerpetratorNotRegistered = 3,
-    VictimNotRegistered = 4
+    VictimNotRegistered = 4,
+    FutureOutcome = 5
 }
 
 public sealed class CrimeOutcomeStoreFailure
@@ -111,15 +112,19 @@ public sealed class CrimeOutcomeStoreFailure
 public sealed class TheftOutcomeStore : ITheftOutcomeSink
 {
     private readonly PersonStore personStore;
+    private readonly SimulationTime simulationTime;
     private readonly Dictionary<string, TheftOutcome> outcomesById =
         new Dictionary<string, TheftOutcome>(StringComparer.Ordinal);
 
-    public TheftOutcomeStore(PersonStore personStore = null)
+    public TheftOutcomeStore(PersonStore personStore, SimulationTime simulationTime)
     {
-        this.personStore = personStore;
+        this.personStore = personStore ?? throw new ArgumentNullException(nameof(personStore));
+        this.simulationTime = simulationTime ?? throw new ArgumentNullException(nameof(simulationTime));
     }
 
     public int Count => outcomesById.Count;
+    public PersonStore PersonStore => personStore;
+    public SimulationTime SimulationTime => simulationTime;
 
     public IReadOnlyList<TheftOutcome> Outcomes => SortedSnapshot(outcomesById.Values);
 
@@ -131,12 +136,32 @@ public sealed class TheftOutcomeStore : ITheftOutcomeSink
 
     public bool TryRecord(TheftOutcome outcome, out CrimeOutcomeStoreFailure failure)
     {
+        if (CanRecord(outcome, out failure) == false)
+        {
+            return false;
+        }
+
+        outcomesById.Add(outcome.OutcomeId.Value, outcome);
+        failure = CrimeOutcomeStoreFailure.None;
+        return true;
+    }
+
+    public bool CanRecord(TheftOutcome outcome, out CrimeOutcomeStoreFailure failure)
+    {
         failure = CrimeOutcomeStoreFailure.None;
         if (outcome == null)
         {
             failure = CrimeOutcomeStoreFailure.Create(
                 CrimeOutcomeStoreFailureCode.InvalidOutcome,
                 "A theft outcome is required.");
+            return false;
+        }
+
+        if (outcome.OccurredAbsoluteDay > simulationTime.AbsoluteDay)
+        {
+            failure = CrimeOutcomeStoreFailure.Create(
+                CrimeOutcomeStoreFailureCode.FutureOutcome,
+                "A theft outcome cannot be recorded in the future.");
             return false;
         }
 
@@ -167,13 +192,22 @@ public sealed class TheftOutcomeStore : ITheftOutcomeSink
             return false;
         }
 
-        outcomesById.Add(outcome.OutcomeId.Value, outcome);
         return true;
     }
 
     public bool TryAcceptTheftOutcome(TheftOutcome outcome)
     {
         return TryRecord(outcome, out _);
+    }
+
+    public bool CanAcceptTheftOutcome(TheftOutcome outcome)
+    {
+        return CanRecord(outcome, out _);
+    }
+
+    internal bool TryRemove(TheftOutcomeId outcomeId)
+    {
+        return outcomeId != null && outcomesById.Remove(outcomeId.Value);
     }
 
     private static IReadOnlyList<TheftOutcome> SortedSnapshot(IEnumerable<TheftOutcome> source)
@@ -188,6 +222,7 @@ public sealed class TheftOutcomeStore : ITheftOutcomeSink
 
 public interface ITheftOutcomeSink
 {
+    bool CanAcceptTheftOutcome(TheftOutcome outcome);
     bool TryAcceptTheftOutcome(TheftOutcome outcome);
 }
 
@@ -302,7 +337,11 @@ public enum CrimeKnowledgeStoreFailureCode
     InvalidObservation = 1,
     EvaluatorNotRegistered = 2,
     OutcomeNotRegistered = 3,
-    OlderObservation = 4
+    OlderObservation = 4,
+    FutureObservation = 5,
+    BeforeOutcome = 6,
+    RoleEndpointMismatch = 7,
+    EndpointNotRegistered = 8
 }
 
 public sealed class CrimeKnowledgeStoreFailure
@@ -330,14 +369,31 @@ public sealed class CrimeKnowledgeStore
 {
     private readonly PersonStore personStore;
     private readonly TheftOutcomeStore outcomeStore;
+    private readonly SimulationTime simulationTime;
+    private readonly InstitutionStore institutionStore;
     private readonly Dictionary<string, CrimeKnowledgeObservation> currentByKey =
         new Dictionary<string, CrimeKnowledgeObservation>(StringComparer.Ordinal);
 
-    public CrimeKnowledgeStore(PersonStore personStore, TheftOutcomeStore outcomeStore)
+    public CrimeKnowledgeStore(
+        PersonStore personStore,
+        TheftOutcomeStore outcomeStore,
+        SimulationTime simulationTime,
+        InstitutionStore institutionStore = null)
     {
         this.personStore = personStore ?? throw new ArgumentNullException(nameof(personStore));
         this.outcomeStore = outcomeStore ?? throw new ArgumentNullException(nameof(outcomeStore));
+        this.simulationTime = simulationTime ?? throw new ArgumentNullException(nameof(simulationTime));
+        this.institutionStore = institutionStore;
+        if (ReferenceEquals(personStore, outcomeStore.PersonStore) == false
+            || ReferenceEquals(simulationTime, outcomeStore.SimulationTime) == false)
+        {
+            throw new ArgumentException("Crime knowledge stores must belong to the same world boundary.");
+        }
     }
+
+    public PersonStore PersonStore => personStore;
+    public TheftOutcomeStore OutcomeStore => outcomeStore;
+    public SimulationTime SimulationTime => simulationTime;
 
     public IReadOnlyList<CrimeKnowledgeObservation> CurrentObservations
     {
@@ -383,11 +439,83 @@ public sealed class CrimeKnowledgeStore
             return false;
         }
 
-        if (outcomeStore.TryGet(observation.OutcomeId, out _) == false)
+        if (outcomeStore.TryGet(observation.OutcomeId, out TheftOutcome outcome) == false)
         {
             failure = CrimeKnowledgeStoreFailure.Create(
                 CrimeKnowledgeStoreFailureCode.OutcomeNotRegistered,
                 "The crime knowledge outcome is not registered.");
+            return false;
+        }
+
+        if (observation.ObservedAbsoluteDay > simulationTime.AbsoluteDay)
+        {
+            failure = CrimeKnowledgeStoreFailure.Create(
+                CrimeKnowledgeStoreFailureCode.FutureObservation,
+                "A crime knowledge observation cannot be recorded in the future.");
+            return false;
+        }
+
+        if (observation.ObservedAbsoluteDay < outcome.OccurredAbsoluteDay)
+        {
+            failure = CrimeKnowledgeStoreFailure.Create(
+                CrimeKnowledgeStoreFailureCode.BeforeOutcome,
+                "A crime knowledge observation cannot predate its outcome.");
+            return false;
+        }
+
+        if (observation.Role == CrimeKnowledgeRole.Victim
+            && observation.EvaluatorPersonId != outcome.VictimPersonId)
+        {
+            failure = CrimeKnowledgeStoreFailure.Create(
+                CrimeKnowledgeStoreFailureCode.RoleEndpointMismatch,
+                "Victim knowledge must be held by the theft victim.");
+            return false;
+        }
+
+        if (observation.Role == CrimeKnowledgeRole.Perpetrator
+            && observation.EvaluatorPersonId != outcome.PerpetratorPersonId)
+        {
+            failure = CrimeKnowledgeStoreFailure.Create(
+                CrimeKnowledgeStoreFailureCode.RoleEndpointMismatch,
+                "Perpetrator knowledge must be held by the factual perpetrator.");
+            return false;
+        }
+
+        if (observation.PerceivedPerpetrator.Kind == SocialPerceivedAttributionKind.BelievedPerson
+            && personStore.TryGet(observation.PerceivedPerpetrator.PersonId, out _) == false)
+        {
+            failure = CrimeKnowledgeStoreFailure.Create(
+                CrimeKnowledgeStoreFailureCode.EndpointNotRegistered,
+                "The believed perpetrator PersonId is not registered.");
+            return false;
+        }
+
+        if (observation.PerceivedPerpetrator.Kind == SocialPerceivedAttributionKind.BelievedInstitution
+            && institutionStore != null
+            && institutionStore.TryGet(observation.PerceivedPerpetrator.InstitutionId, out _) == false)
+        {
+            failure = CrimeKnowledgeStoreFailure.Create(
+                CrimeKnowledgeStoreFailureCode.EndpointNotRegistered,
+                "The believed perpetrator InstitutionId is not registered.");
+            return false;
+        }
+
+        if (observation.KnownInvestigatorPersonId != null
+            && personStore.TryGet(observation.KnownInvestigatorPersonId, out _) == false)
+        {
+            failure = CrimeKnowledgeStoreFailure.Create(
+                CrimeKnowledgeStoreFailureCode.EndpointNotRegistered,
+                "The known investigator PersonId is not registered.");
+            return false;
+        }
+
+        if (observation.KnownInvestigatorInstitutionId != null
+            && institutionStore != null
+            && institutionStore.TryGet(observation.KnownInvestigatorInstitutionId, out _) == false)
+        {
+            failure = CrimeKnowledgeStoreFailure.Create(
+                CrimeKnowledgeStoreFailureCode.EndpointNotRegistered,
+                "The known investigator InstitutionId is not registered.");
             return false;
         }
 
@@ -405,6 +533,13 @@ public sealed class CrimeKnowledgeStore
 
         currentByKey[key] = observation;
         return true;
+    }
+
+    internal bool TryRemove(PersonId evaluatorPersonId, TheftOutcomeId outcomeId)
+    {
+        return evaluatorPersonId != null
+            && outcomeId != null
+            && currentByKey.Remove(Key(evaluatorPersonId, outcomeId));
     }
 
     private static string Key(PersonId evaluatorPersonId, TheftOutcomeId outcomeId)
@@ -428,6 +563,20 @@ public sealed class CrimeSocialAppraisalIntegration : ITheftOutcomeSink
         this.outcomeStore = outcomeStore ?? throw new ArgumentNullException(nameof(outcomeStore));
         this.knowledgeStore = knowledgeStore ?? throw new ArgumentNullException(nameof(knowledgeStore));
         this.reactionStore = reactionStore ?? throw new ArgumentNullException(nameof(reactionStore));
+        if (ReferenceEquals(outcomeStore.PersonStore, knowledgeStore.PersonStore) == false
+            || ReferenceEquals(outcomeStore.SimulationTime, knowledgeStore.SimulationTime) == false
+            || (reactionStore.PersonStore != null
+                && ReferenceEquals(outcomeStore.PersonStore, reactionStore.PersonStore) == false)
+            || (reactionStore.SimulationTime != null
+                && ReferenceEquals(outcomeStore.SimulationTime, reactionStore.SimulationTime) == false))
+        {
+            throw new ArgumentException("Crime appraisal stores must belong to the same world boundary.");
+        }
+    }
+
+    public bool CanAcceptTheftOutcome(TheftOutcome outcome)
+    {
+        return outcomeStore.CanRecord(outcome, out _);
     }
 
     public bool TryAcceptTheftOutcome(TheftOutcome outcome)
@@ -443,7 +592,24 @@ public sealed class CrimeSocialAppraisalIntegration : ITheftOutcomeSink
                 SocialCognitiveBasisKind.DirectExperience,
                 "theft-loss"),
             outcome.OccurredAbsoluteDay);
-        return TryRecordKnowledgeAndAppraise(victimKnowledge, out _);
+        if (TryRecordKnowledgeAndAppraise(victimKnowledge, out _) == true)
+        {
+            return true;
+        }
+
+        foreach (SocialReaction reaction in reactionStore.HistoricalReactions)
+        {
+            if (reaction.EvaluatorPersonId == victimKnowledge.EvaluatorPersonId
+                && reaction.Source.Domain == "crime.theft"
+                && reaction.Source.StableId == outcome.OutcomeId.Value)
+            {
+                reactionStore.TryRemove(reaction.ReactionId);
+            }
+        }
+
+        knowledgeStore.TryRemove(victimKnowledge.EvaluatorPersonId, victimKnowledge.OutcomeId);
+        outcomeStore.TryRemove(outcome.OutcomeId);
+        return false;
     }
 
     public bool TryRecordKnowledgeAndAppraise(
@@ -543,5 +709,41 @@ public sealed class CrimeSocialAppraisalIntegration : ITheftOutcomeSink
         }
 
         return null;
+    }
+}
+
+/// <summary>
+/// World-owned C1/C2 state. All stores share the exact PersonStore and
+/// SimulationTime instances, preventing accidental cross-world composition.
+/// </summary>
+public sealed class CrimeSocialAppraisalWorldState
+{
+    public PersonStore PersonStore { get; }
+    public InstitutionStore InstitutionStore { get; }
+    public SimulationTime SimulationTime { get; }
+    public TheftOutcomeStore TheftOutcomes { get; }
+    public CrimeKnowledgeStore CrimeKnowledge { get; }
+    public SocialReactionStore SocialReactions { get; }
+    public CrimeSocialAppraisalIntegration Integration { get; }
+
+    public CrimeSocialAppraisalWorldState(
+        PersonStore personStore,
+        InstitutionStore institutionStore,
+        SimulationTime simulationTime)
+    {
+        PersonStore = personStore ?? throw new ArgumentNullException(nameof(personStore));
+        InstitutionStore = institutionStore ?? throw new ArgumentNullException(nameof(institutionStore));
+        SimulationTime = simulationTime ?? throw new ArgumentNullException(nameof(simulationTime));
+        TheftOutcomes = new TheftOutcomeStore(PersonStore, SimulationTime);
+        CrimeKnowledge = new CrimeKnowledgeStore(
+            PersonStore,
+            TheftOutcomes,
+            SimulationTime,
+            InstitutionStore);
+        SocialReactions = new SocialReactionStore(PersonStore, SimulationTime);
+        Integration = new CrimeSocialAppraisalIntegration(
+            TheftOutcomes,
+            CrimeKnowledge,
+            SocialReactions);
     }
 }

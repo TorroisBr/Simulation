@@ -480,7 +480,9 @@ public enum SocialReactionStoreFailureCode
     SupersededReactionMissing = 4,
     SupersessionThreadMismatch = 5,
     SupersessionDayInvalid = 6,
-    SupersessionCycle = 7
+    SupersessionCycle = 7,
+    FutureReaction = 8,
+    SupersessionAlreadyUsed = 9
 }
 
 public sealed class SocialReactionStoreFailure
@@ -510,15 +512,19 @@ public sealed class SocialReactionStoreFailure
 public sealed class SocialReactionStore
 {
     private readonly PersonStore personStore;
+    private readonly SimulationTime simulationTime;
     private readonly Dictionary<string, SocialReaction> reactionsById =
         new Dictionary<string, SocialReaction>(StringComparer.Ordinal);
 
-    public SocialReactionStore(PersonStore personStore = null)
+    public SocialReactionStore(PersonStore personStore = null, SimulationTime simulationTime = null)
     {
         this.personStore = personStore;
+        this.simulationTime = simulationTime;
     }
 
     public int Count => reactionsById.Count;
+    public PersonStore PersonStore => personStore;
+    public SimulationTime SimulationTime => simulationTime;
 
     public IReadOnlyList<SocialReaction> HistoricalReactions =>
         SortedSnapshot(reactionsById.Values);
@@ -541,6 +547,14 @@ public sealed class SocialReactionStore
             failure = SocialReactionStoreFailure.Create(
                 SocialReactionStoreFailureCode.EvaluatorNotRegistered,
                 "The reaction evaluator PersonId is not registered.");
+            return false;
+        }
+
+        if (simulationTime != null && reaction.CreatedAbsoluteDay > simulationTime.AbsoluteDay)
+        {
+            failure = SocialReactionStoreFailure.Create(
+                SocialReactionStoreFailureCode.FutureReaction,
+                "A social reaction cannot be recorded in the future.");
             return false;
         }
 
@@ -589,10 +603,26 @@ public sealed class SocialReactionStore
                     "The reaction supersession would create a cycle.");
                 return false;
             }
+
+            foreach (SocialReaction existing in reactionsById.Values)
+            {
+                if (existing.SupersedesReactionId == reaction.SupersedesReactionId)
+                {
+                    failure = SocialReactionStoreFailure.Create(
+                        SocialReactionStoreFailureCode.SupersessionAlreadyUsed,
+                        "A reaction predecessor can have only one superseding reaction.");
+                    return false;
+                }
+            }
         }
 
         reactionsById.Add(reaction.ReactionId.Value, reaction);
         return true;
+    }
+
+    internal bool TryRemove(SocialReactionId reactionId)
+    {
+        return reactionId != null && reactionsById.Remove(reactionId.Value);
     }
 
     public bool TryRecordAppraisal(

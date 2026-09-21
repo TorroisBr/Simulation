@@ -12,7 +12,7 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
     private readonly EffectiveCrimeConfiguration configuration;
     private readonly IAuthoritativeRandomSource randomSource;
     private readonly SimulationTime simulationTime;
-    private readonly ITheftOutcomeSink theftOutcomeSink;
+    private ITheftOutcomeSink theftOutcomeSink;
 
     public CrimeSystem(
         JusticeSystem justiceSystem,
@@ -39,6 +39,17 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
     public bool AllowAutonomousAction(NpcActionData action)
     {
         return configuration.Enabled && configuration.AutonomousEnabled;
+    }
+
+    public bool TryBindTheftOutcomeSink(ITheftOutcomeSink sink)
+    {
+        if (sink == null || theftOutcomeSink != null)
+        {
+            return false;
+        }
+
+        theftOutcomeSink = sink;
+        return true;
     }
 
     public bool HandlesAction(NpcActionData action)
@@ -262,6 +273,13 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
         }
 
         int amount = Mathf.Min(actionRuntime.Amount, Mathf.FloorToInt(actionRuntime.TargetNpc.Money));
+        TheftOutcome theftOutcome = CreateTheftOutcome(npcRuntime, actionRuntime, amount);
+
+        if (theftOutcome != null
+            && theftOutcomeSink.CanAcceptTheftOutcome(theftOutcome) == false)
+        {
+            return NpcActionResult.Failed();
+        }
 
         if (amount <= 0 || transactionService.TryTransferMoney(actionRuntime.TargetNpc, npcRuntime, amount).Success == false)
         {
@@ -270,12 +288,16 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
 
         CrimeActionSettings settings = GetCrimeSettings(actionRuntime.Action);
         logger.Log(SimulationLogCategory.Crime, $"{npcRuntime.NpcName} roubou {actionRuntime.TargetNpc.NpcName} e levou {amount} moedas.");
-        RecordTheftOutcome(npcRuntime, actionRuntime, amount);
+        if (theftOutcome != null
+            && theftOutcomeSink.TryAcceptTheftOutcome(theftOutcome) == false)
+        {
+            logger.LogWarning("O roubo foi aplicado, mas seu outcome social nao pode ser registrado.");
+        }
         justiceSystem.CreateOrIncreaseWarrant(npcRuntime, npcRuntime.CurrentCity, settings.bounty, settings.sentenceDays);
         return NpcActionResult.Succeeded();
     }
 
-    private void RecordTheftOutcome(
+    private TheftOutcome CreateTheftOutcome(
         NpcRuntime perpetratorRuntime,
         NpcActionRuntime actionRuntime,
         int amount)
@@ -284,30 +306,31 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
             || perpetratorRuntime?.PersonId == null
             || actionRuntime?.TargetNpc?.PersonId == null)
         {
-            return;
+            return null;
+        }
+
+        if (amount <= 0)
+        {
+            return null;
+        }
+
+        if (string.IsNullOrWhiteSpace(actionRuntime.StableOccurrenceKey))
+        {
+            return null;
         }
 
         long absoluteDay = simulationTime?.AbsoluteDay ?? 0L;
-        string occurrenceKey = actionRuntime.OriginDecisionId;
-        if (string.IsNullOrWhiteSpace(occurrenceKey))
-        {
-            occurrenceKey = (actionRuntime.Action?.DefinitionId ?? "steal")
-                + "|amount|"
-                + amount.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        }
-
-        TheftOutcome outcome = new TheftOutcome(
+        return new TheftOutcome(
             TheftOutcomeId.Create(
                 perpetratorRuntime.PersonId,
                 actionRuntime.TargetNpc.PersonId,
                 absoluteDay,
-                occurrenceKey),
+                actionRuntime.StableOccurrenceKey),
             perpetratorRuntime.PersonId,
             actionRuntime.TargetNpc.PersonId,
             amount,
             absoluteDay,
             actionRuntime.OriginDecisionId);
-        theftOutcomeSink.TryAcceptTheftOutcome(outcome);
     }
 
     private NpcActionResult TryExecuteHide(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime)

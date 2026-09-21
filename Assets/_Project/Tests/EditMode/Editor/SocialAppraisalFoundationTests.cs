@@ -134,6 +134,48 @@ public sealed class SocialAppraisalFoundationTests
         Assert.That(failure.Code, Is.EqualTo(SocialReactionStoreFailureCode.SupersessionThreadMismatch));
     }
 
+    [Test]
+    public void SupersessionCannotBranchFromOneHistoricalReaction()
+    {
+        PersonStore persons = new PersonStore();
+        PersonId maria = new PersonId("person.maria");
+        persons.TryRegister(new PersonRuntime(maria), out _);
+        SocialReactionStore store = new SocialReactionStore(persons);
+        SocialCognitiveBasis basis = new SocialCognitiveBasis(SocialCognitiveBasisKind.KnownFact, "fact");
+        SocialReaction first = CreateReaction(maria, "theft-branch", "theft-branch", basis, 100L, null);
+        Assert.That(store.TryRecord(first, out _), Is.True);
+
+        SocialReaction second = CreateReaction(
+            maria, "theft-branch", "theft-branch", basis, 101L, first.ReactionId);
+        Assert.That(store.TryRecord(second, out _), Is.True);
+
+        SocialReaction branch = new SocialReaction(
+            SocialReactionId.Create(
+                maria,
+                second.Source,
+                second.Target,
+                SocialPerceivedAttribution.BelievedPerson(new PersonId("person.pedro")),
+                basis,
+                SocialReactionValence.Negative,
+                SocialReactionSalience.High,
+                102L,
+                first.ReactionId),
+            maria,
+            second.Source,
+            second.Target,
+            SocialPerceivedAttribution.BelievedPerson(new PersonId("person.pedro")),
+            SocialReactionValence.Negative,
+            SocialReactionSalience.High,
+            basis,
+            102L,
+            first.ReactionId);
+
+        Assert.That(store.TryRecord(branch, out SocialReactionStoreFailure failure), Is.False);
+        Assert.That(failure.Code, Is.EqualTo(SocialReactionStoreFailureCode.SupersessionAlreadyUsed));
+        Assert.That(store.GetCurrentReactions(), Has.Count.EqualTo(1));
+        Assert.That(store.GetCurrentReactions()[0].ReactionId, Is.EqualTo(second.ReactionId));
+    }
+
     private static SocialReaction CreateReaction(
         PersonId evaluator,
         string sourceId,
