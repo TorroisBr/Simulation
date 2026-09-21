@@ -362,7 +362,19 @@ the promoted canonical state:
 Focused coverage includes the withdrawal/restoration history, untouched
 parallel institution, explicit known-unrecognized knowledge, absence-versus-
 known-unrecognized distinction, affiliation end reasons, and diagnostic
-end-reason output. `SimulationRuntime.AdvanceDay` remains unchanged.
+end-reason output.
+
+Final validation on the current integration tip:
+
+- focused Checkpoint B coverage: `46/46`;
+- ALL EditMode: `1421/1421`;
+- official complete Smoke filter (`EditMode -TestFilter Smoke`): `5/5`;
+- failures/skips: `0/0`;
+- `git diff --check`: green;
+- `SimulationRuntime.AdvanceDay` unchanged.
+
+`SimulationRuntime.AdvanceDay` remains unchanged, so no long-run validation
+was required for this fix.
 
 This is the promoted Checkpoint B final approval candidate. Do not begin
 Checkpoint C before the external human review of this candidate is complete.
