@@ -467,8 +467,9 @@ Final conformance-closure validation on the integration tip:
 - `git diff --check`: green;
 - no changes to `SimulationRuntime.AdvanceDay`.
 
-This closes the architecture-alignment/foundation-hardening follow-up only.
-Checkpoint C has not started. Known deferred work remains categorized as
+This closes the architecture-alignment/foundation-hardening follow-up only;
+the current C1/C2 wave is recorded below. The larger C3 relationship
+projection remains deferred. Known deferred work remains categorized as
 optional cleanup (legacy capability/configuration paths and related naming),
 deferred architecture (calendar fallback, capability discovery, lazy loading,
 Active/Dormant expansion, generic Organization, and future political daily
