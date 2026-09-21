@@ -14,6 +14,7 @@ public sealed class PoliticalLegitimacyDecisionFoundationTests
             true,
             true,
             true,
+            new InstitutionId("institution.court"),
             PoliticalClaimRecognitionState.Recognized,
             3,
             1);
@@ -24,6 +25,7 @@ public sealed class PoliticalLegitimacyDecisionFoundationTests
         Assert.That(first.Score, Is.EqualTo(24L));
         Assert.That(first.MeetsThreshold, Is.True);
         Assert.That(second.Score, Is.EqualTo(first.Score));
+        Assert.That(inputs.RecognitionPerspectiveInstitutionId.Value, Is.EqualTo("institution.court"));
         Assert.That(typeof(PoliticalLegitimacyInputs).GetProperty("PoliticalClaim") , Is.Null);
         Assert.That(typeof(PoliticalLegitimacyAssessment).GetProperty("PoliticalClaimStore"), Is.Null);
         Assert.That(typeof(PoliticalLegitimacy).GetMethods(), Has.None.Matches<System.Reflection.MethodInfo>(method => method.Name.StartsWith("Set", StringComparison.Ordinal)));

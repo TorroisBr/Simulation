@@ -10,6 +10,7 @@ public sealed class PoliticalLegitimacyInputs
     public bool IsAlive { get; }
     public bool IsMature { get; }
     public bool IsEligible { get; }
+    public InstitutionId RecognitionPerspectiveInstitutionId { get; }
     public PoliticalClaimRecognitionState ClaimRecognitionState { get; }
     public int SupportCount { get; }
     public int OpposeCount { get; }
@@ -19,11 +20,14 @@ public sealed class PoliticalLegitimacyInputs
         bool isAlive,
         bool isMature,
         bool isEligible,
+        InstitutionId recognitionPerspectiveInstitutionId,
         PoliticalClaimRecognitionState claimRecognitionState,
         int supportCount,
         int opposeCount)
     {
         CandidatePersonId = candidatePersonId ?? throw new ArgumentNullException(nameof(candidatePersonId));
+        RecognitionPerspectiveInstitutionId = recognitionPerspectiveInstitutionId
+            ?? throw new ArgumentNullException(nameof(recognitionPerspectiveInstitutionId));
         if (Enum.IsDefined(typeof(PoliticalClaimRecognitionState), claimRecognitionState) == false)
         {
             throw new ArgumentOutOfRangeException(nameof(claimRecognitionState));
@@ -45,6 +49,27 @@ public sealed class PoliticalLegitimacyInputs
         ClaimRecognitionState = claimRecognitionState;
         SupportCount = supportCount;
         OpposeCount = opposeCount;
+    }
+
+    [Obsolete("Use the constructor that supplies an explicit recognition perspective institution.")]
+    public PoliticalLegitimacyInputs(
+        PersonId candidatePersonId,
+        bool isAlive,
+        bool isMature,
+        bool isEligible,
+        PoliticalClaimRecognitionState claimRecognitionState,
+        int supportCount,
+        int opposeCount)
+        : this(
+            candidatePersonId,
+            isAlive,
+            isMature,
+            isEligible,
+            new InstitutionId("legacy.implicit-perspective"),
+            claimRecognitionState,
+            supportCount,
+            opposeCount)
+    {
     }
 }
 

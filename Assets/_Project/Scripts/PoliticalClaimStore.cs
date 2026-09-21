@@ -6,6 +6,8 @@ public sealed class PoliticalClaimStore
 {
     private readonly Dictionary<string, PoliticalClaimRecord> recordsByClaimId =
         new Dictionary<string, PoliticalClaimRecord>(StringComparer.Ordinal);
+    private readonly Dictionary<string, PoliticalClaimRecognitionRecord> recognitionsByKey =
+        new Dictionary<string, PoliticalClaimRecognitionRecord>(StringComparer.Ordinal);
     private long revision;
 
     public int Count => recordsByClaimId.Count;
@@ -18,6 +20,17 @@ public sealed class PoliticalClaimStore
             List<PoliticalClaimRecord> snapshot = new List<PoliticalClaimRecord>(recordsByClaimId.Values);
             snapshot.Sort(CompareRecords);
             return new ReadOnlyCollection<PoliticalClaimRecord>(snapshot);
+        }
+    }
+
+    public IReadOnlyList<PoliticalClaimRecognitionRecord> RecognitionRecords
+    {
+        get
+        {
+            List<PoliticalClaimRecognitionRecord> snapshot =
+                new List<PoliticalClaimRecognitionRecord>(recognitionsByKey.Values);
+            snapshot.Sort(CompareRecognitionRecords);
+            return new ReadOnlyCollection<PoliticalClaimRecognitionRecord>(snapshot);
         }
     }
 
@@ -103,9 +116,80 @@ public sealed class PoliticalClaimStore
         return new ReadOnlyCollection<PoliticalClaimRecord>(result);
     }
 
+    public bool TryGetRecognition(
+        PoliticalClaimId claimId,
+        InstitutionId institutionId,
+        out PoliticalClaimRecognitionRecord record)
+    {
+        record = null;
+        string key = RecognitionKey(claimId, institutionId);
+        return key != null && recognitionsByKey.TryGetValue(key, out record);
+    }
+
+    internal bool TryRegisterRecognition(
+        PoliticalClaimRecognitionRecord record,
+        out PoliticalClaimFailure failure)
+    {
+        if (record == null || record.ClaimId == null || record.InstitutionId == null)
+        {
+            failure = PoliticalClaimFailure.Create(
+                PoliticalClaimFailureCode.InvalidClaim,
+                "A claim recognition relation requires a claim and institution.");
+            return false;
+        }
+
+        if (recordsByClaimId.ContainsKey(record.ClaimId.Value) == false)
+        {
+            failure = PoliticalClaimFailure.Create(
+                PoliticalClaimFailureCode.InvalidClaimId,
+                "The recognition claim is not registered.");
+            return false;
+        }
+
+        string key = RecognitionKey(record.ClaimId, record.InstitutionId);
+        if (recognitionsByKey.ContainsKey(key))
+        {
+            failure = PoliticalClaimFailure.Create(
+                PoliticalClaimFailureCode.DuplicateClaimId,
+                "The claim/institution recognition relation is already registered.");
+            return false;
+        }
+
+        if (revision == long.MaxValue)
+        {
+            failure = PoliticalClaimFailure.Create(
+                PoliticalClaimFailureCode.RevisionOverflow,
+                "The political claim store revision cannot advance further.");
+            return false;
+        }
+
+        recognitionsByKey.Add(key, record);
+        revision++;
+        failure = PoliticalClaimFailure.None;
+        return true;
+    }
+
+    public IReadOnlyList<PoliticalClaimRecognitionRecord> GetRecognitionsForClaim(PoliticalClaimId claimId)
+    {
+        List<PoliticalClaimRecognitionRecord> result = new List<PoliticalClaimRecognitionRecord>();
+        if (claimId != null)
+        {
+            foreach (PoliticalClaimRecognitionRecord record in recognitionsByKey.Values)
+            {
+                if (record.ClaimId == claimId)
+                {
+                    result.Add(record);
+                }
+            }
+        }
+
+        result.Sort(CompareRecognitionRecords);
+        return new ReadOnlyCollection<PoliticalClaimRecognitionRecord>(result);
+    }
+
     internal bool TryApplyRecognition(
         PoliticalClaimRecognitionTransition transition,
-        PoliticalClaimRecord nextRecord,
+        PoliticalClaimRecognitionRecord nextRecord,
         out PoliticalClaimFailure failure)
     {
         if (transition == null || nextRecord == null || transition.ClaimId == null)
@@ -124,8 +208,10 @@ public sealed class PoliticalClaimStore
             return false;
         }
 
-        if (recordsByClaimId.TryGetValue(transition.ClaimId.Value, out PoliticalClaimRecord current) == false
-            || ReferenceEquals(current, transition.ExpectedClaim) == false)
+        string key = RecognitionKey(transition.ClaimId, transition.RecognizingInstitutionId);
+        recognitionsByKey.TryGetValue(key, out PoliticalClaimRecognitionRecord current);
+        if ((current == null && transition.ExpectedRecognition != null)
+            || (current != null && ReferenceEquals(current, transition.ExpectedRecognition) == false))
         {
             failure = PoliticalClaimFailure.Create(
                 PoliticalClaimFailureCode.StaleClaim,
@@ -141,7 +227,7 @@ public sealed class PoliticalClaimStore
             return false;
         }
 
-        recordsByClaimId[transition.ClaimId.Value] = nextRecord;
+        recognitionsByKey[key] = nextRecord;
         revision++;
         failure = PoliticalClaimFailure.None;
         return true;
@@ -199,6 +285,11 @@ public sealed class PoliticalClaimStore
             clone.recordsByClaimId.Add(entry.Key, entry.Value);
         }
 
+        foreach (KeyValuePair<string, PoliticalClaimRecognitionRecord> entry in recognitionsByKey)
+        {
+            clone.recognitionsByKey.Add(entry.Key, entry.Value);
+        }
+
         clone.revision = revision;
         return clone;
     }
@@ -212,5 +303,20 @@ public sealed class PoliticalClaimStore
         }
 
         return StringComparer.Ordinal.Compare(left.ClaimantPersonId.Value, right.ClaimantPersonId.Value);
+    }
+
+    private static int CompareRecognitionRecords(
+        PoliticalClaimRecognitionRecord left,
+        PoliticalClaimRecognitionRecord right)
+    {
+        int claim = StringComparer.Ordinal.Compare(left.ClaimId.Value, right.ClaimId.Value);
+        return claim != 0
+            ? claim
+            : StringComparer.Ordinal.Compare(left.InstitutionId.Value, right.InstitutionId.Value);
+    }
+
+    private static string RecognitionKey(PoliticalClaimId claimId, InstitutionId institutionId)
+    {
+        return PoliticalClaimRecognitionRecord.BuildRecognitionId(claimId, institutionId);
     }
 }

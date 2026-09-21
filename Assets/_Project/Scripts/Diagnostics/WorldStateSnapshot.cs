@@ -28,6 +28,7 @@ public sealed class WorldStateSnapshotContext
     public IEnumerable<FactionRecord> Factions { get; }
     public IEnumerable<FactionAffiliationRecord> FactionAffiliations { get; }
     public IEnumerable<PoliticalClaimRecord> PoliticalClaims { get; }
+    public IEnumerable<PoliticalClaimRecognitionRecord> PoliticalClaimRecognitions { get; }
     public IEnumerable<PoliticalSupportRelationRecord> PoliticalSupports { get; }
     public IEnumerable<PoliticalDecisionRecord> PoliticalDecisions { get; }
     public IEnumerable<PoliticalKnowledgeRuntime> PoliticalKnowledgeRuntimes { get; }
@@ -61,7 +62,8 @@ public sealed class WorldStateSnapshotContext
         IEnumerable<PoliticalSupportRelationRecord> politicalSupports = null,
         IEnumerable<PoliticalDecisionRecord> politicalDecisions = null,
         IEnumerable<PoliticalKnowledgeRuntime> politicalKnowledgeRuntimes = null,
-        long? politicalKnowledgeRevision = null)
+        long? politicalKnowledgeRevision = null,
+        IEnumerable<PoliticalClaimRecognitionRecord> politicalClaimRecognitions = null)
     {
         SimulationTime = simulationTime;
         Calendar = calendar ?? (calendarDefinition != null ? new SimulationCalendar(calendarDefinition) : null);
@@ -85,6 +87,7 @@ public sealed class WorldStateSnapshotContext
         Factions = factions;
         FactionAffiliations = factionAffiliations;
         PoliticalClaims = politicalClaims ?? Array.Empty<PoliticalClaimRecord>();
+        PoliticalClaimRecognitions = politicalClaimRecognitions ?? Array.Empty<PoliticalClaimRecognitionRecord>();
         PoliticalSupports = politicalSupports ?? Array.Empty<PoliticalSupportRelationRecord>();
         PoliticalDecisions = politicalDecisions ?? Array.Empty<PoliticalDecisionRecord>();
         PoliticalKnowledgeRuntimes = politicalKnowledgeRuntimes;
@@ -116,6 +119,7 @@ public sealed class WorldStateSnapshot
     public IReadOnlyList<WorldStateEstateSnapshot> Estates { get; }
     public int EstateCount => Estates.Count;
     public IReadOnlyList<WorldStatePoliticalClaimSnapshot> PoliticalClaims { get; }
+    public IReadOnlyList<WorldStatePoliticalClaimRecognitionSnapshot> PoliticalClaimRecognitions { get; }
     public int PoliticalClaimCount => PoliticalClaims.Count;
     public IReadOnlyList<string> InstitutionIds { get; }
     public IReadOnlyList<string> OfficeIds { get; }
@@ -170,7 +174,8 @@ public sealed class WorldStateSnapshot
         IEnumerable<WorldStatePoliticalKnowledgeSnapshot> politicalKnowledge = null,
         long politicalKnowledgeRevision = 0L,
         bool hasPoliticalKnowledgeState = false,
-        IReadOnlyDictionary<string, string> officeInstitutionIds = null)
+        IReadOnlyDictionary<string, string> officeInstitutionIds = null,
+        IEnumerable<WorldStatePoliticalClaimRecognitionSnapshot> politicalClaimRecognitions = null)
     {
         Metadata = new WorldStateSnapshotMetadata(absoluteDay, calendarDate);
         Npcs = SnapshotCollections.CopySorted(npcs, npc => npc?.RuntimeId);
@@ -198,6 +203,9 @@ public sealed class WorldStateSnapshot
                     + transfer.NewOwnerPersonId);
         Estates = SnapshotCollections.CopySorted(estates, estate => estate?.EstateId);
         PoliticalClaims = SnapshotCollections.CopySorted(politicalClaims, claim => claim?.ClaimId);
+        PoliticalClaimRecognitions = SnapshotCollections.CopySorted(
+            politicalClaimRecognitions,
+            recognition => recognition == null ? null : recognition.ClaimId + "\u001f" + recognition.InstitutionId);
         HasInstitutionCatalog = institutionIds != null;
         HasOfficeCatalog = officeIds != null;
         HasPropertyCatalog = propertyIds != null;
@@ -488,22 +496,84 @@ public sealed class WorldStatePoliticalClaimSnapshot
     }
 }
 
+public sealed class WorldStatePoliticalClaimRecognitionSnapshot
+{
+    public string ClaimId { get; }
+    public string InstitutionId { get; }
+    public PoliticalClaimRecognitionState State { get; }
+    public long RecognitionAbsoluteDay { get; }
+    public string Reason { get; }
+    public IReadOnlyList<WorldStatePoliticalClaimRecognitionHistorySnapshot> History { get; }
+
+    public WorldStatePoliticalClaimRecognitionSnapshot(
+        string claimId,
+        string institutionId,
+        PoliticalClaimRecognitionState state,
+        long recognitionAbsoluteDay,
+        string reason,
+        IEnumerable<WorldStatePoliticalClaimRecognitionHistorySnapshot> history = null)
+    {
+        ClaimId = claimId;
+        InstitutionId = institutionId;
+        State = state;
+        RecognitionAbsoluteDay = recognitionAbsoluteDay;
+        Reason = reason ?? string.Empty;
+        List<WorldStatePoliticalClaimRecognitionHistorySnapshot> entries =
+            new List<WorldStatePoliticalClaimRecognitionHistorySnapshot>();
+        if (history != null)
+        {
+            foreach (WorldStatePoliticalClaimRecognitionHistorySnapshot entry in history)
+            {
+                if (entry != null) entries.Add(entry);
+            }
+        }
+        History = entries.AsReadOnly();
+    }
+}
+
+public sealed class WorldStatePoliticalClaimRecognitionHistorySnapshot
+{
+    public PoliticalClaimRecognitionState State { get; }
+    public long RecognitionAbsoluteDay { get; }
+    public string Reason { get; }
+
+    public WorldStatePoliticalClaimRecognitionHistorySnapshot(
+        PoliticalClaimRecognitionState state,
+        long recognitionAbsoluteDay,
+        string reason)
+    {
+        State = state;
+        RecognitionAbsoluteDay = recognitionAbsoluteDay;
+        Reason = reason ?? string.Empty;
+    }
+}
+
 public sealed class WorldStateFactionSnapshot
 {
     public string FactionId { get; }
     public string DisplayName { get; }
     public long CreatedAbsoluteDay { get; }
+    public FactionMembershipPolicy MembershipPolicy { get; }
+    public bool ExpulsionAllowed { get; }
 
-    public WorldStateFactionSnapshot(string factionId, string displayName, long createdAbsoluteDay)
+    public WorldStateFactionSnapshot(
+        string factionId,
+        string displayName,
+        long createdAbsoluteDay,
+        FactionMembershipPolicy membershipPolicy = FactionMembershipPolicy.LeaveAndRejoin,
+        bool expulsionAllowed = true)
     {
         FactionId = factionId;
         DisplayName = displayName ?? string.Empty;
         CreatedAbsoluteDay = createdAbsoluteDay;
+        MembershipPolicy = membershipPolicy;
+        ExpulsionAllowed = expulsionAllowed;
     }
 }
 
 public sealed class WorldStateFactionAffiliationSnapshot
 {
+    public string AffiliationId { get; }
     public string FactionId { get; }
     public string PersonId { get; }
     public long JoinedAbsoluteDay { get; }
@@ -514,12 +584,14 @@ public sealed class WorldStateFactionAffiliationSnapshot
         string factionId,
         string personId,
         long joinedAbsoluteDay,
-        long? endedAbsoluteDay)
+        long? endedAbsoluteDay,
+        string affiliationId = null)
     {
         FactionId = factionId;
         PersonId = personId;
         JoinedAbsoluteDay = joinedAbsoluteDay;
         EndedAbsoluteDay = endedAbsoluteDay;
+        AffiliationId = affiliationId;
     }
 }
 
@@ -642,6 +714,7 @@ public sealed class WorldStatePoliticalKnowledgeSnapshot
     public PoliticalKnowledgeHolderKind HolderKind { get; }
     public string HolderPersonId { get; }
     public string HolderInstitutionId { get; }
+    public string HolderFactionId { get; }
     public IReadOnlyList<WorldStatePoliticalKnowledgeObservationSnapshot> Observations { get; }
 
     public WorldStatePoliticalKnowledgeSnapshot(
@@ -649,12 +722,14 @@ public sealed class WorldStatePoliticalKnowledgeSnapshot
         PoliticalKnowledgeHolderKind holderKind,
         string holderPersonId,
         string holderInstitutionId,
-        IEnumerable<WorldStatePoliticalKnowledgeObservationSnapshot> observations)
+        IEnumerable<WorldStatePoliticalKnowledgeObservationSnapshot> observations,
+        string holderFactionId = null)
     {
         HolderStableId = holderStableId;
         HolderKind = holderKind;
         HolderPersonId = holderPersonId;
         HolderInstitutionId = holderInstitutionId;
+        HolderFactionId = holderFactionId;
         List<WorldStatePoliticalKnowledgeObservationSnapshot> copied =
             new List<WorldStatePoliticalKnowledgeObservationSnapshot>();
         if (observations != null)
@@ -1390,6 +1465,8 @@ public static class WorldStateSnapshotBuilder
         List<WorldStateParentageSnapshot> parentages = BuildParentageSnapshots(context.Parentages);
         List<WorldStatePoliticalClaimSnapshot> politicalClaims =
             BuildPoliticalClaimSnapshots(context.PoliticalClaims);
+        List<WorldStatePoliticalClaimRecognitionSnapshot> politicalClaimRecognitions =
+            BuildPoliticalClaimRecognitionSnapshots(context.PoliticalClaimRecognitions);
         List<WorldStateFactionSnapshot> factions = BuildFactionSnapshots(context.Factions);
         List<WorldStateFactionAffiliationSnapshot> factionAffiliations =
             BuildFactionAffiliationSnapshots(context.FactionAffiliations);
@@ -1434,7 +1511,8 @@ public static class WorldStateSnapshotBuilder
             context.PoliticalKnowledgeRevision ?? 0L,
             context.PoliticalKnowledgeRuntimes != null
                 || context.PoliticalKnowledgeRevision.HasValue,
-            context.OfficeInstitutionIds ?? BuildOfficeInstitutionIds(context.OfficeStore));
+            context.OfficeInstitutionIds ?? BuildOfficeInstitutionIds(context.OfficeStore),
+            politicalClaimRecognitions);
     }
 
     private static List<WorldStatePoliticalClaimSnapshot> BuildPoliticalClaimSnapshots(
@@ -1464,13 +1542,44 @@ public static class WorldStateSnapshotBuilder
                 claim.CreatedAbsoluteDay,
                 claim.Status,
                 claim.ResolutionAbsoluteDay,
-                claim.RecognitionState,
-                claim.RecognizingInstitutionId?.Value,
-                claim.RecognitionAbsoluteDay,
-                claim.RecognitionReason,
+                PoliticalClaimRecognitionState.Unrecognized,
+                null,
+                null,
+                string.Empty,
                 claim.EvidenceReferences));
         }
 
+        return result;
+    }
+
+    private static List<WorldStatePoliticalClaimRecognitionSnapshot> BuildPoliticalClaimRecognitionSnapshots(
+        IEnumerable<PoliticalClaimRecognitionRecord> source)
+    {
+        List<WorldStatePoliticalClaimRecognitionSnapshot> result =
+            new List<WorldStatePoliticalClaimRecognitionSnapshot>();
+        if (source == null) return result;
+
+        foreach (PoliticalClaimRecognitionRecord recognition in source)
+        {
+            if (recognition?.ClaimId == null || recognition.InstitutionId == null) continue;
+            List<WorldStatePoliticalClaimRecognitionHistorySnapshot> history =
+                new List<WorldStatePoliticalClaimRecognitionHistorySnapshot>();
+            foreach (PoliticalClaimRecognitionHistoryEntry entry in recognition.History)
+            {
+                history.Add(new WorldStatePoliticalClaimRecognitionHistorySnapshot(
+                    entry.State,
+                    entry.RecognitionAbsoluteDay,
+                    entry.Reason));
+            }
+
+            result.Add(new WorldStatePoliticalClaimRecognitionSnapshot(
+                recognition.ClaimId.Value,
+                recognition.InstitutionId.Value,
+                recognition.State,
+                recognition.RecognitionAbsoluteDay,
+                recognition.Reason,
+                history));
+        }
         return result;
     }
 
@@ -1490,7 +1599,9 @@ public static class WorldStateSnapshotBuilder
                 result.Add(new WorldStateFactionSnapshot(
                     faction.Id.Value,
                     faction.DisplayName,
-                    faction.CreatedAbsoluteDay));
+                    faction.CreatedAbsoluteDay,
+                    faction.MembershipPolicy,
+                    faction.ExpulsionAllowed));
             }
         }
 
@@ -1515,7 +1626,8 @@ public static class WorldStateSnapshotBuilder
                     affiliation.FactionId.Value,
                     affiliation.PersonId.Value,
                     affiliation.JoinedAbsoluteDay,
-                    affiliation.EndedAbsoluteDay));
+                    affiliation.EndedAbsoluteDay,
+                    affiliation.AffiliationId?.Value));
             }
         }
 
@@ -1646,7 +1758,8 @@ public static class WorldStateSnapshotBuilder
                 runtime.Holder.Kind,
                 runtime.HolderPersonId?.Value,
                 runtime.HolderInstitutionId?.Value,
-                observations));
+                observations,
+                runtime.HolderFactionId?.Value));
         }
 
         return result;

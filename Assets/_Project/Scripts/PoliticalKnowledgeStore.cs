@@ -11,7 +11,8 @@ public enum PoliticalKnowledgeFailureCode
     DuplicateHolder = 4,
     InvalidObservation = 5,
     FutureObservation = 6,
-    KnowledgeNotImproved = 7
+    KnowledgeNotImproved = 7,
+    HolderFactionNotRegistered = 8
 }
 
 public sealed class PoliticalKnowledgeFailure : IEquatable<PoliticalKnowledgeFailure>
@@ -51,8 +52,8 @@ public sealed class PoliticalKnowledgeFailure : IEquatable<PoliticalKnowledgeFai
 }
 
 /// <summary>
-/// World-owned container for political knowledge. It stores beliefs by stable PersonId
-/// or InstitutionId and never rewrites the factual political stores.
+/// World-owned container for political knowledge. It stores beliefs by stable PersonId,
+/// InstitutionId, or FactionId and never rewrites the factual political stores.
 /// </summary>
 public sealed class PoliticalKnowledgeStore
 {
@@ -345,6 +346,15 @@ public sealed class PoliticalKnowledgeStore
             failure = PoliticalKnowledgeFailure.Create(
                 PoliticalKnowledgeFailureCode.HolderInstitutionNotRegistered,
                 "The political knowledge InstitutionId is not registered in this world.");
+            return false;
+        }
+
+        if (holder.Kind == PoliticalKnowledgeHolderKind.Faction
+            && factionStore.TryGet(holder.FactionId, out _) == false)
+        {
+            failure = PoliticalKnowledgeFailure.Create(
+                PoliticalKnowledgeFailureCode.HolderFactionNotRegistered,
+                "The political knowledge FactionId is not registered in this world.");
             return false;
         }
 

@@ -1,8 +1,9 @@
 using System;
+using System.Collections.Generic;
 
 public sealed class PoliticalClaimRecognitionTransition : IEquatable<PoliticalClaimRecognitionTransition>
 {
-    internal PoliticalClaimRecord ExpectedClaim { get; }
+    internal PoliticalClaimRecognitionRecord ExpectedRecognition { get; }
     internal long ExpectedStoreRevision { get; }
     public PoliticalClaimId ClaimId { get; }
     public long ExpectedWorldDay { get; }
@@ -12,7 +13,8 @@ public sealed class PoliticalClaimRecognitionTransition : IEquatable<PoliticalCl
     public string Reason { get; }
 
     internal PoliticalClaimRecognitionTransition(
-        PoliticalClaimRecord expectedClaim,
+        PoliticalClaimId claimId,
+        PoliticalClaimRecognitionRecord expectedRecognition,
         long expectedStoreRevision,
         long expectedWorldDay,
         InstitutionId recognizingInstitutionId,
@@ -20,10 +22,10 @@ public sealed class PoliticalClaimRecognitionTransition : IEquatable<PoliticalCl
         long recognitionAbsoluteDay,
         string reason)
     {
-        ExpectedClaim = expectedClaim;
+        ExpectedRecognition = expectedRecognition;
         ExpectedStoreRevision = expectedStoreRevision;
         ExpectedWorldDay = expectedWorldDay;
-        ClaimId = expectedClaim?.ClaimId;
+        ClaimId = claimId;
         RecognizingInstitutionId = recognizingInstitutionId;
         RecognitionState = recognitionState;
         RecognitionAbsoluteDay = recognitionAbsoluteDay;
@@ -181,8 +183,10 @@ internal static class PoliticalClaimSystem
             return false;
         }
 
+        store.TryGetRecognition(claimId, recognizingInstitutionId, out PoliticalClaimRecognitionRecord existing);
         transition = new PoliticalClaimRecognitionTransition(
-            claim,
+            claimId,
+            existing,
             store.Revision,
             expectedWorldDay,
             recognizingInstitutionId,
@@ -206,11 +210,16 @@ internal static class PoliticalClaimSystem
             return false;
         }
 
-        PoliticalClaimRecord next = transition.ExpectedClaim.WithRecognition(
-            transition.RecognitionState,
+        IEnumerable<PoliticalClaimRecognitionHistoryEntry> history = transition.ExpectedRecognition == null
+            ? null
+            : transition.ExpectedRecognition.History;
+        PoliticalClaimRecognitionRecord next = new PoliticalClaimRecognitionRecord(
+            transition.ClaimId,
             transition.RecognizingInstitutionId,
+            transition.RecognitionState,
             transition.RecognitionAbsoluteDay,
-            transition.Reason);
+            transition.Reason,
+            history);
         return store.TryApplyRecognition(transition, next, out failure);
     }
 

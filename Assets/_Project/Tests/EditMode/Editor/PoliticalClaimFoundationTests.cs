@@ -195,8 +195,9 @@ public sealed class PoliticalClaimFoundationTests
         Assert.That(world.TryApplyPoliticalClaimRecognition(transition, out PoliticalClaimFailure applyFailure), Is.True, applyFailure.ToString());
         PoliticalClaimRecord recognizedClaim = GetClaim(world, claim.ClaimId);
         Assert.That(recognizedClaim, Is.Not.Null);
-        Assert.That(recognizedClaim.RecognitionState, Is.EqualTo(PoliticalClaimRecognitionState.Recognized));
-        Assert.That(recognizedClaim.RecognizingInstitutionId, Is.EqualTo(institutionId));
+        Assert.That(world.PoliticalClaimRecognitionRecords, Has.Count.EqualTo(1));
+        Assert.That(world.PoliticalClaimRecognitionRecords[0].State, Is.EqualTo(PoliticalClaimRecognitionState.Recognized));
+        Assert.That(world.PoliticalClaimRecognitionRecords[0].InstitutionId, Is.EqualTo(institutionId));
         Assert.That(recognizedClaim.EvidenceReferences, Has.Count.EqualTo(1));
     }
 
@@ -269,7 +270,94 @@ public sealed class PoliticalClaimFoundationTests
         Assert.That(resolvedClaim, Is.Not.Null);
         Assert.That(resolvedClaim.Status, Is.EqualTo(PoliticalClaimStatus.Resolved));
         Assert.That(resolvedClaim.ResolutionAbsoluteDay, Is.EqualTo(0L));
-        Assert.That(resolvedClaim.RecognitionState, Is.EqualTo(PoliticalClaimRecognitionState.Contested));
+        Assert.That(world.PoliticalClaimRecognitionRecords[0].State, Is.EqualTo(PoliticalClaimRecognitionState.Contested));
+    }
+
+    [Test]
+    public void OneClaimCanHaveIndependentInstitutionScopedRecognitionRelations()
+    {
+        PersonStore persons = new PersonStore();
+        PersonRuntime claimant = RegisterPerson(persons, "claimant");
+        InstitutionStore institutions = new InstitutionStore();
+        InstitutionId firstInstitution = RegisterInstitution(institutions, "institution.first");
+        InstitutionId secondInstitution = RegisterInstitution(institutions, "institution.second");
+        SimulationRuntime world = CreateWorld(persons, institutions);
+        PoliticalClaimRecord claim = new PoliticalClaimRecord(
+            new PoliticalClaimId("claim.shared"),
+            claimant.PersonId,
+            PoliticalClaimType.StatusRecognition,
+            PoliticalClaimTarget.ForPerson(claimant.PersonId),
+            PoliticalClaimBasis.ExplicitDecision,
+            "shared claim",
+            0L,
+            null);
+        Assert.That(world.TryRegisterPoliticalClaim(claim, out _), Is.True);
+
+        Assert.That(world.TryProposePoliticalClaimRecognition(
+            claim.ClaimId,
+            firstInstitution,
+            PoliticalClaimRecognitionState.Recognized,
+            "first recognizes",
+            out PoliticalClaimRecognitionTransition firstTransition,
+            out _), Is.True);
+        Assert.That(world.TryApplyPoliticalClaimRecognition(firstTransition, out _), Is.True);
+        Assert.That(world.TryProposePoliticalClaimRecognition(
+            claim.ClaimId,
+            secondInstitution,
+            PoliticalClaimRecognitionState.Rejected,
+            "second rejects",
+            out PoliticalClaimRecognitionTransition secondTransition,
+            out _), Is.True);
+        Assert.That(world.TryApplyPoliticalClaimRecognition(secondTransition, out _), Is.True);
+
+        Assert.That(world.PoliticalClaimRecords, Has.Count.EqualTo(1));
+        Assert.That(world.PoliticalClaimRecognitionRecords, Has.Count.EqualTo(2));
+        Assert.That(world.PoliticalClaimRecognitionRecords[0].InstitutionId, Is.EqualTo(firstInstitution));
+        Assert.That(world.PoliticalClaimRecognitionRecords[0].State, Is.EqualTo(PoliticalClaimRecognitionState.Recognized));
+        Assert.That(world.PoliticalClaimRecognitionRecords[1].InstitutionId, Is.EqualTo(secondInstitution));
+        Assert.That(world.PoliticalClaimRecognitionRecords[1].State, Is.EqualTo(PoliticalClaimRecognitionState.Rejected));
+
+        Assert.That(world.TryProposePoliticalClaimRecognition(
+            claim.ClaimId,
+            firstInstitution,
+            PoliticalClaimRecognitionState.Contested,
+            "first contests later",
+            out PoliticalClaimRecognitionTransition update,
+            out _), Is.True);
+        Assert.That(world.TryApplyPoliticalClaimRecognition(update, out _), Is.True);
+        Assert.That(world.PoliticalClaimRecognitionRecords[0].State, Is.EqualTo(PoliticalClaimRecognitionState.Contested));
+        Assert.That(world.PoliticalClaimRecognitionRecords[0].History, Has.Count.EqualTo(2));
+        Assert.That(world.PoliticalClaimRecognitionRecords[1].State, Is.EqualTo(PoliticalClaimRecognitionState.Rejected));
+    }
+
+    [Test]
+    public void ClaimKnowledgeKeepsInstitutionRecognitionPerspectivesSeparate()
+    {
+        PoliticalKnowledgeRuntime knowledge = new PoliticalKnowledgeRuntime(new PersonId("person.reader"));
+        PoliticalClaimId claimId = new PoliticalClaimId("claim.knowledge-perspectives");
+        PoliticalClaimKnowledgeObservation first = CreateClaimKnowledgeObservation(
+            claimId,
+            new InstitutionId("institution.first"),
+            PoliticalClaimRecognitionState.Recognized,
+            10L);
+        PoliticalClaimKnowledgeObservation second = CreateClaimKnowledgeObservation(
+            claimId,
+            new InstitutionId("institution.second"),
+            PoliticalClaimRecognitionState.Rejected);
+
+        Assert.That(knowledge.RecordClaimObservation(first), Is.True);
+        Assert.That(knowledge.RecordClaimObservation(second), Is.True);
+        Assert.That(knowledge.ClaimObservations, Has.Count.EqualTo(2));
+        Assert.That(knowledge.TryGetLatestClaimRecognitionObservation(
+            claimId,
+            first.RecognizingInstitutionId,
+            out PoliticalClaimKnowledgeObservation firstCurrent), Is.True);
+        Assert.That(firstCurrent.RecognitionState, Is.EqualTo(PoliticalClaimRecognitionState.Recognized));
+        Assert.That(knowledge.TryGetLatestClaimRecognitionObservation(
+            claimId,
+            second.RecognizingInstitutionId,
+            out PoliticalClaimKnowledgeObservation secondCurrent), Is.True);
+        Assert.That(secondCurrent.RecognitionState, Is.EqualTo(PoliticalClaimRecognitionState.Rejected));
     }
 
     [Test]
@@ -341,9 +429,10 @@ public sealed class PoliticalClaimFoundationTests
         WorldStateDiff diff = WorldStateDiagnostics.Compare(before, after);
 
         Assert.That(diff.Differences, Has.Some.Matches<WorldStateDifference>(difference =>
-            difference.Section == "PoliticalClaim"
-            && difference.Identity == "claim.diagnostics"
-            && difference.Field == "RecognitionState"));
+            difference.Section == "PoliticalClaimRecognition"
+            && difference.Identity == "claim.diagnostics\u001fcouncil"
+            && difference.Field == "Entity"
+            && difference.ChangeKind == WorldStateDifferenceChangeKind.Added));
         Assert.That(WorldStateInvariantValidator.Validate(after).IsValid, Is.True);
     }
 
@@ -354,6 +443,7 @@ public sealed class PoliticalClaimFoundationTests
             calendar: world.Calendar,
             personStore: world.PersonStore,
             politicalClaims: world.PoliticalClaimRecords,
+            politicalClaimRecognitions: world.PoliticalClaimRecognitionRecords,
             institutionIds: GetInstitutionIds(world),
             officeIds: GetOfficeIds(world),
             propertyIds: GetPropertyIds(world)));
@@ -425,6 +515,30 @@ public sealed class PoliticalClaimFoundationTests
             "direct lineage",
             0L,
             new[] { "genealogy:direct" });
+    }
+
+    private static PoliticalClaimKnowledgeObservation CreateClaimKnowledgeObservation(
+        PoliticalClaimId claimId,
+        InstitutionId institutionId,
+        PoliticalClaimRecognitionState recognitionState,
+        long observedAbsoluteDay = 0L)
+    {
+        return new PoliticalClaimKnowledgeObservation(
+            claimId,
+            true,
+            new PersonId("person.claimant"),
+            PoliticalClaimType.StatusRecognition,
+            PoliticalClaimTarget.ForPerson(new PersonId("person.target")),
+            PoliticalClaimBasis.ExplicitDecision,
+            0L,
+            PoliticalClaimStatus.Active,
+            null,
+            recognitionState,
+            institutionId,
+            0L,
+            observedAbsoluteDay,
+            observedAbsoluteDay,
+            new PoliticalKnowledgeProvenance(PoliticalKnowledgeSource.DirectObservation, "perspective"));
     }
 
     private static SimulationRuntime CreateWorld(

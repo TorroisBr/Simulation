@@ -285,10 +285,6 @@ public sealed class PoliticalClaimRecord : IEquatable<PoliticalClaimRecord>
     public long CreatedAbsoluteDay { get; }
     public PoliticalClaimStatus Status { get; }
     public long? ResolutionAbsoluteDay { get; }
-    public PoliticalClaimRecognitionState RecognitionState { get; }
-    public InstitutionId RecognizingInstitutionId { get; }
-    public long? RecognitionAbsoluteDay { get; }
-    public string RecognitionReason { get; }
     public IReadOnlyList<string> EvidenceReferences { get; }
 
     public PoliticalClaimRecord(
@@ -349,16 +345,14 @@ public sealed class PoliticalClaimRecord : IEquatable<PoliticalClaimRecord>
             throw new ArgumentException("A terminal claim requires a valid resolution day.", nameof(resolutionAbsoluteDay));
         }
 
-        if (recognitionState == PoliticalClaimRecognitionState.Unrecognized
-            && (recognizingInstitutionId != null || recognitionAbsoluteDay.HasValue || string.IsNullOrWhiteSpace(recognitionReason) == false))
-        {
-            throw new ArgumentException("An unrecognized claim cannot carry recognition metadata.");
-        }
-
         if (recognitionState != PoliticalClaimRecognitionState.Unrecognized
-            && (recognizingInstitutionId == null || recognitionAbsoluteDay.HasValue == false))
+            || recognizingInstitutionId != null
+            || recognitionAbsoluteDay.HasValue
+            || string.IsNullOrWhiteSpace(recognitionReason) == false)
         {
-            throw new ArgumentException("A recognized, contested, or rejected claim requires institutional recognition metadata.");
+            throw new ArgumentException(
+                "Political claim recognition is institution-scoped and must be registered through PoliticalClaimStore.",
+                nameof(recognitionState));
         }
 
         if (recognitionAbsoluteDay.HasValue
@@ -387,33 +381,6 @@ public sealed class PoliticalClaimRecord : IEquatable<PoliticalClaimRecord>
         CreatedAbsoluteDay = createdAbsoluteDay;
         Status = status;
         ResolutionAbsoluteDay = resolutionAbsoluteDay;
-        RecognitionState = recognitionState;
-        RecognizingInstitutionId = recognizingInstitutionId;
-        RecognitionAbsoluteDay = recognitionAbsoluteDay;
-        RecognitionReason = recognitionReason ?? string.Empty;
-    }
-
-    internal PoliticalClaimRecord WithRecognition(
-        PoliticalClaimRecognitionState recognitionState,
-        InstitutionId recognizingInstitutionId,
-        long recognitionAbsoluteDay,
-        string recognitionReason)
-    {
-        return new PoliticalClaimRecord(
-            ClaimId,
-            ClaimantPersonId,
-            ClaimType,
-            Target,
-            Basis,
-            BasisDescription,
-            CreatedAbsoluteDay,
-            EvidenceReferences,
-            Status,
-            recognitionState,
-            recognizingInstitutionId,
-            recognitionAbsoluteDay,
-            recognitionReason,
-            ResolutionAbsoluteDay);
     }
 
     internal PoliticalClaimRecord WithStatus(PoliticalClaimStatus status, long resolutionAbsoluteDay)
@@ -428,10 +395,10 @@ public sealed class PoliticalClaimRecord : IEquatable<PoliticalClaimRecord>
             CreatedAbsoluteDay,
             EvidenceReferences,
             status,
-            RecognitionState,
-            RecognizingInstitutionId,
-            RecognitionAbsoluteDay,
-            RecognitionReason,
+            PoliticalClaimRecognitionState.Unrecognized,
+            null,
+            null,
+            null,
             resolutionAbsoluteDay);
     }
 
@@ -447,10 +414,6 @@ public sealed class PoliticalClaimRecord : IEquatable<PoliticalClaimRecord>
             && CreatedAbsoluteDay == other.CreatedAbsoluteDay
             && Status == other.Status
             && ResolutionAbsoluteDay == other.ResolutionAbsoluteDay
-            && RecognitionState == other.RecognitionState
-            && RecognizingInstitutionId == other.RecognizingInstitutionId
-            && RecognitionAbsoluteDay == other.RecognitionAbsoluteDay
-            && string.Equals(RecognitionReason, other.RecognitionReason, StringComparison.Ordinal)
             && SequenceEqual(EvidenceReferences, other.EvidenceReferences);
     }
 
@@ -470,7 +433,7 @@ public sealed class PoliticalClaimRecord : IEquatable<PoliticalClaimRecord>
             hash = (hash * 397) ^ (int)Basis;
             hash = (hash * 397) ^ CreatedAbsoluteDay.GetHashCode();
             hash = (hash * 397) ^ (int)Status;
-            return (hash * 397) ^ (int)RecognitionState;
+            return (hash * 397) ^ (ResolutionAbsoluteDay?.GetHashCode() ?? 0);
         }
     }
 
@@ -517,5 +480,144 @@ public sealed class PoliticalClaimRecord : IEquatable<PoliticalClaimRecord>
         }
 
         return true;
+    }
+}
+
+public sealed class PoliticalClaimRecognitionHistoryEntry : IEquatable<PoliticalClaimRecognitionHistoryEntry>
+{
+    public PoliticalClaimRecognitionState State { get; }
+    public long RecognitionAbsoluteDay { get; }
+    public string Reason { get; }
+
+    public PoliticalClaimRecognitionHistoryEntry(
+        PoliticalClaimRecognitionState state,
+        long recognitionAbsoluteDay,
+        string reason)
+    {
+        if (Enum.IsDefined(typeof(PoliticalClaimRecognitionState), state) == false
+            || state == PoliticalClaimRecognitionState.Unrecognized)
+        {
+            throw new ArgumentOutOfRangeException(nameof(state));
+        }
+
+        if (recognitionAbsoluteDay < 0L)
+        {
+            throw new ArgumentOutOfRangeException(nameof(recognitionAbsoluteDay));
+        }
+
+        State = state;
+        RecognitionAbsoluteDay = recognitionAbsoluteDay;
+        Reason = reason ?? string.Empty;
+    }
+
+    public bool Equals(PoliticalClaimRecognitionHistoryEntry other)
+    {
+        return other != null
+            && State == other.State
+            && RecognitionAbsoluteDay == other.RecognitionAbsoluteDay
+            && string.Equals(Reason, other.Reason, StringComparison.Ordinal);
+    }
+
+    public override bool Equals(object obj) => Equals(obj as PoliticalClaimRecognitionHistoryEntry);
+    public override int GetHashCode() => ((int)State * 397) ^ RecognitionAbsoluteDay.GetHashCode();
+}
+
+public sealed class PoliticalClaimRecognitionRecord : IEquatable<PoliticalClaimRecognitionRecord>
+{
+    public PoliticalClaimId ClaimId { get; }
+    public InstitutionId InstitutionId { get; }
+    public string RecognitionId => BuildRecognitionId(ClaimId, InstitutionId);
+    public PoliticalClaimRecognitionState State { get; }
+    public long RecognitionAbsoluteDay { get; }
+    public string Reason { get; }
+    public IReadOnlyList<PoliticalClaimRecognitionHistoryEntry> History { get; }
+
+    public PoliticalClaimRecognitionRecord(
+        PoliticalClaimId claimId,
+        InstitutionId institutionId,
+        PoliticalClaimRecognitionState state,
+        long recognitionAbsoluteDay,
+        string reason,
+        IEnumerable<PoliticalClaimRecognitionHistoryEntry> history = null)
+    {
+        ClaimId = claimId ?? throw new ArgumentNullException(nameof(claimId));
+        InstitutionId = institutionId ?? throw new ArgumentNullException(nameof(institutionId));
+        if (Enum.IsDefined(typeof(PoliticalClaimRecognitionState), state) == false
+            || state == PoliticalClaimRecognitionState.Unrecognized)
+        {
+            throw new ArgumentOutOfRangeException(nameof(state));
+        }
+
+        if (recognitionAbsoluteDay < 0L)
+        {
+            throw new ArgumentOutOfRangeException(nameof(recognitionAbsoluteDay));
+        }
+
+        List<PoliticalClaimRecognitionHistoryEntry> entries =
+            new List<PoliticalClaimRecognitionHistoryEntry>();
+        if (history != null)
+        {
+            foreach (PoliticalClaimRecognitionHistoryEntry entry in history)
+            {
+                if (entry == null)
+                {
+                    throw new ArgumentException("Recognition history cannot contain null entries.", nameof(history));
+                }
+
+                entries.Add(entry);
+            }
+        }
+
+        PoliticalClaimRecognitionHistoryEntry current =
+            new PoliticalClaimRecognitionHistoryEntry(state, recognitionAbsoluteDay, reason);
+        if (entries.Count == 0 || entries[entries.Count - 1].Equals(current) == false)
+        {
+            entries.Add(current);
+        }
+
+        ClaimId = claimId;
+        InstitutionId = institutionId;
+        State = state;
+        RecognitionAbsoluteDay = recognitionAbsoluteDay;
+        Reason = reason ?? string.Empty;
+        History = new System.Collections.ObjectModel.ReadOnlyCollection<PoliticalClaimRecognitionHistoryEntry>(entries);
+    }
+
+    public bool Equals(PoliticalClaimRecognitionRecord other)
+    {
+        if (other == null
+            || ClaimId != other.ClaimId
+            || InstitutionId != other.InstitutionId
+            || State != other.State
+            || RecognitionAbsoluteDay != other.RecognitionAbsoluteDay
+            || string.Equals(Reason, other.Reason, StringComparison.Ordinal) == false
+            || History.Count != other.History.Count)
+        {
+            return false;
+        }
+
+        for (int index = 0; index < History.Count; index++)
+        {
+            if (History[index].Equals(other.History[index]) == false)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    public override bool Equals(object obj) => Equals(obj as PoliticalClaimRecognitionRecord);
+    public override int GetHashCode() => ((ClaimId.GetHashCode() * 397) ^ InstitutionId.GetHashCode()) ^ (int)State;
+
+    public static string BuildRecognitionId(PoliticalClaimId claimId, InstitutionId institutionId)
+    {
+        if (claimId == null || institutionId == null)
+        {
+            return null;
+        }
+
+        return claimId.Value.Length + ":" + claimId.Value
+            + institutionId.Value.Length + ":" + institutionId.Value;
     }
 }

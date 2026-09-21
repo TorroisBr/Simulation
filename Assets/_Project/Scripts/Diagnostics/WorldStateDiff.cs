@@ -71,6 +71,10 @@ public sealed class WorldStateDiff
             WorldStateCanonicalWriter.IntValue(before.PoliticalClaimCount),
             WorldStateCanonicalWriter.IntValue(after.PoliticalClaimCount),
             differences);
+        CompareValue("Metadata", "world", "PoliticalClaimRecognitionCount",
+            WorldStateCanonicalWriter.IntValue(before.PoliticalClaimRecognitions.Count),
+            WorldStateCanonicalWriter.IntValue(after.PoliticalClaimRecognitions.Count),
+            differences);
         CompareValue("Metadata", "world", "FactionCount",
             WorldStateCanonicalWriter.IntValue(before.FactionCount),
             WorldStateCanonicalWriter.IntValue(after.FactionCount),
@@ -250,6 +254,29 @@ public sealed class WorldStateDiff
             },
             differences);
 
+        CompareEntities("PoliticalClaimRecognition", before.PoliticalClaimRecognitions, after.PoliticalClaimRecognitions,
+            recognition => recognition.ClaimId + "\u001f" + recognition.InstitutionId,
+            (identity, left, right) =>
+            {
+                CompareValue("PoliticalClaimRecognition", identity, "State",
+                    WorldStateCanonicalWriter.EnumValue(left.State),
+                    WorldStateCanonicalWriter.EnumValue(right.State),
+                    differences);
+                CompareValue("PoliticalClaimRecognition", identity, "RecognitionAbsoluteDay",
+                    WorldStateCanonicalWriter.Int64Value(left.RecognitionAbsoluteDay),
+                    WorldStateCanonicalWriter.Int64Value(right.RecognitionAbsoluteDay),
+                    differences);
+                CompareValue("PoliticalClaimRecognition", identity, "Reason",
+                    WorldStateCanonicalWriter.StringValue(left.Reason),
+                    WorldStateCanonicalWriter.StringValue(right.Reason),
+                    differences);
+                CompareValue("PoliticalClaimRecognition", identity, "History",
+                    RecognitionHistoryValue(left.History),
+                    RecognitionHistoryValue(right.History),
+                    differences);
+            },
+            differences);
+
         CompareEntities("Faction", before.Factions, after.Factions,
             faction => faction.FactionId,
             (identity, left, right) =>
@@ -262,13 +289,25 @@ public sealed class WorldStateDiff
                     WorldStateCanonicalWriter.Int64Value(left.CreatedAbsoluteDay),
                     WorldStateCanonicalWriter.Int64Value(right.CreatedAbsoluteDay),
                     differences);
+                CompareValue("Faction", identity, "MembershipPolicy",
+                    WorldStateCanonicalWriter.EnumValue(left.MembershipPolicy),
+                    WorldStateCanonicalWriter.EnumValue(right.MembershipPolicy),
+                    differences);
+                CompareValue("Faction", identity, "ExpulsionAllowed",
+                    WorldStateCanonicalWriter.BoolValue(left.ExpulsionAllowed),
+                    WorldStateCanonicalWriter.BoolValue(right.ExpulsionAllowed),
+                    differences);
             },
             differences);
 
         CompareEntities("FactionAffiliation", before.FactionAffiliations, after.FactionAffiliations,
-            affiliation => affiliation.FactionId + "\u001f" + affiliation.PersonId,
+            affiliation => affiliation.AffiliationId ?? affiliation.FactionId + "\u001f" + affiliation.PersonId,
             (identity, left, right) =>
             {
+                CompareValue("FactionAffiliation", identity, "AffiliationId",
+                    WorldStateCanonicalWriter.StringValue(left.AffiliationId),
+                    WorldStateCanonicalWriter.StringValue(right.AffiliationId),
+                    differences);
                 CompareValue("FactionAffiliation", identity, "JoinedAbsoluteDay",
                     WorldStateCanonicalWriter.Int64Value(left.JoinedAbsoluteDay),
                     WorldStateCanonicalWriter.Int64Value(right.JoinedAbsoluteDay),
@@ -393,6 +432,10 @@ public sealed class WorldStateDiff
                 CompareValue("PoliticalKnowledge", identity, "HolderInstitutionId",
                     WorldStateCanonicalWriter.StringValue(left.HolderInstitutionId),
                     WorldStateCanonicalWriter.StringValue(right.HolderInstitutionId),
+                    differences);
+                CompareValue("PoliticalKnowledge", identity, "HolderFactionId",
+                    WorldStateCanonicalWriter.StringValue(left.HolderFactionId),
+                    WorldStateCanonicalWriter.StringValue(right.HolderFactionId),
                     differences);
                 CompareEntities("PoliticalKnowledgeObservation", left.Observations, right.Observations,
                     observation => identity + "/" + observation.IdentityKey,
@@ -778,6 +821,33 @@ public sealed class WorldStateDiff
                 afterValue,
                 WorldStateDifferenceChangeKind.Changed));
         }
+    }
+
+    private static string RecognitionHistoryValue(
+        IReadOnlyList<WorldStatePoliticalClaimRecognitionHistorySnapshot> history)
+    {
+        if (history == null || history.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        List<string> entries = new List<string>();
+        foreach (WorldStatePoliticalClaimRecognitionHistorySnapshot entry in history)
+        {
+            if (entry == null)
+            {
+                continue;
+            }
+
+            entries.Add(
+                WorldStateCanonicalWriter.EnumValue(entry.State)
+                + "@"
+                + WorldStateCanonicalWriter.Int64Value(entry.RecognitionAbsoluteDay)
+                + "@"
+                + WorldStateCanonicalWriter.StringValue(entry.Reason));
+        }
+
+        return string.Join(";", entries.ToArray());
     }
 
     private static void SortDifferences(List<WorldStateDifference> differences)
