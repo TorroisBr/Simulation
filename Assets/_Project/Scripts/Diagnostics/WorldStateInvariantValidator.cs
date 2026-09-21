@@ -2307,10 +2307,38 @@ public static class WorldStateInvariantValidator
                 AddError(issues, "SocialReactionDayInvalid", identity, "Social reaction day is outside the snapshot timeline.");
             }
 
-            if (reaction.SupersedesReactionId != null
-                && reactionsById.ContainsKey(reaction.SupersedesReactionId) == false)
+        }
+
+        foreach (WorldStateSocialReactionSnapshot reaction in reactions ?? Array.Empty<WorldStateSocialReactionSnapshot>())
+        {
+            if (reaction == null || reaction.SupersedesReactionId == null)
+            {
+                continue;
+            }
+
+            string identity = string.IsNullOrWhiteSpace(reaction.ReactionId)
+                ? "social-reaction"
+                : reaction.ReactionId;
+            if (reactionsById.TryGetValue(
+                    reaction.SupersedesReactionId,
+                    out WorldStateSocialReactionSnapshot predecessor) == false)
             {
                 AddError(issues, "SocialReactionSupersededMissing", identity, "Social reaction supersession predecessor is absent.");
+                continue;
+            }
+
+            if (reaction.CreatedAbsoluteDay < predecessor.CreatedAbsoluteDay)
+            {
+                AddError(issues, "SocialReactionSupersessionDayInvalid", identity, "A social reaction cannot supersede a reaction created later.");
+            }
+
+            if (reaction.EvaluatorPersonId != predecessor.EvaluatorPersonId
+                || reaction.SourceDomain != predecessor.SourceDomain
+                || reaction.SourceStableId != predecessor.SourceStableId
+                || reaction.TargetKind != predecessor.TargetKind
+                || reaction.TargetStableId != predecessor.TargetStableId)
+            {
+                AddError(issues, "SocialReactionSupersessionThreadInvalid", identity, "A superseding social reaction must remain in the evaluator/source/target thread.");
             }
         }
     }
