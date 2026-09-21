@@ -316,6 +316,10 @@ public sealed class WorldStateDiff
                     WorldStateCanonicalWriter.NullableInt64Value(left.EndedAbsoluteDay),
                     WorldStateCanonicalWriter.NullableInt64Value(right.EndedAbsoluteDay),
                     differences);
+                CompareValue("FactionAffiliation", identity, "EndReason",
+                    WorldStateCanonicalWriter.EnumValueOrNull(left.EndReason),
+                    WorldStateCanonicalWriter.EnumValueOrNull(right.EndReason),
+                    differences);
             },
             differences);
 

@@ -360,10 +360,13 @@ public sealed class PoliticalClaimKnowledgeObservation : PoliticalKnowledgeObser
         }
 
         ValidateOptionalDay(recognitionAbsoluteDay, nameof(recognitionAbsoluteDay));
+        bool hasRecognitionPerspective = ReferenceEquals(recognizingInstitutionId, null) == false;
+        bool hasRecognitionDay = recognitionAbsoluteDay.HasValue;
         if (recognitionState == PoliticalClaimRecognitionState.Unrecognized
-            && (recognizingInstitutionId != null || recognitionAbsoluteDay.HasValue))
+            && hasRecognitionPerspective != hasRecognitionDay)
         {
-            throw new ArgumentException("An unrecognized claim cannot carry recognition metadata.");
+            throw new ArgumentException(
+                "An unrecognized claim must carry either no recognition perspective or both an institution and recognition day.");
         }
 
         if (recognitionState != PoliticalClaimRecognitionState.Unrecognized

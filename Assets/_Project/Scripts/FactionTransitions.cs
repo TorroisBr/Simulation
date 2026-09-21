@@ -35,7 +35,8 @@ public sealed class FactionAffiliationEndTransition : IEquatable<FactionAffiliat
     public PersonId PersonId => ExpectedAffiliation?.PersonId;
     public long ExpectedWorldDay { get; }
     public long EndedAbsoluteDay { get; }
-    public bool IsExpulsion { get; }
+    public FactionAffiliationEndReason EndReason { get; }
+    public bool IsExpulsion => EndReason == FactionAffiliationEndReason.Expulsion;
 
     internal FactionAffiliationEndTransition(
         FactionStore expectedStore,
@@ -50,7 +51,9 @@ public sealed class FactionAffiliationEndTransition : IEquatable<FactionAffiliat
         ExpectedStoreRevision = expectedStoreRevision;
         ExpectedWorldDay = expectedWorldDay;
         EndedAbsoluteDay = endedAbsoluteDay;
-        IsExpulsion = isExpulsion;
+        EndReason = isExpulsion
+            ? FactionAffiliationEndReason.Expulsion
+            : FactionAffiliationEndReason.VoluntaryLeave;
     }
 
     public bool Equals(FactionAffiliationEndTransition other) => other != null
@@ -58,9 +61,11 @@ public sealed class FactionAffiliationEndTransition : IEquatable<FactionAffiliat
         && ExpectedStoreRevision == other.ExpectedStoreRevision
         && ExpectedWorldDay == other.ExpectedWorldDay
         && EndedAbsoluteDay == other.EndedAbsoluteDay
-        && IsExpulsion == other.IsExpulsion;
+        && EndReason == other.EndReason;
     public override bool Equals(object obj) => Equals(obj as FactionAffiliationEndTransition);
-    public override int GetHashCode() => (ExpectedAffiliation?.GetHashCode() ?? 0) ^ EndedAbsoluteDay.GetHashCode();
+    public override int GetHashCode() => (ExpectedAffiliation?.GetHashCode() ?? 0)
+        ^ EndedAbsoluteDay.GetHashCode()
+        ^ EndReason.GetHashCode();
 }
 
 internal static class FactionAffiliationSystem

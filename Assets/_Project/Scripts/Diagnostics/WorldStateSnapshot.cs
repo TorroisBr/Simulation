@@ -578,6 +578,7 @@ public sealed class WorldStateFactionAffiliationSnapshot
     public string PersonId { get; }
     public long JoinedAbsoluteDay { get; }
     public long? EndedAbsoluteDay { get; }
+    public FactionAffiliationEndReason? EndReason { get; }
     public bool IsActive => EndedAbsoluteDay.HasValue == false;
 
     public WorldStateFactionAffiliationSnapshot(
@@ -585,13 +586,15 @@ public sealed class WorldStateFactionAffiliationSnapshot
         string personId,
         long joinedAbsoluteDay,
         long? endedAbsoluteDay,
-        string affiliationId = null)
+        string affiliationId = null,
+        FactionAffiliationEndReason? endReason = null)
     {
         FactionId = factionId;
         PersonId = personId;
         JoinedAbsoluteDay = joinedAbsoluteDay;
         EndedAbsoluteDay = endedAbsoluteDay;
         AffiliationId = affiliationId;
+        EndReason = endReason;
     }
 }
 
@@ -1627,7 +1630,8 @@ public static class WorldStateSnapshotBuilder
                     affiliation.PersonId.Value,
                     affiliation.JoinedAbsoluteDay,
                     affiliation.EndedAbsoluteDay,
-                    affiliation.AffiliationId?.Value));
+                    affiliation.AffiliationId?.Value,
+                    affiliation.EndReason));
             }
         }
 

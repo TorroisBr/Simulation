@@ -94,6 +94,12 @@ public enum FactionMembershipPolicy
     LeaveAndRejoin = 2
 }
 
+public enum FactionAffiliationEndReason
+{
+    VoluntaryLeave = 0,
+    Expulsion = 1
+}
+
 public sealed class FactionAffiliationId : IEquatable<FactionAffiliationId>
 {
     public string Value { get; }
@@ -122,6 +128,7 @@ public sealed class FactionAffiliationRecord : IEquatable<FactionAffiliationReco
     public PersonId PersonId { get; }
     public long JoinedAbsoluteDay { get; }
     public long? EndedAbsoluteDay { get; }
+    public FactionAffiliationEndReason? EndReason { get; }
     public bool IsActive => EndedAbsoluteDay.HasValue == false;
 
     public FactionAffiliationRecord(
@@ -129,7 +136,8 @@ public sealed class FactionAffiliationRecord : IEquatable<FactionAffiliationReco
         PersonId personId,
         long joinedAbsoluteDay,
         long? endedAbsoluteDay = null,
-        FactionAffiliationId affiliationId = null)
+        FactionAffiliationId affiliationId = null,
+        FactionAffiliationEndReason? endReason = null)
     {
         FactionId = factionId ?? throw new ArgumentNullException(nameof(factionId));
         PersonId = personId ?? throw new ArgumentNullException(nameof(personId));
@@ -140,8 +148,20 @@ public sealed class FactionAffiliationRecord : IEquatable<FactionAffiliationReco
             throw new ArgumentOutOfRangeException(nameof(endedAbsoluteDay));
         }
 
+        if (endReason.HasValue
+            && Enum.IsDefined(typeof(FactionAffiliationEndReason), endReason.Value) == false)
+        {
+            throw new ArgumentOutOfRangeException(nameof(endReason));
+        }
+
+        if (endReason.HasValue && endedAbsoluteDay.HasValue == false)
+        {
+            throw new ArgumentException("An affiliation end reason requires an ended absolute day.", nameof(endReason));
+        }
+
         JoinedAbsoluteDay = joinedAbsoluteDay;
         EndedAbsoluteDay = endedAbsoluteDay;
+        EndReason = endReason;
         AffiliationId = affiliationId ?? BuildStableId(factionId, personId, joinedAbsoluteDay, 0L);
     }
 
@@ -162,16 +182,23 @@ public sealed class FactionAffiliationRecord : IEquatable<FactionAffiliationReco
             + "@" + joinedAbsoluteDay + "#" + allocationSequence);
     }
 
-    internal FactionAffiliationRecord WithEnd(long endedAbsoluteDay)
+    internal FactionAffiliationRecord WithEnd(long endedAbsoluteDay, FactionAffiliationEndReason endReason)
     {
-        return new FactionAffiliationRecord(FactionId, PersonId, JoinedAbsoluteDay, endedAbsoluteDay, AffiliationId);
+        return new FactionAffiliationRecord(
+            FactionId,
+            PersonId,
+            JoinedAbsoluteDay,
+            endedAbsoluteDay,
+            AffiliationId,
+            endReason);
     }
 
     public bool Equals(FactionAffiliationRecord other)
     {
         return other != null && AffiliationId.Equals(other.AffiliationId)
             && FactionId == other.FactionId && PersonId == other.PersonId
-            && JoinedAbsoluteDay == other.JoinedAbsoluteDay && EndedAbsoluteDay == other.EndedAbsoluteDay;
+            && JoinedAbsoluteDay == other.JoinedAbsoluteDay && EndedAbsoluteDay == other.EndedAbsoluteDay
+            && EndReason == other.EndReason;
     }
 
     public override bool Equals(object obj) => Equals(obj as FactionAffiliationRecord);

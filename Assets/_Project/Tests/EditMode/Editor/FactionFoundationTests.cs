@@ -44,6 +44,7 @@ public sealed class FactionFoundationTests
         Assert.That(world.FactionAffiliationRecords, Has.Count.EqualTo(2));
         Assert.That(world.FactionAffiliationRecords[0].AffiliationId, Is.Not.EqualTo(world.FactionAffiliationRecords[1].AffiliationId));
         Assert.That(world.FactionAffiliationRecords[0].IsActive, Is.False);
+        Assert.That(world.FactionAffiliationRecords[0].EndReason, Is.EqualTo(FactionAffiliationEndReason.VoluntaryLeave));
         Assert.That(world.FactionAffiliationRecords[1].IsActive, Is.True);
     }
 
@@ -109,7 +110,9 @@ public sealed class FactionFoundationTests
         Assert.That(world.TryApplyFactionAffiliation(allowedAdd, out _), Is.True);
         Assert.That(world.TryProposeFactionAffiliationExpulsion(allowed, person.PersonId, out FactionAffiliationEndTransition expulsion, out _), Is.True);
         Assert.That(expulsion.IsExpulsion, Is.True);
+        Assert.That(expulsion.EndReason, Is.EqualTo(FactionAffiliationEndReason.Expulsion));
         Assert.That(world.TryApplyFactionAffiliationEnd(expulsion, out _), Is.True);
+        Assert.That(world.FactionAffiliationRecords[0].EndReason, Is.EqualTo(FactionAffiliationEndReason.Expulsion));
 
         Assert.That(world.TryProposeFactionAffiliation(disallowed, person.PersonId, out FactionAffiliationAddTransition disallowedAdd, out _), Is.True);
         Assert.That(world.TryApplyFactionAffiliation(disallowedAdd, out _), Is.True);
@@ -316,6 +319,10 @@ public sealed class FactionFoundationTests
             difference.Section == "FactionAffiliation"
             && difference.Identity == affiliationIdentity
             && difference.Field == "EndedAbsoluteDay"));
+        Assert.That(diff.Differences, Has.Some.Matches<WorldStateDifference>(difference =>
+            difference.Section == "FactionAffiliation"
+            && difference.Identity == affiliationIdentity
+            && difference.Field == "EndReason"));
         Assert.That(WorldStateInvariantValidator.Validate(after).IsValid, Is.True);
     }
 
