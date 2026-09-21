@@ -105,7 +105,8 @@ Completed:
 Checkpoint B external approval is complete:
 
 - no further Checkpoint B code changes are pending;
-- do not begin Checkpoint C in this task;
+- the C1/C2 social-appraisal and crime/justice wave is recorded below;
+- the larger C3 persistent relationship projection remains deferred;
 - the remaining Phase 6 completion candidate and deferred-work record remain
   future work.
 
@@ -473,6 +474,43 @@ deferred architecture (calendar fallback, capability discovery, lazy loading,
 Active/Dormant expansion, generic Organization, and future political daily
 processing), and future persistence/platform work (RNG/config persistence,
 replay/save, networking, and multiplayer concerns).
+
+### Checkpoint C1/C2 — social appraisal foundation and crime/justice vertical slice
+
+The current C1/C2 implementation is independently reviewed and approved on
+the integration branch `codex/phase6/SocialAppraisalCrimeIntegration`, based on
+the canonical Checkpoint B state. This wave does not promote the deferred C3
+`NpcRelationRuntime` or create a universal relationship/social score layer.
+
+C1 provides derived, knowledge-gated appraisal with immutable historical
+`SocialReaction` records. Reactions have stable evaluator/source/target
+identity, explicit perceived attribution, cognitive/provenance basis, positive
+or negative valence, bounded salience, and append-only supersession. Target and
+perceived attribution remain separate, and unknown attribution is not encoded
+as a false PersonId.
+
+C2 provides typed stable `TheftOutcome` identity, world-bound outcome and crime
+knowledge stores, explicit observer knowledge, and a crime hook that records
+victim loss knowledge and appraises investigation only from the evaluator's
+knowledge. Factual perpetrator identity remains independent from perceived
+attribution. CrimeSystem does not write relationships or political support;
+`SimulationRuntime.AdvanceDay` remains unchanged.
+
+The C2 boundary requires exact shared PersonStore and SimulationTime instances
+for outcomes, crime knowledge, and social reactions. Bound crime execution
+rejects missing semantic occurrence identity before money or warrant mutation;
+diagnostics include deterministic outcomes, knowledge, reactions, lineage,
+canonical identity validation, diffs, and invariants.
+
+Focused implementation/review validation at the feature tip includes C1
+EditMode `6/6`, C2 EditMode `12/12`, SimulationRuntime orchestration `10/10`,
+ALL EditMode `1459/1459`, official complete Smoke `5/5`, and green
+`git diff --check`. No long-run validation was required because
+`SimulationRuntime.AdvanceDay` is unchanged.
+
+C3 persistent relationship projection, including any future generalized
+relationship layer or daily projection, remains explicitly deferred and is
+not part of this canonical promotion.
 
 ## Branch and review policy
 
