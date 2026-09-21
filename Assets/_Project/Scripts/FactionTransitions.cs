@@ -7,6 +7,7 @@ public sealed class FactionAffiliationAddTransition : IEquatable<FactionAffiliat
     public FactionAffiliationRecord Affiliation { get; }
     public FactionId FactionId => Affiliation?.FactionId;
     public PersonId PersonId => Affiliation?.PersonId;
+    public FactionAffiliationId AffiliationId => Affiliation?.AffiliationId;
     public long ExpectedWorldDay { get; }
 
     internal FactionAffiliationAddTransition(FactionStore expectedStore, FactionAffiliationRecord affiliation, long expectedStoreRevision, long expectedWorldDay)
@@ -34,21 +35,30 @@ public sealed class FactionAffiliationEndTransition : IEquatable<FactionAffiliat
     public PersonId PersonId => ExpectedAffiliation?.PersonId;
     public long ExpectedWorldDay { get; }
     public long EndedAbsoluteDay { get; }
+    public bool IsExpulsion { get; }
 
-    internal FactionAffiliationEndTransition(FactionStore expectedStore, FactionAffiliationRecord expectedAffiliation, long expectedStoreRevision, long expectedWorldDay, long endedAbsoluteDay)
+    internal FactionAffiliationEndTransition(
+        FactionStore expectedStore,
+        FactionAffiliationRecord expectedAffiliation,
+        long expectedStoreRevision,
+        long expectedWorldDay,
+        long endedAbsoluteDay,
+        bool isExpulsion)
     {
         ExpectedStore = expectedStore;
         ExpectedAffiliation = expectedAffiliation;
         ExpectedStoreRevision = expectedStoreRevision;
         ExpectedWorldDay = expectedWorldDay;
         EndedAbsoluteDay = endedAbsoluteDay;
+        IsExpulsion = isExpulsion;
     }
 
     public bool Equals(FactionAffiliationEndTransition other) => other != null
         && ReferenceEquals(ExpectedAffiliation, other.ExpectedAffiliation)
         && ExpectedStoreRevision == other.ExpectedStoreRevision
         && ExpectedWorldDay == other.ExpectedWorldDay
-        && EndedAbsoluteDay == other.EndedAbsoluteDay;
+        && EndedAbsoluteDay == other.EndedAbsoluteDay
+        && IsExpulsion == other.IsExpulsion;
     public override bool Equals(object obj) => Equals(obj as FactionAffiliationEndTransition);
     public override int GetHashCode() => (ExpectedAffiliation?.GetHashCode() ?? 0) ^ EndedAbsoluteDay.GetHashCode();
 }
@@ -70,6 +80,21 @@ internal static class FactionAffiliationSystem
             return false;
         }
 
+        if (store.TryGet(factionId, out FactionRecord faction)
+            && faction.MembershipPolicy == FactionMembershipPolicy.LeaveNoRejoin)
+        {
+            foreach (FactionAffiliationRecord historical in store.GetAffiliationsForFaction(factionId))
+            {
+                if (historical.PersonId == personId)
+                {
+                    failure = FactionFoundationFailure.Create(
+                        FactionFoundationFailureCode.DuplicateAffiliation,
+                        "This faction policy does not permit rejoining after a prior tenure.");
+                    return false;
+                }
+            }
+        }
+
         if (store.TryGetAffiliation(factionId, personId, out FactionAffiliationRecord existing))
         {
             failure = FactionFoundationFailure.Create(
@@ -82,7 +107,15 @@ internal static class FactionAffiliationSystem
 
         transition = new FactionAffiliationAddTransition(
             store,
-            new FactionAffiliationRecord(factionId, personId, expectedWorldDay),
+            new FactionAffiliationRecord(
+                factionId,
+                personId,
+                expectedWorldDay,
+                affiliationId: FactionAffiliationRecord.BuildStableId(
+                    factionId,
+                    personId,
+                    expectedWorldDay,
+                    store.GetHistoricalAffiliationCount(factionId, personId))),
             store.Revision,
             expectedWorldDay);
         failure = FactionFoundationFailure.None;
@@ -102,7 +135,14 @@ internal static class FactionAffiliationSystem
         return store.TryApplyAdd(transition, out failure);
     }
 
-    public static bool TryProposeEnd(FactionStore store, FactionId factionId, PersonId personId, long expectedWorldDay, out FactionAffiliationEndTransition transition, out FactionFoundationFailure failure)
+    public static bool TryProposeEnd(
+        FactionStore store,
+        FactionId factionId,
+        PersonId personId,
+        long expectedWorldDay,
+        bool isExpulsion,
+        out FactionAffiliationEndTransition transition,
+        out FactionFoundationFailure failure)
     {
         transition = null;
         if (store == null || factionId == null || personId == null || expectedWorldDay < 0L)
@@ -123,14 +163,57 @@ internal static class FactionAffiliationSystem
             return false;
         }
 
+        if (store.TryGet(factionId, out FactionRecord faction) == false)
+        {
+            failure = FactionFoundationFailure.Create(
+                FactionFoundationFailureCode.FactionNotRegistered,
+                "The faction is not registered.");
+            return false;
+        }
+
+        if (isExpulsion == false && faction.MembershipPolicy == FactionMembershipPolicy.CannotLeave)
+        {
+            failure = FactionFoundationFailure.Create(
+                FactionFoundationFailureCode.VoluntaryLeaveNotAllowed,
+                "The faction policy does not permit voluntary departure.");
+            return false;
+        }
+
+        if (isExpulsion && faction.ExpulsionAllowed == false)
+        {
+            failure = FactionFoundationFailure.Create(
+                FactionFoundationFailureCode.ExpulsionNotAllowed,
+                "The faction policy does not permit expulsion.");
+            return false;
+        }
+
         transition = new FactionAffiliationEndTransition(
             store,
             existing,
             store.Revision,
             expectedWorldDay,
-            expectedWorldDay);
+            expectedWorldDay,
+            isExpulsion);
         failure = FactionFoundationFailure.None;
         return true;
+    }
+
+    public static bool TryProposeEnd(
+        FactionStore store,
+        FactionId factionId,
+        PersonId personId,
+        long expectedWorldDay,
+        out FactionAffiliationEndTransition transition,
+        out FactionFoundationFailure failure)
+    {
+        return TryProposeEnd(
+            store,
+            factionId,
+            personId,
+            expectedWorldDay,
+            false,
+            out transition,
+            out failure);
     }
 
     public static bool TryApplyEnd(FactionStore store, FactionAffiliationEndTransition transition, out FactionFoundationFailure failure)

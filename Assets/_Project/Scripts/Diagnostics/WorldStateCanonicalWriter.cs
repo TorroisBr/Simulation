@@ -17,6 +17,7 @@ public static class WorldStateCanonicalWriter
         AppendLine(output, "METADATA", "SettlementCount", IntValue(snapshot.SettlementCount));
         AppendLine(output, "METADATA", "KnownNpcCount", IntValue(snapshot.KnownNpcCount));
         AppendLine(output, "METADATA", "PoliticalClaimCount", IntValue(snapshot.PoliticalClaimCount));
+        AppendLine(output, "METADATA", "PoliticalClaimRecognitionCount", IntValue(snapshot.PoliticalClaimRecognitions.Count));
         AppendLine(output, "METADATA", "FactionCount", IntValue(snapshot.FactionCount));
         AppendLine(output, "METADATA", "FactionAffiliationCount", IntValue(snapshot.FactionAffiliationCount));
         AppendLine(output, "METADATA", "PoliticalSupportCount", IntValue(snapshot.PoliticalSupportCount));
@@ -104,12 +105,25 @@ public static class WorldStateCanonicalWriter
                 StringListValue(claim.EvidenceReferences));
         }
 
+        foreach (WorldStatePoliticalClaimRecognitionSnapshot recognition in snapshot.PoliticalClaimRecognitions)
+        {
+            AppendLine(output, "POLITICAL_CLAIM_RECOGNITION",
+                recognition.ClaimId,
+                recognition.InstitutionId,
+                EnumValue(recognition.State),
+                Int64Value(recognition.RecognitionAbsoluteDay),
+                recognition.Reason,
+                RecognitionHistoryValue(recognition.History));
+        }
+
         foreach (WorldStateFactionSnapshot faction in snapshot.Factions)
         {
             AppendLine(output, "FACTION",
                 faction.FactionId,
                 faction.DisplayName,
-                Int64Value(faction.CreatedAbsoluteDay));
+                Int64Value(faction.CreatedAbsoluteDay),
+                EnumValue(faction.MembershipPolicy),
+                BoolValue(faction.ExpulsionAllowed));
         }
 
         foreach (WorldStateFactionAffiliationSnapshot affiliation in snapshot.FactionAffiliations)
@@ -117,6 +131,7 @@ public static class WorldStateCanonicalWriter
             AppendLine(output, "FACTION_AFFILIATION",
                 affiliation.FactionId,
                 affiliation.PersonId,
+                affiliation.AffiliationId,
                 Int64Value(affiliation.JoinedAbsoluteDay),
                 NullableInt64Value(affiliation.EndedAbsoluteDay));
         }
@@ -161,7 +176,8 @@ public static class WorldStateCanonicalWriter
                 knowledge.HolderStableId,
                 EnumValue(knowledge.HolderKind),
                 knowledge.HolderPersonId,
-                knowledge.HolderInstitutionId);
+                knowledge.HolderInstitutionId,
+                knowledge.HolderFactionId);
 
             foreach (WorldStatePoliticalKnowledgeObservationSnapshot observation in knowledge.Observations)
             {
@@ -511,6 +527,28 @@ public static class WorldStateCanonicalWriter
         }
 
         result.Append(']');
+        return result.ToString();
+    }
+
+    private static string RecognitionHistoryValue(
+        IReadOnlyList<WorldStatePoliticalClaimRecognitionHistorySnapshot> history)
+    {
+        if (history == null || history.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        StringBuilder result = new StringBuilder();
+        foreach (WorldStatePoliticalClaimRecognitionHistorySnapshot entry in history)
+        {
+            if (result.Length > 0) result.Append(';');
+            result.Append(EnumValue(entry.State));
+            result.Append('@');
+            result.Append(Int64Value(entry.RecognitionAbsoluteDay));
+            result.Append('@');
+            result.Append(entry.Reason ?? string.Empty);
+        }
+
         return result.ToString();
     }
 

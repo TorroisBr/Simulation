@@ -330,6 +330,13 @@ public static class WorldStateInvariantValidator
             snapshot.HasPropertyCatalog,
             snapshot.AbsoluteDay,
             issues);
+        ValidatePoliticalClaimRecognitions(
+            snapshot.PoliticalClaimRecognitions,
+            snapshot.PoliticalClaims,
+            snapshot.InstitutionIds,
+            snapshot.HasInstitutionCatalog,
+            snapshot.AbsoluteDay,
+            issues);
         ValidateFactions(snapshot.Factions, snapshot.FactionAffiliations, personIds, snapshot.AbsoluteDay, issues);
         ValidatePoliticalSupports(
             snapshot.PoliticalSupports,
@@ -714,6 +721,7 @@ public static class WorldStateInvariantValidator
     {
         HashSet<string> factionIds = new HashSet<string>(StringComparer.Ordinal);
         Dictionary<string, long> factionCreationDays = new Dictionary<string, long>(StringComparer.Ordinal);
+        Dictionary<string, FactionMembershipPolicy> factionPolicies = new Dictionary<string, FactionMembershipPolicy>(StringComparer.Ordinal);
         if (factions != null)
         {
             foreach (WorldStateFactionSnapshot faction in factions)
@@ -736,6 +744,12 @@ public static class WorldStateInvariantValidator
                 else
                 {
                     factionCreationDays[faction.FactionId] = faction.CreatedAbsoluteDay;
+                    factionPolicies[faction.FactionId] = faction.MembershipPolicy;
+                }
+
+                if (Enum.IsDefined(typeof(FactionMembershipPolicy), faction.MembershipPolicy) == false)
+                {
+                    AddError(issues, "FactionMembershipPolicyInvalid", faction.FactionId, "Faction membership policy is invalid.");
                 }
 
                 if (faction.CreatedAbsoluteDay < 0L || faction.CreatedAbsoluteDay > absoluteDay)
@@ -746,6 +760,7 @@ public static class WorldStateInvariantValidator
         }
 
         HashSet<string> affiliationKeys = new HashSet<string>(StringComparer.Ordinal);
+        HashSet<string> activeAffiliationPairs = new HashSet<string>(StringComparer.Ordinal);
         if (affiliations == null)
         {
             return;
@@ -760,10 +775,23 @@ public static class WorldStateInvariantValidator
             }
 
             string identity = (affiliation.FactionId ?? "faction") + "/" + (affiliation.PersonId ?? "person");
-            string key = (affiliation.FactionId ?? string.Empty) + "\u001f" + (affiliation.PersonId ?? string.Empty);
+            string key = affiliation.AffiliationId
+                ?? (affiliation.FactionId ?? string.Empty) + "\u001f" + (affiliation.PersonId ?? string.Empty);
             if (affiliationKeys.Add(key) == false)
             {
                 AddError(issues, "DuplicateFactionAffiliation", identity, "Faction/person affiliation appears more than once.");
+            }
+
+            string pair = (affiliation.FactionId ?? string.Empty) + "\u001f" + (affiliation.PersonId ?? string.Empty);
+            if (affiliation.IsActive && activeAffiliationPairs.Add(pair) == false)
+            {
+                AddError(issues, "DuplicateActiveFactionAffiliation", identity, "A faction/person pair has more than one active affiliation tenure.");
+            }
+
+            if (factionPolicies.TryGetValue(affiliation.FactionId, out FactionMembershipPolicy membershipPolicy)
+                && Enum.IsDefined(typeof(FactionMembershipPolicy), membershipPolicy) == false)
+            {
+                AddError(issues, "FactionMembershipPolicyInvalid", identity, "Faction membership policy is invalid.");
             }
 
             if (factionIds.Contains(affiliation.FactionId) == false)
@@ -1177,7 +1205,9 @@ public static class WorldStateInvariantValidator
             string expectedStableId = holder.HolderKind + ":"
                 + (holder.HolderKind == PoliticalKnowledgeHolderKind.Person
                     ? holder.HolderPersonId
-                    : holder.HolderInstitutionId);
+                    : holder.HolderKind == PoliticalKnowledgeHolderKind.Institution
+                        ? holder.HolderInstitutionId
+                        : holder.HolderFactionId);
             if (string.IsNullOrWhiteSpace(holder.HolderStableId) == false
                 && string.Equals(holder.HolderStableId, expectedStableId, StringComparison.Ordinal) == false)
             {
@@ -1199,6 +1229,11 @@ public static class WorldStateInvariantValidator
                 {
                     AddError(issues, "PoliticalKnowledgeHolderShapeInvalid", identity, "Person knowledge holder cannot carry an InstitutionId.");
                 }
+
+                if (holder.HolderFactionId != null)
+                {
+                    AddError(issues, "PoliticalKnowledgeHolderShapeInvalid", identity, "Person knowledge holder cannot carry a FactionId.");
+                }
             }
             else if (holder.HolderKind == PoliticalKnowledgeHolderKind.Institution)
             {
@@ -1215,6 +1250,27 @@ public static class WorldStateInvariantValidator
                 if (holder.HolderPersonId != null)
                 {
                     AddError(issues, "PoliticalKnowledgeHolderShapeInvalid", identity, "Institution knowledge holder cannot carry a PersonId.");
+                }
+
+                if (holder.HolderFactionId != null)
+                {
+                    AddError(issues, "PoliticalKnowledgeHolderShapeInvalid", identity, "Institution knowledge holder cannot carry a FactionId.");
+                }
+            }
+            else if (holder.HolderKind == PoliticalKnowledgeHolderKind.Faction)
+            {
+                if (string.IsNullOrWhiteSpace(holder.HolderFactionId))
+                {
+                    AddError(issues, "PoliticalKnowledgeHolderFactionMissing", identity, "Faction knowledge holder has no FactionId.");
+                }
+                else if (factionIds.Contains(holder.HolderFactionId) == false)
+                {
+                    AddError(issues, "PoliticalKnowledgeHolderFactionMissing", identity, "Political knowledge holder FactionId is absent from the snapshot.");
+                }
+
+                if (holder.HolderPersonId != null || holder.HolderInstitutionId != null)
+                {
+                    AddError(issues, "PoliticalKnowledgeHolderShapeInvalid", identity, "Faction knowledge holder cannot carry a PersonId or InstitutionId.");
                 }
             }
 
@@ -1346,9 +1402,20 @@ public static class WorldStateInvariantValidator
         switch (observation.FactKind)
         {
             case PoliticalKnowledgeFactKind.PoliticalClaim:
-                if (claimIds.Contains(rawIdentity) == false)
+                bool claimIdentityParsed = TryParseClaimKnowledgeIdentity(rawIdentity, out string claimId, out string recognitionInstitutionId);
+                if (claimIdentityParsed == false)
+                {
+                    AddError(issues, "PoliticalKnowledgeClaimIdentityInvalid", identity, "Political knowledge claim identity is malformed.");
+                }
+                else if (claimIds.Contains(claimId) == false)
                 {
                     AddError(issues, "PoliticalKnowledgeClaimMissing", identity, "Political knowledge claim endpoint is absent from the snapshot.");
+                }
+                else if (recognitionInstitutionId != null
+                    && hasInstitutionCatalog
+                    && ContainsString(institutionIds, recognitionInstitutionId) == false)
+                {
+                    AddError(issues, "PoliticalKnowledgeRecognitionInstitutionMissing", identity, "Political knowledge recognition institution is absent from the institution catalog.");
                 }
                 ValidatePoliticalClaimState(
                     observation.StateKey,
@@ -1439,6 +1506,22 @@ public static class WorldStateInvariantValidator
         }
 
         string lengthPrefixed = composite.Substring(prefix.Length);
+        if (factKind == PoliticalKnowledgeFactKind.PoliticalClaim)
+        {
+            if (TryReadLengthPrefixed(lengthPrefixed, 0, out string claimIdentity, out int claimIdentityEnd) == false
+                || claimIdentityEnd != lengthPrefixed.Length)
+            {
+                return false;
+            }
+
+            if (TryParseClaimKnowledgeIdentity(claimIdentity, out _, out _) == false)
+            {
+                return false;
+            }
+
+            rawIdentity = claimIdentity;
+            return true;
+        }
         if (TryReadLengthPrefixed(lengthPrefixed, 0, out rawIdentity, out int end) == false
             || end != lengthPrefixed.Length)
         {
@@ -1447,6 +1530,119 @@ public static class WorldStateInvariantValidator
         }
 
         return true;
+    }
+
+    private static void ValidatePoliticalClaimRecognitions(
+        IReadOnlyList<WorldStatePoliticalClaimRecognitionSnapshot> recognitions,
+        IReadOnlyList<WorldStatePoliticalClaimSnapshot> claims,
+        IReadOnlyList<string> institutionIds,
+        bool hasInstitutionCatalog,
+        long absoluteDay,
+        List<WorldStateInvariantIssue> issues)
+    {
+        HashSet<string> claimIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (WorldStatePoliticalClaimSnapshot claim in claims ?? Array.Empty<WorldStatePoliticalClaimSnapshot>())
+        {
+            if (claim?.ClaimId != null) claimIds.Add(claim.ClaimId);
+        }
+
+        HashSet<string> relationIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (WorldStatePoliticalClaimRecognitionSnapshot recognition in recognitions ?? Array.Empty<WorldStatePoliticalClaimRecognitionSnapshot>())
+        {
+            if (recognition == null)
+            {
+                AddError(issues, "PoliticalClaimRecognitionNull", "recognition", "Snapshot contains a null claim recognition relation.");
+                continue;
+            }
+
+            string identity = recognition.ClaimId + "\u001f" + recognition.InstitutionId;
+            if (relationIds.Add(identity) == false)
+            {
+                AddError(issues, "DuplicatePoliticalClaimRecognition", identity, "Claim recognition relation appears more than once.");
+            }
+            if (claimIds.Contains(recognition.ClaimId) == false)
+            {
+                AddError(issues, "PoliticalClaimRecognitionClaimMissing", identity, "Claim recognition references a claim absent from the snapshot.");
+            }
+            if (hasInstitutionCatalog && ContainsString(institutionIds, recognition.InstitutionId) == false)
+            {
+                AddError(issues, "PoliticalClaimRecognitionInstitutionMissing", identity, "Claim recognition institution is absent from the institution catalog.");
+            }
+            if (Enum.IsDefined(typeof(PoliticalClaimRecognitionState), recognition.State)
+                == false || recognition.State == PoliticalClaimRecognitionState.Unrecognized)
+            {
+                AddError(issues, "PoliticalClaimRecognitionStateInvalid", identity, "Claim recognition relation must have an explicit recognition state.");
+            }
+            if (recognition.RecognitionAbsoluteDay < 0L || recognition.RecognitionAbsoluteDay > absoluteDay)
+            {
+                AddError(issues, "PoliticalClaimRecognitionDayInvalid", identity, "Claim recognition day is outside the snapshot timeline.");
+            }
+
+            PoliticalClaimRecognitionState? previousState = null;
+            long previousDay = -1L;
+            foreach (WorldStatePoliticalClaimRecognitionHistorySnapshot entry in recognition.History ?? Array.Empty<WorldStatePoliticalClaimRecognitionHistorySnapshot>())
+            {
+                if (entry == null || Enum.IsDefined(typeof(PoliticalClaimRecognitionState), entry.State) == false
+                    || entry.State == PoliticalClaimRecognitionState.Unrecognized
+                    || entry.RecognitionAbsoluteDay < previousDay)
+                {
+                    AddError(issues, "PoliticalClaimRecognitionHistoryInvalid", identity, "Claim recognition history is malformed or not chronological.");
+                    continue;
+                }
+                previousState = entry.State;
+                previousDay = entry.RecognitionAbsoluteDay;
+            }
+
+            if (previousState.HasValue && previousState.Value != recognition.State)
+            {
+                AddError(issues, "PoliticalClaimRecognitionHistoryCurrentMismatch", identity, "Claim recognition history does not end at the current relation state.");
+            }
+        }
+    }
+
+    private static bool TryParseClaimKnowledgeIdentity(
+        string value,
+        out string claimId,
+        out string institutionId)
+    {
+        claimId = null;
+        institutionId = null;
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        int unrecognizedMarker = value.LastIndexOf("0:", StringComparison.Ordinal);
+        if (unrecognizedMarker == value.Length - 2
+            && TryReadLengthPrefixed(value.Substring(0, unrecognizedMarker), 0, out claimId, out int unrecognizedEnd)
+            && unrecognizedEnd == unrecognizedMarker)
+        {
+            return true;
+        }
+
+        if (TryReadLengthPrefixed(value, 0, out claimId, out int claimEnd) == false
+            || claimEnd >= value.Length)
+        {
+            claimId = null;
+            return false;
+        }
+
+        if (value[claimEnd] == '0'
+            && value.Substring(claimEnd + 1) == ":")
+        {
+            return true;
+        }
+
+        if (value[claimEnd] != '1'
+            || claimEnd + 1 >= value.Length
+            || value[claimEnd + 1] != ':')
+        {
+            claimId = null;
+            return false;
+        }
+
+        return TryReadLengthPrefixed(value, claimEnd + 2, out institutionId, out int institutionEnd)
+            && institutionEnd == value.Length;
     }
 
     private static bool TryParseLengthPrefixedPair(

@@ -62,6 +62,7 @@ public sealed class SimulationRuntime
     public IReadOnlyList<PropertyOwnershipRecord> PropertyOwnershipRecords => propertyOwnershipStore.Records;
     public IReadOnlyList<EstateRecord> EstateRecords => estateStore.Records;
     public IReadOnlyList<PoliticalClaimRecord> PoliticalClaimRecords => politicalClaimStore.Records;
+    public IReadOnlyList<PoliticalClaimRecognitionRecord> PoliticalClaimRecognitionRecords => politicalClaimStore.RecognitionRecords;
     public IReadOnlyList<FactionRecord> FactionRecords => factionStore.Factions;
     public IReadOnlyList<FactionAffiliationRecord> FactionAffiliationRecords => factionStore.Affiliations;
     public IReadOnlyList<PoliticalSupportRelationRecord> PoliticalSupportRecords => politicalSupportStore.Records;
@@ -606,6 +607,31 @@ public sealed class SimulationRuntime
             out failure);
     }
 
+    public bool TryProposeFactionAffiliationExpulsion(
+        FactionId factionId,
+        PersonId personId,
+        out FactionAffiliationEndTransition transition,
+        out FactionFoundationFailure failure)
+    {
+        transition = null;
+        if (factionId == null || personId == null)
+        {
+            failure = FactionFoundationFailure.Create(
+                FactionFoundationFailureCode.InvalidTransition,
+                "A faction and PersonId are required.");
+            return false;
+        }
+
+        return FactionAffiliationSystem.TryProposeEnd(
+            factionStore,
+            factionId,
+            personId,
+            CurrentDay,
+            true,
+            out transition,
+            out failure);
+    }
+
     public bool TryApplyFactionAffiliationEnd(
         FactionAffiliationEndTransition transition,
         out FactionFoundationFailure failure)
@@ -665,11 +691,6 @@ public sealed class SimulationRuntime
         }
 
         if (TryValidatePoliticalClaimTarget(record, out failure) == false)
-        {
-            return false;
-        }
-
-        if (TryValidatePoliticalClaimRecognition(record, out failure) == false)
         {
             return false;
         }
@@ -1944,37 +1965,6 @@ public sealed class SimulationRuntime
         return true;
     }
 
-    private bool TryValidatePoliticalClaimRecognition(
-        PoliticalClaimRecord record,
-        out PoliticalClaimFailure failure)
-    {
-        failure = PoliticalClaimFailure.None;
-        if (record.RecognitionState == PoliticalClaimRecognitionState.Unrecognized)
-        {
-            return true;
-        }
-
-        if (record.RecognizingInstitutionId == null
-            || institutionStore.TryGet(record.RecognizingInstitutionId, out _) == false)
-        {
-            failure = PoliticalClaimFailure.Create(
-                PoliticalClaimFailureCode.ClaimTargetNotFound,
-                "The political claim recognizing institution must exist in this world.");
-            return false;
-        }
-
-        if (record.RecognitionAbsoluteDay.HasValue == false
-            || record.RecognitionAbsoluteDay.Value > CurrentDay)
-        {
-            failure = PoliticalClaimFailure.Create(
-                PoliticalClaimFailureCode.InvalidRecognitionAbsoluteDay,
-                "Claim recognition must be within the current world timeline.");
-            return false;
-        }
-
-        return true;
-    }
-
     private static void ValidateGenealogyStore(PersonStore persons, GenealogyStore genealogy)
     {
         foreach (ParentageRecord record in genealogy.Records)
@@ -2052,11 +2042,7 @@ public sealed class SimulationRuntime
             }
 
             if (targetExists == false
-                || (record.RecognitionAbsoluteDay.HasValue && record.RecognitionAbsoluteDay.Value > currentDay)
-                || (record.ResolutionAbsoluteDay.HasValue && record.ResolutionAbsoluteDay.Value > currentDay)
-                || (record.RecognitionState != PoliticalClaimRecognitionState.Unrecognized
-                    && (record.RecognizingInstitutionId == null
-                        || institutionStore.TryGet(record.RecognizingInstitutionId, out _) == false)))
+                || (record.ResolutionAbsoluteDay.HasValue && record.ResolutionAbsoluteDay.Value > currentDay))
             {
                 throw new ArgumentException(
                     "The SimulationRuntime PoliticalClaimStore contains a claim target or recognition state inconsistent with the world.",
@@ -2071,14 +2057,35 @@ public sealed class SimulationRuntime
             }
         }
 
-        if (copy.Count != source.Count)
+        foreach (PoliticalClaimRecognitionRecord recognition in source.RecognitionRecords)
+        {
+            if (copy.TryGet(recognition.ClaimId, out PoliticalClaimRecord claim) == false
+                || institutionStore.TryGet(recognition.InstitutionId, out _) == false
+                || recognition.RecognitionAbsoluteDay > currentDay
+                || recognition.RecognitionAbsoluteDay < claim.CreatedAbsoluteDay)
+            {
+                throw new ArgumentException(
+                    "The SimulationRuntime PoliticalClaimStore contains recognition inconsistent with world truth or time.",
+                    nameof(source));
+            }
+
+            if (copy.TryRegisterRecognition(recognition, out PoliticalClaimFailure recognitionFailure) == false)
+            {
+                throw new ArgumentException(
+                    "The SimulationRuntime PoliticalClaimStore contains invalid recognition: " + recognitionFailure + ".",
+                    nameof(source));
+            }
+        }
+
+        if (copy.Count != source.Count
+            || copy.RecognitionRecords.Count != source.RecognitionRecords.Count)
         {
             throw new ArgumentException(
                 "The SimulationRuntime PoliticalClaimStore was not copied completely.",
                 nameof(source));
         }
 
-        return source.Clone();
+        return copy;
     }
 
     private static FactionStore CloneFactionStore(

@@ -140,6 +140,22 @@ public static class WorldStateSnapshotFormatter
             }
         }
 
+        foreach (WorldStatePoliticalClaimRecognitionSnapshot recognition in snapshot.PoliticalClaimRecognitions)
+        {
+            if (recognition != null)
+            {
+                output.Append("POLITICAL CLAIM RECOGNITION ")
+                    .Append(Value(recognition.ClaimId))
+                    .Append(" institution ")
+                    .Append(Value(recognition.InstitutionId))
+                    .Append(" state ")
+                    .Append(WorldStateCanonicalWriter.EnumValue(recognition.State))
+                    .Append(" day ")
+                    .Append(WorldStateCanonicalWriter.Int64Value(recognition.RecognitionAbsoluteDay))
+                    .Append('\n');
+            }
+        }
+
         foreach (WorldStateFactionSnapshot faction in snapshot.Factions)
         {
             if (faction != null)

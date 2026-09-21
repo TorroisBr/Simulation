@@ -5,7 +5,8 @@ using System.Collections.ObjectModel;
 public enum PoliticalKnowledgeHolderKind
 {
     Person = 0,
-    Institution = 1
+    Institution = 1,
+    Faction = 2
 }
 
 public sealed class PoliticalKnowledgeHolder : IEquatable<PoliticalKnowledgeHolder>
@@ -13,11 +14,15 @@ public sealed class PoliticalKnowledgeHolder : IEquatable<PoliticalKnowledgeHold
     private readonly PoliticalKnowledgeHolderKind kind;
     private readonly PersonId personId;
     private readonly InstitutionId institutionId;
+    private readonly FactionId factionId;
 
     public PoliticalKnowledgeHolderKind Kind => kind;
     public PersonId PersonId => personId;
     public InstitutionId InstitutionId => institutionId;
-    public string RawStableId => personId != null ? personId.Value : institutionId.Value;
+    public FactionId FactionId => factionId;
+    public string RawStableId => personId != null
+        ? personId.Value
+        : (institutionId != null ? institutionId.Value : factionId.Value);
     public string StableId => kind + ":" + RawStableId;
 
     private PoliticalKnowledgeHolder(PersonId personId)
@@ -32,6 +37,12 @@ public sealed class PoliticalKnowledgeHolder : IEquatable<PoliticalKnowledgeHold
         kind = PoliticalKnowledgeHolderKind.Institution;
     }
 
+    private PoliticalKnowledgeHolder(FactionId factionId)
+    {
+        this.factionId = factionId ?? throw new ArgumentNullException(nameof(factionId));
+        kind = PoliticalKnowledgeHolderKind.Faction;
+    }
+
     public static PoliticalKnowledgeHolder ForPerson(PersonId personId)
     {
         return new PoliticalKnowledgeHolder(personId);
@@ -42,12 +53,18 @@ public sealed class PoliticalKnowledgeHolder : IEquatable<PoliticalKnowledgeHold
         return new PoliticalKnowledgeHolder(institutionId);
     }
 
+    public static PoliticalKnowledgeHolder ForFaction(FactionId factionId)
+    {
+        return new PoliticalKnowledgeHolder(factionId);
+    }
+
     public bool Equals(PoliticalKnowledgeHolder other)
     {
         return other != null
             && kind == other.kind
             && ((personId != null && personId == other.personId)
-                || (institutionId != null && institutionId == other.institutionId));
+                || (institutionId != null && institutionId == other.institutionId)
+                || (factionId != null && factionId == other.factionId));
     }
 
     public override bool Equals(object obj)
@@ -268,6 +285,7 @@ public sealed class PoliticalClaimKnowledgeObservation : PoliticalKnowledgeObser
     public long? ResolutionAbsoluteDay { get; }
     public PoliticalClaimRecognitionState RecognitionState { get; }
     public InstitutionId RecognizingInstitutionId { get; }
+    public InstitutionId RecognitionPerspectiveInstitutionId => RecognizingInstitutionId;
     public long? RecognitionAbsoluteDay { get; }
 
     public PoliticalClaimKnowledgeObservation(
@@ -382,7 +400,10 @@ public sealed class PoliticalClaimKnowledgeObservation : PoliticalKnowledgeObser
         RecognitionAbsoluteDay = recognitionAbsoluteDay;
     }
 
-    internal override string IdentityKey => ClaimId.Value;
+    internal override string IdentityKey => ClaimId.Value.Length + ":" + ClaimId.Value
+        + (RecognizingInstitutionId == null
+            ? "0:"
+            : "1:" + RecognizingInstitutionId.Value.Length + ":" + RecognizingInstitutionId.Value);
 
     internal override string SnapshotSortKey
     {
@@ -600,6 +621,7 @@ public sealed class PoliticalKnowledgeRuntime
     public PoliticalKnowledgeHolderKind HolderKind => holder.Kind;
     public PersonId HolderPersonId => holder.PersonId;
     public InstitutionId HolderInstitutionId => holder.InstitutionId;
+    public FactionId HolderFactionId => holder.FactionId;
 
     public PoliticalKnowledgeRuntime(PoliticalKnowledgeHolder holder)
     {
@@ -613,6 +635,11 @@ public sealed class PoliticalKnowledgeRuntime
 
     public PoliticalKnowledgeRuntime(InstitutionId holderInstitutionId)
         : this(PoliticalKnowledgeHolder.ForInstitution(holderInstitutionId))
+    {
+    }
+
+    public PoliticalKnowledgeRuntime(FactionId holderFactionId)
+        : this(PoliticalKnowledgeHolder.ForFaction(holderFactionId))
     {
     }
 
@@ -660,7 +687,24 @@ public sealed class PoliticalKnowledgeRuntime
         PoliticalClaimId claimId,
         out PoliticalClaimKnowledgeObservation observation)
     {
-        return TryGet(claimObservations, claimId == null ? null : claimId.Value, out observation);
+        observation = null;
+        if (claimId == null)
+        {
+            return false;
+        }
+
+        foreach (PoliticalClaimKnowledgeObservation candidate in claimObservations.Values)
+        {
+            if (candidate.ClaimId != claimId
+                || (observation != null && ShouldReplace(observation, candidate) == false))
+            {
+                continue;
+            }
+
+            observation = candidate;
+        }
+
+        return observation != null;
     }
 
     public bool TryGetCurrentClaimObservation(
@@ -668,6 +712,22 @@ public sealed class PoliticalKnowledgeRuntime
         out PoliticalClaimKnowledgeObservation observation)
     {
         return TryGetLatestClaimObservation(claimId, out observation);
+    }
+
+    public bool TryGetLatestClaimRecognitionObservation(
+        PoliticalClaimId claimId,
+        InstitutionId institutionId,
+        out PoliticalClaimKnowledgeObservation observation)
+    {
+        observation = null;
+        if (claimId == null || institutionId == null)
+        {
+            return false;
+        }
+
+        string key = claimId.Value.Length + ":" + claimId.Value
+            + "1:" + institutionId.Value.Length + ":" + institutionId.Value;
+        return TryGet(claimObservations, key, out observation);
     }
 
     public bool RecordFactionObservation(FactionKnowledgeObservation observation)

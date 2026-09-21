@@ -26,6 +26,113 @@ public sealed class FactionFoundationTests
     }
 
     [Test]
+    public void LeaveAndRejoinCreatesDistinctHistoricalTenures()
+    {
+        PersonStore persons = new PersonStore();
+        PersonRuntime person = RegisterPerson(persons, "person.member");
+        SimulationRuntime world = CreateWorld(persons);
+        FactionId factionId = RegisterFaction(world, "faction.rejoin");
+
+        Assert.That(world.TryProposeFactionAffiliation(factionId, person.PersonId, out FactionAffiliationAddTransition firstAdd, out _), Is.True);
+        Assert.That(world.TryApplyFactionAffiliation(firstAdd, out _), Is.True);
+        Assert.That(world.TryProposeFactionAffiliationEnd(factionId, person.PersonId, out FactionAffiliationEndTransition end, out _), Is.True);
+        Assert.That(world.TryApplyFactionAffiliationEnd(end, out _), Is.True);
+        world.AdvanceDay();
+        Assert.That(world.TryProposeFactionAffiliation(factionId, person.PersonId, out FactionAffiliationAddTransition secondAdd, out _), Is.True);
+        Assert.That(world.TryApplyFactionAffiliation(secondAdd, out _), Is.True);
+
+        Assert.That(world.FactionAffiliationRecords, Has.Count.EqualTo(2));
+        Assert.That(world.FactionAffiliationRecords[0].AffiliationId, Is.Not.EqualTo(world.FactionAffiliationRecords[1].AffiliationId));
+        Assert.That(world.FactionAffiliationRecords[0].IsActive, Is.False);
+        Assert.That(world.FactionAffiliationRecords[1].IsActive, Is.True);
+    }
+
+    [Test]
+    public void SameDayLeaveAndRejoinStillGetsDistinctTenureIds()
+    {
+        PersonStore persons = new PersonStore();
+        PersonRuntime person = RegisterPerson(persons, "person.member");
+        SimulationRuntime world = CreateWorld(persons);
+        FactionId factionId = RegisterFaction(world, "faction.same-day-rejoin");
+
+        Assert.That(world.TryProposeFactionAffiliation(factionId, person.PersonId, out FactionAffiliationAddTransition firstAdd, out _), Is.True);
+        Assert.That(world.TryApplyFactionAffiliation(firstAdd, out _), Is.True);
+        Assert.That(world.TryProposeFactionAffiliationEnd(factionId, person.PersonId, out FactionAffiliationEndTransition end, out _), Is.True);
+        Assert.That(world.TryApplyFactionAffiliationEnd(end, out _), Is.True);
+        Assert.That(world.TryProposeFactionAffiliation(factionId, person.PersonId, out FactionAffiliationAddTransition secondAdd, out _), Is.True);
+        Assert.That(world.TryApplyFactionAffiliation(secondAdd, out _), Is.True);
+
+        Assert.That(world.FactionAffiliationRecords, Has.Count.EqualTo(2));
+        Assert.That(world.FactionAffiliationRecords[0].AffiliationId, Is.Not.EqualTo(world.FactionAffiliationRecords[1].AffiliationId));
+    }
+
+    [Test]
+    public void LeaveNoRejoinPolicyRejectsSecondTenureAndCannotLeaveRejectsVoluntaryEnd()
+    {
+        PersonStore persons = new PersonStore();
+        PersonRuntime person = RegisterPerson(persons, "person.member");
+        SimulationRuntime world = CreateWorld(persons);
+        FactionId noRejoin = new FactionId("faction.no-rejoin");
+        FactionId cannotLeave = new FactionId("faction.cannot-leave");
+        Assert.That(world.TryRegisterFaction(new FactionRecord(
+            noRejoin, "No Rejoin", 0L, FactionMembershipPolicy.LeaveNoRejoin), out _), Is.True);
+        Assert.That(world.TryRegisterFaction(new FactionRecord(
+            cannotLeave, "Cannot Leave", 0L, FactionMembershipPolicy.CannotLeave), out _), Is.True);
+
+        Assert.That(world.TryProposeFactionAffiliation(noRejoin, person.PersonId, out FactionAffiliationAddTransition add, out _), Is.True);
+        Assert.That(world.TryApplyFactionAffiliation(add, out _), Is.True);
+        world.AdvanceDay();
+        Assert.That(world.TryProposeFactionAffiliationEnd(noRejoin, person.PersonId, out FactionAffiliationEndTransition end, out _), Is.True);
+        Assert.That(world.TryApplyFactionAffiliationEnd(end, out _), Is.True);
+        world.AdvanceDay();
+        Assert.That(world.TryProposeFactionAffiliation(noRejoin, person.PersonId, out _, out FactionFoundationFailure noRejoinFailure), Is.False);
+        Assert.That(noRejoinFailure.Code, Is.EqualTo(FactionFoundationFailureCode.DuplicateAffiliation));
+
+        Assert.That(world.TryProposeFactionAffiliation(cannotLeave, person.PersonId, out FactionAffiliationAddTransition cannotLeaveAdd, out _), Is.True);
+        Assert.That(world.TryApplyFactionAffiliation(cannotLeaveAdd, out _), Is.True);
+        Assert.That(world.TryProposeFactionAffiliationEnd(cannotLeave, person.PersonId, out _, out FactionFoundationFailure leaveFailure), Is.False);
+        Assert.That(leaveFailure.Code, Is.EqualTo(FactionFoundationFailureCode.VoluntaryLeaveNotAllowed));
+    }
+
+    [Test]
+    public void ExpulsionIsAnExplicitPolicyControlledEndReason()
+    {
+        PersonStore persons = new PersonStore();
+        PersonRuntime person = RegisterPerson(persons, "person.member");
+        SimulationRuntime world = CreateWorld(persons);
+        FactionId allowed = new FactionId("faction.expulsion-allowed");
+        FactionId disallowed = new FactionId("faction.expulsion-disallowed");
+        Assert.That(world.TryRegisterFaction(new FactionRecord(allowed, "Allowed", 0L, FactionMembershipPolicy.CannotLeave, true), out _), Is.True);
+        Assert.That(world.TryRegisterFaction(new FactionRecord(disallowed, "Disallowed", 0L, FactionMembershipPolicy.CannotLeave, false), out _), Is.True);
+
+        Assert.That(world.TryProposeFactionAffiliation(allowed, person.PersonId, out FactionAffiliationAddTransition allowedAdd, out _), Is.True);
+        Assert.That(world.TryApplyFactionAffiliation(allowedAdd, out _), Is.True);
+        Assert.That(world.TryProposeFactionAffiliationExpulsion(allowed, person.PersonId, out FactionAffiliationEndTransition expulsion, out _), Is.True);
+        Assert.That(expulsion.IsExpulsion, Is.True);
+        Assert.That(world.TryApplyFactionAffiliationEnd(expulsion, out _), Is.True);
+
+        Assert.That(world.TryProposeFactionAffiliation(disallowed, person.PersonId, out FactionAffiliationAddTransition disallowedAdd, out _), Is.True);
+        Assert.That(world.TryApplyFactionAffiliation(disallowedAdd, out _), Is.True);
+        Assert.That(world.TryProposeFactionAffiliationExpulsion(disallowed, person.PersonId, out _, out FactionFoundationFailure failure), Is.False);
+        Assert.That(failure.Code, Is.EqualTo(FactionFoundationFailureCode.ExpulsionNotAllowed));
+    }
+
+    [Test]
+    public void ActiveFactionAffiliationUniquenessIsEnforcedByStableTenureStore()
+    {
+        PersonStore persons = new PersonStore();
+        PersonRuntime person = RegisterPerson(persons, "person.member");
+        FactionStore store = new FactionStore(persons);
+        FactionId factionId = new FactionId("faction.unique");
+        Assert.That(store.TryRegister(new FactionRecord(factionId, "Unique", 0L), out _), Is.True);
+        Assert.That(store.TryRegisterAffiliation(
+            new FactionAffiliationRecord(factionId, person.PersonId, 0L), out _), Is.True);
+        Assert.That(store.TryRegisterAffiliation(
+            new FactionAffiliationRecord(factionId, person.PersonId, 1L), out FactionFoundationFailure failure), Is.False);
+        Assert.That(failure.Code, Is.EqualTo(FactionFoundationFailureCode.DuplicateAffiliation));
+    }
+
+    [Test]
     public void WorldRejectsAffiliationForMissingFactionOrPerson()
     {
         PersonStore persons = new PersonStore();
@@ -203,10 +310,11 @@ public sealed class FactionFoundationTests
         Assert.That(world.TryApplyFactionAffiliationEnd(end, out _), Is.True);
         WorldStateSnapshot after = Capture(world);
         WorldStateDiff diff = WorldStateDiagnostics.Compare(before, after);
+        string affiliationIdentity = world.FactionAffiliationRecords[0].AffiliationId.Value;
 
         Assert.That(diff.Differences, Has.Some.Matches<WorldStateDifference>(difference =>
             difference.Section == "FactionAffiliation"
-            && difference.Identity == "faction.council\u001fperson.member"
+            && difference.Identity == affiliationIdentity
             && difference.Field == "EndedAbsoluteDay"));
         Assert.That(WorldStateInvariantValidator.Validate(after).IsValid, Is.True);
     }

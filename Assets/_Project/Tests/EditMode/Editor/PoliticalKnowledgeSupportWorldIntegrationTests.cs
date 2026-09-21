@@ -117,7 +117,7 @@ public sealed class PoliticalKnowledgeSupportWorldIntegrationTests
         Assert.That(knowledgeSnapshot.PoliticalKnowledgeRevision, Is.EqualTo(fixture.World.PoliticalKnowledgeRevision));
         Assert.That(WorldStateCanonicalWriter.Write(knowledgeSnapshot), Does.Contain("POLITICAL_KNOWLEDGE"));
         Assert.That(WorldStateCanonicalWriter.Write(knowledgeSnapshot), Does.Contain("POLITICAL_KNOWLEDGE_OBSERVATION"));
-        Assert.That(WorldStateInvariantValidator.Validate(knowledgeSnapshot).IsValid, Is.True);
+        Assert.That(WorldStateInvariantValidator.Validate(knowledgeSnapshot).IsValid, Is.True, WorldStateInvariantValidator.Validate(knowledgeSnapshot).ToString());
 
         PoliticalClaimKnowledgeObservation future = new PoliticalClaimKnowledgeObservation(
             new PoliticalClaimId("claim.future"),
@@ -142,6 +142,49 @@ public sealed class PoliticalKnowledgeSupportWorldIntegrationTests
         Assert.That(futureFailure.Code, Is.EqualTo(PoliticalKnowledgeFailureCode.FutureObservation));
         Assert.That(fixture.World.PoliticalKnowledgeHolderCount, Is.EqualTo(2));
         Assert.That(typeof(PoliticalKnowledgeRuntime).GetProperty("NpcRuntimeId"), Is.Null);
+    }
+
+    [Test]
+    public void FactionPoliticalKnowledgeHolderIsIndependentFromMemberKnowledge()
+    {
+        Fixture fixture = CreateFixture();
+        PoliticalKnowledgeHolder factionHolder = PoliticalKnowledgeHolder.ForFaction(fixture.Faction);
+        Assert.That(fixture.World.TryRegisterPoliticalKnowledgeHolder(
+            factionHolder,
+            out PoliticalKnowledgeFailure holderFailure), Is.True, holderFailure.ToString());
+
+        Assert.That(fixture.World.TryRecordPoliticalKnowledge(
+            factionHolder,
+            new FactionKnowledgeObservation(
+                fixture.Faction,
+                true,
+                fixture.World.CurrentDay,
+                fixture.World.CurrentDay,
+                new PoliticalKnowledgeProvenance(PoliticalKnowledgeSource.DirectObservation, "faction-record")),
+            out PoliticalKnowledgeFailure observationFailure), Is.True, observationFailure.ToString());
+
+        Assert.That(fixture.World.TryRegisterPoliticalKnowledgeHolder(
+            PoliticalKnowledgeHolder.ForPerson(fixture.Supporter),
+            out _), Is.True);
+        Assert.That(fixture.World.TryRecordPoliticalKnowledge(
+            PoliticalKnowledgeHolder.ForPerson(fixture.Supporter),
+            new FactionAffiliationKnowledgeObservation(
+                fixture.Faction,
+                fixture.Supporter,
+                true,
+                fixture.World.CurrentDay,
+                fixture.World.CurrentDay,
+                new PoliticalKnowledgeProvenance(PoliticalKnowledgeSource.DirectObservation, "member-record")),
+            out _), Is.True);
+
+        Assert.That(fixture.World.TryGetPoliticalKnowledge(factionHolder, out PoliticalKnowledgeRuntime factionKnowledge), Is.True);
+        Assert.That(factionKnowledge.FactionObservations, Has.Count.EqualTo(1));
+        Assert.That(factionKnowledge.FactionAffiliationObservations, Is.Empty);
+        Assert.That(fixture.World.TryGetPoliticalKnowledge(
+            PoliticalKnowledgeHolder.ForPerson(fixture.Supporter),
+            out PoliticalKnowledgeRuntime personKnowledge), Is.True);
+        Assert.That(personKnowledge.FactionObservations, Is.Empty);
+        Assert.That(personKnowledge.FactionAffiliationObservations, Has.Count.EqualTo(1));
     }
 
     [Test]
@@ -314,7 +357,8 @@ public sealed class PoliticalKnowledgeSupportWorldIntegrationTests
             },
             politicalKnowledgeRevision: valid.PoliticalKnowledgeRevision,
             hasPoliticalKnowledgeState: true);
-        Assert.That(WorldStateInvariantValidator.Validate(staleKnowledge).IsValid, Is.True);
+        WorldStateInvariantReport staleReport = WorldStateInvariantValidator.Validate(staleKnowledge);
+        Assert.That(staleReport.IsValid, Is.True);
 
         string[] forgedFields = claimObservation.StateKey.Split(new[] { '\u001F' });
         forgedFields[5] = "999";
@@ -403,6 +447,7 @@ public sealed class PoliticalKnowledgeSupportWorldIntegrationTests
             personStore: world.PersonStore,
             institutionIds: new[] { "institution.court" },
             politicalClaims: world.PoliticalClaimRecords,
+            politicalClaimRecognitions: world.PoliticalClaimRecognitionRecords,
             factions: world.FactionRecords,
             factionAffiliations: world.FactionAffiliationRecords,
             politicalSupports: world.PoliticalSupportRecords,

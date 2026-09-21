@@ -205,7 +205,7 @@ public sealed class PoliticalKnowledgeFoundationTests
             claimId,
             true,
             PoliticalClaimStatus.Active,
-            PoliticalClaimRecognitionState.Unrecognized,
+            PoliticalClaimRecognitionState.Recognized,
             10L,
             10L,
             InitialProvenance())), Is.True);
