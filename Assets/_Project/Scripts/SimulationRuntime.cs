@@ -15,6 +15,7 @@ public sealed class SimulationRuntime
     private readonly IAggregateDemographyProvider aggregateDemographyProvider;
     private DailyDemographyReport lastDailyDemographyReport;
     private readonly PersonStore personStore;
+    private readonly SpatialAuthorityStore spatialAuthorityStore;
     private readonly ArmedForceStore armedForceStore;
     private readonly PersistentConflictStore conflictStore;
     private readonly PersistentWarStore warStore;
@@ -58,6 +59,7 @@ public sealed class SimulationRuntime
     public SimulationCalendar Calendar => calendar;
     public DailyDemographyReport LastDailyDemographyReport => lastDailyDemographyReport;
     public PersonStore PersonStore => personStore;
+    public SpatialAuthorityStore SpatialAuthorityStore => spatialAuthorityStore;
     public ArmedForceStore ArmedForceStore => armedForceStore;
     public PersistentConflictStore ConflictStore => conflictStore;
     public PersistentWarStore WarStore => warStore;
@@ -138,7 +140,8 @@ public sealed class SimulationRuntime
         ArmedForceStore armedForceStore = null,
         PersistentConflictStore conflictStore = null,
         PersistentWarStore warStore = null,
-        PersistentBattleStore battleStore = null)
+        PersistentBattleStore battleStore = null,
+        SpatialAuthorityStore spatialAuthorityStore = null)
     {
         this.simulationTime = simulationTime ?? throw new ArgumentNullException(nameof(simulationTime));
 
@@ -183,6 +186,7 @@ public sealed class SimulationRuntime
 
         GenealogyStore resolvedGenealogyStore = genealogyStore ?? new GenealogyStore();
         ValidateGenealogyStore(resolvedPersonStore, resolvedGenealogyStore);
+        SpatialAuthorityStore resolvedSpatialAuthorityStore = CloneSpatialAuthorityStore(spatialAuthorityStore);
         InstitutionStore resolvedInstitutionStore = ResolveInstitutionStore(
             institutionStore,
             officeStore);
@@ -220,6 +224,7 @@ public sealed class SimulationRuntime
         this.naturalMortalitySamples = naturalMortalitySamples;
         this.aggregateDemographyProvider = aggregateDemographyProvider;
         this.personStore = resolvedPersonStore;
+        this.spatialAuthorityStore = resolvedSpatialAuthorityStore;
         this.armedForceStore = resolvedArmedForceStore;
         this.conflictStore = resolvedConflictStore;
         this.warStore = resolvedWarStore;
@@ -2085,6 +2090,25 @@ public sealed class SimulationRuntime
         }
 
         return source.Clone(personStore);
+    }
+
+    private static SpatialAuthorityStore CloneSpatialAuthorityStore(SpatialAuthorityStore source)
+    {
+        if (source == null)
+        {
+            return new SpatialAuthorityStore();
+        }
+
+        SpatialAuthorityInvariantReport report = source.ValidateInvariants();
+        if (report.IsValid == false)
+        {
+            throw new ArgumentException(
+                "The SimulationRuntime SpatialAuthorityStore contains invalid world state: "
+                + string.Join("; ", report.Violations),
+                nameof(source));
+        }
+
+        return source.Clone();
     }
 
     private static PersistentConflictStore CloneConflictStore(

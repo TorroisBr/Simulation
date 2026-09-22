@@ -28,6 +28,11 @@ public static class WorldStateCanonicalWriter
         AppendLine(output, "METADATA", "TheftOutcomeCount", IntValue(snapshot.TheftOutcomeCount));
         AppendLine(output, "METADATA", "CrimeKnowledgeCount", IntValue(snapshot.CrimeKnowledgeCount));
         AppendLine(output, "METADATA", "SocialReactionCount", IntValue(snapshot.SocialReactionCount));
+        if (snapshot.Spatial.AuthorityRevision.HasValue)
+        {
+            AppendLine(output, "METADATA", "SpatialAuthorityStatePresent", BoolValue(true));
+            AppendLine(output, "METADATA", "SpatialAuthorityRevision", Int64Value(snapshot.Spatial.AuthorityRevision.Value));
+        }
         if (snapshot.HasArmedForceState)
         {
             AppendLine(output, "METADATA", "ArmedForceStatePresent", BoolValue(true));
@@ -61,6 +66,19 @@ public static class WorldStateCanonicalWriter
                 Int64Value(calendar.DayOfYear),
                 Int64Value(calendar.DaysPerMonth),
                 Int64Value(calendar.DaysPerYear));
+        }
+
+        if (snapshot.Spatial.AuthorityRevision.HasValue)
+        {
+            foreach (WorldStateHexSnapshot hex in snapshot.Spatial.Hexes)
+            {
+                AppendLine(output, "SPATIAL_HEX", hex.HexId);
+            }
+
+            foreach (WorldStateAnchoredLocationSnapshot location in snapshot.Spatial.AnchoredLocations)
+            {
+                AppendLine(output, "SPATIAL_LOCATION", location.LocationId, location.AnchorHexId);
+            }
         }
 
         if (snapshot.HasArmedForceState)

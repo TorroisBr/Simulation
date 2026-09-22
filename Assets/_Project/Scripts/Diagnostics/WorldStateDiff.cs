@@ -117,6 +117,33 @@ public sealed class WorldStateDiff
             differences);
         CompareCalendar(before.Metadata.CalendarDate, after.Metadata.CalendarDate, differences);
 
+        CompareValue("SpatialAuthorityStore", "world", "StatePresent",
+            WorldStateCanonicalWriter.BoolValue(before.Spatial.AuthorityRevision.HasValue),
+            WorldStateCanonicalWriter.BoolValue(after.Spatial.AuthorityRevision.HasValue),
+            differences);
+        CompareValue("SpatialAuthorityStore", "world", "Revision",
+            before.Spatial.AuthorityRevision.HasValue
+                ? WorldStateCanonicalWriter.Int64Value(before.Spatial.AuthorityRevision.Value)
+                : null,
+            after.Spatial.AuthorityRevision.HasValue
+                ? WorldStateCanonicalWriter.Int64Value(after.Spatial.AuthorityRevision.Value)
+                : null,
+            differences);
+        CompareEntities("SpatialHex", before.Spatial.Hexes, after.Spatial.Hexes,
+            hex => hex.HexId,
+            (identity, left, right) => { },
+            differences);
+        CompareEntities("SpatialLocation", before.Spatial.AnchoredLocations, after.Spatial.AnchoredLocations,
+            location => location.LocationId,
+            (identity, left, right) => CompareValue(
+                "SpatialLocation",
+                identity,
+                "AnchorHexId",
+                WorldStateCanonicalWriter.StringValue(left.AnchorHexId),
+                WorldStateCanonicalWriter.StringValue(right.AnchorHexId),
+                differences),
+            differences);
+
         CompareEntities("NPC", before.Npcs, after.Npcs, npc => npc.RuntimeId,
             (identity, left, right) =>
             {

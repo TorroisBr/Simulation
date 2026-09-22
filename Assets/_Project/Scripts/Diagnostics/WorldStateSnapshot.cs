@@ -10,6 +10,7 @@ public sealed class WorldStateSnapshotContext
     public IEnumerable<NpcRuntime> Npcs { get; }
     public IEnumerable<CityRuntime> Cities { get; }
     public SpatialNetworkRuntime SpatialNetwork { get; }
+    public SpatialAuthorityStore SpatialAuthorityStore { get; }
     public ExplorableSiteStore ExplorableSiteStore { get; }
     public ExpeditionStore ExpeditionStore { get; }
     public PlaceContentStore PlaceContentStore { get; }
@@ -73,13 +74,15 @@ public sealed class WorldStateSnapshotContext
         ArmedForceStore armedForceStore = null,
         PersistentConflictStore conflictStore = null,
         PersistentWarStore warStore = null,
-        PersistentBattleStore battleStore = null)
+        PersistentBattleStore battleStore = null,
+        SpatialAuthorityStore spatialAuthorityStore = null)
     {
         SimulationTime = simulationTime;
         Calendar = calendar ?? (calendarDefinition != null ? new SimulationCalendar(calendarDefinition) : null);
         Npcs = npcs ?? Array.Empty<NpcRuntime>();
         Cities = cities ?? Array.Empty<CityRuntime>();
         SpatialNetwork = spatialNetwork;
+        SpatialAuthorityStore = spatialAuthorityStore;
         ExplorableSiteStore = explorableSiteStore;
         ExpeditionStore = expeditionStore;
         PlaceContentStore = placeContentStore;
@@ -1354,15 +1357,46 @@ public sealed class WorldStateMarketStackSnapshot
 
 public sealed class WorldStateSpatialSnapshot
 {
+    public long? AuthorityRevision { get; }
+    public IReadOnlyList<WorldStateHexSnapshot> Hexes { get; }
+    public IReadOnlyList<WorldStateAnchoredLocationSnapshot> AnchoredLocations { get; }
     public IReadOnlyList<WorldStateLocationSnapshot> Locations { get; }
     public IReadOnlyList<WorldStateRouteSnapshot> Routes { get; }
 
     public WorldStateSpatialSnapshot(
         IEnumerable<WorldStateLocationSnapshot> locations = null,
-        IEnumerable<WorldStateRouteSnapshot> routes = null)
+        IEnumerable<WorldStateRouteSnapshot> routes = null,
+        IEnumerable<WorldStateHexSnapshot> hexes = null,
+        IEnumerable<WorldStateAnchoredLocationSnapshot> anchoredLocations = null,
+        long? authorityRevision = null)
     {
+        AuthorityRevision = authorityRevision;
+        Hexes = SnapshotCollections.CopySorted(hexes, hex => hex?.HexId);
+        AnchoredLocations = SnapshotCollections.CopySorted(anchoredLocations, location => location?.LocationId);
         Locations = SnapshotCollections.CopySorted(locations, location => location?.RuntimeId);
         Routes = SnapshotCollections.CopySorted(routes, route => route?.RuntimeId);
+    }
+}
+
+public sealed class WorldStateHexSnapshot
+{
+    public string HexId { get; }
+
+    public WorldStateHexSnapshot(string hexId)
+    {
+        HexId = hexId;
+    }
+}
+
+public sealed class WorldStateAnchoredLocationSnapshot
+{
+    public string LocationId { get; }
+    public string AnchorHexId { get; }
+
+    public WorldStateAnchoredLocationSnapshot(string locationId, string anchorHexId)
+    {
+        LocationId = locationId;
+        AnchorHexId = anchorHexId;
     }
 }
 
@@ -1735,7 +1769,7 @@ public static class WorldStateSnapshotBuilder
             context.SimulationTime != null ? context.SimulationTime.AbsoluteDay : 0L,
             BuildNpcSnapshots(knownNpcs, expeditions),
             BuildCitySnapshots(context.Cities, knownNpcs, context.PersonStore?.Persons),
-            BuildSpatialSnapshot(context.SpatialNetwork),
+            BuildSpatialSnapshot(context.SpatialNetwork, context.SpatialAuthorityStore),
             BuildSiteSnapshots(context.ExplorableSiteStore),
             expeditions,
             BuildPlaceContentSnapshots(context.PlaceContentStore),
@@ -2881,11 +2915,42 @@ public static class WorldStateSnapshotBuilder
         return result;
     }
 
-    private static WorldStateSpatialSnapshot BuildSpatialSnapshot(SpatialNetworkRuntime network)
+    private static WorldStateSpatialSnapshot BuildSpatialSnapshot(
+        SpatialNetworkRuntime network,
+        SpatialAuthorityStore authority)
     {
+        List<WorldStateHexSnapshot> hexSnapshots = new List<WorldStateHexSnapshot>();
+        List<WorldStateAnchoredLocationSnapshot> anchoredLocationSnapshots =
+            new List<WorldStateAnchoredLocationSnapshot>();
+        long? authorityRevision = null;
+        if (authority != null)
+        {
+            authorityRevision = authority.Revision;
+            foreach (HexRecord hex in authority.Hexes)
+            {
+                if (hex?.Id != null)
+                {
+                    hexSnapshots.Add(new WorldStateHexSnapshot(hex.Id.Value));
+                }
+            }
+
+            foreach (LocationRecord location in authority.Locations)
+            {
+                if (location?.Id != null && location.AnchorHexId != null)
+                {
+                    anchoredLocationSnapshots.Add(new WorldStateAnchoredLocationSnapshot(
+                        location.Id.Value,
+                        location.AnchorHexId.Value));
+                }
+            }
+        }
+
         if (network == null)
         {
-            return new WorldStateSpatialSnapshot();
+            return new WorldStateSpatialSnapshot(
+                hexes: hexSnapshots,
+                anchoredLocations: anchoredLocationSnapshots,
+                authorityRevision: authorityRevision);
         }
 
         List<SpatialLocationRuntime> locations = new List<SpatialLocationRuntime>(network.Locations);
@@ -2910,7 +2975,12 @@ public static class WorldStateSnapshotBuilder
                 route.TravelDays));
         }
 
-        return new WorldStateSpatialSnapshot(locationSnapshots, routeSnapshots);
+        return new WorldStateSpatialSnapshot(
+            locationSnapshots,
+            routeSnapshots,
+            hexSnapshots,
+            anchoredLocationSnapshots,
+            authorityRevision);
     }
 
     private static List<WorldStateSiteSnapshot> BuildSiteSnapshots(ExplorableSiteStore store)

@@ -308,6 +308,7 @@ public static class WorldStateInvariantValidator
         }
 
         ValidateParentages(snapshot.Parentages, personIds, issues);
+        ValidateSpatialAuthority(snapshot.Spatial, issues);
         ValidateArmedForces(snapshot, personIds, issues);
         ValidatePersistentConflictWarBattle(snapshot, issues);
         HashSet<string> propertyIds = ValidatePropertyOwnerships(
@@ -571,6 +572,60 @@ public static class WorldStateInvariantValidator
         if (processed != incomingCounts.Count)
         {
             AddError(issues, "GenealogyCycle", "genealogy", "Parentage relations contain a cycle.");
+        }
+    }
+
+    private static void ValidateSpatialAuthority(
+        WorldStateSpatialSnapshot spatial,
+        List<WorldStateInvariantIssue> issues)
+    {
+        if (spatial == null || spatial.AuthorityRevision.HasValue == false)
+        {
+            return;
+        }
+
+        if (spatial.AuthorityRevision.Value < 0L)
+        {
+            AddError(issues, "SpatialAuthorityNegativeRevision", "world", "Spatial authority revision cannot be negative.");
+        }
+
+        HashSet<string> hexIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (WorldStateHexSnapshot hex in spatial.Hexes ?? new List<WorldStateHexSnapshot>())
+        {
+            if (hex == null || string.IsNullOrWhiteSpace(hex.HexId))
+            {
+                AddError(issues, "SpatialHexIdMissing", "hex", "Spatial Hex has no stable identity.");
+                continue;
+            }
+
+            if (hexIds.Add(hex.HexId) == false)
+            {
+                AddError(issues, "DuplicateSpatialHexId", hex.HexId, "Spatial Hex identity appears more than once.");
+            }
+        }
+
+        HashSet<string> locationIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (WorldStateAnchoredLocationSnapshot location in spatial.AnchoredLocations ?? new List<WorldStateAnchoredLocationSnapshot>())
+        {
+            if (location == null || string.IsNullOrWhiteSpace(location.LocationId))
+            {
+                AddError(issues, "SpatialLocationIdMissing", "location", "Spatial Location has no stable identity.");
+                continue;
+            }
+
+            if (locationIds.Add(location.LocationId) == false)
+            {
+                AddError(issues, "DuplicateSpatialLocationId", location.LocationId, "Spatial Location identity appears more than once.");
+            }
+
+            if (string.IsNullOrWhiteSpace(location.AnchorHexId))
+            {
+                AddError(issues, "SpatialLocationAnchorMissing", location.LocationId, "Spatial Location has no AnchorHexId.");
+            }
+            else if (hexIds.Contains(location.AnchorHexId) == false)
+            {
+                AddError(issues, "SpatialLocationAnchorMissingHex", location.LocationId, "Spatial Location anchor Hex is absent.");
+            }
         }
     }
 
