@@ -2713,11 +2713,13 @@ Demobilized/survivor pode retornar à origem. No contrato de `Amount`, morte
 reduz o roster vivo; ferimento ou captura, por si sós, reduzem disponibilidade,
 não `Amount`. Captura exige estado explícito de custody antes de ser afirmada
 como verdade autoritativa. Esses efeitos agregados podem ser representados sem
-materializar milhares de Persons, mas mortes de manpower ligado a uma fonte
-populacional também atualizam a verdade dessa fonte. Não se deve inferir a
-fonte a partir de provenance aberta. Persons relevantes só recebem
-consequências individuais quando fatos explícitos de participação ou exposição
-sustentarem a transição. Não há regra proporcional universal de casualties.
+materializar milhares de Persons. A morte de manpower ligado a uma fonte
+populacional exige que a consequência factual correspondente para essa fonte
+seja planejada segundo a semântica do domínio de origem; não se infere a fonte
+a partir de provenance aberta. Planejar a consequência da fonte não muta seu
+estado. Persons relevantes só recebem consequências individuais quando fatos
+explícitos de participação ou exposição sustentarem a transição. Não há regra
+proporcional universal de casualties.
 
 ### Fonte autoritativa e alocação
 
@@ -2747,6 +2749,55 @@ atribui pessoal vivo à força sem removê-lo da população factual; a mesma
 capacidade da fonte não pode ser alocada repetidamente além do limite que ela
 permite. Para fontes populacionais, manpower militar alocado não excede nem a
 capacidade militar explicitamente oferecida nem a população viva factual.
+
+### Planejamento de consequências na fonte
+
+A fundação de snapshots de source não autoriza, por si só, uma mudança factual
+na fonte. Uma consequência que afete a fonte parte da identidade autoritativa
+`ManpowerSourceId` e dos fatos atuais exatos dessa fonte, e produz uma proposta
+imutável e específica ao domínio. A proposta não é a mutação: planejamento não
+altera fonte, roster, Battle ou lifecycle.
+
+A resolução de `ManpowerSourceId` para uma autoridade de consequência é uma
+composição explícita do mundo. Não se descobrem tipos de fonte por parsing de
+IDs, provenance, tipo de serviço ou nomes de exibição. Aliases não podem
+representar silenciosamente o mesmo pool factual como fontes independentes.
+Cada autoridade de planejamento possui identidade semântica estável de regra e
+configuração (`RuleKey` e configuração efetiva), e só aceita as fontes e
+efeitos registrados para ela; fonte ou efeito não suportado falha
+explicitamente. Uma fonte futura pode declarar explicitamente que, por sua
+própria semântica, um efeito não exige mutação externa separada. A ausência de
+uma autoridade compatível nunca equivale a essa declaração.
+
+A primeira aplicação populacional concreta usa `SettlementPopulationRuntime`
+por associação explícita entre `ManpowerSourceId` e o settlement exato. A
+capacidade militar alocável continua sendo uma entrada explícita e distinta da
+população factual; não é calculada como `CurrentPopulation`. Se útil para
+manter uma única composição de fontes, a mesma associação explícita pode
+alimentar também os snapshots de alocação.
+
+Para mortes de população agregada, a proposta reutiliza a fronteira existente
+de demografia agregada, em vez de criar uma segunda autoridade de mutação. A
+proposta registra a identidade do settlement, revisão populacional esperada,
+população anterior, piso de residentes representados, mortes e população
+resultante. A quantidade militar permanece `long`; conversão para um domínio
+populacional baseado em `int` é checked. Overflow, underflow ou tentativa de
+ultrapassar o limite de residentes representados rejeita a proposta inteira,
+sem truncar, limitar nem aplicar lotes parciais.
+
+O piso de residentes representados é factual e protegido: Persons
+individualizados não são implicitamente parte de `Contingent.Amount`, então
+mortes agregadas não podem reduzir a população abaixo desse piso. O valor deve
+vir de uma consulta atual ou autoridade composta já responsável por essa
+invariante, e a proposta captura o piso e suas dependências relevantes. Não se
+faz descoberta de Persons dentro da regra de consequência nem se confia em um
+inteiro cacheado obsoleto. A dependência de uma proposta de morte é estreita:
+identidade da fonte, estado/revisão da população factual, piso representado e
+identidade/configuração da regra de fonte. A fingerprint ampla usada para
+alocação pode incluir capacidade e população factual, mas não é automaticamente
+a única dependência da proposta de morte. Uma mudança apenas na capacidade de
+recrutamento não a torna stale quando a capacidade não participou da proposta;
+mudanças em fontes não relacionadas também não a invalidam.
 
 ### Roster vivo, disponibilidade e coortes
 
@@ -2806,13 +2857,13 @@ suportado, captura não pode ser afirmada como verdade autoritativa. Outros
 tipos de custodian aguardam consumidores concretos.
 
 Morte remove manpower vivo das coortes e reduz `Amount`; se a fonte autoritativa
-representa população viva, a mesma transição aplica a morte correspondente no
-domínio de origem. Ferimento não reduz `Amount`; qualquer mudança de
-disponibilidade é explícita. Captura não reduz `Amount`. Desmobilização remove
-a alocação do roster e pode devolver sobreviventes à fonte conforme as regras
-dela, sem aumentar população que já estava viva. Desertion e defection também
-exigem transições explícitas, sem serem inferidas de derrota ou tratadas como
-casualties automáticas.
+representa população viva, a proposta da mesma operação inclui a transição
+correspondente do domínio de origem, a ser aplicada conjuntamente depois.
+Ferimento não reduz `Amount`; qualquer mudança de disponibilidade é explícita.
+Captura não reduz `Amount`. Desmobilização remove a alocação do roster e pode
+devolver sobreviventes à fonte conforme as regras dela, sem aumentar população
+que já estava viva. Desertion e defection também exigem transições explícitas,
+sem serem inferidas de derrota ou tratadas como casualties automáticas.
 
 Nenhuma alocação cria pessoal; nenhum membro desaparece sem morte, saída,
 transferência ou outra transição modelada. Quantidades genéricas de manpower
@@ -3208,12 +3259,13 @@ arbitrárias não pode alterar World Truth.
 ### Autorização e outcome terminal da Battle
 
 A futura aceitação autoritativa deve ser vinculada à policy efetiva do mundo e
-ao boundary de composição. Essa policy seleciona as regras/configurações de
-capability, a autoridade/configuração de aleatoriedade, os settings do resolver,
-a versão da projeção, o perfil numérico suportado e, quando existir, a
-identidade das regras de consequência. A identidade textual `RuleKey` fornecida
-por um caller não substitui essa autoridade; a resolução segue o modelo geral de
-authoring, resolução efetiva e consumo pelo domínio.
+ao boundary de composição. A policy de resolução seleciona regras/configurações
+de capability, autoridade/configuração de aleatoriedade, settings do resolver,
+versão da projeção e perfil numérico suportado. A policy de consequências
+diretas é uma autoridade efetiva separada, composta pelo mundo e identificada
+com suas próprias regras, versão e dependências. A identidade textual `RuleKey`
+fornecida por um caller não substitui nenhuma dessas autoridades; authoring,
+resolução efetiva e consumo pelo domínio permanecem etapas distintas.
 
 A operação de aplicação deve partir da `BattleId` ou de um pedido de resolução:
 o mundo constrói o contexto atual, recalcula sob a policy autorizada, deriva o
@@ -3248,40 +3300,175 @@ modelo, uma Battle admite zero ou um outcome terminal, tornando a própria
 
 ### Plano de consequências e aplicação atômica
 
-Um outcome não pode ser aceito com consequências factuais omitidas sob a
-justificativa de que seu subsistema ainda não existe. A regra selecionada deve
-produzir um plano explícito contendo todas as consequências diretas que declara
-como fatos. Esse plano pode legitimamente conter zero casualties, zero
-deslocamento e nenhuma outra mudança material; zero consequência explícita é
-válido, enquanto ausência de um modelo requerido não equivale a zero.
-Consequências de forças não se convertem em consequências de Persons sem fatos
-explícitos de participação ou exposição.
+Um outcome não pode ser aceito com consequências diretas omitidas sob a
+justificativa de que um domínio declarado pela policy ainda não existe. A
+policy deve cobrir explicitamente cada efeito direto que afirma produzir. Uma
+policy configurada pode declarar zero efeitos; ausência de policy, planner de
+source necessário para um efeito proposto, modelo necessário ou planejamento
+bem-sucedido não significa zero. Policy não configurada, planner de source
+necessário ausente, modelo de consequência não fornecido e falha de
+planejamento permanecem resultados distintos de uma consequência zero
+completa. Uma coleção vazia não pode representar ambiguamente ambos.
+Consequências agregadas de forças não se convertem em consequências de Persons
+sem fatos explícitos de participação e exposição individual.
+
+### Boundary de planejamento direto: D6B1 e D6B2
+
+D6B1 planeja consequências de fonte, sem aplicá-las. D6B2 planeja
+consequências diretas de Battle e também não muta World Truth. São fronteiras
+distintas: a primeira traduz um efeito sobre uma fonte autoritativa em uma
+proposta do domínio dono dessa fonte; a segunda combina o outcome autorizado
+com fatos militares atuais e a policy de consequência do mundo.
+
+D6B2 começa por `BattleId` e estado atual do mundo. Obtém ou reconstrói
+internamente um plano D5 autorizado e fresco, cuja validade corrente é
+confirmada antes do planejamento; um plano/outcome arbitrário fornecido por
+caller não é autoridade. Preview ou fingerprint esperada podem ser
+precondições para confirmar uma proposta, mas não substituem a recomposição
+autorizada.
+
+A policy de consequências diretas é distinta da policy de resolução bruta. Ela
+identifica a regra/configuração efetiva, a versão de cobertura, a autoridade
+opcional de aleatoriedade contextual e as autoridades de planejamento de fonte
+suportadas. A identidade semântica dessa composição participa da validação do
+plano. A ausência de policy ou regra necessária torna o planejamento
+indisponível/falho; não autoriza fallback implícito.
+
+Não existe casualty formula default como `dead = Amount × LossFraction`, nem
+`DefaultConflictConsequenceResolver` é autoridade para converter perda de
+capability em headcount militar. A regra não pode ser escolhida livremente pelo
+caller em cada pedido.
+
+A primeira policy D6B2 usa somente o outcome semântico `Victory`/`Draw`, o
+mapeamento tipado Battle → side → force → contingent, os fatos de execução D3,
+as coortes D6A e fatos explícitos de fonte/custody necessários. Ela não deriva
+casualties de floats, capability totals ou fatores aleatórios brutos de D4.
+Sua provenance causal D5 identifica qual resolução autorizada produziu esse
+outcome. Isso não resolve a equivalência numérica cross-host de D4/D5, que
+continua uma limitação explícita. A policy D6B2 v1 não introduz nova semântica de
+consequência em ponto flutuante. Uma policy futura que consuma números D4
+brutos exige contrato causal explícito e assume as implicações do perfil
+numérico autoritativo.
+
+Somente participantes explícitos da Battle e seus contingents diretos podem
+receber consequências diretas v1. Não se expandem efeitos a parent forces,
+descendants, participantes de War/Conflict, aliados não vinculados ou forças
+próximas. A exposição inicial é determinada pelas coortes capturadas como
+`Available` no contexto D3 pertencente ao plano D5 fresco. Coortes
+indisponíveis — inclusive capturados — não são alvo; coortes `Wounded` e
+`Available` continuam expostas.
+
+Para cada coorte de entrada exposta, a regra produz uma partição explícita em
+coortes sobreviventes de destino e uma quantidade terminal de mortes. Os
+destinos são disjuntos: não se somam contadores independentes de feridos,
+capturados e mortos que possam descrever as mesmas pessoas. `Dead` não é estado
+de coorte viva nem valor de injury state; morte é saída terminal do roster.
+As transições são canonicalizadas e ordenadas por semântica estável de coorte,
+nunca pela ordem incidental de collections. Para cada coorte exposta de
+quantidade `N`:
+
+```text
+SUM(living destination cohorts) + terminal deaths = N
+post-plan living roster = pre-plan living roster - planned deaths
+```
+
+Wound ou capture isolados não alteram o roster vivo. As somas usam aritmética
+checked, quantidades não são negativas e todo o contingente exposto é explicado
+sem criação, desaparecimento ou aplicação parcial. Mortes de uma source
+populacional exigem proposta de morte correspondente na source.
+
+A cobertura agregada D6B2 v1 limita-se a: sobrevivente inalterado,
+healthy → wounded, captura, wounded + captura e morte. Uma consequência zero
+completa explicita que todas as coortes expostas permanecem inalteradas, com
+zero mortes, wounds e captures; não é inferida de ausência de transições.
+Wound preserva roster, source e quantidade viva; altera injury state, enquanto
+availability do destino é declarada explicitamente. A injury state é binária:
+uma coorte já
+`Wounded` pode permanecer ferida, ser capturada, morrer ou ficar ferida e
+capturada, mas não recebe uma nova severidade/reinjury não representável. Se a
+regra exigir esse estado, o planejamento falha; não se inventa gravidade e não
+se presume que toda pessoa ferida fique indisponível.
+
+Uma coorte capturada permanece viva no contingent e source originais, é
+marcada como capturada e indisponível e exige um `ArmedForceId` custodian
+explícito. No modelo inicial, o custodian precisa ser uma força participante
+ativa da mesma Battle e estar em `BattleSideId` diferente do contingent
+capturado. A policy
+pode restringir custodians à side vitoriosa, mas isso não é regra universal:
+não se escolhe automaticamente a primeira força ou um vencedor implícito.
+Captura não causa transição populacional separada. O modelo admite mais de duas
+sides e `Draw`; empate não implica zero casualties
+ou capturas, vitória não implica ausência de perdas do vencedor nem captura
+total do derrotado, e qualquer side pode ser afetada. Se a força custodian
+terminar antes da aplicação, a proposta fica stale.
+Não se converte a Battle em uma estrutura binária fixa de attacker/defender.
+
+Morte positiva em contingent ligado a uma source exige proposta compatível da
+autoridade dessa source. A authority pode propor a mudança factual da fonte ou
+declarar explicitamente, segundo a semântica daquela fonte, que não há mutação
+externa adicional. Sem planner compatível, a consequência não é completa. Em
+contingent sem source, D6B2 pode planejar wound, capture ou sobreviventes
+inalterados; morte positiva falha, sem reduzir silenciosamente o roster.
+Quantidade de mortes zero continua válida.
+
+O plano D6B2 v1 cobre morte, wound e capture para todas as coortes expostas,
+conforme a policy declarada; ele não afirma simular todo aftermath possível.
+Desertion, defection, demobilization, retreat, rout, surrender, deslocamento
+espacial, controle/occupation e casualties de Persons ficam fora dessa
+cobertura. Victory/Draw não implica nenhuma dessas consequências ausentes.
+
+Se consequência v1 usar aleatoriedade, ela possui identidade causal e namespace
+contextual próprios, separados do RNG de resolução bruta. A causalidade usa
+BattleId, identidade causal da resolução D5, fingerprint de policy D6B,
+identidades tipadas de side/force/contingent, chave semântica da coorte de
+entrada, purpose e source/custodian apenas quando forem causais. Não depende de
+ordem de iteração, de quantas coortes não relacionadas existem ou da posição
+de um `Next()` global. D5, coortes expostas, planners/dependências de source e
+custodians prospectivos são validados antes de RNG autoritativo; estado
+inválido ou stale consome zero RNG. As dependências são revalidadas após o
+planejamento antes de retornar um plano atual.
+
+O plano D6B2 é uma camada imutável separada do plano D5. Ele captura o outcome
+autorizado e provenance D5, identidade de policy e versão de cobertura D6B,
+dependências de participantes/coortes, transições canônicas, propostas de
+fonte, decisões de custody e fingerprint causal das consequências. Não altera
+nem reutiliza o objeto D5 como recipiente de efeitos.
+
+`Consequence-complete` significa que todos os domínios declarados pela
+coverage v1 foram planejados para todas as coortes expostas, inclusive quando
+os efeitos forem explicitamente zero. Não significa `Commit-ready`: somente
+D7 valida todas as autoridades de aplicação e decide se a transação inteira
+pode ser aplicada.
 
 A fronteira conceitual é:
 
 ```text
 resolução atual autorizada
-    → BattleOutcome semântico
-        → plano imutável de aplicação/consequências
-            → validação de dependências e policy
-                → commit lógico atômico
-                    → tentativa de evento/history
+    → BattleOutcome semântico D5
+        → plano imutável de consequências diretas D6B2
+            → propostas de transição de fonte D6B1 quando necessárias
+                → revalidação de dependências e policy
+                    → aplicação lógica atômica D7
+                        → tentativa de evento/history
 ```
 
-Criar ou validar o plano não muta o mundo. A validação final inclui contexto e
-Battle, identidade causal D4, policy autorizada e perfil numérico, regras e
-inputs das consequências e os estados específicos de fonte, população,
-custody, Person ou posição que o plano realmente consome. Fingerprints ou
-revisões devem ser específicos às dependências usadas; alterações globais sem
-relação não tornam o plano stale. Se um input causal da resolução mudou, ela é
-recalculada; se mudou apenas uma dependência do plano, o plano é refeito quando
-necessário.
+Criar ou validar o plano não muta o mundo. A validação D6B2 cobre o outcome e
+contexto D5, policy/fingerprint de consequência, coortes expostas, propostas e
+dependências de source e elegibilidade/lifecycle de custodians. Uma mudança em
+qualquer dependência efetivamente usada torna o plano stale; mudanças em forças,
+sources, Battles ou coortes não usadas não o fazem. Mudança causal de D5 exige
+recalcular a resolução; mudança isolada de dependência D6B exige refazer o
+plano correspondente.
 
-Todas as mutações de World Truth exigidas pelo outcome aceito — incluindo
-outcome, ciclo de vida da Battle e consequências diretas — formam uma única
-transação lógica: ou todas se aplicam ou nenhuma. Save e observers não podem
-ver estado intermediário. A aplicação repetida não duplica consequências,
-mudanças de posição, transições de lifecycle ou registros derivados.
+Todas as mutações de World Truth exigidas pelo outcome aceito — incluindo a
+aplicação das transições de source propostas, transições do roster/coortes,
+outcome persistente e lifecycle `Active → Resolved` — formam em D7 uma única
+transação lógica: ou todas se aplicam ou nenhuma. D7 revalida ou reconstrói a
+resolução, o plano completo, as dependências de source e custody e a lifecycle
+da Battle.
+Save e observers não podem ver estado intermediário. A aplicação repetida não
+duplica consequências, mudanças de posição, transições de lifecycle ou
+registros derivados.
 Não existe `Resolved` com consequências diretas implicitamente pendentes para
 aplicação posterior, nem obrigações duráveis de consequência sem um workflow
 real que as consuma. Um workflow persistente em múltiplas etapas exigiria uma
@@ -3873,41 +4060,54 @@ computação bruta não é ainda autorização para alterar World Truth.
 
 ### P7-D5 — Authoritative Battle Resolution Policy + Outcome/Application Plan
 
-D5 é a próxima fronteira e não muta World Truth. Deve estabelecer a policy
-autorizada de resolução pertencente ao mundo/composition boundary, a seleção de
-capability, random authority, resolver settings, versão de projeção e perfil
-numérico; a recomputação autoritativa a partir de `BattleId` e estado atual; a
-semântica opcional de preview, fingerprint esperada e confirmação; o contrato
-mínimo de `BattleOutcome` e sua provenance; e o contrato de plano imutável,
-revalidação e stale handling. Uma computação arbitrária fornecida pelo caller
-nunca é aplicada como verdade.
+D5 estabelece a policy autorizada de resolução pertencente ao mundo/composition
+boundary, a seleção de capability, random authority, resolver settings, versão
+de projeção e perfil numérico; a recomputação autoritativa a partir de
+`BattleId` e estado atual; a semântica opcional de preview, fingerprint esperada
+e confirmação; o contrato mínimo de `BattleOutcome` e sua provenance; e o
+contrato de plano imutável, revalidação e stale handling. Uma computação
+arbitrária fornecida pelo caller nunca é aplicada como verdade.
 
 D5 não inclui casualties, alteração de `Contingent.Amount`, transição
 `Active → Resolved`, mutações de mundo ou eventos/history.
 
 ### P7-D6A — Military Manpower Source / Roster / Availability Foundation
 
-Após a aceitação e promoção do checkpoint D5, D6A estabelece a identidade e
-binding das fontes de manpower, alocação militar, estado agregado do roster
-vivo e disponibilidade por coortes, incluindo o tratamento explícito de
-contingents legados sem fonte. Essa etapa integra a disponibilidade à
-elegibilidade e aos inputs causais de D3/D4/D5, além dos snapshots,
-canonicalização e invariantes necessários para verificar conservação. A
-implementação não infere source binding de `ContingentOriginReference`.
+D6A estabelece a identidade e binding das fontes de manpower, alocação militar,
+estado agregado do roster vivo e disponibilidade por coortes, incluindo o
+tratamento explícito de contingents legados sem fonte. Essa etapa integra a
+disponibilidade à elegibilidade e aos inputs causais de D3/D4/D5, além dos
+snapshots, canonicalização e invariantes necessários para verificar
+conservação. A implementação não infere source binding de
+`ContingentOriginReference`.
 
 D6A não define o que uma Battle causa, não inclui regra de casualty nem aplica
 outcome. Também não transforma `LossFraction` em headcount nem consome RNG de
 consequência.
 
-### P7-D6B — Battle Direct Consequence Planning
+### P7-D6B1 — Manpower Source Consequence Planning
 
-D6B estabelece uma policy de consequência direta autorizada pelo mundo,
-distinta da policy de resolução bruta D5, e produz um plano imutável de
-transições de coorte/fonte. Saídas são destinos disjuntos de coortes, não
-contadores independentes de mortes, ferimentos e capturas que possam se
-sobrepor. Captura exige custodian suportado. O plano é revalidável e não muta
-World Truth. Se usar aleatoriedade, possui identidade causal e namespace
-contextual próprios, separados da aleatoriedade de resolução bruta:
+Depois de D6A, D6B1 estabelece a fronteira que traduz um efeito de manpower
+que altera uma fonte autoritativa em uma proposta imutável do domínio dono
+dessa fonte. A primeira aplicação é uma source populacional baseada em
+`SettlementPopulationRuntime`, vinculada por composição explícita e protegida
+pelo piso factual de residentes representados. A proposta reutiliza a
+autoridade de demografia agregada, mantém capacidade militar alocável distinta
+de população viva e captura somente as dependências necessárias à transição.
+D6B1 não decide casualties, não altera roster ou fonte e não aplica a proposta.
+
+### P7-D6B2 — Battle Direct Consequence Planning
+
+D6B2 parte de `BattleId`, reconstrói o D5 autorizado e combina seu outcome
+semântico com participantes/coortes D3/D6A e uma policy de consequência
+distinta da policy de resolução bruta. Sua cobertura agregada inicial declara
+explicitamente sobrevivência inalterada, wound, capture e death para cada
+coorte exposta. Death exige proposta compatível da source; wound e capture não
+reduzem o roster vivo, e capture exige custodian suportado. O plano imutável
+preserva conservation, dependências estreitas, revalidação e a distinção entre
+consequence-complete e commit-ready; não muta World Truth. Se usar
+aleatoriedade, possui identidade causal e namespace contextual próprios,
+separados da aleatoriedade de resolução bruta:
 
 ```text
 RAW RESOLUTION RNG != CONSEQUENCE RNG
@@ -3915,12 +4115,12 @@ RAW RESOLUTION RNG != CONSEQUENCE RNG
 
 ### P7-D7 — Atomic Battle Outcome Application
 
-Depois de D6A e D6B, D7 revalida/reconstrói a resolução autorizada e o plano
-completo de consequências, então aplica em um único commit lógico as mudanças
-de fonte, roster e status junto com `BattleOutcome` e a transição
+Depois de D6A, D6B1 e D6B2, D7 revalida/reconstrói a resolução autorizada e o
+plano completo de consequências, então aplica em um único commit lógico as
+propostas de transição de fonte, roster/coortes, `BattleOutcome` e a transição
 `Active → Resolved`. Eventos e history são tentados após o commit. Falha antes
 do commit não pode deixar apenas parte das consequências ou um outcome
-persistido sem sua disposition de manpower.
+persistido sem sua disposição de manpower.
 
 Permanecem deferidos além dessas fronteiras:
 
