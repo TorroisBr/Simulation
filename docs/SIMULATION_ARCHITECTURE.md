@@ -2671,7 +2671,10 @@ MANPOWER SOURCE != ALLEGIANCE != LOYALTY != COMMAND
 Uma fonte pode ser uma população agregada, um pool profissional, levy,
 voluntários, mercenários, tropas vassalas, entidades convocadas, mortos
 erguidos, unidades construídas, animais ou outro conteúdo adequado. Não se
-deve assumir que toda força deriva de uma população civil humana.
+deve assumir que toda força deriva de uma população civil humana. Essas
+possibilidades não compartilham automaticamente a semântica de pessoal vivo:
+fontes não vivas exigem accounting próprio e não são incluídas por antecipação
+na primeira fundação de manpower vivo.
 
 Recruitment e mobilization alteram a representação de indivíduos ou recursos;
 não criam população factual. Quando uma fonte real fornece indivíduos para
@@ -2688,13 +2691,12 @@ recrutado nem a quantidade remanescente na fonte de origem.
 `ContingentOriginReference` é provenance/content metadata; não vincula
 automaticamente o contingent a uma fonte autoritativa de manpower.
 
-Disponibilidade deve permanecer separada do tamanho do roster. Feridos e
-capturados continuam vivos e podem permanecer atribuídos ao contingent, embora
-indisponíveis; a representação futura deverá distinguir a população viva
-atribuída da parcela disponível e de outros estados de indisponibilidade. A
-forma exata de armazenar essas parcelas permanece aberta. Desertion, defection
-e demobilization, quando efetivamente aplicadas, removem pessoal do roster e
-podem reduzir `Amount` sem implicar morte.
+Disponibilidade permanece separada do tamanho do roster. Feridos e capturados
+continuam vivos e podem permanecer atribuídos ao contingent, embora
+indisponíveis. A primeira fundação representa esse estado por coortes vivas
+agregadas e disjuntas; a forma detalhada está definida abaixo. Desertion,
+defection e demobilization, quando efetivamente aplicadas, removem pessoal do
+roster e podem reduzir `Amount` sem implicar morte.
 
 Os estados de casualty também não devem ser colapsados:
 
@@ -2710,27 +2712,142 @@ mudança de lado; defected abandona uma força ou lado e adere a outro.
 Demobilized/survivor pode retornar à origem. No contrato de `Amount`, morte
 reduz o roster vivo; ferimento ou captura, por si sós, reduzem disponibilidade,
 não `Amount`. Captura exige estado explícito de custody antes de ser afirmada
-como verdade autoritativa. Esses efeitos agregados podem futuramente ser
-representados sem materializar milhares de Persons, mas a aplicação autoritativa
-de mortes exige também atualizar a fonte de manpower quando ela representar
-população viva. Não se deve inferir essa fonte a partir de provenance aberta.
-Persons relevantes só recebem consequências individuais quando fatos explícitos
-de participação ou exposição sustentarem a transição. Não há regra proporcional
-universal de casualties.
+como verdade autoritativa. Esses efeitos agregados podem ser representados sem
+materializar milhares de Persons, mas mortes de manpower ligado a uma fonte
+populacional também atualizam a verdade dessa fonte. Não se deve inferir a
+fonte a partir de provenance aberta. Persons relevantes só recebem
+consequências individuais quando fatos explícitos de participação ou exposição
+sustentarem a transição. Não há regra proporcional universal de casualties.
 
-Antes de mortes militares agregadas poderem alterar World Truth, deve existir
-uma fronteira explícita de fonte e contabilização que determine de onde vem o
-manpower, se a fonte representa população viva, como recrutamento e transferências
-afetam essa fonte e como mortes, ferimentos, captura e desmobilização são
-refletidos nela. Nem toda força precisa derivar de população civil: pools
-profissionais, mercenários, animais, mortos-vivos, unidades construídas e
-outras fontes podem exigir semânticas próprias. `ORIGIN / PROVENANCE !=
-AUTHORITATIVE MANPOWER SOURCE`.
+### Fonte autoritativa e alocação
 
-Vitória ou derrota não determina, por si só, morte, ferimento, captura,
-deserção, defecção ou desmobilização. Uma regra de consequência deve declarar
-quais fatos produz; seus efeitos diretos precisam ser aplicados conjuntamente.
-Derrotas não implicam retirada, rout ou surrender.
+Um contingent pode ter zero ou uma binding autoritativa de manpower source.
+Quando a contabilização de origens diferentes importa, a primeira forma é
+representá-las em contingents distintos; múltiplas fontes autoritativas dentro
+de um mesmo contingent ficam deferidas. A binding usa uma identidade estável e
+tipada de fonte (`ManpowerSourceId`), resolvida pelo domínio dono da fonte.
+`ContingentOriginReference` permanece metadata de conteúdo/provenance:
+
+```text
+ORIGIN / PROVENANCE != AUTHORITATIVE MANPOWER SOURCE
+```
+
+O domínio de origem continua autoridade sobre seu estado factual vivo ou de
+recursos. O domínio militar possui bindings, alocação militar, roster e
+disponibilidade, sem duplicar o total factual da fonte como outra verdade
+mutável. A fonte e sua policy devem fornecer explicitamente quanto pode ser
+alocado para uso militar. População viva não significa automaticamente
+manpower recrutável, e `Settlement.CurrentPopulation` não é uma fórmula de
+recrutamento nem um pool elegível universal.
+
+A alocação por fonte é derivada dos rosters vivos autoritativamente ligados,
+em vez de ser um segundo total mutável sujeito a divergência. Índices e caches
+podem acelerá-la, mas são reconstruíveis e não autoritativos. Mobilização
+atribui pessoal vivo à força sem removê-lo da população factual; a mesma
+capacidade da fonte não pode ser alocada repetidamente além do limite que ela
+permite. Para fontes populacionais, manpower militar alocado não excede nem a
+capacidade militar explicitamente oferecida nem a população viva factual.
+
+### Roster vivo, disponibilidade e coortes
+
+O estado mutável de manpower é conceitualmente separado da identidade
+estrutural de Armed Force e Contingent e é associado a `ContingentId`. O
+`Amount` semântico continua sendo o número atual de pessoas vivas atribuídas
+ao roster, mas sua autoridade é a soma checked das coortes vivas daquele
+contingent. `AvailableAmount` também é derivado — soma apenas coortes marcadas
+como disponíveis — e não é um escalar mutável concorrente:
+
+```text
+Amount = SUM(living cohorts)
+AvailableAmount = SUM(cohorts where availability is Available)
+LIVING != AVAILABLE
+```
+
+As coortes são agregadas, mutuamente disjuntas e identificadas pelo estado
+semântico combinado, inicialmente incluindo:
+
+- ferimento: saudável ou ferido;
+- custódia: livre ou capturado sob custodian válido;
+- disponibilidade: disponível ou indisponível.
+
+Combinar os estados permite, por exemplo, representar pessoal ferido e
+capturado sem contá-lo duas vezes. Ferimento não implica, por si só,
+disponibilidade nem indisponibilidade; isso é estado explícito. Capturados são
+indisponíveis para o contingent original. Coortes com a mesma chave semântica
+são mescladas e ordenadas deterministicamente. Não há `CohortId` ou identidade
+de linhagem na primeira forma: identidade de estado atual não é histórico de
+transições.
+
+Se `ContingentRecord.Amount` permanecer durante uma migração incremental, será
+apenas uma projeção de compatibilidade do estado de manpower e deverá ser
+igual à soma das coortes. Nenhuma operação normal pode alterá-lo
+independentemente; novos consumidores usam a autoridade de manpower. O caminho
+normal de substituição de contingent pode mudar metadata estrutural permitida,
+mas preserva o roster. Registro estrutural não cria arbitrariamente roster
+positivo sem alocação correspondente. Bootstrap/importação pode ter caminho
+distinto e explícito.
+
+Contingents positivos legados sem binding continuam válidos. Seu estado inicial
+pode ser normalizado para saudável, livre, disponível e sem fonte vinculada,
+preservando a semântica de combate existente sem inventar uma origem
+retroativamente. Podem continuar participando da execução D3/D4/D5, mas não
+podem produzir operações autoritativas que dependam de uma fonte desconhecida,
+como morte agregada debitada dessa fonte ou retorno por desmobilização, até
+serem vinculados ou reconciliados explicitamente. Contingent com roster zero
+também é válido; sua identidade pode permanecer, mas coortes e alocação somam
+zero.
+
+### Transições, custody e conservação
+
+A primeira autoridade de custody agregada é uma `ArmedForceId` válida; uma
+`BattleSideId` não é custodian durável. Captura mantém pessoal vivo e atribuído
+ao roster original, mas indisponível, e registra o custodian. Sem custodian
+suportado, captura não pode ser afirmada como verdade autoritativa. Outros
+tipos de custodian aguardam consumidores concretos.
+
+Morte remove manpower vivo das coortes e reduz `Amount`; se a fonte autoritativa
+representa população viva, a mesma transição aplica a morte correspondente no
+domínio de origem. Ferimento não reduz `Amount`; qualquer mudança de
+disponibilidade é explícita. Captura não reduz `Amount`. Desmobilização remove
+a alocação do roster e pode devolver sobreviventes à fonte conforme as regras
+dela, sem aumentar população que já estava viva. Desertion e defection também
+exigem transições explícitas, sem serem inferidas de derrota ou tratadas como
+casualties automáticas.
+
+Nenhuma alocação cria pessoal; nenhum membro desaparece sem morte, saída,
+transferência ou outra transição modelada. Quantidades genéricas de manpower
+permanecem `long`. Adaptadores para domínios populacionais baseados em `int`
+usam conversão checked, validam limites e verificam todas as precondições
+antes de qualquer mutação; não truncam, limitam silenciosamente nem aplicam
+lotes parciais.
+
+Persons nomeadas explicitamente referenciadas por uma força não são
+implicitamente contadas em `Contingent.Amount`:
+
+```text
+PERSON REPRESENTATION != AGGREGATE ROSTER REPRESENTATION
+```
+
+`ArmedForcePersonReference` por si só não prova membership no roster agregado.
+Se uma Person vier a integrar um contingent, a atribuição `PersonId` →
+`ContingentId` e suas regras de accounting devem ser explícitas antes de
+consequências individuais poderem alterar o roster.
+
+Terminar uma força não é morrer nem ser desmobilizado. Uma força com roster
+vivo direto não termina antes da disposição explícita desse roster por
+transferência, desmobilização ou outra transição adequada. Se for custodian de
+manpower agregado capturado, custody também precisa ser transferida ou
+encerrada antes do término. Roster de descendants não é tratado como roster
+direto do parent. A remoção de uma fonte também não faz desaparecer pessoal
+militar vivo já alocado: ela pode deixar de aceitar novas operações enquanto
+permanece referenciada até reconciliação explícita. O lifecycle completo de
+fontes continua aberto.
+
+Vitória ou derrota não determina, por si só, consequências de manpower. A
+fundação de roster e disponibilidade não define uma regra de casualties, não
+converte `LossFraction` em headcount e não consome RNG de casualty. Regras de
+consequência devem declarar quais fatos produzem; seus efeitos diretos precisam
+ser aplicados conjuntamente. Derrotas não implicam retirada, rout ou surrender.
 
 As necessidades logísticas devem ser derivadas da composição da força e não de
 uma lista universal fixa de recursos. Uma força pode precisar de provisions,
@@ -2999,10 +3116,20 @@ lados resultarem em capability zero, permanece a semântica bruta da foundation
 lower-level, inclusive um possível `Draw`.
 
 A elegibilidade D3 atual usa `Contingent.Amount > 0` como elemento explícito de
-combate, o que é adequado antes de existir estado detalhado de disponibilidade.
-Quando esse estado for introduzido, a elegibilidade de execução deverá usar o
-manpower efetivamente disponível, não o roster vivo total. A regra atual é
-transitória e não define a ontologia permanente de um contingent.
+combate, o que é adequado antes da fundação detalhada de disponibilidade. Com
+essa fundação, elegibilidade usa `AvailableAmount > 0`, não o roster vivo
+total. O contexto captura os fatos de disponibilidade causalmente necessários:
+uma mudança relevante torna-o stale, enquanto mudanças não relacionadas não
+o invalidam.
+
+A projeção de capability D4 recebe o estado factual disponível capturado como
+input de execução; ela não define `capability = AvailableAmount`. A regra
+autorizada de capability continua determinando como manpower disponível e
+outros fatos afetam capability, e pessoal indisponível não contribui
+silenciosamente como se estivesse pronto para combate. D5 reconstrói D3 e
+recomputa D4; mudanças relevantes de disponibilidade tornam obsoleto um plano
+anterior. Binding ou metadata de fonte só entra na causal fingerprint bruta
+quando uma regra efetivamente a consome.
 
 ### Identidade causal e aleatoriedade
 
@@ -3758,24 +3885,42 @@ nunca é aplicada como verdade.
 D5 não inclui casualties, alteração de `Contingent.Amount`, transição
 `Active → Resolved`, mutações de mundo ou eventos/history.
 
-### P7-D6 — Military Manpower / Availability / Casualty Foundation
+### P7-D6A — Military Manpower Source / Roster / Availability Foundation
 
-Depois de D5, a fundação seguinte deverá resolver a semântica e eventual
-migração de `Amount`, a disponibilidade versus roster vivo, estados de wounded
-e captured/custody, vínculos e contabilização de fontes, recruitment/manpower,
-efeitos de morte sobre a fonte populacional quando aplicável e regras explícitas
-de consequências militares. O contrato exato de fontes e o escopo de D6 exigem
-seu próprio gate arquitetural; não se deve inferir um source binding de
-`ContingentOriginReference`.
+Após a aceitação e promoção do checkpoint D5, D6A estabelece a identidade e
+binding das fontes de manpower, alocação militar, estado agregado do roster
+vivo e disponibilidade por coortes, incluindo o tratamento explícito de
+contingents legados sem fonte. Essa etapa integra a disponibilidade à
+elegibilidade e aos inputs causais de D3/D4/D5, além dos snapshots,
+canonicalização e invariantes necessários para verificar conservação. A
+implementação não infere source binding de `ContingentOriginReference`.
+
+D6A não define o que uma Battle causa, não inclui regra de casualty nem aplica
+outcome. Também não transforma `LossFraction` em headcount nem consome RNG de
+consequência.
+
+### P7-D6B — Battle Direct Consequence Planning
+
+D6B estabelece uma policy de consequência direta autorizada pelo mundo,
+distinta da policy de resolução bruta D5, e produz um plano imutável de
+transições de coorte/fonte. Saídas são destinos disjuntos de coortes, não
+contadores independentes de mortes, ferimentos e capturas que possam se
+sobrepor. Captura exige custodian suportado. O plano é revalidável e não muta
+World Truth. Se usar aleatoriedade, possui identidade causal e namespace
+contextual próprios, separados da aleatoriedade de resolução bruta:
+
+```text
+RAW RESOLUTION RNG != CONSEQUENCE RNG
+```
 
 ### P7-D7 — Atomic Battle Outcome Application
 
-Depois de existir a verdade mínima de consequências/manpower necessária, a
-direção é aplicar a resolução autorizada, o outcome semântico e o plano
-completo de consequências diretas por um único commit lógico atômico, então
-transicionar `Active → Resolved` e tentar downstream event/history. Os rótulos
-e limites posteriores a D5 permanecem provisórios até os gates precedentes
-confirmarem o escopo concreto.
+Depois de D6A e D6B, D7 revalida/reconstrói a resolução autorizada e o plano
+completo de consequências, então aplica em um único commit lógico as mudanças
+de fonte, roster e status junto com `BattleOutcome` e a transição
+`Active → Resolved`. Eventos e history são tentados após o commit. Falha antes
+do commit não pode deixar apenas parte das consequências ou um outcome
+persistido sem sua disposition de manpower.
 
 Permanecem deferidos além dessas fronteiras:
 
