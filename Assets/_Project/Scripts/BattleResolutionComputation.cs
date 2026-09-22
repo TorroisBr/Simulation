@@ -19,6 +19,11 @@ public interface IBattleContingentCapabilityProvider
     /// <summary>
     /// Purely projects one captured contingent. Implementations must not read
     /// world stores, inspect runtime Persons, consume RNG, or mutate state.
+    /// The computation service invokes this only for captured contingents with
+    /// positive AvailableAmount; zero-availability direct contingents remain
+    /// projected with zero capability without calling the provider. Availability
+    /// is not an implicit capability formula: each rule defines its use under
+    /// its stable RuleKey.
     /// </summary>
     bool TryEvaluate(
         BattleExecutionContingentSnapshot contingent,
@@ -415,26 +420,29 @@ public sealed class BattleResolutionComputationService
                         return false;
                     }
 
-                    float capability;
-                    string providerFailure;
-                    try
+                    float capability = 0f;
+                    if (contingent.AvailableAmount > 0L)
                     {
-                        if (!capabilityProvider.TryEvaluate(contingent, out capability, out providerFailure))
+                        string providerFailure;
+                        try
+                        {
+                            if (!capabilityProvider.TryEvaluate(contingent, out capability, out providerFailure))
+                            {
+                                failure = Fail(
+                                    BattleResolutionComputationFailureCode.CapabilityProjectionFailed,
+                                    string.IsNullOrWhiteSpace(providerFailure)
+                                        ? "The capability provider rejected a contingent projection."
+                                        : providerFailure);
+                                return false;
+                            }
+                        }
+                        catch (Exception exception)
                         {
                             failure = Fail(
                                 BattleResolutionComputationFailureCode.CapabilityProjectionFailed,
-                                string.IsNullOrWhiteSpace(providerFailure)
-                                    ? "The capability provider rejected a contingent projection."
-                                    : providerFailure);
+                                "The capability provider failed before random evaluation: " + exception.Message);
                             return false;
                         }
-                    }
-                    catch (Exception exception)
-                    {
-                        failure = Fail(
-                            BattleResolutionComputationFailureCode.CapabilityProjectionFailed,
-                            "The capability provider failed before random evaluation: " + exception.Message);
-                        return false;
                     }
 
                     if (float.IsNaN(capability) || float.IsInfinity(capability) || capability < 0f)

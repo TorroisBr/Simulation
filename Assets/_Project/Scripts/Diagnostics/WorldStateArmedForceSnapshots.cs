@@ -117,3 +117,66 @@ public sealed class WorldStateArmedForcePositionSnapshot
         CurrentPosition = currentPosition;
     }
 }
+
+public sealed class WorldStateManpowerCohortSnapshot
+{
+    public ManpowerInjuryState InjuryState { get; }
+    public ManpowerCustodyState CustodyState { get; }
+    public string CustodianForceId { get; }
+    public ManpowerAvailabilityState AvailabilityState { get; }
+    public long Amount { get; }
+
+    public WorldStateManpowerCohortSnapshot(ContingentManpowerCohort cohort)
+    {
+        InjuryState = cohort.InjuryState;
+        CustodyState = cohort.CustodyState;
+        CustodianForceId = cohort.CustodianForceId?.Value;
+        AvailabilityState = cohort.AvailabilityState;
+        Amount = cohort.Amount;
+    }
+}
+
+public sealed class WorldStateContingentManpowerSnapshot
+{
+    public string ContingentId { get; }
+    public string SourceId { get; }
+    public long Revision { get; }
+    public long LivingRosterAmount { get; }
+    public long AvailableAmount { get; }
+    public string Fingerprint { get; }
+    public bool SourceResolved { get; }
+    public long? SourceCapacity { get; }
+    public long? SourceFactualLivingAmount { get; }
+    public string SourceFingerprint { get; }
+    public IReadOnlyList<WorldStateManpowerCohortSnapshot> Cohorts { get; }
+
+    public WorldStateContingentManpowerSnapshot(
+        ContingentManpowerState state,
+        ManpowerSourceCapacitySnapshot source,
+        bool sourceResolved)
+    {
+        ContingentId = state.ContingentId.Value;
+        SourceId = state.SourceId?.Value;
+        Revision = state.Revision;
+        LivingRosterAmount = state.LivingRosterAmount;
+        AvailableAmount = state.AvailableAmount;
+        Fingerprint = state.Fingerprint;
+        SourceResolved = state.SourceId == null || sourceResolved;
+        SourceCapacity = source?.Capacity;
+        SourceFactualLivingAmount = source?.FactualLivingAmount;
+        SourceFingerprint = source?.Fingerprint;
+        List<WorldStateManpowerCohortSnapshot> values = new List<WorldStateManpowerCohortSnapshot>();
+        foreach (ContingentManpowerCohort cohort in state.Cohorts)
+            values.Add(new WorldStateManpowerCohortSnapshot(cohort));
+        values.Sort((a, b) =>
+        {
+            int c = a.InjuryState.CompareTo(b.InjuryState);
+            if (c != 0) return c;
+            c = a.CustodyState.CompareTo(b.CustodyState);
+            if (c != 0) return c;
+            c = StringComparer.Ordinal.Compare(a.CustodianForceId, b.CustodianForceId);
+            return c != 0 ? c : a.AvailabilityState.CompareTo(b.AvailabilityState);
+        });
+        Cohorts = new ReadOnlyCollection<WorldStateManpowerCohortSnapshot>(values);
+    }
+}

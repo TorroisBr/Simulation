@@ -35,7 +35,7 @@ public sealed class BattleResolutionComputationTests
         Assert.That(random.OperationKeys, Has.Count.EqualTo(3));
         Assert.That(capabilities.EvaluatedContingentIds, Is.EqualTo(new[]
         {
-            "contingent-a-1", "contingent-a-2", "contingent-b-1", "contingent-c-0", "contingent-c-1"
+            "contingent-a-1", "contingent-a-2", "contingent-b-1", "contingent-c-1"
         }));
         BattleExecutionContingentSnapshot capturedWithCharacteristics = capabilities.ObservedContingents[0];
         Assert.That(capturedWithCharacteristics.Origin.Domain, Is.EqualTo("source"));
@@ -118,6 +118,49 @@ public sealed class BattleResolutionComputationTests
         Assert.That(BuildRawResultStableKey(computation.RawResult), Is.EqualTo(rawResultKey));
         Assert.Throws<NotSupportedException>(() =>
             ((IList<BattleResolutionParticipantMapping>)computation.ParticipantMappings).Add(longAmount));
+    }
+
+    [Test]
+    public void ZeroAvailabilityDirectContingent_IsProjectedWithZeroWithoutCallingCapabilityProvider()
+    {
+        BattleResolutionFixture fixture = CreateFixture();
+        ContingentManpowerStateStore manpower = new ContingentManpowerStateStore(fixture.Forces);
+        Assert.That(manpower.TryRedistribute(new ContingentId("contingent-a-2"), new[]
+        {
+            new ContingentManpowerCohort(
+                ManpowerInjuryState.Healthy,
+                ManpowerCustodyState.Free,
+                null,
+                ManpowerAvailabilityState.Unavailable,
+                10L)
+        }, 0L, out ContingentManpowerFailure redistributionFailure), Is.True, redistributionFailure?.ToString());
+
+        BattleExecutionContextBuilder builder = new BattleExecutionContextBuilder(
+            fixture.Battles,
+            fixture.Forces,
+            fixture.Spatial,
+            fixture.Spatial.SpatialAuthorityStore,
+            personStore: fixture.Persons,
+            manpowerStateStore: manpower);
+        Assert.That(builder.TryCreate(fixture.BattleId, 1L, out BattleExecutionContext context,
+            out BattleExecutionFailure contextFailure), Is.True, contextFailure?.ToString());
+
+        TestCapabilityProvider provider = CreateCapabilities();
+        provider.Values["contingent-a-2"] = float.MaxValue;
+        BattleResolutionComputationService service = new BattleResolutionComputationService(
+            builder,
+            provider,
+            ResolverSettings,
+            new CountingBattleRandomSource());
+        Assert.That(service.TryCompute(context, 1L, out BattleResolutionComputation computation,
+            out BattleResolutionComputationFailure failure), Is.True, failure?.Message);
+
+        BattleResolutionParticipantMapping unavailable = FindParticipant(computation, "contingent-a-2");
+        Assert.That(unavailable.Amount, Is.EqualTo(10L));
+        Assert.That(unavailable.Capability, Is.Zero,
+            "Unavailable roster stays represented but cannot be assigned combat capability by a fixed provider.");
+        Assert.That(provider.EvaluatedContingentIds, Does.Not.Contain("contingent-a-2"));
+        Assert.That(FindLowerParticipant(computation, unavailable.LowerParticipantId).RawCapability, Is.Zero);
     }
 
     [Test]

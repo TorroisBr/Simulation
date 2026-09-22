@@ -43,6 +43,11 @@ public static class WorldStateCanonicalWriter
             AppendLine(output, "METADATA", "ArmedForceSpatialStatePresent", BoolValue(true));
             AppendLine(output, "METADATA", "ArmedForceSpatialRevision", Int64Value(snapshot.ArmedForceSpatialRevision.Value));
         }
+        if (snapshot.HasContingentManpowerState)
+        {
+            AppendLine(output, "METADATA", "ContingentManpowerStatePresent", BoolValue(true));
+            AppendLine(output, "METADATA", "ContingentManpowerRevision", Int64Value(snapshot.ContingentManpowerRevision.Value));
+        }
         if (snapshot.HasConflictState)
         {
             AppendLine(output, "METADATA", "ConflictStatePresent", BoolValue(true));
@@ -149,6 +154,34 @@ public static class WorldStateCanonicalWriter
                     AppendLine(output, "ARMED_FORCE_POSITION",
                         position.ArmedForceId,
                         position.CurrentPositionStableKey);
+                }
+            }
+        }
+
+        if (snapshot.HasContingentManpowerState)
+        {
+            foreach (WorldStateContingentManpowerSnapshot state in snapshot.ContingentManpowerStates)
+            {
+                AppendLine(output, "CONTINGENT_MANPOWER",
+                    state.ContingentId,
+                    state.SourceId,
+                    Int64Value(state.Revision),
+                    Int64Value(state.LivingRosterAmount),
+                    Int64Value(state.AvailableAmount),
+                    state.Fingerprint,
+                    BoolValue(state.SourceResolved),
+                    NullableInt64Value(state.SourceCapacity),
+                    NullableInt64Value(state.SourceFactualLivingAmount),
+                    state.SourceFingerprint);
+                foreach (WorldStateManpowerCohortSnapshot cohort in state.Cohorts)
+                {
+                    AppendLine(output, "CONTINGENT_MANPOWER_COHORT",
+                        state.ContingentId,
+                        EnumValue(cohort.InjuryState),
+                        EnumValue(cohort.CustodyState),
+                        cohort.CustodianForceId,
+                        EnumValue(cohort.AvailabilityState),
+                        Int64Value(cohort.Amount));
                 }
             }
         }

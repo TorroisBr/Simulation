@@ -310,6 +310,7 @@ public static class WorldStateInvariantValidator
         ValidateParentages(snapshot.Parentages, personIds, issues);
         ValidateSpatialAuthority(snapshot.Spatial, issues);
         ValidateArmedForces(snapshot, personIds, issues);
+        ValidateContingentManpower(snapshot, issues);
         ValidateArmedForcePositions(snapshot, issues);
         ValidatePersistentConflictWarBattle(snapshot, issues);
         HashSet<string> propertyIds = ValidatePropertyOwnerships(
@@ -795,6 +796,145 @@ public static class WorldStateInvariantValidator
             {
                 AddError(issues, "ArmedForcePersonReferencePersonMissing", identity, "Relevant Person reference PersonId is absent from the snapshot.");
             }
+        }
+    }
+
+    private static void ValidateContingentManpower(
+        WorldStateSnapshot snapshot,
+        List<WorldStateInvariantIssue> issues)
+    {
+        if (!snapshot.HasContingentManpowerState) return;
+        Dictionary<string, WorldStateArmedForceContingentSnapshot> contingents =
+            new Dictionary<string, WorldStateArmedForceContingentSnapshot>(StringComparer.Ordinal);
+        foreach (WorldStateArmedForceContingentSnapshot contingent in snapshot.ArmedForceContingents)
+        {
+            if (contingent?.ContingentId != null && !contingents.ContainsKey(contingent.ContingentId))
+                contingents.Add(contingent.ContingentId, contingent);
+        }
+        Dictionary<string, WorldStateArmedForceSnapshot> forces =
+            new Dictionary<string, WorldStateArmedForceSnapshot>(StringComparer.Ordinal);
+        foreach (WorldStateArmedForceSnapshot force in snapshot.ArmedForces)
+            if (force?.ArmedForceId != null && !forces.ContainsKey(force.ArmedForceId))
+                forces.Add(force.ArmedForceId, force);
+
+        HashSet<string> stateIds = new HashSet<string>(StringComparer.Ordinal);
+        Dictionary<string, long> sourceTotals = new Dictionary<string, long>(StringComparer.Ordinal);
+        Dictionary<string, WorldStateContingentManpowerSnapshot> sourceSnapshots =
+            new Dictionary<string, WorldStateContingentManpowerSnapshot>(StringComparer.Ordinal);
+        foreach (WorldStateContingentManpowerSnapshot state in snapshot.ContingentManpowerStates)
+        {
+            if (state == null)
+            {
+                AddError(issues, "ContingentManpowerNull", "manpower", "Snapshot contains a null contingent manpower state.");
+                continue;
+            }
+            string id = string.IsNullOrWhiteSpace(state.ContingentId) ? "contingent" : state.ContingentId;
+            if (string.IsNullOrWhiteSpace(state.ContingentId))
+                AddError(issues, "ContingentManpowerIdMissing", id, "Manpower state has no contingent identity.");
+            else if (!stateIds.Add(state.ContingentId))
+                AddError(issues, "DuplicateContingentManpowerId", id, "Contingent manpower state appears more than once.");
+
+            if (!contingents.TryGetValue(state.ContingentId ?? string.Empty, out WorldStateArmedForceContingentSnapshot contingent))
+                AddError(issues, "ContingentManpowerContingentMissing", id, "Manpower state references a missing contingent.");
+            else if (contingent.Amount != state.LivingRosterAmount)
+                AddError(issues, "ContingentManpowerAmountMirrorMismatch", id, "Contingent Amount differs from the derived living roster.");
+
+            if (!state.SourceResolved)
+                AddError(issues, "ContingentManpowerSourceUnresolved", id, "Bound manpower source is unavailable to diagnostics.");
+            if (state.SourceId != null && !state.SourceCapacity.HasValue)
+                AddError(issues, "ContingentManpowerSourceCapacityMissing", id, "Resolved source has no capacity snapshot.");
+
+            HashSet<string> cohortKeys = new HashSet<string>(StringComparer.Ordinal);
+            long living = 0L;
+            long available = 0L;
+            foreach (WorldStateManpowerCohortSnapshot cohort in state.Cohorts)
+            {
+                if (cohort == null)
+                {
+                    AddError(issues, "ContingentManpowerCohortNull", id, "Manpower state contains a null cohort.");
+                    continue;
+                }
+                string key = ((int)cohort.InjuryState).ToString(CultureInfo.InvariantCulture) + ":"
+                    + ((int)cohort.CustodyState).ToString(CultureInfo.InvariantCulture) + ":"
+                    + (cohort.CustodianForceId ?? string.Empty) + ":"
+                    + ((int)cohort.AvailabilityState).ToString(CultureInfo.InvariantCulture);
+                if (!cohortKeys.Add(key))
+                    AddError(issues, "DuplicateContingentManpowerCohort", id, "Manpower state contains a duplicate canonical cohort key.");
+                if (cohort.Amount <= 0L)
+                    AddError(issues, "ContingentManpowerCohortAmountInvalid", id, "Manpower cohort amount must be positive.");
+                if (!Enum.IsDefined(typeof(ManpowerInjuryState), cohort.InjuryState)
+                    || !Enum.IsDefined(typeof(ManpowerCustodyState), cohort.CustodyState)
+                    || !Enum.IsDefined(typeof(ManpowerAvailabilityState), cohort.AvailabilityState))
+                    AddError(issues, "ContingentManpowerCohortStateInvalid", id, "Manpower cohort contains an invalid status value.");
+                if (cohort.CustodyState == ManpowerCustodyState.Captured)
+                {
+                    if (cohort.AvailabilityState == ManpowerAvailabilityState.Available)
+                        AddError(issues, "CapturedManpowerAvailable", id, "Captured manpower cannot be available to its original contingent.");
+                    if (string.IsNullOrWhiteSpace(cohort.CustodianForceId)
+                        || !forces.TryGetValue(cohort.CustodianForceId, out WorldStateArmedForceSnapshot custodian)
+                        || custodian.LifecycleState != ArmedForceLifecycleState.Active)
+                        AddError(issues, "CapturedManpowerCustodianMissing", id, "Captured manpower requires an existing active ArmedForce custodian.");
+                }
+                else if (!string.IsNullOrWhiteSpace(cohort.CustodianForceId))
+                    AddError(issues, "FreeManpowerHasCustodian", id, "Free manpower cannot carry a custodian force.");
+                try
+                {
+                    living = checked(living + cohort.Amount);
+                    if (cohort.AvailabilityState == ManpowerAvailabilityState.Available)
+                        available = checked(available + cohort.Amount);
+                }
+                catch (OverflowException)
+                {
+                    AddError(issues, "ContingentManpowerRosterOverflow", id, "Manpower cohort total exceeds Int64 capacity.");
+                    break;
+                }
+            }
+            if (living != state.LivingRosterAmount)
+                AddError(issues, "ContingentManpowerLivingTotalMismatch", id, "Cohort sum differs from the stored living roster projection.");
+            if (available != state.AvailableAmount)
+                AddError(issues, "ContingentManpowerAvailableTotalMismatch", id, "Available cohort sum differs from the stored availability projection.");
+
+            if (state.SourceId != null)
+            {
+                try
+                {
+                    sourceTotals[state.SourceId] = checked(sourceTotals.TryGetValue(state.SourceId, out long old)
+                        ? old + state.LivingRosterAmount
+                        : state.LivingRosterAmount);
+                    if (!sourceSnapshots.ContainsKey(state.SourceId)) sourceSnapshots.Add(state.SourceId, state);
+                }
+                catch (OverflowException)
+                {
+                    AddError(issues, "ManpowerSourceAllocationOverflow", state.SourceId, "Allocated roster for source exceeds Int64 capacity.");
+                }
+            }
+        }
+
+        foreach (WorldStateArmedForceContingentSnapshot contingent in snapshot.ArmedForceContingents)
+            if (contingent != null && !stateIds.Contains(contingent.ContingentId ?? string.Empty))
+                AddError(issues, "ContingentManpowerStateMissing", contingent.ContingentId ?? "contingent", "Contingent has no manpower state.");
+
+        foreach (KeyValuePair<string, long> total in sourceTotals)
+        {
+            if (!sourceSnapshots.TryGetValue(total.Key, out WorldStateContingentManpowerSnapshot source)) continue;
+            if (source.SourceCapacity.HasValue && total.Value > source.SourceCapacity.Value)
+                AddError(issues, "ManpowerSourceCapacityExceeded", total.Key, "Bound roster exceeds current source capacity.");
+            if (source.SourceFactualLivingAmount.HasValue && total.Value > source.SourceFactualLivingAmount.Value)
+                AddError(issues, "ManpowerSourceFactualAmountExceeded", total.Key, "Bound roster exceeds current factual living amount.");
+        }
+
+        foreach (WorldStateContingentManpowerSnapshot state in snapshot.ContingentManpowerStates)
+        {
+            if (state == null || !contingents.TryGetValue(state.ContingentId ?? string.Empty, out WorldStateArmedForceContingentSnapshot contingent)) continue;
+            if (!forces.TryGetValue(contingent.ForceId ?? string.Empty, out WorldStateArmedForceSnapshot force)) continue;
+            if (force.LifecycleState == ArmedForceLifecycleState.Terminated && state.LivingRosterAmount > 0L)
+                AddError(issues, "TerminatedForceHasLivingManpower", force.ArmedForceId, "Terminated ArmedForce retains direct living roster.");
+            foreach (WorldStateManpowerCohortSnapshot cohort in state.Cohorts)
+                if (force.LifecycleState == ArmedForceLifecycleState.Terminated
+                    && cohort?.CustodyState == ManpowerCustodyState.Captured
+                    && cohort.CustodianForceId == force.ArmedForceId
+                    && cohort.Amount > 0L)
+                    AddError(issues, "TerminatedForceCustodiesManpower", force.ArmedForceId, "Terminated ArmedForce remains custodian of captured manpower.");
         }
     }
 

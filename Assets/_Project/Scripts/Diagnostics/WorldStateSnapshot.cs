@@ -17,6 +17,7 @@ public sealed class WorldStateSnapshotContext
     public LocalTopologyStore LocalTopologyStore { get; }
     public PersonStore PersonStore { get; }
     public ArmedForceStore ArmedForceStore { get; }
+    public ContingentManpowerStateStore ContingentManpowerStateStore { get; }
     public PersistentConflictStore ConflictStore { get; }
     public PersistentWarStore WarStore { get; }
     public PersistentBattleStore BattleStore { get; }
@@ -77,7 +78,8 @@ public sealed class WorldStateSnapshotContext
         PersistentWarStore warStore = null,
         PersistentBattleStore battleStore = null,
         SpatialAuthorityStore spatialAuthorityStore = null,
-        ArmedForceSpatialStateStore armedForceSpatialStateStore = null)
+        ArmedForceSpatialStateStore armedForceSpatialStateStore = null,
+        ContingentManpowerStateStore contingentManpowerStateStore = null)
     {
         SimulationTime = simulationTime;
         Calendar = calendar ?? (calendarDefinition != null ? new SimulationCalendar(calendarDefinition) : null);
@@ -95,6 +97,7 @@ public sealed class WorldStateSnapshotContext
         WarStore = warStore;
         BattleStore = battleStore;
         ArmedForceSpatialStateStore = armedForceSpatialStateStore;
+        ContingentManpowerStateStore = contingentManpowerStateStore;
         GenealogyStore = genealogyStore;
         PropertyOwnershipStore = propertyOwnershipStore;
         EstateStore = estateStore;
@@ -139,6 +142,9 @@ public sealed class WorldStateSnapshot
     public IReadOnlyList<WorldStateArmedForcePositionSnapshot> ArmedForcePositions { get; }
     public long? ArmedForceSpatialRevision { get; }
     public bool HasArmedForceSpatialState => ArmedForceSpatialRevision.HasValue;
+    public IReadOnlyList<WorldStateContingentManpowerSnapshot> ContingentManpowerStates { get; }
+    public long? ContingentManpowerRevision { get; }
+    public bool HasContingentManpowerState => ContingentManpowerRevision.HasValue;
     public IReadOnlyList<WorldStateConflictSnapshot> Conflicts { get; }
     public IReadOnlyList<WorldStateConflictSideSnapshot> ConflictSides { get; }
     public IReadOnlyList<WorldStateConflictParticipantBindingSnapshot> ConflictParticipantBindings { get; }
@@ -246,7 +252,9 @@ public sealed class WorldStateSnapshot
         IEnumerable<WorldStateBattleParticipantBindingSnapshot> battleParticipantBindings = null,
         long? battleRevision = null,
         IEnumerable<WorldStateArmedForcePositionSnapshot> armedForcePositions = null,
-        long? armedForceSpatialRevision = null)
+        long? armedForceSpatialRevision = null,
+        IEnumerable<WorldStateContingentManpowerSnapshot> contingentManpowerStates = null,
+        long? contingentManpowerRevision = null)
     {
         Metadata = new WorldStateSnapshotMetadata(absoluteDay, calendarDate);
         Npcs = SnapshotCollections.CopySorted(npcs, npc => npc?.RuntimeId);
@@ -272,6 +280,10 @@ public sealed class WorldStateSnapshot
             armedForcePositions,
             position => position?.ArmedForceId);
         ArmedForceSpatialRevision = armedForceSpatialRevision;
+        ContingentManpowerStates = SnapshotCollections.CopySorted(
+            contingentManpowerStates,
+            state => state?.ContingentId);
+        ContingentManpowerRevision = contingentManpowerRevision;
         Conflicts = SnapshotCollections.CopySorted(conflicts, conflict => conflict?.ConflictId);
         ConflictSides = SnapshotCollections.CopySorted(
             conflictSides,
@@ -1857,7 +1869,11 @@ public static class WorldStateSnapshotBuilder
             BuildArmedForcePositionSnapshots(context.ArmedForceSpatialStateStore),
             context.ArmedForceSpatialStateStore == null
                 ? (long?)null
-                : context.ArmedForceSpatialStateStore.Revision);
+                : context.ArmedForceSpatialStateStore.Revision,
+            BuildContingentManpowerSnapshots(context.ContingentManpowerStateStore),
+            context.ContingentManpowerStateStore == null
+                ? (long?)null
+                : context.ContingentManpowerStateStore.Revision);
     }
 
     private static List<WorldStateConflictSnapshot> BuildConflictSnapshots(PersistentConflictStore store)
@@ -2126,6 +2142,25 @@ public static class WorldStateSnapshotBuilder
                 position.Position));
         }
 
+        return result;
+    }
+
+    private static List<WorldStateContingentManpowerSnapshot> BuildContingentManpowerSnapshots(
+        ContingentManpowerStateStore store)
+    {
+        List<WorldStateContingentManpowerSnapshot> result = new List<WorldStateContingentManpowerSnapshot>();
+        if (store == null) return result;
+        foreach (ContingentManpowerState state in store.States)
+        {
+            ManpowerSourceCapacitySnapshot source = null;
+            bool resolved = state.SourceId == null;
+            if (state.SourceId != null && store.SourceProvider != null)
+                resolved = store.SourceProvider.TryGetSnapshot(state.SourceId, out source)
+                    && source != null
+                    && source.SourceId == state.SourceId;
+            if (!resolved) source = null;
+            result.Add(new WorldStateContingentManpowerSnapshot(state, source, resolved));
+        }
         return result;
     }
 

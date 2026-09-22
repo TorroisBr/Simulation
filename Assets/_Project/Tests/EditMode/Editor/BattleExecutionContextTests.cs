@@ -149,6 +149,44 @@ public sealed class BattleExecutionContextTests
     }
 
     [Test]
+    public void Availability_ControlsEligibilityAndParticipatingStateStalenessOnly()
+    {
+        BattleExecutionFixture unavailableSide = CreateFixture(managedManpower: true);
+        Assert.That(unavailableSide.Manpower.TryRedistribute(
+            new ContingentId("contingent-a"),
+            new[] { new ContingentManpowerCohort(ManpowerInjuryState.Wounded, ManpowerCustodyState.Free,
+                null, ManpowerAvailabilityState.Unavailable, 4L) },
+            0L,
+            out _), Is.True);
+        Assert.That(unavailableSide.Builder.TryCreate(unavailableSide.BattleId, 2L, null, out _, out BattleExecutionFailure noAvailable), Is.False);
+        Assert.That(noAvailable.Code, Is.EqualTo(BattleExecutionFailureCode.SideHasNoCombatElements));
+
+        BattleExecutionFixture relevant = CreateFixture(managedManpower: true);
+        Assert.That(relevant.Builder.TryCreate(relevant.BattleId, 2L, null, out BattleExecutionContext captured, out _), Is.True);
+        Assert.That(captured.Sides[0].Forces[0].DirectContingents[0].LivingRosterAmount, Is.EqualTo(4L));
+        Assert.That(captured.Sides[0].Forces[0].DirectContingents[0].AvailableAmount, Is.EqualTo(4L));
+        Assert.That(relevant.Manpower.TryRedistribute(
+            new ContingentId("contingent-a"),
+            new[] { new ContingentManpowerCohort(ManpowerInjuryState.Wounded, ManpowerCustodyState.Free,
+                null, ManpowerAvailabilityState.Unavailable, 4L) },
+            0L,
+            out _), Is.True);
+        Assert.That(relevant.Builder.TryValidateCurrent(captured, 2L, out BattleExecutionValidationReport stale, out _), Is.False);
+        Assert.That(stale.Reasons, Does.Contain(BattleExecutionStalenessReason.ManpowerAvailabilityChanged));
+
+        BattleExecutionFixture unrelated = CreateFixture(managedManpower: true, includeUnrelatedForce: true);
+        Assert.That(unrelated.Builder.TryCreate(unrelated.BattleId, 2L, null, out BattleExecutionContext current, out _), Is.True);
+        Assert.That(unrelated.Manpower.TryRedistribute(
+            new ContingentId("contingent-unrelated"),
+            new[] { new ContingentManpowerCohort(ManpowerInjuryState.Wounded, ManpowerCustodyState.Free,
+                null, ManpowerAvailabilityState.Unavailable, 6L) },
+            0L,
+            out _), Is.True);
+        Assert.That(unrelated.Builder.TryValidateCurrent(current, 2L, out BattleExecutionValidationReport stillCurrent, out BattleExecutionFailure failure), Is.True, failure.ToString());
+        Assert.That(stillCurrent.IsCurrent, Is.True);
+    }
+
+    [Test]
     public void TerminatedParticipant_MakesContextCreationFailAndDoesNotDeleteBattle()
     {
         BattleExecutionFixture fixture = CreateFixture();
@@ -206,7 +244,8 @@ public sealed class BattleExecutionContextTests
         bool childHasContingent = true,
         bool duplicateForceBinding = false,
         bool includeUnrelatedForce = false,
-        bool reverseInsertion = false)
+        bool reverseInsertion = false,
+        bool managedManpower = false)
     {
         PersonStore persons = new PersonStore();
         ArmedForceStore forces = new ArmedForceStore(persons);
@@ -226,7 +265,11 @@ public sealed class BattleExecutionContextTests
         Assert.That(forces.TryRegister(new ArmedForceRecord(forceB, "B", 0L), out _), Is.True);
         if (includeUnrelatedForce)
         {
-            Assert.That(forces.TryRegister(new ArmedForceRecord(new ArmedForceId("force-unrelated"), "Unrelated", 0L), out _), Is.True);
+            ArmedForceId unrelatedForceId = new ArmedForceId("force-unrelated");
+            Assert.That(forces.TryRegister(new ArmedForceRecord(unrelatedForceId, "Unrelated", 0L), out _), Is.True);
+            Assert.That(forces.TryRegisterContingent(new ContingentRecord(
+                new ContingentId("contingent-unrelated"), unrelatedForceId, 6L,
+                new ContingentOriginReference("origin", "unrelated"), "service-unrelated"), out _), Is.True);
         }
 
         if (!commandOnlyParent)
@@ -317,13 +360,17 @@ public sealed class BattleExecutionContextTests
         Assert.That(battles.TryRegister(record, out _), Is.True);
         if (startBattle) Assert.That(battles.TryStart(battleId, 1L, out _), Is.True);
 
+        ContingentManpowerStateStore manpower = managedManpower
+            ? new ContingentManpowerStateStore(forces)
+            : null;
         return new BattleExecutionFixture(
             persons,
             forces,
             spatial,
             battles,
-            new BattleExecutionContextBuilder(battles, forces, spatial, authority),
-            battleId);
+            new BattleExecutionContextBuilder(battles, forces, spatial, authority, personStore: persons, manpowerStateStore: manpower),
+            battleId,
+            manpower);
     }
 
     private static T[] Reverse<T>(T[] values)
@@ -341,7 +388,8 @@ public sealed class BattleExecutionContextTests
             ArmedForceSpatialStateStore spatial,
             PersistentBattleStore battles,
             BattleExecutionContextBuilder builder,
-            BattleId battleId)
+            BattleId battleId,
+            ContingentManpowerStateStore manpower)
         {
             Persons = persons;
             Forces = forces;
@@ -349,6 +397,7 @@ public sealed class BattleExecutionContextTests
             Battles = battles;
             Builder = builder;
             BattleId = battleId;
+            Manpower = manpower;
         }
 
         public PersonStore Persons { get; }
@@ -357,5 +406,6 @@ public sealed class BattleExecutionContextTests
         public PersistentBattleStore Battles { get; }
         public BattleExecutionContextBuilder Builder { get; }
         public BattleId BattleId { get; }
+        public ContingentManpowerStateStore Manpower { get; }
     }
 }
