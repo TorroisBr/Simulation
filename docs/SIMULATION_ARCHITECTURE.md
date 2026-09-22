@@ -2859,6 +2859,182 @@ qualquer alteração do mundo.
 EXECUTION CONTEXT != PERSISTENT STATE != OUTCOME != HISTORY
 ```
 
+### Primeira fronteira de resolução bruta
+
+**DECIDIDO / DIREÇÃO**
+
+A primeira resolução de uma `Battle` deve atravessar uma fronteira estreita e
+explicitamente efêmera:
+
+```text
+BattleExecutionContext
+    → projeção determinística Battle-to-Conflict
+        → resolução bruta lower-level
+            → BattleResolutionComputation
+```
+
+Essa fronteira não transforma a resolução em consequência aplicada. A
+distinção é:
+
+```text
+RESOLUTION COMPUTATION
+    != APPLIED OUTCOME
+    != PERSISTENT BATTLE RESULT
+    != CONSEQUENCES
+    != HISTORY
+```
+
+Na primeira fronteira, a `Battle` permanece `Active`. Não são aplicadas
+casualties, não se altera `Contingent.Amount`, população ou posição, não se
+cria aftermath, não se registram eventos ou history e não se marca uma
+`PersistentBattle` como `Resolved`. O resultado bruto também não deve chamar
+um caminho que combine resolução e aplicação de consequências.
+
+O contexto precisa ser validado novamente antes de qualquer aleatoriedade
+autoritativa. A ordem semântica é:
+
+```text
+validate current context
+    → project deterministic capability
+        → project deterministic lower-level conflict
+            → consume contextual authoritative randomness
+                → compute raw result
+```
+
+Contexto stale ou inválido produz ausência de resolução, sem mutação e sem
+consumo de RNG autoritativo. A projeção de capability é pura, determinística e
+não consome aleatoriedade. Ela só pode usar os inputs capturados ou derivados
+do boundary de execução; um fato adicional só pode tornar-se causal depois de
+entrar explicitamente nesse boundary e na sua semântica de stale/fingerprint.
+
+### Capability específica da resolução
+
+Capability de resolução de Battle é uma projeção contextual, não uma nova
+verdade militar persistente:
+
+```text
+BATTLE RESOLUTION CAPABILITY
+    != ARMED FORCE STRENGTH
+    != ARMY STRENGTH UNIVERSAL
+    != PERSISTENT WORLD FACT
+```
+
+A fronteira deve receber uma regra de capability de Battle explicitamente
+fornecida, determinística, pura, sem RNG autoritativo e sem mutação. Não existe
+uma fórmula militar default implícita nessa primeira resolução: uma produção
+real exige um provider/regra de capability compatível, enquanto testes podem
+usar uma regra determinística fixa. Não se deve transformar automaticamente
+`Contingent.Amount` em capability nem introduzir uma fórmula `Amount ×
+Quality` sem uma decisão de domínio.
+
+A identidade semântica da regra e da sua configuração participa da identidade
+causal da resolução. Providers que possam produzir projeções diferentes não
+podem compartilhar a mesma identidade de RNG apenas por terem o mesmo tipo ou
+por coincidência de identidade de objeto no host.
+
+### Granularidade e mapeamento
+
+Cada `ContingentId` direto capturado no contexto projeta exatamente um
+participante agregado da resolução lower-level. Não se deve colapsar uma força
+inteira, uma side inteira ou Persons individuais em substituição dessa
+granularidade. Isso preserva heterogeneidade, rastreabilidade e uma futura
+aplicação de consequências sem transformar o lower-level em autoridade de
+Battle.
+
+O mapeamento permanece tipado e imutável:
+
+```text
+lower-level participant
+    ↔ BattleId ↔ BattleSideId ↔ ArmedForceId ↔ ContingentId
+```
+
+IDs lower-level devem ser namespaced e determinísticos. Não podem depender de
+allocator sequencial, Unity ID, display name ou ordem de inserção. O
+`Contingent.Amount` continua sendo `long` no snapshot autoritativo; a primeira
+projeção não o converte, trunca ou substitui por um `Count` menor. Se a
+foundation lower-level ainda possui um campo incompatível, a contagem não deve
+ser usada como substituto silencioso do amount.
+
+`Amount > 0` e capability positiva são conceitos distintos. Um contingente
+pode ter amount positivo e capability zero. A primeira resolução não cria uma
+regra adicional de elegibilidade baseada em capability positiva; se todos os
+lados resultarem em capability zero, permanece a semântica bruta da foundation
+lower-level, inclusive um possível `Draw`.
+
+### Identidade causal e aleatoriedade
+
+A identidade do `BattleExecutionContext` não é automaticamente a identidade
+causal de uma resolução. A causal fingerprint deve conter apenas dados que
+participam da projeção ou do resultado, incluindo semanticamente a Battle, o
+dia/fronteira de execução, a localização factual quando usada pela regra de
+capability, as sides e forces ordenadas, os contingentes ordenados, seus dados
+causais, as capabilities projetadas e a identidade/configuração da regra de
+capability.
+
+Metadata de commander permanece não causal enquanto não modificar capability
+ou resultado. A presença de um commander não cria bônus, altera a chave de
+RNG ou muda o vencedor. Se uma regra futura usar comando causalmente, isso
+deverá ser explicitado e refletido na fingerprint.
+
+A aleatoriedade da resolução deve ser contextual e determinística. A operação
+deve derivar sua identidade da fingerprint causal e da side correspondente,
+sem usar `UnityEngine.Random`, `System.Random` ad hoc, stream sequencial
+compartilhado com operações não relacionadas ou ordem incidental de coleções.
+Assim, os mesmos inputs causais, a mesma regra de capability e a mesma
+autoridade determinística de aleatoriedade produzem o mesmo resultado bruto,
+sem que uma resolução não relacionada altere o resultado por ter consumido
+RNG antes.
+
+A primeira fronteira não expõe constraints de outcome ou consequências de
+participantes. Um `GM ForceOutcome` permanece fora dela enquanto o caminho
+lower-level não oferecer uma forma não causal de aplicar essa autoridade.
+Também não há ainda objective ou stakes militares autoritativos. Placeholders
+lower-level transitórios, se necessários para atravessar a foundation, não
+representam objetivo, stakes ou semântica militar e não podem alimentar um
+resolver de consequências como se fossem fatos do domínio.
+
+Não se criam modifiers para terrain, commander, tactics, morale, cohesion,
+readiness, supply ou logistics sem regras e fatos explícitos desses domínios.
+A localização autoritativa continua sendo a `SpatialReference` tipada do
+contexto; ela não é rebaixada a um identificador de localização lower-level
+nem cria uma segunda autoridade espacial.
+
+### Computação efêmera e fronteira posterior
+
+`BattleResolutionComputation` é um wrapper Battle-specific efêmero. Ele pode
+preservar a identidade da Battle, o dia de execução, a fingerprint do contexto,
+a causal fingerprint da resolução, o identificador lower-level adaptado, o
+resultado bruto e os mapeamentos tipados de sides/participants, além da
+identidade da regra utilizada. Não é `BattleOutcome`, `WarResult`, evento,
+history, schema de save ou aplicação de consequência.
+
+O resultado lower-level permanece apenas resultado bruto: `Victory`/`Draw` e
+as disposições correspondentes são suficientes para essa fronteira. Retreat,
+rout, surrender, capture, completion de objetivo, controle territorial e
+outros resultados militares não devem ser inventados nessa camada.
+
+O identificador do conflito adaptado não é automaticamente o identificador de
+um `Conflict` persistente. Ele deve ser namespaced, determinístico e derivado
+da Battle, da fronteira de execução e da identidade causal da resolução.
+
+Se uma aplicação futura usar essa computação depois de outra mutação, deve
+revalidar o contexto e suas dependências. Uma computação stale é rejeitada e
+deve ser refeita a partir de um novo contexto; o raw result não é reutilizado
+automaticamente sobre estado antigo.
+
+O uso atual de números `float` pode ser suficiente para a primeira computação
+bruta no runtime suportado. Isso não encerra a política de determinismo
+numérico autoritativo entre hosts ou em um futuro `Simulation.Core`. Antes de
+aceitar ou persistir um outcome de Battle, deve existir um gate próprio para
+essa política; não se deve refatorar a aritmética especulativamente apenas
+para iniciar a fronteira bruta.
+
+A transição `Active → Resolved` permanece fora desta primeira resolução. O
+próximo gate deverá decidir conjuntamente aceitação do raw result, outcome
+semântico da Battle, lifecycle persistente, consequências, casualties,
+atomicidade transacional e emissão de eventos/history. A decomposição exata
+desse trabalho em checkpoints posteriores permanece aberta.
+
 ```text
 ORDERED RETREAT != ROUT != SURRENDER
 BATTLE STARTED != FIGHT UNTIL ANNIHILATION
@@ -3401,25 +3577,43 @@ stale crossing knowledge novo, Merchant/Expedition migration, military
 movement, scouting, Battle resolution, Battle aftermath, operational groups,
 renderer, procedural generation, save/load ou networking.
 
-P7-C e D1 permanecem fechados e corretos. O próximo foundation slice é
-P7-D2 — ArmedForce Spatial Position Bridge. Ele deve introduzir posição física
-tipada e opcional para `ArmedForce`, validar referências contra a autoridade
-espacial, separar posição de detach, substituir progressivamente a semântica
-legada de `OperationalLocationReference`, produzir diagnostics determinísticos
-e oferecer a consulta mínima de compatibilidade física. Não deve implementar
-military movement ou Battle resolution.
+P7-C, D1, D2 e D3 permanecem fechados e corretos. D2 estabeleceu a posição
+física tipada e opcional de `ArmedForce`; D3 estabeleceu elegibilidade física,
+composição direta, metadata de comando e `BattleExecutionContext` com
+fingerprints e validação stale. Esses checkpoints não implementam movement ou
+Battle resolution.
 
-Depois de D2, a direção é P7-D3 — elegibilidade física, comando operacional e
-`BattleExecutionContext` — seguida por P7-D4 — adapter para `ConflictFoundation`
-e a primeira resolução de Battle. A resolução não deve começar antes de haver
-posição autoritativa das forças, regra de composição direta, prevenção de
-double counting e validação stale suficientes para formar um contexto de
-execução confiável.
+A próxima fronteira é P7-D4 — o primeiro adapter determinístico de
+`BattleExecutionContext` para `ConflictFoundation`, com uma regra de
+capability específica e explicitamente fornecida, aleatoriedade contextual e
+uma `BattleResolutionComputation` efêmera. D4 termina na computação bruta e
+não aplica outcome, consequências, casualties, lifecycle, events ou history.
+`PersistentBattle` permanece `Active`.
 
-Permanecem deferidos nesta fundação: military movement, Hex pathfinding,
-terrain, crossings, múltiplas presenças da mesma força, `OperationalGroup`
-persistente, posição espacial de Person, military knowledge, logistics,
-casualties, aftermath, save/load, networking e Processing LOD.
+Depois de D4, deve haver um novo gate arquitetural conjunto para aceitar um
+raw result, definir o outcome semântico de Battle, aplicar consequências,
+decidir a transição de lifecycle e estabelecer a fronteira de atomicidade e de
+emissão de events/history. A divisão exata desses trabalhos em D5/D6 ou outros
+checkpoints permanece aberta.
+
+Além da computação bruta de D4, permanecem deferidos nesta fundação:
+
+- acceptance de raw computation como outcome persistente de Battle;
+- transição de lifecycle, consequence resolver e fronteira de atomicidade;
+- casualties, mutação de `Contingent.Amount`, wounded, captured, deserted e
+  defected;
+- retreat, rout, surrender, morale, cohesion, readiness, supply e logistics;
+- posição posterior, aftermath, controle militar, occupation e progressão de
+  War;
+- tactical objectives persistentes, modifiers militares causais e `GM
+  ForceOutcome` para Battle;
+- política numérica necessária para aceitar outcome autoritativo entre hosts e
+  um futuro `Simulation.Core`;
+- military movement, Hex pathfinding, terrain, crossings, múltiplas presenças
+  da mesma força, `OperationalGroup` persistente, posição espacial de Person e
+  military knowledge;
+- save/load específico do resultado, replay, networking, product preview e
+  migração ampla para `Simulation.Core`.
 
 ---
 
