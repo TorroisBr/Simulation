@@ -66,9 +66,12 @@ before accepting or persisting a Battle outcome.
 This computation is not an accepted or persistent Battle result. The Battle
 remains `Active`; outcome acceptance, lifecycle transition, consequences,
 casualties, retreat/rout/surrender, capture, logistics, movement, events,
-history, persistence/replay, and the D5/D6 checkpoint split remain deferred.
-The post-D4 architecture gate must decide outcome semantics, atomicity, and
-event/history boundaries before any raw result is applied.
+history, persistence/replay, and implementation of later checkpoints remain
+deferred. The post-D4 architecture gate has now defined the conceptual
+sequence in `docs/SIMULATION_ARCHITECTURE.md`: D5 establishes authorized
+resolution policy and an immutable outcome/application-plan contract without
+mutation; D6 is the manpower/availability/casualty foundation; D7 is the later
+atomic application boundary. D6 and D7 remain subject to their own gates.
 
 D3 checkpoint record retained for historical context:
 

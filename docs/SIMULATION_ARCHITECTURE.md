@@ -2681,6 +2681,21 @@ nomes como campos literais, a diferença entre população total, fonte civil ou
 disponível e população mobilizada. Sobreviventes podem retornar à fonte ao
 serem desmobilizados.
 
+Para um contingent agregado, `Amount` representa o número atual de pessoal
+vivo atribuído ao seu roster. Não representa, por si só, a quantidade
+atualmente disponível para combate, a prontidão do pessoal, o total originalmente
+recrutado nem a quantidade remanescente na fonte de origem.
+`ContingentOriginReference` é provenance/content metadata; não vincula
+automaticamente o contingent a uma fonte autoritativa de manpower.
+
+Disponibilidade deve permanecer separada do tamanho do roster. Feridos e
+capturados continuam vivos e podem permanecer atribuídos ao contingent, embora
+indisponíveis; a representação futura deverá distinguir a população viva
+atribuída da parcela disponível e de outros estados de indisponibilidade. A
+forma exata de armazenar essas parcelas permanece aberta. Desertion, defection
+e demobilization, quando efetivamente aplicadas, removem pessoal do roster e
+podem reduzir `Amount` sem implicar morte.
+
 Os estados de casualty também não devem ser colapsados:
 
 ```text
@@ -2692,11 +2707,30 @@ Death é perda populacional permanente. Wounded continua vivo e pode estar
 temporária ou permanentemente indisponível. Captured continua vivo sob a
 custody de outro ator apropriado. Deserted abandona sua força sem implicar
 mudança de lado; defected abandona uma força ou lado e adere a outro.
-Demobilized/survivor pode retornar à origem. Resultado agregado pode ser
-aplicado a um contingent sem materializar milhares de Persons, enquanto
-Persons relevantes recebem lifecycle e outcome individuais. A distribuição
-de casualties pode depender de exposição, role, plan e situação; não há uma
-regra proporcional universal.
+Demobilized/survivor pode retornar à origem. No contrato de `Amount`, morte
+reduz o roster vivo; ferimento ou captura, por si sós, reduzem disponibilidade,
+não `Amount`. Captura exige estado explícito de custody antes de ser afirmada
+como verdade autoritativa. Esses efeitos agregados podem futuramente ser
+representados sem materializar milhares de Persons, mas a aplicação autoritativa
+de mortes exige também atualizar a fonte de manpower quando ela representar
+população viva. Não se deve inferir essa fonte a partir de provenance aberta.
+Persons relevantes só recebem consequências individuais quando fatos explícitos
+de participação ou exposição sustentarem a transição. Não há regra proporcional
+universal de casualties.
+
+Antes de mortes militares agregadas poderem alterar World Truth, deve existir
+uma fronteira explícita de fonte e contabilização que determine de onde vem o
+manpower, se a fonte representa população viva, como recrutamento e transferências
+afetam essa fonte e como mortes, ferimentos, captura e desmobilização são
+refletidos nela. Nem toda força precisa derivar de população civil: pools
+profissionais, mercenários, animais, mortos-vivos, unidades construídas e
+outras fontes podem exigir semânticas próprias. `ORIGIN / PROVENANCE !=
+AUTHORITATIVE MANPOWER SOURCE`.
+
+Vitória ou derrota não determina, por si só, morte, ferimento, captura,
+deserção, defecção ou desmobilização. Uma regra de consequência deve declarar
+quais fatos produz; seus efeitos diretos precisam ser aplicados conjuntamente.
+Derrotas não implicam retirada, rout ou surrender.
 
 As necessidades logísticas devem ser derivadas da composição da força e não de
 uma lista universal fixa de recursos. Uma força pode precisar de provisions,
@@ -2764,7 +2798,10 @@ influencia a interação entre capabilities, situação e terreno, mas não
 garante o resultado. Uma batalha pode produzir casualties, ferimentos, morte
 ou captura de comandante, withdrawal, rout, surrender, perdas de equipamento
 ou supply, mudanças de morale/cohesion, mudança de posição e oportunidades de
-alterar military control.
+alterar military control, quando regras explícitas estabelecerem esses fatos.
+Possibilidades de aftermath não são consequências implícitas de Victory ou
+Defeat, e referências a comandante não bastam para afirmar consequência
+individual.
 
 Uma Battle persistente e sua elegibilidade para execução são estados
 distintos:
@@ -2961,6 +2998,12 @@ regra adicional de elegibilidade baseada em capability positiva; se todos os
 lados resultarem em capability zero, permanece a semântica bruta da foundation
 lower-level, inclusive um possível `Draw`.
 
+A elegibilidade D3 atual usa `Contingent.Amount > 0` como elemento explícito de
+combate, o que é adequado antes de existir estado detalhado de disponibilidade.
+Quando esse estado for introduzido, a elegibilidade de execução deverá usar o
+manpower efetivamente disponível, não o roster vivo total. A regra atual é
+transitória e não define a ontologia permanente de um contingent.
+
 ### Identidade causal e aleatoriedade
 
 A identidade do `BattleExecutionContext` não é automaticamente a identidade
@@ -3009,9 +3052,9 @@ identidade da regra utilizada. Não é `BattleOutcome`, `WarResult`, evento,
 history, schema de save ou aplicação de consequência.
 
 O resultado lower-level permanece apenas resultado bruto: `Victory`/`Draw` e
-as disposições correspondentes são suficientes para essa fronteira. Retreat,
-rout, surrender, capture, completion de objetivo, controle territorial e
-outros resultados militares não devem ser inventados nessa camada.
+suas disposições são dados da computação, não fatos militares persistentes.
+Retreat, rout, surrender, capture, completion de objetivo, controle territorial
+e outros resultados militares não devem ser inventados nessa camada.
 
 O identificador do conflito adaptado não é automaticamente o identificador de
 um `Conflict` persistente. Ele deve ser namespaced, determinístico e derivado
@@ -3029,11 +3072,122 @@ aceitar ou persistir um outcome de Battle, deve existir um gate próprio para
 essa política; não se deve refatorar a aritmética especulativamente apenas
 para iniciar a fronteira bruta.
 
-A transição `Active → Resolved` permanece fora desta primeira resolução. O
-próximo gate deverá decidir conjuntamente aceitação do raw result, outcome
-semântico da Battle, lifecycle persistente, consequências, casualties,
-atomicidade transacional e emissão de eventos/history. A decomposição exata
-desse trabalho em checkpoints posteriores permanece aberta.
+A transição `Active → Resolved` permanece fora desta primeira resolução. Uma
+computação D4 válida ainda não é, por si só, um outcome autorizado do mundo.
+Uma regra identificada pelo caller, fingerprints coerentes ou settings
+consistentes não provam autorização: uma computação criada com dependências
+arbitrárias não pode alterar World Truth.
+
+### Autorização e outcome terminal da Battle
+
+A futura aceitação autoritativa deve ser vinculada à policy efetiva do mundo e
+ao boundary de composição. Essa policy seleciona as regras/configurações de
+capability, a autoridade/configuração de aleatoriedade, os settings do resolver,
+a versão da projeção, o perfil numérico suportado e, quando existir, a
+identidade das regras de consequência. A identidade textual `RuleKey` fornecida
+por um caller não substitui essa autoridade; a resolução segue o modelo geral de
+authoring, resolução efetiva e consumo pelo domínio.
+
+A operação de aplicação deve partir da `BattleId` ou de um pedido de resolução:
+o mundo constrói o contexto atual, recalcula sob a policy autorizada, deriva o
+outcome semântico e o plano de consequências, revalida as dependências e então
+faz o commit. Uma computação externa pode servir de preview ou proposta; uma
+fingerprint esperada pode registrar a aprovação humana. Na aplicação, o mundo
+recalcula com a policy atual. Se o contexto ou a fingerprint diferir, a
+proposta é rejeitada ou requer nova confirmação, em vez de se confiar no objeto
+computado pelo caller.
+
+O primeiro modelo permite no máximo um outcome terminal aceito por
+`PersistentBattle`. A Battle pode permanecer `Active` por vários dias, mas sua
+resolução aceita a encerra. Não se reutiliza a mesma Battle terminal para
+rounds ou engagements repetidos; se isso se tornar necessário, cada processo
+precisará de identidade e estado explícitos.
+
+`ConflictResolutionResult != BattleOutcome`. O primeiro `BattleOutcome`
+persistente afirma apenas `Victory`, com o `WinningBattleSideId`, ou `Draw`, sem
+vencedor, além do dia lógico de resolução e provenance mínima da resolução
+autorizada. Não afirma automaticamente vencedor ArmedForce, objetivo cumprido,
+retirada, rout, surrender, captura, deslocamento, controle territorial ou
+resultado de War. Capability projetada, fator aleatório, score lower-level e
+breakdown de floats não são World Truth; podem ser mantidos como diagnostics
+ou provenance quando necessário.
+
+O outcome preserva somente a provenance necessária para identificar a Battle,
+o dia lógico aceito, a policy/perfil autorizado, a identidade causal da
+computação e as versões de projeção/regra relevantes. IDs lower-level de
+Conflict não são autoridade nem identidade persistente da Battle. No primeiro
+modelo, uma Battle admite zero ou um outcome terminal, tornando a própria
+`BattleId` suficiente como raiz de idempotência.
+
+### Plano de consequências e aplicação atômica
+
+Um outcome não pode ser aceito com consequências factuais omitidas sob a
+justificativa de que seu subsistema ainda não existe. A regra selecionada deve
+produzir um plano explícito contendo todas as consequências diretas que declara
+como fatos. Esse plano pode legitimamente conter zero casualties, zero
+deslocamento e nenhuma outra mudança material; zero consequência explícita é
+válido, enquanto ausência de um modelo requerido não equivale a zero.
+Consequências de forças não se convertem em consequências de Persons sem fatos
+explícitos de participação ou exposição.
+
+A fronteira conceitual é:
+
+```text
+resolução atual autorizada
+    → BattleOutcome semântico
+        → plano imutável de aplicação/consequências
+            → validação de dependências e policy
+                → commit lógico atômico
+                    → tentativa de evento/history
+```
+
+Criar ou validar o plano não muta o mundo. A validação final inclui contexto e
+Battle, identidade causal D4, policy autorizada e perfil numérico, regras e
+inputs das consequências e os estados específicos de fonte, população,
+custody, Person ou posição que o plano realmente consome. Fingerprints ou
+revisões devem ser específicos às dependências usadas; alterações globais sem
+relação não tornam o plano stale. Se um input causal da resolução mudou, ela é
+recalculada; se mudou apenas uma dependência do plano, o plano é refeito quando
+necessário.
+
+Todas as mutações de World Truth exigidas pelo outcome aceito — incluindo
+outcome, ciclo de vida da Battle e consequências diretas — formam uma única
+transação lógica: ou todas se aplicam ou nenhuma. Save e observers não podem
+ver estado intermediário. A aplicação repetida não duplica consequências,
+mudanças de posição, transições de lifecycle ou registros derivados.
+Não existe `Resolved` com consequências diretas implicitamente pendentes para
+aplicação posterior, nem obrigações duráveis de consequência sem um workflow
+real que as consuma. Um workflow persistente em múltiplas etapas exigiria uma
+decisão e um modelo explícitos.
+
+No primeiro modelo síncrono, o lifecycle permanece `Pending → Active →
+Resolved`; não se acrescentam estados duráveis intermediários de resolução ou
+aplicação. `PersistentBattleRecord` é o owner preferido do outcome singular,
+com o invariável de que `Pending/Active` não possui outcome terminal e
+`Resolved` possui exatamente um outcome válido e seu `ResolvedAbsoluteDay`.
+Esse dia é o dia lógico vigente no boundary de aceitação/commit. Se o dia mudar
+depois de preview ou computação, o contexto antigo fica stale e a resolução é
+refeita, sem backdating silencioso. Um dia efetivo diferente só pode existir
+como input factual explícito.
+
+### Eventos, history e determinismo numérico
+
+O evento da Battle é tentado somente após o commit autoritativo. Se o commit
+for bem-sucedido e o registro do evento falhar, World Truth permanece
+commitada; o erro é reportado, sem rollback das consequências. Entrega
+confiável futura exige mecanismo explícito de retry/outbox. Event/history não
+são a autoridade primária nem tornam o sistema event-sourced. Um futuro evento
+`BattleResolved` carrega fatos estáveis mínimos — BattleId, dia, Victory/Draw,
+vencedor quando houver, sides participantes e provenance/fingerprint opcional
+— sem snapshot do mundo ou IDs de Conflict lower-level.
+
+O uso atual de `float` continua aceitável para computação bruta efêmera no
+runtime suportado. Antes da persistência de outcome, a policy do mundo deve
+identificar um perfil numérico explicitamente suportado. A arquitetura ainda
+não garante equivalência arbitrária entre hosts ou `Simulation.Core`; o perfil
+deve ser demonstrado e compatível, seja por runtime restrito, quantização,
+aritmética definida, fixed-point/integer ou outro método comprovado. Nenhuma
+estratégia numérica específica está decidida.
 
 ```text
 ORDERED RETREAT != ROUT != SURRENDER
@@ -3583,32 +3737,55 @@ composição direta, metadata de comando e `BattleExecutionContext` com
 fingerprints e validação stale. Esses checkpoints não implementam movement ou
 Battle resolution.
 
-A próxima fronteira é P7-D4 — o primeiro adapter determinístico de
-`BattleExecutionContext` para `ConflictFoundation`, com uma regra de
-capability específica e explicitamente fornecida, aleatoriedade contextual e
-uma `BattleResolutionComputation` efêmera. D4 termina na computação bruta e
-não aplica outcome, consequências, casualties, lifecycle, events ou history.
-`PersistentBattle` permanece `Active`.
+P7-D4 estabeleceu o primeiro adapter determinístico de
+`BattleExecutionContext` para `ConflictFoundation`, com regra explícita de
+capability, aleatoriedade contextual e `BattleResolutionComputation` efêmera.
+D4 termina na computação bruta: não aplica outcome, consequências, casualties,
+lifecycle, events ou history; `PersistentBattle` permanece `Active`. A
+computação bruta não é ainda autorização para alterar World Truth.
 
-Depois de D4, deve haver um novo gate arquitetural conjunto para aceitar um
-raw result, definir o outcome semântico de Battle, aplicar consequências,
-decidir a transição de lifecycle e estabelecer a fronteira de atomicidade e de
-emissão de events/history. A divisão exata desses trabalhos em D5/D6 ou outros
-checkpoints permanece aberta.
+### P7-D5 — Authoritative Battle Resolution Policy + Outcome/Application Plan
 
-Além da computação bruta de D4, permanecem deferidos nesta fundação:
+D5 é a próxima fronteira e não muta World Truth. Deve estabelecer a policy
+autorizada de resolução pertencente ao mundo/composition boundary, a seleção de
+capability, random authority, resolver settings, versão de projeção e perfil
+numérico; a recomputação autoritativa a partir de `BattleId` e estado atual; a
+semântica opcional de preview, fingerprint esperada e confirmação; o contrato
+mínimo de `BattleOutcome` e sua provenance; e o contrato de plano imutável,
+revalidação e stale handling. Uma computação arbitrária fornecida pelo caller
+nunca é aplicada como verdade.
 
-- acceptance de raw computation como outcome persistente de Battle;
-- transição de lifecycle, consequence resolver e fronteira de atomicidade;
-- casualties, mutação de `Contingent.Amount`, wounded, captured, deserted e
-  defected;
-- retreat, rout, surrender, morale, cohesion, readiness, supply e logistics;
-- posição posterior, aftermath, controle militar, occupation e progressão de
-  War;
+D5 não inclui casualties, alteração de `Contingent.Amount`, transição
+`Active → Resolved`, mutações de mundo ou eventos/history.
+
+### P7-D6 — Military Manpower / Availability / Casualty Foundation
+
+Depois de D5, a fundação seguinte deverá resolver a semântica e eventual
+migração de `Amount`, a disponibilidade versus roster vivo, estados de wounded
+e captured/custody, vínculos e contabilização de fontes, recruitment/manpower,
+efeitos de morte sobre a fonte populacional quando aplicável e regras explícitas
+de consequências militares. O contrato exato de fontes e o escopo de D6 exigem
+seu próprio gate arquitetural; não se deve inferir um source binding de
+`ContingentOriginReference`.
+
+### P7-D7 — Atomic Battle Outcome Application
+
+Depois de existir a verdade mínima de consequências/manpower necessária, a
+direção é aplicar a resolução autorizada, o outcome semântico e o plano
+completo de consequências diretas por um único commit lógico atômico, então
+transicionar `Active → Resolved` e tentar downstream event/history. Os rótulos
+e limites posteriores a D5 permanecem provisórios até os gates precedentes
+confirmarem o escopo concreto.
+
+Permanecem deferidos além dessas fronteiras:
+
+- aftermath completo, corpses, loot e scavenging;
+- execução de retreat movement, semantics avançadas de rout/surrender,
+  recovery loops e prisoner release/exchange;
+- military control, occupation, War progression, knowledge propagation,
+  appraisal e reactions;
 - tactical objectives persistentes, modifiers militares causais e `GM
   ForceOutcome` para Battle;
-- política numérica necessária para aceitar outcome autoritativo entre hosts e
-  um futuro `Simulation.Core`;
 - military movement, Hex pathfinding, terrain, crossings, múltiplas presenças
   da mesma força, `OperationalGroup` persistente, posição espacial de Person e
   military knowledge;
