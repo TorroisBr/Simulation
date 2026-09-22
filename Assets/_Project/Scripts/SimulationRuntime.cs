@@ -17,6 +17,8 @@ public sealed class SimulationRuntime
     private readonly PersonStore personStore;
     private readonly SpatialAuthorityStore spatialAuthorityStore;
     private readonly ArmedForceStore armedForceStore;
+    private readonly ArmedForceSpatialStateStore armedForceSpatialStateStore;
+    private readonly LocalTopologyStore localTopologyStore;
     private readonly PersistentConflictStore conflictStore;
     private readonly PersistentWarStore warStore;
     private readonly PersistentBattleStore battleStore;
@@ -61,6 +63,8 @@ public sealed class SimulationRuntime
     public PersonStore PersonStore => personStore;
     public SpatialAuthorityStore SpatialAuthorityStore => spatialAuthorityStore;
     public ArmedForceStore ArmedForceStore => armedForceStore;
+    public ArmedForceSpatialStateStore ArmedForceSpatialStateStore => armedForceSpatialStateStore;
+    public LocalTopologyStore LocalTopologyStore => localTopologyStore;
     public PersistentConflictStore ConflictStore => conflictStore;
     public PersistentWarStore WarStore => warStore;
     public PersistentBattleStore BattleStore => battleStore;
@@ -141,7 +145,9 @@ public sealed class SimulationRuntime
         PersistentConflictStore conflictStore = null,
         PersistentWarStore warStore = null,
         PersistentBattleStore battleStore = null,
-        SpatialAuthorityStore spatialAuthorityStore = null)
+        SpatialAuthorityStore spatialAuthorityStore = null,
+        ArmedForceSpatialStateStore armedForceSpatialStateStore = null,
+        LocalTopologyStore localTopologyStore = null)
     {
         this.simulationTime = simulationTime ?? throw new ArgumentNullException(nameof(simulationTime));
 
@@ -205,6 +211,14 @@ public sealed class SimulationRuntime
         ArmedForceStore resolvedArmedForceStore = CloneArmedForceStore(
             armedForceStore,
             resolvedPersonStore);
+        LocalTopologyStore resolvedLocalTopologyStore = localTopologyStore
+            ?? armedForceSpatialStateStore?.LocalTopologyStore;
+        ArmedForceSpatialStateStore resolvedArmedForceSpatialStateStore =
+            CloneArmedForceSpatialStateStore(
+                armedForceSpatialStateStore,
+                resolvedArmedForceStore,
+                resolvedSpatialAuthorityStore,
+                resolvedLocalTopologyStore);
         PersistentConflictStore resolvedConflictStore = CloneConflictStore(
             conflictStore,
             resolvedArmedForceStore);
@@ -227,6 +241,8 @@ public sealed class SimulationRuntime
         this.personStore = resolvedPersonStore;
         this.spatialAuthorityStore = resolvedSpatialAuthorityStore;
         this.armedForceStore = resolvedArmedForceStore;
+        this.armedForceSpatialStateStore = resolvedArmedForceSpatialStateStore;
+        this.localTopologyStore = resolvedLocalTopologyStore;
         this.conflictStore = resolvedConflictStore;
         this.warStore = resolvedWarStore;
         this.battleStore = resolvedBattleStore;
@@ -2110,6 +2126,35 @@ public sealed class SimulationRuntime
         }
 
         return source.Clone();
+    }
+
+    private static ArmedForceSpatialStateStore CloneArmedForceSpatialStateStore(
+        ArmedForceSpatialStateStore source,
+        ArmedForceStore armedForceStore,
+        SpatialAuthorityStore spatialAuthorityStore,
+        LocalTopologyStore localTopologyStore)
+    {
+        if (source == null)
+        {
+            return new ArmedForceSpatialStateStore(
+                armedForceStore,
+                spatialAuthorityStore,
+                localTopologyStore);
+        }
+
+        ArmedForceSpatialInvariantReport report = source.ValidateInvariants();
+        if (report.IsValid == false)
+        {
+            throw new ArgumentException(
+                "The SimulationRuntime ArmedForce spatial state contains invalid world state: "
+                + string.Join("; ", report.Violations),
+                nameof(source));
+        }
+
+        return source.Clone(
+            armedForceStore,
+            spatialAuthorityStore,
+            localTopologyStore);
     }
 
     private static PersistentConflictStore CloneConflictStore(

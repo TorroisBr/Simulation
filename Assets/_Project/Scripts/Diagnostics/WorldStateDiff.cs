@@ -265,6 +265,24 @@ public sealed class WorldStateDiff
             },
             differences);
 
+        ComparePersistentState(
+            "ArmedForceSpatialStore",
+            before.HasArmedForceSpatialState,
+            before.ArmedForceSpatialRevision,
+            after.HasArmedForceSpatialState,
+            after.ArmedForceSpatialRevision,
+            differences);
+        CompareEntities("ArmedForcePosition", before.ArmedForcePositions, after.ArmedForcePositions,
+            position => position.ArmedForceId,
+            (identity, left, right) => CompareValue(
+                "ArmedForcePosition",
+                identity,
+                "SpatialReference",
+                WorldStateCanonicalWriter.StringValue(left.CurrentPositionStableKey),
+                WorldStateCanonicalWriter.StringValue(right.CurrentPositionStableKey),
+                differences),
+            differences);
+
         ComparePersistentState("ConflictStore", before.HasConflictState, before.ConflictRevision, after.HasConflictState, after.ConflictRevision, differences);
         CompareEntities("Conflict", before.Conflicts, after.Conflicts,
             conflict => conflict.ConflictId,
@@ -1163,18 +1181,20 @@ public sealed class WorldStateDiff
             case "ArmedForce": return 5;
             case "ArmedForceContingent": return 6;
             case "ArmedForcePersonReference": return 7;
-            case "ConflictStore": return 8;
-            case "Conflict": return 9;
-            case "ConflictSide": return 10;
-            case "ConflictParticipantBinding": return 11;
-            case "WarStore": return 12;
-            case "War": return 13;
-            case "WarSide": return 14;
-            case "WarParticipantBinding": return 15;
-            case "BattleStore": return 16;
-            case "Battle": return 17;
-            case "BattleSide": return 18;
-            case "BattleParticipantBinding": return 19;
+            case "ArmedForceSpatialStore": return 8;
+            case "ArmedForcePosition": return 9;
+            case "ConflictStore": return 10;
+            case "Conflict": return 11;
+            case "ConflictSide": return 12;
+            case "ConflictParticipantBinding": return 13;
+            case "WarStore": return 14;
+            case "War": return 15;
+            case "WarSide": return 16;
+            case "WarParticipantBinding": return 17;
+            case "BattleStore": return 18;
+            case "Battle": return 19;
+            case "BattleSide": return 20;
+            case "BattleParticipantBinding": return 21;
             case "Parentage": return 4;
             case "Metadata": return 4;
             case "Calendar": return 5;

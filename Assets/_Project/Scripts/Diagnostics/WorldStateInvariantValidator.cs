@@ -310,6 +310,7 @@ public static class WorldStateInvariantValidator
         ValidateParentages(snapshot.Parentages, personIds, issues);
         ValidateSpatialAuthority(snapshot.Spatial, issues);
         ValidateArmedForces(snapshot, personIds, issues);
+        ValidateArmedForcePositions(snapshot, issues);
         ValidatePersistentConflictWarBattle(snapshot, issues);
         HashSet<string> propertyIds = ValidatePropertyOwnerships(
             snapshot.PropertyOwnerships,
@@ -815,6 +816,173 @@ public static class WorldStateInvariantValidator
         }
 
         return false;
+    }
+
+    private static void ValidateArmedForcePositions(
+        WorldStateSnapshot snapshot,
+        List<WorldStateInvariantIssue> issues)
+    {
+        HashSet<string> forceIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (WorldStateArmedForceSnapshot force in snapshot.ArmedForces ?? new List<WorldStateArmedForceSnapshot>())
+        {
+            if (force != null && string.IsNullOrWhiteSpace(force.ArmedForceId) == false)
+            {
+                forceIds.Add(force.ArmedForceId);
+            }
+        }
+
+        HashSet<string> positionForceIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (WorldStateArmedForcePositionSnapshot position in snapshot.ArmedForcePositions ?? new List<WorldStateArmedForcePositionSnapshot>())
+        {
+            if (position == null)
+            {
+                AddError(issues, "ArmedForcePositionNull", "armed-force-position", "Snapshot contains a null ArmedForce position entry.");
+                continue;
+            }
+
+            string identity = string.IsNullOrWhiteSpace(position.ArmedForceId)
+                ? "armed-force-position"
+                : position.ArmedForceId;
+            if (string.IsNullOrWhiteSpace(position.ArmedForceId))
+            {
+                AddError(issues, "ArmedForcePositionForceIdMissing", identity, "ArmedForce position has no stable force identity.");
+            }
+            else if (positionForceIds.Add(position.ArmedForceId) == false)
+            {
+                AddError(issues, "DuplicateArmedForcePosition", identity, "An ArmedForce has more than one current spatial position.");
+            }
+            else if (forceIds.Contains(position.ArmedForceId) == false)
+            {
+                AddError(issues, "ArmedForcePositionForceMissing", identity, "ArmedForce position references a force absent from the snapshot.");
+            }
+
+            if (position.CurrentPosition == null)
+            {
+                AddError(issues, "ArmedForcePositionMissingReference", identity, "ArmedForce position has no typed SpatialReference.");
+                continue;
+            }
+
+            if (!string.Equals(position.CurrentPositionStableKey, position.CurrentPosition.StableKey, StringComparison.Ordinal))
+            {
+                AddError(issues, "ArmedForcePositionMalformed", identity, "ArmedForce position key does not match its typed SpatialReference.");
+                continue;
+            }
+
+            ValidateSpatialReferencePresence(
+                snapshot,
+                position.CurrentPosition,
+                identity,
+                "ArmedForcePosition",
+                issues);
+        }
+    }
+
+    private static void ValidateSpatialReferencePresence(
+        WorldStateSnapshot snapshot,
+        SpatialReference reference,
+        string identity,
+        string diagnosticPrefix,
+        List<WorldStateInvariantIssue> issues)
+    {
+        WorldStateSpatialSnapshot spatial = snapshot.Spatial ?? new WorldStateSpatialSnapshot();
+        if (Enum.IsDefined(typeof(SpatialReferenceKind), reference.Kind) == false)
+        {
+            AddError(issues, diagnosticPrefix + "Malformed", identity, "SpatialReference kind is invalid.");
+            return;
+        }
+
+        if (reference.Kind == SpatialReferenceKind.Hex)
+        {
+            if (reference.HexId == null || ContainsHex(spatial.Hexes, reference.HexId.Value) == false)
+            {
+                AddError(issues, diagnosticPrefix + "HexMissing", identity, "SpatialReference Hex is absent from the spatial authority snapshot.");
+            }
+            return;
+        }
+
+        if (reference.Kind == SpatialReferenceKind.Location)
+        {
+            if (reference.LocationId == null
+                || TryGetAnchoredLocation(spatial.AnchoredLocations, reference.LocationId.Value, out WorldStateAnchoredLocationSnapshot location) == false)
+            {
+                AddError(issues, diagnosticPrefix + "LocationMissing", identity, "SpatialReference Location is absent from the spatial authority snapshot.");
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(location.AnchorHexId)
+                || ContainsHex(spatial.Hexes, location.AnchorHexId) == false)
+            {
+                AddError(issues, diagnosticPrefix + "LocationAnchorMissing", identity, "SpatialReference Location does not resolve to a registered anchor Hex.");
+            }
+            return;
+        }
+
+        if (!reference.TopologyOwnerKind.HasValue
+            || string.IsNullOrWhiteSpace(reference.TopologyOwnerRuntimeId)
+            || string.IsNullOrWhiteSpace(reference.SubLocationRuntimeId))
+        {
+            AddError(issues, diagnosticPrefix + "Malformed", identity, "SubLocation SpatialReference is incomplete.");
+            return;
+        }
+
+        WorldStateSpatialTopologyBindingSnapshot topologyBinding = null;
+        foreach (WorldStateSpatialTopologyBindingSnapshot candidate in spatial.TopologyBindings ?? new List<WorldStateSpatialTopologyBindingSnapshot>())
+        {
+            if (candidate != null
+                && candidate.OwnerKind == reference.TopologyOwnerKind.Value
+                && string.Equals(candidate.OwnerRuntimeId, reference.TopologyOwnerRuntimeId, StringComparison.Ordinal))
+            {
+                topologyBinding = candidate;
+                break;
+            }
+        }
+
+        if (topologyBinding == null)
+        {
+            AddError(issues, diagnosticPrefix + "BindingMissing", identity, "SubLocation owner has no spatial topology binding.");
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(topologyBinding.LocationId)
+            || TryGetAnchoredLocation(spatial.AnchoredLocations, topologyBinding.LocationId, out WorldStateAnchoredLocationSnapshot boundLocation) == false
+            || string.IsNullOrWhiteSpace(boundLocation.AnchorHexId)
+            || ContainsHex(spatial.Hexes, boundLocation.AnchorHexId) == false)
+        {
+            AddError(issues, diagnosticPrefix + "BindingInvalid", identity, "SubLocation binding does not resolve to a valid Location and anchor Hex.");
+            return;
+        }
+
+        bool topologyFound = false;
+        bool placeFound = false;
+        foreach (WorldStateLocalTopologySnapshot topology in snapshot.LocalTopologies ?? new List<WorldStateLocalTopologySnapshot>())
+        {
+            if (topology == null
+                || topology.OwnerKind != reference.TopologyOwnerKind.Value
+                || !string.Equals(topology.OwnerRuntimeId, reference.TopologyOwnerRuntimeId, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            topologyFound = true;
+            foreach (WorldStateLocalPlaceSnapshot place in topology.Places ?? new List<WorldStateLocalPlaceSnapshot>())
+            {
+                if (place != null && string.Equals(place.RuntimeId, reference.SubLocationRuntimeId, StringComparison.Ordinal))
+                {
+                    placeFound = true;
+                    break;
+                }
+            }
+            break;
+        }
+
+        if (!topologyFound)
+        {
+            AddError(issues, diagnosticPrefix + "TopologyMissing", identity, "SubLocation topology is absent from the snapshot.");
+        }
+        else if (!placeFound)
+        {
+            AddError(issues, diagnosticPrefix + "SubLocationMissing", identity, "SubLocation is absent from its owning topology.");
+        }
     }
 
     private static void ValidatePersistentConflictWarBattle(

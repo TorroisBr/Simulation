@@ -104,9 +104,19 @@ public static class WorldStateSnapshotFormatter
                     .Append(WorldStateCanonicalWriter.EnumValue(force.LifecycleState))
                     .Append(" detached ")
                     .Append(WorldStateCanonicalWriter.BoolValue(force.IsDetached))
-                    .Append(" location ")
-                    .Append(Value(force.OperationalLocationReference))
                     .Append('\n');
+            }
+
+            foreach (WorldStateArmedForceSnapshot force in snapshot.ArmedForces)
+            {
+                if (force != null && string.IsNullOrWhiteSpace(force.OperationalLocationReference) == false)
+                {
+                    output.Append("ARMED FORCE LEGACY OPERATIONAL REFERENCE ")
+                        .Append(Value(force.ArmedForceId))
+                        .Append(" ")
+                        .Append(Value(force.OperationalLocationReference))
+                        .Append('\n');
+                }
             }
 
             foreach (WorldStateArmedForceContingentSnapshot contingent in snapshot.ArmedForceContingents)
@@ -119,6 +129,24 @@ public static class WorldStateSnapshotFormatter
                     .Append(" amount ")
                     .Append(WorldStateCanonicalWriter.Int64Value(contingent.Amount))
                     .Append('\n');
+            }
+
+            if (snapshot.HasArmedForceSpatialState)
+            {
+                output.Append("Armed force spatial revision: ")
+                    .Append(WorldStateCanonicalWriter.Int64Value(snapshot.ArmedForceSpatialRevision.Value))
+                    .Append('\n');
+                foreach (WorldStateArmedForcePositionSnapshot position in snapshot.ArmedForcePositions)
+                {
+                    if (position != null)
+                    {
+                        output.Append("ARMED FORCE POSITION ")
+                            .Append(Value(position.ArmedForceId))
+                            .Append(" ")
+                            .Append(Value(position.CurrentPositionStableKey))
+                            .Append('\n');
+                    }
+                }
             }
         }
 

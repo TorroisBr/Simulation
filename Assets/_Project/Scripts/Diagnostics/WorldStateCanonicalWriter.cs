@@ -38,6 +38,11 @@ public static class WorldStateCanonicalWriter
             AppendLine(output, "METADATA", "ArmedForceStatePresent", BoolValue(true));
             AppendLine(output, "METADATA", "ArmedForceRevision", Int64Value(snapshot.ArmedForceRevision.Value));
         }
+        if (snapshot.HasArmedForceSpatialState)
+        {
+            AppendLine(output, "METADATA", "ArmedForceSpatialStatePresent", BoolValue(true));
+            AppendLine(output, "METADATA", "ArmedForceSpatialRevision", Int64Value(snapshot.ArmedForceSpatialRevision.Value));
+        }
         if (snapshot.HasConflictState)
         {
             AppendLine(output, "METADATA", "ConflictStatePresent", BoolValue(true));
@@ -93,8 +98,17 @@ public static class WorldStateCanonicalWriter
                     NullableInt64Value(force.TerminatedAbsoluteDay),
                     force.ParentForceId,
                     BoolValue(force.IsDetached),
-                    force.OperationalLocationReference,
                     force.CommanderPersonId);
+            }
+
+            foreach (WorldStateArmedForceSnapshot force in snapshot.ArmedForces)
+            {
+                if (force != null && string.IsNullOrWhiteSpace(force.OperationalLocationReference) == false)
+                {
+                    AppendLine(output, "ARMED_FORCE_LEGACY_OPERATIONAL_REFERENCE",
+                        force.ArmedForceId,
+                        force.OperationalLocationReference);
+                }
             }
 
             foreach (WorldStateArmedForceContingentSnapshot contingent in snapshot.ArmedForceContingents)
@@ -123,6 +137,19 @@ public static class WorldStateCanonicalWriter
                     reference.ForceId,
                     reference.PersonId,
                     reference.RoleKey);
+            }
+        }
+
+        if (snapshot.HasArmedForceSpatialState)
+        {
+            foreach (WorldStateArmedForcePositionSnapshot position in snapshot.ArmedForcePositions)
+            {
+                if (position != null)
+                {
+                    AppendLine(output, "ARMED_FORCE_POSITION",
+                        position.ArmedForceId,
+                        position.CurrentPositionStableKey);
+                }
             }
         }
 

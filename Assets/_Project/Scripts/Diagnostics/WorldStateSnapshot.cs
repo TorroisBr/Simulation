@@ -20,6 +20,7 @@ public sealed class WorldStateSnapshotContext
     public PersistentConflictStore ConflictStore { get; }
     public PersistentWarStore WarStore { get; }
     public PersistentBattleStore BattleStore { get; }
+    public ArmedForceSpatialStateStore ArmedForceSpatialStateStore { get; }
     public IEnumerable<ParentageRecord> Parentages { get; }
     public GenealogyStore GenealogyStore { get; }
     public PropertyOwnershipStore PropertyOwnershipStore { get; }
@@ -75,7 +76,8 @@ public sealed class WorldStateSnapshotContext
         PersistentConflictStore conflictStore = null,
         PersistentWarStore warStore = null,
         PersistentBattleStore battleStore = null,
-        SpatialAuthorityStore spatialAuthorityStore = null)
+        SpatialAuthorityStore spatialAuthorityStore = null,
+        ArmedForceSpatialStateStore armedForceSpatialStateStore = null)
     {
         SimulationTime = simulationTime;
         Calendar = calendar ?? (calendarDefinition != null ? new SimulationCalendar(calendarDefinition) : null);
@@ -92,6 +94,7 @@ public sealed class WorldStateSnapshotContext
         ConflictStore = conflictStore;
         WarStore = warStore;
         BattleStore = battleStore;
+        ArmedForceSpatialStateStore = armedForceSpatialStateStore;
         GenealogyStore = genealogyStore;
         PropertyOwnershipStore = propertyOwnershipStore;
         EstateStore = estateStore;
@@ -133,6 +136,9 @@ public sealed class WorldStateSnapshot
     public IReadOnlyList<WorldStateArmedForcePersonReferenceSnapshot> ArmedForceRelevantPersons { get; }
     public long? ArmedForceRevision { get; }
     public bool HasArmedForceState => ArmedForceRevision.HasValue;
+    public IReadOnlyList<WorldStateArmedForcePositionSnapshot> ArmedForcePositions { get; }
+    public long? ArmedForceSpatialRevision { get; }
+    public bool HasArmedForceSpatialState => ArmedForceSpatialRevision.HasValue;
     public IReadOnlyList<WorldStateConflictSnapshot> Conflicts { get; }
     public IReadOnlyList<WorldStateConflictSideSnapshot> ConflictSides { get; }
     public IReadOnlyList<WorldStateConflictParticipantBindingSnapshot> ConflictParticipantBindings { get; }
@@ -238,7 +244,9 @@ public sealed class WorldStateSnapshot
         IEnumerable<WorldStateBattleSnapshot> battles = null,
         IEnumerable<WorldStateBattleSideSnapshot> battleSides = null,
         IEnumerable<WorldStateBattleParticipantBindingSnapshot> battleParticipantBindings = null,
-        long? battleRevision = null)
+        long? battleRevision = null,
+        IEnumerable<WorldStateArmedForcePositionSnapshot> armedForcePositions = null,
+        long? armedForceSpatialRevision = null)
     {
         Metadata = new WorldStateSnapshotMetadata(absoluteDay, calendarDate);
         Npcs = SnapshotCollections.CopySorted(npcs, npc => npc?.RuntimeId);
@@ -260,6 +268,10 @@ public sealed class WorldStateSnapshot
                 ? null
                 : reference.ForceId + "\u001f" + reference.RoleKey + "\u001f" + reference.PersonId + "\u001f" + reference.ReferenceId);
         ArmedForceRevision = armedForceRevision;
+        ArmedForcePositions = SnapshotCollections.CopySorted(
+            armedForcePositions,
+            position => position?.ArmedForceId);
+        ArmedForceSpatialRevision = armedForceSpatialRevision;
         Conflicts = SnapshotCollections.CopySorted(conflicts, conflict => conflict?.ConflictId);
         ConflictSides = SnapshotCollections.CopySorted(
             conflictSides,
@@ -1792,12 +1804,17 @@ public static class WorldStateSnapshotBuilder
             BuildCitySnapshots(context.Cities, knownNpcs, context.PersonStore?.Persons),
             BuildSpatialSnapshot(
                 context.SpatialNetwork,
-                context.SpatialAuthorityStore ?? context.BattleStore?.SpatialAuthorityStore),
+                context.SpatialAuthorityStore
+                    ?? context.ArmedForceSpatialStateStore?.SpatialAuthorityStore
+                    ?? context.BattleStore?.SpatialAuthorityStore),
             BuildSiteSnapshots(context.ExplorableSiteStore),
             expeditions,
             BuildPlaceContentSnapshots(context.PlaceContentStore),
             BuildNotableItemSnapshots(context.PlaceContentStore),
-            BuildLocalTopologySnapshots(context.LocalTopologyStore ?? context.BattleStore?.LocalTopologyStore),
+            BuildLocalTopologySnapshots(
+                context.LocalTopologyStore
+                    ?? context.ArmedForceSpatialStateStore?.LocalTopologyStore
+                    ?? context.BattleStore?.LocalTopologyStore),
             calendarDate,
             persons,
             parentages,
@@ -1836,7 +1853,11 @@ public static class WorldStateSnapshotBuilder
             BuildBattleSnapshots(context.BattleStore),
             BuildBattleSideSnapshots(context.BattleStore),
             BuildBattleParticipantBindingSnapshots(context.BattleStore),
-            context.BattleStore == null ? (long?)null : context.BattleStore.Revision);
+            context.BattleStore == null ? (long?)null : context.BattleStore.Revision,
+            BuildArmedForcePositionSnapshots(context.ArmedForceSpatialStateStore),
+            context.ArmedForceSpatialStateStore == null
+                ? (long?)null
+                : context.ArmedForceSpatialStateStore.Revision);
     }
 
     private static List<WorldStateConflictSnapshot> BuildConflictSnapshots(PersistentConflictStore store)
@@ -2081,6 +2102,28 @@ public static class WorldStateSnapshotBuilder
                 reference.ForceId.Value,
                 reference.PersonId.Value,
                 reference.RoleKey));
+        }
+
+        return result;
+    }
+
+    private static List<WorldStateArmedForcePositionSnapshot> BuildArmedForcePositionSnapshots(
+        ArmedForceSpatialStateStore store)
+    {
+        List<WorldStateArmedForcePositionSnapshot> result =
+            new List<WorldStateArmedForcePositionSnapshot>();
+        if (store == null) return result;
+
+        foreach (ArmedForceSpatialPosition position in store.Positions)
+        {
+            if (position?.ForceId == null || position.Position == null)
+            {
+                continue;
+            }
+
+            result.Add(new WorldStateArmedForcePositionSnapshot(
+                position.ForceId.Value,
+                position.Position));
         }
 
         return result;

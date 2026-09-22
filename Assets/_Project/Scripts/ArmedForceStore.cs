@@ -280,11 +280,32 @@ public sealed class ArmedForceStore
 
     /// <summary>
     /// Changes operational separation only. Parent linkage and force identity
-    /// remain unchanged, so this is not secession.
+    /// remain unchanged, so this is not secession. Physical position is owned
+    /// by ArmedForceSpatialStateStore and is not changed by this operation.
     /// </summary>
     public bool TryDetach(
         ArmedForceId forceId,
+        out ArmedForceFoundationFailure failure)
+    {
+        return TryDetachInternal(forceId, null, out failure);
+    }
+
+    /// <summary>
+    /// Transitional compatibility shim for the pre-D2 opaque location field.
+    /// It does not establish or mutate authoritative physical position.
+    /// </summary>
+    [Obsolete("Use TryDetach(forceId, out failure); set typed physical position through ArmedForceSpatialStateStore.")]
+    public bool TryDetach(
+        ArmedForceId forceId,
         string operationalLocationReference,
+        out ArmedForceFoundationFailure failure)
+    {
+        return TryDetachInternal(forceId, operationalLocationReference, out failure);
+    }
+
+    private bool TryDetachInternal(
+        ArmedForceId forceId,
+        string legacyOperationalLocationReference,
         out ArmedForceFoundationFailure failure)
     {
         if (TryResolveActiveForce(forceId, out ArmedForceRecord force, out failure) == false)
@@ -308,9 +329,9 @@ public sealed class ArmedForceStore
                 out failure);
         }
 
-        if (string.IsNullOrWhiteSpace(operationalLocationReference) == false)
+        if (string.IsNullOrWhiteSpace(legacyOperationalLocationReference) == false)
         {
-            force = force.WithOperationalLocation(operationalLocationReference);
+            force = force.WithOperationalLocation(legacyOperationalLocationReference);
         }
 
         if (CanAdvanceRevision(out failure) == false) return false;
@@ -364,9 +385,11 @@ public sealed class ArmedForceStore
     }
 
     /// <summary>
-    /// Records a current location reference without implementing movement,
-    /// routing, travel time, or military operations.
+    /// Transitional compatibility shim for the pre-D2 opaque location field.
+    /// This is not authoritative physical position and is never converted to a
+    /// typed SpatialReference.
     /// </summary>
+    [Obsolete("Use ArmedForceSpatialStateStore.TrySetPosition with a typed SpatialReference.")]
     public bool TrySetOperationalLocation(
         ArmedForceId forceId,
         string operationalLocationReference,

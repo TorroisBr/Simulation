@@ -101,3 +101,18 @@ public sealed class WorldStateArmedForcePersonReferenceSnapshot
         RoleKey = roleKey;
     }
 }
+
+public sealed class WorldStateArmedForcePositionSnapshot
+{
+    public string ArmedForceId { get; }
+    public SpatialReference CurrentPosition { get; }
+    public string CurrentPositionStableKey => CurrentPosition?.StableKey;
+
+    public WorldStateArmedForcePositionSnapshot(
+        string armedForceId,
+        SpatialReference currentPosition)
+    {
+        ArmedForceId = armedForceId;
+        CurrentPosition = currentPosition;
+    }
+}
