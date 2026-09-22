@@ -187,6 +187,10 @@ public sealed class ArmedForceSpatialPositionTests
     public void SimulationRuntimeClonesSpatialPositionAgainstClonedForceAndAuthority()
     {
         WorldParts parts = CreateWorld(false);
+        Assert.That(parts.Spatial.TrySetPosition(
+            parts.ForceId,
+            SpatialReference.ForHex(new HexId("hex-a")),
+            out _), Is.True);
         SimulationRuntime runtime = new SimulationRuntime(
             new SimulationTime(0L),
             Array.Empty<CityRuntime>(),
