@@ -162,7 +162,7 @@ public static class WorldStateCanonicalWriter
         {
             foreach (WorldStateBattleSnapshot battle in snapshot.Battles)
             {
-                AppendLine(output, "BATTLE", battle.BattleId, Int64Value(battle.CreatedAbsoluteDay), NullableInt64Value(battle.StartedAbsoluteDay), EnumValue(battle.LifecycleState), battle.ConflictId, battle.WarId);
+                AppendLine(output, "BATTLE", battle.BattleId, Int64Value(battle.CreatedAbsoluteDay), NullableInt64Value(battle.StartedAbsoluteDay), EnumValue(battle.LifecycleState), battle.ConflictId, battle.WarId, battle.LocationReferenceKey);
             }
             foreach (WorldStateBattleSideSnapshot side in snapshot.BattleSides)
             {

@@ -496,6 +496,7 @@ public sealed class PersistentBattleRecord
     public BattleLifecycleState LifecycleState { get; }
     public ConflictId ConflictId { get; }
     public WarId WarId { get; }
+    public SpatialReference LocationReference { get; }
     public IReadOnlyList<BattleStateSide> Sides { get; }
     public IReadOnlyList<BattleParticipantBinding> ParticipantBindings { get; }
 
@@ -507,7 +508,8 @@ public sealed class PersistentBattleRecord
         BattleLifecycleState lifecycleState = BattleLifecycleState.Pending,
         long? startedAbsoluteDay = null,
         IEnumerable<BattleStateSide> sides = null,
-        IEnumerable<BattleParticipantBinding> participantBindings = null)
+        IEnumerable<BattleParticipantBinding> participantBindings = null,
+        SpatialReference locationReference = null)
     {
         Id = id ?? throw new ArgumentNullException(nameof(id));
         if (createdAbsoluteDay < 0L) throw new ArgumentOutOfRangeException(nameof(createdAbsoluteDay));
@@ -527,13 +529,14 @@ public sealed class PersistentBattleRecord
         LifecycleState = lifecycleState;
         ConflictId = conflictId;
         WarId = warId;
+        LocationReference = locationReference;
         Sides = SortedCopy(sides, (left, right) => StringComparer.Ordinal.Compare(left?.SideId?.Value, right?.SideId?.Value));
         ParticipantBindings = SortedCopy(
             participantBindings,
             (left, right) => StringComparer.Ordinal.Compare(left?.BindingId?.Value, right?.BindingId?.Value));
     }
 
-    internal PersistentBattleRecord WithStarted(long startedAbsoluteDay)
+    internal PersistentBattleRecord WithStarted(long startedAbsoluteDay, SpatialReference locationReference)
     {
         return new PersistentBattleRecord(
             Id,
@@ -543,7 +546,8 @@ public sealed class PersistentBattleRecord
             BattleLifecycleState.Active,
             startedAbsoluteDay,
             Sides,
-            ParticipantBindings);
+            ParticipantBindings,
+            locationReference);
     }
 
     internal PersistentBattleRecord WithParticipantBinding(BattleParticipantBinding binding)
@@ -557,7 +561,8 @@ public sealed class PersistentBattleRecord
             LifecycleState,
             StartedAbsoluteDay,
             Sides,
-            values);
+            values,
+            LocationReference);
     }
 
     private static IReadOnlyList<T> SortedCopy<T>(IEnumerable<T> source, Comparison<T> comparison)
@@ -591,7 +596,10 @@ public enum PersistentStateFailureCode
     WarNotRegistered = 18,
     ContradictoryReference = 19,
     BattleResolutionDeferred = 20,
-    RevisionOverflow = 21
+    RevisionOverflow = 21,
+    BattleLocationRequired = 22,
+    BattleLocationInvalid = 23,
+    BattleLocationImmutable = 24
 }
 
 public sealed class PersistentStateFailure : IEquatable<PersistentStateFailure>

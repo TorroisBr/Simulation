@@ -318,6 +318,7 @@ public sealed class WorldStateDiff
                 CompareValue("Battle", identity, "LifecycleState", WorldStateCanonicalWriter.EnumValue(left.LifecycleState), WorldStateCanonicalWriter.EnumValue(right.LifecycleState), differences);
                 CompareValue("Battle", identity, "ConflictId", WorldStateCanonicalWriter.StringValue(left.ConflictId), WorldStateCanonicalWriter.StringValue(right.ConflictId), differences);
                 CompareValue("Battle", identity, "WarId", WorldStateCanonicalWriter.StringValue(left.WarId), WorldStateCanonicalWriter.StringValue(right.WarId), differences);
+                CompareValue("Battle", identity, "LocationReference", WorldStateCanonicalWriter.StringValue(left.LocationReferenceKey), WorldStateCanonicalWriter.StringValue(right.LocationReferenceKey), differences);
             }, differences);
         CompareEntities("BattleSide", before.BattleSides, after.BattleSides,
             side => side.BattleId + "\u001f" + side.SideId,

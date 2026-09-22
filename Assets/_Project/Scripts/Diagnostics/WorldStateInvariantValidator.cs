@@ -891,6 +891,8 @@ public static class WorldStateInvariantValidator
             if (battle.LifecycleState == BattleLifecycleState.Pending && battle.StartedAbsoluteDay.HasValue) AddError(issues, "PendingBattleHasStartDay", identity, "A pending Battle cannot have a start day.");
             if ((battle.LifecycleState == BattleLifecycleState.Active || battle.LifecycleState == BattleLifecycleState.Resolved) && !battle.StartedAbsoluteDay.HasValue) AddError(issues, "BattleStartDayMissing", identity, "An active or resolved Battle requires a start day.");
             if (battle.StartedAbsoluteDay.HasValue && (battle.StartedAbsoluteDay.Value < battle.CreatedAbsoluteDay || battle.StartedAbsoluteDay.Value > snapshot.AbsoluteDay)) AddError(issues, "BattleStartDayInvalid", identity, "Battle start day is outside its lifecycle interval.");
+            if (battle.LifecycleState == BattleLifecycleState.Active && string.IsNullOrWhiteSpace(battle.LocationReferenceKey)) AddError(issues, "ActiveBattleLocationMissing", identity, "An active Battle requires a physical SpatialReference.");
+            ValidateBattleLocation(snapshot, battle, identity, issues);
             if (string.IsNullOrWhiteSpace(battle.ConflictId) == false && conflictsById.ContainsKey(battle.ConflictId) == false) AddError(issues, "BattleConflictMissing", identity, "Battle Conflict reference is absent from the snapshot.");
             if (string.IsNullOrWhiteSpace(battle.WarId) == false)
             {
@@ -918,6 +920,151 @@ public static class WorldStateInvariantValidator
             else if (battleSideKeys.Add(identity) == false) AddError(issues, "DuplicateBattleSideId", identity, "Battle side identity appears more than once.");
         }
         ValidateBattleBindings(snapshot.BattleParticipantBindings, battlesById, forceIds, battleSideKeys, issues);
+    }
+
+    private static void ValidateBattleLocation(
+        WorldStateSnapshot snapshot,
+        WorldStateBattleSnapshot battle,
+        string identity,
+        List<WorldStateInvariantIssue> issues)
+    {
+        if (string.IsNullOrWhiteSpace(battle.LocationReferenceKey))
+        {
+            return;
+        }
+
+        if (battle.LocationReference == null)
+        {
+            AddError(issues, "BattleLocationMalformed", identity, "Battle location has a key but no typed SpatialReference.");
+            return;
+        }
+
+        if (!string.Equals(battle.LocationReferenceKey, battle.LocationReference.StableKey, System.StringComparison.Ordinal))
+        {
+            AddError(issues, "BattleLocationMalformed", identity, "Battle location key does not match its typed SpatialReference.");
+            return;
+        }
+
+        WorldStateSpatialSnapshot spatial = snapshot.Spatial ?? new WorldStateSpatialSnapshot();
+        SpatialReference reference = battle.LocationReference;
+        if (System.Enum.IsDefined(typeof(SpatialReferenceKind), reference.Kind) == false)
+        {
+            AddError(issues, "BattleLocationMalformed", identity, "Battle location kind is invalid.");
+            return;
+        }
+
+        if (reference.Kind == SpatialReferenceKind.Hex)
+        {
+            if (reference.HexId == null || ContainsHex(spatial.Hexes, reference.HexId.Value) == false)
+            {
+                AddError(issues, "BattleLocationHexMissing", identity, "Battle location Hex is absent from the spatial authority snapshot.");
+            }
+            return;
+        }
+
+        if (reference.Kind == SpatialReferenceKind.Location)
+        {
+            if (reference.LocationId == null || TryGetAnchoredLocation(spatial.AnchoredLocations, reference.LocationId.Value, out WorldStateAnchoredLocationSnapshot location) == false)
+            {
+                AddError(issues, "BattleLocationMissing", identity, "Battle location is absent from the spatial authority snapshot.");
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(location.AnchorHexId) || ContainsHex(spatial.Hexes, location.AnchorHexId) == false)
+            {
+                AddError(issues, "BattleLocationAnchorMissing", identity, "Battle location does not resolve to a registered anchor Hex.");
+            }
+            return;
+        }
+
+        if (!reference.TopologyOwnerKind.HasValue
+            || string.IsNullOrWhiteSpace(reference.TopologyOwnerRuntimeId)
+            || string.IsNullOrWhiteSpace(reference.SubLocationRuntimeId))
+        {
+            AddError(issues, "BattleLocationMalformed", identity, "Battle SubLocation reference is incomplete.");
+            return;
+        }
+
+        WorldStateSpatialTopologyBindingSnapshot topologyBinding = null;
+        foreach (WorldStateSpatialTopologyBindingSnapshot candidate in spatial.TopologyBindings ?? new List<WorldStateSpatialTopologyBindingSnapshot>())
+        {
+            if (candidate != null
+                && candidate.OwnerKind == reference.TopologyOwnerKind.Value
+                && string.Equals(candidate.OwnerRuntimeId, reference.TopologyOwnerRuntimeId, System.StringComparison.Ordinal))
+            {
+                topologyBinding = candidate;
+                break;
+            }
+        }
+
+        if (topologyBinding == null)
+        {
+            AddError(issues, "BattleSubLocationBindingMissing", identity, "Battle SubLocation owner has no spatial topology binding.");
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(topologyBinding.LocationId)
+            || TryGetAnchoredLocation(spatial.AnchoredLocations, topologyBinding.LocationId, out WorldStateAnchoredLocationSnapshot boundLocation) == false
+            || string.IsNullOrWhiteSpace(boundLocation.AnchorHexId)
+            || ContainsHex(spatial.Hexes, boundLocation.AnchorHexId) == false)
+        {
+            AddError(issues, "BattleSubLocationBindingInvalid", identity, "Battle SubLocation binding does not resolve to a valid Location and anchor Hex.");
+            return;
+        }
+
+        bool topologyFound = false;
+        bool placeFound = false;
+        foreach (WorldStateLocalTopologySnapshot topology in snapshot.LocalTopologies ?? new List<WorldStateLocalTopologySnapshot>())
+        {
+            if (topology == null
+                || topology.OwnerKind != reference.TopologyOwnerKind.Value
+                || !string.Equals(topology.OwnerRuntimeId, reference.TopologyOwnerRuntimeId, System.StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            topologyFound = true;
+            foreach (WorldStateLocalPlaceSnapshot place in topology.Places ?? new List<WorldStateLocalPlaceSnapshot>())
+            {
+                if (place != null && string.Equals(place.RuntimeId, reference.SubLocationRuntimeId, System.StringComparison.Ordinal))
+                {
+                    placeFound = true;
+                    break;
+                }
+            }
+            break;
+        }
+
+        if (!topologyFound) AddError(issues, "BattleSubLocationTopologyMissing", identity, "Battle SubLocation topology is absent from the snapshot.");
+        else if (!placeFound) AddError(issues, "BattleSubLocationMissing", identity, "Battle SubLocation is absent from its owning topology.");
+    }
+
+    private static bool ContainsHex(IReadOnlyList<WorldStateHexSnapshot> hexes, string hexId)
+    {
+        foreach (WorldStateHexSnapshot hex in hexes ?? new List<WorldStateHexSnapshot>())
+        {
+            if (hex != null && string.Equals(hex.HexId, hexId, System.StringComparison.Ordinal)) return true;
+        }
+
+        return false;
+    }
+
+    private static bool TryGetAnchoredLocation(
+        IReadOnlyList<WorldStateAnchoredLocationSnapshot> locations,
+        string locationId,
+        out WorldStateAnchoredLocationSnapshot result)
+    {
+        foreach (WorldStateAnchoredLocationSnapshot location in locations ?? new List<WorldStateAnchoredLocationSnapshot>())
+        {
+            if (location != null && string.Equals(location.LocationId, locationId, System.StringComparison.Ordinal))
+            {
+                result = location;
+                return true;
+            }
+        }
+
+        result = null;
+        return false;
     }
 
     private static void ValidateLifecycleDay(

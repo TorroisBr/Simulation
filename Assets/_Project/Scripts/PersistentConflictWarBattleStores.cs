@@ -501,6 +501,8 @@ public sealed class PersistentBattleStore
     private readonly ArmedForceStore armedForceStore;
     private readonly PersistentConflictStore conflictStore;
     private readonly PersistentWarStore warStore;
+    private readonly SpatialAuthorityStore spatialAuthorityStore;
+    private readonly LocalTopologyStore localTopologyStore;
     private readonly Dictionary<string, PersistentBattleRecord> recordsById =
         new Dictionary<string, PersistentBattleRecord>(StringComparer.Ordinal);
     private long revision;
@@ -508,16 +510,22 @@ public sealed class PersistentBattleStore
     public PersistentBattleStore(
         ArmedForceStore armedForceStore,
         PersistentConflictStore conflictStore,
-        PersistentWarStore warStore)
+        PersistentWarStore warStore,
+        SpatialAuthorityStore spatialAuthorityStore = null,
+        LocalTopologyStore localTopologyStore = null)
     {
         this.armedForceStore = armedForceStore ?? throw new ArgumentNullException(nameof(armedForceStore));
         this.conflictStore = conflictStore ?? throw new ArgumentNullException(nameof(conflictStore));
         this.warStore = warStore ?? throw new ArgumentNullException(nameof(warStore));
+        this.spatialAuthorityStore = spatialAuthorityStore ?? new SpatialAuthorityStore();
+        this.localTopologyStore = localTopologyStore;
     }
 
     public ArmedForceStore ArmedForceStore => armedForceStore;
     public PersistentConflictStore ConflictStore => conflictStore;
     public PersistentWarStore WarStore => warStore;
+    public SpatialAuthorityStore SpatialAuthorityStore => spatialAuthorityStore;
+    public LocalTopologyStore LocalTopologyStore => localTopologyStore;
     public int Count => recordsById.Count;
     public long Revision => revision;
 
@@ -562,11 +570,35 @@ public sealed class PersistentBattleStore
 
     public bool TryStart(BattleId battleId, long startedAbsoluteDay, out PersistentStateFailure failure)
     {
+        return TryStart(battleId, startedAbsoluteDay, null, out failure);
+    }
+
+    public bool TryStart(
+        BattleId battleId,
+        long startedAbsoluteDay,
+        SpatialReference locationReference,
+        out PersistentStateFailure failure)
+    {
         if (TryGet(battleId, out PersistentBattleRecord current) == false) return Fail(PersistentStateFailureCode.NotRegistered, "The BattleId is not registered.", out failure);
         if (current.LifecycleState != BattleLifecycleState.Pending) return Fail(PersistentStateFailureCode.InvalidLifecycle, "Only a pending Battle can become active.", out failure);
         if (startedAbsoluteDay < current.CreatedAbsoluteDay) return Fail(PersistentStateFailureCode.InvalidDay, "A Battle cannot start before it is created.", out failure);
+        if (current.LocationReference != null
+            && locationReference != null
+            && current.LocationReference.Equals(locationReference) == false)
+        {
+            return Fail(PersistentStateFailureCode.BattleLocationImmutable, "A pending Battle cannot replace its explicit location during start.", out failure);
+        }
+
+        SpatialReference resolvedLocation = locationReference ?? current.LocationReference;
+        if (resolvedLocation == null)
+        {
+            return Fail(PersistentStateFailureCode.BattleLocationRequired, "An active Battle requires an explicit physical SpatialReference.", out failure);
+        }
+
+        PersistentBattleRecord candidate = current.WithStarted(startedAbsoluteDay, resolvedLocation);
+        if (ValidateRecord(candidate, false, out failure) == false) return false;
         if (CanAdvance(out failure) == false) return false;
-        recordsById[current.Id.Value] = current.WithStarted(startedAbsoluteDay);
+        recordsById[current.Id.Value] = candidate;
         revision++;
         failure = PersistentStateFailure.None;
         return true;
@@ -575,12 +607,19 @@ public sealed class PersistentBattleStore
     internal PersistentBattleStore Clone(
         ArmedForceStore targetArmedForceStore,
         PersistentConflictStore targetConflictStore,
-        PersistentWarStore targetWarStore)
+        PersistentWarStore targetWarStore,
+        SpatialAuthorityStore targetSpatialAuthorityStore)
     {
         if (targetArmedForceStore == null) throw new ArgumentNullException(nameof(targetArmedForceStore));
         if (targetConflictStore == null) throw new ArgumentNullException(nameof(targetConflictStore));
         if (targetWarStore == null) throw new ArgumentNullException(nameof(targetWarStore));
-        PersistentBattleStore copy = new PersistentBattleStore(targetArmedForceStore, targetConflictStore, targetWarStore);
+        if (targetSpatialAuthorityStore == null) throw new ArgumentNullException(nameof(targetSpatialAuthorityStore));
+        PersistentBattleStore copy = new PersistentBattleStore(
+            targetArmedForceStore,
+            targetConflictStore,
+            targetWarStore,
+            targetSpatialAuthorityStore,
+            localTopologyStore);
         foreach (KeyValuePair<string, PersistentBattleRecord> entry in recordsById) copy.recordsById.Add(entry.Key, entry.Value);
         copy.revision = revision;
         if (copy.ValidateInvariants().IsValid == false) throw new ArgumentException("The BattleStore cannot be bound to the target stores.", nameof(targetArmedForceStore));
@@ -606,6 +645,7 @@ public sealed class PersistentBattleStore
         if (record.Sides == null || record.Sides.Count < 2) return Fail(PersistentStateFailureCode.RequiresTwoSides, "A Battle requires at least two domain-owned sides.", out failure);
         if (record.LifecycleState == BattleLifecycleState.Pending && record.StartedAbsoluteDay.HasValue) return Fail(PersistentStateFailureCode.InvalidLifecycle, "A pending Battle cannot have a start day.", out failure);
         if (record.LifecycleState == BattleLifecycleState.Active && !record.StartedAbsoluteDay.HasValue) return Fail(PersistentStateFailureCode.InvalidLifecycle, "An active Battle requires a start day.", out failure);
+        if (ValidateLocation(record, out failure) == false) return false;
 
         HashSet<string> sideIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (BattleStateSide side in record.Sides)
@@ -662,6 +702,11 @@ public sealed class PersistentBattleStore
         if (record.Sides == null || record.Sides.Count < 2) violations.Add("Battle " + record.Id.Value + " has fewer than two sides.");
         if (record.LifecycleState == BattleLifecycleState.Pending && record.StartedAbsoluteDay.HasValue) violations.Add("Pending Battle " + record.Id.Value + " has a start day.");
         if ((record.LifecycleState == BattleLifecycleState.Active || record.LifecycleState == BattleLifecycleState.Resolved) && !record.StartedAbsoluteDay.HasValue) violations.Add("Battle " + record.Id.Value + " has no start day for its lifecycle.");
+        if (record.LifecycleState == BattleLifecycleState.Active && record.LocationReference == null) violations.Add("Active Battle " + record.Id.Value + " has no physical location.");
+        if (record.LocationReference != null && spatialAuthorityStore.TryResolve(record.LocationReference, localTopologyStore, out _, out SpatialAuthorityFailure spatialFailure) == false)
+        {
+            violations.Add("Battle " + record.Id.Value + " has an invalid physical location: " + spatialFailure.Code + ".");
+        }
         HashSet<string> sideIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (BattleStateSide side in record.Sides ?? new List<BattleStateSide>())
         {
@@ -683,6 +728,35 @@ public sealed class PersistentBattleStore
     private bool CanAdvance(out PersistentStateFailure failure)
     {
         if (revision == long.MaxValue) return Fail(PersistentStateFailureCode.RevisionOverflow, "The BattleStore revision cannot advance further.", out failure);
+        failure = PersistentStateFailure.None;
+        return true;
+    }
+
+    private bool ValidateLocation(PersistentBattleRecord record, out PersistentStateFailure failure)
+    {
+        if (record.LocationReference == null)
+        {
+            if (record.LifecycleState == BattleLifecycleState.Active)
+            {
+                return Fail(PersistentStateFailureCode.BattleLocationRequired, "An active Battle requires an explicit physical SpatialReference.", out failure);
+            }
+
+            failure = PersistentStateFailure.None;
+            return true;
+        }
+
+        if (spatialAuthorityStore.TryResolve(
+            record.LocationReference,
+            localTopologyStore,
+            out _,
+            out SpatialAuthorityFailure spatialFailure) == false)
+        {
+            return Fail(
+                PersistentStateFailureCode.BattleLocationInvalid,
+                "Battle SpatialReference is not valid in the bound spatial authority: " + spatialFailure.Code + ".",
+                out failure);
+        }
+
         failure = PersistentStateFailure.None;
         return true;
     }

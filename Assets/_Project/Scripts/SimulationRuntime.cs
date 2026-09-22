@@ -216,7 +216,8 @@ public sealed class SimulationRuntime
             battleStore,
             resolvedArmedForceStore,
             resolvedConflictStore,
-            resolvedWarStore);
+            resolvedWarStore,
+            resolvedSpatialAuthorityStore);
 
         this.configuration = resolvedConfiguration;
         this.calendar = new SimulationCalendar(
@@ -2158,11 +2159,12 @@ public sealed class SimulationRuntime
         PersistentBattleStore source,
         ArmedForceStore armedForceStore,
         PersistentConflictStore conflictStore,
-        PersistentWarStore warStore)
+        PersistentWarStore warStore,
+        SpatialAuthorityStore spatialAuthorityStore)
     {
         if (source == null)
         {
-            return new PersistentBattleStore(armedForceStore, conflictStore, warStore);
+            return new PersistentBattleStore(armedForceStore, conflictStore, warStore, spatialAuthorityStore);
         }
 
         PersistentStateInvariantReport report = source.ValidateInvariants();
@@ -2174,7 +2176,7 @@ public sealed class SimulationRuntime
                 nameof(source));
         }
 
-        return source.Clone(armedForceStore, conflictStore, warStore);
+        return source.Clone(armedForceStore, conflictStore, warStore, spatialAuthorityStore);
     }
 
     private static GenealogyStore CloneGenealogyStore(GenealogyStore source)

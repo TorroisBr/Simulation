@@ -376,7 +376,7 @@ public static class WorldStateSnapshotFormatter
             output.Append("\nBattle revision: ").Append(WorldStateCanonicalWriter.Int64Value(snapshot.BattleRevision.Value)).Append('\n');
             foreach (WorldStateBattleSnapshot battle in snapshot.Battles)
             {
-                if (battle != null) output.Append("BATTLE ").Append(Value(battle.BattleId)).Append(" lifecycle ").Append(WorldStateCanonicalWriter.EnumValue(battle.LifecycleState)).Append(" created ").Append(WorldStateCanonicalWriter.Int64Value(battle.CreatedAbsoluteDay)).Append(" started ").Append(WorldStateCanonicalWriter.NullableInt64Value(battle.StartedAbsoluteDay)).Append(" conflict ").Append(Value(battle.ConflictId)).Append(" war ").Append(Value(battle.WarId)).Append('\n');
+                if (battle != null) output.Append("BATTLE ").Append(Value(battle.BattleId)).Append(" lifecycle ").Append(WorldStateCanonicalWriter.EnumValue(battle.LifecycleState)).Append(" created ").Append(WorldStateCanonicalWriter.Int64Value(battle.CreatedAbsoluteDay)).Append(" started ").Append(WorldStateCanonicalWriter.NullableInt64Value(battle.StartedAbsoluteDay)).Append(" conflict ").Append(Value(battle.ConflictId)).Append(" war ").Append(Value(battle.WarId)).Append(" location ").Append(Value(battle.LocationReferenceKey)).Append('\n');
             }
             foreach (WorldStateBattleSideSnapshot side in snapshot.BattleSides)
             {

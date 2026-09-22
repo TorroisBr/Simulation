@@ -86,7 +86,9 @@ public sealed class PersistentConflictWarBattleStateTests
         ArmedForceStore forces = CreateForces("force-a", "force-b");
         PersistentConflictStore conflicts = new PersistentConflictStore(forces);
         PersistentWarStore wars = new PersistentWarStore(forces, conflicts);
-        PersistentBattleStore battles = new PersistentBattleStore(forces, conflicts, wars);
+        SpatialAuthorityStore spatialAuthority = new SpatialAuthorityStore();
+        Assert.That(spatialAuthority.TryRegisterHex(new HexRecord(new HexId("battle-hex")), out _), Is.True);
+        PersistentBattleStore battles = new PersistentBattleStore(forces, conflicts, wars, spatialAuthority);
         ConflictId conflictId = new ConflictId("conflict-parent");
         WarId warId = new WarId("war-parent");
         Assert.That(conflicts.TryRegister(CreateConflict(conflictId), out _), Is.True);
@@ -96,7 +98,7 @@ public sealed class PersistentConflictWarBattleStateTests
         Assert.That(battles.TryRegister(CreateBattle(standaloneId), out _), Is.True);
         BattleId linkedId = new BattleId("battle-linked");
         Assert.That(battles.TryRegister(CreateBattle(linkedId, conflictId, warId), out _), Is.True);
-        Assert.That(battles.TryStart(linkedId, 1L, out _), Is.True);
+        Assert.That(battles.TryStart(linkedId, 1L, SpatialReference.ForHex(new HexId("battle-hex")), out _), Is.True);
         Assert.That(battles.TryGet(linkedId, out PersistentBattleRecord linked), Is.True);
         Assert.That(linked.LifecycleState, Is.EqualTo(BattleLifecycleState.Active));
 

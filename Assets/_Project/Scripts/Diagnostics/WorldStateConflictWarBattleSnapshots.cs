@@ -102,8 +102,18 @@ public sealed class WorldStateBattleSnapshot
     public BattleLifecycleState LifecycleState { get; }
     public string ConflictId { get; }
     public string WarId { get; }
+    public SpatialReference LocationReference { get; }
+    public string LocationReferenceKey { get; }
 
-    public WorldStateBattleSnapshot(string battleId, long createdAbsoluteDay, long? startedAbsoluteDay, BattleLifecycleState lifecycleState, string conflictId, string warId)
+    public WorldStateBattleSnapshot(
+        string battleId,
+        long createdAbsoluteDay,
+        long? startedAbsoluteDay,
+        BattleLifecycleState lifecycleState,
+        string conflictId,
+        string warId,
+        SpatialReference locationReference = null,
+        string locationReferenceKey = null)
     {
         BattleId = battleId;
         CreatedAbsoluteDay = createdAbsoluteDay;
@@ -111,6 +121,8 @@ public sealed class WorldStateBattleSnapshot
         LifecycleState = lifecycleState;
         ConflictId = conflictId;
         WarId = warId;
+        LocationReference = locationReference;
+        LocationReferenceKey = locationReference?.StableKey ?? locationReferenceKey;
     }
 }
 

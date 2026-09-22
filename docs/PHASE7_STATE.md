@@ -1,4 +1,68 @@
-# Phase 7 — Checkpoint D0 — Current State
+# Phase 7 — Checkpoint D1 — Current State
+
+## D1 baseline, branch, and commit
+
+- Canonical architecture baseline: `775edc758fcb8e0f0baf6768f2c89190eca403fd`.
+- Checkpoint branch: `codex/phase7/BattleSpatialBinding`.
+- Implementation commit: recorded after validation; this section is kept
+  current with the validated branch commit.
+
+## D1 delivered
+
+Checkpoint D1 makes `PersistentBattle` the first explicit consumer of the D0
+world-bound `SpatialAuthority`, without implementing battle resolution,
+movement, terrain, or military position validation.
+
+- `PersistentBattleRecord` carries an optional typed D0 `SpatialReference`.
+- Pending Battles may omit location or carry a valid Hex, Location, or
+  SubLocation reference.
+- Pending -> Active requires a valid explicit physical reference. The legacy
+  `TryStart` overload only reuses a location already explicitly present on the
+  Pending record; it never infers one from participants or runtime objects.
+- `PersistentBattleStore` validates Hex, Location anchor, and LocalTopology
+  SubLocation references against its bound spatial authority before mutation.
+  Failed validation leaves both Battle state and store revision unchanged.
+- `SimulationRuntime` composes BattleStore against its cloned world-bound
+  `SpatialAuthorityStore`; source authority mutation does not mutate the
+  composed runtime authority.
+- Active Battle location is immutable in this slice. No move/change-location
+  operation, resolution transition, winner, result, casualty, aftermath, or
+  Battlefield entity was added.
+- Battle diagnostics now project location, canonicalize its stable key, diff
+  Pending location changes, format it, and validate missing/malformed or
+  unresolved Hex/Location/SubLocation references.
+
+## D1 validation
+
+- D1 focused EditMode: `7/7`.
+- Persistent Conflict/War/Battle regression: `8/8`.
+- SpatialAuthority D0 regression: `8/8`.
+- LocalTopology regression: `17/17`.
+- ALL EditMode: `1498/1498`.
+- Official EditMode `Smoke`: `5/5`.
+- `git diff --check`: clean before commit.
+
+## D1 boundaries and known limitations
+
+The LocalTopology bridge retains its existing transitional RuntimeId-based
+owner/place contract. SimulationRuntime clones the spatial authority; the
+optional LocalTopology bridge remains the supplied consumer boundary and is
+not migrated or redesigned here. Diagnostics remain projections, not a
+save/load contract.
+
+`AdvanceDay` was not changed. No Battle starts automatically, no location is
+assigned automatically, and no daily spatial or military processing was
+added. `docs/SIMULATION_ARCHITECTURE.md` was not changed.
+
+## D1 deferred
+
+City/Site legacy mapping, Crossing references, Hex adjacency, terrain,
+Travel rewrite, military movement, participant position validation, Battle
+resolution, ConflictFoundation adapters, Battlefield/aftermath, operational
+grouping/command, casualties, logistics, recruitment, mobilization,
+knowledge, save/load, and broad `Simulation.Core` migration remain deferred.
+No next checkpoint is started by D1.
+
 
 ## D0 baseline, branch, and commit
 

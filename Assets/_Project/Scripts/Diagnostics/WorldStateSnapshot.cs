@@ -1360,6 +1360,7 @@ public sealed class WorldStateSpatialSnapshot
     public long? AuthorityRevision { get; }
     public IReadOnlyList<WorldStateHexSnapshot> Hexes { get; }
     public IReadOnlyList<WorldStateAnchoredLocationSnapshot> AnchoredLocations { get; }
+    public IReadOnlyList<WorldStateSpatialTopologyBindingSnapshot> TopologyBindings { get; }
     public IReadOnlyList<WorldStateLocationSnapshot> Locations { get; }
     public IReadOnlyList<WorldStateRouteSnapshot> Routes { get; }
 
@@ -1368,13 +1369,33 @@ public sealed class WorldStateSpatialSnapshot
         IEnumerable<WorldStateRouteSnapshot> routes = null,
         IEnumerable<WorldStateHexSnapshot> hexes = null,
         IEnumerable<WorldStateAnchoredLocationSnapshot> anchoredLocations = null,
-        long? authorityRevision = null)
+        long? authorityRevision = null,
+        IEnumerable<WorldStateSpatialTopologyBindingSnapshot> topologyBindings = null)
     {
         AuthorityRevision = authorityRevision;
         Hexes = SnapshotCollections.CopySorted(hexes, hex => hex?.HexId);
         AnchoredLocations = SnapshotCollections.CopySorted(anchoredLocations, location => location?.LocationId);
+        TopologyBindings = SnapshotCollections.CopySorted(topologyBindings, binding => binding?.StableKey);
         Locations = SnapshotCollections.CopySorted(locations, location => location?.RuntimeId);
         Routes = SnapshotCollections.CopySorted(routes, route => route?.RuntimeId);
+    }
+}
+
+public sealed class WorldStateSpatialTopologyBindingSnapshot
+{
+    public LocalTopologyOwnerKind OwnerKind { get; }
+    public string OwnerRuntimeId { get; }
+    public string LocationId { get; }
+    public string StableKey => WorldStateSnapshotValue.OwnerKey(OwnerKind, OwnerRuntimeId);
+
+    public WorldStateSpatialTopologyBindingSnapshot(
+        LocalTopologyOwnerKind ownerKind,
+        string ownerRuntimeId,
+        string locationId)
+    {
+        OwnerKind = ownerKind;
+        OwnerRuntimeId = ownerRuntimeId;
+        LocationId = locationId;
     }
 }
 
@@ -1769,12 +1790,14 @@ public static class WorldStateSnapshotBuilder
             context.SimulationTime != null ? context.SimulationTime.AbsoluteDay : 0L,
             BuildNpcSnapshots(knownNpcs, expeditions),
             BuildCitySnapshots(context.Cities, knownNpcs, context.PersonStore?.Persons),
-            BuildSpatialSnapshot(context.SpatialNetwork, context.SpatialAuthorityStore),
+            BuildSpatialSnapshot(
+                context.SpatialNetwork,
+                context.SpatialAuthorityStore ?? context.BattleStore?.SpatialAuthorityStore),
             BuildSiteSnapshots(context.ExplorableSiteStore),
             expeditions,
             BuildPlaceContentSnapshots(context.PlaceContentStore),
             BuildNotableItemSnapshots(context.PlaceContentStore),
-            BuildLocalTopologySnapshots(context.LocalTopologyStore),
+            BuildLocalTopologySnapshots(context.LocalTopologyStore ?? context.BattleStore?.LocalTopologyStore),
             calendarDate,
             persons,
             parentages,
@@ -1934,7 +1957,8 @@ public static class WorldStateSnapshotBuilder
                 record.StartedAbsoluteDay,
                 record.LifecycleState,
                 record.ConflictId?.Value,
-                record.WarId?.Value));
+                record.WarId?.Value,
+                record.LocationReference));
         }
         return result;
     }
@@ -2922,6 +2946,8 @@ public static class WorldStateSnapshotBuilder
         List<WorldStateHexSnapshot> hexSnapshots = new List<WorldStateHexSnapshot>();
         List<WorldStateAnchoredLocationSnapshot> anchoredLocationSnapshots =
             new List<WorldStateAnchoredLocationSnapshot>();
+        List<WorldStateSpatialTopologyBindingSnapshot> topologyBindingSnapshots =
+            new List<WorldStateSpatialTopologyBindingSnapshot>();
         long? authorityRevision = null;
         if (authority != null)
         {
@@ -2943,6 +2969,17 @@ public static class WorldStateSnapshotBuilder
                         location.AnchorHexId.Value));
                 }
             }
+
+            foreach (SpatialLocalTopologyBinding binding in authority.LocalTopologyBindings)
+            {
+                if (binding?.LocationId != null)
+                {
+                    topologyBindingSnapshots.Add(new WorldStateSpatialTopologyBindingSnapshot(
+                        binding.OwnerKind,
+                        binding.OwnerRuntimeId,
+                        binding.LocationId.Value));
+                }
+            }
         }
 
         if (network == null)
@@ -2950,6 +2987,7 @@ public static class WorldStateSnapshotBuilder
             return new WorldStateSpatialSnapshot(
                 hexes: hexSnapshots,
                 anchoredLocations: anchoredLocationSnapshots,
+                topologyBindings: topologyBindingSnapshots,
                 authorityRevision: authorityRevision);
         }
 
@@ -2980,7 +3018,8 @@ public static class WorldStateSnapshotBuilder
             routeSnapshots,
             hexSnapshots,
             anchoredLocationSnapshots,
-            authorityRevision);
+            authorityRevision,
+            topologyBindingSnapshots);
     }
 
     private static List<WorldStateSiteSnapshot> BuildSiteSnapshots(ExplorableSiteStore store)
