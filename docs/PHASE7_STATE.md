@@ -7,6 +7,8 @@
 - Implementation commit: `86632ea` — minimal Hex/Location spatial authority,
   typed spatial references, LocalTopology bridge, runtime composition, and
   deterministic diagnostics.
+- Follow-up commit: `864c600` — include spatial authority in the human
+  diagnostics formatter and its focused regression assertion.
 
 ## D0 delivered
 
