@@ -5,6 +5,9 @@
 - Architecture baseline: `e4ac516daeb70f3a7fe40acf797d41090f82e818`.
 - Checkpoint B implementation baseline: `6409dbf5c264378bda6c0c25d83105100c3260ff`.
 - Checkpoint A implementation retained from `7a983a9d15caa4c785ef41de78e607f83d6b4c23`.
+- Checkpoint B implementation commits: `073616f4ed7ac8c76834376127c4066a2e6244a4`
+  (store/composition) and `a6ff3dd89e9115645aeffed05a2f173e07adf272`
+  (world diagnostics/tests/state).
 - Checkpoint branch: `codex/phase7/ArmedForceWorldComposition`.
 
 ## Delivered
