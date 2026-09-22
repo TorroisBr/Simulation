@@ -1,4 +1,116 @@
-# Phase 7 — Checkpoint D5 — Canonical Promotion
+# Phase 7 — Current Candidate State
+
+## Checkpoint D6A — Military manpower foundation (feature candidate only)
+
+- Canonical baseline verified before implementation:
+  `b04b69e42a8208d286e4d40427596019a3654d68` on
+  `codex/phase7/canonical`.
+- Feature branch: `codex/phase7/MilitaryManpowerFoundation`, created from that
+  exact baseline. Implementation commit:
+  `904a00d5879db941988885cbb0a4c6c21c4325f2`.
+- D6A is a validated feature candidate only. It has not been integrated into
+  or promoted to `codex/phase7/canonical`; the canonical branch remains at the
+  D5 baseline above.
+
+### Delivered
+
+- `ManpowerSourceId` is stable ordinal semantic identity, separate from
+  contingent origin/provenance. A read-only source snapshot provider supplies
+  explicit military-allocatable capacity, optional factual living quantity,
+  and a fingerprint that must change when either quantity changes. Source
+  allocation is derived by checked summation of the living rosters of all
+  contingents bound to that source; no mutable allocated counter or population
+  mirror was added.
+- `ContingentManpowerStateStore` owns one optional source binding and canonical
+  living cohorts per `ContingentId`. Cohorts aggregate Healthy/Wounded,
+  Free/Captured (with active `ArmedForceId` custodian), and
+  Available/Unavailable. Equal semantic keys merge, order/fingerprints are
+  deterministic, and Captured+Available is rejected. `LivingRosterAmount` and
+  `AvailableAmount` are checked derived sums; no `CohortId` exists.
+- Legacy records bootstrap without inventing a source: positive `Amount`
+  becomes one Healthy/Free/Available cohort; zero becomes no cohorts.
+  `ContingentRecord.Amount` remains an exact compatibility mirror. Managed
+  `TryReplaceContingent` cannot change it, and ordinary managed registration
+  starts at zero; source-backed allocation is required to add roster.
+- Binding a nonempty legacy roster validates current source capacity and
+  optional factual living quantity. A nonempty roster cannot change/clear its
+  binding. Allocation requires an active force, an exact current source
+  fingerprint, valid explicit cohort dimensions, checked arithmetic, and
+  source conservation before mutation. Demobilization requires an explicit
+  binding and exact cohort; if the source resolves it checks the supplied
+  fingerprint, but it may safely reduce the military-owned allocation even
+  when capacity has fallen or the source is unavailable. It never edits source
+  facts. Captured cohorts must first be explicitly released/retargeted.
+  Status redistribution preserves roster total and binding and requires an
+  active force.
+- Historical pre-D6A terminated forces with a positive legacy roster are
+  preserved during composition and reported by invariants rather than silently
+  rewritten. An explicit source binding may reconcile such a roster without
+  reactivating the force; allocation remains blocked, and the roster can be
+  demobilized and unbound only after reaching zero. If no source authority can
+  resolve the legacy roster, its state is preserved and the inconsistency
+  remains diagnostic. New force termination is blocked by direct positive
+  roster or by captured cohorts for which the force is custodian; descendants'
+  rosters are not aggregated.
+- `SimulationRuntime` clones the ArmedForce store first, then clones/rebinds
+  supplied manpower state or performs legacy bootstrap. No source-world
+  `ArmedForceStore` reference is retained. D6A state is projected through
+  snapshots, canonical output, diff, formatting, and world invariants, including
+  source capacity/factual-quantity diagnostics.
+- D3 snapshots capture roster, availability, canonical cohorts, and the
+  participant-local manpower fingerprint. Zero available manpower cannot make
+  a side eligible; only relevant participant state changes stale its context.
+  D4 still represents each direct contingent, but hard-projects zero capability
+  and skips the provider whenever that contingent has zero `AvailableAmount`.
+  For positive availability, D4 passes the immutable factual snapshot to the
+  provider; availability is not itself an automatic capability formula. D5
+  rebuilds D3 and recomputes D4, so relevant availability changes invalidate
+  plans while unrelated changes do not.
+- No casualty rule, consequence policy, battle application, population death,
+  Person accounting, event/history, persistence, or daily military behavior was
+  added. No production manpower-source adapter or recruitment-capacity policy
+  was invented; tests use a deterministic fake provider. `AdvanceDay` and
+  `docs/SIMULATION_ARCHITECTURE.md` are unchanged.
+
+### Validation and review
+
+- D6A focused: `11/11`; D5 planning: `16/16`; D4 raw computation: `10/10`;
+  D3 execution context: `11/11`.
+- D2 ArmedForce spatial: `11/11`; D1 Battle spatial: `7/7`; D0
+  SpatialAuthority: `8/8`.
+- ArmedForce foundation: `10/10`; ArmedForce world composition: `6/6`;
+  Persistent Conflict/War/Battle: `8/8`; ConflictFoundation: `16/16`;
+  SimulationRuntime orchestration: `10/10`.
+- Population filter: `131/131`; Person filter: `130/130`; lifecycle filter:
+  `40/40`. These overlap with the complete suite. A focused D6A test confirms
+  allocation changes only military roster state: settlement population and its
+  revision remain unchanged, and no Person is added.
+- ALL EditMode: `1557/1557`. Official complete EditMode `Smoke`: `5/5`.
+- Independent read-only architecture/correctness review was completed. The
+  reviewed findings were resolved: local roster release cannot be
+  trapped by a disappeared/reduced-capacity source; legacy terminated rosters
+  compose and can be explicitly reconciled where their source resolves; D4
+  cannot assign provider capability to an unavailable contingent.
+- `git diff --check` is clean for the candidate implementation. `AdvanceDay`
+  has no diff; no long-run test was required because daily behavior is unchanged.
+
+### Boundaries and D6B recommendation
+
+D6B is **NOT STARTED**. D7 is **NOT STARTED**. Canonical promotion is also
+**NOT PERFORMED**. The candidate remains confined to its feature branch.
+
+Before D6B implementation, keep its contract separate from D5 raw resolution
+and D7 application: define a world-composed direct-consequence policy that
+consumes a freshly validated D5 outcome and D6A cohort/source facts, carries
+stable policy/rule identity and exact source/contingent dependencies, and
+produces only an immutable, canonical set of disjoint proposed cohort/source
+transitions. Specify casualty, wounded, capture, and custody semantics without
+mutating stores; D7 must own any later atomic cross-domain application. Keep
+causal randomness (if required) separately keyed from D4's resolver stream.
+Cross-host equivalence of D4's existing floating-point arithmetic remains an
+unrelated open limitation.
+
+# Historical record — Checkpoint D5 — Canonical Promotion
 
 ## D5 baseline, integration, and canonical status
 
@@ -110,14 +222,13 @@ mutate world truth.
 ## D5 boundaries and next gate
 
 No long-run suite was required because `AdvanceDay` is unchanged and D5 adds no
-daily behavior. D6A is the next implementation checkpoint. Its architecture
-is consolidated in `docs/SIMULATION_ARCHITECTURE.md`; D6A had been blocked on
-D5 promotion and may now proceed only from the resulting combined canonical
-baseline. This promotion contains no D6A implementation. D6B and D7 remain
-later architecture-gated checkpoints. Cross-host numeric equivalence remains
-unresolved. Consequences, casualties, availability/custody implementation,
-lifecycle transition, application, events/history, save/load, and replay
-remain deferred.
+daily behavior. At the time of D5 promotion, D6A was the next architecture
+checkpoint and no D6A implementation was included in that promotion. The
+current unpromoted D6A candidate is documented at the top of this file. D6B
+and D7 remain later architecture-gated checkpoints. Cross-host numeric
+equivalence remains unresolved. Consequences, casualties, availability/custody
+implementation, lifecycle transition, application, events/history, save/load,
+and replay remained deferred at the D5 checkpoint.
 
 ## Historical record — Checkpoint D4
 
