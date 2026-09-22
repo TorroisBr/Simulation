@@ -1,4 +1,76 @@
-# Phase 7 — Checkpoint D3 — Current State
+# Phase 7 — Checkpoint D4 — Current State
+
+## D4 baseline, branch, and implementation
+
+- Canonical architecture baseline: `1a100bd6b14ed3545e130578ae0a874ce9e6d2d4`.
+- Checkpoint branch: `codex/phase7/BattleRawResolution`.
+- Implementation commit: `fc397ada3bab4b675437d5f970b3eb675bf2d907` —
+  deterministic Battle-to-Conflict raw projection, contextual random
+  authority, immutable computation, and tests.
+
+## D4 delivered
+
+D4 adds the first narrow raw Battle computation boundary. It consumes an
+explicit D3 `BattleExecutionContext`; it does not reconstruct or persist
+execution state.
+
+- `BattleResolutionComputationService` revalidates the context against current
+  world state before invoking capability rules or randomness. Invalid and
+  stale contexts return no computation and consume no random draws.
+- Capability is supplied by an explicit pure
+  `IBattleContingentCapabilityProvider` with a stable semantic `RuleKey`. There
+  is no production default formula. A guard fails if any NPC participant ever
+  reaches the aggregate-only resolver.
+- Every direct contingent captured in the context projects to exactly one
+  aggregate lower-level participant, including zero-amount contingents.
+  Lower-level `Count` remains null; `Amount` remains a long in the typed
+  mapping. Namespaced `SourceId` values derive from Battle, force, and
+  contingent semantic IDs.
+- All Battle sides are preserved in ordinal order. Transitional lower-level
+  objective/stakes are `Other`/`Low`; no modifiers are added; lower-level
+  `LocationRuntimeId` is null.
+- The causal fingerprint uses the projection version, Battle/day, ordered
+  side-force-contingent identities, captured contingent source/service/
+  characteristics/amount, projected capability, capability and random
+  authority RuleKeys, and explicit immutable resolver settings. Commander
+  metadata and spatial references are excluded because neither participates
+  in this capability rule or raw projection. The adapted ConflictId derives
+  from BattleId, execution day, and this fingerprint.
+- `DeterministicBattleConflictRandomSource` adapts the existing keyed
+  deterministic random foundation. Its operation keys are stateless and
+  contextual; unrelated Battle evaluation order does not advance a shared
+  sequence.
+- The returned `BattleResolutionComputation` is ephemeral and exposes the raw
+  `ConflictResolutionResult` plus immutable typed side and participant
+  mappings. It calls only `ConflictResolver.Resolve(..., constraints: null)`;
+  no consequence resolver, world mutation, event, or history path is used.
+
+## D4 validation
+
+- D4 focused EditMode: `9/9`.
+- ALL EditMode: `1528/1528`.
+- Official complete EditMode `Smoke`: `5/5`.
+- Independent read-only architecture/conformance review: no implementation
+  boundary violations found; review-identified test gaps were covered before
+  the final test runs.
+- `git diff --check`: clean before the final documentation commit.
+- `AdvanceDay` and `docs/SIMULATION_ARCHITECTURE.md`: unchanged.
+
+## D4 known limitations and deferred
+
+The lower-level resolver retains its existing float arithmetic. Repeatability
+was tested in the current Unity/runtime environment, but cross-host or future
+`Simulation.Core` numeric determinism is unproven and remains a required gate
+before accepting or persisting a Battle outcome.
+
+This computation is not an accepted or persistent Battle result. The Battle
+remains `Active`; outcome acceptance, lifecycle transition, consequences,
+casualties, retreat/rout/surrender, capture, logistics, movement, events,
+history, persistence/replay, and the D5/D6 checkpoint split remain deferred.
+The post-D4 architecture gate must decide outcome semantics, atomicity, and
+event/history boundaries before any raw result is applied.
+
+D3 checkpoint record retained for historical context:
 
 ## D3 baseline, branch, and commits
 
