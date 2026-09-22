@@ -1,4 +1,110 @@
-# Phase 7 — Checkpoint D4 — Current State
+# Phase 7 — Checkpoint D5 — Validated Feature Candidate
+
+## D5 baseline, branch, and implementation
+
+- Canonical baseline: `eef60513fed42e6b8a8660efd8e9cc9fe4f1538b` (D4 state).
+- Feature branch: `codex/phase7/BattleOutcomePlanning`.
+- Implementation commit: `bcca17580ae216b4f20fc4e11a4082038cd015c8` —
+  world-authorized Battle resolution
+  policy, semantic outcome, immutable non-committable application plan,
+  recomputation/current-plan validation, and focused tests.
+- The feature branch is validated and published independently; this record
+  does not claim promotion to `codex/phase7/canonical` or external approval.
+
+## D5 delivered
+
+D5 adds the first world-bound authorization and semantic outcome boundary. It
+ends with an ephemeral proposal and does not apply Battle consequences or
+mutate world truth.
+
+- `BattleResolutionPolicy` is explicitly composed through `SimulationRuntime`.
+  The runtime exposes only the immutable policy metadata and a bound
+  `BattleOutcomePlanningService`; policy replacement is not supported. When
+  no policy is supplied, the service remains available and reports
+  `PolicyNotConfigured` rather than creating a production default.
+- The policy captures the capability and contextual-random RuleKeys,
+  immutable resolver settings, supported D4 projection version, required
+  numeric execution profile key, and an explicit host-composition support
+  declaration. Its SHA-256 semantic fingerprint uses canonical, ordinal,
+  length-delimited values; it does not use object identity, `GetHashCode`,
+  runtime addresses, or insertion order. Relevant configuration changes
+  change the fingerprint.
+- Numeric profile identity and current-host support are required policy
+  inputs. Unsupported profiles fail before raw resolution. The compatibility
+  declaration is explicit composition metadata; it does not establish
+  cross-host or future `Simulation.Core` numeric equivalence. D4's float
+  arithmetic remains a known limitation.
+- Capability and random implementations are retained by reference only under
+  their explicit contracts: composed capability rules remain immutable and
+  pure, contextual random sources remain immutable/stateless, and every
+  behavior/configuration change requires a new stable `RuleKey`. D5 captures
+  and checks the keys at composition and planning boundaries; it rejects an
+  observable key change.
+- Battle policy is a domain-specific composed-policy bridge. D5 does not add
+  Battle configuration to the broad `EffectiveSimulationConfiguration`
+  foundation.
+- The authoritative request begins with `BattleId`, optional D3
+  `BattleExecutionPlan` commander metadata, and an optional expected causal
+  fingerprint. The service reads the runtime's current logical day, rebuilds
+  the current D3 context from its world-owned builder, and recomputes through
+  its internally bound D4 service. Callers cannot supply an authoritative
+  context, computation, capability provider, random source, or resolver
+  settings.
+- A supplied expected fingerprint is only a preview-confirmation
+  precondition: `null` omits it, and any supplied value (including empty) must
+  match the current authorized D4 causal fingerprint. Authorization always
+  comes from the runtime policy and fresh recomputation.
+- The recomputed context/day is revalidated after resolution as well as by D4
+  before resolution. `TryValidateCurrent` reconstructs the context and
+  recomputes under the same world policy, then checks current day, policy
+  identity, context fingerprint, causal fingerprint, and semantic outcome.
+  Unrelated force changes remain non-invalidating; current day, relevant
+  participant position, and direct contingent changes make the plan stale.
+- `BattleOutcome` is minimal: `Victory` or `Draw`; Victory maps through D4's
+  explicit side mapping to one typed `BattleSideId`, while Draw has no winner.
+  It carries the current logical day and immutable provenance for policy,
+  profile, projection, D4 causal result, context, rules, and settings. Raw
+  scores remain only on the plan's separate ephemeral D4 computation.
+- `BattleOutcomeApplicationPlan` is immutable and ephemeral. It carries the
+  outcome, policy identity, source context/dependencies, optional execution
+  metadata, and D4 computation. `DirectConsequenceStatus` is
+  `NotProvided`; completeness and commit-readiness are always false. D5 has no
+  apply API and does not represent the missing consequence model as zero
+  casualties.
+- D5 does not change `PersistentBattleRecord` or `PersistentBattleStore`,
+  snapshots/diagnostics, `Contingent.Amount`, lifecycle, population, position,
+  events, or history. Battles remain `Active`. `SimulationRuntime.AdvanceDay`
+  and `docs/SIMULATION_ARCHITECTURE.md` are unchanged.
+
+## D5 validation
+
+- D5 focused EditMode: `15/15`.
+- D4 raw resolution: `9/9`; D3 execution context: `10/10`.
+- D2 ArmedForce spatial: `11/11`; D1 Battle spatial: `7/7`; D0
+  SpatialAuthority: `8/8`.
+- ArmedForce foundation: `10/10`; Persistent Conflict/War/Battle: `8/8`;
+  ConflictFoundation: `16/16`; SimulationRuntime orchestration: `10/10`.
+- ALL EditMode: `1543/1543`. Official complete EditMode `Smoke`: `5/5`.
+- ALL EditMode included the diagnostics, Person, Population, lifecycle, and
+  travel regression suites.
+- Independent read-only architecture/correctness review: no remaining D5
+  blocker. The review confirmed that provider immutability/purity and
+  random-source statelessness are composition contracts; arbitrary
+  implementations cannot be mechanically frozen by the runtime.
+- `git diff --check`: clean for implementation before the state-document
+  update. `AdvanceDay` and `docs/SIMULATION_ARCHITECTURE.md`: unchanged.
+
+## D5 boundaries and next gate
+
+No long-run suite was required because `AdvanceDay` is unchanged and D5 adds no
+daily behavior. D6 remains the next architecture-gated foundation for
+Military Manpower / Availability / Casualty. D7 remains the later atomic Battle
+Outcome Application boundary. This branch does not begin D6; its scope remains
+subject to a separate architecture gate. Cross-host numeric equivalence,
+consequences, casualties, availability/custody, lifecycle transition,
+application, events/history, save/load, and replay remain deferred.
+
+## Historical record — Checkpoint D4
 
 ## D4 baseline, branch, and implementation
 
