@@ -1,4 +1,107 @@
-# Phase 7 — Checkpoint D2 — Current State
+# Phase 7 — Checkpoint D3 — Current State
+
+## D3 baseline, branch, and commits
+
+- Canonical architecture baseline: `fc051d9dadefd2579dfc209ace4a7103b0ffc60a`.
+- Checkpoint branch: `codex/phase7/BattleExecutionContext`.
+- Implementation commit: `48ecd22` — BattleExecutionContext contracts, builder,
+  dependency fingerprints, stale validation, runtime composition, and focused
+  tests.
+
+## D3 delivered
+
+Checkpoint D3 adds the smallest ephemeral execution boundary between
+persistent Battle state and a future Battle/Conflict outcome. It does not
+resolve a Battle, consume RNG, mutate world state, or adapt ConflictFoundation.
+
+- `BattleExecutionContext` is an immutable, non-authoritative capture of one
+  explicit Battle execution attempt. It is not stored in
+  `PersistentBattleStore`, does not receive a lifecycle, and is not projected
+  into `WorldStateSnapshot`.
+- `BattleExecutionContextBuilder` consumes the composed Battle, ArmedForce,
+  ArmedForce spatial-position, SpatialAuthority, LocalTopology, and Person
+  stores. It exposes `TryCreate` with explicit failure codes and a convenience
+  overload without a plan.
+- Eligibility requires an existing Active Battle, a started day, a valid typed
+  Battle location, at least two sides, explicit participant bindings, active
+  participant forces, current typed participant positions, and directional
+  physical compatibility with the Battle location.
+- Composition projects only each explicitly bound force's direct contingents.
+  Parent/child hierarchy, detach state, commanders, allies, War, and
+  Conflict are never expanded. Zero-amount contingents remain captured but do
+  not satisfy a side's direct combat-element requirement.
+- Every side must have at least one explicit participant force with a direct
+  contingent whose amount is greater than zero. A command-only parent may
+  coexist with an explicitly bound combat-capable child.
+- Duplicate explicit ArmedForce bindings and duplicate ContingentId
+  projections are rejected without mutating persistent Battle state.
+- `BattleExecutionPlan` is ephemeral and contains only optional explicit
+  `BattleSideId -> PersonId` side-commander metadata. It does not imply
+  ownership, membership, allegiance, loyalty, office, co-location, or force
+  command.
+- Dependency fingerprints capture only the target Battle, explicit bindings,
+  direct contingent composition, relevant current positions, and copied plan
+  metadata. They use stable semantic keys and deterministic ordering rather
+  than store revisions or unrelated world state.
+- `TryValidateCurrent` rechecks the relevant world truth without mutation or
+  RNG and distinguishes current, stale, and malformed contexts with
+  deterministic stale reasons.
+- `SimulationRuntime.BattleExecutionContextBuilder` is bound to the runtime's
+  cloned stores. No context is retained as authoritative runtime state.
+
+## D3 validation
+
+- D3 focused EditMode: `10/10`.
+- ArmedForce foundation regression: `10/10`.
+- D2 ArmedForce spatial regression: `11/11`.
+- D1 Battle spatial regression: `7/7`.
+- Persistent Conflict/War/Battle regression: `8/8`.
+- D0 SpatialAuthority regression: `8/8`.
+- Person-related regression: `129/129`.
+- Population regression: `130/130`.
+- Lifecycle regression: `40/40`.
+- ConflictFoundation regression: `17/17`.
+- ALL EditMode: `1519/1519`.
+- Official EditMode `Smoke`: `5/5`.
+- `git diff --check`: clean before documentation commit.
+
+## D3 boundaries and known limitations
+
+The context is an input capture and eligibility/stale boundary only. It has no
+combat power formula, ArmyStrength, morale, cohesion, readiness, tactics,
+plans/orders, operational groups, resolution, outcome, casualties, logistics,
+movement, scouting, military knowledge, aftermath, or population accounting.
+Person references are validated by PersonId existence only; no Person spatial
+position or NpcRuntime relationship is inferred. The dependency fingerprint is
+semantic diagnostic state, not save/load, replay, or event sourcing.
+
+`PersistentBattleStore` still does not gate registration, participant binding,
+or Battle start on participant position. An Active Battle may exist without a
+currently eligible execution context. `AdvanceDay` remains unchanged and no
+military daily processing or autonomy was added.
+
+## D3 deferred
+
+P7-D4 remains deferred: the ConflictFoundation adapter and the first Battle
+resolution. Persistent strategic War behavior, tactics, morale, cohesion,
+readiness, supply, logistics, funding/pay, requisition, foraging, military
+movement, scouting, military knowledge, recruitment, mobilization, casualties,
+capture/custody, desertion, defection, mutiny, military control, occupation,
+war goals, ceasefire, peace, taxation, diplomacy, Campaign, Polity, WarAI,
+continuity operations, save/load, replay, networking, and broad
+`Simulation.Core` migration remain deferred.
+
+## D3 architecture conformance
+
+Read-only review found no contradiction with `docs/SIMULATION_ARCHITECTURE.md`.
+ArmedForce remains distinct from Faction, Institution, Polity, and generic
+Organization. Command, loyalty, allegiance, membership, funding, and control
+remain distinct. Direct participant bindings remain Battle-owned and explicit;
+physical position remains separate from organizational hierarchy and
+detachment. Person identity remains PersonId-based and independent from
+NpcRuntime. No Unity object identity, discovery order, or insertion order is
+authoritative. No `ConflictFoundation` remodeling or Battle resolution was
+added.
 
 ## D2 baseline, branch, and commits
 
