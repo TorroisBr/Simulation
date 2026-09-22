@@ -2547,6 +2547,74 @@ continuar pertencendo a ela. Durante o destacamento, pode ter localização,
 comandante, ordens, suprimento, batalhas e casualties próprios. O retorno à
 força principal não exige uma ruptura de identidade.
 
+### Posição física da ArmedForce
+
+Uma `ArmedForce` pode possuir zero ou uma posição física operacional atual no
+primeiro modelo. Essa posição representa a presença física da própria força e,
+quando houver posição, de seus contingentes diretos tratados como um corpo
+co-localizado. Ela não é inferida da hierarquia e não representa
+automaticamente o comandante, o headquarters, a parent force, os descendants,
+o aggregate organizacional, um plano de movimento ou uma localização histórica:
+
+```text
+ARMED FORCE POSITION
+!= COMMANDER POSITION
+!= HEADQUARTERS POSITION
+!= DESCENDANT POSITION
+!= ORGANIZATIONAL AGGREGATE
+!= MOVEMENT PLAN
+```
+
+`Position = null` é válido para uma força distribuída, para uma força sem
+composição direta co-localizada, para um nível predominantemente de comando ou
+quando a posição factual ainda não foi estabelecida pela autoridade espacial.
+Uma parent force sem contingentes diretos não recebe a posição de seus filhos,
+e a posição de uma parent não se propaga automaticamente para eles.
+
+Na primeira representação, contingentes diretos de uma mesma força são
+considerados co-localizados quando a força possui posição. Se a composição
+precisar operar simultaneamente em locais diferentes, a direção preferida é
+representá-la por subforces ou detachments com identidades próprias. Múltiplas
+presenças físicas para uma mesma `ArmedForce` permanecem deferidas até existir
+um consumidor concreto que exija essa semântica.
+
+A posição física pertence semanticamente ao domínio de `ArmedForce`, mas não
+precisa ser um campo da identidade ou da composição da força. A separação
+conceitual é:
+
+```text
+ArmedForceStore
+  → identity, hierarchy, composition, lifecycle, commander/relevant persons
+
+ArmedForceSpatialState
+  → current physical position
+```
+
+`SpatialAuthorityStore` continua sendo a autoridade dos lugares físicos e da
+resolução de `SpatialReference`; ele não se torna a autoridade genérica de
+todos os objetos móveis. O estado espacial de uma força deve validar sua
+referência contra essa autoridade.
+
+`OperationalLocationReference`, quando existir como string legada, é apenas
+ponte transitória. Não pode permanecer como uma segunda autoridade depois que
+uma posição tipada existir. Valores legados só devem ser convertidos quando a
+conversão for inequívoca; valores não convertíveis não se tornam verdade
+espacial silenciosamente.
+
+Destacamento e posição são mudanças diferentes:
+
+```text
+DETACH != MOVE
+REATTACH != ARRIVAL
+POSITION STATE != MOVEMENT PLAN != MOVEMENT EXECUTION
+```
+
+Uma operação futura pode compor `Detach` e `SetPosition`, mas `Detach` não
+deve movimentar implicitamente a força, e `Reattach` não deve levá-la à posição
+da parent. Parent e child podem estar fisicamente separados sem que
+`IsDetached` seja verdadeiro; esse estado representa separação operacional da
+estrutura, não distância espacial nem uma nova identidade organizacional.
+
 É importante distinguir:
 
 - **subforce** — parte estrutural de outra força;
@@ -2684,6 +2752,12 @@ weather, presença inimiga e segurança podem alterar a movimentação. Uma for�
 não atravessa magicamente uma rota desconhecida; exploração à frente pode
 produzir knowledge para uma decisão posterior.
 
+É válido afirmar que uma força está em uma `SpatialReference` sem representar
+como chegou ali. Estado de posição, plano de movimento e execução do movimento
+não são a mesma coisa. A posição pode futuramente ser alterada por movimento,
+comando externo, bootstrap de cenário ou consequência de outro domínio, mas a
+existência da posição não cria por si só um `MilitaryMovement`.
+
 Battle deve ser resolvida de forma agregada, sem requisito de combate golpe a
 golpe ou turno a turno. O plano ou a tática escolhida com base em knowledge
 influencia a interação entre capabilities, situação e terreno, mas não
@@ -2691,6 +2765,99 @@ garante o resultado. Uma batalha pode produzir casualties, ferimentos, morte
 ou captura de comandante, withdrawal, rout, surrender, perdas de equipamento
 ou supply, mudanças de morale/cohesion, mudança de posição e oportunidades de
 alterar military control.
+
+Uma Battle persistente e sua elegibilidade para execução são estados
+distintos:
+
+```text
+BATTLE REGISTRATION/START != BATTLE EXECUTION ELIGIBILITY
+```
+
+Bindings de participantes não provam co-localização no momento do registro, e
+`Pending → Active` não congela as posições das forças. Antes da execução, um
+contexto de Battle deve revalidar a Battle ativa, sua localização, os
+participantes, a posição física atual das forças, a compatibilidade espacial,
+a composição direta e as revisões ou fingerprints das dependências realmente
+usadas. Uma mudança posterior de posição torna um contexto capturado obsoleto,
+mas não invalida retroativamente o registro persistente da Battle.
+
+### Composição direta e participação operacional
+
+Uma binding explícita de `ArmedForce` em uma Battle representa a participação
+daquela força, não a inclusão automática de seus descendants:
+
+```text
+ArmedForce binding → direct contingents of that ArmedForce
+```
+
+O agregado organizacional continua sendo uma consulta estrutural e não deve
+alimentar diretamente o manpower da Battle. Assim, se Army e Legion A forem
+bindings explícitas, a Army contribui apenas com seus contingentes diretos e
+a Legion A apenas com os seus. `ContingentId` estável deve permitir detectar
+ou rejeitar duplicação durante a projeção de execução.
+
+Uma parent force sem contingentes diretos pode permanecer registrada como
+participante, representando envolvimento organizacional, presença de comando
+ou intenção ainda não expandida. Porém, ao criar o contexto de execução, ela
+contribui com zero combatants. Não se deve gerar manpower dos descendants por
+shorthand implícito. Cada side precisa possuir pelo menos um combat element
+explícito e utilizável antes de uma resolução; uma Battle persistente pode
+existir sem ser imediatamente executável.
+
+### Comando operacional temporário
+
+Hierarquia organizacional e comando operacional são relações diferentes:
+
+```text
+ARMED FORCE PARENT != OPERATIONAL COMMAND RELATION
+```
+
+Forças podem atuar juntas em uma operação sem fundir suas identidades. O
+primeiro modelo pode representar um comandante geral e as forças subordinadas
+no plano ou contexto de execução da Battle, sem reparenting organizacional.
+`Force Commander` não é automaticamente `Battle Side Commander`.
+
+Não se introduz ainda uma entidade persistente `OperationalGroup`. Para o
+primeiro execution slice, `BattleSide` mais bindings explícitas de
+`ArmedForce` são suficientes. Uma estrutura operacional própria só deve surgir
+quando houver consumidor real para múltiplos grupos no mesmo side, ordens ou
+planos separados, logística, continuidade entre Battles ou diagnostics
+próprios. Inicialmente, seu escopo preferencial seria a operação ou a Battle;
+um grupo persistente de War exigiria justificativa adicional.
+
+`CommanderPersonId`, officers e heroes são referências de identidade e papel.
+Não implicam presença física, participação individual, manpower ou
+co-localização. Enquanto não existir posição canônica de `Person`, estar na
+posição X não significa que o commander está em X. Commanders podem ser
+metadata de comando sem se tornarem named combat participants.
+
+### Contexto de execução
+
+A transição futura deve preservar três camadas distintas:
+
+```text
+PERSISTENT BATTLE STATE
+    → BATTLE EXECUTION CONTEXT
+        → BATTLE/CONFLICT OUTCOME
+```
+
+O contexto de execução deve capturar somente inputs relevantes e revalidáveis,
+como `BattleId`, fronteira lógica ou dia, localização física validada, sides
+em ordem determinística, participantes explícitos, contingentes diretos,
+`ContingentId` estáveis, dados de capability necessários, comando operacional
+opcional e revisões ou fingerprints das dependências utilizadas. Sua criação
+não deve consumir aleatoriedade autoritativa.
+
+Um contexto fica stale quando muda uma dependência que ele realmente usa:
+movimento da força ou alteração dos contingentes, por exemplo. Mudança de
+comandante que não participa do cálculo não precisa invalidá-lo; se o comando
+afeta o resultado, a mudança deve torná-lo stale. A validação deve preferir
+revisões específicas ou fingerprints relevantes em vez de invalidar por toda e
+qualquer alteração do mundo.
+
+```text
+EXECUTION CONTEXT != PERSISTENT STATE != OUTCOME != HISTORY
+```
 
 ```text
 ORDERED RETREAT != ROUT != SURRENDER
@@ -3064,6 +3231,43 @@ Active Battle  → localização física factual válida obrigatória
 WORLD TRUTH: Battle exists at Hex X não concede esse conhecimento a todos os
 atores.
 
+### Compatibilidade física entre Battle e participantes
+
+A presença física deve usar inicialmente uma regra conservadora e consciente
+da containment. Uma posição mais específica pode provar presença em uma área
+mais ampla, mas uma posição mais ampla não prova presença em uma área mais
+específica:
+
+```text
+Battle at Hex H
+  Force at Hex H                         → compatível
+  Force at Location anchored in H        → compatível
+  Force at SubLocation anchored in H     → compatível
+
+Battle at Location L
+  Force at Location L                    → compatível
+  Force at SubLocation contained in L    → compatível
+  Force only at Anchor Hex               → insuficiente
+
+Battle at SubLocation S
+  Force at exact SubLocation S           → compatível
+  Force only at parent Location          → insuficiente
+  Force only at Hex                      → insuficiente
+```
+
+Isso preserva:
+
+```text
+MORE-SPECIFIC PRESENCE MAY PROVE BROADER PRESENCE
+BROAD PRESENCE DOES NOT PROVE MORE-SPECIFIC PRESENCE
+SAME PHYSICAL AREA != SAME EXACT SPATIAL REFERENCE
+```
+
+O modelo não inventa geometria local inexistente. A compatibilidade regional
+de uma Location ou SubLocation deve ser resolvida pelas âncoras espaciais
+existentes, sem transformar o fato de compartilhar um Hex em presença
+automática dentro de uma estrutura específica.
+
 Battle != Battle Location != Battle Aftermath / Battlefield Site.
 
 Uma Battle em City A → Market Square pode deixar corpos, feridos, equipamento,
@@ -3172,10 +3376,11 @@ A migração deve ser incremental:
 
 Não fazer um big-bang rewrite.
 
-### P7-D0 — Spatial Reference / Authority Bridge
+### P7-D0/D1 — Spatial Reference / Battle Location Foundation
 
-O próximo implementation checkpoint espacial é P7-D0 — Spatial Reference /
-Authority Bridge. Seu escopo mínimo futuro é:
+P7-D0 estabeleceu o menor bridge autoritativo de referências físicas, e P7-D1
+fez `PersistentBattle` consumir essa autoridade sem iniciar movimento ou
+resolução. O foundation inclui:
 
 - identidade estável de Hex e Location;
 - SpatialReference tipada;
@@ -3184,7 +3389,9 @@ Authority Bridge. Seu escopo mínimo futuro é:
 - owner explícito da verdade espacial;
 - ordenação determinística;
 - snapshot, canonical output, diff e invariants básicos;
-- capacidade de validar futuramente a localização de uma Battle.
+- capacidade de validar a localização física de uma Battle;
+- localização opcional em Battle Pending;
+- localização física válida obrigatória em Battle Active.
 
 Se necessário para representar uma referência espacial de forma correta,
 Crossing pode receber o menor contrato de identidade exigido. P7-D0 não deve
@@ -3194,10 +3401,25 @@ stale crossing knowledge novo, Merchant/Expedition migration, military
 movement, scouting, Battle resolution, Battle aftermath, operational groups,
 renderer, procedural generation, save/load ou networking.
 
-P7-C permanece fechado e correto. A ausência atual de Battle location é
-DEFERRED BY DESIGN, não um mismatch retroativo. Battle resolution não deve
-começar antes de existir autoridade suficiente para que uma Active Battle
-possua localização física factual.
+P7-C e D1 permanecem fechados e corretos. O próximo foundation slice é
+P7-D2 — ArmedForce Spatial Position Bridge. Ele deve introduzir posição física
+tipada e opcional para `ArmedForce`, validar referências contra a autoridade
+espacial, separar posição de detach, substituir progressivamente a semântica
+legada de `OperationalLocationReference`, produzir diagnostics determinísticos
+e oferecer a consulta mínima de compatibilidade física. Não deve implementar
+military movement ou Battle resolution.
+
+Depois de D2, a direção é P7-D3 — elegibilidade física, comando operacional e
+`BattleExecutionContext` — seguida por P7-D4 — adapter para `ConflictFoundation`
+e a primeira resolução de Battle. A resolução não deve começar antes de haver
+posição autoritativa das forças, regra de composição direta, prevenção de
+double counting e validação stale suficientes para formar um contexto de
+execução confiável.
+
+Permanecem deferidos nesta fundação: military movement, Hex pathfinding,
+terrain, crossings, múltiplas presenças da mesma força, `OperationalGroup`
+persistente, posição espacial de Person, military knowledge, logistics,
+casualties, aftermath, save/load, networking e Processing LOD.
 
 ---
 
