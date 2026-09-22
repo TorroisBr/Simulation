@@ -168,6 +168,18 @@ IDENTITY != CLAIMED CONTINUITY
 OWNERSHIP != CUSTODY != CONTROL
 OWNERSHIP != JURISDICTION != CONTROL != ALLEGIANCE
 RESIDENCE != PRESENCE
+SIMULATION LOCATION != RENDERING COORDINATE
+CONTAINMENT != SAME HEX != CONNECTIVITY
+HEX ADJACENCY != TRAVERSABILITY
+MOVING ENTITY != LOCATION
+DISTANCE != TRAVEL TIME
+SHORTEST PATH != FASTEST PATH != SAFEST PATH
+ROUTE PLANNING USES KNOWLEDGE
+TRAVERSAL EXECUTION REVALIDATES WORLD TRUTH
+BATTLE != BATTLE LOCATION != BATTLE AFTERMATH
+BATTLE ENDED != BATTLEFIELD MATERIAL STATE ENDED
+BATTLEFIELD MATERIAL STATE != HISTORICAL MEMORY
+CONTENT DEFINITION != CURRENT SPATIAL WORLD STATE
 MEMBERSHIP != RESIDENCE != CITIZENSHIP != ALLEGIANCE
 GENEALOGY != HOUSEHOLD != DYNASTY
 OFFICE != TITLE != SOCIAL STATUS
@@ -2764,13 +2776,251 @@ não deve ser reduzida a um único valor de amizade entre Estados.
 
 # Parte XVI — Espaço, exploração e conhecimento espacial
 
-## 69. Chegar a um local != conhecer sua topologia
+## 69. Fundação física regional: HexGrid, Locations e topologia local
 
-**DECIDIDO**
+**DECIDIDO / DIREÇÃO**
 
-Arrival pode revelar/confirmar o site macro, mas não deve automaticamente revelar toda a topologia interna.
+O mundo físico utilizará um HexGrid como substrato espacial regional comum.
+Um Hex é uma área física relativamente grossa do mundo, não uma coordenada de
+alta resolução. A arquitetura não deve criar uma recursão:
 
-Para sites detalhados:
+```text
+World → Hex → smaller Hex → smaller Hex → coordinates
+```
+
+A estrutura conceitual é:
+
+```text
+World
+  → Hex
+      → Location
+          → LocalTopology / SubLocation
+```
+
+SIMULATION LOCATION != RENDERING COORDINATE. Coordenadas, meshes e outras
+representações do host podem existir para apresentação ou interação local, mas
+não definem a posição autoritativa do mundo.
+
+### Hex como área regional
+
+Um Hex pode conter zero, uma ou várias Locations, além de terrain, features
+físicas, barriers, crossings e outras informações regionais quando houver um
+consumidor real.
+
+```text
+Hex 421
+├── City A
+├── Old Well
+└── Stone Bridge
+```
+
+Isso não significa que Old Well esteja dentro de City A. Nem o fato de duas
+entidades ocuparem o mesmo Hex cria uma relação hierárquica ou uma conexão de
+traversal:
+
+```text
+CONTAINMENT != SAME HEX != CONNECTIVITY
+```
+
+Adjacência geométrica também não garante passagem:
+
+```text
+HEX ADJACENCY != TRAVERSABILITY
+```
+
+Hexes vizinhos podem estar separados por rio, canyon, parede, face de montanha,
+mar, barreira mágica ou passagem colapsada.
+
+Terrain é contexto físico regional. Seus tipos podem ser definidos por
+conteúdo e não precisam formar, desde já, um enum universal fechado. Terrain
+não possui um Hex.TravelTime absoluto; o custo de traversal depende de
+condições do mundo, terrain, perfil de movimento, rota ou crossing e outros
+fatos relevantes.
+
+### Location é âncora espacial, não entidade universal
+
+Location é uma identidade espacial neutra e estável. Não é WorldEntity,
+classe-base de todo objeto do mundo ou substituto de City, Fortress, Mine,
+ExplorableSite e outros conceitos de domínio.
+
+Entidades de domínio permanecem domain-owned e referenciam uma âncora:
+
+```text
+City          → LocationId
+Fortress      → LocationId
+Mine          → LocationId
+ExplorableSite → LocationId
+```
+
+No primeiro slice físico, cada Location possui um AnchorHexId único:
+
+```text
+Location → AnchorHexId
+```
+
+Isso não torna impossível um footprint que futuramente cubra vários Hexes. Essa
+complexidade só deve ser introduzida quando um consumidor real exigir essa
+semântica. Não faz parte do primeiro foundation slice.
+
+Objetos móveis não são Locations:
+
+```text
+Person | Caravan | ArmedForce | Ship | TravelParty | Expedition
+    → current spatial position/reference
+
+MOVING ENTITY != LOCATION
+```
+
+### LocalTopology e SubLocation
+
+Interiores e estruturas locais não precisam repetir o HexGrid regional:
+
+```text
+Hex 421
+└── City A
+     └── LocalTopology
+          ├── Market Square
+          ├── Palace
+          ├── Barracks
+          └── Harbor
+```
+
+LocalTopology representa relações locais significativas, como containment,
+conexões percorríveis, entry points, publicação e conhecimento topológico. Isso
+é outro nível de abstração, não zoom infinito do grid.
+
+O LocalTopologyStore atual é uma fundação reutilizável/adaptável. Futuramente
+deve aceitar um owner espacial neutro quando necessário, em vez de permanecer
+semanticamente limitado a City e ExplorableSite.
+
+### SpatialReference
+
+A arquitetura deve suportar uma referência física semanticamente tipada que
+possa apontar para:
+
+- Hex;
+- Location;
+- SubLocation;
+- Crossing espacialmente identificável.
+
+O formato técnico exato permanece para o futuro foundation slice. Não são
+autoridade espacial:
+
+- strings opacas sem validação;
+- nomes textuais de cidades;
+- Unity RuntimeIds;
+- GameObjects;
+- coordenadas de rendering.
+
+Uma referência mais específica deve ser resolvível para sua posição regional:
+
+```text
+Market Square → City A → Hex 421
+```
+
+Uma Crossing também pode ser uma referência válida sem se tornar
+automaticamente uma Location genérica.
+
+### Traversal network
+
+O grid físico e a rede de traversal são camadas diferentes:
+
+```text
+PHYSICAL GRID != TRAVERSAL NETWORK
+```
+
+O grid responde principalmente por posição regional, vizinhança geométrica e
+contexto físico. A traversal network representa relações de movimento
+semanticamente relevantes, como road, trail, mountain pass, tunnel, ferry
+route, gate, bridge, portal, sea lane e causeway.
+
+O mundo não deve virar uma railway. Nem toda passagem possível precisa de uma
+Connection explícita. Quando as condições físicas permitem, wilderness
+traversal pode ser derivado da geografia e do terrain:
+
+```text
+grid topology + physical conditions + explicit traversal structures
+→ possibilidades de passagem
+```
+
+### Barrier e Crossing
+
+Barrier representa um obstáculo ou restrição física relevante para traversal.
+Pode ser um rio, canyon, parede, cadeia montanhosa, ravina, mar ou campo
+mágico. Uma Barrier não precisa estar limitada a uma única boundary entre dois
+Hexes; um rio pode atravessar muitos Hexes e uma parede pode cobrir vários
+segmentos.
+
+Crossing representa uma forma ou local concreto de atravessar ou superar uma
+Barrier:
+
+```text
+River       → Bridge | Ford | Ferry
+Mountain    → Pass | Tunnel
+Wall        → Gate
+```
+
+Bridge não é uma primitive arquitetural especial. É um tipo ou definição de
+conteúdo de Crossing:
+
+```text
+BARRIER → CROSSING → TRAVERSAL POSSIBILITY / CONNECTION
+```
+
+Uma Crossing pode possuir identidade estável, posição física, relação com a
+Barrier, estado factual atual e restrições de traversal. Se for destruída,
+Hexes e Barrier permanecem; apenas aquela Crossing se torna inutilizável.
+Outras Crossings podem continuar funcionando.
+
+A traversal authority futura combina topologia derivável do grid com estado
+autoritativo persistente quando a mudança factual for relevante. Não deve
+persistir cada edge geométrica simples sem necessidade, mas também não deve
+derivar tudo a ponto de perder estados como estrada bloqueada ou ponte
+destruída.
+
+### Travel e movimento
+
+A verdade espacial futura não deve ser primariamente:
+
+```text
+City A → City B → TravelDays = 3
+```
+
+Deve ser:
+
+```text
+Origin
+→ chosen path / route
+→ traversed Hexes / connections / crossings
+→ Destination
+```
+
+Travel duration é resultado da semântica de traversal:
+
+```text
+DISTANCE != TRAVEL TIME
+SHORTEST PATH != FASTEST PATH != SAFEST PATH
+```
+
+Uma rota mais longa por plains e road pode ser mais rápida ou segura que uma
+rota curta por montanhas.
+
+O plano de viagem pode registrar path escolhido, custo esperado, duração
+esperada, conhecimento usado e assumptions relevantes. Isso congela o plano,
+não a realidade inteira. Durante a execução, ponte pode ruir, estrada pode
+inundar, passagem pode ser bloqueada, guerra pode fechar uma rota, clima pode
+mudar ou portão pode fechar. O próximo passo deve revalidar a verdade atual;
+movimento pode falhar ou parar, knowledge pode ser atualizado e uma nova
+decisão pode ser necessária. O algoritmo de replanning permanece aberto.
+
+Perfis de movimento como Person, Caravan, Scout, Army, Mounted Group, Ship e
+Flying Creature podem interagir de formas diferentes com o mesmo terrain.
+Movement profiles permanecem deferidos.
+
+### Chegar a um local != conhecer sua topologia
+
+Arrival pode revelar ou confirmar o site macro, mas não deve automaticamente
+revelar toda a topologia interna:
 
 ```text
 Arrival
@@ -2780,7 +3030,174 @@ Begin Exploration
 → direct observation dos entry points visíveis
 ```
 
-Como regra de foundation, observação deve reutilizar o sistema de conhecimento espacial existente, não criar canal paralelo.
+Observação deve reutilizar os sistemas de conhecimento espacial existentes, não
+criar um canal paralelo.
+
+### Knowledge espacial
+
+Spatial authority representa a verdade física factual. Actor knowledge
+representa o que aquele ator sabe, acredita ou recebeu de terceiros:
+
+```text
+World Truth:
+Stone Bridge destroyed on day 128.
+
+Traveler Knowledge:
+Stone Bridge believed passable.
+Observed day 120.
+```
+
+Route planning usa Knowledge. Traversal execution revalida World Truth. O
+conhecimento não deve revelar automaticamente Hexes, Connections, Barriers,
+Crossings ou seus estados atuais.
+
+### Battle location e aftermath
+
+Uma Battle não exige previamente uma entidade Battlefield. A localização do
+episódio pode ser um Hex, Location, SubLocation ou Crossing:
+
+```text
+Pending Battle → localização ainda opcional
+Active Battle  → localização física factual válida obrigatória
+```
+
+WORLD TRUTH: Battle exists at Hex X não concede esse conhecimento a todos os
+atores.
+
+Battle != Battle Location != Battle Aftermath / Battlefield Site.
+
+Uma Battle em City A → Market Square pode deixar corpos, feridos, equipamento,
+destroços ou danos associados à própria Market Square. Não deve criar
+automaticamente Battlefield #123.
+
+Se uma batalha em um Hex sem Location produzir uma identidade espacial
+persistente relevante — por ruínas, túmulos, fenômeno sobrenatural, memória
+social ou outro fato — uma nova Location/POI pode ser criada explicitamente:
+
+```text
+Hex 1837
+└── Battlefield of Red Spears
+```
+
+Essa criação depende de relevância semântica real. BATTLE ENDED != BATTLEFIELD
+MATERIAL STATE ENDED, e material aftermath não é a mesma coisa que memória
+histórica da Battle. O aftermath pode ser saqueado, removido, enterrado,
+degradado, queimado ou recuperado sem apagar a Battle histórica, knowledge,
+memories ou consequências já produzidas.
+
+Relevant Persons podem futuramente possuir restos individualizados quando a
+identidade importar, mas casualties agregadas não exigem um objeto de corpse
+por indivíduo. A semântica completa de corpses, scavenging, looting, burial,
+salvage e aftermath permanece deferida até existir Battle Outcome e consumidor
+real. Não criar ainda um LootPile ou CorpseSystem universal.
+
+### Escala física
+
+Não se fixa:
+
+```text
+1 Hex = exactly X km
+```
+
+Cada world/content context deverá possuir uma convenção física única e coerente
+quando for necessário calcular distance, movement, speed, traversal, time,
+logistics ou operational range. Não se adota, neste momento, escala regional
+variável. A unidade e o valor exatos permanecem configuração futura. Rendering
+scale não participa dessa autoridade.
+
+### Identidade, autoridade e determinismo
+
+A futura spatial foundation deverá possuir identidades semânticas estáveis para
+Hex, Location, SubLocation, Connection, Barrier e Crossing quando esses
+conceitos tiverem identidade persistente. RuntimeIdAllocator, ordem de
+descoberta Unity, ordem incidental de assets e coordenadas de rendering não são
+identidade conceitual final.
+
+Ordenações relevantes, como vizinhos de Hex, Locations, Connections,
+Crossings e desempates de path, devem ser semânticas ou determinísticas. O
+algoritmo de pathfinding continua deferido, mas deterministic tie-breaking não
+é opcional para pathfinding autoritativo.
+
+```text
+CONTENT DEFINITION != CURRENT SPATIAL WORLD STATE
+```
+
+Uma BridgeDefinition pode descrever tipo, material e propriedades padrão,
+enquanto o runtime mantém a condição factual Destroyed. Uma TerrainDefinition
+descreve comportamento padrão, enquanto o estado do mundo determina qual
+terrain/contexto se aplica ao Hex.
+
+A autoridade futura deve ser distinta de rendering Unity, GameObjects, caches
+de path, knowledge de atores e definições de conteúdo:
+
+```text
+content definitions
+↓
+authoritative physical spatial state
+  ├── Hex / grid topology
+  ├── Location anchors
+  ├── Barriers
+  ├── Crossings
+  └── traversal state / connections
+↓
+LocalTopology
+↓
+derived indexes / path caches
+↓
+actor Knowledge
+```
+
+O nome técnico dessa authority não precisa ser congelado agora.
+
+### SpatialNetworkRuntime atual e migração
+
+SpatialNetworkRuntime atual é ADAPT / TRANSITIONAL. Ele pode continuar servindo
+como adapter enquanto o modelo baseado em
+SpatialLocationRuntime + SpatialRouteRuntime + fixed TravelDays ainda for
+necessário, mas não deve ser promovido automaticamente a authority espacial
+final por compatibilidade.
+
+A migração deve ser incremental:
+
+1. introduzir referências físicas estáveis;
+2. introduzir uma authority mínima de Hex e Location;
+3. mapear o modelo atual para Location/Hex e Connections transitórias;
+4. preservar Travel através de adapter/facade;
+5. permitir conteúdo novo usar Hexes reais sem migrar todo cenário legado;
+6. adaptar owners de LocalTopology para uma âncora espacial neutra;
+7. evoluir knowledge para Hex/Connection/Barrier/Crossing;
+8. migrar Travel para paths compostos;
+9. fazer Merchant e Expedition consumirem a nova authority;
+10. só depois integrar Battle resolution, terrain e military movement.
+
+Não fazer um big-bang rewrite.
+
+### P7-D0 — Spatial Reference / Authority Bridge
+
+O próximo implementation checkpoint espacial é P7-D0 — Spatial Reference /
+Authority Bridge. Seu escopo mínimo futuro é:
+
+- identidade estável de Hex e Location;
+- SpatialReference tipada;
+- âncora Location → Hex;
+- integração mínima com LocalTopology/SubLocation;
+- owner explícito da verdade espacial;
+- ordenação determinística;
+- snapshot, canonical output, diff e invariants básicos;
+- capacidade de validar futuramente a localização de uma Battle.
+
+Se necessário para representar uma referência espacial de forma correta,
+Crossing pode receber o menor contrato de identidade exigido. P7-D0 não deve
+implementar HexGrid completo, pathfinding, terrain simulation, traversal
+network completa, weather, movement profiles, Travel rewrite, replanning,
+stale crossing knowledge novo, Merchant/Expedition migration, military
+movement, scouting, Battle resolution, Battle aftermath, operational groups,
+renderer, procedural generation, save/load ou networking.
+
+P7-C permanece fechado e correto. A ausência atual de Battle location é
+DEFERRED BY DESIGN, não um mismatch retroativo. Battle resolution não deve
+começar antes de existir autoridade suficiente para que uma Active Battle
+possua localização física factual.
 
 ---
 
@@ -3713,6 +4130,18 @@ PERSON-ONLY | RICH STATE LOADED/UNLOADED
 RICH STATE → ACTIVE/DORMANT PROCESSING
 PERSON != NPCRUNTIME
 RESIDENCE != PRESENCE
+SIMULATION LOCATION != RENDERING COORDINATE
+CONTAINMENT != SAME HEX != CONNECTIVITY
+HEX ADJACENCY != TRAVERSABILITY
+MOVING ENTITY != LOCATION
+DISTANCE != TRAVEL TIME
+SHORTEST PATH != FASTEST PATH != SAFEST PATH
+ROUTE PLANNING USES KNOWLEDGE
+TRAVERSAL EXECUTION REVALIDATES WORLD TRUTH
+BATTLE != BATTLE LOCATION != BATTLE AFTERMATH
+BATTLE ENDED != BATTLEFIELD MATERIAL STATE ENDED
+BATTLEFIELD MATERIAL STATE != HISTORICAL MEMORY
+CONTENT DEFINITION != CURRENT SPATIAL WORLD STATE
 
 ORGANIZATION != FACTION != INSTITUTION != POLITY
 ORGANIZATIONRUNTIME LOCAL/LEGACY != CANONICAL ORGANIZATION FOUNDATION
