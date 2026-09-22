@@ -15,6 +15,7 @@ public sealed class SimulationRuntime
     private readonly IAggregateDemographyProvider aggregateDemographyProvider;
     private DailyDemographyReport lastDailyDemographyReport;
     private readonly PersonStore personStore;
+    private readonly ArmedForceStore armedForceStore;
     private readonly GenealogyStore genealogyStore;
     private readonly InstitutionStore institutionStore;
     private readonly OfficeStore officeStore;
@@ -54,6 +55,7 @@ public sealed class SimulationRuntime
     public SimulationCalendar Calendar => calendar;
     public DailyDemographyReport LastDailyDemographyReport => lastDailyDemographyReport;
     public PersonStore PersonStore => personStore;
+    public ArmedForceStore ArmedForceStore => armedForceStore;
     public IReadOnlyList<ParentageRecord> GenealogyRecords => genealogyStore.Records;
     public IReadOnlyList<InstitutionRecord> InstitutionRecords => institutionStore.Institutions;
     public IReadOnlyList<OfficeRecord> OfficeRecords => officeStore.Offices;
@@ -126,7 +128,8 @@ public sealed class SimulationRuntime
         PoliticalSupportStore politicalSupportStore = null,
         PoliticalKnowledgeStore politicalKnowledgeStore = null,
         PoliticalDecisionStore politicalDecisionStore = null,
-        long? politicalWorldRevision = null)
+        long? politicalWorldRevision = null,
+        ArmedForceStore armedForceStore = null)
     {
         this.simulationTime = simulationTime ?? throw new ArgumentNullException(nameof(simulationTime));
 
@@ -186,6 +189,9 @@ public sealed class SimulationRuntime
             estateStore,
             resolvedPersonStore,
             simulationTime.AbsoluteDay);
+        ArmedForceStore resolvedArmedForceStore = CloneArmedForceStore(
+            armedForceStore,
+            resolvedPersonStore);
 
         this.configuration = resolvedConfiguration;
         this.calendar = new SimulationCalendar(
@@ -193,6 +199,7 @@ public sealed class SimulationRuntime
         this.naturalMortalitySamples = naturalMortalitySamples;
         this.aggregateDemographyProvider = aggregateDemographyProvider;
         this.personStore = resolvedPersonStore;
+        this.armedForceStore = resolvedArmedForceStore;
         this.genealogyStore = CloneGenealogyStore(resolvedGenealogyStore);
         this.institutionStore = resolvedInstitutionStore;
         this.officeStore = resolvedOfficeStore;
@@ -2033,6 +2040,27 @@ public sealed class SimulationRuntime
                     nameof(genealogy));
             }
         }
+    }
+
+    private static ArmedForceStore CloneArmedForceStore(
+        ArmedForceStore source,
+        PersonStore personStore)
+    {
+        if (source == null)
+        {
+            return new ArmedForceStore(personStore);
+        }
+
+        ArmedForceInvariantReport report = source.ValidateInvariants();
+        if (report.IsValid == false)
+        {
+            throw new ArgumentException(
+                "The SimulationRuntime ArmedForceStore contains invalid world state: "
+                + string.Join("; ", report.Violations),
+                nameof(source));
+        }
+
+        return source.Clone(personStore);
     }
 
     private static GenealogyStore CloneGenealogyStore(GenealogyStore source)

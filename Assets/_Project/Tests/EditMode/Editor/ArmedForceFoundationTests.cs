@@ -129,7 +129,7 @@ public sealed class ArmedForceFoundationTests
         Assert.That(store.TryRegisterContingent(second, out _), Is.True);
 
         Assert.That(store.GetContingents(root)[0].Id.Value, Is.EqualTo("contingent-b"));
-        Assert.That(store.TryGetAggregateContingentAmount(
+        Assert.That(store.TryGetOrganizationalAggregateContingentAmount(
             root,
             out long amount,
             out ArmedForceFoundationFailure aggregateFailure), Is.True, aggregateFailure.ToString());
@@ -142,13 +142,100 @@ public sealed class ArmedForceFoundationTests
                 first.Id,
                 root,
                 9L,
-                new ContingentOriginReference("pool", "alpha-revised"),
-                "service-beta-revised"),
+                new ContingentOriginReference("pool", "alpha"),
+                "service-beta",
+                new[] { new ArmedForceCharacteristic("form", "updated") }),
             out ArmedForceFoundationFailure replacementFailure), Is.True, replacementFailure.ToString());
         Assert.That(store.TryGetContingent(first.Id, out ContingentRecord replaced), Is.True);
         Assert.That(replaced.Id, Is.EqualTo(first.Id));
         Assert.That(replaced.Amount, Is.EqualTo(9L));
         Assert.That(persons.Persons, Is.Empty);
+    }
+
+    [Test]
+    public void ContingentProvenance_IsImmutablePerIdentityAndFailuresAreAtomic()
+    {
+        ArmedForceStore store = new ArmedForceStore(new PersonStore());
+        ArmedForceId forceId = new ArmedForceId("force-provenance");
+        ContingentRecord original = new ContingentRecord(
+            new ContingentId("contingent-provenance"),
+            forceId,
+            4L,
+            new ContingentOriginReference("origin", "stable"),
+            "service",
+            new[] { new ArmedForceCharacteristic("kind", "initial") });
+        Assert.That(store.TryRegister(new ArmedForceRecord(forceId, "Provenance", 0L), out _), Is.True);
+        Assert.That(store.TryRegisterContingent(original, out _), Is.True);
+
+        long revision = store.Revision;
+        Assert.That(store.TryReplaceContingent(
+            new ContingentRecord(
+                original.Id,
+                forceId,
+                8L,
+                original.Origin,
+                original.ServiceType,
+                new[] { new ArmedForceCharacteristic("kind", "changed") }),
+            out _), Is.True);
+        Assert.That(store.Revision, Is.EqualTo(revision + 1L));
+
+        long failedRevision = store.Revision;
+        Assert.That(store.TryReplaceContingent(
+            new ContingentRecord(
+                original.Id,
+                forceId,
+                11L,
+                new ContingentOriginReference("origin", "mutated"),
+                original.ServiceType),
+            out ArmedForceFoundationFailure originFailure), Is.False);
+        Assert.That(originFailure.Code, Is.EqualTo(ArmedForceFoundationFailureCode.ContingentOriginMutation));
+        Assert.That(store.Revision, Is.EqualTo(failedRevision));
+        Assert.That(store.TryGetContingent(original.Id, out ContingentRecord afterOriginFailure), Is.True);
+        Assert.That(afterOriginFailure.Amount, Is.EqualTo(8L));
+        Assert.That(afterOriginFailure.Origin, Is.EqualTo(original.Origin));
+
+        Assert.That(store.TryReplaceContingent(
+            new ContingentRecord(
+                original.Id,
+                forceId,
+                12L,
+                original.Origin,
+                "service-mutated"),
+            out ArmedForceFoundationFailure serviceFailure), Is.False);
+        Assert.That(serviceFailure.Code, Is.EqualTo(ArmedForceFoundationFailureCode.ContingentServiceTypeMutation));
+        Assert.That(store.Revision, Is.EqualTo(failedRevision));
+    }
+
+    [Test]
+    public void OrganizationalAggregate_IncludesDetachedAndTerminatedDescendants()
+    {
+        ArmedForceStore store = new ArmedForceStore(new PersonStore());
+        ArmedForceId root = new ArmedForceId("force-aggregate-root");
+        ArmedForceId child = new ArmedForceId("force-aggregate-child");
+        Assert.That(store.TryRegister(new ArmedForceRecord(root, "Root", 0L), out _), Is.True);
+        Assert.That(store.TryRegister(new ArmedForceRecord(child, "Child", 0L, root), out _), Is.True);
+        Assert.That(store.TryRegisterContingent(
+            new ContingentRecord(
+                new ContingentId("contingent-child"),
+                child,
+                6L,
+                new ContingentOriginReference("source", "child"),
+                "service"),
+            out _), Is.True);
+
+        Assert.That(store.TryDetach(child, "remote", out _), Is.True);
+        Assert.That(store.TryGetOrganizationalAggregateContingentAmount(
+            root,
+            out long detachedAmount,
+            out _), Is.True);
+        Assert.That(detachedAmount, Is.EqualTo(6L));
+
+        Assert.That(store.TryTerminate(child, 1L, out _), Is.True);
+        Assert.That(store.TryGetOrganizationalAggregateContingentAmount(
+            root,
+            out long historicalAmount,
+            out _), Is.True);
+        Assert.That(historicalAmount, Is.EqualTo(6L));
     }
 
     [Test]

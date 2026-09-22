@@ -31,6 +31,61 @@ public sealed class ArmedForceStore
     public int RelevantPersonCount => relevantPersonsById.Count;
     public long Revision => revision;
 
+    /// <summary>
+    /// Rebuilds a world-bound store without replaying mutations. The copy keeps
+    /// stable identities, composition, lifecycle, hierarchy, and revision
+    /// exactly as they are in the source store. The target PersonStore is the
+    /// only authority used for PersonId validation by the composed world.
+    /// </summary>
+    internal ArmedForceStore Clone(PersonStore targetPersonStore)
+    {
+        if (targetPersonStore == null)
+        {
+            throw new ArgumentNullException(nameof(targetPersonStore));
+        }
+
+        foreach (ArmedForceRecord force in forcesById.Values)
+        {
+            if (force?.CommanderPersonId != null
+                && targetPersonStore.TryGet(force.CommanderPersonId, out _) == false)
+            {
+                throw new ArgumentException(
+                    "The ArmedForceStore contains a commander absent from the target PersonStore.",
+                    nameof(targetPersonStore));
+            }
+        }
+
+        foreach (ArmedForcePersonReference reference in relevantPersonsById.Values)
+        {
+            if (reference?.PersonId != null
+                && targetPersonStore.TryGet(reference.PersonId, out _) == false)
+            {
+                throw new ArgumentException(
+                    "The ArmedForceStore contains a relevant Person absent from the target PersonStore.",
+                    nameof(targetPersonStore));
+            }
+        }
+
+        ArmedForceStore copy = new ArmedForceStore(targetPersonStore);
+        foreach (KeyValuePair<string, ArmedForceRecord> entry in forcesById)
+        {
+            copy.forcesById.Add(entry.Key, entry.Value);
+        }
+
+        foreach (KeyValuePair<string, ContingentRecord> entry in contingentsById)
+        {
+            copy.contingentsById.Add(entry.Key, entry.Value);
+        }
+
+        foreach (KeyValuePair<string, ArmedForcePersonReference> entry in relevantPersonsById)
+        {
+            copy.relevantPersonsById.Add(entry.Key, entry.Value);
+        }
+
+        copy.revision = revision;
+        return copy;
+    }
+
     public IReadOnlyList<ArmedForceRecord> Forces
     {
         get
@@ -520,6 +575,22 @@ public sealed class ArmedForceStore
                 out failure);
         }
 
+        if (current.Origin.Equals(replacement.Origin) == false)
+        {
+            return Fail(
+                ArmedForceFoundationFailureCode.ContingentOriginMutation,
+                "A contingent identity cannot change its origin reference.",
+                out failure);
+        }
+
+        if (string.Equals(current.ServiceType, replacement.ServiceType, StringComparison.Ordinal) == false)
+        {
+            return Fail(
+                ArmedForceFoundationFailureCode.ContingentServiceTypeMutation,
+                "A contingent identity cannot change its service type.",
+                out failure);
+        }
+
         if (CanAdvanceRevision(out failure) == false) return false;
 
         contingentsById[replacement.Id.Value] = replacement;
@@ -543,15 +614,16 @@ public sealed class ArmedForceStore
     }
 
     /// <summary>
-    /// Returns aggregate contingent amount for a force and its current active
-    /// descendant subforces. Terminated descendants are excluded by default so
-    /// historical composition does not become current manpower implicitly.
+    /// Returns the organizational aggregate contingent amount for a force and
+    /// every structurally subordinate force. Physical detachment does not
+    /// remove a descendant from this aggregate. The result is composition
+    /// history, not current manpower, battle strength, or location-aware state;
+    /// terminated records therefore remain queryable here.
     /// </summary>
-    public bool TryGetAggregateContingentAmount(
+    public bool TryGetOrganizationalAggregateContingentAmount(
         ArmedForceId forceId,
         out long amount,
-        out ArmedForceFoundationFailure failure,
-        bool includeTerminatedDescendants = false)
+        out ArmedForceFoundationFailure failure)
     {
         amount = 0L;
         if (TryGet(forceId, out _) == false)
@@ -566,13 +638,6 @@ public sealed class ArmedForceStore
         {
             foreach (ArmedForceRecord force in GetHierarchyPreOrder(forceId))
             {
-                if (force.Id != forceId
-                    && includeTerminatedDescendants == false
-                    && force.IsActive == false)
-                {
-                    continue;
-                }
-
                 foreach (ContingentRecord contingent in GetContingents(force.Id))
                 {
                     amount = checked(amount + contingent.Amount);

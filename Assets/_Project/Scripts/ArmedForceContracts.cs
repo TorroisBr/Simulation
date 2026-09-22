@@ -560,7 +560,9 @@ public enum ArmedForceFoundationFailureCode
     ContingentNotRegistered = 22,
     RevisionOverflow = 23,
     AggregateAmountOverflow = 24,
-    InvalidInvariant = 25
+    InvalidInvariant = 25,
+    ContingentOriginMutation = 26,
+    ContingentServiceTypeMutation = 27
 }
 
 public sealed class ArmedForceFoundationFailure : IEquatable<ArmedForceFoundationFailure>
