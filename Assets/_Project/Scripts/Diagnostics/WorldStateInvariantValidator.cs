@@ -308,6 +308,7 @@ public static class WorldStateInvariantValidator
         }
 
         ValidateParentages(snapshot.Parentages, personIds, issues);
+        ValidateArmedForces(snapshot, personIds, issues);
         HashSet<string> propertyIds = ValidatePropertyOwnerships(
             snapshot.PropertyOwnerships,
             personIds,
@@ -570,6 +571,194 @@ public static class WorldStateInvariantValidator
         {
             AddError(issues, "GenealogyCycle", "genealogy", "Parentage relations contain a cycle.");
         }
+    }
+
+    private static void ValidateArmedForces(
+        WorldStateSnapshot snapshot,
+        HashSet<string> personIds,
+        List<WorldStateInvariantIssue> issues)
+    {
+        if (snapshot.HasArmedForceState == false)
+        {
+            return;
+        }
+
+        HashSet<string> forceIds = new HashSet<string>(StringComparer.Ordinal);
+        Dictionary<string, WorldStateArmedForceSnapshot> forcesById =
+            new Dictionary<string, WorldStateArmedForceSnapshot>(StringComparer.Ordinal);
+        foreach (WorldStateArmedForceSnapshot force in snapshot.ArmedForces)
+        {
+            if (force == null)
+            {
+                AddError(issues, "ArmedForceNull", "armed-force", "Snapshot contains a null ArmedForce entry.");
+                continue;
+            }
+
+            string identity = string.IsNullOrWhiteSpace(force.ArmedForceId) ? "armed-force" : force.ArmedForceId;
+            if (string.IsNullOrWhiteSpace(force.ArmedForceId))
+            {
+                AddError(issues, "ArmedForceIdMissing", identity, "ArmedForce has no stable identity.");
+            }
+            else if (forceIds.Add(force.ArmedForceId) == false)
+            {
+                AddError(issues, "DuplicateArmedForceId", identity, "ArmedForceId appears more than once.");
+            }
+            else
+            {
+                forcesById.Add(force.ArmedForceId, force);
+            }
+
+            if (force.CreatedAbsoluteDay > snapshot.AbsoluteDay)
+            {
+                AddError(issues, "ArmedForceCreationDayInvalid", identity, "ArmedForce creation day is after the snapshot day.");
+            }
+
+            if (Enum.IsDefined(typeof(ArmedForceLifecycleState), force.LifecycleState) == false)
+            {
+                AddError(issues, "ArmedForceLifecycleInvalid", identity, "ArmedForce lifecycle state is invalid.");
+            }
+
+            if (force.LifecycleState == ArmedForceLifecycleState.Active
+                && force.TerminatedAbsoluteDay.HasValue)
+            {
+                AddError(issues, "ActiveArmedForceHasTerminationDay", identity, "An active ArmedForce cannot have a termination day.");
+            }
+
+            if (force.LifecycleState == ArmedForceLifecycleState.Terminated)
+            {
+                if (force.TerminatedAbsoluteDay.HasValue == false)
+                {
+                    AddError(issues, "TerminatedArmedForceMissingDay", identity, "A terminated ArmedForce requires a termination day.");
+                }
+                else if (force.TerminatedAbsoluteDay.Value < force.CreatedAbsoluteDay
+                    || force.TerminatedAbsoluteDay.Value > snapshot.AbsoluteDay)
+                {
+                    AddError(issues, "ArmedForceTerminationDayInvalid", identity, "ArmedForce termination day is outside its lifecycle interval.");
+                }
+            }
+
+            if (force.ParentForceId == force.ArmedForceId)
+            {
+                AddError(issues, "ArmedForceSelfParent", identity, "An ArmedForce cannot be its own parent.");
+            }
+
+            if (force.IsDetached && string.IsNullOrWhiteSpace(force.ParentForceId))
+            {
+                AddError(issues, "DetachedArmedForceMissingParent", identity, "A detached ArmedForce must remain structurally subordinate.");
+            }
+
+            if (string.IsNullOrWhiteSpace(force.CommanderPersonId) == false
+                && personIds.Contains(force.CommanderPersonId) == false)
+            {
+                AddError(issues, "ArmedForceCommanderPersonMissing", identity, "ArmedForce commander is absent from the Person snapshot.");
+            }
+        }
+
+        foreach (WorldStateArmedForceSnapshot force in snapshot.ArmedForces)
+        {
+            if (force == null || string.IsNullOrWhiteSpace(force.ArmedForceId)) continue;
+            string identity = force.ArmedForceId;
+            if (string.IsNullOrWhiteSpace(force.ParentForceId) == false)
+            {
+                if (forcesById.TryGetValue(force.ParentForceId, out WorldStateArmedForceSnapshot parent) == false)
+                {
+                    AddError(issues, "ArmedForceParentMissing", identity, "ArmedForce parent is absent from the snapshot.");
+                }
+                else if (force.LifecycleState == ArmedForceLifecycleState.Active
+                    && parent.LifecycleState == ArmedForceLifecycleState.Terminated)
+                {
+                    AddError(issues, "ActiveArmedForceHasTerminatedParent", identity, "An active ArmedForce cannot have a terminated parent.");
+                }
+            }
+
+            if (ContainsArmedForceParentCycle(force.ArmedForceId, forcesById))
+            {
+                AddError(issues, "ArmedForceHierarchyCycle", identity, "ArmedForce hierarchy contains a parent cycle.");
+            }
+        }
+
+        HashSet<string> contingentIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (WorldStateArmedForceContingentSnapshot contingent in snapshot.ArmedForceContingents)
+        {
+            if (contingent == null)
+            {
+                AddError(issues, "ArmedForceContingentNull", "contingent", "Snapshot contains a null ArmedForce contingent entry.");
+                continue;
+            }
+
+            string identity = string.IsNullOrWhiteSpace(contingent.ContingentId) ? "contingent" : contingent.ContingentId;
+            if (string.IsNullOrWhiteSpace(contingent.ContingentId))
+            {
+                AddError(issues, "ArmedForceContingentIdMissing", identity, "Contingent has no stable identity.");
+            }
+            else if (contingentIds.Add(contingent.ContingentId) == false)
+            {
+                AddError(issues, "DuplicateArmedForceContingentId", identity, "ContingentId appears more than once.");
+            }
+
+            if (contingent.Amount < 0L)
+            {
+                AddError(issues, "NegativeArmedForceContingentAmount", identity, "Contingent amount cannot be negative.");
+            }
+
+            if (string.IsNullOrWhiteSpace(contingent.ForceId)
+                || forcesById.ContainsKey(contingent.ForceId) == false)
+            {
+                AddError(issues, "ArmedForceContingentForceMissing", identity, "Contingent force is absent from the snapshot.");
+            }
+        }
+
+        HashSet<string> referenceIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (WorldStateArmedForcePersonReferenceSnapshot reference in snapshot.ArmedForceRelevantPersons)
+        {
+            if (reference == null)
+            {
+                AddError(issues, "ArmedForcePersonReferenceNull", "reference", "Snapshot contains a null ArmedForce Person reference.");
+                continue;
+            }
+
+            string identity = string.IsNullOrWhiteSpace(reference.ReferenceId) ? "reference" : reference.ReferenceId;
+            if (string.IsNullOrWhiteSpace(reference.ReferenceId))
+            {
+                AddError(issues, "ArmedForcePersonReferenceIdMissing", identity, "Relevant Person reference has no stable identity.");
+            }
+            else if (referenceIds.Add(reference.ReferenceId) == false)
+            {
+                AddError(issues, "DuplicateArmedForcePersonReferenceId", identity, "Relevant Person reference identity appears more than once.");
+            }
+
+            if (string.IsNullOrWhiteSpace(reference.ForceId)
+                || forcesById.ContainsKey(reference.ForceId) == false)
+            {
+                AddError(issues, "ArmedForcePersonReferenceForceMissing", identity, "Relevant Person reference force is absent from the snapshot.");
+            }
+
+            if (string.IsNullOrWhiteSpace(reference.PersonId)
+                || personIds.Contains(reference.PersonId) == false)
+            {
+                AddError(issues, "ArmedForcePersonReferencePersonMissing", identity, "Relevant Person reference PersonId is absent from the snapshot.");
+            }
+        }
+    }
+
+    private static bool ContainsArmedForceParentCycle(
+        string forceId,
+        Dictionary<string, WorldStateArmedForceSnapshot> forcesById)
+    {
+        HashSet<string> visited = new HashSet<string>(StringComparer.Ordinal);
+        string currentId = forceId;
+        while (string.IsNullOrWhiteSpace(currentId) == false)
+        {
+            if (visited.Add(currentId) == false) return true;
+            if (forcesById.TryGetValue(currentId, out WorldStateArmedForceSnapshot current) == false)
+            {
+                return false;
+            }
+
+            currentId = current.ParentForceId;
+        }
+
+        return false;
     }
 
     private static void ValidatePoliticalClaims(

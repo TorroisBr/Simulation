@@ -28,6 +28,11 @@ public static class WorldStateCanonicalWriter
         AppendLine(output, "METADATA", "TheftOutcomeCount", IntValue(snapshot.TheftOutcomeCount));
         AppendLine(output, "METADATA", "CrimeKnowledgeCount", IntValue(snapshot.CrimeKnowledgeCount));
         AppendLine(output, "METADATA", "SocialReactionCount", IntValue(snapshot.SocialReactionCount));
+        if (snapshot.HasArmedForceState)
+        {
+            AppendLine(output, "METADATA", "ArmedForceStatePresent", BoolValue(true));
+            AppendLine(output, "METADATA", "ArmedForceRevision", Int64Value(snapshot.ArmedForceRevision.Value));
+        }
         if (snapshot.Metadata.CalendarDate != null)
         {
             WorldStateCalendarSnapshot calendar = snapshot.Metadata.CalendarDate;
@@ -41,6 +46,51 @@ public static class WorldStateCanonicalWriter
                 Int64Value(calendar.DayOfYear),
                 Int64Value(calendar.DaysPerMonth),
                 Int64Value(calendar.DaysPerYear));
+        }
+
+        if (snapshot.HasArmedForceState)
+        {
+            foreach (WorldStateArmedForceSnapshot force in snapshot.ArmedForces)
+            {
+                AppendLine(output, "ARMED_FORCE",
+                    force.ArmedForceId,
+                    force.DisplayName,
+                    Int64Value(force.CreatedAbsoluteDay),
+                    EnumValue(force.LifecycleState),
+                    NullableInt64Value(force.TerminatedAbsoluteDay),
+                    force.ParentForceId,
+                    BoolValue(force.IsDetached),
+                    force.OperationalLocationReference,
+                    force.CommanderPersonId);
+            }
+
+            foreach (WorldStateArmedForceContingentSnapshot contingent in snapshot.ArmedForceContingents)
+            {
+                AppendLine(output, "ARMED_FORCE_CONTINGENT",
+                    contingent.ContingentId,
+                    contingent.ForceId,
+                    Int64Value(contingent.Amount),
+                    contingent.OriginDomain,
+                    contingent.OriginValue,
+                    contingent.ServiceType);
+
+                foreach (WorldStateArmedForceCharacteristicSnapshot characteristic in contingent.Characteristics)
+                {
+                    AppendLine(output, "ARMED_FORCE_CONTINGENT_CHARACTERISTIC",
+                        contingent.ContingentId,
+                        characteristic.Key,
+                        characteristic.Value);
+                }
+            }
+
+            foreach (WorldStateArmedForcePersonReferenceSnapshot reference in snapshot.ArmedForceRelevantPersons)
+            {
+                AppendLine(output, "ARMED_FORCE_PERSON_REFERENCE",
+                    reference.ReferenceId,
+                    reference.ForceId,
+                    reference.PersonId,
+                    reference.RoleKey);
+            }
         }
 
         foreach (WorldStatePersonSnapshot person in snapshot.Persons)

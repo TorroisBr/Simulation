@@ -1,62 +1,89 @@
-# Phase 7 — Checkpoint A — Current State
+# Phase 7 — Checkpoint B — Current State
 
-## Canonical baseline
+## Baselines
 
 - Architecture baseline: `e4ac516daeb70f3a7fe40acf797d41090f82e818`.
-- Checkpoint branch: `codex/phase7/ArmedForceFoundation`.
-- Validated implementation commit: `7a983a9d15caa4c785ef41de78e607f83d6b4c23`.
+- Checkpoint B implementation baseline: `6409dbf5c264378bda6c0c25d83105100c3260ff`.
+- Checkpoint A implementation retained from `7a983a9d15caa4c785ef41de78e607f83d6b4c23`.
+- Checkpoint branch: `codex/phase7/ArmedForceWorldComposition`.
 
 ## Delivered
 
-The checkpoint introduces a pure C# armed-force foundation owned by
-`ArmedForceStore`:
+Checkpoint B composes the Checkpoint A ArmedForce foundation into world state
+and diagnostics without introducing War, Battle, movement, or daily military
+processing.
 
-- stable `ArmedForceId`, `ContingentId`, and force/person-reference IDs;
-- generic parent hierarchy with parent existence, self-parent, cycle, and
-  terminated-parent validation;
-- deterministic ID-sorted force snapshots and pre-order hierarchy traversal;
-- detach/reattach state that preserves parent linkage and force identity;
-- optional opaque operational location reference without movement semantics;
-- aggregate contingents with stable identity, amount, open origin reference,
-  open service type, and deterministic extensible characteristics;
-- PersonId-based commander and relevant-Person references validated against
-  `PersonStore`, without requiring or discovering `NpcRuntime`;
-- active/terminated lifecycle with retained records, no ID reuse, revision
-  tracking, atomic validate-then-apply mutations, and invariant reporting.
+- `SimulationRuntime` owns a cloned `ArmedForceStore` bound to the resolved
+  authoritative `PersonStore`; the clone preserves IDs, hierarchy, lifecycle,
+  composition, relevant-Person references, and revision without retaining an
+  external mutable store reference.
+- Contingent identity now requires immutable origin and service-type semantics.
+  Amount and extensible characteristics may be replaced; origin/service
+  mutation fails atomically with stable revision and state.
+- Organizational contingent aggregation is explicit and includes detached and
+  terminated structural descendants as composition/history. It is not a
+  current-manpower, battle-strength, or location query.
+- World snapshots capture force identity/lifecycle/parent/detachment/location/
+  commander, contingent provenance/composition, relevant Person references,
+  and ArmedForceStore revision with deterministic ordering.
+- Canonical writer, human diagnostics formatter, diff, and snapshot invariant
+  validation report ArmedForce state. Diagnostics validate parent existence,
+  self-parent/cycles, active children under terminated parents, detached roots,
+  commander/relevant-Person references, contingent force references, and stable
+  identities. The store remains the mutation authority.
+- Person references remain PersonId-based and do not require materialized
+  `NpcRuntime` representations.
 
-No ArmedForce state was added to `SimulationRuntime`, `AdvanceDay`,
-`ConflictFoundation`, or Unity object discovery.
+No ArmedForce configuration flag, RNG, save/load, event sourcing, recruitment,
+population accounting, or military daily tick was added. `ConflictFoundation`
+was not remodeled.
 
 ## Validation
 
-- `ArmedForceFoundationTests`: `8/8`.
-- Person regression filter: `126/126`.
+- Focused ArmedForce suites: `16/16`.
+- Diagnostics/orchestration/ConflictFoundation regression filter: `98/98`.
+- Person regression filter: `128/128`.
 - Population regression filter: `130/130`.
-- `ConflictFoundationTests`: `16/16`.
-- Lifecycle regression filter: `38/38`.
-- ALL EditMode: `1467/1467`.
+- ALL EditMode: `1475/1475`.
 - Official EditMode `Smoke` filter: `5/5`.
-- `git diff --check`: clean for the implementation commit.
-- The project-declared Unity Editor `6000.3.9f1` was used directly in batchmode.
-  The repository validation wrapper could not acquire its process snapshot in
-  this environment because `Get-CimInstance` returned access denied.
+- `git diff --check`: clean.
+- Unity `6000.3.9f1` was used directly in batchmode. The repository wrapper
+  could not acquire its process snapshot in this environment because
+  `Get-CimInstance` returned access denied.
+
+## AdvanceDay and architecture conformance
+
+`SimulationRuntime.AdvanceDay` was not changed. No military processing or RNG
+was added to the daily cadence; focused coverage confirms ArmedForce revision
+and state remain unchanged across one day advance.
+
+`docs/SIMULATION_ARCHITECTURE.md` was not changed. A read-only conformance
+review found no contradiction requiring an architecture decision. The design
+preserves ArmedForce != Faction/Institution/Polity/generic Organization,
+Person != NpcRuntime, physical separation != organizational separation, and
+manpower source != allegiance/loyalty/command.
 
 ## Deferred
 
-War, Battle, Conflict/War state, tactics, morale, cohesion, readiness,
-logistics, funding/pay, movement, scouting, military knowledge, recruitment,
-mobilization accounting, casualties, capture, desertion, defection, mutiny,
-military control, occupation, war goals, ceasefire, peace, diplomacy,
-Campaign, Polity, WarAI, and daily military processing remain deferred.
+Persistent War/Battle/strategic Conflict state, battle resolution, tactics,
+morale, cohesion, readiness, supply, logistics, funding/pay, requisition,
+foraging, military movement, scouting, military knowledge, recruitment,
+mobilization accounting, casualties, capture/custody, desertion, defection,
+mutiny, military control, occupation, war goals, ceasefire, peace, taxation,
+diplomacy, Campaign, Polity, WarAI, and daily military autonomy remain
+deferred.
 
-Split/secession, true schism, absorption, and genuine merger operations are
-also deferred. The identity and lifecycle model preserves the IDs and records
-needed for those future explicit transitions without choosing continuity by
-manpower or commander retention.
+Explicit continuity operations for secession, true schism, absorption, and
+genuine merger remain deferred. The current identity/lifecycle/store contracts
+preserve the records and IDs required for those future explicit transitions
+without choosing continuity by manpower or commander retention.
+
+Save/load, persistence, and migration are also deferred. The snapshot and
+canonical writer are diagnostics projections, not serialization contracts.
 
 ## Known limitations
 
-The store is currently a composable standalone world-truth foundation. It is
-not yet projected into `SimulationRuntime`/`Simulation.Core`, the general
-WorldState snapshot/diagnostics catalog, save/load, or a historical event log.
-Those integrations require their own consumer and checkpoint semantics.
+ArmedForce remains composed at the current `SimulationRuntime` boundary; no
+broader `Simulation.Core` migration was started. The composition API is ready
+for a future boundary migration, but this checkpoint intentionally does not
+add a military subsystem, operational manpower query, or autonomous consumer.

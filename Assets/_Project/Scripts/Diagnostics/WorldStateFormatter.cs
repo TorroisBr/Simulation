@@ -62,6 +62,40 @@ public static class WorldStateSnapshotFormatter
             output.Append("Materialized NPC: ").Append(Value(person.MaterializedNpcRuntimeId)).Append('\n');
         }
 
+        if (snapshot.HasArmedForceState)
+        {
+            output.Append("\nArmed force revision: ")
+                .Append(WorldStateCanonicalWriter.Int64Value(snapshot.ArmedForceRevision.Value))
+                .Append('\n');
+            foreach (WorldStateArmedForceSnapshot force in snapshot.ArmedForces)
+            {
+                if (force == null) continue;
+                output.Append("ARMED FORCE ")
+                    .Append(Value(force.ArmedForceId))
+                    .Append(" parent ")
+                    .Append(Value(force.ParentForceId))
+                    .Append(" lifecycle ")
+                    .Append(WorldStateCanonicalWriter.EnumValue(force.LifecycleState))
+                    .Append(" detached ")
+                    .Append(WorldStateCanonicalWriter.BoolValue(force.IsDetached))
+                    .Append(" location ")
+                    .Append(Value(force.OperationalLocationReference))
+                    .Append('\n');
+            }
+
+            foreach (WorldStateArmedForceContingentSnapshot contingent in snapshot.ArmedForceContingents)
+            {
+                if (contingent == null) continue;
+                output.Append("ARMED FORCE CONTINGENT ")
+                    .Append(Value(contingent.ContingentId))
+                    .Append(" force ")
+                    .Append(Value(contingent.ForceId))
+                    .Append(" amount ")
+                    .Append(WorldStateCanonicalWriter.Int64Value(contingent.Amount))
+                    .Append('\n');
+            }
+        }
+
         foreach (WorldStateParentageSnapshot parentage in snapshot.Parentages)
         {
             if (parentage != null)

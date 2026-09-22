@@ -15,6 +15,7 @@ public sealed class WorldStateSnapshotContext
     public PlaceContentStore PlaceContentStore { get; }
     public LocalTopologyStore LocalTopologyStore { get; }
     public PersonStore PersonStore { get; }
+    public ArmedForceStore ArmedForceStore { get; }
     public IEnumerable<ParentageRecord> Parentages { get; }
     public GenealogyStore GenealogyStore { get; }
     public PropertyOwnershipStore PropertyOwnershipStore { get; }
@@ -65,7 +66,8 @@ public sealed class WorldStateSnapshotContext
         IEnumerable<PoliticalKnowledgeRuntime> politicalKnowledgeRuntimes = null,
         long? politicalKnowledgeRevision = null,
         IEnumerable<PoliticalClaimRecognitionRecord> politicalClaimRecognitions = null,
-        CrimeSocialAppraisalWorldState crimeSocialAppraisal = null)
+        CrimeSocialAppraisalWorldState crimeSocialAppraisal = null,
+        ArmedForceStore armedForceStore = null)
     {
         SimulationTime = simulationTime;
         Calendar = calendar ?? (calendarDefinition != null ? new SimulationCalendar(calendarDefinition) : null);
@@ -77,6 +79,7 @@ public sealed class WorldStateSnapshotContext
         PlaceContentStore = placeContentStore;
         LocalTopologyStore = localTopologyStore;
         PersonStore = personStore;
+        ArmedForceStore = armedForceStore;
         GenealogyStore = genealogyStore;
         PropertyOwnershipStore = propertyOwnershipStore;
         EstateStore = estateStore;
@@ -113,6 +116,11 @@ public sealed class WorldStateSnapshot
     public int KnownNpcCount => Npcs.Count;
     public IReadOnlyList<WorldStatePersonSnapshot> Persons { get; }
     public int PersonCount => Persons.Count;
+    public IReadOnlyList<WorldStateArmedForceSnapshot> ArmedForces { get; }
+    public IReadOnlyList<WorldStateArmedForceContingentSnapshot> ArmedForceContingents { get; }
+    public IReadOnlyList<WorldStateArmedForcePersonReferenceSnapshot> ArmedForceRelevantPersons { get; }
+    public long? ArmedForceRevision { get; }
+    public bool HasArmedForceState => ArmedForceRevision.HasValue;
     public IReadOnlyList<WorldStateParentageSnapshot> Parentages { get; }
     public int ParentageCount => Parentages.Count;
     public IReadOnlyList<WorldStatePropertyOwnershipSnapshot> PropertyOwnerships { get; }
@@ -187,7 +195,11 @@ public sealed class WorldStateSnapshot
         IEnumerable<WorldStatePoliticalClaimRecognitionSnapshot> politicalClaimRecognitions = null,
         IEnumerable<WorldStateTheftOutcomeSnapshot> theftOutcomes = null,
         IEnumerable<WorldStateCrimeKnowledgeSnapshot> crimeKnowledge = null,
-        IEnumerable<WorldStateSocialReactionSnapshot> socialReactions = null)
+        IEnumerable<WorldStateSocialReactionSnapshot> socialReactions = null,
+        IEnumerable<WorldStateArmedForceSnapshot> armedForces = null,
+        IEnumerable<WorldStateArmedForceContingentSnapshot> armedForceContingents = null,
+        IEnumerable<WorldStateArmedForcePersonReferenceSnapshot> armedForceRelevantPersons = null,
+        long? armedForceRevision = null)
     {
         Metadata = new WorldStateSnapshotMetadata(absoluteDay, calendarDate);
         Npcs = SnapshotCollections.CopySorted(npcs, npc => npc?.RuntimeId);
@@ -199,6 +211,16 @@ public sealed class WorldStateSnapshot
         NotableItems = SnapshotCollections.CopySorted(notableItems, notable => notable?.RuntimeId);
         LocalTopologies = SnapshotCollections.CopySorted(localTopologies, topology => topology?.StableKey);
         Persons = SnapshotCollections.CopySorted(persons, person => person?.PersonId);
+        ArmedForces = SnapshotCollections.CopySorted(armedForces, force => force?.ArmedForceId);
+        ArmedForceContingents = SnapshotCollections.CopySorted(
+            armedForceContingents,
+            contingent => contingent?.ContingentId);
+        ArmedForceRelevantPersons = SnapshotCollections.CopySorted(
+            armedForceRelevantPersons,
+            reference => reference == null
+                ? null
+                : reference.ForceId + "\u001f" + reference.RoleKey + "\u001f" + reference.PersonId + "\u001f" + reference.ReferenceId);
+        ArmedForceRevision = armedForceRevision;
         Parentages = SortParentages(parentages);
         PropertyOwnerships = SnapshotCollections.CopySorted(
             propertyOwnerships,
@@ -1681,7 +1703,98 @@ public static class WorldStateSnapshotBuilder
             politicalClaimRecognitions,
             theftOutcomes,
             crimeKnowledge,
-            socialReactions);
+            socialReactions,
+            BuildArmedForceSnapshots(context.ArmedForceStore),
+            BuildArmedForceContingentSnapshots(context.ArmedForceStore),
+            BuildArmedForcePersonReferenceSnapshots(context.ArmedForceStore),
+            context.ArmedForceStore == null ? (long?)null : context.ArmedForceStore.Revision);
+    }
+
+    private static List<WorldStateArmedForceSnapshot> BuildArmedForceSnapshots(
+        ArmedForceStore store)
+    {
+        List<WorldStateArmedForceSnapshot> result = new List<WorldStateArmedForceSnapshot>();
+        if (store == null) return result;
+
+        foreach (ArmedForceRecord force in store.Forces)
+        {
+            if (force == null || force.Id == null) continue;
+            result.Add(new WorldStateArmedForceSnapshot(
+                force.Id.Value,
+                force.DisplayName,
+                force.CreatedAbsoluteDay,
+                force.LifecycleState,
+                force.TerminatedAbsoluteDay,
+                force.ParentForceId?.Value,
+                force.IsDetached,
+                force.OperationalLocationReference,
+                force.CommanderPersonId?.Value));
+        }
+
+        return result;
+    }
+
+    private static List<WorldStateArmedForceContingentSnapshot> BuildArmedForceContingentSnapshots(
+        ArmedForceStore store)
+    {
+        List<WorldStateArmedForceContingentSnapshot> result =
+            new List<WorldStateArmedForceContingentSnapshot>();
+        if (store == null) return result;
+
+        foreach (ContingentRecord contingent in store.Contingents)
+        {
+            if (contingent == null || contingent.Id == null || contingent.ForceId == null)
+            {
+                continue;
+            }
+
+            List<WorldStateArmedForceCharacteristicSnapshot> characteristics =
+                new List<WorldStateArmedForceCharacteristicSnapshot>();
+            foreach (ArmedForceCharacteristic characteristic in contingent.Characteristics)
+            {
+                if (characteristic != null)
+                {
+                    characteristics.Add(new WorldStateArmedForceCharacteristicSnapshot(
+                        characteristic.Key,
+                        characteristic.Value));
+                }
+            }
+
+            result.Add(new WorldStateArmedForceContingentSnapshot(
+                contingent.Id.Value,
+                contingent.ForceId.Value,
+                contingent.Amount,
+                contingent.Origin?.Domain,
+                contingent.Origin?.Value,
+                contingent.ServiceType,
+                characteristics));
+        }
+
+        return result;
+    }
+
+    private static List<WorldStateArmedForcePersonReferenceSnapshot> BuildArmedForcePersonReferenceSnapshots(
+        ArmedForceStore store)
+    {
+        List<WorldStateArmedForcePersonReferenceSnapshot> result =
+            new List<WorldStateArmedForcePersonReferenceSnapshot>();
+        if (store == null) return result;
+
+        foreach (ArmedForcePersonReference reference in store.RelevantPersons)
+        {
+            if (reference == null || reference.Id == null || reference.ForceId == null || reference.PersonId == null)
+            {
+                continue;
+            }
+
+            result.Add(new WorldStateArmedForcePersonReferenceSnapshot(
+                reference.Id.Value,
+                reference.ForceId.Value,
+                reference.PersonId.Value,
+                reference.RoleKey));
+        }
+
+        return result;
     }
 
     private static List<WorldStateTheftOutcomeSnapshot> BuildTheftOutcomeSnapshots(

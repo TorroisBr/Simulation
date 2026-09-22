@@ -153,6 +153,91 @@ public sealed class WorldStateDiff
                 CompareValue("Person", identity, "ResidenceSettlementRuntimeId", WorldStateCanonicalWriter.StringValue(left.ResidenceSettlementRuntimeId), WorldStateCanonicalWriter.StringValue(right.ResidenceSettlementRuntimeId), differences);
             }, differences);
 
+        CompareValue("ArmedForceStore", "world", "StatePresent",
+            WorldStateCanonicalWriter.BoolValue(before.HasArmedForceState),
+            WorldStateCanonicalWriter.BoolValue(after.HasArmedForceState),
+            differences);
+        CompareValue("ArmedForceStore", "world", "Revision",
+            before.ArmedForceRevision.HasValue
+                ? WorldStateCanonicalWriter.Int64Value(before.ArmedForceRevision.Value)
+                : null,
+            after.ArmedForceRevision.HasValue
+                ? WorldStateCanonicalWriter.Int64Value(after.ArmedForceRevision.Value)
+                : null,
+            differences);
+
+        CompareEntities("ArmedForce", before.ArmedForces, after.ArmedForces,
+            force => force.ArmedForceId,
+            (identity, left, right) =>
+            {
+                CompareValue("ArmedForce", identity, "DisplayName",
+                    WorldStateCanonicalWriter.StringValue(left.DisplayName),
+                    WorldStateCanonicalWriter.StringValue(right.DisplayName), differences);
+                CompareValue("ArmedForce", identity, "CreatedAbsoluteDay",
+                    WorldStateCanonicalWriter.Int64Value(left.CreatedAbsoluteDay),
+                    WorldStateCanonicalWriter.Int64Value(right.CreatedAbsoluteDay), differences);
+                CompareValue("ArmedForce", identity, "LifecycleState",
+                    WorldStateCanonicalWriter.EnumValue(left.LifecycleState),
+                    WorldStateCanonicalWriter.EnumValue(right.LifecycleState), differences);
+                CompareValue("ArmedForce", identity, "TerminatedAbsoluteDay",
+                    WorldStateCanonicalWriter.NullableInt64Value(left.TerminatedAbsoluteDay),
+                    WorldStateCanonicalWriter.NullableInt64Value(right.TerminatedAbsoluteDay), differences);
+                CompareValue("ArmedForce", identity, "ParentForceId",
+                    WorldStateCanonicalWriter.StringValue(left.ParentForceId),
+                    WorldStateCanonicalWriter.StringValue(right.ParentForceId), differences);
+                CompareValue("ArmedForce", identity, "IsDetached",
+                    WorldStateCanonicalWriter.BoolValue(left.IsDetached),
+                    WorldStateCanonicalWriter.BoolValue(right.IsDetached), differences);
+                CompareValue("ArmedForce", identity, "OperationalLocationReference",
+                    WorldStateCanonicalWriter.StringValue(left.OperationalLocationReference),
+                    WorldStateCanonicalWriter.StringValue(right.OperationalLocationReference), differences);
+                CompareValue("ArmedForce", identity, "CommanderPersonId",
+                    WorldStateCanonicalWriter.StringValue(left.CommanderPersonId),
+                    WorldStateCanonicalWriter.StringValue(right.CommanderPersonId), differences);
+            },
+            differences);
+
+        CompareEntities("ArmedForceContingent", before.ArmedForceContingents, after.ArmedForceContingents,
+            contingent => contingent.ContingentId,
+            (identity, left, right) =>
+            {
+                CompareValue("ArmedForceContingent", identity, "ForceId",
+                    WorldStateCanonicalWriter.StringValue(left.ForceId),
+                    WorldStateCanonicalWriter.StringValue(right.ForceId), differences);
+                CompareValue("ArmedForceContingent", identity, "Amount",
+                    WorldStateCanonicalWriter.Int64Value(left.Amount),
+                    WorldStateCanonicalWriter.Int64Value(right.Amount), differences);
+                CompareValue("ArmedForceContingent", identity, "OriginDomain",
+                    WorldStateCanonicalWriter.StringValue(left.OriginDomain),
+                    WorldStateCanonicalWriter.StringValue(right.OriginDomain), differences);
+                CompareValue("ArmedForceContingent", identity, "OriginValue",
+                    WorldStateCanonicalWriter.StringValue(left.OriginValue),
+                    WorldStateCanonicalWriter.StringValue(right.OriginValue), differences);
+                CompareValue("ArmedForceContingent", identity, "ServiceType",
+                    WorldStateCanonicalWriter.StringValue(left.ServiceType),
+                    WorldStateCanonicalWriter.StringValue(right.ServiceType), differences);
+                CompareValue("ArmedForceContingent", identity, "Characteristics",
+                    ArmedForceCharacteristicsValue(left.Characteristics),
+                    ArmedForceCharacteristicsValue(right.Characteristics), differences);
+            },
+            differences);
+
+        CompareEntities("ArmedForcePersonReference", before.ArmedForceRelevantPersons, after.ArmedForceRelevantPersons,
+            reference => reference.ReferenceId,
+            (identity, left, right) =>
+            {
+                CompareValue("ArmedForcePersonReference", identity, "ForceId",
+                    WorldStateCanonicalWriter.StringValue(left.ForceId),
+                    WorldStateCanonicalWriter.StringValue(right.ForceId), differences);
+                CompareValue("ArmedForcePersonReference", identity, "PersonId",
+                    WorldStateCanonicalWriter.StringValue(left.PersonId),
+                    WorldStateCanonicalWriter.StringValue(right.PersonId), differences);
+                CompareValue("ArmedForcePersonReference", identity, "RoleKey",
+                    WorldStateCanonicalWriter.StringValue(left.RoleKey),
+                    WorldStateCanonicalWriter.StringValue(right.RoleKey), differences);
+            },
+            differences);
+
         CompareEntities("Parentage", before.Parentages, after.Parentages,
             parentage => ParentageIdentity(parentage),
             (identity, left, right) => { },
@@ -921,6 +1006,29 @@ public sealed class WorldStateDiff
         return string.Join(";", entries.ToArray());
     }
 
+    private static string ArmedForceCharacteristicsValue(
+        IReadOnlyList<WorldStateArmedForceCharacteristicSnapshot> characteristics)
+    {
+        if (characteristics == null || characteristics.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        List<string> entries = new List<string>();
+        foreach (WorldStateArmedForceCharacteristicSnapshot characteristic in characteristics)
+        {
+            if (characteristic != null)
+            {
+                entries.Add(
+                    WorldStateCanonicalWriter.StringValue(characteristic.Key)
+                    + "="
+                    + WorldStateCanonicalWriter.StringValue(characteristic.Value));
+            }
+        }
+
+        return string.Join(";", entries.ToArray());
+    }
+
     private static void SortDifferences(List<WorldStateDifference> differences)
     {
         differences.Sort((left, right) =>
@@ -945,6 +1053,10 @@ public sealed class WorldStateDiff
             case "NpcAction": return 1;
             case "MerchantTradePlan": return 2;
             case "NpcInventory": return 3;
+            case "ArmedForceStore": return 4;
+            case "ArmedForce": return 5;
+            case "ArmedForceContingent": return 6;
+            case "ArmedForcePersonReference": return 7;
             case "Parentage": return 4;
             case "Metadata": return 4;
             case "Calendar": return 5;
