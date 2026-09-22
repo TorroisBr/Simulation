@@ -22,6 +22,7 @@ public sealed class SimulationRuntime
     private readonly PersistentConflictStore conflictStore;
     private readonly PersistentWarStore warStore;
     private readonly PersistentBattleStore battleStore;
+    private readonly BattleExecutionContextBuilder battleExecutionContextBuilder;
     private readonly GenealogyStore genealogyStore;
     private readonly InstitutionStore institutionStore;
     private readonly OfficeStore officeStore;
@@ -68,6 +69,7 @@ public sealed class SimulationRuntime
     public PersistentConflictStore ConflictStore => conflictStore;
     public PersistentWarStore WarStore => warStore;
     public PersistentBattleStore BattleStore => battleStore;
+    public BattleExecutionContextBuilder BattleExecutionContextBuilder => battleExecutionContextBuilder;
     public IReadOnlyList<ParentageRecord> GenealogyRecords => genealogyStore.Records;
     public IReadOnlyList<InstitutionRecord> InstitutionRecords => institutionStore.Institutions;
     public IReadOnlyList<OfficeRecord> OfficeRecords => officeStore.Offices;
@@ -246,6 +248,13 @@ public sealed class SimulationRuntime
         this.conflictStore = resolvedConflictStore;
         this.warStore = resolvedWarStore;
         this.battleStore = resolvedBattleStore;
+        this.battleExecutionContextBuilder = new BattleExecutionContextBuilder(
+            this.battleStore,
+            this.armedForceStore,
+            this.armedForceSpatialStateStore,
+            this.spatialAuthorityStore,
+            this.localTopologyStore,
+            this.personStore);
         this.genealogyStore = CloneGenealogyStore(resolvedGenealogyStore);
         this.institutionStore = resolvedInstitutionStore;
         this.officeStore = resolvedOfficeStore;
