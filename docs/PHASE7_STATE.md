@@ -4,8 +4,8 @@
 
 - Canonical architecture baseline: `775edc758fcb8e0f0baf6768f2c89190eca403fd`.
 - Checkpoint branch: `codex/phase7/BattleSpatialBinding`.
-- Implementation commit: recorded after validation; this section is kept
-  current with the validated branch commit.
+- Implementation commit: `9b100c7` — Battle spatial binding, world-bound
+  composition, diagnostics, and focused coverage.
 
 ## D1 delivered
 
