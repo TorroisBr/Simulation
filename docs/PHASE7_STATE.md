@@ -1,4 +1,70 @@
-# Phase 7 — Checkpoint C — Current State
+# Phase 7 — Checkpoint D0 — Current State
+
+## D0 baseline, branch, and commit
+
+- Canonical architecture baseline: `9e922550d1bd0ed6ca6ddffc1538809960208a10`.
+- Checkpoint branch: `codex/phase7/SpatialAuthorityBridge`.
+- Implementation commit: `86632ea` — minimal Hex/Location spatial authority,
+  typed spatial references, LocalTopology bridge, runtime composition, and
+  deterministic diagnostics.
+
+## D0 delivered
+
+Checkpoint D0 adds the smallest authoritative world-bound physical reference
+layer without implementing a HexGrid, traversal, pathfinding, or Battle
+resolution.
+
+- `HexId` and `LocationId` are stable typed identities independent of Unity,
+  `NpcRuntime`, `RuntimeIdAllocator`, discovery order, and insertion order.
+- `HexRecord` is identity-only. `LocationRecord` has exactly one immutable
+  `AnchorHexId`; registration validates the anchor before mutation.
+- `SpatialReference` is typed for Hex, Location, and SubLocation. SubLocation
+  references use explicit existing LocalTopology owner/place fields rather than
+  an opaque string.
+- `SpatialAuthorityStore` owns Hex/Location records, explicit topology-owner
+  bindings, deterministic ordering, revision, cloning, resolution, and
+  invariant validation. Mutations validate before applying and reject revision
+  overflow without partial state changes.
+- LocalTopology remains the local topology authority. The bridge resolves
+  `SubLocation -> LocalTopology -> Location -> AnchorHex` only when the
+  consumer supplies the existing `LocalTopologyStore`; City and ExplorableSite
+  were not migrated into Location records.
+- `SimulationRuntime` composes a cloned spatial authority without adding daily
+  processing or changing `AdvanceDay`.
+- Snapshot context, snapshot projection, canonical writer, diff, and invariant
+  validation expose only the authoritative spatial records and revision.
+
+## D0 invariants and determinism
+
+Containment, same-Hex, and connectivity remain distinct. Hex adjacency,
+traversability, distance, travel time, knowledge, and execution are not
+introduced. Moving entities remain separate from Location. No terrain, weather,
+travel costs, barriers, crossings, RNG, or Unity object identity was added.
+Equivalent authoritative state produces sorted, insertion-order-independent
+Hex/Location projections and canonical output.
+
+## D0 validation
+
+- D0 focused EditMode: `8/8`.
+- ALL EditMode: `1491/1491`.
+- Official EditMode `Smoke`: `5/5`.
+- `git diff --check`: clean before documentation update.
+- Unity `6000.3.9f1` was run in an isolated validation worktree because the
+  primary checkout had an interactive Editor instance open.
+
+## D0 deferred and known limitations
+
+Full HexGrid, adjacency, terrain, barriers, crossings, scale/configuration,
+route/travel rewrite, knowledge integration, movement, military use, Battle
+location assignment, Battle resolution, aftermath, save/load, and broad
+`Simulation.Core` migration remain deferred. Spatial authority does not yet
+automatically map legacy City/Site runtime locations; such mapping remains an
+explicit future integration. Spatial diagnostics are projections, not a
+save/load contract.
+
+`AdvanceDay` was not changed. `docs/SIMULATION_ARCHITECTURE.md` was not changed.
+
+## Historical Checkpoint C — Baseline and branch
 
 ## Baseline and branch
 
