@@ -1,15 +1,24 @@
-# Phase 7 — Checkpoint D5 — Validated Feature Candidate
+# Phase 7 — Checkpoint D5 — Canonical Promotion
 
-## D5 baseline, branch, and implementation
+## D5 baseline, integration, and canonical status
 
 - Canonical baseline: `eef60513fed42e6b8a8660efd8e9cc9fe4f1538b` (D4 state).
-- Feature branch: `codex/phase7/BattleOutcomePlanning`.
+- D5 feature branch: `codex/phase7/BattleOutcomePlanning`, ending at
+  `e1e65b7bcf3db37c3300e9045d99931bc556bc92`.
 - Implementation commit: `bcca17580ae216b4f20fc4e11a4082038cd015c8` —
   world-authorized Battle resolution
   policy, semantic outcome, immutable non-committable application plan,
   recomputation/current-plan validation, and focused tests.
-- The feature branch is validated and published independently; this record
-  does not claim promotion to `codex/phase7/canonical` or external approval.
+- Consolidated architecture commit: `9af971bea53c5548c81e8506b033b92c5ea0f12a`
+  on `codex/phase7/BattleRawResolution`; its only change relative to the common
+  baseline is `docs/SIMULATION_ARCHITECTURE.md`.
+- Integration branch: `codex/phase7/D5CanonicalIntegration`. Merge commit
+  `99f0c284750b9f87fdaa21241b67b968277235d2` preserves the D5 candidate as its
+  first parent and the architecture commit as its second parent.
+- D5 is approved and promoted as the Phase 7 canonical checkpoint. The
+  validated `codex/phase7/canonical` promotion contains both the D5
+  implementation and the consolidated D6A/D6B/D7 architecture. This state
+  document update is included in the final promotion commit.
 
 ## D5 delivered
 
@@ -73,36 +82,42 @@ mutate world truth.
   casualties.
 - D5 does not change `PersistentBattleRecord` or `PersistentBattleStore`,
   snapshots/diagnostics, `Contingent.Amount`, lifecycle, population, position,
-  events, or history. Battles remain `Active`. `SimulationRuntime.AdvanceDay`
-  and `docs/SIMULATION_ARCHITECTURE.md` are unchanged.
+  events, or history. Battles remain `Active`; D5 provides no world mutation.
+  `SimulationRuntime.AdvanceDay` is unchanged. The D5 feature branch did not
+  edit `docs/SIMULATION_ARCHITECTURE.md`; canonical integration includes the
+  separate consolidated architecture commit listed above.
 
 ## D5 validation
 
-- D5 focused EditMode: `15/15`.
+- D5 focused EditMode, rerun on the integrated tree: `15/15`.
 - D4 raw resolution: `9/9`; D3 execution context: `10/10`.
 - D2 ArmedForce spatial: `11/11`; D1 Battle spatial: `7/7`; D0
   SpatialAuthority: `8/8`.
 - ArmedForce foundation: `10/10`; Persistent Conflict/War/Battle: `8/8`;
   ConflictFoundation: `16/16`; SimulationRuntime orchestration: `10/10`.
-- ALL EditMode: `1543/1543`. Official complete EditMode `Smoke`: `5/5`.
+- ALL EditMode, rerun on the integrated tree: `1543/1543`. Official complete
+  EditMode `Smoke`, rerun on the integrated tree: `5/5`.
 - ALL EditMode included the diagnostics, Person, Population, lifecycle, and
   travel regression suites.
 - Independent read-only architecture/correctness review: no remaining D5
   blocker. The review confirmed that provider immutability/purity and
   random-source statelessness are composition contracts; arbitrary
   implementations cannot be mechanically frozen by the runtime.
-- `git diff --check`: clean for implementation before the state-document
-  update. `AdvanceDay` and `docs/SIMULATION_ARCHITECTURE.md`: unchanged.
+- Independent read-only conformance review of the integrated tree found no
+  D5/D6 boundary blocker or conceptual contradiction. `git diff --check` is
+  clean for the integrated state, including this state-document update.
 
 ## D5 boundaries and next gate
 
 No long-run suite was required because `AdvanceDay` is unchanged and D5 adds no
-daily behavior. D6 remains the next architecture-gated foundation for
-Military Manpower / Availability / Casualty. D7 remains the later atomic Battle
-Outcome Application boundary. This branch does not begin D6; its scope remains
-subject to a separate architecture gate. Cross-host numeric equivalence,
-consequences, casualties, availability/custody, lifecycle transition,
-application, events/history, save/load, and replay remain deferred.
+daily behavior. D6A is the next implementation checkpoint. Its architecture
+is consolidated in `docs/SIMULATION_ARCHITECTURE.md`; D6A had been blocked on
+D5 promotion and may now proceed only from the resulting combined canonical
+baseline. This promotion contains no D6A implementation. D6B and D7 remain
+later architecture-gated checkpoints. Cross-host numeric equivalence remains
+unresolved. Consequences, casualties, availability/custody implementation,
+lifecycle transition, application, events/history, save/load, and replay
+remain deferred.
 
 ## Historical record — Checkpoint D4
 
