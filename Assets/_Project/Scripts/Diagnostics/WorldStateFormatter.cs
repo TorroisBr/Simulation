@@ -96,6 +96,8 @@ public static class WorldStateSnapshotFormatter
             }
         }
 
+        AppendConflictWarBattle(output, snapshot);
+
         foreach (WorldStateParentageSnapshot parentage in snapshot.Parentages)
         {
             if (parentage != null)
@@ -301,6 +303,64 @@ public static class WorldStateSnapshotFormatter
         }
 
         return output.ToString();
+    }
+
+    private static void AppendConflictWarBattle(StringBuilder output, WorldStateSnapshot snapshot)
+    {
+        if (snapshot.HasConflictState)
+        {
+            output.Append("\nConflict revision: ").Append(WorldStateCanonicalWriter.Int64Value(snapshot.ConflictRevision.Value)).Append('\n');
+            foreach (WorldStateConflictSnapshot conflict in snapshot.Conflicts)
+            {
+                if (conflict == null) continue;
+                output.Append("CONFLICT ").Append(Value(conflict.ConflictId)).Append(" lifecycle ")
+                    .Append(WorldStateCanonicalWriter.EnumValue(conflict.LifecycleState)).Append(" created ")
+                    .Append(WorldStateCanonicalWriter.Int64Value(conflict.CreatedAbsoluteDay)).Append(" ended ")
+                    .Append(WorldStateCanonicalWriter.NullableInt64Value(conflict.EndedAbsoluteDay)).Append('\n');
+            }
+            foreach (WorldStateConflictSideSnapshot side in snapshot.ConflictSides)
+            {
+                if (side != null) output.Append("CONFLICT SIDE ").Append(Value(side.ConflictId)).Append('/').Append(Value(side.SideId)).Append(" ").Append(Value(side.DisplayName)).Append('\n');
+            }
+            foreach (WorldStateConflictParticipantBindingSnapshot binding in snapshot.ConflictParticipantBindings)
+            {
+                if (binding != null) output.Append("CONFLICT PARTICIPANT ").Append(Value(binding.ConflictId)).Append('/').Append(Value(binding.BindingId)).Append(" side ").Append(Value(binding.SideId)).Append(" force ").Append(Value(binding.ArmedForceId)).Append('\n');
+            }
+        }
+
+        if (snapshot.HasWarState)
+        {
+            output.Append("\nWar revision: ").Append(WorldStateCanonicalWriter.Int64Value(snapshot.WarRevision.Value)).Append('\n');
+            foreach (WorldStateWarSnapshot war in snapshot.Wars)
+            {
+                if (war != null) output.Append("WAR ").Append(Value(war.WarId)).Append(" lifecycle ").Append(WorldStateCanonicalWriter.EnumValue(war.LifecycleState)).Append(" created ").Append(WorldStateCanonicalWriter.Int64Value(war.CreatedAbsoluteDay)).Append(" ended ").Append(WorldStateCanonicalWriter.NullableInt64Value(war.EndedAbsoluteDay)).Append(" conflict ").Append(Value(war.ConflictId)).Append('\n');
+            }
+            foreach (WorldStateWarSideSnapshot side in snapshot.WarSides)
+            {
+                if (side != null) output.Append("WAR SIDE ").Append(Value(side.WarId)).Append('/').Append(Value(side.SideId)).Append(" ").Append(Value(side.DisplayName)).Append('\n');
+            }
+            foreach (WorldStateWarParticipantBindingSnapshot binding in snapshot.WarParticipantBindings)
+            {
+                if (binding != null) output.Append("WAR PARTICIPANT ").Append(Value(binding.WarId)).Append('/').Append(Value(binding.BindingId)).Append(" side ").Append(Value(binding.SideId)).Append(" force ").Append(Value(binding.ArmedForceId)).Append('\n');
+            }
+        }
+
+        if (snapshot.HasBattleState)
+        {
+            output.Append("\nBattle revision: ").Append(WorldStateCanonicalWriter.Int64Value(snapshot.BattleRevision.Value)).Append('\n');
+            foreach (WorldStateBattleSnapshot battle in snapshot.Battles)
+            {
+                if (battle != null) output.Append("BATTLE ").Append(Value(battle.BattleId)).Append(" lifecycle ").Append(WorldStateCanonicalWriter.EnumValue(battle.LifecycleState)).Append(" created ").Append(WorldStateCanonicalWriter.Int64Value(battle.CreatedAbsoluteDay)).Append(" started ").Append(WorldStateCanonicalWriter.NullableInt64Value(battle.StartedAbsoluteDay)).Append(" conflict ").Append(Value(battle.ConflictId)).Append(" war ").Append(Value(battle.WarId)).Append('\n');
+            }
+            foreach (WorldStateBattleSideSnapshot side in snapshot.BattleSides)
+            {
+                if (side != null) output.Append("BATTLE SIDE ").Append(Value(side.BattleId)).Append('/').Append(Value(side.SideId)).Append(" ").Append(Value(side.DisplayName)).Append('\n');
+            }
+            foreach (WorldStateBattleParticipantBindingSnapshot binding in snapshot.BattleParticipantBindings)
+            {
+                if (binding != null) output.Append("BATTLE PARTICIPANT ").Append(Value(binding.BattleId)).Append('/').Append(Value(binding.BindingId)).Append(" side ").Append(Value(binding.SideId)).Append(" force ").Append(Value(binding.ArmedForceId)).Append('\n');
+            }
+        }
     }
 
     private static string DisplayOrId(string displayName, string runtimeId)

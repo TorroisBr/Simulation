@@ -16,6 +16,9 @@ public sealed class WorldStateSnapshotContext
     public LocalTopologyStore LocalTopologyStore { get; }
     public PersonStore PersonStore { get; }
     public ArmedForceStore ArmedForceStore { get; }
+    public PersistentConflictStore ConflictStore { get; }
+    public PersistentWarStore WarStore { get; }
+    public PersistentBattleStore BattleStore { get; }
     public IEnumerable<ParentageRecord> Parentages { get; }
     public GenealogyStore GenealogyStore { get; }
     public PropertyOwnershipStore PropertyOwnershipStore { get; }
@@ -67,7 +70,10 @@ public sealed class WorldStateSnapshotContext
         long? politicalKnowledgeRevision = null,
         IEnumerable<PoliticalClaimRecognitionRecord> politicalClaimRecognitions = null,
         CrimeSocialAppraisalWorldState crimeSocialAppraisal = null,
-        ArmedForceStore armedForceStore = null)
+        ArmedForceStore armedForceStore = null,
+        PersistentConflictStore conflictStore = null,
+        PersistentWarStore warStore = null,
+        PersistentBattleStore battleStore = null)
     {
         SimulationTime = simulationTime;
         Calendar = calendar ?? (calendarDefinition != null ? new SimulationCalendar(calendarDefinition) : null);
@@ -80,6 +86,9 @@ public sealed class WorldStateSnapshotContext
         LocalTopologyStore = localTopologyStore;
         PersonStore = personStore;
         ArmedForceStore = armedForceStore;
+        ConflictStore = conflictStore;
+        WarStore = warStore;
+        BattleStore = battleStore;
         GenealogyStore = genealogyStore;
         PropertyOwnershipStore = propertyOwnershipStore;
         EstateStore = estateStore;
@@ -121,6 +130,21 @@ public sealed class WorldStateSnapshot
     public IReadOnlyList<WorldStateArmedForcePersonReferenceSnapshot> ArmedForceRelevantPersons { get; }
     public long? ArmedForceRevision { get; }
     public bool HasArmedForceState => ArmedForceRevision.HasValue;
+    public IReadOnlyList<WorldStateConflictSnapshot> Conflicts { get; }
+    public IReadOnlyList<WorldStateConflictSideSnapshot> ConflictSides { get; }
+    public IReadOnlyList<WorldStateConflictParticipantBindingSnapshot> ConflictParticipantBindings { get; }
+    public long? ConflictRevision { get; }
+    public bool HasConflictState => ConflictRevision.HasValue;
+    public IReadOnlyList<WorldStateWarSnapshot> Wars { get; }
+    public IReadOnlyList<WorldStateWarSideSnapshot> WarSides { get; }
+    public IReadOnlyList<WorldStateWarParticipantBindingSnapshot> WarParticipantBindings { get; }
+    public long? WarRevision { get; }
+    public bool HasWarState => WarRevision.HasValue;
+    public IReadOnlyList<WorldStateBattleSnapshot> Battles { get; }
+    public IReadOnlyList<WorldStateBattleSideSnapshot> BattleSides { get; }
+    public IReadOnlyList<WorldStateBattleParticipantBindingSnapshot> BattleParticipantBindings { get; }
+    public long? BattleRevision { get; }
+    public bool HasBattleState => BattleRevision.HasValue;
     public IReadOnlyList<WorldStateParentageSnapshot> Parentages { get; }
     public int ParentageCount => Parentages.Count;
     public IReadOnlyList<WorldStatePropertyOwnershipSnapshot> PropertyOwnerships { get; }
@@ -199,7 +223,19 @@ public sealed class WorldStateSnapshot
         IEnumerable<WorldStateArmedForceSnapshot> armedForces = null,
         IEnumerable<WorldStateArmedForceContingentSnapshot> armedForceContingents = null,
         IEnumerable<WorldStateArmedForcePersonReferenceSnapshot> armedForceRelevantPersons = null,
-        long? armedForceRevision = null)
+        long? armedForceRevision = null,
+        IEnumerable<WorldStateConflictSnapshot> conflicts = null,
+        IEnumerable<WorldStateConflictSideSnapshot> conflictSides = null,
+        IEnumerable<WorldStateConflictParticipantBindingSnapshot> conflictParticipantBindings = null,
+        long? conflictRevision = null,
+        IEnumerable<WorldStateWarSnapshot> wars = null,
+        IEnumerable<WorldStateWarSideSnapshot> warSides = null,
+        IEnumerable<WorldStateWarParticipantBindingSnapshot> warParticipantBindings = null,
+        long? warRevision = null,
+        IEnumerable<WorldStateBattleSnapshot> battles = null,
+        IEnumerable<WorldStateBattleSideSnapshot> battleSides = null,
+        IEnumerable<WorldStateBattleParticipantBindingSnapshot> battleParticipantBindings = null,
+        long? battleRevision = null)
     {
         Metadata = new WorldStateSnapshotMetadata(absoluteDay, calendarDate);
         Npcs = SnapshotCollections.CopySorted(npcs, npc => npc?.RuntimeId);
@@ -221,6 +257,30 @@ public sealed class WorldStateSnapshot
                 ? null
                 : reference.ForceId + "\u001f" + reference.RoleKey + "\u001f" + reference.PersonId + "\u001f" + reference.ReferenceId);
         ArmedForceRevision = armedForceRevision;
+        Conflicts = SnapshotCollections.CopySorted(conflicts, conflict => conflict?.ConflictId);
+        ConflictSides = SnapshotCollections.CopySorted(
+            conflictSides,
+            side => side == null ? null : side.ConflictId + "\u001f" + side.SideId);
+        ConflictParticipantBindings = SnapshotCollections.CopySorted(
+            conflictParticipantBindings,
+            binding => binding == null ? null : binding.ConflictId + "\u001f" + binding.BindingId);
+        ConflictRevision = conflictRevision;
+        Wars = SnapshotCollections.CopySorted(wars, war => war?.WarId);
+        WarSides = SnapshotCollections.CopySorted(
+            warSides,
+            side => side == null ? null : side.WarId + "\u001f" + side.SideId);
+        WarParticipantBindings = SnapshotCollections.CopySorted(
+            warParticipantBindings,
+            binding => binding == null ? null : binding.WarId + "\u001f" + binding.BindingId);
+        WarRevision = warRevision;
+        Battles = SnapshotCollections.CopySorted(battles, battle => battle?.BattleId);
+        BattleSides = SnapshotCollections.CopySorted(
+            battleSides,
+            side => side == null ? null : side.BattleId + "\u001f" + side.SideId);
+        BattleParticipantBindings = SnapshotCollections.CopySorted(
+            battleParticipantBindings,
+            binding => binding == null ? null : binding.BattleId + "\u001f" + binding.BindingId);
+        BattleRevision = battleRevision;
         Parentages = SortParentages(parentages);
         PropertyOwnerships = SnapshotCollections.CopySorted(
             propertyOwnerships,
@@ -1707,7 +1767,178 @@ public static class WorldStateSnapshotBuilder
             BuildArmedForceSnapshots(context.ArmedForceStore),
             BuildArmedForceContingentSnapshots(context.ArmedForceStore),
             BuildArmedForcePersonReferenceSnapshots(context.ArmedForceStore),
-            context.ArmedForceStore == null ? (long?)null : context.ArmedForceStore.Revision);
+            context.ArmedForceStore == null ? (long?)null : context.ArmedForceStore.Revision,
+            BuildConflictSnapshots(context.ConflictStore),
+            BuildConflictSideSnapshots(context.ConflictStore),
+            BuildConflictParticipantBindingSnapshots(context.ConflictStore),
+            context.ConflictStore == null ? (long?)null : context.ConflictStore.Revision,
+            BuildWarSnapshots(context.WarStore),
+            BuildWarSideSnapshots(context.WarStore),
+            BuildWarParticipantBindingSnapshots(context.WarStore),
+            context.WarStore == null ? (long?)null : context.WarStore.Revision,
+            BuildBattleSnapshots(context.BattleStore),
+            BuildBattleSideSnapshots(context.BattleStore),
+            BuildBattleParticipantBindingSnapshots(context.BattleStore),
+            context.BattleStore == null ? (long?)null : context.BattleStore.Revision);
+    }
+
+    private static List<WorldStateConflictSnapshot> BuildConflictSnapshots(PersistentConflictStore store)
+    {
+        List<WorldStateConflictSnapshot> result = new List<WorldStateConflictSnapshot>();
+        if (store == null) return result;
+        foreach (PersistentConflictRecord record in store.Records)
+        {
+            if (record?.Id == null) continue;
+            result.Add(new WorldStateConflictSnapshot(
+                record.Id.Value,
+                record.CreatedAbsoluteDay,
+                record.LifecycleState,
+                record.EndedAbsoluteDay));
+        }
+        return result;
+    }
+
+    private static List<WorldStateConflictSideSnapshot> BuildConflictSideSnapshots(PersistentConflictStore store)
+    {
+        List<WorldStateConflictSideSnapshot> result = new List<WorldStateConflictSideSnapshot>();
+        if (store == null) return result;
+        foreach (PersistentConflictRecord record in store.Records)
+        {
+            if (record?.Id == null) continue;
+            foreach (ConflictStateSide side in record.Sides)
+            {
+                if (side?.SideId == null) continue;
+                result.Add(new WorldStateConflictSideSnapshot(record.Id.Value, side.SideId.Value, side.DisplayName));
+            }
+        }
+        return result;
+    }
+
+    private static List<WorldStateConflictParticipantBindingSnapshot> BuildConflictParticipantBindingSnapshots(PersistentConflictStore store)
+    {
+        List<WorldStateConflictParticipantBindingSnapshot> result = new List<WorldStateConflictParticipantBindingSnapshot>();
+        if (store == null) return result;
+        foreach (PersistentConflictRecord record in store.Records)
+        {
+            if (record?.Id == null) continue;
+            foreach (ConflictParticipantBinding binding in record.ParticipantBindings)
+            {
+                if (binding?.BindingId == null || binding.SideId == null || binding.ArmedForceId == null) continue;
+                result.Add(new WorldStateConflictParticipantBindingSnapshot(
+                    record.Id.Value,
+                    binding.BindingId.Value,
+                    binding.SideId.Value,
+                    binding.ArmedForceId.Value));
+            }
+        }
+        return result;
+    }
+
+    private static List<WorldStateWarSnapshot> BuildWarSnapshots(PersistentWarStore store)
+    {
+        List<WorldStateWarSnapshot> result = new List<WorldStateWarSnapshot>();
+        if (store == null) return result;
+        foreach (PersistentWarRecord record in store.Records)
+        {
+            if (record?.Id == null) continue;
+            result.Add(new WorldStateWarSnapshot(
+                record.Id.Value,
+                record.CreatedAbsoluteDay,
+                record.LifecycleState,
+                record.EndedAbsoluteDay,
+                record.ConflictId?.Value));
+        }
+        return result;
+    }
+
+    private static List<WorldStateWarSideSnapshot> BuildWarSideSnapshots(PersistentWarStore store)
+    {
+        List<WorldStateWarSideSnapshot> result = new List<WorldStateWarSideSnapshot>();
+        if (store == null) return result;
+        foreach (PersistentWarRecord record in store.Records)
+        {
+            if (record?.Id == null) continue;
+            foreach (WarStateSide side in record.Sides)
+            {
+                if (side?.SideId == null) continue;
+                result.Add(new WorldStateWarSideSnapshot(record.Id.Value, side.SideId.Value, side.DisplayName));
+            }
+        }
+        return result;
+    }
+
+    private static List<WorldStateWarParticipantBindingSnapshot> BuildWarParticipantBindingSnapshots(PersistentWarStore store)
+    {
+        List<WorldStateWarParticipantBindingSnapshot> result = new List<WorldStateWarParticipantBindingSnapshot>();
+        if (store == null) return result;
+        foreach (PersistentWarRecord record in store.Records)
+        {
+            if (record?.Id == null) continue;
+            foreach (WarParticipantBinding binding in record.ParticipantBindings)
+            {
+                if (binding?.BindingId == null || binding.SideId == null || binding.ArmedForceId == null) continue;
+                result.Add(new WorldStateWarParticipantBindingSnapshot(
+                    record.Id.Value,
+                    binding.BindingId.Value,
+                    binding.SideId.Value,
+                    binding.ArmedForceId.Value));
+            }
+        }
+        return result;
+    }
+
+    private static List<WorldStateBattleSnapshot> BuildBattleSnapshots(PersistentBattleStore store)
+    {
+        List<WorldStateBattleSnapshot> result = new List<WorldStateBattleSnapshot>();
+        if (store == null) return result;
+        foreach (PersistentBattleRecord record in store.Records)
+        {
+            if (record?.Id == null) continue;
+            result.Add(new WorldStateBattleSnapshot(
+                record.Id.Value,
+                record.CreatedAbsoluteDay,
+                record.StartedAbsoluteDay,
+                record.LifecycleState,
+                record.ConflictId?.Value,
+                record.WarId?.Value));
+        }
+        return result;
+    }
+
+    private static List<WorldStateBattleSideSnapshot> BuildBattleSideSnapshots(PersistentBattleStore store)
+    {
+        List<WorldStateBattleSideSnapshot> result = new List<WorldStateBattleSideSnapshot>();
+        if (store == null) return result;
+        foreach (PersistentBattleRecord record in store.Records)
+        {
+            if (record?.Id == null) continue;
+            foreach (BattleStateSide side in record.Sides)
+            {
+                if (side?.SideId == null) continue;
+                result.Add(new WorldStateBattleSideSnapshot(record.Id.Value, side.SideId.Value, side.DisplayName));
+            }
+        }
+        return result;
+    }
+
+    private static List<WorldStateBattleParticipantBindingSnapshot> BuildBattleParticipantBindingSnapshots(PersistentBattleStore store)
+    {
+        List<WorldStateBattleParticipantBindingSnapshot> result = new List<WorldStateBattleParticipantBindingSnapshot>();
+        if (store == null) return result;
+        foreach (PersistentBattleRecord record in store.Records)
+        {
+            if (record?.Id == null) continue;
+            foreach (BattleParticipantBinding binding in record.ParticipantBindings)
+            {
+                if (binding?.BindingId == null || binding.SideId == null || binding.ArmedForceId == null) continue;
+                result.Add(new WorldStateBattleParticipantBindingSnapshot(
+                    record.Id.Value,
+                    binding.BindingId.Value,
+                    binding.SideId.Value,
+                    binding.ArmedForceId.Value));
+            }
+        }
+        return result;
     }
 
     private static List<WorldStateArmedForceSnapshot> BuildArmedForceSnapshots(

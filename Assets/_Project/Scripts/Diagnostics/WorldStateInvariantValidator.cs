@@ -309,6 +309,7 @@ public static class WorldStateInvariantValidator
 
         ValidateParentages(snapshot.Parentages, personIds, issues);
         ValidateArmedForces(snapshot, personIds, issues);
+        ValidatePersistentConflictWarBattle(snapshot, issues);
         HashSet<string> propertyIds = ValidatePropertyOwnerships(
             snapshot.PropertyOwnerships,
             personIds,
@@ -759,6 +760,167 @@ public static class WorldStateInvariantValidator
         }
 
         return false;
+    }
+
+    private static void ValidatePersistentConflictWarBattle(
+        WorldStateSnapshot snapshot,
+        List<WorldStateInvariantIssue> issues)
+    {
+        HashSet<string> forceIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (WorldStateArmedForceSnapshot force in snapshot.ArmedForces ?? new List<WorldStateArmedForceSnapshot>())
+        {
+            if (force != null && string.IsNullOrWhiteSpace(force.ArmedForceId) == false) forceIds.Add(force.ArmedForceId);
+        }
+
+        Dictionary<string, WorldStateConflictSnapshot> conflictsById = new Dictionary<string, WorldStateConflictSnapshot>(StringComparer.Ordinal);
+        foreach (WorldStateConflictSnapshot conflict in snapshot.Conflicts ?? new List<WorldStateConflictSnapshot>())
+        {
+            if (conflict == null)
+            {
+                AddError(issues, "ConflictNull", "conflict", "Snapshot contains a null Conflict entry.");
+                continue;
+            }
+
+            string identity = string.IsNullOrWhiteSpace(conflict.ConflictId) ? "conflict" : conflict.ConflictId;
+            if (string.IsNullOrWhiteSpace(conflict.ConflictId)) AddError(issues, "ConflictIdMissing", identity, "Conflict has no stable identity.");
+            else if (conflictsById.ContainsKey(conflict.ConflictId)) AddError(issues, "DuplicateConflictId", identity, "ConflictId appears more than once.");
+            else conflictsById.Add(conflict.ConflictId, conflict);
+            ValidateLifecycleDay(conflict.CreatedAbsoluteDay, conflict.EndedAbsoluteDay, conflict.LifecycleState, snapshot.AbsoluteDay, identity, "Conflict", issues);
+        }
+
+        HashSet<string> conflictSideKeys = new HashSet<string>(StringComparer.Ordinal);
+        foreach (WorldStateConflictSideSnapshot side in snapshot.ConflictSides ?? new List<WorldStateConflictSideSnapshot>())
+        {
+            if (side == null) { AddError(issues, "ConflictSideNull", "conflict-side", "Snapshot contains a null Conflict side entry."); continue; }
+            string identity = (side.ConflictId ?? "conflict") + "/" + (side.SideId ?? "side");
+            if (string.IsNullOrWhiteSpace(side.ConflictId) || conflictsById.ContainsKey(side.ConflictId) == false) AddError(issues, "ConflictSideParentMissing", identity, "Conflict side parent is absent from the snapshot.");
+            if (string.IsNullOrWhiteSpace(side.SideId)) AddError(issues, "ConflictSideIdMissing", identity, "Conflict side has no stable identity.");
+            else if (conflictSideKeys.Add(identity) == false) AddError(issues, "DuplicateConflictSideId", identity, "Conflict side identity appears more than once.");
+        }
+
+        ValidateConflictBindings(snapshot.ConflictParticipantBindings, conflictsById, forceIds, conflictSideKeys, issues);
+
+        Dictionary<string, WorldStateWarSnapshot> warsById = new Dictionary<string, WorldStateWarSnapshot>(StringComparer.Ordinal);
+        foreach (WorldStateWarSnapshot war in snapshot.Wars ?? new List<WorldStateWarSnapshot>())
+        {
+            if (war == null) { AddError(issues, "WarNull", "war", "Snapshot contains a null War entry."); continue; }
+            string identity = string.IsNullOrWhiteSpace(war.WarId) ? "war" : war.WarId;
+            if (string.IsNullOrWhiteSpace(war.WarId)) AddError(issues, "WarIdMissing", identity, "War has no stable identity.");
+            else if (warsById.ContainsKey(war.WarId)) AddError(issues, "DuplicateWarId", identity, "WarId appears more than once.");
+            else warsById.Add(war.WarId, war);
+            ValidateLifecycleDay(war.CreatedAbsoluteDay, war.EndedAbsoluteDay, war.LifecycleState, snapshot.AbsoluteDay, identity, "War", issues);
+            if (string.IsNullOrWhiteSpace(war.ConflictId) == false && conflictsById.ContainsKey(war.ConflictId) == false) AddError(issues, "WarConflictMissing", identity, "War Conflict reference is absent from the snapshot.");
+        }
+
+        HashSet<string> warSideKeys = new HashSet<string>(StringComparer.Ordinal);
+        foreach (WorldStateWarSideSnapshot side in snapshot.WarSides ?? new List<WorldStateWarSideSnapshot>())
+        {
+            if (side == null) { AddError(issues, "WarSideNull", "war-side", "Snapshot contains a null War side entry."); continue; }
+            string identity = (side.WarId ?? "war") + "/" + (side.SideId ?? "side");
+            if (string.IsNullOrWhiteSpace(side.WarId) || warsById.ContainsKey(side.WarId) == false) AddError(issues, "WarSideParentMissing", identity, "War side parent is absent from the snapshot.");
+            if (string.IsNullOrWhiteSpace(side.SideId)) AddError(issues, "WarSideIdMissing", identity, "War side has no stable identity.");
+            else if (warSideKeys.Add(identity) == false) AddError(issues, "DuplicateWarSideId", identity, "War side identity appears more than once.");
+        }
+        ValidateWarBindings(snapshot.WarParticipantBindings, warsById, forceIds, warSideKeys, issues);
+
+        Dictionary<string, WorldStateBattleSnapshot> battlesById = new Dictionary<string, WorldStateBattleSnapshot>(StringComparer.Ordinal);
+        foreach (WorldStateBattleSnapshot battle in snapshot.Battles ?? new List<WorldStateBattleSnapshot>())
+        {
+            if (battle == null) { AddError(issues, "BattleNull", "battle", "Snapshot contains a null Battle entry."); continue; }
+            string identity = string.IsNullOrWhiteSpace(battle.BattleId) ? "battle" : battle.BattleId;
+            if (string.IsNullOrWhiteSpace(battle.BattleId)) AddError(issues, "BattleIdMissing", identity, "Battle has no stable identity.");
+            else if (battlesById.ContainsKey(battle.BattleId)) AddError(issues, "DuplicateBattleId", identity, "BattleId appears more than once.");
+            else battlesById.Add(battle.BattleId, battle);
+            if (Enum.IsDefined(typeof(BattleLifecycleState), battle.LifecycleState) == false) AddError(issues, "BattleLifecycleInvalid", identity, "Battle lifecycle state is invalid.");
+            if (battle.CreatedAbsoluteDay > snapshot.AbsoluteDay) AddError(issues, "BattleCreationDayInvalid", identity, "Battle creation day is after the snapshot day.");
+            if (battle.LifecycleState == BattleLifecycleState.Pending && battle.StartedAbsoluteDay.HasValue) AddError(issues, "PendingBattleHasStartDay", identity, "A pending Battle cannot have a start day.");
+            if ((battle.LifecycleState == BattleLifecycleState.Active || battle.LifecycleState == BattleLifecycleState.Resolved) && !battle.StartedAbsoluteDay.HasValue) AddError(issues, "BattleStartDayMissing", identity, "An active or resolved Battle requires a start day.");
+            if (battle.StartedAbsoluteDay.HasValue && (battle.StartedAbsoluteDay.Value < battle.CreatedAbsoluteDay || battle.StartedAbsoluteDay.Value > snapshot.AbsoluteDay)) AddError(issues, "BattleStartDayInvalid", identity, "Battle start day is outside its lifecycle interval.");
+            if (string.IsNullOrWhiteSpace(battle.ConflictId) == false && conflictsById.ContainsKey(battle.ConflictId) == false) AddError(issues, "BattleConflictMissing", identity, "Battle Conflict reference is absent from the snapshot.");
+            if (string.IsNullOrWhiteSpace(battle.WarId) == false)
+            {
+                if (warsById.TryGetValue(battle.WarId, out WorldStateWarSnapshot battleWar) == false)
+                {
+                    AddError(issues, "BattleWarMissing", identity, "Battle War reference is absent from the snapshot.");
+                }
+                else if (battleWar != null
+                    && string.IsNullOrWhiteSpace(battle.ConflictId) == false
+                    && string.IsNullOrWhiteSpace(battleWar.ConflictId) == false
+                    && battleWar.ConflictId != battle.ConflictId)
+                {
+                    AddError(issues, "BattleReferenceContradiction", identity, "Battle Conflict and War references contradict one another.");
+                }
+            }
+        }
+
+        HashSet<string> battleSideKeys = new HashSet<string>(StringComparer.Ordinal);
+        foreach (WorldStateBattleSideSnapshot side in snapshot.BattleSides ?? new List<WorldStateBattleSideSnapshot>())
+        {
+            if (side == null) { AddError(issues, "BattleSideNull", "battle-side", "Snapshot contains a null Battle side entry."); continue; }
+            string identity = (side.BattleId ?? "battle") + "/" + (side.SideId ?? "side");
+            if (string.IsNullOrWhiteSpace(side.BattleId) || battlesById.ContainsKey(side.BattleId) == false) AddError(issues, "BattleSideParentMissing", identity, "Battle side parent is absent from the snapshot.");
+            if (string.IsNullOrWhiteSpace(side.SideId)) AddError(issues, "BattleSideIdMissing", identity, "Battle side has no stable identity.");
+            else if (battleSideKeys.Add(identity) == false) AddError(issues, "DuplicateBattleSideId", identity, "Battle side identity appears more than once.");
+        }
+        ValidateBattleBindings(snapshot.BattleParticipantBindings, battlesById, forceIds, battleSideKeys, issues);
+    }
+
+    private static void ValidateLifecycleDay(
+        long createdAbsoluteDay,
+        long? endedAbsoluteDay,
+        Enum lifecycleState,
+        long snapshotAbsoluteDay,
+        string identity,
+        string domain,
+        List<WorldStateInvariantIssue> issues)
+    {
+        if (createdAbsoluteDay > snapshotAbsoluteDay) AddError(issues, domain + "CreationDayInvalid", identity, domain + " creation day is after the snapshot day.");
+        if (Enum.IsDefined(lifecycleState.GetType(), lifecycleState) == false) AddError(issues, domain + "LifecycleInvalid", identity, domain + " lifecycle state is invalid.");
+        bool active = string.Equals(lifecycleState.ToString(), "Active", StringComparison.Ordinal);
+        if (active && endedAbsoluteDay.HasValue) AddError(issues, "Active" + domain + "HasEndDay", identity, "An active " + domain + " cannot have an end day.");
+        if (!active && Enum.IsDefined(lifecycleState.GetType(), lifecycleState) && (!endedAbsoluteDay.HasValue || endedAbsoluteDay.Value < createdAbsoluteDay || endedAbsoluteDay.Value > snapshotAbsoluteDay)) AddError(issues, domain + "EndDayInvalid", identity, domain + " end day is outside its lifecycle interval.");
+    }
+
+    private static void ValidateConflictBindings(IReadOnlyList<WorldStateConflictParticipantBindingSnapshot> bindings, Dictionary<string, WorldStateConflictSnapshot> parents, HashSet<string> forceIds, HashSet<string> sideKeys, List<WorldStateInvariantIssue> issues)
+    {
+        HashSet<string> ids = new HashSet<string>(StringComparer.Ordinal);
+        foreach (WorldStateConflictParticipantBindingSnapshot binding in bindings ?? new List<WorldStateConflictParticipantBindingSnapshot>())
+        {
+            if (binding == null) { AddError(issues, "ConflictBindingNull", "conflict-binding", "Snapshot contains a null Conflict participant binding."); continue; }
+            string identity = (binding.ConflictId ?? "conflict") + "/" + (binding.BindingId ?? "binding");
+            if (string.IsNullOrWhiteSpace(binding.BindingId) || ids.Add(identity) == false) AddError(issues, "DuplicateConflictBindingId", identity, "Conflict participant binding identity is missing or duplicated.");
+            if (string.IsNullOrWhiteSpace(binding.ConflictId) || parents.ContainsKey(binding.ConflictId) == false) AddError(issues, "ConflictBindingParentMissing", identity, "Conflict participant binding parent is absent.");
+            if (string.IsNullOrWhiteSpace(binding.SideId) || sideKeys.Contains(binding.ConflictId + "/" + binding.SideId) == false) AddError(issues, "ConflictBindingSideMissing", identity, "Conflict participant binding side is absent.");
+            if (string.IsNullOrWhiteSpace(binding.ArmedForceId) || forceIds.Contains(binding.ArmedForceId) == false) AddError(issues, "ConflictBindingForceMissing", identity, "Conflict participant binding ArmedForce is absent.");
+        }
+    }
+
+    private static void ValidateWarBindings(IReadOnlyList<WorldStateWarParticipantBindingSnapshot> bindings, Dictionary<string, WorldStateWarSnapshot> parents, HashSet<string> forceIds, HashSet<string> sideKeys, List<WorldStateInvariantIssue> issues)
+    {
+        HashSet<string> ids = new HashSet<string>(StringComparer.Ordinal);
+        foreach (WorldStateWarParticipantBindingSnapshot binding in bindings ?? new List<WorldStateWarParticipantBindingSnapshot>())
+        {
+            if (binding == null) { AddError(issues, "WarBindingNull", "war-binding", "Snapshot contains a null War participant binding."); continue; }
+            string identity = (binding.WarId ?? "war") + "/" + (binding.BindingId ?? "binding");
+            if (string.IsNullOrWhiteSpace(binding.BindingId) || ids.Add(identity) == false) AddError(issues, "DuplicateWarBindingId", identity, "War participant binding identity is missing or duplicated.");
+            if (string.IsNullOrWhiteSpace(binding.WarId) || parents.ContainsKey(binding.WarId) == false) AddError(issues, "WarBindingParentMissing", identity, "War participant binding parent is absent.");
+            if (string.IsNullOrWhiteSpace(binding.SideId) || sideKeys.Contains(binding.WarId + "/" + binding.SideId) == false) AddError(issues, "WarBindingSideMissing", identity, "War participant binding side is absent.");
+            if (string.IsNullOrWhiteSpace(binding.ArmedForceId) || forceIds.Contains(binding.ArmedForceId) == false) AddError(issues, "WarBindingForceMissing", identity, "War participant binding ArmedForce is absent.");
+        }
+    }
+
+    private static void ValidateBattleBindings(IReadOnlyList<WorldStateBattleParticipantBindingSnapshot> bindings, Dictionary<string, WorldStateBattleSnapshot> parents, HashSet<string> forceIds, HashSet<string> sideKeys, List<WorldStateInvariantIssue> issues)
+    {
+        HashSet<string> ids = new HashSet<string>(StringComparer.Ordinal);
+        foreach (WorldStateBattleParticipantBindingSnapshot binding in bindings ?? new List<WorldStateBattleParticipantBindingSnapshot>())
+        {
+            if (binding == null) { AddError(issues, "BattleBindingNull", "battle-binding", "Snapshot contains a null Battle participant binding."); continue; }
+            string identity = (binding.BattleId ?? "battle") + "/" + (binding.BindingId ?? "binding");
+            if (string.IsNullOrWhiteSpace(binding.BindingId) || ids.Add(identity) == false) AddError(issues, "DuplicateBattleBindingId", identity, "Battle participant binding identity is missing or duplicated.");
+            if (string.IsNullOrWhiteSpace(binding.BattleId) || parents.ContainsKey(binding.BattleId) == false) AddError(issues, "BattleBindingParentMissing", identity, "Battle participant binding parent is absent.");
+            if (string.IsNullOrWhiteSpace(binding.SideId) || sideKeys.Contains(binding.BattleId + "/" + binding.SideId) == false) AddError(issues, "BattleBindingSideMissing", identity, "Battle participant binding side is absent.");
+            if (string.IsNullOrWhiteSpace(binding.ArmedForceId) || forceIds.Contains(binding.ArmedForceId) == false) AddError(issues, "BattleBindingForceMissing", identity, "Battle participant binding ArmedForce is absent.");
+        }
     }
 
     private static void ValidatePoliticalClaims(

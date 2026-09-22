@@ -33,6 +33,21 @@ public static class WorldStateCanonicalWriter
             AppendLine(output, "METADATA", "ArmedForceStatePresent", BoolValue(true));
             AppendLine(output, "METADATA", "ArmedForceRevision", Int64Value(snapshot.ArmedForceRevision.Value));
         }
+        if (snapshot.HasConflictState)
+        {
+            AppendLine(output, "METADATA", "ConflictStatePresent", BoolValue(true));
+            AppendLine(output, "METADATA", "ConflictRevision", Int64Value(snapshot.ConflictRevision.Value));
+        }
+        if (snapshot.HasWarState)
+        {
+            AppendLine(output, "METADATA", "WarStatePresent", BoolValue(true));
+            AppendLine(output, "METADATA", "WarRevision", Int64Value(snapshot.WarRevision.Value));
+        }
+        if (snapshot.HasBattleState)
+        {
+            AppendLine(output, "METADATA", "BattleStatePresent", BoolValue(true));
+            AppendLine(output, "METADATA", "BattleRevision", Int64Value(snapshot.BattleRevision.Value));
+        }
         if (snapshot.Metadata.CalendarDate != null)
         {
             WorldStateCalendarSnapshot calendar = snapshot.Metadata.CalendarDate;
@@ -90,6 +105,54 @@ public static class WorldStateCanonicalWriter
                     reference.ForceId,
                     reference.PersonId,
                     reference.RoleKey);
+            }
+        }
+
+        if (snapshot.HasConflictState)
+        {
+            foreach (WorldStateConflictSnapshot conflict in snapshot.Conflicts)
+            {
+                AppendLine(output, "CONFLICT", conflict.ConflictId, Int64Value(conflict.CreatedAbsoluteDay), EnumValue(conflict.LifecycleState), NullableInt64Value(conflict.EndedAbsoluteDay));
+            }
+            foreach (WorldStateConflictSideSnapshot side in snapshot.ConflictSides)
+            {
+                AppendLine(output, "CONFLICT_SIDE", side.ConflictId, side.SideId, side.DisplayName);
+            }
+            foreach (WorldStateConflictParticipantBindingSnapshot binding in snapshot.ConflictParticipantBindings)
+            {
+                AppendLine(output, "CONFLICT_PARTICIPANT_BINDING", binding.ConflictId, binding.BindingId, binding.SideId, binding.ArmedForceId);
+            }
+        }
+
+        if (snapshot.HasWarState)
+        {
+            foreach (WorldStateWarSnapshot war in snapshot.Wars)
+            {
+                AppendLine(output, "WAR", war.WarId, Int64Value(war.CreatedAbsoluteDay), EnumValue(war.LifecycleState), NullableInt64Value(war.EndedAbsoluteDay), war.ConflictId);
+            }
+            foreach (WorldStateWarSideSnapshot side in snapshot.WarSides)
+            {
+                AppendLine(output, "WAR_SIDE", side.WarId, side.SideId, side.DisplayName);
+            }
+            foreach (WorldStateWarParticipantBindingSnapshot binding in snapshot.WarParticipantBindings)
+            {
+                AppendLine(output, "WAR_PARTICIPANT_BINDING", binding.WarId, binding.BindingId, binding.SideId, binding.ArmedForceId);
+            }
+        }
+
+        if (snapshot.HasBattleState)
+        {
+            foreach (WorldStateBattleSnapshot battle in snapshot.Battles)
+            {
+                AppendLine(output, "BATTLE", battle.BattleId, Int64Value(battle.CreatedAbsoluteDay), NullableInt64Value(battle.StartedAbsoluteDay), EnumValue(battle.LifecycleState), battle.ConflictId, battle.WarId);
+            }
+            foreach (WorldStateBattleSideSnapshot side in snapshot.BattleSides)
+            {
+                AppendLine(output, "BATTLE_SIDE", side.BattleId, side.SideId, side.DisplayName);
+            }
+            foreach (WorldStateBattleParticipantBindingSnapshot binding in snapshot.BattleParticipantBindings)
+            {
+                AppendLine(output, "BATTLE_PARTICIPANT_BINDING", binding.BattleId, binding.BindingId, binding.SideId, binding.ArmedForceId);
             }
         }
 

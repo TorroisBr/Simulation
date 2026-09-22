@@ -238,6 +238,72 @@ public sealed class WorldStateDiff
             },
             differences);
 
+        ComparePersistentState("ConflictStore", before.HasConflictState, before.ConflictRevision, after.HasConflictState, after.ConflictRevision, differences);
+        CompareEntities("Conflict", before.Conflicts, after.Conflicts,
+            conflict => conflict.ConflictId,
+            (identity, left, right) =>
+            {
+                CompareValue("Conflict", identity, "CreatedAbsoluteDay", WorldStateCanonicalWriter.Int64Value(left.CreatedAbsoluteDay), WorldStateCanonicalWriter.Int64Value(right.CreatedAbsoluteDay), differences);
+                CompareValue("Conflict", identity, "LifecycleState", WorldStateCanonicalWriter.EnumValue(left.LifecycleState), WorldStateCanonicalWriter.EnumValue(right.LifecycleState), differences);
+                CompareValue("Conflict", identity, "EndedAbsoluteDay", WorldStateCanonicalWriter.NullableInt64Value(left.EndedAbsoluteDay), WorldStateCanonicalWriter.NullableInt64Value(right.EndedAbsoluteDay), differences);
+            }, differences);
+        CompareEntities("ConflictSide", before.ConflictSides, after.ConflictSides,
+            side => side.ConflictId + "\u001f" + side.SideId,
+            (identity, left, right) => CompareValue("ConflictSide", identity, "DisplayName", WorldStateCanonicalWriter.StringValue(left.DisplayName), WorldStateCanonicalWriter.StringValue(right.DisplayName), differences),
+            differences);
+        CompareEntities("ConflictParticipantBinding", before.ConflictParticipantBindings, after.ConflictParticipantBindings,
+            binding => binding.ConflictId + "\u001f" + binding.BindingId,
+            (identity, left, right) =>
+            {
+                CompareValue("ConflictParticipantBinding", identity, "SideId", WorldStateCanonicalWriter.StringValue(left.SideId), WorldStateCanonicalWriter.StringValue(right.SideId), differences);
+                CompareValue("ConflictParticipantBinding", identity, "ArmedForceId", WorldStateCanonicalWriter.StringValue(left.ArmedForceId), WorldStateCanonicalWriter.StringValue(right.ArmedForceId), differences);
+            }, differences);
+
+        ComparePersistentState("WarStore", before.HasWarState, before.WarRevision, after.HasWarState, after.WarRevision, differences);
+        CompareEntities("War", before.Wars, after.Wars,
+            war => war.WarId,
+            (identity, left, right) =>
+            {
+                CompareValue("War", identity, "CreatedAbsoluteDay", WorldStateCanonicalWriter.Int64Value(left.CreatedAbsoluteDay), WorldStateCanonicalWriter.Int64Value(right.CreatedAbsoluteDay), differences);
+                CompareValue("War", identity, "LifecycleState", WorldStateCanonicalWriter.EnumValue(left.LifecycleState), WorldStateCanonicalWriter.EnumValue(right.LifecycleState), differences);
+                CompareValue("War", identity, "EndedAbsoluteDay", WorldStateCanonicalWriter.NullableInt64Value(left.EndedAbsoluteDay), WorldStateCanonicalWriter.NullableInt64Value(right.EndedAbsoluteDay), differences);
+                CompareValue("War", identity, "ConflictId", WorldStateCanonicalWriter.StringValue(left.ConflictId), WorldStateCanonicalWriter.StringValue(right.ConflictId), differences);
+            }, differences);
+        CompareEntities("WarSide", before.WarSides, after.WarSides,
+            side => side.WarId + "\u001f" + side.SideId,
+            (identity, left, right) => CompareValue("WarSide", identity, "DisplayName", WorldStateCanonicalWriter.StringValue(left.DisplayName), WorldStateCanonicalWriter.StringValue(right.DisplayName), differences),
+            differences);
+        CompareEntities("WarParticipantBinding", before.WarParticipantBindings, after.WarParticipantBindings,
+            binding => binding.WarId + "\u001f" + binding.BindingId,
+            (identity, left, right) =>
+            {
+                CompareValue("WarParticipantBinding", identity, "SideId", WorldStateCanonicalWriter.StringValue(left.SideId), WorldStateCanonicalWriter.StringValue(right.SideId), differences);
+                CompareValue("WarParticipantBinding", identity, "ArmedForceId", WorldStateCanonicalWriter.StringValue(left.ArmedForceId), WorldStateCanonicalWriter.StringValue(right.ArmedForceId), differences);
+            }, differences);
+
+        ComparePersistentState("BattleStore", before.HasBattleState, before.BattleRevision, after.HasBattleState, after.BattleRevision, differences);
+        CompareEntities("Battle", before.Battles, after.Battles,
+            battle => battle.BattleId,
+            (identity, left, right) =>
+            {
+                CompareValue("Battle", identity, "CreatedAbsoluteDay", WorldStateCanonicalWriter.Int64Value(left.CreatedAbsoluteDay), WorldStateCanonicalWriter.Int64Value(right.CreatedAbsoluteDay), differences);
+                CompareValue("Battle", identity, "StartedAbsoluteDay", WorldStateCanonicalWriter.NullableInt64Value(left.StartedAbsoluteDay), WorldStateCanonicalWriter.NullableInt64Value(right.StartedAbsoluteDay), differences);
+                CompareValue("Battle", identity, "LifecycleState", WorldStateCanonicalWriter.EnumValue(left.LifecycleState), WorldStateCanonicalWriter.EnumValue(right.LifecycleState), differences);
+                CompareValue("Battle", identity, "ConflictId", WorldStateCanonicalWriter.StringValue(left.ConflictId), WorldStateCanonicalWriter.StringValue(right.ConflictId), differences);
+                CompareValue("Battle", identity, "WarId", WorldStateCanonicalWriter.StringValue(left.WarId), WorldStateCanonicalWriter.StringValue(right.WarId), differences);
+            }, differences);
+        CompareEntities("BattleSide", before.BattleSides, after.BattleSides,
+            side => side.BattleId + "\u001f" + side.SideId,
+            (identity, left, right) => CompareValue("BattleSide", identity, "DisplayName", WorldStateCanonicalWriter.StringValue(left.DisplayName), WorldStateCanonicalWriter.StringValue(right.DisplayName), differences),
+            differences);
+        CompareEntities("BattleParticipantBinding", before.BattleParticipantBindings, after.BattleParticipantBindings,
+            binding => binding.BattleId + "\u001f" + binding.BindingId,
+            (identity, left, right) =>
+            {
+                CompareValue("BattleParticipantBinding", identity, "SideId", WorldStateCanonicalWriter.StringValue(left.SideId), WorldStateCanonicalWriter.StringValue(right.SideId), differences);
+                CompareValue("BattleParticipantBinding", identity, "ArmedForceId", WorldStateCanonicalWriter.StringValue(left.ArmedForceId), WorldStateCanonicalWriter.StringValue(right.ArmedForceId), differences);
+            }, differences);
+
         CompareEntities("Parentage", before.Parentages, after.Parentages,
             parentage => ParentageIdentity(parentage),
             (identity, left, right) => { },
@@ -885,6 +951,18 @@ public sealed class WorldStateDiff
             }, differences, npcIdentity + "/item:");
     }
 
+    private static void ComparePersistentState(
+        string section,
+        bool beforePresent,
+        long? beforeRevision,
+        bool afterPresent,
+        long? afterRevision,
+        List<WorldStateDifference> differences)
+    {
+        CompareValue(section, "world", "StatePresent", WorldStateCanonicalWriter.BoolValue(beforePresent), WorldStateCanonicalWriter.BoolValue(afterPresent), differences);
+        CompareValue(section, "world", "Revision", beforeRevision.HasValue ? WorldStateCanonicalWriter.Int64Value(beforeRevision.Value) : null, afterRevision.HasValue ? WorldStateCanonicalWriter.Int64Value(afterRevision.Value) : null, differences);
+    }
+
     private delegate void EntityFields<T>(string identity, T before, T after);
 
     private static void CompareEntities<T>(
@@ -1057,6 +1135,18 @@ public sealed class WorldStateDiff
             case "ArmedForce": return 5;
             case "ArmedForceContingent": return 6;
             case "ArmedForcePersonReference": return 7;
+            case "ConflictStore": return 8;
+            case "Conflict": return 9;
+            case "ConflictSide": return 10;
+            case "ConflictParticipantBinding": return 11;
+            case "WarStore": return 12;
+            case "War": return 13;
+            case "WarSide": return 14;
+            case "WarParticipantBinding": return 15;
+            case "BattleStore": return 16;
+            case "Battle": return 17;
+            case "BattleSide": return 18;
+            case "BattleParticipantBinding": return 19;
             case "Parentage": return 4;
             case "Metadata": return 4;
             case "Calendar": return 5;
