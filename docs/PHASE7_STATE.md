@@ -1,92 +1,100 @@
-# Phase 7 — Checkpoint B — Current State
+# Phase 7 — Checkpoint C — Current State
 
-## Baselines
+## Baseline and branch
 
-- Architecture baseline: `e4ac516daeb70f3a7fe40acf797d41090f82e818`.
-- Checkpoint B implementation baseline: `6409dbf5c264378bda6c0c25d83105100c3260ff`.
-- Checkpoint A implementation retained from `7a983a9d15caa4c785ef41de78e607f83d6b4c23`.
-- Checkpoint B implementation commits: `073616f4ed7ac8c76834376127c4066a2e6244a4`
-  (store/composition) and `a6ff3dd89e9115645aeffed05a2f173e07adf272`
-  (world diagnostics/tests/state).
-- Checkpoint branch: `codex/phase7/ArmedForceWorldComposition`.
+- Canonical architecture baseline: `2419d786602e8fa1250df7a0ed7326e236218419`.
+- Checkpoint branch: `codex/phase7/ConflictWarBattleState`.
+- Implementation commits:
+  - `e472b2d` — persistent Conflict/War/Battle contracts, stores, and
+    `SimulationRuntime` composition.
+  - `83ee003` — diagnostics projections, canonical/diff/formatter/invariants,
+    and focused tests.
 
 ## Delivered
 
-Checkpoint B composes the Checkpoint A ArmedForce foundation into world state
-and diagnostics without introducing War, Battle, movement, or daily military
-processing.
+Checkpoint C adds the minimum persistent world-state boundaries for Conflict,
+War, and Battle without implementing a war system or battle resolution.
 
-- `SimulationRuntime` owns a cloned `ArmedForceStore` bound to the resolved
-  authoritative `PersonStore`; the clone preserves IDs, hierarchy, lifecycle,
-  composition, relevant-Person references, and revision without retaining an
-  external mutable store reference.
-- Contingent identity now requires immutable origin and service-type semantics.
-  Amount and extensible characteristics may be replaced; origin/service
-  mutation fails atomically with stable revision and state.
-- Organizational contingent aggregation is explicit and includes detached and
-  terminated structural descendants as composition/history. It is not a
-  current-manpower, battle-strength, or location query.
-- World snapshots capture force identity/lifecycle/parent/detachment/location/
-  commander, contingent provenance/composition, relevant Person references,
-  and ArmedForceStore revision with deterministic ordering.
-- Canonical writer, human diagnostics formatter, diff, and snapshot invariant
-  validation report ArmedForce state. Diagnostics validate parent existence,
-  self-parent/cycles, active children under terminated parents, detached roots,
-  commander/relevant-Person references, contingent force references, and stable
-  identities. The store remains the mutation authority.
-- Person references remain PersonId-based and do not require materialized
-  `NpcRuntime` representations.
+- Stable typed `ConflictId`, `WarId`, and `BattleId` identities are independent
+  of `NpcRuntime`, Unity object discovery, and insertion order.
+- Conflict, War, and Battle have separate authoritative stores and separate
+  domain-owned side and participant-binding types. There is no global SideId,
+  universal actor model, or participant hierarchy.
+- The only concrete participant kind introduced is explicit `ArmedForceId`.
+  Bindings are owned by their Conflict/War/Battle store, require an existing
+  force, and new current bindings require an active force.
+- Conflict and War support `Active -> Ended`; Battle supports `Pending -> Active`.
+  Battle resolution is explicitly deferred; `Resolved` is representable only
+  as a diagnostics/historical enum and cannot be registered or transitioned by
+  this checkpoint.
+- War optionally references a Conflict. Battle optionally references a War
+  and/or Conflict. When both Battle references exist, contradictory War-to-
+  Conflict links are rejected.
+- Store mutations validate before applying, advance only after successful
+  application, and leave state/revision unchanged on failure. Historical
+  references to terminated ArmedForces remain representable in registered
+  records; newly added bindings cannot target terminated forces.
+- Stores are cloned into `SimulationRuntime` against the resolved
+  `ArmedForceStore`. Snapshot context, canonical output, human formatter, diff,
+  and world invariant validation expose the new state deterministically.
+- `ConflictFoundation` and `ConflictResolutionService` remain unchanged and
+  lower-level; no adapter was introduced.
 
-No ArmedForce configuration flag, RNG, save/load, event sourcing, recruitment,
-population accounting, or military daily tick was added. `ConflictFoundation`
-was not remodeled.
+## Invariants preserved
+
+Armed Force remains distinct from Faction, Institution, Polity, and generic
+Organization. Conflict/War/Battle side identity is domain-owned. Command,
+loyalty, allegiance, membership, funding, and control remain distinct.
+Person identity remains `PersonId`-based and does not require an
+`NpcRuntime`. Physical separation does not imply organizational separation;
+no hierarchy propagation is performed for participant bindings.
+
+No event sourcing, DomainEvent additions, RNG, Unity-dependent domain state,
+global ad-hoc lists, or military daily processing was added.
 
 ## Validation
 
-- Focused ArmedForce suites: `16/16`.
-- Diagnostics/orchestration/ConflictFoundation regression filter: `98/98`.
-- Person regression filter: `128/128`.
-- Population regression filter: `130/130`.
-- ALL EditMode: `1475/1475`.
+- Checkpoint C focused tests: `8/8`.
+- Focused/regression filter covering ArmedForce diagnostics, runtime
+  orchestration, ConflictFoundation, Person, and Population: `245/245`.
+- ALL EditMode: `1483/1483`.
 - Official EditMode `Smoke` filter: `5/5`.
-- `git diff --check`: clean.
+- `git diff --check`: clean before commit.
 - Unity `6000.3.9f1` was used directly in batchmode. The repository wrapper
-  could not acquire its process snapshot in this environment because
-  `Get-CimInstance` returned access denied.
+  was not used because its `Get-CimInstance` process snapshot was denied in
+  this environment.
 
 ## AdvanceDay and architecture conformance
 
-`SimulationRuntime.AdvanceDay` was not changed. No military processing or RNG
-was added to the daily cadence; focused coverage confirms ArmedForce revision
-and state remain unchanged across one day advance.
-
-`docs/SIMULATION_ARCHITECTURE.md` was not changed. A read-only conformance
-review found no contradiction requiring an architecture decision. The design
-preserves ArmedForce != Faction/Institution/Polity/generic Organization,
-Person != NpcRuntime, physical separation != organizational separation, and
-manpower source != allegiance/loyalty/command.
+`SimulationRuntime.AdvanceDay` was not changed. No military processing,
+autonomy, cadence, or RNG was added. `docs/SIMULATION_ARCHITECTURE.md` was not
+changed. Read-only conformance review found no design contradiction requiring
+an architecture decision.
 
 ## Deferred
 
-Persistent War/Battle/strategic Conflict state, battle resolution, tactics,
-morale, cohesion, readiness, supply, logistics, funding/pay, requisition,
-foraging, military movement, scouting, military knowledge, recruitment,
-mobilization accounting, casualties, capture/custody, desertion, defection,
-mutiny, military control, occupation, war goals, ceasefire, peace, taxation,
-diplomacy, Campaign, Polity, WarAI, and daily military autonomy remain
-deferred.
+Persistent strategic war behavior, battle resolution/result payloads, tactics,
+plans, morale, cohesion, readiness, supply, logistics, funding/pay,
+requisition, foraging, movement, scouting, military knowledge, recruitment,
+population mobilization accounting, casualties, capture/custody, desertion,
+defection, mutiny, military control, occupation, war goals, ceasefire, peace,
+taxation, diplomacy, Campaign, Polity, and WarAI remain deferred.
 
-Explicit continuity operations for secession, true schism, absorption, and
-genuine merger remain deferred. The current identity/lifecycle/store contracts
-preserve the records and IDs required for those future explicit transitions
-without choosing continuity by manpower or commander retention.
-
-Save/load, persistence, and migration are also deferred. The snapshot and
-canonical writer are diagnostics projections, not serialization contracts.
+Also deferred are participant kinds beyond ArmedForce, side switching/exit and
+re-entry semantics, ancestor/descendant overlap policy, Battle location,
+continuity operations for secession/schism/absorption/merger, save/load,
+replay, networking, and broad `Simulation.Core` migration.
 
 ## Known limitations
 
-ArmedForce remains composed at the current `SimulationRuntime` boundary; no
-broader `Simulation.Core` migration was started. The composition API is ready
-for a future boundary migration, but this checkpoint intentionally does not
-add a military subsystem, operational manpower query, or autonomous consumer.
+The stores are composed at the current `SimulationRuntime` boundary. Snapshot
+and canonical output are diagnostics projections, not save/load contracts.
+No consumer performs military simulation or modifies population/manpower as a
+consequence of these records.
+
+## Recommendation for P7-D
+
+Add the next boundary only after choosing and testing the explicit domain
+consumer for these persistent records. Keep participant bindings explicit and
+domain-owned, and do not add battle resolution, military daily processing, or
+continuity heuristics to the foundation layer.
