@@ -23,6 +23,8 @@ public sealed class SimulationRuntime
     private readonly PersistentWarStore warStore;
     private readonly PersistentBattleStore battleStore;
     private readonly BattleExecutionContextBuilder battleExecutionContextBuilder;
+    private readonly BattleResolutionPolicy battleResolutionPolicy;
+    private readonly BattleOutcomePlanningService battleOutcomePlanningService;
     private readonly GenealogyStore genealogyStore;
     private readonly InstitutionStore institutionStore;
     private readonly OfficeStore officeStore;
@@ -70,6 +72,8 @@ public sealed class SimulationRuntime
     public PersistentWarStore WarStore => warStore;
     public PersistentBattleStore BattleStore => battleStore;
     public BattleExecutionContextBuilder BattleExecutionContextBuilder => battleExecutionContextBuilder;
+    public BattleResolutionPolicy BattleResolutionPolicy => battleResolutionPolicy;
+    public BattleOutcomePlanningService BattleOutcomePlanningService => battleOutcomePlanningService;
     public IReadOnlyList<ParentageRecord> GenealogyRecords => genealogyStore.Records;
     public IReadOnlyList<InstitutionRecord> InstitutionRecords => institutionStore.Institutions;
     public IReadOnlyList<OfficeRecord> OfficeRecords => officeStore.Offices;
@@ -149,7 +153,8 @@ public sealed class SimulationRuntime
         PersistentBattleStore battleStore = null,
         SpatialAuthorityStore spatialAuthorityStore = null,
         ArmedForceSpatialStateStore armedForceSpatialStateStore = null,
-        LocalTopologyStore localTopologyStore = null)
+        LocalTopologyStore localTopologyStore = null,
+        BattleResolutionPolicy battleResolutionPolicy = null)
     {
         this.simulationTime = simulationTime ?? throw new ArgumentNullException(nameof(simulationTime));
 
@@ -255,6 +260,11 @@ public sealed class SimulationRuntime
             this.spatialAuthorityStore,
             this.localTopologyStore,
             this.personStore);
+        this.battleResolutionPolicy = battleResolutionPolicy;
+        this.battleOutcomePlanningService = new BattleOutcomePlanningService(
+            this.battleExecutionContextBuilder,
+            this.simulationTime,
+            this.battleResolutionPolicy);
         this.genealogyStore = CloneGenealogyStore(resolvedGenealogyStore);
         this.institutionStore = resolvedInstitutionStore;
         this.officeStore = resolvedOfficeStore;

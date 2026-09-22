@@ -10,6 +10,9 @@ public interface IBattleContingentCapabilityProvider
     /// <summary>
     /// Stable semantic identity for both the rule and all configuration that
     /// can affect its output. This must not be based on runtime object identity.
+    /// Implementations composed into a world policy must remain immutable and
+    /// pure for that policy's lifetime; changing rule behavior/configuration
+    /// requires a new provider and a new RuleKey.
     /// </summary>
     string RuleKey { get; }
 
@@ -27,7 +30,9 @@ public interface IBattleContingentCapabilityProvider
 /// A keyed, stateless random authority used only by raw Battle computation.
 /// Identical RuleKey/operationKey pairs must return identical values,
 /// independent of call count and evaluation order. RuleKey must identify the
-/// seed/authority and algorithm semantics.
+/// seed/authority and algorithm semantics. A source composed into a world
+/// policy must remain immutable and stateless for that policy's lifetime;
+/// changing its authority or algorithm requires a new source and RuleKey.
 /// </summary>
 public interface IBattleContextualConflictRandomSource : IContextualConflictRandomSource
 {
