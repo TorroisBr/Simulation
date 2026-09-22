@@ -153,6 +153,7 @@ public sealed class SpatialAuthorityTests
         Assert.That(snapshot.Spatial.AnchoredLocations.Single().AnchorHexId, Is.EqualTo("hex-a"));
         Assert.That(WorldStateInvariantValidator.Validate(snapshot).IsValid, Is.True);
         Assert.That(WorldStateCanonicalWriter.Write(snapshot), Does.Contain("SPATIAL_LOCATION|location-a|hex-a"));
+        Assert.That(WorldStateDiagnostics.Format(snapshot), Does.Contain("LOCATION location-a anchor hex-a"));
     }
 
     private static SpatialAuthorityStore CreateAuthority(string hexId, string locationId)

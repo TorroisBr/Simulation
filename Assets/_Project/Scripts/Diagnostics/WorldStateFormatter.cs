@@ -62,6 +62,32 @@ public static class WorldStateSnapshotFormatter
             output.Append("Materialized NPC: ").Append(Value(person.MaterializedNpcRuntimeId)).Append('\n');
         }
 
+        if (snapshot.Spatial.AuthorityRevision.HasValue)
+        {
+            output.Append("\nSpatial authority revision: ")
+                .Append(WorldStateCanonicalWriter.Int64Value(snapshot.Spatial.AuthorityRevision.Value))
+                .Append('\n');
+            foreach (WorldStateHexSnapshot hex in snapshot.Spatial.Hexes)
+            {
+                if (hex != null)
+                {
+                    output.Append("HEX ").Append(Value(hex.HexId)).Append('\n');
+                }
+            }
+
+            foreach (WorldStateAnchoredLocationSnapshot location in snapshot.Spatial.AnchoredLocations)
+            {
+                if (location != null)
+                {
+                    output.Append("LOCATION ")
+                        .Append(Value(location.LocationId))
+                        .Append(" anchor ")
+                        .Append(Value(location.AnchorHexId))
+                        .Append('\n');
+                }
+            }
+        }
+
         if (snapshot.HasArmedForceState)
         {
             output.Append("\nArmed force revision: ")
