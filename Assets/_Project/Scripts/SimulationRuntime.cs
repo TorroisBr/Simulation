@@ -16,6 +16,9 @@ public sealed class SimulationRuntime
     private DailyDemographyReport lastDailyDemographyReport;
     private readonly PersonStore personStore;
     private readonly ArmedForceStore armedForceStore;
+    private readonly PersistentConflictStore conflictStore;
+    private readonly PersistentWarStore warStore;
+    private readonly PersistentBattleStore battleStore;
     private readonly GenealogyStore genealogyStore;
     private readonly InstitutionStore institutionStore;
     private readonly OfficeStore officeStore;
@@ -56,6 +59,9 @@ public sealed class SimulationRuntime
     public DailyDemographyReport LastDailyDemographyReport => lastDailyDemographyReport;
     public PersonStore PersonStore => personStore;
     public ArmedForceStore ArmedForceStore => armedForceStore;
+    public PersistentConflictStore ConflictStore => conflictStore;
+    public PersistentWarStore WarStore => warStore;
+    public PersistentBattleStore BattleStore => battleStore;
     public IReadOnlyList<ParentageRecord> GenealogyRecords => genealogyStore.Records;
     public IReadOnlyList<InstitutionRecord> InstitutionRecords => institutionStore.Institutions;
     public IReadOnlyList<OfficeRecord> OfficeRecords => officeStore.Offices;
@@ -129,7 +135,10 @@ public sealed class SimulationRuntime
         PoliticalKnowledgeStore politicalKnowledgeStore = null,
         PoliticalDecisionStore politicalDecisionStore = null,
         long? politicalWorldRevision = null,
-        ArmedForceStore armedForceStore = null)
+        ArmedForceStore armedForceStore = null,
+        PersistentConflictStore conflictStore = null,
+        PersistentWarStore warStore = null,
+        PersistentBattleStore battleStore = null)
     {
         this.simulationTime = simulationTime ?? throw new ArgumentNullException(nameof(simulationTime));
 
@@ -192,6 +201,18 @@ public sealed class SimulationRuntime
         ArmedForceStore resolvedArmedForceStore = CloneArmedForceStore(
             armedForceStore,
             resolvedPersonStore);
+        PersistentConflictStore resolvedConflictStore = CloneConflictStore(
+            conflictStore,
+            resolvedArmedForceStore);
+        PersistentWarStore resolvedWarStore = CloneWarStore(
+            warStore,
+            resolvedArmedForceStore,
+            resolvedConflictStore);
+        PersistentBattleStore resolvedBattleStore = CloneBattleStore(
+            battleStore,
+            resolvedArmedForceStore,
+            resolvedConflictStore,
+            resolvedWarStore);
 
         this.configuration = resolvedConfiguration;
         this.calendar = new SimulationCalendar(
@@ -200,6 +221,9 @@ public sealed class SimulationRuntime
         this.aggregateDemographyProvider = aggregateDemographyProvider;
         this.personStore = resolvedPersonStore;
         this.armedForceStore = resolvedArmedForceStore;
+        this.conflictStore = resolvedConflictStore;
+        this.warStore = resolvedWarStore;
+        this.battleStore = resolvedBattleStore;
         this.genealogyStore = CloneGenealogyStore(resolvedGenealogyStore);
         this.institutionStore = resolvedInstitutionStore;
         this.officeStore = resolvedOfficeStore;
@@ -2061,6 +2085,72 @@ public sealed class SimulationRuntime
         }
 
         return source.Clone(personStore);
+    }
+
+    private static PersistentConflictStore CloneConflictStore(
+        PersistentConflictStore source,
+        ArmedForceStore armedForceStore)
+    {
+        if (source == null)
+        {
+            return new PersistentConflictStore(armedForceStore);
+        }
+
+        PersistentStateInvariantReport report = source.ValidateInvariants();
+        if (report.IsValid == false)
+        {
+            throw new ArgumentException(
+                "The SimulationRuntime ConflictStore contains invalid world state: "
+                + string.Join("; ", report.Violations),
+                nameof(source));
+        }
+
+        return source.Clone(armedForceStore);
+    }
+
+    private static PersistentWarStore CloneWarStore(
+        PersistentWarStore source,
+        ArmedForceStore armedForceStore,
+        PersistentConflictStore conflictStore)
+    {
+        if (source == null)
+        {
+            return new PersistentWarStore(armedForceStore, conflictStore);
+        }
+
+        PersistentStateInvariantReport report = source.ValidateInvariants();
+        if (report.IsValid == false)
+        {
+            throw new ArgumentException(
+                "The SimulationRuntime WarStore contains invalid world state: "
+                + string.Join("; ", report.Violations),
+                nameof(source));
+        }
+
+        return source.Clone(armedForceStore, conflictStore);
+    }
+
+    private static PersistentBattleStore CloneBattleStore(
+        PersistentBattleStore source,
+        ArmedForceStore armedForceStore,
+        PersistentConflictStore conflictStore,
+        PersistentWarStore warStore)
+    {
+        if (source == null)
+        {
+            return new PersistentBattleStore(armedForceStore, conflictStore, warStore);
+        }
+
+        PersistentStateInvariantReport report = source.ValidateInvariants();
+        if (report.IsValid == false)
+        {
+            throw new ArgumentException(
+                "The SimulationRuntime BattleStore contains invalid world state: "
+                + string.Join("; ", report.Violations),
+                nameof(source));
+        }
+
+        return source.Clone(armedForceStore, conflictStore, warStore);
     }
 
     private static GenealogyStore CloneGenealogyStore(GenealogyStore source)
