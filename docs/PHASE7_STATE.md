@@ -82,6 +82,11 @@ replay, networking, and broad `Simulation.Core` migration remain deferred.
 
 No P7-B, D3, or later checkpoint was started automatically.
 
+P7-D3 remains deferred: physical Battle execution eligibility,
+`BattleExecutionContext`, direct combat-element projection, side commander,
+dependency fingerprints, and stale-context handling. P7-D4 remains deferred:
+ConflictFoundation adapter and the first Battle resolution.
+
 ## D2 architecture conformance
 
 Read-only review found no contradiction with
