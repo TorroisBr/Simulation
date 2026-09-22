@@ -1,4 +1,96 @@
-# Phase 7 — Checkpoint D1 — Current State
+# Phase 7 — Checkpoint D2 — Current State
+
+## D2 baseline, branch, and commits
+
+- Canonical architecture baseline: `c7d3341200cfec64700c59429b15b1d7dd2a5992`.
+- Checkpoint branch: `codex/phase7/ArmedForceSpatialPosition`.
+- Implementation commit: `7480e5d` — authoritative ArmedForce spatial
+  position state, runtime composition, and diagnostics integration.
+- Focused test commit: `1234c93` — D2 spatial position coverage.
+- Fixture correction commit: `4f7ee64` — runtime clone test setup.
+
+## D2 delivered
+
+Checkpoint D2 adds the minimum authoritative optional current physical
+position bridge for ArmedForce. It does not implement movement, Battle
+resolution, logistics, recruitment, or military daily processing.
+
+- `ArmedForceSpatialStateStore` owns optional typed current positions keyed by
+  stable `ArmedForceId`. It is separate from force identity, hierarchy,
+  contingents, relevant Person references, lifecycle, detachment, and the
+  legacy opaque location field.
+- Position updates and clears require an existing active force, validate the
+  typed reference against the supplied D0 `SpatialAuthorityStore`, apply
+  atomically, advance a dedicated revision, and keep no-op operations at the
+  same revision.
+- Positions are optional and are never inferred or propagated between parent,
+  child, contingent, commander, detachment, or reattachment. Detach/reattach
+  preserves both force identity and any separately stored current position.
+- Directional compatibility queries are deterministic and typed: Hex checks
+  the resolved anchor Hex; Location checks exact Location identity; SubLocation
+  checks exact SubLocation identity. Missing current position is a valid
+  incompatible result, while invalid or unresolved references are query
+  failures.
+- `SimulationRuntime` composes the spatial state against its cloned
+  `ArmedForceStore` and cloned `SpatialAuthorityStore`, retaining the explicit
+  LocalTopology bridge when SubLocation resolution is required.
+- Snapshot, canonical writer, formatter, diff, and invariant validation now
+  project `ARMED_FORCE_POSITION` state and its revision deterministically.
+  `OperationalLocationReference` remains only as a transitional legacy shim;
+  it is never converted into typed position and is not emitted as the
+  canonical ArmedForce position.
+- No `NpcRuntime` is required or materialized by spatial position state.
+
+## D2 validation
+
+- D2 focused EditMode: `11/11`.
+- ArmedForce regression: `29/29`.
+- SpatialAuthority D0 regression: `9/9`.
+- BattleSpatial D1 regression: `7/7`.
+- Persistent Conflict/War/Battle regression: `8/8`.
+- Person regression: `128/128`.
+- Population regression: `130/130`.
+- ConflictFoundation regression: `17/17`.
+- Lifecycle regression: `40/40`.
+- ALL EditMode: `1509/1509`.
+- Official EditMode `Smoke`: `5/5`.
+- `git diff --check`: clean before final commit.
+
+## D2 boundaries and known limitations
+
+The spatial state is a current-position authority only. It has no movement,
+route, adjacency, terrain, travel-time, scouting, knowledge, battle gating,
+participant-position validation, or execution context. Position history is
+represented by diagnostics snapshots/revisions only; no event sourcing or
+save/load contract was added. LocalTopology remains the existing explicit
+SubLocation bridge and is not redesigned here.
+
+`AdvanceDay` was not changed. No military processing, autonomy, cadence, RNG,
+population mutation, or ConflictFoundation remodeling was added.
+`docs/SIMULATION_ARCHITECTURE.md` was not changed.
+
+## D2 deferred
+
+Persistent strategic War behavior, Battle resolution, tactics, plans, morale,
+cohesion, readiness, supply, logistics, funding/pay, requisition, foraging,
+military movement, scouting, military knowledge, recruitment, mobilization,
+casualties, capture/custody, desertion, defection, mutiny, military control,
+occupation, war goals, ceasefire, peace, taxation, diplomacy, Campaign,
+Polity, WarAI, physical movement integration, participant-position gating,
+continuity operations for secession/schism/absorption/merger, save/load,
+replay, networking, and broad `Simulation.Core` migration remain deferred.
+
+No P7-B, D3, or later checkpoint was started automatically.
+
+## D2 architecture conformance
+
+Read-only review found no contradiction with
+`docs/SIMULATION_ARCHITECTURE.md`. ArmedForce remains distinct from Faction,
+Institution, Polity, and generic Organization. Command, loyalty, allegiance,
+membership, funding, and control remain distinct. Physical separation remains
+distinct from organizational separation. Person identity remains PersonId
+based and independent from NpcRuntime. No Unity object identity or discovery
+order is authoritative.
 
 ## D1 baseline, branch, and commit
 

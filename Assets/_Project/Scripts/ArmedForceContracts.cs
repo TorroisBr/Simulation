@@ -163,6 +163,10 @@ public sealed class ArmedForceRecord : IEquatable<ArmedForceRecord>
     public string DisplayName { get; }
     public long CreatedAbsoluteDay { get; }
     public ArmedForceId ParentForceId { get; }
+    /// <summary>
+    /// Legacy opaque compatibility data only. It is not authoritative physical
+    /// position; typed current position is owned by ArmedForceSpatialStateStore.
+    /// </summary>
     public string OperationalLocationReference { get; }
     public PersonId CommanderPersonId { get; }
     public ArmedForceLifecycleState LifecycleState { get; }

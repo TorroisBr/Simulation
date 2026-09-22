@@ -11,6 +11,7 @@ public sealed class WorldStateArmedForceSnapshot
     public long? TerminatedAbsoluteDay { get; }
     public string ParentForceId { get; }
     public bool IsDetached { get; }
+    /// <summary>Legacy opaque compatibility projection, never a spatial authority.</summary>
     public string OperationalLocationReference { get; }
     public string CommanderPersonId { get; }
 

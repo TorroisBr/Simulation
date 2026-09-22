@@ -131,21 +131,22 @@ public static class WorldStateSnapshotFormatter
                     .Append('\n');
             }
 
-            if (snapshot.HasArmedForceSpatialState)
+        }
+
+        if (snapshot.HasArmedForceSpatialState)
+        {
+            output.Append("\nArmed force spatial revision: ")
+                .Append(WorldStateCanonicalWriter.Int64Value(snapshot.ArmedForceSpatialRevision.Value))
+                .Append('\n');
+            foreach (WorldStateArmedForcePositionSnapshot position in snapshot.ArmedForcePositions)
             {
-                output.Append("Armed force spatial revision: ")
-                    .Append(WorldStateCanonicalWriter.Int64Value(snapshot.ArmedForceSpatialRevision.Value))
-                    .Append('\n');
-                foreach (WorldStateArmedForcePositionSnapshot position in snapshot.ArmedForcePositions)
+                if (position != null)
                 {
-                    if (position != null)
-                    {
-                        output.Append("ARMED FORCE POSITION ")
-                            .Append(Value(position.ArmedForceId))
-                            .Append(" ")
-                            .Append(Value(position.CurrentPositionStableKey))
-                            .Append('\n');
-                    }
+                    output.Append("ARMED FORCE POSITION ")
+                        .Append(Value(position.ArmedForceId))
+                        .Append(" ")
+                        .Append(Value(position.CurrentPositionStableKey))
+                        .Append('\n');
                 }
             }
         }
