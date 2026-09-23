@@ -167,16 +167,90 @@
   `docs/SIMULATION_ARCHITECTURE.md` are unchanged. No long-run suite was
   required because D6B1 is non-mutating and adds no daily behavior.
 
-### Boundaries and next gate
+### Current boundary after D6B1
 
-D6B1 is approved and promoted to `codex/phase7/canonical`. D6B2 is now the next
-architecture/implementation gate. D6B2 and D7 remain **NOT STARTED**. Do not
-infer Battle casualties, accept or apply a Battle outcome, mark a Battle
-Resolved, apply population deaths, mutate Person state, emit outcome history,
-or add daily military behavior from D6A/D6B1.
+D6B1 is approved and promoted to `codex/phase7/canonical`. Checkpoint D6B2 is
+now a separately validated feature candidate, described below; it has not been
+promoted to canonical. D7 remains **NOT STARTED**. Do not apply a Battle
+outcome, mark a Battle Resolved, apply population deaths, mutate Person state,
+emit outcome history, or add daily military behavior from D6A/D6B1/D6B2.
 
 Cross-host equivalence of D4's existing floating-point arithmetic remains an
 unrelated open limitation.
+
+## Checkpoint D6B2 — Validated feature candidate (not promoted)
+
+- Required canonical baseline: `59fdab5100e27672d9ef9096761d72ed04090790` on
+  `codex/phase7/canonical`; this branch was created from that exact commit.
+- Feature branch: `codex/phase7/BattleDirectConsequencePlanning`.
+- Implementation commit: `16621d2eb91a90e6dd0298dcc5e7c3cc441a60ba`.
+- The candidate and this state record are confined to the feature branch.
+  `codex/phase7/canonical` was not changed; promotion requires separate user
+  approval.
+
+### Delivered
+
+D6B2 adds a world-composed, deterministic, non-mutating Battle-level direct
+consequence planning boundary. It layers over a fresh D5 application plan and
+the matching D3/D6A facts; it does not modify D5's plan or claim application
+readiness.
+
+- `BattleDirectConsequencePolicy` is explicit and optional. There is no
+  production casualty rule or consequence RNG. Its stable identity and
+  fingerprint capture the rule key, configuration identity/version, and D6B2
+  plan/coverage versions. Observable rule-identity changes fail closed.
+- One rule invocation receives one immutable, canonical input for the entire
+  Battle. D5 remains the sole outcome authority; raw D4 values and live stores
+  are not exposed to the rule.
+- Only D3-captured, D6A-bound free and available cohorts are exposed. Every
+  exposed cohort requires one explicit, checked-conservation partition.
+  Healthy may remain healthy or become wounded; wounded cannot heal. Captured
+  survivors require explicit unavailable custody by an active participant on
+  another Battle side. Draw does not imply a winner or capture.
+- Positive deaths require a source binding. D6B2 checked-sums deaths by
+  `ManpowerSourceId`, preserves cohort-to-source traces, and requests exactly
+  one D6B1 proposal per affected source. A failed/unsupported D6B1 proposal
+  prevents any complete plan from being returned.
+- Immutable post-consequence contingent projections are derived from the
+  pre-state plus partitions. They preserve unexposed cohorts, merge equal
+  semantic cohorts, and expose derived living-roster and available totals.
+- The complete plan carries stable semantic fingerprints and validates the
+  current day, D5 outcome/context, D6B2 policy, participant manpower,
+  custodians, and affected D6B1 proposals. Capacity-only and unrelated-source
+  changes do not invalidate an otherwise current proposal. Invalid partitions
+  and destinations are validated in stable semantic order for deterministic
+  diagnostics.
+- Planning changes no Battle lifecycle/outcome, D6A manpower or legacy
+  `Contingent.Amount`, source population/revision, ArmedForce position, Person,
+  or simulation day. `SimulationRuntime.AdvanceDay` is unchanged.
+
+### Validation and independent review
+
+- D6B2 focused EditMode: `21/21`.
+- D6B1: `23/23`; D6A: `11/11`; D5: `16/16`; D4: `10/10`; D3: `11/11`.
+- D2 spatial: `11/11`; D1 spatial: `7/7`; D0 spatial: `8/8`.
+- ArmedForce foundation: `10/10`; ArmedForce composition: `6/6`;
+  Persistent Conflict/War/Battle: `8/8`; ConflictFoundation: `16/16`;
+  SimulationRuntime orchestration: `10/10`.
+- Population: `137/137`; Person: `130/130`; lifecycle: `40/40`;
+  aggregate demography: `23/23`.
+- ALL EditMode: `1601/1601`. Official complete EditMode `Smoke`: `5/5`.
+- Independent read-only review found no remaining blocker. It verified
+  rule-call/source-request cardinality, D5 separation, stale checks,
+  capacity-independent freshness, projection totals, non-mutation, and
+  deterministic failure diagnostics.
+- `git diff --check` is clean. No long-run suite was required because
+  `AdvanceDay` is unchanged and D6B2 adds no daily behavior.
+
+### Candidate-only boundary and known limitations
+
+D6B2 is **VALIDATED FEATURE CANDIDATE ONLY**, not an externally approved or
+canonical checkpoint. No consequence is applied, no `BattleOutcome` is
+persisted, and there is no D7 atomic application. Production worlds without an
+explicit D6B2 policy fail as unconfigured; casualty semantics remain entirely
+rule/configuration-owned. The post-consequence projection is ephemeral and is
+not a persistence, event-history, or replay contract. D7 remains **NOT
+STARTED**. `docs/SIMULATION_ARCHITECTURE.md` was not changed.
 
 # Historical record — Checkpoint D5 — Canonical Promotion
 
