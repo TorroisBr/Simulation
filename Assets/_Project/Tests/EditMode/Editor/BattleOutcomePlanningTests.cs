@@ -361,7 +361,7 @@ public sealed class BattleOutcomePlanningTests
     }
 
     [Test]
-    public void ParticipantPositionAndDirectCompositionChangesMakePlanStale()
+    public void ParticipantPositionAndManpowerChangesMakePlanStale()
     {
         BattleOutcomeFixture positionFixture = CreateFixture(CreateStandardPolicy());
         Assert.That(positionFixture.Runtime.BattleOutcomePlanningService.TryCreateApplicationPlan(
@@ -384,18 +384,71 @@ public sealed class BattleOutcomePlanningTests
             contingentFixture.BattleId,
             out BattleOutcomeApplicationPlan contingentPlan,
             out _), Is.True);
-        Assert.That(contingentFixture.Runtime.ArmedForceStore.TryReplaceContingent(new ContingentRecord(
+        Assert.That(contingentFixture.Runtime.ContingentManpowerStateStore.TryRedistribute(
             new ContingentId("contingent-a"),
-            new ArmedForceId("force-a"),
-            5L,
-            new ContingentOriginReference("source", "a"),
-            "service-a"), out _), Is.True);
+            new[] { new ContingentManpowerCohort(
+                ManpowerInjuryState.Wounded,
+                ManpowerCustodyState.Free,
+                null,
+                ManpowerAvailabilityState.Unavailable,
+                4L) },
+            0L,
+            out _), Is.True);
         Assert.That(contingentFixture.Runtime.BattleOutcomePlanningService.TryValidateCurrent(
             contingentPlan,
             out BattleOutcomePlanValidationReport contingentReport,
             out BattleOutcomePlanningFailure contingentFailure), Is.False);
         Assert.That(contingentReport.IsStale, Is.True);
         Assert.That(contingentFailure.Code, Is.EqualTo(BattleOutcomePlanningFailureCode.PlanStale));
+    }
+
+    [Test]
+    public void AvailabilityFlowsIntoD4CapabilityAndD5RevalidatesTheCapturedPlan()
+    {
+        AvailableAmountCapabilityProvider capability = new AvailableAmountCapabilityProvider();
+        BattleResolutionPolicy policy = new BattleResolutionPolicy(
+            capability,
+            new DeterministicBattleConflictRandomSource(21, "random:available:v1"),
+            new BattleResolutionResolverSettings(0f, 0f),
+            ProjectionVersion,
+            NumericProfile,
+            new BattleNumericExecutionProfileCompatibility(new[] { NumericProfile }));
+        BattleOutcomeFixture fixture = CreateFixture(policy);
+        Assert.That(fixture.Runtime.BattleOutcomePlanningService.TryCreateApplicationPlan(
+            fixture.BattleId,
+            out BattleOutcomeApplicationPlan firstPlan,
+            out BattleOutcomePlanningFailure firstFailure), Is.True, firstFailure?.Message);
+        string firstCausalFingerprint = firstPlan.ResolutionComputation.CausalFingerprint;
+        Assert.That(capability.ObservedAvailableAmounts, Is.EqualTo(new long[] { 4L, 2L }));
+
+        Assert.That(fixture.Runtime.ContingentManpowerStateStore.TryRedistribute(
+            new ContingentId("contingent-a"),
+            new[]
+            {
+                new ContingentManpowerCohort(ManpowerInjuryState.Healthy, ManpowerCustodyState.Free,
+                    null, ManpowerAvailabilityState.Available, 2L),
+                new ContingentManpowerCohort(ManpowerInjuryState.Wounded, ManpowerCustodyState.Free,
+                    null, ManpowerAvailabilityState.Unavailable, 2L)
+            },
+            0L,
+            out _), Is.True);
+        Assert.That(fixture.Runtime.BattleOutcomePlanningService.TryValidateCurrent(
+            firstPlan,
+            out BattleOutcomePlanValidationReport staleReport,
+            out BattleOutcomePlanningFailure staleFailure), Is.False);
+        Assert.That(staleReport.IsStale, Is.True);
+        Assert.That(staleFailure.Code, Is.EqualTo(BattleOutcomePlanningFailureCode.PlanStale));
+        Assert.That(capability.ObservedAvailableAmounts, Is.EqualTo(new long[] { 4L, 2L, 2L, 2L }),
+            "D5 revalidates against a newly captured D3 context, and D4 sees its current availability.");
+
+        Assert.That(fixture.Runtime.BattleOutcomePlanningService.TryCreateApplicationPlan(
+            fixture.BattleId,
+            out BattleOutcomeApplicationPlan currentPlan,
+            out BattleOutcomePlanningFailure currentFailure), Is.True, currentFailure?.Message);
+        Assert.That(capability.ObservedAvailableAmounts, Is.EqualTo(new long[] { 4L, 2L, 2L, 2L, 2L, 2L }));
+        Assert.That(currentPlan.ResolutionComputation.CausalFingerprint, Is.Not.EqualTo(firstCausalFingerprint));
+        Assert.That(fixture.Runtime.BattleStore.TryGet(fixture.BattleId, out PersistentBattleRecord battle), Is.True);
+        Assert.That(battle.LifecycleState, Is.EqualTo(BattleLifecycleState.Active));
     }
 
     [Test]
@@ -625,6 +678,23 @@ public sealed class BattleOutcomePlanningTests
             capability = capabilities.TryGetValue(contingent.ContingentId.Value, out float value)
                 ? value
                 : fallbackCapability;
+            return true;
+        }
+    }
+
+    private sealed class AvailableAmountCapabilityProvider : IBattleContingentCapabilityProvider
+    {
+        public string RuleKey => "capability:captured-availability:v1";
+        public List<long> ObservedAvailableAmounts { get; } = new List<long>();
+
+        public bool TryEvaluate(
+            BattleExecutionContingentSnapshot contingent,
+            out float capability,
+            out string failureReason)
+        {
+            ObservedAvailableAmounts.Add(contingent.AvailableAmount);
+            capability = contingent.AvailableAmount;
+            failureReason = null;
             return true;
         }
     }

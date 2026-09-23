@@ -18,6 +18,7 @@ public sealed class ArmedForceStore
         new Dictionary<string, ContingentRecord>(StringComparer.Ordinal);
     private readonly Dictionary<string, ArmedForcePersonReference> relevantPersonsById =
         new Dictionary<string, ArmedForcePersonReference>(StringComparer.Ordinal);
+    private ContingentManpowerStateStore manpowerAuthority;
     private long revision;
 
     public ArmedForceStore(PersonStore personStore)
@@ -199,6 +200,42 @@ public sealed class ArmedForceStore
     {
         record = null;
         return contingentId != null && contingentsById.TryGetValue(contingentId.Value, out record);
+    }
+
+    internal void AttachManpowerAuthority(ContingentManpowerStateStore authority)
+    {
+        if (authority == null) throw new ArgumentNullException(nameof(authority));
+        if (manpowerAuthority != null && !ReferenceEquals(manpowerAuthority, authority))
+            throw new InvalidOperationException("An ArmedForceStore can have only one manpower authority.");
+        manpowerAuthority = authority;
+    }
+
+    internal bool TryUpdateContingentAmountFromManpower(
+        ContingentManpowerStateStore authority,
+        ContingentId contingentId,
+        long expectedAmount,
+        long amount,
+        out ArmedForceFoundationFailure failure)
+    {
+        if (authority == null || !ReferenceEquals(authority, manpowerAuthority))
+            return Fail(ArmedForceFoundationFailureCode.ManpowerAuthorityRequired, "The manpower authority is not attached to this ArmedForceStore.", out failure);
+        if (contingentId == null || !contingentsById.TryGetValue(contingentId.Value, out ContingentRecord current))
+            return Fail(ArmedForceFoundationFailureCode.ContingentNotRegistered, "The contingent is not registered.", out failure);
+        if (current.Amount != expectedAmount || amount < 0L)
+            return Fail(ArmedForceFoundationFailureCode.InvalidInvariant, "The contingent Amount mirror changed or the replacement is invalid.", out failure);
+        if (!forcesById.TryGetValue(current.ForceId.Value, out ArmedForceRecord force))
+            return Fail(ArmedForceFoundationFailureCode.ForceNotRegistered, "The contingent force is not registered.", out failure);
+        if (!force.IsActive && amount >= expectedAmount)
+            return Fail(ArmedForceFoundationFailureCode.ContingentForceNotActive, "A terminated force may only release pre-existing roster through a strict decrease.", out failure);
+        if (CanAdvanceRevision(out failure) == false) return false;
+        contingentsById[contingentId.Value] = current.WithComposition(
+            amount,
+            current.Origin,
+            current.ServiceType,
+            current.Characteristics);
+        revision++;
+        failure = ArmedForceFoundationFailure.None;
+        return true;
     }
 
     public bool TryGetRelevantPerson(
@@ -509,6 +546,37 @@ public sealed class ArmedForceStore
         ContingentRecord contingent,
         out ArmedForceFoundationFailure failure)
     {
+        if (manpowerAuthority != null)
+        {
+            return Fail(
+                ArmedForceFoundationFailureCode.ManpowerAuthorityRequired,
+                "Managed contingent registration must go through ContingentManpowerStateStore.",
+                out failure);
+        }
+
+        return TryRegisterContingentCore(contingent, out failure);
+    }
+
+    internal bool TryRegisterContingentFromManpower(
+        ContingentManpowerStateStore authority,
+        ContingentRecord contingent,
+        out ArmedForceFoundationFailure failure)
+    {
+        if (authority == null || !ReferenceEquals(authority, manpowerAuthority))
+        {
+            return Fail(
+                ArmedForceFoundationFailureCode.ManpowerAuthorityRequired,
+                "The manpower authority is not attached to this ArmedForceStore.",
+                out failure);
+        }
+
+        return TryRegisterContingentCore(contingent, out failure);
+    }
+
+    private bool TryRegisterContingentCore(
+        ContingentRecord contingent,
+        out ArmedForceFoundationFailure failure)
+    {
         if (contingent == null || contingent.Id == null || contingent.ForceId == null)
         {
             return Fail(
@@ -555,6 +623,24 @@ public sealed class ArmedForceStore
     /// accounting remain outside this checkpoint.
     /// </summary>
     public bool TryReplaceContingent(
+        ContingentRecord replacement,
+        out ArmedForceFoundationFailure failure)
+    {
+        if (manpowerAuthority != null
+            && replacement != null
+            && contingentsById.TryGetValue(replacement.Id?.Value ?? string.Empty, out ContingentRecord managedCurrent)
+            && replacement.Amount != managedCurrent.Amount)
+        {
+            return Fail(
+                ArmedForceFoundationFailureCode.ManpowerAmountMutationRequired,
+                "Managed contingent Amount is a manpower roster mirror and can only change through ContingentManpowerStateStore.",
+                out failure);
+        }
+
+        return TryReplaceContingentCore(replacement, out failure);
+    }
+
+    private bool TryReplaceContingentCore(
         ContingentRecord replacement,
         out ArmedForceFoundationFailure failure)
     {
@@ -707,6 +793,12 @@ public sealed class ArmedForceStore
                     "A force with active subordinate forces cannot be terminated in this foundation.",
                     out failure);
             }
+        }
+
+        if (manpowerAuthority != null
+            && !manpowerAuthority.CanTerminateForce(force.Id, out failure))
+        {
+            return false;
         }
 
         if (CanAdvanceRevision(out failure) == false) return false;

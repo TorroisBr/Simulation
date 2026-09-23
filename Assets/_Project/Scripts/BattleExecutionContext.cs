@@ -33,7 +33,8 @@ public enum BattleExecutionFailureCode
     ForcePositionChanged = 24,
     ForceNoLongerSpatiallyCompatible = 25,
     DirectContingentCompositionChanged = 26,
-    ReferencedSpatialStateInvalid = 27
+    ReferencedSpatialStateInvalid = 27,
+    ManpowerStateMissing = 28
 }
 
 public sealed class BattleExecutionFailure : IEquatable<BattleExecutionFailure>
@@ -119,16 +120,27 @@ public sealed class BattleExecutionContingentSnapshot
     public ContingentId ContingentId { get; }
     public ArmedForceId ForceId { get; }
     public long Amount { get; }
+    public long LivingRosterAmount { get; }
+    public long AvailableAmount { get; }
+    public string ManpowerStateFingerprint { get; }
+    public IReadOnlyList<ContingentManpowerCohort> ManpowerCohorts { get; }
     public ContingentOriginReference Origin { get; }
     public string ServiceType { get; }
     public IReadOnlyList<ArmedForceCharacteristic> Characteristics { get; }
 
-    internal BattleExecutionContingentSnapshot(ContingentRecord contingent)
+    internal BattleExecutionContingentSnapshot(
+        ContingentRecord contingent,
+        ContingentManpowerState manpowerState)
     {
         if (contingent == null) throw new ArgumentNullException(nameof(contingent));
         ContingentId = contingent.Id;
         ForceId = contingent.ForceId;
         Amount = contingent.Amount;
+        LivingRosterAmount = manpowerState.LivingRosterAmount;
+        AvailableAmount = manpowerState.AvailableAmount;
+        ManpowerStateFingerprint = manpowerState.Fingerprint;
+        ManpowerCohorts = new ReadOnlyCollection<ContingentManpowerCohort>(
+            new List<ContingentManpowerCohort>(manpowerState.Cohorts));
         Origin = contingent.Origin;
         ServiceType = contingent.ServiceType;
         Characteristics = new ReadOnlyCollection<ArmedForceCharacteristic>(
@@ -136,7 +148,7 @@ public sealed class BattleExecutionContingentSnapshot
     }
 
     public string StableKey => ContingentId.Value;
-    public bool HasUsableCombatElements => Amount > 0L;
+    public bool HasUsableCombatElements => AvailableAmount > 0L;
 }
 
 public sealed class BattleExecutionForceContext
@@ -230,11 +242,16 @@ public sealed class BattleExecutionParticipantFingerprint
 
 public sealed class BattleExecutionContingentFingerprint
 {
-    internal BattleExecutionContingentFingerprint(ContingentRecord contingent)
+    internal BattleExecutionContingentFingerprint(
+        ContingentRecord contingent,
+        ContingentManpowerState manpowerState)
     {
         ContingentId = contingent.Id;
         ForceId = contingent.ForceId;
         Amount = contingent.Amount;
+        LivingRosterAmount = manpowerState.LivingRosterAmount;
+        AvailableAmount = manpowerState.AvailableAmount;
+        ManpowerStateFingerprint = manpowerState.Fingerprint;
         Origin = contingent.Origin;
         ServiceType = contingent.ServiceType;
         Characteristics = new ReadOnlyCollection<ArmedForceCharacteristic>(
@@ -244,6 +261,9 @@ public sealed class BattleExecutionContingentFingerprint
     public ContingentId ContingentId { get; }
     public ArmedForceId ForceId { get; }
     public long Amount { get; }
+    public long LivingRosterAmount { get; }
+    public long AvailableAmount { get; }
+    public string ManpowerStateFingerprint { get; }
     public ContingentOriginReference Origin { get; }
     public string ServiceType { get; }
     public IReadOnlyList<ArmedForceCharacteristic> Characteristics { get; }
@@ -359,6 +379,9 @@ public sealed class BattleExecutionDependencyFingerprint
                 Append(builder, contingent?.ContingentId?.Value);
                 Append(builder, contingent?.ForceId?.Value);
                 Append(builder, contingent == null ? null : Invariant(contingent.Amount));
+                Append(builder, contingent == null ? null : Invariant(contingent.LivingRosterAmount));
+                Append(builder, contingent == null ? null : Invariant(contingent.AvailableAmount));
+                Append(builder, contingent?.ManpowerStateFingerprint);
                 Append(builder, contingent?.Origin?.Domain);
                 Append(builder, contingent?.Origin?.Value);
                 Append(builder, contingent?.ServiceType);
@@ -473,7 +496,9 @@ public enum BattleExecutionStalenessReason
     DirectContingentCompositionChanged = 7,
     ExecutionDayChanged = 8,
     ReferencedSpatialStateInvalid = 9,
-    BattleStartedDayChanged = 10
+    BattleStartedDayChanged = 10,
+    ManpowerAvailabilityChanged = 11,
+    ManpowerStateChanged = 12
 }
 
 public sealed class BattleExecutionValidationReport
@@ -512,6 +537,7 @@ public sealed class BattleExecutionContextBuilder
     private readonly SpatialAuthorityStore spatialAuthorityStore;
     private readonly LocalTopologyStore localTopologyStore;
     private readonly PersonStore personStore;
+    private readonly ContingentManpowerStateStore manpowerStateStore;
 
     public BattleExecutionContextBuilder(
         PersistentBattleStore battleStore,
@@ -519,7 +545,8 @@ public sealed class BattleExecutionContextBuilder
         ArmedForceSpatialStateStore spatialStateStore,
         SpatialAuthorityStore spatialAuthorityStore,
         LocalTopologyStore localTopologyStore = null,
-        PersonStore personStore = null)
+        PersonStore personStore = null,
+        ContingentManpowerStateStore manpowerStateStore = null)
     {
         this.battleStore = battleStore ?? throw new ArgumentNullException(nameof(battleStore));
         this.armedForceStore = armedForceStore ?? throw new ArgumentNullException(nameof(armedForceStore));
@@ -527,6 +554,10 @@ public sealed class BattleExecutionContextBuilder
         this.spatialAuthorityStore = spatialAuthorityStore ?? throw new ArgumentNullException(nameof(spatialAuthorityStore));
         this.localTopologyStore = localTopologyStore ?? battleStore.LocalTopologyStore ?? spatialStateStore.LocalTopologyStore;
         this.personStore = personStore ?? armedForceStore.PersonStore;
+        this.manpowerStateStore = manpowerStateStore;
+        if (manpowerStateStore != null
+            && !ReferenceEquals(manpowerStateStore.ArmedForceStore, armedForceStore))
+            throw new ArgumentException("Battle execution and manpower state must belong to the same world composition.", nameof(manpowerStateStore));
 
         if (!ReferenceEquals(battleStore.ArmedForceStore, armedForceStore))
         {
@@ -688,8 +719,10 @@ public sealed class BattleExecutionContextBuilder
                         return Fail(BattleExecutionFailureCode.DuplicateContingentProjection, "A ContingentId may be projected into an execution context only once.", out failure);
                     }
 
-                    contingentSnapshots.Add(new BattleExecutionContingentSnapshot(contingent));
-                    contingentFingerprints.Add(new BattleExecutionContingentFingerprint(contingent));
+                    if (!TryGetManpowerState(contingent, out ContingentManpowerState manpowerState))
+                        return Fail(BattleExecutionFailureCode.ManpowerStateMissing, "A projected contingent has no matching manpower state.", out failure);
+                    contingentSnapshots.Add(new BattleExecutionContingentSnapshot(contingent, manpowerState));
+                    contingentFingerprints.Add(new BattleExecutionContingentFingerprint(contingent, manpowerState));
                 }
 
                 forces.Add(new BattleExecutionForceContext(force.Id, position, contingentSnapshots));
@@ -812,10 +845,19 @@ public sealed class BattleExecutionContextBuilder
                 continue;
             }
 
-            if (BuildContingentFingerprintKey(armedForceStore.GetContingents(currentForce.Id))
-                != BuildContingentFingerprintKey(capturedForce.DirectContingents))
+            IReadOnlyList<ContingentRecord> currentContingents = armedForceStore.GetContingents(currentForce.Id);
+            if (BuildCurrentContingentStructureKey(currentContingents)
+                != BuildCapturedContingentStructureKey(capturedForce.DirectContingents))
             {
                 reasons.Add(BattleExecutionStalenessReason.DirectContingentCompositionChanged);
+            }
+            if (BuildCurrentManpowerKey(currentContingents)
+                != BuildCapturedManpowerKey(capturedForce.DirectContingents))
+            {
+                reasons.Add(BuildCurrentAvailabilityKey(currentContingents)
+                    != BuildCapturedAvailabilityKey(capturedForce.DirectContingents)
+                    ? BattleExecutionStalenessReason.ManpowerAvailabilityChanged
+                    : BattleExecutionStalenessReason.ManpowerStateChanged);
             }
 
             SpatialReference currentPosition;
@@ -1010,7 +1052,7 @@ public sealed class BattleExecutionContextBuilder
         return builder.ToString();
     }
 
-    private static string BuildContingentFingerprintKey(IEnumerable<ContingentRecord> contingents)
+    private string BuildCurrentContingentStructureKey(IEnumerable<ContingentRecord> contingents)
     {
         List<ContingentRecord> values = contingents == null
             ? new List<ContingentRecord>()
@@ -1048,6 +1090,9 @@ public sealed class BattleExecutionContextBuilder
             Append(builder, contingent?.ContingentId?.Value);
             Append(builder, contingent?.ForceId?.Value);
             Append(builder, contingent == null ? null : Invariant(contingent.Amount));
+            Append(builder, contingent == null ? null : Invariant(contingent.LivingRosterAmount));
+            Append(builder, contingent == null ? null : Invariant(contingent.AvailableAmount));
+            Append(builder, contingent?.ManpowerStateFingerprint);
             Append(builder, contingent?.Origin?.Domain);
             Append(builder, contingent?.Origin?.Value);
             Append(builder, contingent?.ServiceType);
@@ -1060,6 +1105,99 @@ public sealed class BattleExecutionContextBuilder
         }
 
         return builder.ToString();
+    }
+
+    private string BuildCurrentManpowerKey(IEnumerable<ContingentRecord> contingents)
+    {
+        List<ContingentRecord> values = contingents == null
+            ? new List<ContingentRecord>()
+            : new List<ContingentRecord>(contingents);
+        values.Sort((left, right) => StringComparer.Ordinal.Compare(left?.Id?.Value, right?.Id?.Value));
+        StringBuilder builder = new StringBuilder();
+        foreach (ContingentRecord contingent in values)
+        {
+            Append(builder, contingent?.Id?.Value);
+            if (contingent == null || !TryGetManpowerState(contingent, out ContingentManpowerState state))
+            {
+                Append(builder, null);
+                continue;
+            }
+            Append(builder, Invariant(state.LivingRosterAmount));
+            Append(builder, Invariant(state.AvailableAmount));
+            Append(builder, state.Fingerprint);
+        }
+        return builder.ToString();
+    }
+
+    private static string BuildCapturedContingentStructureKey(IEnumerable<BattleExecutionContingentFingerprint> contingents)
+    {
+        StringBuilder builder = new StringBuilder();
+        foreach (BattleExecutionContingentFingerprint contingent in contingents ?? new List<BattleExecutionContingentFingerprint>())
+        {
+            Append(builder, contingent?.ContingentId?.Value);
+            Append(builder, contingent?.ForceId?.Value);
+            Append(builder, contingent == null ? null : Invariant(contingent.Amount));
+            Append(builder, contingent?.Origin?.Domain);
+            Append(builder, contingent?.Origin?.Value);
+            Append(builder, contingent?.ServiceType);
+            foreach (ArmedForceCharacteristic characteristic in contingent?.Characteristics ?? new List<ArmedForceCharacteristic>())
+            {
+                Append(builder, characteristic?.Key);
+                Append(builder, characteristic?.Value);
+            }
+        }
+        return builder.ToString();
+    }
+
+    private static string BuildCapturedManpowerKey(IEnumerable<BattleExecutionContingentFingerprint> contingents)
+    {
+        StringBuilder builder = new StringBuilder();
+        foreach (BattleExecutionContingentFingerprint contingent in contingents ?? new List<BattleExecutionContingentFingerprint>())
+        {
+            Append(builder, contingent?.ContingentId?.Value);
+            Append(builder, contingent == null ? null : Invariant(contingent.LivingRosterAmount));
+            Append(builder, contingent == null ? null : Invariant(contingent.AvailableAmount));
+            Append(builder, contingent?.ManpowerStateFingerprint);
+        }
+        return builder.ToString();
+    }
+
+    private string BuildCurrentAvailabilityKey(IEnumerable<ContingentRecord> contingents)
+    {
+        StringBuilder builder = new StringBuilder();
+        foreach (ContingentRecord contingent in contingents ?? new List<ContingentRecord>())
+        {
+            Append(builder, contingent?.Id?.Value);
+            Append(builder, contingent != null && TryGetManpowerState(contingent, out ContingentManpowerState state)
+                ? Invariant(state.AvailableAmount)
+                : null);
+        }
+        return builder.ToString();
+    }
+
+    private static string BuildCapturedAvailabilityKey(IEnumerable<BattleExecutionContingentFingerprint> contingents)
+    {
+        StringBuilder builder = new StringBuilder();
+        foreach (BattleExecutionContingentFingerprint contingent in contingents ?? new List<BattleExecutionContingentFingerprint>())
+        {
+            Append(builder, contingent?.ContingentId?.Value);
+            Append(builder, contingent == null ? null : Invariant(contingent.AvailableAmount));
+        }
+        return builder.ToString();
+    }
+
+    private bool TryGetManpowerState(ContingentRecord contingent, out ContingentManpowerState state)
+    {
+        state = null;
+        if (contingent == null || contingent.Id == null) return false;
+        if (manpowerStateStore == null)
+        {
+            state = ContingentManpowerState.FromLegacy(contingent);
+            return true;
+        }
+        return manpowerStateStore.TryGet(contingent.Id, out state)
+            && state != null
+            && state.LivingRosterAmount == contingent.Amount;
     }
 
     private static BattleExecutionPositionFingerprint FindPositionFingerprint(

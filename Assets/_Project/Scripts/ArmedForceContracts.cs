@@ -566,7 +566,11 @@ public enum ArmedForceFoundationFailureCode
     AggregateAmountOverflow = 24,
     InvalidInvariant = 25,
     ContingentOriginMutation = 26,
-    ContingentServiceTypeMutation = 27
+    ContingentServiceTypeMutation = 27,
+    ManpowerAuthorityRequired = 28,
+    ManpowerAmountMutationRequired = 29,
+    ForceHasManagedManpower = 30,
+    ForceCustodiesManagedManpower = 31
 }
 
 public sealed class ArmedForceFoundationFailure : IEquatable<ArmedForceFoundationFailure>

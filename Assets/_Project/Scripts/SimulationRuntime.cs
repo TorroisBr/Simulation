@@ -17,6 +17,7 @@ public sealed class SimulationRuntime
     private readonly PersonStore personStore;
     private readonly SpatialAuthorityStore spatialAuthorityStore;
     private readonly ArmedForceStore armedForceStore;
+    private readonly ContingentManpowerStateStore contingentManpowerStateStore;
     private readonly ArmedForceSpatialStateStore armedForceSpatialStateStore;
     private readonly LocalTopologyStore localTopologyStore;
     private readonly PersistentConflictStore conflictStore;
@@ -66,6 +67,7 @@ public sealed class SimulationRuntime
     public PersonStore PersonStore => personStore;
     public SpatialAuthorityStore SpatialAuthorityStore => spatialAuthorityStore;
     public ArmedForceStore ArmedForceStore => armedForceStore;
+    public ContingentManpowerStateStore ContingentManpowerStateStore => contingentManpowerStateStore;
     public ArmedForceSpatialStateStore ArmedForceSpatialStateStore => armedForceSpatialStateStore;
     public LocalTopologyStore LocalTopologyStore => localTopologyStore;
     public PersistentConflictStore ConflictStore => conflictStore;
@@ -154,7 +156,9 @@ public sealed class SimulationRuntime
         SpatialAuthorityStore spatialAuthorityStore = null,
         ArmedForceSpatialStateStore armedForceSpatialStateStore = null,
         LocalTopologyStore localTopologyStore = null,
-        BattleResolutionPolicy battleResolutionPolicy = null)
+        BattleResolutionPolicy battleResolutionPolicy = null,
+        ContingentManpowerStateStore contingentManpowerStateStore = null,
+        IManpowerSourceSnapshotProvider manpowerSourceProvider = null)
     {
         this.simulationTime = simulationTime ?? throw new ArgumentNullException(nameof(simulationTime));
 
@@ -218,6 +222,21 @@ public sealed class SimulationRuntime
         ArmedForceStore resolvedArmedForceStore = CloneArmedForceStore(
             armedForceStore,
             resolvedPersonStore);
+        if (contingentManpowerStateStore != null
+            && !ReferenceEquals(contingentManpowerStateStore.ArmedForceStore, armedForceStore))
+        {
+            throw new ArgumentException(
+                "The supplied manpower state must belong to the supplied ArmedForceStore.",
+                nameof(contingentManpowerStateStore));
+        }
+        ContingentManpowerStateStore resolvedManpowerStateStore = contingentManpowerStateStore == null
+            ? ContingentManpowerStateStore.CreateLegacyBootstrap(
+                resolvedArmedForceStore,
+                manpowerSourceProvider)
+            : contingentManpowerStateStore.CloneForRuntime(
+                resolvedArmedForceStore,
+                manpowerSourceProvider ?? contingentManpowerStateStore.SourceProvider);
+        resolvedManpowerStateStore.AttachToArmedForceStore();
         LocalTopologyStore resolvedLocalTopologyStore = localTopologyStore
             ?? armedForceSpatialStateStore?.LocalTopologyStore;
         ArmedForceSpatialStateStore resolvedArmedForceSpatialStateStore =
@@ -248,6 +267,7 @@ public sealed class SimulationRuntime
         this.personStore = resolvedPersonStore;
         this.spatialAuthorityStore = resolvedSpatialAuthorityStore;
         this.armedForceStore = resolvedArmedForceStore;
+        this.contingentManpowerStateStore = resolvedManpowerStateStore;
         this.armedForceSpatialStateStore = resolvedArmedForceSpatialStateStore;
         this.localTopologyStore = resolvedLocalTopologyStore;
         this.conflictStore = resolvedConflictStore;
@@ -259,7 +279,8 @@ public sealed class SimulationRuntime
             this.armedForceSpatialStateStore,
             this.spatialAuthorityStore,
             this.localTopologyStore,
-            this.personStore);
+            this.personStore,
+            this.contingentManpowerStateStore);
         this.battleResolutionPolicy = battleResolutionPolicy;
         this.battleOutcomePlanningService = new BattleOutcomePlanningService(
             this.battleExecutionContextBuilder,

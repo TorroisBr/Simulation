@@ -283,6 +283,47 @@ public sealed class WorldStateDiff
                 differences),
             differences);
 
+        ComparePersistentState(
+            "ContingentManpowerStore",
+            before.HasContingentManpowerState,
+            before.ContingentManpowerRevision,
+            after.HasContingentManpowerState,
+            after.ContingentManpowerRevision,
+            differences);
+        CompareEntities("ContingentManpower", before.ContingentManpowerStates, after.ContingentManpowerStates,
+            state => state.ContingentId,
+            (identity, left, right) =>
+            {
+                CompareValue("ContingentManpower", identity, "SourceId",
+                    WorldStateCanonicalWriter.StringValue(left.SourceId),
+                    WorldStateCanonicalWriter.StringValue(right.SourceId), differences);
+                CompareValue("ContingentManpower", identity, "Revision",
+                    WorldStateCanonicalWriter.Int64Value(left.Revision),
+                    WorldStateCanonicalWriter.Int64Value(right.Revision), differences);
+                CompareValue("ContingentManpower", identity, "LivingRosterAmount",
+                    WorldStateCanonicalWriter.Int64Value(left.LivingRosterAmount),
+                    WorldStateCanonicalWriter.Int64Value(right.LivingRosterAmount), differences);
+                CompareValue("ContingentManpower", identity, "AvailableAmount",
+                    WorldStateCanonicalWriter.Int64Value(left.AvailableAmount),
+                    WorldStateCanonicalWriter.Int64Value(right.AvailableAmount), differences);
+                CompareValue("ContingentManpower", identity, "Fingerprint",
+                    WorldStateCanonicalWriter.StringValue(left.Fingerprint),
+                    WorldStateCanonicalWriter.StringValue(right.Fingerprint), differences);
+                CompareValue("ContingentManpower", identity, "SourceResolved",
+                    WorldStateCanonicalWriter.BoolValue(left.SourceResolved),
+                    WorldStateCanonicalWriter.BoolValue(right.SourceResolved), differences);
+                CompareValue("ContingentManpower", identity, "SourceCapacity",
+                    WorldStateCanonicalWriter.NullableInt64Value(left.SourceCapacity),
+                    WorldStateCanonicalWriter.NullableInt64Value(right.SourceCapacity), differences);
+                CompareValue("ContingentManpower", identity, "SourceFactualLivingAmount",
+                    WorldStateCanonicalWriter.NullableInt64Value(left.SourceFactualLivingAmount),
+                    WorldStateCanonicalWriter.NullableInt64Value(right.SourceFactualLivingAmount), differences);
+                CompareValue("ContingentManpower", identity, "SourceFingerprint",
+                    WorldStateCanonicalWriter.StringValue(left.SourceFingerprint),
+                    WorldStateCanonicalWriter.StringValue(right.SourceFingerprint), differences);
+            },
+            differences);
+
         ComparePersistentState("ConflictStore", before.HasConflictState, before.ConflictRevision, after.HasConflictState, after.ConflictRevision, differences);
         CompareEntities("Conflict", before.Conflicts, after.Conflicts,
             conflict => conflict.ConflictId,

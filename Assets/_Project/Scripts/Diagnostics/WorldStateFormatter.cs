@@ -131,6 +131,23 @@ public static class WorldStateSnapshotFormatter
                     .Append('\n');
             }
 
+            if (snapshot.HasContingentManpowerState)
+            {
+                output.Append("\nContingent manpower revision: ")
+                    .Append(WorldStateCanonicalWriter.Int64Value(snapshot.ContingentManpowerRevision.Value))
+                    .Append('\n');
+                foreach (WorldStateContingentManpowerSnapshot state in snapshot.ContingentManpowerStates)
+                {
+                    output.Append("CONTINGENT MANPOWER ")
+                        .Append(Value(state.ContingentId))
+                        .Append(" source ").Append(Value(state.SourceId))
+                        .Append(" living ").Append(WorldStateCanonicalWriter.Int64Value(state.LivingRosterAmount))
+                        .Append(" available ").Append(WorldStateCanonicalWriter.Int64Value(state.AvailableAmount))
+                        .Append(" source-resolved ").Append(WorldStateCanonicalWriter.BoolValue(state.SourceResolved))
+                        .Append('\n');
+                }
+            }
+
         }
 
         if (snapshot.HasArmedForceSpatialState)
