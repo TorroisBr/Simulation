@@ -264,6 +264,83 @@ contract. P7-D7G is the next implementation checkpoint and remains
 **NOT STARTED**; D7 implementation must wait for its canonical promotion.
 At the D6B2 promotion, `docs/SIMULATION_ARCHITECTURE.md` was not changed.
 
+## Checkpoint P7-D7G — Validated feature candidate (not promoted)
+
+- Required canonical baseline: `feee341c7b893ccc7c12f0f76d416598f52c2138`.
+- Feature branch: `codex/phase7/RuntimeAuthoritativeMutationGuard`.
+- Validated implementation candidate before this state update:
+  `eecc6d9649dfceb78d208e432a5405ffebcdbd56`.
+- This is a feature candidate only. `codex/phase7/canonical` was not moved;
+  this state update and the candidate must be externally approved before any
+  canonical promotion. The D7 implementation remains **NOT STARTED** and is
+  not unblocked by this candidate.
+
+### Delivered
+
+- Each `SimulationRuntime` owns one instance-local `Healthy`/`Faulted` guard.
+  Faulting is sticky and internal-only; no gameplay reset or generic
+  transaction/lock framework was added. Stable fault categories are exposed
+  without exception or wall-clock data.
+- Runtime-bound authorities and supported normal-processing systems share
+  that guard. Binding is one-way (same-guard rebinding is idempotent),
+  standalone authorities remain usable while unbound, cross-runtime reuse is
+  rejected, and runtime-owned stores with clone semantics bind their clones.
+- Guarded mutation boundaries include `SimulationTime`, Person lifecycle and
+  `PersonStore`, ArmedForce/manpower, Conflict/War/Battle, spatial/topology,
+  settlement population, genealogy, institutions/offices, property/estate,
+  political claims/factions/support/knowledge/decisions, PlaceContent,
+  crime/justice, directives/commands, travel/parties, merchant knowledge,
+  sites, and expeditions/autonomy. CrimeSystem recursively binds its nested
+  TravelSystem even when the top-level travel-system input is absent or is a
+  different system. A bound TravelSystem cannot replace or clear its attached
+  party store; standalone attachment behavior remains available.
+- Bound `SimulationTime.AdvanceDay` rejects explicitly by exception for
+  compatibility; `TryAdvanceDay` returns `RuntimeFaulted`. Runtime
+  `TryAdvanceDay(s)` rejects before clock, daily systems, RNG, allocators, or
+  sequences; legacy `AdvanceDay(s)` delegate through that boundary. Healthy
+  daily processing order remains unchanged.
+- Reads, queries, and diagnostics remain available while faulted. Guard health
+  is operational status and is not added to causal world snapshots. An
+  internal population snapshot restore remains usable under the sticky latch.
+
+### Supported guarantee and known boundary
+
+The guarantee is that **supported runtime-owned authoritative mutation and
+normal processing are blocked while Faulted**. It does not freeze every object
+reachable in memory. Direct calls through externally retained legacy
+`NpcRuntime` mutators/child references and `CityRuntime` methods such as
+`SimulateProductionDay` remain unsupported out-of-bound mutation paths. Normal
+`SimulationRuntime` day processing and composed travel/crime/justice/merchant/
+expedition entrypoints are guarded before their effects. This is an explicit
+encapsulation limitation, not a claim that all mutable objects are frozen.
+
+### Validation and independent review
+
+- D7G focused guard: `18/18`; runtime system guard entrypoints: `4/4` crime,
+  directives, and commands; `3/3` travel/expedition. Runtime orchestration:
+  `10/10`.
+- Person: `134/134`; lifecycle: `40/40`; Population: `137/137`;
+  AggregateDemography: `23/23`.
+- ArmedForce: `30/30`; MilitaryManpowerFoundation: `11/11`; combined manpower
+  filter: `37/37`; Persistent Conflict/War/Battle: `8/8`.
+- D6B2: `21/21`; D6B1: `23/23`; D6A: `11/11`; D5: `16/16`; D4: `10/10`;
+  D3: `11/11`; D2: `11/11`; D1: `7/7`; D0: `8/8`; ConflictFoundation:
+  `16/16`.
+- Travel scouting/group: `11/11`, `30/30`; expedition exploration/correction/
+  autonomy: `24/24`, `32/32`, `46/46`; CrimeSocialAppraisal: `12/12`;
+  EconomyTransaction: `33/33`; MerchantLiquidity: `9/9`;
+  CommercialKnowledgeSharing: `7/7`.
+- Political: `59/59`; Institution: `44/44`; Property: `21/21`.
+- Final ALL EditMode: `1626/1626`; official complete EditMode `Smoke`:
+  `5/5`; `SimulationRuntimeLongRunTests`: `7/7`; `git diff --check` is clean.
+- Independent read-only conformance review found no remaining blocker after
+  verifying nested CrimeSystem travel binding, post-bind party-store stability,
+  and faulted population/restore coverage. The review confirmed the documented
+  legacy-reference boundary; it did not claim whole-object-graph immutability.
+- `docs/SIMULATION_ARCHITECTURE.md` is unchanged. D7G remains a validated
+  feature candidate awaiting external approval and separate canonical
+  promotion; D7 remains **NOT STARTED**.
+
 # Historical record — Checkpoint D5 — Canonical Promotion
 
 ## D5 baseline, integration, and canonical status
