@@ -106,14 +106,41 @@
 - `git diff --check` is clean for the final integration state. `AdvanceDay`
   has no diff; no long-run test was required because daily behavior is unchanged.
 
+## Checkpoint D6B1 — Validated feature candidate (not promoted)
+
+- Canonical baseline remains `1c3fa501e6cfb45a7eec3fbfb7386848d3d1c6af` on
+  `codex/phase7/canonical`. D6B1 feature branch:
+  `codex/phase7/ManpowerSourceConsequencePlanning`.
+- Implementation commit:
+  `dd28f201561ad51a3c33a979d4ac824b6136bf77`. This is a feature candidate
+  only; it has not been integrated or promoted to canonical.
+- `SimulationRuntime` composes explicit `ManpowerSourceId` to exact
+  `CityRuntime` registrations. Each registration supplies military capacity
+  independently from factual living population and binds the settlement death
+  planner. Duplicate source IDs, duplicate settlement authorities, foreign
+  city instances, and cross-`SimulationRuntime` registry reuse are rejected.
+  Existing arbitrary D6A snapshot providers remain supported when no D6B1
+  settlement registrations are supplied; a snapshot alone does not imply a
+  consequence planner.
+- Positive aggregate Death effects produce an immutable typed
+  `AggregateDemographyTransition` proposal. Planning and freshness validation
+  are non-mutating, use the current represented-resident floor from
+  `SettlementPopulationPresenceQuery`, reject amounts above `Int32.MaxValue`,
+  and use a deterministic dependency fingerprint limited to source/settlement,
+  population revision/current value, represented floor, planner identity and
+  version, and effect kind/amount. No arbitrary domain payload is carried.
+- Focused D6B1: `23/23`; D6A manpower foundation: `11/11`; aggregate demography:
+  `23/23`. ALL EditMode: `1580/1580`. Official EditMode `Smoke`: `5/5`.
+  `git diff --check` is clean. Independent review found no remaining blocker.
+  `SimulationRuntime.AdvanceDay` is unchanged, so no long-run suite was needed.
+
 ### Boundaries and next checkpoint
 
-D6B1, D6B2, and D7 are **NOT STARTED**. D6B1 is the next implementation
-checkpoint; its architecture is already consolidated in the canonical
-architecture baseline above. D6B2 follows D6B1, and D7 remains the later
-atomic application boundary. Do not infer casualties, accept or apply a Battle
-outcome, mark a Battle Resolved, mutate population/Person state, emit outcome
-history, or add daily military behavior from D6A.
+D6B1 is a validated feature candidate awaiting integration/approval and is not
+canonical. D6B2 and D7 remain **NOT STARTED**. D6B2 follows D6B1, and D7 remains
+the later atomic application boundary. Do not infer casualties, accept or apply
+a Battle outcome, mark a Battle Resolved, mutate population/Person state, emit
+outcome history, or add daily military behavior from D6A/D6B1.
 
 Cross-host equivalence of D4's existing floating-point arithmetic remains an
 unrelated open limitation.
