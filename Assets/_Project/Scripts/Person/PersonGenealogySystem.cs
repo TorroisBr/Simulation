@@ -12,7 +12,8 @@ public enum PersonGenealogyFailure
     DuplicateParentage = 7,
     WouldCreateCycle = 8,
     ParentageNotFound = 9,
-    StoreFailure = 10
+    StoreFailure = 10,
+    RuntimeFaulted = 11
 }
 
 /// <summary>
@@ -153,6 +154,8 @@ public static class PersonGenealogySystem
 
         switch (failure.Code)
         {
+            case GenealogyFailureCode.RuntimeFaulted:
+                return PersonGenealogyFailure.RuntimeFaulted;
             case GenealogyFailureCode.InvalidParent:
                 return PersonGenealogyFailure.InvalidParent;
             case GenealogyFailureCode.InvalidChild:

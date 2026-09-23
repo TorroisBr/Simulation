@@ -141,6 +141,54 @@ public sealed class RuntimeAuthoritativeMutationGuardTests
     }
 
     [Test]
+    public void RuntimeOwnedGenealogyRejectsMutationWithoutRevisionChange()
+    {
+        PersonStore people = new PersonStore();
+        PersonRuntime parent = new PersonRuntime(new PersonId("guarded-parent"));
+        PersonRuntime child = new PersonRuntime(new PersonId("guarded-child"));
+        Assert.That(people.TryRegister(parent, out _), Is.True);
+        Assert.That(people.TryRegister(child, out _), Is.True);
+        SimulationRuntime runtime = new SimulationRuntime(new SimulationTime(), null, null, personStore: people);
+        Assert.That(runtime.TryAddParentage(parent.PersonId, child.PersonId, out _), Is.True);
+        long worldRevision = runtime.PoliticalWorldRevision;
+        int genealogyCount = runtime.GenealogyRecords.Count;
+        PersonRuntime secondChild = new PersonRuntime(new PersonId("guarded-second-child"));
+        Assert.That(runtime.TryRegisterPerson(secondChild, out _), Is.True);
+        worldRevision = runtime.PoliticalWorldRevision;
+        MarkFaulted(runtime, AuthoritativeMutationFaultReason.RollbackRestoreFailed);
+
+        Assert.That(runtime.TryAddParentage(parent.PersonId, secondChild.PersonId, out PersonGenealogyFailure failure), Is.False);
+        Assert.That(failure, Is.EqualTo(PersonGenealogyFailure.RuntimeFaulted));
+        Assert.That(runtime.GenealogyRecords.Count, Is.EqualTo(genealogyCount));
+        Assert.That(runtime.PoliticalWorldRevision, Is.EqualTo(worldRevision));
+        Assert.That(runtime.ContainsParentage(parent.PersonId, child.PersonId), Is.True);
+    }
+
+    [Test]
+    public void RuntimeOwnedPlaceContentRejectsMutationAndRemainsReadable()
+    {
+        PlaceContentStore placeContent = new PlaceContentStore();
+        SimulationRuntime runtime = new SimulationRuntime(
+            new SimulationTime(), null, null, placeContentStore: placeContent);
+        LocalPlaceRuntime place = new LocalPlaceRuntime("guarded-content-place");
+        PlaceContentOwnerReference owner = PlaceContentOwnerReference.ForLocalPlace(place, "macro-location");
+        PlaceContentRuntime contents = placeContent.GetOrCreate(owner);
+        Assert.That(placeContent.Places.Count, Is.EqualTo(1));
+        MarkFaulted(runtime, AuthoritativeMutationFaultReason.IntegrityRestoreFailed);
+
+        Assert.That(placeContent.TryAddStack(
+            owner,
+            null,
+            1,
+            PlaceContentPersistencePolicy.Durable,
+            out PlaceContentStackRuntime stack), Is.False);
+        Assert.That(stack, Is.Null);
+        Assert.That(contents.StackedContent.Count, Is.Zero);
+        Assert.That(placeContent.TryGet(owner, out PlaceContentRuntime readContent), Is.True);
+        Assert.That(readContent, Is.SameAs(contents));
+    }
+
+    [Test]
     public void OrdinaryInvalidDayCountDoesNotFaultRuntime()
     {
         SimulationRuntime runtime = new SimulationRuntime(new SimulationTime(), null, null);
