@@ -10,5 +10,7 @@ public enum WorldNpcRegistryFailure
     NpcNotRegistered = 4,
     NpcHasResidence = 5,
     NpcPersonBindingInvalid = 6,
-    NpcBoundToPerson = 7
+    NpcBoundToPerson = 7,
+    RuntimeFaulted = 8,
+    AlreadyOwnedByAnotherRuntime = 9
 }

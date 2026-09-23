@@ -1,9 +1,17 @@
 using System;
 
+public enum SimulationTimeAdvanceFailure
+{
+    None = 0,
+    RuntimeFaulted = 1,
+    AbsoluteDayOverflow = 2
+}
+
 [Serializable]
-public sealed class SimulationTime
+public sealed class SimulationTime : IAuthoritativeMutationGuardBindable
 {
     private long absoluteDay;
+    private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
 
     public long AbsoluteDay => absoluteDay;
 
@@ -24,12 +32,51 @@ public sealed class SimulationTime
 
     public void AdvanceDay()
     {
+        if (!TryAdvanceDay(out SimulationTimeAdvanceFailure failure))
+        {
+            throw new InvalidOperationException(failure == SimulationTimeAdvanceFailure.RuntimeFaulted
+                ? "A faulted SimulationRuntime cannot advance its SimulationTime."
+                : "SimulationTime cannot advance beyond the maximum AbsoluteDay.");
+        }
+    }
+
+    public bool TryAdvanceDay(out SimulationTimeAdvanceFailure failure)
+    {
+        if (!mutationGuardBinding.CanMutate)
+        {
+            failure = SimulationTimeAdvanceFailure.RuntimeFaulted;
+            return false;
+        }
+
         if (absoluteDay == long.MaxValue)
         {
-            throw new InvalidOperationException("SimulationTime cannot advance beyond the maximum AbsoluteDay.");
+            failure = SimulationTimeAdvanceFailure.AbsoluteDayOverflow;
+            return false;
         }
 
         absoluteDay++;
+        failure = SimulationTimeAdvanceFailure.None;
+        return true;
+    }
+
+    internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return mutationGuardBinding.CanBindTo(guard);
+    }
+
+    internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return mutationGuardBinding.TryBindTo(guard);
+    }
+
+    bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return CanBindMutationGuard(guard);
+    }
+
+    bool IAuthoritativeMutationGuardBindable.TryBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return TryBindMutationGuard(guard);
     }
 }
 

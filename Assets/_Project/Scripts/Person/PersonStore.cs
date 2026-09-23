@@ -11,14 +11,16 @@ public enum PersonStoreFailure
     InvalidNpcRuntimeId = 5,
     NpcAlreadyBoundToAnotherPerson = 6,
     BirthAbsoluteDayInFuture = 7,
-    DeathAbsoluteDayInFuture = 8
+    DeathAbsoluteDayInFuture = 8,
+    RuntimeFaulted = 9
 }
 
 /// <summary>
 /// World-owned registry of lightweight Persons and their optional materialization binding.
 /// </summary>
-public sealed class PersonStore
+public sealed class PersonStore : IAuthoritativeMutationGuardBindable
 {
+    private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
     private readonly Dictionary<PersonId, PersonRuntime> personsById =
         new Dictionary<PersonId, PersonRuntime>();
     private readonly Dictionary<string, PersonRuntime> personsByNpcRuntimeId =
@@ -36,6 +38,12 @@ public sealed class PersonStore
     public bool TryRegister(PersonRuntime person, out PersonStoreFailure failure)
     {
         failure = PersonStoreFailure.None;
+
+        if (!mutationGuardBinding.CanMutate)
+        {
+            failure = PersonStoreFailure.RuntimeFaulted;
+            return false;
+        }
 
         if (person == null || person.PersonId == null)
         {
@@ -142,6 +150,12 @@ public sealed class PersonStore
     {
         failure = PersonStoreFailure.None;
 
+        if (!mutationGuardBinding.CanMutate)
+        {
+            failure = PersonStoreFailure.RuntimeFaulted;
+            return false;
+        }
+
         if (personId == null)
         {
             failure = PersonStoreFailure.InvalidPerson;
@@ -184,6 +198,11 @@ public sealed class PersonStore
 
     internal bool TryUnbindMaterializedNpc(PersonId personId, string npcRuntimeId)
     {
+        if (!mutationGuardBinding.CanMutate)
+        {
+            return false;
+        }
+
         if (personId == null || string.IsNullOrWhiteSpace(npcRuntimeId) == true)
         {
             return false;
@@ -197,5 +216,25 @@ public sealed class PersonStore
 
         personsByNpcRuntimeId.Remove(npcRuntimeId);
         return true;
+    }
+
+    internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return mutationGuardBinding.CanBindTo(guard);
+    }
+
+    internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return mutationGuardBinding.TryBindTo(guard);
+    }
+
+    bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return CanBindMutationGuard(guard);
+    }
+
+    bool IAuthoritativeMutationGuardBindable.TryBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return TryBindMutationGuard(guard);
     }
 }

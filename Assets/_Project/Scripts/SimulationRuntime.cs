@@ -2,8 +2,17 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
+public enum SimulationRuntimeAdvanceFailure
+{
+    None = 0,
+    RuntimeFaulted = 1,
+    InvalidDayCount = 2,
+    AbsoluteDayOverflow = 3
+}
+
 public sealed class SimulationRuntime
 {
+    private readonly AuthoritativeMutationGuard mutationGuard = new AuthoritativeMutationGuard();
     private readonly SimulationTime simulationTime;
     private readonly List<CityRuntime> cities;
     private readonly List<NpcRuntime> npcRuntimes;
@@ -63,6 +72,9 @@ public sealed class SimulationRuntime
     private readonly SimulationLogger logger;
 
     public SimulationTime SimulationTime => simulationTime;
+    public AuthoritativeMutationHealth MutationHealth => mutationGuard.Health;
+    public bool IsMutationFaulted => mutationGuard.Health == AuthoritativeMutationHealth.Faulted;
+    public AuthoritativeMutationFaultReason MutationFaultReason => mutationGuard.FaultReason;
     public long CurrentDay => simulationTime.AbsoluteDay;
     public IReadOnlyList<CityRuntime> Cities => cities;
     public EffectiveSimulationConfiguration Configuration => configuration;
@@ -106,7 +118,11 @@ public sealed class SimulationRuntime
     {
         get
         {
-            RefreshPoliticalWorldRevisionFromExposedStores();
+            if (mutationGuard.CanMutate)
+            {
+                RefreshPoliticalWorldRevisionFromExposedStores();
+            }
+
             return politicalWorldRevision;
         }
     }
@@ -172,6 +188,13 @@ public sealed class SimulationRuntime
         BattleDirectConsequencePolicy battleDirectConsequencePolicy = null)
     {
         this.simulationTime = simulationTime ?? throw new ArgumentNullException(nameof(simulationTime));
+        if (this.simulationTime.CanBindMutationGuard(mutationGuard) == false)
+        {
+            throw new ArgumentException(
+                "The supplied SimulationTime is already bound to another SimulationRuntime.",
+                nameof(simulationTime));
+        }
+
         List<CityRuntime> resolvedCities = cities != null
             ? new List<CityRuntime>(cities)
             : new List<CityRuntime>();
@@ -234,6 +257,13 @@ public sealed class SimulationRuntime
         }
 
         PersonStore resolvedPersonStore = personStore ?? new PersonStore();
+        if (resolvedPersonStore.CanBindMutationGuard(mutationGuard) == false)
+        {
+            throw new ArgumentException(
+                "The supplied PersonStore is already bound to another SimulationRuntime.",
+                nameof(personStore));
+        }
+
         if (politicalWorldRevision.HasValue && politicalWorldRevision.Value < 0L)
         {
             throw new ArgumentOutOfRangeException(
@@ -471,6 +501,42 @@ public sealed class SimulationRuntime
             this,
             this.battleDirectConsequencePolicy);
 
+        BindCoreMutationGuardAuthorities();
+
+    }
+
+    private void BindCoreMutationGuardAuthorities()
+    {
+        IAuthoritativeMutationGuardBindable[] authorities =
+        {
+            simulationTime,
+            personStore
+        };
+
+        foreach (IAuthoritativeMutationGuardBindable authority in authorities)
+        {
+            if (authority == null || authority.CanBindMutationGuard(mutationGuard) == false)
+            {
+                throw new InvalidOperationException(
+                    "A mutable SimulationRuntime input became bound to another runtime during composition.");
+            }
+        }
+
+        foreach (IAuthoritativeMutationGuardBindable authority in authorities)
+        {
+            if (authority.TryBindMutationGuard(mutationGuard) == false)
+            {
+                throw new InvalidOperationException(
+                    "A mutable SimulationRuntime input could not bind to its runtime mutation guard.");
+            }
+        }
+    }
+
+    internal AuthoritativeMutationGuard MutationGuard => mutationGuard;
+
+    internal void MarkAuthoritativeMutationFaulted(AuthoritativeMutationFaultReason reason)
+    {
+        mutationGuard.MarkFaulted(reason);
     }
 
     /// <summary>
@@ -480,6 +546,12 @@ public sealed class SimulationRuntime
     public bool TryRegisterNpc(NpcRuntime npcRuntime, out WorldNpcRegistryFailure failure)
     {
         failure = WorldNpcRegistryFailure.None;
+
+        if (mutationGuard.CanMutate == false)
+        {
+            failure = WorldNpcRegistryFailure.RuntimeFaulted;
+            return false;
+        }
 
         if (npcRuntime == null)
         {
@@ -537,6 +609,12 @@ public sealed class SimulationRuntime
     public bool TryUnregisterNpc(string runtimeId, out WorldNpcRegistryFailure failure)
     {
         failure = WorldNpcRegistryFailure.None;
+
+        if (mutationGuard.CanMutate == false)
+        {
+            failure = WorldNpcRegistryFailure.RuntimeFaulted;
+            return false;
+        }
 
         if (string.IsNullOrWhiteSpace(runtimeId) == true)
         {
@@ -2044,7 +2122,35 @@ public sealed class SimulationRuntime
 
     public void AdvanceDay()
     {
-        simulationTime.AdvanceDay();
+        if (TryAdvanceDay(out SimulationRuntimeAdvanceFailure failure) == false)
+        {
+            throw CreateAdvanceFailureException(failure);
+        }
+    }
+
+    public bool TryAdvanceDay(out SimulationRuntimeAdvanceFailure failure)
+    {
+        failure = SimulationRuntimeAdvanceFailure.None;
+        if (mutationGuard.CanMutate == false)
+        {
+            failure = SimulationRuntimeAdvanceFailure.RuntimeFaulted;
+            return false;
+        }
+
+        if (simulationTime.TryAdvanceDay(out SimulationTimeAdvanceFailure timeFailure) == false)
+        {
+            failure = timeFailure == SimulationTimeAdvanceFailure.RuntimeFaulted
+                ? SimulationRuntimeAdvanceFailure.RuntimeFaulted
+                : SimulationRuntimeAdvanceFailure.AbsoluteDayOverflow;
+            return false;
+        }
+
+        AdvanceDayAfterClockAdvance();
+        return true;
+    }
+
+    private void AdvanceDayAfterClockAdvance()
+    {
         placeContentStore?.AdvanceDays(1);
         logger?.BeginDay(CurrentDay);
         lastDailyDemographyReport = DailyDemographicSystem.Advance(
@@ -2148,6 +2254,14 @@ public sealed class SimulationRuntime
         }
 
         expeditionSystem?.ReconcileAfterTravel(arrivedNpcs);
+    }
+
+    private static InvalidOperationException CreateAdvanceFailureException(
+        SimulationRuntimeAdvanceFailure failure)
+    {
+        return failure == SimulationRuntimeAdvanceFailure.AbsoluteDayOverflow
+            ? new InvalidOperationException("SimulationTime cannot advance beyond the maximum AbsoluteDay.")
+            : new InvalidOperationException("A faulted SimulationRuntime cannot advance its world.");
     }
 
     internal GenealogyStore GenealogyStoreForWorldBoundary => genealogyStore;
@@ -3038,10 +3152,55 @@ public sealed class SimulationRuntime
             throw new ArgumentOutOfRangeException(nameof(dayCount), dayCount, "dayCount cannot be negative.");
         }
 
+        if (dayCount == 0)
+        {
+            return;
+        }
+
+        if (TryAdvanceDays(
+                dayCount,
+                out _,
+                out SimulationRuntimeAdvanceFailure failure) == false)
+        {
+            throw CreateAdvanceFailureException(failure);
+        }
+    }
+
+    public bool TryAdvanceDays(
+        int dayCount,
+        out int daysAdvanced,
+        out SimulationRuntimeAdvanceFailure failure)
+    {
+        daysAdvanced = 0;
+        failure = SimulationRuntimeAdvanceFailure.None;
+        if (dayCount < 0)
+        {
+            failure = SimulationRuntimeAdvanceFailure.InvalidDayCount;
+            return false;
+        }
+
+        if (dayCount == 0)
+        {
+            return true;
+        }
+
+        if (mutationGuard.CanMutate == false)
+        {
+            failure = SimulationRuntimeAdvanceFailure.RuntimeFaulted;
+            return false;
+        }
+
         for (int i = 0; i < dayCount; i++)
         {
-            AdvanceDay();
+            if (TryAdvanceDay(out failure) == false)
+            {
+                return false;
+            }
+
+            daysAdvanced++;
         }
+
+        return true;
     }
 
     private void BeginSimulationDay()
