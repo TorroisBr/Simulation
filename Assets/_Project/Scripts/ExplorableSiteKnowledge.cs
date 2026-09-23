@@ -173,8 +173,10 @@ public sealed class ExplorableSiteKnowledgeRuntime
     }
 }
 
-public sealed class ExplorableSiteKnowledgeSystem
+public sealed class ExplorableSiteKnowledgeSystem : IAuthoritativeMutationGuardBindable
 {
+    private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
+
     public bool RecordInitialScenarioKnowledge(
         NpcRuntime npcRuntime,
         ExplorableSiteRuntime siteRuntime,
@@ -206,6 +208,11 @@ public sealed class ExplorableSiteKnowledgeSystem
         long observedDay,
         ExplorableSiteKnowledgeSource source)
     {
+        if (!mutationGuardBinding.CanMutate)
+        {
+            return false;
+        }
+
         if (npcRuntime == null || siteRuntime == null || siteRuntime.Location == null)
         {
             return false;
@@ -225,5 +232,25 @@ public sealed class ExplorableSiteKnowledgeSystem
         }
 
         return recorded;
+    }
+
+    internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return mutationGuardBinding.CanBindTo(guard);
+    }
+
+    internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return mutationGuardBinding.TryBindTo(guard);
+    }
+
+    bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return CanBindMutationGuard(guard);
+    }
+
+    bool IAuthoritativeMutationGuardBindable.TryBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return TryBindMutationGuard(guard);
     }
 }

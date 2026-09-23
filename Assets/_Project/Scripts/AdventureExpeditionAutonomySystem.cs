@@ -14,7 +14,7 @@ public sealed class AdventureExpeditionAutonomySettings
     public int CommonResourceRetrievalAmount = 1;
 }
 
-public sealed class AdventureExpeditionAutonomySystem
+public sealed class AdventureExpeditionAutonomySystem : IAuthoritativeMutationGuardBindable
 {
     private readonly AdventureAutonomySystem candidateSystem;
     private readonly AdventureSiteIntelKnowledgeSystem intelSystem;
@@ -31,6 +31,7 @@ public sealed class AdventureExpeditionAutonomySystem
     private readonly IAdventureItemDefinitionResolver itemResolver;
     private readonly SimulationTime simulationTime;
     private readonly AdventureExpeditionAutonomySettings settings;
+    private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
     private readonly HashSet<string> reservedToday = new HashSet<string>(StringComparer.Ordinal);
     private readonly HashSet<string> failedExecutionKeys = new HashSet<string>(StringComparer.Ordinal);
     private long reservationDay = -1L;
@@ -74,6 +75,8 @@ public sealed class AdventureExpeditionAutonomySystem
 
     public void BeginDay()
     {
+        ThrowIfFaulted();
+
         if (reservationDay == simulationTime.AbsoluteDay)
         {
             return;
@@ -86,12 +89,21 @@ public sealed class AdventureExpeditionAutonomySystem
 
     public bool IsReservedToday(string npcRuntimeId)
     {
-        BeginDay();
+        if (mutationGuardBinding.CanMutate)
+        {
+            BeginDay();
+        }
+
         return string.IsNullOrWhiteSpace(npcRuntimeId) == false && reservedToday.Contains(npcRuntimeId);
     }
 
     public bool TryStartAutonomousExpedition(NpcRuntime decisionMaker, IReadOnlyList<NpcRuntime> availableNpcs)
     {
+        if (!mutationGuardBinding.CanMutate)
+        {
+            return false;
+        }
+
         BeginDay();
         if (decisionMaker == null
             || reservedToday.Contains(decisionMaker.RuntimeId)
@@ -155,6 +167,7 @@ public sealed class AdventureExpeditionAutonomySystem
 
     public void AdvanceActiveExpeditions()
     {
+        ThrowIfFaulted();
         BeginDay();
         List<ExpeditionRuntime> active = new List<ExpeditionRuntime>(expeditionStore.ActiveExpeditions);
         foreach (ExpeditionRuntime expedition in active)
@@ -174,6 +187,60 @@ public sealed class AdventureExpeditionAutonomySystem
                 TryAdvanceExploration(expedition);
             }
         }
+    }
+
+    internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return mutationGuardBinding.CanBindTo(guard)
+            && simulationTime.CanBindMutationGuard(guard)
+            && CanBindNested(expeditionSystem, guard)
+            && CanBindNested(siteStore, guard)
+            && CanBindNested(topologyStore, guard)
+            && CanBindNested(contentStore, guard);
+    }
+
+    internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        if (!CanBindMutationGuard(guard) || !mutationGuardBinding.TryBindTo(guard))
+        {
+            return false;
+        }
+
+        return simulationTime.TryBindMutationGuard(guard)
+            && TryBindNested(expeditionSystem, guard)
+            && TryBindNested(siteStore, guard)
+            && TryBindNested(topologyStore, guard)
+            && TryBindNested(contentStore, guard);
+    }
+
+    bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return CanBindMutationGuard(guard);
+    }
+
+    bool IAuthoritativeMutationGuardBindable.TryBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return TryBindMutationGuard(guard);
+    }
+
+    private void ThrowIfFaulted()
+    {
+        if (!mutationGuardBinding.CanMutate)
+        {
+            throw new InvalidOperationException("A faulted SimulationRuntime cannot process autonomous expeditions.");
+        }
+    }
+
+    private static bool CanBindNested(object nested, AuthoritativeMutationGuard guard)
+    {
+        IAuthoritativeMutationGuardBindable bindable = nested as IAuthoritativeMutationGuardBindable;
+        return bindable == null || bindable.CanBindMutationGuard(guard);
+    }
+
+    private static bool TryBindNested(object nested, AuthoritativeMutationGuard guard)
+    {
+        IAuthoritativeMutationGuardBindable bindable = nested as IAuthoritativeMutationGuardBindable;
+        return bindable == null || bindable.TryBindMutationGuard(guard);
     }
 
     private void TryBeginExploration(ExpeditionRuntime expedition)

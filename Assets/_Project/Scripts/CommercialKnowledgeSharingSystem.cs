@@ -1,11 +1,12 @@
 using System;
 using System.Collections.Generic;
 
-public sealed class CommercialKnowledgeSharingSystem
+public sealed class CommercialKnowledgeSharingSystem : IAuthoritativeMutationGuardBindable
 {
     private readonly SimulationTime simulationTime;
     private readonly int maxSharedObservationsPerInteraction;
     private readonly CommercialKnowledgePolicy knowledgePolicy;
+    private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
 
     public CommercialKnowledgeSharingSystem(
         SimulationTime simulationTime,
@@ -20,6 +21,11 @@ public sealed class CommercialKnowledgeSharingSystem
 
     public void ShareAmongPresentMerchants(IReadOnlyList<NpcRuntime> npcRuntimes)
     {
+        if (!mutationGuardBinding.CanMutate)
+        {
+            throw new InvalidOperationException("A faulted SimulationRuntime cannot share commercial knowledge.");
+        }
+
         if (npcRuntimes == null)
         {
             return;
@@ -66,6 +72,31 @@ public sealed class CommercialKnowledgeSharingSystem
 
             groupStart = groupEnd;
         }
+    }
+
+    internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return mutationGuardBinding.CanBindTo(guard) && simulationTime.CanBindMutationGuard(guard);
+    }
+
+    internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        if (!CanBindMutationGuard(guard) || !mutationGuardBinding.TryBindTo(guard))
+        {
+            return false;
+        }
+
+        return simulationTime.TryBindMutationGuard(guard);
+    }
+
+    bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return CanBindMutationGuard(guard);
+    }
+
+    bool IAuthoritativeMutationGuardBindable.TryBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return TryBindMutationGuard(guard);
     }
 
     private Dictionary<string, IReadOnlyList<ShareableObservation>> CapturePhaseSnapshots(List<NpcRuntime> merchants)

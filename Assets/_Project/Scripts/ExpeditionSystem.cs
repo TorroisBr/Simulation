@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-public sealed class ExpeditionSystem
+public sealed class ExpeditionSystem : IAuthoritativeMutationGuardBindable
 {
     private static readonly ActionParticipationRequirements ExpeditionRequirements =
         new ActionParticipationRequirements(
@@ -26,6 +26,7 @@ public sealed class ExpeditionSystem
     private readonly PlaceContentStore placeContentStore;
     private readonly LocalTopologyStore localTopologyStore;
     private SimulationRuntime worldRuntime;
+    private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
 
     public ExpeditionStore Store => expeditionStore;
 
@@ -89,6 +90,11 @@ public sealed class ExpeditionSystem
         out ExpeditionRuntime expedition)
     {
         expedition = null;
+
+        if (!mutationGuardBinding.CanMutate)
+        {
+            return false;
+        }
 
         if (TryPrepareStart(targetSite, context, out ExpeditionPreparation preparation, out string reason) == false)
         {
@@ -203,6 +209,11 @@ public sealed class ExpeditionSystem
 
     public bool TryBeginExploration(ExpeditionRuntime expedition, out string reason)
     {
+        if (RejectIfFaulted(out reason))
+        {
+            return false;
+        }
+
         if (CanBeginExploration(expedition, out reason) == false)
         {
             return false;
@@ -247,6 +258,11 @@ public sealed class ExpeditionSystem
 
     public bool TryContinueExploration(ExpeditionRuntime expedition, out string reason)
     {
+        if (RejectIfFaulted(out reason))
+        {
+            return false;
+        }
+
         if (CanContinueExploration(expedition, out reason) == false)
         {
             return false;
@@ -291,7 +307,11 @@ public sealed class ExpeditionSystem
         LocalPlaceRuntime place,
         out string reason)
     {
-        reason = null;
+        if (RejectIfFaulted(out reason))
+        {
+            return false;
+        }
+
         if (CanContinueExploration(expedition, out reason) == false)
         {
             return false;
@@ -355,7 +375,11 @@ public sealed class ExpeditionSystem
         LocalTopologyConnectionRuntime connection,
         out string reason)
     {
-        reason = null;
+        if (RejectIfFaulted(out reason))
+        {
+            return false;
+        }
+
         if (CanContinueExploration(expedition, out reason) == false)
         {
             return false;
@@ -421,6 +445,11 @@ public sealed class ExpeditionSystem
         int amount,
         out string reason)
     {
+        if (RejectIfFaulted(out reason))
+        {
+            return false;
+        }
+
         ExplorableSiteRuntime site = expedition != null
             ? explorableSiteStore.GetByRuntimeId(expedition.TargetSiteRuntimeId)
             : null;
@@ -442,7 +471,11 @@ public sealed class ExpeditionSystem
         int amount,
         out string reason)
     {
-        reason = null;
+        if (RejectIfFaulted(out reason))
+        {
+            return false;
+        }
+
         if (CanContinueExploration(expedition, out reason) == false
             || placeContentStore == null
             || owner == null
@@ -492,7 +525,11 @@ public sealed class ExpeditionSystem
         out string reason)
     {
         notable = null;
-        reason = null;
+        if (RejectIfFaulted(out reason))
+        {
+            return false;
+        }
+
         if (expedition == null || expedition.PerformerRuntimeIds.Count == 0
             || identityRegistry.TryGetNpc(expedition.PerformerRuntimeIds[0], out NpcRuntime performer) == false)
         {
@@ -511,7 +548,11 @@ public sealed class ExpeditionSystem
         out string reason)
     {
         notable = null;
-        reason = null;
+        if (RejectIfFaulted(out reason))
+        {
+            return false;
+        }
+
         if (CanContinueExploration(expedition, out reason) == false
             || placeContentStore == null
             || string.IsNullOrWhiteSpace(notableItemRuntimeId) == true
@@ -578,7 +619,11 @@ public sealed class ExpeditionSystem
         out string reason)
     {
         result = null;
-        reason = null;
+        if (RejectIfFaulted(out reason))
+        {
+            return false;
+        }
+
         if (CanContinueExploration(expedition, out reason) == false
             || placeContentStore == null)
         {
@@ -708,7 +753,11 @@ public sealed class ExpeditionSystem
 
     public bool TryBeginReturn(ExpeditionRuntime expedition, out string reason)
     {
-        reason = null;
+        if (RejectIfFaulted(out reason))
+        {
+            return false;
+        }
+
         if (TryValidateActiveExpedition(expedition, out reason) == false
             || expedition.CanBeginReturn() == false)
         {
@@ -981,6 +1030,8 @@ public sealed class ExpeditionSystem
 
     public IReadOnlyList<ExpeditionRuntime> ReconcileAfterTravel(IReadOnlyList<NpcRuntime> arrivedNpcs)
     {
+        ThrowIfFaulted();
+
         List<ExpeditionRuntime> arrivedExpeditions = new List<ExpeditionRuntime>();
         List<ExpeditionRuntime> activeExpeditions = new List<ExpeditionRuntime>(expeditionStore.ActiveExpeditions);
 
@@ -1046,6 +1097,79 @@ public sealed class ExpeditionSystem
         }
 
         return arrivedExpeditions.AsReadOnly();
+    }
+
+    internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return mutationGuardBinding.CanBindTo(guard)
+            && (worldRuntime == null || ReferenceEquals(worldRuntime.MutationGuard, guard))
+            && simulationTime.CanBindMutationGuard(guard)
+            && CanBindNested(expeditionStore, guard)
+            && CanBindNested(explorableSiteStore, guard)
+            && CanBindNested(travelPartySystem, guard)
+            && CanBindNested(travelPartyStore, guard)
+            && CanBindNested(explorableSiteKnowledgeSystem, guard)
+            && CanBindNested(placeContentStore, guard)
+            && CanBindNested(localTopologyStore, guard);
+    }
+
+    internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        if (!CanBindMutationGuard(guard) || !mutationGuardBinding.TryBindTo(guard))
+        {
+            return false;
+        }
+
+        return simulationTime.TryBindMutationGuard(guard)
+            && TryBindNested(expeditionStore, guard)
+            && TryBindNested(explorableSiteStore, guard)
+            && TryBindNested(travelPartySystem, guard)
+            && TryBindNested(travelPartyStore, guard)
+            && TryBindNested(explorableSiteKnowledgeSystem, guard)
+            && TryBindNested(placeContentStore, guard)
+            && TryBindNested(localTopologyStore, guard);
+    }
+
+    bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return CanBindMutationGuard(guard);
+    }
+
+    bool IAuthoritativeMutationGuardBindable.TryBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return TryBindMutationGuard(guard);
+    }
+
+    private bool RejectIfFaulted(out string reason)
+    {
+        reason = null;
+        if (mutationGuardBinding.CanMutate)
+        {
+            return false;
+        }
+
+        reason = "A faulted SimulationRuntime cannot mutate expedition state.";
+        return true;
+    }
+
+    private void ThrowIfFaulted()
+    {
+        if (!mutationGuardBinding.CanMutate)
+        {
+            throw new InvalidOperationException("A faulted SimulationRuntime cannot reconcile expeditions.");
+        }
+    }
+
+    private static bool CanBindNested(object nested, AuthoritativeMutationGuard guard)
+    {
+        IAuthoritativeMutationGuardBindable bindable = nested as IAuthoritativeMutationGuardBindable;
+        return bindable == null || bindable.CanBindMutationGuard(guard);
+    }
+
+    private static bool TryBindNested(object nested, AuthoritativeMutationGuard guard)
+    {
+        IAuthoritativeMutationGuardBindable bindable = nested as IAuthoritativeMutationGuardBindable;
+        return bindable == null || bindable.TryBindMutationGuard(guard);
     }
 
     private bool TryPrepareStart(

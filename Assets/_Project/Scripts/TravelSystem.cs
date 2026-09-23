@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class TravelSystem
+public class TravelSystem : IAuthoritativeMutationGuardBindable
 {
     private readonly SpatialNetworkRuntime spatialNetwork;
     private readonly Func<SpatialLocationRuntime, CityRuntime> getCityRuntimeByLocation;
@@ -11,6 +11,7 @@ public class TravelSystem
     private readonly SimulationLogger logger;
     private readonly EconomyTransactionService transactionService;
     private TravelPartyStore travelPartyStore;
+    private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
 
     public TravelSystem(
         SpatialNetworkRuntime spatialNetwork,
@@ -63,11 +64,30 @@ public class TravelSystem
 
     public void AttachTravelPartyStore(TravelPartyStore store)
     {
+        if (travelPartyStore != null && !ReferenceEquals(travelPartyStore, store))
+        {
+            throw new InvalidOperationException("TravelSystem cannot replace its attached TravelPartyStore.");
+        }
+
+        if (store != null && mutationGuardBinding.BoundGuard != null)
+        {
+            if (store.CanBindMutationGuard(mutationGuardBinding.BoundGuard) == false
+                || store.TryBindMutationGuard(mutationGuardBinding.BoundGuard) == false)
+            {
+                throw new InvalidOperationException("TravelSystem cannot attach a TravelPartyStore owned by another runtime.");
+            }
+        }
+
         travelPartyStore = store;
     }
 
     public bool TryStartTravel(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime)
     {
+        if (!mutationGuardBinding.CanMutate)
+        {
+            return false;
+        }
+
         if (npcRuntime == null
             || actionRuntime == null
             || actionRuntime.TargetCity == null)
@@ -88,6 +108,11 @@ public class TravelSystem
         CityRuntime targetCityProjection,
         string originDecisionId = null)
     {
+        if (!mutationGuardBinding.CanMutate)
+        {
+            return false;
+        }
+
         CityRuntime resolvedTargetCity = targetCityProjection ?? GetCityRuntime(targetLocation);
 
         if (npcRuntime == null
@@ -158,6 +183,11 @@ public class TravelSystem
         int travelDays,
         string originDecisionId = null)
     {
+        if (!mutationGuardBinding.CanMutate)
+        {
+            return false;
+        }
+
         if (travelDays <= 0 || TryGetDirectRoute(npcRuntime?.CurrentLocation, targetLocation, out SpatialRouteRuntime route) == false)
         {
             return false;
@@ -208,6 +238,8 @@ public class TravelSystem
 
     public IReadOnlyList<NpcRuntime> AdvanceTravels(List<NpcRuntime> npcRuntimeList)
     {
+        ThrowIfFaulted();
+
         if (npcRuntimeList == null)
         {
             return Array.Empty<NpcRuntime>();
@@ -483,6 +515,45 @@ public class TravelSystem
         }
 
         return spatialNetwork.TryGetSingleDirectRoute(originLocation, targetLocation, out route);
+    }
+
+    internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return mutationGuardBinding.CanBindTo(guard)
+            && (travelPartyStore == null || travelPartyStore.CanBindMutationGuard(guard));
+    }
+
+    internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        if (!CanBindMutationGuard(guard))
+        {
+            return false;
+        }
+
+        if (!mutationGuardBinding.TryBindTo(guard))
+        {
+            return false;
+        }
+
+        return travelPartyStore == null || travelPartyStore.TryBindMutationGuard(guard);
+    }
+
+    bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return CanBindMutationGuard(guard);
+    }
+
+    bool IAuthoritativeMutationGuardBindable.TryBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return TryBindMutationGuard(guard);
+    }
+
+    private void ThrowIfFaulted()
+    {
+        if (!mutationGuardBinding.CanMutate)
+        {
+            throw new InvalidOperationException("A faulted SimulationRuntime cannot advance travel.");
+        }
     }
 
     private bool IsManagedByTravelParty(NpcRuntime npcRuntime)

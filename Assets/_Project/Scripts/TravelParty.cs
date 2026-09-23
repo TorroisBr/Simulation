@@ -202,11 +202,12 @@ public sealed class TravelPartyRuntime
     }
 }
 
-public sealed class TravelPartyStore
+public sealed class TravelPartyStore : IAuthoritativeMutationGuardBindable
 {
     private readonly List<TravelPartyRuntime> activeParties = new List<TravelPartyRuntime>();
     private readonly Dictionary<string, TravelPartyRuntime> partiesById = new Dictionary<string, TravelPartyRuntime>(StringComparer.Ordinal);
     private readonly IReadOnlyList<TravelPartyRuntime> readOnlyActiveParties;
+    private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
 
     public IReadOnlyList<TravelPartyRuntime> ActiveParties => readOnlyActiveParties;
 
@@ -224,6 +225,11 @@ public sealed class TravelPartyStore
 
     public bool Add(TravelPartyRuntime party)
     {
+        if (!mutationGuardBinding.CanMutate)
+        {
+            return false;
+        }
+
         if (party == null || party.IsActive == false || partiesById.ContainsKey(party.TravelPartyId) == true)
         {
             return false;
@@ -283,6 +289,11 @@ public sealed class TravelPartyStore
 
     public bool Complete(string travelPartyId)
     {
+        if (!mutationGuardBinding.CanMutate)
+        {
+            return false;
+        }
+
         TravelPartyRuntime party = GetById(travelPartyId);
 
         if (party == null)
@@ -298,6 +309,11 @@ public sealed class TravelPartyStore
 
     public bool Remove(string travelPartyId)
     {
+        if (!mutationGuardBinding.CanMutate)
+        {
+            return false;
+        }
+
         TravelPartyRuntime party = GetById(travelPartyId);
 
         if (party == null)
@@ -309,9 +325,29 @@ public sealed class TravelPartyStore
         activeParties.Remove(party);
         return true;
     }
+
+    internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return mutationGuardBinding.CanBindTo(guard);
+    }
+
+    internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return mutationGuardBinding.TryBindTo(guard);
+    }
+
+    bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return CanBindMutationGuard(guard);
+    }
+
+    bool IAuthoritativeMutationGuardBindable.TryBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return TryBindMutationGuard(guard);
+    }
 }
 
-public sealed class TravelPartySystem
+public sealed class TravelPartySystem : IAuthoritativeMutationGuardBindable
 {
     private static readonly ActionParticipationRequirements DefaultRequirements = new ActionParticipationRequirements(
         minPerformers: 1,
@@ -330,6 +366,7 @@ public sealed class TravelPartySystem
     private readonly DomainEventRecorder domainEventRecorder;
     private readonly SimulationLogger logger;
     private readonly EconomyTransactionService transactionService;
+    private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
 
     public TravelPartyStore Store => partyStore;
 
@@ -364,6 +401,11 @@ public sealed class TravelPartySystem
     public bool TryStartTravelParty(ActionExecutionContext context, out TravelPartyRuntime party)
     {
         party = null;
+
+        if (!mutationGuardBinding.CanMutate)
+        {
+            return false;
+        }
 
         if (TryPrepareTravel(context, false, out TravelPreparation preparation, out _) == false)
         {
@@ -492,6 +534,8 @@ public sealed class TravelPartySystem
 
     public IReadOnlyList<NpcRuntime> AdvanceParties()
     {
+        ThrowIfFaulted();
+
         List<NpcRuntime> arrivals = new List<NpcRuntime>();
         List<TravelPartyRuntime> activeParties = new List<TravelPartyRuntime>(partyStore.ActiveParties);
 
@@ -572,6 +616,49 @@ public sealed class TravelPartySystem
         }
 
         return arrivals.AsReadOnly();
+    }
+
+    internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return mutationGuardBinding.CanBindTo(guard)
+            && partyStore.CanBindMutationGuard(guard)
+            && travelSystem.CanBindMutationGuard(guard)
+            && simulationTime.CanBindMutationGuard(guard);
+    }
+
+    internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        if (!CanBindMutationGuard(guard))
+        {
+            return false;
+        }
+
+        if (!mutationGuardBinding.TryBindTo(guard))
+        {
+            return false;
+        }
+
+        return partyStore.TryBindMutationGuard(guard)
+            && travelSystem.TryBindMutationGuard(guard)
+            && simulationTime.TryBindMutationGuard(guard);
+    }
+
+    bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return CanBindMutationGuard(guard);
+    }
+
+    bool IAuthoritativeMutationGuardBindable.TryBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return TryBindMutationGuard(guard);
+    }
+
+    private void ThrowIfFaulted()
+    {
+        if (!mutationGuardBinding.CanMutate)
+        {
+            throw new InvalidOperationException("A faulted SimulationRuntime cannot advance travel parties.");
+        }
     }
 
     private bool TryPrepareTravel(

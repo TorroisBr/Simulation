@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class MerchantSystem : INpcActionProvider
+public class MerchantSystem : INpcActionProvider, IAuthoritativeMutationGuardBindable
 {
     private readonly EffectiveMerchantTradeConfiguration tradeConfiguration;
     private readonly TravelSystem travelSystem;
@@ -11,6 +11,7 @@ public class MerchantSystem : INpcActionProvider
     private readonly NpcDecisionRecorder decisionRecorder;
     private readonly SimulationLogger logger;
     private readonly EconomyTransactionService transactionService;
+    private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
 
     public MerchantSystem(
         EffectiveMerchantTradeConfiguration tradeConfiguration,
@@ -32,6 +33,8 @@ public class MerchantSystem : INpcActionProvider
 
     public void AdvanceNpcTradeState(NpcRuntime npcRuntime)
     {
+        ThrowIfFaulted();
+
         if (IsMerchant(npcRuntime) == false || npcRuntime.IsAlive == false || npcRuntime.CurrentCity == null || npcRuntime.IsTraveling == true)
         {
             return;
@@ -109,6 +112,8 @@ public class MerchantSystem : INpcActionProvider
 
     public void BootstrapInitialKnowledge(NpcRuntime npcRuntime)
     {
+        ThrowIfFaulted();
+
         if (simulationTime.AbsoluteDay != 0L
             || IsTravelingMerchant(npcRuntime) == false
             || npcRuntime.CurrentCity == null)
@@ -134,6 +139,8 @@ public class MerchantSystem : INpcActionProvider
 
     public void ObserveCurrentMarket(NpcRuntime npcRuntime)
     {
+        ThrowIfFaulted();
+
         if (IsMerchant(npcRuntime) == false || npcRuntime.CurrentCity == null || npcRuntime.IsTraveling == true)
         {
             return;
@@ -307,6 +314,11 @@ public class MerchantSystem : INpcActionProvider
 
     public NpcActionResult TryExecuteAction(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime)
     {
+        if (!mutationGuardBinding.CanMutate)
+        {
+            return NpcActionResult.Failed();
+        }
+
         if (npcRuntime == null || npcRuntime.IsAlive == false || actionRuntime == null || actionRuntime.Action == null)
         {
             return NpcActionResult.Failed();
@@ -323,6 +335,42 @@ public class MerchantSystem : INpcActionProvider
         }
 
         return NpcActionResult.Failed();
+    }
+
+    internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return mutationGuardBinding.CanBindTo(guard)
+            && simulationTime.CanBindMutationGuard(guard)
+            && (travelSystem == null || travelSystem.CanBindMutationGuard(guard));
+    }
+
+    internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        if (!CanBindMutationGuard(guard) || !mutationGuardBinding.TryBindTo(guard))
+        {
+            return false;
+        }
+
+        return simulationTime.TryBindMutationGuard(guard)
+            && (travelSystem == null || travelSystem.TryBindMutationGuard(guard));
+    }
+
+    bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return CanBindMutationGuard(guard);
+    }
+
+    bool IAuthoritativeMutationGuardBindable.TryBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return TryBindMutationGuard(guard);
+    }
+
+    private void ThrowIfFaulted()
+    {
+        if (!mutationGuardBinding.CanMutate)
+        {
+            throw new InvalidOperationException("A faulted SimulationRuntime cannot mutate merchant state.");
+        }
     }
 
     private bool TryExecuteBuyGoods(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime)
