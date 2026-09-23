@@ -170,10 +170,13 @@
 ### Current boundary after D6B1
 
 D6B1 and D6B2 are approved and promoted to `codex/phase7/canonical`.
-Checkpoint D6B2 is the current canonical checkpoint, described below. D7 is the
-next checkpoint and remains **NOT STARTED**. Do not apply a Battle outcome,
-mark a Battle Resolved, apply population deaths, mutate Person state, emit
-outcome history, or add daily military behavior from D6A/D6B1/D6B2.
+Checkpoint D6B2 is the current canonical implementation checkpoint, described
+below. P7-D7G — Runtime Authoritative Mutation Guard — is the next
+implementation checkpoint and remains **NOT STARTED**. D7 implementation also
+remains **NOT STARTED** and must wait until D7G is validated and promoted to
+canonical. Do not apply a Battle outcome, mark a Battle Resolved, apply
+population deaths, mutate Person state, emit outcome history, or add daily
+military behavior from D6A/D6B1/D6B2.
 
 Cross-host equivalence of D4's existing floating-point arithmetic remains an
 unrelated open limitation.
@@ -257,8 +260,9 @@ D6B2 is **APPROVED AND PROMOTED TO CANONICAL**. No consequence is applied, no
 worlds without an explicit D6B2 policy fail as unconfigured; casualty
 semantics remain entirely rule/configuration-owned. The post-consequence
 projection is ephemeral and is not a persistence, event-history, or replay
-contract. D7 is the next checkpoint and remains **NOT STARTED**.
-`docs/SIMULATION_ARCHITECTURE.md` was not changed.
+contract. P7-D7G is the next implementation checkpoint and remains
+**NOT STARTED**; D7 implementation must wait for its canonical promotion.
+At the D6B2 promotion, `docs/SIMULATION_ARCHITECTURE.md` was not changed.
 
 # Historical record — Checkpoint D5 — Canonical Promotion
 

@@ -4219,10 +4219,11 @@ aleatoriedade de resolução bruta:
 RAW RESOLUTION RNG != CONSEQUENCE RNG
 ```
 
-Com esse contrato, D6B2 pode seguir para implementação diretamente após a
-consolidação documental, sem outra gate exploratória, salvo se a implementação
-revelar uma contradição concreta. D7 permanece posterior à implementação,
-validação e promoção de D6B2.
+A cobertura D6B2 fornece o plano de consequências que D7 aplica; não é
+necessária outra gate exploratória entre esses contratos, salvo se uma
+implementação revelar contradição concreta. A arquitetura de D7 está definida
+abaixo; sua implementação permanece posterior à validação e promoção de D6B2
+e exige que P7-D7G seja implementado, validado e promovido primeiro.
 
 ### P7-D7 — Atomic Battle Outcome Application
 
@@ -4330,14 +4331,15 @@ observar ou intercalar o estado entre o primeiro e o último write. Código de
 regra/provider roda antes do commit.
 
 Falhas esperadas — como plano stale, source ou custody inválida, perfil não
-suportado e overflow — são descobertas durante a preparação e deixam
-World Truth inalterada. Rollback é obrigatório para falha inesperada durante o
-commit e restaura exatamente os valores e revisões apenas do estado autoritativo
-tocados pela transação: contingents/manpower, mirrors, sources e record/revisão
-da Battle. Se o rollback concluir, a falha informa que o commit foi revertido;
-se o rollback falhar, o runtime fica explicitamente comprometido/faulted e
-mutação autoritativa normal deve parar. Recuperação de crash durável entre
-writes pertence à futura persistência.
+suportado e overflow — são descobertas durante a preparação, deixam
+World Truth inalterada e não faultam o runtime. Rollback é obrigatório para
+falha inesperada durante o commit e restaura exatamente os valores e revisões
+apenas do estado autoritativo tocados pela transação: contingents/manpower,
+mirrors, sources e record/revisão da Battle. Se o rollback concluir, a falha
+informa que o commit foi revertido e o runtime permanece Healthy; se o rollback
+falhar, o runtime fica explicitamente Faulted e a mutação autoritativa normal
+deve parar conforme a fronteira suportada definida em P7-D7G. Recuperação de
+crash durável entre writes pertence à futura persistência.
 
 D7 v1 é síncrono, sem `await`, no contexto serializado de mutação autoritativa
 do runtime; não implica thread-safety geral. Chamadas D7 concorrentes ou
@@ -4403,6 +4405,158 @@ Permanecem deferidos além dessas fronteiras:
   military knowledge;
 - save/load específico do resultado, replay, networking, product preview e
   migração ampla para `Simulation.Core`.
+
+### P7-D7G — Runtime Authoritative Mutation Guard
+
+**DECIDIDO**
+
+P7-D7G estabelece a proteção de integridade runtime exigida pela falha
+catastrófica de rollback de D7. É um pré-requisito de implementação de D7, não
+uma extensão da transação de Battle nem um mecanismo geral de transações. O
+conceito pode ser chamado `AuthoritativeMutationGuard` ou equivalente; o nome
+técnico exato não é parte do contrato arquitetural.
+
+#### Saúde do runtime e alcance da garantia
+
+Cada composição de `SimulationRuntime` possui um estado de integridade local,
+conceitualmente `Healthy` ou `Faulted`. A transição é pegajosa e unidirecional
+em v1: somente uma falha catastrófica de integridade — principalmente uma
+falha ao restaurar o estado após rollback — pode levar de `Healthy` a
+`Faulted`; não há reset de gameplay. Rejeições normais de domínio, como estado
+stale, configuração ausente, precondição inválida ou recurso insuficiente,
+não faultam o runtime. Isso não introduz singleton global, semântica genérica
+de transação nem gerência geral de locks.
+
+Enquanto `Faulted`, devem rejeitar antes da primeira escrita:
+
+- operações autoritativas pelas APIs suportadas do runtime;
+- mutações pelas authorities/stores autoritativas vinculadas à composição;
+- entrypoints de sistemas usados pelo processamento normal daquele runtime.
+
+Queries, leituras e diagnostics continuam permitidos para inspeção. A garantia
+delimita a **fronteira suportada de mutação autoritativa**; ela não promete
+imutabilidade de memória nem congelamento de todo o grafo de objetos alcançável
+por referências externas:
+
+```text
+SUPPORTED AUTHORITATIVE MUTATION BOUNDARY
+!= ENTIRE REACHABLE OBJECT GRAPH
+```
+
+Objetos legados mutáveis, como `NpcRuntime`, `CityRuntime`, coleções ou
+subobjetos expostos e referências Unity retidas externamente, podem permitir
+chamadas diretas que não são interceptáveis sem uma refatoração ampla de
+encapsulamento. Depois de `Faulted`, essas chamadas diretas constituem
+**UNSUPPORTED OUT-OF-BOUND MUTATION**, não uma operação suportada do runtime.
+Isso não reclassifica `NpcRuntime` ou `CityRuntime` como projeções não
+autoritativas: eles podem conter estado factual ou individual rico. Apesar
+desses escape hatches legados, todo processamento normal do runtime que os use
+deve rejeitar enquanto Faulted. Os bypasses identificados permanecem dívida
+técnica de encapsulamento; não exigem uma reescrita total para D7.
+
+#### Vinculação e enforcement
+
+O guard pertence à composição do mundo: cada `SimulationRuntime` tem um, e
+todas as stores/authorities mutáveis vinculadas ou clonadas para aquele mundo
+consultam o mesmo estado. O fault de um mundo não afeta outro. Uma authority já
+vinculada a um runtime não pode ser reatribuída a outro. Stores criadas
+independentemente podem continuar utilizáveis como stores standalone
+`Healthy`/não vinculadas; ao serem vinculadas, passam a respeitar o guard em
+todos os caminhos suportados de mutação e a vinculação é de um único runtime.
+
+Compartilhar a mesma authority mutável entre duas composições com guards
+distintos é incompatível com essa propriedade. A composição deve rejeitar o
+compartilhamento, obter ownership independente por clonagem quando já houver
+essa semântica, ou declarar explicitamente uma exceção legada ainda não
+resolvida; nunca associar silenciosamente dois guards à mesma authority.
+
+O enforcement precisa existir na própria autoridade de mutação das stores
+autoritativas expostas pelo runtime, antes da primeira escrita. Uma checagem
+apenas nos chamadores do `SimulationRuntime` não basta quando a store também é
+acessível diretamente. Sistemas podem rejeitar mais cedo, mas seus entrypoints
+suportados também devem verificar o guard quando alteram estado autoritativo
+fora de uma store protegida. A auditoria de D7G deve seguir os caminhos reais
+de escrita das authorities compostas que forem mutáveis — como Person,
+ArmedForce/manpower, Conflict/War/Battle, espaço, população/demografia,
+genealogia, instituições/cargos, propriedade/estate e política/conhecimento —
+e dos fluxos normais de crime/justiça, viagem, economia mercantil, expedições,
+conteúdo de lugar e diretivas agendadas. Verificações redundantes não são
+necessárias quando todas as escritas já passam pela mesma authority protegida.
+
+#### Tempo, restauração e integração com D7
+
+`AdvanceDay` normal deve verificar a saúde antes de qualquer mutação diária,
+inclusive antes de avançar o dia lógico. Se Faulted, a operação rejeita sem
+executar sistemas diários. A fronteira pública deve comunicar essa rejeição de
+forma explícita; `TryAdvanceDay` ou equivalente é uma possibilidade, não um
+contrato de API. `AdvanceDays` deve rejeitar antes de começar seu primeiro dia
+quando o runtime já está Faulted. Como `SimulationTime` é exposto e possui
+mutação direta, sua via normal de mutação também respeita o mesmo guard quando
+vinculada ao runtime; uma instância standalone e não vinculada pode permanecer
+utilizável normalmente.
+
+A restauração interna do rollback não é gameplay nem mutação autoritativa
+normal. D7 deve poder tentar restaurar os valores e revisões exatos sob uma
+authority privada de restauração; se a restauração tiver sucesso, o runtime
+continua Healthy, e, se falhar, o runtime passa a Faulted. Caso a implementação
+marque Faulted antes de tentar restaurar, a restauração ainda precisa de um
+bypass interno equivalente. Esse bypass nunca é exposto como API pública.
+
+Quando D7 vier a ser implementado, verifica o guard antes de planejar. Um
+runtime já Faulted rejeita imediatamente, sem chamar D5/D6B2 ou planners de
+source, consumir RNG, alocar IDs de evento ou alterar estado. Rejeições normais
+de D7 mantêm o runtime Healthy. A lease contra reentrância/concorrência da
+operação D7 permanece distinta do latch de integridade e não implica
+thread-safety geral.
+
+APIs de falha `Try`/out devem, quando razoável, identificar explicitamente o
+runtime Faulted; APIs mutadoras booleanas retornam `false` sem mutar. Exceções
+não devem ser o fluxo esperado de controle quando a forma da API permitir uma
+rejeição explícita. Um `LastMutationFailure` mutável compartilhado não é a
+semântica primária de falha.
+
+#### Diagnostics, determinismo e validação de D7G
+
+O estado `Healthy`/`Faulted` é integridade operacional, não `World Truth`.
+Pode ser exposto em diagnostics de runtime/integridade, com uma categoria ou
+razão estável opcional. Exceções, timestamps de parede e stack traces arbitrários
+não se tornam fatos causais do mundo. Não se inclui o latch em
+`WorldStateSnapshot` sem uma necessidade concreta: snapshots de estado do
+mundo e diagnostics de integridade têm propósitos distintos.
+
+Uma rejeição por Faulted ocorre antes de efeitos colaterais que alterariam o
+futuro determinístico, incluindo knowledge, RNG stateful autoritativo,
+allocators de IDs, sequências de registros, diretivas ou agendas. O guard não
+adiciona RNG, timestamps, ordenação global ou inputs de decisão; em runtime
+Healthy, o comportamento semântico permanece inalterado.
+
+A validação de D7G deve cobrir, no mínimo: comportamento Healthy preservado;
+`AdvanceDay` rejeitado antes de mudar `SimulationTime`; mutações pelas stores
+expostas de Person, ArmedForce/manpower, Conflict/War/Battle, espaço e
+população/source bloqueadas, além de entrypoints representativos de sistemas;
+queries e diagnostics ainda disponíveis; isolamento entre dois runtimes;
+rejeição normal sem fault; possibilidade de restauração interna;
+impossibilidade de rebind entre runtimes; e ausência de consumo prematuro de
+RNG/IDs/sequências. Também deve documentar os bypasses de referência legados
+encontrados e provar que o processamento normal por eles é bloqueado.
+
+P7-D7G não implementa D7, framework transacional genérico, thread-safety ampla,
+recuperação de save/crash, conversão geral de objetos em imutáveis ou
+refatoração completa de encapsulamento. A sequência da Phase 7 é:
+
+```text
+D6B2 canonical
+→ D7 architecture canonical
+→ D7G implementation
+→ D7G validation and canonical promotion
+→ D7 implementation
+→ D7 validation and canonical promotion
+```
+
+Logo, a implementação de D7 deve aguardar P7-D7G canônico. A dívida de
+referências legadas fora da fronteira suportada não bloqueia D7 quando as
+authorities compostas, APIs suportadas do runtime e entrypoints do
+processamento normal estiverem protegidos conforme este contrato.
 
 ---
 
