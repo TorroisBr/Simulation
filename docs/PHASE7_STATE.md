@@ -169,24 +169,31 @@
 
 ### Current boundary after D6B1
 
-D6B1 is approved and promoted to `codex/phase7/canonical`. Checkpoint D6B2 is
-now a separately validated feature candidate, described below; it has not been
-promoted to canonical. D7 remains **NOT STARTED**. Do not apply a Battle
-outcome, mark a Battle Resolved, apply population deaths, mutate Person state,
-emit outcome history, or add daily military behavior from D6A/D6B1/D6B2.
+D6B1 and D6B2 are approved and promoted to `codex/phase7/canonical`.
+Checkpoint D6B2 is the current canonical checkpoint, described below. D7 is the
+next checkpoint and remains **NOT STARTED**. Do not apply a Battle outcome,
+mark a Battle Resolved, apply population deaths, mutate Person state, emit
+outcome history, or add daily military behavior from D6A/D6B1/D6B2.
 
 Cross-host equivalence of D4's existing floating-point arithmetic remains an
 unrelated open limitation.
 
-## Checkpoint D6B2 — Validated feature candidate (not promoted)
+## Checkpoint D6B2 — Approved and promoted to canonical
 
-- Required canonical baseline: `59fdab5100e27672d9ef9096761d72ed04090790` on
-  `codex/phase7/canonical`; this branch was created from that exact commit.
+- Previous canonical baseline: `59fdab5100e27672d9ef9096761d72ed04090790` on
+  `codex/phase7/canonical`.
 - Feature branch: `codex/phase7/BattleDirectConsequencePlanning`.
+- Validated feature candidate (preserved unchanged):
+  `450dfbf6389e807618231851cf533b3286ed3275`.
 - Implementation commit: `16621d2eb91a90e6dd0298dcc5e7c3cc441a60ba`.
-- The candidate and this state record are confined to the feature branch.
-  `codex/phase7/canonical` was not changed; promotion requires separate user
-  approval.
+- Candidate state-document commit:
+  `450dfbf6389e807618231851cf533b3286ed3275`.
+- Promotion branch: `codex/phase7/D6B2CanonicalPromotion`, created directly
+  from the validated candidate. Since the candidate was a linear descendant of
+  the previous canonical baseline (ahead 2, behind 0), promotion uses a
+  fast-forward with no merge commit.
+- D6B2 is approved and promoted to `codex/phase7/canonical` after independent
+  review and final validation in a clean promotion worktree.
 
 ### Delivered
 
@@ -234,23 +241,24 @@ readiness.
   SimulationRuntime orchestration: `10/10`.
 - Population: `137/137`; Person: `130/130`; lifecycle: `40/40`;
   aggregate demography: `23/23`.
-- ALL EditMode: `1601/1601`. Official complete EditMode `Smoke`: `5/5`.
-- Independent read-only review found no remaining blocker. It verified
-  rule-call/source-request cardinality, D5 separation, stale checks,
-  capacity-independent freshness, projection totals, non-mutation, and
-  deterministic failure diagnostics.
-- `git diff --check` is clean. No long-run suite was required because
-  `AdvanceDay` is unchanged and D6B2 adds no daily behavior.
+- Final promotion validation: ALL EditMode `1601/1601`; official complete
+  EditMode `Smoke`: `5/5`; `git diff --check` clean.
+- Independent read-only promotion review approved. It confirmed partitions are
+  the sole authored consequence proposal, source death totals and post-state
+  are derived, same-source deaths produce one traceable D6B1 proposal,
+  freshness guards remain scoped, and D6B2 is non-mutating with D7 absent.
+- No long-run suite was required because `AdvanceDay` is unchanged and D6B2
+  adds no daily behavior.
 
-### Candidate-only boundary and known limitations
+### Promoted boundary and known limitations
 
-D6B2 is **VALIDATED FEATURE CANDIDATE ONLY**, not an externally approved or
-canonical checkpoint. No consequence is applied, no `BattleOutcome` is
-persisted, and there is no D7 atomic application. Production worlds without an
-explicit D6B2 policy fail as unconfigured; casualty semantics remain entirely
-rule/configuration-owned. The post-consequence projection is ephemeral and is
-not a persistence, event-history, or replay contract. D7 remains **NOT
-STARTED**. `docs/SIMULATION_ARCHITECTURE.md` was not changed.
+D6B2 is **APPROVED AND PROMOTED TO CANONICAL**. No consequence is applied, no
+`BattleOutcome` is persisted, and there is no D7 atomic application. Production
+worlds without an explicit D6B2 policy fail as unconfigured; casualty
+semantics remain entirely rule/configuration-owned. The post-consequence
+projection is ephemeral and is not a persistence, event-history, or replay
+contract. D7 is the next checkpoint and remains **NOT STARTED**.
+`docs/SIMULATION_ARCHITECTURE.md` was not changed.
 
 # Historical record — Checkpoint D5 — Canonical Promotion
 
