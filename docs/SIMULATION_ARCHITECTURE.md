@@ -3573,22 +3573,39 @@ como input factual explícito.
 
 ### Eventos, history e determinismo numérico
 
-O evento da Battle é tentado somente após o commit autoritativo. Se o commit
-for bem-sucedido e o registro do evento falhar, World Truth permanece
-commitada; o erro é reportado, sem rollback das consequências. Entrega
-confiável futura exige mecanismo explícito de retry/outbox. Event/history não
-são a autoridade primária nem tornam o sistema event-sourced. Um futuro evento
-`BattleResolved` carrega fatos estáveis mínimos — BattleId, dia, Victory/Draw,
-vencedor quando houver, sides participantes e provenance/fingerprint opcional
-— sem snapshot do mundo ou IDs de Conflict lower-level.
+O evento `BattleResolved` de D7 v1 é uma projeção downstream do outcome aceito
+e só é tentado após o commit autoritativo. Seu conteúdo semântico mínimo pode
+identificar BattleId, dia, Victory/Draw, vencedor quando houver, sides e
+participantes por identidade estável, e provenance/fingerprint aceita. Não
+carrega snapshot do mundo, scores brutos ou IDs de Conflict lower-level. Se o
+registro de evento/history falhar depois do commit, World Truth permanece
+commitada e o resultado de D7 informa o aviso pós-commit; não há rollback nem
+republicação automática em uma chamada idempotente. Entrega confiável futura
+exigiria mecanismo explícito de retry/outbox. Event/history não são a
+autoridade primária nem tornam o sistema event-sourced.
 
-O uso atual de `float` continua aceitável para computação bruta efêmera no
-runtime suportado. Antes da persistência de outcome, a policy do mundo deve
-identificar um perfil numérico explicitamente suportado. A arquitetura ainda
-não garante equivalência arbitrária entre hosts ou `Simulation.Core`; o perfil
-deve ser demonstrado e compatível, seja por runtime restrito, quantização,
-aritmética definida, fixed-point/integer ou outro método comprovado. Nenhuma
-estratégia numérica específica está decidida.
+O uso atual de `float` permanece aceitável para computação bruta efêmera no
+perfil numérico compatível. D7 v1 pode aceitar e persistir um outcome quando a
+policy de resolução identifica um perfil explicitamente suportado pelo host.
+Esse perfil compõe a compatibilidade autoritativa da resolução: além dos
+mesmos inputs autoritativos e versão compatível, as execuções precisam usar o
+mesmo perfil numérico suportado. O perfil atual
+`unity-float32-current-host:v1` descreve a composição Unity que o declara; não
+certifica automaticamente outra versão/runtime Unity, headless ou
+`Simulation.Core`. Outro host só pode declarar compatibilidade com a mesma
+identidade após estabelecer essa compatibilidade; caso contrário, deve falhar
+fechado para a resolução autoritativa sob esse perfil.
+
+```text
+SUPPORTED NUMERIC PROFILE
+!= PROVEN ARBITRARY CROSS-HOST EQUIVALENCE
+```
+
+Não se afirma equivalência arbitrária cross-host ou cross-profile. Perfis
+diferentes não satisfazem o mesmo contrato de compatibilidade para resolução;
+replay ou recomputação entre perfis permanece não suportado/não comprovado.
+Nenhuma estratégia numérica universal — quantização, aritmética definida,
+fixed-point/integer ou outra — é escolhida por esta regra.
 
 ```text
 ORDERED RETREAT != ROUT != SURRENDER
@@ -4209,12 +4226,168 @@ validação e promoção de D6B2.
 
 ### P7-D7 — Atomic Battle Outcome Application
 
-Depois de D6A, D6B1 e D6B2, D7 revalida/reconstrói a resolução autorizada e o
-plano completo de consequências, então aplica em um único commit lógico as
-propostas de transição de fonte, roster/coortes, `BattleOutcome` e a transição
-`Active → Resolved`. Eventos e history são tentados após o commit. Falha antes
-do commit não pode deixar apenas parte das consequências ou um outcome
-persistido sem sua disposição de manpower.
+**DECIDIDO**
+
+D7 é uma operação explícita, síncrona e vinculada ao runtime autoritativo. Sua
+entrada começa por `BattleId` e pode incluir apenas metadata de execução D3 já
+permitida por D5 e uma fingerprint D6B2 esperada opcional. O chamador não
+fornece outcome, plano D5/D6B2, proposta de source, pós-estado de manpower ou
+policy. D7 reconstrói internamente um plano D6B2 atual a partir das authorities
+do mundo. Sem policy D6B2 configurada, falha fechado; ausência de regra não é
+uma consequência zero nem autoriza fallback de casualty.
+
+Se fornecida, a fingerprint esperada do plano D6B2 é uma precondição de
+preview-confirmação: deve coincidir com o plano recém-calculado antes de
+qualquer mutação; mismatch rejeita sem alterar World Truth. Se omitida, D7
+aplica o plano atualmente autorizado. Essa confirmação pertence à fronteira
+de aplicação, não ao planner D6B2.
+
+#### Outcome aceito, ownership e lifecycle
+
+O outcome persistido é um valor imutável mínimo: BattleId, Victory ou Draw,
+WinningBattleSideId apenas para Victory, dia lógico da resolução e provenance
+aceita. A provenance identifica a policy D5, perfil numérico, versão da
+projeção e fingerprint causal, além da policy D6B2, versão/schema de plano e
+coverage e fingerprint do plano de consequências aceito. Não guarda
+referências a policies ou regras vivas.
+
+`PersistentBattleRecord` possui o único outcome terminal da Battle;
+`PersistentBattleStore` possui a operação de domínio que grava esse outcome e
+faz `Active → Resolved` em conjunto. Não há um segundo outcome store em v1.
+Registro público normal não pode criar Battle resolvida; eventual hidratação
+de save/load terá um caminho validado próprio.
+
+Os invariantes são:
+
+- `Pending` não tem dia de início nem outcome terminal;
+- `Active` exige dia de início e localização física válida, e não tem outcome;
+- `Resolved` preserva início/localização e tem exatamente um outcome coerente,
+  com dia de resolução igual ao dia do outcome e não anterior ao início;
+- o BattleId do outcome coincide com o record; vitória aponta para uma
+  `BattleSideId` existente e empate não possui vencedor.
+
+`BattleId` é a raiz de idempotência. A primeira aplicação retorna
+conceitualmente `Applied`; uma chamada posterior para a mesma Battle retorna
+`AlreadyResolved`, expõe o outcome persistido e não recalcula D5/D6B2, não
+reaplica consequências e não reemite o evento. Em retry com fingerprint
+esperada, igualdade com a fingerprint aceita mantém `AlreadyResolved`; uma
+fingerprint diferente retorna mismatch explícito sem mutação. Ler um outcome
+resolvido não depende das policies atuais; mudanças posteriores de policy não
+reescrevem nem invalidam o fato já aceito.
+
+#### Transições de domínio e conservação
+
+D6B1 continua sendo a authority de planejamento de efeitos de source. D7 usa
+um boundary estreito de aplicação pertencente ao domínio da source e vinculado
+à mesma registration explícita usada na proposta. Para source populacional de
+settlement, aplica-se a `AggregateDemographyTransition` capturada por meio da
+authority de demografia agregada (`AggregateDemographySystem.TryApply`). D7
+não edita população diretamente, não chama novamente o provider demográfico
+nem recalcula mortes.
+
+A aplicação do manpower pertence a um batch específico de Battle na authority
+D6A e consome o pós-estado exato projetado por D6B2. Não se interpreta morte
+como desmobilização nem se usa uma redistribuição que exige preservar o roster
+vivo para reduzi-lo. Antes de escrever, o batch verifica para todos os
+contingents afetados o pre-state/revisão atuais, o pós-estado projetado, a
+preservação do source binding, a redução do roster exatamente igual às mortes
+D6B2, coortes e custódia válidas, e a possibilidade de avançar revisões e
+mirrors.
+
+```text
+Contingent.Amount = LivingRosterAmount
+SUM(military deaths by source) = D6B1 source death proposal
+post source allocation = pre source allocation - those deaths
+```
+
+Morte altera o mirror `Contingent.Amount` junto com o roster no mesmo batch;
+ferimento e captura, por si só, não o alteram. Nenhum setter arbitrário de
+Amount é introduzido. Source populacional deve reduzir a população factual
+exatamente pelo efeito de morte proposto, sem aplicar ou omitir a mesma morte
+duas vezes. Se o estado projetado de um contingent for semanticamente igual ao
+atual, ele não é escrito nem recebe nova revisão. Um plano completo sem
+consequências também é válido: nesse caso só o outcome/lifecycle da Battle
+muda.
+
+#### Commit lógico e falhas
+
+D7 v1 usa uma transação estreita e específica de Battle, não um framework
+universal de transações, Unit of Work, undo commands ou engine genérica de
+mutações. Seu boundary tem quatro momentos: recomputar o plano autorizado;
+preparar e validar todos os writes e snapshots de rollback sem mutação; aplicar
+somente writes preparados; e, por fim, tentar evento/history. A preparação
+inclui policy/perfil, Battle ainda `Active`, freshness D5/D6B2/D6B1,
+destinos exatos de source, pós-estados de manpower e mirrors, record terminal
+e todos os limites de revisão.
+
+A ordem dos writes é: (1) batch de coortes/manpower e mirrors; (2) transições
+factuais de source em ordem estável de `ManpowerSourceId`; (3) outcome e
+`Active → Resolved` como último write do Battle. Assim, a alocação militar cai
+antes da população de sua source, e a Battle não se torna terminal antes das
+consequências diretas. Nenhum evento, history, callback, policy/provider,
+código do usuário, `await`, snapshot de save ou processamento de comando pode
+observar ou intercalar o estado entre o primeiro e o último write. Código de
+regra/provider roda antes do commit.
+
+Falhas esperadas — como plano stale, source ou custody inválida, perfil não
+suportado e overflow — são descobertas durante a preparação e deixam
+World Truth inalterada. Rollback é obrigatório para falha inesperada durante o
+commit e restaura exatamente os valores e revisões apenas do estado autoritativo
+tocados pela transação: contingents/manpower, mirrors, sources e record/revisão
+da Battle. Se o rollback concluir, a falha informa que o commit foi revertido;
+se o rollback falhar, o runtime fica explicitamente comprometido/faulted e
+mutação autoritativa normal deve parar. Recuperação de crash durável entre
+writes pertence à futura persistência.
+
+D7 v1 é síncrono, sem `await`, no contexto serializado de mutação autoritativa
+do runtime; não implica thread-safety geral. Chamadas D7 concorrentes ou
+reentrantes no mesmo `SimulationRuntime` são rejeitadas, sem introduzir
+locking assíncrono amplo.
+
+Cada contingent alterado avança sua revisão uma vez; a revisão global de
+manpower avança uma vez pelo batch; ArmedForceStore avança se algum Amount
+mirror realmente mudar; cada settlement afetado aplica sua transição e revisão
+uma vez; e o BattleStore avança uma vez pelo commit terminal. Estado inalterado
+não recebe churn de revisão. Overflow é verificado antes do commit, e
+convenções existentes de revisão do domínio não são violadas por simetria
+cosmética.
+
+O resultado distingue aplicação (`Applied`), aplicação com aviso pós-commit
+(`AppliedWithPostCommitWarning`), repetição idempotente (`AlreadyResolved`) e
+rejeição pré-commit (`Rejected`), com causa tipada. Se o evento/history falhar
+depois de World Truth estar commitada, o resultado continua sendo aplicação
+com aviso, nunca rejeição transacional. Falha de rollback é mais grave e
+faults o runtime.
+
+#### Projeções, persistência e fronteiras
+
+Após o commit, o evento/history mínimo de BattleResolved é tentado como
+representação downstream, não participante da transação. A gravação usa
+identidades estáveis e provenance aceita, sem scores ou breakdown de
+casualties. A chamada `AlreadyResolved` não publica de novo evento ausente;
+outbox/retry confiável permanece futuro.
+
+Como o outcome terminal é World Truth, snapshots, canonical output, diff,
+formatter e invariants devem expor lifecycle, dia resolvido, tipo de outcome,
+vencedor e provenance aceita. O plano D6B2 permanece efêmero e fora do
+`WorldStateSnapshot`. O outcome deve ser representável futuramente por IDs
+estáveis, enums, dia lógico e fingerprints/version strings, sem referências a
+objetos runtime; D7 não implementa save/load ou migração/hidratação. Uma Battle
+resolvida deve poder ser consultada sem recomputar D4/D5/D6B2.
+
+D7 não encerra Conflict ou War, decide vencedor/goals de War, faz paz, altera
+ownership/jurisdição/controle, move forças nem cria casualties de Persons. Não
+adiciona resolução automática a `AdvanceDay`. D7 não implementa movement,
+retreat/rout/surrender, aftermath amplo, save/load, replay, networking ou
+event sourcing.
+
+A validação deve provar aplicação multi-source com mortes, ferimentos,
+captura, source totals e mirrors exatos; Battle de consequência zero; retries
+idempotentes e fingerprint incompatível; e que toda falha pré-commit preserva
+o snapshot. Falhas injetadas após o batch de manpower, após source e antes do
+write terminal da Battle devem restaurar exatamente estado e revisões. Também
+deve provar que mudança de policy após resolução não altera o outcome aceito e
+que falha de evento pós-commit retorna aviso sem rollback.
 
 Permanecem deferidos além dessas fronteiras:
 
