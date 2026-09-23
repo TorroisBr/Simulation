@@ -24,7 +24,8 @@ public enum PersonBirthLifecycleFailure
     ParentNotRegistered = 17,
     SelfParent = 18,
     ChildAlreadyHasParentage = 19,
-    ParentageMutationFailed = 20
+    ParentageMutationFailed = 20,
+    RuntimeFaulted = 21
 }
 
 /// <summary>
@@ -294,6 +295,12 @@ public static class PersonBirthLifecycleSystem
             return false;
         }
 
+        if (world.IsMutationFaulted)
+        {
+            failure = PersonBirthLifecycleFailure.RuntimeFaulted;
+            return false;
+        }
+
         if (IsValidTransitionShape(transition) == false)
         {
             failure = PersonBirthLifecycleFailure.InvalidTransition;
@@ -437,6 +444,12 @@ public static class PersonBirthLifecycleSystem
         out PersonBirthLifecycleFailure failure)
     {
         transition = null;
+        if (world != null && world.IsMutationFaulted)
+        {
+            failure = PersonBirthLifecycleFailure.RuntimeFaulted;
+            return false;
+        }
+
         if (TryProposeNamedBirth(
                 world,
                 settlement,

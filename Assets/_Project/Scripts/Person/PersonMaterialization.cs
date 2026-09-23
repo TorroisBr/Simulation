@@ -17,7 +17,8 @@ public enum PersonMaterializationFailure
     NpcNotRegistered = 12,
     ResidenceConflict = 13,
     PersonDead = 14,
-    LifeStateConflict = 15
+    LifeStateConflict = 15,
+    RuntimeFaulted = 16
 }
 
 /// <summary>
@@ -41,6 +42,12 @@ public static class PersonMaterializationSystem
         if (world == null)
         {
             failure = PersonMaterializationFailure.InvalidWorld;
+            return false;
+        }
+
+        if (world.IsMutationFaulted)
+        {
+            failure = PersonMaterializationFailure.RuntimeFaulted;
             return false;
         }
 
@@ -152,6 +159,12 @@ public static class PersonMaterializationSystem
             return false;
         }
 
+        if (world.IsMutationFaulted)
+        {
+            failure = PersonMaterializationFailure.RuntimeFaulted;
+            return false;
+        }
+
         if (personId == null)
         {
             failure = PersonMaterializationFailure.InvalidPerson;
@@ -236,6 +249,8 @@ public static class PersonMaterializationSystem
     {
         switch (failure)
         {
+            case PersonStoreFailure.RuntimeFaulted:
+                return PersonMaterializationFailure.RuntimeFaulted;
             case PersonStoreFailure.PersonNotRegistered:
                 return PersonMaterializationFailure.PersonNotRegistered;
             case PersonStoreFailure.AlreadyMaterialized:

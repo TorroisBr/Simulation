@@ -4,6 +4,18 @@ using NUnit.Framework;
 
 public sealed class RuntimeAuthoritativeMutationGuardTests
 {
+    [SetUp]
+    public void SetUp()
+    {
+        SimulationTestFactory.CleanupDefinitions();
+    }
+
+    [TearDown]
+    public void TearDown()
+    {
+        SimulationTestFactory.CleanupDefinitions();
+    }
+
     [Test]
     public void StandaloneSimulationTimeRemainsMutable()
     {
@@ -186,6 +198,45 @@ public sealed class RuntimeAuthoritativeMutationGuardTests
         Assert.That(contents.StackedContent.Count, Is.Zero);
         Assert.That(placeContent.TryGet(owner, out PlaceContentRuntime readContent), Is.True);
         Assert.That(readContent, Is.SameAs(contents));
+    }
+
+    [Test]
+    public void FaultedRuntimeBlocksPersonBindingBeforeNpcOrPersonMutation()
+    {
+        PersonStore people = new PersonStore();
+        PersonRuntime person = new PersonRuntime(new PersonId("faulted-binding-person"));
+        Assert.That(people.TryRegister(person, out _), Is.True);
+        NpcRuntime npc = new NpcRuntime(
+            "faulted-binding-npc",
+            SimulationTestFactory.CreateNpc("faulted-binding-definition"));
+        SimulationRuntime runtime = new SimulationRuntime(
+            new SimulationTime(), null, new[] { npc }, personStore: people);
+        MarkFaulted(runtime, AuthoritativeMutationFaultReason.RollbackRestoreFailed);
+
+        Assert.That(
+            runtime.TryBindExistingNpcToPerson(person.PersonId, npc.RuntimeId, out PersonMaterializationFailure failure),
+            Is.False);
+        Assert.That(failure, Is.EqualTo(PersonMaterializationFailure.RuntimeFaulted));
+        Assert.That(npc.PersonId, Is.Null);
+        Assert.That(person.IsMaterialized, Is.False);
+    }
+
+    [Test]
+    public void FaultedRuntimeBlocksExistingPersonResidenceBinding()
+    {
+        PersonStore people = new PersonStore();
+        PersonRuntime person = new PersonRuntime(new PersonId("faulted-residence-person"));
+        Assert.That(people.TryRegister(person, out _), Is.True);
+        CityRuntime city = SimulationTestFactory.CreateCity("faulted-residence-city", "faulted-residence-location");
+        SimulationRuntime runtime = new SimulationRuntime(
+            new SimulationTime(), new[] { city }, null, personStore: people);
+        MarkFaulted(runtime, AuthoritativeMutationFaultReason.IntegrityRestoreFailed);
+
+        Assert.That(
+            runtime.TryBindExistingPersonResident(person.PersonId, city, out PersonResidenceMembershipFailure failure),
+            Is.False);
+        Assert.That(failure, Is.EqualTo(PersonResidenceMembershipFailure.RuntimeFaulted));
+        Assert.That(person.ResidenceSettlementRuntimeId, Is.Null);
     }
 
     [Test]

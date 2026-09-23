@@ -10,7 +10,8 @@ public enum PersonResidenceMembershipFailure
     SettlementNotInWorld = 5,
     ResidenceAlreadyAssigned = 6,
     AggregateCapacityExceeded = 7,
-    PersonDead = 8
+    PersonDead = 8,
+    RuntimeFaulted = 9
 }
 
 /// <summary>
@@ -31,6 +32,12 @@ public static class PersonResidenceMembershipSystem
         if (world == null)
         {
             failure = PersonResidenceMembershipFailure.InvalidWorld;
+            return false;
+        }
+
+        if (world.IsMutationFaulted)
+        {
+            failure = PersonResidenceMembershipFailure.RuntimeFaulted;
             return false;
         }
 
