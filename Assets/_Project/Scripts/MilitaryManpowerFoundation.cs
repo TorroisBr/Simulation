@@ -121,7 +121,8 @@ public enum ContingentManpowerFailureCode
     RedistributionChangesLivingRoster = 25,
     ForceHasDirectLivingRoster = 26,
     ForceIsCustodianOfCapturedRoster = 27,
-    InvalidInvariant = 28
+    InvalidInvariant = 28,
+    RuntimeFaulted = 29
 }
 
 public sealed class ContingentManpowerFailure
@@ -247,8 +248,9 @@ public sealed class ContingentManpowerInvariantReport
 /// <summary>
 /// Owns contingent source bindings and cohort rosters. It never mutates the source domain or population.
 /// </summary>
-public sealed class ContingentManpowerStateStore
+public sealed class ContingentManpowerStateStore : IAuthoritativeMutationGuardBindable
 {
+    private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
     private readonly ArmedForceStore armedForceStore;
     private readonly IManpowerSourceSnapshotProvider sourceProvider;
     private readonly Dictionary<string, ContingentManpowerState> states =
@@ -339,6 +341,9 @@ public sealed class ContingentManpowerStateStore
     /// <summary>Managed registration is deliberately empty; positive roster must use TryAllocate.</summary>
     public bool TryRegisterContingent(ContingentRecord contingent, out ContingentManpowerFailure failure)
     {
+        if (!mutationGuardBinding.CanMutate)
+            return Fail(ContingentManpowerFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.", out failure);
+
         if (contingent == null || contingent.Id == null || contingent.ForceId == null)
             return Fail(ContingentManpowerFailureCode.InvalidContingent, "A contingent with stable identity is required.", out failure);
         if (contingent.Amount != 0L)
@@ -661,6 +666,9 @@ public sealed class ContingentManpowerStateStore
     private bool TryGetMutableState(ContingentId id, long expectedRevision, out ContingentManpowerState state, out ContingentManpowerFailure failure)
     {
         state = null;
+        if (!mutationGuardBinding.CanMutate)
+            return Fail(ContingentManpowerFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.", out failure);
+
         if (id == null || !states.TryGetValue(id.Value, out state))
             return Fail(ContingentManpowerFailureCode.ContingentNotRegistered, "The contingent manpower state is not registered.", out failure);
         if (state.Revision != expectedRevision)
@@ -826,5 +834,28 @@ public sealed class ContingentManpowerStateStore
     {
         failure = ContingentManpowerFailure.Create(code, message);
         return false;
+    }
+
+    internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return mutationGuardBinding.CanBindTo(guard)
+            && armedForceStore.CanBindMutationGuard(guard);
+    }
+
+    internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return CanBindMutationGuard(guard)
+            && mutationGuardBinding.TryBindTo(guard)
+            && armedForceStore.TryBindMutationGuard(guard);
+    }
+
+    bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return CanBindMutationGuard(guard);
+    }
+
+    bool IAuthoritativeMutationGuardBindable.TryBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return TryBindMutationGuard(guard);
     }
 }

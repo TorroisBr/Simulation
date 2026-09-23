@@ -6,8 +6,9 @@ using System.Collections.ObjectModel;
 /// World-owned registry of explicitly opened estates. Factual Person death is
 /// not observed here and never opens an estate implicitly.
 /// </summary>
-public sealed class EstateStore
+public sealed class EstateStore : IAuthoritativeMutationGuardBindable
 {
+    private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
     private readonly PersonStore personStore;
     private readonly Dictionary<string, EstateRecord> recordsById =
         new Dictionary<string, EstateRecord>(StringComparer.Ordinal);
@@ -58,6 +59,12 @@ public sealed class EstateStore
         EstateRecord record,
         out EstateFoundationFailure failure)
     {
+        if (!mutationGuardBinding.CanMutate)
+        {
+            failure = EstateFoundationFailure.Create(EstateFoundationFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.");
+            return false;
+        }
+
         if (record == null || record.EstateId == null || record.DeceasedPersonId == null)
         {
             failure = EstateFoundationFailure.Create(
@@ -96,4 +103,20 @@ public sealed class EstateStore
         failure = EstateFoundationFailure.None;
         return true;
     }
+
+    internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return mutationGuardBinding.CanBindTo(guard)
+            && personStore.CanBindMutationGuard(guard);
+    }
+
+    internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return CanBindMutationGuard(guard)
+            && personStore.TryBindMutationGuard(guard)
+            && mutationGuardBinding.TryBindTo(guard);
+    }
+
+    bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard) => CanBindMutationGuard(guard);
+    bool IAuthoritativeMutationGuardBindable.TryBindMutationGuard(AuthoritativeMutationGuard guard) => TryBindMutationGuard(guard);
 }

@@ -2,8 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 
-public sealed class FactionStore
+public sealed class FactionStore : IAuthoritativeMutationGuardBindable
 {
+    private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
     private readonly PersonStore personStore;
     private readonly object ownerToken = new object();
     private readonly Dictionary<string, FactionRecord> factionsById =
@@ -46,6 +47,12 @@ public sealed class FactionStore
 
     public bool TryRegister(FactionRecord record, out FactionFoundationFailure failure)
     {
+        if (!mutationGuardBinding.CanMutate)
+        {
+            failure = FactionFoundationFailure.Create(FactionFoundationFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.");
+            return false;
+        }
+
         if (record?.Id == null)
         {
             failure = FactionFoundationFailure.Create(FactionFoundationFailureCode.InvalidFaction, "A faction with a stable FactionId is required.");
@@ -114,6 +121,12 @@ public sealed class FactionStore
 
     public bool TryRegisterAffiliation(FactionAffiliationRecord record, out FactionFoundationFailure failure)
     {
+        if (!mutationGuardBinding.CanMutate)
+        {
+            failure = FactionFoundationFailure.Create(FactionFoundationFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.");
+            return false;
+        }
+
         if (ValidateAffiliationEndpoints(record, out failure) == false
             || ValidateNewAffiliation(record, out failure) == false)
         {
@@ -137,6 +150,12 @@ public sealed class FactionStore
 
     internal bool TryApplyAdd(FactionAffiliationAddTransition transition, out FactionFoundationFailure failure)
     {
+        if (!mutationGuardBinding.CanMutate)
+        {
+            failure = FactionFoundationFailure.Create(FactionFoundationFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.");
+            return false;
+        }
+
         if (transition == null || transition.Affiliation == null)
         {
             failure = FactionFoundationFailure.Create(FactionFoundationFailureCode.InvalidTransition, "A valid affiliation add transition is required.");
@@ -172,6 +191,12 @@ public sealed class FactionStore
 
     internal bool TryApplyEnd(FactionAffiliationEndTransition transition, out FactionFoundationFailure failure)
     {
+        if (!mutationGuardBinding.CanMutate)
+        {
+            failure = FactionFoundationFailure.Create(FactionFoundationFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.");
+            return false;
+        }
+
         if (transition == null || transition.ExpectedAffiliation == null)
         {
             failure = FactionFoundationFailure.Create(FactionFoundationFailureCode.InvalidTransition, "A valid affiliation end transition is required.");
@@ -285,4 +310,19 @@ public sealed class FactionStore
         int person = StringComparer.Ordinal.Compare(left.PersonId.Value, right.PersonId.Value);
         return person != 0 ? person : StringComparer.Ordinal.Compare(left.AffiliationId.Value, right.AffiliationId.Value);
     }
+
+    internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return mutationGuardBinding.CanBindTo(guard) && personStore.CanBindMutationGuard(guard);
+    }
+
+    internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return CanBindMutationGuard(guard)
+            && personStore.TryBindMutationGuard(guard)
+            && mutationGuardBinding.TryBindTo(guard);
+    }
+
+    bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard) => CanBindMutationGuard(guard);
+    bool IAuthoritativeMutationGuardBindable.TryBindMutationGuard(AuthoritativeMutationGuard guard) => TryBindMutationGuard(guard);
 }

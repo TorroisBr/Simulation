@@ -283,7 +283,8 @@ public enum PoliticalSupportFailureCode
     WrongSupportStore = 16,
     RevisionOverflow = 17,
     ActiveRelationAlreadyExists = DuplicateActiveRelation,
-    StaleWorldDay = 18
+    StaleWorldDay = 18,
+    RuntimeFaulted = 19
 }
 
 public sealed class PoliticalSupportFailure : IEquatable<PoliticalSupportFailure>

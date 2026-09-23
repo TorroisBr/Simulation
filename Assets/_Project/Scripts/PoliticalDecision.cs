@@ -408,7 +408,8 @@ public enum PoliticalDecisionFailureCode
     DuplicateDecisionId = 2,
     RevisionOverflow = 3,
     StaleDecision = 4,
-    WorldMismatch = 5
+    WorldMismatch = 5,
+    RuntimeFaulted = 6
 }
 
 public sealed class PoliticalDecisionFailure
@@ -439,8 +440,9 @@ public sealed class PoliticalDecisionFailure
 /// Deterministic append-only history of political decisions. It stores
 /// proposals/selections and captured stale checks; it owns no execution path.
 /// </summary>
-public sealed class PoliticalDecisionStore
+public sealed class PoliticalDecisionStore : IAuthoritativeMutationGuardBindable
 {
+    private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
     private readonly Dictionary<string, PoliticalDecisionRecord> recordsById =
         new Dictionary<string, PoliticalDecisionRecord>(StringComparer.Ordinal);
     private PersonStore boundPersonStore;
@@ -484,6 +486,12 @@ public sealed class PoliticalDecisionStore
 
     public bool TryRegister(PoliticalDecisionRecord record, out PoliticalDecisionFailure failure)
     {
+        if (!mutationGuardBinding.CanMutate)
+        {
+            failure = PoliticalDecisionFailure.Create(PoliticalDecisionFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.");
+            return false;
+        }
+
         if (record == null || record.DecisionId == null || record.Decider == null || record.Outcome == null)
         {
             failure = PoliticalDecisionFailure.Create(
@@ -548,4 +556,20 @@ public sealed class PoliticalDecisionStore
             ? day
             : StringComparer.Ordinal.Compare(left.DecisionId.Value, right.DecisionId.Value);
     }
+
+    internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return mutationGuardBinding.CanBindTo(guard)
+            && (boundPersonStore == null || boundPersonStore.CanBindMutationGuard(guard));
+    }
+
+    internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return CanBindMutationGuard(guard)
+            && (boundPersonStore == null || boundPersonStore.TryBindMutationGuard(guard))
+            && mutationGuardBinding.TryBindTo(guard);
+    }
+
+    bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard) => CanBindMutationGuard(guard);
+    bool IAuthoritativeMutationGuardBindable.TryBindMutationGuard(AuthoritativeMutationGuard guard) => TryBindMutationGuard(guard);
 }

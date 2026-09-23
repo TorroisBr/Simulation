@@ -6,8 +6,9 @@ using System.Collections.ObjectModel;
 /// Authoritative persistent Conflict state. This store is deliberately
 /// independent from the lower-level ConflictFoundation resolution primitive.
 /// </summary>
-public sealed class PersistentConflictStore
+public sealed class PersistentConflictStore : IAuthoritativeMutationGuardBindable
 {
+    private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
     private readonly ArmedForceStore armedForceStore;
     private readonly Dictionary<string, PersistentConflictRecord> recordsById =
         new Dictionary<string, PersistentConflictRecord>(StringComparer.Ordinal);
@@ -40,6 +41,9 @@ public sealed class PersistentConflictStore
 
     public bool TryRegister(PersistentConflictRecord record, out PersistentStateFailure failure)
     {
+        if (!mutationGuardBinding.CanMutate)
+            return Fail(PersistentStateFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.", out failure);
+
         if (record == null || record.Id == null)
         {
             return Fail(PersistentStateFailureCode.InvalidRecord, "A Conflict requires a stable ConflictId.", out failure);
@@ -66,6 +70,9 @@ public sealed class PersistentConflictStore
         ConflictParticipantBinding binding,
         out PersistentStateFailure failure)
     {
+        if (!mutationGuardBinding.CanMutate)
+            return Fail(PersistentStateFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.", out failure);
+
         if (TryGet(conflictId, out PersistentConflictRecord current) == false)
         {
             return Fail(PersistentStateFailureCode.NotRegistered, "The ConflictId is not registered.", out failure);
@@ -89,6 +96,9 @@ public sealed class PersistentConflictStore
 
     public bool TryEnd(ConflictId conflictId, long endedAbsoluteDay, out PersistentStateFailure failure)
     {
+        if (!mutationGuardBinding.CanMutate)
+            return Fail(PersistentStateFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.", out failure);
+
         if (TryGet(conflictId, out PersistentConflictRecord current) == false)
         {
             return Fail(PersistentStateFailureCode.NotRegistered, "The ConflictId is not registered.", out failure);
@@ -320,11 +330,17 @@ public sealed class PersistentConflictStore
         failure = PersistentStateFailure.Create(code, message);
         return false;
     }
+
+    internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard) => mutationGuardBinding.CanBindTo(guard);
+    internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard) => mutationGuardBinding.TryBindTo(guard);
+    bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard) => CanBindMutationGuard(guard);
+    bool IAuthoritativeMutationGuardBindable.TryBindMutationGuard(AuthoritativeMutationGuard guard) => TryBindMutationGuard(guard);
 }
 
 /// <summary>Authoritative persistent War state with optional Conflict reference.</summary>
-public sealed class PersistentWarStore
+public sealed class PersistentWarStore : IAuthoritativeMutationGuardBindable
 {
+    private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
     private readonly ArmedForceStore armedForceStore;
     private readonly PersistentConflictStore conflictStore;
     private readonly Dictionary<string, PersistentWarRecord> recordsById =
@@ -360,6 +376,9 @@ public sealed class PersistentWarStore
 
     public bool TryRegister(PersistentWarRecord record, out PersistentStateFailure failure)
     {
+        if (!mutationGuardBinding.CanMutate)
+            return Fail(PersistentStateFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.", out failure);
+
         if (record == null || record.Id == null) return Fail(PersistentStateFailureCode.InvalidRecord, "A War requires a stable WarId.", out failure);
         if (recordsById.ContainsKey(record.Id.Value)) return Fail(PersistentStateFailureCode.DuplicateIdentity, "The WarId is already registered.", out failure);
         if (ValidateRecord(record, false, out failure) == false || CanAdvance(out failure) == false) return false;
@@ -371,6 +390,9 @@ public sealed class PersistentWarStore
 
     public bool TryAddParticipantBinding(WarId warId, WarParticipantBinding binding, out PersistentStateFailure failure)
     {
+        if (!mutationGuardBinding.CanMutate)
+            return Fail(PersistentStateFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.", out failure);
+
         if (TryGet(warId, out PersistentWarRecord current) == false) return Fail(PersistentStateFailureCode.NotRegistered, "The WarId is not registered.", out failure);
         if (current.IsActive == false) return Fail(PersistentStateFailureCode.StateEnded, "An ended War cannot receive a new participant.", out failure);
         if (ValidateBinding(current, binding, true, out failure) == false || CanAdvance(out failure) == false) return false;
@@ -382,6 +404,9 @@ public sealed class PersistentWarStore
 
     public bool TryEnd(WarId warId, long endedAbsoluteDay, out PersistentStateFailure failure)
     {
+        if (!mutationGuardBinding.CanMutate)
+            return Fail(PersistentStateFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.", out failure);
+
         if (TryGet(warId, out PersistentWarRecord current) == false) return Fail(PersistentStateFailureCode.NotRegistered, "The WarId is not registered.", out failure);
         if (current.IsActive == false) return Fail(PersistentStateFailureCode.StateEnded, "The War is already ended.", out failure);
         if (endedAbsoluteDay < current.CreatedAbsoluteDay) return Fail(PersistentStateFailureCode.InvalidDay, "A War cannot end before it is created.", out failure);
@@ -493,11 +518,17 @@ public sealed class PersistentWarStore
         failure = PersistentStateFailure.Create(code, message);
         return false;
     }
+
+    internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard) => mutationGuardBinding.CanBindTo(guard);
+    internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard) => mutationGuardBinding.TryBindTo(guard);
+    bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard) => CanBindMutationGuard(guard);
+    bool IAuthoritativeMutationGuardBindable.TryBindMutationGuard(AuthoritativeMutationGuard guard) => TryBindMutationGuard(guard);
 }
 
 /// <summary>Authoritative persistent Battle state with optional parent references.</summary>
-public sealed class PersistentBattleStore
+public sealed class PersistentBattleStore : IAuthoritativeMutationGuardBindable
 {
+    private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
     private readonly ArmedForceStore armedForceStore;
     private readonly PersistentConflictStore conflictStore;
     private readonly PersistentWarStore warStore;
@@ -547,6 +578,9 @@ public sealed class PersistentBattleStore
 
     public bool TryRegister(PersistentBattleRecord record, out PersistentStateFailure failure)
     {
+        if (!mutationGuardBinding.CanMutate)
+            return Fail(PersistentStateFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.", out failure);
+
         if (record == null || record.Id == null) return Fail(PersistentStateFailureCode.InvalidRecord, "A Battle requires a stable BattleId.", out failure);
         if (recordsById.ContainsKey(record.Id.Value)) return Fail(PersistentStateFailureCode.DuplicateIdentity, "The BattleId is already registered.", out failure);
         if (record.LifecycleState == BattleLifecycleState.Resolved) return Fail(PersistentStateFailureCode.BattleResolutionDeferred, "Battle resolution is outside this checkpoint.", out failure);
@@ -559,6 +593,9 @@ public sealed class PersistentBattleStore
 
     public bool TryAddParticipantBinding(BattleId battleId, BattleParticipantBinding binding, out PersistentStateFailure failure)
     {
+        if (!mutationGuardBinding.CanMutate)
+            return Fail(PersistentStateFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.", out failure);
+
         if (TryGet(battleId, out PersistentBattleRecord current) == false) return Fail(PersistentStateFailureCode.NotRegistered, "The BattleId is not registered.", out failure);
         if (current.LifecycleState == BattleLifecycleState.Resolved) return Fail(PersistentStateFailureCode.BattleResolutionDeferred, "Battle resolution is outside this checkpoint.", out failure);
         if (ValidateBinding(current, binding, true, out failure) == false || CanAdvance(out failure) == false) return false;
@@ -579,6 +616,9 @@ public sealed class PersistentBattleStore
         SpatialReference locationReference,
         out PersistentStateFailure failure)
     {
+        if (!mutationGuardBinding.CanMutate)
+            return Fail(PersistentStateFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.", out failure);
+
         if (TryGet(battleId, out PersistentBattleRecord current) == false) return Fail(PersistentStateFailureCode.NotRegistered, "The BattleId is not registered.", out failure);
         if (current.LifecycleState != BattleLifecycleState.Pending) return Fail(PersistentStateFailureCode.InvalidLifecycle, "Only a pending Battle can become active.", out failure);
         if (startedAbsoluteDay < current.CreatedAbsoluteDay) return Fail(PersistentStateFailureCode.InvalidDay, "A Battle cannot start before it is created.", out failure);
@@ -766,4 +806,9 @@ public sealed class PersistentBattleStore
         failure = PersistentStateFailure.Create(code, message);
         return false;
     }
+
+    internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard) => mutationGuardBinding.CanBindTo(guard);
+    internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard) => mutationGuardBinding.TryBindTo(guard);
+    bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard) => CanBindMutationGuard(guard);
+    bool IAuthoritativeMutationGuardBindable.TryBindMutationGuard(AuthoritativeMutationGuard guard) => TryBindMutationGuard(guard);
 }

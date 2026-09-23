@@ -5,8 +5,9 @@ using System.Collections.ObjectModel;
 /// <summary>
 /// In-memory registry for institution definitions within one world boundary.
 /// </summary>
-public sealed class InstitutionStore
+public sealed class InstitutionStore : IAuthoritativeMutationGuardBindable
 {
+    private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
     private readonly Dictionary<string, InstitutionRecord> records =
         new Dictionary<string, InstitutionRecord>(StringComparer.Ordinal);
 
@@ -22,6 +23,12 @@ public sealed class InstitutionStore
 
     public bool TryRegister(InstitutionRecord record, out InstitutionFoundationFailure failure)
     {
+        if (!mutationGuardBinding.CanMutate)
+        {
+            failure = InstitutionFoundationFailure.Create(InstitutionFoundationFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.");
+            return false;
+        }
+
         if (record == null || record.Id == null)
         {
             failure = InstitutionFoundationFailure.Create(
@@ -48,14 +55,20 @@ public sealed class InstitutionStore
         record = null;
         return id != null && records.TryGetValue(id.Value, out record);
     }
+
+    internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard) => mutationGuardBinding.CanBindTo(guard);
+    internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard) => mutationGuardBinding.TryBindTo(guard);
+    bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard) => CanBindMutationGuard(guard);
+    bool IAuthoritativeMutationGuardBindable.TryBindMutationGuard(AuthoritativeMutationGuard guard) => TryBindMutationGuard(guard);
 }
 
 /// <summary>
 /// In-memory office registry and controlled incumbency boundary for one world.
 /// It deliberately has no dependency on mutable simulation runtime adapters.
 /// </summary>
-public sealed class OfficeStore
+public sealed class OfficeStore : IAuthoritativeMutationGuardBindable
 {
+    private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
     private readonly InstitutionStore institutionStore;
     private readonly Dictionary<string, OfficeRecord> records =
         new Dictionary<string, OfficeRecord>(StringComparer.Ordinal);
@@ -139,6 +152,12 @@ public sealed class OfficeStore
 
     public bool TryRegister(OfficeRecord record, out InstitutionFoundationFailure failure)
     {
+        if (!mutationGuardBinding.CanMutate)
+        {
+            failure = InstitutionFoundationFailure.Create(InstitutionFoundationFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.");
+            return false;
+        }
+
         if (record == null || record.Id == null || record.InstitutionId == null)
         {
             failure = InstitutionFoundationFailure.Create(
@@ -230,6 +249,12 @@ public sealed class OfficeStore
         long? startAbsoluteDay,
         out InstitutionFoundationFailure failure)
     {
+        if (!mutationGuardBinding.CanMutate)
+        {
+            failure = InstitutionFoundationFailure.Create(InstitutionFoundationFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.");
+            return false;
+        }
+
         if (TryGet(officeId, out _) == false)
         {
             failure = InstitutionFoundationFailure.Create(
@@ -289,6 +314,12 @@ public sealed class OfficeStore
         InstitutionalVacancyRecognitionReason endReason,
         out InstitutionFoundationFailure failure)
     {
+        if (!mutationGuardBinding.CanMutate)
+        {
+            failure = InstitutionFoundationFailure.Create(InstitutionFoundationFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.");
+            return false;
+        }
+
         if (TryGet(officeId, out _) == false)
         {
             failure = InstitutionFoundationFailure.Create(
@@ -370,6 +401,12 @@ public sealed class OfficeStore
         OfficeTenureRecord record,
         out InstitutionFoundationFailure failure)
     {
+        if (!mutationGuardBinding.CanMutate)
+        {
+            failure = InstitutionFoundationFailure.Create(InstitutionFoundationFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.");
+            return false;
+        }
+
         if (record == null || record.OfficeId == null || record.Incumbent == null || record.IsOpen)
         {
             failure = InstitutionFoundationFailure.Create(
@@ -465,4 +502,20 @@ public sealed class OfficeStore
         snapshot.Sort((left, right) => string.CompareOrdinal(left.Id.Value, right.Id.Value));
         return new ReadOnlyCollection<OfficeRecord>(snapshot);
     }
+
+    internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return mutationGuardBinding.CanBindTo(guard)
+            && institutionStore.CanBindMutationGuard(guard);
+    }
+
+    internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return CanBindMutationGuard(guard)
+            && institutionStore.TryBindMutationGuard(guard)
+            && mutationGuardBinding.TryBindTo(guard);
+    }
+
+    bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard) => CanBindMutationGuard(guard);
+    bool IAuthoritativeMutationGuardBindable.TryBindMutationGuard(AuthoritativeMutationGuard guard) => TryBindMutationGuard(guard);
 }

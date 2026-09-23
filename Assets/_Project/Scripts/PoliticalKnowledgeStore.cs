@@ -12,7 +12,8 @@ public enum PoliticalKnowledgeFailureCode
     InvalidObservation = 5,
     FutureObservation = 6,
     KnowledgeNotImproved = 7,
-    HolderFactionNotRegistered = 8
+    HolderFactionNotRegistered = 8,
+    RuntimeFaulted = 9
 }
 
 public sealed class PoliticalKnowledgeFailure : IEquatable<PoliticalKnowledgeFailure>
@@ -55,8 +56,9 @@ public sealed class PoliticalKnowledgeFailure : IEquatable<PoliticalKnowledgeFai
 /// World-owned container for political knowledge. It stores beliefs by stable PersonId,
 /// InstitutionId, or FactionId and never rewrites the factual political stores.
 /// </summary>
-public sealed class PoliticalKnowledgeStore
+public sealed class PoliticalKnowledgeStore : IAuthoritativeMutationGuardBindable
 {
+    private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
     private readonly PersonStore personStore;
     private readonly InstitutionStore institutionStore;
     private readonly PoliticalClaimStore politicalClaimStore;
@@ -109,6 +111,12 @@ public sealed class PoliticalKnowledgeStore
         long currentWorldDay,
         out PoliticalKnowledgeFailure failure)
     {
+        if (!mutationGuardBinding.CanMutate)
+        {
+            failure = PoliticalKnowledgeFailure.Create(PoliticalKnowledgeFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.");
+            return false;
+        }
+
         if (ValidateHolder(holder, out failure) == false)
         {
             return false;
@@ -151,6 +159,12 @@ public sealed class PoliticalKnowledgeStore
         out PoliticalKnowledgeFailure failure)
     {
         failure = PoliticalKnowledgeFailure.None;
+        if (!mutationGuardBinding.CanMutate)
+        {
+            failure = PoliticalKnowledgeFailure.Create(PoliticalKnowledgeFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.");
+            return false;
+        }
+
         if (runtime == null)
         {
             failure = PoliticalKnowledgeFailure.Create(
@@ -208,6 +222,12 @@ public sealed class PoliticalKnowledgeStore
         out PoliticalKnowledgeFailure failure)
     {
         failure = PoliticalKnowledgeFailure.None;
+        if (!mutationGuardBinding.CanMutate)
+        {
+            failure = PoliticalKnowledgeFailure.Create(PoliticalKnowledgeFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.");
+            return false;
+        }
+
         if (observation == null)
         {
             failure = PoliticalKnowledgeFailure.Create(
@@ -529,4 +549,30 @@ public sealed class PoliticalKnowledgeStore
             message);
         return false;
     }
+
+    internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return mutationGuardBinding.CanBindTo(guard)
+            && personStore.CanBindMutationGuard(guard)
+            && institutionStore.CanBindMutationGuard(guard)
+            && politicalClaimStore.CanBindMutationGuard(guard)
+            && factionStore.CanBindMutationGuard(guard)
+            && officeStore.CanBindMutationGuard(guard)
+            && propertyOwnershipStore.CanBindMutationGuard(guard);
+    }
+
+    internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return CanBindMutationGuard(guard)
+            && personStore.TryBindMutationGuard(guard)
+            && institutionStore.TryBindMutationGuard(guard)
+            && politicalClaimStore.TryBindMutationGuard(guard)
+            && factionStore.TryBindMutationGuard(guard)
+            && officeStore.TryBindMutationGuard(guard)
+            && propertyOwnershipStore.TryBindMutationGuard(guard)
+            && mutationGuardBinding.TryBindTo(guard);
+    }
+
+    bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard) => CanBindMutationGuard(guard);
+    bool IAuthoritativeMutationGuardBindable.TryBindMutationGuard(AuthoritativeMutationGuard guard) => TryBindMutationGuard(guard);
 }

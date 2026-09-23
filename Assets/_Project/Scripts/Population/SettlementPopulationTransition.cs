@@ -12,7 +12,9 @@ public enum PopulationTransitionFailure
     WouldOverflow = 4,
     StaleState = 5,
     InvalidTransition = 6,
-    RevisionOverflow = 7
+    RevisionOverflow = 7,
+    RuntimeFaulted = 8,
+    RuntimeOwnershipMismatch = 9
 }
 
 /// <summary>

@@ -92,6 +92,55 @@ public sealed class RuntimeAuthoritativeMutationGuardTests
     }
 
     [Test]
+    public void ExposedPersonStoreRejectsMutationWhileFaultedButRemainsReadable()
+    {
+        PersonStore people = new PersonStore();
+        SimulationRuntime runtime = new SimulationRuntime(new SimulationTime(), null, null, personStore: people);
+        PersonId personId = new PersonId("faulted-person-store");
+        MarkFaulted(runtime, AuthoritativeMutationFaultReason.RollbackRestoreFailed);
+
+        Assert.That(people.TryRegister(new PersonRuntime(personId), out PersonStoreFailure failure), Is.False);
+        Assert.That(failure, Is.EqualTo(PersonStoreFailure.RuntimeFaulted));
+        Assert.That(people.Persons.Count, Is.Zero);
+        Assert.That(people.TryGet(personId, out _), Is.False);
+    }
+
+    [Test]
+    public void PersonDeathEntryPointRejectsBeforeChangingUnresidentPerson()
+    {
+        PersonStore people = new PersonStore();
+        PersonRuntime person = new PersonRuntime(new PersonId("faulted-death-person"));
+        Assert.That(people.TryRegister(person, out _), Is.True);
+        SimulationRuntime runtime = new SimulationRuntime(new SimulationTime(3L), null, null, personStore: people);
+        Assert.That(runtime.TryProposePersonDeath(person.PersonId, out PersonDeathTransition transition, out _), Is.True);
+
+        MarkFaulted(runtime, AuthoritativeMutationFaultReason.IntegrityRestoreFailed);
+
+        Assert.That(runtime.TryApplyPersonDeath(transition, out PersonDeathLifecycleFailure failure), Is.False);
+        Assert.That(failure, Is.EqualTo(PersonDeathLifecycleFailure.RuntimeFaulted));
+        Assert.That(person.IsDeadAt(runtime.CurrentDay), Is.False);
+    }
+
+    [Test]
+    public void ExposedArmedForceStoreRejectsMutationWithoutRevisionChange()
+    {
+        SimulationRuntime runtime = new SimulationRuntime(new SimulationTime(), null, null);
+        long revisionBefore = runtime.ArmedForceStore.Revision;
+        MarkFaulted(runtime, AuthoritativeMutationFaultReason.RollbackRestoreFailed);
+
+        Assert.That(
+            runtime.ArmedForceStore.TryRegister(
+                new ArmedForceRecord(new ArmedForceId("faulted-force"), "Faulted", 0L),
+                out ArmedForceFoundationFailure failure),
+            Is.False);
+
+        Assert.That(failure.Code, Is.EqualTo(ArmedForceFoundationFailureCode.RuntimeFaulted));
+        Assert.That(runtime.ArmedForceStore.Count, Is.Zero);
+        Assert.That(runtime.ArmedForceStore.Revision, Is.EqualTo(revisionBefore));
+        Assert.That(runtime.ArmedForceStore.TryGet(new ArmedForceId("faulted-force"), out _), Is.False);
+    }
+
+    [Test]
     public void OrdinaryInvalidDayCountDoesNotFaultRuntime()
     {
         SimulationRuntime runtime = new SimulationRuntime(new SimulationTime(), null, null);

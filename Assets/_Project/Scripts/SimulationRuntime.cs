@@ -52,6 +52,7 @@ public sealed class SimulationRuntime
     private long politicalWorldRevision;
     private long lastPoliticalTruthFingerprint;
     private bool hasPoliticalTruthFingerprint;
+    private bool isComposingNpcRoster;
     private readonly List<NpcActionData> configuredActions;
     private readonly ScheduledDirectiveSystem scheduledDirectiveSystem;
     private readonly JusticeSystem justiceSystem;
@@ -187,6 +188,13 @@ public sealed class SimulationRuntime
         IEnumerable<SettlementManpowerSourceRegistration> settlementManpowerSourceRegistrations = null,
         BattleDirectConsequencePolicy battleDirectConsequencePolicy = null)
     {
+        List<CityRuntime> resolvedCities = cities != null
+            ? new List<CityRuntime>(cities)
+            : new List<CityRuntime>();
+        List<NpcRuntime> resolvedNpcRuntimes = npcRuntimes != null
+            ? new List<NpcRuntime>(npcRuntimes)
+            : new List<NpcRuntime>();
+
         this.simulationTime = simulationTime ?? throw new ArgumentNullException(nameof(simulationTime));
         if (this.simulationTime.CanBindMutationGuard(mutationGuard) == false)
         {
@@ -195,9 +203,38 @@ public sealed class SimulationRuntime
                 nameof(simulationTime));
         }
 
-        List<CityRuntime> resolvedCities = cities != null
-            ? new List<CityRuntime>(cities)
-            : new List<CityRuntime>();
+        foreach (CityRuntime city in resolvedCities)
+        {
+            if (city != null && !city.CanBindRuntimeMutationGuard(mutationGuard))
+            {
+                throw new ArgumentException(
+                    "A CityRuntime or its population authority is already owned by another SimulationRuntime.",
+                    nameof(cities));
+            }
+        }
+
+        foreach (NpcRuntime npc in resolvedNpcRuntimes)
+        {
+            if (npc != null && !npc.CanBindRuntimeMutationGuard(mutationGuard))
+            {
+                throw new ArgumentException("An NpcRuntime is already owned by another SimulationRuntime.", nameof(npcRuntimes));
+            }
+        }
+
+        PreflightMutationGuardBinding(scheduledDirectiveSystem, mutationGuard, nameof(scheduledDirectiveSystem));
+        PreflightMutationGuardBinding(justiceSystem, mutationGuard, nameof(justiceSystem));
+        PreflightMutationGuardBinding(crimeSystem, mutationGuard, nameof(crimeSystem));
+        PreflightMutationGuardBinding(npcDecisionSystem, mutationGuard, nameof(npcDecisionSystem));
+        PreflightMutationGuardBinding(travelSystem, mutationGuard, nameof(travelSystem));
+        PreflightMutationGuardBinding(travelPartySystem, mutationGuard, nameof(travelPartySystem));
+        PreflightMutationGuardBinding(merchantSystem, mutationGuard, nameof(merchantSystem));
+        PreflightMutationGuardBinding(commercialKnowledgeSharingSystem, mutationGuard, nameof(commercialKnowledgeSharingSystem));
+        PreflightMutationGuardBinding(explorableSiteStore, mutationGuard, nameof(explorableSiteStore));
+        PreflightMutationGuardBinding(explorableSiteKnowledgeSystem, mutationGuard, nameof(explorableSiteKnowledgeSystem));
+        PreflightMutationGuardBinding(expeditionSystem, mutationGuard, nameof(expeditionSystem));
+        PreflightMutationGuardBinding(placeContentStore, mutationGuard, nameof(placeContentStore));
+        PreflightMutationGuardBinding(adventureExpeditionAutonomySystem, mutationGuard, nameof(adventureExpeditionAutonomySystem));
+
         object manpowerSourceWorldCompositionIdentity = new object();
         resolvedCities.Sort((left, right) => string.CompareOrdinal(
             left?.RuntimeId ?? string.Empty,
@@ -427,23 +464,6 @@ public sealed class SimulationRuntime
         this.scheduledDirectiveSystem = scheduledDirectiveSystem;
         this.justiceSystem = justiceSystem;
         this.crimeSystem = crimeSystem;
-        if (this.crimeSystem != null
-            && this.crimeSystem.TryBindSimulationTime(this.simulationTime) == false)
-        {
-            throw new ArgumentException(
-                "CrimeSystem must belong to the SimulationRuntime time boundary.",
-                nameof(crimeSystem));
-        }
-        if (this.crimeSystem != null
-            && this.crimeSystem.TryBindTheftOutcomeSink(this.crimeSocialAppraisalWorldState.Integration) == false
-            && ReferenceEquals(
-                this.crimeSystem.TheftOutcomeSink,
-                this.crimeSocialAppraisalWorldState.Integration) == false)
-        {
-            throw new ArgumentException(
-                "CrimeSystem outcome sink must belong to the SimulationRuntime crime appraisal world.",
-                nameof(crimeSystem));
-        }
         this.npcDecisionSystem = npcDecisionSystem;
         this.travelSystem = travelSystem;
         this.travelPartySystem = travelPartySystem;
@@ -474,11 +494,10 @@ public sealed class SimulationRuntime
                 nameof(configuration));
         }
 
-        this.expeditionSystem?.BindWorldRuntime(this);
-
-        if (npcRuntimes != null)
+        isComposingNpcRoster = true;
+        if (resolvedNpcRuntimes != null)
         {
-            foreach (NpcRuntime npcRuntime in npcRuntimes)
+            foreach (NpcRuntime npcRuntime in resolvedNpcRuntimes)
             {
                 if (TryRegisterNpc(npcRuntime, out WorldNpcRegistryFailure failure) == false)
                 {
@@ -502,16 +521,82 @@ public sealed class SimulationRuntime
             this.battleDirectConsequencePolicy);
 
         BindCoreMutationGuardAuthorities();
+        if (this.crimeSystem != null
+            && this.crimeSystem.TryBindSimulationTime(this.simulationTime) == false)
+        {
+            throw new ArgumentException(
+                "CrimeSystem must belong to the SimulationRuntime time boundary.",
+                nameof(crimeSystem));
+        }
+        if (this.crimeSystem != null
+            && this.crimeSystem.TryBindTheftOutcomeSink(this.crimeSocialAppraisalWorldState.Integration) == false
+            && ReferenceEquals(
+                this.crimeSystem.TheftOutcomeSink,
+                this.crimeSocialAppraisalWorldState.Integration) == false)
+        {
+            throw new ArgumentException(
+                "CrimeSystem outcome sink must belong to the SimulationRuntime crime appraisal world.",
+                nameof(crimeSystem));
+        }
+        this.expeditionSystem?.BindWorldRuntime(this);
+        isComposingNpcRoster = false;
 
     }
 
     private void BindCoreMutationGuardAuthorities()
     {
-        IAuthoritativeMutationGuardBindable[] authorities =
+        List<IAuthoritativeMutationGuardBindable> authorities = new List<IAuthoritativeMutationGuardBindable>();
+        AddRequiredMutationGuardBinding(authorities, simulationTime, nameof(SimulationTime));
+        AddRequiredMutationGuardBinding(authorities, personStore, nameof(PersonStore));
+        AddRequiredMutationGuardBinding(authorities, spatialAuthorityStore, nameof(SpatialAuthorityStore));
+        AddRequiredMutationGuardBinding(authorities, armedForceStore, nameof(ArmedForceStore));
+        AddRequiredMutationGuardBinding(authorities, contingentManpowerStateStore, nameof(ContingentManpowerStateStore));
+        AddRequiredMutationGuardBinding(authorities, armedForceSpatialStateStore, nameof(ArmedForceSpatialStateStore));
+        AddRequiredMutationGuardBinding(authorities, localTopologyStore, nameof(LocalTopologyStore));
+        AddRequiredMutationGuardBinding(authorities, conflictStore, nameof(PersistentConflictStore));
+        AddRequiredMutationGuardBinding(authorities, warStore, nameof(PersistentWarStore));
+        AddRequiredMutationGuardBinding(authorities, battleStore, nameof(PersistentBattleStore));
+        AddRequiredMutationGuardBinding(authorities, genealogyStore, nameof(GenealogyStore));
+        AddRequiredMutationGuardBinding(authorities, institutionStore, nameof(InstitutionStore));
+        AddRequiredMutationGuardBinding(authorities, officeStore, nameof(OfficeStore));
+        AddRequiredMutationGuardBinding(authorities, propertyOwnershipStore, nameof(PropertyOwnershipStore));
+        AddRequiredMutationGuardBinding(authorities, estateStore, nameof(EstateStore));
+        AddRequiredMutationGuardBinding(authorities, politicalClaimStore, nameof(PoliticalClaimStore));
+        AddRequiredMutationGuardBinding(authorities, factionStore, nameof(FactionStore));
+        AddRequiredMutationGuardBinding(authorities, politicalSupportStore, nameof(PoliticalSupportStore));
+        AddRequiredMutationGuardBinding(authorities, politicalKnowledgeStore, nameof(PoliticalKnowledgeStore));
+        AddRequiredMutationGuardBinding(authorities, politicalDecisionStore, nameof(PoliticalDecisionStore));
+        AddRequiredMutationGuardBinding(authorities, crimeSocialAppraisalWorldState, nameof(CrimeSocialAppraisalWorldState));
+        AddRequiredMutationGuardBinding(authorities, scheduledDirectiveSystem, nameof(ScheduledDirectiveSystem));
+        AddRequiredMutationGuardBinding(authorities, justiceSystem, nameof(JusticeSystem));
+        AddRequiredMutationGuardBinding(authorities, crimeSystem, nameof(CrimeSystem));
+        AddRequiredMutationGuardBinding(authorities, npcDecisionSystem, nameof(NpcDecisionSystem));
+        AddRequiredMutationGuardBinding(authorities, travelSystem, nameof(TravelSystem));
+        AddRequiredMutationGuardBinding(authorities, travelPartySystem, nameof(TravelPartySystem));
+        AddRequiredMutationGuardBinding(authorities, merchantSystem, nameof(MerchantSystem));
+        AddRequiredMutationGuardBinding(authorities, commercialKnowledgeSharingSystem, nameof(CommercialKnowledgeSharingSystem));
+        AddRequiredMutationGuardBinding(authorities, explorableSiteStore, nameof(ExplorableSiteStore));
+        AddRequiredMutationGuardBinding(authorities, explorableSiteKnowledgeSystem, nameof(ExplorableSiteKnowledgeSystem));
+        AddRequiredMutationGuardBinding(authorities, expeditionSystem, nameof(ExpeditionSystem));
+        AddRequiredMutationGuardBinding(authorities, placeContentStore, nameof(PlaceContentStore));
+        AddRequiredMutationGuardBinding(authorities, adventureExpeditionAutonomySystem, nameof(AdventureExpeditionAutonomySystem));
+
+        foreach (CityRuntime city in cities)
         {
-            simulationTime,
-            personStore
-        };
+            if (city != null && !city.CanBindRuntimeMutationGuard(mutationGuard))
+            {
+                throw new InvalidOperationException(
+                    "A CityRuntime or its population authority is already owned by another SimulationRuntime.");
+            }
+        }
+
+        foreach (NpcRuntime npc in npcRuntimes)
+        {
+            if (npc != null && !npc.CanBindRuntimeMutationGuard(mutationGuard))
+            {
+                throw new InvalidOperationException("An NpcRuntime is already owned by another SimulationRuntime.");
+            }
+        }
 
         foreach (IAuthoritativeMutationGuardBindable authority in authorities)
         {
@@ -529,6 +614,60 @@ public sealed class SimulationRuntime
                 throw new InvalidOperationException(
                     "A mutable SimulationRuntime input could not bind to its runtime mutation guard.");
             }
+        }
+
+        foreach (CityRuntime city in cities)
+        {
+            if (city != null && !city.TryBindRuntimeMutationGuard(mutationGuard))
+            {
+                throw new InvalidOperationException("A CityRuntime could not bind to its SimulationRuntime.");
+            }
+        }
+
+        foreach (NpcRuntime npc in npcRuntimes)
+        {
+            if (npc != null && !npc.TryBindRuntimeMutationGuard(mutationGuard))
+            {
+                throw new InvalidOperationException("An NpcRuntime could not bind to its SimulationRuntime.");
+            }
+        }
+    }
+
+    private static void AddRequiredMutationGuardBinding(
+        List<IAuthoritativeMutationGuardBindable> authorities,
+        object authority,
+        string name)
+    {
+        if (authority == null)
+        {
+            return;
+        }
+
+        if (!(authority is IAuthoritativeMutationGuardBindable bindable))
+        {
+            throw new InvalidOperationException(
+                name + " is retained by SimulationRuntime but does not support one-way mutation-guard binding.");
+        }
+
+        authorities.Add(bindable);
+    }
+
+    private static void PreflightMutationGuardBinding(
+        object authority,
+        AuthoritativeMutationGuard guard,
+        string name)
+    {
+        if (authority == null)
+        {
+            return;
+        }
+
+        if (!(authority is IAuthoritativeMutationGuardBindable bindable)
+            || bindable.CanBindMutationGuard(guard) == false)
+        {
+            throw new ArgumentException(
+                name + " is already bound to another SimulationRuntime or does not support guard binding.",
+                name);
         }
     }
 
@@ -556,6 +695,12 @@ public sealed class SimulationRuntime
         if (npcRuntime == null)
         {
             failure = WorldNpcRegistryFailure.InvalidNpc;
+            return false;
+        }
+
+        if (!npcRuntime.CanBindRuntimeMutationGuard(mutationGuard))
+        {
+            failure = WorldNpcRegistryFailure.AlreadyOwnedByAnotherRuntime;
             return false;
         }
 
@@ -593,6 +738,12 @@ public sealed class SimulationRuntime
                 || npcRuntime.TryBindPersonRuntime(boundPerson) == false))
         {
             failure = WorldNpcRegistryFailure.NpcPersonBindingInvalid;
+            return false;
+        }
+
+        if (!isComposingNpcRoster && !npcRuntime.TryBindRuntimeMutationGuard(mutationGuard))
+        {
+            failure = WorldNpcRegistryFailure.AlreadyOwnedByAnotherRuntime;
             return false;
         }
 
@@ -2095,6 +2246,11 @@ public sealed class SimulationRuntime
 
     public bool TryStartTravelParty(ActionExecutionContext context)
     {
+        if (mutationGuard.CanMutate == false)
+        {
+            return false;
+        }
+
         if (context == null)
         {
             return false;

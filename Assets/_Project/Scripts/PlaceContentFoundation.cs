@@ -850,8 +850,9 @@ public sealed class PlaceContentRuntime
     }
 }
 
-public sealed class PlaceContentStore
+public sealed class PlaceContentStore : IAuthoritativeMutationGuardBindable
 {
+    private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
     private readonly RuntimeIdAllocator notableItemIdAllocator;
     private readonly RuntimeIdentityRegistry identityRegistry;
     private readonly List<PlaceContentRuntime> places = new List<PlaceContentRuntime>();
@@ -888,6 +889,8 @@ public sealed class PlaceContentStore
     {
         notable = null;
         diagnostic = null;
+        if (RejectIfFaulted(out diagnostic)) return false;
+
         if (definition == null)
         {
             diagnostic = "Notable item creation requires an ItemData definition.";
@@ -930,6 +933,8 @@ public sealed class PlaceContentStore
     public bool TryRegisterNotableItem(NotableItemRuntime notable, out string diagnostic)
     {
         diagnostic = null;
+        if (RejectIfFaulted(out diagnostic)) return false;
+
         if (notable == null)
         {
             diagnostic = "Cannot register a null NotableItemRuntime.";
@@ -1035,6 +1040,11 @@ public sealed class PlaceContentStore
 
     public PlaceContentRuntime GetOrCreate(PlaceContentOwnerReference owner)
     {
+        if (!mutationGuardBinding.CanMutate)
+        {
+            throw new InvalidOperationException("A faulted SimulationRuntime cannot mutate place content.");
+        }
+
         if (owner == null)
         {
             throw new ArgumentNullException(nameof(owner));
@@ -1090,6 +1100,8 @@ public sealed class PlaceContentStore
         float averageUnitCost = 0f)
     {
         stack = null;
+        if (!mutationGuardBinding.CanMutate) return false;
+
         if (TryValidateStackInput(owner, item, amount, persistencePolicy, decayPerDay, averageUnitCost, out string diagnostic) == false)
         {
             return false;
@@ -1170,6 +1182,8 @@ public sealed class PlaceContentStore
         out int removedAmount)
     {
         removedAmount = 0;
+        if (!mutationGuardBinding.CanMutate) return false;
+
         if (owner == null || item == null || amount <= 0 || TryGet(owner, out PlaceContentRuntime content) == false)
         {
             return false;
@@ -1239,6 +1253,8 @@ public sealed class PlaceContentStore
     {
         notable = null;
         diagnostic = null;
+        if (RejectIfFaulted(out diagnostic)) return false;
+
         if (sourceOwner == null || destinationNpc == null || string.IsNullOrWhiteSpace(notableRuntimeId) == true)
         {
             diagnostic = "Place-to-NPC transfer requires a source place, notable RuntimeId, and destination NPC.";
@@ -1288,6 +1304,8 @@ public sealed class PlaceContentStore
     {
         notable = null;
         diagnostic = null;
+        if (RejectIfFaulted(out diagnostic)) return false;
+
         if (sourceNpc == null || destinationOwner == null || string.IsNullOrWhiteSpace(notableRuntimeId) == true)
         {
             diagnostic = "NPC-to-place transfer requires a source NPC, notable RuntimeId, and destination place.";
@@ -1343,6 +1361,8 @@ public sealed class PlaceContentStore
     {
         notable = null;
         diagnostic = null;
+        if (RejectIfFaulted(out diagnostic)) return false;
+
         if (sourceOwner == null || destinationOwner == null
             || string.IsNullOrWhiteSpace(notableRuntimeId) == true
             || string.Equals(sourceOwner.StableKey, destinationOwner.StableKey, StringComparison.Ordinal) == true)
@@ -1396,6 +1416,8 @@ public sealed class PlaceContentStore
         out string diagnostic)
     {
         diagnostic = null;
+        if (RejectIfFaulted(out diagnostic)) return false;
+
         if (owner == null || notable == null)
         {
             diagnostic = "Notable content requires an owner and an item.";
@@ -1455,6 +1477,8 @@ public sealed class PlaceContentStore
         out string diagnostic)
     {
         diagnostic = null;
+        if (RejectIfFaulted(out diagnostic)) return false;
+
         if (owner == null || opposition == null)
         {
             diagnostic = "Opposition content requires an owner and an opposition runtime.";
@@ -1536,6 +1560,8 @@ public sealed class PlaceContentStore
     {
         result = null;
         diagnostic = null;
+        if (RejectIfFaulted(out diagnostic)) return false;
+
         if (owner == null || opposition == null || conflict == null || conflictResolutionService == null)
         {
             diagnostic = "Opposition resolution requires an owner, active opposition, conflict, and generic resolver service.";
@@ -1620,6 +1646,8 @@ public sealed class PlaceContentStore
     public bool TrySecure(PlaceContentOwnerReference owner, out string diagnostic)
     {
         diagnostic = null;
+        if (RejectIfFaulted(out diagnostic)) return false;
+
         if (owner == null || TryGet(owner, out PlaceContentRuntime content) == false)
         {
             diagnostic = "Cannot secure an unregistered place content owner.";
@@ -1655,6 +1683,11 @@ public sealed class PlaceContentStore
 
     public void AdvanceDays(int dayCount)
     {
+        if (!mutationGuardBinding.CanMutate)
+        {
+            throw new InvalidOperationException("A faulted SimulationRuntime cannot advance place-content aging.");
+        }
+
         if (dayCount < 0)
         {
             throw new ArgumentOutOfRangeException(nameof(dayCount));
@@ -1723,4 +1756,21 @@ public sealed class PlaceContentStore
 
         return true;
     }
+
+    private bool RejectIfFaulted(out string diagnostic)
+    {
+        if (mutationGuardBinding.CanMutate)
+        {
+            diagnostic = null;
+            return false;
+        }
+
+        diagnostic = "The SimulationRuntime is faulted.";
+        return true;
+    }
+
+    internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard) => mutationGuardBinding.CanBindTo(guard);
+    internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard) => mutationGuardBinding.TryBindTo(guard);
+    bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard) => CanBindMutationGuard(guard);
+    bool IAuthoritativeMutationGuardBindable.TryBindMutationGuard(AuthoritativeMutationGuard guard) => TryBindMutationGuard(guard);
 }

@@ -925,8 +925,9 @@ public sealed class LocalTopologyRuntime
     }
 }
 
-public sealed class LocalTopologyStore
+public sealed class LocalTopologyStore : IAuthoritativeMutationGuardBindable
 {
+    private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
     private readonly RuntimeIdentityRegistry identityRegistry;
     private readonly List<LocalTopologyRuntime> topologies = new List<LocalTopologyRuntime>();
     private readonly Dictionary<string, LocalTopologyRuntime> topologiesByOwnerRuntimeId =
@@ -949,6 +950,12 @@ public sealed class LocalTopologyStore
     public bool TryAddTopology(LocalTopologyRuntime topology, out string diagnostic)
     {
         diagnostic = null;
+
+        if (!mutationGuardBinding.CanMutate)
+        {
+            diagnostic = "The SimulationRuntime is faulted.";
+            return false;
+        }
 
         if (topology == null)
         {
@@ -1034,6 +1041,12 @@ public sealed class LocalTopologyStore
     {
         diagnostic = null;
 
+        if (!mutationGuardBinding.CanMutate)
+        {
+            diagnostic = "The SimulationRuntime is faulted.";
+            return false;
+        }
+
         if (TryPreparePublishedTopology(topology, out diagnostic) == false)
         {
             return false;
@@ -1066,6 +1079,12 @@ public sealed class LocalTopologyStore
         out string diagnostic)
     {
         diagnostic = null;
+
+        if (!mutationGuardBinding.CanMutate)
+        {
+            diagnostic = "The SimulationRuntime is faulted.";
+            return false;
+        }
 
         if (TryPreparePublishedTopology(topology, out diagnostic) == false)
         {
@@ -1164,6 +1183,11 @@ public sealed class LocalTopologyStore
 
         return true;
     }
+
+    internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard) => mutationGuardBinding.CanBindTo(guard);
+    internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard) => mutationGuardBinding.TryBindTo(guard);
+    bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard) => CanBindMutationGuard(guard);
+    bool IAuthoritativeMutationGuardBindable.TryBindMutationGuard(AuthoritativeMutationGuard guard) => TryBindMutationGuard(guard);
 
     private bool IsOwnerReferenceConsistent(
         LocalTopologyOwnerReference owner,

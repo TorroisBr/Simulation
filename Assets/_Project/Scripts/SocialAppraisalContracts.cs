@@ -482,7 +482,8 @@ public enum SocialReactionStoreFailureCode
     SupersessionDayInvalid = 6,
     SupersessionCycle = 7,
     FutureReaction = 8,
-    SupersessionAlreadyUsed = 9
+    SupersessionAlreadyUsed = 9,
+    RuntimeFaulted = 10
 }
 
 public sealed class SocialReactionStoreFailure
@@ -509,8 +510,9 @@ public sealed class SocialReactionStoreFailure
     public override string ToString() => Code + ": " + Message;
 }
 
-public sealed class SocialReactionStore
+public sealed class SocialReactionStore : IAuthoritativeMutationGuardBindable
 {
+    private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
     private readonly PersonStore personStore;
     private readonly SimulationTime simulationTime;
     private readonly Dictionary<string, SocialReaction> reactionsById =
@@ -624,6 +626,12 @@ public sealed class SocialReactionStore
         SocialReaction reaction,
         out SocialReactionStoreFailure failure)
     {
+        if (!mutationGuardBinding.CanMutate)
+        {
+            failure = SocialReactionStoreFailure.Create(SocialReactionStoreFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.");
+            return false;
+        }
+
         if (CanRecord(reaction, out failure) == false)
         {
             return false;
@@ -651,6 +659,13 @@ public sealed class SocialReactionStore
         out SocialReaction reaction,
         out SocialReactionStoreFailure failure)
     {
+        reaction = null;
+        if (!mutationGuardBinding.CanMutate)
+        {
+            failure = SocialReactionStoreFailure.Create(SocialReactionStoreFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.");
+            return false;
+        }
+
         if (TryBuildAppraisalReaction(
             evaluatorPersonId,
             source,
@@ -832,4 +847,22 @@ public sealed class SocialReactionStore
         if (comparison != 0) return comparison;
         return (left?.CreatedAbsoluteDay ?? 0L).CompareTo(right?.CreatedAbsoluteDay ?? 0L);
     }
+
+    internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return mutationGuardBinding.CanBindTo(guard)
+            && (personStore == null || personStore.CanBindMutationGuard(guard))
+            && (simulationTime == null || simulationTime.CanBindMutationGuard(guard));
+    }
+
+    internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return CanBindMutationGuard(guard)
+            && (personStore == null || personStore.TryBindMutationGuard(guard))
+            && (simulationTime == null || simulationTime.TryBindMutationGuard(guard))
+            && mutationGuardBinding.TryBindTo(guard);
+    }
+
+    bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard) => CanBindMutationGuard(guard);
+    bool IAuthoritativeMutationGuardBindable.TryBindMutationGuard(AuthoritativeMutationGuard guard) => TryBindMutationGuard(guard);
 }

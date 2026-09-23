@@ -105,7 +105,8 @@ public enum CrimeOutcomeStoreFailureCode
     DuplicateOutcomeId = 2,
     PerpetratorNotRegistered = 3,
     VictimNotRegistered = 4,
-    FutureOutcome = 5
+    FutureOutcome = 5,
+    RuntimeFaulted = 6
 }
 
 public sealed class CrimeOutcomeStoreFailure
@@ -129,8 +130,9 @@ public sealed class CrimeOutcomeStoreFailure
     public override string ToString() => Code + ": " + Message;
 }
 
-public sealed class TheftOutcomeStore : ITheftOutcomeSink
+public sealed class TheftOutcomeStore : ITheftOutcomeSink, IAuthoritativeMutationGuardBindable
 {
+    private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
     private readonly PersonStore personStore;
     private readonly SimulationTime simulationTime;
     private readonly Dictionary<string, TheftOutcome> outcomesById =
@@ -156,6 +158,12 @@ public sealed class TheftOutcomeStore : ITheftOutcomeSink
 
     public bool TryRecord(TheftOutcome outcome, out CrimeOutcomeStoreFailure failure)
     {
+        if (!mutationGuardBinding.CanMutate)
+        {
+            failure = CrimeOutcomeStoreFailure.Create(CrimeOutcomeStoreFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.");
+            return false;
+        }
+
         if (CanRecord(outcome, out failure) == false)
         {
             return false;
@@ -238,6 +246,24 @@ public sealed class TheftOutcomeStore : ITheftOutcomeSink
             right?.OutcomeId?.Value));
         return new ReadOnlyCollection<TheftOutcome>(snapshot);
     }
+
+    internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return mutationGuardBinding.CanBindTo(guard)
+            && personStore.CanBindMutationGuard(guard)
+            && simulationTime.CanBindMutationGuard(guard);
+    }
+
+    internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return CanBindMutationGuard(guard)
+            && personStore.TryBindMutationGuard(guard)
+            && simulationTime.TryBindMutationGuard(guard)
+            && mutationGuardBinding.TryBindTo(guard);
+    }
+
+    bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard) => CanBindMutationGuard(guard);
+    bool IAuthoritativeMutationGuardBindable.TryBindMutationGuard(AuthoritativeMutationGuard guard) => TryBindMutationGuard(guard);
 }
 
 public interface ITheftOutcomeSink
@@ -361,7 +387,8 @@ public enum CrimeKnowledgeStoreFailureCode
     FutureObservation = 5,
     BeforeOutcome = 6,
     RoleEndpointMismatch = 7,
-    EndpointNotRegistered = 8
+    EndpointNotRegistered = 8,
+    RuntimeFaulted = 9
 }
 
 public sealed class CrimeKnowledgeStoreFailure
@@ -385,8 +412,9 @@ public sealed class CrimeKnowledgeStoreFailure
     public override string ToString() => Code + ": " + Message;
 }
 
-public sealed class CrimeKnowledgeStore
+public sealed class CrimeKnowledgeStore : IAuthoritativeMutationGuardBindable
 {
+    private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
     private readonly PersonStore personStore;
     private readonly TheftOutcomeStore outcomeStore;
     private readonly SimulationTime simulationTime;
@@ -582,6 +610,12 @@ public sealed class CrimeKnowledgeStore
         CrimeKnowledgeObservation observation,
         out CrimeKnowledgeStoreFailure failure)
     {
+        if (!mutationGuardBinding.CanMutate)
+        {
+            failure = CrimeKnowledgeStoreFailure.Create(CrimeKnowledgeStoreFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.");
+            return false;
+        }
+
         if (CanRecord(observation, out failure) == false)
         {
             return false;
@@ -615,10 +649,33 @@ public sealed class CrimeKnowledgeStore
         return evaluatorPersonId.Value.Length + ":" + evaluatorPersonId.Value
             + outcomeId.Value.Length + ":" + outcomeId.Value;
     }
+
+    internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return mutationGuardBinding.CanBindTo(guard)
+            && personStore.CanBindMutationGuard(guard)
+            && outcomeStore.CanBindMutationGuard(guard)
+            && simulationTime.CanBindMutationGuard(guard)
+            && institutionStore.CanBindMutationGuard(guard);
+    }
+
+    internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return CanBindMutationGuard(guard)
+            && personStore.TryBindMutationGuard(guard)
+            && outcomeStore.TryBindMutationGuard(guard)
+            && simulationTime.TryBindMutationGuard(guard)
+            && institutionStore.TryBindMutationGuard(guard)
+            && mutationGuardBinding.TryBindTo(guard);
+    }
+
+    bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard) => CanBindMutationGuard(guard);
+    bool IAuthoritativeMutationGuardBindable.TryBindMutationGuard(AuthoritativeMutationGuard guard) => TryBindMutationGuard(guard);
 }
 
-public sealed class CrimeSocialAppraisalIntegration : ITheftOutcomeSink
+public sealed class CrimeSocialAppraisalIntegration : ITheftOutcomeSink, IAuthoritativeMutationGuardBindable
 {
+    private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
     private readonly TheftOutcomeStore outcomeStore;
     private readonly CrimeKnowledgeStore knowledgeStore;
     private readonly SocialReactionStore reactionStore;
@@ -664,6 +721,8 @@ public sealed class CrimeSocialAppraisalIntegration : ITheftOutcomeSink
 
     public bool TryAcceptTheftOutcome(TheftOutcome outcome)
     {
+        if (!mutationGuardBinding.CanMutate) return false;
+
         if (CanAcceptTheftOutcome(outcome) == false)
         {
             return false;
@@ -717,6 +776,12 @@ public sealed class CrimeSocialAppraisalIntegration : ITheftOutcomeSink
         CrimeKnowledgeObservation observation,
         out SocialReactionStoreFailure failure)
     {
+        if (!mutationGuardBinding.CanMutate)
+        {
+            failure = SocialReactionStoreFailure.Create(SocialReactionStoreFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.");
+            return false;
+        }
+
         if (CanRecordKnowledgeAndAppraise(observation, out failure) == false)
         {
             return false;
@@ -926,14 +991,35 @@ public sealed class CrimeSocialAppraisalIntegration : ITheftOutcomeSink
 
         return null;
     }
+
+    internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return mutationGuardBinding.CanBindTo(guard)
+            && outcomeStore.CanBindMutationGuard(guard)
+            && knowledgeStore.CanBindMutationGuard(guard)
+            && reactionStore.CanBindMutationGuard(guard);
+    }
+
+    internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return CanBindMutationGuard(guard)
+            && outcomeStore.TryBindMutationGuard(guard)
+            && knowledgeStore.TryBindMutationGuard(guard)
+            && reactionStore.TryBindMutationGuard(guard)
+            && mutationGuardBinding.TryBindTo(guard);
+    }
+
+    bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard) => CanBindMutationGuard(guard);
+    bool IAuthoritativeMutationGuardBindable.TryBindMutationGuard(AuthoritativeMutationGuard guard) => TryBindMutationGuard(guard);
 }
 
 /// <summary>
 /// World-owned C1/C2 state. All stores share the exact PersonStore and
 /// SimulationTime instances, preventing accidental cross-world composition.
 /// </summary>
-public sealed class CrimeSocialAppraisalWorldState
+public sealed class CrimeSocialAppraisalWorldState : IAuthoritativeMutationGuardBindable
 {
+    private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
     public PersonStore PersonStore { get; }
     public InstitutionStore InstitutionStore { get; }
     public SimulationTime SimulationTime { get; }
@@ -962,4 +1048,32 @@ public sealed class CrimeSocialAppraisalWorldState
             CrimeKnowledge,
             SocialReactions);
     }
+
+    internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return mutationGuardBinding.CanBindTo(guard)
+            && PersonStore.CanBindMutationGuard(guard)
+            && InstitutionStore.CanBindMutationGuard(guard)
+            && SimulationTime.CanBindMutationGuard(guard)
+            && TheftOutcomes.CanBindMutationGuard(guard)
+            && CrimeKnowledge.CanBindMutationGuard(guard)
+            && SocialReactions.CanBindMutationGuard(guard)
+            && Integration.CanBindMutationGuard(guard);
+    }
+
+    internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return CanBindMutationGuard(guard)
+            && PersonStore.TryBindMutationGuard(guard)
+            && InstitutionStore.TryBindMutationGuard(guard)
+            && SimulationTime.TryBindMutationGuard(guard)
+            && TheftOutcomes.TryBindMutationGuard(guard)
+            && CrimeKnowledge.TryBindMutationGuard(guard)
+            && SocialReactions.TryBindMutationGuard(guard)
+            && Integration.TryBindMutationGuard(guard)
+            && mutationGuardBinding.TryBindTo(guard);
+    }
+
+    bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard) => CanBindMutationGuard(guard);
+    bool IAuthoritativeMutationGuardBindable.TryBindMutationGuard(AuthoritativeMutationGuard guard) => TryBindMutationGuard(guard);
 }

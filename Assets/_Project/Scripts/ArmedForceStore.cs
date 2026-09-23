@@ -9,8 +9,9 @@ using System.Collections.ObjectModel;
 /// The store intentionally contains no Unity objects, NpcRuntime membership,
 /// daily processing, recruitment, movement, battle, or war state.
 /// </summary>
-public sealed class ArmedForceStore
+public sealed class ArmedForceStore : IAuthoritativeMutationGuardBindable
 {
+    private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
     private readonly PersonStore personStore;
     private readonly Dictionary<string, ArmedForceRecord> forcesById =
         new Dictionary<string, ArmedForceRecord>(StringComparer.Ordinal);
@@ -122,6 +123,11 @@ public sealed class ArmedForceStore
         ArmedForceRecord record,
         out ArmedForceFoundationFailure failure)
     {
+        if (!mutationGuardBinding.CanMutate)
+        {
+            return Fail(ArmedForceFoundationFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.", out failure);
+        }
+
         if (record == null || record.Id == null)
         {
             return Fail(
@@ -217,6 +223,11 @@ public sealed class ArmedForceStore
         long amount,
         out ArmedForceFoundationFailure failure)
     {
+        if (!mutationGuardBinding.CanMutate)
+        {
+            return Fail(ArmedForceFoundationFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.", out failure);
+        }
+
         if (authority == null || !ReferenceEquals(authority, manpowerAuthority))
             return Fail(ArmedForceFoundationFailureCode.ManpowerAuthorityRequired, "The manpower authority is not attached to this ArmedForceStore.", out failure);
         if (contingentId == null || !contingentsById.TryGetValue(contingentId.Value, out ContingentRecord current))
@@ -258,6 +269,11 @@ public sealed class ArmedForceStore
         ArmedForceId parentForceId,
         out ArmedForceFoundationFailure failure)
     {
+        if (!mutationGuardBinding.CanMutate)
+        {
+            return Fail(ArmedForceFoundationFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.", out failure);
+        }
+
         if (TryResolveActiveForce(forceId, out ArmedForceRecord force, out failure) == false)
         {
             return false;
@@ -345,6 +361,11 @@ public sealed class ArmedForceStore
         string legacyOperationalLocationReference,
         out ArmedForceFoundationFailure failure)
     {
+        if (!mutationGuardBinding.CanMutate)
+        {
+            return Fail(ArmedForceFoundationFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.", out failure);
+        }
+
         if (TryResolveActiveForce(forceId, out ArmedForceRecord force, out failure) == false)
         {
             return false;
@@ -383,6 +404,11 @@ public sealed class ArmedForceStore
         ArmedForceId forceId,
         out ArmedForceFoundationFailure failure)
     {
+        if (!mutationGuardBinding.CanMutate)
+        {
+            return Fail(ArmedForceFoundationFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.", out failure);
+        }
+
         if (TryResolveActiveForce(forceId, out ArmedForceRecord force, out failure) == false)
         {
             return false;
@@ -432,6 +458,11 @@ public sealed class ArmedForceStore
         string operationalLocationReference,
         out ArmedForceFoundationFailure failure)
     {
+        if (!mutationGuardBinding.CanMutate)
+        {
+            return Fail(ArmedForceFoundationFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.", out failure);
+        }
+
         if (TryResolveActiveForce(forceId, out ArmedForceRecord force, out failure) == false)
         {
             return false;
@@ -455,6 +486,11 @@ public sealed class ArmedForceStore
         PersonId commanderPersonId,
         out ArmedForceFoundationFailure failure)
     {
+        if (!mutationGuardBinding.CanMutate)
+        {
+            return Fail(ArmedForceFoundationFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.", out failure);
+        }
+
         if (TryResolveActiveForce(forceId, out ArmedForceRecord force, out failure) == false)
         {
             return false;
@@ -485,6 +521,11 @@ public sealed class ArmedForceStore
         out ArmedForceFoundationFailure failure)
     {
         reference = null;
+        if (!mutationGuardBinding.CanMutate)
+        {
+            return Fail(ArmedForceFoundationFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.", out failure);
+        }
+
         if (TryResolveActiveForce(forceId, out _, out failure) == false)
         {
             return false;
@@ -546,6 +587,11 @@ public sealed class ArmedForceStore
         ContingentRecord contingent,
         out ArmedForceFoundationFailure failure)
     {
+        if (!mutationGuardBinding.CanMutate)
+        {
+            return Fail(ArmedForceFoundationFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.", out failure);
+        }
+
         if (manpowerAuthority != null)
         {
             return Fail(
@@ -577,6 +623,11 @@ public sealed class ArmedForceStore
         ContingentRecord contingent,
         out ArmedForceFoundationFailure failure)
     {
+        if (!mutationGuardBinding.CanMutate)
+        {
+            return Fail(ArmedForceFoundationFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.", out failure);
+        }
+
         if (contingent == null || contingent.Id == null || contingent.ForceId == null)
         {
             return Fail(
@@ -626,6 +677,11 @@ public sealed class ArmedForceStore
         ContingentRecord replacement,
         out ArmedForceFoundationFailure failure)
     {
+        if (!mutationGuardBinding.CanMutate)
+        {
+            return Fail(ArmedForceFoundationFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.", out failure);
+        }
+
         if (manpowerAuthority != null
             && replacement != null
             && contingentsById.TryGetValue(replacement.Id?.Value ?? string.Empty, out ContingentRecord managedCurrent)
@@ -644,6 +700,11 @@ public sealed class ArmedForceStore
         ContingentRecord replacement,
         out ArmedForceFoundationFailure failure)
     {
+        if (!mutationGuardBinding.CanMutate)
+        {
+            return Fail(ArmedForceFoundationFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.", out failure);
+        }
+
         if (replacement == null || replacement.Id == null || replacement.ForceId == null)
         {
             return Fail(
@@ -771,6 +832,11 @@ public sealed class ArmedForceStore
         long terminatedAbsoluteDay,
         out ArmedForceFoundationFailure failure)
     {
+        if (!mutationGuardBinding.CanMutate)
+        {
+            return Fail(ArmedForceFoundationFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.", out failure);
+        }
+
         if (TryResolveActiveForce(forceId, out ArmedForceRecord force, out failure) == false)
         {
             return false;
@@ -953,6 +1019,26 @@ public sealed class ArmedForceStore
 
         failure = ArmedForceFoundationFailure.None;
         return true;
+    }
+
+    internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return mutationGuardBinding.CanBindTo(guard);
+    }
+
+    internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return mutationGuardBinding.TryBindTo(guard);
+    }
+
+    bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return CanBindMutationGuard(guard);
+    }
+
+    bool IAuthoritativeMutationGuardBindable.TryBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return TryBindMutationGuard(guard);
     }
 
     private bool WouldCreateCycle(ArmedForceId forceId, ArmedForceId candidateParentId)

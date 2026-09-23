@@ -5,6 +5,7 @@ using UnityEngine;
 [Serializable]
 public class CityRuntime
 {
+    [NonSerialized] private MutationGuardBinding runtimeMutationGuardBinding = new MutationGuardBinding();
     [SerializeField] private string runtimeId;
     [SerializeField] private CityData cityData;
     [NonSerialized] private SettlementPopulationRuntime population;
@@ -261,6 +262,29 @@ public class CityRuntime
         if (npcRuntime.CurrentCity == this)
         {
             npcRuntime.ClearCurrentPresenceFromCity(this);
+        }
+    }
+
+    internal bool CanBindRuntimeMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        EnsureRuntimeMutationGuardBinding();
+        return runtimeMutationGuardBinding.CanBindTo(guard)
+            && Population.CanBindMutationGuard(guard);
+    }
+
+    internal bool TryBindRuntimeMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        EnsureRuntimeMutationGuardBinding();
+        return CanBindRuntimeMutationGuard(guard)
+            && Population.TryBindMutationGuard(guard)
+            && runtimeMutationGuardBinding.TryBindTo(guard);
+    }
+
+    private void EnsureRuntimeMutationGuardBinding()
+    {
+        if (runtimeMutationGuardBinding == null)
+        {
+            runtimeMutationGuardBinding = new MutationGuardBinding();
         }
     }
 

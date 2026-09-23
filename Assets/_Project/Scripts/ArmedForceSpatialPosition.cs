@@ -10,7 +10,8 @@ public enum ArmedForceSpatialFailureCode
     InvalidSpatialReference = 3,
     SpatialReferenceNotRegistered = 4,
     RevisionOverflow = 5,
-    InvalidInvariant = 6
+    InvalidInvariant = 6,
+    RuntimeFaulted = 7
 }
 
 public sealed class ArmedForceSpatialFailure : IEquatable<ArmedForceSpatialFailure>
@@ -96,8 +97,9 @@ public sealed class ArmedForceSpatialInvariantReport
 /// composition, lifecycle, and the legacy OperationalLocationReference shim.
 /// This store performs no movement, battle, war, or daily processing.
 /// </summary>
-public sealed class ArmedForceSpatialStateStore
+public sealed class ArmedForceSpatialStateStore : IAuthoritativeMutationGuardBindable
 {
+    private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
     private readonly ArmedForceStore armedForceStore;
     private readonly SpatialAuthorityStore spatialAuthorityStore;
     private readonly LocalTopologyStore localTopologyStore;
@@ -147,6 +149,14 @@ public sealed class ArmedForceSpatialStateStore
         SpatialReference position,
         out ArmedForceSpatialFailure failure)
     {
+        if (!mutationGuardBinding.CanMutate)
+        {
+            failure = ArmedForceSpatialFailure.Create(
+                ArmedForceSpatialFailureCode.RuntimeFaulted,
+                "The SimulationRuntime is faulted.");
+            return false;
+        }
+
         if (TryResolveActiveForce(forceId, out failure) == false)
         {
             return false;
@@ -179,6 +189,14 @@ public sealed class ArmedForceSpatialStateStore
         ArmedForceId forceId,
         out ArmedForceSpatialFailure failure)
     {
+        if (!mutationGuardBinding.CanMutate)
+        {
+            failure = ArmedForceSpatialFailure.Create(
+                ArmedForceSpatialFailureCode.RuntimeFaulted,
+                "The SimulationRuntime is faulted.");
+            return false;
+        }
+
         if (TryResolveActiveForce(forceId, out failure) == false)
         {
             return false;
@@ -418,4 +436,9 @@ public sealed class ArmedForceSpatialStateStore
         failure = ArmedForceSpatialFailure.Create(code, message, authorityFailure);
         return false;
     }
+
+    internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard) => mutationGuardBinding.CanBindTo(guard);
+    internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard) => mutationGuardBinding.TryBindTo(guard);
+    bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard) => CanBindMutationGuard(guard);
+    bool IAuthoritativeMutationGuardBindable.TryBindMutationGuard(AuthoritativeMutationGuard guard) => TryBindMutationGuard(guard);
 }

@@ -7,8 +7,9 @@ using System.Collections.ObjectModel;
 /// foundation is explicit and world-owned; transfer is an explicit domain
 /// transition, not an incidental effect of death or estate opening.
 /// </summary>
-public sealed class PropertyOwnershipStore
+public sealed class PropertyOwnershipStore : IAuthoritativeMutationGuardBindable
 {
+    private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
     private readonly PersonStore personStore;
     private readonly Dictionary<string, PropertyOwnershipRecord> recordsByPropertyId =
         new Dictionary<string, PropertyOwnershipRecord>(StringComparer.Ordinal);
@@ -58,6 +59,12 @@ public sealed class PropertyOwnershipStore
         PropertyOwnershipRecord record,
         out PropertyFoundationFailure failure)
     {
+        if (!mutationGuardBinding.CanMutate)
+        {
+            failure = PropertyFoundationFailure.Create(PropertyFoundationFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.");
+            return false;
+        }
+
         if (record == null || record.PropertyId == null || record.OwnerPersonId == null)
         {
             failure = PropertyFoundationFailure.Create(
@@ -143,6 +150,12 @@ public sealed class PropertyOwnershipStore
         PropertyOwnershipTransferHistoryRecord history,
         out PropertyTransferFailure failure)
     {
+        if (!mutationGuardBinding.CanMutate)
+        {
+            failure = PropertyTransferFailure.Create(PropertyTransferFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.");
+            return false;
+        }
+
         if (transition == null || nextOwnership == null || history == null)
         {
             failure = PropertyTransferFailure.Create(
@@ -188,6 +201,12 @@ public sealed class PropertyOwnershipStore
         PropertyOwnershipTransferHistoryRecord history,
         out PropertyTransferFailure failure)
     {
+        if (!mutationGuardBinding.CanMutate)
+        {
+            failure = PropertyTransferFailure.Create(PropertyTransferFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.");
+            return false;
+        }
+
         if (history == null)
         {
             failure = PropertyTransferFailure.Create(
@@ -209,4 +228,20 @@ public sealed class PropertyOwnershipStore
         failure = PropertyTransferFailure.None;
         return true;
     }
+
+    internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return mutationGuardBinding.CanBindTo(guard)
+            && (personStore == null || personStore.CanBindMutationGuard(guard));
+    }
+
+    internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return CanBindMutationGuard(guard)
+            && (personStore == null || personStore.TryBindMutationGuard(guard))
+            && mutationGuardBinding.TryBindTo(guard);
+    }
+
+    bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard) => CanBindMutationGuard(guard);
+    bool IAuthoritativeMutationGuardBindable.TryBindMutationGuard(AuthoritativeMutationGuard guard) => TryBindMutationGuard(guard);
 }

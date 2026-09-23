@@ -14,7 +14,8 @@ public enum PropertyTransferFailureCode
     InvalidTransition = 9,
     StalePropertyStore = 10,
     StalePropertyOwnership = 11,
-    RevisionOverflow = 12
+    RevisionOverflow = 12,
+    RuntimeFaulted = 13
 }
 
 public sealed class PropertyTransferFailure : IEquatable<PropertyTransferFailure>

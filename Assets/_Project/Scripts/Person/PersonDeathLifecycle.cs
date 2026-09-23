@@ -16,7 +16,8 @@ public enum PersonDeathLifecycleFailure
     StalePersonRegistration = 11,
     InvalidInjury = 12,
     InvalidDeathDay = 13,
-    ResidenceSettlementMissing = 14
+    ResidenceSettlementMissing = 14,
+    RuntimeFaulted = 15
 }
 
 /// <summary>
@@ -174,6 +175,12 @@ public static class PersonDeathLifecycleSystem
         NpcInjurySeverity injurySeverity,
         out PersonDeathLifecycleFailure failure)
     {
+        if (world != null && world.IsMutationFaulted)
+        {
+            failure = PersonDeathLifecycleFailure.RuntimeFaulted;
+            return false;
+        }
+
         if (NpcInjuryRules.IsValid(injurySeverity) == false)
         {
             failure = PersonDeathLifecycleFailure.InvalidInjury;
@@ -296,6 +303,12 @@ public static class PersonDeathLifecycleSystem
         out PersonDeathLifecycleFailure failure)
     {
         failure = PersonDeathLifecycleFailure.None;
+        if (world != null && world.IsMutationFaulted)
+        {
+            failure = PersonDeathLifecycleFailure.RuntimeFaulted;
+            return false;
+        }
+
         if (TryValidateDeath(
                 world,
                 transition,

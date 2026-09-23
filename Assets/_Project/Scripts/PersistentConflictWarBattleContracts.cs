@@ -599,7 +599,8 @@ public enum PersistentStateFailureCode
     RevisionOverflow = 21,
     BattleLocationRequired = 22,
     BattleLocationInvalid = 23,
-    BattleLocationImmutable = 24
+    BattleLocationImmutable = 24,
+    RuntimeFaulted = 25
 }
 
 public sealed class PersistentStateFailure : IEquatable<PersistentStateFailure>

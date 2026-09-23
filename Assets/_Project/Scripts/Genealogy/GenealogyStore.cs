@@ -6,8 +6,9 @@ using System.Collections.ObjectModel;
 /// Authoritative parentage store for one world boundary.
 /// It intentionally knows only PersonId and does not validate world membership.
 /// </summary>
-public sealed class GenealogyStore
+public sealed class GenealogyStore : IAuthoritativeMutationGuardBindable
 {
+    private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
     private readonly HashSet<ParentageRecord> records = new HashSet<ParentageRecord>();
     private readonly Dictionary<PersonId, HashSet<PersonId>> childrenByParent =
         new Dictionary<PersonId, HashSet<PersonId>>();
@@ -34,6 +35,12 @@ public sealed class GenealogyStore
         PersonId child,
         out GenealogyFailure failure)
     {
+        if (!mutationGuardBinding.CanMutate)
+        {
+            failure = GenealogyFailure.Create(GenealogyFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.");
+            return false;
+        }
+
         if (parent == null)
         {
             failure = GenealogyFailure.Create(
@@ -134,6 +141,12 @@ public sealed class GenealogyStore
         PersonId child,
         out GenealogyFailure failure)
     {
+        if (!mutationGuardBinding.CanMutate)
+        {
+            failure = GenealogyFailure.Create(GenealogyFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.");
+            return false;
+        }
+
         if (parent == null)
         {
             failure = GenealogyFailure.Create(
@@ -345,4 +358,9 @@ public sealed class GenealogyStore
     {
         return string.CompareOrdinal(left.Value, right.Value);
     }
+
+    internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard) => mutationGuardBinding.CanBindTo(guard);
+    internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard) => mutationGuardBinding.TryBindTo(guard);
+    bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard) => CanBindMutationGuard(guard);
+    bool IAuthoritativeMutationGuardBindable.TryBindMutationGuard(AuthoritativeMutationGuard guard) => TryBindMutationGuard(guard);
 }

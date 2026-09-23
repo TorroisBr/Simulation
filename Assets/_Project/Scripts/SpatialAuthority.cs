@@ -283,7 +283,8 @@ public enum SpatialAuthorityFailureCode
     TopologyNotRegistered = 12,
     SubLocationNotRegistered = 13,
     RevisionOverflow = 14,
-    InvalidInvariant = 15
+    InvalidInvariant = 15,
+    RuntimeFaulted = 16
 }
 
 public sealed class SpatialAuthorityFailure : IEquatable<SpatialAuthorityFailure>
@@ -339,8 +340,9 @@ public sealed class SpatialAuthorityInvariantReport
 /// bridge from existing LocalTopology/SubLocation identities to a Location.
 /// It does not provide grid generation, adjacency, traversal, terrain, or time.
 /// </summary>
-public sealed class SpatialAuthorityStore
+public sealed class SpatialAuthorityStore : IAuthoritativeMutationGuardBindable
 {
+    private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
     private readonly Dictionary<string, HexRecord> hexesById =
         new Dictionary<string, HexRecord>(StringComparer.Ordinal);
     private readonly Dictionary<string, LocationRecord> locationsById =
@@ -361,6 +363,11 @@ public sealed class SpatialAuthorityStore
     public bool TryRegisterHex(HexRecord hex, out SpatialAuthorityFailure failure)
     {
         failure = SpatialAuthorityFailure.None;
+        if (!mutationGuardBinding.CanMutate)
+        {
+            return Fail(SpatialAuthorityFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.", out failure);
+        }
+
         if (hex == null || hex.Id == null || string.IsNullOrWhiteSpace(hex.Id.Value))
         {
             return Fail(SpatialAuthorityFailureCode.InvalidHex, "Hex requires a stable identity.", out failure);
@@ -384,6 +391,11 @@ public sealed class SpatialAuthorityStore
     public bool TryRegisterLocation(LocationRecord location, out SpatialAuthorityFailure failure)
     {
         failure = SpatialAuthorityFailure.None;
+        if (!mutationGuardBinding.CanMutate)
+        {
+            return Fail(SpatialAuthorityFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.", out failure);
+        }
+
         if (location == null || location.Id == null || location.AnchorHexId == null
             || string.IsNullOrWhiteSpace(location.Id.Value)
             || string.IsNullOrWhiteSpace(location.AnchorHexId.Value))
@@ -417,6 +429,11 @@ public sealed class SpatialAuthorityStore
         out SpatialAuthorityFailure failure)
     {
         failure = SpatialAuthorityFailure.None;
+        if (!mutationGuardBinding.CanMutate)
+        {
+            return Fail(SpatialAuthorityFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.", out failure);
+        }
+
         if (topology == null || topology.Owner == null || locationId == null)
         {
             return Fail(SpatialAuthorityFailureCode.InvalidTopologyBinding, "A topology binding requires a topology, owner, and LocationId.", out failure);
@@ -713,4 +730,9 @@ public sealed class SpatialAuthorityStore
         result.Sort((left, right) => StringComparer.Ordinal.Compare(left?.StableKey, right?.StableKey));
         return new ReadOnlyCollection<SpatialLocalTopologyBinding>(result);
     }
+
+    internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard) => mutationGuardBinding.CanBindTo(guard);
+    internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard) => mutationGuardBinding.TryBindTo(guard);
+    bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard) => CanBindMutationGuard(guard);
+    bool IAuthoritativeMutationGuardBindable.TryBindMutationGuard(AuthoritativeMutationGuard guard) => TryBindMutationGuard(guard);
 }

@@ -80,7 +80,8 @@ public enum PropertyFoundationFailureCode
     InvalidOwnershipRecord = 3,
     DuplicatePropertyId = 4,
     PersonNotRegistered = 5,
-    RevisionOverflow = 6
+    RevisionOverflow = 6,
+    RuntimeFaulted = 7
 }
 
 /// <summary>

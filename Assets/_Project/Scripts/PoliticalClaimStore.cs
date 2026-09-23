@@ -2,8 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 
-public sealed class PoliticalClaimStore
+public sealed class PoliticalClaimStore : IAuthoritativeMutationGuardBindable
 {
+    private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
     private readonly Dictionary<string, PoliticalClaimRecord> recordsByClaimId =
         new Dictionary<string, PoliticalClaimRecord>(StringComparer.Ordinal);
     private readonly Dictionary<string, PoliticalClaimRecognitionRecord> recognitionsByKey =
@@ -36,6 +37,12 @@ public sealed class PoliticalClaimStore
 
     public bool TryRegister(PoliticalClaimRecord record, out PoliticalClaimFailure failure)
     {
+        if (!mutationGuardBinding.CanMutate)
+        {
+            failure = PoliticalClaimFailure.Create(PoliticalClaimFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.");
+            return false;
+        }
+
         if (record == null
             || record.ClaimId == null
             || record.ClaimantPersonId == null
@@ -130,6 +137,12 @@ public sealed class PoliticalClaimStore
         PoliticalClaimRecognitionRecord record,
         out PoliticalClaimFailure failure)
     {
+        if (!mutationGuardBinding.CanMutate)
+        {
+            failure = PoliticalClaimFailure.Create(PoliticalClaimFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.");
+            return false;
+        }
+
         if (record == null || record.ClaimId == null || record.InstitutionId == null)
         {
             failure = PoliticalClaimFailure.Create(
@@ -192,6 +205,12 @@ public sealed class PoliticalClaimStore
         PoliticalClaimRecognitionRecord nextRecord,
         out PoliticalClaimFailure failure)
     {
+        if (!mutationGuardBinding.CanMutate)
+        {
+            failure = PoliticalClaimFailure.Create(PoliticalClaimFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.");
+            return false;
+        }
+
         if (transition == null || nextRecord == null || transition.ClaimId == null)
         {
             failure = PoliticalClaimFailure.Create(
@@ -238,6 +257,12 @@ public sealed class PoliticalClaimStore
         PoliticalClaimRecord nextRecord,
         out PoliticalClaimFailure failure)
     {
+        if (!mutationGuardBinding.CanMutate)
+        {
+            failure = PoliticalClaimFailure.Create(PoliticalClaimFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.");
+            return false;
+        }
+
         if (transition == null || nextRecord == null || transition.ClaimId == null)
         {
             failure = PoliticalClaimFailure.Create(
@@ -319,4 +344,9 @@ public sealed class PoliticalClaimStore
     {
         return PoliticalClaimRecognitionRecord.BuildRecognitionId(claimId, institutionId);
     }
+
+    internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard) => mutationGuardBinding.CanBindTo(guard);
+    internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard) => mutationGuardBinding.TryBindTo(guard);
+    bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard) => CanBindMutationGuard(guard);
+    bool IAuthoritativeMutationGuardBindable.TryBindMutationGuard(AuthoritativeMutationGuard guard) => TryBindMutationGuard(guard);
 }

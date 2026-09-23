@@ -87,7 +87,8 @@ public enum EstateFoundationFailureCode
     EstateAlreadyExistsForPerson = 10,
     StalePersonRegistration = 11,
     StaleEstateStore = 12,
-    RevisionOverflow = 13
+    RevisionOverflow = 13,
+    RuntimeFaulted = 14
 }
 
 /// <summary>

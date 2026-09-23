@@ -33,6 +33,12 @@ public static class AggregateDemographySystem
         transition = null;
         failure = AggregateDemographyFailure.None;
 
+        if (population != null && !population.CanMutate)
+        {
+            failure = AggregateDemographyFailure.RuntimeFaulted;
+            return false;
+        }
+
         if (TryValidatePopulationAndFloor(population, representedResidentFloor, out failure) == false)
         {
             return false;
@@ -285,6 +291,8 @@ public static class AggregateDemographySystem
                 return AggregateDemographyFailure.WouldOverflow;
             case PopulationTransitionFailure.RevisionOverflow:
                 return AggregateDemographyFailure.RevisionOverflow;
+            case PopulationTransitionFailure.RuntimeFaulted:
+                return AggregateDemographyFailure.RuntimeFaulted;
             case PopulationTransitionFailure.StaleState:
                 return AggregateDemographyFailure.StaleState;
             case PopulationTransitionFailure.NegativeChange:

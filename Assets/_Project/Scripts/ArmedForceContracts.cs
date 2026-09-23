@@ -570,7 +570,8 @@ public enum ArmedForceFoundationFailureCode
     ManpowerAuthorityRequired = 28,
     ManpowerAmountMutationRequired = 29,
     ForceHasManagedManpower = 30,
-    ForceCustodiesManagedManpower = 31
+    ForceCustodiesManagedManpower = 31,
+    RuntimeFaulted = 32
 }
 
 public sealed class ArmedForceFoundationFailure : IEquatable<ArmedForceFoundationFailure>

@@ -201,7 +201,8 @@ public enum InstitutionFoundationFailureCode
     PersonNotRegistered,
     InvalidEndAbsoluteDay,
     InvalidVacancyRecognitionReason,
-    StaleIncumbency
+    StaleIncumbency,
+    RuntimeFaulted
 }
 
 /// <summary>

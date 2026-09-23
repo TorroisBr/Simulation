@@ -9,7 +9,8 @@ public enum GenealogyFailureCode
     SelfParent,
     DuplicateParentage,
     WouldCreateCycle,
-    ParentageNotFound
+    ParentageNotFound,
+    RuntimeFaulted
 }
 
 /// <summary>

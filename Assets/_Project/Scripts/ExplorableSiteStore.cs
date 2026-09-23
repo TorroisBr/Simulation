@@ -1,8 +1,9 @@
 using System;
 using System.Collections.Generic;
 
-public sealed class ExplorableSiteStore
+public sealed class ExplorableSiteStore : IAuthoritativeMutationGuardBindable
 {
+    private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
     private readonly List<ExplorableSiteRuntime> sites = new List<ExplorableSiteRuntime>();
     private readonly Dictionary<string, ExplorableSiteRuntime> sitesByRuntimeId =
         new Dictionary<string, ExplorableSiteRuntime>(StringComparer.Ordinal);
@@ -17,6 +18,8 @@ public sealed class ExplorableSiteStore
 
     public bool Add(ExplorableSiteRuntime site)
     {
+        if (!mutationGuardBinding.CanMutate) return false;
+
         if (site == null
             || string.IsNullOrWhiteSpace(site.RuntimeId) == true
             || sitesByRuntimeId.ContainsKey(site.RuntimeId) == true)
@@ -74,4 +77,9 @@ public sealed class ExplorableSiteStore
 
         return result.AsReadOnly();
     }
+
+    internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard) => mutationGuardBinding.CanBindTo(guard);
+    internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard) => mutationGuardBinding.TryBindTo(guard);
+    bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard) => CanBindMutationGuard(guard);
+    bool IAuthoritativeMutationGuardBindable.TryBindMutationGuard(AuthoritativeMutationGuard guard) => TryBindMutationGuard(guard);
 }

@@ -15,7 +15,8 @@ public enum AggregateDemographyFailure
     WouldViolateRepresentedResidentFloor = 7,
     RevisionOverflow = 8,
     StaleState = 9,
-    InvalidTransition = 10
+    InvalidTransition = 10,
+    RuntimeFaulted = 11
 }
 
 /// <summary>

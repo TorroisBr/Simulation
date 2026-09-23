@@ -222,7 +222,8 @@ public enum PoliticalClaimFailureCode
     InvalidResolutionAbsoluteDay = 16,
     StaleClaim = 17,
     InvalidTransition = 18,
-    RevisionOverflow = 19
+    RevisionOverflow = 19,
+    RuntimeFaulted = 20
 }
 
 public sealed class PoliticalClaimFailure : IEquatable<PoliticalClaimFailure>

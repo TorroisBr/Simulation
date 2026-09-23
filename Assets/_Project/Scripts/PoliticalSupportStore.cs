@@ -3,8 +3,9 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
 
-public sealed class PoliticalSupportStore
+public sealed class PoliticalSupportStore : IAuthoritativeMutationGuardBindable
 {
+    private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
     private readonly PersonStore personStore;
     private readonly FactionStore factionStore;
     private readonly PoliticalClaimStore politicalClaimStore;
@@ -44,6 +45,12 @@ public sealed class PoliticalSupportStore
         PoliticalSupportRelationRecord record,
         out PoliticalSupportFailure failure)
     {
+        if (!mutationGuardBinding.CanMutate)
+        {
+            failure = PoliticalSupportFailure.Create(PoliticalSupportFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.");
+            return false;
+        }
+
         if (record == null || record.RelationId == null || record.Source == null || record.Target == null)
         {
             failure = PoliticalSupportFailure.Create(
@@ -184,6 +191,12 @@ public sealed class PoliticalSupportStore
         long currentWorldDay,
         out PoliticalSupportFailure failure)
     {
+        if (!mutationGuardBinding.CanMutate)
+        {
+            failure = PoliticalSupportFailure.Create(PoliticalSupportFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.");
+            return false;
+        }
+
         if (transition == null || transition.ExpectedRelation == null)
         {
             failure = PoliticalSupportFailure.Create(
@@ -388,6 +401,12 @@ public sealed class PoliticalSupportStore
         long currentWorldDay,
         out PoliticalSupportFailure failure)
     {
+        if (!mutationGuardBinding.CanMutate)
+        {
+            failure = PoliticalSupportFailure.Create(PoliticalSupportFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.");
+            return false;
+        }
+
         if (transition == null || transition.ExpectedRelation == null)
         {
             failure = PoliticalSupportFailure.Create(
@@ -581,4 +600,24 @@ public sealed class PoliticalSupportStore
 
         return StringComparer.Ordinal.Compare(left.RelationId.Value, right.RelationId.Value);
     }
+
+    internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return mutationGuardBinding.CanBindTo(guard)
+            && personStore.CanBindMutationGuard(guard)
+            && factionStore.CanBindMutationGuard(guard)
+            && politicalClaimStore.CanBindMutationGuard(guard);
+    }
+
+    internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return CanBindMutationGuard(guard)
+            && personStore.TryBindMutationGuard(guard)
+            && factionStore.TryBindMutationGuard(guard)
+            && politicalClaimStore.TryBindMutationGuard(guard)
+            && mutationGuardBinding.TryBindTo(guard);
+    }
+
+    bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard) => CanBindMutationGuard(guard);
+    bool IAuthoritativeMutationGuardBindable.TryBindMutationGuard(AuthoritativeMutationGuard guard) => TryBindMutationGuard(guard);
 }

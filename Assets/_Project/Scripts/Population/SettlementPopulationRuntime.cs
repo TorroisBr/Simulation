@@ -4,8 +4,9 @@ using System;
 /// Mutable aggregate population state owned by a future settlement runtime.
 /// This ledger intentionally has no independent runtime identity and no named-NPC awareness.
 /// </summary>
-public sealed class SettlementPopulationRuntime
+public sealed class SettlementPopulationRuntime : IAuthoritativeMutationGuardBindable
 {
+    private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
     private readonly string settlementRuntimeId;
     private int currentPopulation;
     private long revision;
@@ -13,6 +14,8 @@ public sealed class SettlementPopulationRuntime
     public string SettlementRuntimeId => settlementRuntimeId;
     public int CurrentPopulation => currentPopulation;
     public long Revision => revision;
+    internal bool CanMutate => mutationGuardBinding.CanMutate;
+    internal AuthoritativeMutationGuard BoundMutationGuard => mutationGuardBinding.BoundGuard;
 
     internal void RestoreSnapshot(int population, long expectedRevision)
     {
@@ -51,6 +54,12 @@ public sealed class SettlementPopulationRuntime
         out PopulationTransitionFailure failure)
     {
         failure = PopulationTransitionFailure.None;
+
+        if (!mutationGuardBinding.CanMutate)
+        {
+            failure = PopulationTransitionFailure.RuntimeFaulted;
+            return false;
+        }
 
         if (transition == null)
         {
@@ -114,6 +123,11 @@ public sealed class SettlementPopulationRuntime
     {
         failure = PopulationTransitionFailure.None;
 
+        if (!originCanApply(origin, destination, out failure))
+        {
+            return false;
+        }
+
         if (origin == null || destination == null
             || string.IsNullOrWhiteSpace(origin.SettlementRuntimeId) == true
             || string.IsNullOrWhiteSpace(destination.SettlementRuntimeId) == true
@@ -171,6 +185,55 @@ public sealed class SettlementPopulationRuntime
         origin.revision++;
         destination.currentPopulation = destinationPopulationBefore + 1;
         destination.revision++;
+        return true;
+    }
+
+    internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return mutationGuardBinding.CanBindTo(guard);
+    }
+
+    internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return mutationGuardBinding.TryBindTo(guard);
+    }
+
+    bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return CanBindMutationGuard(guard);
+    }
+
+    bool IAuthoritativeMutationGuardBindable.TryBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return TryBindMutationGuard(guard);
+    }
+
+    private static bool originCanApply(
+        SettlementPopulationRuntime origin,
+        SettlementPopulationRuntime destination,
+        out PopulationTransitionFailure failure)
+    {
+        if (origin == null || destination == null)
+        {
+            failure = PopulationTransitionFailure.None;
+            return true;
+        }
+
+        if (!origin.mutationGuardBinding.CanMutate || !destination.mutationGuardBinding.CanMutate)
+        {
+            failure = PopulationTransitionFailure.RuntimeFaulted;
+            return false;
+        }
+
+        if (!ReferenceEquals(
+                origin.mutationGuardBinding.BoundGuard,
+                destination.mutationGuardBinding.BoundGuard))
+        {
+            failure = PopulationTransitionFailure.RuntimeOwnershipMismatch;
+            return false;
+        }
+
+        failure = PopulationTransitionFailure.None;
         return true;
     }
 }

@@ -223,7 +223,8 @@ public enum FactionFoundationFailureCode
     RevisionOverflow = 13,
     WrongFactionStore = 14,
     VoluntaryLeaveNotAllowed = 15,
-    ExpulsionNotAllowed = 16
+    ExpulsionNotAllowed = 16,
+    RuntimeFaulted = 17
 }
 
 public sealed class FactionFoundationFailure : IEquatable<FactionFoundationFailure>

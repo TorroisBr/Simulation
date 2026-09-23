@@ -5,6 +5,7 @@ using UnityEngine;
 [Serializable]
 public class NpcRuntime : ICapabilityConditionSource
 {
+    [NonSerialized] private MutationGuardBinding runtimeMutationGuardBinding = new MutationGuardBinding();
     [SerializeField]private string runtimeId;
     [SerializeField]private string personIdValue;
     [NonSerialized]private PersonId personIdentity;
@@ -92,7 +93,27 @@ public class NpcRuntime : ICapabilityConditionSource
     public SpatialKnowledgeRuntime SpatialKnowledge => spatialKnowledge ?? (spatialKnowledge = new SpatialKnowledgeRuntime(runtimeId));
     public LocalTopologyKnowledgeRuntime LocalTopologyKnowledge => localTopologyKnowledge ?? (localTopologyKnowledge = new LocalTopologyKnowledgeRuntime(runtimeId));
     public AdventureSiteIntelKnowledgeRuntime AdventureSiteIntelKnowledge => adventureSiteIntelKnowledge ?? (adventureSiteIntelKnowledge = new AdventureSiteIntelKnowledgeRuntime(runtimeId));
-    public string NpcName => npcData != null ? npcData.name : "NPC desconhecido";
+	public string NpcName => npcData != null ? npcData.name : "NPC desconhecido";
+
+    internal bool CanBindRuntimeMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        EnsureRuntimeMutationGuardBinding();
+        return runtimeMutationGuardBinding.CanBindTo(guard);
+    }
+
+    internal bool TryBindRuntimeMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        EnsureRuntimeMutationGuardBinding();
+        return runtimeMutationGuardBinding.TryBindTo(guard);
+    }
+
+    private void EnsureRuntimeMutationGuardBinding()
+    {
+        if (runtimeMutationGuardBinding == null)
+        {
+            runtimeMutationGuardBinding = new MutationGuardBinding();
+        }
+    }
 
 	public NpcRuntime(string runtimeId, NpcData npcData)
 		: this(runtimeId, npcData, null, 0f)
