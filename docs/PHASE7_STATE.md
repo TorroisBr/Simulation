@@ -1,16 +1,27 @@
-# Phase 7 — Current Candidate State
+# Phase 7 — Current Canonical State
 
-## Checkpoint D6A — Military manpower foundation (feature candidate only)
+## Checkpoint D6A — Military manpower foundation (approved and promoted)
 
-- Canonical baseline verified before implementation:
-  `b04b69e42a8208d286e4d40427596019a3654d68` on
-  `codex/phase7/canonical`.
+- Common implementation baseline:
+  `b04b69e42a8208d286e4d40427596019a3654d68`.
+- Canonical architecture baseline before integration:
+  `ffaf5418c79a42f4b4c6300c6ad8e4acda6edbbb` on
+  `codex/phase7/canonical`. This commit consolidates the D6A/D6B/D7
+  architecture in `docs/SIMULATION_ARCHITECTURE.md` and is the first parent
+  of the D6A integration merge.
 - Feature branch: `codex/phase7/MilitaryManpowerFoundation`, created from that
-  exact baseline. Implementation commit:
-  `904a00d5879db941988885cbb0a4c6c21c4325f2`.
-- D6A is a validated feature candidate only. It has not been integrated into
-  or promoted to `codex/phase7/canonical`; the canonical branch remains at the
-  D5 baseline above.
+  common baseline. Implementation commit:
+  `904a00d5879db941988885cbb0a4c6c21c4325f2`. The complete validated feature
+  candidate, including its original state record, is
+  `a316b460bd962eb5e2b0dc5ce261e9975bba8275`.
+- Integration branch: `codex/phase7/D6ACanonicalIntegration`. Merge commit
+  `f15dcf4318b9da1283d4351d4d5b977cc9cdafea` has the canonical architecture
+  commit above as first parent and the D6A candidate as second parent; the
+  merge base is `b04b69e42a8208d286e4d40427596019a3654d68`. The architecture
+  document is unchanged by the merge. Following integration validation, this
+  D6A state-document update is included in the promoted canonical tip.
+- D6A is approved and promoted to `codex/phase7/canonical`. The feature branch
+  remains unchanged. No D6B1, D6B2, or D7 implementation is included.
 
 ### Delivered
 
@@ -86,27 +97,24 @@
   allocation changes only military roster state: settlement population and its
   revision remain unchanged, and no Person is added.
 - ALL EditMode: `1557/1557`. Official complete EditMode `Smoke`: `5/5`.
-- Independent read-only architecture/correctness review was completed. The
-  reviewed findings were resolved: local roster release cannot be
-  trapped by a disappeared/reduced-capacity source; legacy terminated rosters
-  compose and can be explicitly reconciled where their source resolves; D4
-  cannot assign provider capability to an unavailable contingent.
-- `git diff --check` is clean for the candidate implementation. `AdvanceDay`
+- All listed focused filters, ALL EditMode, and official Smoke were rerun in
+  the D6A integration worktree before promotion.
+- Independent read-only review of the integration found no blocker. It noted
+  one non-blocking diagnostic wording mismatch: a no-combat-elements message
+  names `Amount` although eligibility uses `AvailableAmount`; the validated
+  candidate was preserved without expanding this promotion into a code fix.
+- `git diff --check` is clean for the final integration state. `AdvanceDay`
   has no diff; no long-run test was required because daily behavior is unchanged.
 
-### Boundaries and D6B recommendation
+### Boundaries and next checkpoint
 
-D6B is **NOT STARTED**. D7 is **NOT STARTED**. Canonical promotion is also
-**NOT PERFORMED**. The candidate remains confined to its feature branch.
+D6B1, D6B2, and D7 are **NOT STARTED**. D6B1 is the next implementation
+checkpoint; its architecture is already consolidated in the canonical
+architecture baseline above. D6B2 follows D6B1, and D7 remains the later
+atomic application boundary. Do not infer casualties, accept or apply a Battle
+outcome, mark a Battle Resolved, mutate population/Person state, emit outcome
+history, or add daily military behavior from D6A.
 
-Before D6B implementation, keep its contract separate from D5 raw resolution
-and D7 application: define a world-composed direct-consequence policy that
-consumes a freshly validated D5 outcome and D6A cohort/source facts, carries
-stable policy/rule identity and exact source/contingent dependencies, and
-produces only an immutable, canonical set of disjoint proposed cohort/source
-transitions. Specify casualty, wounded, capture, and custody semantics without
-mutating stores; D7 must own any later atomic cross-domain application. Keep
-causal randomness (if required) separately keyed from D4's resolver stream.
 Cross-host equivalence of D4's existing floating-point arithmetic remains an
 unrelated open limitation.
 
@@ -223,9 +231,10 @@ mutate world truth.
 
 No long-run suite was required because `AdvanceDay` is unchanged and D5 adds no
 daily behavior. At the time of D5 promotion, D6A was the next architecture
-checkpoint and no D6A implementation was included in that promotion. The
-current unpromoted D6A candidate is documented at the top of this file. D6B
-and D7 remain later architecture-gated checkpoints. Cross-host numeric
+checkpoint and no D6A implementation was included in that promotion. That is
+historical status; D6A was subsequently integrated and promoted as recorded at
+the top of this file. D6B1/D6B2 and D7 remain later architecture-gated
+checkpoints. Cross-host numeric
 equivalence remains unresolved. Consequences, casualties, availability/custody
 implementation, lifecycle transition, application, events/history, save/load,
 and replay remained deferred at the D5 checkpoint.
