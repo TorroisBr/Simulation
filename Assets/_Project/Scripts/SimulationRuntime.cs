@@ -20,6 +20,8 @@ public sealed class SimulationRuntime
     private readonly ContingentManpowerStateStore contingentManpowerStateStore;
     private readonly SettlementManpowerSourceRegistry settlementManpowerSourceRegistry;
     private readonly ManpowerSourceConsequencePlanningService manpowerSourceConsequencePlanningService;
+    private readonly BattleDirectConsequencePolicy battleDirectConsequencePolicy;
+    private readonly BattleDirectConsequencePlanningService battleDirectConsequencePlanningService;
     private readonly ArmedForceSpatialStateStore armedForceSpatialStateStore;
     private readonly LocalTopologyStore localTopologyStore;
     private readonly PersistentConflictStore conflictStore;
@@ -72,6 +74,9 @@ public sealed class SimulationRuntime
     public ContingentManpowerStateStore ContingentManpowerStateStore => contingentManpowerStateStore;
     public ManpowerSourceConsequencePlanningService ManpowerSourceConsequencePlanningService
         => manpowerSourceConsequencePlanningService;
+    public BattleDirectConsequencePolicy BattleDirectConsequencePolicy => battleDirectConsequencePolicy;
+    public BattleDirectConsequencePlanningService BattleDirectConsequencePlanningService
+        => battleDirectConsequencePlanningService;
     public ArmedForceSpatialStateStore ArmedForceSpatialStateStore => armedForceSpatialStateStore;
     public LocalTopologyStore LocalTopologyStore => localTopologyStore;
     public PersistentConflictStore ConflictStore => conflictStore;
@@ -163,7 +168,8 @@ public sealed class SimulationRuntime
         BattleResolutionPolicy battleResolutionPolicy = null,
         ContingentManpowerStateStore contingentManpowerStateStore = null,
         IManpowerSourceSnapshotProvider manpowerSourceProvider = null,
-        IEnumerable<SettlementManpowerSourceRegistration> settlementManpowerSourceRegistrations = null)
+        IEnumerable<SettlementManpowerSourceRegistration> settlementManpowerSourceRegistrations = null,
+        BattleDirectConsequencePolicy battleDirectConsequencePolicy = null)
     {
         this.simulationTime = simulationTime ?? throw new ArgumentNullException(nameof(simulationTime));
         List<CityRuntime> resolvedCities = cities != null
@@ -327,6 +333,7 @@ public sealed class SimulationRuntime
             this.personStore,
             this.contingentManpowerStateStore);
         this.battleResolutionPolicy = battleResolutionPolicy;
+        this.battleDirectConsequencePolicy = battleDirectConsequencePolicy;
         this.battleOutcomePlanningService = new BattleOutcomePlanningService(
             this.battleExecutionContextBuilder,
             this.simulationTime,
@@ -460,6 +467,9 @@ public sealed class SimulationRuntime
             this,
             this.settlementManpowerSourceRegistry,
             this.contingentManpowerStateStore.SourceProvider);
+        this.battleDirectConsequencePlanningService = new BattleDirectConsequencePlanningService(
+            this,
+            this.battleDirectConsequencePolicy);
 
     }
 
