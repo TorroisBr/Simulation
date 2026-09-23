@@ -167,16 +167,15 @@
   `docs/SIMULATION_ARCHITECTURE.md` are unchanged. No long-run suite was
   required because D6B1 is non-mutating and adds no daily behavior.
 
-### Current boundary after D6B1
+### Historical boundary after D6B1
 
-D6B1 and D6B2 are approved and promoted to `codex/phase7/canonical`.
-Checkpoint D6B2 is the current canonical implementation checkpoint, described
-below. P7-D7G — Runtime Authoritative Mutation Guard — is the next
-implementation checkpoint and remains **NOT STARTED**. D7 implementation also
-remains **NOT STARTED** and must wait until D7G is validated and promoted to
-canonical. Do not apply a Battle outcome, mark a Battle Resolved, apply
-population deaths, mutate Person state, emit outcome history, or add daily
-military behavior from D6A/D6B1/D6B2.
+At that stage, D6B1 and D6B2 were approved and promoted to
+`codex/phase7/canonical`, with D6B2 as the current implementation checkpoint.
+P7-D7G was then **NOT STARTED** and blocked D7. P7-D7G has since been approved
+and promoted to canonical; D7 is now the next implementation checkpoint and
+remains **NOT STARTED**. Do not apply a Battle outcome, mark a Battle Resolved,
+apply population deaths, mutate Person state, emit outcome history, or add
+daily military behavior from D6A/D6B1/D6B2.
 
 Cross-host equivalence of D4's existing floating-point arithmetic remains an
 unrelated open limitation.
@@ -260,20 +259,27 @@ D6B2 is **APPROVED AND PROMOTED TO CANONICAL**. No consequence is applied, no
 worlds without an explicit D6B2 policy fail as unconfigured; casualty
 semantics remain entirely rule/configuration-owned. The post-consequence
 projection is ephemeral and is not a persistence, event-history, or replay
-contract. P7-D7G is the next implementation checkpoint and remains
-**NOT STARTED**; D7 implementation must wait for its canonical promotion.
-At the D6B2 promotion, `docs/SIMULATION_ARCHITECTURE.md` was not changed.
+contract. At the D6B2 promotion, P7-D7G was the next implementation
+checkpoint. It has since been approved and promoted; D7 is now next and remains
+**NOT STARTED**. `docs/SIMULATION_ARCHITECTURE.md` was not changed at either
+promotion.
 
-## Checkpoint P7-D7G — Validated feature candidate (not promoted)
+## Checkpoint P7-D7G — Approved and promoted to canonical
 
-- Required canonical baseline: `feee341c7b893ccc7c12f0f76d416598f52c2138`.
+- Original canonical baseline: `feee341c7b893ccc7c12f0f76d416598f52c2138`.
+- Implementation candidate: `eecc6d9649dfceb78d208e432a5405ffebcdbd56`.
 - Feature branch: `codex/phase7/RuntimeAuthoritativeMutationGuard`.
-- Validated implementation candidate before this state update:
-  `eecc6d9649dfceb78d208e432a5405ffebcdbd56`.
-- This is a feature candidate only. `codex/phase7/canonical` was not moved;
-  this state update and the candidate must be externally approved before any
-  canonical promotion. The D7 implementation remains **NOT STARTED** and is
-  not unblocked by this candidate.
+- Validated feature HEAD: `aa1ee58dbd2caf80647fa5821dea6c40bc63c6c7`.
+- Final canonical SHA: this state-only promotion commit, which is the
+  `codex/phase7/canonical` tip after fast-forward. Its full object ID is
+  reported in the promotion result; a commit cannot embed its own hash.
+- Promotion branch: `codex/phase7/D7GCanonicalPromotion`, based on the
+  validated feature HEAD. Canonical fast-forwarded from the original baseline
+  to this state-only promotion commit; no merge commit, squash, or rewrite was
+  used. The feature branch remains unchanged.
+- P7-D7G is **APPROVED AND PROMOTED TO CANONICAL**. D7 is the next
+  implementation checkpoint and remains **NOT STARTED**; this promotion does
+  not start or authorize D7 implementation in this task.
 
 ### Delivered
 
@@ -319,7 +325,7 @@ encapsulation limitation, not a claim that all mutable objects are frozen.
 - D7G focused guard: `18/18`; runtime system guard entrypoints: `4/4` crime,
   directives, and commands; `3/3` travel/expedition. Runtime orchestration:
   `10/10`.
-- Person: `134/134`; lifecycle: `40/40`; Population: `137/137`;
+- Person: `134/134`; lifecycle: `40/40`; Population: `138/138`;
   AggregateDemography: `23/23`.
 - ArmedForce: `30/30`; MilitaryManpowerFoundation: `11/11`; combined manpower
   filter: `37/37`; Persistent Conflict/War/Battle: `8/8`.
@@ -327,7 +333,7 @@ encapsulation limitation, not a claim that all mutable objects are frozen.
   D3: `11/11`; D2: `11/11`; D1: `7/7`; D0: `8/8`; ConflictFoundation:
   `16/16`.
 - Travel scouting/group: `11/11`, `30/30`; expedition exploration/correction/
-  autonomy: `24/24`, `32/32`, `46/46`; CrimeSocialAppraisal: `12/12`;
+  autonomy: `24/24`, `32/32`, `46/46`; CrimeSocialAppraisalIntegration: `12/12`;
   EconomyTransaction: `33/33`; MerchantLiquidity: `9/9`;
   CommercialKnowledgeSharing: `7/7`.
 - Political: `59/59`; Institution: `44/44`; Property: `21/21`.
@@ -337,9 +343,14 @@ encapsulation limitation, not a claim that all mutable objects are frozen.
   verifying nested CrimeSystem travel binding, post-bind party-store stability,
   and faulted population/restore coverage. The review confirmed the documented
   legacy-reference boundary; it did not claim whole-object-graph immutability.
-- `docs/SIMULATION_ARCHITECTURE.md` is unchanged. D7G remains a validated
-  feature candidate awaiting external approval and separate canonical
-  promotion; D7 remains **NOT STARTED**.
+- Independent read-only promotion review passed with no blocking, important,
+  or non-blocking findings. It confirmed the supported-store and system guard
+  boundaries, world-local sticky fault, pre-write time/day rejection,
+  deterministic side-effect protection, available reads/diagnostics, healthy
+  ordering, and the documented unsupported direct-reference limitation.
+- `docs/SIMULATION_ARCHITECTURE.md` is unchanged. P7-D7G is promoted;
+  **D7 is the next implementation checkpoint and remains NOT STARTED**. A
+  future D7 branch must start fresh from the final canonical SHA above.
 
 # Historical record — Checkpoint D5 — Canonical Promotion
 
