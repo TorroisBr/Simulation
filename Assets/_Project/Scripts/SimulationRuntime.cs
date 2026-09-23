@@ -18,6 +18,8 @@ public sealed class SimulationRuntime
     private readonly SpatialAuthorityStore spatialAuthorityStore;
     private readonly ArmedForceStore armedForceStore;
     private readonly ContingentManpowerStateStore contingentManpowerStateStore;
+    private readonly SettlementManpowerSourceRegistry settlementManpowerSourceRegistry;
+    private readonly ManpowerSourceConsequencePlanningService manpowerSourceConsequencePlanningService;
     private readonly ArmedForceSpatialStateStore armedForceSpatialStateStore;
     private readonly LocalTopologyStore localTopologyStore;
     private readonly PersistentConflictStore conflictStore;
@@ -68,6 +70,8 @@ public sealed class SimulationRuntime
     public SpatialAuthorityStore SpatialAuthorityStore => spatialAuthorityStore;
     public ArmedForceStore ArmedForceStore => armedForceStore;
     public ContingentManpowerStateStore ContingentManpowerStateStore => contingentManpowerStateStore;
+    public ManpowerSourceConsequencePlanningService ManpowerSourceConsequencePlanningService
+        => manpowerSourceConsequencePlanningService;
     public ArmedForceSpatialStateStore ArmedForceSpatialStateStore => armedForceSpatialStateStore;
     public LocalTopologyStore LocalTopologyStore => localTopologyStore;
     public PersistentConflictStore ConflictStore => conflictStore;
@@ -158,9 +162,49 @@ public sealed class SimulationRuntime
         LocalTopologyStore localTopologyStore = null,
         BattleResolutionPolicy battleResolutionPolicy = null,
         ContingentManpowerStateStore contingentManpowerStateStore = null,
-        IManpowerSourceSnapshotProvider manpowerSourceProvider = null)
+        IManpowerSourceSnapshotProvider manpowerSourceProvider = null,
+        IEnumerable<SettlementManpowerSourceRegistration> settlementManpowerSourceRegistrations = null)
     {
         this.simulationTime = simulationTime ?? throw new ArgumentNullException(nameof(simulationTime));
+        List<CityRuntime> resolvedCities = cities != null
+            ? new List<CityRuntime>(cities)
+            : new List<CityRuntime>();
+        object manpowerSourceWorldCompositionIdentity = new object();
+        resolvedCities.Sort((left, right) => string.CompareOrdinal(
+            left?.RuntimeId ?? string.Empty,
+            right?.RuntimeId ?? string.Empty));
+
+        if (!SettlementManpowerSourceRegistry.TryCreate(
+                settlementManpowerSourceRegistrations,
+                resolvedCities.AsReadOnly(),
+                manpowerSourceWorldCompositionIdentity,
+                out SettlementManpowerSourceRegistry resolvedSettlementManpowerSourceRegistry,
+                out string settlementManpowerSourceFailure))
+        {
+            throw new ArgumentException(
+                "The settlement manpower source composition is invalid: " + settlementManpowerSourceFailure,
+                nameof(settlementManpowerSourceRegistrations));
+        }
+
+        IManpowerSourceSnapshotProvider existingManpowerSourceProvider = manpowerSourceProvider
+            ?? contingentManpowerStateStore?.SourceProvider;
+        if (existingManpowerSourceProvider is SettlementManpowerSourceRegistry existingSettlementRegistry
+            && !existingSettlementRegistry.IsComposedFor(manpowerSourceWorldCompositionIdentity))
+        {
+            throw new ArgumentException(
+                "A settlement manpower source registry cannot be reused across SimulationRuntime compositions.",
+                nameof(manpowerSourceProvider));
+        }
+        if (resolvedSettlementManpowerSourceRegistry != null
+            && existingManpowerSourceProvider != null
+            && !ReferenceEquals(existingManpowerSourceProvider, resolvedSettlementManpowerSourceRegistry))
+        {
+            throw new ArgumentException(
+                "Settlement manpower source registrations are the D6A/D6B1 authority and cannot be combined with a different source provider.",
+                nameof(manpowerSourceProvider));
+        }
+        IManpowerSourceSnapshotProvider resolvedManpowerSourceProvider =
+            resolvedSettlementManpowerSourceRegistry ?? existingManpowerSourceProvider;
 
         if (configuration != null && (economyEnabled.HasValue || guardCrimeEnabled.HasValue))
         {
@@ -232,10 +276,10 @@ public sealed class SimulationRuntime
         ContingentManpowerStateStore resolvedManpowerStateStore = contingentManpowerStateStore == null
             ? ContingentManpowerStateStore.CreateLegacyBootstrap(
                 resolvedArmedForceStore,
-                manpowerSourceProvider)
+                resolvedManpowerSourceProvider)
             : contingentManpowerStateStore.CloneForRuntime(
                 resolvedArmedForceStore,
-                manpowerSourceProvider ?? contingentManpowerStateStore.SourceProvider);
+                resolvedManpowerSourceProvider);
         resolvedManpowerStateStore.AttachToArmedForceStore();
         LocalTopologyStore resolvedLocalTopologyStore = localTopologyStore
             ?? armedForceSpatialStateStore?.LocalTopologyStore;
@@ -268,6 +312,7 @@ public sealed class SimulationRuntime
         this.spatialAuthorityStore = resolvedSpatialAuthorityStore;
         this.armedForceStore = resolvedArmedForceStore;
         this.contingentManpowerStateStore = resolvedManpowerStateStore;
+        this.settlementManpowerSourceRegistry = resolvedSettlementManpowerSourceRegistry;
         this.armedForceSpatialStateStore = resolvedArmedForceSpatialStateStore;
         this.localTopologyStore = resolvedLocalTopologyStore;
         this.conflictStore = resolvedConflictStore;
@@ -335,10 +380,7 @@ public sealed class SimulationRuntime
             this.personStore,
             this.institutionStore,
             this.simulationTime);
-        this.cities = cities != null ? new List<CityRuntime>(cities) : new List<CityRuntime>();
-        this.cities.Sort((left, right) => string.CompareOrdinal(
-            left?.RuntimeId ?? string.Empty,
-            right?.RuntimeId ?? string.Empty));
+        this.cities = resolvedCities;
         this.npcRuntimes = new List<NpcRuntime>();
         this.npcRuntimeSnapshot = this.npcRuntimes.AsReadOnly();
         this.npcRegistryById = new Dictionary<string, NpcRuntime>(StringComparer.Ordinal);
@@ -413,6 +455,11 @@ public sealed class SimulationRuntime
         this.npcRuntimes.Sort((left, right) => string.CompareOrdinal(
             left?.RuntimeId ?? string.Empty,
             right?.RuntimeId ?? string.Empty));
+
+        this.manpowerSourceConsequencePlanningService = new ManpowerSourceConsequencePlanningService(
+            this,
+            this.settlementManpowerSourceRegistry,
+            this.contingentManpowerStateStore.SourceProvider);
 
     }
 
@@ -540,6 +587,37 @@ public sealed class SimulationRuntime
         }
 
         return new RepresentedResidentFloorSnapshot(floors);
+    }
+
+    internal bool TryGetManpowerSourceSettlementContext(
+        CityRuntime city,
+        SettlementPopulationRuntime expectedPopulation,
+        out int representedResidentFloor)
+    {
+        representedResidentFloor = 0;
+        if (city == null
+            || expectedPopulation == null
+            || !SettlementManpowerSourceRegistry.ContainsExactCity(cities, city)
+            || !ReferenceEquals(city.Population, expectedPopulation)
+            || !string.Equals(city.RuntimeId, expectedPopulation.SettlementRuntimeId, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        SettlementPopulationPresenceSummary presence = SettlementPopulationPresenceQuery.BuildSummary(
+            city,
+            npcRuntimeSnapshot,
+            personStore.Persons);
+        if (presence == null
+            || presence.ResidentPopulation != expectedPopulation.CurrentPopulation
+            || presence.RepresentedResidentCount < 0
+            || presence.RepresentedResidentCount > expectedPopulation.CurrentPopulation)
+        {
+            return false;
+        }
+
+        representedResidentFloor = presence.RepresentedResidentCount;
+        return true;
     }
 
     public bool TryRegisterPerson(PersonRuntime person, out PersonStoreFailure failure)
