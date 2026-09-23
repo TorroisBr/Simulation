@@ -483,7 +483,8 @@ public sealed class BattleOutcomePlanningTests
             CreatePolicy(
                 new TestCapabilityProvider("capability:other-world:v1", 1f),
                 new DeterministicBattleConflictRandomSource(41, "random:other-world:v1")),
-            new SimulationTime(1L));
+            new SimulationTime(1L),
+            new PersonStore());
 
         Assert.That(differentPolicyRuntime.BattleOutcomePlanningService.TryValidateCurrent(
             plan,
@@ -587,14 +588,15 @@ public sealed class BattleOutcomePlanningTests
     private static SimulationRuntime ComposeRuntime(
         BattleWorldSources sources,
         BattleResolutionPolicy policy,
-        SimulationTime time)
+        SimulationTime time,
+        PersonStore personStore = null)
     {
         return new SimulationRuntime(
             time,
             null,
             null,
             economyEnabled: false,
-            personStore: sources.Persons,
+            personStore: personStore ?? sources.Persons,
             armedForceStore: sources.Forces,
             battleStore: sources.Battles,
             spatialAuthorityStore: sources.Authority,

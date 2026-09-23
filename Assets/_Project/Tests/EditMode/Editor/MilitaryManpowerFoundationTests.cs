@@ -330,7 +330,7 @@ public sealed class MilitaryManpowerFoundationTests
         SimulationRuntime defaultBootstrapRuntime = new SimulationRuntime(
             new SimulationTime(0L), null, null,
             economyEnabled: false,
-            personStore: persons,
+            personStore: new PersonStore(),
             armedForceStore: forces);
         Assert.That(defaultBootstrapRuntime.ContingentManpowerStateStore.TryGet(contingentId, out ContingentManpowerState defaultState), Is.True);
         Assert.That(defaultState.LivingRosterAmount, Is.EqualTo(3L));

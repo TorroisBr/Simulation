@@ -64,9 +64,11 @@ public class TravelSystem : IAuthoritativeMutationGuardBindable
 
     public void AttachTravelPartyStore(TravelPartyStore store)
     {
-        if (travelPartyStore != null && !ReferenceEquals(travelPartyStore, store))
+        if (mutationGuardBinding.BoundGuard != null
+            && !ReferenceEquals(travelPartyStore, store))
         {
-            throw new InvalidOperationException("TravelSystem cannot replace its attached TravelPartyStore.");
+            throw new InvalidOperationException(
+                "TravelSystem cannot replace its attached TravelPartyStore after runtime binding.");
         }
 
         if (store != null && mutationGuardBinding.BoundGuard != null)

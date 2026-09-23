@@ -220,6 +220,7 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
     internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard)
     {
         return mutationGuardBinding.CanBindTo(guard)
+            && (travelSystem == null || travelSystem.CanBindMutationGuard(guard))
             && (justiceSystem == null || justiceSystem.CanBindMutationGuard(guard));
     }
 
@@ -227,6 +228,7 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
     {
         return CanBindMutationGuard(guard)
             && mutationGuardBinding.TryBindTo(guard)
+            && (travelSystem == null || travelSystem.TryBindMutationGuard(guard))
             && (justiceSystem == null || justiceSystem.TryBindMutationGuard(guard));
     }
 

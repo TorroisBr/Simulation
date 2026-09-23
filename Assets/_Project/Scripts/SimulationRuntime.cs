@@ -454,6 +454,22 @@ public sealed class SimulationRuntime
             this.personStore,
             this.institutionStore,
             this.simulationTime);
+        if (crimeSystem != null
+            && crimeSystem.SimulationTime != null
+            && !ReferenceEquals(crimeSystem.SimulationTime, this.simulationTime))
+        {
+            throw new ArgumentException(
+                "CrimeSystem must belong to the SimulationRuntime time boundary.",
+                nameof(crimeSystem));
+        }
+        if (crimeSystem != null
+            && crimeSystem.TheftOutcomeSink != null
+            && !ReferenceEquals(crimeSystem.TheftOutcomeSink, this.crimeSocialAppraisalWorldState.Integration))
+        {
+            throw new ArgumentException(
+                "CrimeSystem outcome sink must belong to the SimulationRuntime crime appraisal world.",
+                nameof(crimeSystem));
+        }
         this.cities = resolvedCities;
         this.npcRuntimes = new List<NpcRuntime>();
         this.npcRuntimeSnapshot = this.npcRuntimes.AsReadOnly();

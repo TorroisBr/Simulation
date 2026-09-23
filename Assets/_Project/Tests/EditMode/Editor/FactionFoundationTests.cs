@@ -185,7 +185,9 @@ public sealed class FactionFoundationTests
         PersonStore persons = new PersonStore();
         PersonRuntime person = RegisterPerson(persons, "person.member");
         SimulationRuntime firstWorld = CreateWorld(persons);
-        SimulationRuntime secondWorld = CreateWorld(persons);
+        PersonStore secondPersons = new PersonStore();
+        Assert.That(secondPersons.TryRegister(new PersonRuntime(person.PersonId), out _), Is.True);
+        SimulationRuntime secondWorld = CreateWorld(secondPersons);
         FactionId factionId = RegisterFaction(firstWorld, "faction.council");
         RegisterFaction(secondWorld, "faction.council");
 

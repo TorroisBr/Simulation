@@ -143,7 +143,9 @@ public sealed class InstitutionWorldIntegrationTests
         OfficeId officeId = RegisterOffice(offices, institutionId, "shared-office");
 
         SimulationRuntime first = CreateWorld(persons, institutions, offices);
-        SimulationRuntime second = CreateWorld(persons, institutions, offices);
+        PersonStore secondPersons = new PersonStore();
+        Assert.That(secondPersons.TryRegister(new PersonRuntime(person.PersonId), out _), Is.True);
+        SimulationRuntime second = CreateWorld(secondPersons, institutions, offices);
 
         Assert.That(first.TryAssignIncumbent(officeId, person.PersonId, out _), Is.True);
         Assert.That(first.IsOfficeVacant(officeId), Is.False);

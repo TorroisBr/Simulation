@@ -351,6 +351,87 @@ public sealed class RuntimeAuthoritativeMutationGuardTests
     }
 
     [Test]
+    public void FaultedRuntimeGuardsTravelSystemNestedOnlyThroughCrimeSystem()
+    {
+        TravelPartyFixture fixture = SimulationTestFactory.CreateTravelPartyFixture();
+        CrimeSystem crime = new CrimeSystem(
+            null,
+            fixture.Travel,
+            null,
+            simulationTime: fixture.Records.Time);
+        SimulationRuntime runtime = new SimulationRuntime(
+            fixture.Records.Time,
+            new[] { fixture.World.A, fixture.World.B, fixture.World.C },
+            fixture.Members,
+            crimeSystem: crime);
+        Assert.DoesNotThrow(() => fixture.Travel.AttachTravelPartyStore(fixture.Parties));
+        Assert.Throws<InvalidOperationException>(() =>
+            fixture.Travel.AttachTravelPartyStore(new TravelPartyStore()));
+        Assert.Throws<InvalidOperationException>(() => fixture.Travel.AttachTravelPartyStore(null));
+        float moneyBefore = fixture.Bruno.Money;
+        SpatialLocationRuntime locationBefore = fixture.Bruno.CurrentLocation;
+        MarkFaulted(runtime, AuthoritativeMutationFaultReason.RollbackRestoreFailed);
+
+        Assert.That(fixture.Travel.TryStartTravel(
+            fixture.Bruno,
+            fixture.World.B.Location,
+            fixture.World.B), Is.False);
+        Assert.That(fixture.Bruno.IsTraveling, Is.False);
+        Assert.That(fixture.Bruno.Money, Is.EqualTo(moneyBefore));
+        Assert.That(fixture.Bruno.CurrentLocation, Is.SameAs(locationBefore));
+        Assert.That(fixture.Bruno.TravelPlan.IsActive, Is.False);
+        Assert.That(fixture.Parties.ActiveParties, Is.Empty);
+    }
+
+    [Test]
+    public void FaultedRuntimeBlocksPopulationApplyButInternalRestoreCanRestoreSnapshot()
+    {
+        CityRuntime city = SimulationTestFactory.CreateCity(
+            "faulted-population-city",
+            "faulted-population-location");
+        SettlementPopulationRuntime population = city.Population;
+        int originalPopulation = population.CurrentPopulation;
+        long originalRevision = population.Revision;
+        SimulationRuntime runtime = new SimulationRuntime(
+            new SimulationTime(),
+            new[] { city },
+            null);
+        Assert.That(SettlementPopulationSystem.TryPropose(
+            population,
+            new PopulationChangeSet(1, 0, 0, 0),
+            out SettlementPopulationTransition firstTransition,
+            out _), Is.True);
+        Assert.That(SettlementPopulationSystem.TryApply(population, firstTransition, out _), Is.True);
+        Assert.That(population.Revision, Is.EqualTo(originalRevision + 1L));
+        Assert.That(SettlementPopulationSystem.TryPropose(
+            population,
+            new PopulationChangeSet(1, 0, 0, 0),
+            out SettlementPopulationTransition faultedTransition,
+            out _), Is.True);
+        int populationBeforeRejectedMutation = population.CurrentPopulation;
+        long revisionBeforeRejectedMutation = population.Revision;
+
+        MarkFaulted(runtime, AuthoritativeMutationFaultReason.IntegrityRestoreFailed);
+
+        Assert.That(SettlementPopulationSystem.TryApply(
+            population,
+            faultedTransition,
+            out PopulationTransitionFailure failure), Is.False);
+        Assert.That(failure, Is.EqualTo(PopulationTransitionFailure.RuntimeFaulted));
+        Assert.That(population.CurrentPopulation, Is.EqualTo(populationBeforeRejectedMutation));
+        Assert.That(population.Revision, Is.EqualTo(revisionBeforeRejectedMutation));
+
+        MethodInfo restoreSnapshot = typeof(SettlementPopulationRuntime).GetMethod(
+            "RestoreSnapshot",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(restoreSnapshot, Is.Not.Null);
+        restoreSnapshot.Invoke(population, new object[] { originalPopulation, originalRevision });
+        Assert.That(population.CurrentPopulation, Is.EqualTo(originalPopulation));
+        Assert.That(population.Revision, Is.EqualTo(originalRevision));
+        Assert.That(runtime.IsMutationFaulted, Is.True);
+    }
+
+    [Test]
     public void OrdinaryInvalidDayCountDoesNotFaultRuntime()
     {
         SimulationRuntime runtime = new SimulationRuntime(new SimulationTime(), null, null);

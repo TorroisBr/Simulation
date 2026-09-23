@@ -37,7 +37,7 @@ public sealed class GenealogyStore : IAuthoritativeMutationGuardBindable
     {
         if (!mutationGuardBinding.CanMutate)
         {
-            failure = GenealogyFailure.Create(GenealogyFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.");
+            failure = GenealogyFailure.Create(GenealogyFailureCode.RuntimeFaulted, "The runtime is faulted.");
             return false;
         }
 
@@ -143,7 +143,7 @@ public sealed class GenealogyStore : IAuthoritativeMutationGuardBindable
     {
         if (!mutationGuardBinding.CanMutate)
         {
-            failure = GenealogyFailure.Create(GenealogyFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.");
+            failure = GenealogyFailure.Create(GenealogyFailureCode.RuntimeFaulted, "The runtime is faulted.");
             return false;
         }
 

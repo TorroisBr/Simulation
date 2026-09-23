@@ -25,7 +25,7 @@ public sealed class InstitutionStore : IAuthoritativeMutationGuardBindable
     {
         if (!mutationGuardBinding.CanMutate)
         {
-            failure = InstitutionFoundationFailure.Create(InstitutionFoundationFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.");
+            failure = InstitutionFoundationFailure.Create(InstitutionFoundationFailureCode.RuntimeFaulted, "The runtime is faulted.");
             return false;
         }
 
@@ -154,7 +154,7 @@ public sealed class OfficeStore : IAuthoritativeMutationGuardBindable
     {
         if (!mutationGuardBinding.CanMutate)
         {
-            failure = InstitutionFoundationFailure.Create(InstitutionFoundationFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.");
+            failure = InstitutionFoundationFailure.Create(InstitutionFoundationFailureCode.RuntimeFaulted, "The runtime is faulted.");
             return false;
         }
 
@@ -251,7 +251,7 @@ public sealed class OfficeStore : IAuthoritativeMutationGuardBindable
     {
         if (!mutationGuardBinding.CanMutate)
         {
-            failure = InstitutionFoundationFailure.Create(InstitutionFoundationFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.");
+            failure = InstitutionFoundationFailure.Create(InstitutionFoundationFailureCode.RuntimeFaulted, "The runtime is faulted.");
             return false;
         }
 
@@ -316,7 +316,7 @@ public sealed class OfficeStore : IAuthoritativeMutationGuardBindable
     {
         if (!mutationGuardBinding.CanMutate)
         {
-            failure = InstitutionFoundationFailure.Create(InstitutionFoundationFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.");
+            failure = InstitutionFoundationFailure.Create(InstitutionFoundationFailureCode.RuntimeFaulted, "The runtime is faulted.");
             return false;
         }
 
@@ -403,7 +403,7 @@ public sealed class OfficeStore : IAuthoritativeMutationGuardBindable
     {
         if (!mutationGuardBinding.CanMutate)
         {
-            failure = InstitutionFoundationFailure.Create(InstitutionFoundationFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.");
+            failure = InstitutionFoundationFailure.Create(InstitutionFoundationFailureCode.RuntimeFaulted, "The runtime is faulted.");
             return false;
         }
 

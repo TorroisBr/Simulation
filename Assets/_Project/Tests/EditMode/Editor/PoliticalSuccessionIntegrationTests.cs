@@ -152,17 +152,24 @@ public sealed class PoliticalSuccessionIntegrationTests
     {
         Fixture fixture = CreateFixture();
         long capturedRevision = fixture.World.PoliticalWorldRevision;
+        PersonStore independentPeople = new PersonStore();
+        foreach (PersonRuntime person in fixture.People.Persons)
+        {
+            Assert.That(independentPeople.TryRegister(new PersonRuntime(
+                person.PersonId,
+                person.BirthAbsoluteDay,
+                person.DeathAbsoluteDay), out _), Is.True);
+        }
 
         SimulationRuntime composed = new SimulationRuntime(
             new SimulationTime(fixture.World.CurrentDay),
             Array.Empty<CityRuntime>(),
             null,
-            personStore: fixture.People,
+            personStore: independentPeople,
             genealogyStore: fixture.Genealogy,
             institutionStore: fixture.Institutions,
             officeStore: fixture.Offices,
             politicalKnowledgeStore: fixture.Knowledge,
-            politicalDecisionStore: fixture.Decisions,
             politicalWorldRevision: capturedRevision);
 
         Assert.That(composed.PoliticalWorldRevision, Is.EqualTo(capturedRevision));

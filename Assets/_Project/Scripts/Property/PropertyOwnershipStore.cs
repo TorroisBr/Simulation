@@ -61,7 +61,7 @@ public sealed class PropertyOwnershipStore : IAuthoritativeMutationGuardBindable
     {
         if (!mutationGuardBinding.CanMutate)
         {
-            failure = PropertyFoundationFailure.Create(PropertyFoundationFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.");
+            failure = PropertyFoundationFailure.Create(PropertyFoundationFailureCode.RuntimeFaulted, "The runtime is faulted.");
             return false;
         }
 
@@ -152,7 +152,7 @@ public sealed class PropertyOwnershipStore : IAuthoritativeMutationGuardBindable
     {
         if (!mutationGuardBinding.CanMutate)
         {
-            failure = PropertyTransferFailure.Create(PropertyTransferFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.");
+            failure = PropertyTransferFailure.Create(PropertyTransferFailureCode.RuntimeFaulted, "The runtime is faulted.");
             return false;
         }
 
@@ -203,7 +203,7 @@ public sealed class PropertyOwnershipStore : IAuthoritativeMutationGuardBindable
     {
         if (!mutationGuardBinding.CanMutate)
         {
-            failure = PropertyTransferFailure.Create(PropertyTransferFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.");
+            failure = PropertyTransferFailure.Create(PropertyTransferFailureCode.RuntimeFaulted, "The runtime is faulted.");
             return false;
         }
 

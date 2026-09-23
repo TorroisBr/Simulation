@@ -61,7 +61,7 @@ public sealed class EstateStore : IAuthoritativeMutationGuardBindable
     {
         if (!mutationGuardBinding.CanMutate)
         {
-            failure = EstateFoundationFailure.Create(EstateFoundationFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.");
+            failure = EstateFoundationFailure.Create(EstateFoundationFailureCode.RuntimeFaulted, "The runtime is faulted.");
             return false;
         }
 
