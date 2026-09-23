@@ -240,6 +240,117 @@ public sealed class RuntimeAuthoritativeMutationGuardTests
     }
 
     [Test]
+    public void FaultedRuntimeBlocksManpowerBeforeConsultingItsSourceProvider()
+    {
+        PersonStore people = new PersonStore();
+        ArmedForceStore forces = new ArmedForceStore(people);
+        ArmedForceId forceId = new ArmedForceId("guarded-manpower-force");
+        Assert.That(forces.TryRegister(new ArmedForceRecord(forceId, "Guarded force", 0L), out _), Is.True);
+        CountingManpowerSourceProvider provider = new CountingManpowerSourceProvider();
+        ManpowerSourceId sourceId = new ManpowerSourceId("guarded-manpower-source");
+        provider.Set(sourceId, 20L, "source-fingerprint");
+        ContingentManpowerStateStore manpower = new ContingentManpowerStateStore(forces, provider);
+        ContingentId contingentId = new ContingentId("guarded-manpower-contingent");
+        Assert.That(manpower.TryRegisterContingent(new ContingentRecord(
+            contingentId,
+            forceId,
+            0L,
+            new ContingentOriginReference("source", "guarded"),
+            "service"), out _), Is.True);
+        Assert.That(manpower.TrySetSourceBinding(
+            contingentId,
+            sourceId,
+            0L,
+            "source-fingerprint",
+            out _), Is.True);
+        SimulationRuntime runtime = new SimulationRuntime(
+            new SimulationTime(), null, null,
+            personStore: people,
+            armedForceStore: forces,
+            contingentManpowerStateStore: manpower);
+        long forceRevision = runtime.ArmedForceStore.Revision;
+        long manpowerRevision = runtime.ContingentManpowerStateStore.Revision;
+        provider.CallCount = 0;
+        MarkFaulted(runtime, AuthoritativeMutationFaultReason.RollbackRestoreFailed);
+
+        Assert.That(runtime.ContingentManpowerStateStore.TryAllocate(
+            contingentId,
+            1L,
+            ManpowerInjuryState.Healthy,
+            ManpowerCustodyState.Free,
+            null,
+            ManpowerAvailabilityState.Available,
+            1L,
+            "source-fingerprint",
+            out ContingentManpowerFailure failure), Is.False);
+
+        Assert.That(failure.Code, Is.EqualTo(ContingentManpowerFailureCode.RuntimeFaulted));
+        Assert.That(provider.CallCount, Is.Zero);
+        Assert.That(runtime.ArmedForceStore.Revision, Is.EqualTo(forceRevision));
+        Assert.That(runtime.ContingentManpowerStateStore.Revision, Is.EqualTo(manpowerRevision));
+        Assert.That(runtime.ArmedForceStore.TryGetContingent(contingentId, out ContingentRecord forceMirror), Is.True);
+        Assert.That(forceMirror.Amount, Is.Zero);
+        Assert.That(runtime.ContingentManpowerStateStore.TryGet(contingentId, out ContingentManpowerState state), Is.True);
+        Assert.That(state.LivingRosterAmount, Is.Zero);
+    }
+
+    [Test]
+    public void FaultedRuntimeBlocksConflictWarBattleAndSpatialStoreWritesButKeepsQueries()
+    {
+        SimulationRuntime runtime = new SimulationRuntime(new SimulationTime(), null, null);
+        MarkFaulted(runtime, AuthoritativeMutationFaultReason.IntegrityRestoreFailed);
+        ConflictId conflictId = new ConflictId("faulted-conflict");
+        ConflictStateSide[] conflictSides =
+        {
+            new ConflictStateSide(conflictId, new ConflictSideId("conflict-a")),
+            new ConflictStateSide(conflictId, new ConflictSideId("conflict-b"))
+        };
+        WarId warId = new WarId("faulted-war");
+        WarStateSide[] warSides =
+        {
+            new WarStateSide(warId, new WarSideId("war-a")),
+            new WarStateSide(warId, new WarSideId("war-b"))
+        };
+        BattleId battleId = new BattleId("faulted-battle");
+        BattleStateSide[] battleSides =
+        {
+            new BattleStateSide(battleId, new BattleSideId("battle-a")),
+            new BattleStateSide(battleId, new BattleSideId("battle-b"))
+        };
+
+        Assert.That(runtime.ConflictStore.TryRegister(
+            new PersistentConflictRecord(conflictId, 0L, sides: conflictSides),
+            out PersistentStateFailure conflictFailure), Is.False);
+        Assert.That(runtime.WarStore.TryRegister(
+            new PersistentWarRecord(warId, 0L, sides: warSides),
+            out PersistentStateFailure warFailure), Is.False);
+        Assert.That(runtime.BattleStore.TryRegister(
+            new PersistentBattleRecord(battleId, 0L, sides: battleSides),
+            out PersistentStateFailure battleFailure), Is.False);
+        Assert.That(runtime.SpatialAuthorityStore.TryRegisterHex(
+            new HexRecord(new HexId("faulted-hex")),
+            out SpatialAuthorityFailure spatialFailure), Is.False);
+        Assert.That(runtime.ArmedForceSpatialStateStore.TryClearPosition(
+            new ArmedForceId("faulted-force-position"),
+            out ArmedForceSpatialFailure forcePositionFailure), Is.False);
+
+        Assert.That(conflictFailure.Code, Is.EqualTo(PersistentStateFailureCode.RuntimeFaulted));
+        Assert.That(warFailure.Code, Is.EqualTo(PersistentStateFailureCode.RuntimeFaulted));
+        Assert.That(battleFailure.Code, Is.EqualTo(PersistentStateFailureCode.RuntimeFaulted));
+        Assert.That(spatialFailure.Code, Is.EqualTo(SpatialAuthorityFailureCode.RuntimeFaulted));
+        Assert.That(forcePositionFailure.Code, Is.EqualTo(ArmedForceSpatialFailureCode.RuntimeFaulted));
+        Assert.That(runtime.ConflictStore.Revision, Is.Zero);
+        Assert.That(runtime.WarStore.Revision, Is.Zero);
+        Assert.That(runtime.BattleStore.Revision, Is.Zero);
+        Assert.That(runtime.SpatialAuthorityStore.Revision, Is.Zero);
+        Assert.That(runtime.ArmedForceSpatialStateStore.Revision, Is.Zero);
+        Assert.That(runtime.ConflictStore.TryGet(conflictId, out _), Is.False);
+        Assert.That(runtime.WarStore.TryGet(warId, out _), Is.False);
+        Assert.That(runtime.BattleStore.TryGet(battleId, out _), Is.False);
+        Assert.That(runtime.SpatialAuthorityStore.TryGet(new HexId("faulted-hex"), out _), Is.False);
+    }
+
+    [Test]
     public void OrdinaryInvalidDayCountDoesNotFaultRuntime()
     {
         SimulationRuntime runtime = new SimulationRuntime(new SimulationTime(), null, null);
@@ -263,5 +374,24 @@ public sealed class RuntimeAuthoritativeMutationGuardTests
             BindingFlags.Instance | BindingFlags.NonPublic);
         Assert.That(markFaulted, Is.Not.Null);
         markFaulted.Invoke(runtime, new object[] { reason });
+    }
+
+    private sealed class CountingManpowerSourceProvider : IManpowerSourceSnapshotProvider
+    {
+        private ManpowerSourceCapacitySnapshot snapshot;
+
+        public int CallCount { get; set; }
+
+        public void Set(ManpowerSourceId sourceId, long capacity, string fingerprint)
+        {
+            snapshot = new ManpowerSourceCapacitySnapshot(sourceId, capacity, capacity, fingerprint);
+        }
+
+        public bool TryGetSnapshot(ManpowerSourceId sourceId, out ManpowerSourceCapacitySnapshot result)
+        {
+            CallCount++;
+            result = snapshot != null && snapshot.SourceId == sourceId ? snapshot : null;
+            return result != null;
+        }
     }
 }
