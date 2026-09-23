@@ -2,8 +2,9 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class JusticeSystem
+public class JusticeSystem : IAuthoritativeMutationGuardBindable
 {
+    private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
     private readonly List<WantedRecordRuntime> wantedRecords = new List<WantedRecordRuntime>();
     private readonly List<PrisonSentenceRuntime> prisonSentences = new List<PrisonSentenceRuntime>();
     private readonly NpcStatusData freeStatus;
@@ -41,6 +42,8 @@ public class JusticeSystem
 
     public void BeginDay()
     {
+        ThrowIfFaulted();
+
         foreach (PrisonSentenceRuntime sentence in prisonSentences)
         {
             if (sentence != null)
@@ -55,6 +58,8 @@ public class JusticeSystem
         Func<NpcData, NpcRuntime> getSingleNpcRuntimeByDefinition,
         Func<CityData, CityRuntime> getSingleCityRuntimeByDefinition)
     {
+        ThrowIfFaulted();
+
         if (config == null || getSingleNpcRuntimeByDefinition == null || getSingleCityRuntimeByDefinition == null)
         {
             return;
@@ -75,6 +80,11 @@ public class JusticeSystem
 
     public WantedRecordRuntime CreateOrIncreaseWarrant(NpcRuntime target, CityRuntime city, float bounty, int sentenceDays)
     {
+        if (mutationGuardBinding.CanMutate == false)
+        {
+            return null;
+        }
+
         if (target == null || city == null)
         {
             return null;
@@ -85,6 +95,12 @@ public class JusticeSystem
         if (record == null)
         {
             record = new WantedRecordRuntime(target, city, bounty, sentenceDays);
+            if (mutationGuardBinding.BoundGuard != null
+                && record.TryBindMutationGuard(mutationGuardBinding.BoundGuard) == false)
+            {
+                return null;
+            }
+
             wantedRecords.Add(record);
         }
         else
@@ -99,6 +115,11 @@ public class JusticeSystem
 
     public bool Arrest(NpcRuntime guardRuntime, NpcRuntime targetRuntime, CityRuntime city, string originDecisionId = null)
     {
+        if (mutationGuardBinding.CanMutate == false)
+        {
+            return false;
+        }
+
         if (guardRuntime == null || targetRuntime == null || city == null || arrestedStatus == null || IsArrested(targetRuntime) == true)
         {
             return false;
@@ -119,6 +140,12 @@ public class JusticeSystem
         }
 
         PrisonSentenceRuntime sentence = new PrisonSentenceRuntime(targetRuntime, city, record, record.SentenceDays);
+        if (mutationGuardBinding.BoundGuard != null
+            && sentence.TryBindMutationGuard(mutationGuardBinding.BoundGuard) == false)
+        {
+            return false;
+        }
+
         prisonSentences.Add(sentence);
         targetRuntime.ClearHidden();
         targetRuntime.RemoveStatus(hiddenStatus);
@@ -139,6 +166,8 @@ public class JusticeSystem
 
     public void AdvanceSentences(List<NpcRuntime> npcRuntimeList)
     {
+        ThrowIfFaulted();
+
         for (int i = prisonSentences.Count - 1; i >= 0; i--)
         {
             PrisonSentenceRuntime sentence = prisonSentences[i];
@@ -183,6 +212,11 @@ public class JusticeSystem
 
     public bool EscapePrison(NpcRuntime targetRuntime, float escapeBountyPenalty, string originDecisionId = null)
     {
+        if (mutationGuardBinding.CanMutate == false)
+        {
+            return false;
+        }
+
         if (targetRuntime == null || IsArrested(targetRuntime) == false || WasArrestedToday(targetRuntime) == true)
         {
             return false;
@@ -193,6 +227,11 @@ public class JusticeSystem
 
     public bool ApplyEscapeSuccess(NpcRuntime targetRuntime, float escapeBountyPenalty, string originDecisionId = null)
     {
+        if (mutationGuardBinding.CanMutate == false)
+        {
+            return false;
+        }
+
         if (targetRuntime == null || IsArrested(targetRuntime) == false)
         {
             return false;
@@ -225,6 +264,8 @@ public class JusticeSystem
 
     public void SyncWantedStatuses(List<NpcRuntime> npcRuntimeList)
     {
+        ThrowIfFaulted();
+
         if (npcRuntimeList == null)
         {
             return;
@@ -238,6 +279,8 @@ public class JusticeSystem
 
     public void SyncWantedStatus(NpcRuntime npcRuntime)
     {
+        ThrowIfFaulted();
+
         if (npcRuntime == null || wantedStatus == null)
         {
             return;
@@ -297,6 +340,11 @@ public class JusticeSystem
 
     public bool RegisterFailedEscape(NpcRuntime targetRuntime, int additionalSentenceDays)
     {
+        if (mutationGuardBinding.CanMutate == false)
+        {
+            return false;
+        }
+
         PrisonSentenceRuntime sentence = GetActiveSentence(targetRuntime);
 
         if (sentence == null || sentence.Warrant == null || sentence.Warrant.IsActive == false)
@@ -349,6 +397,76 @@ public class JusticeSystem
         }
 
         return records;
+    }
+
+    internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        if (mutationGuardBinding.CanBindTo(guard) == false)
+        {
+            return false;
+        }
+
+        foreach (WantedRecordRuntime record in wantedRecords)
+        {
+            if (record != null && record.CanBindMutationGuard(guard) == false)
+            {
+                return false;
+            }
+        }
+
+        foreach (PrisonSentenceRuntime sentence in prisonSentences)
+        {
+            if (sentence != null && sentence.CanBindMutationGuard(guard) == false)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        if (CanBindMutationGuard(guard) == false || mutationGuardBinding.TryBindTo(guard) == false)
+        {
+            return false;
+        }
+
+        foreach (WantedRecordRuntime record in wantedRecords)
+        {
+            if (record != null && record.TryBindMutationGuard(guard) == false)
+            {
+                return false;
+            }
+        }
+
+        foreach (PrisonSentenceRuntime sentence in prisonSentences)
+        {
+            if (sentence != null && sentence.TryBindMutationGuard(guard) == false)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return CanBindMutationGuard(guard);
+    }
+
+    bool IAuthoritativeMutationGuardBindable.TryBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return TryBindMutationGuard(guard);
+    }
+
+    private void ThrowIfFaulted()
+    {
+        if (mutationGuardBinding.CanMutate == false)
+        {
+            throw new InvalidOperationException("Runtime mutation is faulted.");
+        }
     }
 
     private PrisonSentenceRuntime GetActiveSentence(NpcRuntime targetRuntime)
@@ -426,8 +544,9 @@ public class JusticeSystem
 }
 
 [Serializable]
-public class WantedRecordRuntime
+public class WantedRecordRuntime : IAuthoritativeMutationGuardBindable
 {
+    private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
     [NonSerialized] private NpcRuntime target;
     [NonSerialized] private CityRuntime city;
     [SerializeField] private float bounty;
@@ -450,6 +569,8 @@ public class WantedRecordRuntime
 
     public void AddPenalty(float additionalBounty, int additionalSentenceDays)
     {
+        ThrowIfFaulted();
+
         bounty += Mathf.Max(0f, additionalBounty);
         sentenceDays += Mathf.Max(0, additionalSentenceDays);
         sentenceDays = Mathf.Max(1, sentenceDays);
@@ -457,13 +578,30 @@ public class WantedRecordRuntime
 
     public void Resolve()
     {
+        ThrowIfFaulted();
+
         resolved = true;
+    }
+
+    internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard) => mutationGuardBinding.CanBindTo(guard);
+    internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard) => mutationGuardBinding.TryBindTo(guard);
+
+    bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard) => CanBindMutationGuard(guard);
+    bool IAuthoritativeMutationGuardBindable.TryBindMutationGuard(AuthoritativeMutationGuard guard) => TryBindMutationGuard(guard);
+
+    private void ThrowIfFaulted()
+    {
+        if (mutationGuardBinding.CanMutate == false)
+        {
+            throw new InvalidOperationException("Runtime mutation is faulted.");
+        }
     }
 }
 
 [Serializable]
-public class PrisonSentenceRuntime
+public class PrisonSentenceRuntime : IAuthoritativeMutationGuardBindable
 {
+    private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
     [NonSerialized] private NpcRuntime target;
     [NonSerialized] private CityRuntime city;
     [NonSerialized] private WantedRecordRuntime warrant;
@@ -490,17 +628,37 @@ public class PrisonSentenceRuntime
 
     public void AdvanceDay()
     {
+        ThrowIfFaulted();
+
         remainingDays = Mathf.Max(0, remainingDays - 1);
     }
 
     public void RegisterFailedEscape(int additionalSentenceDays)
     {
+        ThrowIfFaulted();
+
         failedEscapeAttempts++;
         remainingDays += Mathf.Max(0, additionalSentenceDays);
     }
 
     public void ClearArrestedToday()
     {
+        ThrowIfFaulted();
+
         wasArrestedToday = false;
+    }
+
+    internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard) => mutationGuardBinding.CanBindTo(guard);
+    internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard) => mutationGuardBinding.TryBindTo(guard);
+
+    bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard) => CanBindMutationGuard(guard);
+    bool IAuthoritativeMutationGuardBindable.TryBindMutationGuard(AuthoritativeMutationGuard guard) => TryBindMutationGuard(guard);
+
+    private void ThrowIfFaulted()
+    {
+        if (mutationGuardBinding.CanMutate == false)
+        {
+            throw new InvalidOperationException("Runtime mutation is faulted.");
+        }
     }
 }

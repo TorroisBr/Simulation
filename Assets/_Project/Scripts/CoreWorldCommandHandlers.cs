@@ -218,7 +218,7 @@ internal static class WorldCommandAuthorityRules
     }
 }
 
-public abstract class CoreWorldCommandHandlerBase : IWorldCommandHandler
+public abstract class CoreWorldCommandHandlerBase : IWorldCommandHandler, IRuntimeMutationGuardSource
 {
     protected readonly CoreWorldCommandDependencies Dependencies;
 
@@ -230,6 +230,10 @@ public abstract class CoreWorldCommandHandlerBase : IWorldCommandHandler
     public abstract WorldCommandKind Kind { get; }
     public abstract WorldCommandPreview Preview(WorldCommand command);
     public abstract WorldCommandHandlerResult Execute(WorldCommand command, WorldCommandExecutionContext context);
+
+    internal AuthoritativeMutationGuard RuntimeMutationGuard => Dependencies.WorldRuntime?.MutationGuard;
+    AuthoritativeMutationGuard IRuntimeMutationGuardSource.RuntimeMutationGuard => RuntimeMutationGuard;
+    protected bool RuntimeIsFaulted => Dependencies.WorldRuntime?.IsMutationFaulted == true;
 
     protected WorldCommandPreview Invalid(WorldCommand command, string diagnostic, IEnumerable<string> affected = null)
     {
@@ -570,6 +574,7 @@ public sealed class RelocateNpcWorldCommandHandler : CoreWorldCommandHandlerBase
 
     public override WorldCommandHandlerResult Execute(WorldCommand command, WorldCommandExecutionContext context)
     {
+        if (RuntimeIsFaulted) return Failure("Runtime mutation is faulted.");
         RelocateNpcWorldCommandPayload payload = command?.Payload as RelocateNpcWorldCommandPayload;
         if (payload == null)
         {
@@ -645,6 +650,7 @@ public sealed class DeclareStackResourceWorldCommandHandler : CoreWorldCommandHa
 
     public override WorldCommandHandlerResult Execute(WorldCommand command, WorldCommandExecutionContext context)
     {
+        if (RuntimeIsFaulted) return Failure("Runtime mutation is faulted.");
         DeclareStackResourceWorldCommandPayload payload = command?.Payload as DeclareStackResourceWorldCommandPayload;
         if (payload == null)
         {
@@ -715,6 +721,7 @@ public sealed class DeclareNotableItemWorldCommandHandler : CoreWorldCommandHand
 
     public override WorldCommandHandlerResult Execute(WorldCommand command, WorldCommandExecutionContext context)
     {
+        if (RuntimeIsFaulted) return Failure("Runtime mutation is faulted.");
         DeclareNotableItemWorldCommandPayload payload = command?.Payload as DeclareNotableItemWorldCommandPayload;
         if (payload == null)
         {
@@ -778,6 +785,7 @@ public sealed class AddLocalPlaceWorldCommandHandler : CoreWorldCommandHandlerBa
 
     public override WorldCommandHandlerResult Execute(WorldCommand command, WorldCommandExecutionContext context)
     {
+        if (RuntimeIsFaulted) return Failure("Runtime mutation is faulted.");
         AddLocalPlaceWorldCommandPayload payload = command?.Payload as AddLocalPlaceWorldCommandPayload;
         if (payload == null)
         {
@@ -886,6 +894,7 @@ public sealed class AddLocalConnectionWorldCommandHandler : CoreWorldCommandHand
 
     public override WorldCommandHandlerResult Execute(WorldCommand command, WorldCommandExecutionContext context)
     {
+        if (RuntimeIsFaulted) return Failure("Runtime mutation is faulted.");
         AddLocalConnectionWorldCommandPayload payload = command?.Payload as AddLocalConnectionWorldCommandPayload;
         if (payload == null)
         {
@@ -992,6 +1001,7 @@ public sealed class GrantSiteKnowledgeWorldCommandHandler : CoreWorldCommandHand
 
     public override WorldCommandHandlerResult Execute(WorldCommand command, WorldCommandExecutionContext context)
     {
+        if (RuntimeIsFaulted) return Failure("Runtime mutation is faulted.");
         GrantSiteKnowledgeWorldCommandPayload payload = command?.Payload as GrantSiteKnowledgeWorldCommandPayload;
         if (payload == null)
         {
@@ -1051,6 +1061,7 @@ public sealed class GrantAdventureIntelWorldCommandHandler : CoreWorldCommandHan
 
     public override WorldCommandHandlerResult Execute(WorldCommand command, WorldCommandExecutionContext context)
     {
+        if (RuntimeIsFaulted) return Failure("Runtime mutation is faulted.");
         GrantAdventureIntelWorldCommandPayload payload = command?.Payload as GrantAdventureIntelWorldCommandPayload;
         if (payload == null)
         {
@@ -1194,6 +1205,7 @@ public sealed class ResolveConflictWorldCommandHandler : CoreWorldCommandHandler
 
     public override WorldCommandHandlerResult Execute(WorldCommand command, WorldCommandExecutionContext context)
     {
+        if (RuntimeIsFaulted) return Failure("Runtime mutation is faulted.");
         ResolveConflictWorldCommandPayload payload = command?.Payload as ResolveConflictWorldCommandPayload;
         if (payload == null)
         {

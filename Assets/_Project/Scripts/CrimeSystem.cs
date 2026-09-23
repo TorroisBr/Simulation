@@ -1,9 +1,10 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutonomousNpcActionPolicy
+public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutonomousNpcActionPolicy, IAuthoritativeMutationGuardBindable
 {
     private const float EscapeSuccessMultiplierPerFailure = 0.8f;
+    private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
     private readonly JusticeSystem justiceSystem;
     private readonly TravelSystem travelSystem;
     private readonly NpcStatusData hiddenStatus;
@@ -86,6 +87,12 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
 
     public NpcActionRuntime CreateAction(NpcRuntime npcRuntime, NpcActionData action, ref float utility)
     {
+        if (mutationGuardBinding.CanMutate == false)
+        {
+            utility = 0f;
+            return null;
+        }
+
         if (action == null || configuration.Enabled == false)
         {
             utility = 0f;
@@ -118,6 +125,11 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
 
     public NpcActionResult TryExecuteAction(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime)
     {
+        if (mutationGuardBinding.CanMutate == false)
+        {
+            return NpcActionResult.Failed("Runtime mutation is faulted.");
+        }
+
         if (configuration.Enabled == false || actionRuntime == null || actionRuntime.Action == null)
         {
             return NpcActionResult.Failed();
@@ -148,6 +160,11 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
 
     public NpcActionResult HandleActionFailure(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime)
     {
+        if (mutationGuardBinding.CanMutate == false)
+        {
+            return null;
+        }
+
         if (actionRuntime == null || actionRuntime.Action == null || actionRuntime.Action.actionType != NpcActionType.EscapePrison)
         {
             return null;
@@ -167,6 +184,8 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
 
     public void AdvanceHiddenStatuses(List<NpcRuntime> npcRuntimeList)
     {
+        ThrowIfFaulted();
+
         if (npcRuntimeList == null)
         {
             return;
@@ -195,6 +214,37 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
                 npcRuntime.RemoveStatus(hiddenStatus);
                 logger.Log(SimulationLogCategory.Crime, $"{npcRuntime.NpcName} nao esta mais escondido.");
             }
+        }
+    }
+
+    internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return mutationGuardBinding.CanBindTo(guard)
+            && (justiceSystem == null || justiceSystem.CanBindMutationGuard(guard));
+    }
+
+    internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return CanBindMutationGuard(guard)
+            && mutationGuardBinding.TryBindTo(guard)
+            && (justiceSystem == null || justiceSystem.TryBindMutationGuard(guard));
+    }
+
+    bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return CanBindMutationGuard(guard);
+    }
+
+    bool IAuthoritativeMutationGuardBindable.TryBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return TryBindMutationGuard(guard);
+    }
+
+    private void ThrowIfFaulted()
+    {
+        if (mutationGuardBinding.CanMutate == false)
+        {
+            throw new System.InvalidOperationException("Runtime mutation is faulted.");
         }
     }
 

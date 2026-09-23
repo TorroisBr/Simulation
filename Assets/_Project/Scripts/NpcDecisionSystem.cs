@@ -1,8 +1,9 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public class NpcDecisionSystem
+public class NpcDecisionSystem : IAuthoritativeMutationGuardBindable
 {
+    private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
     private readonly List<INpcActionProvider> actionProviders = new List<INpcActionProvider>();
     private readonly IAuthoritativeRandomSource randomSource;
 
@@ -36,6 +37,11 @@ public class NpcDecisionSystem
         List<NpcActionData> availableActions,
         long currentAbsoluteDay)
     {
+        if (mutationGuardBinding.CanMutate == false)
+        {
+            return null;
+        }
+
         if (npcRuntime == null || npcRuntime.IsAlive == false)
         {
             return null;
@@ -53,6 +59,11 @@ public class NpcDecisionSystem
 
     public NpcActionRuntime CreateRequestedAction(NpcRuntime npcRuntime, NpcActionData action)
     {
+        if (mutationGuardBinding.CanMutate == false)
+        {
+            return null;
+        }
+
         if (npcRuntime == null || npcRuntime.IsAlive == false || action == null || HasAllRequiredStatus(action, npcRuntime.CurrentStatus) == false)
         {
             return null;
@@ -178,7 +189,7 @@ public class NpcDecisionSystem
 
     public INpcActionProvider GetProviderForAction(NpcActionData action)
     {
-        if (action == null)
+        if (mutationGuardBinding.CanMutate == false || action == null)
         {
             return null;
         }
@@ -205,6 +216,54 @@ public class NpcDecisionSystem
         }
 
         return false;
+    }
+
+    internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        if (mutationGuardBinding.CanBindTo(guard) == false)
+        {
+            return false;
+        }
+
+        foreach (INpcActionProvider provider in actionProviders)
+        {
+            if (provider is IAuthoritativeMutationGuardBindable bindable
+                && bindable.CanBindMutationGuard(guard) == false)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        if (CanBindMutationGuard(guard) == false || mutationGuardBinding.TryBindTo(guard) == false)
+        {
+            return false;
+        }
+
+        foreach (INpcActionProvider provider in actionProviders)
+        {
+            if (provider is IAuthoritativeMutationGuardBindable bindable
+                && bindable.TryBindMutationGuard(guard) == false)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return CanBindMutationGuard(guard);
+    }
+
+    bool IAuthoritativeMutationGuardBindable.TryBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return TryBindMutationGuard(guard);
     }
 
     private List<NpcActionData> GetAllValidActions(List<NpcStatusData> npcCurrentStatus, List<NpcActionData> availableActions)

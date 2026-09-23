@@ -534,6 +534,11 @@ public interface IWorldCommandHandler
     WorldCommandHandlerResult Execute(WorldCommand command, WorldCommandExecutionContext context);
 }
 
+internal interface IRuntimeMutationGuardSource
+{
+    AuthoritativeMutationGuard RuntimeMutationGuard { get; }
+}
+
 public sealed class WorldCommandResult
 {
     private readonly IReadOnlyList<string> affectedRuntimeIds;
@@ -623,8 +628,9 @@ public sealed class WorldCommandRecord
     }
 }
 
-public sealed class WorldCommandRecordStore
+public sealed class WorldCommandRecordStore : IAuthoritativeMutationGuardBindable
 {
+    private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
     private readonly List<WorldCommandRecord> records = new List<WorldCommandRecord>();
     private readonly IReadOnlyList<WorldCommandRecord> readOnlyRecords;
 
@@ -637,7 +643,7 @@ public sealed class WorldCommandRecordStore
 
     public bool Add(WorldCommandRecord record)
     {
-        if (record == null) return false;
+        if (mutationGuardBinding.CanMutate == false || record == null) return false;
         foreach (WorldCommandRecord existing in records)
         {
             if (existing != null && string.Equals(existing.WorldCommandId, record.WorldCommandId, StringComparison.Ordinal))
@@ -649,10 +655,17 @@ public sealed class WorldCommandRecordStore
         records.Add(record);
         return true;
     }
+
+    internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard) => mutationGuardBinding.CanBindTo(guard);
+    internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard) => mutationGuardBinding.TryBindTo(guard);
+
+    bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard) => CanBindMutationGuard(guard);
+    bool IAuthoritativeMutationGuardBindable.TryBindMutationGuard(AuthoritativeMutationGuard guard) => TryBindMutationGuard(guard);
 }
 
-public sealed class WorldCommandService
+public sealed class WorldCommandService : IAuthoritativeMutationGuardBindable
 {
+    private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
     private readonly WorldCommandIdAllocator commandIdAllocator;
     private readonly WorldCommandRecordStore recordStore;
     private readonly RuntimeIdAllocator runtimeIdAllocator;
@@ -682,9 +695,24 @@ public sealed class WorldCommandService
 
     public bool RegisterHandler(IWorldCommandHandler handler)
     {
-        if (handler == null || Enum.IsDefined(typeof(WorldCommandKind), handler.Kind) == false || handlers.ContainsKey(handler.Kind))
+        if (mutationGuardBinding.CanMutate == false
+            || handler == null
+            || Enum.IsDefined(typeof(WorldCommandKind), handler.Kind) == false
+            || handlers.ContainsKey(handler.Kind))
         {
             return false;
+        }
+
+        if (handler is IRuntimeMutationGuardSource guardSource
+            && guardSource.RuntimeMutationGuard != null)
+        {
+            AuthoritativeMutationGuard runtimeGuard = guardSource.RuntimeMutationGuard;
+            if (runtimeGuard.CanMutate == false
+                || mutationGuardBinding.CanBindTo(runtimeGuard) == false
+                || TryBindMutationGuard(runtimeGuard) == false)
+            {
+                return false;
+            }
         }
 
         handlers.Add(handler.Kind, handler);
@@ -707,6 +735,16 @@ public sealed class WorldCommandService
 
     public WorldCommandResult Execute(WorldCommand command)
     {
+        if (mutationGuardBinding.CanMutate == false)
+        {
+            WorldCommandHandlerResult rejected = new WorldCommandHandlerResult(false, "Runtime mutation is faulted.");
+            return new WorldCommandResult(
+                null,
+                command == null ? WorldCommandKind.RelocateNpc : command.Kind,
+                rejected,
+                null);
+        }
+
         string commandId = commandIdAllocator.Allocate();
         WorldCommandHandlerResult handlerResult;
         if (command == null)
@@ -754,5 +792,43 @@ public sealed class WorldCommandService
             handlerResult.Diagnostic);
         recordStore.Add(record);
         return new WorldCommandResult(commandId, kind, handlerResult, record);
+    }
+
+    internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        if (mutationGuardBinding.CanBindTo(guard) == false
+            || recordStore.CanBindMutationGuard(guard) == false)
+        {
+            return false;
+        }
+
+        foreach (IWorldCommandHandler handler in handlers.Values)
+        {
+            if (handler is IRuntimeMutationGuardSource guardSource
+                && guardSource.RuntimeMutationGuard != null
+                && ReferenceEquals(guardSource.RuntimeMutationGuard, guard) == false)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return CanBindMutationGuard(guard)
+            && mutationGuardBinding.TryBindTo(guard)
+            && recordStore.TryBindMutationGuard(guard);
+    }
+
+    bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return CanBindMutationGuard(guard);
+    }
+
+    bool IAuthoritativeMutationGuardBindable.TryBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return TryBindMutationGuard(guard);
     }
 }

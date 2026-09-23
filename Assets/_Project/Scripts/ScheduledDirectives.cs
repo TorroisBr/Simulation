@@ -2,8 +2,9 @@ using System;
 using System.Collections.Generic;
 
 [Serializable]
-public sealed class ScheduledDirective
+public sealed class ScheduledDirective : IAuthoritativeMutationGuardBindable
 {
+    private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
     private readonly string directiveId;
     private readonly long absoluteDay;
     private readonly ScheduledDirectiveMode mode;
@@ -89,7 +90,10 @@ public sealed class ScheduledDirective
 
     private bool MarkProcessed(ScheduledDirectiveState finalState, long currentDay, string reason)
     {
-        if (state != ScheduledDirectiveState.Pending || currentDay < 0L || finalState == ScheduledDirectiveState.Pending)
+        if (mutationGuardBinding.CanMutate == false
+            || state != ScheduledDirectiveState.Pending
+            || currentDay < 0L
+            || finalState == ScheduledDirectiveState.Pending)
         {
             return false;
         }
@@ -99,6 +103,12 @@ public sealed class ScheduledDirective
         resultReason = reason ?? string.Empty;
         return true;
     }
+
+    internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard) => mutationGuardBinding.CanBindTo(guard);
+    internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard) => mutationGuardBinding.TryBindTo(guard);
+
+    bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard) => CanBindMutationGuard(guard);
+    bool IAuthoritativeMutationGuardBindable.TryBindMutationGuard(AuthoritativeMutationGuard guard) => TryBindMutationGuard(guard);
 }
 
 public enum ScheduledDirectiveMode
@@ -120,8 +130,9 @@ public enum ScheduledDirectiveState
     Skipped
 }
 
-public sealed class ScheduledDirectiveStore
+public sealed class ScheduledDirectiveStore : IAuthoritativeMutationGuardBindable
 {
+    private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
     private readonly List<ScheduledDirective> directives = new List<ScheduledDirective>();
     private readonly IReadOnlyList<ScheduledDirective> readOnlyDirectives;
     private readonly Dictionary<string, ScheduledDirective> directivesById = new Dictionary<string, ScheduledDirective>(StringComparer.Ordinal);
@@ -139,15 +150,30 @@ public sealed class ScheduledDirectiveStore
 
     public bool Add(ScheduledDirective directive)
     {
-        if (directive == null)
+        if (mutationGuardBinding.CanMutate == false
+            || directive == null
+            || (mutationGuardBinding.BoundGuard != null
+                && directive.CanBindMutationGuard(mutationGuardBinding.BoundGuard) == false))
         {
-            logger.LogError("Cannot add scheduled directive: directive is null.");
+            if (mutationGuardBinding.CanMutate)
+            {
+                logger.LogError(directive == null
+                    ? "Cannot add scheduled directive: directive is null."
+                    : "Cannot add scheduled directive: directive is owned by another runtime.");
+            }
+
             return false;
         }
 
         if (directivesById.ContainsKey(directive.DirectiveId) == true)
         {
             logger.LogError($"Cannot add duplicate DirectiveId '{directive.DirectiveId}'.");
+            return false;
+        }
+
+        if (mutationGuardBinding.BoundGuard != null
+            && directive.TryBindMutationGuard(mutationGuardBinding.BoundGuard) == false)
+        {
             return false;
         }
 
@@ -182,6 +208,52 @@ public sealed class ScheduledDirectiveStore
         return pending;
     }
 
+    internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        if (mutationGuardBinding.CanBindTo(guard) == false)
+        {
+            return false;
+        }
+
+        foreach (ScheduledDirective directive in directives)
+        {
+            if (directive != null && directive.CanBindMutationGuard(guard) == false)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        if (CanBindMutationGuard(guard) == false || mutationGuardBinding.TryBindTo(guard) == false)
+        {
+            return false;
+        }
+
+        foreach (ScheduledDirective directive in directives)
+        {
+            if (directive != null && directive.TryBindMutationGuard(guard) == false)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return CanBindMutationGuard(guard);
+    }
+
+    bool IAuthoritativeMutationGuardBindable.TryBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return TryBindMutationGuard(guard);
+    }
+
     private void SkipInvalidSchedule(ScheduledDirective directive, long currentDay, string reason)
     {
         directive.MarkSkipped(currentDay, reason);
@@ -189,8 +261,9 @@ public sealed class ScheduledDirectiveStore
     }
 }
 
-public sealed class ScheduledDirectiveSystem
+public sealed class ScheduledDirectiveSystem : IAuthoritativeMutationGuardBindable
 {
+    private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
     private readonly ScheduledDirectiveStore directiveStore;
     private readonly RuntimeIdentityRegistry identityRegistry;
     private readonly SimulationLogger logger;
@@ -209,6 +282,8 @@ public sealed class ScheduledDirectiveSystem
 
     public void PrepareDay(long absoluteDay)
     {
+        ThrowIfFaulted();
+
         if (absoluteDay < 1L || lastPreparedAbsoluteDay == absoluteDay)
         {
             return;
@@ -251,6 +326,11 @@ public sealed class ScheduledDirectiveSystem
     {
         directive = null;
 
+        if (mutationGuardBinding.CanMutate == false)
+        {
+            return false;
+        }
+
         if (actorRuntime == null || string.IsNullOrWhiteSpace(actorRuntime.RuntimeId) == true)
         {
             return false;
@@ -263,5 +343,36 @@ public sealed class ScheduledDirectiveSystem
 
         directivesByActorForCurrentDay.Remove(actorRuntime.RuntimeId);
         return directive != null && directive.IsPending == true;
+    }
+
+    internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return mutationGuardBinding.CanBindTo(guard)
+            && directiveStore.CanBindMutationGuard(guard);
+    }
+
+    internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return CanBindMutationGuard(guard)
+            && mutationGuardBinding.TryBindTo(guard)
+            && directiveStore.TryBindMutationGuard(guard);
+    }
+
+    bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return CanBindMutationGuard(guard);
+    }
+
+    bool IAuthoritativeMutationGuardBindable.TryBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        return TryBindMutationGuard(guard);
+    }
+
+    private void ThrowIfFaulted()
+    {
+        if (mutationGuardBinding.CanMutate == false)
+        {
+            throw new InvalidOperationException("Runtime mutation is faulted.");
+        }
     }
 }
