@@ -8,10 +8,9 @@
   `094971b` on `codex/phase8/P8AGeographyIntegration` to the new
   `codex/phase8/canonical` branch. The canonical branch is pushed and its
   remote SHA was verified; the Phase 7 canonical baseline remains preserved.
-- Phase 8 remains open. P8-A is canonical. P8-B and P8-C are implemented in
-  the reviewed integration candidate recorded below; their promotion is pending
-  independent integration validation. P8-D and P8-E are design-approved and
-  await their dependencies.
+- Phase 8 remains open. P8-A through P8-C are canonical. P8-D is design-approved
+  and READY to implement from the current canonical branch. P8-E is
+  design-approved and waits for promoted P8-D capability.
 
 ## P8-A — Factual Geography
 
@@ -65,27 +64,30 @@ run because P8-A does not change the daily loop or long-horizon behavior.
 
 ## Remaining Phase 8 dependency state
 
-- **P8-B — Factual Passages:** implementation candidate
+- **P8-B — Factual Passages:** feature commit
   `3814d814087d97f28de75447740b3db715532ed6` is published on
   `codex/phase8/P8BFactualPassages`; independent implementation review: **PASS**.
-  The implementation worker reported focused suites passed 44/44 with no
-  failures or skips. Passage option, barrier, and crossing condition facts are
-  included in the integration snapshot, canonical output, formatter, diff, and
-  invariant validation.
-- **P8-C — Legacy Anchors and Civil Presence:** implementation candidate
+  Its focused suites passed 44/44 with no failures or skips. P8-B is canonical
+  through combined integration implementation commit
+  `1c84519740db8a245e103678b38f692e13522383`. Passage option, barrier, and
+  crossing condition facts are included in the integration snapshot, canonical
+  output, formatter, diff, and invariant validation.
+- **P8-C — Legacy Anchors and Civil Presence:** feature commit
   `d238f4bcef9faaf622329130f02b706e19bb8b4d` is published on
   `codex/phase8/P8CLegacyAnchorsCivilPresence`; independent implementation
-  review: **PASS**. The implementation worker reported its focused suite passed
-  4/4. Person At/InTransit positions and City/Site anchor bindings are composed
-  through `SimulationRuntime`, cloned against the runtime-owned authorities,
-  mutation-guard bound, and included in spatial diagnostics.
+  review: **PASS**. Its focused suite passed 4/4. P8-C is canonical through
+  combined integration implementation commit
+  `1c84519740db8a245e103678b38f692e13522383`. Person At/InTransit positions
+  and City/Site anchor bindings are composed through `SimulationRuntime`,
+  cloned against the runtime-owned authorities, mutation-guard bound, and
+  included in spatial diagnostics.
 - **P8-D — Knowledge and Route Plan:** the technical design at
   `6800d3d289e2f8be730f082ee7457c518ed22050` passed independent review and is
   included in this documentation integration. It defines Hex-only route
   endpoints, deterministic same-subject observation resolution, and excludes
   a traversal from new candidates when the actor's resolved belief is
-  `KnownUnavailable`. Implementation waits for promoted P8-B and P8-C
-  capabilities and their published APIs.
+  `KnownUnavailable`. With P8-B and P8-C promoted, P8-D is READY to implement
+  from the current `codex/phase8/canonical` HEAD.
 - **P8-E — Civil Travel Vertical Slice:** the technical design at
   `4b7127f57d354c851e4d8ddaaeb27e8fbd51686c` passed independent review and is
   included in this documentation integration. Its proving scenario uses
@@ -103,7 +105,7 @@ without expanding P8-C into a LocalTopology migration. The included contract
 and P8-D/P8-E technical designs approve design semantics only and do not mark
 their capabilities implemented.
 
-## P8-B/C integration candidate
+## P8-B/C integration — canonical
 
 - Integration branch: `codex/phase8/P8BCSpatialDiagnosticsIntegration`.
 - Integration order: reviewed P8-B, then reviewed P8-C, then the accepted
@@ -114,13 +116,13 @@ their capabilities implemented.
   reject unregistered owners, and passage/boundary diagnostic keys encode each
   nullable string component with a length prefix to remain injective for
   delimiter-bearing IDs.
-- Candidate implementation commit: `1c84519740db8a245e103678b38f692e13522383`.
-- Independent integration code review: **PASS**. Independent validation evidence
-  review: **PASS**. The integration candidate satisfies the review and test
-  gates; canonical promotion is the remaining operation.
+- Promoted implementation commit: `1c84519740db8a245e103678b38f692e13522383`.
+- Canonical promotion: **COMPLETE**. `codex/phase8/canonical` was fast-forwarded
+  to validated integration record `799194e5bad0d2e52406cb7aa4b9198ef8923d9d`
+  on 2026-09-24 and pushed; this state update records that promotion.
+- Independent integration code review: **PASS**. Independent validation
+  evidence review: **PASS**.
 - Validation record commit: `ea09f5d305753486246d9e811dc8bf0f20cb2d46`.
-  `codex/phase8/canonical` remains at `01eebe0f11ca145e04e7c4cd065c124777edc8fd`
-  until promotion is pushed and verified.
 - Validation evidence at the final candidate code state:
 
 | Gate | Invocation | Result | Retained XML and log |
