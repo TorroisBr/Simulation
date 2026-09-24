@@ -232,6 +232,101 @@ public sealed class ContingentManpowerState
     }
 }
 
+internal sealed class BattleAmountMirrorProjection
+{
+    internal ContingentId ContingentId { get; }
+    internal long ExpectedAmount { get; }
+    internal long ProjectedAmount { get; }
+
+    internal BattleAmountMirrorProjection(ContingentId contingentId, long expectedAmount, long projectedAmount)
+    {
+        ContingentId = contingentId;
+        ExpectedAmount = expectedAmount;
+        ProjectedAmount = projectedAmount;
+    }
+}
+
+internal sealed class PreparedBattleAmountMirrorBatch
+{
+    internal ContingentManpowerStateStore Authority { get; }
+    internal long ExpectedStoreRevision { get; }
+    internal IReadOnlyList<ContingentRecord> ExpectedRecords { get; }
+    internal IReadOnlyList<ContingentRecord> ReplacementRecords { get; }
+
+    internal PreparedBattleAmountMirrorBatch(
+        ContingentManpowerStateStore authority,
+        long expectedStoreRevision,
+        IEnumerable<ContingentRecord> expectedRecords,
+        IEnumerable<ContingentRecord> replacementRecords)
+    {
+        Authority = authority;
+        ExpectedStoreRevision = expectedStoreRevision;
+        ExpectedRecords = new ReadOnlyCollection<ContingentRecord>(new List<ContingentRecord>(expectedRecords));
+        ReplacementRecords = new ReadOnlyCollection<ContingentRecord>(new List<ContingentRecord>(replacementRecords));
+    }
+}
+
+internal sealed class BattleAmountMirrorSnapshot
+{
+    internal long PriorRevision { get; }
+    internal IReadOnlyList<ContingentRecord> PriorRecords { get; }
+
+    internal BattleAmountMirrorSnapshot(long priorRevision, IEnumerable<ContingentRecord> priorRecords)
+    {
+        PriorRevision = priorRevision;
+        PriorRecords = new ReadOnlyCollection<ContingentRecord>(new List<ContingentRecord>(priorRecords));
+    }
+}
+
+internal sealed class PreparedBattleManpowerStateWrite
+{
+    internal ContingentManpowerState Expected { get; }
+    internal ContingentManpowerState Replacement { get; }
+
+    internal PreparedBattleManpowerStateWrite(ContingentManpowerState expected, ContingentManpowerState replacement)
+    {
+        Expected = expected;
+        Replacement = replacement;
+    }
+}
+
+internal sealed class PreparedBattleManpowerBatch
+{
+    internal long ExpectedStoreRevision { get; }
+    internal IReadOnlyList<PreparedBattleManpowerStateWrite> StateWrites { get; }
+    internal PreparedBattleAmountMirrorBatch MirrorBatch { get; }
+    internal BattleManpowerBatchSnapshot Snapshot { get; }
+
+    internal PreparedBattleManpowerBatch(
+        long expectedStoreRevision,
+        IEnumerable<PreparedBattleManpowerStateWrite> stateWrites,
+        PreparedBattleAmountMirrorBatch mirrorBatch,
+        BattleManpowerBatchSnapshot snapshot)
+    {
+        ExpectedStoreRevision = expectedStoreRevision;
+        StateWrites = new ReadOnlyCollection<PreparedBattleManpowerStateWrite>(new List<PreparedBattleManpowerStateWrite>(stateWrites));
+        MirrorBatch = mirrorBatch;
+        Snapshot = snapshot;
+    }
+}
+
+internal sealed class BattleManpowerBatchSnapshot
+{
+    internal long PriorManpowerRevision { get; }
+    internal IReadOnlyList<ContingentManpowerState> PriorStates { get; }
+    internal BattleAmountMirrorSnapshot MirrorSnapshot { get; }
+
+    internal BattleManpowerBatchSnapshot(
+        long priorManpowerRevision,
+        IEnumerable<ContingentManpowerState> priorStates,
+        BattleAmountMirrorSnapshot mirrorSnapshot)
+    {
+        PriorManpowerRevision = priorManpowerRevision;
+        PriorStates = new ReadOnlyCollection<ContingentManpowerState>(new List<ContingentManpowerState>(priorStates));
+        MirrorSnapshot = mirrorSnapshot;
+    }
+}
+
 public sealed class ContingentManpowerInvariantReport
 {
     public IReadOnlyList<string> Violations { get; }
@@ -524,6 +619,255 @@ public sealed class ContingentManpowerStateStore : IAuthoritativeMutationGuardBi
         return true;
     }
 
+    internal bool TryPrepareBattleBatch(
+        BattleDirectConsequencePlan plan,
+        out PreparedBattleManpowerBatch prepared,
+        out ContingentManpowerFailure failure)
+    {
+        prepared = null;
+        if (!mutationGuardBinding.CanMutate)
+            return Fail(ContingentManpowerFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.", out failure);
+        if (plan == null || plan.BattleId == null || !plan.IsComplete
+            || plan.ContingentProjections == null || plan.Partitions == null || plan.SourceGroups == null)
+            return Fail(ContingentManpowerFailureCode.InvalidInvariant, "A complete D6B2 Battle plan is required.", out failure);
+
+        Dictionary<string, long> deathsByContingent = new Dictionary<string, long>(StringComparer.Ordinal);
+        try
+        {
+            foreach (BattleCohortConsequencePartition partition in plan.Partitions)
+            {
+                if (partition == null || partition.InputIdentity?.ContingentId == null || partition.DeathAmount < 0L)
+                    return Fail(ContingentManpowerFailureCode.InvalidInvariant, "A D6B2 death partition is malformed.", out failure);
+                string id = partition.InputIdentity.ContingentId.Value;
+                deathsByContingent.TryGetValue(id, out long prior);
+                deathsByContingent[id] = checked(prior + partition.DeathAmount);
+            }
+        }
+        catch (OverflowException)
+        {
+            return Fail(ContingentManpowerFailureCode.CohortAmountOverflow, "D6B2 per-contingent deaths exceed Int64 capacity.", out failure);
+        }
+
+        List<PreparedBattleManpowerStateWrite> writes = new List<PreparedBattleManpowerStateWrite>();
+        List<BattleAmountMirrorProjection> mirrorProjections = new List<BattleAmountMirrorProjection>();
+        HashSet<string> projectedIds = new HashSet<string>(StringComparer.Ordinal);
+        Dictionary<string, long> touchedBeforeBySource = new Dictionary<string, long>(StringComparer.Ordinal);
+        Dictionary<string, long> touchedAfterBySource = new Dictionary<string, long>(StringComparer.Ordinal);
+        try
+        {
+            foreach (BattleDirectConsequenceContingentProjection projection in plan.ContingentProjections)
+            {
+                if (projection == null || projection.ContingentId == null
+                    || !projectedIds.Add(projection.ContingentId.Value))
+                    return Fail(ContingentManpowerFailureCode.InvalidInvariant, "D6B2 contains an invalid or duplicate contingent projection.", out failure);
+                if (!states.TryGetValue(projection.ContingentId.Value, out ContingentManpowerState current))
+                    return Fail(ContingentManpowerFailureCode.ContingentNotRegistered, "A D6B2 contingent is absent from the D6A store.", out failure);
+                if (!armedForceStore.TryGetContingent(projection.ContingentId, out ContingentRecord contingent))
+                    return Fail(ContingentManpowerFailureCode.ContingentNotRegistered, "A D6B2 contingent mirror is absent from the ArmedForce store.", out failure);
+                if (current.SourceId != projection.SourceId)
+                    return Fail(ContingentManpowerFailureCode.SourceBindingChangeRequiresEmptyRoster, "A D6B2 projection changed its stable manpower-source binding.", out failure);
+                if (contingent.Amount != current.LivingRosterAmount)
+                    return Fail(ContingentManpowerFailureCode.AmountMirrorMismatch, "A current Contingent.Amount differs from its D6A living roster.", out failure);
+
+                if (!TryNormalize(projection.Cohorts, out List<ContingentManpowerCohort> normalized, out long projectedLiving, out failure))
+                    return false;
+                long projectedAvailable = 0L;
+                try
+                {
+                    foreach (ContingentManpowerCohort cohort in normalized)
+                        if (cohort.AvailabilityState == ManpowerAvailabilityState.Available)
+                            projectedAvailable = checked(projectedAvailable + cohort.Amount);
+                }
+                catch (OverflowException)
+                {
+                    return Fail(ContingentManpowerFailureCode.CohortAmountOverflow, "Projected available manpower exceeds Int64 capacity.", out failure);
+                }
+                if (projectedLiving != projection.LivingRosterAmount || projectedAvailable != projection.AvailableAmount)
+                    return Fail(ContingentManpowerFailureCode.InvalidInvariant, "D6B2 projected roster totals do not match its cohort projection.", out failure);
+
+                deathsByContingent.TryGetValue(projection.ContingentId.Value, out long terminalDeaths);
+                if (terminalDeaths > current.LivingRosterAmount
+                    || current.LivingRosterAmount - projectedLiving != terminalDeaths)
+                    return Fail(ContingentManpowerFailureCode.InvalidInvariant, "The projected roster reduction does not equal terminal D6B2 deaths.", out failure);
+                if (projection.SourceId == null && terminalDeaths > 0L)
+                    return Fail(ContingentManpowerFailureCode.SourceBindingRequired, "Battle deaths require an explicit stable manpower-source binding.", out failure);
+
+                bool cohortsChanged = !HaveSameCohorts(current.Cohorts, normalized);
+                if (current.SourceId != projection.SourceId || cohortsChanged)
+                {
+                    if (current.Revision == long.MaxValue)
+                        return Fail(ContingentManpowerFailureCode.RevisionOverflow, "A contingent manpower revision cannot advance.", out failure);
+                    ContingentManpowerState replacement = new ContingentManpowerState(
+                        current.ContingentId,
+                        projection.SourceId,
+                        normalized,
+                        current.Revision + 1L);
+                    writes.Add(new PreparedBattleManpowerStateWrite(current, replacement));
+                }
+
+                mirrorProjections.Add(new BattleAmountMirrorProjection(
+                    projection.ContingentId,
+                    current.LivingRosterAmount,
+                    projectedLiving));
+                if (projection.SourceId != null)
+                {
+                    AddAmount(touchedBeforeBySource, projection.SourceId.Value, current.LivingRosterAmount);
+                    AddAmount(touchedAfterBySource, projection.SourceId.Value, projectedLiving);
+                }
+            }
+        }
+        catch (OverflowException)
+        {
+            return Fail(ContingentManpowerFailureCode.RosterAmountOverflow, "D7 source allocation accounting exceeds Int64 capacity.", out failure);
+        }
+
+        foreach (string id in deathsByContingent.Keys)
+            if (!projectedIds.Contains(id))
+                return Fail(ContingentManpowerFailureCode.InvalidInvariant, "A D6B2 death partition has no contingent post-state projection.", out failure);
+
+        Dictionary<string, long> deathsBySource = new Dictionary<string, long>(StringComparer.Ordinal);
+        foreach (BattleDirectConsequenceSourceGroup group in plan.SourceGroups)
+        {
+            if (group == null || group.SourceId == null || group.Proposal?.Effect == null)
+                return Fail(ContingentManpowerFailureCode.InvalidInvariant, "A D6B2 source group has no exact D6B1 proposal.", out failure);
+            long tracedDeaths = 0L;
+            try
+            {
+                foreach (BattleDirectConsequenceDeathTrace trace in group.Traces)
+                {
+                    if (trace?.CohortIdentity?.ContingentId == null || trace.DeathAmount < 0L)
+                        return Fail(ContingentManpowerFailureCode.InvalidInvariant, "A D6B2 source death trace is malformed.", out failure);
+                    tracedDeaths = checked(tracedDeaths + trace.DeathAmount);
+                }
+                if (tracedDeaths != group.DeathAmount
+                    || group.Proposal.SourceId != group.SourceId
+                    || group.Proposal.Effect.Kind != ManpowerSourceEffectKind.Death
+                    || group.Proposal.Effect.Amount != group.DeathAmount)
+                    return Fail(ContingentManpowerFailureCode.InvalidInvariant, "D6B2 source traces and the D6B1 death proposal disagree.", out failure);
+                AddAmount(deathsBySource, group.SourceId.Value, group.DeathAmount);
+            }
+            catch (OverflowException)
+            {
+                return Fail(ContingentManpowerFailureCode.RosterAmountOverflow, "D6B2 source deaths exceed Int64 capacity.", out failure);
+            }
+        }
+
+        HashSet<string> sourceIds = new HashSet<string>(touchedBeforeBySource.Keys, StringComparer.Ordinal);
+        foreach (string id in deathsBySource.Keys) sourceIds.Add(id);
+        foreach (string sourceIdValue in sourceIds)
+        {
+            ManpowerSourceId sourceId = new ManpowerSourceId(sourceIdValue);
+            if (!TryGetSourceAllocation(sourceId, out long allocationBefore, out failure)) return false;
+            touchedBeforeBySource.TryGetValue(sourceIdValue, out long touchedBefore);
+            touchedAfterBySource.TryGetValue(sourceIdValue, out long touchedAfter);
+            deathsBySource.TryGetValue(sourceIdValue, out long deaths);
+            long projectedAllocation;
+            long expectedAllocation;
+            try
+            {
+                projectedAllocation = checked(allocationBefore - touchedBefore + touchedAfter);
+                expectedAllocation = checked(allocationBefore - deaths);
+            }
+            catch (OverflowException)
+            {
+                return Fail(ContingentManpowerFailureCode.RosterAmountOverflow, "A D7 source allocation exceeds Int64 capacity.", out failure);
+            }
+            if (deaths > allocationBefore || projectedAllocation != expectedAllocation)
+                return Fail(ContingentManpowerFailureCode.InvalidInvariant, "Post-battle source allocation does not equal pre-allocation minus D6B2 deaths.", out failure);
+        }
+
+        if (writes.Count > 0 && revision == long.MaxValue)
+            return Fail(ContingentManpowerFailureCode.RevisionOverflow, "The global manpower revision cannot advance.", out failure);
+        if (!armedForceStore.TryPrepareBattleAmountMirrorBatch(
+                this,
+                mirrorProjections,
+                out PreparedBattleAmountMirrorBatch mirrorBatch,
+                out ArmedForceFoundationFailure mirrorFailure))
+            return Fail(
+                mirrorFailure.Code == ArmedForceFoundationFailureCode.RevisionOverflow
+                    ? ContingentManpowerFailureCode.RevisionOverflow
+                    : ContingentManpowerFailureCode.AmountMirrorMismatch,
+                mirrorFailure.ToString(),
+                out failure);
+        if (!armedForceStore.TryCaptureBattleAmountMirrorSnapshot(mirrorBatch, out BattleAmountMirrorSnapshot mirrorSnapshot))
+            return Fail(ContingentManpowerFailureCode.AmountMirrorMismatch, "The ArmedForce mirror changed during D7 preparation.", out failure);
+
+        List<ContingentManpowerState> priorStates = new List<ContingentManpowerState>();
+        foreach (PreparedBattleManpowerStateWrite write in writes) priorStates.Add(write.Expected);
+        BattleManpowerBatchSnapshot snapshot = new BattleManpowerBatchSnapshot(revision, priorStates, mirrorSnapshot);
+        prepared = new PreparedBattleManpowerBatch(revision, writes, mirrorBatch, snapshot);
+        failure = ContingentManpowerFailure.None;
+        return true;
+    }
+
+    internal bool IsBattleBatchCurrent(PreparedBattleManpowerBatch prepared)
+    {
+        if (prepared == null || revision != prepared.ExpectedStoreRevision
+            || !mutationGuardBinding.CanMutate
+            || !armedForceStore.IsBattleAmountMirrorBatchCurrent(prepared.MirrorBatch))
+            return false;
+        foreach (PreparedBattleManpowerStateWrite write in prepared.StateWrites)
+            if (write?.Expected == null
+                || !states.TryGetValue(write.Expected.ContingentId.Value, out ContingentManpowerState current)
+                || !ReferenceEquals(current, write.Expected))
+                return false;
+        return true;
+    }
+
+    internal bool TryCommitBattleBatch(
+        PreparedBattleManpowerBatch prepared,
+        out BattleManpowerBatchSnapshot snapshot,
+        out bool authoritativeWriteStarted,
+        out ContingentManpowerFailure failure)
+    {
+        snapshot = prepared?.Snapshot;
+        authoritativeWriteStarted = false;
+        if (!mutationGuardBinding.CanMutate)
+            return Fail(ContingentManpowerFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.", out failure);
+        if (!IsBattleBatchCurrent(prepared))
+            return Fail(ContingentManpowerFailureCode.StaleContingentState, "The D6A batch changed after preparation.", out failure);
+        if (prepared.StateWrites.Count > 0)
+        {
+            if (!CanAdvanceRevision(out failure)) return false;
+            authoritativeWriteStarted = true;
+            foreach (PreparedBattleManpowerStateWrite write in prepared.StateWrites)
+                states[write.Replacement.ContingentId.Value] = write.Replacement;
+            revision++;
+        }
+        if (prepared.MirrorBatch.ReplacementRecords.Count > 0)
+            authoritativeWriteStarted = true;
+        if (!armedForceStore.TryCommitBattleAmountMirrorBatch(
+                prepared.MirrorBatch,
+                out _,
+                out ArmedForceFoundationFailure mirrorFailure))
+            return Fail(
+                mirrorFailure.Code == ArmedForceFoundationFailureCode.RevisionOverflow
+                    ? ContingentManpowerFailureCode.RevisionOverflow
+                    : ContingentManpowerFailureCode.AmountMirrorMismatch,
+                mirrorFailure.ToString(),
+                out failure);
+        failure = ContingentManpowerFailure.None;
+        return true;
+    }
+
+    internal bool RestoreBattleBatch(BattleManpowerBatchSnapshot snapshot)
+    {
+        if (snapshot == null || snapshot.PriorManpowerRevision < 0L) return false;
+        bool mirrorsRestored = armedForceStore.RestoreBattleAmountMirrorSnapshot(snapshot.MirrorSnapshot);
+        bool statesRestored = true;
+        foreach (ContingentManpowerState prior in snapshot.PriorStates)
+        {
+            if (prior == null || prior.ContingentId == null || !states.ContainsKey(prior.ContingentId.Value))
+            {
+                statesRestored = false;
+                continue;
+            }
+            states[prior.ContingentId.Value] = prior;
+        }
+        revision = snapshot.PriorManpowerRevision;
+        return mirrorsRestored && statesRestored;
+    }
+
     public bool TryGetSourceAllocation(ManpowerSourceId sourceId, out long amount, out ContingentManpowerFailure failure)
     {
         amount = 0L;
@@ -806,6 +1150,23 @@ public sealed class ContingentManpowerStateStore : IAuthoritativeMutationGuardBi
 
     private static bool SameKey(ContingentManpowerCohort left, ContingentManpowerCohort right)
         => ContingentManpowerState.CompareCohorts(left, right) == 0;
+
+    private static bool HaveSameCohorts(
+        IReadOnlyList<ContingentManpowerCohort> left,
+        IReadOnlyList<ContingentManpowerCohort> right)
+    {
+        if (left == null || right == null || left.Count != right.Count) return false;
+        for (int index = 0; index < left.Count; index++)
+            if (!SameKey(left[index], right[index]) || left[index].Amount != right[index].Amount)
+                return false;
+        return true;
+    }
+
+    private static void AddAmount(Dictionary<string, long> totals, string key, long amount)
+    {
+        totals.TryGetValue(key, out long current);
+        totals[key] = checked(current + amount);
+    }
 
     private static void ValidateStateInvariants(ContingentManpowerState state, List<string> violations)
     {

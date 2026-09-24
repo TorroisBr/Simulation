@@ -378,6 +378,7 @@ public sealed class WorldStateDiff
                 CompareValue("Battle", identity, "ConflictId", WorldStateCanonicalWriter.StringValue(left.ConflictId), WorldStateCanonicalWriter.StringValue(right.ConflictId), differences);
                 CompareValue("Battle", identity, "WarId", WorldStateCanonicalWriter.StringValue(left.WarId), WorldStateCanonicalWriter.StringValue(right.WarId), differences);
                 CompareValue("Battle", identity, "LocationReference", WorldStateCanonicalWriter.StringValue(left.LocationReferenceKey), WorldStateCanonicalWriter.StringValue(right.LocationReferenceKey), differences);
+                CompareBattleOutcome(identity, left.TerminalOutcome, right.TerminalOutcome, differences);
             }, differences);
         CompareEntities("BattleSide", before.BattleSides, after.BattleSides,
             side => side.BattleId + "\u001f" + side.SideId,
@@ -1122,6 +1123,32 @@ public sealed class WorldStateDiff
             before == null ? null : "present",
             after == null ? null : "present",
             before == null ? WorldStateDifferenceChangeKind.Added : WorldStateDifferenceChangeKind.Removed));
+    }
+
+    private static void CompareBattleOutcome(
+        string identity,
+        WorldStateBattleTerminalOutcomeSnapshot left,
+        WorldStateBattleTerminalOutcomeSnapshot right,
+        List<WorldStateDifference> differences)
+    {
+        CompareValue("Battle", identity, "TerminalOutcomePresent",
+            WorldStateCanonicalWriter.BoolValue(left != null),
+            WorldStateCanonicalWriter.BoolValue(right != null), differences);
+        CompareValue("Battle", identity, "OutcomeType", left == null ? null : WorldStateCanonicalWriter.EnumValue(left.OutcomeType), right == null ? null : WorldStateCanonicalWriter.EnumValue(right.OutcomeType), differences);
+        CompareValue("Battle", identity, "WinningBattleSideId", WorldStateCanonicalWriter.StringValue(left?.WinningBattleSideId), WorldStateCanonicalWriter.StringValue(right?.WinningBattleSideId), differences);
+        CompareValue("Battle", identity, "ResolvedAbsoluteDay", left == null ? null : WorldStateCanonicalWriter.Int64Value(left.ResolvedAbsoluteDay), right == null ? null : WorldStateCanonicalWriter.Int64Value(right.ResolvedAbsoluteDay), differences);
+        CompareValue("Battle", identity, "D5PolicyFingerprint", WorldStateCanonicalWriter.StringValue(left?.D5PolicyFingerprint), WorldStateCanonicalWriter.StringValue(right?.D5PolicyFingerprint), differences);
+        CompareValue("Battle", identity, "D5NumericExecutionProfileKey", WorldStateCanonicalWriter.StringValue(left?.D5NumericExecutionProfileKey), WorldStateCanonicalWriter.StringValue(right?.D5NumericExecutionProfileKey), differences);
+        CompareValue("Battle", identity, "D5ProjectionVersion", WorldStateCanonicalWriter.StringValue(left?.D5ProjectionVersion), WorldStateCanonicalWriter.StringValue(right?.D5ProjectionVersion), differences);
+        CompareValue("Battle", identity, "D5CausalResolutionFingerprint", WorldStateCanonicalWriter.StringValue(left?.D5CausalResolutionFingerprint), WorldStateCanonicalWriter.StringValue(right?.D5CausalResolutionFingerprint), differences);
+        CompareValue("Battle", identity, "D5SourceContextFingerprint", WorldStateCanonicalWriter.StringValue(left?.D5SourceContextFingerprint), WorldStateCanonicalWriter.StringValue(right?.D5SourceContextFingerprint), differences);
+        CompareValue("Battle", identity, "D5CapabilityRuleKey", WorldStateCanonicalWriter.StringValue(left?.D5CapabilityRuleKey), WorldStateCanonicalWriter.StringValue(right?.D5CapabilityRuleKey), differences);
+        CompareValue("Battle", identity, "D5RandomAuthorityRuleKey", WorldStateCanonicalWriter.StringValue(left?.D5RandomAuthorityRuleKey), WorldStateCanonicalWriter.StringValue(right?.D5RandomAuthorityRuleKey), differences);
+        CompareValue("Battle", identity, "D5ResolverSettingsIdentity", WorldStateCanonicalWriter.StringValue(left?.D5ResolverSettingsIdentity), WorldStateCanonicalWriter.StringValue(right?.D5ResolverSettingsIdentity), differences);
+        CompareValue("Battle", identity, "D6B2PolicyFingerprint", WorldStateCanonicalWriter.StringValue(left?.D6B2PolicyFingerprint), WorldStateCanonicalWriter.StringValue(right?.D6B2PolicyFingerprint), differences);
+        CompareValue("Battle", identity, "D6B2PlanSchemaVersion", WorldStateCanonicalWriter.StringValue(left?.D6B2PlanSchemaVersion), WorldStateCanonicalWriter.StringValue(right?.D6B2PlanSchemaVersion), differences);
+        CompareValue("Battle", identity, "D6B2CoverageVersion", WorldStateCanonicalWriter.StringValue(left?.D6B2CoverageVersion), WorldStateCanonicalWriter.StringValue(right?.D6B2CoverageVersion), differences);
+        CompareValue("Battle", identity, "D6B2PlanFingerprint", WorldStateCanonicalWriter.StringValue(left?.D6B2PlanFingerprint), WorldStateCanonicalWriter.StringValue(right?.D6B2PlanFingerprint), differences);
     }
 
     private static void CompareValue(

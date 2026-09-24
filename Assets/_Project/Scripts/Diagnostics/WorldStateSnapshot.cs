@@ -1995,7 +1995,10 @@ public static class WorldStateSnapshotBuilder
                 record.LifecycleState,
                 record.ConflictId?.Value,
                 record.WarId?.Value,
-                record.LocationReference));
+                record.LocationReference,
+                terminalOutcome: record.TerminalOutcome == null
+                    ? null
+                    : new WorldStateBattleTerminalOutcomeSnapshot(record.TerminalOutcome)));
         }
         return result;
     }

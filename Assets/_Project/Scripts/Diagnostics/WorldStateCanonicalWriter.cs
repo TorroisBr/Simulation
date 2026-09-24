@@ -223,6 +223,18 @@ public static class WorldStateCanonicalWriter
             foreach (WorldStateBattleSnapshot battle in snapshot.Battles)
             {
                 AppendLine(output, "BATTLE", battle.BattleId, Int64Value(battle.CreatedAbsoluteDay), NullableInt64Value(battle.StartedAbsoluteDay), EnumValue(battle.LifecycleState), battle.ConflictId, battle.WarId, battle.LocationReferenceKey);
+                if (battle.TerminalOutcome != null)
+                {
+                    WorldStateBattleTerminalOutcomeSnapshot outcome = battle.TerminalOutcome;
+                    AppendLine(output, "BATTLE_OUTCOME", outcome.BattleId, EnumValue(outcome.OutcomeType), outcome.WinningBattleSideId, Int64Value(outcome.ResolvedAbsoluteDay));
+                    AppendLine(output, "BATTLE_OUTCOME_PROVENANCE", outcome.BattleId,
+                        outcome.D5PolicyFingerprint, outcome.D5NumericExecutionProfileKey,
+                        outcome.D5ProjectionVersion, outcome.D5CausalResolutionFingerprint,
+                        outcome.D5SourceContextFingerprint, outcome.D5CapabilityRuleKey,
+                        outcome.D5RandomAuthorityRuleKey, outcome.D5ResolverSettingsIdentity,
+                        outcome.D6B2PolicyFingerprint, outcome.D6B2PlanSchemaVersion,
+                        outcome.D6B2CoverageVersion, outcome.D6B2PlanFingerprint);
+                }
             }
             foreach (WorldStateBattleSideSnapshot side in snapshot.BattleSides)
             {

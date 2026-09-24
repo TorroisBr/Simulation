@@ -1198,8 +1198,40 @@ public static class WorldStateInvariantValidator
             if (battle.CreatedAbsoluteDay > snapshot.AbsoluteDay) AddError(issues, "BattleCreationDayInvalid", identity, "Battle creation day is after the snapshot day.");
             if (battle.LifecycleState == BattleLifecycleState.Pending && battle.StartedAbsoluteDay.HasValue) AddError(issues, "PendingBattleHasStartDay", identity, "A pending Battle cannot have a start day.");
             if ((battle.LifecycleState == BattleLifecycleState.Active || battle.LifecycleState == BattleLifecycleState.Resolved) && !battle.StartedAbsoluteDay.HasValue) AddError(issues, "BattleStartDayMissing", identity, "An active or resolved Battle requires a start day.");
+            if (battle.LifecycleState != BattleLifecycleState.Resolved && battle.TerminalOutcome != null) AddError(issues, "NonResolvedBattleHasOutcome", identity, "Only a Resolved Battle may carry a terminal outcome.");
+            if (battle.LifecycleState == BattleLifecycleState.Resolved && battle.TerminalOutcome == null) AddError(issues, "ResolvedBattleOutcomeMissing", identity, "A Resolved Battle requires exactly one terminal outcome.");
             if (battle.StartedAbsoluteDay.HasValue && (battle.StartedAbsoluteDay.Value < battle.CreatedAbsoluteDay || battle.StartedAbsoluteDay.Value > snapshot.AbsoluteDay)) AddError(issues, "BattleStartDayInvalid", identity, "Battle start day is outside its lifecycle interval.");
-            if (battle.LifecycleState == BattleLifecycleState.Active && string.IsNullOrWhiteSpace(battle.LocationReferenceKey)) AddError(issues, "ActiveBattleLocationMissing", identity, "An active Battle requires a physical SpatialReference.");
+            if ((battle.LifecycleState == BattleLifecycleState.Active || battle.LifecycleState == BattleLifecycleState.Resolved) && string.IsNullOrWhiteSpace(battle.LocationReferenceKey)) AddError(issues, "ActiveBattleLocationMissing", identity, "An active or resolved Battle requires a physical SpatialReference.");
+            if (battle.TerminalOutcome != null)
+            {
+                WorldStateBattleTerminalOutcomeSnapshot outcome = battle.TerminalOutcome;
+                if (!string.Equals(outcome.BattleId, battle.BattleId, StringComparison.Ordinal)) AddError(issues, "BattleOutcomeIdentityMismatch", identity, "Terminal outcome BattleId does not match its owning Battle.");
+                if (!Enum.IsDefined(typeof(BattleOutcomeType), outcome.OutcomeType)) AddError(issues, "BattleOutcomeTypeInvalid", identity, "Terminal outcome type is invalid.");
+                if (outcome.ResolvedAbsoluteDay < 0L
+                    || (battle.StartedAbsoluteDay.HasValue && outcome.ResolvedAbsoluteDay < battle.StartedAbsoluteDay.Value)
+                    || outcome.ResolvedAbsoluteDay > snapshot.AbsoluteDay) AddError(issues, "BattleOutcomeDayInvalid", identity, "Terminal outcome day is outside the started Battle interval or after the snapshot day.");
+                if (outcome.OutcomeType == BattleOutcomeType.Victory)
+                {
+                    if (string.IsNullOrWhiteSpace(outcome.WinningBattleSideId)) AddError(issues, "BattleWinnerMissing", identity, "A victory outcome requires a winning BattleSideId.");
+                    else if (!HasBattleSide(snapshot.BattleSides, battle.BattleId, outcome.WinningBattleSideId)) AddError(issues, "BattleWinnerSideMissing", identity, "Winning BattleSideId is not registered on the Battle.");
+                }
+                else if (outcome.OutcomeType == BattleOutcomeType.Draw && outcome.WinningBattleSideId != null)
+                {
+                    AddError(issues, "BattleDrawHasWinner", identity, "A draw outcome cannot have a winning BattleSideId.");
+                }
+                if (string.IsNullOrWhiteSpace(outcome.D5PolicyFingerprint)
+                    || string.IsNullOrWhiteSpace(outcome.D5NumericExecutionProfileKey)
+                    || string.IsNullOrWhiteSpace(outcome.D5ProjectionVersion)
+                    || string.IsNullOrWhiteSpace(outcome.D5CausalResolutionFingerprint)
+                    || string.IsNullOrWhiteSpace(outcome.D5SourceContextFingerprint)
+                    || string.IsNullOrWhiteSpace(outcome.D5CapabilityRuleKey)
+                    || string.IsNullOrWhiteSpace(outcome.D5RandomAuthorityRuleKey)
+                    || string.IsNullOrWhiteSpace(outcome.D5ResolverSettingsIdentity)
+                    || string.IsNullOrWhiteSpace(outcome.D6B2PolicyFingerprint)
+                    || string.IsNullOrWhiteSpace(outcome.D6B2PlanSchemaVersion)
+                    || string.IsNullOrWhiteSpace(outcome.D6B2CoverageVersion)
+                    || string.IsNullOrWhiteSpace(outcome.D6B2PlanFingerprint)) AddError(issues, "BattleOutcomeProvenanceInvalid", identity, "Terminal outcome requires complete stable D5/D6B2 provenance.");
+            }
             ValidateBattleLocation(snapshot, battle, identity, issues);
             if (string.IsNullOrWhiteSpace(battle.ConflictId) == false && conflictsById.ContainsKey(battle.ConflictId) == false) AddError(issues, "BattleConflictMissing", identity, "Battle Conflict reference is absent from the snapshot.");
             if (string.IsNullOrWhiteSpace(battle.WarId) == false)
@@ -1345,6 +1377,19 @@ public static class WorldStateInvariantValidator
 
         if (!topologyFound) AddError(issues, "BattleSubLocationTopologyMissing", identity, "Battle SubLocation topology is absent from the snapshot.");
         else if (!placeFound) AddError(issues, "BattleSubLocationMissing", identity, "Battle SubLocation is absent from its owning topology.");
+    }
+
+    private static bool HasBattleSide(
+        IReadOnlyList<WorldStateBattleSideSnapshot> sides,
+        string battleId,
+        string sideId)
+    {
+        if (sides == null) return false;
+        foreach (WorldStateBattleSideSnapshot side in sides)
+            if (side != null
+                && string.Equals(side.BattleId, battleId, StringComparison.Ordinal)
+                && string.Equals(side.SideId, sideId, StringComparison.Ordinal)) return true;
+        return false;
     }
 
     private static bool ContainsHex(IReadOnlyList<WorldStateHexSnapshot> hexes, string hexId)

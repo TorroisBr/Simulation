@@ -16,7 +16,8 @@ public enum DomainEventType
     ExpeditionAdvanced,
     ExpeditionObjectiveCompleted,
     ExpeditionReturnStarted,
-    ExpeditionCompleted
+    ExpeditionCompleted,
+    BattleResolved
 }
 
 public enum DomainEventParticipantRole
@@ -771,6 +772,52 @@ public sealed class ConflictResolvedEvent : DomainEvent
     }
 }
 
+[Serializable]
+public sealed class BattleResolvedEvent : DomainEvent
+{
+    public override DomainEventType EventType => DomainEventType.BattleResolved;
+    public BattleId BattleId { get; }
+    public BattleOutcomeType OutcomeType { get; }
+    public BattleSideId WinningBattleSideId { get; }
+    public string D5PolicyFingerprint { get; }
+    public string D5CausalResolutionFingerprint { get; }
+    public string D6B2PolicyFingerprint { get; }
+    public string D6B2PlanFingerprint { get; }
+
+    public BattleResolvedEvent(
+        string eventId,
+        long absoluteDay,
+        long recordSequence,
+        BattleId battleId,
+        BattleOutcomeType outcomeType,
+        BattleSideId winningBattleSideId,
+        string d5PolicyFingerprint,
+        string d5CausalResolutionFingerprint,
+        string d6b2PolicyFingerprint,
+        string d6b2PlanFingerprint)
+        : base(eventId, absoluteDay, recordSequence, null)
+    {
+        BattleId = battleId ?? throw new ArgumentNullException(nameof(battleId));
+        if (!Enum.IsDefined(typeof(BattleOutcomeType), outcomeType))
+            throw new ArgumentOutOfRangeException(nameof(outcomeType));
+        if (outcomeType == BattleOutcomeType.Victory && winningBattleSideId == null)
+            throw new ArgumentException("A BattleResolved victory requires a winning side.", nameof(winningBattleSideId));
+        if (outcomeType == BattleOutcomeType.Draw && winningBattleSideId != null)
+            throw new ArgumentException("A BattleResolved draw cannot have a winning side.", nameof(winningBattleSideId));
+        OutcomeType = outcomeType;
+        WinningBattleSideId = winningBattleSideId;
+        D5PolicyFingerprint = RequireId(d5PolicyFingerprint, nameof(d5PolicyFingerprint));
+        D5CausalResolutionFingerprint = RequireId(d5CausalResolutionFingerprint, nameof(d5CausalResolutionFingerprint));
+        D6B2PolicyFingerprint = RequireId(d6b2PolicyFingerprint, nameof(d6b2PolicyFingerprint));
+        D6B2PlanFingerprint = RequireId(d6b2PlanFingerprint, nameof(d6b2PlanFingerprint));
+    }
+
+    // ArmedForceId and BattleSideId are not NpcRuntimeIds; do not misrepresent
+    // military participants through the generic runtime-participant index.
+    public override IReadOnlyList<DomainEventParticipant> GetParticipants()
+        => Array.Empty<DomainEventParticipant>();
+}
+
 public sealed class DomainEventStore
 {
     private readonly List<DomainEvent> events = new List<DomainEvent>();
@@ -877,7 +924,8 @@ public sealed class HistoryPolicy
     {
         return domainEvent is NpcEscapedEvent
             || domainEvent is ConflictResolvedEvent
-            || domainEvent is ExpeditionCompletedEvent;
+            || domainEvent is ExpeditionCompletedEvent
+            || domainEvent is BattleResolvedEvent;
     }
 }
 

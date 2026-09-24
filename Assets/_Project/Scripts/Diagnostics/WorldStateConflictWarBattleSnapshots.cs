@@ -104,6 +104,7 @@ public sealed class WorldStateBattleSnapshot
     public string WarId { get; }
     public SpatialReference LocationReference { get; }
     public string LocationReferenceKey { get; }
+    public WorldStateBattleTerminalOutcomeSnapshot TerminalOutcome { get; }
 
     public WorldStateBattleSnapshot(
         string battleId,
@@ -113,7 +114,8 @@ public sealed class WorldStateBattleSnapshot
         string conflictId,
         string warId,
         SpatialReference locationReference = null,
-        string locationReferenceKey = null)
+        string locationReferenceKey = null,
+        WorldStateBattleTerminalOutcomeSnapshot terminalOutcome = null)
     {
         BattleId = battleId;
         CreatedAbsoluteDay = createdAbsoluteDay;
@@ -123,6 +125,50 @@ public sealed class WorldStateBattleSnapshot
         WarId = warId;
         LocationReference = locationReference;
         LocationReferenceKey = locationReference?.StableKey ?? locationReferenceKey;
+        TerminalOutcome = terminalOutcome;
+    }
+}
+
+/// <summary>Immutable diagnostic view of accepted Battle outcome and stable provenance.</summary>
+public sealed class WorldStateBattleTerminalOutcomeSnapshot
+{
+    public string BattleId { get; }
+    public BattleOutcomeType OutcomeType { get; }
+    public string WinningBattleSideId { get; }
+    public long ResolvedAbsoluteDay { get; }
+    public string D5PolicyFingerprint { get; }
+    public string D5NumericExecutionProfileKey { get; }
+    public string D5ProjectionVersion { get; }
+    public string D5CausalResolutionFingerprint { get; }
+    public string D5SourceContextFingerprint { get; }
+    public string D5CapabilityRuleKey { get; }
+    public string D5RandomAuthorityRuleKey { get; }
+    public string D5ResolverSettingsIdentity { get; }
+    public string D6B2PolicyFingerprint { get; }
+    public string D6B2PlanSchemaVersion { get; }
+    public string D6B2CoverageVersion { get; }
+    public string D6B2PlanFingerprint { get; }
+
+    public WorldStateBattleTerminalOutcomeSnapshot(PersistentBattleTerminalOutcome outcome)
+    {
+        if (outcome == null) throw new ArgumentNullException(nameof(outcome));
+        BattleId = outcome.BattleId?.Value;
+        OutcomeType = outcome.OutcomeType;
+        WinningBattleSideId = outcome.WinningBattleSideId?.Value;
+        ResolvedAbsoluteDay = outcome.ResolvedAbsoluteDay;
+        BattleResolutionProvenance d5 = outcome.Provenance?.D5Resolution;
+        D5PolicyFingerprint = d5?.PolicyFingerprint;
+        D5NumericExecutionProfileKey = d5?.NumericExecutionProfileKey;
+        D5ProjectionVersion = d5?.ProjectionVersion;
+        D5CausalResolutionFingerprint = d5?.CausalResolutionFingerprint;
+        D5SourceContextFingerprint = d5?.SourceContextFingerprint;
+        D5CapabilityRuleKey = d5?.CapabilityRuleKey;
+        D5RandomAuthorityRuleKey = d5?.RandomAuthorityRuleKey;
+        D5ResolverSettingsIdentity = d5?.ResolverSettingsIdentity;
+        D6B2PolicyFingerprint = outcome.Provenance?.D6B2PolicyFingerprint;
+        D6B2PlanSchemaVersion = outcome.Provenance?.D6B2PlanSchemaVersion;
+        D6B2CoverageVersion = outcome.Provenance?.D6B2CoverageVersion;
+        D6B2PlanFingerprint = outcome.Provenance?.D6B2PlanFingerprint;
     }
 }
 

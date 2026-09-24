@@ -249,6 +249,138 @@ public sealed class ArmedForceStore : IAuthoritativeMutationGuardBindable
         return true;
     }
 
+    internal bool TryPrepareBattleAmountMirrorBatch(
+        ContingentManpowerStateStore authority,
+        IReadOnlyList<BattleAmountMirrorProjection> projections,
+        out PreparedBattleAmountMirrorBatch prepared,
+        out ArmedForceFoundationFailure failure)
+    {
+        prepared = null;
+        if (!mutationGuardBinding.CanMutate)
+            return Fail(ArmedForceFoundationFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.", out failure);
+        if (authority == null || !ReferenceEquals(authority, manpowerAuthority))
+            return Fail(ArmedForceFoundationFailureCode.ManpowerAuthorityRequired, "The manpower authority is not attached to this ArmedForceStore.", out failure);
+        if (projections == null)
+            return Fail(ArmedForceFoundationFailureCode.InvalidInvariant, "A Battle mirror batch requires explicit projections.", out failure);
+
+        List<ContingentRecord> expected = new List<ContingentRecord>();
+        List<ContingentRecord> replacements = new List<ContingentRecord>();
+        HashSet<string> ids = new HashSet<string>(StringComparer.Ordinal);
+        foreach (BattleAmountMirrorProjection projection in projections)
+        {
+            if (projection == null || projection.ContingentId == null
+                || projection.ExpectedAmount < 0L || projection.ProjectedAmount < 0L
+                || !ids.Add(projection.ContingentId.Value))
+                return Fail(ArmedForceFoundationFailureCode.InvalidInvariant, "A Battle Amount mirror projection is invalid or duplicated.", out failure);
+            if (!contingentsById.TryGetValue(projection.ContingentId.Value, out ContingentRecord current))
+                return Fail(ArmedForceFoundationFailureCode.ContingentNotRegistered, "A Battle mirror contingent is not registered.", out failure);
+            if (current.Amount != projection.ExpectedAmount)
+                return Fail(ArmedForceFoundationFailureCode.InvalidInvariant, "A Battle mirror no longer equals its expected pre-state roster.", out failure);
+            if (!forcesById.TryGetValue(current.ForceId.Value, out ArmedForceRecord force) || !force.IsActive)
+                return Fail(ArmedForceFoundationFailureCode.ContingentForceNotActive, "A Battle mirror contingent must remain bound to an active force.", out failure);
+            if (projection.ProjectedAmount != projection.ExpectedAmount)
+            {
+                expected.Add(current);
+                replacements.Add(current.WithComposition(
+                    projection.ProjectedAmount,
+                    current.Origin,
+                    current.ServiceType,
+                    current.Characteristics));
+            }
+        }
+
+        if (replacements.Count > 0 && !CanAdvanceRevision(out failure)) return false;
+        prepared = new PreparedBattleAmountMirrorBatch(
+            authority,
+            revision,
+            expected,
+            replacements);
+        failure = ArmedForceFoundationFailure.None;
+        return true;
+    }
+
+    internal bool TryCommitBattleAmountMirrorBatch(
+        PreparedBattleAmountMirrorBatch prepared,
+        out BattleAmountMirrorSnapshot snapshot,
+        out ArmedForceFoundationFailure failure)
+    {
+        snapshot = null;
+        if (!mutationGuardBinding.CanMutate)
+            return Fail(ArmedForceFoundationFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.", out failure);
+        if (prepared == null || !ReferenceEquals(prepared.Authority, manpowerAuthority))
+            return Fail(ArmedForceFoundationFailureCode.ManpowerAuthorityRequired, "The prepared Battle mirror batch is not authorized.", out failure);
+
+        snapshot = new BattleAmountMirrorSnapshot(revision, prepared.ExpectedRecords);
+        if (revision != prepared.ExpectedStoreRevision)
+            return Fail(ArmedForceFoundationFailureCode.InvalidInvariant, "The ArmedForceStore revision changed after Battle mirror preparation.", out failure);
+        for (int index = 0; index < prepared.ExpectedRecords.Count; index++)
+        {
+            ContingentRecord expected = prepared.ExpectedRecords[index];
+            if (!contingentsById.TryGetValue(expected.Id.Value, out ContingentRecord current)
+                || !ReferenceEquals(current, expected))
+                return Fail(ArmedForceFoundationFailureCode.InvalidInvariant, "A contingent mirror changed after Battle mirror preparation.", out failure);
+        }
+        if (prepared.ReplacementRecords.Count == 0)
+        {
+            failure = ArmedForceFoundationFailure.None;
+            return true;
+        }
+        if (!CanAdvanceRevision(out failure)) return false;
+        for (int index = 0; index < prepared.ReplacementRecords.Count; index++)
+        {
+            ContingentRecord replacement = prepared.ReplacementRecords[index];
+            contingentsById[replacement.Id.Value] = replacement;
+        }
+        revision++;
+        failure = ArmedForceFoundationFailure.None;
+        return true;
+    }
+
+    internal bool TryCaptureBattleAmountMirrorSnapshot(
+        PreparedBattleAmountMirrorBatch prepared,
+        out BattleAmountMirrorSnapshot snapshot)
+    {
+        snapshot = null;
+        if (prepared == null || !ReferenceEquals(prepared.Authority, manpowerAuthority)
+            || revision != prepared.ExpectedStoreRevision)
+            return false;
+        foreach (ContingentRecord expected in prepared.ExpectedRecords)
+        {
+            if (expected == null || !contingentsById.TryGetValue(expected.Id.Value, out ContingentRecord current)
+                || !ReferenceEquals(current, expected))
+                return false;
+        }
+        snapshot = new BattleAmountMirrorSnapshot(revision, prepared.ExpectedRecords);
+        return true;
+    }
+
+    internal bool IsBattleAmountMirrorBatchCurrent(PreparedBattleAmountMirrorBatch prepared)
+    {
+        if (prepared == null || !ReferenceEquals(prepared.Authority, manpowerAuthority)
+            || revision != prepared.ExpectedStoreRevision)
+            return false;
+        foreach (ContingentRecord expected in prepared.ExpectedRecords)
+        {
+            if (expected == null || !contingentsById.TryGetValue(expected.Id.Value, out ContingentRecord current)
+                || !ReferenceEquals(current, expected))
+                return false;
+        }
+        return true;
+    }
+
+    internal bool RestoreBattleAmountMirrorSnapshot(BattleAmountMirrorSnapshot snapshot)
+    {
+        if (snapshot == null || snapshot.PriorRevision < 0L) return false;
+        foreach (ContingentRecord prior in snapshot.PriorRecords)
+        {
+            if (prior == null || prior.Id == null || !contingentsById.ContainsKey(prior.Id.Value)) return false;
+        }
+        foreach (ContingentRecord prior in snapshot.PriorRecords)
+            contingentsById[prior.Id.Value] = prior;
+        revision = snapshot.PriorRevision;
+        return true;
+    }
+
     public bool TryGetRelevantPerson(
         ArmedForcePersonReferenceId referenceId,
         out ArmedForcePersonReference reference)

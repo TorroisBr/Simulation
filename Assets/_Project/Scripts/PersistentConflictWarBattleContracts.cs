@@ -497,6 +497,8 @@ public sealed class PersistentBattleRecord
     public ConflictId ConflictId { get; }
     public WarId WarId { get; }
     public SpatialReference LocationReference { get; }
+    public PersistentBattleTerminalOutcome TerminalOutcome { get; }
+    public long? ResolvedAbsoluteDay => TerminalOutcome?.ResolvedAbsoluteDay;
     public IReadOnlyList<BattleStateSide> Sides { get; }
     public IReadOnlyList<BattleParticipantBinding> ParticipantBindings { get; }
 
@@ -510,6 +512,31 @@ public sealed class PersistentBattleRecord
         IEnumerable<BattleStateSide> sides = null,
         IEnumerable<BattleParticipantBinding> participantBindings = null,
         SpatialReference locationReference = null)
+        : this(
+            id,
+            createdAbsoluteDay,
+            conflictId,
+            warId,
+            lifecycleState,
+            startedAbsoluteDay,
+            sides,
+            participantBindings,
+            locationReference,
+            null)
+    {
+    }
+
+    internal PersistentBattleRecord(
+        BattleId id,
+        long createdAbsoluteDay,
+        ConflictId conflictId,
+        WarId warId,
+        BattleLifecycleState lifecycleState,
+        long? startedAbsoluteDay,
+        IEnumerable<BattleStateSide> sides,
+        IEnumerable<BattleParticipantBinding> participantBindings,
+        SpatialReference locationReference,
+        PersistentBattleTerminalOutcome terminalOutcome)
     {
         Id = id ?? throw new ArgumentNullException(nameof(id));
         if (createdAbsoluteDay < 0L) throw new ArgumentOutOfRangeException(nameof(createdAbsoluteDay));
@@ -530,6 +557,7 @@ public sealed class PersistentBattleRecord
         ConflictId = conflictId;
         WarId = warId;
         LocationReference = locationReference;
+        TerminalOutcome = terminalOutcome;
         Sides = SortedCopy(sides, (left, right) => StringComparer.Ordinal.Compare(left?.SideId?.Value, right?.SideId?.Value));
         ParticipantBindings = SortedCopy(
             participantBindings,
@@ -547,7 +575,8 @@ public sealed class PersistentBattleRecord
             startedAbsoluteDay,
             Sides,
             ParticipantBindings,
-            locationReference);
+            locationReference,
+            null);
     }
 
     internal PersistentBattleRecord WithParticipantBinding(BattleParticipantBinding binding)
@@ -562,7 +591,23 @@ public sealed class PersistentBattleRecord
             StartedAbsoluteDay,
             Sides,
             values,
-            LocationReference);
+            LocationReference,
+            TerminalOutcome);
+    }
+
+    internal PersistentBattleRecord WithTerminalOutcome(PersistentBattleTerminalOutcome terminalOutcome)
+    {
+        return new PersistentBattleRecord(
+            Id,
+            CreatedAbsoluteDay,
+            ConflictId,
+            WarId,
+            BattleLifecycleState.Resolved,
+            StartedAbsoluteDay,
+            Sides,
+            ParticipantBindings,
+            LocationReference,
+            terminalOutcome);
     }
 
     private static IReadOnlyList<T> SortedCopy<T>(IEnumerable<T> source, Comparison<T> comparison)
@@ -570,6 +615,89 @@ public sealed class PersistentBattleRecord
         List<T> values = source == null ? new List<T>() : new List<T>(source);
         values.Sort(comparison);
         return new ReadOnlyCollection<T>(values);
+    }
+}
+
+/// <summary>
+/// Stable, immutable D5+D6B2 provenance accepted with one persistent Battle
+/// outcome. It deliberately contains no live rules, plans, or runtime objects.
+/// </summary>
+public sealed class PersistentBattleOutcomeProvenance
+{
+    public BattleResolutionProvenance D5Resolution { get; }
+    public string D6B2PolicyFingerprint { get; }
+    public string D6B2PlanSchemaVersion { get; }
+    public string D6B2CoverageVersion { get; }
+    public string D6B2PlanFingerprint { get; }
+
+    internal PersistentBattleOutcomeProvenance(
+        BattleResolutionProvenance d5Resolution,
+        string d6b2PolicyFingerprint,
+        string d6b2PlanSchemaVersion,
+        string d6b2CoverageVersion,
+        string d6b2PlanFingerprint)
+    {
+        D5Resolution = d5Resolution ?? throw new ArgumentNullException(nameof(d5Resolution));
+        D6B2PolicyFingerprint = RequireStableIdentity(d6b2PolicyFingerprint, nameof(d6b2PolicyFingerprint));
+        D6B2PlanSchemaVersion = RequireStableIdentity(d6b2PlanSchemaVersion, nameof(d6b2PlanSchemaVersion));
+        D6B2CoverageVersion = RequireStableIdentity(d6b2CoverageVersion, nameof(d6b2CoverageVersion));
+        D6B2PlanFingerprint = RequireStableIdentity(d6b2PlanFingerprint, nameof(d6b2PlanFingerprint));
+    }
+
+    private static string RequireStableIdentity(string value, string parameterName)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            throw new ArgumentException("Accepted Battle provenance must be explicit and non-empty.", parameterName);
+        return value;
+    }
+}
+
+/// <summary>The one immutable terminal Battle outcome persisted by its owning store.</summary>
+public sealed class PersistentBattleTerminalOutcome
+{
+    public BattleId BattleId { get; }
+    public BattleOutcomeType OutcomeType { get; }
+    public BattleSideId WinningBattleSideId { get; }
+    public long ResolvedAbsoluteDay { get; }
+    public PersistentBattleOutcomeProvenance Provenance { get; }
+
+    internal PersistentBattleTerminalOutcome(
+        BattleId battleId,
+        BattleOutcomeType outcomeType,
+        BattleSideId winningBattleSideId,
+        long resolvedAbsoluteDay,
+        PersistentBattleOutcomeProvenance provenance)
+    {
+        BattleId = battleId ?? throw new ArgumentNullException(nameof(battleId));
+        if (!Enum.IsDefined(typeof(BattleOutcomeType), outcomeType))
+            throw new ArgumentOutOfRangeException(nameof(outcomeType));
+        if (outcomeType == BattleOutcomeType.Victory && winningBattleSideId == null)
+            throw new ArgumentException("A Battle victory requires a registered winning side.", nameof(winningBattleSideId));
+        if (outcomeType == BattleOutcomeType.Draw && winningBattleSideId != null)
+            throw new ArgumentException("A Battle draw cannot have a winning side.", nameof(winningBattleSideId));
+        if (resolvedAbsoluteDay < 0L)
+            throw new ArgumentOutOfRangeException(nameof(resolvedAbsoluteDay));
+        OutcomeType = outcomeType;
+        WinningBattleSideId = winningBattleSideId;
+        ResolvedAbsoluteDay = resolvedAbsoluteDay;
+        Provenance = provenance ?? throw new ArgumentNullException(nameof(provenance));
+    }
+}
+
+internal sealed class PreparedBattleTerminalWrite
+{
+    internal PersistentBattleRecord ExpectedRecord { get; }
+    internal PersistentBattleRecord TerminalRecord { get; }
+    internal long ExpectedStoreRevision { get; }
+
+    internal PreparedBattleTerminalWrite(
+        PersistentBattleRecord expectedRecord,
+        PersistentBattleRecord terminalRecord,
+        long expectedStoreRevision)
+    {
+        ExpectedRecord = expectedRecord;
+        TerminalRecord = terminalRecord;
+        ExpectedStoreRevision = expectedStoreRevision;
     }
 }
 

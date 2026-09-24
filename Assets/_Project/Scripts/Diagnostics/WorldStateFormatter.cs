@@ -422,7 +422,16 @@ public static class WorldStateSnapshotFormatter
             output.Append("\nBattle revision: ").Append(WorldStateCanonicalWriter.Int64Value(snapshot.BattleRevision.Value)).Append('\n');
             foreach (WorldStateBattleSnapshot battle in snapshot.Battles)
             {
-                if (battle != null) output.Append("BATTLE ").Append(Value(battle.BattleId)).Append(" lifecycle ").Append(WorldStateCanonicalWriter.EnumValue(battle.LifecycleState)).Append(" created ").Append(WorldStateCanonicalWriter.Int64Value(battle.CreatedAbsoluteDay)).Append(" started ").Append(WorldStateCanonicalWriter.NullableInt64Value(battle.StartedAbsoluteDay)).Append(" conflict ").Append(Value(battle.ConflictId)).Append(" war ").Append(Value(battle.WarId)).Append(" location ").Append(Value(battle.LocationReferenceKey)).Append('\n');
+                if (battle != null)
+                {
+                    output.Append("BATTLE ").Append(Value(battle.BattleId)).Append(" lifecycle ").Append(WorldStateCanonicalWriter.EnumValue(battle.LifecycleState)).Append(" created ").Append(WorldStateCanonicalWriter.Int64Value(battle.CreatedAbsoluteDay)).Append(" started ").Append(WorldStateCanonicalWriter.NullableInt64Value(battle.StartedAbsoluteDay)).Append(" conflict ").Append(Value(battle.ConflictId)).Append(" war ").Append(Value(battle.WarId)).Append(" location ").Append(Value(battle.LocationReferenceKey)).Append('\n');
+                    if (battle.TerminalOutcome != null)
+                    {
+                        WorldStateBattleTerminalOutcomeSnapshot outcome = battle.TerminalOutcome;
+                        output.Append("BATTLE OUTCOME ").Append(Value(outcome.BattleId)).Append(" type ").Append(WorldStateCanonicalWriter.EnumValue(outcome.OutcomeType)).Append(" winner ").Append(Value(outcome.WinningBattleSideId)).Append(" resolved ").Append(WorldStateCanonicalWriter.Int64Value(outcome.ResolvedAbsoluteDay)).Append('\n');
+                        output.Append("BATTLE OUTCOME PROVENANCE ").Append(Value(outcome.BattleId)).Append(" D5 ").Append(Value(outcome.D5PolicyFingerprint)).Append(" profile ").Append(Value(outcome.D5NumericExecutionProfileKey)).Append(" projection ").Append(Value(outcome.D5ProjectionVersion)).Append(" causal ").Append(Value(outcome.D5CausalResolutionFingerprint)).Append(" source-context ").Append(Value(outcome.D5SourceContextFingerprint)).Append(" capability ").Append(Value(outcome.D5CapabilityRuleKey)).Append(" random ").Append(Value(outcome.D5RandomAuthorityRuleKey)).Append(" resolver ").Append(Value(outcome.D5ResolverSettingsIdentity)).Append(" D6B2 ").Append(Value(outcome.D6B2PolicyFingerprint)).Append(" schema ").Append(Value(outcome.D6B2PlanSchemaVersion)).Append(" coverage ").Append(Value(outcome.D6B2CoverageVersion)).Append(" plan ").Append(Value(outcome.D6B2PlanFingerprint)).Append('\n');
+                    }
+                }
             }
             foreach (WorldStateBattleSideSnapshot side in snapshot.BattleSides)
             {

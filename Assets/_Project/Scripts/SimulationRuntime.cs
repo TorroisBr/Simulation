@@ -31,6 +31,7 @@ public sealed class SimulationRuntime
     private readonly ManpowerSourceConsequencePlanningService manpowerSourceConsequencePlanningService;
     private readonly BattleDirectConsequencePolicy battleDirectConsequencePolicy;
     private readonly BattleDirectConsequencePlanningService battleDirectConsequencePlanningService;
+    private readonly BattleOutcomeApplicationService battleOutcomeApplicationService;
     private readonly ArmedForceSpatialStateStore armedForceSpatialStateStore;
     private readonly LocalTopologyStore localTopologyStore;
     private readonly PersistentConflictStore conflictStore;
@@ -90,6 +91,8 @@ public sealed class SimulationRuntime
     public BattleDirectConsequencePolicy BattleDirectConsequencePolicy => battleDirectConsequencePolicy;
     public BattleDirectConsequencePlanningService BattleDirectConsequencePlanningService
         => battleDirectConsequencePlanningService;
+    public BattleOutcomeApplicationService BattleOutcomeApplicationService
+        => battleOutcomeApplicationService;
     public ArmedForceSpatialStateStore ArmedForceSpatialStateStore => armedForceSpatialStateStore;
     public LocalTopologyStore LocalTopologyStore => localTopologyStore;
     public PersistentConflictStore ConflictStore => conflictStore;
@@ -186,7 +189,8 @@ public sealed class SimulationRuntime
         ContingentManpowerStateStore contingentManpowerStateStore = null,
         IManpowerSourceSnapshotProvider manpowerSourceProvider = null,
         IEnumerable<SettlementManpowerSourceRegistration> settlementManpowerSourceRegistrations = null,
-        BattleDirectConsequencePolicy battleDirectConsequencePolicy = null)
+        BattleDirectConsequencePolicy battleDirectConsequencePolicy = null,
+        IDomainEventRecorder battleResolvedEventRecorder = null)
     {
         List<CityRuntime> resolvedCities = cities != null
             ? new List<CityRuntime>(cities)
@@ -555,6 +559,10 @@ public sealed class SimulationRuntime
                 nameof(crimeSystem));
         }
         this.expeditionSystem?.BindWorldRuntime(this);
+        this.battleOutcomeApplicationService = new BattleOutcomeApplicationService(
+            this,
+            mutationGuard,
+            battleResolvedEventRecorder);
         isComposingNpcRoster = false;
 
     }
