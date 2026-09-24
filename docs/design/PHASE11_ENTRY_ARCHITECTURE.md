@@ -186,7 +186,7 @@ Trusted local game/UI caller
       existing local sale using that actor's inventory and CommercialKnowledge
     → existing MerchantSystem selects a local-market candidate and amount
     → current market World Truth validation
-    → transaction result / records
+    → transient transaction result returned; input/decision record retained
 
 CURRENT GM / EXTERNAL COMMAND PATH
 Structured input or deterministic translation
@@ -295,8 +295,9 @@ following causal facts recoverable in principle:
 - the normalized typed actor choice: stable `PersonId` and supported action
   definition identity, not only human text or a command kind;
 - no item, quantity, price, or market outcome is selected by the UI. Existing
-  `MerchantSystem` chooses the local sale from inventory and Knowledge, and
-  the normal transaction result records the resulting material/money effect;
+  `MerchantSystem` chooses the local sale from inventory and Knowledge. The
+  transaction service returns its result during execution, but current
+  `MerchantSystem` does not retain a trade DomainEvent or history entry;
 - the trusted local game/UI input origin and the logical application boundary;
   there is no controller/principal identity or authorization grant in scope;
 - deterministic actor-turn order at application. The existing daily roster
