@@ -1,6 +1,7 @@
 using System;
 using System.Reflection;
 using System.Linq;
+using System.Collections.Generic;
 using NUnit.Framework;
 
 public sealed class SpatialPassageAuthorityTests
@@ -301,6 +302,30 @@ public sealed class SpatialPassageAuthorityTests
         Assert.That(failure.Code, Is.EqualTo(SpatialAuthorityFailureCode.RevisionOverflow));
         Assert.That(authority.PassageAuthority.Options, Is.Empty);
         Assert.That(authority.Revision, Is.EqualTo(long.MaxValue));
+    }
+
+    [Test]
+    public void ParentSpatialValidationAndRuntimeCloneGateRejectMalformedPassageChildState()
+    {
+        SpatialAuthorityStore authority = CreateAdjacentGeography();
+        HexBoundaryKey boundary = Boundary();
+        Assert.That(authority.TryRegisterCrossing(
+            new CrossingRecord(new CrossingId("crossing.validation"), boundary, new HexId("hex.a"),
+                "content.bridge", "bridge-v1", null), out SpatialAuthorityFailure failure), Is.True, failure.ToString());
+
+        FieldInfo conditionsField = typeof(SpatialPassageAuthority).GetField("crossingConditions", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(conditionsField, Is.Not.Null);
+        Dictionary<string, PassageCondition> conditions = (Dictionary<string, PassageCondition>)conditionsField.GetValue(authority.PassageAuthority);
+        conditions.Add("crossing.validation", (PassageCondition)999);
+
+        SpatialAuthorityInvariantReport report = authority.ValidateInvariants();
+        Assert.That(report.IsValid, Is.False);
+        Assert.That(string.Join("\n", report.Violations),
+            Does.Contain("Crossing condition refers to an absent CrossingId or invalid state: crossing.validation."));
+
+        ArgumentException exception = Assert.Throws<ArgumentException>(() => new SimulationRuntime(
+            new SimulationTime(0L), Array.Empty<CityRuntime>(), Array.Empty<NpcRuntime>(), spatialAuthorityStore: authority));
+        Assert.That(exception.Message, Does.Contain("Crossing condition refers to an absent CrossingId or invalid state: crossing.validation."));
     }
 
     private static SpatialAuthorityStore CreateAdjacentGeography()

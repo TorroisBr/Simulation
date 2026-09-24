@@ -1126,6 +1126,16 @@ public sealed class SpatialAuthorityStore : IAuthoritativeMutationGuardBindable
             }
         }
 
+        if (PassageAuthority == null)
+        {
+            violations.Add("Spatial authority passage child is missing.");
+        }
+        else
+        {
+            SpatialAuthorityInvariantReport passageReport = PassageAuthority.ValidateInvariants();
+            violations.AddRange(passageReport.Violations);
+        }
+
         return new SpatialAuthorityInvariantReport(violations);
     }
 
