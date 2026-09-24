@@ -196,6 +196,12 @@ DECISION != EXECUTION
 EVENT != TRUTH
 PERSON != NPCRUNTIME
 DEFINITION ID != RUNTIME / SEMANTIC INSTANCE ID
+GENERATED BACKSTORY != SIMULATED HISTORY
+INITIAL GENERATED STATE != IMMUTABLE WORLD
+INITIAL GENERATION != RUNTIME MUTATION AUTHORITY
+RUNTIME-CREATED WORLD STRUCTURE = NORMAL WORLD TRUTH
+PLAYER DECISION AUTHORITY != OMNISCIENT INFORMATION AUTHORITY
+IN-WORLD DIVINITY != GM / EXTERNAL AUTHORITY
 ```
 
 Essas desigualdades significam **conceitos diferentes**, não necessariamente classes diferentes.
@@ -339,6 +345,11 @@ estado individual rico
   relevância.
 - **Person** — identidade individual factual, capaz de sobreviver
   historicamente e de participar de outros stores e relações por `PersonId`.
+  O conceito não é exclusivo de humanos: um indivíduo não humano cuja
+  identidade factual importa pode ser uma Person, sem criar uma segunda
+  simulação de indivíduos. Espécie e biologia não substituem identidade nem
+  confundem limitações físicas com regras sociais; seus contratos concretos
+  dependem de consumidores futuros.
 - **Person-only / Person não materializada** — a identidade individual existe,
   mas não há estado individual rico persistido. Isso não é `Dormant`.
 - **Estado individual rico** — representação que preserva comportamento,
@@ -445,6 +456,12 @@ Exemplos:
 | derivada | idade, tempo desde observação |
 
 Evitar framework temporal gigante; contador absoluto + calendário + `nextEvaluationDay`/vencimentos resolvem muitos casos.
+
+Uma ocorrência de calendário ou regra de recorrência determina quando uma
+operação é considerada. A mudança factual, se houver, pertence à autoridade
+validada do domínio ou do GM, não ao calendário por si só.
+
+`CALENDAR OCCURRENCE != DOMAIN EFFECT`
 
 ### AdvanceDay
 
@@ -581,6 +598,44 @@ Materialização é independente de atividade. Materializar uma Person ou
 carregar uma representação Unity não deve automaticamente torná-la `Active`,
 produzir observações, executar AI, iniciar viagens, consumir RNG ou criar
 consequências autoritativas.
+
+### Gênese do mundo e início da história simulada
+
+**DECIDIDO**
+
+O mundo inicial configurado deve estar completamente estabelecido como
+`World Truth` antes da primeira fronteira temporal realmente simulada.
+Geração inicial pode ser composta de etapas e consumir conteúdo resolvido,
+mas produz estado semântico do mundo, não instruções de renderização. Observar
+ou carregar uma região inicial não cria retroativamente sua existência.
+
+Um mundo pré-envelhecido pode ter backstory gerada anterior ao início efetivo
+da simulação. Ela pode explicar seu estado inicial, mas não é histórico
+realmente simulado e não precisa ser forkável internamente. A primeira
+fronteira temporal realmente simulada delimita o início da garantia de fork;
+o número do dia no calendário, por si só, não define essa fronteira.
+
+Desde o início da história realmente simulada, a geração inicial não possui
+mais autoridade especial sobre o mundo. Criação, alteração e destruição passam
+pelas authorities normais de runtime e integram `World Truth`. Isso inclui
+expansão explícita do mundo e mudanças em cidades, POIs, edifícios, estradas,
+recursos, organizações, empregos e propriedades. A origem gerada, manual,
+modded ou construída não torna o estado imutável nem cria uma segunda
+autoridade.
+Qualquer mutação autoritativa durante a história realmente simulada participa
+da reconstrução histórica conforme sua fronteira causal.
+Uma região criada por expansão só passa a existir nessa fronteira; sua
+história simulada não é fabricada retroativamente.
+A proveniência do estado inicial e das definições usadas deve permanecer
+recuperável quando for necessária para interpretar sua causalidade ou
+reconstruí-lo. Ela não concede autoridade de mutação após o início da simulação.
+
+```text
+GENERATED BACKSTORY != SIMULATED HISTORY
+INITIAL GENERATED STATE != IMMUTABLE WORLD
+INITIAL GENERATION != RUNTIME MUTATION AUTHORITY
+RUNTIME-CREATED WORLD STRUCTURE = NORMAL WORLD TRUTH
+```
 
 ---
 
@@ -4818,6 +4873,27 @@ GM authority must NOT break structural invariants
 
 Exemplo: GM pode declarar que Arthur virou rei, mas o sistema deve atualizar incumbency/tenure/history de forma estruturalmente coerente, não setar um campo arbitrário.
 
+### Controle de ator e divindade factual
+
+**DECIDIDO**
+
+Quando uma pessoa controla um ator, ela substitui a escolha autônoma desse
+ator. Recebe somente a informação e a percepção disponíveis a ele; a escolha
+humana não concede onisciência nem autoridade sobre o outcome. A execução
+continua sujeita às capacidades, precondições e consequências do domínio.
+Visão omnisciente pertence a um modo Observer/GM explícito.
+
+Uma divindade factual dentro do mundo é um ator de `World Truth`, com poderes
+e limites causais definidos pelo domínio. Pode usar identidade `Person` quando
+for um indivíduo persistente. Não herda a autoridade externa do GM. Religião,
+crença, culto e datas sagradas podem existir independentemente da existência
+factual da divindade; detalhes desses domínios permanecem futuros.
+
+```text
+PLAYER DECISION AUTHORITY != OMNISCIENT INFORMATION AUTHORITY
+IN-WORLD DIVINITY != GM / EXTERNAL AUTHORITY
+```
+
 ---
 
 ## 82. Três níveis conceituais de intervenção do GM
@@ -5115,12 +5191,39 @@ ticks/transações.
 **DECIDIDO**
 
 - Save — estado necessário para continuar a simulação.
-- Replay — reconstruir execução a partir de inputs/eventos, se algum dia necessário.
+- Reconstrução histórica/replay — recuperar o estado autoritativo em uma
+  fronteira simulada por execução determinística compatível e/ou estados
+  preservados, com os inputs externos relevantes.
 - History — registro seletivo do que merece retenção.
 
-Deterministic simulation e deterministic save continuation não implicam full
-replay, event sourcing ou history como `World Truth`. Um replay por inputs pode
-ser adicionado futuramente, mas não faz parte da garantia fundamental atual.
+**Garantia de produto:** qualquer fronteira temporal realmente simulada desde
+a primeira deve permitir reconstruir o estado autoritativo correspondente e
+criar um fork independente que possa continuar dali. Isso inclui `World Truth`
+e os demais estados autoritativos necessários para continuidade, com todas as
+consequências acumuladas de decisões autônomas, inputs externos e mutações de
+domínio até aquela fronteira. A garantia não se estende ao interior da
+backstory gerada anterior ao início da simulação.
+
+Uma serraria criada no dia simulado 200 integra um fork da fronteira do dia
+205 e não um fork da fronteira do dia 199. A mesma regra se aplica à criação,
+alteração e destruição de qualquer estrutura ou fato autoritativo, inclusive
+cidades, POIs, construções, estradas, recursos, organizações, empregos e
+propriedades. Reconstruir apenas a lista de decisões externas sem seus efeitos
+autoritativos não satisfaz a garantia.
+
+Replay, persistência e checkpoints são mecanismos técnicos para cumprir essa
+garantia, não novas fontes de verdade histórica. Checkpoints podem acelerar a
+reconstrução; sua retenção ou reciclagem não pode eliminar a possibilidade de
+fork em uma fronteira realmente simulada. A reconstrução deve respeitar as
+semânticas compatíveis de simulação e conteúdo vigentes no período histórico.
+O contrato técnico exato de armazenamento, replay, migração e retenção fica
+para o consumidor de persistência.
+
+Determinismo e save continuation, isoladamente, não implementam essa garantia.
+`History`, eventos e snapshots diagnósticos não substituem o estado
+autoritativo nem exigem event sourcing universal. Decisões autônomas podem ser
+reproduzidas deterministicamente sem registro individual de cada escolha,
+desde que o estado reconstruído seja o mesmo na fronteira escolhida.
 
 O projeto não é event-sourced por padrão.
 
@@ -5452,6 +5555,15 @@ EXISTENCE != REPRESENTATION != PROCESSING
 PERSON-ONLY != DORMANT
 MATERIALIZATION != ACTIVITY
 ACTIVE / DORMANT / LOADED / UNLOADED != POPULATION CHANGE
+PERSON IDENTITY IS NOT HUMAN-ONLY
+CALENDAR OCCURRENCE != DOMAIN EFFECT
+
+INITIAL CONFIGURED WORLD → COMPLETE WORLD TRUTH BEFORE FIRST SIMULATED BOUNDARY
+GENERATED BACKSTORY != SIMULATED HISTORY
+INITIAL GENERATED STATE != IMMUTABLE WORLD
+INITIAL GENERATION != RUNTIME MUTATION AUTHORITY
+RUNTIME-CREATED WORLD STRUCTURE = NORMAL WORLD TRUTH
+EVERY SIMULATED HISTORICAL BOUNDARY → RECONSTRUCTABLE AUTHORITATIVE STATE AND INDEPENDENT FORK
 
 AUTHORITATIVE DETERMINISM:
 same compatible version + authoritative state + effective configuration/content
@@ -5545,6 +5657,12 @@ CHECKPOINT C1 → SOCIAL APPRAISAL FOUNDATION
 CHECKPOINT C2 → CRIME/JUSTICE VERTICAL SLICE
 CHECKPOINT C3 → PERSISTENT RELATIONSHIP PROJECTION, DEFERRED
 SAVE != REPLAY != HISTORY
+CHECKPOINT != HISTORICAL TRUTH
+
+FORK FROM A SIMULATED BOUNDARY:
+reconstruct World Truth + authoritative continuation state at T;
+all domain consequences through T participate;
+generated backstory before simulation start is outside the fork guarantee.
 
 SAVE CONTINUATION:
 save at T + same future inputs → same future authoritative state
@@ -5557,6 +5675,8 @@ wall-clock arrival alone does not define causality.
 GM MAY OVERRIDE PLAUSIBILITY
 GM MAY ASSERT FACTS/OUTCOMES
 GM MUST NOT BREAK STRUCTURAL INVARIANTS
+PLAYER DECISION AUTHORITY != OMNISCIENT INFORMATION AUTHORITY
+IN-WORLD DIVINITY != GM / EXTERNAL AUTHORITY
 
 AI/NLP TRANSLATES TO VALIDATED WORLD COMMANDS;
 IT DOES NOT BECOME AN UNCONTROLLED AUTHOR OF WORLD TRUTH.
