@@ -8,14 +8,17 @@
 ## Purpose and evidence boundary
 
 Phase 11's Brief describes a bounded actor-control and external-command slice.
-The user selected the first consumer: **one actor-scoped choice of a supported
-action replaces that actor's autonomous choice, while ordinary domain
-execution still revalidates current World Truth.** This selection does not
-grant hidden knowledge, outcome authority, broader ongoing control, or GM /
-external command scope. The actor's eligibility, controller authority,
-visible candidate/target set, application boundary, and exact action contract
-remain unresolved. The Brief marks the phase `ENTRY_ARCHITECTURE_READY`; this
-does not make implementation schedulable.
+The user selected the first consumer: **one actor-scoped choice of a local
+`SellGoods` action, with candidate planning based on that actor's
+`CommercialKnowledge` and existing domain execution revalidating current
+market truth.** The choice replaces that actor's autonomous action choice for
+one decision. The selected slice is a sale at the actor's current city's
+market; it does not include remote trade travel, a new market outcome path,
+hidden knowledge, broader ongoing control, or GM/external command scope. The
+action choice is selected, but actor eligibility/materialization, controller
+authority, what candidate details are visible, the application boundary, and
+the exact action/input contract remain unresolved. The Brief marks the phase
+`ENTRY_ARCHITECTURE_READY`; this does not make implementation schedulable.
 
 This proposal is based on assigned baseline `1f4651e99db2c357dd3be3c6b9284d104379f706`
 in the isolated `codex/phase11/ActorCommandsEntryArchitecture` worktree. The
@@ -87,6 +90,18 @@ No external command queue is currently composed into the `AdvanceDay` input
 boundary. The relative ordering of future actor input, scheduled directives,
 and autonomous choice therefore remains to be designed.
 
+For the selected consumer, the existing local-sale path provides a concrete
+domain seam. `MerchantSystem.CreateSellGoodsAction` builds a local sale from
+the merchant's inventory and current-city `CommercialKnowledge` observation,
+including remembered price/freshness, then selects a sale quantity. The
+ordinary local-market execution path delegates to the existing transaction
+service against the actor's current-city market; a stale candidate can fail or
+partially fill against current market truth. The current provider constructs a
+best sale, not a general actor-facing list of typed sale candidates, and its
+runtime action contains content/runtime references. This is evidence for the
+consumer, not an approved candidate-list or input-payload contract. Keeping the
+consumer to the current-city market sale requires no travel capability.
+
 ### Existing external command path
 
 `WorldCommand` is a typed envelope with `Kind`, `Origin`, `Authority`, and a
@@ -141,12 +156,12 @@ Actor Knowledge + current actor state
     → existing action/domain execution revalidates World Truth
     → domain outcome → Domain Event / History / UI
 
-SELECTED HUMAN ACTOR-CHOICE SCOPE (technical path not yet defined)
-Controller (?) + controlled actor identity (?)
-    → actor-scoped decision context built from that actor's Knowledge
-    → explicit choice/request at a defined logical boundary (?)
-    → the same supported action/domain execution boundary
-    → current World Truth validation → domain outcome → downstream records
+SELECTED ACTOR-CHOICE SCOPE (technical path not yet defined)
+Controller (?) + eligible local merchant actor identity (?)
+    → local SellGoods candidates planned from that actor's CommercialKnowledge
+    → choice of candidate and sale arguments at a logical boundary (?)
+    → existing MerchantSystem / market transaction authority
+    → current market World Truth validation → transaction result / records
 
 CURRENT GM / EXTERNAL COMMAND PATH
 Structured input or deterministic translation
@@ -156,8 +171,9 @@ Structured input or deterministic translation
     → command audit record and domain events where applicable
 ```
 
-The selected actor path replaces the actor's autonomous *choice*. It must not
-inject hidden facts into the choice context, directly write an outcome, or
+The selected actor path replaces the actor's autonomous *choice*. It must use
+the actor's `CommercialKnowledge` for sale-candidate planning, must not present
+current market truth as remembered knowledge, directly write an outcome, or
 skip the selected domain's execution checks. The GM/external path remains a
 separate authority surface and is not part of this selected first-consumer
 scope. Whether a later command track shares an envelope, adapter, or queue is
@@ -166,22 +182,27 @@ an implementation choice; it must not erase the semantic distinction.
 ## Selected first consumer and adjacent options
 
 The selected first-consumer product scope is one actor-scoped choice of one
-supported action in place of that actor's autonomous choice. Normal domain
-execution remains authoritative and revalidates current World Truth. The
-choice does not yet define who may submit it, which actor representations are
-eligible, what candidates or targets can be seen, or when it is applied.
+local-market `SellGoods` action in place of that actor's autonomous choice.
+Candidate planning uses the actor's `CommercialKnowledge`; ordinary merchant
+and transaction execution remains authoritative and revalidates current
+market truth. This scope does not include remote trade travel, local
+NPC-to-NPC sale, or market mutation by the input layer. It does not yet define
+who may submit the choice, which actor representations are eligible, which
+sale candidates/details can be seen, the exact item/quantity payload, or when
+the choice is applied.
 
 | Candidate | What it could prove | Constraints and dependencies |
 |---|---|---|
-| **Selected:** one actor-scoped choice of a supported action | Replaces that actor's autonomous choice for one decision while ordinary domain execution revalidates current World Truth. Existing `NpcActionData`, `NpcDecisionSystem`, and decision records are nearby seams, not an approved action contract. | Actor eligibility/materialization, controller authority, visible candidates/targets, the one-shot application boundary, and the exact action payload/contract remain open. `CreateRequestedAction` alone supplies none of the ingress, identity, information, ordering, or input-record contract. |
+| **Selected:** one actor-scoped local-market `SellGoods` choice | Replaces that actor's autonomous action choice for one decision. Candidate planning uses that actor's `CommercialKnowledge`; existing `MerchantSystem` and market transaction execution revalidate against current market truth. | This selected consumer is limited to a sale at the current-city market and needs no travel capability. Actor eligibility/materialization, controller authority, visible candidate details, exact item/quantity payload, and one-shot application boundary remain open. `CreateRequestedAction` alone supplies none of the ingress, identity, information, ordering, or input-record contract. |
 | GM/external `Request` through `ResolveConflict` or `PlaceOpposition` | Exercises the existing normal-resolver command path and its distinction from supported forced outcomes. | **Not selected** as the first consumer and not included in the selected actor-choice scope. Existing command support does not imply additional command, actor-control, or ForceOutcome permissions. |
 | GM `Declare` through a supported existing command | Exercises a typed declared operation through its existing domain authority; Knowledge grants can change Knowledge without asserting underlying Truth. | **Not selected** as the first consumer or part of the selected actor-choice scope. Each command has distinct truth/knowledge semantics and capability; there is no blanket `Declare` support. |
-| Travel/route intent chosen using actor Knowledge | Could later join actor choice, spatial perspective, and domain execution. | Not selected. Civil Travel is a soft ordering for Phase 11, not a hard dependency. Any future travel consumer waits for the exact promoted spatial/travel capability it uses. |
+| Remote trade, travel, or route intent | Could later join actor choice, spatial perspective, and domain execution. | Not part of the selected local-market sale. Civil Travel is a soft ordering for Phase 11, not a dependency for this consumer; a later travel consumer waits for the exact promoted spatial/travel capability it uses. |
 
-The first-consumer product choice is set. Architecture/technical entry design
-must now define the bounded actor and action contract, preserve the actor's
-Knowledge perspective, and bind execution to an available domain authority.
-This selection does not authorize an implementation wave.
+The first-consumer action choice is set. Architecture/technical entry design
+must now define the bounded actor/controller and sale-candidate contract,
+preserve the actor's Knowledge perspective, and bind execution to the existing
+market transaction authority. This selection does not authorize an
+implementation wave.
 
 ## Actor-limited information and authority implications
 
@@ -191,11 +212,14 @@ This selection does not authorize an implementation wave.
    `Origin` label is provenance, not proof of authorization. A GM may have an
    external authority that an in-world actor does not.
 2. **Build choice context from actor Knowledge.** An actor's unknown or stale
-   information stays unknown or stale. A controller may see more in an
-   observer/GM surface only if product scope allows it; that observer view
-   cannot silently become the actor's decision input. Knowledge gained from an
-   explicit GM action remains a Knowledge mutation, not automatic factual
-   discovery by the actor.
+   information stays unknown or stale. For the selected sale, remembered
+   prices, stock, and liquidity estimates come from that merchant's
+   `CommercialKnowledge`; current market state is consulted for domain
+   execution, not substituted into the candidate's Knowledge view. A
+   controller may see more in an observer/GM surface only if product scope
+   allows it; that observer view cannot silently become the actor's decision
+   input. Knowledge gained from an explicit GM action remains a Knowledge
+   mutation, not automatic factual discovery by the actor.
 3. **Keep Person identity durable.** Any future persisted actor command should
    identify an individual through `PersonId` when that identity exists and
    specify the required materialized representation at execution. The design
@@ -203,11 +227,11 @@ This selection does not authorize an implementation wave.
    treat lack of `NpcRuntime` as loss of Person identity or silently
    materialize/activate the actor as a side effect of input.
 4. **Replace a decision, not execution truth.** Explicit choice may supply a
-   bounded action/intent. Domain code still checks life/state, policy,
-   capability, current targets, costs, and other operation preconditions at
-   execution. If facts changed since preview/choice, reject or return the
-   domain's supported result; do not expose hidden Truth as an automatic
-   explanation or update to Knowledge.
+   bounded local-sale candidate/intent. Domain code still checks life/state,
+   policy, capability, current market stock/funds/counterparty conditions, and
+   other operation preconditions at execution. If facts changed since
+   candidate planning/choice, return the transaction's supported result; do
+   not expose hidden Truth as an automatic explanation or update to Knowledge.
 5. **Do not widen command modes.** Preserve `Suggest` as preview-only,
    `Request` as subject to normal rules, `Declare` as a supported declared
    operation, and `ForceOutcome` only for constraints a domain explicitly
@@ -229,6 +253,9 @@ following causal facts recoverable in principle:
 
 - the normalized typed input/payload and selected target(s), not only the
   human text or a command kind;
+- for the selected sale, the stable item identity and quantity, plus the actor
+  and local market identity needed to interpret the input; the exact contract
+  and treatment of the remembered estimate remain open;
 - stable actor/subject identity and any controller/principal provenance needed
   to interpret authority;
 - origin, requested authority mode, command/decision identity, and semantic
@@ -258,9 +285,9 @@ no Phase 11 IDs, approval, or implementation authorization.
 
 | Candidate unit (UNAPPROVED) | Candidate closure evidence | Dependencies / ordering |
 |---|---|---|
-| Actor eligibility, perspective, and one-choice contract | Defines actor eligibility/materialization, controller authority, visible candidate/target projection, exact supported-action contract, and explicit exclusions for the selected scope. | The first-consumer product choice is set; these technical and remaining product details must be resolved before implementation. |
+| Actor eligibility, perspective, and one-choice contract | Defines actor eligibility/materialization, controller authority, the actor's local sale candidate view, exact item/quantity contract, and explicit exclusions for the selected scope. | The local `SellGoods` action choice is selected; these technical and remaining product details must be resolved before implementation. |
 | Logical input boundary and envelope contract | Defines capture/application boundary, deterministic order, stale-state behavior, identity/provenance, and accepted/rejected semantics without granting new domain mutation power. | Depends on the selected consumer and its actor identity. Requires explicit coexistence semantics with scheduled directives, autonomous selection, and any external command source. |
-| Consumer adapter through existing domain authority | A bounded request/choice reaches one selected domain path, revalidates current World Truth, and records no fabricated result. | Requires the exact promoted domain capability and a contract for actor Knowledge access. No blanket P8/P9 or command-handler dependency. |
+| Consumer adapter through existing domain authority | A bounded choice reaches the existing local `SellGoods` path through `MerchantSystem` and the market transaction service, revalidates current market truth, and records no fabricated result. | Requires the local merchant/action composition and a contract for actor `CommercialKnowledge` access. No travel capability, blanket P8/P9 dependency, or new GM command authority is selected. |
 | Causal-input recording and integration | Captures enough normalized causal input and logical application order for its stated guarantee, with deterministic behavior across equivalent runs. | Integrates command/input capture, runtime boundary, domain records, and relevant diagnostics. Must be explicit about what Phase 12/13 still need. |
 | Phase-specific regression and acceptance review | Tests privacy-of-perspective, command authority, stale truth, deterministic ordering, and domain invariants for the approved consumer. | Follows implementation and independent review; test scope depends on whether daily-loop ordering or long-horizon behavior changes. |
 
@@ -274,16 +301,18 @@ reason to introduce a generic concurrency lock or universal actor framework.
 ## Dependencies and scheduling implications
 
 - Phase 11 entry design can proceed independently of Phase 8 world generation.
-  An implementation can proceed only when its selected consumer's actual
-  domain authority is available and promoted; registering a provider or
-  handler is not enough.
+  The selected current-city market sale uses the existing merchant and
+  transaction execution path and does not require travel. Registering a
+  provider or handler alone still does not establish domain availability or
+  enablement.
 - Phase 11 has hard semantic dependencies on Person/Knowledge/decision versus
   execution contracts and on the existing `Request`/`Declare`/supported
   `ForceOutcome` distinctions. These contracts do not establish a universal
   actor model or command permission matrix.
 - Any actor-information query depends on the specific Knowledge model being
-  consumed. There is no current general actor Knowledge projection covering
-  all domains.
+  consumed. The selected sale uses `CommercialKnowledge`, currently owned by
+  the `NpcRuntime` representation; there is no current general actor Knowledge
+  projection covering all domains.
 - Any live input integration depends on a selected logical application
   boundary that coexists with autonomous and scheduled processing. If
   `AdvanceDay` ordering or long-horizon effects change, the corresponding
@@ -292,16 +321,19 @@ reason to introduce a generic concurrency lock or universal actor framework.
   Phase 11 is not a substitute for Phase 12's full authoritative save scope.
   Phase 13 needs both continuation and reconstructible inputs/mutations; a
   Phase 11 command audit record alone cannot satisfy it.
-- Civil travel is a possible later consumer, not a blanket prerequisite. A
-  selected travel slice waits for the relevant promoted Phase 8 authority only.
+- Civil travel is not a dependency for this local sale. Any later travel or
+  remote-trade consumer waits for the relevant promoted Phase 8 authority only.
 
 ## Unresolved choices for review
 
 ### Product choices
 
-- Which actor is eligible for the selected one-action choice, and can an
+- Is eligibility for this first sale limited to a living, materialized
+  merchant `NpcRuntime` with a current city, as the existing provider expects,
+  or should the product include another actor representation? Can an
   unmaterialized Person be eligible?
-- Which action candidates and targets may the actor-scoped view expose? Is any
+- Which local sale candidates/details (item, quantity, remembered price,
+  liquidity, and freshness) may the actor-scoped view expose? Is any
   GM/observer assistance allowed while preserving the actor's Knowledge
   boundary?
 - Who may submit the choice for that actor, and what product-level controller
@@ -318,10 +350,11 @@ reason to introduce a generic concurrency lock or universal actor framework.
 - Is actor choice represented as a separate input type, a constrained
   `WorldCommand`, or an adapter to a domain-specific request? The answer must
   preserve actor choice versus GM declaration and domain outcome.
-- What is the exact supported-action contract: which stable action identity,
-  selected target/arguments, and actor-scoped candidate source are captured?
-  Existing `NpcActionRuntime` / `CreateRequestedAction` is not assumed to be
-  the contract.
+- What is the exact local-sale contract: stable action/item identity, quantity,
+  local-market binding, and actor-scoped candidate source? The current provider
+  constructs a best local sale rather than a general candidate list, and
+  `NpcActionRuntime` / `CreateRequestedAction` is not assumed to be the
+  external input contract.
 - At what logical boundary are inputs accepted and ordered relative to
   scheduled directives and autonomous action choice, and how is this one-shot
   choice consumed? What happens to late, duplicate, stale, rejected, or
@@ -329,11 +362,11 @@ reason to introduce a generic concurrency lock or universal actor framework.
 - Which normalized fields and principal/order data are included in a future
   causal record, and what guarantee belongs to Phase 11 versus Phase 12/13?
   How are failed requests and replay-sensitive rejection semantics captured?
-- Does any new `Request` or `ForceOutcome` support actually have a domain-owned
-  implementation? The default answer is no until the selected domain defines
-  and validates that support.
-- What actor Knowledge projection does the first consumer require, and can it
-  avoid exposing world registries/world snapshots to the decision layer?
+- No new `Request` or `ForceOutcome` support is selected or needed for this
+  local sale. The input must reach the existing merchant/transaction domain
+  authority without adding a forced outcome path.
+- How is this consumer's `CommercialKnowledge` view projected without exposing
+  world registries/current market truth to candidate planning?
 
 These questions must be resolved or explicitly scoped out before a
 track-specific technical design is accepted. No semantic answer or product
