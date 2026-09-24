@@ -168,8 +168,27 @@ public sealed class SimulationRuntime
         }
         foreach (string violation in spatialRouteKnowledgeStore.ValidateInvariants().Violations)
             violations.Add("SpatialRouteKnowledge: " + violation);
+        foreach (PersonId actor in spatialRouteKnowledgeStore.Actors)
+        {
+            foreach (SpatialObservation observation in spatialRouteKnowledgeStore.GetObservations(actor))
+            {
+                if (observation == null) continue;
+                if (observation.ObservedDay > CurrentDay)
+                    violations.Add("SpatialRouteKnowledge: Observation " + observation.StableIdentity
+                        + " was observed after current SimulationTime.AbsoluteDay.");
+                if (observation.ReceivedDay > CurrentDay)
+                    violations.Add("SpatialRouteKnowledge: Observation " + observation.StableIdentity
+                        + " was received after current SimulationTime.AbsoluteDay.");
+            }
+        }
         foreach (string violation in personRoutePlanStore.ValidateInvariants().Violations)
             violations.Add("PersonRoutePlans: " + violation);
+        foreach (PersonRoutePlan plan in personRoutePlanStore.History)
+        {
+            if (plan != null && plan.AcceptedDay > CurrentDay)
+                violations.Add("PersonRoutePlans: Plan " + plan.StableKey
+                    + " was accepted after current SimulationTime.AbsoluteDay.");
+        }
         return new SimulationRuntimeSpatialInvariantReport(violations);
     }
 
@@ -468,13 +487,17 @@ public sealed class SimulationRuntime
                 resolvedSpatialAuthorityStore,
                 resolvedTraversalOptionResolver);
         SpatialRouteKnowledgeStore resolvedSpatialRouteKnowledgeStore =
-            CloneSpatialRouteKnowledgeStore(spatialRouteKnowledgeStore, resolvedPersonStore);
+            CloneSpatialRouteKnowledgeStore(
+                spatialRouteKnowledgeStore,
+                resolvedPersonStore,
+                this.simulationTime.AbsoluteDay);
         PersonRoutePlanStore resolvedPersonRoutePlanStore =
             ClonePersonRoutePlanStore(
                 personRoutePlanStore,
                 resolvedPersonStore,
                 resolvedSpatialRouteKnowledgeStore,
-                () => this.simulationTime.AbsoluteDay);
+                () => this.simulationTime.AbsoluteDay,
+                this.simulationTime.AbsoluteDay);
         SpatialRoutePlanningSystem resolvedSpatialRoutePlanningSystem =
             new SpatialRoutePlanningSystem(
                 resolvedPersonStore,
@@ -2804,7 +2827,8 @@ public sealed class SimulationRuntime
 
     private static SpatialRouteKnowledgeStore CloneSpatialRouteKnowledgeStore(
         SpatialRouteKnowledgeStore source,
-        PersonStore personStore)
+        PersonStore personStore,
+        long currentWorldDay)
     {
         if (source == null)
         {
@@ -2820,6 +2844,21 @@ public sealed class SimulationRuntime
                 nameof(source));
         }
 
+        foreach (PersonId actor in source.Actors)
+        {
+            foreach (SpatialObservation observation in source.GetObservations(actor))
+            {
+                if (observation != null
+                    && (observation.ObservedDay > currentWorldDay
+                        || observation.ReceivedDay > currentWorldDay))
+                {
+                    throw new ArgumentException(
+                        "The SimulationRuntime SpatialRouteKnowledgeStore contains an observation later than the target SimulationTime.AbsoluteDay.",
+                        nameof(source));
+                }
+            }
+        }
+
         return source.Clone(personStore);
     }
 
@@ -2827,7 +2866,8 @@ public sealed class SimulationRuntime
         PersonRoutePlanStore source,
         PersonStore personStore,
         SpatialRouteKnowledgeStore knowledgeStore,
-        Func<long> currentWorldDayProvider)
+        Func<long> currentWorldDayProvider,
+        long currentWorldDay)
     {
         if (source == null)
         {
@@ -2841,6 +2881,16 @@ public sealed class SimulationRuntime
                 "The SimulationRuntime PersonRoutePlanStore contains invalid world state: "
                 + string.Join("; ", report.Violations),
                 nameof(source));
+        }
+
+        foreach (PersonRoutePlan plan in source.History)
+        {
+            if (plan != null && plan.AcceptedDay > currentWorldDay)
+            {
+                throw new ArgumentException(
+                    "The SimulationRuntime PersonRoutePlanStore contains a plan accepted later than the target SimulationTime.AbsoluteDay.",
+                    nameof(source));
+            }
         }
 
         return source.CloneForRuntime(personStore, knowledgeStore, currentWorldDayProvider);

@@ -392,6 +392,96 @@ public sealed class SpatialRoutePlanningTests
             string.Join("; ", runtime.ValidateSpatialInvariants().Violations));
     }
 
+    [TestCase(2L, 2L)]
+    [TestCase(0L, 2L)]
+    public void RuntimeRejectsDetachedSpatialKnowledgeDatedAfterTargetWorldDay(
+        long observedDay,
+        long receivedDay)
+    {
+        Fixture source = CreateFixture("person.runtime-future-knowledge." + observedDay + "." + receivedDay);
+        Record(source, OptionObservation(
+            Segment("hex.a", "hex.b", "connection.ab"),
+            SpatialRouteOptionBelief.KnownAvailable,
+            "map.future",
+            "future-knowledge." + observedDay + "." + receivedDay,
+            observedDay,
+            receivedDay),
+            receivedDay);
+
+        ArgumentException failure = Assert.Throws<ArgumentException>(() => new SimulationRuntime(
+            new SimulationTime(1L), null, null,
+            personStore: source.People,
+            spatialAuthorityStore: source.Spatial,
+            spatialRouteKnowledgeStore: source.Knowledge));
+
+        Assert.That(failure.Message, Does.Contain("later than the target SimulationTime.AbsoluteDay"));
+    }
+
+    [Test]
+    public void RuntimeRejectsDetachedRoutePlanAcceptedAfterTargetWorldDay()
+    {
+        Fixture source = CreateFixture("person.runtime-future-plan");
+        SpatialRouteSegment segment = Segment("hex.a", "hex.b", "connection.ab");
+        Record(source, OptionObservation(segment, SpatialRouteOptionBelief.KnownAvailable,
+            "map", "future-plan.route", 0L, 0L), 0L);
+        SpatialRouteCandidate candidate = source.Planner.BuildKnownCandidates(
+            Request(source.Actor, "hex.a", "hex.b", 0L)).Candidates.Single();
+        Record(source, EstimateObservation(candidate, MetricId, MetricUnit, 2m,
+            "future-plan.estimate", 0L), 0L);
+        SpatialRoutePlanningOutcome selectedForDayTwo = source.Planner.SelectKnownRoute(
+            Request(source.Actor, "hex.a", "hex.b", 2L),
+            Policy(preferHigher: false, maxAge: 2L, requireAvailable: true));
+        Assert.That(selectedForDayTwo.IsSuccess, Is.True, selectedForDayTwo.FailureMessage);
+        Assert.That(source.Plans.TryAcceptPlan(selectedForDayTwo, "decision.future-plan", 0L, 2L,
+            out PersonRoutePlanFailure planFailure), Is.True, planFailure.ToString());
+
+        ArgumentException failure = Assert.Throws<ArgumentException>(() => new SimulationRuntime(
+            new SimulationTime(1L), null, null,
+            personStore: source.People,
+            spatialAuthorityStore: source.Spatial,
+            spatialRouteKnowledgeStore: source.Knowledge,
+            personRoutePlanStore: source.Plans));
+
+        Assert.That(failure.Message, Does.Contain("accepted later than the target SimulationTime.AbsoluteDay"));
+    }
+
+    [Test]
+    public void RuntimeAcceptsPastDatedKnowledgeAndPlansAndReportsFutureOwnedKnowledge()
+    {
+        Fixture source = CreateFixture("person.runtime-past-state");
+        SpatialRoutePlanningOutcome selectedOnDayZero = PrepareSelectableRoute(source, 0L, "past-state");
+        Assert.That(source.Plans.TryAcceptPlan(selectedOnDayZero, "decision.past-plan", 0L, 0L,
+            out PersonRoutePlanFailure planFailure), Is.True, planFailure.ToString());
+
+        SimulationRuntime runtime = new SimulationRuntime(
+            new SimulationTime(1L), null, null,
+            personStore: source.People,
+            spatialAuthorityStore: source.Spatial,
+            spatialRouteKnowledgeStore: source.Knowledge,
+            personRoutePlanStore: source.Plans);
+
+        Assert.That(runtime.SpatialRouteKnowledgeStore.ObservationCount, Is.EqualTo(2));
+        Assert.That(runtime.PersonRoutePlanStore.History.Single().AcceptedDay, Is.EqualTo(0L));
+        Assert.That(runtime.ValidateSpatialInvariants().IsValid, Is.True,
+            string.Join("; ", runtime.ValidateSpatialInvariants().Violations));
+
+        SpatialObservation futureObservation = OptionObservation(
+            Segment("hex.a", "hex.b", "connection.ab"),
+            SpatialRouteOptionBelief.KnownUnavailable,
+            "later-map",
+            "runtime-future-observation",
+            2L,
+            2L);
+        Assert.That(runtime.SpatialRouteKnowledgeStore.TryRecordObservation(
+            source.Actor, futureObservation, 2L, out SpatialKnowledgeFailure knowledgeFailure),
+            Is.True, knowledgeFailure.ToString());
+
+        SimulationRuntimeSpatialInvariantReport report = runtime.ValidateSpatialInvariants();
+        Assert.That(report.IsValid, Is.False);
+        Assert.That(report.Violations.Any(value => value.Contains("observed after current SimulationTime.AbsoluteDay")), Is.True);
+        Assert.That(report.Violations.Any(value => value.Contains("received after current SimulationTime.AbsoluteDay")), Is.True);
+    }
+
     private static SpatialRoutePlanningOutcome PrepareSelectableRoute(Fixture fixture, long day, string identity)
     {
         SpatialRouteSegment segment = Segment("hex.a", "hex.b", "connection.ab");
