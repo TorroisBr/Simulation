@@ -2,7 +2,7 @@
 
 `SIMULATION_ARCHITECTURE.md` remains the semantic authority. This roadmap names intended phase scopes and likely dependency directions; it neither reports delivered behavior nor authorizes implementation or canonical promotion. The owning `PHASE*_STATE.md` and current canonical code establish delivery. Phase numbers primarily organize planning and closure, not a requirement to execute whole phases serially.
 
-Phases 5–7 are closed within their documented scopes. Phase 8 has consolidated architecture and approved macro checkpoints but no implementation. Phases 9–17 are planning entries whose checkpoint decomposition still needs entry design. See the Phase Briefs for scope and readiness, and `EXECUTION_MODEL.md` for the scheduling vocabulary.
+Phases 5–7 are closed within their documented scopes. Phase 8 has approved macro checkpoints; P8-A is implemented, independently reviewed, and integration-validated. `PHASE8_STATE.md` records its promotion status and the remaining dependency graph. Phases 9–17 are planning entries whose checkpoint decomposition still needs entry design. See the Phase Briefs for scope and readiness, and `EXECUTION_MODEL.md` for the scheduling vocabulary.
 
 | Phase | Planning objective |
 |---|---|

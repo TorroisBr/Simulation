@@ -1,6 +1,6 @@
 # Phase 8 — Spatial Truth & Civil Travel v1
 
-**Authority:** approved phase scope under `../SIMULATION_ARCHITECTURE.md` §69; planning, not delivered State. **Readiness:** `READY_FOR_TECHNICAL_DESIGN`, not `READY_FOR_IMPLEMENTATION`. No Phase 8 implementation has started.
+**Authority:** approved phase scope under `../SIMULATION_ARCHITECTURE.md` §69. This Brief defines the intended scope and acceptance boundaries; current delivery status and readiness are recorded in `../PHASE8_STATE.md`.
 
 ## Objective and closure
 
