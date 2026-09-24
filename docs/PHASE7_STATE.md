@@ -1,4 +1,92 @@
-# Phase 7 — Current Canonical State
+# Phase 7 — COMPLETED
+
+## Formal closure
+
+**Status: APPROVED AND FORMALLY CLOSED WITH EXPLICIT KNOWN LIMITATIONS.**
+
+- Closure authority: the completed Architecture Lab review verdict is **READY
+  TO CLOSE WITH EXPLICIT KNOWN LIMITATIONS**. No code, architecture, or missing
+  Phase 7 implementation blocker remains.
+- Canonical baseline at closure: `1bfe14834509500ba74593444f5abe27ea5988f6`
+  on `codex/phase7/canonical`; P7-D7 and P7-D7G are canonical.
+- This state-only closure record is the canonical closure commit; its exact
+  SHA is reported by promotion verification.
+- Completed checkpoints: **P7-A, P7-B, P7-C, P7-D0, P7-D1, P7-D2, P7-D3,
+  P7-D4, P7-D5, P7-D6A, P7-D6B1, P7-D6B2, P7-D7G, and P7-D7**. There is no
+  additional Phase 7 implementation checkpoint pending. Historical checkpoint
+  records below remain historical and have not been rewritten.
+
+Phase 7 established the persistent and authoritative foundations needed for a
+bounded end-to-end Battle v1 chain; it did **not** deliver a complete warfare
+simulation. The delivered chain is:
+
+```text
+World Truth
+→ persistent Battle / participants / spatial truth
+→ BattleExecutionContext
+→ deterministic raw Battle resolution
+→ semantic Battle outcome
+→ direct consequence planning
+→ source consequence planning
+→ atomic authoritative application
+→ persistent terminal Battle outcome
+→ BattleResolved downstream event/history
+→ diagnostics
+```
+
+`ExecutionContext / computation / plans != World Truth`.
+
+Delivered foundations include stable ArmedForce identity and recursive
+hierarchy; persistent Conflict / War / Battle; typed spatial authority and
+optional ArmedForce position; physical Battle eligibility and execution
+context; contextual deterministic raw resolution; a world-authorized semantic
+outcome; D6A manpower/source/availability/custody; D6B1 source consequence
+planning; D6B2 direct consequence planning; the D7G runtime authoritative
+mutation guard; D7 atomic Battle application; persistent terminal
+outcome/provenance and idempotent `AlreadyResolved`; exact rollback with
+runtime `Faulted` on unrecoverable restore; and downstream `BattleResolved`,
+history, and deterministic diagnostics.
+
+The following distinctions remain explicit:
+
+```text
+HOSTILITY != CONFLICT != WAR != BATTLE
+BATTLE RESULT != WAR RESULT
+MANPOWER SOURCE != ALLEGIANCE != LOYALTY != COMMAND
+MORALE != COHESION != LOYALTY
+LEGAL OWNERSHIP != JURISDICTION != ADMINISTRATION
+  != MILITARY CONTROL != OCCUPATION != ALLEGIANCE
+```
+
+### Explicit known limitations
+
+- **Numeric portability:** authoritative outcomes require an explicitly
+  supported numeric execution profile, including
+  `unity-float32-current-host:v1` where supported. No arbitrary equivalence
+  across Unity versions, headless runtimes, future `Simulation.Core`, or
+  different profiles is claimed.
+- **D7G legacy escape hatches:** supported runtime-owned authoritative
+  mutations are blocked while Faulted. Direct mutation through externally
+  retained legacy mutable references such as `NpcRuntime`, `CityRuntime`, or
+  child objects remains unsupported out-of-bound mutation; this does not
+  invalidate the supported D7G boundary.
+- **Event reliability:** `BattleResolved` is a post-commit downstream
+  representation. No durable outbox or retry mechanism exists.
+- **Deferred consumers, not incomplete Phase 7 work:** full HexGrid;
+  military movement/pathfinding; terrain, weather, crossings, and scouting;
+  retreat/rout execution; War progression/goals/pressure; military control and
+  occupation; ceasefire/surrender/peace; named Person casualties; broader
+  knowledge/reaction propagation; save/load hydration and migration; replay;
+  networking; and broad `Simulation.Core` extraction.
+
+The D7 validation record immediately below remains the final promoted record:
+Battle outcome application `20/20`; D7G `18/18`; D6B2 `21/21`; D6B1 `23/23`;
+D6A `11/11`; D5 `16/16`; D4 `10/10`; D3 `11/11`; D2 `11/11`; D1 `7/7`; D0
+`8/8`; ArmedForce `30/30`; combined manpower `39/39`; AggregateDemography
+`23/23`; diagnostics `54/54`; SimulationRuntime `10/10`; Population `139/139`;
+Person `134/134`; lifecycle `40/40`; ConflictFoundation `16/16`; ALL EditMode
+`1646/1646`; official Smoke `5/5`; long-run `7/7`; and `git diff --check`
+clean. No Unity tests were rerun for this documentation-only closure marker.
 
 ## P7-D7 — Atomic Battle Outcome Application (approved and promoted)
 
@@ -52,10 +140,11 @@
   save/load, replay, or networking. `docs/SIMULATION_ARCHITECTURE.md` is
   unchanged.
 
-Do not interpret historical statements below that D7 is “next” or “NOT
-STARTED” as current; they describe their respective earlier checkpoints.
-“Historical Checkpoint C” below is the completed Conflict/War/Battle persistent
-foundation, not a new post-D7 task. Phase 7 is not automatically closed by D7.
+Statements below that D7 is “next” or “NOT STARTED” describe earlier
+checkpoints only. “Historical Checkpoint C” below is the completed
+Conflict/War/Battle persistent foundation, not a pending checkpoint. Phase 7
+is formally closed by the state-only closure record at the top of this file;
+future deferred systems remain outside Phase 7.
 
 ## Checkpoint D6A — Military manpower foundation (approved and promoted)
 
