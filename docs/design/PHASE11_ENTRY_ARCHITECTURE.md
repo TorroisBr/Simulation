@@ -229,8 +229,9 @@ implementation wave.
 4. **Replace a decision, not execution truth.** Explicit choice may supply a
    bounded local-sale candidate/intent. Domain code still checks life/state,
    policy, capability, seller inventory, current price and market capacity,
-   counterparty funds for account-backed markets or the configured money
-   source for open markets, and other operation preconditions at execution. If
+   counterparty funds for account-backed markets or the existing
+   explicit-source money path for open markets, and other operation
+   preconditions at execution. If
    facts changed since candidate planning/choice, return the transaction's
    supported result; do not expose hidden Truth as an automatic explanation
    or update to Knowledge.
