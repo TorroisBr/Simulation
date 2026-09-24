@@ -7,6 +7,12 @@ No Phase 9 checkpoint IDs are assigned or approved here.
 **Review baseline:** `codex/phase9/GenesisEntryArchitecture` at
 `1f4651e99db2c357dd3be3c6b9284d104379f706`.
 
+**Current dependency review:** `docs/PHASE8_STATE.md` on
+`codex/phase8/canonical` at `ed7a40a86a6a16e9f4fda75703470c38135fda0e`.
+That state supersedes the P7-era Phase 8 readiness statements below and the
+older progress sentence in this branch's Roadmap snapshot: P8-A through P8-C
+are canonical, P8-D is ready for implementation, and P8-E waits on D.
+
 **Authority:** `docs/SIMULATION_ARCHITECTURE.md` remains the semantic authority.
 The Phase 9 and Phase 8 Briefs and `docs/ROADMAP.md` define subordinate scope
 and dependencies. This proposal records observed code and possible boundaries;
@@ -19,12 +25,14 @@ it does not settle the open decisions below.
   requires deterministic, complete initial World Truth before the first
   actually simulated boundary. It explicitly defers generation passes, the ID
   algorithm, mod schema, and exact content catalog.
-- The Phase 8 Brief says Phase 8 is `READY_FOR_TECHNICAL_DESIGN` and has no
-  implementation. The current checkout contains the consolidated spatial
-  semantic direction, but no P8-A technical design artifact or promoted P8
-  spatial capability was found at this baseline. This proposal therefore
-  distinguishes the accepted semantic direction from the missing technical
-  contract and runtime capability.
+- At the reviewed P7 code baseline, the Phase 8 Brief said Phase 8 was
+  `READY_FOR_TECHNICAL_DESIGN`; no P8-A technical design artifact or promoted
+  spatial capability was present in that historical snapshot. Current P8
+  State now records P8-A/B/C as canonical. P8-A establishes factual Hex
+  geography, scale provenance, terrain identity/revision and anchored
+  Locations; P8-B establishes passage/barrier/crossing-condition facts; P8-C
+  composes City/Site anchor bindings and Person-level `At`/`InTransit` truth in
+  runtime and diagnostics. P8-D remains ready to implement and P8-E waits on D.
 - `TesteSimulacao.InitializeSimulation` is the current authored startup path.
   It reads `SimulationConfigData`, constructs a `SimulationTime`, random
   source, `RuntimeIdAllocator`, `RuntimeIdentityRegistry`, and legacy
@@ -53,11 +61,14 @@ it does not settle the open decisions below.
   authorities, binds world mutation guards and registers the NPC roster. Its
   constructor is not itself a domain-neutral generation pipeline or a declared
   pre-start sealing boundary.
-- `SpatialAuthorityStore` currently owns `HexRecord` identities,
-  `LocationRecord` identities with one `AnchorHexId`, and local-topology
-  bindings. `HexRecord` has no semantic coordinate or terrain; the store does
-  not provide adjacency, passages, traversal or generation. The existing
-  `SpatialNetworkRuntime` is a separate legacy location/route model.
+- At the reviewed P7 baseline, `SpatialAuthorityStore` owned `HexRecord`
+  identities, `LocationRecord` identities with one `AnchorHexId`, and
+  local-topology bindings, while `HexRecord` had no semantic coordinate or
+  terrain. Current P8-A adds authored axial coordinates, scale provenance,
+  terrain identity/revision and the promoted spatial authority. Current P8-B
+  owns passage facts; P8-C owns City/Site anchors and Person-level
+  `At`/`InTransit` position. `SpatialNetworkRuntime` remains a separate legacy
+  location/route model in the reviewed P7 code.
 - `SimulationConfigurationResolver` implements
   `Defaults → Preset → World overrides → Content overrides → EffectiveSimulationConfiguration`.
   `SimulationRuntime` separately receives a calendar definition and owns an
@@ -79,6 +90,13 @@ before the first actually simulated boundary. Generated initial facts must use
 the same domain ontology and authorities as authored facts. The generation
 source may be composed from stages, but it must not be a rendering instruction
 or a second runtime mutation authority.
+
+For spatial facts, current P8 State is the promoted capability inventory.
+Initial geography can use canonical P8-A. P8-B is available if the selected
+initial profile includes passage facts; P8-C is available if it establishes
+Person positions or City/Site bindings. P8-D is only a design-approved,
+ready-to-implement dependency for profiles that include route plans or route
+Knowledge; P8-E remains outside any blanket P9 prerequisite.
 
 An initial world may have generated backstory before simulation begins. That
 backstory can explain initial facts, but it is not simulated history and has no
@@ -132,7 +150,7 @@ accepted.
 |---|---|---|
 | Initial-world scope and inputs | Define which initial facts are in the supported Phase 9 profile; separate authored input, generated input, resolved configuration/calendar, and compatible content. | Entry discussion can proceed now. A materially different promise for generated scale or population is a product decision. |
 | Identity and provenance boundary | Specify which identities are semantic and durable, what input/provenance must be recoverable, and how compatible content/configuration is identified. | Requires an architecture decision on generated identity. The ID algorithm is explicitly deferred and must not be invented in this proposal. |
-| Spatial initial facts | Populate factual geography and anchored locations in the accepted spatial ontology. | Spatial design that depends on technical representation must wait for the P8-A technical contract. Runtime integration needs the relevant promoted spatial authority. It does not require all of P8-E. |
+| Spatial initial facts | Populate factual geography and anchored locations in the accepted spatial ontology. | P8-A's technical contract and authority are canonical and available. Add P8-B if the selected initial profile authors passage facts; add P8-C if it establishes Person positions or City/Site bindings. Profiles with route plans or route Knowledge must wait for P8-D implementation/promotion. P8-E is not a blanket dependency. |
 | Domain-owned initial facts | Establish the selected population, Persons, settlements, places, relationships, starting state and other chosen facts through their existing domain owners. | Depends on accepted scope, identity and each included domain's contracts. The inventory must not imply every existing domain store is automatically part of the Phase 9 profile. |
 | Complete-state composition and checks | Show that the selected inputs resolve into one valid initial world with deterministic ordering and valid cross-domain references before simulation starts. | Depends on the selected fact producers and on the chosen world-composition boundary. Avoid making `SimulationRuntime` a generation dumping ground. |
 | Pre-start boundary and reconstruction evidence | Mark the transition from initial setup/backstory to the first actually simulated boundary and declare the initial causal inputs/state that later reconstruction must recover. | Depends on the accepted boundary semantics and composition model. Save/replay mechanics remain Phase 12/13 concerns. |
@@ -142,8 +160,10 @@ Candidate dependency direction, subject to entry review:
 ```text
 accepted scope and execution inputs ───────────────┐
                                                    ├─→ domain-owned initial facts
-P8-A semantic/technical spatial contract ─────────┘             │
-P8-A promoted spatial authority ─→ spatial integration           │
+P8-A canonical spatial authority ──────────────────┘             │
+P8-B passage facts (if selected) ────────────────────────────────┤
+P8-C Person positions/City-Site anchors (if selected) ──────────┤
+P8-D route plans/route Knowledge (if selected; must promote) ────┤
 identity/provenance decisions ───────────────────────────────────┤
                                                                 ▼
                                              complete-state checks/composition
@@ -169,7 +189,7 @@ the fork guarantee.
 | Semantic identity | `PersonId` and spatial IDs are distinct from representation IDs. Person and spatial stores own their records; the legacy registry indexes RuntimeIds. | Identity touches Person/population, spatial, and runtime composition together. `RuntimeIdentity.cs`, `PersonId.cs`, spatial identity and initialization code are high-collision areas. |
 | Domain World Truth | Person, population, institutions, properties, political, conflict and other stores/services own their domain facts and transitions. | A generator should prepare/route facts through these authorities rather than keep parallel copies. A Phase 9 scope audit must name included authorities before implementation. |
 | Runtime composition and first-boundary execution | `SimulationRuntime` composes authorities and enforces a shared mutation guard; `TesteSimulacao` currently owns the host bootstrap sequence. | Likely hotspots are `SimulationRuntime.cs`, `TesteSimulacao.cs`, configuration composition and mutation-guard binding. Any parallel work needs isolated worktrees and explicit integration ownership. |
-| Spatial authority | `SpatialAuthorityStore` and the P8-A track own factual Hex/Location semantics; legacy `SpatialNetworkRuntime` remains transitional. | Do not let Phase 9 and P8-A writers concurrently own spatial identity/storage. Genesis implementation that uses the new authority waits for its promotion. |
+| Spatial authority | Current P8-A owns factual Hex/Location/terrain semantics; P8-B owns passage conditions; P8-C owns City/Site anchors and Person `At`/`InTransit` positions. Legacy `SpatialNetworkRuntime` remains transitional in the reviewed P7 code. | These capabilities are canonical in the current P8 state. P9 should compose through their owners, not duplicate stores. Scope determines whether B/C facts are included; route-plan or route-Knowledge scope depends on P8-D promotion. |
 | Diagnostics | World-state snapshots/canonical writers project current facts for inspection. | Diagnostics can help compare generated worlds but are not primary truth or a substitute for the complete state. Diagnostics-core edits would be a shared hotspot. |
 
 ## 6. Reconstruction-sensitive initial inputs and state
@@ -182,8 +202,11 @@ design should classify at least:
 
 - all authoritative domain facts at the first simulated boundary, including
   semantic identities, references and cross-store relations;
-- the initial spatial identities/topology/anchors and any other spatial truth
-  included in the chosen profile;
+- P8-A Hex/Location identities, axial geography, scale provenance and terrain
+  identity/revision; plus P8-B passage/barrier/crossing-condition facts and
+  P8-C City/Site anchor bindings and Person `At`/`InTransit` positions when
+  included in the chosen profile. `NpcRuntime` location fields alone do not
+  represent the Person-level positions;
 - population aggregates and the selected Person/representation/lifecycle
   facts, while preserving `PersonId` across materialization and dormancy;
 - effective configuration and calendar, plus the compatible simulation/content
@@ -200,22 +223,23 @@ reconstructing it from compatible inputs belongs to the later persistence and
 reconstruction designs. Neither diagnostics, `History`, nor a generated
 backstory log alone is sufficient proof of the initial truth.
 
-## 7. What must wait for Phase 8
+## 7. Current Phase 8 dependency status
 
-- Spatial-specific technical design that assumes coordinate representation,
-  coordinate/identity mapping, or details of Hex/Location composition must use
-  the reviewed P8-A technical contract once available; §69 intentionally leaves
-  those implementation details open.
-- Code that constructs or registers Phase 9 geography in the new spatial model
-  must wait for promotion of the relevant P8-A spatial capability. A candidate
-  P8-A branch or an unreviewed technical sketch is not a promoted capability.
-- If accepted Phase 9 scope includes passages, local topology, or other P8
-  behavior, that part must additionally wait for the relevant P8 contract and
-  promoted capability. This is consumer-specific; P8-E civil travel is not a
-  blanket prerequisite for initial geography.
-- Non-spatial entry architecture, scope questions, and reconstruction-sensitive
-  state inventory may continue alongside P8, provided they do not silently
-  assume missing P8 types or semantics.
+- Spatial-specific design and implementation can use the current canonical
+  P8-A contract and authority; those dependencies are satisfied at the cited
+  P8 state.
+- If accepted Phase 9 scope includes initial passage facts, use canonical P8-B
+  passage/barrier/crossing-condition authority. If it establishes Person
+  positions or City/Site bindings, use canonical P8-C stores/composition and
+  preserve Person-level `At`/`InTransit` separately from materialized NPC
+  location fields.
+- If accepted scope includes route plans or route Knowledge, that component
+  must wait for P8-D implementation and promotion. P8-E civil travel is not a
+  blanket prerequisite for initial geography, and P8-D/E remain future
+  dependencies at the cited state.
+- Non-spatial entry architecture and reconstruction-sensitive inventory can
+  proceed independently, but must keep the initial profile's chosen P8 scope
+  explicit.
 
 ## 8. Unresolved architecture and product decisions
 
