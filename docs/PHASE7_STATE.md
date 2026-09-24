@@ -1,5 +1,51 @@
 # Phase 7 — Current Canonical State
 
+## P7-D7 — Atomic Battle Outcome Application (validated feature candidate)
+
+- Status: **VALIDATED FEATURE CANDIDATE — NOT PROMOTED**. Checkpoint D7 is
+  implemented and validated on `codex/phase7/AtomicBattleOutcomeApplicationFinal`.
+  The candidate is based directly on canonical
+  `127e84cdb75fc9c9d45b5e49546ec7c8fca61f46`; it does not move or modify
+  `codex/phase7/canonical`. Implementation commit:
+  `1e70d42f2b13e85069c15784c2ae27ff1d26d814`. The final candidate is the
+  branch tip after this state-document update and is reported with push
+  verification.
+- D7 exposes an explicit runtime-owned Battle outcome application service.
+  It checks the runtime authoritative-mutation guard before planning, rejects
+  reentrant/competing D7 application, and only applies a fresh supported plan
+  to an Active Battle. Already-resolved Battles are idempotent and do not
+  re-run policy/planning or emit another event. Optional expected-plan
+  fingerprints are stale-guarded against current authority.
+- Application narrowly coordinates current D5/D6B2 planning, exact D6A
+  contingent cohort consequences and D6B1 aggregate-demography transitions,
+  persistent terminal outcome/provenance, and the Active-to-Resolved lifecycle.
+  All authorities are prepared and freshness-checked before writes; failures
+  restore captured state and revisions. An unrecoverable rollback failure
+  faults the shared runtime mutation guard. Post-commit `BattleResolved`
+  recording is downstream: recorder failure is reported without rolling back
+  committed world truth.
+- Diagnostics include terminal outcomes and stable D5/D6B2 provenance. D7
+  does not add Person casualties, movement, Conflict/War termination or goals,
+  automatic daily resolution, persistence/replay/networking, or a generic
+  transaction framework. `SimulationRuntime.AdvanceDay` remains unchanged.
+- Focused validation: `BattleOutcomeApplicationTests` `20/20`; persistent
+  Conflict/War/Battle `8/8`; D6B2 `21/21`; D6B1 `23/23`; D6A `11/11`;
+  ArmedForce `30/30`; D7G `18/18`; SimulationRuntime orchestration `10/10`;
+  D5 `16/16`; D4 `10/10`; D3 `11/11`; aggregate demography `23/23`;
+  world-state diagnostics `54/54`; Battle spatial `7/7`.
+- Final required gates on the candidate: ALL EditMode `1646/1646`; official
+  complete EditMode `Smoke` `5/5`; `SimulationRuntimeLongRunTests` `7/7`;
+  `git diff --check` clean. Independent read-only review found no blocker,
+  including on exact mixed-consequence cohort assertions and rollback after a
+  Battle write throws. Long-run was run as an additional gate. No changes to
+  `AdvanceDay` were made.
+
+This candidate has not been externally approved or promoted. Do not interpret
+historical statements below that D7 is “next” or “NOT STARTED” as current: they
+describe their respective earlier canonical checkpoints. The current canonical
+tip remains the P7-D7G-approved baseline above until a separately authorized
+promotion.
+
 ## Checkpoint D6A — Military manpower foundation (approved and promoted)
 
 - Common implementation baseline:
