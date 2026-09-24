@@ -332,7 +332,17 @@ public enum SpatialAuthorityFailureCode
     CrossingBoundaryNotAdjacent = 24,
     CrossingAnchorNotInBoundary = 25,
     CrossingNotRegistered = 26,
-    BoundaryNotAdjacent = 27
+    BoundaryNotAdjacent = 27,
+    InvalidPassageOption = 28,
+    InvalidPassageCondition = 29,
+    DuplicatePassageOption = 30,
+    PassageOptionNotRegistered = 31,
+    PassageOptionBoundaryMismatch = 32,
+    InvalidBarrier = 33,
+    DuplicateBarrierId = 34,
+    BarrierNotRegistered = 35,
+    InvalidTraversalContext = 36,
+    ContextualEffortOverflow = 37
 }
 
 public sealed class SpatialAuthorityFailure : IEquatable<SpatialAuthorityFailure>
@@ -417,10 +427,16 @@ public sealed class SpatialAuthorityStore : IAuthoritativeMutationGuardBindable
     private string coordinateCanonicalOrder;
     private long revision;
 
+    public SpatialAuthorityStore()
+    {
+        PassageAuthority = new SpatialPassageAuthority(this);
+    }
+
     public long Revision => revision;
     public int HexCount => hexesById.Count;
     public int LocationCount => locationsById.Count;
     public int CrossingCount => crossingsById.Count;
+    public SpatialPassageAuthority PassageAuthority { get; private set; }
     public int LocalTopologyBindingCount => topologyBindingsByKey.Count;
     public bool HasGeography => scaleContext != null;
     public SpatialWorldScaleContext ScaleContext => scaleContext;
@@ -687,11 +703,17 @@ public sealed class SpatialAuthorityStore : IAuthoritativeMutationGuardBindable
             return false;
         }
 
+        if (!PassageAuthority.ValidateCrossingBarrierReferences(crossing.OvercomesBarrierIds, crossing.Boundary, out failure)) return false;
+
         if (CanAdvanceRevision(out failure) == false) return false;
         crossingsById.Add(crossing.Id.Value, new CrossingRecord(
             new CrossingId(crossing.Id.Value),
             registeredBoundary,
-            new HexId(crossing.AnchorHexId.Value)));
+            new HexId(crossing.AnchorHexId.Value),
+            crossing.ContentIdentity,
+            crossing.ContentRevision,
+            crossing.OvercomesBarrierIds,
+            crossing.EffortMultiplier));
         revision++;
         return true;
     }
@@ -924,7 +946,11 @@ public sealed class SpatialAuthorityStore : IAuthoritativeMutationGuardBindable
             copy.crossingsById.Add(crossing.Id.Value, new CrossingRecord(
                 new CrossingId(crossing.Id.Value),
                 new HexBoundaryKey(new HexId(crossing.Boundary.FirstHexId.Value), new HexId(crossing.Boundary.SecondHexId.Value)),
-                new HexId(crossing.AnchorHexId.Value)));
+                new HexId(crossing.AnchorHexId.Value),
+                crossing.ContentIdentity,
+                crossing.ContentRevision,
+                crossing.OvercomesBarrierIds,
+                crossing.EffortMultiplier));
         }
 
         foreach (SpatialLocalTopologyBinding binding in LocalTopologyBindings)
@@ -941,7 +967,33 @@ public sealed class SpatialAuthorityStore : IAuthoritativeMutationGuardBindable
         copy.coordinateConventionVersion = coordinateConventionVersion;
         copy.coordinateCanonicalOrder = coordinateCanonicalOrder;
         copy.revision = revision;
+        copy.PassageAuthority = PassageAuthority.CloneFor(copy);
         return copy;
+    }
+
+    internal bool TryCommitPassageMutation(Action applyMutation, out SpatialAuthorityFailure failure)
+    {
+        failure = SpatialAuthorityFailure.None;
+        if (!mutationGuardBinding.CanMutate)
+        {
+            return Fail(SpatialAuthorityFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.", out failure);
+        }
+        if (applyMutation == null)
+        {
+            return Fail(SpatialAuthorityFailureCode.InvalidPassageOption, "Passage mutation has no validated operation.", out failure);
+        }
+        if (CanAdvanceRevision(out failure) == false) return false;
+        applyMutation();
+        revision++;
+        return true;
+    }
+
+    internal bool TryCheckPassageMutationGuard(out SpatialAuthorityFailure failure)
+    {
+        if (!mutationGuardBinding.CanMutate)
+            return Fail(SpatialAuthorityFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.", out failure);
+        failure = SpatialAuthorityFailure.None;
+        return true;
     }
 
     public SpatialAuthorityInvariantReport ValidateInvariants()
@@ -1072,6 +1124,16 @@ public sealed class SpatialAuthorityStore : IAuthoritativeMutationGuardBindable
             {
                 violations.Add("Local topology spatial binding is invalid for '" + entry.Key + "'.");
             }
+        }
+
+        if (PassageAuthority == null)
+        {
+            violations.Add("Spatial authority passage child is missing.");
+        }
+        else
+        {
+            SpatialAuthorityInvariantReport passageReport = PassageAuthority.ValidateInvariants();
+            violations.AddRange(passageReport.Violations);
         }
 
         return new SpatialAuthorityInvariantReport(violations);
