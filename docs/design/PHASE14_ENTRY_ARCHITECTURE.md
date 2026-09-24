@@ -14,7 +14,7 @@ Relevant canonical rules in `docs/SIMULATION_ARCHITECTURE.md`:
 - §§42–43: ownership, jurisdiction, control, and allegiance differ; future titleholders may include Persons, institutions, organizations, or polities, but a universal holder model and co-ownership are not already decided.
 - §45: significant money flows must identify payer, receiver, limiting balance, and any deliberate source or sink.
 - §§69 and 91–92: spatial identities/anchors and replay/fork reconstruction are authoritative concerns; diagnostics and history are not primary truth, and the project is not event-sourced by default.
-- §§821–956: economy, merchants, merchant autonomy, effective commercial configuration, and merchant knowledge are separate concerns. Existing autonomy/configuration rules do not imply a universal trade network.
+- §13: economy, merchants, merchant autonomy, effective commercial configuration, and merchant knowledge are separate concerns. Existing autonomy/configuration rules do not imply a universal trade network.
 
 `docs/EXECUTION_MODEL.md` separates entry architecture from technical design and implementation. A proposed plan may choose interfaces and migration only after semantic and product questions are closed. No Phase 14 State or Phase 14 checkpoint contract exists in this base. The docs inventory has no separate ADR directory; the cited architecture, Brief, Roadmap, Phase 7 State, and Phase 8 Brief are the relevant current sources.
 
