@@ -140,8 +140,66 @@ public static class WorldStateSnapshotFormatter
                         .Append(Value(crossing.SecondHexId))
                         .Append(" anchor ")
                         .Append(Value(crossing.AnchorHexId))
+                        .Append(" content ")
+                        .Append(Value(crossing.ContentIdentity))
+                        .Append('@')
+                        .Append(Value(crossing.ContentRevision))
+                        .Append(" condition ")
+                        .Append(WorldStateCanonicalWriter.EnumValue(crossing.Condition))
+                        .Append(" effort ")
+                        .Append(WorldStateCanonicalWriter.DecimalValue(crossing.EffortMultiplier))
+                        .Append(" overcomes ")
+                        .Append(WorldStateCanonicalWriter.StringListValue(crossing.OvercomesBarrierIds))
                         .Append('\n');
                 }
+            }
+
+            foreach (WorldStatePassageOptionSnapshot option in snapshot.Spatial.PassageOptions)
+            {
+                if (option == null) continue;
+                output.Append("PASSAGE OPTION ").Append(Value(option.StableKey))
+                    .Append(" boundary ").Append(Value(option.FirstHexId)).Append('|').Append(Value(option.SecondHexId))
+                    .Append(" condition ").Append(WorldStateCanonicalWriter.EnumValue(option.Condition))
+                    .Append(" content ").Append(Value(option.ContentIdentity)).Append('@').Append(Value(option.ContentRevision))
+                    .Append(" effort ").Append(WorldStateCanonicalWriter.DecimalValue(option.EffortMultiplier))
+                    .Append(" overcomes ").Append(WorldStateCanonicalWriter.StringListValue(option.OvercomesBarrierIds)).Append('\n');
+            }
+
+            foreach (WorldStateBarrierSnapshot barrier in snapshot.Spatial.Barriers)
+            {
+                if (barrier == null) continue;
+                output.Append("BARRIER ").Append(Value(barrier.BarrierId))
+                    .Append(" content ").Append(Value(barrier.ContentIdentity)).Append('@').Append(Value(barrier.ContentRevision))
+                    .Append(" condition ").Append(WorldStateCanonicalWriter.EnumValue(barrier.Condition)).Append(" boundaries ");
+                List<string> boundaries = new List<string>();
+                foreach (WorldStateHexBoundarySnapshot boundary in barrier.Boundaries)
+                    if (boundary != null) boundaries.Add(boundary.StableKey);
+                output.Append(WorldStateCanonicalWriter.StringListValue(boundaries)).Append('\n');
+            }
+
+            foreach (WorldStatePersonSpatialPositionSnapshot position in snapshot.Spatial.PersonSpatialPositions)
+            {
+                if (position == null) continue;
+                output.Append("PERSON POSITION ").Append(Value(position.PersonId)).Append(' ');
+                if (position.Transit != null)
+                {
+                    output.Append("TRANSIT ").Append(Value(position.Transit.OptionStableKey))
+                        .Append(" boundary ").Append(Value(position.Transit.FirstHexId)).Append('|').Append(Value(position.Transit.SecondHexId))
+                        .Append(" direction ").Append(Value(position.Transit.FromHexId)).Append('>').Append(Value(position.Transit.ToHexId))
+                        .Append(" progress ").Append(WorldStateCanonicalWriter.IntValue(position.Transit.ProgressTicks));
+                }
+                else if (position.Position != null)
+                {
+                    output.Append(position.Position.StableKey);
+                }
+                output.Append('\n');
+            }
+
+            foreach (WorldStateSpatialAnchorBindingSnapshot binding in snapshot.Spatial.LegacySpatialAnchorBindings)
+            {
+                if (binding == null) continue;
+                output.Append("LEGACY SPATIAL ANCHOR ").Append(WorldStateCanonicalWriter.EnumValue(binding.OwnerKind))
+                    .Append(':').Append(Value(binding.OwnerId)).Append(" -> ").Append(Value(binding.LocationId)).Append('\n');
             }
         }
 

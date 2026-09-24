@@ -207,6 +207,82 @@ public sealed class PersonSpatialPresenceTests
         Assert.That(clone.ValidateInvariants().IsValid, Is.True);
     }
 
+    [Test]
+    public void SnapshotCanonicalAndDiffExposePersonTransitAndLegacyAnchorFacts()
+    {
+        SpatialAuthorityStore spatial = CreateGeography();
+        HexBoundaryKey boundary = new HexBoundaryKey(new HexId("hex.a"), new HexId("hex.b"));
+        TraversalOptionRef option = TraversalOptionRef.ForConnection(new ConnectionId("connection.road"));
+        Assert.That(spatial.PassageAuthority.TryRegisterConnection(
+            new PassageOptionRecord(option, boundary, "content.road", "road-v1"), PassageCondition.Available, out SpatialAuthorityFailure passageFailure),
+            Is.True, passageFailure.ToString());
+        PersonStore people = new PersonStore();
+        PersonId personId = new PersonId("person.transit-snapshot");
+        Assert.That(people.TryRegister(new PersonRuntime(personId), out _), Is.True);
+        PersonSpatialPositionStore positions = new PersonSpatialPositionStore(people, spatial, new AuthorityTraversalResolver(spatial));
+        Assert.That(positions.TrySetAt(personId, StablePositionReference.ForHex(new HexId("hex.a")), out _), Is.True);
+        Assert.That(positions.TryBeginTransit(personId, option, boundary, new HexId("hex.a"), new HexId("hex.b"), out _), Is.True);
+        Assert.That(positions.TryAdvanceTransit(personId, 125, out _), Is.True);
+
+        LegacySpatialAnchorBindingStore anchors = new LegacySpatialAnchorBindingStore(spatial);
+        Assert.That(anchors.TryBindCity("city.north", new LocationId("location.a"), out _), Is.True);
+        SimulationRuntime beforeRuntime = CreateRuntime(spatial, people, positions, anchors);
+        Assert.That(beforeRuntime.LegacySpatialAnchorBindingStore.TryBindCity(
+            "city.orphan", new LocationId("location.b"), out SpatialAnchorBindingFailure orphanFailure), Is.False);
+        Assert.That(orphanFailure.Code, Is.EqualTo(SpatialAnchorBindingFailureCode.OwnerNotRegistered));
+        Assert.That(beforeRuntime.ValidateSpatialInvariants().IsValid, Is.True,
+            string.Join("; ", beforeRuntime.ValidateSpatialInvariants().Violations));
+        WorldStateSnapshot before = WorldStateSnapshotBuilder.BuildSnapshot(new WorldStateSnapshotContext(
+            cities: beforeRuntime.Cities,
+            spatialAuthorityStore: beforeRuntime.SpatialAuthorityStore,
+            personStore: beforeRuntime.PersonStore,
+            personSpatialPositionStore: beforeRuntime.PersonSpatialPositionStore,
+            legacySpatialAnchorBindingStore: beforeRuntime.LegacySpatialAnchorBindingStore));
+        Assert.That(before.Spatial.PersonSpatialPositions.Single().Transit.ProgressTicks, Is.EqualTo(125));
+        Assert.That(WorldStateCanonicalWriter.Write(before), Does.Contain("PERSON_SPATIAL_TRANSIT"));
+        Assert.That(WorldStateCanonicalWriter.Write(before), Does.Contain("LEGACY_SPATIAL_ANCHOR_BINDING"));
+        Assert.That(WorldStateInvariantValidator.Validate(before).IsValid, Is.True,
+            string.Join("; ", WorldStateInvariantValidator.Validate(before).Issues.Select(issue => issue.Code + ":" + issue.Message)));
+
+        PersonStore afterPeople = new PersonStore();
+        Assert.That(afterPeople.TryRegister(new PersonRuntime(personId), out _), Is.True);
+        PersonSpatialPositionStore afterPositions = new PersonSpatialPositionStore(afterPeople, spatial, new AuthorityTraversalResolver(spatial));
+        Assert.That(afterPositions.TrySetAt(personId, StablePositionReference.ForHex(new HexId("hex.a")), out _), Is.True);
+        Assert.That(afterPositions.TryBeginTransit(personId, option, boundary, new HexId("hex.a"), new HexId("hex.b"), out _), Is.True);
+        Assert.That(afterPositions.TryAdvanceTransit(personId, 250, out _), Is.True);
+        LegacySpatialAnchorBindingStore movedAnchors = new LegacySpatialAnchorBindingStore(spatial);
+        Assert.That(movedAnchors.TryBindCity("city.north", new LocationId("location.b"), out _), Is.True);
+        SimulationRuntime afterRuntime = CreateRuntime(spatial, afterPeople, afterPositions, movedAnchors);
+        Assert.That(afterRuntime.ValidateSpatialInvariants().IsValid, Is.True,
+            string.Join("; ", afterRuntime.ValidateSpatialInvariants().Violations));
+        WorldStateSnapshot after = WorldStateSnapshotBuilder.BuildSnapshot(new WorldStateSnapshotContext(
+            cities: afterRuntime.Cities,
+            spatialAuthorityStore: afterRuntime.SpatialAuthorityStore,
+            personStore: afterRuntime.PersonStore,
+            personSpatialPositionStore: afterRuntime.PersonSpatialPositionStore,
+            legacySpatialAnchorBindingStore: afterRuntime.LegacySpatialAnchorBindingStore));
+        WorldStateDiff diff = WorldStateDiff.Compare(before, after);
+        Assert.That(diff.Differences, Has.Some.Matches<WorldStateDifference>(difference =>
+            difference.Section == "PersonSpatialPosition" && difference.Field == "Transit.ProgressTicks"));
+        Assert.That(diff.Differences, Has.Some.Matches<WorldStateDifference>(difference =>
+            difference.Section == "LegacySpatialAnchorBinding" && difference.Field == "LocationId"));
+        Assert.That(WorldStateCanonicalWriter.Write(before), Is.Not.EqualTo(WorldStateCanonicalWriter.Write(after)));
+    }
+
+    private static SimulationRuntime CreateRuntime(
+        SpatialAuthorityStore spatial,
+        PersonStore people,
+        PersonSpatialPositionStore positions,
+        LegacySpatialAnchorBindingStore anchors)
+    {
+        CityRuntime city = new CityRuntime("city.north", null, new SpatialLocationRuntime("city.location"));
+        return new SimulationRuntime(new SimulationTime(0L), new[] { city }, System.Array.Empty<NpcRuntime>(),
+            personStore: people,
+            spatialAuthorityStore: spatial,
+            legacySpatialAnchorBindingStore: anchors,
+            personSpatialPositionStore: positions);
+    }
+
     private static PersonSpatialPositionStore Clone(PersonSpatialPositionStore source, PersonStore people, SpatialAuthorityStore spatial, ISpatialTraversalOptionResolver resolver)
     {
         MethodInfo cloneMethod = typeof(PersonSpatialPositionStore).GetMethod("Clone", BindingFlags.Instance | BindingFlags.NonPublic);
@@ -230,7 +306,7 @@ public sealed class PersonSpatialPresenceTests
                 new LocationRecord(new LocationId("location.b"), new HexId("hex.b"))
             });
         Assert.That(spatial.TryComposeGeography(geography, out SpatialAuthorityFailure composeFailure), Is.True, composeFailure.ToString());
-        Assert.That(spatial.TryRegisterCrossing(new CrossingRecord(new CrossingId("crossing.bridge"), new HexBoundaryKey(new HexId("hex.a"), new HexId("hex.b")), new HexId("hex.a")), out SpatialAuthorityFailure crossingFailure), Is.True, crossingFailure.ToString());
+        Assert.That(spatial.TryRegisterCrossing(new CrossingRecord(new CrossingId("crossing.bridge"), new HexBoundaryKey(new HexId("hex.a"), new HexId("hex.b")), new HexId("hex.a"), "content.bridge", "bridge-v1", null), out SpatialAuthorityFailure crossingFailure), Is.True, crossingFailure.ToString());
         return spatial;
     }
 
@@ -250,5 +326,22 @@ public sealed class PersonSpatialPresenceTests
         }
         private static string Key(TraversalOptionRef option, HexBoundaryKey boundary) => option.Kind + ":"
             + (option.ConnectionId?.Value ?? option.CrossingId?.Value ?? option.RuleIdentity + "@" + option.RuleVersion) + ":" + boundary;
+    }
+
+    private sealed class AuthorityTraversalResolver : ISpatialTraversalOptionResolver
+    {
+        private readonly SpatialAuthorityStore authority;
+        public AuthorityTraversalResolver(SpatialAuthorityStore authority) { this.authority = authority; }
+        public bool TryResolveTraversalOption(TraversalOptionRef option, HexBoundaryKey boundary, out string failure)
+        {
+            if (authority.PassageAuthority.TryGetTraversalOptions(boundary, out IReadOnlyList<TraversalOptionRef> options, out SpatialAuthorityFailure spatialFailure)
+                && options.Contains(option))
+            {
+                failure = string.Empty;
+                return true;
+            }
+            failure = spatialFailure?.Message ?? "Traversal option is not registered for the requested boundary.";
+            return false;
+        }
     }
 }

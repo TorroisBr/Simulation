@@ -207,7 +207,7 @@ public sealed class SpatialGeographyTests
             new HexId("hex.fixture.center"),
             new HexId("hex.fixture.right-upper"));
         Assert.That(authority.TryRegisterCrossing(
-            new CrossingRecord(new CrossingId("crossing.fixture.bridge"), boundary, new HexId("hex.fixture.center")),
+            new CrossingRecord(new CrossingId("crossing.fixture.bridge"), boundary, new HexId("hex.fixture.center"), "content.bridge", "bridge-v1", null),
             out SpatialAuthorityFailure failure), Is.True, failure.ToString());
 
         WorldStateSnapshot built = Snapshot(authority);
@@ -235,6 +235,90 @@ public sealed class SpatialGeographyTests
     }
 
     [Test]
+    public void PassageOptionsBarriersAndCrossingConditionsAreProjectedAndDiffedIndependentlyOfRevision()
+    {
+        SpatialAuthorityStore authority = CreateAuthoredFixture();
+        HexBoundaryKey boundary = new HexBoundaryKey(new HexId("hex.fixture.center"), new HexId("hex.fixture.right-upper"));
+        BarrierId barrierId = new BarrierId("barrier.fixture.river");
+        Assert.That(authority.PassageAuthority.TryRegisterBarrier(
+            new BarrierRecord(barrierId, "content.river", "river-v1", new[] { boundary }),
+            BarrierCondition.Active, out SpatialAuthorityFailure failure), Is.True, failure.ToString());
+        Assert.That(authority.TryRegisterCrossing(
+            new CrossingRecord(new CrossingId("crossing.fixture.bridge"), boundary, new HexId("hex.fixture.center"),
+                "content.bridge", "bridge-v1", new[] { barrierId }, 0.75m), out failure), Is.True, failure.ToString());
+        Assert.That(authority.PassageAuthority.TryRegisterConnection(
+            new PassageOptionRecord(TraversalOptionRef.ForConnection(new ConnectionId("connection.fixture.road")),
+                boundary, "content.road", "road-v1"), PassageCondition.Available, out failure), Is.True, failure.ToString());
+
+        WorldStateSnapshot before = Snapshot(authority);
+        Assert.That(before.Spatial.PassageOptions, Has.Count.EqualTo(2));
+        Assert.That(before.Spatial.Barriers, Has.Count.EqualTo(1));
+        Assert.That(before.Spatial.Crossings.Single().OvercomesBarrierIds, Is.EqualTo(new[] { barrierId.Value }));
+        string canonicalBefore = WorldStateCanonicalWriter.Write(before);
+        Assert.That(canonicalBefore, Does.Contain("SPATIAL_PASSAGE_OPTION"));
+        Assert.That(canonicalBefore, Does.Contain("SPATIAL_BARRIER_BOUNDARY"));
+        Assert.That(canonicalBefore, Does.Not.Contain("PassageEvaluation"));
+        Assert.That(WorldStateSnapshotFormatter.Format(before), Does.Contain("BARRIER barrier.fixture.river"));
+
+        Assert.That(authority.PassageAuthority.TryChangePassageCondition(
+            boundary, TraversalOptionRef.ForCrossing(new CrossingId("crossing.fixture.bridge")),
+            PassageCondition.Impaired, out failure), Is.True, failure.ToString());
+        WorldStateSnapshot after = Snapshot(authority);
+        Assert.That(after.Spatial.AuthorityRevision, Is.Not.EqualTo(before.Spatial.AuthorityRevision));
+        Assert.That(WorldStateDiff.Compare(before, after).Differences,
+            Has.Some.Matches<WorldStateDifference>(difference => difference.Section == "SpatialCrossing"
+                && difference.Field == "Condition" && difference.AfterValue == "Impaired"));
+
+        WorldStateSpatialSnapshot sameRevisionChangedFacts = CopySpatialWithPassageFacts(after.Spatial, before.Spatial.AuthorityRevision);
+        WorldStateSnapshot sameRevisionAfter = new WorldStateSnapshot(0L, spatial: sameRevisionChangedFacts);
+        Assert.That(WorldStateDiff.Compare(before, sameRevisionAfter).IsEmpty, Is.False,
+            "Registered condition facts remain diff-visible even when a caller supplies the same authority revision.");
+        Assert.That(WorldStateCanonicalWriter.Write(sameRevisionAfter), Is.Not.EqualTo(canonicalBefore));
+    }
+
+    [Test]
+    public void DelimiterBearingBoundaryIdsRemainDistinctInPassageKeysValidationCanonicalAndDiff()
+    {
+        SpatialAuthorityStore authority = new SpatialAuthorityStore();
+        SpatialGeographyDefinition geography = new SpatialGeographyDefinition(
+            CreateFixtureScale(variant: false),
+            new[]
+            {
+                GeographicHex("a|b", 0, 0, "terrain.fixture.plains"),
+                GeographicHex("c", 1, 0, "terrain.fixture.plains"),
+                GeographicHex("a", 10, 0, "terrain.fixture.plains"),
+                GeographicHex("b|c", 11, 0, "terrain.fixture.plains")
+            },
+            Array.Empty<LocationRecord>());
+        Assert.That(authority.TryComposeGeography(geography, out SpatialAuthorityFailure failure), Is.True, failure.ToString());
+        HexBoundaryKey firstBoundary = new HexBoundaryKey(new HexId("a|b"), new HexId("c"));
+        HexBoundaryKey secondBoundary = new HexBoundaryKey(new HexId("a"), new HexId("b|c"));
+        TraversalOptionRef option = TraversalOptionRef.ForConnection(new ConnectionId("connection.shared"));
+        Assert.That(authority.PassageAuthority.TryRegisterConnection(
+            new PassageOptionRecord(option, firstBoundary, "content.road", "road-v1"), PassageCondition.Available, out failure), Is.True, failure.ToString());
+        Assert.That(authority.PassageAuthority.TryRegisterConnection(
+            new PassageOptionRecord(option, secondBoundary, "content.road", "road-v1"), PassageCondition.Available, out failure), Is.True, failure.ToString());
+
+        WorldStateSnapshot before = Snapshot(authority);
+        WorldStateInvariantReport beforeReport = WorldStateInvariantValidator.Validate(before);
+        Assert.That(beforeReport.IsValid, Is.True,
+            string.Join("; ", beforeReport.Issues.Select(issue => issue.Code + ":" + issue.Message)));
+        Assert.That(before.Spatial.PassageOptions.Select(value => value.StableKey).Distinct().Count(), Is.EqualTo(2));
+        Assert.That(WorldStateCanonicalWriter.Write(before).Split(new[] { "SPATIAL_PASSAGE_OPTION|" }, StringSplitOptions.None).Length - 1, Is.EqualTo(2));
+
+        Assert.That(authority.PassageAuthority.TryChangePassageCondition(
+            secondBoundary, option, PassageCondition.Impaired, out failure), Is.True, failure.ToString());
+        WorldStateSnapshot after = Snapshot(authority);
+        WorldStateDiff diff = WorldStateDiff.Compare(before, after);
+        WorldStateDifference[] optionChanges = diff.Differences
+            .Where(value => value.Section == "SpatialPassageOption" && value.Field == "Condition")
+            .ToArray();
+        Assert.That(optionChanges, Has.Length.EqualTo(1));
+        Assert.That(optionChanges[0].Identity, Is.EqualTo(after.Spatial.PassageOptions.Single(value => value.Condition == PassageCondition.Impaired).StableKey));
+        Assert.That(WorldStateInvariantValidator.Validate(after).IsValid, Is.True);
+    }
+
+    [Test]
     public void ArmedForceCrossingReferencesRequireARegisteredSpatialCrossing()
     {
         SpatialAuthorityStore authority = CreateAuthoredFixture();
@@ -242,7 +326,7 @@ public sealed class SpatialGeographyTests
             new CrossingRecord(
                 new CrossingId("crossing.fixture.bridge"),
                 new HexBoundaryKey(new HexId("hex.fixture.center"), new HexId("hex.fixture.right-upper")),
-                new HexId("hex.fixture.center")),
+                new HexId("hex.fixture.center"), "content.bridge", "bridge-v1", null),
             out SpatialAuthorityFailure failure), Is.True, failure.ToString());
         WorldStateSpatialSnapshot spatial = Snapshot(authority).Spatial;
         WorldStateArmedForceSnapshot force = new WorldStateArmedForceSnapshot(
@@ -437,6 +521,33 @@ public sealed class SpatialGeographyTests
                 coordinateConventionVersion: source.CoordinateConventionVersion,
                 coordinateCanonicalOrder: source.CoordinateCanonicalOrder,
                 scaleContext: source.ScaleContext,
-                crossings: crossings));
+                crossings: crossings,
+                passageOptions: source.PassageOptions,
+                barriers: source.Barriers,
+                personSpatialPositions: source.PersonSpatialPositions,
+                legacySpatialAnchorBindings: source.LegacySpatialAnchorBindings,
+                personSpatialPositionRevision: source.PersonSpatialPositionRevision,
+                legacySpatialAnchorBindingRevision: source.LegacySpatialAnchorBindingRevision));
+    }
+
+    private static WorldStateSpatialSnapshot CopySpatialWithPassageFacts(WorldStateSpatialSnapshot source, long? authorityRevision)
+    {
+        return new WorldStateSpatialSnapshot(
+            locations: source.Locations,
+            routes: source.Routes,
+            hexes: source.Hexes,
+            anchoredLocations: source.AnchoredLocations,
+            authorityRevision: authorityRevision,
+            topologyBindings: source.TopologyBindings,
+            coordinateConventionVersion: source.CoordinateConventionVersion,
+            coordinateCanonicalOrder: source.CoordinateCanonicalOrder,
+            scaleContext: source.ScaleContext,
+            crossings: source.Crossings,
+            passageOptions: source.PassageOptions,
+            barriers: source.Barriers,
+            personSpatialPositions: source.PersonSpatialPositions,
+            legacySpatialAnchorBindings: source.LegacySpatialAnchorBindings,
+            personSpatialPositionRevision: source.PersonSpatialPositionRevision,
+            legacySpatialAnchorBindingRevision: source.LegacySpatialAnchorBindingRevision);
     }
 }

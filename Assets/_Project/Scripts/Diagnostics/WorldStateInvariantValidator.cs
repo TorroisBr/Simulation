@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 
 public enum WorldStateInvariantSeverity
 {
@@ -308,7 +309,7 @@ public static class WorldStateInvariantValidator
         }
 
         ValidateParentages(snapshot.Parentages, personIds, issues);
-        ValidateSpatialAuthority(snapshot.Spatial, issues);
+        ValidateSpatialAuthority(snapshot, issues);
         ValidateArmedForces(snapshot, personIds, issues);
         ValidateContingentManpower(snapshot, issues);
         ValidateArmedForcePositions(snapshot, issues);
@@ -578,9 +579,10 @@ public static class WorldStateInvariantValidator
     }
 
     private static void ValidateSpatialAuthority(
-        WorldStateSpatialSnapshot spatial,
+        WorldStateSnapshot snapshot,
         List<WorldStateInvariantIssue> issues)
     {
+        WorldStateSpatialSnapshot spatial = snapshot?.Spatial;
         if (spatial == null || spatial.AuthorityRevision.HasValue == false)
         {
             return;
@@ -788,7 +790,215 @@ public static class WorldStateInvariantValidator
                     AddError(issues, "SpatialCrossingAnchorOutsideBoundary", crossing.CrossingId, "Spatial Crossing anchor Hex must be one of its boundary endpoints.");
                 }
             }
+
+            if (string.IsNullOrWhiteSpace(crossing.ContentIdentity) || string.IsNullOrWhiteSpace(crossing.ContentRevision))
+                AddError(issues, "SpatialCrossingContentMissing", crossing.CrossingId, "Crossing requires stable content identity and revision.");
+            if (crossing.EffortMultiplier <= 0m || !Enum.IsDefined(typeof(PassageCondition), crossing.Condition))
+                AddError(issues, "SpatialCrossingConditionInvalid", crossing.CrossingId, "Crossing effort or condition is invalid.");
+            foreach (string barrierId in crossing.OvercomesBarrierIds ?? Array.Empty<string>())
+                if (string.IsNullOrWhiteSpace(barrierId)) AddError(issues, "SpatialCrossingBarrierReferenceInvalid", crossing.CrossingId, "Crossing contains an empty barrier relation.");
         }
+
+        ValidateSpatialPassagesAndPresence(snapshot, hexesById, locationIds, crossingIds, issues);
+    }
+
+    private static void ValidateSpatialPassagesAndPresence(
+        WorldStateSnapshot snapshot,
+        Dictionary<string, WorldStateHexSnapshot> hexesById,
+        HashSet<string> locationIds,
+        HashSet<string> crossingIds,
+        List<WorldStateInvariantIssue> issues)
+    {
+        WorldStateSpatialSnapshot spatial = snapshot.Spatial;
+        Dictionary<string, WorldStateBarrierSnapshot> barriers = new Dictionary<string, WorldStateBarrierSnapshot>(StringComparer.Ordinal);
+        foreach (WorldStateBarrierSnapshot barrier in spatial.Barriers ?? Array.Empty<WorldStateBarrierSnapshot>())
+        {
+            if (barrier == null || string.IsNullOrWhiteSpace(barrier.BarrierId))
+            {
+                AddError(issues, "SpatialBarrierIdMissing", "barrier", "Barrier has no stable identity.");
+                continue;
+            }
+            if (barriers.ContainsKey(barrier.BarrierId)) AddError(issues, "DuplicateSpatialBarrierId", barrier.BarrierId, "Barrier identity appears more than once.");
+            else barriers.Add(barrier.BarrierId, barrier);
+            if (string.IsNullOrWhiteSpace(barrier.ContentIdentity) || string.IsNullOrWhiteSpace(barrier.ContentRevision)
+                || !Enum.IsDefined(typeof(BarrierCondition), barrier.Condition))
+                AddError(issues, "SpatialBarrierContentOrConditionInvalid", barrier.BarrierId, "Barrier content identity, revision, or condition is invalid.");
+            foreach (WorldStateHexBoundarySnapshot boundary in barrier.Boundaries ?? Array.Empty<WorldStateHexBoundarySnapshot>())
+                if (!ValidBoundary(boundary, hexesById)) AddError(issues, "SpatialBarrierBoundaryInvalid", barrier.BarrierId, "Barrier boundary must name two registered adjacent Hexes in canonical order.");
+        }
+
+        Dictionary<string, WorldStatePassageOptionSnapshot> options = new Dictionary<string, WorldStatePassageOptionSnapshot>(StringComparer.Ordinal);
+        foreach (WorldStatePassageOptionSnapshot option in spatial.PassageOptions ?? Array.Empty<WorldStatePassageOptionSnapshot>())
+        {
+            if (option == null || string.IsNullOrWhiteSpace(option.StableKey))
+            {
+                AddError(issues, "SpatialPassageOptionIdentityMissing", "option", "Passage option has no stable typed identity.");
+                continue;
+            }
+            if (options.ContainsKey(option.StableKey)) AddError(issues, "DuplicateSpatialPassageOption", option.StableKey, "Passage option identity appears more than once.");
+            else options.Add(option.StableKey, option);
+            if (!Enum.IsDefined(typeof(TraversalOptionKind), option.Kind)
+                || string.IsNullOrWhiteSpace(option.ContentIdentity) || string.IsNullOrWhiteSpace(option.ContentRevision)
+                || option.EffortMultiplier <= 0m || !Enum.IsDefined(typeof(PassageCondition), option.Condition)
+                || !ValidBoundary(new WorldStateHexBoundarySnapshot(option.FirstHexId, option.SecondHexId), hexesById))
+                AddError(issues, "SpatialPassageOptionInvalid", option.StableKey, "Passage option requires a valid typed identity, content, condition, effort, and registered adjacent boundary.");
+
+            bool typedReferenceValid = option.Kind == TraversalOptionKind.Connection
+                ? !string.IsNullOrWhiteSpace(option.ConnectionId) && string.IsNullOrWhiteSpace(option.CrossingId) && string.IsNullOrWhiteSpace(option.RuleIdentity) && string.IsNullOrWhiteSpace(option.RuleVersion)
+                : option.Kind == TraversalOptionKind.Crossing
+                    ? !string.IsNullOrWhiteSpace(option.CrossingId) && string.IsNullOrWhiteSpace(option.ConnectionId) && string.IsNullOrWhiteSpace(option.RuleIdentity) && string.IsNullOrWhiteSpace(option.RuleVersion)
+                    : option.Kind == TraversalOptionKind.WildernessRule
+                        ? !string.IsNullOrWhiteSpace(option.RuleIdentity) && !string.IsNullOrWhiteSpace(option.RuleVersion) && string.IsNullOrWhiteSpace(option.ConnectionId) && string.IsNullOrWhiteSpace(option.CrossingId)
+                        : false;
+            string expectedStableKey = WorldStateSnapshotValue.PassageOptionKey(
+                option.FirstHexId,
+                option.SecondHexId,
+                option.Kind,
+                option.ConnectionId,
+                option.CrossingId,
+                option.RuleIdentity,
+                option.RuleVersion);
+            if (!typedReferenceValid || option.IsCrossing != (option.Kind == TraversalOptionKind.Crossing)
+                || !string.Equals(expectedStableKey, option.StableKey, StringComparison.Ordinal)
+                || (option.Kind == TraversalOptionKind.Crossing && !crossingIds.Contains(option.CrossingId)))
+                AddError(issues, "SpatialPassageOptionTypedReferenceInvalid", option.StableKey, "Passage option kind and typed identity fields do not agree with a registered Crossing relation.");
+
+            foreach (string barrierId in option.OvercomesBarrierIds ?? Array.Empty<string>())
+            {
+                if (!barriers.TryGetValue(barrierId ?? string.Empty, out WorldStateBarrierSnapshot barrier))
+                    AddError(issues, "SpatialPassageOptionBarrierMissing", option.StableKey, "Passage option references an absent barrier.");
+                else if (!barrier.Boundaries.Any(boundary => boundary != null && boundary.StableKey == new WorldStateHexBoundarySnapshot(option.FirstHexId, option.SecondHexId).StableKey))
+                    AddError(issues, "SpatialPassageOptionBarrierBoundaryMismatch", option.StableKey, "A barrier relation must apply to the option's same Hex boundary.");
+            }
+            if (option.Kind != TraversalOptionKind.Crossing && option.OvercomesBarrierIds.Count != 0)
+                AddError(issues, "SpatialPassageOptionUnexpectedBarrierRelation", option.StableKey, "Only a registered Crossing may explicitly overcome a barrier.");
+        }
+
+        foreach (WorldStateCrossingSnapshot crossing in spatial.Crossings ?? Array.Empty<WorldStateCrossingSnapshot>())
+        {
+            if (crossing == null) continue;
+            string optionKey = WorldStateSnapshotValue.PassageOptionKey(
+                crossing.FirstHexId,
+                crossing.SecondHexId,
+                TraversalOptionKind.Crossing,
+                null,
+                crossing.CrossingId,
+                null,
+                null);
+            if (!options.TryGetValue(optionKey, out WorldStatePassageOptionSnapshot option)
+                || option.Condition != crossing.Condition
+                || option.ContentIdentity != crossing.ContentIdentity
+                || option.ContentRevision != crossing.ContentRevision
+                || option.EffortMultiplier != crossing.EffortMultiplier
+                || !StringListsEqual(option.OvercomesBarrierIds, crossing.OvercomesBarrierIds))
+                AddError(issues, "SpatialCrossingPassageStateMismatch", crossing.CrossingId, "Crossing projection must match its registered passage option state.");
+            foreach (string barrierId in crossing.OvercomesBarrierIds ?? Array.Empty<string>())
+            {
+                if (!barriers.TryGetValue(barrierId ?? string.Empty, out WorldStateBarrierSnapshot barrier))
+                    AddError(issues, "SpatialCrossingBarrierMissing", crossing.CrossingId, "Crossing references an absent barrier.");
+                else if (!barrier.Boundaries.Any(boundary => boundary != null
+                    && boundary.StableKey == new WorldStateHexBoundarySnapshot(crossing.FirstHexId, crossing.SecondHexId).StableKey))
+                    AddError(issues, "SpatialCrossingBarrierBoundaryMismatch", crossing.CrossingId, "Crossing can overcome only barriers registered on its own boundary.");
+            }
+        }
+
+        foreach (WorldStatePersonSpatialPositionSnapshot position in spatial.PersonSpatialPositions ?? Array.Empty<WorldStatePersonSpatialPositionSnapshot>())
+        {
+            string identity = position?.PersonId ?? "person-position";
+            if (position == null || string.IsNullOrWhiteSpace(position.PersonId) || !snapshot.Persons.Any(person => person != null && person.PersonId == position.PersonId))
+                AddError(issues, "PersonSpatialPositionOwnerMissing", identity, "Position must belong to a registered PersonId.");
+            if ((position?.Transit == null) == (position?.Position == null))
+                AddError(issues, "PersonSpatialPositionShapeInvalid", identity, "Position must contain exactly one of At or InTransit.");
+            if (position?.Position != null) ValidateStablePositionReference(position.Position, identity, hexesById, locationIds, crossingIds, issues);
+            if (position?.Transit != null)
+            {
+                WorldStateTransitSnapshot transit = position.Transit;
+                WorldStateHexBoundarySnapshot boundary = new WorldStateHexBoundarySnapshot(transit.FirstHexId, transit.SecondHexId);
+                if (transit.ProgressTicks < 0 || transit.ProgressTicks > TraversalProgress.CompleteProgressTicks
+                    || !ValidBoundary(boundary, hexesById)
+                    || !boundary.StableKey.Equals(new WorldStateHexBoundarySnapshot(
+                        StringComparer.Ordinal.Compare(transit.FromHexId, transit.ToHexId) <= 0 ? transit.FromHexId : transit.ToHexId,
+                        StringComparer.Ordinal.Compare(transit.FromHexId, transit.ToHexId) <= 0 ? transit.ToHexId : transit.FromHexId).StableKey, StringComparison.Ordinal))
+                    AddError(issues, "PersonTransitStructureInvalid", identity, "Transit progress, directed endpoints, and registered boundary are inconsistent.");
+                ValidateStablePositionReference(transit.LastFullyReachedReference, identity, hexesById, locationIds, crossingIds, issues);
+                if (transit.LastFullyReachedReference?.Kind != StablePositionReferenceKind.Hex
+                    || transit.LastFullyReachedReference.HexId != transit.FromHexId)
+                    AddError(issues, "PersonTransitOriginReferenceInvalid", identity, "Last fully reached reference must be the directed origin Hex.");
+                string optionKey = WorldStateSnapshotValue.PassageOptionKey(
+                    transit.FirstHexId,
+                    transit.SecondHexId,
+                    transit.OptionKind,
+                    transit.ConnectionId,
+                    transit.CrossingId,
+                    transit.RuleIdentity,
+                    transit.RuleVersion);
+                if (!options.ContainsKey(optionKey)) AddError(issues, "PersonTransitOptionMissing", identity, "Transit option is absent from the passage authority projection.");
+            }
+        }
+
+        if (spatial.PersonSpatialPositionRevision.HasValue && spatial.PersonSpatialPositionRevision.Value < 0)
+            AddError(issues, "PersonSpatialPositionNegativeRevision", "world", "Person spatial position revision cannot be negative.");
+        if (spatial.LegacySpatialAnchorBindingRevision.HasValue && spatial.LegacySpatialAnchorBindingRevision.Value < 0)
+            AddError(issues, "LegacySpatialAnchorBindingNegativeRevision", "world", "Legacy spatial anchor binding revision cannot be negative.");
+        HashSet<string> boundLocations = new HashSet<string>(StringComparer.Ordinal);
+        HashSet<string> boundOwners = new HashSet<string>(StringComparer.Ordinal);
+        foreach (WorldStateSpatialAnchorBindingSnapshot binding in spatial.LegacySpatialAnchorBindings ?? Array.Empty<WorldStateSpatialAnchorBindingSnapshot>())
+        {
+            string identity = binding?.StableKey ?? "anchor-binding";
+            if (binding == null || string.IsNullOrWhiteSpace(binding.OwnerId) || !Enum.IsDefined(typeof(SpatialAnchorOwnerKind), binding.OwnerKind)
+                || !locationIds.Contains(binding.LocationId ?? string.Empty))
+                AddError(issues, "LegacySpatialAnchorBindingInvalid", identity, "Anchor binding requires an owner and registered Location.");
+            if (binding != null)
+            {
+                if (!boundOwners.Add(binding.StableKey)) AddError(issues, "DuplicateLegacySpatialAnchorOwner", identity, "City/Site owner has multiple Location bindings.");
+                if (!boundLocations.Add(binding.LocationId ?? string.Empty)) AddError(issues, "DuplicateLegacySpatialAnchorLocation", identity, "Location is assigned to multiple City/Site owners.");
+                bool ownerExists = binding.OwnerKind == SpatialAnchorOwnerKind.City
+                    ? snapshot.Cities.Any(city => city != null && city.RuntimeId == binding.OwnerId)
+                    : snapshot.Sites.Any(site => site != null && site.RuntimeId == binding.OwnerId);
+                if (!ownerExists) AddError(issues, "LegacySpatialAnchorOwnerMissing", identity, "Anchor owner is absent from its City/Site snapshot collection.");
+            }
+        }
+    }
+
+    private static void ValidateStablePositionReference(
+        WorldStateStablePositionReferenceSnapshot reference,
+        string identity,
+        Dictionary<string, WorldStateHexSnapshot> hexes,
+        HashSet<string> locations,
+        HashSet<string> crossings,
+        List<WorldStateInvariantIssue> issues)
+    {
+        if (reference == null) { AddError(issues, "PersonSpatialReferenceMissing", identity, "Position reference is missing."); return; }
+        bool valid = reference.Kind == StablePositionReferenceKind.Hex
+            ? !string.IsNullOrWhiteSpace(reference.HexId) && hexes.ContainsKey(reference.HexId) && string.IsNullOrEmpty(reference.LocationId) && string.IsNullOrEmpty(reference.CrossingId)
+            : reference.Kind == StablePositionReferenceKind.Location
+                ? !string.IsNullOrWhiteSpace(reference.LocationId) && locations.Contains(reference.LocationId) && string.IsNullOrEmpty(reference.HexId) && string.IsNullOrEmpty(reference.CrossingId)
+                : reference.Kind == StablePositionReferenceKind.Crossing
+                    ? !string.IsNullOrWhiteSpace(reference.CrossingId) && crossings.Contains(reference.CrossingId) && string.IsNullOrEmpty(reference.HexId) && string.IsNullOrEmpty(reference.LocationId)
+                    : false;
+        string expectedStableKey = reference.Kind == StablePositionReferenceKind.Hex ? "hex:" + reference.HexId
+            : reference.Kind == StablePositionReferenceKind.Location ? "location:" + reference.LocationId
+            : reference.Kind == StablePositionReferenceKind.Crossing ? "crossing:" + reference.CrossingId : null;
+        valid = valid && string.Equals(reference.StableKey, expectedStableKey, StringComparison.Ordinal);
+        if (!valid) AddError(issues, "PersonSpatialReferenceInvalid", identity, "Position uses an invalid typed reference or references an absent spatial entity.");
+    }
+
+    private static bool ValidBoundary(WorldStateHexBoundarySnapshot boundary, Dictionary<string, WorldStateHexSnapshot> hexes)
+    {
+        if (boundary == null || string.IsNullOrWhiteSpace(boundary.FirstHexId) || string.IsNullOrWhiteSpace(boundary.SecondHexId)
+            || StringComparer.Ordinal.Compare(boundary.FirstHexId, boundary.SecondHexId) >= 0
+            || !hexes.TryGetValue(boundary.FirstHexId, out WorldStateHexSnapshot first)
+            || !hexes.TryGetValue(boundary.SecondHexId, out WorldStateHexSnapshot second)
+            || !first.Q.HasValue || !first.R.HasValue || !second.Q.HasValue || !second.R.HasValue) return false;
+        return AreAxiallyAdjacent(first.Q.Value, first.R.Value, second.Q.Value, second.R.Value);
+    }
+
+    private static bool StringListsEqual(IReadOnlyList<string> left, IReadOnlyList<string> right)
+    {
+        if (left == null || right == null) return left == right;
+        if (left.Count != right.Count) return false;
+        for (int i = 0; i < left.Count; i++) if (!string.Equals(left[i], right[i], StringComparison.Ordinal)) return false;
+        return true;
     }
 
     private static void ValidateArmedForces(

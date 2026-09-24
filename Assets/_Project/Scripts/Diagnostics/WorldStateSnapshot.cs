@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Collections.ObjectModel;
+using System.Linq;
 
 public sealed class WorldStateSnapshotContext
 {
@@ -11,6 +12,8 @@ public sealed class WorldStateSnapshotContext
     public IEnumerable<CityRuntime> Cities { get; }
     public SpatialNetworkRuntime SpatialNetwork { get; }
     public SpatialAuthorityStore SpatialAuthorityStore { get; }
+    public LegacySpatialAnchorBindingStore LegacySpatialAnchorBindingStore { get; }
+    public PersonSpatialPositionStore PersonSpatialPositionStore { get; }
     public ExplorableSiteStore ExplorableSiteStore { get; }
     public ExpeditionStore ExpeditionStore { get; }
     public PlaceContentStore PlaceContentStore { get; }
@@ -79,7 +82,9 @@ public sealed class WorldStateSnapshotContext
         PersistentBattleStore battleStore = null,
         SpatialAuthorityStore spatialAuthorityStore = null,
         ArmedForceSpatialStateStore armedForceSpatialStateStore = null,
-        ContingentManpowerStateStore contingentManpowerStateStore = null)
+        ContingentManpowerStateStore contingentManpowerStateStore = null,
+        LegacySpatialAnchorBindingStore legacySpatialAnchorBindingStore = null,
+        PersonSpatialPositionStore personSpatialPositionStore = null)
     {
         SimulationTime = simulationTime;
         Calendar = calendar ?? (calendarDefinition != null ? new SimulationCalendar(calendarDefinition) : null);
@@ -87,6 +92,8 @@ public sealed class WorldStateSnapshotContext
         Cities = cities ?? Array.Empty<CityRuntime>();
         SpatialNetwork = spatialNetwork;
         SpatialAuthorityStore = spatialAuthorityStore;
+        LegacySpatialAnchorBindingStore = legacySpatialAnchorBindingStore;
+        PersonSpatialPositionStore = personSpatialPositionStore;
         ExplorableSiteStore = explorableSiteStore;
         ExpeditionStore = expeditionStore;
         PlaceContentStore = placeContentStore;
@@ -1388,6 +1395,12 @@ public sealed class WorldStateSpatialSnapshot
     public IReadOnlyList<WorldStateHexSnapshot> Hexes { get; }
     public IReadOnlyList<WorldStateAnchoredLocationSnapshot> AnchoredLocations { get; }
     public IReadOnlyList<WorldStateCrossingSnapshot> Crossings { get; }
+    public IReadOnlyList<WorldStatePassageOptionSnapshot> PassageOptions { get; }
+    public IReadOnlyList<WorldStateBarrierSnapshot> Barriers { get; }
+    public IReadOnlyList<WorldStatePersonSpatialPositionSnapshot> PersonSpatialPositions { get; }
+    public IReadOnlyList<WorldStateSpatialAnchorBindingSnapshot> LegacySpatialAnchorBindings { get; }
+    public long? PersonSpatialPositionRevision { get; }
+    public long? LegacySpatialAnchorBindingRevision { get; }
     public IReadOnlyList<WorldStateSpatialTopologyBindingSnapshot> TopologyBindings { get; }
     public IReadOnlyList<WorldStateLocationSnapshot> Locations { get; }
     public IReadOnlyList<WorldStateRouteSnapshot> Routes { get; }
@@ -1402,7 +1415,13 @@ public sealed class WorldStateSpatialSnapshot
         string coordinateConventionVersion = null,
         string coordinateCanonicalOrder = null,
         WorldStateSpatialScaleContextSnapshot scaleContext = null,
-        IEnumerable<WorldStateCrossingSnapshot> crossings = null)
+        IEnumerable<WorldStateCrossingSnapshot> crossings = null,
+        IEnumerable<WorldStatePassageOptionSnapshot> passageOptions = null,
+        IEnumerable<WorldStateBarrierSnapshot> barriers = null,
+        IEnumerable<WorldStatePersonSpatialPositionSnapshot> personSpatialPositions = null,
+        IEnumerable<WorldStateSpatialAnchorBindingSnapshot> legacySpatialAnchorBindings = null,
+        long? personSpatialPositionRevision = null,
+        long? legacySpatialAnchorBindingRevision = null)
     {
         AuthorityRevision = authorityRevision;
         CoordinateConventionVersion = coordinateConventionVersion;
@@ -1411,6 +1430,14 @@ public sealed class WorldStateSpatialSnapshot
         Hexes = SnapshotCollections.CopySorted(hexes, hex => hex?.HexId);
         AnchoredLocations = SnapshotCollections.CopySorted(anchoredLocations, location => location?.LocationId);
         Crossings = SnapshotCollections.CopySorted(crossings, crossing => crossing?.CrossingId);
+        PassageOptions = SnapshotCollections.CopySorted(passageOptions, option => option?.StableKey);
+        Barriers = SnapshotCollections.CopySorted(barriers, barrier => barrier?.BarrierId);
+        PersonSpatialPositions = SnapshotCollections.CopySorted(personSpatialPositions, position => position?.PersonId);
+        LegacySpatialAnchorBindings = SnapshotCollections.CopySorted(
+            legacySpatialAnchorBindings,
+            binding => binding?.StableKey);
+        PersonSpatialPositionRevision = personSpatialPositionRevision;
+        LegacySpatialAnchorBindingRevision = legacySpatialAnchorBindingRevision;
         TopologyBindings = SnapshotCollections.CopySorted(topologyBindings, binding => binding?.StableKey);
         Locations = SnapshotCollections.CopySorted(locations, location => location?.RuntimeId);
         Routes = SnapshotCollections.CopySorted(routes, route => route?.RuntimeId);
@@ -1423,17 +1450,205 @@ public sealed class WorldStateCrossingSnapshot
     public string FirstHexId { get; }
     public string SecondHexId { get; }
     public string AnchorHexId { get; }
+    public string ContentIdentity { get; }
+    public string ContentRevision { get; }
+    public decimal EffortMultiplier { get; }
+    public PassageCondition Condition { get; }
+    public IReadOnlyList<string> OvercomesBarrierIds { get; }
 
     public WorldStateCrossingSnapshot(
         string crossingId,
         string firstHexId,
         string secondHexId,
-        string anchorHexId)
+        string anchorHexId,
+        string contentIdentity = null,
+        string contentRevision = null,
+        decimal effortMultiplier = 1m,
+        PassageCondition condition = PassageCondition.Available,
+        IEnumerable<string> overcomesBarrierIds = null)
     {
         CrossingId = crossingId;
         FirstHexId = firstHexId;
         SecondHexId = secondHexId;
         AnchorHexId = anchorHexId;
+        ContentIdentity = contentIdentity;
+        ContentRevision = contentRevision;
+        EffortMultiplier = effortMultiplier;
+        Condition = condition;
+        OvercomesBarrierIds = SnapshotCollections.CopySorted(overcomesBarrierIds, value => value);
+    }
+}
+
+public sealed class WorldStatePassageOptionSnapshot
+{
+    public string StableKey { get; }
+    public TraversalOptionKind Kind { get; }
+    public string ConnectionId { get; }
+    public string CrossingId { get; }
+    public string RuleIdentity { get; }
+    public string RuleVersion { get; }
+    public string FirstHexId { get; }
+    public string SecondHexId { get; }
+    public PassageCondition Condition { get; }
+    public bool IsCrossing { get; }
+    public string ContentIdentity { get; }
+    public string ContentRevision { get; }
+    public decimal EffortMultiplier { get; }
+    public IReadOnlyList<string> OvercomesBarrierIds { get; }
+
+    public WorldStatePassageOptionSnapshot(
+        string stableKey,
+        TraversalOptionKind kind,
+        string connectionId,
+        string crossingId,
+        string ruleIdentity,
+        string ruleVersion,
+        string firstHexId,
+        string secondHexId,
+        PassageCondition condition,
+        bool isCrossing,
+        string contentIdentity,
+        string contentRevision,
+        decimal effortMultiplier,
+        IEnumerable<string> overcomesBarrierIds)
+    {
+        StableKey = stableKey;
+        Kind = kind;
+        ConnectionId = connectionId;
+        CrossingId = crossingId;
+        RuleIdentity = ruleIdentity;
+        RuleVersion = ruleVersion;
+        FirstHexId = firstHexId;
+        SecondHexId = secondHexId;
+        Condition = condition;
+        IsCrossing = isCrossing;
+        ContentIdentity = contentIdentity;
+        ContentRevision = contentRevision;
+        EffortMultiplier = effortMultiplier;
+        OvercomesBarrierIds = SnapshotCollections.CopySorted(overcomesBarrierIds, value => value);
+    }
+}
+
+public sealed class WorldStateHexBoundarySnapshot
+{
+    public string FirstHexId { get; }
+    public string SecondHexId { get; }
+    public string StableKey => WorldStateSnapshotValue.EncodeStableKey(FirstHexId, SecondHexId);
+
+    public WorldStateHexBoundarySnapshot(string firstHexId, string secondHexId)
+    {
+        FirstHexId = firstHexId;
+        SecondHexId = secondHexId;
+    }
+}
+
+public sealed class WorldStateBarrierSnapshot
+{
+    public string BarrierId { get; }
+    public string ContentIdentity { get; }
+    public string ContentRevision { get; }
+    public BarrierCondition Condition { get; }
+    public IReadOnlyList<WorldStateHexBoundarySnapshot> Boundaries { get; }
+
+    public WorldStateBarrierSnapshot(
+        string barrierId,
+        string contentIdentity,
+        string contentRevision,
+        BarrierCondition condition,
+        IEnumerable<WorldStateHexBoundarySnapshot> boundaries)
+    {
+        BarrierId = barrierId;
+        ContentIdentity = contentIdentity;
+        ContentRevision = contentRevision;
+        Condition = condition;
+        Boundaries = SnapshotCollections.CopySorted(boundaries, boundary => boundary?.StableKey);
+    }
+}
+
+public sealed class WorldStateStablePositionReferenceSnapshot
+{
+    public StablePositionReferenceKind Kind { get; }
+    public string HexId { get; }
+    public string LocationId { get; }
+    public string CrossingId { get; }
+    public string StableKey { get; }
+
+    public WorldStateStablePositionReferenceSnapshot(StablePositionReference reference)
+    {
+        Kind = reference.Kind;
+        HexId = reference.HexId?.Value;
+        LocationId = reference.LocationId?.Value;
+        CrossingId = reference.CrossingId?.Value;
+        StableKey = reference.StableKey;
+    }
+}
+
+public sealed class WorldStateTransitSnapshot
+{
+    public TraversalOptionKind OptionKind { get; }
+    public string OptionStableKey { get; }
+    public string ConnectionId { get; }
+    public string CrossingId { get; }
+    public string RuleIdentity { get; }
+    public string RuleVersion { get; }
+    public string FirstHexId { get; }
+    public string SecondHexId { get; }
+    public string FromHexId { get; }
+    public string ToHexId { get; }
+    public WorldStateStablePositionReferenceSnapshot LastFullyReachedReference { get; }
+    public int ProgressTicks { get; }
+
+    public WorldStateTransitSnapshot(TraversalProgress transit)
+    {
+        OptionKind = transit.Option.Kind;
+        ConnectionId = transit.Option.ConnectionId?.Value;
+        CrossingId = transit.Option.CrossingId?.Value;
+        RuleIdentity = transit.Option.RuleIdentity;
+        RuleVersion = transit.Option.RuleVersion;
+        OptionStableKey = WorldStateSnapshotValue.PassageOptionKey(
+            transit.Boundary.FirstHexId.Value,
+            transit.Boundary.SecondHexId.Value,
+            OptionKind,
+            ConnectionId,
+            CrossingId,
+            RuleIdentity,
+            RuleVersion);
+        FirstHexId = transit.Boundary.FirstHexId.Value;
+        SecondHexId = transit.Boundary.SecondHexId.Value;
+        FromHexId = transit.FromHexId.Value;
+        ToHexId = transit.ToHexId.Value;
+        LastFullyReachedReference = new WorldStateStablePositionReferenceSnapshot(transit.LastFullyReachedReference);
+        ProgressTicks = transit.ProgressTicks;
+    }
+}
+
+public sealed class WorldStatePersonSpatialPositionSnapshot
+{
+    public string PersonId { get; }
+    public WorldStateStablePositionReferenceSnapshot Position { get; }
+    public WorldStateTransitSnapshot Transit { get; }
+    public bool IsInTransit => Transit != null;
+
+    public WorldStatePersonSpatialPositionSnapshot(PersonSpatialPosition position)
+    {
+        PersonId = position.PersonId.Value;
+        Position = position.Position == null ? null : new WorldStateStablePositionReferenceSnapshot(position.Position);
+        Transit = position.Transit == null ? null : new WorldStateTransitSnapshot(position.Transit);
+    }
+}
+
+public sealed class WorldStateSpatialAnchorBindingSnapshot
+{
+    public SpatialAnchorOwnerKind OwnerKind { get; }
+    public string OwnerId { get; }
+    public string LocationId { get; }
+    public string StableKey => ((int)OwnerKind).ToString(CultureInfo.InvariantCulture) + ":" + OwnerId;
+
+    public WorldStateSpatialAnchorBindingSnapshot(SpatialAnchorBinding binding)
+    {
+        OwnerKind = binding.OwnerId.Kind;
+        OwnerId = binding.OwnerId.Value;
+        LocationId = binding.LocationId.Value;
     }
 }
 
@@ -1888,7 +2103,9 @@ public static class WorldStateSnapshotBuilder
                 context.SpatialNetwork,
                 context.SpatialAuthorityStore
                     ?? context.ArmedForceSpatialStateStore?.SpatialAuthorityStore
-                    ?? context.BattleStore?.SpatialAuthorityStore),
+                    ?? context.BattleStore?.SpatialAuthorityStore,
+                context.PersonSpatialPositionStore,
+                context.LegacySpatialAnchorBindingStore),
             BuildSiteSnapshots(context.ExplorableSiteStore),
             expeditions,
             BuildPlaceContentSnapshots(context.PlaceContentStore),
@@ -3092,7 +3309,9 @@ public static class WorldStateSnapshotBuilder
 
     private static WorldStateSpatialSnapshot BuildSpatialSnapshot(
         SpatialNetworkRuntime network,
-        SpatialAuthorityStore authority)
+        SpatialAuthorityStore authority,
+        PersonSpatialPositionStore personPositions,
+        LegacySpatialAnchorBindingStore legacyAnchorBindings)
     {
         List<WorldStateHexSnapshot> hexSnapshots = new List<WorldStateHexSnapshot>();
         List<WorldStateAnchoredLocationSnapshot> anchoredLocationSnapshots =
@@ -3100,6 +3319,13 @@ public static class WorldStateSnapshotBuilder
         List<WorldStateSpatialTopologyBindingSnapshot> topologyBindingSnapshots =
             new List<WorldStateSpatialTopologyBindingSnapshot>();
         List<WorldStateCrossingSnapshot> crossingSnapshots = new List<WorldStateCrossingSnapshot>();
+        List<WorldStatePassageOptionSnapshot> passageOptionSnapshots =
+            new List<WorldStatePassageOptionSnapshot>();
+        List<WorldStateBarrierSnapshot> barrierSnapshots = new List<WorldStateBarrierSnapshot>();
+        List<WorldStatePersonSpatialPositionSnapshot> personPositionSnapshots =
+            new List<WorldStatePersonSpatialPositionSnapshot>();
+        List<WorldStateSpatialAnchorBindingSnapshot> legacyAnchorBindingSnapshots =
+            new List<WorldStateSpatialAnchorBindingSnapshot>();
         long? authorityRevision = null;
         string coordinateConventionVersion = null;
         string coordinateCanonicalOrder = null;
@@ -3157,11 +3383,86 @@ public static class WorldStateSnapshotBuilder
             {
                 if (crossing?.Id != null && crossing.Boundary != null && crossing.AnchorHexId != null)
                 {
+                    PassageCondition condition = PassageCondition.Available;
+                    authority.PassageAuthority.TryGetPassageCondition(
+                        crossing.Boundary,
+                        TraversalOptionRef.ForCrossing(crossing.Id),
+                        out condition,
+                        out _);
                     crossingSnapshots.Add(new WorldStateCrossingSnapshot(
                         crossing.Id.Value,
                         crossing.Boundary.FirstHexId.Value,
                         crossing.Boundary.SecondHexId.Value,
-                        crossing.AnchorHexId.Value));
+                        crossing.AnchorHexId.Value,
+                        crossing.ContentIdentity,
+                        crossing.ContentRevision,
+                        crossing.EffortMultiplier,
+                        condition,
+                        crossing.OvercomesBarrierIds.Select(barrier => barrier.Value)));
+                }
+            }
+
+            foreach (PassageOptionState state in authority.PassageAuthority.OptionStates)
+            {
+                if (state?.Option == null || state.Boundary == null) continue;
+                TraversalOptionRef option = state.Option;
+                string stableKey = WorldStateSnapshotValue.PassageOptionKey(
+                    state.Boundary.FirstHexId.Value,
+                    state.Boundary.SecondHexId.Value,
+                    option.Kind,
+                    option.ConnectionId?.Value,
+                    option.CrossingId?.Value,
+                    option.RuleIdentity,
+                    option.RuleVersion);
+                passageOptionSnapshots.Add(new WorldStatePassageOptionSnapshot(
+                    stableKey,
+                    option.Kind,
+                    option.ConnectionId?.Value,
+                    option.CrossingId?.Value,
+                    option.RuleIdentity,
+                    option.RuleVersion,
+                    state.Boundary.FirstHexId.Value,
+                    state.Boundary.SecondHexId.Value,
+                    state.Condition,
+                    state.IsCrossing,
+                    state.ContentIdentity,
+                    state.ContentRevision,
+                    state.EffortMultiplier,
+                    state.OvercomesBarrierIds.Select(barrier => barrier.Value)));
+            }
+
+            foreach (BarrierState state in authority.PassageAuthority.BarrierStates)
+            {
+                if (state?.Barrier == null) continue;
+                barrierSnapshots.Add(new WorldStateBarrierSnapshot(
+                    state.Barrier.Id?.Value,
+                    state.Barrier.ContentIdentity,
+                    state.Barrier.ContentRevision,
+                    state.Condition,
+                    state.Barrier.Boundaries.Select(boundary => new WorldStateHexBoundarySnapshot(
+                        boundary.FirstHexId.Value,
+                        boundary.SecondHexId.Value))));
+            }
+        }
+
+        if (personPositions != null)
+        {
+            foreach (PersonSpatialPosition position in personPositions.Positions)
+            {
+                if (position != null)
+                {
+                    personPositionSnapshots.Add(new WorldStatePersonSpatialPositionSnapshot(position));
+                }
+            }
+        }
+
+        if (legacyAnchorBindings != null)
+        {
+            foreach (SpatialAnchorBinding binding in legacyAnchorBindings.Bindings)
+            {
+                if (binding != null)
+                {
+                    legacyAnchorBindingSnapshots.Add(new WorldStateSpatialAnchorBindingSnapshot(binding));
                 }
             }
         }
@@ -3176,7 +3477,13 @@ public static class WorldStateSnapshotBuilder
                 coordinateConventionVersion: coordinateConventionVersion,
                 coordinateCanonicalOrder: coordinateCanonicalOrder,
                 scaleContext: scaleContextSnapshot,
-                crossings: crossingSnapshots);
+                crossings: crossingSnapshots,
+                passageOptions: passageOptionSnapshots,
+                barriers: barrierSnapshots,
+                personSpatialPositions: personPositionSnapshots,
+                legacySpatialAnchorBindings: legacyAnchorBindingSnapshots,
+                personSpatialPositionRevision: personPositions?.Revision,
+                legacySpatialAnchorBindingRevision: legacyAnchorBindings?.Revision);
         }
 
         List<SpatialLocationRuntime> locations = new List<SpatialLocationRuntime>(network.Locations);
@@ -3211,7 +3518,13 @@ public static class WorldStateSnapshotBuilder
             coordinateConventionVersion,
             coordinateCanonicalOrder,
             scaleContextSnapshot,
-            crossingSnapshots);
+            crossingSnapshots,
+            passageOptionSnapshots,
+            barrierSnapshots,
+            personPositionSnapshots,
+            legacyAnchorBindingSnapshots,
+            personPositions?.Revision,
+            legacyAnchorBindings?.Revision);
     }
 
     private static List<WorldStateSiteSnapshot> BuildSiteSnapshots(ExplorableSiteStore store)
@@ -3506,6 +3819,46 @@ internal static class SnapshotCollections
 
 internal static class WorldStateSnapshotValue
 {
+    public static string EncodeStableKey(params string[] components)
+    {
+        if (components == null) return "-1:";
+        System.Text.StringBuilder result = new System.Text.StringBuilder();
+        foreach (string component in components)
+        {
+            if (component == null)
+            {
+                result.Append("-1:");
+            }
+            else
+            {
+                result.Append(component.Length.ToString(CultureInfo.InvariantCulture))
+                    .Append(':')
+                    .Append(component);
+            }
+        }
+        return result.ToString();
+    }
+
+    public static string PassageOptionKey(
+        string firstHexId,
+        string secondHexId,
+        TraversalOptionKind kind,
+        string connectionId,
+        string crossingId,
+        string ruleIdentity,
+        string ruleVersion)
+    {
+        return EncodeStableKey(
+            "passage-option",
+            firstHexId,
+            secondHexId,
+            ((int)kind).ToString(CultureInfo.InvariantCulture),
+            connectionId,
+            crossingId,
+            ruleIdentity,
+            ruleVersion);
+    }
+
     public static string OwnerKey(PlaceContentOwnerKind kind, string runtimeId)
     {
         return Enum.GetName(typeof(PlaceContentOwnerKind), kind) + ":" + runtimeId;

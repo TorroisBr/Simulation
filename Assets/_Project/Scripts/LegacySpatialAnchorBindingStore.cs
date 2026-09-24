@@ -30,7 +30,7 @@ public sealed class SpatialAnchorBinding
     internal SpatialAnchorBinding(SpatialAnchorOwnerId owner, LocationId location) { OwnerId = owner; LocationId = location; }
 }
 
-public enum SpatialAnchorBindingFailureCode { None = 0, RuntimeFaulted = 1, InvalidBinding = 2, OwnerAlreadyBound = 3, LocationAlreadyBound = 4, LocationNotRegistered = 5, RevisionOverflow = 6 }
+public enum SpatialAnchorBindingFailureCode { None = 0, RuntimeFaulted = 1, InvalidBinding = 2, OwnerAlreadyBound = 3, LocationAlreadyBound = 4, LocationNotRegistered = 5, RevisionOverflow = 6, OwnerNotRegistered = 7 }
 
 public sealed class SpatialAnchorBindingFailure
 {
@@ -51,12 +51,23 @@ public sealed class LegacySpatialAnchorBindingStore : IAuthoritativeMutationGuar
 {
     private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
     private readonly SpatialAuthorityStore spatialAuthorityStore;
+    private readonly Func<SpatialAnchorOwnerId, bool> ownerExists;
     private readonly Dictionary<string, SpatialAnchorBinding> byOwner = new Dictionary<string, SpatialAnchorBinding>(StringComparer.Ordinal);
     private readonly Dictionary<string, string> ownerByLocation = new Dictionary<string, string>(StringComparer.Ordinal);
     private long revision;
 
     public LegacySpatialAnchorBindingStore(SpatialAuthorityStore spatialAuthorityStore)
-    { this.spatialAuthorityStore = spatialAuthorityStore ?? throw new ArgumentNullException(nameof(spatialAuthorityStore)); }
+        : this(spatialAuthorityStore, null)
+    {
+    }
+
+    internal LegacySpatialAnchorBindingStore(
+        SpatialAuthorityStore spatialAuthorityStore,
+        Func<SpatialAnchorOwnerId, bool> ownerExists)
+    {
+        this.spatialAuthorityStore = spatialAuthorityStore ?? throw new ArgumentNullException(nameof(spatialAuthorityStore));
+        this.ownerExists = ownerExists;
+    }
     public long Revision => revision;
     public int Count => byOwner.Count;
     public IReadOnlyList<SpatialAnchorBinding> Bindings
@@ -75,6 +86,7 @@ public sealed class LegacySpatialAnchorBindingStore : IAuthoritativeMutationGuar
     {
         if (!mutationGuardBinding.CanMutate) return Fail(SpatialAnchorBindingFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.", out failure);
         if (owner == null || locationId == null) return Fail(SpatialAnchorBindingFailureCode.InvalidBinding, "Stable domain owner and LocationId are required.", out failure);
+        if (ownerExists != null && !ownerExists(owner)) return Fail(SpatialAnchorBindingFailureCode.OwnerNotRegistered, "City/Site owner must exist in the composed SimulationRuntime.", out failure);
         if (!spatialAuthorityStore.TryGet(locationId, out _)) return Fail(SpatialAnchorBindingFailureCode.LocationNotRegistered, "LocationId must resolve in the supplied SpatialAuthorityStore.", out failure);
         if (byOwner.TryGetValue(owner.StableKey, out SpatialAnchorBinding current))
             return current.LocationId == locationId ? Succeed(out failure) : Fail(SpatialAnchorBindingFailureCode.OwnerAlreadyBound, "A City/Site owner can have exactly one stable Location anchor.", out failure);
@@ -93,15 +105,18 @@ public sealed class LegacySpatialAnchorBindingStore : IAuthoritativeMutationGuar
         foreach (SpatialAnchorBinding binding in Bindings)
         {
             if (binding?.OwnerId == null || binding.LocationId == null) { violations.Add("Spatial anchor binding is incomplete."); continue; }
+            if (ownerExists != null && !ownerExists(binding.OwnerId)) violations.Add("Spatial anchor binding references an unregistered City/Site owner: " + binding.OwnerId.StableKey + ".");
             if (!spatialAuthorityStore.TryGet(binding.LocationId, out _)) violations.Add("Spatial anchor binding references an unregistered Location: " + binding.LocationId.Value + ".");
             if (!ownerByLocation.TryGetValue(binding.LocationId.Value, out string ownerKey) || !string.Equals(ownerKey, binding.OwnerId.StableKey, StringComparison.Ordinal)) violations.Add("Spatial anchor Location index is inconsistent for " + binding.OwnerId.StableKey + ".");
         }
         return new SpatialAnchorBindingInvariantReport(violations);
     }
 
-    internal LegacySpatialAnchorBindingStore Clone(SpatialAuthorityStore targetSpatial)
+    internal LegacySpatialAnchorBindingStore Clone(SpatialAuthorityStore targetSpatial, Func<SpatialAnchorOwnerId, bool> targetOwnerExists = null)
     {
-        LegacySpatialAnchorBindingStore copy = new LegacySpatialAnchorBindingStore(targetSpatial ?? throw new ArgumentNullException(nameof(targetSpatial)));
+        LegacySpatialAnchorBindingStore copy = new LegacySpatialAnchorBindingStore(
+            targetSpatial ?? throw new ArgumentNullException(nameof(targetSpatial)),
+            targetOwnerExists);
         foreach (SpatialAnchorBinding binding in Bindings)
         {
             if (!targetSpatial.TryGet(new LocationId(binding.LocationId.Value), out _)) throw new ArgumentException("Spatial anchor Location is absent from target SpatialAuthorityStore.", nameof(targetSpatial));

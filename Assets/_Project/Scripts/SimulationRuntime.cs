@@ -10,6 +10,60 @@ public enum SimulationRuntimeAdvanceFailure
     AbsoluteDayOverflow = 3
 }
 
+/// <summary>Adapts the spatial authority's passage child to the P8-C transit resolver seam.</summary>
+internal sealed class SpatialPassageTraversalOptionResolver : ISpatialTraversalOptionResolver
+{
+    private readonly SpatialPassageAuthority passageAuthority;
+
+    public SpatialPassageTraversalOptionResolver(SpatialPassageAuthority passageAuthority)
+    {
+        this.passageAuthority = passageAuthority ?? throw new ArgumentNullException(nameof(passageAuthority));
+    }
+
+    public bool TryResolveTraversalOption(TraversalOptionRef option, HexBoundaryKey boundary, out string failure)
+    {
+        if (option == null || boundary == null)
+        {
+            failure = "Traversal option and boundary are required.";
+            return false;
+        }
+
+        if (!passageAuthority.TryGetTraversalOptions(
+                boundary,
+                out IReadOnlyList<TraversalOptionRef> options,
+                out SpatialAuthorityFailure authorityFailure))
+        {
+            failure = authorityFailure?.Message ?? "Traversal boundary is not registered.";
+            return false;
+        }
+
+        foreach (TraversalOptionRef candidate in options)
+        {
+            if (option.Equals(candidate))
+            {
+                failure = string.Empty;
+                return true;
+            }
+        }
+
+        failure = "Traversal option is not registered on the supplied boundary.";
+        return false;
+    }
+}
+
+public sealed class SimulationRuntimeSpatialInvariantReport
+{
+    public IReadOnlyList<string> Violations { get; }
+    public bool IsValid => Violations.Count == 0;
+
+    internal SimulationRuntimeSpatialInvariantReport(IEnumerable<string> violations)
+    {
+        List<string> sorted = violations == null ? new List<string>() : new List<string>(violations);
+        sorted.Sort(StringComparer.Ordinal);
+        Violations = sorted.AsReadOnly();
+    }
+}
+
 public sealed class SimulationRuntime
 {
     private readonly AuthoritativeMutationGuard mutationGuard = new AuthoritativeMutationGuard();
@@ -25,6 +79,8 @@ public sealed class SimulationRuntime
     private DailyDemographyReport lastDailyDemographyReport;
     private readonly PersonStore personStore;
     private readonly SpatialAuthorityStore spatialAuthorityStore;
+    private readonly LegacySpatialAnchorBindingStore legacySpatialAnchorBindingStore;
+    private readonly PersonSpatialPositionStore personSpatialPositionStore;
     private readonly ArmedForceStore armedForceStore;
     private readonly ContingentManpowerStateStore contingentManpowerStateStore;
     private readonly SettlementManpowerSourceRegistry settlementManpowerSourceRegistry;
@@ -84,8 +140,28 @@ public sealed class SimulationRuntime
     public DailyDemographyReport LastDailyDemographyReport => lastDailyDemographyReport;
     public PersonStore PersonStore => personStore;
     public SpatialAuthorityStore SpatialAuthorityStore => spatialAuthorityStore;
+    public LegacySpatialAnchorBindingStore LegacySpatialAnchorBindingStore => legacySpatialAnchorBindingStore;
+    public PersonSpatialPositionStore PersonSpatialPositionStore => personSpatialPositionStore;
     public ArmedForceStore ArmedForceStore => armedForceStore;
     public ContingentManpowerStateStore ContingentManpowerStateStore => contingentManpowerStateStore;
+
+    /// <summary>Validates the composed spatial authority and its dependent factual child stores.</summary>
+    public SimulationRuntimeSpatialInvariantReport ValidateSpatialInvariants()
+    {
+        List<string> violations = new List<string>();
+        foreach (string violation in spatialAuthorityStore.ValidateInvariants().Violations)
+            violations.Add("SpatialAuthority: " + violation);
+        foreach (string violation in legacySpatialAnchorBindingStore.ValidateInvariants().Violations)
+            violations.Add("LegacySpatialAnchorBindings: " + violation);
+        foreach (string violation in personSpatialPositionStore.ValidateInvariants().Violations)
+            violations.Add("PersonSpatialPositions: " + violation);
+        if (armedForceSpatialStateStore != null)
+        {
+            foreach (string violation in armedForceSpatialStateStore.ValidateInvariants().Violations)
+                violations.Add("ArmedForceSpatialPositions: " + violation);
+        }
+        return new SimulationRuntimeSpatialInvariantReport(violations);
+    }
     public ManpowerSourceConsequencePlanningService ManpowerSourceConsequencePlanningService
         => manpowerSourceConsequencePlanningService;
     public BattleDirectConsequencePolicy BattleDirectConsequencePolicy => battleDirectConsequencePolicy;
@@ -190,7 +266,9 @@ public sealed class SimulationRuntime
         IManpowerSourceSnapshotProvider manpowerSourceProvider = null,
         IEnumerable<SettlementManpowerSourceRegistration> settlementManpowerSourceRegistrations = null,
         BattleDirectConsequencePolicy battleDirectConsequencePolicy = null,
-        IDomainEventRecorder battleResolvedEventRecorder = null)
+        IDomainEventRecorder battleResolvedEventRecorder = null,
+        LegacySpatialAnchorBindingStore legacySpatialAnchorBindingStore = null,
+        PersonSpatialPositionStore personSpatialPositionStore = null)
     {
         List<CityRuntime> resolvedCities = cities != null
             ? new List<CityRuntime>(cities)
@@ -325,6 +403,20 @@ public sealed class SimulationRuntime
         GenealogyStore resolvedGenealogyStore = genealogyStore ?? new GenealogyStore();
         ValidateGenealogyStore(resolvedPersonStore, resolvedGenealogyStore);
         SpatialAuthorityStore resolvedSpatialAuthorityStore = CloneSpatialAuthorityStore(spatialAuthorityStore);
+        ISpatialTraversalOptionResolver resolvedTraversalOptionResolver =
+            new SpatialPassageTraversalOptionResolver(resolvedSpatialAuthorityStore.PassageAuthority);
+        LegacySpatialAnchorBindingStore resolvedLegacySpatialAnchorBindingStore =
+            CloneLegacySpatialAnchorBindingStore(
+                legacySpatialAnchorBindingStore,
+                resolvedSpatialAuthorityStore,
+                resolvedCities,
+                explorableSiteStore);
+        PersonSpatialPositionStore resolvedPersonSpatialPositionStore =
+            ClonePersonSpatialPositionStore(
+                personSpatialPositionStore,
+                resolvedPersonStore,
+                resolvedSpatialAuthorityStore,
+                resolvedTraversalOptionResolver);
         InstitutionStore resolvedInstitutionStore = ResolveInstitutionStore(
             institutionStore,
             officeStore);
@@ -387,6 +479,8 @@ public sealed class SimulationRuntime
         this.aggregateDemographyProvider = aggregateDemographyProvider;
         this.personStore = resolvedPersonStore;
         this.spatialAuthorityStore = resolvedSpatialAuthorityStore;
+        this.legacySpatialAnchorBindingStore = resolvedLegacySpatialAnchorBindingStore;
+        this.personSpatialPositionStore = resolvedPersonSpatialPositionStore;
         this.armedForceStore = resolvedArmedForceStore;
         this.contingentManpowerStateStore = resolvedManpowerStateStore;
         this.settlementManpowerSourceRegistry = resolvedSettlementManpowerSourceRegistry;
@@ -573,6 +667,8 @@ public sealed class SimulationRuntime
         AddRequiredMutationGuardBinding(authorities, simulationTime, nameof(SimulationTime));
         AddRequiredMutationGuardBinding(authorities, personStore, nameof(PersonStore));
         AddRequiredMutationGuardBinding(authorities, spatialAuthorityStore, nameof(SpatialAuthorityStore));
+        AddRequiredMutationGuardBinding(authorities, legacySpatialAnchorBindingStore, nameof(LegacySpatialAnchorBindingStore));
+        AddRequiredMutationGuardBinding(authorities, personSpatialPositionStore, nameof(PersonSpatialPositionStore));
         AddRequiredMutationGuardBinding(authorities, armedForceStore, nameof(ArmedForceStore));
         AddRequiredMutationGuardBinding(authorities, contingentManpowerStateStore, nameof(ContingentManpowerStateStore));
         AddRequiredMutationGuardBinding(authorities, armedForceSpatialStateStore, nameof(ArmedForceSpatialStateStore));
@@ -2548,6 +2644,94 @@ public sealed class SimulationRuntime
         }
 
         return source.Clone();
+    }
+
+    private static LegacySpatialAnchorBindingStore CloneLegacySpatialAnchorBindingStore(
+        LegacySpatialAnchorBindingStore source,
+        SpatialAuthorityStore spatialAuthorityStore,
+        IReadOnlyList<CityRuntime> cities,
+        ExplorableSiteStore sites)
+    {
+        Func<SpatialAnchorOwnerId, bool> ownerIsComposed = owner =>
+        {
+            if (owner == null) return false;
+            if (owner.Kind == SpatialAnchorOwnerKind.City)
+            {
+                foreach (CityRuntime city in cities ?? Array.Empty<CityRuntime>())
+                    if (city != null && string.Equals(city.RuntimeId, owner.Value, StringComparison.Ordinal)) return true;
+                return false;
+            }
+            return owner.Kind == SpatialAnchorOwnerKind.ExplorableSite
+                && sites != null
+                && sites.TryGetByRuntimeId(owner.Value, out _);
+        };
+
+        if (source == null)
+        {
+            return new LegacySpatialAnchorBindingStore(spatialAuthorityStore, ownerIsComposed);
+        }
+
+        SpatialAnchorBindingInvariantReport report = source.ValidateInvariants();
+        if (!report.IsValid)
+        {
+            throw new ArgumentException(
+                "The SimulationRuntime LegacySpatialAnchorBindingStore contains invalid world state: "
+                + string.Join("; ", report.Violations),
+                nameof(source));
+        }
+
+        foreach (SpatialAnchorBinding binding in source.Bindings)
+        {
+            bool ownerExists = false;
+            if (binding.OwnerId.Kind == SpatialAnchorOwnerKind.City)
+            {
+                foreach (CityRuntime city in cities ?? Array.Empty<CityRuntime>())
+                {
+                    if (city != null && string.Equals(city.RuntimeId, binding.OwnerId.Value, StringComparison.Ordinal))
+                    {
+                        ownerExists = true;
+                        break;
+                    }
+                }
+            }
+            else if (binding.OwnerId.Kind == SpatialAnchorOwnerKind.ExplorableSite)
+            {
+                ownerExists = sites != null && sites.TryGetByRuntimeId(binding.OwnerId.Value, out _);
+            }
+
+            if (!ownerExists)
+            {
+                throw new ArgumentException(
+                    "The SimulationRuntime LegacySpatialAnchorBindingStore references a City/Site absent from the composed world: "
+                    + binding.OwnerId.StableKey + ".",
+                    nameof(source));
+            }
+        }
+
+        return source.Clone(spatialAuthorityStore, ownerIsComposed);
+    }
+
+    private static PersonSpatialPositionStore ClonePersonSpatialPositionStore(
+        PersonSpatialPositionStore source,
+        PersonStore personStore,
+        SpatialAuthorityStore spatialAuthorityStore,
+        ISpatialTraversalOptionResolver traversalOptionResolver)
+    {
+        if (source == null)
+        {
+            return new PersonSpatialPositionStore(personStore, spatialAuthorityStore, traversalOptionResolver);
+        }
+
+        PersonSpatialPositionInvariantReport report = source.ValidateInvariants();
+        if (!report.IsValid)
+        {
+            throw new ArgumentException(
+                "The SimulationRuntime PersonSpatialPositionStore contains invalid world state: "
+                + string.Join("; ", report.Violations),
+                nameof(source));
+        }
+
+        return source.Clone(personStore, spatialAuthorityStore, traversalOptionResolver);
     }
 
     private static ArmedForceSpatialStateStore CloneArmedForceSpatialStateStore(

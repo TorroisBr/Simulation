@@ -141,6 +141,30 @@ public sealed class WorldStateDiff
             WorldStateCanonicalWriter.StringValue(before.Spatial.CoordinateCanonicalOrder),
             WorldStateCanonicalWriter.StringValue(after.Spatial.CoordinateCanonicalOrder),
             differences);
+        CompareValue("PersonSpatialPositionStore", "world", "StatePresent",
+            WorldStateCanonicalWriter.BoolValue(before.Spatial.PersonSpatialPositionRevision.HasValue),
+            WorldStateCanonicalWriter.BoolValue(after.Spatial.PersonSpatialPositionRevision.HasValue),
+            differences);
+        CompareValue("PersonSpatialPositionStore", "world", "Revision",
+            before.Spatial.PersonSpatialPositionRevision.HasValue
+                ? WorldStateCanonicalWriter.Int64Value(before.Spatial.PersonSpatialPositionRevision.Value)
+                : null,
+            after.Spatial.PersonSpatialPositionRevision.HasValue
+                ? WorldStateCanonicalWriter.Int64Value(after.Spatial.PersonSpatialPositionRevision.Value)
+                : null,
+            differences);
+        CompareValue("LegacySpatialAnchorBindingStore", "world", "StatePresent",
+            WorldStateCanonicalWriter.BoolValue(before.Spatial.LegacySpatialAnchorBindingRevision.HasValue),
+            WorldStateCanonicalWriter.BoolValue(after.Spatial.LegacySpatialAnchorBindingRevision.HasValue),
+            differences);
+        CompareValue("LegacySpatialAnchorBindingStore", "world", "Revision",
+            before.Spatial.LegacySpatialAnchorBindingRevision.HasValue
+                ? WorldStateCanonicalWriter.Int64Value(before.Spatial.LegacySpatialAnchorBindingRevision.Value)
+                : null,
+            after.Spatial.LegacySpatialAnchorBindingRevision.HasValue
+                ? WorldStateCanonicalWriter.Int64Value(after.Spatial.LegacySpatialAnchorBindingRevision.Value)
+                : null,
+            differences);
         CompareValue("SpatialWorldScale", "world", "ResolvedConventionId",
             WorldStateCanonicalWriter.StringValue(before.Spatial.ScaleContext?.ResolvedConventionId),
             WorldStateCanonicalWriter.StringValue(after.Spatial.ScaleContext?.ResolvedConventionId),
@@ -213,6 +237,73 @@ public sealed class WorldStateDiff
                     WorldStateCanonicalWriter.StringValue(left.AnchorHexId),
                     WorldStateCanonicalWriter.StringValue(right.AnchorHexId),
                     differences);
+                CompareValue("SpatialCrossing", identity, "ContentIdentity",
+                    WorldStateCanonicalWriter.StringValue(left.ContentIdentity),
+                    WorldStateCanonicalWriter.StringValue(right.ContentIdentity),
+                    differences);
+                CompareValue("SpatialCrossing", identity, "ContentRevision",
+                    WorldStateCanonicalWriter.StringValue(left.ContentRevision),
+                    WorldStateCanonicalWriter.StringValue(right.ContentRevision),
+                    differences);
+                CompareValue("SpatialCrossing", identity, "EffortMultiplier",
+                    WorldStateCanonicalWriter.DecimalValue(left.EffortMultiplier),
+                    WorldStateCanonicalWriter.DecimalValue(right.EffortMultiplier),
+                    differences);
+                CompareValue("SpatialCrossing", identity, "Condition",
+                    WorldStateCanonicalWriter.EnumValue(left.Condition),
+                    WorldStateCanonicalWriter.EnumValue(right.Condition),
+                    differences);
+                CompareValue("SpatialCrossing", identity, "OvercomesBarrierIds",
+                    StringListValue(left.OvercomesBarrierIds),
+                    StringListValue(right.OvercomesBarrierIds),
+                    differences);
+            },
+            differences);
+        CompareEntities("SpatialPassageOption", before.Spatial.PassageOptions, after.Spatial.PassageOptions,
+            option => option.StableKey,
+            (identity, left, right) =>
+            {
+                CompareValue("SpatialPassageOption", identity, "Kind", WorldStateCanonicalWriter.EnumValue(left.Kind), WorldStateCanonicalWriter.EnumValue(right.Kind), differences);
+                CompareValue("SpatialPassageOption", identity, "ConnectionId", WorldStateCanonicalWriter.StringValue(left.ConnectionId), WorldStateCanonicalWriter.StringValue(right.ConnectionId), differences);
+                CompareValue("SpatialPassageOption", identity, "CrossingId", WorldStateCanonicalWriter.StringValue(left.CrossingId), WorldStateCanonicalWriter.StringValue(right.CrossingId), differences);
+                CompareValue("SpatialPassageOption", identity, "RuleIdentity", WorldStateCanonicalWriter.StringValue(left.RuleIdentity), WorldStateCanonicalWriter.StringValue(right.RuleIdentity), differences);
+                CompareValue("SpatialPassageOption", identity, "RuleVersion", WorldStateCanonicalWriter.StringValue(left.RuleVersion), WorldStateCanonicalWriter.StringValue(right.RuleVersion), differences);
+                CompareValue("SpatialPassageOption", identity, "FirstHexId", WorldStateCanonicalWriter.StringValue(left.FirstHexId), WorldStateCanonicalWriter.StringValue(right.FirstHexId), differences);
+                CompareValue("SpatialPassageOption", identity, "SecondHexId", WorldStateCanonicalWriter.StringValue(left.SecondHexId), WorldStateCanonicalWriter.StringValue(right.SecondHexId), differences);
+                CompareValue("SpatialPassageOption", identity, "Condition", WorldStateCanonicalWriter.EnumValue(left.Condition), WorldStateCanonicalWriter.EnumValue(right.Condition), differences);
+                CompareValue("SpatialPassageOption", identity, "IsCrossing", WorldStateCanonicalWriter.BoolValue(left.IsCrossing), WorldStateCanonicalWriter.BoolValue(right.IsCrossing), differences);
+                CompareValue("SpatialPassageOption", identity, "ContentIdentity", WorldStateCanonicalWriter.StringValue(left.ContentIdentity), WorldStateCanonicalWriter.StringValue(right.ContentIdentity), differences);
+                CompareValue("SpatialPassageOption", identity, "ContentRevision", WorldStateCanonicalWriter.StringValue(left.ContentRevision), WorldStateCanonicalWriter.StringValue(right.ContentRevision), differences);
+                CompareValue("SpatialPassageOption", identity, "EffortMultiplier", WorldStateCanonicalWriter.DecimalValue(left.EffortMultiplier), WorldStateCanonicalWriter.DecimalValue(right.EffortMultiplier), differences);
+                CompareValue("SpatialPassageOption", identity, "OvercomesBarrierIds", StringListValue(left.OvercomesBarrierIds), StringListValue(right.OvercomesBarrierIds), differences);
+            },
+            differences);
+        CompareEntities("SpatialBarrier", before.Spatial.Barriers, after.Spatial.Barriers,
+            barrier => barrier.BarrierId,
+            (identity, left, right) =>
+            {
+                CompareValue("SpatialBarrier", identity, "ContentIdentity", WorldStateCanonicalWriter.StringValue(left.ContentIdentity), WorldStateCanonicalWriter.StringValue(right.ContentIdentity), differences);
+                CompareValue("SpatialBarrier", identity, "ContentRevision", WorldStateCanonicalWriter.StringValue(left.ContentRevision), WorldStateCanonicalWriter.StringValue(right.ContentRevision), differences);
+                CompareValue("SpatialBarrier", identity, "Condition", WorldStateCanonicalWriter.EnumValue(left.Condition), WorldStateCanonicalWriter.EnumValue(right.Condition), differences);
+                CompareValue("SpatialBarrier", identity, "Boundaries", BoundaryListValue(left.Boundaries), BoundaryListValue(right.Boundaries), differences);
+            },
+            differences);
+        CompareEntities("PersonSpatialPosition", before.Spatial.PersonSpatialPositions, after.Spatial.PersonSpatialPositions,
+            position => position.PersonId,
+            (identity, left, right) =>
+            {
+                CompareValue("PersonSpatialPosition", identity, "IsInTransit", WorldStateCanonicalWriter.BoolValue(left.IsInTransit), WorldStateCanonicalWriter.BoolValue(right.IsInTransit), differences);
+                ComparePositionReference(identity, "Position", left.Position, right.Position, differences);
+                CompareTransit(identity, left.Transit, right.Transit, differences);
+            },
+            differences);
+        CompareEntities("LegacySpatialAnchorBinding", before.Spatial.LegacySpatialAnchorBindings, after.Spatial.LegacySpatialAnchorBindings,
+            binding => binding.StableKey,
+            (identity, left, right) =>
+            {
+                CompareValue("LegacySpatialAnchorBinding", identity, "OwnerKind", WorldStateCanonicalWriter.EnumValue(left.OwnerKind), WorldStateCanonicalWriter.EnumValue(right.OwnerKind), differences);
+                CompareValue("LegacySpatialAnchorBinding", identity, "OwnerId", WorldStateCanonicalWriter.StringValue(left.OwnerId), WorldStateCanonicalWriter.StringValue(right.OwnerId), differences);
+                CompareValue("LegacySpatialAnchorBinding", identity, "LocationId", WorldStateCanonicalWriter.StringValue(left.LocationId), WorldStateCanonicalWriter.StringValue(right.LocationId), differences);
             },
             differences);
 
@@ -1241,6 +1332,66 @@ public sealed class WorldStateDiff
                 afterValue,
                 WorldStateDifferenceChangeKind.Changed));
         }
+    }
+
+    private static string StringListValue(IReadOnlyList<string> values)
+    {
+        return WorldStateCanonicalWriter.StringListValue(values ?? Array.Empty<string>());
+    }
+
+    private static string BoundaryListValue(IReadOnlyList<WorldStateHexBoundarySnapshot> boundaries)
+    {
+        if (boundaries == null || boundaries.Count == 0) return string.Empty;
+        List<string> values = new List<string>();
+        foreach (WorldStateHexBoundarySnapshot boundary in boundaries)
+        {
+            values.Add(boundary == null ? string.Empty : boundary.StableKey);
+        }
+        return string.Join(";", values.ToArray());
+    }
+
+    private static void ComparePositionReference(
+        string identity,
+        string prefix,
+        WorldStateStablePositionReferenceSnapshot left,
+        WorldStateStablePositionReferenceSnapshot right,
+        List<WorldStateDifference> differences)
+    {
+        CompareValue("PersonSpatialPosition", identity, prefix + ".Kind",
+            left == null ? null : WorldStateCanonicalWriter.EnumValue(left.Kind),
+            right == null ? null : WorldStateCanonicalWriter.EnumValue(right.Kind), differences);
+        CompareValue("PersonSpatialPosition", identity, prefix + ".HexId",
+            WorldStateCanonicalWriter.StringValue(left?.HexId), WorldStateCanonicalWriter.StringValue(right?.HexId), differences);
+        CompareValue("PersonSpatialPosition", identity, prefix + ".LocationId",
+            WorldStateCanonicalWriter.StringValue(left?.LocationId), WorldStateCanonicalWriter.StringValue(right?.LocationId), differences);
+        CompareValue("PersonSpatialPosition", identity, prefix + ".CrossingId",
+            WorldStateCanonicalWriter.StringValue(left?.CrossingId), WorldStateCanonicalWriter.StringValue(right?.CrossingId), differences);
+    }
+
+    private static void CompareTransit(
+        string identity,
+        WorldStateTransitSnapshot left,
+        WorldStateTransitSnapshot right,
+        List<WorldStateDifference> differences)
+    {
+        CompareValue("PersonSpatialPosition", identity, "TransitPresent",
+            WorldStateCanonicalWriter.BoolValue(left != null), WorldStateCanonicalWriter.BoolValue(right != null), differences);
+        CompareValue("PersonSpatialPosition", identity, "Transit.OptionKind",
+            left == null ? null : WorldStateCanonicalWriter.EnumValue(left.OptionKind),
+            right == null ? null : WorldStateCanonicalWriter.EnumValue(right.OptionKind), differences);
+        CompareValue("PersonSpatialPosition", identity, "Transit.OptionStableKey",
+            WorldStateCanonicalWriter.StringValue(left?.OptionStableKey), WorldStateCanonicalWriter.StringValue(right?.OptionStableKey), differences);
+        CompareValue("PersonSpatialPosition", identity, "Transit.Boundary",
+            WorldStateCanonicalWriter.StringValue(left == null ? null : WorldStateSnapshotValue.EncodeStableKey(left.FirstHexId, left.SecondHexId)),
+            WorldStateCanonicalWriter.StringValue(right == null ? null : WorldStateSnapshotValue.EncodeStableKey(right.FirstHexId, right.SecondHexId)), differences);
+        CompareValue("PersonSpatialPosition", identity, "Transit.FromHexId",
+            WorldStateCanonicalWriter.StringValue(left?.FromHexId), WorldStateCanonicalWriter.StringValue(right?.FromHexId), differences);
+        CompareValue("PersonSpatialPosition", identity, "Transit.ToHexId",
+            WorldStateCanonicalWriter.StringValue(left?.ToHexId), WorldStateCanonicalWriter.StringValue(right?.ToHexId), differences);
+        CompareValue("PersonSpatialPosition", identity, "Transit.ProgressTicks",
+            left == null ? null : WorldStateCanonicalWriter.IntValue(left.ProgressTicks),
+            right == null ? null : WorldStateCanonicalWriter.IntValue(right.ProgressTicks), differences);
+        ComparePositionReference(identity, "Transit.LastFullyReachedReference", left?.LastFullyReachedReference, right?.LastFullyReachedReference, differences);
     }
 
     private static string RecognitionHistoryValue(

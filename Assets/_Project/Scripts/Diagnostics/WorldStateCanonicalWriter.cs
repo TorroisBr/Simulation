@@ -33,6 +33,20 @@ public static class WorldStateCanonicalWriter
             AppendLine(output, "METADATA", "SpatialAuthorityStatePresent", BoolValue(true));
             AppendLine(output, "METADATA", "SpatialAuthorityRevision", Int64Value(snapshot.Spatial.AuthorityRevision.Value));
         }
+        AppendLine(output, "METADATA", "PersonSpatialPositionStatePresent",
+            BoolValue(snapshot.Spatial.PersonSpatialPositionRevision.HasValue));
+        if (snapshot.Spatial.PersonSpatialPositionRevision.HasValue)
+        {
+            AppendLine(output, "METADATA", "PersonSpatialPositionRevision",
+                Int64Value(snapshot.Spatial.PersonSpatialPositionRevision.Value));
+        }
+        AppendLine(output, "METADATA", "LegacySpatialAnchorBindingStatePresent",
+            BoolValue(snapshot.Spatial.LegacySpatialAnchorBindingRevision.HasValue));
+        if (snapshot.Spatial.LegacySpatialAnchorBindingRevision.HasValue)
+        {
+            AppendLine(output, "METADATA", "LegacySpatialAnchorBindingRevision",
+                Int64Value(snapshot.Spatial.LegacySpatialAnchorBindingRevision.Value));
+        }
         if (snapshot.HasArmedForceState)
         {
             AppendLine(output, "METADATA", "ArmedForceStatePresent", BoolValue(true));
@@ -108,7 +122,53 @@ public static class WorldStateCanonicalWriter
                     crossing.CrossingId,
                     crossing.FirstHexId,
                     crossing.SecondHexId,
-                    crossing.AnchorHexId);
+                    crossing.AnchorHexId,
+                    crossing.ContentIdentity,
+                    crossing.ContentRevision,
+                    DecimalValue(crossing.EffortMultiplier),
+                    EnumValue(crossing.Condition));
+                foreach (string barrierId in crossing.OvercomesBarrierIds)
+                {
+                    AppendLine(output, "SPATIAL_CROSSING_OVERCOMES_BARRIER", crossing.CrossingId, barrierId);
+                }
+            }
+
+            foreach (WorldStatePassageOptionSnapshot option in snapshot.Spatial.PassageOptions)
+            {
+                AppendLine(output, "SPATIAL_PASSAGE_OPTION",
+                    option.StableKey,
+                    EnumValue(option.Kind),
+                    option.ConnectionId,
+                    option.CrossingId,
+                    option.RuleIdentity,
+                    option.RuleVersion,
+                    option.FirstHexId,
+                    option.SecondHexId,
+                    EnumValue(option.Condition),
+                    BoolValue(option.IsCrossing),
+                    option.ContentIdentity,
+                    option.ContentRevision,
+                    DecimalValue(option.EffortMultiplier));
+                foreach (string barrierId in option.OvercomesBarrierIds)
+                {
+                    AppendLine(output, "SPATIAL_PASSAGE_OPTION_OVERCOMES_BARRIER", option.StableKey, barrierId);
+                }
+            }
+
+            foreach (WorldStateBarrierSnapshot barrier in snapshot.Spatial.Barriers)
+            {
+                AppendLine(output, "SPATIAL_BARRIER",
+                    barrier.BarrierId,
+                    barrier.ContentIdentity,
+                    barrier.ContentRevision,
+                    EnumValue(barrier.Condition));
+                foreach (WorldStateHexBoundarySnapshot boundary in barrier.Boundaries)
+                {
+                    AppendLine(output, "SPATIAL_BARRIER_BOUNDARY",
+                        barrier.BarrierId,
+                        boundary.FirstHexId,
+                        boundary.SecondHexId);
+                }
             }
 
             if (snapshot.Spatial.CoordinateConventionVersion != null
@@ -615,6 +675,50 @@ public static class WorldStateCanonicalWriter
                 route.OriginRuntimeId,
                 route.DestinationRuntimeId,
                 IntValue(route.TravelDays));
+        }
+
+        foreach (WorldStatePersonSpatialPositionSnapshot position in snapshot.Spatial.PersonSpatialPositions)
+        {
+            if (position.IsInTransit)
+            {
+                WorldStateTransitSnapshot transit = position.Transit;
+                AppendLine(output, "PERSON_SPATIAL_TRANSIT",
+                    position.PersonId,
+                    EnumValue(transit.OptionKind),
+                    transit.OptionStableKey,
+                    transit.ConnectionId,
+                    transit.CrossingId,
+                    transit.RuleIdentity,
+                    transit.RuleVersion,
+                    transit.FirstHexId,
+                    transit.SecondHexId,
+                    transit.FromHexId,
+                    transit.ToHexId,
+                    EnumValue(transit.LastFullyReachedReference.Kind),
+                    transit.LastFullyReachedReference.StableKey,
+                    transit.LastFullyReachedReference.HexId,
+                    transit.LastFullyReachedReference.LocationId,
+                    transit.LastFullyReachedReference.CrossingId,
+                    IntValue(transit.ProgressTicks));
+            }
+            else if (position.Position != null)
+            {
+                AppendLine(output, "PERSON_SPATIAL_AT",
+                    position.PersonId,
+                    EnumValue(position.Position.Kind),
+                    position.Position.StableKey,
+                    position.Position.HexId,
+                    position.Position.LocationId,
+                    position.Position.CrossingId);
+            }
+        }
+
+        foreach (WorldStateSpatialAnchorBindingSnapshot binding in snapshot.Spatial.LegacySpatialAnchorBindings)
+        {
+            AppendLine(output, "LEGACY_SPATIAL_ANCHOR_BINDING",
+                EnumValue(binding.OwnerKind),
+                binding.OwnerId,
+                binding.LocationId);
         }
 
         foreach (WorldStateSiteSnapshot site in snapshot.Sites)
