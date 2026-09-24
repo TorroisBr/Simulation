@@ -81,6 +81,9 @@ public sealed class SimulationRuntime
     private readonly SpatialAuthorityStore spatialAuthorityStore;
     private readonly LegacySpatialAnchorBindingStore legacySpatialAnchorBindingStore;
     private readonly PersonSpatialPositionStore personSpatialPositionStore;
+    private readonly SpatialRouteKnowledgeStore spatialRouteKnowledgeStore;
+    private readonly PersonRoutePlanStore personRoutePlanStore;
+    private readonly SpatialRoutePlanningSystem spatialRoutePlanningSystem;
     private readonly ArmedForceStore armedForceStore;
     private readonly ContingentManpowerStateStore contingentManpowerStateStore;
     private readonly SettlementManpowerSourceRegistry settlementManpowerSourceRegistry;
@@ -142,6 +145,9 @@ public sealed class SimulationRuntime
     public SpatialAuthorityStore SpatialAuthorityStore => spatialAuthorityStore;
     public LegacySpatialAnchorBindingStore LegacySpatialAnchorBindingStore => legacySpatialAnchorBindingStore;
     public PersonSpatialPositionStore PersonSpatialPositionStore => personSpatialPositionStore;
+    public SpatialRouteKnowledgeStore SpatialRouteKnowledgeStore => spatialRouteKnowledgeStore;
+    public PersonRoutePlanStore PersonRoutePlanStore => personRoutePlanStore;
+    public SpatialRoutePlanningSystem SpatialRoutePlanningSystem => spatialRoutePlanningSystem;
     public ArmedForceStore ArmedForceStore => armedForceStore;
     public ContingentManpowerStateStore ContingentManpowerStateStore => contingentManpowerStateStore;
 
@@ -160,8 +166,50 @@ public sealed class SimulationRuntime
             foreach (string violation in armedForceSpatialStateStore.ValidateInvariants().Violations)
                 violations.Add("ArmedForceSpatialPositions: " + violation);
         }
+        foreach (string violation in spatialRouteKnowledgeStore.ValidateInvariants().Violations)
+            violations.Add("SpatialRouteKnowledge: " + violation);
+        foreach (string violation in personRoutePlanStore.ValidateInvariants().Violations)
+            violations.Add("PersonRoutePlans: " + violation);
         return new SimulationRuntimeSpatialInvariantReport(violations);
     }
+
+    /// <summary>Records actor-provided spatial observations against the current runtime day.</summary>
+    public bool TryRecordSpatialObservations(
+        PersonId actor,
+        IEnumerable<SpatialObservation> observations,
+        out SpatialKnowledgeFailure failure)
+    {
+        return spatialRouteKnowledgeStore.TryRecordObservations(actor, observations, CurrentDay, out failure);
+    }
+
+    /// <summary>Builds a selection using the current runtime day and explicit endpoints/policy.</summary>
+    public SpatialRoutePlanningOutcome SelectKnownSpatialRoute(
+        PersonId actor,
+        StablePositionReference origin,
+        StablePositionReference destination,
+        SpatialRouteSelectionPolicy policy,
+        long? maximumOptionBeliefAgeDays = null)
+    {
+        SpatialRoutePlanningRequest request = new SpatialRoutePlanningRequest(
+            actor, origin, destination, CurrentDay, maximumOptionBeliefAgeDays);
+        return spatialRoutePlanningSystem.SelectKnownRoute(request, policy);
+    }
+
+    /// <summary>Accepts a selected route only for the current runtime day.</summary>
+    public bool TryAcceptSpatialRoutePlan(
+        SpatialRoutePlanningOutcome selectedOutcome,
+        string decisionIdentity,
+        long expectedActorPlanRevision,
+        out PersonRoutePlanFailure failure)
+    {
+        return personRoutePlanStore.TryAcceptPlan(
+            selectedOutcome,
+            decisionIdentity,
+            expectedActorPlanRevision,
+            CurrentDay,
+            out failure);
+    }
+
     public ManpowerSourceConsequencePlanningService ManpowerSourceConsequencePlanningService
         => manpowerSourceConsequencePlanningService;
     public BattleDirectConsequencePolicy BattleDirectConsequencePolicy => battleDirectConsequencePolicy;
@@ -268,7 +316,9 @@ public sealed class SimulationRuntime
         BattleDirectConsequencePolicy battleDirectConsequencePolicy = null,
         IDomainEventRecorder battleResolvedEventRecorder = null,
         LegacySpatialAnchorBindingStore legacySpatialAnchorBindingStore = null,
-        PersonSpatialPositionStore personSpatialPositionStore = null)
+        PersonSpatialPositionStore personSpatialPositionStore = null,
+        SpatialRouteKnowledgeStore spatialRouteKnowledgeStore = null,
+        PersonRoutePlanStore personRoutePlanStore = null)
     {
         List<CityRuntime> resolvedCities = cities != null
             ? new List<CityRuntime>(cities)
@@ -417,6 +467,19 @@ public sealed class SimulationRuntime
                 resolvedPersonStore,
                 resolvedSpatialAuthorityStore,
                 resolvedTraversalOptionResolver);
+        SpatialRouteKnowledgeStore resolvedSpatialRouteKnowledgeStore =
+            CloneSpatialRouteKnowledgeStore(spatialRouteKnowledgeStore, resolvedPersonStore);
+        PersonRoutePlanStore resolvedPersonRoutePlanStore =
+            ClonePersonRoutePlanStore(
+                personRoutePlanStore,
+                resolvedPersonStore,
+                resolvedSpatialRouteKnowledgeStore,
+                () => this.simulationTime.AbsoluteDay);
+        SpatialRoutePlanningSystem resolvedSpatialRoutePlanningSystem =
+            new SpatialRoutePlanningSystem(
+                resolvedPersonStore,
+                resolvedSpatialAuthorityStore,
+                resolvedSpatialRouteKnowledgeStore);
         InstitutionStore resolvedInstitutionStore = ResolveInstitutionStore(
             institutionStore,
             officeStore);
@@ -481,6 +544,9 @@ public sealed class SimulationRuntime
         this.spatialAuthorityStore = resolvedSpatialAuthorityStore;
         this.legacySpatialAnchorBindingStore = resolvedLegacySpatialAnchorBindingStore;
         this.personSpatialPositionStore = resolvedPersonSpatialPositionStore;
+        this.spatialRouteKnowledgeStore = resolvedSpatialRouteKnowledgeStore;
+        this.personRoutePlanStore = resolvedPersonRoutePlanStore;
+        this.spatialRoutePlanningSystem = resolvedSpatialRoutePlanningSystem;
         this.armedForceStore = resolvedArmedForceStore;
         this.contingentManpowerStateStore = resolvedManpowerStateStore;
         this.settlementManpowerSourceRegistry = resolvedSettlementManpowerSourceRegistry;
@@ -669,6 +735,8 @@ public sealed class SimulationRuntime
         AddRequiredMutationGuardBinding(authorities, spatialAuthorityStore, nameof(SpatialAuthorityStore));
         AddRequiredMutationGuardBinding(authorities, legacySpatialAnchorBindingStore, nameof(LegacySpatialAnchorBindingStore));
         AddRequiredMutationGuardBinding(authorities, personSpatialPositionStore, nameof(PersonSpatialPositionStore));
+        AddRequiredMutationGuardBinding(authorities, spatialRouteKnowledgeStore, nameof(SpatialRouteKnowledgeStore));
+        AddRequiredMutationGuardBinding(authorities, personRoutePlanStore, nameof(PersonRoutePlanStore));
         AddRequiredMutationGuardBinding(authorities, armedForceStore, nameof(ArmedForceStore));
         AddRequiredMutationGuardBinding(authorities, contingentManpowerStateStore, nameof(ContingentManpowerStateStore));
         AddRequiredMutationGuardBinding(authorities, armedForceSpatialStateStore, nameof(ArmedForceSpatialStateStore));
@@ -2732,6 +2800,50 @@ public sealed class SimulationRuntime
         }
 
         return source.Clone(personStore, spatialAuthorityStore, traversalOptionResolver);
+    }
+
+    private static SpatialRouteKnowledgeStore CloneSpatialRouteKnowledgeStore(
+        SpatialRouteKnowledgeStore source,
+        PersonStore personStore)
+    {
+        if (source == null)
+        {
+            return new SpatialRouteKnowledgeStore(personStore);
+        }
+
+        SpatialKnowledgeInvariantReport report = source.ValidateInvariants();
+        if (!report.IsValid)
+        {
+            throw new ArgumentException(
+                "The SimulationRuntime SpatialRouteKnowledgeStore contains invalid world state: "
+                + string.Join("; ", report.Violations),
+                nameof(source));
+        }
+
+        return source.Clone(personStore);
+    }
+
+    private static PersonRoutePlanStore ClonePersonRoutePlanStore(
+        PersonRoutePlanStore source,
+        PersonStore personStore,
+        SpatialRouteKnowledgeStore knowledgeStore,
+        Func<long> currentWorldDayProvider)
+    {
+        if (source == null)
+        {
+            return new PersonRoutePlanStore(personStore, knowledgeStore, currentWorldDayProvider);
+        }
+
+        PersonRoutePlanInvariantReport report = source.ValidateInvariants();
+        if (!report.IsValid)
+        {
+            throw new ArgumentException(
+                "The SimulationRuntime PersonRoutePlanStore contains invalid world state: "
+                + string.Join("; ", report.Violations),
+                nameof(source));
+        }
+
+        return source.CloneForRuntime(personStore, knowledgeStore, currentWorldDayProvider);
     }
 
     private static ArmedForceSpatialStateStore CloneArmedForceSpatialStateStore(

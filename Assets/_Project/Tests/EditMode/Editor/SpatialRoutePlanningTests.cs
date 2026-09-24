@@ -289,6 +289,121 @@ public sealed class SpatialRoutePlanningTests
         Assert.That(knowledgeFailure.Code, Is.EqualTo(SpatialKnowledgeFailureCode.RuntimeFaulted));
     }
 
+    [Test]
+    public void RuntimeClonesAndComposesP8DKnowledgePlannerAndPlansWithDiagnostics()
+    {
+        Fixture source = CreateFixture("person.runtime-route");
+        SpatialRouteSegment segment = Segment("hex.a", "hex.b", "connection.ab");
+        Record(source, OptionObservation(segment, SpatialRouteOptionBelief.KnownAvailable, "map", "runtime-route", 0L, 0L), 0L);
+        SpatialRouteCandidate candidate = source.Planner.BuildKnownCandidates(
+            Request(source.Actor, "hex.a", "hex.b", 0L)).Candidates.Single();
+        Record(source, EstimateObservation(candidate, MetricId, MetricUnit, 3m, "runtime-estimate", 0L), 0L);
+
+        SimulationRuntime runtime = new SimulationRuntime(
+            new SimulationTime(), null, null,
+            personStore: source.People,
+            spatialAuthorityStore: source.Spatial,
+            spatialRouteKnowledgeStore: source.Knowledge,
+            personRoutePlanStore: source.Plans);
+
+        Assert.That(runtime.SpatialAuthorityStore, Is.Not.SameAs(source.Spatial));
+        Assert.That(runtime.SpatialRouteKnowledgeStore, Is.Not.SameAs(source.Knowledge));
+        Assert.That(runtime.PersonRoutePlanStore, Is.Not.SameAs(source.Plans));
+        Assert.That(runtime.SpatialRouteKnowledgeStore.GetObservations(source.Actor).Count, Is.EqualTo(2));
+        Assert.That(runtime.ValidateSpatialInvariants().IsValid, Is.True,
+            string.Join("; ", runtime.ValidateSpatialInvariants().Violations));
+
+        object secondGuard = CreateFaultedMutationGuard();
+        Assert.That(BindGuard(runtime.SpatialRouteKnowledgeStore, secondGuard), Is.False,
+            "Runtime-owned Knowledge must already be bound to the runtime mutation guard.");
+        Assert.That(BindGuard(runtime.PersonRoutePlanStore, secondGuard), Is.False,
+            "Runtime-owned route plans must already be bound to the runtime mutation guard.");
+
+        SpatialRoutePlanningOutcome selected = runtime.SelectKnownSpatialRoute(
+            source.Actor,
+            StablePositionReference.ForHex(new HexId("hex.a")),
+            StablePositionReference.ForHex(new HexId("hex.b")),
+            Policy(preferHigher: false, maxAge: 0L, requireAvailable: true));
+        Assert.That(selected.IsSuccess, Is.True, selected.FailureMessage);
+        Assert.That(runtime.TryAcceptSpatialRoutePlan(selected, "decision.runtime-route", 0L,
+            out PersonRoutePlanFailure planFailure), Is.True, planFailure.ToString());
+        Assert.That(runtime.PersonRoutePlanStore.History.Single().AcceptedDay, Is.EqualTo(runtime.CurrentDay));
+
+        WorldStateSnapshotContext context = new WorldStateSnapshotContext(
+            simulationTime: runtime.SimulationTime,
+            personStore: runtime.PersonStore,
+            spatialAuthorityStore: runtime.SpatialAuthorityStore,
+            legacySpatialAnchorBindingStore: runtime.LegacySpatialAnchorBindingStore,
+            personSpatialPositionStore: runtime.PersonSpatialPositionStore,
+            spatialRouteKnowledgeStore: runtime.SpatialRouteKnowledgeStore,
+            personRoutePlanStore: runtime.PersonRoutePlanStore);
+        WorldStateSnapshot before = WorldStateSnapshotBuilder.Capture(context);
+        Assert.That(before.Spatial.SpatialRouteObservations.Count, Is.EqualTo(2));
+        Assert.That(before.Spatial.PersonRoutePlans.Count, Is.EqualTo(1));
+        Assert.That(WorldStateInvariantValidator.Validate(before).IsValid, Is.True,
+            string.Join("; ", WorldStateInvariantValidator.Validate(before).Errors));
+        string canonicalBefore = WorldStateCanonicalWriter.Write(before);
+        Assert.That(canonicalBefore, Does.Contain("SPATIAL_ROUTE_OBSERVATION"));
+        Assert.That(canonicalBefore, Does.Contain("PERSON_ROUTE_PLAN_LEG"));
+        Assert.That(WorldStateSnapshotFormatter.Format(before), Does.Contain("ROUTE PLAN"));
+
+        SpatialObservation laterFalseBelief = OptionObservation(
+            segment, SpatialRouteOptionBelief.KnownUnavailable, "traveler", "runtime-unavailable-report", 0L, 0L);
+        Assert.That(runtime.TryRecordSpatialObservations(source.Actor, new[] { laterFalseBelief },
+            out SpatialKnowledgeFailure knowledgeFailure), Is.True, knowledgeFailure.ToString());
+        WorldStateSnapshot after = WorldStateSnapshotBuilder.Capture(context);
+        Assert.That(after.Spatial.SpatialRouteObservations.Count, Is.EqualTo(3));
+        Assert.That(WorldStateInvariantValidator.Validate(after).IsValid, Is.True,
+            string.Join("; ", WorldStateInvariantValidator.Validate(after).Errors));
+        WorldStateDiff diff = WorldStateDiff.Compare(before, after);
+        Assert.That(diff.IsEmpty, Is.False);
+        Assert.That(diff.Differences.Any(value => value.Section == "SpatialRouteObservation"), Is.True);
+        Assert.That(WorldStateCanonicalWriter.Write(after), Does.Contain("KnownUnavailable"));
+        Assert.That(runtime.ValidateSpatialInvariants().IsValid, Is.True,
+            string.Join("; ", runtime.ValidateSpatialInvariants().Violations));
+    }
+
+    [Test]
+    public void RuntimeRejectsSelectionFromAnotherWorldDayThroughFacadeAndExposedPlanStore()
+    {
+        Fixture source = CreateFixture("person.runtime-stale-day");
+        SpatialRoutePlanningOutcome selectionMadeOnDayZero = PrepareSelectableRoute(source, 0L, "stale-day");
+        Assert.That(selectionMadeOnDayZero.IsSuccess, Is.True, selectionMadeOnDayZero.FailureMessage);
+
+        SimulationRuntime runtime = new SimulationRuntime(
+            new SimulationTime(1L), null, null,
+            personStore: source.People,
+            spatialAuthorityStore: source.Spatial,
+            spatialRouteKnowledgeStore: source.Knowledge,
+            personRoutePlanStore: source.Plans);
+        long planRevision = runtime.PersonRoutePlanStore.Revision;
+        int planCount = runtime.PersonRoutePlanStore.PlanCount;
+
+        Assert.That(runtime.TryAcceptSpatialRoutePlan(selectionMadeOnDayZero, "decision.stale-day.facade", 0L,
+            out PersonRoutePlanFailure failure), Is.False);
+        Assert.That(failure.Code, Is.EqualTo(PersonRoutePlanFailureCode.StalePlanningDay));
+        Assert.That(runtime.PersonRoutePlanStore.TryAcceptPlan(selectionMadeOnDayZero,
+            "decision.stale-day.direct", 0L, 0L, out failure), Is.False,
+            "Calling the runtime-owned store directly cannot supply an obsolete world day.");
+        Assert.That(failure.Code, Is.EqualTo(PersonRoutePlanFailureCode.StalePlanningDay));
+        Assert.That(runtime.PersonRoutePlanStore.Revision, Is.EqualTo(planRevision));
+        Assert.That(runtime.PersonRoutePlanStore.PlanCount, Is.EqualTo(planCount));
+        Assert.That(runtime.ValidateSpatialInvariants().IsValid, Is.True,
+            string.Join("; ", runtime.ValidateSpatialInvariants().Violations));
+    }
+
+    private static SpatialRoutePlanningOutcome PrepareSelectableRoute(Fixture fixture, long day, string identity)
+    {
+        SpatialRouteSegment segment = Segment("hex.a", "hex.b", "connection.ab");
+        Record(fixture, OptionObservation(segment, SpatialRouteOptionBelief.KnownAvailable,
+            "map", identity + ".route", day, day), day);
+        SpatialRoutePlanningRequest request = Request(fixture.Actor, "hex.a", "hex.b", day);
+        SpatialRouteCandidate candidate = fixture.Planner.BuildKnownCandidates(request).Candidates.Single();
+        Record(fixture, EstimateObservation(candidate, MetricId, MetricUnit, 2m,
+            identity + ".estimate", day), day);
+        return fixture.Planner.SelectKnownRoute(request, Policy(false, 0L, true));
+    }
+
     private static Fixture CreateFixture(string actorId)
     {
         PersonStore people = CreatePeople(actorId);

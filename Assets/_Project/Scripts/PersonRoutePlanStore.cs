@@ -59,7 +59,8 @@ public enum PersonRoutePlanFailureCode
     InvalidDecisionIdentity = 4,
     StaleKnowledgeBasis = 5,
     PlanRevisionMismatch = 6,
-    RevisionOverflow = 7
+    RevisionOverflow = 7,
+    StalePlanningDay = 8
 }
 
 public sealed class PersonRoutePlanFailure
@@ -83,13 +84,18 @@ public sealed class PersonRoutePlanStore : IAuthoritativeMutationGuardBindable
     private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
     private readonly PersonStore personStore;
     private readonly SpatialRouteKnowledgeStore knowledgeStore;
+    private readonly Func<long> currentWorldDayProvider;
     private readonly Dictionary<string, List<PersonRoutePlan>> plansByActor = new Dictionary<string, List<PersonRoutePlan>>(StringComparer.Ordinal);
     private long revision;
 
-    public PersonRoutePlanStore(PersonStore personStore, SpatialRouteKnowledgeStore knowledgeStore)
+    public PersonRoutePlanStore(
+        PersonStore personStore,
+        SpatialRouteKnowledgeStore knowledgeStore,
+        Func<long> currentWorldDayProvider = null)
     {
         this.personStore = personStore ?? throw new ArgumentNullException(nameof(personStore));
         this.knowledgeStore = knowledgeStore ?? throw new ArgumentNullException(nameof(knowledgeStore));
+        this.currentWorldDayProvider = currentWorldDayProvider;
     }
 
     public long Revision => revision;
@@ -153,6 +159,14 @@ public sealed class PersonRoutePlanStore : IAuthoritativeMutationGuardBindable
     {
         if (!mutationGuardBinding.CanMutate)
             return Fail(PersonRoutePlanFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.", out failure);
+        if (currentWorldDayProvider != null)
+        {
+            long currentWorldDay = currentWorldDayProvider();
+            if (currentWorldDay < 0L || acceptedDay != currentWorldDay
+                || selectedOutcome?.PlanningDay != currentWorldDay)
+                return Fail(PersonRoutePlanFailureCode.StalePlanningDay,
+                    "A route plan can only be accepted from a selection made on the SimulationRuntime's current world day.", out failure);
+        }
         if (selectedOutcome == null || !selectedOutcome.IsSuccess || selectedOutcome.SelectedCandidate == null
             || selectedOutcome.Request == null || selectedOutcome.Request.ActorPersonId == null
             || selectedOutcome.Policy == null || !selectedOutcome.Policy.IsValid
@@ -233,9 +247,25 @@ public sealed class PersonRoutePlanStore : IAuthoritativeMutationGuardBindable
 
     internal PersonRoutePlanStore Clone(PersonStore targetPersons, SpatialRouteKnowledgeStore targetKnowledge)
     {
+        return CloneCore(targetPersons, targetKnowledge, null);
+    }
+
+    internal PersonRoutePlanStore CloneForRuntime(
+        PersonStore targetPersons,
+        SpatialRouteKnowledgeStore targetKnowledge,
+        Func<long> currentWorldDayProvider)
+    {
+        return CloneCore(targetPersons, targetKnowledge, currentWorldDayProvider);
+    }
+
+    private PersonRoutePlanStore CloneCore(
+        PersonStore targetPersons,
+        SpatialRouteKnowledgeStore targetKnowledge,
+        Func<long> currentWorldDayProvider)
+    {
         if (targetPersons == null) throw new ArgumentNullException(nameof(targetPersons));
         if (targetKnowledge == null) throw new ArgumentNullException(nameof(targetKnowledge));
-        PersonRoutePlanStore copy = new PersonRoutePlanStore(targetPersons, targetKnowledge);
+        PersonRoutePlanStore copy = new PersonRoutePlanStore(targetPersons, targetKnowledge, currentWorldDayProvider);
         foreach (KeyValuePair<string, List<PersonRoutePlan>> entry in plansByActor)
         {
             PersonId actor = new PersonId(entry.Key);

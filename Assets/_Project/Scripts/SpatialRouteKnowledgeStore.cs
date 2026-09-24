@@ -30,6 +30,18 @@ public sealed class SpatialRouteKnowledgeStore : IAuthoritativeMutationGuardBind
         }
     }
 
+    public IReadOnlyList<PersonId> Actors
+    {
+        get
+        {
+            List<string> actorIds = new List<string>(observationsByActor.Keys);
+            actorIds.Sort(StringComparer.Ordinal);
+            List<PersonId> result = new List<PersonId>(actorIds.Count);
+            foreach (string actorId in actorIds) result.Add(new PersonId(actorId));
+            return new ReadOnlyCollection<PersonId>(result);
+        }
+    }
+
     public long GetActorRevision(PersonId actor)
     {
         return actor != null && actorRevisions.TryGetValue(actor.Value, out long value) ? value : 0L;
