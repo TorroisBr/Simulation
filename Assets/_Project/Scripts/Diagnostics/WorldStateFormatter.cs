@@ -127,6 +127,22 @@ public static class WorldStateSnapshotFormatter
                         .Append('\n');
                 }
             }
+
+            foreach (WorldStateCrossingSnapshot crossing in snapshot.Spatial.Crossings)
+            {
+                if (crossing != null)
+                {
+                    output.Append("CROSSING ")
+                        .Append(Value(crossing.CrossingId))
+                        .Append(" boundary ")
+                        .Append(Value(crossing.FirstHexId))
+                        .Append('|')
+                        .Append(Value(crossing.SecondHexId))
+                        .Append(" anchor ")
+                        .Append(Value(crossing.AnchorHexId))
+                        .Append('\n');
+                }
+            }
         }
 
         if (snapshot.HasArmedForceState)

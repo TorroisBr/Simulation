@@ -592,6 +592,8 @@ public static class WorldStateInvariantValidator
         }
 
         HashSet<string> hexIds = new HashSet<string>(StringComparer.Ordinal);
+        Dictionary<string, WorldStateHexSnapshot> hexesById =
+            new Dictionary<string, WorldStateHexSnapshot>(StringComparer.Ordinal);
         HashSet<HexCoordinate> geographicCoordinates = new HashSet<HexCoordinate>();
         bool geographyPresent = spatial.ScaleContext != null
             || spatial.CoordinateConventionVersion != null
@@ -608,6 +610,10 @@ public static class WorldStateInvariantValidator
             if (hexIds.Add(hex.HexId) == false)
             {
                 AddError(issues, "DuplicateSpatialHexId", hex.HexId, "Spatial Hex identity appears more than once.");
+            }
+            else
+            {
+                hexesById.Add(hex.HexId, hex);
             }
 
             if (hex.HasGeographicFacts)
@@ -749,6 +755,19 @@ public static class WorldStateInvariantValidator
                 if (!hexIds.Contains(crossing.FirstHexId) || !hexIds.Contains(crossing.SecondHexId))
                 {
                     AddError(issues, "SpatialCrossingBoundaryHexMissing", crossing.CrossingId, "Spatial Crossing boundary references a Hex absent from the spatial authority snapshot.");
+                }
+                else if (hexesById.TryGetValue(crossing.FirstHexId, out WorldStateHexSnapshot firstHex)
+                    && hexesById.TryGetValue(crossing.SecondHexId, out WorldStateHexSnapshot secondHex))
+                {
+                    if (!firstHex.Q.HasValue || !firstHex.R.HasValue
+                        || !secondHex.Q.HasValue || !secondHex.R.HasValue)
+                    {
+                        AddError(issues, "SpatialCrossingBoundaryGeometryMissing", crossing.CrossingId, "Spatial Crossing boundary requires geographic axial coordinates for both endpoint Hexes.");
+                    }
+                    else if (!AreAxiallyAdjacent(firstHex.Q.Value, firstHex.R.Value, secondHex.Q.Value, secondHex.R.Value))
+                    {
+                        AddError(issues, "SpatialCrossingBoundaryNotAdjacent", crossing.CrossingId, "Spatial Crossing boundary endpoint Hexes are not geometric neighbors.");
+                    }
                 }
             }
 
@@ -1576,6 +1595,15 @@ public static class WorldStateInvariantValidator
         }
 
         return false;
+    }
+
+    private static bool AreAxiallyAdjacent(int firstQ, int firstR, int secondQ, int secondR)
+    {
+        long qDelta = (long)secondQ - firstQ;
+        long rDelta = (long)secondR - firstR;
+        return (qDelta == 1L && (rDelta == 0L || rDelta == -1L))
+            || (qDelta == 0L && (rDelta == 1L || rDelta == -1L))
+            || (qDelta == -1L && (rDelta == 0L || rDelta == 1L));
     }
 
     private static bool TryGetAnchoredLocation(

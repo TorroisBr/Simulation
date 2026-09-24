@@ -218,6 +218,8 @@ public sealed class SpatialGeographyTests
         Assert.That(crossing.AnchorHexId, Is.EqualTo("hex.fixture.center"));
         Assert.That(WorldStateCanonicalWriter.Write(built), Does.Contain(
             "SPATIAL_CROSSING|crossing.fixture.bridge|hex.fixture.center|hex.fixture.right-upper|hex.fixture.center"));
+        Assert.That(WorldStateSnapshotFormatter.Format(built), Does.Contain(
+            "CROSSING crossing.fixture.bridge boundary hex.fixture.center|hex.fixture.right-upper anchor hex.fixture.center"));
         Assert.That(WorldStateInvariantValidator.Validate(built).IsValid, Is.True);
 
         WorldStateSnapshot withCrossing = SnapshotWithCrossings(built.Spatial, built.Spatial.Crossings);
@@ -259,8 +261,8 @@ public sealed class SpatialGeographyTests
                     SpatialReference.ForCrossing(new CrossingId("crossing.fixture.bridge")))
             },
             armedForceSpatialRevision: 0L);
-        Assert.That(WorldStateInvariantValidator.Validate(valid).Issues,
-            Has.None.Matches<WorldStateInvariantIssue>(issue => issue.Code == "ArmedForcePositionCrossingMissing"));
+        WorldStateInvariantReport validReport = WorldStateInvariantValidator.Validate(valid);
+        Assert.That(validReport.IsValid, Is.True, string.Join("; ", validReport.Issues.Select(issue => issue.Code + ": " + issue.Message)));
 
         WorldStateSnapshot invalid = new WorldStateSnapshot(
             0L,
@@ -276,6 +278,22 @@ public sealed class SpatialGeographyTests
             armedForceSpatialRevision: 0L);
         Assert.That(WorldStateInvariantValidator.Validate(invalid).Issues,
             Has.Some.Matches<WorldStateInvariantIssue>(issue => issue.Code == "ArmedForcePositionCrossingMissing"));
+    }
+
+    [Test]
+    public void SpatialCrossingBoundaryMustJoinGeometricNeighborHexes()
+    {
+        WorldStateSpatialSnapshot geography = Snapshot(CreateAuthoredFixture()).Spatial;
+        WorldStateCrossingSnapshot nonAdjacentCrossing = new WorldStateCrossingSnapshot(
+            "crossing.fixture.non-adjacent",
+            "hex.fixture.left-upper",
+            "hex.fixture.right-upper",
+            "hex.fixture.left-upper");
+        WorldStateSnapshot snapshot = SnapshotWithCrossings(geography, new[] { nonAdjacentCrossing });
+
+        WorldStateInvariantReport report = WorldStateInvariantValidator.Validate(snapshot);
+        Assert.That(report.Issues, Has.Some.Matches<WorldStateInvariantIssue>(
+            issue => issue.Code == "SpatialCrossingBoundaryNotAdjacent"));
     }
 
     [Test]
