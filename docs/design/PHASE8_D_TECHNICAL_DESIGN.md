@@ -4,11 +4,11 @@
 **Accepted upstream contract:** `5faa5817a11b0ae7412ec3ed98240fb1d633de11` (`PHASE8_BC_SHARED_SEGMENT_CONTRACT.md`)
 **Candidate branch:** `codex/phase8/P8DTechnicalDesign`
 **Scope:** P8-D technical design only. No executable code, architecture, Brief, Roadmap, or State edits.
-**Readiness:** Design can proceed against the accepted B/C semantic contract. Implementation must wait for promoted B/C capabilities and their published APIs. No product choice is hidden in the selector: route comparison requires an explicit stable selection policy and estimates available to the actor; absence of either is a typed planning failure. This checkpoint's regional route endpoints are Hexes; Location/Crossing local connectors are outside its supported routing graph.
+**Readiness:** The P8-D design is approved, and its P8-B/C capability dependencies are now canonical through implementation commit `1c84519740db8a245e103678b38f692e13522383`; P8-D implementation is READY from the current `codex/phase8/canonical` head. No product choice is hidden in the selector: route comparison requires an explicit stable selection policy and estimates available to the actor; absence of either is a typed planning failure. This checkpoint's regional route endpoints are Hexes; Location/Crossing local connectors are outside its supported routing graph.
 
 ## 1. Authority and scope
 
-This design is subordinate to `docs/SIMULATION_ARCHITECTURE.md` §§5–6, 16, 69; `docs/phases/PHASE8_BRIEF.md`; `docs/PHASE8_STATE.md`; the P8-A technical design; and the accepted P8-B/C shared segment contract. It defines the Knowledge and route-plan seams needed for P8-D. It does not claim that the still-pending P8-B/C capabilities or this design are implemented.
+This design is subordinate to `docs/SIMULATION_ARCHITECTURE.md` §§5–6, 16, 69; `docs/phases/PHASE8_BRIEF.md`; `docs/PHASE8_STATE.md`; the P8-A technical design; and the accepted P8-B/C shared segment contract. It defines the Knowledge and route-plan seams needed for P8-D. The P8-B/C capabilities it consumes are now canonical; this design does not claim P8-D itself is implemented.
 
 P8-D establishes actor-owned spatial observations, known route alternatives, a deterministic route-selection operation over those observations, and an accepted route plan keyed to persistent `PersonId`. The plan is intent/decision state. P8-C remains the only authority for factual position and transit progress; P8-B remains the authority for current passage truth. Planning reads actor Knowledge and explicit request inputs only. Execution, owned by the later P8-E vertical slice, revalidates current truth.
 
