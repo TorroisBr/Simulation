@@ -1,19 +1,21 @@
 # Phase 11 Entry Architecture Proposal
 
-> **Status: UNAPPROVED proposal for architecture and product review.** This is
-> an entry-design artifact only. It does not amend the Simulation Architecture,
-> Roadmap, Phase Brief, or Phase State; it approves no product scope, consumer,
-> checkpoint, implementation, or promotion. No Phase 11 checkpoint IDs are
-> assigned here.
+> **Status: product scope selected; architecture/technical entry design still
+> pending.** The user-selected first consumer is not implementation approval.
+> This proposal does not amend the Simulation Architecture, Roadmap, Phase
+> Brief, or Phase State. No Phase 11 checkpoint IDs are approved or assigned.
 
 ## Purpose and evidence boundary
 
-Phase 11's Brief describes a bounded actor-control and external-command slice:
-a human choice may replace an actor's autonomous choice without granting
-hidden knowledge or outcome authority, while GM/external commands use explicit
-validation and domain execution. The Brief marks the phase
-`ENTRY_ARCHITECTURE_READY`; this does not make implementation schedulable.
-Choosing which interventions a person may make is an explicit product gate.
+Phase 11's Brief describes a bounded actor-control and external-command slice.
+The user selected the first consumer: **one actor-scoped choice of a supported
+action replaces that actor's autonomous choice, while ordinary domain
+execution still revalidates current World Truth.** This selection does not
+grant hidden knowledge, outcome authority, broader ongoing control, or GM /
+external command scope. The actor's eligibility, controller authority,
+visible candidate/target set, application boundary, and exact action contract
+remain unresolved. The Brief marks the phase `ENTRY_ARCHITECTURE_READY`; this
+does not make implementation schedulable.
 
 This proposal is based on assigned baseline `1f4651e99db2c357dd3be3c6b9284d104379f706`
 in the isolated `codex/phase11/ActorCommandsEntryArchitecture` worktree. The
@@ -139,7 +141,7 @@ Actor Knowledge + current actor state
     → existing action/domain execution revalidates World Truth
     → domain outcome → Domain Event / History / UI
 
-POSSIBLE HUMAN ACTOR-CHOICE PATH (not yet defined)
+SELECTED HUMAN ACTOR-CHOICE SCOPE (technical path not yet defined)
 Controller (?) + controlled actor identity (?)
     → actor-scoped decision context built from that actor's Knowledge
     → explicit choice/request at a defined logical boundary (?)
@@ -154,29 +156,32 @@ Structured input or deterministic translation
     → command audit record and domain events where applicable
 ```
 
-The intended actor path can replace the actor's autonomous *choice*. It must
-not inject hidden facts into the choice context, directly write an outcome, or
+The selected actor path replaces the actor's autonomous *choice*. It must not
+inject hidden facts into the choice context, directly write an outcome, or
 skip the selected domain's execution checks. The GM/external path remains a
-separate authority surface. Whether both paths share an envelope, adapter, or
-queue is an implementation choice after the consumer and product scope are
-approved; it must not erase their semantic distinction.
+separate authority surface and is not part of this selected first-consumer
+scope. Whether a later command track shares an envelope, adapter, or queue is
+an implementation choice; it must not erase the semantic distinction.
 
-## Candidate first-consumer options (no selection)
+## Selected first consumer and adjacent options
 
-These are alternatives for entry review, not a recommendation, priority order,
-or approved scope.
+The selected first-consumer product scope is one actor-scoped choice of one
+supported action in place of that actor's autonomous choice. Normal domain
+execution remains authoritative and revalidates current World Truth. The
+choice does not yet define who may submit it, which actor representations are
+eligible, what candidates or targets can be seen, or when it is applied.
 
 | Candidate | What it could prove | Constraints and dependencies |
 |---|---|---|
-| One explicit choice among a materialized actor's ordinary supported actions | A human choice replaces the autonomous action selection while the normal action executor still validates the world. Existing `NpcActionData`, `NpcDecisionSystem`, and decision records are nearby seams. | Requires a defined controller-to-actor identity, a bounded actor-scoped choice/target view, a deterministic decision boundary, and evidence that the selected action/provider uses Knowledge rather than hidden Truth. `CreateRequestedAction` alone supplies none of the ingress, identity, or input-record contract. Product must decide whether this type of intervention is exposed. |
-| A GM/external `Request` through `ResolveConflict` or `PlaceOpposition` | Exercises the existing normal-resolver command path and the distinction between a request and a supported forced outcome. | It does not by itself demonstrate actor-limited information or replacement of autonomous actor choice. The conflict foundation must be available in the selected composition; no new ForceOutcome scope follows from this option. |
-| A GM `Declare` through a supported existing command, such as a local content/topology declaration or a Knowledge grant | Exercises a typed declared operation through its existing domain authority; Knowledge grants can demonstrate a Knowledge change without asserting underlying Truth. | It does not by itself demonstrate actor control. Each command has different truth/knowledge semantics and exact capability; it cannot be used to imply blanket `Declare` support. Local topology/spatial integration may depend on the chosen current capability. |
-| A travel/route intent chosen using actor Knowledge | Could eventually join actor choice, spatial perspective, and domain execution. | Civil Travel is a soft ordering for Phase 11, not a Phase 11 hard dependency. The Phase 8 Brief says its travel implementation has not started; this option must wait for the exact spatial/travel capability it consumes and must not assume a second travel authority. |
+| **Selected:** one actor-scoped choice of a supported action | Replaces that actor's autonomous choice for one decision while ordinary domain execution revalidates current World Truth. Existing `NpcActionData`, `NpcDecisionSystem`, and decision records are nearby seams, not an approved action contract. | Actor eligibility/materialization, controller authority, visible candidates/targets, the one-shot application boundary, and the exact action payload/contract remain open. `CreateRequestedAction` alone supplies none of the ingress, identity, information, ordering, or input-record contract. |
+| GM/external `Request` through `ResolveConflict` or `PlaceOpposition` | Exercises the existing normal-resolver command path and its distinction from supported forced outcomes. | **Not selected** as the first consumer and not included in the selected actor-choice scope. Existing command support does not imply additional command, actor-control, or ForceOutcome permissions. |
+| GM `Declare` through a supported existing command | Exercises a typed declared operation through its existing domain authority; Knowledge grants can change Knowledge without asserting underlying Truth. | **Not selected** as the first consumer or part of the selected actor-choice scope. Each command has distinct truth/knowledge semantics and capability; there is no blanket `Declare` support. |
+| Travel/route intent chosen using actor Knowledge | Could later join actor choice, spatial perspective, and domain execution. | Not selected. Civil Travel is a soft ordering for Phase 11, not a hard dependency. Any future travel consumer waits for the exact promoted spatial/travel capability it uses. |
 
-The entry gate must choose whether Phase 11 starts with the actor-choice track,
-the GM/external-command track, or a deliberately bounded combination. The
-choice is user/product scope. Architecture review should then bind the chosen
-consumer to its actual domain API and current canonical capability.
+The first-consumer product choice is set. Architecture/technical entry design
+must now define the bounded actor and action contract, preserve the actor's
+Knowledge perspective, and bind execution to an available domain authority.
+This selection does not authorize an implementation wave.
 
 ## Actor-limited information and authority implications
 
@@ -253,7 +258,7 @@ no Phase 11 IDs, approval, or implementation authorization.
 
 | Candidate unit (UNAPPROVED) | Candidate closure evidence | Dependencies / ordering |
 |---|---|---|
-| Product scope and actor perspective contract | Names one consumer; identifies controlled actor, information projection, permitted intervention, and explicit exclusions. | Must be resolved before a track-specific implementation. Architecture cannot choose user-facing interventions. |
+| Actor eligibility, perspective, and one-choice contract | Defines actor eligibility/materialization, controller authority, visible candidate/target projection, exact supported-action contract, and explicit exclusions for the selected scope. | The first-consumer product choice is set; these technical and remaining product details must be resolved before implementation. |
 | Logical input boundary and envelope contract | Defines capture/application boundary, deterministic order, stale-state behavior, identity/provenance, and accepted/rejected semantics without granting new domain mutation power. | Depends on the selected consumer and its actor identity. Requires explicit coexistence semantics with scheduled directives, autonomous selection, and any external command source. |
 | Consumer adapter through existing domain authority | A bounded request/choice reaches one selected domain path, revalidates current World Truth, and records no fabricated result. | Requires the exact promoted domain capability and a contract for actor Knowledge access. No blanket P8/P9 or command-handler dependency. |
 | Causal-input recording and integration | Captures enough normalized causal input and logical application order for its stated guarantee, with deterministic behavior across equivalent runs. | Integrates command/input capture, runtime boundary, domain records, and relevant diagnostics. Must be explicit about what Phase 12/13 still need. |
@@ -294,18 +299,16 @@ reason to introduce a generic concurrency lock or universal actor framework.
 
 ### Product choices
 
-- Which user intervention is the first supported behavior: choosing a
-  materialized actor's next action, issuing a GM/external world command, or a
-  deliberately bounded combination?
-- Which actor(s) can a human control, for how long, and can a Person without
-  rich materialized state be controlled?
-- Which facts/actions/targets may the human see from the actor perspective?
-  Is any GM/observer assistance allowed while preserving the actor's actual
-  Knowledge boundary?
-- Does human choice cover one action only, a plan/goal, or an ongoing control
-  policy? The Phase 11 objective does not pick this granularity.
-- Which of the existing `WorldCommand` kinds, if any, are intentionally
-  exposed to external users? No command mode is a blanket permission.
+- Which actor is eligible for the selected one-action choice, and can an
+  unmaterialized Person be eligible?
+- Which action candidates and targets may the actor-scoped view expose? Is any
+  GM/observer assistance allowed while preserving the actor's Knowledge
+  boundary?
+- Who may submit the choice for that actor, and what product-level controller
+  authority is intended? No ongoing actor-control policy was selected.
+- GM/external `WorldCommand` operations are not in the selected first-consumer
+  scope. Whether a separate command track belongs in a later Phase 11 slice
+  remains undecided; no existing command kind is implicitly exposed.
 
 ### Architecture and technical choices
 
@@ -315,9 +318,14 @@ reason to introduce a generic concurrency lock or universal actor framework.
 - Is actor choice represented as a separate input type, a constrained
   `WorldCommand`, or an adapter to a domain-specific request? The answer must
   preserve actor choice versus GM declaration and domain outcome.
+- What is the exact supported-action contract: which stable action identity,
+  selected target/arguments, and actor-scoped candidate source are captured?
+  Existing `NpcActionRuntime` / `CreateRequestedAction` is not assumed to be
+  the contract.
 - At what logical boundary are inputs accepted and ordered relative to
-  scheduled directives and autonomous action choice? What happens to late,
-  duplicate, stale, rejected, or deferred inputs?
+  scheduled directives and autonomous action choice, and how is this one-shot
+  choice consumed? What happens to late, duplicate, stale, rejected, or
+  deferred inputs?
 - Which normalized fields and principal/order data are included in a future
   causal record, and what guarantee belongs to Phase 11 versus Phase 12/13?
   How are failed requests and replay-sensitive rejection semantics captured?
