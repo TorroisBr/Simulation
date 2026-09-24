@@ -10,8 +10,10 @@ for that selected first consumer. All implementation units below remain
 
 **Design baseline:** Phase 11 entry branch commit `cc875d4` plus the reviewed
 entry updates through `e96fa14`; canonical Phase 8 branch/code and State at
-`ed7a40a86a6a16e9f4fda75703470c38135fda0e`. The inspected, unpromoted P8-D
-implementation candidate is `0070e9d717a2901d4db4e6d3fc1e3dfa4fd756` on
+`ed7a40a86a6a16e9f4fda75703470c38135fda0e`. The current P8-D runtime and
+diagnostics integration code commit is
+`2faf3f873a7a434dc7330191e9292d09f6dd3014`; its latest unpromoted integration
+branch HEAD is `6e964c90adfcda828c675e7a1a3f726279c2d298` on
 `codex/phase8/P8DKnowledgeRoutePlanIntegration`.
 
 ## 1. Scope and authority
@@ -59,8 +61,8 @@ its domain outcome.
 | `Assets/_Project/Scripts/WorldCommandFoundation.cs` | Add `WorldCommandKind.ActorActionChoice`, `WorldCommandOrigin.LocalPlayer`, and `ActorActionChoiceWorldCommandPayload(PersonId actorPersonId, string actionDefinitionId)` | Gives the trusted UI a typed command identity and stable payload. `LocalPlayer` is provenance only. The payload contains no item, quantity, price, target market, or outcome. |
 | New `Assets/_Project/Scripts/ActorActionChoiceWorldCommandHandler.cs` | `ActorActionChoiceWorldCommandHandler : IWorldCommandHandler` | Read-only `Preview`; `Execute` accepts only `Request` and queues through the runtime. It does not create a sale, mutate inventory/money, update Knowledge, or claim sale success. `Declare` and `ForceOutcome` are rejected for this kind; `Suggest` remains preview-only under the existing service. |
 | `Assets/_Project/Scripts/CoreWorldCommandHandlers.cs` | Add an explicit `RegisterActorActionChoiceHandler(WorldCommandService, SimulationRuntime)` entry point, separate from general core/GM handler registration | Allows the local actor-choice command to use the existing WorldCommand service contract without registering a new GM-console or natural-language command. The local UI composition calls this registration; `GMConsolePanel` and the translator gain no actor-control surface. |
-| New `Assets/_Project/Scripts/ActorChoiceContracts.cs` and `ActorChoiceStore.cs` | `ActorChoiceInput`, `ActorChoiceInputId`, `ActorChoiceDisposition`, `ActorChoiceFailure`, `ActorChoiceStore` | Owns the normalized captured input, per-world capture order, pending queue, deferral/rejection/applied dispositions, mutation guard, clone, and invariant checks. It stores stable IDs and values, not `NpcRuntime`, `NpcActionData`, `ItemData`, or market references. |
-| `Assets/_Project/Scripts/SimulationRuntime.cs` | `ActorChoiceStore` composition/property; an internal capture method used by the handler; input reconciliation; `EvaluateAction` hook and post-attempt result recording | Connects trusted command capture to the ordinary runtime actor-turn boundary and existing action path. Keeps authoritative mutations under the existing runtime guard. |
+| New `Assets/_Project/Scripts/ActorChoiceContracts.cs` and `ActorChoiceStore.cs` | `ActorChoiceInput`, `ActorChoiceInputId`, `ActorChoiceDisposition`, `ActorChoiceFailure`, `ActorChoiceStore` | Owns normalized input, per-world capture order, pending queue, deferral/rejection/dispatch/attempt lifecycle, mutation guard, clone, and invariant checks. It stores stable IDs and values, not `NpcRuntime`, `NpcActionData`, `ItemData`, or market references. |
+| `Assets/_Project/Scripts/SimulationRuntime.cs` | `ActorChoiceStore` composition/property; an internal capture method used by the handler; input reconciliation; `EvaluateAction` hook; dispatch-start consumption and terminal returned/thrown outcome recording | Connects trusted command capture to the ordinary runtime actor-turn boundary and existing action path. Keeps authoritative mutations under the existing runtime guard and preserves action-execution exception propagation. |
 | `Assets/_Project/Scripts/DecisionRecords.cs` | Add `NpcDecisionOrigin.ActorChoice` | Distinguishes the selected action's decision provenance from `Autonomous` and `ScheduledDirective`. The actor-choice input record remains the durable causal input; `NpcDecisionRecord` remains a separate decision record. |
 | Diagnostics files described in §6 | Snapshot projection, canonical output, diff, formatting, and invariants | Makes pending and resolved causal inputs inspectable and digest-sensitive without treating diagnostics as authority. |
 
@@ -107,8 +109,36 @@ dispositions. Each receipt contains:
 - `InputSequence`, `PersonId`, and the selected action `DefinitionId`;
 - `WorldCommandOrigin.LocalPlayer`, `WorldCommandAuthorityMode.Request`, and
   `CapturedAbsoluteDay`;
-- zero or more ordered deferrals followed by at most one terminal rejection
-  or application/attempt result.
+- a lifecycle state and ordered dispositions: zero or more `Deferred`
+  dispositions may precede either one terminal `Rejected`, or one
+  `DispatchStarted` marker followed by exactly one terminal attempt outcome.
+
+The lifecycle statuses are `Pending`, `ConsumedAwaitingTerminalAttempt`,
+`Rejected`, `AttemptReturned`, and `AttemptThrew`. `Deferred` is a recorded
+boundary disposition while the status remains `Pending`. `DispatchStarted`
+changes `Pending` to `ConsumedAwaitingTerminalAttempt`; that state is excluded
+from the pending queue and is never eligible for another dispatch. Only its
+matching terminal attempt outcome can close it. `Rejected`, `AttemptReturned`,
+and `AttemptThrew` are terminal.
+
+Attempt classification is `Succeeded`, `Failed`, `ReturnedNoResult`, or
+`Threw`. The optional `NpcActionResult` status is populated only for a
+non-null returned result (`Succeeded` or `Failed`); it is absent for the other
+two classifications.
+
+`DispatchStarted` is recorded immediately before the first call to
+`TryExecuteCurrentAction`. That transition removes the input from the pending
+queue and permanently marks it consumed, before action dispatch can begin; it
+is not a retryable or deferred state. A normal return appends one terminal
+`AttemptReturned` disposition. A non-null `NpcActionResult` is classified as
+`Succeeded` or `Failed`; a null return is classified as `ReturnedNoResult`
+and has no `NpcActionResult` status. If execution throws, append one terminal
+`AttemptThrew` disposition with no returned-result status, then rethrow the
+original exception. Neither outcome requeues the input. After
+`DispatchStarted`, only the matching terminal
+`AttemptReturned` or `AttemptThrew` disposition may be appended; no deferral,
+rejection, or second dispatch is valid. No disposition may follow a terminal
+outcome.
 
 IDs and payload values are captured before action execution. They are not
 derived from display names, object hashes, `NpcRuntimeId`, or Unity instance
@@ -200,27 +230,38 @@ action, append a terminal `Rejected/ActionUnavailable` disposition at that
 normal boundary and continue with the unchanged autonomous `ChooseAction`
 path. No action or sale is fabricated, and the choice is not retried.
 
-If action construction succeeds, mark the choice consumed/applied before
-dispatch to `TryExecuteCurrentAction`, record the choice as the
-`NpcDecisionOrigin.ActorChoice`, and execute through the same ordinary
-`MerchantSystem`/`EconomyTransactionService` path exactly once. This order
-prevents an exception or interrupted runtime from turning an already
-dispatched input back into a pending retry. The `NpcActionResult` returned by
-the existing path is retained as a small execution result (`Succeeded`,
-`Failed`, or `Unavailable` if no result is returned); it does not replace the
-underlying transaction receipt. A failed or partial transaction follows the
-existing `MerchantSystem` result behavior: no automatic retry, no second
-autonomous action that day, and no Knowledge rewrite. If execution throws,
-the choice remains consumed with an unavailable result and the runtime's
-existing fault behavior applies.
+If action construction succeeds, record the choice as the
+`NpcDecisionOrigin.ActorChoice`, then append `DispatchStarted` immediately
+before calling `TryExecuteCurrentAction`. This transition removes the input
+from the pending queue and makes it permanently non-retryable before action
+dispatch begins. Execute through the same ordinary
+`MerchantSystem`/`EconomyTransactionService` path exactly once. If the call
+returns, append the single terminal `AttemptReturned` disposition to the
+input: a non-null result is represented as `Succeeded` or `Failed`; a null
+return is `ReturnedNoResult` and carries no result status. These labels
+describe only what the existing runtime returned; they do not replace the
+underlying transaction result.
+A failed or partial transaction follows existing `MerchantSystem` behavior:
+no automatic retry, no second autonomous action that day, and no Knowledge
+rewrite.
 
-This boundary deliberately keeps three outcomes separate:
+If action execution throws after dispatch starts, append the single terminal
+`AttemptThrew` outcome with no returned-result status, then rethrow the
+original exception with its existing propagation/stack. Do not
+swallow it, substitute `Failed`/`Unavailable`, or claim an `NpcActionResult`
+that was never returned. The choice remains consumed, no autonomous fallback
+or retry runs in that interrupted actor turn, and the runtime's existing fault
+behavior applies. A terminal rejection occurs only before dispatch (for
+example, when the provider returns no action); it falls back to autonomous
+selection as specified above.
 
-| Record | `Success` means |
+This boundary deliberately keeps the records separate:
+
+| Record | Meaning |
 |---|---|
 | `WorldCommandRecord` | The typed request was accepted into the actor-choice input owner. |
-| Actor-choice disposition | The input was deferred, rejected, or selected and attempted at a recorded actor boundary. |
-| `NpcActionResult` | The existing action execution reported success/failure. |
+| Actor-choice lifecycle | The input was deferred or rejected, or dispatched once and closed as returned or thrown. `DispatchStarted` means consumed even before the terminal outcome is written. |
+| Returned `NpcActionResult` | The existing action execution reported success/failure; a null return or thrown call has no returned result. |
 
 Current `MerchantSystem` execution receives an `EconomyTransactionResult`
 internally and returns a transient `NpcActionResult` through the runtime. It
@@ -261,7 +302,8 @@ must retain:
 - caller provenance (`LocalPlayer`) and the `Request` authority mode, without
   inventing a caller principal or actor grant;
 - capture day, every considered/deferred boundary and reason, the actual
-  actor-turn roster ordinal, and the terminal reject/apply/attempt result;
+  actor-turn roster ordinal, and the terminal rejection or returned/thrown
+  attempt outcome;
 - the action/content/configuration versions and effective policy needed to
   interpret the same selection. These remain Phase 12/13 continuation and
   reconstruction inputs; Phase 11 records the selected stable IDs, not a
@@ -283,10 +325,15 @@ existing random-stream key and normal draw behavior. Deferral consumes no
 randomness.
 
 The store clone must copy capture sequence, normalized payloads, all pending
-choices, disposition order, and terminal outcomes into the target runtime while
-binding to its target `PersonStore` and mutation guard. It must not share
-mutable lists, runtime references, or allocators with its source. Diagnostics
-must be a stable value projection and must not mutate the queue. The current
+choices, disposition order, dispatch markers, and terminal outcomes into the
+target runtime while binding to its target `PersonStore` and mutation guard.
+An observed `ConsumedAwaitingTerminalAttempt` state remains consumed in the
+clone and must never be dispatched again; recovery does not invent a returned
+result. Ordinary synchronous execution closes this state with a returned or
+thrown outcome before the next actor turn. Full interrupted-run recovery
+policy is outside this Phase 11 slice. The clone must not share mutable lists,
+runtime references, or allocators with its source. Diagnostics must be a stable
+value projection and must not mutate the queue. The current
 canonical `SimulationRuntime` constructor clones/composes many input stores,
 but this baseline does not define full save/load or historical fork semantics;
 Phase 11 must not claim that it does. Phase 12/13 later own durable allocator
@@ -306,22 +353,35 @@ Canonical output orders receipts by `InputSequence` and dispositions by their
 recorded boundary order (day, roster ordinal, transition ordinal). Stable
 writer fields include input ID, correlated WorldCommand ID, PersonId, action
 DefinitionId, origin/authority, capture day, disposition and reason, logical
-boundary fields, decision-record link when available, and the returned
-`NpcActionResult` status. The writer must use invariant numeric formatting and
-delimiter-safe identity encoding. Diff reports pending additions, deferral
-transitions, terminal rejection/application, and execution-result changes.
-The formatter presents input acceptance separately from domain execution.
+boundary fields, decision-record link when available, and the terminal
+attempt outcome. `AttemptReturned` records `Succeeded` or `Failed` only when a
+non-null `NpcActionResult` was returned; a null return records
+`ReturnedNoResult` with no result status. `AttemptThrew` records `Threw` with
+no returned-result status. The writer must use invariant numeric formatting
+and delimiter-safe identity encoding. Diff reports pending additions,
+deferral transitions, dispatch consumption,
+terminal rejection/attempt outcomes, and returned-result changes. The
+formatter presents input acceptance separately from domain execution.
 Snapshot invariant validation checks unique input/command correlations,
 nonnegative monotonic sequences/days, valid stable IDs, legal lifecycle
-transitions, at most one terminal disposition per input, and no disposition
-after terminal resolution. The current Person or its persisted identity may
-remain dead; that is valid history, not a diagnostic error.
+transitions, at most one dispatch start and one terminal disposition per
+input, a terminal attempt only after dispatch start, no rejection/deferral
+after dispatch start, a returned-result status iff `AttemptReturned` has a
+non-null result, no `NpcActionResult` status on `AttemptThrew` or
+`ReturnedNoResult`, and no disposition after terminal resolution. A
+`ConsumedAwaitingTerminalAttempt` input has exactly one `DispatchStarted`
+marker, remains outside the pending queue, and can only close as returned or
+thrown. A dispatched input is never pending or eligible for replay, including
+while its terminal outcome is not yet written. The current Person or its
+persisted identity may remain dead; that is valid history, not a diagnostic
+error.
 
 Snapshot, export, digest, compare, and validation must not allocate input or
 command IDs, query `MerchantSystem` for sale candidates, inspect current market
 truth for actor Knowledge, invoke the action provider, mutate a disposition,
-or consume random state. Pending and applied/rejected inputs remain present in
-snapshots without introducing fake DomainEvents or ordinary NPC history.
+or consume random state. Pending and all dispatched, rejected, or completed
+inputs remain present in snapshots without introducing fake DomainEvents or
+ordinary NPC history.
 
 ## 7. Proposed regression coverage
 
@@ -331,10 +391,10 @@ slice; this documentation task does not run them.
 | Test surface | Required cases |
 |---|---|
 | `ActorActionChoiceCommandTests` and `WorldCommandFoundationTests` | Typed payload retains only PersonId/action DefinitionId; `LocalPlayer` is provenance; Request queues without sale mutation; Preview is read-only and allocates no choice/command identity; Suggest cannot execute; Declare/ForceOutcome do not execute this kind; `WorldCommandRecord.Success` means queued, not sold. Existing command authority behavior stays unchanged. |
-| `ActorChoiceStoreTests` | Capture order/IDs are deterministic; multiple same-actor choices remain FIFO; rejection, deferral, and applied-result transitions are one-shot; dead/unmaterialized actor reconciliation terminates pending choice; clone is independent and preserves sequence, payload, pending state, dispositions, and result; mutation guard blocks writes. |
-| `ActorChoiceRuntimeTests` and `SimulationRuntimeOrchestrationTests` | Choice is consumed immediately before autonomous choice only on a normal actor turn; actor roster order is unchanged; travel, expedition, reservation, and scheduled directive precedence is unchanged and records deferral; actor unavailable at the input-processing boundary is rejected; stale action/provider/policy eligibility rejection falls through to autonomous selection; accepted action attempts once, with no same-day retry or autonomous second action. |
+| `ActorChoiceStoreTests` | Capture order/IDs are deterministic; multiple same-actor choices remain FIFO; rejection and deferral transitions are one-shot; dispatch-start permanently consumes an input; exactly one returned/thrown terminal outcome follows; no disposition follows terminal resolution; dead/unmaterialized actor reconciliation terminates pending choice; clone is independent and preserves sequence, payload, lifecycle state, dispositions, and result; mutation guard blocks writes. |
+| `ActorChoiceRuntimeTests` and `SimulationRuntimeOrchestrationTests` | Choice is consumed immediately before action dispatch only on a normal actor turn; actor roster order is unchanged; travel, expedition, reservation, and scheduled directive precedence is unchanged and records deferral; actor unavailable at the input-processing boundary is rejected; stale action/provider/policy eligibility rejection falls through to autonomous selection; accepted action attempts once, with no same-day retry or autonomous second action. If action execution throws, assert one terminal `AttemptThrew`, no returned `NpcActionResult` status, no requeue/retry or autonomous fallback, and propagation of the same exception instance with the original throw frame preserved. Also cover non-null success/failure results versus a null return classified as `ReturnedNoResult`. |
 | `MerchantLiquidityTests` plus actor-choice commerce cases | Actor's remembered price/liquidity and own inventory bound candidate planning; another NPC's current state and current market truth do not enrich planning; active plan is rejected; stale current market can return the normal failure/partial-fill action result; no Knowledge rewrite, fabricated transaction receipt, trade DomainEvent, or history entry. |
-| `ActorChoiceDiagnosticsTests` and WorldState diagnostics suites | Pending, deferred, rejected, applied, and result states appear in immutable snapshots; canonical export/digest/diff/formatting are deterministic; ordering is by causal input/boundary keys rather than collection iteration; validation catches illegal transitions; diagnostic operations are read-only. |
+| `ActorChoiceDiagnosticsTests` and WorldState diagnostics suites | Pending, deferred, rejected, dispatch-started, returned, and thrown states appear in immutable snapshots; returned `NpcActionResult` statuses are present only for non-null results, while null and thrown calls have distinct attempt outcomes and no result status; canonical export/digest/diff/formatting are deterministic; ordering is by causal input/boundary keys rather than collection iteration; validation catches illegal transitions and any disposition after terminal; diagnostic operations are read-only. |
 
 Also retain the existing `CoreWorldCommandHandlerTests`,
 `WorldCommandFoundationTests`, `SimulationRuntimeOrchestrationTests`,
@@ -347,24 +407,30 @@ choice, the reviewer should require the matching long-run gate.
 
 ## 8. P8-D hotspot forecast and integration sequence
 
-P8-D is not a semantic dependency for this current-city sale. The P8-D
-candidate at `0070e9d` currently adds `PersonRoutePlanStore`,
-`SpatialRouteKnowledge`, `SpatialRouteKnowledgeStore`,
-`SpatialRoutePlanningSystem`, and route-planning tests; its current diff does
-not yet modify `SimulationRuntime` or diagnostics. The promoted Phase 8
-technical design and `PHASE8_STATE.md` nevertheless require those P8-D stores
-to be composed with the runtime, mutation guard, clone path, invariants, and
-stable snapshots/diff/canonical output. P8-B/C already changed the shared
-composition surfaces: `SimulationRuntime.cs`, `WorldStateSnapshot.cs`,
-`WorldStateCanonicalWriter.cs`, `WorldStateDiff.cs`,
-`WorldStateFormatter.cs`, and `WorldStateInvariantValidator.cs`.
+P8-D is not a semantic dependency for this current-city sale. Its current
+runtime and diagnostics integration code commit is
+`2faf3f873a7a434dc7330191e9292d09f6dd3014`; the latest unpromoted integration
+branch HEAD is `6e964c90adfcda828c675e7a1a3f726279c2d298` on
+`codex/phase8/P8DKnowledgeRoutePlanIntegration`. Commit `2faf3f8` integrates
+route-store composition with `SimulationRuntime.cs` and the shared diagnostic
+surfaces: `WorldStateSnapshot.cs`, `WorldStateCanonicalWriter.cs`,
+`WorldStateDiff.cs`, `WorldStateFormatter.cs`, and
+`WorldStateInvariantValidator.cs`. It also touches `PersonRoutePlanStore.cs`,
+`SpatialRouteKnowledgeStore.cs`, and `SpatialRoutePlanningTests.cs`. Across
+the candidate diff from the Phase 8 canonical base, the touched route files
+also include `PersonRoutePlanStore.cs`, `SpatialRouteKnowledge.cs`,
+`SpatialRouteKnowledgeStore.cs`, and `SpatialRoutePlanningSystem.cs`, with
+their Unity metadata and route-test metadata; `PHASE8_STATE.md` and
+`ROADMAP.md` record the candidate status. These are the actual
+shared-runtime/diagnostics hotspots in the current candidate, rather than a
+forecast based on the earlier feature-only diff.
 
-The P8-D integration forecast therefore includes the same shared files even
-though they are absent from the current feature-candidate diff. Phase 11
-implementation must **wait until P8-D completes its owned integration window
-for `SimulationRuntime` and diagnostics, or until `codex/phase8/canonical` has
-advanced and the Phase 11 implementation worktree is refreshed against its
-new current head**. Do not overlap writers on those files. This is an
+Phase 11 implementation must **wait until the P8-D `SimulationRuntime` and
+diagnostics integration is integrated into the selected Phase 8 canonical
+base and the Phase 11 worktree is refreshed from that base**. Recompute the
+actual touched-file set after that integration and assign one writer at a
+time for overlapping files. Do not start P11 shared-hotspot changes while
+this P8-D integration window remains unintegrated. This is an
 integration/hotspot wait only: no P8-D capability or route API is used by the
 selected SellGoods action.
 
@@ -374,9 +440,10 @@ Proposed sequence after technical-design review:
    typed WorldCommand handler's `Request`-only meaning, FIFO multi-submit
    behavior, death/unmaterialization reconciliation, and separate command,
    input, decision, and action-result records.
-2. Wait for the P8-D shared runtime/diagnostics integration window to finish or
-   refresh to its new promoted canonical state. Recompute candidate diff and
-   actual touched files before assigning P11 work.
+2. Wait for the P8-D runtime/diagnostics integration at code commit
+   `2faf3f873a7a434dc7330191e9292d09f6dd3014` to be integrated into the
+   selected Phase 8 canonical base. Refresh the P11 worktree and recompute
+   touched files before assigning P11 shared-hotspot work.
 3. Start implementation from the refreshed canonical head in an isolated
    `codex/phase11/<FeatureName>` worktree. Assign one owner per shared hotspot:
    command contract/handler, actor-choice store, runtime boundary, then
