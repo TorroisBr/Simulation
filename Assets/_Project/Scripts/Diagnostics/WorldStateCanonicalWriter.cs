@@ -82,12 +82,44 @@ public static class WorldStateCanonicalWriter
         {
             foreach (WorldStateHexSnapshot hex in snapshot.Spatial.Hexes)
             {
-                AppendLine(output, "SPATIAL_HEX", hex.HexId);
+                if (hex.HasGeographicFacts)
+                {
+                    AppendLine(output, "SPATIAL_HEX",
+                        hex.HexId,
+                        NullableIntValue(hex.Q),
+                        NullableIntValue(hex.R),
+                        hex.TerrainDefinitionId);
+                }
+                else
+                {
+                    AppendLine(output, "SPATIAL_HEX", hex.HexId);
+                }
             }
 
             foreach (WorldStateAnchoredLocationSnapshot location in snapshot.Spatial.AnchoredLocations)
             {
                 AppendLine(output, "SPATIAL_LOCATION", location.LocationId, location.AnchorHexId);
+            }
+
+            if (snapshot.Spatial.CoordinateConventionVersion != null
+                || snapshot.Spatial.CoordinateCanonicalOrder != null)
+            {
+                AppendLine(output, "SPATIAL_COORDINATE_CONVENTION",
+                    snapshot.Spatial.CoordinateConventionVersion,
+                    snapshot.Spatial.CoordinateCanonicalOrder);
+            }
+
+            if (snapshot.Spatial.ScaleContext != null)
+            {
+                WorldStateSpatialScaleContextSnapshot scale = snapshot.Spatial.ScaleContext;
+                AppendLine(output, "SPATIAL_WORLD_SCALE",
+                    scale.ResolvedConventionId,
+                    scale.SourceIdentity,
+                    scale.SourceVersion,
+                    scale.DistancePerNeighborStep.HasValue
+                        ? DecimalValue(scale.DistancePerNeighborStep.Value)
+                        : null,
+                    scale.Unit);
             }
         }
 
@@ -736,6 +768,16 @@ public static class WorldStateCanonicalWriter
     public static string Int64Value(long value)
     {
         return value.ToString(CultureInfo.InvariantCulture);
+    }
+
+    public static string DecimalValue(decimal value)
+    {
+        return value.ToString("G29", CultureInfo.InvariantCulture);
+    }
+
+    public static string NullableIntValue(int? value)
+    {
+        return value.HasValue ? IntValue(value.Value) : "~";
     }
 
     public static string NullableInt64Value(long? value)

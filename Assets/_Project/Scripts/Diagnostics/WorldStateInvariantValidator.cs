@@ -592,6 +592,11 @@ public static class WorldStateInvariantValidator
         }
 
         HashSet<string> hexIds = new HashSet<string>(StringComparer.Ordinal);
+        HashSet<HexCoordinate> geographicCoordinates = new HashSet<HexCoordinate>();
+        bool geographyPresent = spatial.ScaleContext != null
+            || spatial.CoordinateConventionVersion != null
+            || spatial.CoordinateCanonicalOrder != null;
+        int geographicHexCount = 0;
         foreach (WorldStateHexSnapshot hex in spatial.Hexes ?? new List<WorldStateHexSnapshot>())
         {
             if (hex == null || string.IsNullOrWhiteSpace(hex.HexId))
@@ -603,6 +608,85 @@ public static class WorldStateInvariantValidator
             if (hexIds.Add(hex.HexId) == false)
             {
                 AddError(issues, "DuplicateSpatialHexId", hex.HexId, "Spatial Hex identity appears more than once.");
+            }
+
+            if (hex.HasGeographicFacts)
+            {
+                geographyPresent = true;
+                geographicHexCount++;
+                if (hex.Q.HasValue != hex.R.HasValue)
+                {
+                    AddError(issues, "SpatialHexCoordinateIncomplete", hex.HexId, "Geographic Hex must provide both axial q and r coordinates.");
+                }
+
+                if (!hex.Q.HasValue || !hex.R.HasValue)
+                {
+                    AddError(issues, "SpatialHexCoordinateMissing", hex.HexId, "Geographic Hex has no complete axial coordinate.");
+                }
+                else if (!geographicCoordinates.Add(new HexCoordinate(hex.Q.Value, hex.R.Value)))
+                {
+                    AddError(issues, "DuplicateSpatialHexCoordinate", hex.HexId, "Axial coordinate is assigned to more than one geographic Hex.");
+                }
+
+                if (string.IsNullOrWhiteSpace(hex.TerrainDefinitionId))
+                {
+                    AddError(issues, "SpatialHexTerrainReferenceMissing", hex.HexId, "Geographic Hex has no stable terrain definition reference.");
+                }
+            }
+        }
+
+        if (geographyPresent)
+        {
+            foreach (WorldStateHexSnapshot hex in spatial.Hexes ?? new List<WorldStateHexSnapshot>())
+            {
+                if (hex != null && !hex.HasGeographicFacts)
+                {
+                    AddError(issues, "SpatialGeographyHexFactsMissing", hex.HexId, "Every Hex in a geographic context must have axial coordinates and a terrain reference.");
+                }
+            }
+
+            if (spatial.ScaleContext == null)
+            {
+                AddError(issues, "SpatialGeographyScaleMissing", "world", "Finite geography requires exactly one resolved world-local scale context.");
+            }
+            else
+            {
+                WorldStateSpatialScaleContextSnapshot scale = spatial.ScaleContext;
+                if (string.IsNullOrWhiteSpace(scale.ResolvedConventionId))
+                {
+                    AddError(issues, "SpatialScaleIdentityMissing", "world", "World-local scale context has no resolved convention identity.");
+                }
+
+                if (string.IsNullOrWhiteSpace(scale.SourceIdentity)
+                    || string.IsNullOrWhiteSpace(scale.SourceVersion))
+                {
+                    AddError(issues, "SpatialScaleProvenanceMissing", "world", "World-local scale context has incomplete source identity or version provenance.");
+                }
+
+                if (!scale.DistancePerNeighborStep.HasValue || scale.DistancePerNeighborStep.Value <= 0m)
+                {
+                    AddError(issues, "SpatialScaleDistanceInvalid", "world", "World-local distance per neighbor step must be present and positive.");
+                }
+
+                if (string.IsNullOrWhiteSpace(scale.Unit))
+                {
+                    AddError(issues, "SpatialScaleUnitMissing", "world", "World-local scale context has no authored unit.");
+                }
+            }
+
+            if (!string.Equals(spatial.CoordinateConventionVersion, HexCoordinate.ConventionVersion, StringComparison.Ordinal))
+            {
+                AddError(issues, "SpatialCoordinateConventionUnsupported", "world", "Geography coordinate convention version is absent or unsupported.");
+            }
+
+            if (!string.Equals(spatial.CoordinateCanonicalOrder, HexCoordinate.CanonicalOrder, StringComparison.Ordinal))
+            {
+                AddError(issues, "SpatialCoordinateOrderUnsupported", "world", "Geography coordinate canonical order is absent or unsupported.");
+            }
+
+            if (geographicHexCount == 0)
+            {
+                AddError(issues, "SpatialGeographyHexMissing", "world", "Geography scale context exists without any geographic Hexes.");
             }
         }
 

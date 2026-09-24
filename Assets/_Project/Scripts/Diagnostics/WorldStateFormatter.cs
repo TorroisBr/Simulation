@@ -67,11 +67,50 @@ public static class WorldStateSnapshotFormatter
             output.Append("\nSpatial authority revision: ")
                 .Append(WorldStateCanonicalWriter.Int64Value(snapshot.Spatial.AuthorityRevision.Value))
                 .Append('\n');
+            if (snapshot.Spatial.CoordinateConventionVersion != null
+                || snapshot.Spatial.CoordinateCanonicalOrder != null)
+            {
+                output.Append("Coordinate convention: ")
+                    .Append(Value(snapshot.Spatial.CoordinateConventionVersion))
+                    .Append(" order ")
+                    .Append(Value(snapshot.Spatial.CoordinateCanonicalOrder))
+                    .Append('\n');
+            }
+
+            if (snapshot.Spatial.ScaleContext != null)
+            {
+                WorldStateSpatialScaleContextSnapshot scale = snapshot.Spatial.ScaleContext;
+                output.Append("World scale: ")
+                    .Append(Value(scale.ResolvedConventionId))
+                    .Append(" source ")
+                    .Append(Value(scale.SourceIdentity))
+                    .Append('@')
+                    .Append(Value(scale.SourceVersion))
+                    .Append(" neighbor step ")
+                    .Append(scale.DistancePerNeighborStep.HasValue
+                        ? WorldStateCanonicalWriter.DecimalValue(scale.DistancePerNeighborStep.Value)
+                        : "unknown")
+                    .Append(' ')
+                    .Append(Value(scale.Unit))
+                    .Append('\n');
+            }
+
             foreach (WorldStateHexSnapshot hex in snapshot.Spatial.Hexes)
             {
                 if (hex != null)
                 {
-                    output.Append("HEX ").Append(Value(hex.HexId)).Append('\n');
+                    output.Append("HEX ").Append(Value(hex.HexId));
+                    if (hex.HasGeographicFacts)
+                    {
+                        output.Append(" axial ")
+                            .Append(hex.Q.HasValue ? WorldStateCanonicalWriter.IntValue(hex.Q.Value) : "unknown")
+                            .Append(',')
+                            .Append(hex.R.HasValue ? WorldStateCanonicalWriter.IntValue(hex.R.Value) : "unknown")
+                            .Append(" terrain ")
+                            .Append(Value(hex.TerrainDefinitionId));
+                    }
+
+                    output.Append('\n');
                 }
             }
 

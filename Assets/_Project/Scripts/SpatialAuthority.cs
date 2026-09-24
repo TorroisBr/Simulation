@@ -53,10 +53,20 @@ public sealed class LocationId : IEquatable<LocationId>
 public sealed class HexRecord
 {
     public HexId Id { get; }
+    public HexCoordinate? Coordinate { get; }
+    public TerrainDefinitionId TerrainDefinitionId { get; }
+    public bool IsGeographic => Coordinate.HasValue && TerrainDefinitionId != null;
 
     public HexRecord(HexId id)
     {
         Id = id ?? throw new ArgumentNullException(nameof(id));
+    }
+
+    public HexRecord(HexId id, HexCoordinate coordinate, TerrainDefinitionId terrainDefinitionId)
+    {
+        Id = id ?? throw new ArgumentNullException(nameof(id));
+        TerrainDefinitionId = terrainDefinitionId ?? throw new ArgumentNullException(nameof(terrainDefinitionId));
+        Coordinate = coordinate;
     }
 }
 
@@ -284,7 +294,12 @@ public enum SpatialAuthorityFailureCode
     SubLocationNotRegistered = 13,
     RevisionOverflow = 14,
     InvalidInvariant = 15,
-    RuntimeFaulted = 16
+    RuntimeFaulted = 16,
+    GeographyNotPresent = 17,
+    InvalidGeography = 18,
+    DuplicateHexCoordinate = 19,
+    SpatialAuthorityNotEmpty = 20,
+    GeographicHexRequiresComposition = 21
 }
 
 public sealed class SpatialAuthorityFailure : IEquatable<SpatialAuthorityFailure>
@@ -336,29 +351,152 @@ public sealed class SpatialAuthorityInvariantReport
 }
 
 /// <summary>
-/// Authoritative world-bound Hex/Location identity and the smallest explicit
-/// bridge from existing LocalTopology/SubLocation identities to a Location.
-/// It does not provide grid generation, adjacency, traversal, terrain, or time.
+/// Authoritative world-bound Hex/Location identity, finite factual geography,
+/// and the smallest explicit bridge from existing LocalTopology/SubLocation
+/// identities to a Location. It does not provide grid generation, traversal,
+/// or travel time.
 /// </summary>
 public sealed class SpatialAuthorityStore : IAuthoritativeMutationGuardBindable
 {
+    private static readonly HexCoordinate[] NeighborDeltas =
+    {
+        new HexCoordinate(1, 0),
+        new HexCoordinate(1, -1),
+        new HexCoordinate(0, -1),
+        new HexCoordinate(-1, 0),
+        new HexCoordinate(-1, 1),
+        new HexCoordinate(0, 1)
+    };
+
     private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
     private readonly Dictionary<string, HexRecord> hexesById =
         new Dictionary<string, HexRecord>(StringComparer.Ordinal);
+    private readonly Dictionary<HexCoordinate, HexRecord> geographicHexesByCoordinate =
+        new Dictionary<HexCoordinate, HexRecord>();
     private readonly Dictionary<string, LocationRecord> locationsById =
         new Dictionary<string, LocationRecord>(StringComparer.Ordinal);
     private readonly Dictionary<string, SpatialLocalTopologyBinding> topologyBindingsByKey =
         new Dictionary<string, SpatialLocalTopologyBinding>(StringComparer.Ordinal);
+    private SpatialWorldScaleContext scaleContext;
+    private string coordinateConventionVersion;
+    private string coordinateCanonicalOrder;
     private long revision;
 
     public long Revision => revision;
     public int HexCount => hexesById.Count;
     public int LocationCount => locationsById.Count;
     public int LocalTopologyBindingCount => topologyBindingsByKey.Count;
+    public bool HasGeography => scaleContext != null;
+    public SpatialWorldScaleContext ScaleContext => scaleContext;
+    public string CoordinateConventionVersion => coordinateConventionVersion;
+    public string CoordinateCanonicalOrder => coordinateCanonicalOrder;
 
     public IReadOnlyList<HexRecord> Hexes => SortedHexes();
     public IReadOnlyList<LocationRecord> Locations => SortedLocations();
     public IReadOnlyList<SpatialLocalTopologyBinding> LocalTopologyBindings => SortedBindings();
+
+    /// <summary>
+    /// Atomically composes the finite, manually authored P8-A geography into
+    /// an otherwise empty authority. Legacy identity-only stores remain
+    /// scale-free and are not implicitly promoted to a geographic grid.
+    /// </summary>
+    public bool TryComposeGeography(
+        SpatialGeographyDefinition definition,
+        out SpatialAuthorityFailure failure)
+    {
+        failure = SpatialAuthorityFailure.None;
+        if (!mutationGuardBinding.CanMutate)
+        {
+            return Fail(SpatialAuthorityFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.", out failure);
+        }
+
+        if (definition == null || definition.ScaleContext == null || definition.Hexes == null
+            || definition.Hexes.Count == 0
+            || string.IsNullOrWhiteSpace(definition.CoordinateConventionVersion)
+            || string.IsNullOrWhiteSpace(definition.CoordinateCanonicalOrder))
+        {
+            return Fail(SpatialAuthorityFailureCode.InvalidGeography, "Geography requires a scale context, a coordinate convention, and at least one Hex.", out failure);
+        }
+
+        if (hexesById.Count != 0 || locationsById.Count != 0 || topologyBindingsByKey.Count != 0
+            || scaleContext != null || geographicHexesByCoordinate.Count != 0)
+        {
+            return Fail(SpatialAuthorityFailureCode.SpatialAuthorityNotEmpty, "Finite geography must be composed into an empty spatial authority.", out failure);
+        }
+
+        Dictionary<string, HexRecord> pendingHexes = new Dictionary<string, HexRecord>(StringComparer.Ordinal);
+        Dictionary<HexCoordinate, HexRecord> pendingCoordinates = new Dictionary<HexCoordinate, HexRecord>();
+        foreach (HexRecord hex in definition.Hexes)
+        {
+            if (hex == null || hex.Id == null || string.IsNullOrWhiteSpace(hex.Id.Value)
+                || !hex.IsGeographic || !hex.Coordinate.HasValue
+                || hex.TerrainDefinitionId == null
+                || string.IsNullOrWhiteSpace(hex.TerrainDefinitionId.Value))
+            {
+                return Fail(SpatialAuthorityFailureCode.InvalidGeography, "Every geographic Hex requires a stable ID, axial coordinate, and terrain definition reference.", out failure);
+            }
+
+            if (pendingHexes.ContainsKey(hex.Id.Value))
+            {
+                return Fail(SpatialAuthorityFailureCode.DuplicateHexId, "HexId is duplicated in the authored geography.", out failure);
+            }
+
+            HexCoordinate coordinate = hex.Coordinate.Value;
+            if (pendingCoordinates.ContainsKey(coordinate))
+            {
+                return Fail(SpatialAuthorityFailureCode.DuplicateHexCoordinate, "Axial coordinate is duplicated in the authored geography.", out failure);
+            }
+
+            pendingHexes.Add(hex.Id.Value, hex);
+            pendingCoordinates.Add(coordinate, hex);
+        }
+
+        Dictionary<string, LocationRecord> pendingLocations = new Dictionary<string, LocationRecord>(StringComparer.Ordinal);
+        foreach (LocationRecord location in definition.Locations ?? Array.Empty<LocationRecord>())
+        {
+            if (location == null || location.Id == null || location.AnchorHexId == null
+                || string.IsNullOrWhiteSpace(location.Id.Value)
+                || string.IsNullOrWhiteSpace(location.AnchorHexId.Value))
+            {
+                return Fail(SpatialAuthorityFailureCode.InvalidLocation, "Authored Locations require a stable identity and exactly one anchor Hex.", out failure);
+            }
+
+            if (pendingLocations.ContainsKey(location.Id.Value))
+            {
+                return Fail(SpatialAuthorityFailureCode.DuplicateLocationId, "LocationId is duplicated in the authored geography.", out failure);
+            }
+
+            if (pendingHexes.ContainsKey(location.AnchorHexId.Value) == false)
+            {
+                return Fail(SpatialAuthorityFailureCode.AnchorHexNotRegistered, "Authored Location anchor Hex is absent from the finite geography.", out failure);
+            }
+
+            pendingLocations.Add(location.Id.Value, location);
+        }
+
+        if (CanAdvanceRevision(out failure) == false)
+        {
+            return false;
+        }
+
+        foreach (KeyValuePair<string, HexRecord> entry in pendingHexes)
+        {
+            HexRecord copy = CloneHex(entry.Value);
+            hexesById.Add(entry.Key, copy);
+            geographicHexesByCoordinate.Add(copy.Coordinate.Value, copy);
+        }
+
+        foreach (KeyValuePair<string, LocationRecord> entry in pendingLocations)
+        {
+            locationsById.Add(entry.Key, CloneLocation(entry.Value));
+        }
+
+        scaleContext = CloneScaleContext(definition.ScaleContext);
+        coordinateConventionVersion = definition.CoordinateConventionVersion;
+        coordinateCanonicalOrder = definition.CoordinateCanonicalOrder;
+        revision++;
+        return true;
+    }
 
     public bool TryRegisterHex(HexRecord hex, out SpatialAuthorityFailure failure)
     {
@@ -373,6 +511,11 @@ public sealed class SpatialAuthorityStore : IAuthoritativeMutationGuardBindable
             return Fail(SpatialAuthorityFailureCode.InvalidHex, "Hex requires a stable identity.", out failure);
         }
 
+        if (scaleContext != null || hex.IsGeographic)
+        {
+            return Fail(SpatialAuthorityFailureCode.GeographicHexRequiresComposition, "Geographic Hexes must be registered together through finite geography composition.", out failure);
+        }
+
         if (hexesById.ContainsKey(hex.Id.Value))
         {
             return Fail(SpatialAuthorityFailureCode.DuplicateHexId, "HexId is already registered.", out failure);
@@ -385,6 +528,47 @@ public sealed class SpatialAuthorityStore : IAuthoritativeMutationGuardBindable
 
         hexesById.Add(hex.Id.Value, hex);
         revision++;
+        return true;
+    }
+
+    /// <summary>
+    /// Returns only the registered geographic Hexes at the six axial
+    /// neighboring coordinates, in lexicographic (q, r) order.
+    /// </summary>
+    public bool TryGetGeometricNeighbors(
+        HexId id,
+        out IReadOnlyList<HexRecord> neighbors,
+        out SpatialAuthorityFailure failure)
+    {
+        neighbors = new ReadOnlyCollection<HexRecord>(new List<HexRecord>());
+        failure = SpatialAuthorityFailure.None;
+        if (scaleContext == null)
+        {
+            return Fail(SpatialAuthorityFailureCode.GeographyNotPresent, "This spatial authority contains no finite geography.", out failure);
+        }
+
+        if (id == null || hexesById.TryGetValue(id.Value, out HexRecord hex) == false)
+        {
+            return Fail(SpatialAuthorityFailureCode.HexNotRegistered, "Hex is not registered in the finite geography.", out failure);
+        }
+
+        if (hex.IsGeographic == false || hex.Coordinate.HasValue == false)
+        {
+            return Fail(SpatialAuthorityFailureCode.InvalidGeography, "Registered geography contains a Hex without axial coordinates.", out failure);
+        }
+
+        List<HexRecord> found = new List<HexRecord>(NeighborDeltas.Length);
+        foreach (HexCoordinate delta in NeighborDeltas)
+        {
+            if (hex.Coordinate.Value.TryOffset(delta, out HexCoordinate candidate)
+                && geographicHexesByCoordinate.TryGetValue(candidate, out HexRecord neighbor))
+            {
+                found.Add(neighbor);
+            }
+        }
+
+        found.Sort((left, right) => left.Coordinate.Value.CompareTo(right.Coordinate.Value));
+        neighbors = new ReadOnlyCollection<HexRecord>(found);
         return true;
     }
 
@@ -577,7 +761,12 @@ public sealed class SpatialAuthorityStore : IAuthoritativeMutationGuardBindable
         SpatialAuthorityStore copy = new SpatialAuthorityStore();
         foreach (HexRecord hex in Hexes)
         {
-            copy.hexesById.Add(hex.Id.Value, new HexRecord(new HexId(hex.Id.Value)));
+            HexRecord clone = CloneHex(hex);
+            copy.hexesById.Add(hex.Id.Value, clone);
+            if (clone.IsGeographic)
+            {
+                copy.geographicHexesByCoordinate.Add(clone.Coordinate.Value, clone);
+            }
         }
 
         foreach (LocationRecord location in Locations)
@@ -597,6 +786,9 @@ public sealed class SpatialAuthorityStore : IAuthoritativeMutationGuardBindable
                     new LocationId(binding.LocationId.Value)));
         }
 
+        copy.scaleContext = scaleContext == null ? null : CloneScaleContext(scaleContext);
+        copy.coordinateConventionVersion = coordinateConventionVersion;
+        copy.coordinateCanonicalOrder = coordinateCanonicalOrder;
         copy.revision = revision;
         return copy;
     }
@@ -615,6 +807,76 @@ public sealed class SpatialAuthorityStore : IAuthoritativeMutationGuardBindable
                 || !string.Equals(entry.Key, entry.Value.Id.Value, StringComparison.Ordinal))
             {
                 violations.Add("Hex index contains an invalid record for '" + entry.Key + "'.");
+            }
+        }
+
+        if (scaleContext == null)
+        {
+            if (geographicHexesByCoordinate.Count != 0
+                || string.IsNullOrEmpty(coordinateConventionVersion) == false
+                || string.IsNullOrEmpty(coordinateCanonicalOrder) == false)
+            {
+                violations.Add("Geographic index or coordinate convention exists without a world-local scale context.");
+            }
+
+            foreach (KeyValuePair<string, HexRecord> entry in hexesById)
+            {
+                if (entry.Value != null && entry.Value.IsGeographic)
+                {
+                    violations.Add("Geographic Hex exists without a world-local scale context: " + entry.Key + ".");
+                }
+            }
+        }
+        else
+        {
+            if (hexesById.Count == 0)
+            {
+                violations.Add("Geography scale context exists without any registered geographic Hexes.");
+            }
+
+            if (string.IsNullOrWhiteSpace(scaleContext.ResolvedConventionId)
+                || string.IsNullOrWhiteSpace(scaleContext.SourceIdentity)
+                || string.IsNullOrWhiteSpace(scaleContext.SourceVersion)
+                || scaleContext.DistancePerNeighborStep <= 0m
+                || string.IsNullOrWhiteSpace(scaleContext.Unit))
+            {
+                violations.Add("World-local scale context is incomplete or invalid.");
+            }
+
+            if (!string.Equals(coordinateConventionVersion, HexCoordinate.ConventionVersion, StringComparison.Ordinal)
+                || !string.Equals(coordinateCanonicalOrder, HexCoordinate.CanonicalOrder, StringComparison.Ordinal))
+            {
+                violations.Add("Geography coordinate convention is absent or unsupported.");
+            }
+
+            HashSet<HexCoordinate> coordinates = new HashSet<HexCoordinate>();
+            foreach (KeyValuePair<string, HexRecord> entry in hexesById)
+            {
+                HexRecord hex = entry.Value;
+                if (hex == null || !hex.IsGeographic || !hex.Coordinate.HasValue
+                    || hex.TerrainDefinitionId == null
+                    || string.IsNullOrWhiteSpace(hex.TerrainDefinitionId.Value))
+                {
+                    violations.Add("Geographic Hex is missing its coordinate or terrain reference: " + entry.Key + ".");
+                    continue;
+                }
+
+                HexCoordinate coordinate = hex.Coordinate.Value;
+                if (!coordinates.Add(coordinate))
+                {
+                    violations.Add("Geographic Hex coordinate is duplicated: " + coordinate + ".");
+                }
+
+                if (!geographicHexesByCoordinate.TryGetValue(coordinate, out HexRecord indexedHex)
+                    || !string.Equals(indexedHex?.Id?.Value, hex.Id.Value, StringComparison.Ordinal))
+                {
+                    violations.Add("Geographic coordinate index does not match Hex " + entry.Key + ".");
+                }
+            }
+
+            if (geographicHexesByCoordinate.Count != hexesById.Count)
+            {
+                violations.Add("Geographic coordinate index does not match the finite Hex set.");
             }
         }
 
@@ -708,6 +970,31 @@ public sealed class SpatialAuthorityStore : IAuthoritativeMutationGuardBindable
     private static string TopologyKey(LocalTopologyOwnerKind ownerKind, string ownerRuntimeId)
     {
         return ownerKind + ":" + ownerRuntimeId;
+    }
+
+    private static HexRecord CloneHex(HexRecord source)
+    {
+        return source.IsGeographic
+            ? new HexRecord(
+                new HexId(source.Id.Value),
+                source.Coordinate.Value,
+                new TerrainDefinitionId(source.TerrainDefinitionId.Value))
+            : new HexRecord(new HexId(source.Id.Value));
+    }
+
+    private static LocationRecord CloneLocation(LocationRecord source)
+    {
+        return new LocationRecord(new LocationId(source.Id.Value), new HexId(source.AnchorHexId.Value));
+    }
+
+    private static SpatialWorldScaleContext CloneScaleContext(SpatialWorldScaleContext source)
+    {
+        return new SpatialWorldScaleContext(
+            source.ResolvedConventionId,
+            source.SourceIdentity,
+            source.SourceVersion,
+            source.DistancePerNeighborStep,
+            source.Unit);
     }
 
     private IReadOnlyList<HexRecord> SortedHexes()

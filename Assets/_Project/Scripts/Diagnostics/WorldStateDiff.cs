@@ -129,9 +129,59 @@ public sealed class WorldStateDiff
                 ? WorldStateCanonicalWriter.Int64Value(after.Spatial.AuthorityRevision.Value)
                 : null,
             differences);
+        CompareValue("SpatialAuthorityStore", "world", "GeographyPresent",
+            WorldStateCanonicalWriter.BoolValue(before.Spatial.ScaleContext != null),
+            WorldStateCanonicalWriter.BoolValue(after.Spatial.ScaleContext != null),
+            differences);
+        CompareValue("SpatialAuthorityStore", "world", "CoordinateConventionVersion",
+            WorldStateCanonicalWriter.StringValue(before.Spatial.CoordinateConventionVersion),
+            WorldStateCanonicalWriter.StringValue(after.Spatial.CoordinateConventionVersion),
+            differences);
+        CompareValue("SpatialAuthorityStore", "world", "CoordinateCanonicalOrder",
+            WorldStateCanonicalWriter.StringValue(before.Spatial.CoordinateCanonicalOrder),
+            WorldStateCanonicalWriter.StringValue(after.Spatial.CoordinateCanonicalOrder),
+            differences);
+        CompareValue("SpatialWorldScale", "world", "ResolvedConventionId",
+            WorldStateCanonicalWriter.StringValue(before.Spatial.ScaleContext?.ResolvedConventionId),
+            WorldStateCanonicalWriter.StringValue(after.Spatial.ScaleContext?.ResolvedConventionId),
+            differences);
+        CompareValue("SpatialWorldScale", "world", "SourceIdentity",
+            WorldStateCanonicalWriter.StringValue(before.Spatial.ScaleContext?.SourceIdentity),
+            WorldStateCanonicalWriter.StringValue(after.Spatial.ScaleContext?.SourceIdentity),
+            differences);
+        CompareValue("SpatialWorldScale", "world", "SourceVersion",
+            WorldStateCanonicalWriter.StringValue(before.Spatial.ScaleContext?.SourceVersion),
+            WorldStateCanonicalWriter.StringValue(after.Spatial.ScaleContext?.SourceVersion),
+            differences);
+        CompareValue("SpatialWorldScale", "world", "DistancePerNeighborStep",
+            before.Spatial.ScaleContext?.DistancePerNeighborStep.HasValue == true
+                ? WorldStateCanonicalWriter.DecimalValue(before.Spatial.ScaleContext.DistancePerNeighborStep.Value)
+                : null,
+            after.Spatial.ScaleContext?.DistancePerNeighborStep.HasValue == true
+                ? WorldStateCanonicalWriter.DecimalValue(after.Spatial.ScaleContext.DistancePerNeighborStep.Value)
+                : null,
+            differences);
+        CompareValue("SpatialWorldScale", "world", "Unit",
+            WorldStateCanonicalWriter.StringValue(before.Spatial.ScaleContext?.Unit),
+            WorldStateCanonicalWriter.StringValue(after.Spatial.ScaleContext?.Unit),
+            differences);
         CompareEntities("SpatialHex", before.Spatial.Hexes, after.Spatial.Hexes,
             hex => hex.HexId,
-            (identity, left, right) => { },
+            (identity, left, right) =>
+            {
+                CompareValue("SpatialHex", identity, "CoordinateQ",
+                    WorldStateCanonicalWriter.NullableIntValue(left.Q),
+                    WorldStateCanonicalWriter.NullableIntValue(right.Q),
+                    differences);
+                CompareValue("SpatialHex", identity, "CoordinateR",
+                    WorldStateCanonicalWriter.NullableIntValue(left.R),
+                    WorldStateCanonicalWriter.NullableIntValue(right.R),
+                    differences);
+                CompareValue("SpatialHex", identity, "TerrainDefinitionId",
+                    WorldStateCanonicalWriter.StringValue(left.TerrainDefinitionId),
+                    WorldStateCanonicalWriter.StringValue(right.TerrainDefinitionId),
+                    differences);
+            },
             differences);
         CompareEntities("SpatialLocation", before.Spatial.AnchoredLocations, after.Spatial.AnchoredLocations,
             location => location.LocationId,

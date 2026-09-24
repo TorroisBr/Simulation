@@ -1382,6 +1382,9 @@ public sealed class WorldStateMarketStackSnapshot
 public sealed class WorldStateSpatialSnapshot
 {
     public long? AuthorityRevision { get; }
+    public string CoordinateConventionVersion { get; }
+    public string CoordinateCanonicalOrder { get; }
+    public WorldStateSpatialScaleContextSnapshot ScaleContext { get; }
     public IReadOnlyList<WorldStateHexSnapshot> Hexes { get; }
     public IReadOnlyList<WorldStateAnchoredLocationSnapshot> AnchoredLocations { get; }
     public IReadOnlyList<WorldStateSpatialTopologyBindingSnapshot> TopologyBindings { get; }
@@ -1394,9 +1397,15 @@ public sealed class WorldStateSpatialSnapshot
         IEnumerable<WorldStateHexSnapshot> hexes = null,
         IEnumerable<WorldStateAnchoredLocationSnapshot> anchoredLocations = null,
         long? authorityRevision = null,
-        IEnumerable<WorldStateSpatialTopologyBindingSnapshot> topologyBindings = null)
+        IEnumerable<WorldStateSpatialTopologyBindingSnapshot> topologyBindings = null,
+        string coordinateConventionVersion = null,
+        string coordinateCanonicalOrder = null,
+        WorldStateSpatialScaleContextSnapshot scaleContext = null)
     {
         AuthorityRevision = authorityRevision;
+        CoordinateConventionVersion = coordinateConventionVersion;
+        CoordinateCanonicalOrder = coordinateCanonicalOrder;
+        ScaleContext = scaleContext;
         Hexes = SnapshotCollections.CopySorted(hexes, hex => hex?.HexId);
         AnchoredLocations = SnapshotCollections.CopySorted(anchoredLocations, location => location?.LocationId);
         TopologyBindings = SnapshotCollections.CopySorted(topologyBindings, binding => binding?.StableKey);
@@ -1426,10 +1435,44 @@ public sealed class WorldStateSpatialTopologyBindingSnapshot
 public sealed class WorldStateHexSnapshot
 {
     public string HexId { get; }
+    public int? Q { get; }
+    public int? R { get; }
+    public string TerrainDefinitionId { get; }
+    public bool HasGeographicFacts => Q.HasValue || R.HasValue || TerrainDefinitionId != null;
 
-    public WorldStateHexSnapshot(string hexId)
+    public WorldStateHexSnapshot(
+        string hexId,
+        int? q = null,
+        int? r = null,
+        string terrainDefinitionId = null)
     {
         HexId = hexId;
+        Q = q;
+        R = r;
+        TerrainDefinitionId = terrainDefinitionId;
+    }
+}
+
+public sealed class WorldStateSpatialScaleContextSnapshot
+{
+    public string ResolvedConventionId { get; }
+    public string SourceIdentity { get; }
+    public string SourceVersion { get; }
+    public decimal? DistancePerNeighborStep { get; }
+    public string Unit { get; }
+
+    public WorldStateSpatialScaleContextSnapshot(
+        string resolvedConventionId,
+        string sourceIdentity,
+        string sourceVersion,
+        decimal? distancePerNeighborStep,
+        string unit)
+    {
+        ResolvedConventionId = resolvedConventionId;
+        SourceIdentity = sourceIdentity;
+        SourceVersion = sourceVersion;
+        DistancePerNeighborStep = distancePerNeighborStep;
+        Unit = unit;
     }
 }
 
@@ -3030,14 +3073,33 @@ public static class WorldStateSnapshotBuilder
         List<WorldStateSpatialTopologyBindingSnapshot> topologyBindingSnapshots =
             new List<WorldStateSpatialTopologyBindingSnapshot>();
         long? authorityRevision = null;
+        string coordinateConventionVersion = null;
+        string coordinateCanonicalOrder = null;
+        WorldStateSpatialScaleContextSnapshot scaleContextSnapshot = null;
         if (authority != null)
         {
             authorityRevision = authority.Revision;
+            coordinateConventionVersion = authority.CoordinateConventionVersion;
+            coordinateCanonicalOrder = authority.CoordinateCanonicalOrder;
+            if (authority.ScaleContext != null)
+            {
+                scaleContextSnapshot = new WorldStateSpatialScaleContextSnapshot(
+                    authority.ScaleContext.ResolvedConventionId,
+                    authority.ScaleContext.SourceIdentity,
+                    authority.ScaleContext.SourceVersion,
+                    authority.ScaleContext.DistancePerNeighborStep,
+                    authority.ScaleContext.Unit);
+            }
+
             foreach (HexRecord hex in authority.Hexes)
             {
                 if (hex?.Id != null)
                 {
-                    hexSnapshots.Add(new WorldStateHexSnapshot(hex.Id.Value));
+                    hexSnapshots.Add(new WorldStateHexSnapshot(
+                        hex.Id.Value,
+                        hex.Coordinate.HasValue ? hex.Coordinate.Value.Q : (int?)null,
+                        hex.Coordinate.HasValue ? hex.Coordinate.Value.R : (int?)null,
+                        hex.TerrainDefinitionId?.Value));
                 }
             }
 
@@ -3069,7 +3131,10 @@ public static class WorldStateSnapshotBuilder
                 hexes: hexSnapshots,
                 anchoredLocations: anchoredLocationSnapshots,
                 topologyBindings: topologyBindingSnapshots,
-                authorityRevision: authorityRevision);
+                authorityRevision: authorityRevision,
+                coordinateConventionVersion: coordinateConventionVersion,
+                coordinateCanonicalOrder: coordinateCanonicalOrder,
+                scaleContext: scaleContextSnapshot);
         }
 
         List<SpatialLocationRuntime> locations = new List<SpatialLocationRuntime>(network.Locations);
@@ -3100,7 +3165,10 @@ public static class WorldStateSnapshotBuilder
             hexSnapshots,
             anchoredLocationSnapshots,
             authorityRevision,
-            topologyBindingSnapshots);
+            topologyBindingSnapshots,
+            coordinateConventionVersion,
+            coordinateCanonicalOrder,
+            scaleContextSnapshot);
     }
 
     private static List<WorldStateSiteSnapshot> BuildSiteSnapshots(ExplorableSiteStore store)
