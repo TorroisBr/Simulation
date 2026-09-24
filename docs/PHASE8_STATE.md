@@ -4,15 +4,16 @@
 
 - The verified Phase 7 canonical baseline entering Phase 8 is
   `1f4651e99db2c357dd3be3c6b9284d104379f706` on `codex/phase7/canonical`.
-- This document is part of the P8-A integration candidate. Until canonical
-  promotion, it does not change the current canonical branch or satisfy a
-  downstream canonical capability dependency.
-- Phase 8 remains open. P8-A is validated in the integration candidate;
-  P8-B through P8-E are not implemented or promoted.
+- P8-A is locally promoted from integration commit
+  `094971b` on `codex/phase8/P8AGeographyIntegration` to the new
+  `codex/phase8/canonical` branch; remote push and synchronization verification
+  are pending. The Phase 7 canonical baseline remains preserved.
+- Phase 8 remains open. P8-A is canonical; P8-B through P8-E are not
+  implemented or promoted.
 
 ## P8-A — Factual Geography
 
-**Status: IMPLEMENTED, INDEPENDENTLY REVIEWED, AND INTEGRATION-VALIDATED; NOT YET PROMOTED.**
+**Status: LOCALLY PROMOTED, IMPLEMENTED, INDEPENDENTLY REVIEWED, AND INTEGRATION-VALIDATED.**
 
 - Approved technical design: final design commit
   `ec4e796ddc955b72d7623e7647924aa3f76e3474` on
@@ -20,6 +21,9 @@
 - Implementation candidate: `22e7a27cd5aac7a0fe73046f135023f004836113` on
   `codex/phase8/P8AFactualGeography`, based on the Phase 7 canonical baseline
   and the reviewed P8-A design.
+- Promoted integration record: `094971b` on
+  `codex/phase8/P8AGeographyIntegration`; canonical branch:
+  `codex/phase8/canonical`.
 - Independent implementation review: **PASS**; no blocking correctness or
   architecture issues found.
 - Integration candidate branch: `codex/phase8/P8AGeographyIntegration`.
@@ -59,11 +63,13 @@ run because P8-A does not change the daily loop or long-horizon behavior.
 
 ## Remaining Phase 8 dependency state
 
-- **P8-B — Factual Passages:** implementation waits for P8-A promotion and the
-  independently accepted P8-B/C shared segment contract.
-- **P8-C — Legacy Anchors and Civil Presence:** implementation waits for
-  P8-A promotion and the same shared contract. City/Site bridge, PersonId
-  position, and transit progress remain unimplemented.
+- **P8-B — Factual Passages:** ready for isolated implementation from the
+  current `codex/phase8/canonical` HEAD under the accepted P8-B/C shared
+  segment contract.
+- **P8-C — Legacy Anchors and Civil Presence:** design/discovery may proceed;
+  implementation waits for P8-B to publish and independently review the stable
+  typed boundary/option API seam. City/Site bridge, PersonId position, and
+  transit progress remain unimplemented.
 - **P8-D — Knowledge and Route Plan:** waits for promoted P8-B and P8-C
   contracts/capabilities.
 - **P8-E — Civil Travel Vertical Slice:** waits for the relevant promoted
@@ -77,7 +83,7 @@ Crossing identities, and excludes runtime-only SubLocation references. That
 resolves the reconstruction blocker without expanding P8-C into a LocalTopology
 migration. The contract is not part of this P8-A integration candidate.
 
-P8-B/C implementation remains **MUST WAIT** for promotion of the P8-A
-capability. After that promotion, P8-B and P8-C can use isolated feature
-branches under the accepted shared contract; integrate B before C because
-transit progress consumes B's stable boundary/option identities.
+P8-B can now begin on an isolated feature branch. P8-C design/discovery may
+proceed, but its implementation must wait for P8-B's published and
+independently reviewed API seam. Integrate B before C because transit progress
+consumes B's stable boundary/option identities.
