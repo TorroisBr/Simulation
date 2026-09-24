@@ -17,7 +17,7 @@ one decision. The selected slice is the actor's existing local-market
 `SellGoods` behavior at its current city. It does not include active-plan
 sales, which can use current state from other NPCs during candidate planning;
 remote trade travel, a new sale outcome path, hidden knowledge, broader
-ongoing control, and GM/external command scope are also excluded. The
+ongoing control, and additional GM/external interventions are also excluded. The
 user selected a trusted single-player game/UI caller, with no player-to-actor
 ownership, control grants, authentication, anti-cheat, anti-tamper, or security
 validation layer. The supported actor is a living, materialized,
@@ -99,12 +99,15 @@ after checking that the NPC is alive and its required status is present. It
 does not itself provide the selected action-choice input or its causal record.
 The selected local UI is trusted; no controller-to-actor grant or security
 check is added. The runtime's scheduled `RequestAction` and narrow
-`ForceOutcome` directive path are separate from this actor-choice input and
-from the `WorldCommand` service. In current `SimulationRuntime` order, travel
-and reserved-activity checks and scheduled directives can bypass ordinary
-autonomous evaluation. A new actor choice is consumed only at the same normal
-`EvaluateAction` boundary, immediately before autonomous `ChooseAction`, so
-those existing higher-priority paths keep their behavior.
+`ForceOutcome` directive path are separate from this actor-choice input. The
+trusted UI choice is a distinct semantic input from GM/external declarations,
+but its capture enters through a dedicated typed `WorldCommand`/domain
+boundary as required by the Phase 11 Brief; it queues a choice rather than
+applying a sale. In current `SimulationRuntime` order, travel and
+reserved-activity checks and scheduled directives can bypass ordinary
+autonomous evaluation. A queued actor choice is consumed only at the same
+normal `EvaluateAction` boundary, immediately before autonomous
+`ChooseAction`, so those existing higher-priority paths keep their behavior.
 
 For the selected consumer, the existing local-sale path provides a concrete
 domain seam. `MerchantSystem.CreateSellGoodsAction` builds a local sale from
@@ -176,8 +179,9 @@ Actor Knowledge + current actor state
     → domain outcome → Domain Event / History / UI
 
 SELECTED ACTOR-CHOICE SCOPE
-Trusted local game/UI caller + PersonId of a current eligible merchant
-    → select the supported SellGoods action by stable action identity
+Trusted local game/UI caller
+    → dedicated typed WorldCommand payload (PersonId + action DefinitionId)
+    → capture the choice in the actor-input owner at the domain boundary
     → at that actor's next normal EvaluateAction boundary, construct the
       existing local sale using that actor's inventory and CommercialKnowledge
     → existing MerchantSystem selects a local-market candidate and amount
@@ -198,11 +202,13 @@ sale action; the human selects the action, not an item, quantity, price, or
 transaction result. It must not present current market truth as remembered
 knowledge, directly write an outcome, or skip the normal action and
 domain checks. The GM/external path remains a separate authority surface and is not
-part of this selected first-consumer scope. No authentication or defensive
+part of this selected first-consumer scope. The shared `WorldCommand` ingress
+does not give this actor choice GM authority or authorize a world mutation;
+its dedicated payload records a request that the existing actor/domain path
+may apply at the next decision boundary. No authentication or defensive
 validation for forged inputs is added; invalid inputs outside the normal UI
-flow are outside the supported contract. Whether a later command track shares
-an envelope, adapter, or queue is an implementation choice; it must not erase
-the semantic distinction.
+flow are outside the supported contract. Its command identity remains
+separate from actor-action acceptance and domain outcome records.
 
 ## Selected first consumer and adjacent options
 
@@ -306,8 +312,10 @@ following causal facts recoverable in principle:
   domain stores them.
 
 The present `WorldCommandRecord` is useful audit metadata but lacks payload and
-logical queue order; this actor choice is a decision input, not a GM/external
-`WorldCommand`. Its normalized selection and application result must be
+logical queue order. The actor choice remains semantically distinct from
+GM/external authority operations, while its trusted UI ingress uses the
+required `WorldCommand`/domain boundary with a dedicated typed payload. Its
+normalized selection, queue order, application boundary, and result must be
 recoverable without treating diagnostic/history output as authority. The
 current allocator's local sequence does not alone prove ordering across a
 save/load or fork. Exact schema/versioning remains Phase 12/13 work; Phase 11
@@ -321,16 +329,17 @@ no Phase 11 IDs, approval, or implementation authorization.
 | Candidate unit (UNAPPROVED) | Candidate closure evidence | Dependencies / ordering |
 |---|---|---|
 | Actor eligibility, perspective, and one-choice contract | Use the supported configured `SellGoods` action for a living Person-backed materialized `NpcRuntime` with a current city and no active trade plan; actor knowledge remains owned by that runtime. The UI chooses the action, while MerchantSystem chooses the local-market candidate and quantity. | Product scope is selected. Preserve the existing current-city merchant/action requirements; do not add a broader actor model or controller grants. |
-| Logical input boundary and envelope contract | Capture a normalized `PersonId` plus `NpcActionData.DefinitionId`; consume it at the next ordinary `EvaluateAction` before autonomous choice. Existing scheduled directives and activity exclusions retain their current precedence. | Use the normal actor-turn loop order. A choice unavailable at application is recorded as rejected and autonomous selection proceeds; a created action is attempted once and its normal domain result is returned. |
+| Logical input boundary and envelope contract | Capture a normalized `PersonId` plus `NpcActionData.DefinitionId` through a dedicated typed `WorldCommand`/domain ingress; consume it at the next ordinary `EvaluateAction` before autonomous choice. Existing scheduled directives and activity exclusions retain their current precedence. | Use the normal actor-turn loop order. A choice unavailable at application is recorded as rejected and autonomous selection proceeds; a created action is attempted once and its normal domain result is returned. The new payload does not reuse GM `Declare` or `ForceOutcome` authority. |
 | Consumer adapter through existing domain authority | A bounded choice reaches the existing local-market `SellGoods` path through `MerchantSystem` and the current market transaction service, revalidates current market truth, and records no fabricated result. | Requires the local merchant/action composition and a contract for actor `CommercialKnowledge` access. No travel capability, blanket P8/P9 dependency, or new GM command authority is selected. |
 | Causal-input recording and integration | Captures the selected actor/action, decision boundary, and applied/rejected disposition separately from the sale outcome. The pending choice is authoritative future input. | Integrates the actor-choice input owner, runtime decision boundary, decision records and deterministic diagnostics. Phase 12/13 still own full continuation/reconstruction formats. |
 | Phase-specific regression and acceptance review | Tests Knowledge-bounded action planning, ordinary current-truth revalidation, one-shot use, scheduled-directive precedence, deterministic actor order, and unchanged GM command semantics. | Follows implementation and independent review; long-run validation is required only if daily-loop or long-horizon behavior changes. |
 
-Implementation touching `NpcDecisionSystem`, `SimulationRuntime`/`EvaluateAction`,
-decision records, Knowledge, or merchant transaction composition needs explicit
-file ownership and an isolated worktree. The selected actor-choice path remains
-separate from `WorldCommandFoundation` and GM command handlers; it does not
-justify a generic concurrency lock or universal actor framework.
+Implementation touching `WorldCommandFoundation`, `NpcDecisionSystem`,
+`SimulationRuntime`/`EvaluateAction`, decision records, Knowledge, or merchant
+transaction composition needs explicit file ownership and an isolated
+worktree. The actor-choice payload/handler remains semantically distinct from
+GM command handlers and authority modes; it does not justify a generic
+concurrency lock or universal actor framework.
 
 ## Dependencies and scheduling implications
 
