@@ -169,13 +169,19 @@ OWNERSHIP != CUSTODY != CONTROL
 OWNERSHIP != JURISDICTION != CONTROL != ALLEGIANCE
 RESIDENCE != PRESENCE
 SIMULATION LOCATION != RENDERING COORDINATE
+HEX COORDINATE != HEX ID != RENDERING COORDINATE
 CONTAINMENT != SAME HEX != CONNECTIVITY
 HEX ADJACENCY != TRAVERSABILITY
+GEOMETRIC ADJACENCY != PHYSICAL PASSAGE != ACTOR CAPABILITY != PERMISSION != PERCEIVED PASSAGE
 MOVING ENTITY != LOCATION
+IN TRANSIT != NO FACTUAL POSITION
 DISTANCE != TRAVEL TIME
+HEX DISTANCE != PHYSICAL DISTANCE != TRAVEL TIME
 SHORTEST PATH != FASTEST PATH != SAFEST PATH
 ROUTE PLANNING USES KNOWLEDGE
 TRAVERSAL EXECUTION REVALIDATES WORLD TRUTH
+ROUTE ESTIMATE != EXECUTION TRUTH / ACTUAL CONTEXTUAL COST
+PLAN STALE IN TRUTH != ACTOR KNOWS WHY
 BATTLE != BATTLE LOCATION != BATTLE AFTERMATH
 BATTLE ENDED != BATTLEFIELD MATERIAL STATE ENDED
 BATTLEFIELD MATERIAL STATE != HISTORICAL MEMORY
@@ -3771,11 +3777,24 @@ SIMULATION LOCATION != RENDERING COORDINATE. Coordenadas, meshes e outras
 representações do host podem existir para apresentação ou interação local, mas
 não definem a posição autoritativa do mundo.
 
+O primeiro consumidor civil dessa fundação usa um pequeno mundo finito
+criado manualmente para validar verdade espacial, planejamento e viagem. Esse
+recorte não limita a arquitetura a uma região: toda célula que integra o mundo
+inicial existe factualmente antes da primeira fronteira simulada, mesmo sem
+observador, cena carregada ou representação visual. Criação posterior de espaço
+segue a autoridade normal de mutação do mundo, não a sua descoberta.
+
 ### Hex como área regional
 
 Um Hex pode conter zero, uma ou várias Locations, além de terrain, features
 físicas, barriers, crossings e outras informações regionais quando houver um
 consumidor real.
+
+Hexes existentes possuem identidade semântica estável e coordenadas semânticas
+suficientes para derivar sua adjacência geométrica. Só células existentes
+participam da geografia finita. Coordenada semântica não é `HexId` nem
+coordenada de rendering; sua representação técnica permanece aberta. A
+geometria regional é hexagonal, sem exigir suporte a grid quadrado.
 
 ```text
 Hex 421
@@ -3806,6 +3825,12 @@ conteúdo e não precisam formar, desde já, um enum universal fechado. Terrain
 não possui um Hex.TravelTime absoluto; o custo de traversal depende de
 condições do mundo, terrain, perfil de movimento, rota ou crossing e outros
 fatos relevantes.
+
+Existência do Hex, terrain aplicado, estruturas instanciadas e suas condições
+atuais podem ser fatos do mundo. Tempo, esforço, custo de recursos, risco,
+perigo e atratividade de uma rota são avaliações contextuais desses fatos para
+um viajante e momento, não verdades escalares permanentes do Hex. Perfis
+diferentes podem avaliar o mesmo caminho de modo diferente.
 
 ### Location é âncora espacial, não entidade universal
 
@@ -3840,6 +3865,11 @@ Person | Caravan | ArmedForce | Ship | TravelParty | Expedition
 
 MOVING ENTITY != LOCATION
 ```
+
+Entidades de domínio como City e ExplorableSite permanecem distintas de suas
+âncoras `LocationId`. Compartilhar um Hex não dá acesso automático a uma
+Location, a seus pontos de entrada nem a outra POI no mesmo Hex. Essas
+transições e sua conectividade precisam de semântica espacial explícita.
 
 ### LocalTopology e SubLocation
 
@@ -3913,6 +3943,14 @@ grid topology + physical conditions + explicit traversal structures
 → possibilidades de passagem
 ```
 
+Adjacência geométrica não é passagem física; passagem física não é capacidade
+do ator de usá-la; capacidade não é permissão legal/social; e nenhuma delas é
+automaticamente a passagem percebida pelo ator. Road e bridge não criam
+adjacência. Uma estrada fechada não elimina necessariamente outra passagem
+física possível, e uma ponte destruída não elimina os Hexes vizinhos. Evitar
+um `Hex.Blocked` universal. A política de permissão legal, política ou militar
+continua distinta e não precisa ser resolvida pelo primeiro consumidor civil.
+
 ### Barrier e Crossing
 
 Barrier representa um obstáculo ou restrição física relevante para traversal.
@@ -3941,6 +3979,12 @@ Uma Crossing pode possuir identidade estável, posição física, relação com 
 Barrier, estado factual atual e restrições de traversal. Se for destruída,
 Hexes e Barrier permanecem; apenas aquela Crossing se torna inutilizável.
 Outras Crossings podem continuar funcionando.
+
+Condições de estrada, obstruções e disponibilidade de passage/crossing que
+possam mudar são estado factual de runtime. O primeiro consumidor civil deve
+permitir ao menos uma mudança factual de passage/crossing durante a história
+simulada para que a revalidação da execução tenha significado. Essa mudança
+usa a autoridade normal de mutação; não é uma edição silenciosa de asset.
 
 A traversal authority futura combina topologia derivável do grid com estado
 autoritativo persistente quando a mudança factual for relevante. Não deve
@@ -3975,17 +4019,65 @@ SHORTEST PATH != FASTEST PATH != SAFEST PATH
 Uma rota mais longa por plains e road pode ser mais rápida ou segura que uma
 rota curta por montanhas.
 
-O plano de viagem pode registrar path escolhido, custo esperado, duração
-esperada, conhecimento usado e assumptions relevantes. Isso congela o plano,
-não a realidade inteira. Durante a execução, ponte pode ruir, estrada pode
-inundar, passagem pode ser bloqueada, guerra pode fechar uma rota, clima pode
-mudar ou portão pode fechar. O próximo passo deve revalidar a verdade atual;
-movimento pode falhar ou parar, knowledge pode ser atualizado e uma nova
-decisão pode ser necessária. O algoritmo de replanning permanece aberto.
+O planejamento de rota considera posição/origem, destino, conhecimento
+espacial do ator, perfil/capacidades, parâmetros efetivos pertinentes e
+critério da decisão. Pode produzir alternativas, plano escolhido, estimativas
+de duração/custo e assumptions/proveniência. Seleção e desempate que afetam o
+resultado são determinísticos; query e preview não mutam nem consomem RNG
+autoritativo. No primeiro slice civil, ao menos duas alternativas conhecidas
+permitem exercitar a escolha e o efeito de conhecimento desatualizado; isso
+não exige duas alternativas para toda viagem futura. O algoritmo de busca e
+uma pontuação universal de rota permanecem abertos.
+
+O plano aceito registra a intenção e suas hipóteses, não congela a realidade
+física. A sequência causal é:
+
+```text
+Knowledge → route decision/plan → traversal attempt → execution context
+→ factual validation → progress/outcome → observation/event/history as appropriate
+```
+
+Na fronteira causal de cada movimento, a execução revalida os requisitos
+factuais do próximo segmento e calcula seu contexto/custo efetivo. Se uma
+ponte caiu ou outra condição tornou o plano inviável, a execução pode parar ou
+falhar na posição factual já alcançada, sem desfazer progresso válido nem
+inventar silenciosamente outra rota. Replanning é nova decisão. Uma falha não
+transmite automaticamente ao viajante a causa oculta: somente o que ele pode
+perceber atualiza seu Knowledge. Estimativa de rota não é verdade de execução
+nem custo contextual necessariamente realizado.
+
+Um viajante em trânsito mantém posição factual: pode estar em Hex, âncora/local ou
+num segmento de traversal, com direção e progresso determinístico suficientes
+para retomar a viagem. Não precisa de microposição contínua nem de coordenadas
+de rendering; a base temporal diária pode continuar. Uma travessia de vários
+dias não torna o viajante espacialmente inexistente. Esse estado deve
+permanecer autoritativo apesar de Dormant, descarregamento de representação e
+futura persistência, sem depender exclusivamente de uma instância
+`NpcRuntime`. Também permite que futuros consumidores de encontro ou
+interceptação saibam onde ocorreu o deslocamento, sem definir encounters agora.
+
+O primeiro viajante suportado é um indivíduo civil com `PersonId` persistente.
+`NpcRuntime` pode participar da AI ou da execução rica, mas não ser a única
+autoridade persistente de posição ou compromisso de viagem. Essa escolha de
+slice não restringe as primitivas de passagem a Persons nem exige uma
+abstração universal de Group/MovementSubject antecipadamente.
+
+A posição factual pode pertencer à autoridade espacial vinculada a `PersonId`.
+Um compromisso individual de viagem persistente integra estado individual
+rico, carregado ou descarregado; a ausência de `NpcRuntime` carregado não faz
+desse viajante uma `Person-only`.
+
+O primeiro slice exercita viagem por múltiplos segmentos, mudança factual de
+passagem, rejeição de hipótese obsoleta, observação apropriada, parada ou nova
+decisão de rota e chegada pelo mesmo modelo autoritativo.
 
 Perfis de movimento como Person, Caravan, Scout, Army, Mounted Group, Ship e
 Flying Creature podem interagir de formas diferentes com o mesmo terrain.
-Movement profiles permanecem deferidos.
+O perfil suficiente para o primeiro viajante civil pode existir sem fixar uma
+hierarquia universal de perfis. Capacidade, suprimento, permissões e execução
+de movimento militar permanecem próprios de futuros consumidores, que podem
+reutilizar a geografia, IDs, barriers, crossings e consultas factuais sem
+herdar velocidade civil como verdade topológica.
 
 ### Chegar a um local != conhecer sua topologia
 
@@ -4020,6 +4112,22 @@ Observed day 120.
 Route planning usa Knowledge. Traversal execution revalida World Truth. O
 conhecimento não deve revelar automaticamente Hexes, Connections, Barriers,
 Crossings ou seus estados atuais.
+
+Observações espaciais podem ser incompletas, velhas ou falsas, inclusive sobre
+destino, segmento, estrada, crossing e condição de passagem. Origem e tempo
+da observação importam quando influenciam confiança ou decisão. Uma rota
+lembrada pode sobreviver como plano/compromisso, mas o planejador não deve
+filtrar cada passagem acreditada com a verdade oculta antes de considerá-la:
+
+```text
+NO KNOWN ROUTE != PHYSICALLY IMPOSSIBLE ROUTE
+PLAN STALE IN TRUTH != ACTOR KNOWS WHY
+```
+
+Por exemplo, o viajante pode escolher uma ponte que acredita utilizável. Ao
+alcançá-la, a execução verifica sua condição factual; se ela caiu, o ator
+permanece onde chegou e só aprende aquilo que consegue observar. Outra rota,
+se conhecida, exige nova decisão.
 
 ### Battle location e aftermath
 
@@ -4109,8 +4217,14 @@ Não se fixa:
 Cada world/content context deverá possuir uma convenção física única e coerente
 quando for necessário calcular distance, movement, speed, traversal, time,
 logistics ou operational range. Não se adota, neste momento, escala regional
-variável. A unidade e o valor exatos permanecem configuração futura. Rendering
-scale não participa dessa autoridade.
+variável. Para um mundo que usa viagem física, a escala/convenção regional
+resolvida participa do contexto efetivo autoritativo; parâmetros globais de
+cálculo de viagem, quando realmente globais, pertencem à configuração efetiva.
+Definições de terrain, estruturas e perfis permanecem conteúdo, enquanto
+terrain aplicado e condição atual são World Truth. A unidade e o valor exatos
+da escala não são constantes universais. Distância em Hexes, distância física
+e tempo de viagem são grandezas diferentes: um Hex não equivale a um dia de
+viagem. Rendering scale não participa dessa autoridade.
 
 ### Identidade, autoridade e determinismo
 
@@ -4120,8 +4234,16 @@ conceitos tiverem identidade persistente. RuntimeIdAllocator, ordem de
 descoberta Unity, ordem incidental de assets e coordenadas de rendering não são
 identidade conceitual final.
 
-Ordenações relevantes, como vizinhos de Hex, Locations, Connections,
-Crossings e desempates de path, devem ser semânticas ou determinísticas. O
+`HexId` e `LocationId` são identidades de instância, distintas de coordenada,
+nome exibido e `DefinitionId`. Estruturas como uma ponte, road ou crossing
+individual também precisam de identidade semântica própria quando sua
+continuidade, estado ou história importarem. A forma de atribuir IDs em futura
+geração procedural permanece aberta. A origem manual, gerada, modded ou criada
+por mutação validada não muda a ontologia nem a autoridade espacial.
+
+Ordenações relevantes, como vizinhos de Hex, alternativas de passagem,
+Locations, Connections, Crossings, observações, candidatos de rota, progresso
+e desempates de path, devem ser semânticas ou determinísticas. O
 algoritmo de pathfinding continua deferido, mas deterministic tie-breaking não
 é opcional para pathfinding autoritativo.
 
@@ -4159,10 +4281,14 @@ O nome técnico dessa authority não precisa ser congelado agora.
 ### SpatialNetworkRuntime atual e migração
 
 SpatialNetworkRuntime atual é ADAPT / TRANSITIONAL. Ele pode continuar servindo
-como adapter enquanto o modelo baseado em
-SpatialLocationRuntime + SpatialRouteRuntime + fixed TravelDays ainda for
-necessário, mas não deve ser promovido automaticamente a authority espacial
-final por compatibilidade.
+consumidores/cenários explicitamente legados ou uma projeção de compatibilidade
+enquanto o modelo baseado em SpatialLocationRuntime + SpatialRouteRuntime +
+fixed TravelDays ainda for necessário. Não é a authority espacial final nem
+uma segunda fonte de passagem factual, posição, progresso ou duração dentro
+de uma viagem que use as novas semânticas. Nesses mundos/cenários, o novo modelo
+é a authority espacial e de viagem. Cada viagem/viajante possui uma só
+autoridade espacial e de execução; coexistência entre cenários não autoriza
+dual authority dentro de um mesmo trip.
 
 A migração deve ser incremental:
 
@@ -5166,6 +5292,12 @@ decisões futuras, inclusive estado ou contexto de aleatoriedade e
 sequências/allocators quando forem semanticamente necessários.
 
 Uma seed inicial isolada não é estado suficiente para continuação.
+
+Para mundos que utilizem a fundação física, topologia espacial, identidades e
+condições mutáveis de passagens, posição factual em trânsito, plano/progresso
+autoritativo e Knowledge relevante também devem poder ser preservados ou
+reconstruídos sem depender de GameObjects, caches ou diagnostics. Isso não
+define agora um formato de save ou replay para a viagem civil.
 
 Quando uma Person possui estado individual rico, a persistência deve distinguir
 claramente:
