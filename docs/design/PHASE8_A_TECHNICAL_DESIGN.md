@@ -18,7 +18,7 @@ The coordinate representation below is a technical realization of §69's existin
 At the base SHA, `SpatialAuthorityStore` is the existing world-bound authority for stable Hex and Location identity and the LocalTopology-to-Location bridge:
 
 - `Assets/_Project/Scripts/SpatialAuthority.cs` defines `HexId`, `LocationId`, `HexRecord`, `LocationRecord`, `SpatialReference`, and `SpatialAuthorityStore`. IDs are typed, ordinal string identities independent of coordinates. `HexRecord` currently contains only an ID. A `LocationRecord` contains one `AnchorHexId`; registration requires that Hex to exist. The store owns registration, lookup, resolution, deterministic ordering, revision, cloning, mutation-guard binding, and invariant validation.
-- The current Hex model does **not** hold coordinates or terrain, derive neighbors, define a finite grid, or carry regional scale. `SpatialReferenceKind` currently supports Hex, Location, and SubLocation, but not Crossing.
+- The current Hex model does **not** hold coordinates or terrain, derive neighbors, define a finite grid, or carry regional scale. `SpatialReferenceKind` currently supports Hex, Location, and SubLocation, but not Crossing. No terrain content catalog or terrain revision-resolution boundary exists in the current code.
 - `SimulationRuntime` clones and composes the injected spatial authority (`CloneSpatialAuthorityStore`) without adding spatial daily processing. The source store and runtime store are separate authorities after composition.
 - `WorldStateSnapshot`, `WorldStateCanonicalWriter`, `WorldStateDiff`, `WorldStateInvariantValidator`, and `WorldStateFormatter` currently expose Hex IDs and Location-to-Hex anchors. They do not project coordinates, terrain assignment, or scale. Added authoritative fields therefore need clone, snapshot, canonical, diff, formatter, and invariant coverage together.
 - P7-D0 deliberately did not migrate `CityRuntime` or `ExplorableSiteRuntime` into `LocationRecord`. Those runtime objects still carry legacy `SpatialLocationRuntime` references. P7-D0 binds existing LocalTopology/SubLocation to a `LocationId` only through an explicit `SpatialLocalTopologyBinding`.
@@ -33,7 +33,7 @@ Relevant existing tests are `SpatialAuthorityTests.cs`, `BattleSpatialBindingTes
 | A finite manually authored geography exists as factual world state before the first simulated boundary, independent of observer, scene, or rendering state. | Compose an explicit finite spatial definition into the runtime's spatial authority before the initial simulation boundary. The finite set is the set of registered geographic Hex records; no query or coordinate neighborhood implicitly creates a cell. Validate through a small authored fixture/composition test. No procedural generator or runtime expansion. |
 | Hex has stable semantic identity distinct from semantic coordinate and from rendering coordinates. | Keep `HexId` as instance identity. Add an immutable axial integer coordinate pair `(q, r)` to each geographic Hex. Equality is equality of both integers; canonical order is lexicographic `(q, then r)`. Reject duplicate IDs and duplicate coordinates within one geographic world. Never derive IDs or coordinates from asset load order, RuntimeIds, discovery order, or rendering transforms. |
 | Existing semantic coordinates suffice to derive hexagonal geometric adjacency, while only existing cells participate. | Derive the six candidate coordinates using deltas `{(1,0), (1,-1), (0,-1), (-1,0), (-1,1), (0,1)}`. A candidate is a neighbor only if a geographic Hex is registered at that exact pair. Return existing neighbors in lexicographic coordinate order. Do not store derived adjacency as passage truth or instantiate missing cells. Add no distance, pathfinding, or rendering projection. |
-| Regional scale and terrain are factual context, not universal travel cost. | The effective authoritative world context has exactly one resolved, immutable, world-local physical-scale convention for a P8-A geography. Its authored content/world-input provenance and resolved identity are retained for reconstruction. The convention maps one geometric neighbor step in the uniform axial grid to an authored physical-distance value and unit; it does not define travel time or cost. Applied terrain is a stable reference to content-defined terrain; do not introduce a closed universal terrain enum or `Hex.TravelTime`. The exact scale value and unit for the sample world remain deferred to authored content. |
+| Regional scale and terrain are factual context, not universal travel cost. | The effective authoritative world context has exactly one resolved, immutable, world-local physical-scale convention for a P8-A geography. Its authored content/world-input provenance and resolved identity are retained for reconstruction. The convention maps one geometric neighbor step in the uniform axial grid to an authored physical-distance value and unit; it does not define travel time or cost. Each P8-A geographic Hex has an applied terrain reference pairing a stable definition ID with a stable authored revision/version token; both are required and preserved. The token changes when the definition's meaning changes. P8-A performs structural validation only because no content catalog exists; it does not introduce a closed universal terrain enum, `Hex.TravelTime`, a generic catalog, catalog membership checks, or runtime compatibility resolution. The exact scale value and unit for the sample world remain deferred to authored content. |
 | Locations are stable neutral anchors; each P8-A Location anchors to exactly one existing Hex. | Preserve `LocationId` and `LocationRecord.AnchorHexId` semantics. Validate the single registered anchor. Do not make Location a base class or migrate City/Site ownership in P8-A. |
 | Geography is deterministic and reconstructible. | Extend authority clone, ordered projection, diagnostics, and invariants for every new factual field. Registration order must not change neighbor queries or canonical snapshots. The manual slice must give explicit stable IDs, coordinate pairs, terrain references, anchors, and a resolved scale input with provenance. |
 
@@ -45,7 +45,7 @@ The proposals below are implementation ownership and API seams, not additional a
 
 ### Spatial truth owner and coordinates
 
-Keep one world-bound authority: the existing `SpatialAuthorityStore`, or a narrowly composed geography component that remains owned and cloned by it. Do not create a parallel grid authority beside it. Extend the existing Hex record with immutable semantic coordinate and applied terrain reference; retain `HexId` as its identity. Keep Location-to-Hex anchors in the existing store.
+Keep one world-bound authority: the existing `SpatialAuthorityStore`, or a narrowly composed geography component that remains owned and cloned by it. Do not create a parallel grid authority beside it. Extend the existing Hex record with immutable semantic coordinate and an applied `TerrainReference` pair; retain `HexId` as its identity. Every P8-A geographic Hex requires both non-empty terrain-reference components. Keep Location-to-Hex anchors in the existing store. Identity-only P7 stores outside a P8-A geography remain valid without a terrain reference.
 
 Use an immutable axial coordinate value `HexCoordinate(q, r)` with two integer components. Pair equality compares `q` and `r`; canonical ordering compares `q` first, then `r`. The six geometric neighbor deltas are exactly:
 
@@ -58,10 +58,12 @@ Neighbor lookup adds each delta, consults the finite coordinate index, and retur
 The minimal conceptual surface is:
 
 ```text
-P8-A geographic Hex record: HexId + HexCoordinate(q,r) + applied TerrainDefinitionId
+P8-A geographic Hex record: HexId + HexCoordinate(q,r) + TerrainReference(TerrainDefinitionId, AuthoredRevisionToken)
 P8-A geography context: registered geographic Hexes, anchored Locations, exactly one world-local scale record; identity-only P7 contexts remain scale-free
 SpatialAuthorityStore: query existing geometric neighbors for a HexId
 ```
+
+`TerrainReference` is a minimal pair: a stable `TerrainDefinitionId` plus a stable authored revision/version token (`AuthoredRevisionToken`). Both values are non-empty. The content authoring contract changes the revision/version token whenever the definition's meaning changes; P8-A preserves that token as data but cannot compare it with a catalog because no catalog exists. Catalog membership checks and runtime compatibility resolution belong to a later content/persistence boundary, not a new P8-A catalog.
 
 This surface must not expose an implicit `GetOrCreateNeighbor` operation. It must not return roads, crossings, movement capability, legal permission, route cost, or actor belief.
 
@@ -89,10 +91,10 @@ P8-A owns geographic facts and Location anchors only. P8-C owns the City/Site le
 
 | Files | P8-A ownership |
 |---|---|
-| `Assets/_Project/Scripts/SpatialAuthority.cs` and, if a clean type boundary requires it, one new spatial-geography source file | Axial coordinate value, coordinate index, coordinate-bearing geographic Hex value, terrain reference, world-local scale record/provenance, finite neighbor query, validation and cloning. |
+| `Assets/_Project/Scripts/SpatialAuthority.cs` and, if a clean type boundary requires it, one new spatial-geography source file | Axial coordinate value, coordinate index, coordinate-bearing geographic Hex value, paired terrain reference and structural validation, world-local scale record/provenance, finite neighbor query, and cloning. Do not add a terrain catalog. |
 | `Assets/_Project/Scripts/SimulationRuntime.cs` | Only the `CloneSpatialAuthorityStore` / composition path needed to preserve geographic fields and scale provenance and bind the authoritative store. No daily-loop changes. |
-| `Assets/_Project/Scripts/Diagnostics/WorldStateSnapshot.cs`, `WorldStateCanonicalWriter.cs`, `WorldStateDiff.cs`, `WorldStateFormatter.cs`, `WorldStateInvariantValidator.cs` | Snapshot, deterministic serialization/formatting, value diffs, and coordinate/terrain/scale provenance invariants for added factual geography. |
-| `Assets/_Project/Tests/EditMode/Editor/SpatialAuthorityTests.cs` and focused world-state diagnostics tests | P8-A assertions for finite membership, coordinate identity/separation, exact six-neighbor behavior, terrain/scale provenance, anchors, cloning, order independence, and diagnostics. |
+| `Assets/_Project/Scripts/Diagnostics/WorldStateSnapshot.cs`, `WorldStateCanonicalWriter.cs`, `WorldStateDiff.cs`, `WorldStateFormatter.cs`, `WorldStateInvariantValidator.cs` | Snapshots and canonical output carry both `TerrainDefinitionId` and `AuthoredRevisionToken`; diffs compare each component; formatters expose both; invariants require both non-empty. Extend the same surfaces for coordinates, scale provenance, and cross-reference structure. |
+| `Assets/_Project/Tests/EditMode/Editor/SpatialAuthorityTests.cs` and focused world-state diagnostics tests | P8-A assertions for finite membership, coordinate identity/separation, exact six-neighbor behavior, non-empty terrain ID/revision token, terrain revision changes, scale provenance, anchors, cloning, order independence, and diagnostics. |
 | `Assets/_Project/Scripts/SpatialRuntime.cs`, `TravelSystem.cs`, `NpcRuntime.cs`, `SimulationRuntime.AdvanceDay`, `CityRuntime.cs`, `ExplorableSiteRuntime.cs`, LocalTopology ownership | No P8-A ownership. Existing consumers are regression boundaries; City/Site migration belongs to P8-C. |
 
 `SpatialAuthority.cs`, `SimulationRuntime.cs`, and diagnostics are shared architectural hotspots. P8-A should be integrated before B/C implementation work that consumes the new contract. B and C should then work in isolated branches with explicit ownership of their overlapping spatial identity/segment boundary.
@@ -100,10 +102,10 @@ P8-A owns geographic facts and Location anchors only. P8-C owns the City/Site le
 ## 5. Migration and integration order
 
 1. Add the immutable axial coordinate value and deterministic finite-neighbor query using the convention in §4. Keep coordinates semantic and separate from IDs and rendering.
-2. Define the finite authored geography input and its one world-local resolved scale record. Retain source identity/version and resolved identity; author an explicit value/unit for the sample world before runtime composition. Validate stable IDs, coordinate uniqueness, terrain content references, anchors, and scale provenance.
+2. Define the finite authored geography input and its one world-local resolved scale record. Retain source identity/version and resolved identity; author an explicit value/unit for the sample world before runtime composition. Validate stable IDs, coordinate uniqueness, both non-empty terrain-reference components, anchors, and scale provenance; do not validate catalog membership or resolve runtime compatibility.
 3. Add immutable geographic facts to the existing spatial authority boundary. Preserve existing identity-only Phase 7 uses; P8-A geographic contexts require all geographic Hex coordinates and one scale record. Update `Clone()` and runtime composition atomically with the new fields.
-4. Extend snapshot, canonical writer, diff, formatter, and invariant validation so no new authoritative value or reconstruction identity is invisible to world-state diagnostics. Preserve stable semantic ordering.
-5. Add focused P8-A tests for registration/rejection atomicity, six-neighbor results over existing cells only, order independence, clone fidelity, terrain/scale provenance, anchor validity, diagnostic fidelity, and pre-boundary authored composition. Run affected Phase 7 spatial/diagnostic regressions during implementation.
+4. Extend snapshot, canonical writer, diff, formatter, and invariant validation so no new authoritative value or reconstruction identity, including both terrain-reference components, is invisible to world-state diagnostics. Preserve stable semantic ordering.
+5. Add focused P8-A tests for registration/rejection atomicity, six-neighbor results over existing cells only, order independence, clone fidelity of both terrain-reference components, terrain revision change detection, scale provenance, anchor validity, diagnostic fidelity, and pre-boundary authored composition. Run affected Phase 7 spatial/diagnostic regressions during implementation.
 6. Independently review the full P8-A diff against the recorded base, including architecture boundaries and reconstruction sensitivity. Integrate and validate P8-A before treating its behavior as a promoted dependency for B/C. Only after stable P8-A contracts/capabilities should B and C enter parallel isolated implementation; P8-D waits for the required B/C contracts/capabilities, and P8-E waits for promoted B/C/D plus integration validation.
 
 Do not use this order to create checkpoint IDs beyond the IDs already approved in `PHASE8_BRIEF.md`.
@@ -113,7 +115,7 @@ Do not use this order to create checkpoint IDs beyond the IDs already approved i
 No tests were run for this documentation-only artifact. After independent technical review and implementation authorization, validate at least:
 
 - focused `SpatialAuthorityTests` for typed IDs/coordinates, pair equality and lexicographic ordering, coordinate uniqueness, the exact six candidate deltas, lookup of only registered neighbors, deterministic results, anchor checks, mutation guard/revision behavior, and clone equivalence;
-- focused snapshot/canonical/diff/formatter/invariant tests proving coordinates, terrain, world-local scale value/unit, and scale provenance appear as factual state and differ when changed;
+- focused snapshot/canonical/diff/formatter/invariant tests proving coordinates, TerrainDefinitionId and AuthoredRevisionToken appear in snapshots/canonical output, clone together, and are independently diffed and invariant-checked; prove terrain-version changes change the reconstruction projection. Also cover world-local scale value/unit and scale provenance;
 - composition before the first simulated boundary and proof that runtime composition does not depend on rendering or discovery;
 - Phase 7 spatial consumers: `BattleSpatialBindingTests`, `ArmedForceSpatialPositionTests`, and the relevant Battle execution/diagnostic tests, including legacy identity-only stores without geography context;
 - all relevant EditMode domain suites, ALL EditMode, and the complete official Smoke suite before promotion, plus `git diff --check`;
@@ -128,13 +130,13 @@ A future reconstruction of the same initial geography must recover, at minimum:
 - the finite membership of the world’s geographic Hex set;
 - each stable `HexId` and its axial integer pair `(q, r)`;
 - the coordinate convention version and canonical pair ordering used to derive adjacency;
-- each applied terrain reference and the corresponding compatible content definition/version;
+- each applied terrain reference's stable TerrainDefinitionId and stable AuthoredRevisionToken; the token changes whenever terrain-definition meaning changes. P8-A preserves this pair as reconstruction input but does not require catalog membership or resolve runtime compatibility;
 - each stable `LocationId` and its single `AnchorHexId`;
 - the single resolved world-local physical-scale convention, its stable resolved identity, source identity/version or world-input revision, exact authored value, and unit;
 - the effective global configuration as an independently resolved input under its own authority, without copying global travel calculation parameters into spatial world content;
 - deterministic composition/order rules and any external authored inputs that affect these facts.
 
-This declaration is for architecture/design review; P8-A does not implement save, replay, or fork. Terrain/scale content definitions and world-authoring inputs are sources; their resolved application to this world is factual context. No Unity transform, scene ordering, RuntimeId allocator sequence, renderer, or discovered-cell cache may be required to reproduce authoritative geography.
+This declaration is for architecture/design review; P8-A does not implement save, replay, or fork. Terrain/scale content definitions and world-authoring inputs are sources; their resolved application to this world is factual context. The terrain definition ID and authored revision/version token are both part of the applied fact and reconstruction identity. No Unity transform, scene ordering, RuntimeId allocator sequence, renderer, or discovered-cell cache may be required to reproduce authoritative geography.
 
 ## 8. Remaining implementation-readiness requirements
 
