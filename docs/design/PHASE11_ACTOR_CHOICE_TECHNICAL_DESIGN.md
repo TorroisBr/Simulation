@@ -250,8 +250,9 @@ If action execution throws after dispatch starts, append the single terminal
 original exception with its existing propagation/stack. Do not
 swallow it, substitute `Failed`/`Unavailable`, or claim an `NpcActionResult`
 that was never returned. The choice remains consumed, no autonomous fallback
-or retry runs in that interrupted actor turn, and the runtime's existing fault
-behavior applies. A terminal rejection occurs only before dispatch (for
+or retry runs in that interrupted actor turn, and the exception propagates to
+the caller. This design asserts no automatic runtime fault-state transition.
+A terminal rejection occurs only before dispatch (for
 example, when the provider returns no action); it falls back to autonomous
 selection as specified above.
 
