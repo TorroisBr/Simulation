@@ -718,6 +718,58 @@ public static class WorldStateInvariantValidator
                 AddError(issues, "SpatialLocationAnchorMissingHex", location.LocationId, "Spatial Location anchor Hex is absent.");
             }
         }
+
+        HashSet<string> crossingIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (WorldStateCrossingSnapshot crossing in spatial.Crossings ?? new List<WorldStateCrossingSnapshot>())
+        {
+            if (crossing == null || string.IsNullOrWhiteSpace(crossing.CrossingId))
+            {
+                AddError(issues, "SpatialCrossingIdMissing", "crossing", "Spatial Crossing has no stable identity.");
+                continue;
+            }
+
+            if (crossingIds.Add(crossing.CrossingId) == false)
+            {
+                AddError(issues, "DuplicateSpatialCrossingId", crossing.CrossingId, "Spatial Crossing identity appears more than once.");
+            }
+
+            if (string.IsNullOrWhiteSpace(crossing.FirstHexId)
+                || string.IsNullOrWhiteSpace(crossing.SecondHexId)
+                || string.Equals(crossing.FirstHexId, crossing.SecondHexId, StringComparison.Ordinal))
+            {
+                AddError(issues, "SpatialCrossingBoundaryInvalid", crossing.CrossingId, "Spatial Crossing requires two distinct stable boundary Hex identities.");
+            }
+            else
+            {
+                if (StringComparer.Ordinal.Compare(crossing.FirstHexId, crossing.SecondHexId) > 0)
+                {
+                    AddError(issues, "SpatialCrossingBoundaryOrderInvalid", crossing.CrossingId, "Spatial Crossing boundary Hex identities must use canonical ordinal order.");
+                }
+
+                if (!hexIds.Contains(crossing.FirstHexId) || !hexIds.Contains(crossing.SecondHexId))
+                {
+                    AddError(issues, "SpatialCrossingBoundaryHexMissing", crossing.CrossingId, "Spatial Crossing boundary references a Hex absent from the spatial authority snapshot.");
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(crossing.AnchorHexId))
+            {
+                AddError(issues, "SpatialCrossingAnchorMissing", crossing.CrossingId, "Spatial Crossing has no anchor Hex identity.");
+            }
+            else
+            {
+                if (!hexIds.Contains(crossing.AnchorHexId))
+                {
+                    AddError(issues, "SpatialCrossingAnchorHexMissing", crossing.CrossingId, "Spatial Crossing anchor Hex is absent from the spatial authority snapshot.");
+                }
+
+                if (!string.Equals(crossing.AnchorHexId, crossing.FirstHexId, StringComparison.Ordinal)
+                    && !string.Equals(crossing.AnchorHexId, crossing.SecondHexId, StringComparison.Ordinal))
+                {
+                    AddError(issues, "SpatialCrossingAnchorOutsideBoundary", crossing.CrossingId, "Spatial Crossing anchor Hex must be one of its boundary endpoints.");
+                }
+            }
+        }
     }
 
     private static void ValidateArmedForces(
@@ -1146,6 +1198,16 @@ public static class WorldStateInvariantValidator
             return;
         }
 
+        if (reference.Kind == SpatialReferenceKind.Crossing)
+        {
+            if (reference.CrossingId == null
+                || ContainsCrossing(spatial.Crossings, reference.CrossingId.Value) == false)
+            {
+                AddError(issues, diagnosticPrefix + "CrossingMissing", identity, "SpatialReference Crossing is absent from the spatial authority snapshot.");
+            }
+            return;
+        }
+
         if (!reference.TopologyOwnerKind.HasValue
             || string.IsNullOrWhiteSpace(reference.TopologyOwnerRuntimeId)
             || string.IsNullOrWhiteSpace(reference.SubLocationRuntimeId))
@@ -1406,6 +1468,16 @@ public static class WorldStateInvariantValidator
             return;
         }
 
+        if (reference.Kind == SpatialReferenceKind.Crossing)
+        {
+            if (reference.CrossingId == null
+                || ContainsCrossing(spatial.Crossings, reference.CrossingId.Value) == false)
+            {
+                AddError(issues, "BattleLocationCrossingMissing", identity, "Battle location Crossing is absent from the spatial authority snapshot.");
+            }
+            return;
+        }
+
         if (!reference.TopologyOwnerKind.HasValue
             || string.IsNullOrWhiteSpace(reference.TopologyOwnerRuntimeId)
             || string.IsNullOrWhiteSpace(reference.SubLocationRuntimeId))
@@ -1486,6 +1558,21 @@ public static class WorldStateInvariantValidator
         foreach (WorldStateHexSnapshot hex in hexes ?? new List<WorldStateHexSnapshot>())
         {
             if (hex != null && string.Equals(hex.HexId, hexId, System.StringComparison.Ordinal)) return true;
+        }
+
+        return false;
+    }
+
+    private static bool ContainsCrossing(
+        IReadOnlyList<WorldStateCrossingSnapshot> crossings,
+        string crossingId)
+    {
+        foreach (WorldStateCrossingSnapshot crossing in crossings ?? new List<WorldStateCrossingSnapshot>())
+        {
+            if (crossing != null && string.Equals(crossing.CrossingId, crossingId, StringComparison.Ordinal))
+            {
+                return true;
+            }
         }
 
         return false;

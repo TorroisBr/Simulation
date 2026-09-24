@@ -1387,6 +1387,7 @@ public sealed class WorldStateSpatialSnapshot
     public WorldStateSpatialScaleContextSnapshot ScaleContext { get; }
     public IReadOnlyList<WorldStateHexSnapshot> Hexes { get; }
     public IReadOnlyList<WorldStateAnchoredLocationSnapshot> AnchoredLocations { get; }
+    public IReadOnlyList<WorldStateCrossingSnapshot> Crossings { get; }
     public IReadOnlyList<WorldStateSpatialTopologyBindingSnapshot> TopologyBindings { get; }
     public IReadOnlyList<WorldStateLocationSnapshot> Locations { get; }
     public IReadOnlyList<WorldStateRouteSnapshot> Routes { get; }
@@ -1400,7 +1401,8 @@ public sealed class WorldStateSpatialSnapshot
         IEnumerable<WorldStateSpatialTopologyBindingSnapshot> topologyBindings = null,
         string coordinateConventionVersion = null,
         string coordinateCanonicalOrder = null,
-        WorldStateSpatialScaleContextSnapshot scaleContext = null)
+        WorldStateSpatialScaleContextSnapshot scaleContext = null,
+        IEnumerable<WorldStateCrossingSnapshot> crossings = null)
     {
         AuthorityRevision = authorityRevision;
         CoordinateConventionVersion = coordinateConventionVersion;
@@ -1408,9 +1410,30 @@ public sealed class WorldStateSpatialSnapshot
         ScaleContext = scaleContext;
         Hexes = SnapshotCollections.CopySorted(hexes, hex => hex?.HexId);
         AnchoredLocations = SnapshotCollections.CopySorted(anchoredLocations, location => location?.LocationId);
+        Crossings = SnapshotCollections.CopySorted(crossings, crossing => crossing?.CrossingId);
         TopologyBindings = SnapshotCollections.CopySorted(topologyBindings, binding => binding?.StableKey);
         Locations = SnapshotCollections.CopySorted(locations, location => location?.RuntimeId);
         Routes = SnapshotCollections.CopySorted(routes, route => route?.RuntimeId);
+    }
+}
+
+public sealed class WorldStateCrossingSnapshot
+{
+    public string CrossingId { get; }
+    public string FirstHexId { get; }
+    public string SecondHexId { get; }
+    public string AnchorHexId { get; }
+
+    public WorldStateCrossingSnapshot(
+        string crossingId,
+        string firstHexId,
+        string secondHexId,
+        string anchorHexId)
+    {
+        CrossingId = crossingId;
+        FirstHexId = firstHexId;
+        SecondHexId = secondHexId;
+        AnchorHexId = anchorHexId;
     }
 }
 
@@ -3076,6 +3099,7 @@ public static class WorldStateSnapshotBuilder
             new List<WorldStateAnchoredLocationSnapshot>();
         List<WorldStateSpatialTopologyBindingSnapshot> topologyBindingSnapshots =
             new List<WorldStateSpatialTopologyBindingSnapshot>();
+        List<WorldStateCrossingSnapshot> crossingSnapshots = new List<WorldStateCrossingSnapshot>();
         long? authorityRevision = null;
         string coordinateConventionVersion = null;
         string coordinateCanonicalOrder = null;
@@ -3128,6 +3152,18 @@ public static class WorldStateSnapshotBuilder
                         binding.LocationId.Value));
                 }
             }
+
+            foreach (CrossingRecord crossing in authority.Crossings)
+            {
+                if (crossing?.Id != null && crossing.Boundary != null && crossing.AnchorHexId != null)
+                {
+                    crossingSnapshots.Add(new WorldStateCrossingSnapshot(
+                        crossing.Id.Value,
+                        crossing.Boundary.FirstHexId.Value,
+                        crossing.Boundary.SecondHexId.Value,
+                        crossing.AnchorHexId.Value));
+                }
+            }
         }
 
         if (network == null)
@@ -3139,7 +3175,8 @@ public static class WorldStateSnapshotBuilder
                 authorityRevision: authorityRevision,
                 coordinateConventionVersion: coordinateConventionVersion,
                 coordinateCanonicalOrder: coordinateCanonicalOrder,
-                scaleContext: scaleContextSnapshot);
+                scaleContext: scaleContextSnapshot,
+                crossings: crossingSnapshots);
         }
 
         List<SpatialLocationRuntime> locations = new List<SpatialLocationRuntime>(network.Locations);
@@ -3173,7 +3210,8 @@ public static class WorldStateSnapshotBuilder
             topologyBindingSnapshots,
             coordinateConventionVersion,
             coordinateCanonicalOrder,
-            scaleContextSnapshot);
+            scaleContextSnapshot,
+            crossingSnapshots);
     }
 
     private static List<WorldStateSiteSnapshot> BuildSiteSnapshots(ExplorableSiteStore store)

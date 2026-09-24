@@ -197,6 +197,24 @@ public sealed class WorldStateDiff
                 WorldStateCanonicalWriter.StringValue(right.AnchorHexId),
                 differences),
             differences);
+        CompareEntities("SpatialCrossing", before.Spatial.Crossings, after.Spatial.Crossings,
+            crossing => crossing.CrossingId,
+            (identity, left, right) =>
+            {
+                CompareValue("SpatialCrossing", identity, "FirstHexId",
+                    WorldStateCanonicalWriter.StringValue(left.FirstHexId),
+                    WorldStateCanonicalWriter.StringValue(right.FirstHexId),
+                    differences);
+                CompareValue("SpatialCrossing", identity, "SecondHexId",
+                    WorldStateCanonicalWriter.StringValue(left.SecondHexId),
+                    WorldStateCanonicalWriter.StringValue(right.SecondHexId),
+                    differences);
+                CompareValue("SpatialCrossing", identity, "AnchorHexId",
+                    WorldStateCanonicalWriter.StringValue(left.AnchorHexId),
+                    WorldStateCanonicalWriter.StringValue(right.AnchorHexId),
+                    differences);
+            },
+            differences);
 
         CompareEntities("NPC", before.Npcs, after.Npcs, npc => npc.RuntimeId,
             (identity, left, right) =>

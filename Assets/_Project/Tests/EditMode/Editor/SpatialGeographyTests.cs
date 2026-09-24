@@ -200,6 +200,102 @@ public sealed class SpatialGeographyTests
     }
 
     [Test]
+    public void CrossingSnapshotCanonicalOutputAndDiffExposeRegisteredBoundaryFacts()
+    {
+        SpatialAuthorityStore authority = CreateAuthoredFixture();
+        HexBoundaryKey boundary = new HexBoundaryKey(
+            new HexId("hex.fixture.center"),
+            new HexId("hex.fixture.right-upper"));
+        Assert.That(authority.TryRegisterCrossing(
+            new CrossingRecord(new CrossingId("crossing.fixture.bridge"), boundary, new HexId("hex.fixture.center")),
+            out SpatialAuthorityFailure failure), Is.True, failure.ToString());
+
+        WorldStateSnapshot built = Snapshot(authority);
+        WorldStateCrossingSnapshot crossing = built.Spatial.Crossings.Single();
+        Assert.That(crossing.CrossingId, Is.EqualTo("crossing.fixture.bridge"));
+        Assert.That(crossing.FirstHexId, Is.EqualTo("hex.fixture.center"));
+        Assert.That(crossing.SecondHexId, Is.EqualTo("hex.fixture.right-upper"));
+        Assert.That(crossing.AnchorHexId, Is.EqualTo("hex.fixture.center"));
+        Assert.That(WorldStateCanonicalWriter.Write(built), Does.Contain(
+            "SPATIAL_CROSSING|crossing.fixture.bridge|hex.fixture.center|hex.fixture.right-upper|hex.fixture.center"));
+        Assert.That(WorldStateInvariantValidator.Validate(built).IsValid, Is.True);
+
+        WorldStateSnapshot withCrossing = SnapshotWithCrossings(built.Spatial, built.Spatial.Crossings);
+        WorldStateSnapshot withoutCrossing = SnapshotWithCrossings(
+            built.Spatial,
+            Array.Empty<WorldStateCrossingSnapshot>());
+        Assert.That(withCrossing.Spatial.AuthorityRevision, Is.EqualTo(withoutCrossing.Spatial.AuthorityRevision));
+        Assert.That(WorldStateCanonicalWriter.Write(withCrossing), Is.Not.EqualTo(WorldStateCanonicalWriter.Write(withoutCrossing)));
+        WorldStateDiff diff = WorldStateDiff.Compare(withoutCrossing, withCrossing);
+        Assert.That(diff.Differences.Any(value => value.Section == "SpatialCrossing"
+            && value.Identity == "crossing.fixture.bridge"
+            && value.ChangeKind == WorldStateDifferenceChangeKind.Added), Is.True);
+    }
+
+    [Test]
+    public void ArmedForceCrossingReferencesRequireARegisteredSpatialCrossing()
+    {
+        SpatialAuthorityStore authority = CreateAuthoredFixture();
+        Assert.That(authority.TryRegisterCrossing(
+            new CrossingRecord(
+                new CrossingId("crossing.fixture.bridge"),
+                new HexBoundaryKey(new HexId("hex.fixture.center"), new HexId("hex.fixture.right-upper")),
+                new HexId("hex.fixture.center")),
+            out SpatialAuthorityFailure failure), Is.True, failure.ToString());
+        WorldStateSpatialSnapshot spatial = Snapshot(authority).Spatial;
+        WorldStateArmedForceSnapshot force = new WorldStateArmedForceSnapshot(
+            "force.fixture", "Fixture force", 0L, ArmedForceLifecycleState.Active,
+            null, null, false, null, null);
+
+        WorldStateSnapshot valid = new WorldStateSnapshot(
+            0L,
+            spatial: spatial,
+            armedForces: new[] { force },
+            armedForceRevision: 0L,
+            armedForcePositions: new[]
+            {
+                new WorldStateArmedForcePositionSnapshot(
+                    force.ArmedForceId,
+                    SpatialReference.ForCrossing(new CrossingId("crossing.fixture.bridge")))
+            },
+            armedForceSpatialRevision: 0L);
+        Assert.That(WorldStateInvariantValidator.Validate(valid).Issues,
+            Has.None.Matches<WorldStateInvariantIssue>(issue => issue.Code == "ArmedForcePositionCrossingMissing"));
+
+        WorldStateSnapshot invalid = new WorldStateSnapshot(
+            0L,
+            spatial: spatial,
+            armedForces: new[] { force },
+            armedForceRevision: 0L,
+            armedForcePositions: new[]
+            {
+                new WorldStateArmedForcePositionSnapshot(
+                    force.ArmedForceId,
+                    SpatialReference.ForCrossing(new CrossingId("crossing.fixture.missing")))
+            },
+            armedForceSpatialRevision: 0L);
+        Assert.That(WorldStateInvariantValidator.Validate(invalid).Issues,
+            Has.Some.Matches<WorldStateInvariantIssue>(issue => issue.Code == "ArmedForcePositionCrossingMissing"));
+    }
+
+    [Test]
+    public void BattleCrossingReferencesRequireARegisteredSpatialCrossing()
+    {
+        WorldStateSpatialSnapshot spatial = Snapshot(CreateAuthoredFixture()).Spatial;
+        WorldStateBattleSnapshot battle = new WorldStateBattleSnapshot(
+            "battle.fixture", 0L, null, BattleLifecycleState.Pending, null, null,
+            SpatialReference.ForCrossing(new CrossingId("crossing.fixture.missing")));
+        WorldStateSnapshot snapshot = new WorldStateSnapshot(
+            0L,
+            spatial: spatial,
+            battles: new[] { battle },
+            battleRevision: 0L);
+
+        Assert.That(WorldStateInvariantValidator.Validate(snapshot).Issues,
+            Has.Some.Matches<WorldStateInvariantIssue>(issue => issue.Code == "BattleLocationCrossingMissing"));
+    }
+
+    [Test]
     public void SpatialSnapshotInvariantsRejectIncompleteGeographyAndScaleProvenance()
     {
         WorldStateSpatialSnapshot missingScale = new WorldStateSpatialSnapshot(
@@ -307,5 +403,22 @@ public sealed class SpatialGeographyTests
     {
         return WorldStateSnapshotBuilder.BuildSnapshot(
             new WorldStateSnapshotContext(spatialAuthorityStore: authority));
+    }
+
+    private static WorldStateSnapshot SnapshotWithCrossings(
+        WorldStateSpatialSnapshot source,
+        System.Collections.Generic.IEnumerable<WorldStateCrossingSnapshot> crossings)
+    {
+        return new WorldStateSnapshot(
+            0L,
+            spatial: new WorldStateSpatialSnapshot(
+                hexes: source.Hexes,
+                anchoredLocations: source.AnchoredLocations,
+                authorityRevision: source.AuthorityRevision,
+                topologyBindings: source.TopologyBindings,
+                coordinateConventionVersion: source.CoordinateConventionVersion,
+                coordinateCanonicalOrder: source.CoordinateCanonicalOrder,
+                scaleContext: source.ScaleContext,
+                crossings: crossings));
     }
 }

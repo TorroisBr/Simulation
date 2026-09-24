@@ -102,6 +102,15 @@ public static class WorldStateCanonicalWriter
                 AppendLine(output, "SPATIAL_LOCATION", location.LocationId, location.AnchorHexId);
             }
 
+            foreach (WorldStateCrossingSnapshot crossing in snapshot.Spatial.Crossings)
+            {
+                AppendLine(output, "SPATIAL_CROSSING",
+                    crossing.CrossingId,
+                    crossing.FirstHexId,
+                    crossing.SecondHexId,
+                    crossing.AnchorHexId);
+            }
+
             if (snapshot.Spatial.CoordinateConventionVersion != null
                 || snapshot.Spatial.CoordinateCanonicalOrder != null)
             {
