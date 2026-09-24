@@ -88,7 +88,8 @@ public enum SpatialReferenceKind
 {
     Hex = 0,
     Location = 1,
-    SubLocation = 2
+    SubLocation = 2,
+    Crossing = 3
 }
 
 /// <summary>
@@ -101,6 +102,7 @@ public sealed class SpatialReference : IEquatable<SpatialReference>
         SpatialReferenceKind kind,
         HexId hexId,
         LocationId locationId,
+        CrossingId crossingId,
         LocalTopologyOwnerKind? topologyOwnerKind,
         string topologyOwnerRuntimeId,
         string subLocationRuntimeId)
@@ -113,6 +115,7 @@ public sealed class SpatialReference : IEquatable<SpatialReference>
         Kind = kind;
         HexId = hexId;
         LocationId = locationId;
+        CrossingId = crossingId;
         TopologyOwnerKind = topologyOwnerKind;
         TopologyOwnerRuntimeId = topologyOwnerRuntimeId;
         SubLocationRuntimeId = subLocationRuntimeId;
@@ -121,6 +124,7 @@ public sealed class SpatialReference : IEquatable<SpatialReference>
     public SpatialReferenceKind Kind { get; }
     public HexId HexId { get; }
     public LocationId LocationId { get; }
+    public CrossingId CrossingId { get; }
     public LocalTopologyOwnerKind? TopologyOwnerKind { get; }
     public string TopologyOwnerRuntimeId { get; }
     public string SubLocationRuntimeId { get; }
@@ -135,6 +139,8 @@ public sealed class SpatialReference : IEquatable<SpatialReference>
                     return "hex:" + HexId.Value;
                 case SpatialReferenceKind.Location:
                     return "location:" + LocationId.Value;
+                case SpatialReferenceKind.Crossing:
+                    return "crossing:" + CrossingId.Value;
                 case SpatialReferenceKind.SubLocation:
                     return "sublocation:" + TopologyOwnerKind.Value + ":"
                         + TopologyOwnerRuntimeId + ":" + SubLocationRuntimeId;
@@ -152,6 +158,7 @@ public sealed class SpatialReference : IEquatable<SpatialReference>
             null,
             null,
             null,
+            null,
             null);
     }
 
@@ -161,6 +168,7 @@ public sealed class SpatialReference : IEquatable<SpatialReference>
             SpatialReferenceKind.Location,
             null,
             locationId ?? throw new ArgumentNullException(nameof(locationId)),
+            null,
             null,
             null,
             null);
@@ -190,9 +198,22 @@ public sealed class SpatialReference : IEquatable<SpatialReference>
             SpatialReferenceKind.SubLocation,
             null,
             null,
+            null,
             topologyOwnerKind,
             topologyOwnerRuntimeId,
             subLocationRuntimeId);
+    }
+
+    public static SpatialReference ForCrossing(CrossingId crossingId)
+    {
+        return new SpatialReference(
+            SpatialReferenceKind.Crossing,
+            null,
+            null,
+            crossingId ?? throw new ArgumentNullException(nameof(crossingId)),
+            null,
+            null,
+            null);
     }
 
     public static SpatialReference ForSubLocation(
@@ -216,6 +237,7 @@ public sealed class SpatialReference : IEquatable<SpatialReference>
             && Kind == other.Kind
             && HexId == other.HexId
             && LocationId == other.LocationId
+            && CrossingId == other.CrossingId
             && TopologyOwnerKind == other.TopologyOwnerKind
             && string.Equals(TopologyOwnerRuntimeId, other.TopologyOwnerRuntimeId, StringComparison.Ordinal)
             && string.Equals(SubLocationRuntimeId, other.SubLocationRuntimeId, StringComparison.Ordinal);
@@ -260,6 +282,7 @@ public sealed class SpatialResolution
     public SpatialReference Reference { get; }
     public HexRecord Hex { get; }
     public LocationRecord Location { get; }
+    public CrossingRecord Crossing { get; }
     public LocalTopologyRuntime LocalTopology { get; }
     public LocalPlaceRuntime SubLocation { get; }
 
@@ -267,12 +290,14 @@ public sealed class SpatialResolution
         SpatialReference reference,
         HexRecord hex,
         LocationRecord location,
+        CrossingRecord crossing = null,
         LocalTopologyRuntime localTopology = null,
         LocalPlaceRuntime subLocation = null)
     {
         Reference = reference ?? throw new ArgumentNullException(nameof(reference));
         Hex = hex;
         Location = location;
+        Crossing = crossing;
         LocalTopology = localTopology;
         SubLocation = subLocation;
     }
@@ -301,7 +326,13 @@ public enum SpatialAuthorityFailureCode
     InvalidGeography = 18,
     DuplicateHexCoordinate = 19,
     SpatialAuthorityNotEmpty = 20,
-    GeographicHexRequiresComposition = 21
+    GeographicHexRequiresComposition = 21,
+    InvalidCrossing = 22,
+    DuplicateCrossingId = 23,
+    CrossingBoundaryNotAdjacent = 24,
+    CrossingAnchorNotInBoundary = 25,
+    CrossingNotRegistered = 26,
+    BoundaryNotAdjacent = 27
 }
 
 public sealed class SpatialAuthorityFailure : IEquatable<SpatialAuthorityFailure>
@@ -377,6 +408,8 @@ public sealed class SpatialAuthorityStore : IAuthoritativeMutationGuardBindable
         new Dictionary<HexCoordinate, HexRecord>();
     private readonly Dictionary<string, LocationRecord> locationsById =
         new Dictionary<string, LocationRecord>(StringComparer.Ordinal);
+    private readonly Dictionary<string, CrossingRecord> crossingsById =
+        new Dictionary<string, CrossingRecord>(StringComparer.Ordinal);
     private readonly Dictionary<string, SpatialLocalTopologyBinding> topologyBindingsByKey =
         new Dictionary<string, SpatialLocalTopologyBinding>(StringComparer.Ordinal);
     private SpatialWorldScaleContext scaleContext;
@@ -387,6 +420,7 @@ public sealed class SpatialAuthorityStore : IAuthoritativeMutationGuardBindable
     public long Revision => revision;
     public int HexCount => hexesById.Count;
     public int LocationCount => locationsById.Count;
+    public int CrossingCount => crossingsById.Count;
     public int LocalTopologyBindingCount => topologyBindingsByKey.Count;
     public bool HasGeography => scaleContext != null;
     public SpatialWorldScaleContext ScaleContext => scaleContext;
@@ -395,6 +429,7 @@ public sealed class SpatialAuthorityStore : IAuthoritativeMutationGuardBindable
 
     public IReadOnlyList<HexRecord> Hexes => SortedHexes();
     public IReadOnlyList<LocationRecord> Locations => SortedLocations();
+    public IReadOnlyList<CrossingRecord> Crossings => SortedCrossings();
     public IReadOnlyList<SpatialLocalTopologyBinding> LocalTopologyBindings => SortedBindings();
 
     /// <summary>
@@ -576,6 +611,98 @@ public sealed class SpatialAuthorityStore : IAuthoritativeMutationGuardBindable
         return true;
     }
 
+    /// <summary>
+    /// Resolves the unordered identity for an adjacent pair in the registered
+    /// finite geography. This reports geometric adjacency only, never passage.
+    /// </summary>
+    public bool TryGetGeometricBoundary(
+        HexId fromHexId,
+        HexId toHexId,
+        out HexBoundaryKey boundary,
+        out SpatialAuthorityFailure failure)
+    {
+        boundary = null;
+        failure = SpatialAuthorityFailure.None;
+        if (fromHexId == null || toHexId == null || fromHexId == toHexId)
+        {
+            return Fail(SpatialAuthorityFailureCode.BoundaryNotAdjacent, "A geometric boundary requires two distinct registered HexIds.", out failure);
+        }
+
+        if (TryGetGeometricNeighbors(fromHexId, out IReadOnlyList<HexRecord> neighbors, out failure) == false)
+        {
+            return false;
+        }
+
+        bool isNeighbor = false;
+        foreach (HexRecord neighbor in neighbors)
+        {
+            if (neighbor.Id == toHexId)
+            {
+                isNeighbor = true;
+                break;
+            }
+        }
+
+        if (!isNeighbor)
+        {
+            return Fail(SpatialAuthorityFailureCode.BoundaryNotAdjacent, "The registered Hexes are not geometric neighbors.", out failure);
+        }
+
+        boundary = new HexBoundaryKey(fromHexId, toHexId);
+        return true;
+    }
+
+    /// <summary>Registers the stable Crossing identity and its factual boundary anchor.</summary>
+    public bool TryRegisterCrossing(CrossingRecord crossing, out SpatialAuthorityFailure failure)
+    {
+        failure = SpatialAuthorityFailure.None;
+        if (!mutationGuardBinding.CanMutate)
+        {
+            return Fail(SpatialAuthorityFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.", out failure);
+        }
+
+        if (crossing == null || crossing.Id == null || crossing.Boundary == null || crossing.AnchorHexId == null)
+        {
+            return Fail(SpatialAuthorityFailureCode.InvalidCrossing, "Crossing requires a stable identity, boundary, and anchor Hex.", out failure);
+        }
+
+        if (crossingsById.ContainsKey(crossing.Id.Value))
+        {
+            return Fail(SpatialAuthorityFailureCode.DuplicateCrossingId, "CrossingId is already registered.", out failure);
+        }
+
+        if (!crossing.Boundary.Contains(crossing.AnchorHexId))
+        {
+            return Fail(SpatialAuthorityFailureCode.CrossingAnchorNotInBoundary, "Crossing anchor Hex must be one of its boundary endpoints.", out failure);
+        }
+
+        if (TryGetGeometricBoundary(crossing.Boundary.FirstHexId, crossing.Boundary.SecondHexId,
+            out HexBoundaryKey registeredBoundary, out failure) == false)
+        {
+            if (failure.Code == SpatialAuthorityFailureCode.BoundaryNotAdjacent)
+            {
+                failure = SpatialAuthorityFailure.Create(SpatialAuthorityFailureCode.CrossingBoundaryNotAdjacent,
+                    "Crossing boundary is not adjacent in registered finite geography.");
+            }
+            return false;
+        }
+
+        if (CanAdvanceRevision(out failure) == false) return false;
+        crossingsById.Add(crossing.Id.Value, new CrossingRecord(
+            new CrossingId(crossing.Id.Value),
+            registeredBoundary,
+            new HexId(crossing.AnchorHexId.Value)));
+        revision++;
+        return true;
+    }
+
+    public bool TryGet(CrossingId id, out CrossingRecord crossing)
+    {
+        if (id != null && crossingsById.TryGetValue(id.Value, out crossing)) return true;
+        crossing = null;
+        return false;
+    }
+
     public bool TryRegisterLocation(LocationRecord location, out SpatialAuthorityFailure failure)
     {
         failure = SpatialAuthorityFailure.None;
@@ -722,6 +849,18 @@ public sealed class SpatialAuthorityStore : IAuthoritativeMutationGuardBindable
             return true;
         }
 
+        if (reference.Kind == SpatialReferenceKind.Crossing)
+        {
+            if (reference.CrossingId == null || TryGet(reference.CrossingId, out CrossingRecord crossing) == false)
+            {
+                return Fail(SpatialAuthorityFailureCode.CrossingNotRegistered, "SpatialReference Crossing is not registered.", out failure);
+            }
+
+            TryGet(crossing.AnchorHexId, out HexRecord crossingAnchor);
+            resolution = new SpatialResolution(reference, crossingAnchor, null, crossing);
+            return true;
+        }
+
         if (reference.TopologyOwnerKind.HasValue == false
             || string.IsNullOrWhiteSpace(reference.TopologyOwnerRuntimeId)
             || string.IsNullOrWhiteSpace(reference.SubLocationRuntimeId))
@@ -756,7 +895,7 @@ public sealed class SpatialAuthorityStore : IAuthoritativeMutationGuardBindable
             return Fail(SpatialAuthorityFailureCode.LocationNotRegistered, "SubLocation binding resolves to an absent Location or Hex.", out failure);
         }
 
-        resolution = new SpatialResolution(reference, boundHex, boundLocation, topology, place);
+        resolution = new SpatialResolution(reference, boundHex, boundLocation, localTopology: topology, subLocation: place);
         return true;
     }
 
@@ -778,6 +917,14 @@ public sealed class SpatialAuthorityStore : IAuthoritativeMutationGuardBindable
             copy.locationsById.Add(
                 location.Id.Value,
                 new LocationRecord(new LocationId(location.Id.Value), new HexId(location.AnchorHexId.Value)));
+        }
+
+        foreach (CrossingRecord crossing in Crossings)
+        {
+            copy.crossingsById.Add(crossing.Id.Value, new CrossingRecord(
+                new CrossingId(crossing.Id.Value),
+                new HexBoundaryKey(new HexId(crossing.Boundary.FirstHexId.Value), new HexId(crossing.Boundary.SecondHexId.Value)),
+                new HexId(crossing.AnchorHexId.Value)));
         }
 
         foreach (SpatialLocalTopologyBinding binding in LocalTopologyBindings)
@@ -892,6 +1039,27 @@ public sealed class SpatialAuthorityStore : IAuthoritativeMutationGuardBindable
                 || !hexesById.ContainsKey(entry.Value.AnchorHexId.Value))
             {
                 violations.Add("Location index contains an invalid or unanchored record for '" + entry.Key + "'.");
+            }
+        }
+
+        foreach (KeyValuePair<string, CrossingRecord> entry in crossingsById)
+        {
+            CrossingRecord crossing = entry.Value;
+            if (crossing == null || crossing.Id == null || crossing.Boundary == null || crossing.AnchorHexId == null
+                || !string.Equals(entry.Key, crossing.Id.Value, StringComparison.Ordinal)
+                || !crossing.Boundary.Contains(crossing.AnchorHexId)
+                || !hexesById.ContainsKey(crossing.Boundary.FirstHexId.Value)
+                || !hexesById.ContainsKey(crossing.Boundary.SecondHexId.Value)
+                || !hexesById.ContainsKey(crossing.AnchorHexId.Value))
+            {
+                violations.Add("Crossing index contains an invalid or unanchored record for '" + entry.Key + "'.");
+                continue;
+            }
+
+            if (TryGetGeometricBoundary(crossing.Boundary.FirstHexId, crossing.Boundary.SecondHexId,
+                out _, out _) == false)
+            {
+                violations.Add("Crossing boundary is not adjacent in registered finite geography: " + entry.Key + ".");
             }
         }
 
@@ -1016,6 +1184,13 @@ public sealed class SpatialAuthorityStore : IAuthoritativeMutationGuardBindable
         List<LocationRecord> result = new List<LocationRecord>(locationsById.Values);
         result.Sort((left, right) => StringComparer.Ordinal.Compare(left?.Id?.Value, right?.Id?.Value));
         return new ReadOnlyCollection<LocationRecord>(result);
+    }
+
+    private IReadOnlyList<CrossingRecord> SortedCrossings()
+    {
+        List<CrossingRecord> result = new List<CrossingRecord>(crossingsById.Values);
+        result.Sort((left, right) => StringComparer.Ordinal.Compare(left?.Id?.Value, right?.Id?.Value));
+        return new ReadOnlyCollection<CrossingRecord>(result);
     }
 
     private IReadOnlyList<SpatialLocalTopologyBinding> SortedBindings()
