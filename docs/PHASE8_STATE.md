@@ -4,16 +4,16 @@
 
 - The verified Phase 7 canonical baseline entering Phase 8 is
   `1f4651e99db2c357dd3be3c6b9284d104379f706` on `codex/phase7/canonical`.
-- P8-A is locally promoted from integration commit
+- P8-A was promoted from integration commit
   `094971b` on `codex/phase8/P8AGeographyIntegration` to the new
-  `codex/phase8/canonical` branch; remote push and synchronization verification
-  are pending. The Phase 7 canonical baseline remains preserved.
+  `codex/phase8/canonical` branch. The canonical branch is pushed and its
+  remote SHA was verified; the Phase 7 canonical baseline remains preserved.
 - Phase 8 remains open. P8-A is canonical; P8-B through P8-E are not
   implemented or promoted.
 
 ## P8-A — Factual Geography
 
-**Status: LOCALLY PROMOTED, IMPLEMENTED, INDEPENDENTLY REVIEWED, AND INTEGRATION-VALIDATED.**
+**Status: CANONICAL, IMPLEMENTED, INDEPENDENTLY REVIEWED, AND INTEGRATION-VALIDATED.**
 
 - Approved technical design: final design commit
   `ec4e796ddc955b72d7623e7647924aa3f76e3474` on
