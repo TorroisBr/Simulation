@@ -65,18 +65,19 @@ run because P8-A does not change the daily loop or long-horizon behavior.
 
 - **P8-B — Factual Passages:** implementation candidate
   `fe46a8e19bb04ddd487b067c6ea068db7d59d487` is published on
-  `codex/phase8/P8BFactualPassages`. Its focused suites passed 44/44 with no
-  failures or skips; `git diff --check` passed. Independent implementation
-  review is pending. The reviewed Crossing identity/anchor diagnostic seam is
+  `codex/phase8/P8BFactualPassages`. The implementation worker reported
+  focused suites passed 44/44 with no failures or skips; `git diff --check`
+  passed. Independent implementation review is pending. The reviewed Crossing
+  identity/anchor diagnostic seam is
   at `99ddc300e13bd15925c1d43218b665e858845d99`; mutable option, barrier, and
   crossing-condition projections remain part of the named diagnostics
   integration before P8-B promotion.
 - **P8-C — Legacy Anchors and Civil Presence:** implementation candidate
   `a33d4a7d548836b58578dee496b612194109a232` is published on
   `codex/phase8/P8CLegacyAnchorsCivilPresence`, based on the independently
-  reviewed Crossing/API seam. Its focused suite passed 4/4 and
-  `git diff --check` passed. Independent implementation review and shared
-  diagnostics integration are pending; P8-C is not promoted.
+  reviewed Crossing/API seam. The implementation worker reported its focused
+  suite passed 4/4; `git diff --check` passed. Independent implementation
+  review and shared diagnostics integration are pending; P8-C is not promoted.
 - **P8-D — Knowledge and Route Plan:** the technical design at
   `6800d3d289e2f8be730f082ee7457c518ed22050` passed independent review and is
   included in this documentation integration. It defines Hex-only route
@@ -101,9 +102,10 @@ without expanding P8-C into a LocalTopology migration. The included contract
 and P8-D/P8-E technical designs approve design semantics only and do not mark
 their capabilities implemented.
 
-P8-B and P8-C may proceed in isolated feature worktrees against the reviewed
-stable identity seam. Integrate B before C because transit progress consumes
-B's boundary/option identities, then compose the shared runtime and diagnostics
-projections through one named integration owner. P8-D implementation follows
-promoted B/C capabilities; P8-E implementation follows promoted B/C/D
-capabilities and the Phase 8 integration validation gate.
+The P8-B and P8-C implementation candidates are published and await
+independent review. After approval, integrate B before C because transit
+progress consumes B's boundary/option identities, then compose the shared
+runtime and diagnostics projections through one named integration owner.
+P8-D implementation follows promoted B/C capabilities; P8-E implementation
+follows promoted B/C/D capabilities and the Phase 8 integration validation
+gate.
