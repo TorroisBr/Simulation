@@ -115,8 +115,12 @@ their capabilities implemented.
   nullable string component with a length prefix to remain injective for
   delimiter-bearing IDs.
 - Candidate implementation commit: `1c84519740db8a245e103678b38f692e13522383`.
-- Independent integration review and validator/promotion gate: **PENDING**.
-  `codex/phase8/canonical` has not moved.
+- Independent integration code review: **PASS**. Independent validation evidence
+  review: **PASS**. The integration candidate satisfies the review and test
+  gates; canonical promotion is the remaining operation.
+- Validation record commit: `ea09f5d305753486246d9e811dc8bf0f20cb2d46`.
+  `codex/phase8/canonical` remains at `01eebe0f11ca145e04e7c4cd065c124777edc8fd`
+  until promotion is pushed and verified.
 - Validation evidence at the final candidate code state:
 
 | Gate | Invocation | Result | Retained XML and log |
