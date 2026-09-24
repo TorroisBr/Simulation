@@ -89,6 +89,40 @@ public sealed class TerrainDefinitionId : IEquatable<TerrainDefinitionId>
 }
 
 /// <summary>
+/// Stable applied terrain identity and the authored revision whose meaning is
+/// referenced by this world. This is structural reference data, not a catalog.
+/// </summary>
+public sealed class TerrainReference : IEquatable<TerrainReference>
+{
+    public TerrainDefinitionId TerrainDefinitionId { get; }
+    public string AuthoredRevisionToken { get; }
+
+    public TerrainReference(TerrainDefinitionId terrainDefinitionId, string authoredRevisionToken)
+    {
+        TerrainDefinitionId = terrainDefinitionId ?? throw new ArgumentNullException(nameof(terrainDefinitionId));
+        if (string.IsNullOrWhiteSpace(authoredRevisionToken))
+        {
+            throw new ArgumentException("A terrain reference requires a stable authored revision/version token.", nameof(authoredRevisionToken));
+        }
+
+        AuthoredRevisionToken = authoredRevisionToken;
+    }
+
+    public bool Equals(TerrainReference other) => other != null
+        && TerrainDefinitionId.Equals(other.TerrainDefinitionId)
+        && string.Equals(AuthoredRevisionToken, other.AuthoredRevisionToken, StringComparison.Ordinal);
+    public override bool Equals(object obj) => Equals(obj as TerrainReference);
+    public override int GetHashCode()
+    {
+        unchecked
+        {
+            return (TerrainDefinitionId.GetHashCode() * 397)
+                ^ StringComparer.Ordinal.GetHashCode(AuthoredRevisionToken);
+        }
+    }
+}
+
+/// <summary>
 /// One resolved, world-local physical scale convention. It is independent of
 /// global simulation and travel configuration.
 /// </summary>

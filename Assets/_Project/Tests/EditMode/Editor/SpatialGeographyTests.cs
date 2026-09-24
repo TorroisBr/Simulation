@@ -26,6 +26,10 @@ public sealed class SpatialGeographyTests
     [Test]
     public void FiniteGeographyComposesAtomicallyAndValidatesCoordinatesAndAnchors()
     {
+        Assert.Throws<ArgumentException>(() => new TerrainReference(
+            new TerrainDefinitionId("terrain.fixture.plains"),
+            " "));
+
         SpatialAuthorityStore store = new SpatialAuthorityStore();
         SpatialGeographyDefinition duplicateCoordinates = new SpatialGeographyDefinition(
             CreateFixtureScale(false),
@@ -61,6 +65,9 @@ public sealed class SpatialGeographyTests
         Assert.That(authored.ScaleContext.Unit, Is.EqualTo("kilometers"));
         Assert.That(authored.ScaleContext.SourceIdentity, Is.EqualTo("authored-fixture:p8a-small-world"));
         Assert.That(authored.ScaleContext.SourceVersion, Is.EqualTo("fixture-v1"));
+        Assert.That(authored.TryGet(new HexId("hex.fixture.center"), out HexRecord centerHex), Is.True);
+        Assert.That(centerHex.TerrainDefinitionId.Value, Is.EqualTo("terrain.fixture.plains"));
+        Assert.That(centerHex.AuthoredRevisionToken, Is.EqualTo("fixture-revision-v1"));
         Assert.That(authored.TryGet(new LocationId("location.fixture.center"), out LocationRecord location), Is.True);
         Assert.That(location.AnchorHexId, Is.EqualTo(new HexId("hex.fixture.center")));
         Assert.That(authored.ValidateInvariants().IsValid, Is.True);
@@ -134,6 +141,11 @@ public sealed class SpatialGeographyTests
         Assert.That(runtime.SpatialAuthorityStore.HexCount, Is.EqualTo(source.HexCount));
         Assert.That(runtime.SpatialAuthorityStore.ScaleContext, Is.EqualTo(source.ScaleContext));
         Assert.That(runtime.SpatialAuthorityStore.ScaleContext, Is.Not.SameAs(source.ScaleContext));
+        Assert.That(source.TryGet(new HexId("hex.fixture.center"), out HexRecord sourceCenter), Is.True);
+        Assert.That(runtime.SpatialAuthorityStore.TryGet(new HexId("hex.fixture.center"), out HexRecord runtimeCenter), Is.True);
+        Assert.That(runtimeCenter.TerrainDefinitionId, Is.EqualTo(sourceCenter.TerrainDefinitionId));
+        Assert.That(runtimeCenter.AuthoredRevisionToken, Is.EqualTo(sourceCenter.AuthoredRevisionToken));
+        Assert.That(runtimeCenter.TerrainReference, Is.Not.SameAs(sourceCenter.TerrainReference));
         Assert.That(runtime.SpatialAuthorityStore.TryGetGeometricNeighbors(
             new HexId("hex.fixture.center"), out var neighbors, out _), Is.True);
         Assert.That(neighbors, Has.Count.EqualTo(6));
@@ -157,29 +169,41 @@ public sealed class SpatialGeographyTests
         Assert.That(WorldStateCanonicalWriter.Write(same), Is.EqualTo(canonical));
         Assert.That(WorldStateDiff.Compare(first, same).IsEmpty, Is.True);
         Assert.That(canonical, Does.Contain("SPATIAL_COORDINATE_CONVENTION|axial-hex-v1|q-then-r"));
-        Assert.That(canonical, Does.Contain("SPATIAL_HEX|hex.fixture.center|0|0|terrain.fixture.plains"));
+        Assert.That(canonical, Does.Contain("SPATIAL_HEX|hex.fixture.center|0|0|terrain.fixture.plains|fixture-revision-v1"));
         Assert.That(canonical, Does.Contain("SPATIAL_WORLD_SCALE|scale.fixture.kilometers|authored-fixture:p8a-small-world|fixture-v1|2|kilometers"));
         Assert.That(WorldStateSnapshotFormatter.Format(first), Does.Contain("World scale: scale.fixture.kilometers"));
-        Assert.That(WorldStateSnapshotFormatter.Format(first), Does.Contain("HEX hex.fixture.center axial 0,0 terrain terrain.fixture.plains"));
+        Assert.That(WorldStateSnapshotFormatter.Format(first), Does.Contain("HEX hex.fixture.center axial 0,0 terrain terrain.fixture.plains@fixture-revision-v1"));
         Assert.That(WorldStateInvariantValidator.Validate(first).IsValid, Is.True);
+        Assert.That(first.Spatial.Hexes.Single(hex => hex.HexId == "hex.fixture.center").TerrainDefinitionId, Is.EqualTo("terrain.fixture.plains"));
+        Assert.That(first.Spatial.Hexes.Single(hex => hex.HexId == "hex.fixture.center").AuthoredRevisionToken, Is.EqualTo("fixture-revision-v1"));
 
         WorldStateSnapshot changed = Snapshot(CreateAuthoredFixture(variant: true));
         var differences = WorldStateDiff.Compare(first, changed).Differences;
         Assert.That(differences.Any(value => value.Section == "SpatialHex" && value.Identity == "hex.fixture.center" && value.Field == "CoordinateQ"), Is.True);
         Assert.That(differences.Any(value => value.Section == "SpatialHex" && value.Identity == "hex.fixture.center" && value.Field == "CoordinateR"), Is.True);
         Assert.That(differences.Any(value => value.Section == "SpatialHex" && value.Identity == "hex.fixture.center" && value.Field == "TerrainDefinitionId"), Is.True);
+        Assert.That(differences.Any(value => value.Section == "SpatialHex" && value.Identity == "hex.fixture.center" && value.Field == "AuthoredRevisionToken"), Is.True);
         Assert.That(differences.Any(value => value.Section == "SpatialWorldScale" && value.Field == "ResolvedConventionId"), Is.True);
         Assert.That(differences.Any(value => value.Section == "SpatialWorldScale" && value.Field == "SourceIdentity"), Is.True);
         Assert.That(differences.Any(value => value.Section == "SpatialWorldScale" && value.Field == "SourceVersion"), Is.True);
         Assert.That(differences.Any(value => value.Section == "SpatialWorldScale" && value.Field == "DistancePerNeighborStep"), Is.True);
         Assert.That(differences.Any(value => value.Section == "SpatialWorldScale" && value.Field == "Unit"), Is.True);
+
+        WorldStateSnapshot revisionOnlyChange = Snapshot(CreateAuthoredFixture(terrainRevisionOnlyVariant: true));
+        string revisionChangedCanonical = WorldStateCanonicalWriter.Write(revisionOnlyChange);
+        Assert.That(revisionChangedCanonical, Does.Contain("SPATIAL_HEX|hex.fixture.center|0|0|terrain.fixture.plains|fixture-revision-v2"));
+        WorldStateDiff revisionDiff = WorldStateDiff.Compare(first, revisionOnlyChange);
+        Assert.That(revisionDiff.Differences, Has.Count.EqualTo(1));
+        Assert.That(revisionDiff.Differences[0].Section, Is.EqualTo("SpatialHex"));
+        Assert.That(revisionDiff.Differences[0].Identity, Is.EqualTo("hex.fixture.center"));
+        Assert.That(revisionDiff.Differences[0].Field, Is.EqualTo("AuthoredRevisionToken"));
     }
 
     [Test]
     public void SpatialSnapshotInvariantsRejectIncompleteGeographyAndScaleProvenance()
     {
         WorldStateSpatialSnapshot missingScale = new WorldStateSpatialSnapshot(
-            hexes: new[] { new WorldStateHexSnapshot("hex-a", 0, 0, "terrain.fixture.plains") },
+            hexes: new[] { new WorldStateHexSnapshot("hex-a", 0, 0, "terrain.fixture.plains", "fixture-revision-v1") },
             authorityRevision: 1L,
             coordinateConventionVersion: HexCoordinate.ConventionVersion,
             coordinateCanonicalOrder: HexCoordinate.CanonicalOrder);
@@ -190,8 +214,9 @@ public sealed class SpatialGeographyTests
         WorldStateSpatialSnapshot malformedScale = new WorldStateSpatialSnapshot(
             hexes: new[]
             {
-                new WorldStateHexSnapshot("hex-a", 0, 0, "terrain.fixture.plains"),
-                new WorldStateHexSnapshot("hex-b", 0, 0, "terrain.fixture.forest")
+                new WorldStateHexSnapshot("hex-a", 0, 0, "terrain.fixture.plains", "fixture-revision-v1"),
+                new WorldStateHexSnapshot("hex-b", 0, 0, "terrain.fixture.forest", "fixture-revision-v1"),
+                new WorldStateHexSnapshot("hex-c", 2, 0, "terrain.fixture.marsh", "")
             },
             authorityRevision: 1L,
             coordinateConventionVersion: "unsupported",
@@ -206,17 +231,20 @@ public sealed class SpatialGeographyTests
         Assert.That(malformedReport.Issues, Has.Some.Matches<WorldStateInvariantIssue>(issue => issue.Code == "SpatialScaleUnitMissing"));
         Assert.That(malformedReport.Issues, Has.Some.Matches<WorldStateInvariantIssue>(issue => issue.Code == "SpatialCoordinateConventionUnsupported"));
         Assert.That(malformedReport.Issues, Has.Some.Matches<WorldStateInvariantIssue>(issue => issue.Code == "SpatialCoordinateOrderUnsupported"));
+        Assert.That(malformedReport.Issues, Has.Some.Matches<WorldStateInvariantIssue>(issue => issue.Code == "SpatialHexTerrainRevisionTokenMissing"));
     }
 
     private static SpatialAuthorityStore CreateAuthoredFixture(
         bool reverseRegistrationOrder = false,
         bool includeRightLower = true,
-        bool variant = false)
+        bool variant = false,
+        bool terrainRevisionOnlyVariant = false)
     {
         HexRecord[] authoredHexes =
         {
             GeographicHex("hex.fixture.center", variant ? 3 : 0, variant ? 2 : 0,
-                variant ? "terrain.fixture.highland" : "terrain.fixture.plains"),
+                variant ? "terrain.fixture.highland" : "terrain.fixture.plains",
+                variant || terrainRevisionOnlyVariant ? "fixture-revision-v2" : "fixture-revision-v1"),
             GeographicHex("hex.fixture.right-upper", 1, 0, "terrain.fixture.forest"),
             GeographicHex("hex.fixture.right-lower", 1, -1, "terrain.fixture.hills"),
             GeographicHex("hex.fixture.down", 0, -1, "terrain.fixture.marsh"),
@@ -260,12 +288,19 @@ public sealed class SpatialGeographyTests
                 "kilometers");
     }
 
-    private static HexRecord GeographicHex(string id, int q, int r, string terrainDefinitionId)
+    private static HexRecord GeographicHex(
+        string id,
+        int q,
+        int r,
+        string terrainDefinitionId,
+        string authoredRevisionToken = "fixture-revision-v1")
     {
         return new HexRecord(
             new HexId(id),
             new HexCoordinate(q, r),
-            new TerrainDefinitionId(terrainDefinitionId));
+            new TerrainReference(
+                new TerrainDefinitionId(terrainDefinitionId),
+                authoredRevisionToken));
     }
 
     private static WorldStateSnapshot Snapshot(SpatialAuthorityStore authority)

@@ -1438,18 +1438,22 @@ public sealed class WorldStateHexSnapshot
     public int? Q { get; }
     public int? R { get; }
     public string TerrainDefinitionId { get; }
-    public bool HasGeographicFacts => Q.HasValue || R.HasValue || TerrainDefinitionId != null;
+    public string AuthoredRevisionToken { get; }
+    public bool HasGeographicFacts => Q.HasValue || R.HasValue
+        || TerrainDefinitionId != null || AuthoredRevisionToken != null;
 
     public WorldStateHexSnapshot(
         string hexId,
         int? q = null,
         int? r = null,
-        string terrainDefinitionId = null)
+        string terrainDefinitionId = null,
+        string authoredRevisionToken = null)
     {
         HexId = hexId;
         Q = q;
         R = r;
         TerrainDefinitionId = terrainDefinitionId;
+        AuthoredRevisionToken = authoredRevisionToken;
     }
 }
 
@@ -3099,7 +3103,8 @@ public static class WorldStateSnapshotBuilder
                         hex.Id.Value,
                         hex.Coordinate.HasValue ? hex.Coordinate.Value.Q : (int?)null,
                         hex.Coordinate.HasValue ? hex.Coordinate.Value.R : (int?)null,
-                        hex.TerrainDefinitionId?.Value));
+                        hex.TerrainDefinitionId?.Value,
+                        hex.AuthoredRevisionToken));
                 }
             }
 

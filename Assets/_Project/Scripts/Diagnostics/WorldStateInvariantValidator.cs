@@ -632,6 +632,11 @@ public static class WorldStateInvariantValidator
                 {
                     AddError(issues, "SpatialHexTerrainReferenceMissing", hex.HexId, "Geographic Hex has no stable terrain definition reference.");
                 }
+
+                if (string.IsNullOrWhiteSpace(hex.AuthoredRevisionToken))
+                {
+                    AddError(issues, "SpatialHexTerrainRevisionTokenMissing", hex.HexId, "Geographic Hex has no stable authored terrain revision/version token.");
+                }
             }
         }
 
@@ -641,7 +646,7 @@ public static class WorldStateInvariantValidator
             {
                 if (hex != null && !hex.HasGeographicFacts)
                 {
-                    AddError(issues, "SpatialGeographyHexFactsMissing", hex.HexId, "Every Hex in a geographic context must have axial coordinates and a terrain reference.");
+                    AddError(issues, "SpatialGeographyHexFactsMissing", hex.HexId, "Every Hex in a geographic context must have axial coordinates, a terrain definition ID, and an authored revision token.");
                 }
             }
 

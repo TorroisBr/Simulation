@@ -107,7 +107,9 @@ public static class WorldStateSnapshotFormatter
                             .Append(',')
                             .Append(hex.R.HasValue ? WorldStateCanonicalWriter.IntValue(hex.R.Value) : "unknown")
                             .Append(" terrain ")
-                            .Append(Value(hex.TerrainDefinitionId));
+                            .Append(Value(hex.TerrainDefinitionId))
+                            .Append('@')
+                            .Append(Value(hex.AuthoredRevisionToken));
                     }
 
                     output.Append('\n');

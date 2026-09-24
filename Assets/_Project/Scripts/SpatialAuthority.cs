@@ -54,18 +54,20 @@ public sealed class HexRecord
 {
     public HexId Id { get; }
     public HexCoordinate? Coordinate { get; }
-    public TerrainDefinitionId TerrainDefinitionId { get; }
-    public bool IsGeographic => Coordinate.HasValue && TerrainDefinitionId != null;
+    public TerrainReference TerrainReference { get; }
+    public TerrainDefinitionId TerrainDefinitionId => TerrainReference?.TerrainDefinitionId;
+    public string AuthoredRevisionToken => TerrainReference?.AuthoredRevisionToken;
+    public bool IsGeographic => Coordinate.HasValue && TerrainReference != null;
 
     public HexRecord(HexId id)
     {
         Id = id ?? throw new ArgumentNullException(nameof(id));
     }
 
-    public HexRecord(HexId id, HexCoordinate coordinate, TerrainDefinitionId terrainDefinitionId)
+    public HexRecord(HexId id, HexCoordinate coordinate, TerrainReference terrainReference)
     {
         Id = id ?? throw new ArgumentNullException(nameof(id));
-        TerrainDefinitionId = terrainDefinitionId ?? throw new ArgumentNullException(nameof(terrainDefinitionId));
+        TerrainReference = terrainReference ?? throw new ArgumentNullException(nameof(terrainReference));
         Coordinate = coordinate;
     }
 }
@@ -430,10 +432,12 @@ public sealed class SpatialAuthorityStore : IAuthoritativeMutationGuardBindable
         {
             if (hex == null || hex.Id == null || string.IsNullOrWhiteSpace(hex.Id.Value)
                 || !hex.IsGeographic || !hex.Coordinate.HasValue
+                || hex.TerrainReference == null
                 || hex.TerrainDefinitionId == null
-                || string.IsNullOrWhiteSpace(hex.TerrainDefinitionId.Value))
+                || string.IsNullOrWhiteSpace(hex.TerrainDefinitionId.Value)
+                || string.IsNullOrWhiteSpace(hex.AuthoredRevisionToken))
             {
-                return Fail(SpatialAuthorityFailureCode.InvalidGeography, "Every geographic Hex requires a stable ID, axial coordinate, and terrain definition reference.", out failure);
+                return Fail(SpatialAuthorityFailureCode.InvalidGeography, "Every geographic Hex requires a stable ID, axial coordinate, terrain definition ID, and authored revision token.", out failure);
             }
 
             if (pendingHexes.ContainsKey(hex.Id.Value))
@@ -855,9 +859,10 @@ public sealed class SpatialAuthorityStore : IAuthoritativeMutationGuardBindable
                 HexRecord hex = entry.Value;
                 if (hex == null || !hex.IsGeographic || !hex.Coordinate.HasValue
                     || hex.TerrainDefinitionId == null
-                    || string.IsNullOrWhiteSpace(hex.TerrainDefinitionId.Value))
+                    || string.IsNullOrWhiteSpace(hex.TerrainDefinitionId.Value)
+                    || string.IsNullOrWhiteSpace(hex.AuthoredRevisionToken))
                 {
-                    violations.Add("Geographic Hex is missing its coordinate or terrain reference: " + entry.Key + ".");
+                    violations.Add("Geographic Hex is missing its coordinate or terrain reference ID/revision token: " + entry.Key + ".");
                     continue;
                 }
 
@@ -978,7 +983,9 @@ public sealed class SpatialAuthorityStore : IAuthoritativeMutationGuardBindable
             ? new HexRecord(
                 new HexId(source.Id.Value),
                 source.Coordinate.Value,
-                new TerrainDefinitionId(source.TerrainDefinitionId.Value))
+                new TerrainReference(
+                    new TerrainDefinitionId(source.TerrainDefinitionId.Value),
+                    source.AuthoredRevisionToken))
             : new HexRecord(new HexId(source.Id.Value));
     }
 

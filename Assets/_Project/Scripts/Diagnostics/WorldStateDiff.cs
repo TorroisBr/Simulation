@@ -181,6 +181,10 @@ public sealed class WorldStateDiff
                     WorldStateCanonicalWriter.StringValue(left.TerrainDefinitionId),
                     WorldStateCanonicalWriter.StringValue(right.TerrainDefinitionId),
                     differences);
+                CompareValue("SpatialHex", identity, "AuthoredRevisionToken",
+                    WorldStateCanonicalWriter.StringValue(left.AuthoredRevisionToken),
+                    WorldStateCanonicalWriter.StringValue(right.AuthoredRevisionToken),
+                    differences);
             },
             differences);
         CompareEntities("SpatialLocation", before.Spatial.AnchoredLocations, after.Spatial.AnchoredLocations,

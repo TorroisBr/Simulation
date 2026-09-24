@@ -88,7 +88,8 @@ public static class WorldStateCanonicalWriter
                         hex.HexId,
                         NullableIntValue(hex.Q),
                         NullableIntValue(hex.R),
-                        hex.TerrainDefinitionId);
+                        hex.TerrainDefinitionId,
+                        hex.AuthoredRevisionToken);
                 }
                 else
                 {
