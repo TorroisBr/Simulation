@@ -228,10 +228,11 @@ implementation wave.
    materialize/activate the actor as a side effect of input.
 4. **Replace a decision, not execution truth.** Explicit choice may supply a
    bounded local-sale candidate/intent. Domain code still checks life/state,
-   policy, capability, current market stock/funds/counterparty conditions, and
-   other operation preconditions at execution. If facts changed since
-   candidate planning/choice, return the transaction's supported result; do
-   not expose hidden Truth as an automatic explanation or update to Knowledge.
+   policy, capability, seller inventory, current price and market capacity,
+   counterparty funds, and other operation preconditions at execution. If
+   facts changed since candidate planning/choice, return the transaction's
+   supported result; do not expose hidden Truth as an automatic explanation
+   or update to Knowledge.
 5. **Do not widen command modes.** Preserve `Suggest` as preview-only,
    `Request` as subject to normal rules, `Declare` as a supported declared
    operation, and `ForceOutcome` only for constraints a domain explicitly
