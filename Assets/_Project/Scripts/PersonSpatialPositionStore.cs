@@ -53,7 +53,8 @@ public enum PersonSpatialPositionFailureCode
     None = 0, RuntimeFaulted = 1, PersonNotRegistered = 2, InvalidReference = 3,
     SpatialReferenceNotRegistered = 4, InvalidTransit = 5, BoundaryNotRegistered = 6,
     TraversalOptionNotRegistered = 7, PositionMismatch = 8, NoTransit = 9,
-    ProgressOutOfRange = 10, ArrivalNotReady = 11, RevisionOverflow = 12
+    ProgressOutOfRange = 10, ArrivalNotReady = 11, RevisionOverflow = 12,
+    PositionAlreadyRegistered = 13
 }
 
 public sealed class PersonSpatialPositionFailure
@@ -128,10 +129,11 @@ public sealed class PersonSpatialPositionStore : IAuthoritativeMutationGuardBind
 
     public bool TrySetAt(PersonId id, StablePositionReference position, out PersonSpatialPositionFailure failure)
     {
-        if (!CanMutate(out failure) || !TryPerson(id, out failure) || !TryResolve(position, out _, out failure)) return false;
+        if (!CanMutate(out failure) || !TryPerson(id, out failure)) return false;
+        if (positions.ContainsKey(id.Value))
+            return Fail(PersonSpatialPositionFailureCode.PositionAlreadyRegistered, "At registration is initial-position-only; use validated transit and arrival transitions to change position.", out failure);
+        if (!TryResolve(position, out _, out failure)) return false;
         PersonSpatialPosition next = new PersonSpatialPosition(id, position, null);
-        if (TryGetPosition(id, out PersonSpatialPosition current) && !current.IsInTransit && current.Position.Equals(position))
-        { failure = PersonSpatialPositionFailure.None; return true; }
         if (!CanAdvanceRevision(out failure)) return false;
         positions[id.Value] = next; revision++; failure = PersonSpatialPositionFailure.None; return true;
     }
@@ -160,6 +162,8 @@ public sealed class PersonSpatialPositionStore : IAuthoritativeMutationGuardBind
             return Fail(PersonSpatialPositionFailureCode.TraversalOptionNotRegistered, resolverFailure, out failure);
         if (!TryGetPosition(id, out PersonSpatialPosition current) || current.IsInTransit)
             return Fail(PersonSpatialPositionFailureCode.PositionMismatch, "Person must have an At position before departure.", out failure);
+        if (current.Position.Kind != StablePositionReferenceKind.Hex)
+            return Fail(PersonSpatialPositionFailureCode.PositionMismatch, "Regional transit requires a Hex At position; Location and Crossing require an explicit local connector capability.", out failure);
         if (!TryResolve(current.Position, out SpatialResolution resolution, out failure)) return false;
         if (resolution.Hex == null || resolution.Hex.Id != from)
             return Fail(PersonSpatialPositionFailureCode.PositionMismatch, "Current position does not resolve to the directed origin Hex.", out failure);
@@ -189,6 +193,8 @@ public sealed class PersonSpatialPositionStore : IAuthoritativeMutationGuardBind
             return Fail(PersonSpatialPositionFailureCode.NoTransit, "Person has no active transit position.", out failure);
         if (current.Transit.ProgressTicks != TraversalProgress.CompleteProgressTicks)
             return Fail(PersonSpatialPositionFailureCode.ArrivalNotReady, "Transit must reach its explicit completion tick before arrival.", out failure);
+        if (destination == null || destination.Kind != StablePositionReferenceKind.Hex)
+            return Fail(PersonSpatialPositionFailureCode.PositionMismatch, "Regional transit arrival requires a Hex reference; Location and Crossing require an explicit local connector capability.", out failure);
         if (!TryValidateTransit(current.Transit, out failure) || !TryResolve(destination, out SpatialResolution resolution, out failure)) return false;
         if (resolution.Hex == null || resolution.Hex.Id != current.Transit.ToHexId)
             return Fail(PersonSpatialPositionFailureCode.PositionMismatch, "Arrival reference does not resolve to the directed destination Hex.", out failure);
@@ -233,6 +239,7 @@ public sealed class PersonSpatialPositionStore : IAuthoritativeMutationGuardBind
     {
         if (transit == null || transit.ProgressTicks < 0 || transit.ProgressTicks > TraversalProgress.CompleteProgressTicks
             || transit.Option == null || transit.Boundary == null || transit.FromHexId == null || transit.ToHexId == null
+            || transit.LastFullyReachedReference == null || transit.LastFullyReachedReference.Kind != StablePositionReferenceKind.Hex
             || !transit.Boundary.Equals(new HexBoundaryKey(transit.FromHexId, transit.ToHexId)))
             return Fail(PersonSpatialPositionFailureCode.InvalidTransit, "Transit state is structurally invalid.", out failure);
         if (!TryResolve(transit.LastFullyReachedReference, out SpatialResolution last, out failure)) return false;
