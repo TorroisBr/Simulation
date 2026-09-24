@@ -8,8 +8,10 @@
   `094971b` on `codex/phase8/P8AGeographyIntegration` to the new
   `codex/phase8/canonical` branch. The canonical branch is pushed and its
   remote SHA was verified; the Phase 7 canonical baseline remains preserved.
-- Phase 8 remains open. P8-A is canonical; P8-B through P8-E are not
-  implemented or promoted.
+- Phase 8 remains open. P8-A is canonical. P8-B and P8-C are implemented in
+  the reviewed integration candidate recorded below; their promotion is pending
+  independent integration validation. P8-D and P8-E are design-approved and
+  await their dependencies.
 
 ## P8-A — Factual Geography
 
@@ -64,20 +66,19 @@ run because P8-A does not change the daily loop or long-horizon behavior.
 ## Remaining Phase 8 dependency state
 
 - **P8-B — Factual Passages:** implementation candidate
-  `fe46a8e19bb04ddd487b067c6ea068db7d59d487` is published on
-  `codex/phase8/P8BFactualPassages`. The implementation worker reported
-  focused suites passed 44/44 with no failures or skips; `git diff --check`
-  passed. Independent implementation review is pending. The reviewed Crossing
-  identity/anchor diagnostic seam is
-  at `99ddc300e13bd15925c1d43218b665e858845d99`; mutable option, barrier, and
-  crossing-condition projections remain part of the named diagnostics
-  integration before P8-B promotion.
+  `3814d814087d97f28de75447740b3db715532ed6` is published on
+  `codex/phase8/P8BFactualPassages`; independent implementation review: **PASS**.
+  The implementation worker reported focused suites passed 44/44 with no
+  failures or skips. Passage option, barrier, and crossing condition facts are
+  included in the integration snapshot, canonical output, formatter, diff, and
+  invariant validation.
 - **P8-C — Legacy Anchors and Civil Presence:** implementation candidate
-  `a33d4a7d548836b58578dee496b612194109a232` is published on
-  `codex/phase8/P8CLegacyAnchorsCivilPresence`, based on the independently
-  reviewed Crossing/API seam. The implementation worker reported its focused
-  suite passed 4/4; `git diff --check` passed. Independent implementation
-  review and shared diagnostics integration are pending; P8-C is not promoted.
+  `d238f4bcef9faaf622329130f02b706e19bb8b4d` is published on
+  `codex/phase8/P8CLegacyAnchorsCivilPresence`; independent implementation
+  review: **PASS**. The implementation worker reported its focused suite passed
+  4/4. Person At/InTransit positions and City/Site anchor bindings are composed
+  through `SimulationRuntime`, cloned against the runtime-owned authorities,
+  mutation-guard bound, and included in spatial diagnostics.
 - **P8-D — Knowledge and Route Plan:** the technical design at
   `6800d3d289e2f8be730f082ee7457c518ed22050` passed independent review and is
   included in this documentation integration. It defines Hex-only route
@@ -102,10 +103,31 @@ without expanding P8-C into a LocalTopology migration. The included contract
 and P8-D/P8-E technical designs approve design semantics only and do not mark
 their capabilities implemented.
 
-The P8-B and P8-C implementation candidates are published and await
-independent review. After approval, integrate B before C because transit
-progress consumes B's boundary/option identities, then compose the shared
-runtime and diagnostics projections through one named integration owner.
-P8-D implementation follows promoted B/C capabilities; P8-E implementation
-follows promoted B/C/D capabilities and the Phase 8 integration validation
-gate.
+## P8-B/C integration candidate
+
+- Integration branch: `codex/phase8/P8BCSpatialDiagnosticsIntegration`.
+- Integration order: reviewed P8-B, then reviewed P8-C, then the accepted
+  design documentation integration. The resolved shared composition preserves
+  one spatial/passage authority and uses its actual passage registry as the
+  runtime transit resolver. Contextual passage evaluation remains query output
+  and is not persisted in World Truth. Runtime-owned City/Site anchor bindings
+  reject unregistered owners, and passage/boundary diagnostic keys encode each
+  nullable string component with a length prefix to remain injective for
+  delimiter-bearing IDs.
+- Candidate implementation commit: `1c84519740db8a245e103678b38f692e13522383`.
+- Independent integration review and validator/promotion gate: **PENDING**.
+  `codex/phase8/canonical` has not moved.
+- Validation evidence at the final candidate code state:
+
+| Gate | Invocation | Result | Retained XML and log |
+|---|---|---:|---|
+| Focused spatial diagnostics and P8-B/C | `-Mode EditMode -TestFilter Spatial -ResultsDirectory .\Library\ValidationResults\P8BC` | 79/79 passed; 0 failed, 0 skipped | `Library/ValidationResults/P8BC/EditMode-20260924-181137-4cd4afb83d844cfaba185f6601c0b6ef.xml` and `.log` |
+| Person spatial presence/runtime snapshots | `-Mode EditMode -TestFilter PersonSpatialPresenceTests -ResultsDirectory .\Library\ValidationResults\P8BC` | 8/8 passed; 0 failed, 0 skipped | `Library/ValidationResults/P8BC/EditMode-20260924-181219-7b0987f62da7465282eac7d709709923.xml` and `.log` |
+| World state diagnostics | `-Mode EditMode -TestFilter WorldStateDiagnostics -ResultsDirectory .\Library\ValidationResults\P8BC` | 54/54 passed; 0 failed, 0 skipped | `Library/ValidationResults/P8BC/EditMode-20260924-181201-1532753bcff94bad8abbc8bbb941725d.xml` and `.log` |
+| ALL EditMode | `-Mode EditMode -All -ResultsDirectory .\Library\ValidationResults\P8BC` | 1679/1679 passed; 0 failed, 0 skipped | `Library/ValidationResults/P8BC/EditMode-20260924-181240-912de8769bd84132aca7d1a7846dcbb3.xml` and `.log` |
+| Official complete Smoke | `-Mode EditMode -TestFilter Smoke -ResultsDirectory .\Library\ValidationResults\P8BC` | 5/5 passed; 0 failed, 0 skipped | `Library/ValidationResults/P8BC/EditMode-20260924-181318-ea5a008cf1d64ea29c98804bd2cefbed.xml` and `.log` |
+
+All listed final-gate XML files are parseable passed reports with coherent
+counts. `git diff --check` is part of the final candidate gate. No daily-loop
+or long-horizon behavior changed. P8-D implementation follows promoted B/C;
+P8-E follows promoted B/C/D and the Phase 8 integration validation gate.
