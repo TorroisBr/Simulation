@@ -1,8 +1,8 @@
 # Phase 11 Entry Architecture Proposal
 
-> **Status: product scope resolved; c285 architecture refresh awaiting
-> independent review.** Earlier reviews apply to their earlier baselines only;
-> they are not a review of this refresh. The user-selected first consumer and
+> **Status: product scope resolved; targeted correction against current Phase 8
+> canonical state awaiting independent re-review.** Earlier reviews apply to
+> their earlier baselines only; they are not a review of this correction. The user-selected first consumer and
 > trusted local caller are not implementation approval. This proposal does
 > not amend the Simulation Architecture, Roadmap, Phase Brief, or Phase State.
 > No Phase 11 checkpoint IDs are approved or assigned.
@@ -32,17 +32,16 @@ contract; routine type names and storage/API shapes remain technical design
 work. The Brief marks the phase `ENTRY_ARCHITECTURE_READY`; this update does
 not itself authorize implementation.
 
-This refresh is based on `codex/phase8/canonical` at
-`c285466c355103d3637ac165246591b72eb7bda0` (parent
-`4b6dd1d38cffeaf3cc1ac3effea0f8ede8771194`), in the isolated
-`codex/phase11/ActorChoiceArchitectureRefresh` worktree. The P8 State at this
-baseline reports P8-A/B/C canonical, the refreshed P8-D integration candidate
-independently reviewed and validated but not promoted, and P8-E design-approved
-waiting on promoted P8-D capability. Neither P8-D nor P8-E is a prerequisite
-for this current-city local-market action. No Phase 11 State or approved
-checkpoint decomposition exists; no candidate is promoted by this refresh.
+This refresh is based on the current `codex/phase8/canonical` state/code at
+`c5b2e06b534f4b2af38f10e6510b10800aa8b28c`, which includes architecture
+baseline `c285466c355103d3637ac165246591b72eb7bda0` (parent
+`4b6dd1d38cffeaf3cc1ac3effea0f8ede8771194`). The current Phase 8 State
+records P8-A through P8-D canonical, including the refreshed P8-D promotion;
+P8-E remains unimplemented. Neither P8-D nor P8-E is a prerequisite for this
+current-city local-market action. No Phase 11 State or approved checkpoint
+decomposition exists; no candidate is promoted by this refresh.
 
-Relevant authorities reread at c285: `AGENTS.md`, `docs/SIMULATION_ARCHITECTURE.md`
+Relevant authorities reread against current canonical state: `AGENTS.md`, `docs/SIMULATION_ARCHITECTURE.md`
 (§§2, 11–12, 81–85, 91–92), `docs/ROADMAP.md`, `docs/EXECUTION_MODEL.md`, `docs/PHASE5_STATE.md`,
 `docs/PHASE6_STATE.md`, `docs/PHASE7_STATE.md`, and the Phase 8–13 Briefs.
 The current intraday/extensibility and multi-participant alignment records were
@@ -346,7 +345,7 @@ no Phase 11 IDs, approval, or implementation authorization.
 | Candidate unit (UNAPPROVED) | Candidate closure evidence | Dependencies / ordering |
 |---|---|---|
 | Actor eligibility, perspective, and one-choice contract | Use the supported configured `SellGoods` action for a living Person-backed materialized `NpcRuntime` with a current city and no active trade plan; actor knowledge remains owned by that runtime. The UI chooses the action, while MerchantSystem chooses the local-market candidate and quantity. | Product scope is selected. Preserve the existing current-city merchant/action requirements; do not add a broader actor model or controller grants. |
-| Logical input boundary and envelope contract | Capture a normalized `PersonId` plus `NpcActionData.DefinitionId` through a dedicated typed `WorldCommand`/domain ingress; consume it at the next ordinary `EvaluateAction` before autonomous choice. Existing scheduled directives and activity exclusions retain their current precedence. | Use the normal actor-turn loop order. A choice unavailable at application is recorded as rejected and ends that actor's choice for the current decision without a different autonomous selection; a created action is attempted once and its normal domain result is returned. The new payload does not reuse GM `Declare` or `ForceOutcome` authority. |
+| Logical input boundary and envelope contract | Capture a normalized `PersonId` plus `NpcActionData.DefinitionId` through a dedicated typed `WorldCommand`/domain ingress; consume it at the next ordinary `EvaluateAction` before autonomous choice. Existing scheduled directives and activity exclusions retain their current precedence. | Use the normal actor-turn loop order. The one-shot choice owns that decision: if ordinary eligibility rejects it or the provider cannot construct it, record terminal rejection and do not call autonomous selection for a different action in that turn. If constructed, attempt it once; record the ordinary current-world domain result, including failure/partial result, without autonomous fallback. The payload does not reuse GM `Declare` or `ForceOutcome` authority. |
 | Consumer adapter through existing domain authority | A bounded choice reaches the existing local-market `SellGoods` path through `MerchantSystem` and the current market transaction service, revalidates current market truth, and records no fabricated result. | Requires the local merchant/action composition and a contract for actor `CommercialKnowledge` access. No travel capability, blanket P8/P9 dependency, or new GM command authority is selected. |
 | Causal-input recording and integration | Captures the selected actor/action, decision boundary, and applied/rejected disposition separately from the sale outcome. The pending choice is authoritative future input. | Integrates the actor-choice input owner, runtime decision boundary, decision records and deterministic diagnostics. Phase 12/13 still own full continuation/reconstruction formats. |
 | Phase-specific regression and acceptance review | Tests Knowledge-bounded action planning, ordinary current-truth revalidation, one-shot use, scheduled-directive precedence, deterministic actor order, and unchanged GM command semantics. | Follows implementation and independent review; long-run validation is required only if daily-loop or long-horizon behavior changes. |
@@ -411,7 +410,11 @@ contract is:
   decision. If the action is
   constructed, attempt it once through the existing action and transaction
   path; stale market truth produces the ordinary domain result, with no
-  automatic retry and no Knowledge rewrite.
+  automatic retry, no same-decision autonomous selection, and no Knowledge
+  rewrite. A pre-dispatch eligibility/provider rejection is a terminal
+  `Rejected` disposition; a constructed action whose current-world transaction
+  returns failure is an attempted action with its ordinary failed result. Both
+  consume the one-shot choice for that decision.
 - GM/external `WorldCommand` behavior remains on its existing validated path
   and is not widened by this actor-choice consumer. Phase 12/13 own later
   save-schema and full historical reconstruction guarantees.

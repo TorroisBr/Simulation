@@ -1,27 +1,31 @@
 # Phase 11 — Actor Choice Technical Design
 
-**Status: proposed technical design; c285 architecture refresh awaiting
-independent review; not implementation authorization.** Earlier review applies
-only to its recorded earlier baseline, not to this refresh.
+**Status: proposed technical design; targeted no-fallback/canonical-state
+correction awaiting independent re-review; not implementation authorization.**
+Earlier review applies only to its recorded earlier baseline, not to this
+correction.
 The Phase 11 entry contract is recorded in
 [`PHASE11_ENTRY_ARCHITECTURE.md`](PHASE11_ENTRY_ARCHITECTURE.md), refreshed
-against c285 and awaiting independent review. Earlier review commit `e96fa14`
-is historical evidence only and does not cover this refresh. This document proposes
+against current Phase 8 canonical state c5b2 and awaiting targeted independent
+re-review. Earlier review commit `e96fa14` is historical evidence only and
+does not cover this correction. This document proposes
 interfaces, ownership, ordering, diagnostics, tests, and integration sequence
 for that selected first consumer. All implementation units below remain
 **UNAPPROVED**; Phase 11 has no approved checkpoint IDs or Phase State record.
 
-**Design baseline:** `codex/phase8/canonical` at
+**Design baseline:** current `codex/phase8/canonical` at
+`c5b2e06b534f4b2af38f10e6510b10800aa8b28c`, including architecture baseline
 `c285466c355103d3637ac165246591b72eb7bda0` (parent
 `4b6dd1d38cffeaf3cc1ac3effea0f8ede8771194`), refreshed P11 entry proposal in
 this worktree, and corrected store candidate
 `f1221d4e3275e21a876076350ca12058927dbaa9` on
 `codex/phase11/ActorChoiceStore`, superseding initial store candidate
-`0a32e86dd3c907e80c6439f3de7fe061618110ea`. Current P8 State records P8-A/B/C
-canonical and P8-D as independently reviewed/validated but unpromoted; P8-E
-waits for promoted P8-D. Neither is a semantic or capability prerequisite for
-this local-market action. This design and store remain candidates; no Phase 11
-checkpoint IDs or promotion are approved.
+`0a32e86dd3c907e80c6439f3de7fe061618110ea`. Current Phase 8 State at c5b2
+records P8-A through P8-D canonical, with P8-E still unimplemented. P8-D
+promotion resolves the earlier capability wait but neither P8-D nor P8-E is a
+semantic or capability prerequisite for this local-market action. This design
+and store remain candidates; no Phase 11 checkpoint IDs or implementation
+authorization are approved.
 
 The corrected store candidate and tests retain a daily-profile capture day and
 actor-turn-roster ordinal. Disposition boundaries are monotonic by
@@ -57,7 +61,7 @@ change `Suggest`, `Request`, `Declare`, or supported `ForceOutcome` meanings.
 The player chooses an action; existing domain systems decide whether it can be
 planned and executed.
 
-The relevant semantic authorities reread at c285 are
+The relevant semantic authorities reread against current canonical state are
 `SIMULATION_ARCHITECTURE.md` §§2, 5–6, 11–12, 81–85, 91–92, the Phase 11
 Brief, Roadmap, Execution Model, both 2026-09-26 alignment records, and the
 refreshed entry proposal. Architecture §81
@@ -143,6 +147,13 @@ changes `Pending` to `ConsumedAwaitingTerminalAttempt`; that state is excluded
 from the pending queue and is never eligible for another dispatch. Only its
 matching terminal attempt outcome can close it. `Rejected`, `AttemptReturned`,
 and `AttemptThrew` are terminal.
+
+The Store candidate's `TryReject` records a terminal rejection, after which the
+input is no longer returned by `PendingInputs` or
+`TryGetNextPendingForActor`. That store transition alone cannot prevent
+autonomous choice: the runtime adapter must return from the current decision
+boundary after recording rejection, rather than continuing into
+`ChooseAction`.
 
 Attempt classification is `Succeeded`, `Failed`, `ReturnedNoResult`, or
 `Threw`. The optional `NpcActionResult` status is populated only for a
@@ -426,8 +437,8 @@ slice; this documentation task does not run them.
 |---|---|
 | `ActorActionChoiceCommandTests` and `WorldCommandFoundationTests` | Typed payload retains only PersonId/action DefinitionId; `LocalPlayer` is provenance; Request queues without sale mutation; Preview is read-only and allocates no choice/command identity; Suggest cannot execute; Declare/ForceOutcome do not execute this kind; `WorldCommandRecord.Success` means queued, not sold. Existing command authority behavior stays unchanged. |
 | `ActorChoiceStoreTests` | Capture order/IDs are deterministic; multiple same-actor choices remain FIFO; disposition boundaries are nondecreasing by `(absoluteDay, actorTurnRosterOrdinal)` (equal boundaries are valid); pre-capture-day, earlier-day, and earlier-same-day-ordinal transitions are rejected atomically with status/dispositions/count unchanged; rejection and deferral transitions are one-shot; dispatch-start permanently consumes an input; exactly one returned/thrown terminal outcome follows; no disposition follows terminal resolution; dead/unmaterialized actor reconciliation terminates pending choice; clone is independent and preserves sequence, payload, lifecycle state, dispositions, and result; mutation guard blocks writes. |
-| `ActorChoiceRuntimeTests` and `SimulationRuntimeOrchestrationTests` | Choice is consumed immediately before action dispatch only on a normal actor turn; actor roster order is unchanged; travel, expedition, reservation, and scheduled directive precedence is unchanged and records deferral; actor unavailable at the input-processing boundary is rejected; stale action/provider/policy eligibility rejection does not cause a different same-turn autonomous selection; accepted action attempts once, with no same-day retry or autonomous second action. If action execution throws, assert one terminal `AttemptThrew`, no returned `NpcActionResult` status, no requeue/retry or autonomous fallback, and propagation of the same exception instance with the original throw frame preserved. Also cover non-null success/failure results versus a null return classified as `ReturnedNoResult`. |
-| `MerchantLiquidityTests` plus actor-choice commerce cases | Actor's remembered price/liquidity and own inventory bound candidate planning; another NPC's current state and current market truth do not enrich planning; active plan is rejected; stale current market can return the normal failure/partial-fill action result; no Knowledge rewrite, fabricated transaction receipt, trade DomainEvent, or history entry. |
+| `ActorChoiceRuntimeTests` and `SimulationRuntimeOrchestrationTests` | Choice is consumed immediately before action dispatch only on a normal actor turn; actor roster order is unchanged; travel, expedition, reservation, and scheduled directive precedence is unchanged and records deferral; actor unavailable at the input-processing boundary is rejected; normal gameplay eligibility rejection or inability to construct the selected action records terminal rejection and does not call autonomous selection for a different action in that turn; a constructed choice is attempted once and current-world execution failure/partial result does not trigger same-decision autonomous selection. If action execution throws, assert one terminal `AttemptThrew`, no returned `NpcActionResult` status, no requeue/retry or autonomous fallback, and propagation of the same exception instance with the original throw frame preserved. Also cover non-null success/failure results versus a null return classified as `ReturnedNoResult`. |
+| `MerchantLiquidityTests` plus actor-choice commerce cases | Actor's remembered price/liquidity and own inventory bound candidate planning; another NPC's current state and current market truth do not enrich planning; active plan is rejected; stale current market can return the normal failure/partial-fill action result, recorded as the attempted choice's returned failure; no same-decision autonomous action, Knowledge rewrite, fabricated transaction receipt, trade DomainEvent, or history entry. |
 | `ActorChoiceDiagnosticsTests` and WorldState diagnostics suites | Pending, deferred, rejected, dispatch-started, returned, and thrown states appear in immutable snapshots; returned `NpcActionResult` statuses are present only for non-null results, while null and thrown calls have distinct attempt outcomes and no result status; canonical export/digest/diff/formatting are deterministic; ordering is by causal input/boundary keys rather than collection iteration; validation catches illegal transitions and any disposition after terminal; diagnostic operations are read-only. |
 
 Also retain the existing `CoreWorldCommandHandlerTests`,
@@ -441,28 +452,21 @@ choice, the reviewer should require the matching long-run gate.
 
 ## 8. P8-D/P8-E dependencies and integration sequence
 
-P8-D and P8-E are not semantic or promoted-capability dependencies for this
-current-city sale. At c285, Phase 8 State records P8-D branch
-`codex/phase8/P8DArchitectureRefreshIntegration` as independently reviewed
-and validated but unpromoted, and P8-E as waiting for promoted P8-D. The
-refreshed P8-D candidate integrates
-route-store composition with `SimulationRuntime.cs` and the shared diagnostic
-surfaces: `WorldStateSnapshot.cs`, `WorldStateCanonicalWriter.cs`,
-`WorldStateDiff.cs`, `WorldStateFormatter.cs`, and
-`WorldStateInvariantValidator.cs`. It also touches `PersonRoutePlanStore.cs`,
-`SpatialRouteKnowledgeStore.cs`, and `SpatialRoutePlanningTests.cs`. Across
-the candidate diff from the Phase 8 canonical base, the touched route files
-also include `PersonRoutePlanStore.cs`, `SpatialRouteKnowledge.cs`,
-`SpatialRouteKnowledgeStore.cs`, and `SpatialRoutePlanningSystem.cs`, with
-their Unity metadata and route-test metadata; `PHASE8_STATE.md` and
-`ROADMAP.md` record the candidate status. These are the actual
-shared-runtime/diagnostics hotspots in the current candidate. These remain
-actual shared-file hotspots; the current sale uses no P8 route capability.
+P8-D and P8-E are not semantic or capability dependencies for this current-city
+sale. Current `codex/phase8/canonical` is
+`c5b2e06b534f4b2af38f10e6510b10800aa8b28c`; Phase 8 State records P8-A through
+P8-D canonical and P8-E unimplemented. The P8-D promotion integrated route-store
+composition with `SimulationRuntime.cs` and shared diagnostic surfaces
+(`WorldStateSnapshot.cs`, `WorldStateCanonicalWriter.cs`, `WorldStateDiff.cs`,
+`WorldStateFormatter.cs`, and `WorldStateInvariantValidator.cs`), plus the
+Person route-plan/Knowledge stores and planning tests. These are now canonical
+shared-runtime/diagnostics hotspots. The current sale uses no P8 route
+capability. P8-E's later travel consumer work does not block this local sale.
 
 The dependency graph imposes no P8-D/P8-E wait for P11's local SellGoods
 semantics. Before implementation touches `SimulationRuntime` or diagnostics,
-refresh from the selected canonical head, inspect the then-current P8-D status
-and actual touched-file set, and serialize writers to overlapping hotspots.
+refresh from the selected canonical head and inspect actual touched files;
+serialize writers to overlapping hotspots.
 This is integration/hotspot coordination only, not a P8 capability gate.
 
 Proposed sequence after technical-design review:
@@ -471,10 +475,10 @@ Proposed sequence after technical-design review:
    typed WorldCommand handler's `Request`-only meaning, FIFO multi-submit
    behavior, death/unmaterialization reconciliation, and separate command,
    input, decision, and action-result records.
-2. Refresh the implementation worktree from the selected canonical base and
-   inspect current P8-D integration status and touched files. Do not assert a
-   P8-D capability dependency for this local sale; use single-writer ownership
-   wherever actual files overlap.
+2. Refresh the implementation worktree from selected canonical base `c5b2e06`
+   or its verified successor and inspect then-current touched files. Do not
+   assert a P8-D capability dependency for this local sale; use single-writer
+   ownership wherever actual files overlap.
 3. Start implementation from the refreshed canonical head in an isolated
    `codex/phase11/<FeatureName>` worktree. Assign one owner per shared hotspot:
    command contract/handler, actor-choice store, runtime boundary, then
