@@ -19,12 +19,14 @@ capability.
 ## 1. Recommendation and bounded first profile
 
 When its product scope and dependencies are approved, Phase 10 should add one
-domain-owned local site to the normal authored single-player bootstrap profile,
-anchored to an existing canonical P8 `LocationId`, with a finite local topology
-of named semantic places and explicit connections. The same authorities and
-invariants must accept authored and generated instances. This proposal does
-not select the domain/site kind, topology catalog, layout algorithm, or exact
-included stores; those remain explicit first-profile/checkpoint scope.
+domain-owned local site in a later, separately accepted P10 profile/stage
+composition that consumes P9, leaving P9's authored-only first profile
+unchanged. The site is anchored to an existing canonical P8 `LocationId`, with
+a finite local topology of named semantic places and explicit connections.
+The same authorities and invariants must accept authored and generated
+instances. This proposal does not select the domain/site kind, topology
+catalog, layout algorithm, or exact included stores; those remain explicit
+first-profile/checkpoint scope.
 
 This recommendation is deliberately narrower than a general settlement,
 interior, or world-expansion system. It includes only the site and local facts
