@@ -1,7 +1,16 @@
 # Phase 12 `UnityBootstrap-Daily-v1` Checkpoint Contract Proposal — UNAPPROVED
 
-**Status:** proposed checkpoint contract for independent review and formal
-acceptance. It assigns no accepted Phase 12 checkpoint IDs, changes no Phase
+**Status:** proposed checkpoint contract; independent review **PASS** for
+content commit `a9699e46aaffd12616353975b447caed12ff3d27`. The review used
+`codex/phase8/canonical` at `c5b2e06b534f4b2af38f10e6510b10800aa8b28c`,
+including architecture refresh `c285466c355103d3637ac165246591b72eb7bda0`,
+and both alignment records: intraday/extensibility at `c285466c355103d3637ac165246591b72eb7bda0`
+and multi-participant activity at `4b6dd1d38cffeaf3cc1ac3effea0f8ede8771194`.
+No blockers were found. If P9 genesis outputs enter this supported profile,
+recheck their stage/contributor identity, deterministic order, random context,
+provenance and output-capture coverage; capture generated outputs rather than
+rerunning historical genesis. Formal human acceptance remains pending. This
+document assigns no accepted Phase 12 checkpoint IDs, changes no Phase
 Brief/State/Roadmap, and authorizes no code implementation. It makes no claim
 that capture, hydration, or save/load parity currently exists.
 
@@ -253,11 +262,13 @@ This document is a proposed checkpoint-contract input. It does not amend
 `SIMULATION_ARCHITECTURE.md`, Phase 12 Brief/State, Roadmap, or Phase 8 State.
 It assigns no accepted P12 checkpoint IDs and authorizes no implementation.
 
-Remaining gates are independent review and formal human acceptance of this
-contract, then establishment of actual checkpoint scope/status and separate
-implementation authorization through the repository workflow. The owner
-export/hydration and parity requirements are capability gates for closure, not
-permission to claim completion before implementation evidence exists.
+Remaining gates are formal human acceptance of this contract, then
+establishment of actual checkpoint scope/status and separate implementation
+authorization through the repository workflow. The owner export/hydration and
+parity requirements are capability gates for closure, not permission to claim
+completion before implementation evidence exists. The independent review's
+conditional P9 recheck applies only if genesis outputs enter the supported
+profile; they remain excluded from this proposal.
 
 No unresolved product or canonical semantic choice is required for this
 bounded profile by the reviewed documents. Expanding to cross-host/runtime
@@ -270,7 +281,8 @@ profile contract.
 - `docs/SIMULATION_ARCHITECTURE.md`, `docs/EXECUTION_MODEL.md`,
   `docs/phases/PHASE12_BRIEF.md`, and refreshed P12 entry/technical proposals.
 - Canonical `docs/PHASE8_STATE.md` at `c5b2e06`, including P8-D promotion and
-  the pending P8-E candidate, plus both dated architecture alignment records.
+  the pending P8-E candidate; `INTRADAY_EXTENSIBILITY_ALIGNMENT.md` at
+  `c285466`; and `MULTIPARTICIPANT_ACTIVITY_ALIGNMENT.md` at `4b6dd1`.
 - `Assets/_Project/Scripts/TesteSimulacao.cs`, `SimulationConfigData.cs`,
   `SimulationRuntime.cs` composition and `AdvanceDay`/`TryAdvanceDay`,
   `RuntimeIdentity.cs`, `DeterministicRandom.cs`, and
