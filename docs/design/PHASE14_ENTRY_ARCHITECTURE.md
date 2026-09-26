@@ -1,6 +1,6 @@
 # Phase 14 Entry Architecture — Bounded v1 Proposal
 
-**Status:** `ENTRY_ARCHITECTURE_READY`; refreshed against the current canonical architecture and pending independent entry review. It is a proposal for technical design, not canonical architecture, an implementation contract, checkpoint approval, or authorization to implement. No Phase 14 checkpoint IDs are approved.
+**Status:** `ENTRY_ARCHITECTURE_READY`; independent entry review passed against refreshed proposal `2c9cd0a6f10e17062a83c7488287023b1bbaf0ec`. This remains a proposal for technical design, not canonical architecture, an implementation contract, checkpoint approval, or authorization to implement. No Phase 14 checkpoint IDs are approved.
 
 **Observed code base:** canonical `codex/phase8/canonical` at `c285466c355103d3637ac165246591b72eb7bda0` (parent `4b6dd1d38cffeaf3cc1ac3effea0f8ede8771194`). At that revision, P8-A/B/C are canonical; P8-D remains a separate refreshed integration candidate and P8-E waits for promoted P8-D. The Phase 14 Brief is `ENTRY_ARCHITECTURE_READY`. The proposal's daily, same-City source/consumer scope remains compatible with the updated temporal, extensibility, and multi-participant contracts.
 
@@ -97,4 +97,4 @@ If independent entry review accepts this proposal, technical design should resol
 3. Which existing City market state is the authoritative owned store for this slice and how its title/custody projection composes with existing market counterparties and transaction paths.
 4. Which source, stock, configuration, order, and result fields must appear in deterministic diagnostics/reconstruction projections so later save/fork work can preserve the causal state.
 
-These are technical design questions within the proposed product boundary. Independent entry review remains the next gate; this document creates no checkpoint IDs and grants no implementation approval.
+These are technical design questions within the proposed product boundary. Technical design is the next gate; this document creates no checkpoint IDs and grants no implementation approval.
