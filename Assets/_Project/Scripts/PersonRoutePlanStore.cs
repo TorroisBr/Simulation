@@ -62,7 +62,8 @@ public enum PersonRoutePlanFailureCode
     StaleKnowledgeBasis = 5,
     PlanRevisionMismatch = 6,
     RevisionOverflow = 7,
-    StalePlanningDay = 8
+    StalePlanningDay = 8,
+    ActorInTransit = 9
 }
 
 public sealed class PersonRoutePlanFailure
@@ -87,17 +88,20 @@ public sealed class PersonRoutePlanStore : IAuthoritativeMutationGuardBindable
     private readonly PersonStore personStore;
     private readonly SpatialRouteKnowledgeStore knowledgeStore;
     private readonly Func<long> currentWorldDayProvider;
+    private readonly Func<PersonId, bool> actorInTransitProvider;
     private Dictionary<string, List<PersonRoutePlan>> plansByActor = new Dictionary<string, List<PersonRoutePlan>>(StringComparer.Ordinal);
     private long revision;
 
     public PersonRoutePlanStore(
         PersonStore personStore,
         SpatialRouteKnowledgeStore knowledgeStore,
-        Func<long> currentWorldDayProvider = null)
+        Func<long> currentWorldDayProvider = null,
+        Func<PersonId, bool> actorInTransitProvider = null)
     {
         this.personStore = personStore ?? throw new ArgumentNullException(nameof(personStore));
         this.knowledgeStore = knowledgeStore ?? throw new ArgumentNullException(nameof(knowledgeStore));
         this.currentWorldDayProvider = currentWorldDayProvider;
+        this.actorInTransitProvider = actorInTransitProvider;
     }
 
     /// <summary>Mutation version; lifecycle transitions advance it independently of accepted plan count.</summary>
@@ -213,6 +217,9 @@ public sealed class PersonRoutePlanStore : IAuthoritativeMutationGuardBindable
         PersonId actor = selectedOutcome.Request.ActorPersonId;
         if (!personStore.TryGet(actor, out _))
             return Fail(PersonRoutePlanFailureCode.ActorNotRegistered, "Plan actor PersonId is not registered.", out failure);
+        if (actorInTransitProvider != null && actorInTransitProvider(actor))
+            return Fail(PersonRoutePlanFailureCode.ActorInTransit,
+                "A Person route cannot be accepted or replaced while its factual position is in transit.", out failure);
         if (selectedOutcome.KnowledgeBasis.ActorPersonId != actor
             || !knowledgeStore.IsBasisCurrent(selectedOutcome.KnowledgeBasis))
             return Fail(PersonRoutePlanFailureCode.StaleKnowledgeBasis, "The actor Knowledge basis changed after selection.", out failure);
@@ -281,25 +288,27 @@ public sealed class PersonRoutePlanStore : IAuthoritativeMutationGuardBindable
 
     internal PersonRoutePlanStore Clone(PersonStore targetPersons, SpatialRouteKnowledgeStore targetKnowledge)
     {
-        return CloneCore(targetPersons, targetKnowledge, null);
+        return CloneCore(targetPersons, targetKnowledge, null, null);
     }
 
     internal PersonRoutePlanStore CloneForRuntime(
         PersonStore targetPersons,
         SpatialRouteKnowledgeStore targetKnowledge,
-        Func<long> currentWorldDayProvider)
+        Func<long> currentWorldDayProvider,
+        Func<PersonId, bool> actorInTransitProvider)
     {
-        return CloneCore(targetPersons, targetKnowledge, currentWorldDayProvider);
+        return CloneCore(targetPersons, targetKnowledge, currentWorldDayProvider, actorInTransitProvider);
     }
 
     private PersonRoutePlanStore CloneCore(
         PersonStore targetPersons,
         SpatialRouteKnowledgeStore targetKnowledge,
-        Func<long> currentWorldDayProvider)
+        Func<long> currentWorldDayProvider,
+        Func<PersonId, bool> actorInTransitProvider)
     {
         if (targetPersons == null) throw new ArgumentNullException(nameof(targetPersons));
         if (targetKnowledge == null) throw new ArgumentNullException(nameof(targetKnowledge));
-        PersonRoutePlanStore copy = new PersonRoutePlanStore(targetPersons, targetKnowledge, currentWorldDayProvider);
+        PersonRoutePlanStore copy = new PersonRoutePlanStore(targetPersons, targetKnowledge, currentWorldDayProvider, actorInTransitProvider);
         foreach (KeyValuePair<string, List<PersonRoutePlan>> entry in plansByActor)
         {
             PersonId actor = new PersonId(entry.Key);

@@ -223,16 +223,6 @@ public sealed class SimulationRuntime
         long expectedActorPlanRevision,
         out PersonRoutePlanFailure failure)
     {
-        if (selectedOutcome?.Request?.ActorPersonId != null
-            && personRoutePlanStore.TryGetCurrent(selectedOutcome.Request.ActorPersonId, out PersonRoutePlan existing)
-            && (existing.Status == PersonRoutePlanStatus.Active || existing.Status == PersonRoutePlanStatus.Accepted)
-            && personSpatialPositionStore.TryGetPosition(existing.ActorPersonId, out PersonSpatialPosition position)
-            && position.IsInTransit)
-        {
-            failure = PersonRoutePlanFailure.Create(PersonRoutePlanFailureCode.InvalidPlan,
-                "A route cannot be replaced while the Person is in transit.");
-            return false;
-        }
         return personRoutePlanStore.TryAcceptPlan(
             selectedOutcome,
             decisionIdentity,
@@ -508,6 +498,8 @@ public sealed class SimulationRuntime
                 personRoutePlanStore,
                 resolvedPersonStore,
                 resolvedSpatialRouteKnowledgeStore,
+                actor => resolvedPersonSpatialPositionStore.TryGetPosition(actor, out PersonSpatialPosition currentPosition)
+                    && currentPosition.IsInTransit,
                 () => this.simulationTime.AbsoluteDay,
                 this.simulationTime.AbsoluteDay);
         SpatialRoutePlanningSystem resolvedSpatialRoutePlanningSystem =
@@ -2881,12 +2873,13 @@ public sealed class SimulationRuntime
         PersonRoutePlanStore source,
         PersonStore personStore,
         SpatialRouteKnowledgeStore knowledgeStore,
+        Func<PersonId, bool> actorInTransitProvider,
         Func<long> currentWorldDayProvider,
         long currentWorldDay)
     {
         if (source == null)
         {
-            return new PersonRoutePlanStore(personStore, knowledgeStore, currentWorldDayProvider);
+            return new PersonRoutePlanStore(personStore, knowledgeStore, currentWorldDayProvider, actorInTransitProvider);
         }
 
         PersonRoutePlanInvariantReport report = source.ValidateInvariants();
@@ -2908,7 +2901,7 @@ public sealed class SimulationRuntime
             }
         }
 
-        return source.CloneForRuntime(personStore, knowledgeStore, currentWorldDayProvider);
+        return source.CloneForRuntime(personStore, knowledgeStore, currentWorldDayProvider, actorInTransitProvider);
     }
 
     private static ArmedForceSpatialStateStore CloneArmedForceSpatialStateStore(
