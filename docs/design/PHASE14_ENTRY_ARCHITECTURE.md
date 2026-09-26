@@ -64,7 +64,7 @@ These are the recommended entry decisions for this bounded v1; they are proposal
 
 ## 5. Temporal, extension, and participant dependencies
 
-This proposal promises only the existing daily autonomous Economy cadence and a manually authored local source. That bounded daily/static profile has no P18 implementation dependency. If a later scope promises duration, shifts, automatically progressed production or transport, or intraday opportunities, it must consume the specific promoted P18 scheduler/lifecycle/availability contracts required by that behavior; a day count is not an intraday timeline.
+This proposal promises only the existing daily autonomous Economy cadence and a manually authored local source. Legacy daily automatic production and consumption remain valid without P18, and this bounded daily/static profile has no P18 implementation dependency. If a later scope promises duration-based or intraday automatic progression, shifts, or intraday opportunities, it must consume the specific promoted P18 scheduler/lifecycle/availability contracts required by that behavior; a day count is not an intraday timeline.
 
 The v1 consumer is passive and single-settlement. It does not coordinate several actors, so it has no P20 dependency. If a future consumer actually introduces shared work or multi-participant commitments, that consumer must use the relevant promoted P20 capability on the P18 foundation. P18 must not acquire a reverse dependency on P20.
 
