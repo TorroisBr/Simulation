@@ -9,6 +9,9 @@ proposal; reviewed P18-A, P18-B, and P18-C technical designs; and both dated
 architecture alignment records.
 **Status:** Proposed technical design only. No implementation authorization,
 checkpoint IDs, capability promotion, persistence schema, or Phase State change.
+**Independent technical design review:** PASS at content commit
+`b6ad17a26f9e663b956f0e575e033f7c816cd7c0` after the decline lifecycle
+mapping correction. This status note does not authorize implementation.
 
 ## 1. Purpose and boundary
 
