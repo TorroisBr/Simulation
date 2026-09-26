@@ -14,8 +14,10 @@ proposal `a89ada7692fd9950fc8424cadaacefaae14ccb80`. Since that design base,
 P8-D was promoted to canonical at `c5b2e06b534f4b2af38f10e6510b10800aa8b28c`.
 
 **Current revalidation baseline:** `codex/phase8/canonical` at
-`77f3e1a47a1e007492a794ea777d681a21a36d09`, including P8-E promotion
-`d95b60d174cb0b17df09e2775b3cbd134c74b21f`. P8-A through P8-E are canonical.
+`470667d37863384edadb3d93ef64d8004aff46a3`. P8-A through P8-E are canonical;
+the State-only closure promotion is recorded at `0ae5055` and its approved
+status wording at `470667d`. The later State-only records add no runtime
+behavior to the P8-E capability promoted at `d95b60d174cb0b17df09e2775b3cbd134c74b21f`.
 The proposed single-site local-topology profile consumes no P8-E route-plan or
 civil-travel behavior, so P8-E adds no dependency. The latest P9 entry,
 technical-design, and checkpoint-contract proposals were revalidated at
