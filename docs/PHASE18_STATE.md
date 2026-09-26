@@ -1,19 +1,19 @@
 # Phase 18 State — Intraday Temporal Execution v1
 
-**Status:** IN_PROGRESS
+**Status:** IN_PROGRESS — refreshed P18-A candidate; final review pending
 
-**Canonical base:** `codex/phase8/canonical` at `c5b2e06b534f4b2af38f10e6510b10800aa8b28c`
+**Canonical base:** `codex/phase8/canonical` at `d95b60d174cb0b17df09e2775b3cbd134c74b21f`
 
 **Architecture update:** `c285466c355103d3637ac165246591b72eb7bda0`
 
-**Integration branch:** `codex/phase18/TimelineIntegration`
-**P18-A integrated code commit:** `350c6a049404b4f339044a31d1620a9596f55f5a`
+**Integration branch:** `codex/phase18/TimelineIntegrationPostP8E`
+**P18-A refreshed source commit:** `4dea565a95a05ff03f61a9c18cfc163d47e509e1` (merges the unchanged P18-A implementation onto promoted P8-E canonical)
 
 ## Phase status
 
 | Work | Status | Evidence / prerequisite |
 |---|---|---|
-| P18-A — Logical Timeline Scheduler | INTEGRATED CANDIDATE; AWAITS CANONICAL PROMOTION | Candidate source commit `dd4d46ae1a4519d5ae07931965fbb6156692830e`; integrated as `1af92a1` plus collision-safe identity fix `350c6a0`. Independent review passed. Focused timeline 18/18, ALL EditMode 1714/1714, complete Smoke 5/5; `git diff --check` passed. |
+| P18-A — Logical Timeline Scheduler | REFRESHED INTEGRATED CANDIDATE; FINAL REVIEW PENDING | Original source commit `dd4d46ae1a4519d5ae07931965fbb6156692830e`; integrated as `1af92a1` plus collision-safe identity fix `350c6a0`, then refreshed against P8-E canonical in `4dea565`. The P18-A source diff is unchanged. Refreshed `LogicalTimelineTests` 18/18 (`Temp/ValidationResults/EditMode-20260926-212439-794ceaae956f47f7aebde4fade3d05bc.xml`), ALL EditMode 1717/1717 (`Temp/ValidationResults/EditMode-20260926-212600-77374b90b7ad4504b1c0408a27e4dbec.xml`), and complete Smoke 5/5 (`Temp/ValidationResults/EditMode-20260926-212641-e7c2128b74f54c5eb8e7872fd2700d85.xml`); `git diff --check d95b60d 4dea565` passed. Independent refreshed review remains pending. |
 | P18-B — Activity Lifecycle | DESIGN REVIEW PASS; IMPLEMENTATION BLOCKED | Waits for P18-A promotion and its own accepted implementation checkpoint. Stable activity-instance identity is independent of PersonId and participant identity; zero/one/many actors are allowed only for unformed Proposed instances, with Scheduled/Active requiring at least one. |
 | P18-C — Availability-Driven Decisions | DESIGN REVIEW PASS; IMPLEMENTATION BLOCKED | Waits for the relevant promoted P18-A/B contracts. Decisions remain PersonId-owned and Knowledge-bounded; execution revalidates current truth. |
 | P18-D — Consumer Integration | BLOCKED BY P18-C AND SELECTED CONSUMER CAPABILITIES | Integrate only explicit consumers whose prerequisites are met. No blanket P8/P11/P20 gate is implied. |
@@ -39,8 +39,10 @@
 
 ## Promotion and next actions
 
-The P18-A integration candidate is prepared on a noncanonical branch. The
-repository's human canonical-promotion gate remains in force; this does not
-block independent READY work. After promotion, rebuild the DAG and implement
-P18-B if its checkpoint is schedulable, then P18-C, followed by only those
-P18-D adapters whose concrete consumer prerequisites are met.
+P8-E was promoted to canonical at `d95b60d`. P18-A has no P8-E dependency and
+its implementation adds no overlapping source files; this refresh preserves
+the existing candidate on the new base. The repository's human
+canonical-promotion gate remains in force. After refreshed review and approval,
+rebuild the DAG. P18-B implementation still requires its own accepted
+checkpoint; then continue to P18-C and only those P18-D adapters whose
+concrete consumer prerequisites are met.
