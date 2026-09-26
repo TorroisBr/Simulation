@@ -6,7 +6,7 @@
 
 **Architecture baseline:** `c285466c355103d3637ac165246591b72eb7bda0`
 
-**Integrated source commit:** `5b4674cf8a59c7376a1d9cad4ca5dad956697cb7` on `codex/phase11/ActorChoiceIntegrationPostP8E`; this refresh merges the now-canonical P8-E candidate at `d95b60d174cb0b17df09e2775b3cbd134c74b21f` with the reviewed P11 candidate.
+**Integrated source commit:** `e40ebd63bcdfb043caa7e50001404afaa0ce85b7` on `codex/phase11/ActorChoiceIntegrationPostP8E`; merge commit `5b4674cf8a59c7376a1d9cad4ca5dad956697cb7` refreshes the reviewed P11 candidate against canonical P8-E at `d95b60d174cb0b17df09e2775b3cbd134c74b21f`.
 
 The candidate combines the P11 actor-choice implementation and diagnostics
 with P8-E, which is now canonical. P11's local SellGoods contract has no
@@ -43,8 +43,8 @@ capability dependency for this rule.
 |---|---|---|---|
 | P11-01 | Stable actor-choice input store, ordered dispositions, terminal attempt lifecycle | CANDIDATE COMPLETE | Store branch `codex/phase11/ActorChoiceStore`, commit `f1221d4e3275e21a876076350ca12058927dbaa9`; independent review against c5b2 and both alignment records; `ActorChoiceStoreTests` 9/9. |
 | P11-02 | Typed WorldCommand ingress and trusted local UI capture | INTEGRATED CANDIDATE | Integrated with the ordinary WorldCommand/domain boundary; `ActorActionChoiceCommandTests` 6/6. No GM authority expansion. |
-| P11-03 | Runtime application at the ordinary actor decision boundary and existing SellGoods path | INTEGRATED CANDIDATE | One-shot handling and no-fallback semantics implemented; exact P8-C position/location eligibility applied to input and autonomous local SellGoods. `ActorChoice` tests 22/22. |
-| P11-04 | Deterministic diagnostics, invariants, focused integration tests, and acceptance review | INTEGRATED CANDIDATE; REFRESHED COMBINED REVIEW PENDING | Actor-choice state is included in canonical snapshots, diffs, formatting, and invariant validation. The prior candidate passed independent review at `a281d98`; the refreshed P8-E canonical integration awaits final review. |
+| P11-03 | Runtime application at the ordinary actor decision boundary and existing SellGoods path | INTEGRATED CANDIDATE | One-shot handling and no-fallback semantics implemented; exact P8-C position/location eligibility applied to input and autonomous local SellGoods. Refreshed `ActorChoice` tests 24/24. |
+| P11-04 | Deterministic diagnostics, invariants, focused integration tests, and acceptance review | INTEGRATED CANDIDATE; REFRESHED COMBINED REVIEW PENDING | Actor-choice state is included in canonical snapshots, diffs, formatting, and invariant validation. The prior candidate passed independent review at `a281d98`; missing failed/thrown execution regressions were restored at `e40ebd6`; final review of the corrected refreshed candidate is pending. |
 
 The initial integration review found two defects: autonomous SellGoods could
 execute during P8-C transit using stale `CurrentCity`, and P8-E interruption
@@ -53,6 +53,12 @@ fixed in `32b16bf5ded371750fb2e028d3f39786dfb85c94` and
 `a554e8f9199ee77d98d4a512592e965057d72c0b`. Independent review of the complete
 fix diff passed; tests cover transit, exact Location mismatch at the same Hex,
 legacy no-position behavior, and future/stale caller days with no mutation.
+
+The refreshed independent review found two missing runtime regression cases
+for failed and thrown actor-choice execution. Both are restored in
+`e40ebd6`, adapted to the refreshed fixture, and assert one provider creation
+and execution, one ActorChoice decision, a terminal attempt result, and no
+same-turn autonomous fallback.
 
 ## Architecture and dependency revalidation
 
@@ -83,20 +89,20 @@ independent review of the exact refreshed source is pending.
 
 ## Validation evidence
 
-All results below are from the refreshed integration worktree at source commit
-`5b4674c`, after merging canonical P8-E. Every suite passed with zero failures
-and skips.
+Results marked `5b4674c` ran after merging canonical P8-E. ActorChoice, ALL
+EditMode, and Smoke were rerun after the test-only coverage correction at
+`e40ebd6`. Every suite passed with zero failures and skips.
 
 | Gate | Result | Retained report |
 |---|---:|---|
-| `ActorChoice` | 22/22 | `Temp/ValidationResults/EditMode-20260926-211802-422790eb2e614e979ac66d1b636cd1fa.xml` |
+| `ActorChoice` | 24/24 | `Temp/ValidationResults/EditMode-20260926-212902-f8a155c8beba40e8957da36b11617090.xml` (`e40ebd6`) |
 | `ActorActionChoiceCommandTests` | 6/6 | `Temp/ValidationResults/EditMode-20260926-211930-97788d207a25444da25c536a8ae842fd.xml` |
 | `SpatialRoutePlanning` | 20/20 | `Temp/ValidationResults/EditMode-20260926-211954-f7f29e8c223543cba78dc703cfcb7730.xml` |
 | `SimulationRuntimeLongRunTests` | 7/7 | `Temp/ValidationResults/EditMode-20260926-212013-e79e0af396c64d72878a8517eb9dd4d8.xml` |
-| ALL EditMode | 1727/1727 | `Temp/ValidationResults/EditMode-20260926-212032-1b4653707cfa4a8fa566f85212c035bd.xml` |
-| Official complete Smoke | 5/5 | `Temp/ValidationResults/EditMode-20260926-212109-052521fd9a9141f7aa2656782d27bc6d.xml` |
+| ALL EditMode | 1729/1729 | `Temp/ValidationResults/EditMode-20260926-212925-d486e681b0c34c67a4aa2c5dd9528177.xml` (`e40ebd6`) |
+| Official complete Smoke | 5/5 | `Temp/ValidationResults/EditMode-20260926-213005-d3ae3bbfc53f4ef8825109198bb92c01.xml` (`e40ebd6`) |
 
-`git diff --check d95b60d 5b4674c` passed after integration. The refreshed
+`git diff --check d95b60d e40ebd6` passed after integration and test correction. The refreshed
 candidate still needs independent final review and its own human canonical-
 promotion approval. P8-E's implementation and promotion evidence remain
 recorded in `docs/PHASE8_STATE.md`.
