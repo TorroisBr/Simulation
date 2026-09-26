@@ -6,18 +6,32 @@ No Phase 9 checkpoint IDs are assigned or approved here.
 
 **Review baseline:** canonical architecture/roadmap refresh at
 `c285466c355103d3637ac165246591b72eb7bda0`, revalidated against current
-Phase 8 state and initialization/content code. This refresh updates the
-proposal only; it does not approve its architecture or authorize implementation.
+Phase 8 state and initialization/content code. The current canonical Phase 8
+tip is `77f3e1a47a1e007492a794ea777d681a21a36d09`, including P8-E promotion
+`d95b60d174cb0b17df09e2775b3cbd134c74b21f`. This refresh updates the proposal
+only; it does not approve its architecture or authorize implementation.
 
 **Current dependency review:** `docs/PHASE8_STATE.md` on
-`codex/phase8/canonical` at `1d65e59a4864391f3ed56334454f6eb4b6d71584`
-(the Phase 8 State at reviewed baseline `c285466c355103d3637ac165246591b72eb7bda0`).
-P8-A/B/C are canonical. P8-D's separate integration candidate needs targeted
-architecture-impact/temporal-profile revalidation before promotion; it is not
-currently a promoted capability. P8-E is design-approved but waits for
-promoted P8-D and that impact review. A P9 profile that consumes route-plan or
-route-Knowledge capability inherits the relevant P8-D promotion edge; P8-E
-remains no blanket genesis prerequisite.
+`codex/phase8/canonical` at `77f3e1a47a1e007492a794ea777d681a21a36d09`.
+P8-A through P8-E are canonical. P8-D is relevant only to selected route-plan
+or route-Knowledge facts, and P8-E only to selected civil-travel facts; neither
+is a blanket genesis prerequisite. P8-E remains its bounded explicit-operation
+slice, with automatic intraday travel deferred to P18-D.
+
+**Post-promotion impact revalidation:** the authored Unity bootstrap profile
+remains compatible with P8-E. Its current legacy NPC rows have no explicit
+per-instance `PersonId`, and the profile creates no P8-E transit position,
+route-plan, or travel-operation facts. This does not remove or replace the
+canonical P8-E runtime capability. If a future profile includes those facts,
+it must route them through the P8 owners and consume the corresponding P8-C/D/E
+capabilities. The selected first profile adds no P18 activity/participation
+facts; existing scheduled directives retain their current domain semantics.
+Future timed activities use stable `ActivityInstanceId` independently from
+`PersonId`, with participant cardinality represented explicitly; a multi-person
+activity adds only the relevant P20 edge. Current moddability constraints
+apply to seam/review design; P19 loader/API and lifecycle implementation remain
+deferred. The prior entry review applies to its earlier text; independent
+review of this refreshed entry proposal is pending.
 
 **Authority:** `docs/SIMULATION_ARCHITECTURE.md` remains the semantic authority.
 The Phase 9 and Phase 8 Briefs and `docs/ROADMAP.md` define subordinate scope
@@ -33,13 +47,14 @@ it does not settle the open decisions below.
   algorithms, the ID algorithm, mod schema, and exact content catalog; the
   dependency-aware pipeline/contribution contract is now explicit.
 - The original proposal described a P7-era state before P8-A existed. Current
-  P8 State records P8-A/B/C as canonical. P8-A establishes factual Hex
+  P8 State records P8-A/B/C/D/E as canonical. P8-A establishes factual Hex
   geography, scale provenance, terrain identity/revision and anchored
   Locations; P8-B establishes passage/barrier/crossing-condition facts; P8-C
   composes City/Site anchor bindings and Person-level `At`/`InTransit` truth in
-  runtime and diagnostics. P8-D/E retain separate readiness gates; only a P9
-  profile that consumes route-plan or route-Knowledge capability has a hard
-  P8-D promotion edge.
+  runtime and diagnostics. P8-D adds Knowledge/route planning. P8-E adds the
+  bounded explicit-operation civil-travel slice. Only selected profile outputs
+  that consume route plans/route Knowledge or civil-travel facts inherit the
+  corresponding promoted P8-D/E capability edge.
 - `TesteSimulacao.InitializeSimulation` is the current authored startup path.
   It reads `SimulationConfigData`, constructs a `SimulationTime`, random
   source, `RuntimeIdAllocator`, `RuntimeIdentityRegistry`, and legacy
@@ -101,8 +116,9 @@ For spatial facts, current P8 State is the promoted capability inventory.
 Initial geography can use canonical P8-A. P8-B is available if the selected
 initial profile includes passage facts; P8-C is available if it establishes
 Person positions or City/Site bindings. Only a profile that includes route
-plans or route Knowledge depends on promoted P8-D capability; P8-E remains
-outside any blanket P9 prerequisite.
+plans or route Knowledge depends on promoted P8-D capability; P8-E is required
+only for selected civil-travel facts. Neither capability is a blanket P9
+prerequisite. The current authored-bootstrap profile selects neither.
 
 An initial world may have generated backstory before simulation begins. That
 backstory can explain initial facts, but it is not simulated history and has no
@@ -164,7 +180,7 @@ deterministic tie-break behavior.
 | Resolve profile and context | Authored world inputs; selected contributor set; effective configuration and calendar; compatible simulation/content versions | Immutable resolved profile, provenance, generation context and accepted contributor/stage graph | Resolve and validate compatibility before any stage runs. |
 | Establish spatial substrate (when selected) | Resolved profile; authored geography/scale/terrain inputs | P8-owned Hex, Location and selected passage/anchor facts | Use P8-A authority; include P8-B facts only when selected; include P8-C bindings/Person positions only when selected. |
 | Produce dependent domain facts | Declared earlier stage outputs and authored domain inputs | Facts for only the included domains, such as population, Person records, settlements, relationships or selected starting state | Edges name the exact consumed outputs. Contributors at the same dependency level use stable contributor/stage identity ordering; conflicts follow a declared deterministic policy, never registration or collection order. |
-| Add optional local or temporal facts | Earlier outputs plus the relevant accepted/promoted domain contract | Local topology/content under P10 scope, or temporal activity/commitment state only when the selected profile includes it | Local facts depend on the relevant P8/P9 capability. Temporal facts add only the applicable P18 contract/capability; multi-participant activity/participation facts additionally depend on relevant P20 contracts/capability only when selected. Neither P18 nor P20 is a blanket P9 gate. |
+| Add optional local or temporal facts | Earlier outputs plus the relevant accepted/promoted domain contract | Local topology/content under P10 scope, or timed `ActivityInstance`/lifecycle/participant-availability facts only when selected; existing scheduled directives keep their current domain semantics | Local facts depend on the relevant P8/P9 capability. Timed activities add only the applicable P18 contract/capability; multi-participant activity/participation facts additionally depend on relevant P20 contracts/capability only when selected. Neither P18 nor P20 is a blanket P9 gate. |
 | Validate and publish | All candidate outputs in unpublished candidate domain authorities | One complete validated initial world and its provenance | Validate references, invariants and completeness before exposing the candidate; generated facts remain in their owning stores. |
 
 Randomness used by a stage is derived from stable causal context for that
@@ -187,7 +203,7 @@ already occurred.
 | Initial-world scope and inputs | Define which initial facts are in the supported Phase 9 profile; separate authored input, generated input, resolved configuration/calendar, and compatible content. | Entry discussion can proceed now. A materially different promise for generated scale or population is a product decision. |
 | Identity and provenance boundary | Specify stable semantic identities, compatible contributor/stage versions, inputs and provenance needed for the supported profile and reconstruction. | The requirements are settled by Architecture §§8, 12, 91–92 and the 2026-09-26 alignment. The exact ID/compatibility algorithms remain technical-design decisions. |
 | Dependency-aware generation pipeline | Resolve and validate the selected stage/contributor DAG, deterministic contribution/conflict ordering, per-purpose random context, and explicit new-world participation. | Required by the current P9 Brief and architecture alignment. It does not imply P19 loader/API work. |
-| Spatial initial facts | Populate factual geography and anchored locations in the accepted spatial ontology. | P8-A is canonical. Add P8-B if the selected profile authors passage facts; add P8-C if it establishes Person positions or City/Site bindings. Route plans/route Knowledge require promoted P8-D only when selected. P8-E is not a blanket dependency. |
+| Spatial initial facts | Populate factual geography and anchored locations in the accepted spatial ontology. | P8-A through P8-E are canonical. Add the corresponding P8-B/C/D/E capability only when selected outputs consume its owner facts; the authored-bootstrap first profile currently selects no P8 spatial/travel facts. |
 | Domain-owned initial facts | Establish the selected population, Persons, settlements, places, relationships, starting state and other chosen facts through their existing domain owners. | Depends on accepted scope, identity and each included domain's contracts. The inventory must not imply every existing domain store is automatically part of the Phase 9 profile. |
 | Complete-state validation and publication | Validate the stage graph, complete candidate World Truth, cross-domain references and profile-specific readiness before the world is exposed to runtime. | Depends on selected fact producers. Publication mechanism is technical design; do not turn `SimulationRuntime` into a generation dumping ground. |
 | First simulated boundary and reconstruction evidence | Establish the first actually simulated boundary only after the complete selected initial state exists; retain causal inputs/provenance needed by later reconstruction. | Initial-generation privilege ends there. Save/replay mechanics remain Phase 12/13 concerns. |
@@ -284,10 +300,11 @@ backstory log alone is sufficient proof of the initial truth.
   positions or City/Site bindings, use canonical P8-C stores/composition and
   preserve Person-level `At`/`InTransit` separately from materialized NPC
   location fields.
-- If accepted scope includes route plans or route Knowledge, only that component
-  waits for P8-D implementation and promotion. P8-E civil travel is not a
-  genesis prerequisite. P8-D's other consumers and P8-E retain their own
-  readiness and promotion gates in the current Phase 8 State.
+- If accepted scope includes route plans or route Knowledge, that component
+  consumes canonical P8-D. If it includes civil-travel facts, it consumes the
+  P8-C/D/E owners and contracts. The current authored-bootstrap profile
+  includes neither, while normal runtime composition retains all canonical
+  P8 capabilities selected by the host.
 - Non-spatial entry architecture and reconstruction-sensitive inventory can
   proceed independently, but must keep the initial profile's chosen P8 scope
   explicit.
@@ -303,11 +320,12 @@ invariants.
 |---|---|---|
 | Which domain facts and optional capabilities belong to the first supported profile? | Scope / product boundary | The Brief requires a semantically complete configured initial world but defines no catalog or universal inventory. A profile must name included domains/capabilities and may not imply later-phase scope. |
 | What exact generated-ID derivation and compatibility/version representation will implementation use? | Technical design | Semantic identity must be stable and distinct from definition/runtime identity; the algorithm and concrete manifest/compatibility representation remain deferred. |
-| What world scale, population scale, procedural-generation extent and pre-simulation backstory should the first profile promise? | Product | No product gate is established. If the selected guarantee requires a product choice, surface it before the affected technical design is approved. |
-| Which optional initial Knowledge, commitments or temporal activity/participation state does the selected profile include? | Profile / domain scope | Knowledge remains perspective-owned and distinct from World Truth. Temporal activity state is included only when selected and uses relevant P18 contracts; multi-participant facts additionally use relevant P20 contracts only when selected. Neither phase is a blanket dependency. |
+| What world scale, population scale, procedural-generation extent and pre-simulation backstory should the first profile promise? | Product | Resolved for the first delivery: use the existing authored Unity bootstrap world as the proving profile; add no generated terrain, settlements, population or backstory promise. The authored configuration determines extent. Later profiles need their own explicit scope. |
+| Which optional initial Knowledge, commitments or temporal activity/participation state does the selected profile include? | Profile / domain scope | The bounded first-profile proposal inventories existing bootstrap Knowledge, warrants and scheduled directives; it adds no P18 activity/participation facts. Future timed facts use relevant P18 contracts, and multi-participant facts add only relevant P20 contracts. Neither phase is a blanket dependency. |
 
-No concrete algorithm, content catalog, world scale, or product promise is
-selected in this proposal. The dependency-aware stage/contributor contract,
+No concrete algorithm or content catalog is selected in this proposal. The
+first-profile product boundary above is user-approved; future content promises
+remain out of scope. The dependency-aware stage/contributor contract,
 stable identity/provenance requirement, deterministic contribution and
 purpose-scoped randomness rules, pre-publication validation, and explicit
 new-world/retrofit boundary are current constraints, not open questions. Any

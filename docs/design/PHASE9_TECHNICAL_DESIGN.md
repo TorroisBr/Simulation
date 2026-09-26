@@ -1,14 +1,16 @@
 # Phase 9 Technical Design Proposal — UNAPPROVED
 
-**Status:** technical-design proposal for independent review. It assigns no
-checkpoint IDs and authorizes no implementation. The current Phase 9 Brief
-and accepted checkpoint scope remain controlling.
+**Status:** technical-design proposal; this text awaits independent re-review.
+It assigns no checkpoint IDs and authorizes no implementation. The current
+Phase 9 Brief and accepted checkpoint scope remain controlling.
 
-**Prior independent technical-design review:** PASS on commit
-`89dfd7329c1b1cb836b77ff5277b198c20dbe7c5`. This review applies to the
-previous proposal revision. The current scope/baseline refresh requires a new
-independent review; it assigns no checkpoint IDs and authorizes no
-implementation.
+**Historical independent technical-design review:** PASS on commit
+`89dfd7329c1b1cb836b77ff5277b198c20dbe7c5`; that review applies to the earlier
+proposal revision. The P8-E promotion refresh passed targeted independent
+review at `4b3e651137824124cdb770a15bf23f51c618e4f7`. This revision clarifies
+the boundary between existing scheduled directives and P18 activity state;
+independent re-review of the refreshed document set is pending. No checkpoint
+IDs or implementation authorization are added.
 
 **Baseline:** `codex/phase8/canonical` at
 `c5b2e06b534f4b2af38f10e6510b10800aa8b28c`, containing the architecture and
@@ -54,8 +56,10 @@ geography; P8-B for passages; P8-C for City/Site anchors or Person positions;
 P8-D is canonical and available for route plans or route Knowledge if selected.
 P8-E is now canonical, but is not a blanket prerequisite; it is conditional
 only when selected initial outputs consume its travel/route-plan facts. P18 is
-conditional on initial temporal facts, and P20 on selected shared activity/
-participation facts. P19's loader and public API remain deferred.
+conditional on selected timed-activity/lifecycle or participant-availability
+facts; existing scheduled directives retain their current domain semantics.
+P20 applies only to selected shared activity/participation facts. P19's loader
+and public API remain deferred.
 
 The inspected `TesteSimulacao.InitializeSimulation` path constructs time,
 randomness and runtime identity infrastructure, creates runtime objects from
@@ -186,9 +190,10 @@ implementation/promotion pending. At current revalidated canonical tip
 only if the accepted profile selects route plans or route Knowledge; P8-E is
 relevant only if selected outputs consume its civil-travel/route-plan facts.
 Neither capability is a blanket P9 dependency. If the
-profile is daily-only and has no temporal initial facts, P18 is not a gate. If
-it initializes timed activities, it must consume the relevant accepted and
-promoted P18 contracts/capabilities. If it initializes shared
+profile is daily-only and has no P18 activity/participant state, P18 is not a
+gate; existing scheduled-directive commitments retain their current domain
+contract. If it initializes timed activities, it must consume the relevant
+accepted and promoted P18 contracts/capabilities. If it initializes shared
 activity/participation facts, it additionally needs the applicable P20
 contracts/capabilities. Neither is a blanket genesis prerequisite, and P18
 must not be made to wait on P20.

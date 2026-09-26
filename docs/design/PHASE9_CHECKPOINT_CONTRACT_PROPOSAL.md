@@ -1,12 +1,14 @@
 # Phase 9 First-Profile Checkpoint Contract Proposal — UNAPPROVED
 
-**Status:** proposed bounded contract; independent review **PASS** at
-`12313cb18d351041b75caa04d658b8fab5b75e9b` against canonical
-`c5b2e06b534f4b2af38f10e6510b10800aa8b28c` including `c285466` and both
-2026-09-26 alignment records. The review found no blocking issue and confirmed
-the authored population/economy and order-sensitive input corrections. Formal
-acceptance remains pending. This document assigns no approved P9 checkpoint ID,
-changes no Phase Brief/State/Roadmap, and authorizes no implementation.
+**Status:** proposed bounded contract. Independent review **PASS** at
+`12313cb18d351041b75caa04d658b8fab5b75e9b` against the historical canonical
+baseline `c5b2e06b534f4b2af38f10e6510b10800aa8b28c`, including architecture
+update `c285466` and both 2026-09-26 alignment records. That review found no
+blocking issue and confirmed the authored population/economy and order-sensitive
+input corrections. This revision refreshes the proposal after P8-E promotion;
+independent review of this refreshed text is pending. Formal acceptance remains
+pending. This document assigns no approved P9 checkpoint ID, changes no Phase
+Brief/State/Roadmap, and authorizes no implementation.
 
 **Product scope:** the user-approved first delivery is the existing authored
 Unity bootstrap world as a proving profile for a generic deterministic genesis
@@ -15,13 +17,19 @@ profile promises no procedurally generated terrain, settlements, population,
 or pre-simulation backstory. Later procedural consumers remain possible through
 reviewed seams, but are outside this profile.
 
-**Baseline:** canonical `codex/phase8/canonical` at
+**Historical authoring baseline:** canonical `codex/phase8/canonical` at
 `c5b2e06b534f4b2af38f10e6510b10800aa8b28c`, containing architecture/roadmap
 refresh `c285466c355103d3637ac165246591b72eb7bda0`; refreshed entry proposal
 `05ba224da8cead8221d12fb1b9dc64da5a3b61d2`; and refreshed technical-design
-proposal `7bb3312c7b045067dd2dee55451d71c8fd796880`. P8-A through P8-D are
-canonical; P8-E remains a design-approved candidate with implementation and
-promotion pending in the current State.
+proposal `7bb3312c7b045067dd2dee55451d71c8fd796880`. At that historical
+baseline, P8-A through P8-D were canonical and P8-E implementation/promotion was
+pending.
+
+**Current revalidation baseline:** `codex/phase8/canonical` at
+`77f3e1a47a1e007492a794ea777d681a21a36d09`, including P8-E promotion
+`d95b60d174cb0b17df09e2775b3cbd134c74b21f`. The architecture baseline remains
+`c285466c355103d3637ac165246591b72eb7bda0`; both alignment records remain
+current. P8-A through P8-E are canonical at this baseline.
 
 **Authority:** `docs/SIMULATION_ARCHITECTURE.md` remains controlling. The P9
 Brief, refreshed entry/technical proposals, Phase 8 State, and the
@@ -261,17 +269,32 @@ proposal changes no executable content and has no Unity test requirement.
 - P8-D is canonical and is a dependency only if a selected profile output
   includes route plans or route Knowledge. The current proposal's first
   profile does not add these outputs.
-- P8-E remains a design-approved candidate with implementation/promotion
-  pending in the current State. Its civil-travel slice is not a blanket P9
-  prerequisite.
-- A daily first profile with no initial temporal facts does not wait for P18.
-  Any future profile that initializes timed activities consumes the relevant
-  accepted/promoted P18 contract/capability. P20 is conditional only on
-  selected shared activity/participation facts. P18 does not wait on P20.
+- P8-E is canonical at the current revalidation baseline. The selected
+  authored-bootstrap profile creates no P8-E route-plan, transit-position, or
+  travel-operation facts, so P8-E is not a blanket P9 prerequisite. A future
+  profile that consumes its facts must use the P8-owned authorities and the
+  relevant promoted P8-C/D/E capabilities. This preserves P8-D's rule of one
+  active route plan per Person and P8-E's in-transit replacement guard; neither
+  defines a permanent Activity-to-Person cardinality. No automatic travel or
+  timed activity is introduced by this genesis profile.
+- A daily first profile with no P18 activity/participation facts does not wait
+  for P18. Existing scheduled-directive commitments remain under their current
+  domain owner and semantics; this profile does not turn them into
+  `ActivityInstance` state. Any future profile that initializes timed
+  activities consumes the relevant accepted/promoted P18 contract/capability.
+  Activity definitions, stable `ActivityInstanceId` values, and participant
+  `PersonId` values remain separate identities; an activity may have one or
+  multiple participants, so it is not keyed by one actor. P20 is conditional
+  only when selected outputs include shared activity/participation facts. P18
+  does not wait on P20, and P20 waits only on
+  the relevant P18-A/B/C capabilities, not P18-D by phase number.
 - P19 loader/public API, arbitrary external-provider support, local generation
   catalogs, and mod lifecycle are not built or required by this first profile.
-  Later consumers can bind reviewed contributors to accepted semantic
-  contracts after those consumers/contracts exist.
+  Current extensibility constraints still apply to seams and review: preserve
+  declared stage inputs/outputs, dependencies, stable identities, deterministic
+  ordering, and domain-owned publication without adding a speculative public
+  loader/API. Later consumers can bind reviewed contributors to accepted
+  semantic contracts after those consumers/contracts exist.
 - P10 local generation is a later consumer of the P9 genesis/provenance and
   relevant P8 local-anchor contracts. P12/P13 continuation/reconstruction
   remain responsible for preserving/recovering initial and later state.
