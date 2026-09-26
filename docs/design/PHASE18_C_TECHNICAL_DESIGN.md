@@ -2,7 +2,7 @@
 
 **Design base:** `002ddc394339f924739f67fc4a8ff4420d3aecf3` (`codex/phase18/P18CAvailabilityDecisionDesign`), descended from the reviewed P18-A design at `1ac0673` and P18-B design at `002ddc3`; both trace to architecture baseline `c285466c355103d3637ac165246591b72eb7bda0`.
 **Authority:** `docs/SIMULATION_ARCHITECTURE.md` §§2, 11–12, 91–92; `docs/ROADMAP.md`; `docs/EXECUTION_MODEL.md`; `docs/phases/PHASE18_BRIEF.md`; `docs/design/PHASE18_A_TECHNICAL_DESIGN.md`; `docs/design/PHASE18_B_TECHNICAL_DESIGN.md`; `docs/architecture/INTRADAY_EXTENSIBILITY_ALIGNMENT.md`; `docs/architecture/MULTIPARTICIPANT_ACTIVITY_ALIGNMENT.md`.
-**Status:** Bounded technical-design proposal only. No implementation checkpoint IDs or capability promotion are introduced. P18-C implementation remains blocked until relevant P18-A and P18-B capabilities are promoted and the implementation boundary is independently reviewed.
+**Status:** Independent technical design review passed on `2dd4941cc26271b5faddd5ca7bb5db5883063cfc`. This remains a bounded technical-design proposal only. No implementation checkpoint IDs or capability promotion are introduced. P18-C implementation remains blocked until relevant P18-A and P18-B capabilities are promoted and the implementation boundary is independently reviewed.
 
 ## 1. Purpose and boundary
 
@@ -95,3 +95,5 @@ Hotspots include `NpcDecisionSystem`, action/provider interfaces and adapters, `
 P18-C technical design consumes the reviewed A/B contracts but does not claim either capability exists in canonical code. **P18-C implementation remains blocked until the relevant P18-A and P18-B capabilities are promoted**, after which the exact implementation slice and shared hotspots must be independently reviewed. No P18-D consumer is needed to design this seam, and this proposal does not authorize a P18-D migration.
 
 No P11 SellGoods integration, P8 travel migration, sleep/dreams/needs/jobs/theft/robbery/gangs/rituals/War/MegaEventos, participant formation or solver, public extension API/loader, save/replay, generic security boundary, or universal actor decision framework is included. P19 mechanics remain deferred; current extensibility constraints still apply to semantic identity, stable ordering, and avoiding speculative Unity-only authority. No unresolved product or architectural decision is identified by this proposal; exact APIs and implementation sequencing remain reviewable technical details within these contracts.
+
+**Independent review:** PASS on `2dd4941cc26271b5faddd5ca7bb5db5883063cfc`. Implementation remains blocked on promoted P18-A/B capabilities; this document records no capability promotion.
