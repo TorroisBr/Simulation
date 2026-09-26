@@ -59,12 +59,12 @@ The observed authored inputs include:
 | Authored input | Existing use in `TesteSimulacao` | Contract boundary |
 |---|---|---|
 | Calendar, enabled modules, and configuration overrides | Resolves `CalendarDefinition`, `SimulationModuleSet`, and `EffectiveSimulationConfiguration`. | Preserve configuration policy/parameters and calendar as separate resolved authoritative inputs. Record the effective values/revisions and compatible source versions needed to interpret the initial state. |
-| `Cities` and `CityData.connections` | Creates City runtimes, legacy spatial locations, and travel routes with authored travel-day values. | Preserve configured extent and authored references. This legacy spatial model is not the P8 factual geography authority. Any P8 spatial outputs are conditional and must use P8 owners. |
+| `Cities` and `CityData` | Creates City runtimes and legacy locations/routes. `CityRuntime` initializes settlement population from `initialPopulation`, market stock from `marketItems`, counterparty liquidity from `marketLiquidity`, population economy from `populationConsumption`, and retains `productionConfigs` for daily production. | These are valid authored starting-world/economy inputs and are included in the profile fingerprint and output inventory. Preserve configured extent and referenced definitions. This legacy spatial model is not P8 factual geography; any mapped P8 outputs use P8 owners. |
 | `ExplorableSites` | Creates site runtimes and legacy locations/routes; authored initial knowledge may refer to them. | Preserve selected authored site instances and references. No generated sites or local topology are promised. |
-| `Npcs` (`NpcSimulationConfig`) and referenced `NpcData` | Creates one named `NpcRuntime` for each accepted authored config entry, with starting city and initial money; applies configured inventory. | World/population extent is the authored configuration. No seed-driven additions, aggregates, or procedural population are in scope. The first profile keeps these legacy bootstrap NPCs outside `PersonStore`; it creates Person state only if a config row supplies an explicit stable per-instance `PersonId`. |
+| `Npcs` (`NpcSimulationConfig`) and referenced `NpcData` | Creates one named `NpcRuntime` for each accepted authored config entry, with starting city and initial money; applies configured inventory. | World/population extent is authored configuration. No seed-driven additions or generated population aggregates are in scope; `CityData.initialPopulation` is a valid authored aggregate input. The first profile keeps these legacy bootstrap NPCs outside `PersonStore`; it creates Person state only if a config row supplies an explicit stable per-instance `PersonId`. |
 | `Actions`, statuses/jobs and content definitions | Supplies configured action/content definitions and state references to host/domain systems. | Resolve compatible references before materialization; do not mutate authoring assets or equate a content definition ID with a semantic Person/world identity without an accepted rule. |
 | Initial known sites and bootstrap knowledge | Bootstraps selected site, spatial, and commercial Knowledge for named runtime NPCs. | Knowledge remains perspective-owned and distinct from World Truth. Include only currently selected authored initial Knowledge; do not expose hidden facts to every actor. |
-| Initial warrants and scheduled directives | Initializes Justice state and the configured future directive store. | Keep initial authoritative warrant facts in their domain owner; retain directives as scheduled inputs/commitments with their own boundary semantics. Neither is simulated history merely because it exists at startup. |
+| Initial warrants and scheduled directives | `InitializeJusticeState` calls `JusticeSystem.CreateInitialWarrants` in config-list order, then syncs wanted statuses; `CreateScheduledDirectives` allocates DirectiveIds while traversing its config list. | Keep warrants in their legal owner and directives as scheduled inputs/commitments. Preserve each authored list's order in the causal fingerprint because warrant penalties can accumulate and directive/runtime IDs are allocated during traversal. Neither is simulated history merely because it exists at startup. |
 | Fixed-seed setting | Current host passes `simulationSeed` when `useFixedSimulationSeed` is true and `0` otherwise to its existing random source. | This observed behavior is not yet a P9 root-seed/provenance contract. Any stage that consumes randomness must declare its causal random purpose and version; the first profile adds no random world-content generation. |
 
 `simulationName`, logging settings, report text, renderer state, and host
@@ -81,14 +81,17 @@ is automatically included.
 | Output category | Profile content | Owner and required distinction |
 |---|---|---|
 | Resolved run context | Effective configuration, effective calendar, compatible simulation/content context, selected built-in stage set, and declared seed/random context. | Configuration resolver and calendar own their respective resolved values. These do not replace domain facts. |
-| Authored macro-world representations/facts | Configured cities, configured connections/routes and configured explorable sites that pass validation. | City/site definitions and configured route references remain in their existing domain/runtime owners. Current authored inputs do not provide the canonical P8 Hex/Location identity and terrain provenance needed to assert P8 spatial facts, so this profile publishes none from unmapped legacy locations/routes. Runtime `CityRuntime`, `ExplorableSiteRuntime`, `SpatialLocationRuntime`, and legacy route IDs remain representations; sequential `RuntimeIdAllocator` output is not durable identity. |
-| Named authored actors | Configured NPC definition, starting-city reference and configured initial money/inventory. Count/extent follows accepted authored entries; there are no added people or population aggregates in the first profile. | Existing NPC/runtime and inventory authorities own their state. Legacy bootstrap NPCs remain outside `PersonStore` unless that config row carries an explicit stable per-instance `PersonId`; definition IDs and allocated runtime IDs never imply Person identity. |
+| Authored macro-world and economy inputs | Configured City definitions and connections/routes, `initialPopulation`, initial market items/liquidity, population-consumption economy inputs and daily production configs, plus configured explorable sites. | These are valid profile inputs: City, population and market initialization becomes owner state, while production configs remain compatible daily-rule inputs. The profile adds no procedurally generated settlements, terrain, population, or economy facts. Current authored inputs do not provide canonical P8 Hex/Location identity and terrain provenance, so unmapped legacy locations/routes create no P8 facts. |
+| Named authored actors | Configured NPC definition, starting-city reference, initial money/inventory and the row's authored initial known sites. Count/extent follows accepted authored entries; no new people, PersonIds, or aggregate population is generated. | Existing NPC/runtime, inventory and perspective-owned Knowledge authorities own these outputs. Legacy bootstrap NPCs remain outside `PersonStore` unless that config row carries an explicit stable per-instance `PersonId`; definition IDs and allocated runtime IDs never imply Person identity. |
 | Initial perspective state | Only the initial Knowledge and warrants/directives selected through the current host path. | Knowledge remains observer-owned; warrants belong to their legal domain; scheduled directives are not past simulation history. |
 | Execution composition | Domain systems and services needed to run the supported daily profile. | Composition is not itself a truth-generating stage; systems do not gain extra authority from being constructed. |
 
 The first profile contributes no procedural terrain, settlement placement,
-population, local topology, or backstory. Future profiles may add dependent
-stages after their product/content and domain contracts are accepted.
+population, local topology, or backstory. It preserves the already-authored
+`CityData` initial population, market stock/liquidity, population-economy
+settings and production inputs as valid profile content. Only generated
+additions are excluded. Future profiles may add dependent stages after their
+product/content and domain contracts are accepted.
 
 ## 3. Proposed stage roles and dependency contract
 
@@ -100,7 +103,7 @@ profile, not claims about existing implementation.
 | Proposed stage identity | Declared inputs | Candidate output | Required dependency and failure boundary |
 |---|---|---|---|
 | `p9.genesis.resolve-profile/v1` | One selected `SimulationConfigData`; referenced definitions; profile schema/version; calendar and configuration inputs; built-in stage manifest; current bootstrap seed setting. | Immutable resolved profile, normalized references, effective configuration/calendar, and validated dependency graph. | Runs first. Reject unresolved/duplicate identities, invalid references, incompatible definitions, missing dependencies, cycles, ambiguous order, or unsupported profile selections before candidate facts are produced. |
-| `p9.genesis.authored-world/v1` | Resolved profile plus authored city/site/connection data. | Candidate configured city/site representations and legacy route references; canonical P8 spatial facts only when explicit authored identifiers/provenance map to P8 owners. | Precedes actor placement and dependent Knowledge. Unmapped legacy locations/routes remain in `SpatialNetworkRuntime`; do not invent P8 IDs/topology or duplicate P8 truth. P8-A/B/C/D edges apply only to selected mapped facts or downstream outputs. |
+| `p9.genesis.authored-world/v1` | Resolved profile plus authored city/site/connection, initial population, market/liquidity, consumption and production data. | Candidate City/site representations, authored population and economy facts, and legacy route references; canonical P8 spatial facts only when explicit authored identifiers/provenance map to P8 owners. | Precedes actor placement and dependent Knowledge. Unmapped legacy locations/routes remain in `SpatialNetworkRuntime`; do not invent P8 IDs/topology or duplicate P8 truth. P8-A/B/C/D edges apply only to selected mapped facts or downstream outputs. |
 | `p9.genesis.authored-actors/v1` | Resolved profile, validated authored world references, NPC and initial-state definitions. | Candidate named legacy NPC runtime state and selected owner-routed initial warrants/directives/Knowledge. Create `PersonRuntime` only for a config row with explicit stable per-instance `PersonId`. | Depends on accepted world references. Knowledge remains perspective-owned. A failed or invalid required row rejects the candidate; it is not silently skipped to publish a partial profile. |
 | `p9.genesis.validate-profile/v1` | All proposed outputs in unpublished candidate authorities and resolved profile. | Completeness and owner/domain validation result covering identity/cardinality, references, temporal bounds, selected spatial scope, and provenance. | Runs after producers. Any failure leaves no result visible to host/runtime. Completeness is checked against the explicit profile inventory, not inferred from instantiated objects. |
 | `p9.genesis.publish/v1` | Validated candidate result and provenance. | One complete initial composition bound by the runtime host before its first `AdvanceDay`. | Publish by one host-visible composition handoff after validation; candidate stores are not reachable through the live runtime before that handoff. Failure cannot leave partial World Truth visible. After publication, ordinary runtime authorities apply. |
@@ -112,10 +115,19 @@ The v1 dependency edges are fixed: `resolve-profile` precedes both
 by ordinal `DefinitionId`; site configs by site `DefinitionId`, anchor-city
 `DefinitionId`, then authored travel-days; connections by origin ID,
 destination ID, then authored travel-days; NPC rows by ordinal
-`NpcData.DefinitionId`.
-Duplicate output keys with no domain-supported multiplicity rule fail profile
-validation. This makes runtime allocation independent of host enumeration
-order while keeping `DefinitionId` in its content-reference role.
+`NpcData.DefinitionId`. For `CityData.marketItems` and `productionConfigs`,
+`NpcSimulationConfig.initialInventory` and `initialKnownExplorableSites`,
+`SimulationConfigData.initialWarrants` and `scheduledDirectives`, preserve the
+authored list order and include each element's zero-based position and consumed
+values in the compatibility fingerprint. These lists are traversed by current
+initialization/owner code, can contain repeated content references, or
+allocate/combine runtime state during traversal; sorting them by definition
+ID would change or ambiguously identify results. When a stable semantic sort
+key is unique it defines order; when keys collide and order is meaningful,
+the authored order is causal and fingerprinted. Duplicate output keys without
+a domain-supported multiplicity rule fail validation. This makes runtime
+allocation independent of incidental host enumeration while keeping
+`DefinitionId` in its content-reference role.
 
 Only the five built-in contributors above are selected in this first profile.
 Registration, asset enumeration, dictionary order, and runtime ID allocation
