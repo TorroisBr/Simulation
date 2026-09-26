@@ -1,6 +1,6 @@
 # Phase 12 — Entry Architecture: Causal-State Inventory
 
-**Status: UNAPPROVED proposal.** Original code observations below cite canonical baseline `1f4651e99db2c357dd3be3c6b9284d104379f706` (Phase 7); the current composition entry points were rechecked against orchestration baseline `c285466c355103d3637ac165246591b72eb7bda0` and the assigned refresh branch. The current Phase 8 State is the authority for P8 delivery/readiness. This proposal does not amend the semantic architecture, Phase 12 Brief, Roadmap, or a Phase State. No Phase 12 State or approved Phase 12 checkpoint ID exists. The candidate slices below are discussion structure only; they are not checkpoint IDs and authorize no implementation.
+**Status:** Independent entry review passed on refreshed proposal `a257092471607520f7da7f056f465bbb3f5384d3`; the recommended `UnityBootstrap-Daily-v1` profile is ready for technical design. The recommendation remains unapproved as canonical architecture and does not authorize implementation. Original code observations below cite canonical baseline `1f4651e99db2c357dd3be3c6b9284d104379f706` (Phase 7); the current composition entry points were rechecked against orchestration baseline `c285466c355103d3637ac165246591b72eb7bda0` and the assigned refresh branch. The current Phase 8 State is the authority for P8 delivery/readiness. This proposal does not amend the semantic architecture, Phase 12 Brief, Roadmap, or a Phase State. No Phase 12 State or approved Phase 12 checkpoint ID exists. The candidate slices below are discussion structure only; they are not checkpoint IDs and authorize no implementation.
 
 ## 1. Purpose and limits
 
@@ -145,7 +145,9 @@ The recommended defaults are compatible same-build/runtime only, current-host nu
 3. **Content/mod compatibility:** Should compatible official content updates or future P19 modules load when they differ from the exact original content set?
 4. **Retention:** Should save preserve additional events, decisions, Chronicle/history, or logs beyond the existing selective-history contract?
 
-Do not start a full technical design until the architecture gates above are answered within accepted semantics. Ask for product intent only if the desired promise is broader or different from the already accepted Phase 12 contract.
+The recommended `UnityBootstrap-Daily-v1` profile and compatible same-build/current-host/exact-content defaults answer the initial architecture gates for technical design. Proceed within that bounded profile. Ask for product intent only if the desired promise is broader or different from the already accepted Phase 12 contract.
+
+**Independent entry review:** PASS against refreshed proposal `a257092471607520f7da7f056f465bbb3f5384d3`. This approves no checkpoint ID or implementation capability.
 
 ## 8. Sources inspected for this refresh
 
