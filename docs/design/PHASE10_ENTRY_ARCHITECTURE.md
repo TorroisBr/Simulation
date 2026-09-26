@@ -1,15 +1,18 @@
 # Phase 10 Entry Architecture Proposal — UNAPPROVED
 
-**Status:** bounded entry recommendation for independent review. This document
-does not approve a checkpoint, assign checkpoint IDs, authorize implementation,
-or promote any Phase 8/9 candidate capability.
+**Status:** bounded entry recommendation; independent review passed at content
+commit `027006843327d226e00faf2de05422ca622bf2f4`. This document does not approve
+a checkpoint, assign checkpoint IDs, authorize implementation, or promote any
+Phase 9 candidate capability.
 
 **Baseline:** architecture, Roadmap, Execution Model and Phase 8 State at
 `c285466c355103d3637ac165246591b72eb7bda0`; reviewed P9 entry proposal
 `5c1e39957440aee767bfe16d56faa01bee1660aa`; reviewed P9 technical-design
-proposal `a89ada7692fd9950fc8424cadaacefaae14ccb80`. The current canonical
-Phase 8 capabilities are P8-A/B/C. P9 documents are reviewed proposals, not
-promoted implementation capabilities.
+proposal `a89ada7692fd9950fc8424cadaacefaae14ccb80`. Since that design base,
+P8-D was promoted to canonical at `c5b2e06b534f4b2af38f10e6510b10800aa8b28c`.
+The current canonical Phase 8 capabilities are P8-A/B/C/D. This P10 proposal
+does not rely on P8-D route planning; P9 documents remain reviewed proposals,
+not promoted implementation capabilities.
 
 ## 1. Purpose and consumer boundary
 
@@ -41,8 +44,9 @@ canonical P8-C City/Site anchor bindings where its existing owner kinds apply.
 P8-C also delivers Person-level `At`/`InTransit` positions; those positions
 remain separate from `NpcRuntime` fields. P8-B passage truth is included only
 if the selected local profile actually creates passage facts. P8-D route
-Knowledge/plan behavior is not a blanket dependency; selecting it would add
-its hard dependency on P8-D promotion. P8-E civil travel remains optional.
+Knowledge/plan behavior is not a blanket dependency; a profile that uses it
+must bind to the now-promoted P8-D authority and APIs. P8-E civil travel remains
+optional.
 
 The existing `LocalTopologyStore` is a reusable foundation, not proof that
 P8-C delivered a `LocationId`-based local-world composition contract. Its
@@ -142,7 +146,7 @@ player from their own modifications.
 | P8-A canonical geography and Location identity | Available for relevant spatial facts. |
 | P8-C canonical City/Site anchors and Person positions | Available within its delivered contract; does not include LocalTopology migration. |
 | P8-B canonical passage facts | Conditional on local profile including passages. |
-| P8-D refreshed candidate | Not promoted; required only if selected profile consumes route-plan/route-Knowledge capability. |
+| P8-D canonical route Knowledge/plan capability | Available if the selected profile consumes it; no blanket dependency. |
 | P8-E civil travel | No blanket P10 dependency. |
 | P9 entry and technical-design candidates | Both independently reviewed proposals; neither is a promoted implementation capability nor implementation authorization. P10 can define a compatible consumer boundary against their contracts. |
 | P9 implementation and selected capability promotion | Required before P10 enters actual world composition through the generator. |
