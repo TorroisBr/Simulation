@@ -6,10 +6,10 @@ architecture `c285466c355103d3637ac165246591b72eb7bda0`.
 **Current canonical impact revalidation:** Phase 8 docs tip
 `77f3e1a47a1e007492a794ea777d681a21a36d09` includes P8-E promotion
 `d95b60d174cb0b17df09e2775b3cbd134c74b21f`. P20's synthetic shared-activity
-contract consumes no P8 travel capability; its relevant hard edges remain the
-promoted P18-A/B/C capabilities, not P18-D or P19. Activity instance identity
-remains independent of participant identity and supports the architecture's
-one-or-more participant cardinality.
+contract consumes no P8 travel capability; execution requires the relevant
+P18-A/B/C capabilities once promoted, not P18-D or P19 as blanket phase gates.
+Activity instance identity remains independent of participant identity and
+supports the architecture's one-or-more participant cardinality.
 **Authority:** `docs/SIMULATION_ARCHITECTURE.md` §§11–12, 91–93;
 `docs/ROADMAP.md`; `docs/EXECUTION_MODEL.md`; the Phase 20 Brief and entry
 proposal; reviewed P18-A, P18-B, and P18-C technical designs; and both dated
