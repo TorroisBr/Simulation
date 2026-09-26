@@ -42,3 +42,11 @@ future integration must not reinterpret old daily inputs or lose those records.
 Revalidate pre-change runtime/turn adapters against this boundary before further
 approval. Preserve the input store and existing SellGoods domain seam where
 compatible; public mod API/loader and UI transport remain later work.
+
+## Participation input boundary
+
+The bounded SellGoods actor-choice slice does not wait for P20. A future
+participation/proposal/withdrawal consumer needs P20's actual contracts, retaining
+each actor's decision and stable input causality. Choosing for one actor does
+not automatically choose for all activity participants or reveal their Knowledge.
+No recruitment UI, group-control grants or negotiation engine is added to P11.

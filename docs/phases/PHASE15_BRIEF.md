@@ -32,3 +32,9 @@ construction, initial generation and mod retrofit remain distinct causal paths
 to normal World Truth. Neither generated origin nor installation reruns old
 construction or grants permanent generator authority. No general mod loader
 or temporal scheduler is implemented inside P15.
+
+Construction/work involving several individual participants conditionally
+consumes P20 coordination and relevant P18 temporal execution. Crew participation
+is distinct from persistent company/guild membership; shared work does not merge
+workers or their effects. P15's factual creation boundary gains no blanket P20
+dependency and no workforce/recruitment gameplay is implemented here.

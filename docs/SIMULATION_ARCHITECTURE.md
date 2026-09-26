@@ -510,6 +510,69 @@ factual pode exigir revalidação ou invalidar uma atividade, mas não concede
 automaticamente conhecimento ao ator. Duração/custo temporal podem informar
 utility, sem tornar utility-per-hour uma regra universal de seleção.
 
+### Activity, instância e múltiplos participantes
+
+**DECIDIDO / DIREÇÃO**
+
+Activity é um empreendimento temporal que pode envolver um ou mais
+participantes. Sua definição descreve regras/conteúdo; a instância concreta
+possui identidade e contexto de execução próprios. Identidade, lifecycle e
+contexto da instância não se confundem com a identidade do iniciador ou de um
+único ator. Um slice individual é válido, mas não estabelece cardinalidade
+universal de exatamente um participante nem torna `NpcRuntime` o dono exclusivo
+de Activity. Para Persons, vínculos duráveis usam `PersonId`, independentemente
+de materialização; outros participantes exigem sua identidade semântica apropriada.
+
+Quando necessário, a definição pode declarar papéis/requisitos de participação,
+quantidades mínimas/máximas e condições relevantes. Não se fixa um catálogo
+universal de papéis, uma hierarquia de Actor ou um schema de atividades. Há um
+contexto compartilhado, mas participantes continuam atores individuais com
+Knowledge, decisões e efeitos potencialmente diferentes. Participar junto não
+cria um NPC sintético, não funde identidades, não compartilha automaticamente
+Knowledge e não obriga outcomes iguais. Efeitos continuam sob as authorities
+dos respectivos domínios, não sob uma authority universal de resultados de Activity.
+
+Uma atividade que precisa reunir participantes pode possuir proposta/formação
+antes da execução. Cada ator decide individualmente se participa usando sua
+perspectiva e regras de decisão; propor/recrutar não concede controle de todos
+os participantes ao iniciador. Adesão pode criar compromisso/reserva para um
+intervalo futuro. Convite, adesão, reserva, disponibilidade e início efetivo são
+fatos distintos: adesão não garante que o ator estará apto no início.
+
+Início agendado revalida requisitos, compromissos e disponibilidade temporal dos
+participantes exigidos nessa fronteira contra o estado atual, antes de produzir
+efeitos de execução. Os intervalos exigidos por papel/participante são definidos
+pela atividade quando necessário; não se pressupõe que todos ficam ocupados
+pelo mesmo intervalo completo. Formação/reservas e a transição de início devem rejeitar
+conflitos ou stale state sem compromissos parciais incoerentes. Cancelamento,
+falha de formação, retirada ou abort dependem de regras explícitas da atividade,
+incluindo liberação das reservas e tratamento de efeitos já aplicados. Não se
+inferem conclusão, rollback ou recrutamento automático. Compatibilidade entre
+compromissos, papéis opcionais e mudança de composição durante execução exige
+design do consumidor; não criar agora solver, negociação social ou workflow engine.
+
+`PERSISTENT GROUP / ORGANIZATION != TEMPORARY MULTI-PARTICIPANT ACTIVITY`
+
+Uma família, gangue, companhia, guilda ou força pode ter continuidade própria;
+sua membership não é participação numa atividade e não substitui decisão ou
+disponibilidade. Atores sem Group/Organization persistente podem atuar juntos.
+Não exigir criação de Group, Organization ou manager específico por gameplay
+para formar uma atividade temporária.
+
+Pequenos grupos podem usar participantes individuais. Sistemas de grande escala
+podem executar sobre unidades/armies ou outros agregados com autoridade própria;
+War não deve virar uma atividade que agenda milhares de Persons. Reutilizar
+tempo, compromissos ou contexto quando compatíveis não exige lifecycle,
+participação ou execução militar idênticos ao modelo de pequenos grupos.
+
+A fundação temporal preserva essas fronteiras agora; formação e execução com
+múltiplos participantes são uma camada dependente posterior (Phase 20), não
+requisito de implementar tudo na Phase 18. Um futuro code mod deve poder
+definir atividade, requisitos/policies e efeitos pelos contratos semânticos
+suportados, sem editar `NpcRuntime` nem exigir um novo manager de gameplay no
+jogo base. A API/loader pública continua trabalho posterior da Phase 19;
+não antecipar infraestrutura extensível sem consumidor real.
+
 ### Scheduler e autoridade temporal
 
 A direção adotada é um scheduler temporal/event-driven central por mundo,
@@ -5454,6 +5517,14 @@ etapas de geração e retrofit participam do mesmo inventário, com identidade e
 versões compatíveis dos contribuintes. Isso não fixa formatos de save ou de
 estado de extensões nem exige loader antecipado.
 
+Quando atividades compartilhadas forem suportadas, o inventário inclui
+definição/versão compatível, identidade da instância, proposta/formação,
+participantes e papéis/requisitos, adesões, compromissos/reservas e intervalos,
+início agendado, contexto/lifecycle e efeitos autoritativos compartilhados ou
+individuais já aplicados, além de inputs/ordem necessários à continuação.
+Participação não pode existir apenas numa lista transitória de NPCs carregados.
+Índices derivados não substituem esses fatos; não se escolhe agora um save schema.
+
 ---
 
 ## 92. Save != Replay != History
@@ -5515,7 +5586,7 @@ Evitar por padrão:
 
 - `WorldEntity` universal;
 - `KnowledgeGraph` universal;
-- generic Activity engine;
+- generic Activity engine que absorve regras/outcomes de todos os domínios;
 - generic Rules engine;
 - generic Command-policy engine gigante;
 - Quest framework;
@@ -5532,6 +5603,11 @@ Evitar por padrão:
 registros de ciclo de vida, histórico de relações, índices ativos, stale
 guards, snapshots determinísticos e caches reconstruíveis. Isso não autoriza
 criar uma `Organization` base/class/store universal apenas por conveniência.
+
+As fundações temporais e de participação justificadas pelos requisitos das
+Phases 18/20 reutilizam mecanismos delimitados; não autorizam um planejamento,
+negociação, workflow ou sistema universal de efeitos. Seus exemplos motivadores
+não autorizam implementar robbery, gangues, caça, rituais ou War nesta fundação.
 
 Preferir:
 
@@ -5837,6 +5913,13 @@ DAY CADENCE != MINIMUM CAUSAL TIME BOUNDARY
 ACTOR CHOOSES WHEN AVAILABLE != ONE ACTION PER DAY
 TEMPORAL SCHEDULER != DOMAIN OUTCOME AUTHORITY
 ACTIVITY != PASSIVE PROCESS
+ACTIVITY DEFINITION != CONCRETE ACTIVITY INSTANCE
+ACTIVITY INSTANCE IDENTITY != SINGLE ACTOR IDENTITY
+PERSISTENT GROUP / ORGANIZATION != TEMPORARY MULTI-PARTICIPANT ACTIVITY
+PARTICIPATION != MEMBERSHIP != CONTROL OF OTHER ACTORS
+AGREEMENT / RESERVATION != VALIDATED START
+SHARED CONTEXT != SHARED KNOWLEDGE / IDENTICAL OUTCOME
+SMALL-GROUP EXECUTION != AGGREGATE WARFARE EXECUTION
 
 INITIAL CONFIGURED WORLD → COMPLETE WORLD TRUTH BEFORE FIRST SIMULATED BOUNDARY
 GENERATED BACKSTORY != SIMULATED HISTORY

@@ -21,3 +21,8 @@ War progresses through explicit strategic decisions, pressure and consequences w
 - **Hotspots/parallelism:** War/Battle stores, political authority, territory, military position/logistics, runtime and diagnostics; distant implementation must wait despite isolated file opportunities.
 - **Downstream unlocks:** future diplomacy, government and broader strategic consumers, without declaring them delivered.
 - **Deferred:** exact strategic model, polity relationship, occupation/treaty semantics and additional future consumers.
+
+P20's multi-participant activity capability does not redefine War or add a hard
+dependency for strategic War. Large-scale execution may use aggregate units/
+armies with its own participation, temporal and outcome semantics; compatible
+shared mechanisms are reusable without identical small-group scheduling.

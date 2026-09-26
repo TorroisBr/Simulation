@@ -16,6 +16,12 @@ same timeline without double processing or a second authority.
 Prove these properties with focused fixtures using existing consumers and
 synthetic test operations, not new sleep, dreams, theft, needs or job gameplay.
 
+The activity definition is distinct from its concrete instance; instance identity
+and lifecycle are not permanently owned by exactly one actor or `NpcRuntime`.
+P18 may implement/prove a one-participant slice, while keeping its temporal
+subject and availability/commitment seams compatible with P20. This is a boundary
+constraint now, not a requirement to implement participant roles or recruitment.
+
 ## Approved planning checkpoints
 
 | ID | Closure boundary | Dependencies |
@@ -31,6 +37,12 @@ consumer migration. Technical designs may proceed on accepted contracts, but
 code integrations wait for promoted capabilities. Interruption is required
 only where the selected existing consumer supports it; no universal rollback
 or universal activity superclass is prescribed.
+
+P20 layers multi-participant formation/execution on the relevant A/B/C capability.
+P18 does not depend on P20; P20 need not wait for every legacy consumer in D.
+P18-B/C review must reject a permanent one-to-one Activity/Actor identity or
+NPC-only lifecycle assumption. Actor availability and commitments remain
+individual even when a later shared instance references several actors.
 
 ## Gates and boundaries
 
@@ -55,6 +67,8 @@ or universal activity superclass is prescribed.
 - **Exclusions:** concrete gameplay, per-frame/per-actor polling, universal
   temporal framework, mod loader, save/replay implementation, renderer, final
   utility/duration/travel formulas and wholesale conversion of all daily domains.
+  Multi-participant role/formation/reservation coordination and shared execution
+  belong to P20; no gang/group manager or participant solver is built in P18.
 - **Reconstruction:** time/calendar, activity IDs/commitments/lifecycle/progress,
   availability, pending work or its deterministic reconstruction inputs,
   causal sequence/tie-break state, external input boundaries, versions/configuration
@@ -68,4 +82,5 @@ or universal activity superclass is prescribed.
 - **Hotspots:** time/calendar, `SimulationRuntime`/`AdvanceDay`, action/decision,
   command capture, travel, diagnostics. Isolate writers and integrate serially.
 - **Unlocks:** timed work/opportunities, travel/waiting and future rest/needs;
-  temporal P12/P13 coverage; relevant P14/P15/P16 timed consumers; P19 temporal hooks.
+  temporal P12/P13 coverage; relevant P14/P15/P16 timed consumers; P19 temporal
+  hooks and P20's participant layer. Exact classes/schemas remain technical design.

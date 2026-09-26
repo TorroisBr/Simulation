@@ -36,3 +36,12 @@ before that boundary must not include its newly created facts. Installation
 does not reexecute historical placement/scoring stages. P19 integrations require
 their actual state/version/migration contracts, not a blanket loader dependency
 for unmodded-world reconstruction. This adds no early replay/storage schema.
+
+## Shared-activity historical boundaries
+
+Supported P20 history includes formation, independent agreements/withdrawals,
+reservations, validated start, cancellation/abort and individual/shared effects
+at their actual boundaries. A fork preserves the corresponding pending or
+executing instance and participants, not a later final roster imposed on earlier
+history. It consumes relevant P20 state/input semantics and P12 continuation
+only when that activity capability is supported; no early replay implementation.

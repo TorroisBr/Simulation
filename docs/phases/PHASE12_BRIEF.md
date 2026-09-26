@@ -38,3 +38,13 @@ claiming those integrations. Do not invent mod schemas or require P19 to save
 ordinary official worlds. Missing compatible code/content cannot silently
 discard extension state. Revalidate pre-change continuation proposals against
 these additions; historical retained state is not regenerated on installation.
+
+## Shared-activity continuation inventory
+
+When P20 is in the supported save scope, hydrate one instance with compatible
+definition/version, formation state, participant identities/roles, agreements,
+future reservations/intervals, scheduled start and shared lifecycle/context.
+Preserve participant-specific effects already applied and pending causal work
+without duplicating the activity into separate actor-owned truths. Inventory can
+begin on accepted P20 contracts; hydration waits for actual capabilities. This
+is conditional coverage, not a blanket P20 dependency for all P12 saves.

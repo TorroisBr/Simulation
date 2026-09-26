@@ -31,3 +31,8 @@ assumption. Design can precede P18 promotion on stable contracts, but integrated
 intraday movement cannot use an independent daily/host clock. Supply/passive
 processes remain domain-owned. No Wind & Sail/weather mod, loader or alternative
 renderer is required for P16 closure.
+
+P20's small-group individual activity model is not mandatory for military
+execution. Units/armies may consume compatible time/commitment concepts under
+their aggregate domain authority without scheduling every Person in one shared
+activity or converting an army into a synthetic NPC. No blanket P20 dependency.

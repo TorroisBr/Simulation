@@ -31,3 +31,8 @@ does not become a mandatory actor-selected action. No new work/rest/theft
 behavior is required for infrastructure validation. Use existing semantic
 source/transfer seams and composable policy contributions only when actually
 needed; no mod loader or universal production extension engine in P14.
+
+If a future chosen production consumer requires several actors, its shared
+participation/commitment coordination consumes relevant P20 capability on P18.
+Static source/stock truth and passive production remain independent; no crew,
+job, hunting or meal system is introduced for this requirement.

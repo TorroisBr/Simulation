@@ -2,7 +2,7 @@
 
 `SIMULATION_ARCHITECTURE.md` remains the semantic authority. This roadmap names intended phase scopes and likely dependency directions; it neither reports delivered behavior nor authorizes implementation or canonical promotion. The owning `PHASE*_STATE.md` and current canonical code establish delivery. Phase numbers primarily organize planning and closure, not a requirement to execute whole phases serially.
 
-Phases 5–7 are closed within their documented scopes. P8-A/B/C are canonical; `PHASE8_STATE.md` records subsequent candidates and readiness. Phases 9–17 retain their IDs and scopes. New Phases 18–19 introduce intraday execution and the later code-mod platform; their numbers do not put them after strategic War in execution order. See the Phase Briefs and `EXECUTION_MODEL.md` for readiness and scheduling.
+Phases 5–7 are closed within their documented scopes. P8-A/B/C are canonical; `PHASE8_STATE.md` records subsequent candidates and readiness. Phases 9–17 retain their IDs and scopes. Phases 18–20 introduce intraday execution, the later code-mod platform and multi-participant activities; their numbers do not put them after strategic War in execution order. See the Phase Briefs and `EXECUTION_MODEL.md` for readiness and scheduling.
 
 | Phase | Planning objective |
 |---|---|
@@ -18,6 +18,7 @@ Phases 5–7 are closed within their documented scopes. P8-A/B/C are canonical; 
 | 17 — Strategic War v1 | Strategic War progression without equating Battle result with War result. |
 | 18 — Intraday Temporal Execution v1 | One logical timeline, deterministic due-work scheduling, activity lifecycle and availability-driven actor decisions, with bounded legacy integration. |
 | 19 — Code Mods & Public Extension Surface v1 | A later code-mod API/loader and supported extension lifecycle, including new mechanics/state and optional explicit existing-world retrofit. |
+| 20 — Multi-participant Activities v1 | Temporary shared activity instances, independent participation decisions, future commitments and validated coordinated start/execution over the temporal foundation. |
 
 Runtime World Expansion remains a future consumer without an assigned dedicated phase. Its absence from this sequence does not forbid a later insertion or assign it to Phase 15 by implication.
 
@@ -72,6 +73,45 @@ transport are deferred to dedicated designs. No anti-cheat or adversarial
 actor-control/mod-security architecture is introduced for the player's local
 world. Optional official expansions should ideally use that same public API.
 
+## Multi-participant activity layer
+
+P18 preserves definition versus instance, stable activity identity independent
+of a single actor, and composable availability/commitment boundaries now. Its
+first activity slice may involve one actor; it must not turn that slice into a
+permanent one-Activity-to-one-Actor contract or NPC-owned lifecycle. P18 does
+not implement formation, roles or coordinated multi-participant execution.
+
+**P20** layers that capability on the relevant P18-A/B/C timeline, lifecycle and
+availability contracts/capabilities. Entry/decomposition can proceed against
+accepted contracts; execution waits for the actual promoted capabilities.
+P18-D's entire legacy migration is not a blanket dependency, and P18 never
+waits for P20. P20 is prioritized after that temporal foundation, not after
+P19 merely because its number is higher. P19's activity extension adapter
+consumes the relevant P20 capability when multi-participant support is exposed;
+P20's official bounded implementation does not wait for the mod loader.
+
+```text
+P18-A/B/C relevant contracts → P20 entry / technical design
+P18-A/B/C relevant promoted capabilities → P20 shared activity execution
+P20 + relevant spatial/travel capability → future traveling-together consumer
+P20 + relevant P14/P15 capability → future multi-worker consumer
+P20 state contracts/capability + P12/P13 → supported shared-activity save/fork
+P20 + relevant P19 public surface → mod-defined multi-participant activities
+```
+
+These are conditional consumer edges, not new closure requirements for P8's
+individual traveler, P11 SellGoods or static P14/P15 truth. P16/P17 may use
+compatible temporal/commitment concepts for aggregate units/armies without
+depending on P20's small-group execution or scheduling all Persons in one
+activity. Persistent Group/Organization is not a prerequisite for P20.
+
+P20 entry must delimit definition/instance ownership, required/optional roles
+and counts when useful, proposal/formation, independent acceptance, future
+reservations, conflict/stale-state checks and atomic start, cancellation or
+failure-to-form/abort, and participant-specific effects under normal domain
+authorities. No full planner, social negotiation, gang, War or workflow engine
+is added. Technical representation and exact role APIs remain design work.
+
 ## Dependency directions, not blanket phase locks
 
 - P8-A establishes factual geography. P8-B (passages) and P8-C (anchors/civil presence) may proceed with isolation after their shared identity/segment contract is stable. P8-D (Knowledge/route) consumes the needed passage and position contracts; P8-E integrates the travel slice. Each implementation dependency must distinguish accepted contract from promoted capability.
@@ -92,6 +132,9 @@ These are planning edges, not fabricated checkpoint IDs for Phases 9–17. Hard 
 - Before P18 implementation: reviewed logical time precision/range, same-instant
   ordering, reentrant scheduling, zero-duration progress, lifecycle ownership,
   cancellation/stale-work handling, actor availability and daily compatibility.
+  Review activity identity/cardinality and definition/instance separation;
+  single-actor validation must leave the P20 participant layer possible without
+  relocating lifecycle into a synthetic NPC or second scheduler.
 - Before the first durable intraday command: retain payload, authority, exact
   logical boundary and causal ordering. A date alone cannot order intraday effects.
 - Before P9 implementation: reviewed bounded profile and stage inputs/outputs,
@@ -100,6 +143,10 @@ These are planning edges, not fabricated checkpoint IDs for Phases 9–17. Hard 
 - Before P19 implementation: real supported extension scope and public contracts;
   define module compatibility/state lifecycle, deterministic composition and
   explicit new-world versus optional retrofit behavior. No generic security platform.
+- Before P20 implementation: reviewed bounded participation/formation contract
+  and relevant promoted P18 capabilities; close atomic reservation/start/release,
+  independent decision/Knowledge, role validation and loss-of-participant rules
+  for the selected proving slice. No per-gameplay manager or NPC rewrite is required.
 - Before claiming save/fork with mods or intraday execution: supported temporal
   and extension-state inventory, recoverable compatible code/content, inputs and
   history; no missing causality may be reconstructed retroactively.
@@ -110,6 +157,13 @@ P8-D/E and P11 candidates require targeted revalidation of temporal adapters,
 not wholesale redesign. P9 and P12 entry proposals need their new pipeline and
 temporal/extension inventories incorporated before further approval. No existing
 phase is automatically implementation-ready, cancelled, or retroactively rewritten.
+
+The additional impact record is `architecture/MULTIPARTICIPANT_ACTIVITY_ALIGNMENT.md`
+(base `4b6dd1d`). P18-B/C technical work requires a targeted cardinality/identity
+review; no P18 implementation existed at this baseline. Delivered P8 behavior
+and current P8/P11 single-actor candidates acquire no P20 implementation gate.
+P12/P13 inventory and P19 extension design consume the shared-activity contracts
+only where that capability is in scope.
 
 ## Changing the roadmap
 

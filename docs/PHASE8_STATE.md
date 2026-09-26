@@ -30,6 +30,20 @@ automatic intraday travel deferred to P18-D. Do not promote either candidate by
 assuming its pre-refresh readiness is sufficient without the recorded impact
 review. The spatial A → B/C → D → E capability graph remains unchanged.
 
+## Multi-participant requirement refresh — 2026-09-26
+
+The additional architecture update starts from canonical
+`4b6dd1d38cffeaf3cc1ac3effea0f8ede8771194`. Phase 20 layers temporary
+multi-participant activities over relevant Phase 18 temporal contracts;
+Phase 18 preserves instance/participant boundaries without implementing that
+coordination. See `architecture/MULTIPARTICIPANT_ACTIVITY_ALIGNMENT.md`.
+
+This adds no P20 dependency to P8's individual civil traveler, no new promotion
+gate beyond the already recorded temporal impact review, and no delivered
+capability. Existing P8 implementation/validation and P8-D/E candidate scopes
+are preserved; future traveling-together integration is a separate consumer.
+No P18/P20 State is created because neither phase has delivered implementation.
+
 ## P8-A — Factual Geography
 
 **Status: CANONICAL, IMPLEMENTED, INDEPENDENTLY REVIEWED, AND INTEGRATION-VALIDATED.**

@@ -26,11 +26,19 @@ Existing validation/guards remain coherence tools for supported operations.
   retrofit consume applicable P12/P13 state/compatibility boundaries. A pure
   extension contract may precede persistence, but cannot claim saved-mod-world
   support. No blanket dependency on all those phases or on P17.
+  Multi-participant activity adapters consume the relevant P20 participant
+  contract/capability; the basic mod platform need not wait for all of P20,
+  and P20's official implementation does not require the P19 loader.
 - **Public boundary:** presentation-independent semantic APIs/hooks; registries,
   policies/modifiers/pipelines only where independent contributors need them.
   Resolve ordering, duplicates/conflicts and causal RNG deterministically.
   A future alternate renderer/application can interact with the same simulation;
   transport/extraction, including Unity-hosted IPC fallback, needs its own design.
+  A code mod can define a new activity and role/requirement, participation and
+  participant-effect policies using supported semantic contracts, without editing
+  `NpcRuntime` or requiring a special activity manager added to the base game.
+  This preserves arbitrary future arrangements without implementing every role
+  or arrangement up front or introducing a universal workflow engine.
 - **Generation:** modules may consume earlier stage outputs, generate persistent
   domain data, contribute scoring/policies or add dependency-ordered stages.
   New-world-only participation is valid. Existing-world support is a separate,

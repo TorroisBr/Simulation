@@ -43,3 +43,12 @@ progress, observation and command adapters against this boundary before promotio
 Keep spatial/travel domain/application seams independent of presentation where
 practical; no mod loader, universal extension registry or new scheduler is added
 to P8. Hooks follow real domain operations. Mod security is not spatial authority.
+
+## Shared-activity boundary
+
+P8's first traveler remains one civil Person; P20 adds no new P8 closure gate.
+Future traveling-together activities consume the applicable promoted travel
+and P18/P20 capabilities while retaining factual position and effects for each
+participant under their owning authority. Neither co-travel nor shared context
+creates a synthetic NPC or requires persistent Group membership. Legacy parties
+are not migrated or certified as P20 capability by this documentation change.

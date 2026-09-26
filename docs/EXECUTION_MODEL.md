@@ -104,3 +104,22 @@ to P19; no worker may add speculative mod infrastructure or new sleep/theft/need
 gameplay to satisfy P18. Day-based proof fixtures may remain explicitly scoped,
 but a worker may not turn their daily cadence into the permanent actor or travel
 contract. Domain validation is distinct from adversarial player/mod security.
+
+## Multi-participant activity scope review
+
+Use `architecture/MULTIPARTICIPANT_ACTIVITY_ALIGNMENT.md` for the additional
+requirement accepted against canonical `4b6dd1d`. P18 technical review must
+distinguish definition, instance identity/lifecycle and participant identity.
+An individual proving slice is sufficient for P18, but cannot establish a
+permanent one-Activity-to-one-Actor or NPC-owned authority contract. P20 layers
+formation, shared execution and coordinated participant commitments on relevant
+P18 capabilities; no reverse P18 → waits-for-P20 gate is introduced.
+
+Include formation/agreements, role/count constraints when applicable, participant
+IDs, future reservation intervals, scheduled start, lifecycle/context and
+participant-specific effects in the causal inventory when supported. Preserve
+coherent mutation boundaries and deterministic decisions/ordering. Persistent
+Group membership and aggregate military execution are separate contracts.
+Single-actor P8/P11 candidates and delivered capabilities are not invalidated
+merely by their bounded scope. Review future broad temporal/mod/save claims
+for these boundaries; do not dispatch gameplay or invent a workflow engine.
