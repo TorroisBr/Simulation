@@ -1,12 +1,12 @@
 # Phase 11 State — Actor Perspective & Commands v1
 
-**Status:** IN_PROGRESS — integrated candidate; canonical promotion pending
+**Status:** INTEGRATED AND REVIEWED CANDIDATE — canonical promotion pending
 
 **Canonical base:** `codex/phase8/canonical` at `c5b2e06b534f4b2af38f10e6510b10800aa8b28c`
 
 **Architecture baseline:** `c285466c355103d3637ac165246591b72eb7bda0`
 
-**Integrated code/design candidate:** `5d16851172ee8fd0815f944dcbec89f87966c581` on `codex/phase11/ActorChoiceIntegrationRefresh`
+**Integrated code/design candidate:** `a281d98d6a5917c79609da8d574625cede0535db` on `codex/phase11/ActorChoiceIntegrationRefresh` (code/design integration at `5d16851172ee8fd0815f944dcbec89f87966c581`; final State/review record at the listed commit)
 
 The candidate combines the P11 actor-choice implementation and diagnostics
 with the separately validated P8-E integration candidate. P8-E remains
@@ -46,7 +46,7 @@ capability dependency for this rule.
 | P11-01 | Stable actor-choice input store, ordered dispositions, terminal attempt lifecycle | CANDIDATE COMPLETE | Store branch `codex/phase11/ActorChoiceStore`, commit `f1221d4e3275e21a876076350ca12058927dbaa9`; independent review against c5b2 and both alignment records; `ActorChoiceStoreTests` 9/9. |
 | P11-02 | Typed WorldCommand ingress and trusted local UI capture | INTEGRATED CANDIDATE | Integrated with the ordinary WorldCommand/domain boundary; `ActorActionChoiceCommandTests` 6/6. No GM authority expansion. |
 | P11-03 | Runtime application at the ordinary actor decision boundary and existing SellGoods path | INTEGRATED CANDIDATE | One-shot handling and no-fallback semantics implemented; exact P8-C position/location eligibility applied to input and autonomous local SellGoods. `ActorChoice` tests 22/22. |
-| P11-04 | Deterministic diagnostics, invariants, focused integration tests, and acceptance review | INTEGRATED CANDIDATE; FINAL COMBINED REVIEW PENDING | Actor-choice state is included in canonical snapshots, diffs, formatting, and invariant validation. Diagnostics tests are included in the integration suite; final whole-candidate review remains outstanding. |
+| P11-04 | Deterministic diagnostics, invariants, focused integration tests, and acceptance review | INTEGRATED CANDIDATE; FINAL COMBINED REVIEW PASS | Actor-choice state is included in canonical snapshots, diffs, formatting, and invariant validation. Independent final review of the complete candidate passed at `a281d98`; `git diff --check c5b2e06 a281d98` passed. |
 
 The initial integration review found two defects: autonomous SellGoods could
 execute during P8-C transit using stale `CurrentCity`, and P8-E interruption
@@ -77,6 +77,13 @@ Roadmap and Execution Model, and both 2026-09-26 alignment records.
   diagnostics hotspots, not because the SellGoods semantics require civil
   travel.
 
+The final combined review passed. It confirmed one-shot/no-fallback semantics,
+daily precedence, stable PersonId/action identity, diagnostics parity, the
+exact P8-C position rule for explicit and autonomous SellGoods, and correct
+conditional boundaries for P18/P20/P19. It also confirmed that P8-E is only
+included for shared-hotspot integration and still requires its own promotion
+gate before this branch can be promoted.
+
 ## Validation evidence
 
 All results below are from the merged integration worktree at candidate code
@@ -93,19 +100,16 @@ with zero failures and skips.
 | Official complete Smoke | 5/5 | `Library/ValidationResults/P11IntegrationRefresh/EditMode-20260926-205015-4d3539cf16654047b45c4bf92debba68.xml` and `.log` |
 
 Focused and final gates were run after the runtime/day fixes. The final
-combined-candidate independent review and `git diff --check` are the remaining
-integration gates before the required human canonical-promotion approval.
+combined-candidate independent review and `git diff --check c5b2e06 a281d98`
+both passed. The remaining gate is human canonical-promotion approval, after
+the separately recorded P8-E promotion sequence is satisfied.
 P8-E's implementation and promotion evidence remain recorded independently in
 `docs/PHASE8_STATE.md`.
 
 ## Next actions
 
-1. Finish independent review of this exact combined candidate and run
-   `git diff --check` against the canonical base.
-2. Record the final review result, exact integration SHA and diff-check in this
-   State; publish the candidate branch.
-3. Respect the explicit human promotion gate. Promote P8-E first because its
+1. Respect the explicit human promotion gate. Promote P8-E first because its
    candidate code is part of this branch, then refresh this candidate's base
    record and re-evaluate P11 promotion readiness.
-4. After successful promotion, recompute the full DAG and continue only the
+2. After successful promotion, recompute the full DAG and continue only the
    newly unblocked Phase work.
