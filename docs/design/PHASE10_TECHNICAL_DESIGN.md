@@ -1,20 +1,29 @@
 # Phase 10 Technical Design Proposal — UNAPPROVED
 
-**Status:** bounded technical design proposal. This document assigns no
-checkpoint IDs, does not approve the first content profile, and does not
-authorize implementation. Phase 10 remains `WAIT_DEPENDENCY` for implementation.
+**Status:** bounded technical design proposal — UNAPPROVED. This document
+assigns no checkpoint IDs, changes no Phase State/Roadmap, does not approve the
+first content profile, and does not authorize implementation. Implementation
+remains `WAIT_DEPENDENCY` on promoted P9 capability and this phase's accepted
+profile/checkpoint scope.
 
-**Independent technical-design review:** pending.
+**Independent technical-design review:** PASS for the candidate semantics.
+The final P9-profile boundary wording clarification was independently reviewed
+at P10 document commit `a914a0d7d9fb5f8f2f74d5b87b15923a12a9af78`. Review
+approval does not constitute formal P10 acceptance or implementation approval.
 
-**Baseline:** Phase 8 canonical architecture baseline
-`c5b2e06b534f4b2af38f10e6510b10800aa8b28c`; reviewed Phase 10 entry proposal
-`b0158984c70c008cacdfe4390463b9250ad1f0ad`; refreshed, independently reviewed
-Phase 9 entry proposal `05ba224da8cead8221d12fb1b9dc64da5a3b61d2`; refreshed,
-independently reviewed Phase 9 technical design
-`7bb3312c7b045067dd2dee55451d71c8fd796880`. The canonical Phase 8 State at
-this baseline records P8-A/B/C/D promoted. P9 proposals define a compatible
-pipeline contract but do not constitute a promoted P9 implementation
-capability.
+**Reviewed baseline:** `codex/phase8/canonical` at
+`c5b2e06b534f4b2af38f10e6510b10800aa8b28c`, containing architecture refresh
+`c285466c355103d3637ac165246591b72eb7bda0`; Phase 8 State records P8-A/B/C/D
+promoted and P8-E design-approved with implementation/promotion pending. The
+review also covered the P9 checkpoint-contract proposal
+`44f731490bc4fb9bade72784dd5c064d26e320df`, the intraday/extensibility
+alignment at `c285466c355103d3637ac165246591b72eb7bda0`, and the
+multi-participant-activity alignment at
+`4b6dd1d38cffeaf3cc1ac3effea0f8ede8771194`. Existing reviewed entry baselines:
+P10 `b0158984c70c008cacdfe4390463b9250ad1f0ad`; P9 refreshed entry
+`05ba224da8cead8221d12fb1b9dc64da5a3b61d2` and technical design
+`7bb3312c7b045067dd2dee55451d71c8fd796880`. P9 contract review does not mean
+its implementation capability is promoted.
 
 ## 1. Recommendation and bounded first profile
 
