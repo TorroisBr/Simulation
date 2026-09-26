@@ -308,6 +308,7 @@ public static class WorldStateInvariantValidator
             }
         }
 
+        ValidateActorChoices(snapshot.ActorChoices, personIds, snapshot.AbsoluteDay, issues);
         ValidateParentages(snapshot.Parentages, personIds, issues);
         ValidateSpatialAuthority(snapshot, issues);
         ValidateSpatialRouteKnowledgeAndPlans(snapshot, personIds, issues);
@@ -4225,6 +4226,57 @@ public static class WorldStateInvariantValidator
         if (float.IsNaN(plan.PurchasePricePerItem) || float.IsInfinity(plan.PurchasePricePerItem))
         {
             AddWarning(issues, "NonFiniteTradePlanPrice", identity, "Merchant trade plan purchase price is not finite.");
+        }
+    }
+
+    private static void ValidateActorChoices(
+        IReadOnlyList<WorldStateActorChoiceSnapshot> choices,
+        HashSet<string> personIds,
+        long absoluteDay,
+        List<WorldStateInvariantIssue> issues)
+    {
+        HashSet<string> ids = new HashSet<string>(StringComparer.Ordinal);
+        HashSet<string> commands = new HashSet<string>(StringComparer.Ordinal);
+        HashSet<long> sequences = new HashSet<long>();
+        foreach (WorldStateActorChoiceSnapshot choice in choices)
+        {
+            if (choice == null) { AddError(issues, "ActorChoiceNull", "actor-choice", "Actor choice is null."); continue; }
+            string id = choice.InputId ?? "actor-choice";
+            if (string.IsNullOrWhiteSpace(choice.InputId) || !ids.Add(choice.InputId)) AddError(issues, "ActorChoiceIdInvalid", id, "Actor choice input ID is missing or duplicated.");
+            if (string.IsNullOrWhiteSpace(choice.WorldCommandId) || !commands.Add(choice.WorldCommandId)) AddError(issues, "ActorChoiceCommandInvalid", id, "Actor choice command ID is missing or duplicated.");
+            if (choice.InputSequence <= 0 || !sequences.Add(choice.InputSequence)) AddError(issues, "ActorChoiceSequenceInvalid", id, "Actor choice input sequence must be positive and unique.");
+            if (string.IsNullOrWhiteSpace(choice.PersonId) || !personIds.Contains(choice.PersonId)) AddError(issues, "ActorChoicePersonMissing", id, "Actor choice actor PersonId is absent.");
+            if (string.IsNullOrWhiteSpace(choice.ActionDefinitionId)) AddError(issues, "ActorChoiceActionMissing", id, "Actor choice action definition ID is missing.");
+            if (!Enum.IsDefined(typeof(WorldCommandOrigin), choice.Origin) || !Enum.IsDefined(typeof(WorldCommandAuthorityMode), choice.Authority)) AddError(issues, "ActorChoiceProvenanceInvalid", id, "Actor choice command provenance or authority value is invalid.");
+            if (!Enum.IsDefined(typeof(ActorChoiceInputStatus), choice.Status) || choice.CapturedAbsoluteDay < 0 || choice.CapturedAbsoluteDay > absoluteDay) AddError(issues, "ActorChoiceLifecycleInvalid", id, "Actor choice status or captured day is invalid.");
+            long expected = 1;
+            long previousDay = choice.CapturedAbsoluteDay;
+            ActorChoiceInputStatus derived = ActorChoiceInputStatus.Pending;
+            foreach (ActorChoiceDisposition disposition in choice.Dispositions)
+            {
+                if (disposition == null || disposition.TransitionOrdinal != expected++ || !Enum.IsDefined(typeof(ActorChoiceDispositionKind), disposition.Kind) || disposition.AbsoluteDay < previousDay || disposition.AbsoluteDay > absoluteDay || disposition.ActorTurnRosterOrdinal < 0)
+                { AddError(issues, "ActorChoiceDispositionInvalid", id, "Actor choice disposition ordering or boundary is invalid."); break; }
+                previousDay = disposition.AbsoluteDay;
+                switch (disposition.Kind)
+                {
+                    case ActorChoiceDispositionKind.Deferred:
+                        if (derived != ActorChoiceInputStatus.Pending || !disposition.DeferralReason.HasValue || !Enum.IsDefined(typeof(ActorChoiceDeferralReason), disposition.DeferralReason.Value)) AddError(issues, "ActorChoiceLifecycleTransitionInvalid", id, "Deferred disposition is invalid for the current lifecycle state.");
+                        derived = ActorChoiceInputStatus.Pending; break;
+                    case ActorChoiceDispositionKind.Rejected:
+                        if (derived != ActorChoiceInputStatus.Pending || !disposition.Failure.HasValue || !Enum.IsDefined(typeof(ActorChoiceFailure), disposition.Failure.Value)) AddError(issues, "ActorChoiceLifecycleTransitionInvalid", id, "Rejected disposition is invalid for the current lifecycle state.");
+                        derived = ActorChoiceInputStatus.Rejected; break;
+                    case ActorChoiceDispositionKind.DispatchStarted:
+                        if (derived != ActorChoiceInputStatus.Pending || string.IsNullOrWhiteSpace(disposition.DecisionRecordId)) AddError(issues, "ActorChoiceLifecycleTransitionInvalid", id, "Dispatch disposition is invalid for the current lifecycle state.");
+                        derived = ActorChoiceInputStatus.ConsumedAwaitingTerminalAttempt; break;
+                    case ActorChoiceDispositionKind.AttemptReturned:
+                        if (derived != ActorChoiceInputStatus.ConsumedAwaitingTerminalAttempt || !disposition.AttemptOutcome.HasValue || (disposition.AttemptOutcome != ActorChoiceAttemptOutcome.Succeeded && disposition.AttemptOutcome != ActorChoiceAttemptOutcome.Failed && disposition.AttemptOutcome != ActorChoiceAttemptOutcome.ReturnedNoResult)) AddError(issues, "ActorChoiceLifecycleTransitionInvalid", id, "Returned attempt is invalid for the current lifecycle state.");
+                        derived = ActorChoiceInputStatus.AttemptReturned; break;
+                    case ActorChoiceDispositionKind.AttemptThrew:
+                        if (derived != ActorChoiceInputStatus.ConsumedAwaitingTerminalAttempt || disposition.AttemptOutcome != ActorChoiceAttemptOutcome.Threw) AddError(issues, "ActorChoiceLifecycleTransitionInvalid", id, "Thrown attempt is invalid for the current lifecycle state.");
+                        derived = ActorChoiceInputStatus.AttemptThrew; break;
+                }
+            }
+            if (derived != choice.Status) AddError(issues, "ActorChoiceStatusMismatch", id, "Actor choice status does not match its ordered disposition history.");
         }
     }
 

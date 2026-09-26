@@ -28,6 +28,7 @@ public static class WorldStateCanonicalWriter
         AppendLine(output, "METADATA", "TheftOutcomeCount", IntValue(snapshot.TheftOutcomeCount));
         AppendLine(output, "METADATA", "CrimeKnowledgeCount", IntValue(snapshot.CrimeKnowledgeCount));
         AppendLine(output, "METADATA", "SocialReactionCount", IntValue(snapshot.SocialReactionCount));
+        AppendLine(output, "METADATA", "ActorChoiceInputCount", IntValue(snapshot.ActorChoices.Count));
         AppendLine(output, "METADATA", "SpatialRouteKnowledgeStatePresent", BoolValue(snapshot.Spatial.HasSpatialRouteKnowledgeState));
         if (snapshot.Spatial.SpatialRouteKnowledgeRevision.HasValue)
         {
@@ -375,6 +376,25 @@ public static class WorldStateCanonicalWriter
                 person.CompletedYears.HasValue ? Int64Value(person.CompletedYears.Value) : null,
                 person.ResidenceSettlementRuntimeId,
                 person.DeathAbsoluteDay.HasValue ? Int64Value(person.DeathAbsoluteDay.Value) : null);
+        }
+
+        foreach (WorldStateActorChoiceSnapshot choice in snapshot.ActorChoices)
+        {
+            AppendLine(output, "ACTOR_CHOICE", choice.InputId, choice.WorldCommandId,
+                Int64Value(choice.InputSequence), choice.PersonId, choice.ActionDefinitionId,
+                EnumValue(choice.Origin), EnumValue(choice.Authority), Int64Value(choice.CapturedAbsoluteDay),
+                EnumValue(choice.Status));
+            foreach (ActorChoiceDisposition disposition in choice.Dispositions)
+            {
+                AppendLine(output, "ACTOR_CHOICE_DISPOSITION", choice.InputId,
+                    Int64Value(disposition.TransitionOrdinal), EnumValue(disposition.Kind),
+                    Int64Value(disposition.AbsoluteDay), IntValue(disposition.ActorTurnRosterOrdinal),
+                    disposition.DeferralReason.HasValue ? EnumValue(disposition.DeferralReason.Value) : null,
+                    disposition.Failure.HasValue ? EnumValue(disposition.Failure.Value) : null,
+                    disposition.DecisionRecordId,
+                    disposition.AttemptOutcome.HasValue ? EnumValue(disposition.AttemptOutcome.Value) : null,
+                    disposition.ReturnedResultStatus.HasValue ? EnumValue(disposition.ReturnedResultStatus.Value) : null);
+            }
         }
 
         foreach (WorldStateParentageSnapshot parentage in snapshot.Parentages)
