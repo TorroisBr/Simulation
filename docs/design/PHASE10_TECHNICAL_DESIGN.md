@@ -8,9 +8,10 @@ authorize implementation. Phase 10 remains `WAIT_DEPENDENCY` for implementation.
 
 **Baseline:** Phase 8 canonical architecture baseline
 `c5b2e06b534f4b2af38f10e6510b10800aa8b28c`; reviewed Phase 10 entry proposal
-`b0158984c70c008cacdfe4390463b9250ad1f0ad`; reviewed Phase 9 entry proposal
-`5c1e39957440aee767bfe16d56faa01bee1660aa`; reviewed Phase 9 technical design
-`a89ada7692fd9950fc8424cadaacefaae14ccb80`. The canonical Phase 8 State at
+`b0158984c70c008cacdfe4390463b9250ad1f0ad`; refreshed, independently reviewed
+Phase 9 entry proposal `05ba224da8cead8221d12fb1b9dc64da5a3b61d2`; refreshed,
+independently reviewed Phase 9 technical design
+`7bb3312c7b045067dd2dee55451d71c8fd796880`. The canonical Phase 8 State at
 this baseline records P8-A/B/C/D promoted. P9 proposals define a compatible
 pipeline contract but do not constitute a promoted P9 implementation
 capability.
