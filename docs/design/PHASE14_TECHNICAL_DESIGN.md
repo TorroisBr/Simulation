@@ -49,7 +49,7 @@ At each enabled daily boundary:
 4. Update derived market prices after the production and consumption operations, as in the current daily sequence.
 5. Expose the closing stock and operation outcomes as projections. The material balance for successful source contributions is `closing = opening + sum(applied source quantities) - actual free consumption`.
 
-If a stock mutation guard rejects an operation, the domain operation leaves that operation unapplied and reports rejection; it does not publish a success result. Guard/authority binding remains with the runtime-owned mutation boundary. A later paid-consumption scope would require a separately reviewed atomic stock-and-money contract and is outside this proposal.
+The current `MarketRuntime` stock methods are the aggregate stock authority and mutate directly; the existing runtime mutation-guard binding does not bind `MarketRuntime`. This profile therefore does not assume a market stock guard exists. If the accepted implementation introduces or explicitly binds one, a guard rejection must leave that operation unapplied and report rejection without a success result. Any such binding belongs to the runtime-owned mutation boundary. A later paid-consumption scope would require a separately reviewed atomic stock-and-money contract and is outside this proposal.
 
 ## 5. Determinism, causal identity, and reconstruction
 
@@ -77,10 +77,10 @@ Do not add a general plugin registry, public mod API, loader, package protocol, 
 If a bounded implementation checkpoint is later accepted, keep it on an isolated branch from the then-current canonical base. The likely ownership is:
 
 1. Add stable authored semantic source identity/version and narrowly validate the selected local source profile in City content/configuration.
-2. Add the P14 source/title/custody operation at the domain boundary and compose it with the current market stock mutation guard. Keep `CityRuntime` as coordinator, not owner of new universal rules.
+2. Add the P14 source/title/custody operation at the domain boundary and mutate aggregate stock through the existing `MarketRuntime` stock authority. Do not assume a market mutation guard; compose with a guard only if the accepted implementation introduces or binds one. Keep `CityRuntime` as coordinator, not owner of new universal rules.
 3. Preserve the existing daily economy ordering and Economy.Enabled gate while invoking source operations; constrain the v1 consumer to one City and its own market/population.
 4. Extend deterministic diagnostics/reconstruction projections and focused tests for identity stability, deterministic ordering, complete-add overflow rejection, stock-limited consumption, title/custody distinction, disabled economy, and repeatable same-input results.
-5. Review the full diff against the selected base and run relevant economy, market, population-consumption, mutation-guard, and diagnostics suites. Any required broader regression gates follow the accepted checkpoint and repository execution policy.
+5. Review the full diff against the selected base and run relevant economy, market, population-consumption, and diagnostics suites. Add mutation-guard composition coverage only if the accepted implementation introduces or binds a guard for market stock. Any required broader regression gates follow the accepted checkpoint and repository execution policy.
 
 Likely code surfaces include `CityData`, `CityRuntime`, `MarketRuntime`, `CityProductionResult`, the `SimulationRuntime` economy-pass composition, and authoritative diagnostics/projection components. These are change-risk indicators, not authorization to edit those files. No code or tests are changed by this proposal.
 
