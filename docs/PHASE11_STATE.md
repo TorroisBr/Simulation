@@ -6,7 +6,7 @@
 
 **Architecture baseline:** `c285466c355103d3637ac165246591b72eb7bda0`
 
-**Integrated code/design candidate:** `a281d98d6a5917c79609da8d574625cede0535db` on `codex/phase11/ActorChoiceIntegrationRefresh` (code/design integration at `5d16851172ee8fd0815f944dcbec89f87966c581`; final State/review record at the listed commit)
+**Integrated branch:** `codex/phase11/ActorChoiceIntegrationRefresh`; code/design integration at `5d16851172ee8fd0815f944dcbec89f87966c581`, reviewed candidate at `a281d98d6a5917c79609da8d574625cede0535db`, final State/review record at `9b0ff6259ca6289b76c8b812393e75362e320187`
 
 The candidate combines the P11 actor-choice implementation and diagnostics
 with the separately validated P8-E integration candidate. P8-E remains
