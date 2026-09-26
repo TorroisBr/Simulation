@@ -1,11 +1,6 @@
 # Phase 11 Entry Architecture Proposal
 
-> **Status: product scope resolved; targeted correction against current Phase 8
-> canonical state awaiting independent re-review.** Earlier reviews apply to
-> their earlier baselines only; they are not a review of this correction. The user-selected first consumer and
-> trusted local caller are not implementation approval. This proposal does
-> not amend the Simulation Architecture, Roadmap, Phase Brief, or Phase State.
-> No Phase 11 checkpoint IDs are approved or assigned.
+> **Status: independent review PASS against Phase 8 canonical state `c5b2e06` and the 2026-09-26 alignment records, including the P8-C current-position compatibility addendum.** The user selected the bounded first consumer and trusted local caller, then explicitly resumed full-roadmap execution on 2026-09-26. Implementation checkpoint IDs and current status are recorded in [`../PHASE11_STATE.md`](../PHASE11_STATE.md). This bounded execution record does not amend canonical architecture or promote a canonical branch.
 
 ## Purpose and evidence boundary
 
@@ -36,10 +31,12 @@ This refresh is based on the current `codex/phase8/canonical` state/code at
 `c5b2e06b534f4b2af38f10e6510b10800aa8b28c`, which includes architecture
 baseline `c285466c355103d3637ac165246591b72eb7bda0` (parent
 `4b6dd1d38cffeaf3cc1ac3effea0f8ede8771194`). The current Phase 8 State
-records P8-A through P8-D canonical, including the refreshed P8-D promotion;
-P8-E remains unimplemented. Neither P8-D nor P8-E is a prerequisite for this
-current-city local-market action. No Phase 11 State or approved checkpoint
-decomposition exists; no candidate is promoted by this refresh.
+records P8-A through P8-D canonical, including the refreshed P8-D promotion.
+P8-E is not canonical at c5b2, but its integration candidate
+`07b953bee214728c326a9a121c0f7360382f94a8` is independently reviewed and
+integration-validated. Neither P8-D nor P8-E is a prerequisite for this
+current-city local-market action. No capability dependency is inferred from
+P11's later use of that candidate as a shared-runtime integration base.
 
 Relevant authorities reread against current canonical state: `AGENTS.md`, `docs/SIMULATION_ARCHITECTURE.md`
 (§§2, 11–12, 81–85, 91–92), `docs/ROADMAP.md`, `docs/EXECUTION_MODEL.md`, `docs/PHASE5_STATE.md`,
@@ -138,6 +135,19 @@ best sale, not a general actor-facing list of typed sale candidates, and its
 runtime action contains content/runtime references. This is evidence for the
 consumer, not an approved candidate-list or input-payload contract. This
 current-city market sale requires no travel capability.
+
+Because P8-C Person positions are optional and P8-E can change the Person-level
+position without updating legacy `NpcRuntime.CurrentCity`, P11-03 must
+conditionally reconcile the two facts before using that city as the local
+market. No P8-C position entry preserves current legacy behavior. An
+`InTransit` position follows the existing `Deferred/Traveling` path. At a
+stable position, only the exact `LocationId` bound to the actor's current City
+validates this local context. Sharing the City's anchor Hex does not prove
+Location entry or access; a Hex, Crossing, different Location, or missing
+City binding is unavailable and terminally rejects the one-shot choice without
+autonomous fallback. The check relies on `PersonSpatialPositionStore`,
+`LegacySpatialAnchorBindingStore`, and `SpatialAuthorityStore`; it introduces
+no P8-E capability dependency and no security/authorization validation.
 
 ### Existing external command path
 
@@ -244,7 +254,7 @@ travel/reservation and scheduled-directive precedence remains intact.
 
 | Candidate | What it could prove | Constraints and dependencies |
 |---|---|---|
-| **Selected:** one actor-scoped local-market `SellGoods` choice | Replaces that actor's autonomous action choice for one decision. The trusted local UI selects the action for a living Person-backed materialized merchant with a current city and no active trade plan. Existing `MerchantSystem` plans the local-market sale from that actor's inventory and `CommercialKnowledge`; execution revalidates current market truth. | The input identifies `PersonId` and the supported action definition, not item/quantity or outcome. It is consumed at the next normal `EvaluateAction` boundary, after existing scheduled directives and activity exclusions. No controller grant/auth/security layer or travel capability is added. `CreateRequestedAction` alone still supplies no causal input record. |
+| **Selected:** one actor-scoped local-market `SellGoods` choice | Replaces that actor's autonomous action choice for one decision. The trusted local UI selects the action for a living Person-backed materialized merchant with a current city and no active trade plan. Existing `MerchantSystem` plans the local-market sale from that actor's inventory and `CommercialKnowledge`; execution revalidates current market truth. | The input identifies `PersonId` and the supported action definition, not item/quantity or outcome. It is consumed at the next normal `EvaluateAction` boundary, after existing scheduled directives and activity exclusions. If optional P8-C position exists, it must be at the exact Location bound to `CurrentCity`; transit defers and a stable mismatch rejects with no fallback. A Hex anchor alone proves no Location access. No controller grant/auth/security layer or travel capability is added. `CreateRequestedAction` alone still supplies no causal input record. |
 | GM/external `Request` through `ResolveConflict` or `PlaceOpposition` | Exercises the existing normal-resolver command path and its distinction from supported forced outcomes. | **Not selected** as the first consumer and not included in the selected actor-choice scope. Existing command support does not imply additional command, actor-control, or ForceOutcome permissions. |
 | GM `Declare` through a supported existing command | Exercises a typed declared operation through its existing domain authority; Knowledge grants can change Knowledge without asserting underlying Truth. | **Not selected** as the first consumer or part of the selected actor-choice scope. Each command has distinct truth/knowledge semantics and capability; there is no blanket `Declare` support. |
 | Remote trade, travel, or route intent | Could later join actor choice, spatial perspective, and domain execution. | Not part of the selected local-market sale. Civil Travel is a soft ordering for Phase 11, not a dependency for this consumer; a later travel consumer waits for the exact promoted spatial/travel capability it uses. |
@@ -337,16 +347,17 @@ current allocator's local sequence does not alone prove ordering across a
 save/load or fork. Exact schema/versioning remains Phase 12/13 work; Phase 11
 must not claim to solve those phases by adding a generic event log.
 
-## Candidate checkpoint decomposition — UNAPPROVED
+## Checkpoint decomposition
 
-The units below are candidate design/implementation boundaries only. They have
-no Phase 11 IDs, approval, or implementation authorization.
+The work units below map to the implementation checkpoint IDs recorded in
+`../PHASE11_STATE.md`. Their contract remains bounded to the selected local
+SellGoods consumer.
 
-| Candidate unit (UNAPPROVED) | Candidate closure evidence | Dependencies / ordering |
+| Work unit | Closure evidence | Dependencies / ordering |
 |---|---|---|
-| Actor eligibility, perspective, and one-choice contract | Use the supported configured `SellGoods` action for a living Person-backed materialized `NpcRuntime` with a current city and no active trade plan; actor knowledge remains owned by that runtime. The UI chooses the action, while MerchantSystem chooses the local-market candidate and quantity. | Product scope is selected. Preserve the existing current-city merchant/action requirements; do not add a broader actor model or controller grants. |
+| Actor eligibility, perspective, and one-choice contract | Use the supported configured `SellGoods` action for a living Person-backed materialized `NpcRuntime` with a current city and no active trade plan; actor knowledge remains owned by that runtime. If optional P8-C position exists, require the exact Location bound to that City; transit defers, while a stable mismatch (including only sharing its anchor Hex) is unavailable. The UI chooses the action, while MerchantSystem chooses the local-market candidate and quantity. | Product scope is selected. Preserve the existing current-city merchant/action requirements; do not add a broader actor model or controller grants. |
 | Logical input boundary and envelope contract | Capture a normalized `PersonId` plus `NpcActionData.DefinitionId` through a dedicated typed `WorldCommand`/domain ingress; consume it at the next ordinary `EvaluateAction` before autonomous choice. Existing scheduled directives and activity exclusions retain their current precedence. | Use the normal actor-turn loop order. The one-shot choice owns that decision: if ordinary eligibility rejects it or the provider cannot construct it, record terminal rejection and do not call autonomous selection for a different action in that turn. If constructed, attempt it once; record the ordinary current-world domain result, including failure/partial result, without autonomous fallback. The payload does not reuse GM `Declare` or `ForceOutcome` authority. |
-| Consumer adapter through existing domain authority | A bounded choice reaches the existing local-market `SellGoods` path through `MerchantSystem` and the current market transaction service, revalidates current market truth, and records no fabricated result. | Requires the local merchant/action composition and a contract for actor `CommercialKnowledge` access. No travel capability, blanket P8/P9 dependency, or new GM command authority is selected. |
+| Consumer adapter through existing domain authority | A bounded choice reaches the existing local-market `SellGoods` path through `MerchantSystem` and the current market transaction service, revalidates current market truth, and records no fabricated result. | Requires the local merchant/action composition, actor `CommercialKnowledge` access, and conditional reads of the promoted P8-C position/binding/spatial authorities. No P8-E capability, blanket P8/P9 dependency, or new GM command authority is selected. |
 | Causal-input recording and integration | Captures the selected actor/action, decision boundary, and applied/rejected disposition separately from the sale outcome. The pending choice is authoritative future input. | Integrates the actor-choice input owner, runtime decision boundary, decision records and deterministic diagnostics. Phase 12/13 still own full continuation/reconstruction formats. |
 | Phase-specific regression and acceptance review | Tests Knowledge-bounded action planning, ordinary current-truth revalidation, one-shot use, scheduled-directive precedence, deterministic actor order, and unchanged GM command semantics. | Follows implementation and independent review; long-run validation is required only if daily-loop or long-horizon behavior changes. |
 
