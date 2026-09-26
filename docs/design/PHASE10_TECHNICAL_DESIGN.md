@@ -13,8 +13,9 @@ approval does not constitute formal P10 acceptance or implementation approval.
 
 **Reviewed baseline:** `codex/phase8/canonical` at
 `c5b2e06b534f4b2af38f10e6510b10800aa8b28c`, containing architecture refresh
-`c285466c355103d3637ac165246591b72eb7bda0`; Phase 8 State records P8-A/B/C/D
-promoted and P8-E design-approved with implementation/promotion pending. The
+`c285466c355103d3637ac165246591b72eb7bda0`; at that historical baseline,
+Phase 8 State recorded P8-A/B/C/D promoted and P8-E design-approved with
+implementation/promotion pending. The
 review also covered the P9 checkpoint-contract proposal
 `44f731490bc4fb9bade72784dd5c064d26e320df`, the intraday/extensibility
 alignment at `c285466c355103d3637ac165246591b72eb7bda0`, and the
@@ -24,6 +25,14 @@ P10 `b0158984c70c008cacdfe4390463b9250ad1f0ad`; P9 refreshed entry
 `05ba224da8cead8221d12fb1b9dc64da5a3b61d2` and technical design
 `7bb3312c7b045067dd2dee55451d71c8fd796880`. P9 contract review does not mean
 its implementation capability is promoted.
+
+**Targeted P8-E promotion revalidation:** checked against Phase 8 canonical
+tip `77f3e1a` (P8-E promotion `d95b60d174cb0b17df09e2775b3cbd134c74b21f`);
+architecture baseline remains `c285466c355103d3637ac165246591b72eb7bda0`,
+with both alignment records current. P8-E is now canonical. The proposed daily
+local-topology profile consumes P8 Location/anchor and local-topology facts,
+but no P8-E route-plan/civil-travel, intraday temporal, or shared-activity
+behavior. P8-E is therefore not a blanket dependency for this profile.
 
 ## 1. Recommendation and bounded first profile
 
@@ -228,7 +237,7 @@ bounded profile while preserving compatible semantic seams.
 
 | Track | Current dependency/readiness consequence |
 |---|---|
-| P8-A/B/C/D | Canonical promoted contracts are available. This profile requires P8-A Location/anchor truth and the P8-C-relevant site anchor contract; P8-B is conditional on chosen passage facts. P8-D route Knowledge/planning and P8-E civil travel are not blanket P10 dependencies. |
+| P8-A/B/C/D/E | Canonical promoted contracts are available at `77f3e1a`. This profile requires P8-A Location/anchor truth and the P8-C-relevant site anchor contract; P8-B is conditional on chosen passage facts. It consumes no P8-E route/plan/travel behavior, so P8-E is not a dependency for the proposed daily local-topology profile. |
 | P9 | Reviewed entry and technical proposals provide the intended pipeline contract, but P9 implementation/capability is not promoted. P10 may design against the contract; actual generator composition must wait for the relevant promoted P9 capability. |
 | LocalTopology | Existing store is not yet a LocationId-neutral owner contract. The bounded migration/adapter and its consuming integrations must be implemented and promoted before P10 can publish these facts. |
 | P18/P20 | Not required by the recommended daily-only, single-site profile. Add dependencies only if the approved scope actually initializes temporal activity or multi-participant facts. |
