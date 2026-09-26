@@ -83,6 +83,7 @@ public sealed class SimulationRuntime
     private readonly PersonSpatialPositionStore personSpatialPositionStore;
     private readonly SpatialRouteKnowledgeStore spatialRouteKnowledgeStore;
     private readonly PersonRoutePlanStore personRoutePlanStore;
+    private readonly P8ETravelTransactionCoordinator p8eTravelTransactionCoordinator;
     private readonly SpatialRoutePlanningSystem spatialRoutePlanningSystem;
     private readonly ArmedForceStore armedForceStore;
     private readonly ContingentManpowerStateStore contingentManpowerStateStore;
@@ -147,6 +148,7 @@ public sealed class SimulationRuntime
     public PersonSpatialPositionStore PersonSpatialPositionStore => personSpatialPositionStore;
     public SpatialRouteKnowledgeStore SpatialRouteKnowledgeStore => spatialRouteKnowledgeStore;
     public PersonRoutePlanStore PersonRoutePlanStore => personRoutePlanStore;
+    public P8ETravelTransactionCoordinator P8ETravelTransactionCoordinator => p8eTravelTransactionCoordinator;
     public SpatialRoutePlanningSystem SpatialRoutePlanningSystem => spatialRoutePlanningSystem;
     public ArmedForceStore ArmedForceStore => armedForceStore;
     public ContingentManpowerStateStore ContingentManpowerStateStore => contingentManpowerStateStore;
@@ -221,6 +223,16 @@ public sealed class SimulationRuntime
         long expectedActorPlanRevision,
         out PersonRoutePlanFailure failure)
     {
+        if (selectedOutcome?.Request?.ActorPersonId != null
+            && personRoutePlanStore.TryGetCurrent(selectedOutcome.Request.ActorPersonId, out PersonRoutePlan existing)
+            && (existing.Status == PersonRoutePlanStatus.Active || existing.Status == PersonRoutePlanStatus.Accepted)
+            && personSpatialPositionStore.TryGetPosition(existing.ActorPersonId, out PersonSpatialPosition position)
+            && position.IsInTransit)
+        {
+            failure = PersonRoutePlanFailure.Create(PersonRoutePlanFailureCode.InvalidPlan,
+                "A route cannot be replaced while the Person is in transit.");
+            return false;
+        }
         return personRoutePlanStore.TryAcceptPlan(
             selectedOutcome,
             decisionIdentity,
@@ -569,6 +581,9 @@ public sealed class SimulationRuntime
         this.personSpatialPositionStore = resolvedPersonSpatialPositionStore;
         this.spatialRouteKnowledgeStore = resolvedSpatialRouteKnowledgeStore;
         this.personRoutePlanStore = resolvedPersonRoutePlanStore;
+        p8eTravelTransactionCoordinator = new P8ETravelTransactionCoordinator(
+            resolvedPersonSpatialPositionStore, resolvedPersonRoutePlanStore, resolvedSpatialRouteKnowledgeStore,
+            resolvedSpatialAuthorityStore.PassageAuthority);
         this.spatialRoutePlanningSystem = resolvedSpatialRoutePlanningSystem;
         this.armedForceStore = resolvedArmedForceStore;
         this.contingentManpowerStateStore = resolvedManpowerStateStore;

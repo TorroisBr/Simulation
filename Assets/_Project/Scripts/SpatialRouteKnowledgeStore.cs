@@ -10,8 +10,8 @@ public sealed class SpatialRouteKnowledgeStore : IAuthoritativeMutationGuardBind
 {
     private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
     private readonly PersonStore personStore;
-    private readonly Dictionary<string, List<SpatialObservation>> observationsByActor = new Dictionary<string, List<SpatialObservation>>(StringComparer.Ordinal);
-    private readonly Dictionary<string, long> actorRevisions = new Dictionary<string, long>(StringComparer.Ordinal);
+    private Dictionary<string, List<SpatialObservation>> observationsByActor = new Dictionary<string, List<SpatialObservation>>(StringComparer.Ordinal);
+    private Dictionary<string, long> actorRevisions = new Dictionary<string, long>(StringComparer.Ordinal);
     private long revision;
 
     public SpatialRouteKnowledgeStore(PersonStore personStore)
@@ -20,6 +20,30 @@ public sealed class SpatialRouteKnowledgeStore : IAuthoritativeMutationGuardBind
     }
 
     public long Revision => revision;
+    internal bool TryPrepareObservation(PersonId actor, SpatialObservation observation, long currentWorldDay,
+        long expectedRevision, out PreparedSpatialKnowledgeChange prepared, out SpatialKnowledgeFailure failure)
+    {
+        prepared = null;
+        if (!mutationGuardBinding.CanMutate)
+            return Fail(SpatialKnowledgeFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.", out failure);
+        if (revision != expectedRevision)
+            return Fail(SpatialKnowledgeFailureCode.RevisionMismatch, "Spatial Knowledge changed during travel preparation.", out failure);
+        SpatialRouteKnowledgeStore copy = Clone(personStore);
+        if (!copy.TryRecordObservation(actor, observation, currentWorldDay, out failure)) return false;
+        prepared = new PreparedSpatialKnowledgeChange(this, revision, copy.revision,
+            copy.observationsByActor, copy.actorRevisions);
+        return true;
+    }
+
+    internal bool CanInstall(PreparedSpatialKnowledgeChange prepared) => prepared != null
+        && ReferenceEquals(prepared.Owner, this) && revision == prepared.ExpectedRevision;
+
+    internal void InstallPrepared(PreparedSpatialKnowledgeChange prepared)
+    {
+        observationsByActor = prepared.ObservationsByActor;
+        actorRevisions = prepared.ActorRevisions;
+        revision = prepared.NextRevision;
+    }
     public int ObservationCount
     {
         get
@@ -359,4 +383,16 @@ public sealed class SpatialKnowledgeInvariantReport
         result.Sort(StringComparer.Ordinal);
         Violations = new ReadOnlyCollection<string>(result);
     }
+}
+
+internal sealed class PreparedSpatialKnowledgeChange
+{
+    internal readonly SpatialRouteKnowledgeStore Owner;
+    internal readonly long ExpectedRevision;
+    internal readonly long NextRevision;
+    internal readonly Dictionary<string, List<SpatialObservation>> ObservationsByActor;
+    internal readonly Dictionary<string, long> ActorRevisions;
+    internal PreparedSpatialKnowledgeChange(SpatialRouteKnowledgeStore owner, long expected, long next,
+        Dictionary<string, List<SpatialObservation>> observations, Dictionary<string, long> actorRevisions)
+    { Owner = owner; ExpectedRevision = expected; NextRevision = next; ObservationsByActor = observations; ActorRevisions = actorRevisions; }
 }
