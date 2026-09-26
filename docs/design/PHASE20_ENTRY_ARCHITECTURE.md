@@ -131,8 +131,8 @@ ownership/interfaces, reservation conflict and stale-state handling, atomic
 start/effect publication, cancellation/release behavior, deterministic
 ordering, reconstruction inputs, and targeted regression coverage. Independent
 technical review must pass before implementation readiness. Independent entry
-review of this proposal is still pending; it is not a substitute for that later
-technical review.
+review of this proposal passed on the entry candidate; it is not a substitute
+for that later technical review.
 
 The two-Person fixture, role-free formation, common test interval, and
 test-owned all-or-none effect boundary are recommended bounded choices within
