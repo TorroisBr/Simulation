@@ -28,6 +28,26 @@ public static class WorldStateSnapshotFormatter
             .Append(" | Faction affiliations: ").Append(WorldStateCanonicalWriter.IntValue(snapshot.FactionAffiliationCount))
             .Append('\n');
 
+        foreach (WorldStateActorChoiceSnapshot choice in snapshot.ActorChoices)
+        {
+            output.Append("\nACTOR CHOICE ").Append(Value(choice.InputId)).Append(" command=")
+                .Append(Value(choice.WorldCommandId)).Append(" sequence=")
+                .Append(WorldStateCanonicalWriter.Int64Value(choice.InputSequence)).Append(" person=")
+                .Append(Value(choice.PersonId)).Append(" action=").Append(Value(choice.ActionDefinitionId))
+                .Append(" origin=").Append(choice.Origin).Append(" authority=").Append(choice.Authority)
+                .Append(" capturedDay=").Append(WorldStateCanonicalWriter.Int64Value(choice.CapturedAbsoluteDay))
+                .Append(" status=").Append(choice.Status).Append('\n');
+            foreach (ActorChoiceDisposition disposition in choice.Dispositions)
+            {
+                output.Append("  ").Append(disposition.TransitionOrdinal).Append(" ").Append(disposition.Kind)
+                    .Append(" day=").Append(disposition.AbsoluteDay).Append(" roster=")
+                    .Append(disposition.ActorTurnRosterOrdinal).Append(" defer=").Append(disposition.DeferralReason)
+                    .Append(" reject=").Append(disposition.Failure).Append(" decision=")
+                    .Append(Value(disposition.DecisionRecordId)).Append(" attempt=").Append(disposition.AttemptOutcome)
+                    .Append(" result=").Append(disposition.ReturnedResultStatus).Append('\n');
+            }
+        }
+
         foreach (WorldStatePersonSnapshot person in snapshot.Persons)
         {
             if (person == null)

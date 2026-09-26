@@ -12,7 +12,8 @@ public enum WorldCommandKind
     GrantSiteKnowledge,
     GrantAdventureIntel,
     ResolveConflict,
-    PlaceOpposition
+    PlaceOpposition,
+    ActorActionChoice
 }
 
 public enum WorldCommandOrigin
@@ -22,7 +23,8 @@ public enum WorldCommandOrigin
     Scenario,
     ExternalImport,
     System,
-    Internal
+    Internal,
+    LocalPlayer
 }
 
 public enum WorldCommandAuthorityMode
@@ -122,6 +124,21 @@ public sealed class RelocateNpcWorldCommandPayload : WorldCommandPayload
     }
 
     private static string RequireId(string value, string name) => string.IsNullOrWhiteSpace(value) ? throw new ArgumentException("RuntimeId is required.", name) : value;
+}
+
+/// <summary>Stable actor and action identifiers supplied by the trusted local UI.</summary>
+public sealed class ActorActionChoiceWorldCommandPayload : WorldCommandPayload
+{
+    public PersonId PersonId { get; }
+    public string ActionDefinitionId { get; }
+
+    public ActorActionChoiceWorldCommandPayload(PersonId personId, string actionDefinitionId)
+    {
+        PersonId = personId ?? throw new ArgumentNullException(nameof(personId));
+        ActionDefinitionId = string.IsNullOrWhiteSpace(actionDefinitionId)
+            ? throw new ArgumentException("Action definition ID is required.", nameof(actionDefinitionId))
+            : actionDefinitionId;
+    }
 }
 
 public sealed class DeclareStackResourceWorldCommandPayload : WorldCommandPayload
