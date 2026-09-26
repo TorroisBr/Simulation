@@ -1,4 +1,4 @@
-# Phase 8 — CLOSED (State-only closure candidate; canonical approval pending)
+# Phase 8 — CLOSED (canonical State-only closure)
 
 ## Latest architecture baseline — 2026-09-26
 
@@ -15,9 +15,9 @@ Earlier dated sections preserve their historical baselines; use this section and
   `codex/phase8/canonical` branch. The canonical branch is pushed and its
   remote SHA was verified; the Phase 7 canonical baseline remains preserved.
 - P8-A through P8-E are canonical on `codex/phase8/canonical` at
-  `77f3e1a47a1e007492a794ea777d681a21a36d09`. This candidate records the
-  Phase 8 closure marker; canonical State remains open until explicit closure
-  approval and State-only promotion. P8-D was promoted from
+  `77f3e1a47a1e007492a794ea777d681a21a36d09`. The approved State-only closure
+  promotion advanced `codex/phase8/canonical` to
+  `0ae50551c8cc662469ef06e05f19389de6fbde7d`. P8-D was promoted from
   integration implementation commit `dccff74831b5ecfa55d32f142185a437afb5579a`
   on `codex/phase8/P8DArchitectureRefreshIntegration`, based on
   `c285466c355103d3637ac165246591b72eb7bda0`, after targeted temporal-profile
@@ -27,9 +27,9 @@ Earlier dated sections preserve their historical baselines; use this section and
   its validated integration candidate at `d95b60d`; the promotion record is
   below.
 
-## Phase 8 closure candidate — State-only
+## Phase 8 closure — State-only promotion
 
-**Proposed status: CLOSED. Canonical closure is pending explicit approval.**
+**Status: CLOSED. The approved State-only closure is canonical at `0ae5055`.**
 
 The Phase 8 closure objective is complete: P8-A (Factual Geography), P8-B
 (Factual Passages), P8-C (Legacy Anchors and Civil Presence), P8-D (Knowledge
@@ -39,10 +39,11 @@ integration reviews, targeted temporal and architecture revalidations, and
 required Unity validation records are retained in this State. The closure
 review found no remaining Phase 8 code or runtime-validation work.
 
-This candidate changes State and reconciles historical readiness/dependency
-wording only; it introduces no runtime behavior. The canonical branch remains
-at the open State until the user approves this State-only closure candidate.
-Closure does not require downstream consumers to be implemented.
+The promotion changes State and reconciles historical readiness/dependency
+wording only; it introduces no runtime behavior. The user approved the
+State-only closure candidate, and `codex/phase8/canonical` was fast-forwarded
+from `77f3e1a` to `0ae5055`. Closure does not require downstream consumers to
+be implemented.
 
 Known limits and deferred consumers retained at closure:
 
