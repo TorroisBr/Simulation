@@ -3,8 +3,9 @@
 **Status:** bounded entry recommendation; independent review passed at content
 commit `027006843327d226e00faf2de05422ca622bf2f4`. This document does not approve
 a checkpoint, assign checkpoint IDs, authorize implementation, or promote any
-Phase 9 candidate capability. The P8-E promotion impact update below requires
-independent review of this refreshed document.
+Phase 9 candidate capability. The P8-E promotion impact update passed
+independent review at `b71505c`; the status does not approve a checkpoint or
+authorize implementation.
 
 **Historical baseline:** architecture, Roadmap, Execution Model and Phase 8 State at
 `c285466c355103d3637ac165246591b72eb7bda0`; reviewed P9 entry proposal
