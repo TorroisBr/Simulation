@@ -2,7 +2,7 @@
 
 **Design base:** `1ac0673d149d684d207c4231d1a91d391fa75880` (`codex/phase18/P18ALogicalTimelineDesign`), descended from canonical architecture `c285466c355103d3637ac165246591b72eb7bda0`.
 **Authority:** `docs/SIMULATION_ARCHITECTURE.md` §§11–12, 91–92; `docs/ROADMAP.md`; `docs/EXECUTION_MODEL.md`; `docs/phases/PHASE18_BRIEF.md`; `docs/design/PHASE18_A_TECHNICAL_DESIGN.md`; `docs/architecture/INTRADAY_EXTENSIBILITY_ALIGNMENT.md`; `docs/architecture/MULTIPARTICIPANT_ACTIVITY_ALIGNMENT.md`.
-**Status:** Proposed bounded technical design for independent review. This is not implementation authorization or capability promotion. No implementation checkpoint IDs are introduced.
+**Status:** Independent technical design review passed on `a7880cd6e6361c2d3441b462d843abc84ed41058`. This design is not implementation authorization or capability promotion. No implementation checkpoint IDs are introduced.
 
 ## 1. Purpose and boundary
 
@@ -110,3 +110,5 @@ Hotspots include P18-B activity/commitment authority, P18-A due-work descriptor/
 P18-B technical design consumes the reviewed P18-A contract at the stated base. Implementation/integration remains blocked until P18-A is promoted and the P18-B implementation boundary is independently reviewed. P18-C consumes A/B contracts and promoted capabilities; P18-D selects only actual consumer integrations. P18-B has no dependency on P9 generation, P14 jobs, P17 War, P19 loader, or P20 implementation. P20 later layers participant formation and shared execution on relevant A/B/C capabilities; P18-B must keep identity/cardinality compatible without waiting for P20.
 
 Excluded: Sleep, Dreams, needs, jobs, robbery/theft/gangs, rituals, War, MegaEventos, travel, SellGoods, actor-choice/decision loops, per-frame polling, role catalogs, participant formation/recruitment, coordinated reservation solving, persistent Group membership, shared consumer effects, universal recurrence/activity frameworks, public mod APIs/loaders, and save/replay implementation. No unresolved semantic issue is identified by this proposal; interval, identity, atomicity, and scope choices are explicit proposals for independent review.
+
+**Independent review:** PASS on `a7880cd6e6361c2d3441b462d843abc84ed41058`. Implementation/integration remains blocked on promoted P18-A capability; this design records no capability promotion.
