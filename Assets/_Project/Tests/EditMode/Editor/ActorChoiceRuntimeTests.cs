@@ -39,6 +39,46 @@ public sealed class ActorChoiceRuntimeTests
     }
 
     [Test]
+    public void ReturnedFailureIsTerminalAndDoesNotRunAutonomousFallback()
+    {
+        Fixture fixture = CreateFixture(
+            inventoryAmount: 10,
+            executionBehavior: TestActionExecutionBehavior.ReturnFailure);
+        ActorChoiceInput input = Capture(fixture, "choice-returned-failure");
+
+        fixture.Runtime.AdvanceDay();
+
+        ActorChoiceInput failed = GetInput(fixture.Runtime, input.InputId);
+        Assert.That(failed.Status, Is.EqualTo(ActorChoiceInputStatus.AttemptReturned));
+        Assert.That(failed.Dispositions[1].AttemptOutcome, Is.EqualTo(ActorChoiceAttemptOutcome.Failed));
+        Assert.That(fixture.TestProvider.CreateCount, Is.EqualTo(1));
+        Assert.That(fixture.TestProvider.ExecutionCount, Is.EqualTo(1));
+        Assert.That(fixture.Records.Decisions.Decisions, Has.Count.EqualTo(1));
+        Assert.That(fixture.Records.Decisions.Decisions[0].Origin, Is.EqualTo(NpcDecisionOrigin.ActorChoice));
+        Assert.That(fixture.Actor.CurrentStatus, Has.No.Member(fixture.FallbackStatus));
+    }
+
+    [Test]
+    public void ThrownAttemptIsRecordedOnceAndDoesNotRunAutonomousFallback()
+    {
+        Fixture fixture = CreateFixture(
+            inventoryAmount: 10,
+            executionBehavior: TestActionExecutionBehavior.Throw);
+        ActorChoiceInput input = Capture(fixture, "choice-thrown");
+
+        Assert.Throws<System.InvalidOperationException>(() => fixture.Runtime.AdvanceDay());
+
+        ActorChoiceInput thrown = GetInput(fixture.Runtime, input.InputId);
+        Assert.That(thrown.Status, Is.EqualTo(ActorChoiceInputStatus.AttemptThrew));
+        Assert.That(thrown.Dispositions[1].AttemptOutcome, Is.EqualTo(ActorChoiceAttemptOutcome.Threw));
+        Assert.That(fixture.TestProvider.CreateCount, Is.EqualTo(1));
+        Assert.That(fixture.TestProvider.ExecutionCount, Is.EqualTo(1));
+        Assert.That(fixture.Records.Decisions.Decisions, Has.Count.EqualTo(1));
+        Assert.That(fixture.Records.Decisions.Decisions[0].Origin, Is.EqualTo(NpcDecisionOrigin.ActorChoice));
+        Assert.That(fixture.Actor.CurrentStatus, Has.No.Member(fixture.FallbackStatus));
+    }
+
+    [Test]
     public void UnavailableSupportedChoiceDoesNotFallBackToAutonomousAction()
     {
         Fixture fixture = CreateFixture(inventoryAmount: 0);
@@ -195,7 +235,10 @@ public sealed class ActorChoiceRuntimeTests
         Assert.That(fixture.Runtime.ActorChoiceStore.ValidateInvariants().IsValid, Is.True);
     }
 
-    private static Fixture CreateFixture(int inventoryAmount, bool forceAutonomousSell = false)
+    private static Fixture CreateFixture(
+        int inventoryAmount,
+        bool forceAutonomousSell = false,
+        TestActionExecutionBehavior executionBehavior = TestActionExecutionBehavior.Success)
     {
         RecordFixture records = SimulationTestFactory.CreateRecordFixture();
         ItemData item = SimulationTestFactory.CreateItem("actor-choice-item", 10f);
@@ -219,9 +262,12 @@ public sealed class ActorChoiceRuntimeTests
         AutonomousSellProvider autonomousSellProvider = forceAutonomousSell
             ? new AutonomousSellProvider(item)
             : null;
-        NpcDecisionSystem decisionSystem = forceAutonomousSell
-            ? new NpcDecisionSystem(new List<INpcActionProvider> { autonomousSellProvider })
-            : new NpcDecisionSystem(new List<INpcActionProvider> { merchantSystem });
+        TestSellActionProvider testProvider = executionBehavior == TestActionExecutionBehavior.Success
+            ? null
+            : new TestSellActionProvider(city, item, executionBehavior);
+        INpcActionProvider actionProvider = testProvider
+            ?? (forceAutonomousSell ? (INpcActionProvider)autonomousSellProvider : merchantSystem);
+        NpcDecisionSystem decisionSystem = new NpcDecisionSystem(new List<INpcActionProvider> { actionProvider });
         if (forceAutonomousSell)
         {
             sellAction.baseUtility = 100f;
@@ -258,7 +304,7 @@ public sealed class ActorChoiceRuntimeTests
         }
 
         return new Fixture(runtime, records, city, actor, item, sellAction, fallbackStatus,
-            autonomousSellProvider);
+            autonomousSellProvider, testProvider);
     }
 
     private static void SetActorAtCurrentCityLocation(Fixture fixture)
@@ -356,6 +402,7 @@ public sealed class ActorChoiceRuntimeTests
         public NpcActionData SellAction { get; }
         public NpcStatusData FallbackStatus { get; }
         public AutonomousSellProvider AutonomousSellProvider { get; }
+        public TestSellActionProvider TestProvider { get; }
 
         public Fixture(
             SimulationRuntime runtime,
@@ -365,7 +412,8 @@ public sealed class ActorChoiceRuntimeTests
             ItemData item,
             NpcActionData sellAction,
             NpcStatusData fallbackStatus,
-            AutonomousSellProvider autonomousSellProvider)
+            AutonomousSellProvider autonomousSellProvider,
+            TestSellActionProvider testProvider)
         {
             Runtime = runtime;
             Records = records;
@@ -375,6 +423,7 @@ public sealed class ActorChoiceRuntimeTests
             SellAction = sellAction;
             FallbackStatus = fallbackStatus;
             AutonomousSellProvider = autonomousSellProvider;
+            TestProvider = testProvider;
         }
     }
 
@@ -391,6 +440,53 @@ public sealed class ActorChoiceRuntimeTests
         {
             ExecutionCount++;
             return NpcActionResult.Succeeded();
+        }
+    }
+
+    private enum TestActionExecutionBehavior
+    {
+        Success,
+        ReturnFailure,
+        Throw
+    }
+
+    private sealed class TestSellActionProvider : INpcActionProvider
+    {
+        private readonly CityRuntime city;
+        private readonly ItemData item;
+        private readonly TestActionExecutionBehavior executionBehavior;
+
+        public int CreateCount { get; private set; }
+        public int ExecutionCount { get; private set; }
+
+        public TestSellActionProvider(
+            CityRuntime city,
+            ItemData item,
+            TestActionExecutionBehavior executionBehavior)
+        {
+            this.city = city;
+            this.item = item;
+            this.executionBehavior = executionBehavior;
+        }
+
+        public bool HandlesAction(NpcActionData action)
+        {
+            return action != null && action.actionType == NpcActionType.SellGoods;
+        }
+
+        public NpcActionRuntime CreateAction(NpcRuntime npcRuntime, NpcActionData action, ref float utility)
+        {
+            CreateCount++;
+            return new NpcActionRuntime(action, city, item, 5, 1f);
+        }
+
+        public NpcActionResult TryExecuteAction(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime)
+        {
+            ExecutionCount++;
+            if (executionBehavior == TestActionExecutionBehavior.Throw)
+                throw new System.InvalidOperationException("Injected actor choice execution failure.");
+
+            return NpcActionResult.Failed("Injected actor choice execution failure.");
         }
     }
 }
