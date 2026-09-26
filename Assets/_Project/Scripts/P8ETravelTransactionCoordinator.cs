@@ -12,14 +12,17 @@ public sealed class P8ETravelTransactionCoordinator
     private readonly PersonRoutePlanStore plans;
     private readonly SpatialRouteKnowledgeStore knowledge;
     private readonly SpatialPassageAuthority passage;
+    private readonly Func<long> currentWorldDayProvider;
 
     internal P8ETravelTransactionCoordinator(PersonSpatialPositionStore positions,
-        PersonRoutePlanStore plans, SpatialRouteKnowledgeStore knowledge, SpatialPassageAuthority passage)
+        PersonRoutePlanStore plans, SpatialRouteKnowledgeStore knowledge, SpatialPassageAuthority passage,
+        Func<long> currentWorldDayProvider)
     {
         this.positions = positions ?? throw new ArgumentNullException(nameof(positions));
         this.plans = plans ?? throw new ArgumentNullException(nameof(plans));
         this.knowledge = knowledge ?? throw new ArgumentNullException(nameof(knowledge));
         this.passage = passage ?? throw new ArgumentNullException(nameof(passage));
+        this.currentWorldDayProvider = currentWorldDayProvider ?? throw new ArgumentNullException(nameof(currentWorldDayProvider));
     }
 
     public bool TryBeginNextSegment(PersonId actor, TraversalCostContext movementContext,
@@ -92,8 +95,12 @@ public sealed class P8ETravelTransactionCoordinator
     public bool TryInterruptRejectedNextSegment(PersonId actor, TraversalCostContext movementContext,
         SpatialObservation supportedObservation, long currentWorldDay, out P8ETravelFailure failure)
     {
+        long authoritativeWorldDay = currentWorldDayProvider();
+        if (currentWorldDay != authoritativeWorldDay)
+            return Fail("The supplied world day does not match the current SimulationRuntime day.", out failure);
+
         long expectedPositionRevision = positions.Revision;
-        if (actor == null || movementContext == null || currentWorldDay < 0L
+        if (actor == null || movementContext == null || authoritativeWorldDay < 0L
             || !positions.TryGetPosition(actor, out PersonSpatialPosition current) || current.IsInTransit
             || current.Position?.Kind != StablePositionReferenceKind.Hex
             || !plans.TryGetCurrent(actor, out PersonRoutePlan plan) || plan.Status != PersonRoutePlanStatus.Active)
@@ -110,7 +117,7 @@ public sealed class P8ETravelTransactionCoordinator
             || !supportedObservation.Subject.Equals(SpatialSubject.ForTraversalOption(leg.Segment))
             || supportedObservation.Value.Kind != SpatialObservationValueKind.RouteOptionBelief
             || supportedObservation.Value.RouteOptionBelief != SpatialRouteOptionBelief.KnownUnavailable
-            || supportedObservation.ReceivedDay != currentWorldDay))
+            || supportedObservation.ReceivedDay != authoritativeWorldDay))
             return Fail("Supported rejection evidence must be a same-day KnownUnavailable observation of the attempted traversal option.", out failure);
         if (!plans.TryPrepareStatusChange(actor, plans.Revision, plan.PlanRevision,
             PersonRoutePlanStatus.Active, PersonRoutePlanStatus.Interrupted,
@@ -118,7 +125,7 @@ public sealed class P8ETravelTransactionCoordinator
             return Fail(planFailure.ToString(), out failure);
         PreparedSpatialKnowledgeChange preparedKnowledge = null;
         if (supportedObservation != null && !knowledge.TryPrepareObservation(actor, supportedObservation,
-            currentWorldDay, knowledge.Revision, out preparedKnowledge, out SpatialKnowledgeFailure knowledgeFailure))
+            authoritativeWorldDay, knowledge.Revision, out preparedKnowledge, out SpatialKnowledgeFailure knowledgeFailure))
             return Fail(knowledgeFailure.ToString(), out failure);
         if (!TryCommit(null, preparedPlan, preparedKnowledge, expectedPositionRevision)) return Fail("Travel state changed before the atomic commit.", out failure);
         failure = P8ETravelFailure.None;

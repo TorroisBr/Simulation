@@ -575,7 +575,8 @@ public sealed class SimulationRuntime
         this.personRoutePlanStore = resolvedPersonRoutePlanStore;
         p8eTravelTransactionCoordinator = new P8ETravelTransactionCoordinator(
             resolvedPersonSpatialPositionStore, resolvedPersonRoutePlanStore, resolvedSpatialRouteKnowledgeStore,
-            resolvedSpatialAuthorityStore.PassageAuthority);
+            resolvedSpatialAuthorityStore.PassageAuthority,
+            () => CurrentDay);
         this.spatialRoutePlanningSystem = resolvedSpatialRoutePlanningSystem;
         this.armedForceStore = resolvedArmedForceStore;
         this.contingentManpowerStateStore = resolvedManpowerStateStore;
