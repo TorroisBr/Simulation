@@ -19,6 +19,24 @@ The profile excludes arbitrary constructor-composed runtimes, injected providers
 
 P18, P19 and P20 are conditional extensions to the state inventory only if a future explicitly supported profile contains their temporal, module, or shared-activity state. The base daily profile has no blanket dependency on those phases. A date is not a future intraday ordering contract: adding intraday capture requires the relevant promoted P18 identity, exact logical-time, due-work and same-time ordering/hydration capabilities first. Adding extension-owned state requires the applicable P19 lifecycle/state compatibility contracts. Adding shared activities requires the relevant P20 participant and lifecycle contracts. These additions do not justify freezing this proposal's internal time field to a day-only scalar.
 
+The current profile also excludes P9/P10 generated worlds and P20 activity
+instances. If a later supported profile includes generated worlds, its causal
+inventory must retain stable generation stage/contributor identities, compatible
+versions and provenance, selected authored inputs, dependency and deterministic
+contribution/conflict order, purpose-scoped random context, and generated
+outputs needed to continue; installation must not silently rerun historical
+generation. If a later profile includes a P20 activity, preserve the
+definition/version and stable instance identity separately from participants;
+formation state, semantic participant identities (using `PersonId` for Person
+participants without requiring materialized `NpcRuntime`), roles as of the save
+boundary, agreements, reservations and intervals, scheduled start, shared
+lifecycle/context, effects already applied, and pending causal work including
+its relevant input, deterministic order, revision/sequence and random context.
+Do not infer a one-Activity to one-actor relationship or duplicate one shared
+instance into actor-owned copies. These are conditional inventory/revalidation
+gates, not dependencies of `UnityBootstrap-Daily-v1`; relevant P9/P10/P20
+capabilities are required only when their state enters a supported profile.
+
 The alignment records also apply as constraints while their capabilities remain
 out of profile: keep domain/application logic independent of Unity presentation
 where practical and compose independent semantic contributions deterministically;
