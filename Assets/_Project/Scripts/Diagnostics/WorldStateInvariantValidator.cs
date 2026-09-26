@@ -1008,8 +1008,8 @@ public static class WorldStateInvariantValidator
                 AddError(issues, "PersonRoutePlanIdentityInvalid", identity, "Person route plan stable identity does not match its decision and candidate.");
         }
 
-        if (spatial.PersonRoutePlanRevision.HasValue && planCount != spatial.PersonRoutePlanRevision.Value)
-            AddError(issues, "PersonRoutePlanRevisionMismatch", "world", "Person route-plan history count does not match its store revision.");
+        if (spatial.PersonRoutePlanRevision.HasValue && planCount > spatial.PersonRoutePlanRevision.Value)
+            AddError(issues, "PersonRoutePlanRevisionMismatch", "world", "Person route-plan history count exceeds its mutation revision.");
         foreach (KeyValuePair<string, List<WorldStatePersonRoutePlanSnapshot>> entry in plansByActor)
         {
             entry.Value.Sort((left, right) => left.PlanRevision.CompareTo(right.PlanRevision));

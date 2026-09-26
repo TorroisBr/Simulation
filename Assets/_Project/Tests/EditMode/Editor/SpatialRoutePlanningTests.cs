@@ -243,7 +243,7 @@ public sealed class SpatialRoutePlanningTests
 
         Assert.That(fixture.Plans.TryAcceptPlan(selected, "decision.route.1", 0L, 5L, out PersonRoutePlanFailure failure), Is.True, failure.ToString());
         Assert.That(fixture.Plans.TryGetCurrent(new PersonId(fixture.Actor.Value), out PersonRoutePlan first), Is.True);
-        Assert.That(first.Status, Is.EqualTo(PersonRoutePlanStatus.Active));
+        Assert.That(first.Status, Is.EqualTo(PersonRoutePlanStatus.Accepted));
         Assert.That(first.Candidate.Segments.Single().Option, Is.EqualTo(segment.Option));
         Assert.That(fixture.Plans.ValidateInvariants().IsValid, Is.True);
 
@@ -254,7 +254,7 @@ public sealed class SpatialRoutePlanningTests
         Assert.That(fixture.Plans.TryAcceptPlan(selected, "decision.route.2", 1L, 5L, out failure), Is.True, failure.ToString());
         Assert.That(fixture.Plans.History.Count, Is.EqualTo(2));
         Assert.That(fixture.Plans.History[0].Status, Is.EqualTo(PersonRoutePlanStatus.Superseded));
-        Assert.That(fixture.Plans.History[1].Status, Is.EqualTo(PersonRoutePlanStatus.Active));
+        Assert.That(fixture.Plans.History[1].Status, Is.EqualTo(PersonRoutePlanStatus.Accepted));
 
         PersonStore targetPeople = CreatePeople(fixture.Actor.Value);
         SpatialRouteKnowledgeStore targetKnowledge = CloneKnowledge(fixture.Knowledge, targetPeople);
@@ -361,6 +361,165 @@ public sealed class SpatialRoutePlanningTests
         Assert.That(WorldStateCanonicalWriter.Write(after), Does.Contain("KnownUnavailable"));
         Assert.That(runtime.ValidateSpatialInvariants().IsValid, Is.True,
             string.Join("; ", runtime.ValidateSpatialInvariants().Violations));
+    }
+
+    [Test]
+    public void CivilTravelCommitsDepartureProgressAndArrivalWithDistinctPlanAndMutationRevisions()
+    {
+        Fixture source = CreateFixture("person.p8e-journey");
+        SpatialRouteSegment segment = Segment("hex.a", "hex.b", "connection.ab");
+        Record(source, OptionObservation(segment, SpatialRouteOptionBelief.KnownAvailable,
+            "guide", "journey.option", 0L, 0L), 0L);
+        SpatialRouteCandidate candidate = source.Planner.BuildKnownCandidates(
+            Request(source.Actor, "hex.a", "hex.b", 0L)).Candidates.Single();
+        Record(source, EstimateObservation(candidate, MetricId, MetricUnit, 1m, "journey.estimate", 0L), 0L);
+        SpatialRouteSegment reverseSegment = Segment("hex.b", "hex.a", "connection.ab");
+        Record(source, OptionObservation(reverseSegment, SpatialRouteOptionBelief.KnownAvailable,
+            "guide", "journey.reverse-option", 0L, 0L), 0L);
+        SpatialRouteCandidate reverseCandidate = source.Planner.BuildKnownCandidates(
+            Request(source.Actor, "hex.b", "hex.a", 0L)).Candidates.Single();
+        Record(source, EstimateObservation(reverseCandidate, MetricId, MetricUnit, 1m, "journey.reverse-estimate", 0L), 0L);
+
+        PersonSpatialPositionStore positions = new PersonSpatialPositionStore(source.People, source.Spatial,
+            new TestTraversalResolver(source.Spatial.PassageAuthority));
+        Assert.That(positions.TrySetAt(source.Actor, StablePositionReference.ForHex(new HexId("hex.a")),
+            out PersonSpatialPositionFailure positionFailure), Is.True, positionFailure.ToString());
+        SimulationRuntime runtime = new SimulationRuntime(new SimulationTime(), null, null,
+            personStore: source.People,
+            spatialAuthorityStore: source.Spatial,
+            personSpatialPositionStore: positions,
+            spatialRouteKnowledgeStore: source.Knowledge);
+        SpatialRoutePlanningOutcome selected = runtime.SelectKnownSpatialRoute(source.Actor,
+            StablePositionReference.ForHex(new HexId("hex.a")), StablePositionReference.ForHex(new HexId("hex.b")),
+            Policy(false, 0L, true));
+        Assert.That(selected.IsSuccess, Is.True, selected.FailureMessage);
+        Assert.That(runtime.TryAcceptSpatialRoutePlan(selected, "decision.p8e-journey", 0L,
+            out PersonRoutePlanFailure planFailure), Is.True, planFailure.ToString());
+        Assert.That(runtime.PersonRoutePlanStore.TryGetCurrent(source.Actor, out PersonRoutePlan accepted), Is.True);
+        Assert.That(accepted.Status, Is.EqualTo(PersonRoutePlanStatus.Accepted));
+
+        TraversalCostContext context = new TraversalCostContext("civil.profile", "v1", 1m, 1m, 1m);
+        Assert.That(runtime.P8ETravelTransactionCoordinator.TryBeginNextSegment(source.Actor, context,
+            out P8ETravelFailure travelFailure), Is.True, travelFailure.Message);
+        Assert.That(runtime.PersonRoutePlanStore.TryGetCurrent(source.Actor, out PersonRoutePlan active), Is.True);
+        Assert.That(active.Status, Is.EqualTo(PersonRoutePlanStatus.Active));
+        Assert.That(runtime.PersonRoutePlanStore.Revision, Is.EqualTo(2L));
+        Assert.That(runtime.PersonSpatialPositionStore.TryGetPosition(source.Actor, out PersonSpatialPosition transit), Is.True);
+        Assert.That(transit.IsInTransit, Is.True);
+        long inTransitPositionRevision = runtime.PersonSpatialPositionStore.Revision;
+        long inTransitPlanStoreRevision = runtime.PersonRoutePlanStore.Revision;
+        Assert.That(runtime.PersonRoutePlanStore.TryAcceptPlan(selected, "decision.illegal-in-transit", 1L,
+            runtime.CurrentDay, out PersonRoutePlanFailure transitPlanFailure), Is.False);
+        Assert.That(transitPlanFailure.Code, Is.EqualTo(PersonRoutePlanFailureCode.ActorInTransit));
+        Assert.That(runtime.PersonSpatialPositionStore.Revision, Is.EqualTo(inTransitPositionRevision));
+        Assert.That(runtime.PersonRoutePlanStore.Revision, Is.EqualTo(inTransitPlanStoreRevision));
+        Assert.That(runtime.PersonRoutePlanStore.TryGetCurrent(source.Actor, out PersonRoutePlan stillActive), Is.True);
+        Assert.That(stillActive.Status, Is.EqualTo(PersonRoutePlanStatus.Active));
+        Assert.That(runtime.PersonRoutePlanStore.History.Count, Is.EqualTo(1));
+
+        Assert.That(runtime.P8ETravelTransactionCoordinator.TryAdvanceSegment(source.Actor,
+            TraversalProgress.CompleteProgressTicks, out travelFailure), Is.True, travelFailure.Message);
+        Assert.That(runtime.P8ETravelTransactionCoordinator.TryArriveAtFinalDestination(source.Actor,
+            out travelFailure), Is.True, travelFailure.Message);
+        Assert.That(runtime.PersonSpatialPositionStore.TryGetPosition(source.Actor, out PersonSpatialPosition arrived), Is.True);
+        Assert.That(arrived.Position.HexId, Is.EqualTo(new HexId("hex.b")));
+        Assert.That(runtime.PersonRoutePlanStore.TryGetCurrent(source.Actor, out PersonRoutePlan completed), Is.True);
+        Assert.That(completed.Status, Is.EqualTo(PersonRoutePlanStatus.Completed));
+        Assert.That(runtime.PersonRoutePlanStore.Revision, Is.EqualTo(3L));
+        Assert.That(runtime.PersonRoutePlanStore.PlanCount, Is.EqualTo(1));
+
+        SpatialRoutePlanningOutcome stableReplan = runtime.SelectKnownSpatialRoute(source.Actor,
+            StablePositionReference.ForHex(new HexId("hex.b")), StablePositionReference.ForHex(new HexId("hex.a")),
+            Policy(false, 0L, true));
+        Assert.That(stableReplan.IsSuccess, Is.True, stableReplan.FailureMessage);
+        Assert.That(runtime.PersonRoutePlanStore.TryAcceptPlan(stableReplan, "decision.stable-replan", 1L,
+            runtime.CurrentDay, out PersonRoutePlanFailure replanFailure), Is.True, replanFailure.ToString());
+        Assert.That(runtime.PersonRoutePlanStore.TryGetCurrent(source.Actor, out PersonRoutePlan replanned), Is.True);
+        Assert.That(replanned.Status, Is.EqualTo(PersonRoutePlanStatus.Accepted));
+        Assert.That(runtime.PersonRoutePlanStore.History[0].Status, Is.EqualTo(PersonRoutePlanStatus.Completed));
+        Assert.That(runtime.ValidateSpatialInvariants().IsValid, Is.True,
+            string.Join("; ", runtime.ValidateSpatialInvariants().Violations));
+
+        WorldStateSnapshot snapshot = WorldStateSnapshotBuilder.Capture(new WorldStateSnapshotContext(
+            simulationTime: runtime.SimulationTime,
+            personStore: runtime.PersonStore,
+            spatialAuthorityStore: runtime.SpatialAuthorityStore,
+            personSpatialPositionStore: runtime.PersonSpatialPositionStore,
+            spatialRouteKnowledgeStore: runtime.SpatialRouteKnowledgeStore,
+            personRoutePlanStore: runtime.PersonRoutePlanStore));
+        Assert.That(WorldStateInvariantValidator.Validate(snapshot).IsValid, Is.True,
+            string.Join("; ", WorldStateInvariantValidator.Validate(snapshot).Errors));
+    }
+
+    [TestCase(0L, 1L)]
+    [TestCase(1L, 0L)]
+    public void P8EInterruptRejectsCallerDayDifferentFromRuntimeWithoutMutation(
+        long runtimeDay,
+        long suppliedDay)
+    {
+        Fixture source = CreateFixture("person.p8e-interrupt-day." + runtimeDay + "." + suppliedDay);
+        foreach (SpatialRouteSegment segment in AllRouteSegments())
+        {
+            Record(source, OptionObservation(segment, SpatialRouteOptionBelief.KnownAvailable,
+                "interrupt-map", "interrupt-option." + segment.StableKey, 0L, 0L), 0L);
+        }
+        IReadOnlyList<SpatialRouteCandidate> candidates = source.Planner.BuildKnownCandidates(
+            Request(source.Actor, "hex.a", "hex.d", 0L)).Candidates;
+        foreach (SpatialRouteCandidate candidate in candidates)
+        {
+            Record(source, EstimateObservation(candidate, MetricId, MetricUnit, 1m,
+                "interrupt-estimate." + candidate.SequenceKey, 0L), 0L);
+        }
+
+        PersonSpatialPositionStore positions = new PersonSpatialPositionStore(source.People, source.Spatial,
+            new TestTraversalResolver(source.Spatial.PassageAuthority));
+        Assert.That(positions.TrySetAt(source.Actor, StablePositionReference.ForHex(new HexId("hex.a")),
+            out PersonSpatialPositionFailure positionFailure), Is.True, positionFailure.ToString());
+        SimulationRuntime runtime = new SimulationRuntime(new SimulationTime(), null, null,
+            personStore: source.People,
+            spatialAuthorityStore: source.Spatial,
+            personSpatialPositionStore: positions,
+            spatialRouteKnowledgeStore: source.Knowledge,
+            personRoutePlanStore: source.Plans);
+        SpatialRoutePlanningOutcome selected = runtime.SelectKnownSpatialRoute(source.Actor,
+            StablePositionReference.ForHex(new HexId("hex.a")), StablePositionReference.ForHex(new HexId("hex.d")),
+            Policy(false, 0L, true));
+        Assert.That(selected.IsSuccess, Is.True, selected.FailureMessage);
+        Assert.That(runtime.TryAcceptSpatialRoutePlan(selected, "decision.p8e-interrupt", 0L,
+            out PersonRoutePlanFailure planFailure), Is.True, planFailure.ToString());
+        TraversalCostContext movement = new TraversalCostContext("civil.profile", "v1", 1m, 1m, 1m);
+        Assert.That(runtime.P8ETravelTransactionCoordinator.TryBeginNextSegment(source.Actor, movement,
+            out P8ETravelFailure travelFailure), Is.True, travelFailure.Message);
+        Assert.That(runtime.P8ETravelTransactionCoordinator.TryAdvanceSegment(source.Actor,
+            TraversalProgress.CompleteProgressTicks, out travelFailure), Is.True, travelFailure.Message);
+        Assert.That(runtime.P8ETravelTransactionCoordinator.TryArriveAtIntermediateHex(source.Actor,
+            out travelFailure), Is.True, travelFailure.Message);
+
+        SpatialRouteSegment attempted = selected.SelectedCandidate.Segments[1];
+        Assert.That(runtime.SpatialAuthorityStore.PassageAuthority.TryChangePassageCondition(
+            attempted.Boundary, attempted.Option, PassageCondition.Closed,
+            out SpatialAuthorityFailure passageFailure), Is.True, passageFailure.ToString());
+        if (runtimeDay > 0L)
+        {
+            runtime.AdvanceDay();
+        }
+        SpatialObservation wrongDayObservation = OptionObservation(attempted,
+            SpatialRouteOptionBelief.KnownUnavailable, "interrupt-observer", "wrong-day-rejection",
+            suppliedDay, suppliedDay);
+        long positionRevision = runtime.PersonSpatialPositionStore.Revision;
+        long planRevision = runtime.PersonRoutePlanStore.Revision;
+        long knowledgeRevision = runtime.SpatialRouteKnowledgeStore.Revision;
+        int observationCount = runtime.SpatialRouteKnowledgeStore.ObservationCount;
+
+        Assert.That(runtime.P8ETravelTransactionCoordinator.TryInterruptRejectedNextSegment(
+            source.Actor, movement, wrongDayObservation, suppliedDay, out travelFailure), Is.False);
+        Assert.That(travelFailure.Message, Does.Contain("does not match the current SimulationRuntime day"));
+        Assert.That(runtime.PersonSpatialPositionStore.Revision, Is.EqualTo(positionRevision));
+        Assert.That(runtime.PersonRoutePlanStore.Revision, Is.EqualTo(planRevision));
+        Assert.That(runtime.PersonRoutePlanStore.TryGetCurrent(source.Actor, out PersonRoutePlan unchanged), Is.True);
+        Assert.That(unchanged.Status, Is.EqualTo(PersonRoutePlanStatus.Active));
+        Assert.That(runtime.SpatialRouteKnowledgeStore.Revision, Is.EqualTo(knowledgeRevision));
+        Assert.That(runtime.SpatialRouteKnowledgeStore.ObservationCount, Is.EqualTo(observationCount));
     }
 
     [Test]
@@ -646,5 +805,24 @@ public sealed class SpatialRoutePlanningTests
         public Fixture(PersonId actor, PersonStore people, SpatialAuthorityStore spatial,
             SpatialRouteKnowledgeStore knowledge, SpatialRoutePlanningSystem planner, PersonRoutePlanStore plans)
         { Actor = actor; People = people; Spatial = spatial; Knowledge = knowledge; Planner = planner; Plans = plans; }
+    }
+
+    private sealed class TestTraversalResolver : ISpatialTraversalOptionResolver
+    {
+        private readonly SpatialPassageAuthority passage;
+        public TestTraversalResolver(SpatialPassageAuthority passage) { this.passage = passage; }
+        public bool TryResolveTraversalOption(TraversalOptionRef option, HexBoundaryKey boundary, out string failure)
+        {
+            if (passage.TryGetTraversalOptions(boundary, out IReadOnlyList<TraversalOptionRef> options,
+                out SpatialAuthorityFailure authorityFailure))
+            {
+                foreach (TraversalOptionRef candidate in options)
+                    if (candidate.Equals(option)) { failure = string.Empty; return true; }
+                failure = "Traversal option is not registered for the boundary.";
+                return false;
+            }
+            failure = authorityFailure?.Message ?? "Boundary traversal options could not be read.";
+            return false;
+        }
     }
 }

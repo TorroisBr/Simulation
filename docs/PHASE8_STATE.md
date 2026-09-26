@@ -1,5 +1,11 @@
 # Phase 8 — IN PROGRESS
 
+## Latest architecture baseline — 2026-09-26
+
+The current canonical architecture update is `c285466c355103d3637ac165246591b72eb7bda0`; it supersedes the prior architecture baseline `4b6dd1d38cffeaf3cc1ac3effea0f8ede8771194`. The available canonical branch head is `c5b2e06b534f4b2af38f10e6510b10800aa8b28c`, which includes the update and P8-D promotion. Both `architecture/INTRADAY_EXTENSIBILITY_ALIGNMENT.md` and `architecture/MULTIPARTICIPANT_ACTIVITY_ALIGNMENT.md` are current constraints for review and future integration.
+
+Earlier dated sections preserve their historical baselines; use this section and the c5b2 canonical State when resolving any apparent conflict.
+
 ## Canonical baseline and current candidate
 
 - The verified Phase 7 canonical baseline entering Phase 8 is
@@ -14,7 +20,9 @@
   `c285466c355103d3637ac165246591b72eb7bda0`, after targeted temporal-profile
   revalidation, independent review, full validation, and final promotion check.
   The candidate State/review record was `d1818fb475de271713efdd480d6a994353a705f2`.
-  P8-E is design-approved and now has its P8-D capability dependency promoted.
+  P8-E's B/C/D capability dependencies are promoted; its validated
+  implementation integration candidate is recorded below and is not yet
+  canonical.
 
 ## Architecture requirement refresh — 2026-09-26
 
@@ -43,15 +51,18 @@ This adds no P20 dependency to P8's individual civil traveler, no new promotion
 gate beyond the already recorded temporal impact review, and no delivered
 capability. Existing P8 implementation/validation and P8-D/E candidate scopes
 are preserved; future traveling-together integration is a separate consumer.
-No P18/P20 State is created because neither phase has delivered implementation.
+P18 has a noncanonical integration State for its validated P18-A candidate;
+P20 has no State because it has no delivered implementation.
 
 Targeted P8-E design-impact revalidation against canonical `c285466` and both
 alignment records passed for the reviewed technical design at
 `4b7127f57d354c851e4d8ddaaeb27e8fbd51686c`. Its one-Person explicit-operation
 journey remains a bounded profile with no autonomous daily progression or
 per-day travel cap, and it establishes no permanent Activity-to-Actor relation.
-Implementation remains blocked on promoted P8-B/C/D capabilities and their
-published APIs; intraday travel remains a P18-D consumer.
+P8-B/C/D capabilities and their published APIs are promoted. The P8-E
+implementation integration candidate and its final validation are recorded in
+the section below; canonical promotion remains pending. Automatic intraday
+travel remains a P18-D consumer.
 
 ## P8-A — Factual Geography
 
@@ -224,3 +235,24 @@ was run. Independent final review against refreshed candidate `8186e8d` passed;
 against this candidate and its retained reports. The canonical branch was
 advanced to the validated integration, and this State update records the
 promotion.
+
+## P8-E implementation integration — prepared, promotion pending
+
+- Canonical remains `codex/phase8/canonical` at `c5b2e06b534f4b2af38f10e6510b10800aa8b28c`; P8-E is not yet canonical.
+- Integration branch: `codex/phase8/P8EIntegration`. Validated code candidate: `d4c4c4ff22624785f479fd619a89694c45fab78a`; final State/review record: `e7beb5c93908d928c8c85090d6249e473f8296ef`; original P8-E integration commit: `af0fd3db826ef3fcf935eca3d21f75c411d83b46`.
+- Feature candidate: `16abef139ade3b6d54fe229cf6b5d8831a367298` on `codex/phase8/P8ECivilTravel`. The integration tree exactly matches the tested feature tree (`ea32ffb57ac380d60a760cb69f661ea984101519`).
+- Independent implementation review: **PASS**. The runtime-bound `PersonRoutePlanStore.TryAcceptPlan` rejects replacement while its Person is in transit; the check occurs before Knowledge/revision checks or mutation. Runtime composition and cloning preserve the position provider; standalone stores retain existing behavior. Regression tests prove rejection leaves position and plan revisions/history/status unchanged, and explicit replanning at a stable Hex succeeds.
+- Targeted architecture revalidation and independent code review of the runtime-day guard at `d4c4c4f`: **PASS**. Interruption rejects a supplied day that differs from `SimulationRuntime.CurrentDay` before preparation, uses runtime-authoritative day for evidence validation/preparation, and has no P11 actor-choice or transit changes in its diff. The regression verifies stale and future supplied days leave position, active plan, Knowledge revision, and observation count unchanged.
+- Scope remains the reviewed one-Person explicit-operation slice: current passage truth is re-evaluated at each attempted segment; position/transit and plan lifecycle mutations commit atomically; optional supported same-day Knowledge evidence joins interruption atomically. No `AdvanceDay` progression, daily travel cap, per-Activity cardinality, P18 blanket gate, P19 loader/API, or P20 dependency was added.
+- Original P8-E focused gates passed on the pre-guard integration source tree at `af0fd3d`; the affected route-planning suite and final gates were rerun on exact candidate HEAD `d4c4c4f`:
+
+| Gate | Result | Retained XML |
+|---|---:|---|
+| Original P8-E route lifecycle | 18/18 | `Library/ValidationResults/P8E/EditMode-20260926-183948-9b83c5c895c14c96bb982585d39e29f7.xml` (pre-guard `af0fd3d`) |
+| Original Spatial | 97/97 | `Library/ValidationResults/P8E/EditMode-20260926-184007-424745fbc44b46d1b3b8b7dd44478179.xml` (pre-guard `af0fd3d`) |
+| Original Travel | 101/101 | `Library/ValidationResults/P8E/EditMode-20260926-184023-66955609ade847658b9412387ffb645b.xml` (pre-guard `af0fd3d`) |
+| SpatialRoutePlanningTests | 20/20 | `Temp/ValidationResults/EditMode-20260926-205841-ba66dd806dfc405db07e6d152c476545.xml` (`d4c4c4f`) |
+| ALL EditMode | 1699/1699 | `Temp/ValidationResults/EditMode-20260926-210019-f2a0e259d76243ae83058fca59bdcfcc.xml` (`d4c4c4f`) |
+| Official complete Smoke | 5/5 | `Temp/ValidationResults/EditMode-20260926-210059-01db1fc4b0314ddcb6d8cd0de4c81728.xml` (`d4c4c4f`) |
+
+`git diff --check c5b2e06 d4c4c4f` passed. No long-run suite was required because the daily loop and long-horizon behavior remain unchanged. The exact guarded candidate is ready for the repository's human canonical-promotion gate; independent READY work continues while that gate is pending.

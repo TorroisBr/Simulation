@@ -431,7 +431,8 @@ public enum SpatialKnowledgeFailureCode
     InvalidObservation = 4,
     FutureObservation = 5,
     ConflictingProvenance = 6,
-    RevisionOverflow = 7
+    RevisionOverflow = 7,
+    RevisionMismatch = 8
 }
 
 public sealed class SpatialKnowledgeFailure
