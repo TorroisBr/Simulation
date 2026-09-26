@@ -1,8 +1,12 @@
 # Phase 14 Entry Architecture — Bounded v1 Proposal
 
-**Status:** `ENTRY_ARCHITECTURE_READY`; the prior refreshed proposal passed independent entry review at `109341530c6d5f293974fc0475ff0c7c1279c7a4`. This revision records a targeted identity reconciliation against the actual P8 owner lookup and requires re-review of that clarification. It remains a proposal for technical design, not canonical architecture, an implementation contract, checkpoint approval, or authorization to implement. No Phase 14 checkpoint IDs are approved.
+**Status:** `ENTRY_ARCHITECTURE_READY`; the prior refreshed proposal passed independent entry review at `109341530c6d5f293974fc0475ff0c7c1279c7a4`. The identity-reconciled proposal was then revalidated for the P8-E promotion; independent review of the combined refresh is pending. It remains a proposal for technical design, not canonical architecture, an implementation contract, checkpoint approval, or authorization to implement. No Phase 14 checkpoint IDs are approved.
 
-**Observed code base:** Phase 8 canonical at `c5b2e06b534f4b2af38f10e6510b10800aa8b28c`, incorporating architecture baseline `c285466c355103d3637ac165246591b72eb7bda0`. P8-A through P8-D are canonical. P8-E remains a separate promotion-pending candidate; its existing design and candidate conclusions are preserved. The Phase 14 Brief is `ENTRY_ARCHITECTURE_READY`. This packet inspects the current canonical code; any specifically historical P7 facts are labeled as such.
+**Historical baseline:** Phase 8 canonical at `c5b2e06b534f4b2af38f10e6510b10800aa8b28c`, incorporating architecture baseline `c285466c355103d3637ac165246591b72eb7bda0`.
+
+**Current revalidation baseline:** `codex/phase8/canonical` at `77f3e1a47a1e007492a794ea777d681a21a36d09`, including P8-E promotion `d95b60d174cb0b17df09e2775b3cbd134c74b21f`. P8-A through P8-E are canonical. The Phase 14 Brief is `ENTRY_ARCHITECTURE_READY`. This packet inspects the current canonical code; any specifically historical P7 facts are labeled as such.
+
+**P8-E and alignment impact:** the reviewed single-City daily source/sink has no transport, route flow, timed activity, or multi-participant work. P8-E is available but adds no dependency; the daily cadence retains current semantics. P18/P20 remain conditional only for later timed-activity or shared-participation consumers. Current moddability constraints apply to future seams/review; P19 API/loader and module lifecycle remain deferred.
 
 ## 1. Governing constraints
 
@@ -28,7 +32,7 @@ Relevant architecture rules in `docs/SIMULATION_ARCHITECTURE.md`:
 | Trade and inventories | `InventoryRuntime` stores integer item quantities on an `NpcRuntime`. `EconomyTransactionService` supports item transfers and checks money, stock, and capacity for its current transaction types. Trade receipts identify runtime IDs. | Merchant transfer, actor carriage, and durable title are outside the proposed first consumer. Their existing runtime-ID transaction path does not establish a general asset/title model. |
 | Money | `MoneyEffect` distinguishes transfers and deliberate monetary sources/sinks. Population consumption defaults to free; account-backed consumption is also implemented. | The proposed proving case uses free consumption and makes no monetary mutation. |
 | Property | `PropertyOwnershipStore` records `PropertyId → PersonId` and provides explicit property-transfer transitions. | It is a Person-based property foundation, not a generic stock or material-title store. |
-| Spatial authority | P8-A provides factual Hex/Location geography; P8-C composes City/Site anchor bindings and Person spatial position; P8-D is canonical. P8-E remains promotion-pending. | A source attaches to a City instance with an authored stable `SettlementSemanticId` and its P8 `LocationId`. The current P8 City anchor owner key is checked against `CityRuntime.RuntimeId` during composition, so it is only an in-process lookup key for this profile, not durable settlement identity. The profile's `LocationId` must resolve and equal the selected City instance's composed P8 anchor. No route or passage behavior is needed for same-City production and consumption. |
+| Spatial authority | P8-A provides factual Hex/Location geography; P8-C composes City/Site anchor bindings and Person spatial position; P8-D and P8-E are canonical. | A source attaches to a City instance with an authored stable `SettlementSemanticId` and its P8 `LocationId`. The current P8 City anchor owner key is checked against `CityRuntime.RuntimeId` during composition, so it is only an in-process lookup key for this profile, not durable settlement identity. The profile's `LocationId` must resolve and equal the selected City instance's composed P8 anchor. No route or passage behavior is needed for same-City production and consumption. |
 | Daily execution | With Economy enabled, `SimulationRuntime.AdvanceDay()` runs City production for all cities, then population consumption and price updates. | The proposed cadence follows this existing daily autonomous order. |
 
 The relevant existing coverage includes `SettlementStockOwnershipTests`, `PopulationConsumptionTests`, `EconomyTransactionTests`, and `PropertyTransferFoundationTests`. These tests demonstrate current behavior; they do not choose Phase 14 product scope. No tests were run as part of this documentation proposal.
@@ -61,7 +65,7 @@ These are the recommended entry decisions for this bounded v1; they are proposal
 
 ## 5. Spatial and conditional dependencies
 
-P8-A/B/C/D are canonical at the observed base; P8-E remains a separate promotion-pending candidate. The proposed local City scenario uses P8-A geography and the P8-C City anchor binding to a Location. It does not require P8-D or P8-E: no actor plans a route, traverses a passage, or carries material between locations.
+P8-A through P8-E are canonical at the current revalidation baseline. The proposed local City scenario uses P8-A geography and the P8-C City anchor binding to a Location. It does not consume P8-D or P8-E route/travel facts: no actor plans a route, traverses a passage, or carries material between locations.
 
 If later scope adds physical movement, that work must use the promoted P8 travel authority required by the actual flow. Legacy fixed-day City routes are not a substitute for that authority.
 
