@@ -2,9 +2,9 @@
 
 ## Latest architecture baseline — 2026-09-26
 
-The current canonical architecture update is `c285466c355103d3637ac165246591b72eb7bda0`; it supersedes the prior architecture baseline `4b6dd1d38cffeaf3cc1ac3effea0f8ede8771194`. The available canonical branch head is `c5b2e06b534f4b2af38f10e6510b10800aa8b28c`, which includes the update and P8-D promotion. Both `architecture/INTRADAY_EXTENSIBILITY_ALIGNMENT.md` and `architecture/MULTIPARTICIPANT_ACTIVITY_ALIGNMENT.md` are current constraints for review and future integration.
+The current canonical architecture update is `c285466c355103d3637ac165246591b72eb7bda0`; it supersedes the prior architecture baseline `4b6dd1d38cffeaf3cc1ac3effea0f8ede8771194`. The Phase 8 canonical branch was advanced to P8-E promotion commit `d95b60d174cb0b17df09e2775b3cbd134c74b21f`, which includes the update, P8-D promotion, and P8-E implementation. Both `architecture/INTRADAY_EXTENSIBILITY_ALIGNMENT.md` and `architecture/MULTIPARTICIPANT_ACTIVITY_ALIGNMENT.md` remain current constraints for review and future integration.
 
-Earlier dated sections preserve their historical baselines; use this section and the c5b2 canonical State when resolving any apparent conflict.
+Earlier dated sections preserve their historical baselines; use this section and the latest canonical Phase 8 State when resolving any apparent conflict.
 
 ## Canonical baseline and current candidate
 
@@ -14,15 +14,15 @@ Earlier dated sections preserve their historical baselines; use this section and
   `094971b` on `codex/phase8/P8AGeographyIntegration` to the new
   `codex/phase8/canonical` branch. The canonical branch is pushed and its
   remote SHA was verified; the Phase 7 canonical baseline remains preserved.
-- Phase 8 remains open. P8-A through P8-D are canonical. P8-D was promoted from
+- Phase 8 remains open. P8-A through P8-E are canonical. P8-D was promoted from
   integration implementation commit `dccff74831b5ecfa55d32f142185a437afb5579a`
   on `codex/phase8/P8DArchitectureRefreshIntegration`, based on
   `c285466c355103d3637ac165246591b72eb7bda0`, after targeted temporal-profile
   revalidation, independent review, full validation, and final promotion check.
   The candidate State/review record was `d1818fb475de271713efdd480d6a994353a705f2`.
-  P8-E's B/C/D capability dependencies are promoted; its validated
-  implementation integration candidate is recorded below and is not yet
-  canonical.
+  P8-E's B/C/D capability dependencies are promoted. P8-E was promoted from
+  its validated integration candidate at `d95b60d`; the promotion record is
+  below.
 
 ## Architecture requirement refresh — 2026-09-26
 
@@ -33,9 +33,9 @@ mod or generation capability and does not alter the retained validation records.
 See `architecture/INTRADAY_EXTENSIBILITY_ALIGNMENT.md`, the Roadmap and P18/P19
 Briefs for the new dependencies and candidate impact.
 
-P8-A/B/C remain canonical and valid in their delivered scope. P8-D's refreshed
-integration was promoted after the temporal-profile revalidation and gates
-recorded below. P8-E's existing explicit-operation proving schedule remains a
+P8-A/B/C/D/E are canonical and valid in their delivered scopes. P8-D's
+refreshed integration was promoted after the temporal-profile revalidation and
+gates recorded below. P8-E's explicit-operation proving schedule remains a
 bounded transitional slice, with automatic intraday travel deferred to P18-D.
 The spatial A → B/C → D → E capability graph remains unchanged.
 
@@ -47,10 +47,10 @@ multi-participant activities over relevant Phase 18 temporal contracts;
 Phase 18 preserves instance/participant boundaries without implementing that
 coordination. See `architecture/MULTIPARTICIPANT_ACTIVITY_ALIGNMENT.md`.
 
-This adds no P20 dependency to P8's individual civil traveler, no new promotion
-gate beyond the already recorded temporal impact review, and no delivered
-capability. Existing P8 implementation/validation and P8-D/E candidate scopes
-are preserved; future traveling-together integration is a separate consumer.
+This adds no P20 dependency to P8's individual civil traveler and no new
+promotion gate beyond the already recorded temporal impact review. Existing
+P8 implementation/validation scopes are preserved; future traveling-together
+integration is a separate consumer.
 P18 has a noncanonical integration State for its validated P18-A candidate;
 P20 has no State because it has no delivered implementation.
 
@@ -59,10 +59,9 @@ alignment records passed for the reviewed technical design at
 `4b7127f57d354c851e4d8ddaaeb27e8fbd51686c`. Its one-Person explicit-operation
 journey remains a bounded profile with no autonomous daily progression or
 per-day travel cap, and it establishes no permanent Activity-to-Actor relation.
-P8-B/C/D capabilities and their published APIs are promoted. The P8-E
-implementation integration candidate and its final validation are recorded in
-the section below; canonical promotion remains pending. Automatic intraday
-travel remains a P18-D consumer.
+P8-B/C/D capabilities and their published APIs are promoted. P8-E's
+implementation and final validation are recorded below and are now canonical.
+Automatic intraday travel remains a P18-D consumer.
 
 ## P8-A — Factual Geography
 
@@ -236,10 +235,10 @@ against this candidate and its retained reports. The canonical branch was
 advanced to the validated integration, and this State update records the
 promotion.
 
-## P8-E implementation integration — prepared, promotion pending
+## P8-E implementation integration — promoted
 
-- Canonical remains `codex/phase8/canonical` at `c5b2e06b534f4b2af38f10e6510b10800aa8b28c`; P8-E is not yet canonical.
-- Integration branch: `codex/phase8/P8EIntegration`. Validated code candidate: `d4c4c4ff22624785f479fd619a89694c45fab78a`; final State/review record: `e7beb5c93908d928c8c85090d6249e473f8296ef`; original P8-E integration commit: `af0fd3db826ef3fcf935eca3d21f75c411d83b46`.
+- Canonical branch: `codex/phase8/canonical`. User-approved fast-forward promotion commit: `d95b60d174cb0b17df09e2775b3cbd134c74b21f`; local and `origin` were verified synchronized at that commit. This canonical State update records the promotion.
+- Integration branch: `codex/phase8/P8EIntegration`. Validated code candidate: `d4c4c4ff22624785f479fd619a89694c45fab78a`; candidate State/review record: `e7beb5c93908d928c8c85090d6249e473f8296ef`; promotion branch tip: `d95b60d174cb0b17df09e2775b3cbd134c74b21f`; original P8-E integration commit: `af0fd3db826ef3fcf935eca3d21f75c411d83b46`.
 - Feature candidate: `16abef139ade3b6d54fe229cf6b5d8831a367298` on `codex/phase8/P8ECivilTravel`. The integration tree exactly matches the tested feature tree (`ea32ffb57ac380d60a760cb69f661ea984101519`).
 - Independent implementation review: **PASS**. The runtime-bound `PersonRoutePlanStore.TryAcceptPlan` rejects replacement while its Person is in transit; the check occurs before Knowledge/revision checks or mutation. Runtime composition and cloning preserve the position provider; standalone stores retain existing behavior. Regression tests prove rejection leaves position and plan revisions/history/status unchanged, and explicit replanning at a stable Hex succeeds.
 - Targeted architecture revalidation and independent code review of the runtime-day guard at `d4c4c4f`: **PASS**. Interruption rejects a supplied day that differs from `SimulationRuntime.CurrentDay` before preparation, uses runtime-authoritative day for evidence validation/preparation, and has no P11 actor-choice or transit changes in its diff. The regression verifies stale and future supplied days leave position, active plan, Knowledge revision, and observation count unchanged.
@@ -255,4 +254,4 @@ promotion.
 | ALL EditMode | 1699/1699 | `Temp/ValidationResults/EditMode-20260926-210019-f2a0e259d76243ae83058fca59bdcfcc.xml` (`d4c4c4f`) |
 | Official complete Smoke | 5/5 | `Temp/ValidationResults/EditMode-20260926-210059-01db1fc4b0314ddcb6d8cd0de4c81728.xml` (`d4c4c4f`) |
 
-`git diff --check c5b2e06 d4c4c4f` passed. No long-run suite was required because the daily loop and long-horizon behavior remain unchanged. The exact guarded candidate is ready for the repository's human canonical-promotion gate; independent READY work continues while that gate is pending.
+`git diff --check c5b2e06 d4c4c4f` passed. No long-run suite was required because the daily loop and long-horizon behavior remain unchanged. The user approved canonical promotion after the complete candidate, independent review, and validation evidence were ready; the canonical branch was fast-forwarded and pushed to `d95b60d`. Independent READY work continues under the refreshed DAG.
