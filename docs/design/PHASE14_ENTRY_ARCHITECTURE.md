@@ -1,6 +1,6 @@
 # Phase 14 Entry Architecture — Bounded v1 Proposal
 
-**Status:** `ENTRY_ARCHITECTURE_READY`; the prior refreshed proposal passed independent entry review at `109341530c6d5f293974fc0475ff0c7c1279c7a4`. The identity-reconciled proposal was then revalidated for the P8-E promotion; independent review of the combined refresh is pending. It remains a proposal for technical design, not canonical architecture, an implementation contract, checkpoint approval, or authorization to implement. No Phase 14 checkpoint IDs are approved.
+**Status:** `ENTRY_ARCHITECTURE_READY`; the prior refreshed proposal passed independent entry review at `109341530c6d5f293974fc0475ff0c7c1279c7a4`. The identity-reconciled and P8-E promotion refresh passed independent review at `c4b7e91`. It remains a proposal for technical design, not canonical architecture, an implementation contract, checkpoint approval, or authorization to implement. No Phase 14 checkpoint IDs are approved.
 
 **Historical baseline:** Phase 8 canonical at `c5b2e06b534f4b2af38f10e6510b10800aa8b28c`, incorporating architecture baseline `c285466c355103d3637ac165246591b72eb7bda0`.
 
@@ -21,7 +21,7 @@ Relevant architecture rules in `docs/SIMULATION_ARCHITECTURE.md`:
 - §§91–92 require recoverable causal state at simulated boundaries and distinguish save/reconstruction from history; the project is not event-sourced by default.
 - §13 keeps economy, merchant autonomy, effective configuration, and commercial knowledge as distinct concerns.
 
-`docs/EXECUTION_MODEL.md` separates entry architecture, technical design, and implementation. The prior refreshed proposal passed independent entry review at `109341530c6d5f293974fc0475ff0c7c1279c7a4`; the identity and P8-E impact refresh is pending independent review. Technical design remains a separate review gate. No Phase 14 State or checkpoint contract exists in the observed base.
+`docs/EXECUTION_MODEL.md` separates entry architecture, technical design, and implementation. The prior refreshed proposal passed independent entry review at `109341530c6d5f293974fc0475ff0c7c1279c7a4`, and the identity/P8-E refresh passed independent review at `c4b7e91`. Technical design remains a separate review gate. No Phase 14 State or checkpoint contract exists in the observed base.
 
 ## 2. Current repository evidence
 
