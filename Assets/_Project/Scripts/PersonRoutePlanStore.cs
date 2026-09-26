@@ -6,9 +6,11 @@ using System.Linq;
 
 public enum PersonRoutePlanStatus
 {
-    Active = 0,
-    Superseded = 1,
-    Interrupted = 2
+    Accepted = 0,
+    Active = 1,
+    Completed = 2,
+    Superseded = 3,
+    Interrupted = 4
 }
 
 /// <summary>PersonId-owned travel intent. It contains no position or progress state.</summary>
@@ -60,7 +62,8 @@ public enum PersonRoutePlanFailureCode
     StaleKnowledgeBasis = 5,
     PlanRevisionMismatch = 6,
     RevisionOverflow = 7,
-    StalePlanningDay = 8
+    StalePlanningDay = 8,
+    ActorInTransit = 9
 }
 
 public sealed class PersonRoutePlanFailure
@@ -85,20 +88,54 @@ public sealed class PersonRoutePlanStore : IAuthoritativeMutationGuardBindable
     private readonly PersonStore personStore;
     private readonly SpatialRouteKnowledgeStore knowledgeStore;
     private readonly Func<long> currentWorldDayProvider;
-    private readonly Dictionary<string, List<PersonRoutePlan>> plansByActor = new Dictionary<string, List<PersonRoutePlan>>(StringComparer.Ordinal);
+    private readonly Func<PersonId, bool> actorInTransitProvider;
+    private Dictionary<string, List<PersonRoutePlan>> plansByActor = new Dictionary<string, List<PersonRoutePlan>>(StringComparer.Ordinal);
     private long revision;
 
     public PersonRoutePlanStore(
         PersonStore personStore,
         SpatialRouteKnowledgeStore knowledgeStore,
-        Func<long> currentWorldDayProvider = null)
+        Func<long> currentWorldDayProvider = null,
+        Func<PersonId, bool> actorInTransitProvider = null)
     {
         this.personStore = personStore ?? throw new ArgumentNullException(nameof(personStore));
         this.knowledgeStore = knowledgeStore ?? throw new ArgumentNullException(nameof(knowledgeStore));
         this.currentWorldDayProvider = currentWorldDayProvider;
+        this.actorInTransitProvider = actorInTransitProvider;
     }
 
+    /// <summary>Mutation version; lifecycle transitions advance it independently of accepted plan count.</summary>
     public long Revision => revision;
+    internal bool TryPrepareStatusChange(PersonId actor, long expectedStoreRevision, long expectedPlanRevision,
+        PersonRoutePlanStatus expectedStatus, PersonRoutePlanStatus nextStatus,
+        out PreparedPersonRoutePlanChange prepared, out PersonRoutePlanFailure failure)
+    {
+        prepared = null;
+        if (!mutationGuardBinding.CanMutate)
+            return Fail(PersonRoutePlanFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.", out failure);
+        if (revision != expectedStoreRevision || !TryGetCurrent(actor, out PersonRoutePlan current)
+            || current.PlanRevision != expectedPlanRevision || current.Status != expectedStatus)
+            return Fail(PersonRoutePlanFailureCode.PlanRevisionMismatch, "Route plan changed during travel preparation.", out failure);
+        if (nextStatus != PersonRoutePlanStatus.Active && nextStatus != PersonRoutePlanStatus.Completed
+            && nextStatus != PersonRoutePlanStatus.Interrupted)
+            return Fail(PersonRoutePlanFailureCode.InvalidPlan, "Unsupported travel lifecycle transition.", out failure);
+        if (revision == long.MaxValue) return Fail(PersonRoutePlanFailureCode.RevisionOverflow, "Plan store revision cannot advance.", out failure);
+        Dictionary<string, List<PersonRoutePlan>> next = new Dictionary<string, List<PersonRoutePlan>>(plansByActor, StringComparer.Ordinal);
+        List<PersonRoutePlan> history = new List<PersonRoutePlan>(next[actor.Value]);
+        history[history.Count - 1] = CreatePlan(current.ActorPersonId, current.DestinationHexId, current.Candidate,
+            current.SelectionPolicy, current.KnowledgeBasis, current.DecisionIdentity, current.AcceptedDay,
+            current.PlanRevision, nextStatus);
+        next[actor.Value] = history;
+        prepared = new PreparedPersonRoutePlanChange(this, revision, revision + 1L, next);
+        failure = PersonRoutePlanFailure.None;
+        return true;
+    }
+
+    internal bool CanInstall(PreparedPersonRoutePlanChange prepared) => prepared != null
+        && ReferenceEquals(prepared.Owner, this) && revision == prepared.ExpectedRevision;
+
+    internal void InstallPrepared(PreparedPersonRoutePlanChange prepared)
+    { plansByActor = prepared.NextPlans; revision = prepared.NextRevision; }
     public int PlanCount
     {
         get
@@ -180,6 +217,9 @@ public sealed class PersonRoutePlanStore : IAuthoritativeMutationGuardBindable
         PersonId actor = selectedOutcome.Request.ActorPersonId;
         if (!personStore.TryGet(actor, out _))
             return Fail(PersonRoutePlanFailureCode.ActorNotRegistered, "Plan actor PersonId is not registered.", out failure);
+        if (actorInTransitProvider != null && actorInTransitProvider(actor))
+            return Fail(PersonRoutePlanFailureCode.ActorInTransit,
+                "A Person route cannot be accepted or replaced while its factual position is in transit.", out failure);
         if (selectedOutcome.KnowledgeBasis.ActorPersonId != actor
             || !knowledgeStore.IsBasisCurrent(selectedOutcome.KnowledgeBasis))
             return Fail(PersonRoutePlanFailureCode.StaleKnowledgeBasis, "The actor Knowledge basis changed after selection.", out failure);
@@ -191,7 +231,8 @@ public sealed class PersonRoutePlanStore : IAuthoritativeMutationGuardBindable
 
         List<PersonRoutePlan> nextPlans = plansByActor.TryGetValue(actor.Value, out List<PersonRoutePlan> current)
             ? new List<PersonRoutePlan>(current) : new List<PersonRoutePlan>();
-        if (nextPlans.Count > 0 && nextPlans[nextPlans.Count - 1].Status == PersonRoutePlanStatus.Active)
+        if (nextPlans.Count > 0 && (nextPlans[nextPlans.Count - 1].Status == PersonRoutePlanStatus.Active
+            || nextPlans[nextPlans.Count - 1].Status == PersonRoutePlanStatus.Accepted))
         {
             PersonRoutePlan previous = nextPlans[nextPlans.Count - 1];
             nextPlans[nextPlans.Count - 1] = CreatePlan(
@@ -202,7 +243,7 @@ public sealed class PersonRoutePlanStore : IAuthoritativeMutationGuardBindable
 
         PersonRoutePlan created = CreatePlan(actor, selectedOutcome.SelectedCandidate.DestinationHexId,
             selectedOutcome.SelectedCandidate, selectedOutcome.Policy, selectedOutcome.KnowledgeBasis,
-            decisionIdentity, acceptedDay, actorRevision + 1L, PersonRoutePlanStatus.Active);
+            decisionIdentity, acceptedDay, actorRevision + 1L, PersonRoutePlanStatus.Accepted);
         nextPlans.Add(created);
         plansByActor[actor.Value] = nextPlans;
         revision++;
@@ -241,31 +282,33 @@ public sealed class PersonRoutePlanStore : IAuthoritativeMutationGuardBindable
             if (entry.Value[entry.Value.Count - 1].Status == PersonRoutePlanStatus.Superseded)
                 violations.Add("Latest Person route plan cannot be superseded: " + entry.Key + ".");
         }
-        if (count != revision) violations.Add("Person route-plan revision does not match accepted plan history count.");
+        if (revision < count) violations.Add("Person route-plan mutation revision is below accepted plan history count.");
         return new PersonRoutePlanInvariantReport(violations);
     }
 
     internal PersonRoutePlanStore Clone(PersonStore targetPersons, SpatialRouteKnowledgeStore targetKnowledge)
     {
-        return CloneCore(targetPersons, targetKnowledge, null);
+        return CloneCore(targetPersons, targetKnowledge, null, null);
     }
 
     internal PersonRoutePlanStore CloneForRuntime(
         PersonStore targetPersons,
         SpatialRouteKnowledgeStore targetKnowledge,
-        Func<long> currentWorldDayProvider)
+        Func<long> currentWorldDayProvider,
+        Func<PersonId, bool> actorInTransitProvider)
     {
-        return CloneCore(targetPersons, targetKnowledge, currentWorldDayProvider);
+        return CloneCore(targetPersons, targetKnowledge, currentWorldDayProvider, actorInTransitProvider);
     }
 
     private PersonRoutePlanStore CloneCore(
         PersonStore targetPersons,
         SpatialRouteKnowledgeStore targetKnowledge,
-        Func<long> currentWorldDayProvider)
+        Func<long> currentWorldDayProvider,
+        Func<PersonId, bool> actorInTransitProvider)
     {
         if (targetPersons == null) throw new ArgumentNullException(nameof(targetPersons));
         if (targetKnowledge == null) throw new ArgumentNullException(nameof(targetKnowledge));
-        PersonRoutePlanStore copy = new PersonRoutePlanStore(targetPersons, targetKnowledge, currentWorldDayProvider);
+        PersonRoutePlanStore copy = new PersonRoutePlanStore(targetPersons, targetKnowledge, currentWorldDayProvider, actorInTransitProvider);
         foreach (KeyValuePair<string, List<PersonRoutePlan>> entry in plansByActor)
         {
             PersonId actor = new PersonId(entry.Key);
@@ -374,4 +417,14 @@ public sealed class PersonRoutePlanInvariantReport
         result.Sort(StringComparer.Ordinal);
         Violations = new ReadOnlyCollection<string>(result);
     }
+}
+
+internal sealed class PreparedPersonRoutePlanChange
+{
+    internal readonly PersonRoutePlanStore Owner;
+    internal readonly long ExpectedRevision;
+    internal readonly long NextRevision;
+    internal readonly Dictionary<string, List<PersonRoutePlan>> NextPlans;
+    internal PreparedPersonRoutePlanChange(PersonRoutePlanStore owner, long expected, long next, Dictionary<string, List<PersonRoutePlan>> plans)
+    { Owner = owner; ExpectedRevision = expected; NextRevision = next; NextPlans = plans; }
 }

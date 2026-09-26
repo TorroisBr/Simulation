@@ -83,6 +83,7 @@ public sealed class SimulationRuntime
     private readonly PersonSpatialPositionStore personSpatialPositionStore;
     private readonly SpatialRouteKnowledgeStore spatialRouteKnowledgeStore;
     private readonly PersonRoutePlanStore personRoutePlanStore;
+    private readonly P8ETravelTransactionCoordinator p8eTravelTransactionCoordinator;
     private readonly SpatialRoutePlanningSystem spatialRoutePlanningSystem;
     private readonly ArmedForceStore armedForceStore;
     private readonly ContingentManpowerStateStore contingentManpowerStateStore;
@@ -147,6 +148,7 @@ public sealed class SimulationRuntime
     public PersonSpatialPositionStore PersonSpatialPositionStore => personSpatialPositionStore;
     public SpatialRouteKnowledgeStore SpatialRouteKnowledgeStore => spatialRouteKnowledgeStore;
     public PersonRoutePlanStore PersonRoutePlanStore => personRoutePlanStore;
+    public P8ETravelTransactionCoordinator P8ETravelTransactionCoordinator => p8eTravelTransactionCoordinator;
     public SpatialRoutePlanningSystem SpatialRoutePlanningSystem => spatialRoutePlanningSystem;
     public ArmedForceStore ArmedForceStore => armedForceStore;
     public ContingentManpowerStateStore ContingentManpowerStateStore => contingentManpowerStateStore;
@@ -496,6 +498,8 @@ public sealed class SimulationRuntime
                 personRoutePlanStore,
                 resolvedPersonStore,
                 resolvedSpatialRouteKnowledgeStore,
+                actor => resolvedPersonSpatialPositionStore.TryGetPosition(actor, out PersonSpatialPosition currentPosition)
+                    && currentPosition.IsInTransit,
                 () => this.simulationTime.AbsoluteDay,
                 this.simulationTime.AbsoluteDay);
         SpatialRoutePlanningSystem resolvedSpatialRoutePlanningSystem =
@@ -569,6 +573,9 @@ public sealed class SimulationRuntime
         this.personSpatialPositionStore = resolvedPersonSpatialPositionStore;
         this.spatialRouteKnowledgeStore = resolvedSpatialRouteKnowledgeStore;
         this.personRoutePlanStore = resolvedPersonRoutePlanStore;
+        p8eTravelTransactionCoordinator = new P8ETravelTransactionCoordinator(
+            resolvedPersonSpatialPositionStore, resolvedPersonRoutePlanStore, resolvedSpatialRouteKnowledgeStore,
+            resolvedSpatialAuthorityStore.PassageAuthority);
         this.spatialRoutePlanningSystem = resolvedSpatialRoutePlanningSystem;
         this.armedForceStore = resolvedArmedForceStore;
         this.contingentManpowerStateStore = resolvedManpowerStateStore;
@@ -2866,12 +2873,13 @@ public sealed class SimulationRuntime
         PersonRoutePlanStore source,
         PersonStore personStore,
         SpatialRouteKnowledgeStore knowledgeStore,
+        Func<PersonId, bool> actorInTransitProvider,
         Func<long> currentWorldDayProvider,
         long currentWorldDay)
     {
         if (source == null)
         {
-            return new PersonRoutePlanStore(personStore, knowledgeStore, currentWorldDayProvider);
+            return new PersonRoutePlanStore(personStore, knowledgeStore, currentWorldDayProvider, actorInTransitProvider);
         }
 
         PersonRoutePlanInvariantReport report = source.ValidateInvariants();
@@ -2893,7 +2901,7 @@ public sealed class SimulationRuntime
             }
         }
 
-        return source.CloneForRuntime(personStore, knowledgeStore, currentWorldDayProvider);
+        return source.CloneForRuntime(personStore, knowledgeStore, currentWorldDayProvider, actorInTransitProvider);
     }
 
     private static ArmedForceSpatialStateStore CloneArmedForceSpatialStateStore(
