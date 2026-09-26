@@ -12,8 +12,9 @@
   integration candidate on `codex/phase8/P8DArchitectureRefreshIntegration`,
   based on `c285466c355103d3637ac165246591b72eb7bda0`. Targeted temporal-profile
   revalidation and the required validation gates pass; independent final review
-  and explicit approval for canonical promotion remain pending. P8-E is design-
-  approved and waits for promoted P8-D capability.
+  and final promotion check pass. P8-D is ready for canonical promotion but is
+  not promoted in this record. P8-E is design-approved and waits for promoted
+  P8-D capability.
 
 ## Architecture requirement refresh — 2026-09-26
 
@@ -26,11 +27,10 @@ Briefs for the new dependencies and candidate impact.
 
 P8-A/B/C remain canonical and valid in their delivered scope. P8-D's refreshed
 integration candidate completed the targeted temporal-profile revalidation
-recorded below; it remains a candidate pending independent final review and
-explicit canonical-promotion approval. P8-E's existing explicit-operation
-proving schedule remains a bounded transitional slice, with automatic intraday
-travel deferred to P18-D. The spatial A → B/C → D → E capability graph remains
-unchanged.
+recorded below; its independent final review and promotion-readiness check pass.
+P8-E's existing explicit-operation proving schedule remains a bounded
+transitional slice, with automatic intraday travel deferred to P18-D. The
+spatial A → B/C → D → E capability graph remains unchanged.
 
 ## Multi-participant requirement refresh — 2026-09-26
 
@@ -45,6 +45,14 @@ gate beyond the already recorded temporal impact review, and no delivered
 capability. Existing P8 implementation/validation and P8-D/E candidate scopes
 are preserved; future traveling-together integration is a separate consumer.
 No P18/P20 State is created because neither phase has delivered implementation.
+
+Targeted P8-E design-impact revalidation against canonical `c285466` and both
+alignment records passed for the reviewed technical design at
+`4b7127f57d354c851e4d8ddaaeb27e8fbd51686c`. Its one-Person explicit-operation
+journey remains a bounded profile with no autonomous daily progression or
+per-day travel cap, and it establishes no permanent Activity-to-Actor relation.
+Implementation remains blocked on promoted P8-B/C/D capabilities and their
+published APIs; intraday travel remains a P18-D consumer.
 
 ## P8-A — Factual Geography
 
@@ -208,5 +216,6 @@ P8-E follows promoted B/C/D and the Phase 8 integration validation gate.
 
 The daily loop and long-horizon behavior remain unchanged, so no long-run suite
 was run. Independent final review against refreshed candidate `8186e8d` passed;
-`git diff --check` passes. P8-D remains an integration candidate pending
-explicit canonical-promotion approval; no promotion is recorded or implied here.
+`git diff --check` passes. The final promotion-readiness check also passed
+against this candidate and its retained reports. P8-D remains an integration
+candidate until the canonical branch is advanced.
