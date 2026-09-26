@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 
 /// <summary>A nonnegative logical instant in millisecond-sized simulation quanta.</summary>
 public struct LogicalTick : IEquatable<LogicalTick>, IComparable<LogicalTick>
@@ -48,7 +49,8 @@ public sealed class DailyBoundaryOperation
     public string ProfileId { get; }
     public long AbsoluteDay { get; }
     public LogicalTick DueAt { get; }
-    public string OccurrenceId => WorldId + ":" + ProfileId + ":day-boundary:" + AbsoluteDay;
+    public string OccurrenceId => SpatialStableKey.Encode(WorldId, ProfileId,
+        AbsoluteDay.ToString(CultureInfo.InvariantCulture));
 
     public DailyBoundaryOperation(string worldId, string profileId, long absoluteDay)
     {
@@ -442,8 +444,11 @@ public sealed class SimulationTimeline
         left.OwnerId == right.OwnerId && left.DueWorkId == right.DueWorkId
         && left.OccurrenceSequence == right.OccurrenceSequence;
 
-    private static string Identity(DueWorkReference reference) => reference.OwnerId + "\n" + reference.DueWorkId
-        + "\n" + reference.Revision + "\n" + reference.OccurrenceSequence;
+    private static string Identity(DueWorkReference reference) => SpatialStableKey.Encode(
+        reference.OwnerId,
+        reference.DueWorkId,
+        reference.Revision.ToString(CultureInfo.InvariantCulture),
+        reference.OccurrenceSequence.ToString(CultureInfo.InvariantCulture));
 
     private static long FirstKey<T>(SortedDictionary<long, T> dictionary)
     {

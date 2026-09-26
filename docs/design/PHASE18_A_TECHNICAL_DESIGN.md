@@ -89,9 +89,12 @@ The P18-A reconstruction inventory is:
 - `MaxDispatchesPerInstant` and other effective settings that change dispatch acceptance;
 - stable pending due-work facts, their owner IDs/revisions, occurrence/generation identities, due instants, and recurrence inputs where owned;
 - captured external inputs with target instants, accepted sequence identities/order, and the sealed boundary state;
+- any pending crossed day-boundary operation's stable world/profile/day identity, encoded with injective length-prefixed string components, together with the boundary owner's pending/committed idempotency identity and effect state;
 - the causal sequence allocator state used for same-instant scheduling;
 - domain state needed to resolve each descriptor and validate/consume it, plus compatible simulation/content versions;
 - deterministic random state/context only when a dispatched owner operation consumes it.
+
+Composite stable keys (including owner/work/revision/occurrence components and boundary world/profile/day identity) use injective length-prefixed string encoding so delimiter-bearing IDs cannot alias.
 
 The scheduler index itself may be omitted if it is deterministically rebuilt from those facts. If any queue field affects order and is not derivable, it is causal state and must be preserved. Host references/delegates, transient Unity objects, and registration order cannot substitute for stable IDs and inputs. This is an inventory contract only; save/load format, replay engine, history retention, and persistence implementation remain later work under the P12/P13 edges.
 

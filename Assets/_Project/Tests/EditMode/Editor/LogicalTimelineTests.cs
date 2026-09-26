@@ -213,6 +213,28 @@ public sealed class LogicalTimelineTests
     }
 
     [Test]
+    public void LengthPrefixedDueWorkIdentityKeepsDelimiterBearingComponentsDistinct()
+    {
+        DueOwner owner = new DueOwner();
+        SimulationTimeline timeline = new SimulationTimeline(Calendar(), new LogicalTick(0), owner);
+        owner.Current.Add("c"); owner.Current.Add("b\nc");
+        DueWorkReference first = new DueWorkReference("a\nb", "c", "instance-1", 1, 2, new LogicalTick(10));
+        DueWorkReference second = new DueWorkReference("a", "b\nc", "instance-2", 1, 2, new LogicalTick(10));
+        Assert.That(timeline.TryIndexOwnerFact(first, out _), Is.True);
+        Assert.That(timeline.TryIndexOwnerFact(second, out TimelineFailure failure), Is.True, failure.ToString());
+        Assert.That(timeline.PreviewDueWork(new LogicalTick(10)).Count, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void LengthPrefixedBoundaryIdentityKeepsDelimiterBearingWorldAndProfileDistinct()
+    {
+        DailyBoundaryOperation first = new DailyBoundaryOperation("world:segment", "profile", 1);
+        DailyBoundaryOperation second = new DailyBoundaryOperation("world", "segment:profile", 1);
+        Assert.That(first.OccurrenceId, Is.Not.EqualTo(second.OccurrenceId));
+        Assert.That(first.OccurrenceId, Is.EqualTo("13:world:segment7:profile1:1"));
+    }
+
+    [Test]
     public void SameInstantGeneratedWorkUsesNextCausalWaveAfterCurrentWave()
     {
         DueOwner owner = new DueOwner();
@@ -306,7 +328,7 @@ public sealed class LogicalTimelineTests
             LogicalTick.TicksPerDay), out _), Is.True);
         Assert.That(timeline.TrySealInputsThrough(new LogicalTick(LogicalTick.TicksPerDay), out _), Is.True);
         Assert.That(timeline.TryAdvanceTo(new LogicalTick(LogicalTick.TicksPerDay), out _), Is.True);
-        CollectionAssert.AreEqual(new[] { "input:choice", "boundary:ordered-world:ordered-profile:day-boundary:1", "due:ordinary" }, order);
+        CollectionAssert.AreEqual(new[] { "input:choice", "boundary:13:ordered-world15:ordered-profile1:1", "due:ordinary" }, order);
     }
 
     [Test]
@@ -323,7 +345,7 @@ public sealed class LogicalTimelineTests
         Assert.That(timeline.PreviewDueWork(new LogicalTick(LogicalTick.TicksPerDay)).Count, Is.EqualTo(2));
         Assert.That(timeline.TrySealInputsThrough(new LogicalTick(2 * LogicalTick.TicksPerDay), out _), Is.True);
         Assert.That(timeline.TryAdvanceTo(new LogicalTick(2 * LogicalTick.TicksPerDay), out _), Is.True);
-        CollectionAssert.AreEqual(new[] { "world:intraday:day-boundary:1", "world:intraday:day-boundary:2" }, boundary.Attempts);
+        CollectionAssert.AreEqual(new[] { "5:world8:intraday1:1", "5:world8:intraday1:2" }, boundary.Attempts);
         CollectionAssert.AreEqual(new[] { "effect:1", "effect:2" }, boundary.Effects);
     }
 
