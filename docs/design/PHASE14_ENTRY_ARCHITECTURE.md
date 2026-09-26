@@ -1,6 +1,6 @@
 # Phase 14 Entry Architecture — Bounded v1 Proposal
 
-**Status:** `ENTRY_ARCHITECTURE_READY`; this recommended scope is pending independent entry review. It is a proposal for technical design, not canonical architecture, an implementation contract, checkpoint approval, or authorization to implement. No Phase 14 checkpoint IDs are approved.
+**Status:** `ENTRY_ARCHITECTURE_READY`; the prior refreshed proposal passed independent entry review at `109341530c6d5f293974fc0475ff0c7c1279c7a4`. This revision records a targeted identity reconciliation against the actual P8 owner lookup and requires re-review of that clarification. It remains a proposal for technical design, not canonical architecture, an implementation contract, checkpoint approval, or authorization to implement. No Phase 14 checkpoint IDs are approved.
 
 **Observed code base:** Phase 8 canonical at `c5b2e06b534f4b2af38f10e6510b10800aa8b28c`, incorporating architecture baseline `c285466c355103d3637ac165246591b72eb7bda0`. P8-A through P8-D are canonical. P8-E remains a separate promotion-pending candidate; its existing design and candidate conclusions are preserved. The Phase 14 Brief is `ENTRY_ARCHITECTURE_READY`. This packet inspects the current canonical code; any specifically historical P7 facts are labeled as such.
 
@@ -17,7 +17,7 @@ Relevant architecture rules in `docs/SIMULATION_ARCHITECTURE.md`:
 - §§91–92 require recoverable causal state at simulated boundaries and distinguish save/reconstruction from history; the project is not event-sourced by default.
 - §13 keeps economy, merchant autonomy, effective configuration, and commercial knowledge as distinct concerns.
 
-`docs/EXECUTION_MODEL.md` separates entry architecture, technical design, and implementation. The design proposal below must pass independent entry review before technical design. No Phase 14 State or checkpoint contract exists in the observed base.
+`docs/EXECUTION_MODEL.md` separates entry architecture, technical design, and implementation. Independent entry review passed on the refreshed proposal; technical design remains a separate review gate. No Phase 14 State or checkpoint contract exists in the observed base.
 
 ## 2. Current repository evidence
 
@@ -28,7 +28,7 @@ Relevant architecture rules in `docs/SIMULATION_ARCHITECTURE.md`:
 | Trade and inventories | `InventoryRuntime` stores integer item quantities on an `NpcRuntime`. `EconomyTransactionService` supports item transfers and checks money, stock, and capacity for its current transaction types. Trade receipts identify runtime IDs. | Merchant transfer, actor carriage, and durable title are outside the proposed first consumer. Their existing runtime-ID transaction path does not establish a general asset/title model. |
 | Money | `MoneyEffect` distinguishes transfers and deliberate monetary sources/sinks. Population consumption defaults to free; account-backed consumption is also implemented. | The proposed proving case uses free consumption and makes no monetary mutation. |
 | Property | `PropertyOwnershipStore` records `PropertyId → PersonId` and provides explicit property-transfer transitions. | It is a Person-based property foundation, not a generic stock or material-title store. |
-| Spatial authority | P8-A provides factual Hex/Location geography; P8-C composes stable City/Site anchor bindings and Person spatial position; P8-D is now canonical. P8-E remains promotion-pending. | A source attached to a City uses that City's stable semantic key, the same City key used by its P8 anchor binding, and needs only its current P8 Location anchor. No route or passage behavior is needed for same-City production and consumption. |
+| Spatial authority | P8-A provides factual Hex/Location geography; P8-C composes City/Site anchor bindings and Person spatial position; P8-D is canonical. P8-E remains promotion-pending. | A source attaches to a City instance with an authored stable `SettlementSemanticId` and its P8 `LocationId`. The current P8 City anchor owner key is checked against `CityRuntime.RuntimeId` during composition, so it is only an in-process lookup key for this profile, not durable settlement identity. No route or passage behavior is needed for same-City production and consumption. |
 | Daily execution | With Economy enabled, `SimulationRuntime.AdvanceDay()` runs City production for all cities, then population consumption and price updates. | The proposed cadence follows this existing daily autonomous order. |
 
 The relevant existing coverage includes `SettlementStockOwnershipTests`, `PopulationConsumptionTests`, `EconomyTransactionTests`, and `PropertyTransferFoundationTests`. These tests demonstrate current behavior; they do not choose Phase 14 product scope. No tests were run as part of this documentation proposal.
@@ -50,9 +50,9 @@ The proving scenario isolates this source and sink. It does not include merchant
 These are the recommended entry decisions for this bounded v1; they are proposals, not accepted canonical decisions.
 
 1. **First consumer and closure:** one City’s configured daily production into its own market, followed by consumption by that City’s population. The closure boundary is the closing market balance after that consumption.
-2. **Source semantics:** each configured output is an explicit exogenous source with a stable authored source key; source identity never comes from a list position. If a legacy entry has no key, compatibility is limited to a unique stable-City-key-plus-item identity within that City's configured sources. Duplicate entries that this scoped identity cannot distinguish require stable authored keys and are unsupported by that compatibility path. Inputs, finite reserves, depletion, and processing are outside v1.
+2. **Source semantics:** each configured output is an explicit exogenous source with a stable authored source key; source identity never comes from a list position. If a legacy entry has no key, compatibility is limited to a unique `SettlementSemanticId`-plus-item identity within that settlement's configured sources. Duplicate entries that this scoped identity cannot distinguish require stable authored keys and are unsupported by that compatibility path. Inputs, finite reserves, depletion, and processing are outside v1.
 3. **Accounting depth:** count abstract integer quantities per `ItemDefinitionId`, stored as aggregate balances. Do not introduce physical units, lots, source provenance, or transformations.
-4. **Title and custody:** the settlement/City owns the configured source and output; the City market is the custodian of the aggregate stock. The settlement semantic identity is the stable City key already used by the P8 City anchor binding, never `CityRuntime.RuntimeId`; the P8 `LocationId` is an anchor reference and does not replace City identity. This v1 needs only that concrete settlement holder, not a universal holder model.
+4. **Title and custody:** the settlement/City owns the configured source and output; the City market is the custodian of the aggregate stock. Each selected City instance carries an authored stable `SettlementSemanticId`, independent of `CityData.DefinitionId`, the legacy P8 anchor owner key, and `CityRuntime.RuntimeId`. The profile records its association with the current P8 `LocationId`; runtime object/ID references are lookup handles only. This v1 needs only that concrete settlement holder, not a universal holder model.
 5. **Spatial scope:** anchor the source at the current P8 City Location. No Hex footprint, route, passage, or physical transport is included.
 6. **Execution and cadence:** use the existing daily autonomous economy cadence, gated by `Economy.Enabled`, with production before consumption. This is not command-initiated production.
 7. **Money:** use free population consumption. No money moves in the proposed flow; no payer, receiver, account, or monetary source/sink is introduced.
@@ -83,9 +83,9 @@ This is a reconstruction constraint, not a requirement to retain every operation
 
 If independent entry review accepts this proposal, technical design should resolve:
 
-1. How to assign durable semantic IDs to a City production source and its market store, using the stable City key shared with the P8 anchor binding for settlement identity, and preserving the P12/P13 identity contract.
+1. Technical design should specify how the selected profile carries the already selected authored, stable per-instance `SettlementSemanticId` and its P8 `LocationId` association, then assign durable source and market-store IDs without persisting the current runtime-keyed P8 owner lookup. Preserve the P12/P13 identity contract; do not use definition, display, list-position, or runtime identity as an instance ID.
 2. How to apply production and consumption without partial mutation, including overflow, insufficient stock, and the existing mutation guards.
 3. Which existing City market state is the authoritative owned store for this slice and how its title/custody projection composes with existing market counterparties and transaction paths.
 4. Which source, stock, configuration, order, and result fields must appear in deterministic diagnostics/reconstruction projections so later save/fork work can preserve the causal state.
 
-These are technical design questions within the proposed product boundary. Independent entry review remains the next gate; this document creates no checkpoint IDs and grants no implementation approval.
+These are technical design questions within the proposed product boundary. This document creates no checkpoint IDs and grants no implementation approval.
