@@ -46,6 +46,34 @@ public sealed class ActorChoiceDiagnosticsTests
     }
 
     [Test]
+    public void SnapshotInvariantsMatchStoreDecisionRecordIdSemanticsForNonDispatchDispositions()
+    {
+        AssertDecisionRecordIdDoesNotInvalidate(
+            ActorChoiceInputStatus.Pending,
+            CreateDisposition(1, ActorChoiceDispositionKind.Deferred, 0, 0,
+                deferralReason: ActorChoiceDeferralReason.Traveling, decisionRecordId: "decision-deferred"));
+        AssertDecisionRecordIdDoesNotInvalidate(
+            ActorChoiceInputStatus.Rejected,
+            CreateDisposition(1, ActorChoiceDispositionKind.Rejected, 0, 0,
+                failure: ActorChoiceFailure.ActorUnavailable, decisionRecordId: "decision-rejected"));
+
+        ActorChoiceDisposition dispatch = CreateDisposition(1, ActorChoiceDispositionKind.DispatchStarted, 0, 0);
+        AssertDecisionRecordIdDoesNotInvalidate(
+            ActorChoiceInputStatus.AttemptReturned,
+            dispatch,
+            CreateDisposition(2, ActorChoiceDispositionKind.AttemptReturned, 0, 0,
+                attemptOutcome: ActorChoiceAttemptOutcome.Succeeded,
+                returnedResultStatus: NpcActionResultType.Success,
+                decisionRecordId: "decision-returned"));
+        AssertDecisionRecordIdDoesNotInvalidate(
+            ActorChoiceInputStatus.AttemptThrew,
+            dispatch,
+            CreateDisposition(2, ActorChoiceDispositionKind.AttemptThrew, 0, 0,
+                attemptOutcome: ActorChoiceAttemptOutcome.Threw,
+                decisionRecordId: "decision-threw"));
+    }
+
+    [Test]
     public void SnapshotCanonicalExportAndDiffExposeInputAndLifecycle()
     {
         ActorChoiceStore store = new ActorChoiceStore(new PersonStore());
@@ -91,6 +119,14 @@ public sealed class ActorChoiceDiagnosticsTests
         });
         return new WorldStateSnapshot(absoluteDay: 1L,
             actorChoices: new[] { new WorldStateActorChoiceSnapshot(input) });
+    }
+
+    private static void AssertDecisionRecordIdDoesNotInvalidate(
+        ActorChoiceInputStatus status,
+        params ActorChoiceDisposition[] dispositions)
+    {
+        WorldStateInvariantReport report = WorldStateInvariantValidator.Validate(CreateSnapshot(status, dispositions));
+        Assert.That(report.Errors, Has.None.Property("Code").EqualTo("ActorChoiceLifecycleTransitionInvalid"));
     }
 
     private static ActorChoiceDisposition CreateDisposition(
