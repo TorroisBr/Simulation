@@ -55,11 +55,13 @@ mutation. There are no roles or optional participants in this fixture.
 
 Each required Person independently receives an accept-or-decline opportunity.
 The decision reads only that Person's allowed Knowledge and records its
-decision identity, logical boundary, and relevant source revision. Decline
-makes the fixture `NotFormed`; any instance reservation already made is
-released coherently. A missing decision leaves the instance Proposed and
-non-executable. No acceptance is inferred from another participant, the
-proposer, a roster, shared context, or the UI.
+decision identity, logical boundary, and relevant source revision. A decline
+maps to P18-B's `Proposed → Cancelled` transition, with P20's `NotFormed`
+terminal disposition. The disposition and release of any instance reservation
+already made are one coherent owner mutation. `NotFormed` is a P20 outcome
+label, not a new P18-B lifecycle state. A missing decision leaves the instance
+Proposed and non-executable. No acceptance is inferred from another
+participant, the proposer, a roster, shared context, or the UI.
 
 Acceptance requests that Person's commitment for the same half-open future
 fixture interval `[start, end)`, with integer P18-A ticks and checked range.
@@ -111,8 +113,9 @@ takes P18-B's supported terminal cancellation disposition with a P20
 add a new generic lifecycle state. Explicit pre-start cancellation follows
 P18-B's Cancel transition,
 invalidates the pending due reference by revision, and releases both
-commitments atomically. Either decline also prevents execution and releases
-any fixture reservation already established. These terminal transitions
+commitments atomically. Either decline uses the same `Proposed → Cancelled`
+transition with `NotFormed` disposition and releases any fixture reservation
+already established. These terminal transitions
 preserve decisions and causal outcomes; they do not erase history or roll
 back effects that have already committed. No retry, recruitment, withdrawal
 after start, mid-execution roster change, or generic interruption policy is
