@@ -1,8 +1,12 @@
 # Phase 9 First-Profile Checkpoint Contract Proposal — UNAPPROVED
 
-**Status:** proposed bounded contract for independent review and formal
-acceptance. This document assigns no approved P9 checkpoint ID, changes no
-Phase Brief/State/Roadmap, and authorizes no implementation.
+**Status:** proposed bounded contract; independent review **PASS** at
+`12313cb18d351041b75caa04d658b8fab5b75e9b` against canonical
+`c5b2e06b534f4b2af38f10e6510b10800aa8b28c` including `c285466` and both
+2026-09-26 alignment records. The review found no blocking issue and confirmed
+the authored population/economy and order-sensitive input corrections. Formal
+acceptance remains pending. This document assigns no approved P9 checkpoint ID,
+changes no Phase Brief/State/Roadmap, and authorizes no implementation.
 
 **Product scope:** the user-approved first delivery is the existing authored
 Unity bootstrap world as a proving profile for a generic deterministic genesis
@@ -305,8 +309,8 @@ product scope:
    `TesteSimulacao` construction does not yet implement it.
 
 These choices become formal only if the proposal is accepted. The remaining
-gates are independent review, formal acceptance of this contract, and separate
-implementation authorization; no checkpoint ID is assigned here.
+gates are formal acceptance of this contract and separate implementation
+authorization; no checkpoint ID is assigned here.
 
 ## 8. Proposal boundary and required review
 
@@ -316,7 +320,7 @@ the Roadmap, or Phase 8 State. It does not authorize implementation or claim
 that the current Unity bootstrap already meets the deterministic-genesis
 contract.
 
-Required next gates are independent architecture/design review of this
-proposal, formal human acceptance of its bounded technical requirements, and
-separate implementation authorization under repository policy. No checkpoint
-IDs are assigned here.
+Independent architecture/design review passed for the proposal revision
+identified above. Remaining gates are formal human acceptance of its bounded
+technical requirements and separate implementation authorization under
+repository policy. No checkpoint IDs are assigned here.
