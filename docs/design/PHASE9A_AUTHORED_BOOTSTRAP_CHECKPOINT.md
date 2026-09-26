@@ -12,6 +12,10 @@ candidate branch and does not claim canonical delivery or authorize promotion.
   Phase 8 closure tip `0ae50551c8cc662469ef06e05f19389de6fbde7d` through a
   non-rewriting merge. Its changed path is `docs/PHASE8_STATE.md`; implementation
   and architecture impact is `UPSTREAM_IRRELEVANT`.
+- The current canonical Phase 8 baseline is now `470667d37863384edadb3d93ef64d8004aff46a3`,
+  included through a subsequent non-rewriting merge. The `0ae5055` to `470667d`
+  update changes only `docs/PHASE8_STATE.md` and is `UPSTREAM_IRRELEVANT` to P9-A
+  implementation code.
 - Architecture baseline: `c285466c355103d3637ac165246591b72eb7bda0`.
 - P8-E canonical promotion: `d95b60d174cb0b17df09e2775b3cbd134c74b21f`.
 - Current impact constraints: both
@@ -97,6 +101,8 @@ silently skipped to publish a partial profile.
 - NPC rows must be non-null, resolve a unique authored `NpcData` definition,
   and preserve starting-city, initial-money, ordered inventory, and ordered
   initial-known-site inputs. No stable Person identity is added in P9-A.
+- City production rows are consumed in authored source order; their ordinal
+  positions are part of canonical provenance even when rows share an item.
 - Configured actions, statuses, jobs, items, warrants, directives and
   knowledge references are validated against the selected definitions and
   domain semantics before publication. Each selected warrant/directive must
@@ -106,6 +112,10 @@ silently skipped to publish a partial profile.
   Do not reject that supported multiplicity as a duplicate output key. The
   current ordered warrant/directive list positions are causal input and remain
   ordered.
+- NPC default actions and job work actions must resolve to the exact selected
+  action definition objects in `SimulationConfigData.Actions`; matching IDs on
+  a different object do not establish the selected content reference. Existing
+  NPC/item capability authoring validators run for each selected definition.
 - `NpcStatusData` and `NpcJobData` selected by the profile carry explicit,
   serialized, non-empty stable `DefinitionId` values. Display labels and coarse
   job enums are not identities; selected definitions must have unique IDs.

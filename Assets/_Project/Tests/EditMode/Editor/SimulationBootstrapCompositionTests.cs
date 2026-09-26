@@ -107,6 +107,8 @@ public sealed class SimulationBootstrapCompositionTests
         NpcActionData action = SimulationTestFactory.CreateAction("genesis-action", NpcActionType.Hide, NpcActionCategory.Crime);
         ItemData fingerprintItem = SimulationTestFactory.CreateItem("genesis-fingerprint-item", 10f);
         city.marketItems.Add(new MarketItemConfig { item = fingerprintItem, initialAmount = 4, desiredAmount = 7 });
+        city.productionConfigs.Add(new CityProductionConfig { item = fingerprintItem, amountPerDay = 2 });
+        city.productionConfigs.Add(new CityProductionConfig { item = fingerprintItem, amountPerDay = 5 });
         config.Cities.Add(city);
         config.Cities.Add(unorderedCity);
         config.Npcs.Add(new NpcSimulationConfig { npc = npc, startingCity = city });
@@ -121,6 +123,10 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(first, Is.EqualTo(same));
         config.Cities.Reverse();
         Assert.That(SimulationGenesisPipeline.CreateFingerprint(config, effective, calendar, out _), Is.EqualTo(first));
+        string beforeProductionReorder = SimulationGenesisPipeline.CreateFingerprint(config, effective, calendar, out _);
+        city.productionConfigs.Reverse();
+        Assert.That(SimulationGenesisPipeline.CreateFingerprint(config, effective, calendar, out _), Is.Not.EqualTo(beforeProductionReorder));
+        city.productionConfigs.Reverse();
         Assert.That(SimulationGenesisPipeline.ResolveStageOrder(), Is.EqualTo(new[]
         {
             "p9.genesis.resolve-profile/v1", "p9.genesis.authored-world/v1",
@@ -156,6 +162,69 @@ public sealed class SimulationBootstrapCompositionTests
 
         Assert.DoesNotThrow(() => SimulationGenesisPipeline.ValidateProfile(config));
         secondOrigin.connections.Add(new CityConnection { destination = secondDestination, travelDays = 3 });
+        Assert.Throws<System.InvalidOperationException>(() => SimulationGenesisPipeline.ValidateProfile(config));
+    }
+
+    [Test]
+    public void DefaultAndJobWorkActionsMustReferenceTheExactSelectedDefinitionObject()
+    {
+        SimulationConfigData config = SimulationTestFactory.CreateSimulationConfig();
+        CityData city = SimulationTestFactory.CreateCityData("exact-action-city");
+        NpcData npc = SimulationTestFactory.CreateNpc("exact-action-npc");
+        NpcActionData selectedAction = SimulationTestFactory.CreateAction("same-action-id", NpcActionType.Hide);
+        NpcActionData unselectedTwin = SimulationTestFactory.CreateAction("same-action-id", NpcActionType.Hide);
+        config.Cities.Add(city);
+        config.Npcs.Add(new NpcSimulationConfig { npc = npc, startingCity = city });
+        config.Actions.Add(selectedAction);
+        npc.acoesPadrao.Add(new NPCDefaultAction { action = unselectedTwin, baseUtility = 5f });
+
+        Assert.Throws<System.InvalidOperationException>(() => SimulationGenesisPipeline.ValidateProfile(config));
+
+        npc.acoesPadrao.Clear();
+        npc.job.workAction = unselectedTwin;
+        Assert.Throws<System.InvalidOperationException>(() => SimulationGenesisPipeline.ValidateProfile(config));
+
+        npc.job.workAction = selectedAction;
+        Assert.DoesNotThrow(() => SimulationGenesisPipeline.ValidateProfile(config));
+    }
+
+    [Test]
+    public void SelectedNpcAndItemCapabilityAuthoringUseDomainValidators()
+    {
+        SimulationConfigData npcConfig = SimulationTestFactory.CreateSimulationConfig();
+        CityData city = SimulationTestFactory.CreateCityData("invalid-capability-city");
+        NpcData npc = SimulationTestFactory.CreateNpc("invalid-capability-npc");
+        npc.capabilityValues.Add(new CapabilityAttributeValue(
+            SimulationTestFactory.CreateCapabilityAttribute("invalid-capability-attribute"), -1f));
+        npcConfig.Cities.Add(city);
+        npcConfig.Npcs.Add(new NpcSimulationConfig { npc = npc, startingCity = city });
+        System.InvalidOperationException npcFailure = Assert.Throws<System.InvalidOperationException>(
+            () => SimulationGenesisPipeline.ValidateProfile(npcConfig));
+        Assert.That(npcFailure.Message, Does.Contain("Selected NPC capability authoring is invalid"));
+
+        SimulationConfigData itemConfig = SimulationTestFactory.CreateSimulationConfig();
+        CityData itemCity = SimulationTestFactory.CreateCityData("invalid-item-city");
+        ItemData item = SimulationTestFactory.CreateItem("invalid-item-capability");
+        item.CapabilityModifiers.Add(new CapabilityAttributeModifier(
+            SimulationTestFactory.CreateCapabilityAttribute("invalid-item-attribute"), -1f));
+        itemCity.marketItems.Add(new MarketItemConfig { item = item });
+        itemConfig.Cities.Add(itemCity);
+        System.InvalidOperationException itemFailure = Assert.Throws<System.InvalidOperationException>(
+            () => SimulationGenesisPipeline.ValidateProfile(itemConfig));
+        Assert.That(itemFailure.Message, Does.Contain("Selected item capability authoring is invalid"));
+    }
+
+    [Test]
+    public void ActionStatusWeightsAreIncludedInStableStatusIdentityValidation()
+    {
+        SimulationConfigData config = SimulationTestFactory.CreateSimulationConfig();
+        NpcStatusData selectedStatus = SimulationTestFactory.CreateStatus("duplicate-weight-status");
+        NpcStatusData unselectedTwin = SimulationTestFactory.CreateStatus("duplicate-weight-status");
+        NpcActionData action = SimulationTestFactory.CreateAction("weighted-action", NpcActionType.Hide);
+        action.statusModifiers.Add(new StatusWeightModifier { status = unselectedTwin, multiplier = 2f });
+        config.Statuses.Add(selectedStatus);
+        config.Actions.Add(action);
+
         Assert.Throws<System.InvalidOperationException>(() => SimulationGenesisPipeline.ValidateProfile(config));
     }
 

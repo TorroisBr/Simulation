@@ -115,11 +115,9 @@ public static class SimulationGenesisPipeline
                 markets.Add(market);
             markets.Sort((a, b) => StringComparer.Ordinal.Compare(a?.item?.DefinitionId, b?.item?.DefinitionId));
             foreach (MarketItemConfig market in markets) Add(fields, "market", city.DefinitionId, market?.item?.DefinitionId, market?.initialAmount, market?.desiredAmount, market?.consumptionPer1000Population.ToString("R", CultureInfo.InvariantCulture));
-            var production = new List<CityProductionConfig>();
+            int productionIndex = 0;
             foreach (CityProductionConfig input in city.productionConfigs ?? new List<CityProductionConfig>())
-                production.Add(input);
-            production.Sort((a, b) => StringComparer.Ordinal.Compare(a?.item?.DefinitionId, b?.item?.DefinitionId));
-            foreach (CityProductionConfig input in production) Add(fields, "production", city.DefinitionId, input?.item?.DefinitionId, input?.amountPerDay);
+                Add(fields, "production", city.DefinitionId, productionIndex++, input?.item?.DefinitionId, input?.amountPerDay);
             var routes = new List<CityConnection>();
             foreach (CityConnection route in city.connections ?? new List<CityConnection>())
                 routes.Add(route);
@@ -180,6 +178,9 @@ public static class SimulationGenesisPipeline
             if (action?.statusToRemove != null) selectedStatuses.UnionWith(action.statusToRemove);
             if (action?.targetStatusToAdd != null) selectedStatuses.UnionWith(action.targetStatusToAdd);
             if (action?.targetStatusToRemove != null) selectedStatuses.UnionWith(action.targetStatusToRemove);
+            if (action?.statusModifiers != null)
+                foreach (StatusWeightModifier weight in action.statusModifiers)
+                    if (weight != null) selectedStatuses.Add(weight.status);
         }
         var orderedStatuses = new List<NpcStatusData>(selectedStatuses);
         orderedStatuses.RemoveAll(value => value == null);
@@ -346,6 +347,18 @@ public static class SimulationGenesisPipeline
         statuses.Add(config.hiddenStatus);
         foreach (NpcSimulationConfig npc in config.Npcs)
             if (npc.npc.statusPadrao != null) statuses.AddRange(npc.npc.statusPadrao);
+        foreach (NpcActionData action in config.Actions)
+        {
+            if (action == null) continue;
+            if (action.statusNecessariosParaFazerAcao != null) statuses.AddRange(action.statusNecessariosParaFazerAcao);
+            if (action.statusToAdd != null) statuses.AddRange(action.statusToAdd);
+            if (action.statusToRemove != null) statuses.AddRange(action.statusToRemove);
+            if (action.targetStatusToAdd != null) statuses.AddRange(action.targetStatusToAdd);
+            if (action.targetStatusToRemove != null) statuses.AddRange(action.targetStatusToRemove);
+            if (action.statusModifiers != null)
+                foreach (StatusWeightModifier weight in action.statusModifiers)
+                    if (weight != null) statuses.Add(weight.status);
+        }
         var uniqueStatuses = new HashSet<NpcStatusData>();
         foreach (NpcStatusData status in statuses)
             if (status != null && uniqueStatuses.Add(status) == false) continue;
@@ -436,12 +449,15 @@ public static class SimulationGenesisPipeline
                 if (weight == null || weight.status == null || string.IsNullOrWhiteSpace(weight.status.DefinitionId))
                     throw new InvalidOperationException("Action weights must resolve stable status definitions.");
         }
+        foreach (NpcJobData job in jobs)
+            if (job.workAction != null && !config.Actions.Contains(job.workAction))
+                throw new InvalidOperationException("Selected job work actions must resolve to the exact selected action definition.");
         foreach (NpcSimulationConfig npc in config.Npcs)
         {
             if (npc.npc.acoesPadrao == null || npc.npc.statusPadrao == null || npc.npc.traits == null || npc.npc.capabilityValues == null)
                 throw new InvalidOperationException("NPC authored action/status collections must be present.");
             foreach (NPCDefaultAction action in npc.npc.acoesPadrao)
-                if (action == null || action.action == null || !actionIds.Contains(action.action.DefinitionId))
+                if (action == null || action.action == null || !config.Actions.Contains(action.action))
                     throw new InvalidOperationException("NPC default actions must resolve to selected action definitions.");
             foreach (NpcStatusData status in npc.npc.statusPadrao)
                 if (status == null || string.IsNullOrWhiteSpace(status.DefinitionId))
@@ -451,10 +467,15 @@ public static class SimulationGenesisPipeline
             foreach (CapabilityAttributeValue value in npc.npc.capabilityValues)
                 if (value == null || value.Attribute == null || string.IsNullOrWhiteSpace(value.Attribute.DefinitionId))
                     throw new InvalidOperationException("NPC capability values require stable attribute definitions.");
+            if (!CapabilityAuthoringValidator.ValidateNpc(npc.npc, out string npcDiagnostic))
+                throw new InvalidOperationException("Selected NPC capability authoring is invalid: " + npcDiagnostic);
             foreach (ExplorableSiteData knownSite in npc.InitialKnownExplorableSites)
                 if (knownSite == null || !siteIds.Contains(knownSite.DefinitionId))
                     throw new InvalidOperationException("NPC initial Knowledge must resolve to a selected explorable site.");
         }
+        foreach (ItemData item in selectedItems)
+            if (!CapabilityAuthoringValidator.ValidateItem(item, out string itemDiagnostic))
+                throw new InvalidOperationException("Selected item capability authoring is invalid: " + itemDiagnostic);
     }
 
     private struct RouteKey : IEquatable<RouteKey>
