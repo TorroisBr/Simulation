@@ -2,11 +2,11 @@
 
 **Status:** INTEGRATED AND REVIEWED REFRESHED CANDIDATE — canonical promotion pending
 
-**Canonical base:** `codex/phase8/canonical` at `d95b60d174cb0b17df09e2775b3cbd134c74b21f`
+**Canonical base:** `codex/phase8/canonical` at `77f3e1a47a1e007492a794ea777d681a21a36d09`
 
 **Architecture baseline:** `c285466c355103d3637ac165246591b72eb7bda0`
 
-**Integrated source commit:** `e40ebd63bcdfb043caa7e50001404afaa0ce85b7` on `codex/phase11/ActorChoiceIntegrationPostP8E`; merge commit `5b4674cf8a59c7376a1d9cad4ca5dad956697cb7` refreshes the reviewed P11 candidate against canonical P8-E at `d95b60d174cb0b17df09e2775b3cbd134c74b21f`.
+**Integrated source commit:** `e40ebd63bcdfb043caa7e50001404afaa0ce85b7` on `codex/phase11/ActorChoiceIntegrationPostP8E`; merge commit `5b4674cf8a59c7376a1d9cad4ca5dad956697cb7` refreshes the reviewed P11 candidate against canonical P8-E at `d95b60d174cb0b17df09e2775b3cbd134c74b21f`. Merge `2acff8e` then synced the canonical State/Roadmap-only update at `77f3e1a`; no P11 runtime or test source changed.
 
 **Final independent review:** PASS at candidate/State commit `aa8ecf6e722532a305e061a0106aad2a4a71947b`.
 
@@ -84,7 +84,7 @@ Roadmap and Execution Model, and both 2026-09-26 alignment records.
   travel.
 
 The pre-promotion combined review at `a281d98` passed. The refreshed
-independent review at `aa8ecf6` also passed after restoring the two missing
+independent review at `aa8ecf6` passed after restoring the two missing
 failure-path tests. It confirmed one-shot/no-fallback semantics, daily
 precedence, stable PersonId/action identity, diagnostics parity, the exact
 P8-C position rule, canonical P8-E's runtime-day guard, and conditional
@@ -105,9 +105,8 @@ EditMode, and Smoke were rerun after the test-only coverage correction at
 | ALL EditMode | 1729/1729 | `Temp/ValidationResults/EditMode-20260926-212925-d486e681b0c34c67a4aa2c5dd9528177.xml` (`e40ebd6`) |
 | Official complete Smoke | 5/5 | `Temp/ValidationResults/EditMode-20260926-213005-d3ae3bbfc53f4ef8825109198bb92c01.xml` (`e40ebd6`) |
 
-`git diff --check d95b60d e40ebd6` passed after integration and test correction. The refreshed
-candidate still needs independent final review and its own human canonical-
-promotion approval. P8-E's implementation and promotion evidence remain
+`git diff --check d95b60d e40ebd6` passed after integration and test correction; `git diff --check` also passed for the docs-only sync at `2acff8e`. The refreshed
+candidate's code review remains applicable because the later sync changed only canonical State/Roadmap docs. Its own human canonical-promotion approval remains required. P8-E's implementation and promotion evidence remain
 recorded in `docs/PHASE8_STATE.md`.
 
 ## Next actions
