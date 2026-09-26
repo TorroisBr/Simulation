@@ -69,10 +69,11 @@ Every stored reference is a typed stable identity and is checked for uniqueness,
 ### Capture
 
 1. The bootstrap issues a capture eligibility token only after `AdvanceDay` returns normally. It is bound to the runtime instance and the completed absolute-day/boundary sequence.
-2. Capture is single-threaded on the simulation owner thread, between calls, with no daily system, domain transaction, command handler, or bootstrap mutation in progress. Re-entrant advance/capture and concurrent mutation are rejected. The current API does not expose a global transaction, so the implementation must add this lifecycle seam rather than assume snapshot atomicity.
-3. A thrown/failed advance, a runtime faulted by the mutation guard, a stale token, or an active operation cannot be captured. Do not attempt rollback or infer a successful boundary from the incremented day alone.
-4. Each domain owner exports an immutable value section from its own authority. The capture coordinator verifies that all required sections belong to the same runtime and boundary and that no section changes during capture; on any mismatch, discard the candidate envelope.
-5. Seal the envelope with deterministic section ordering and integrity digest only after all owner sections pass identity/reference checks. A failed capture leaves the running world untouched and emits no partially usable save.
+2. Any supported authoritative mutation that completes after that `AdvanceDay` return—including a domain/UI command or bootstrap mutation—invalidates the token. The v1 boundary capture therefore occurs before later supported state changes; eligibility is reissued only after a subsequent successful `AdvanceDay`. Diagnostics-only reads do not invalidate it.
+3. Capture is single-threaded on the simulation owner thread, between calls, with no daily system, domain transaction, command handler, or bootstrap mutation in progress. Re-entrant advance/capture and concurrent mutation are rejected. The current API does not expose a global transaction, so the implementation must add this lifecycle seam rather than assume snapshot atomicity.
+4. A thrown/failed advance, a runtime faulted by the mutation guard, a stale or invalidated token, or an active operation cannot be captured. Do not attempt rollback or infer a successful boundary from the incremented day alone.
+5. Each domain owner exports an immutable value section from its own authority. The capture coordinator verifies that all required sections belong to the same runtime and boundary and that no section changes during capture; on any mismatch, discard the candidate envelope.
+6. Seal the envelope with deterministic section ordering and integrity digest only after all owner sections pass identity/reference checks. A failed capture leaves the running world untouched and emits no partially usable save.
 
 ### Hydration
 
