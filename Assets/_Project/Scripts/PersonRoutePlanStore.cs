@@ -6,9 +6,11 @@ using System.Linq;
 
 public enum PersonRoutePlanStatus
 {
-    Active = 0,
-    Superseded = 1,
-    Interrupted = 2
+    Accepted = 0,
+    Active = 1,
+    Completed = 2,
+    Superseded = 3,
+    Interrupted = 4
 }
 
 /// <summary>PersonId-owned travel intent. It contains no position or progress state.</summary>
@@ -85,7 +87,7 @@ public sealed class PersonRoutePlanStore : IAuthoritativeMutationGuardBindable
     private readonly PersonStore personStore;
     private readonly SpatialRouteKnowledgeStore knowledgeStore;
     private readonly Func<long> currentWorldDayProvider;
-    private readonly Dictionary<string, List<PersonRoutePlan>> plansByActor = new Dictionary<string, List<PersonRoutePlan>>(StringComparer.Ordinal);
+    private Dictionary<string, List<PersonRoutePlan>> plansByActor = new Dictionary<string, List<PersonRoutePlan>>(StringComparer.Ordinal);
     private long revision;
 
     public PersonRoutePlanStore(
@@ -98,7 +100,38 @@ public sealed class PersonRoutePlanStore : IAuthoritativeMutationGuardBindable
         this.currentWorldDayProvider = currentWorldDayProvider;
     }
 
+    /// <summary>Mutation version; lifecycle transitions advance it independently of accepted plan count.</summary>
     public long Revision => revision;
+    internal bool TryPrepareStatusChange(PersonId actor, long expectedStoreRevision, long expectedPlanRevision,
+        PersonRoutePlanStatus expectedStatus, PersonRoutePlanStatus nextStatus,
+        out PreparedPersonRoutePlanChange prepared, out PersonRoutePlanFailure failure)
+    {
+        prepared = null;
+        if (!mutationGuardBinding.CanMutate)
+            return Fail(PersonRoutePlanFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.", out failure);
+        if (revision != expectedStoreRevision || !TryGetCurrent(actor, out PersonRoutePlan current)
+            || current.PlanRevision != expectedPlanRevision || current.Status != expectedStatus)
+            return Fail(PersonRoutePlanFailureCode.PlanRevisionMismatch, "Route plan changed during travel preparation.", out failure);
+        if (nextStatus != PersonRoutePlanStatus.Active && nextStatus != PersonRoutePlanStatus.Completed
+            && nextStatus != PersonRoutePlanStatus.Interrupted)
+            return Fail(PersonRoutePlanFailureCode.InvalidPlan, "Unsupported travel lifecycle transition.", out failure);
+        if (revision == long.MaxValue) return Fail(PersonRoutePlanFailureCode.RevisionOverflow, "Plan store revision cannot advance.", out failure);
+        Dictionary<string, List<PersonRoutePlan>> next = new Dictionary<string, List<PersonRoutePlan>>(plansByActor, StringComparer.Ordinal);
+        List<PersonRoutePlan> history = new List<PersonRoutePlan>(next[actor.Value]);
+        history[history.Count - 1] = CreatePlan(current.ActorPersonId, current.DestinationHexId, current.Candidate,
+            current.SelectionPolicy, current.KnowledgeBasis, current.DecisionIdentity, current.AcceptedDay,
+            current.PlanRevision, nextStatus);
+        next[actor.Value] = history;
+        prepared = new PreparedPersonRoutePlanChange(this, revision, revision + 1L, next);
+        failure = PersonRoutePlanFailure.None;
+        return true;
+    }
+
+    internal bool CanInstall(PreparedPersonRoutePlanChange prepared) => prepared != null
+        && ReferenceEquals(prepared.Owner, this) && revision == prepared.ExpectedRevision;
+
+    internal void InstallPrepared(PreparedPersonRoutePlanChange prepared)
+    { plansByActor = prepared.NextPlans; revision = prepared.NextRevision; }
     public int PlanCount
     {
         get
@@ -191,7 +224,8 @@ public sealed class PersonRoutePlanStore : IAuthoritativeMutationGuardBindable
 
         List<PersonRoutePlan> nextPlans = plansByActor.TryGetValue(actor.Value, out List<PersonRoutePlan> current)
             ? new List<PersonRoutePlan>(current) : new List<PersonRoutePlan>();
-        if (nextPlans.Count > 0 && nextPlans[nextPlans.Count - 1].Status == PersonRoutePlanStatus.Active)
+        if (nextPlans.Count > 0 && (nextPlans[nextPlans.Count - 1].Status == PersonRoutePlanStatus.Active
+            || nextPlans[nextPlans.Count - 1].Status == PersonRoutePlanStatus.Accepted))
         {
             PersonRoutePlan previous = nextPlans[nextPlans.Count - 1];
             nextPlans[nextPlans.Count - 1] = CreatePlan(
@@ -202,7 +236,7 @@ public sealed class PersonRoutePlanStore : IAuthoritativeMutationGuardBindable
 
         PersonRoutePlan created = CreatePlan(actor, selectedOutcome.SelectedCandidate.DestinationHexId,
             selectedOutcome.SelectedCandidate, selectedOutcome.Policy, selectedOutcome.KnowledgeBasis,
-            decisionIdentity, acceptedDay, actorRevision + 1L, PersonRoutePlanStatus.Active);
+            decisionIdentity, acceptedDay, actorRevision + 1L, PersonRoutePlanStatus.Accepted);
         nextPlans.Add(created);
         plansByActor[actor.Value] = nextPlans;
         revision++;
@@ -241,7 +275,7 @@ public sealed class PersonRoutePlanStore : IAuthoritativeMutationGuardBindable
             if (entry.Value[entry.Value.Count - 1].Status == PersonRoutePlanStatus.Superseded)
                 violations.Add("Latest Person route plan cannot be superseded: " + entry.Key + ".");
         }
-        if (count != revision) violations.Add("Person route-plan revision does not match accepted plan history count.");
+        if (revision < count) violations.Add("Person route-plan mutation revision is below accepted plan history count.");
         return new PersonRoutePlanInvariantReport(violations);
     }
 
@@ -374,4 +408,14 @@ public sealed class PersonRoutePlanInvariantReport
         result.Sort(StringComparer.Ordinal);
         Violations = new ReadOnlyCollection<string>(result);
     }
+}
+
+internal sealed class PreparedPersonRoutePlanChange
+{
+    internal readonly PersonRoutePlanStore Owner;
+    internal readonly long ExpectedRevision;
+    internal readonly long NextRevision;
+    internal readonly Dictionary<string, List<PersonRoutePlan>> NextPlans;
+    internal PreparedPersonRoutePlanChange(PersonRoutePlanStore owner, long expected, long next, Dictionary<string, List<PersonRoutePlan>> plans)
+    { Owner = owner; ExpectedRevision = expected; NextRevision = next; NextPlans = plans; }
 }
