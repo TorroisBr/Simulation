@@ -78,6 +78,7 @@ public sealed class SimulationRuntime
     private readonly IAggregateDemographyProvider aggregateDemographyProvider;
     private DailyDemographyReport lastDailyDemographyReport;
     private readonly PersonStore personStore;
+    private readonly ActorChoiceStore actorChoiceStore;
     private readonly SpatialAuthorityStore spatialAuthorityStore;
     private readonly LegacySpatialAnchorBindingStore legacySpatialAnchorBindingStore;
     private readonly PersonSpatialPositionStore personSpatialPositionStore;
@@ -143,6 +144,7 @@ public sealed class SimulationRuntime
     public SimulationCalendar Calendar => calendar;
     public DailyDemographyReport LastDailyDemographyReport => lastDailyDemographyReport;
     public PersonStore PersonStore => personStore;
+    public ActorChoiceStore ActorChoiceStore => actorChoiceStore;
     public SpatialAuthorityStore SpatialAuthorityStore => spatialAuthorityStore;
     public LegacySpatialAnchorBindingStore LegacySpatialAnchorBindingStore => legacySpatialAnchorBindingStore;
     public PersonSpatialPositionStore PersonSpatialPositionStore => personSpatialPositionStore;
@@ -339,7 +341,8 @@ public sealed class SimulationRuntime
         LegacySpatialAnchorBindingStore legacySpatialAnchorBindingStore = null,
         PersonSpatialPositionStore personSpatialPositionStore = null,
         SpatialRouteKnowledgeStore spatialRouteKnowledgeStore = null,
-        PersonRoutePlanStore personRoutePlanStore = null)
+        PersonRoutePlanStore personRoutePlanStore = null,
+        ActorChoiceStore actorChoiceStore = null)
     {
         List<CityRuntime> resolvedCities = cities != null
             ? new List<CityRuntime>(cities)
@@ -453,6 +456,10 @@ public sealed class SimulationRuntime
                 "The supplied PersonStore is already bound to another SimulationRuntime.",
                 nameof(personStore));
         }
+
+        ActorChoiceStore resolvedActorChoiceStore = actorChoiceStore == null
+            ? new ActorChoiceStore(resolvedPersonStore)
+            : actorChoiceStore.Clone(resolvedPersonStore);
 
         if (politicalWorldRevision.HasValue && politicalWorldRevision.Value < 0L)
         {
@@ -568,6 +575,7 @@ public sealed class SimulationRuntime
         this.naturalMortalitySamples = naturalMortalitySamples;
         this.aggregateDemographyProvider = aggregateDemographyProvider;
         this.personStore = resolvedPersonStore;
+        this.actorChoiceStore = resolvedActorChoiceStore;
         this.spatialAuthorityStore = resolvedSpatialAuthorityStore;
         this.legacySpatialAnchorBindingStore = resolvedLegacySpatialAnchorBindingStore;
         this.personSpatialPositionStore = resolvedPersonSpatialPositionStore;
@@ -762,6 +770,7 @@ public sealed class SimulationRuntime
         List<IAuthoritativeMutationGuardBindable> authorities = new List<IAuthoritativeMutationGuardBindable>();
         AddRequiredMutationGuardBinding(authorities, simulationTime, nameof(SimulationTime));
         AddRequiredMutationGuardBinding(authorities, personStore, nameof(PersonStore));
+        AddRequiredMutationGuardBinding(authorities, actorChoiceStore, nameof(ActorChoiceStore));
         AddRequiredMutationGuardBinding(authorities, spatialAuthorityStore, nameof(SpatialAuthorityStore));
         AddRequiredMutationGuardBinding(authorities, legacySpatialAnchorBindingStore, nameof(LegacySpatialAnchorBindingStore));
         AddRequiredMutationGuardBinding(authorities, personSpatialPositionStore, nameof(PersonSpatialPositionStore));
@@ -2636,6 +2645,25 @@ public sealed class SimulationRuntime
         return failure == SimulationRuntimeAdvanceFailure.AbsoluteDayOverflow
             ? new InvalidOperationException("SimulationTime cannot advance beyond the maximum AbsoluteDay.")
             : new InvalidOperationException("A faulted SimulationRuntime cannot advance its world.");
+    }
+
+    internal bool TryCaptureActorChoiceInput(
+        string worldCommandId,
+        PersonId personId,
+        string actionDefinitionId,
+        WorldCommandOrigin origin,
+        WorldCommandAuthorityMode authority,
+        out ActorChoiceStoreFailureCode failure)
+    {
+        return actorChoiceStore.TryCapture(
+            worldCommandId,
+            personId,
+            actionDefinitionId,
+            origin,
+            authority,
+            CurrentDay,
+            out _,
+            out failure);
     }
 
     internal GenealogyStore GenealogyStoreForWorldBoundary => genealogyStore;
