@@ -472,6 +472,26 @@ public sealed class ActorChoiceStore : IAuthoritativeMutationGuardBindable
         }
 
         current = inputs[index];
+        if (absoluteDay < current.CapturedAbsoluteDay)
+        {
+            failure = ActorChoiceStoreFailureCode.InvalidLifecycleTransition;
+            current = null;
+            return false;
+        }
+
+        if (current.Dispositions.Count > 0)
+        {
+            ActorChoiceDisposition previous = current.Dispositions[current.Dispositions.Count - 1];
+            if (absoluteDay < previous.AbsoluteDay
+                || (absoluteDay == previous.AbsoluteDay
+                    && actorTurnRosterOrdinal < previous.ActorTurnRosterOrdinal))
+            {
+                failure = ActorChoiceStoreFailureCode.InvalidLifecycleTransition;
+                current = null;
+                return false;
+            }
+        }
+
         failure = ActorChoiceStoreFailureCode.None;
         return true;
     }

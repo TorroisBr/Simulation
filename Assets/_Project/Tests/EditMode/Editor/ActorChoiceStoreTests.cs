@@ -153,6 +153,54 @@ public sealed class ActorChoiceStoreTests
     }
 
     [Test]
+    public void TransitionBeforeCaptureDayIsRejectedAtomically()
+    {
+        ActorChoiceStore store = CreateStore();
+        ActorChoiceInput input = Capture(store, "world-command-1", new PersonId("merchant"), absoluteDay: 4L);
+
+        Assert.That(store.TryDefer(
+            input.InputId, 3L, 0, ActorChoiceDeferralReason.Traveling,
+            out ActorChoiceStoreFailureCode failure), Is.False);
+        Assert.That(failure, Is.EqualTo(ActorChoiceStoreFailureCode.InvalidLifecycleTransition));
+        Assert.That(store.TryGet(input.InputId, out ActorChoiceInput unchanged), Is.True);
+        Assert.That(unchanged.Status, Is.EqualTo(ActorChoiceInputStatus.Pending));
+        Assert.That(unchanged.Dispositions, Is.Empty);
+        Assert.That(store.Count, Is.EqualTo(1));
+        Assert.That(store.ValidateInvariants().IsValid, Is.True);
+    }
+
+    [Test]
+    public void TransitionBoundariesCannotRegressAndEqualBoundaryTransitionsRemainValid()
+    {
+        ActorChoiceStore store = CreateStore();
+        ActorChoiceInput input = Capture(store, "world-command-1", new PersonId("merchant"), absoluteDay: 2L);
+        Assert.That(store.TryDefer(
+            input.InputId, 3L, 4, ActorChoiceDeferralReason.Traveling, out _), Is.True);
+
+        Assert.That(store.TryDefer(
+            input.InputId, 2L, 9, ActorChoiceDeferralReason.ScheduledDirective,
+            out ActorChoiceStoreFailureCode earlierDayFailure), Is.False);
+        Assert.That(earlierDayFailure, Is.EqualTo(ActorChoiceStoreFailureCode.InvalidLifecycleTransition));
+        Assert.That(store.TryDefer(
+            input.InputId, 3L, 3, ActorChoiceDeferralReason.ScheduledDirective,
+            out ActorChoiceStoreFailureCode earlierOrdinalFailure), Is.False);
+        Assert.That(earlierOrdinalFailure, Is.EqualTo(ActorChoiceStoreFailureCode.InvalidLifecycleTransition));
+
+        Assert.That(store.TryDefer(
+            input.InputId, 3L, 4, ActorChoiceDeferralReason.ScheduledDirective,
+            out ActorChoiceStoreFailureCode equalBoundaryFailure), Is.True, equalBoundaryFailure.ToString());
+        Assert.That(store.TryGet(input.InputId, out ActorChoiceInput unchanged), Is.True);
+        Assert.That(unchanged.Status, Is.EqualTo(ActorChoiceInputStatus.Pending));
+        Assert.That(unchanged.Dispositions, Has.Count.EqualTo(2));
+        Assert.That(unchanged.Dispositions[0].AbsoluteDay, Is.EqualTo(3L));
+        Assert.That(unchanged.Dispositions[0].ActorTurnRosterOrdinal, Is.EqualTo(4));
+        Assert.That(unchanged.Dispositions[1].AbsoluteDay, Is.EqualTo(3L));
+        Assert.That(unchanged.Dispositions[1].ActorTurnRosterOrdinal, Is.EqualTo(4));
+        Assert.That(store.Count, Is.EqualTo(1));
+        Assert.That(store.ValidateInvariants().IsValid, Is.True);
+    }
+
+    [Test]
     public void CloneCopiesLifecycleAndAllocatorsWithoutSharingMutableState()
     {
         ActorChoiceStore source = CreateStore();
