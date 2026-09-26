@@ -1,10 +1,10 @@
 # P18-A — Logical Timeline and Due-work Scheduler Technical Design
 
-**Design base:** `c285466c355103d3637ac165246591b72eb7bda0` (`codex/phase6/canonical`)
+**Design base:** `c285466c355103d3637ac165246591b72eb7bda0` (`codex/phase8/canonical`)
 **Authority:** `docs/SIMULATION_ARCHITECTURE.md` §§11–12, 91–92; `docs/ROADMAP.md`; `docs/EXECUTION_MODEL.md`; `docs/phases/PHASE18_BRIEF.md`.
 **Checkpoint:** P18-A — Logical Timeline and Due-work Scheduler.
 **Scope:** Proposed technical design only. No executable code, gameplay, architecture, Brief, Roadmap, State, or test changes.
-**Status:** Proposed; independent technical design review required. Review approval is not implementation authorization or capability promotion.
+**Status:** Independent technical design review passed on `6b1edf21128eaa874ecca1b96674287d3c6d1d80`. Review approval is not implementation authorization or capability promotion.
 
 ## 1. Outcome and boundary
 
@@ -109,4 +109,4 @@ Primary implementation hotspots are calendar conversion and timeline state, `Sim
 
 P18-A depends on the existing canonical calendar, determinism, and domain mutation/input contracts. It does not acquire blanket prerequisites on P9, P14, or P17; it does not wait for P20. Its reviewed contracts may support P18-B/C technical design and P20 entry/design. Their implementation/integration still waits for promoted upstream capabilities they actually consume. P18-D remains downstream of A/B/C and only the concrete consumer capabilities selected in its reviewed scope. No P12/P13 persistence implementation, P19 loader, gameplay feature, or broad daily-domain migration is authorized here.
 
-**Review status:** proposed; independent reviewer must assess the tick quantum/range, exact boundary ordering, dispatch-limit policy, ownership/atomicity seams, reconstruction inventory, and P20 compatibility. After review, revise this document and record the verdict on the candidate branch. Do not mint additional checkpoint IDs or mark P18-A implementation-ready in this document.
+**Review status:** PASS on `6b1edf21128eaa874ecca1b96674287d3c6d1d80`; the reviewer assessed the tick quantum/range, exact boundary ordering, dispatch-limit policy, ownership/atomicity seams, reconstruction inventory, and P20 compatibility. This records design review only. Do not mint additional checkpoint IDs or infer capability promotion from this document.
