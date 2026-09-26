@@ -7,10 +7,16 @@ the current P8 City-anchor composition found that its owner lookup key is
 currently checked against `CityRuntime.RuntimeId`; it is not a durable City
 instance identity. This revision uses a separate authored `SettlementSemanticId`
 associated with the stable P8 `LocationId`. Independent re-review of content
-commit `3d9ed793ae7fdfce74b9224856d40e5ea73ef2a0` passed against canonical
-`c5b2e06b534f4b2af38f10e6510b10800aa8b28c` and architecture update
+commit `3d9ed793ae7fdfce74b9224856d40e5ea73ef2a0` passed against the historical
+canonical baseline `c5b2e06b534f4b2af38f10e6510b10800aa8b28c` and architecture update
 `c285466c355103d3637ac165246591b72eb7bda0`, confirming the exact LocationId
 association, uniqueness/cardinality rules, and conditional P18/P20 edges.
+**P8-E promotion impact revalidation:** the latest canonical Phase 8 State is
+at `77f3e1a`; P8-E was promoted at `d95b60d174cb0b17df09e2775b3cbd134c74b21f`.
+The reviewed P14 single-settlement source/sink scope includes no transport,
+route flow, or multi-actor work, so P8-E is now canonical but is not a
+dependency for this design. The reviewed architecture baseline remains
+`c285466c355103d3637ac165246591b72eb7bda0`, with both alignment records current.
 
 ## 1. Scope and governing contracts
 
@@ -23,9 +29,11 @@ The semantic rules are:
 - The domain source and market-stock authority own their mutations. A schedule/cadence invokes them; it does not define material truth. Existing daily automatic production and consumption need no P18 capability.
 - Preserve deterministic order and atomic domain transitions. Overflow cannot partially apply a source contribution. Insufficient stock caps the free population sink at actual available stock as the existing behavior intends; the stock decrease and reported consumed quantity are one atomic transition.
 - Preserve current moddability constraints: domain behavior remains independent of Unity presentation where practical, seams permit compatible extension, and independent contributions have stable identity and deterministic composition. P19 API/loader and module lifecycle remain deferred.
-- No P20 prerequisite applies to this single-settlement passive source/sink. P8-D is canonical and P8-E remains a separate promotion-pending candidate; neither travel capability is used here.
+- No P20 prerequisite applies to this single-settlement passive source/sink.
+  P8-D and P8-E are canonical, but neither route/travel capability is used by
+  this design; transport, route flow, and multi-actor work remain excluded.
 
-The design follows architecture §§2, 11–13, 41–45, 69, 91–92; the current Roadmap and Execution Model; Phase 8 State at c5b2e06 (including architecture baseline c285466); and both the intraday/extensibility and multi-participant alignment records. P18 is required only if a later approved consumer promises duration-based or intraday production. P20 is conditional only if a later consumer coordinates multiple participants.
+The design follows architecture §§2, 11–13, 41–45, 69, 91–92; the current Roadmap and Execution Model; Phase 8 State at historical baseline c5b2e06 (including architecture baseline c285466); and both the intraday/extensibility and multi-participant alignment records. P18 is required only if a later approved consumer promises duration-based or intraday production. P20 is conditional only if a later consumer coordinates multiple participants.
 
 ## 2. Current implementation and fit
 
