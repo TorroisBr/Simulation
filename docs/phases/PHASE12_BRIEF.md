@@ -1,12 +1,12 @@
 # Phase 12 — Save & Deterministic Continuation
 
-**Authority:** planning entry subordinate to `../SIMULATION_ARCHITECTURE.md`. **Readiness:** `ENTRY_ARCHITECTURE_READY`; no implementation checkpoint is schedulable.
+**Authority:** planning entry subordinate to `../SIMULATION_ARCHITECTURE.md`. **Readiness:** `TECHNICAL_DESIGN_IN_PROGRESS`; P12-A is a bounded proposal and is not ready for implementation.
 
 ## Objective and closure
 
 For supported compatible versions/profiles, continuing from boundary T and saving at T, loading, then continuing with the same inputs produce the same future authoritative results. Save is not replay or selective History.
 
-**Checkpoints:** to be defined at architecture/technical entry; no P12 checkpoint IDs are approved.
+**Checkpoint plan:** P12-A — `UnityBootstrap-Daily-v1` (proposal; durable record at `../design/P12-A_UNITYBOOTSTRAP_DAILY_V1_CHECKPOINT.md`). The ID is assigned for planning traceability only; it is not human acceptance, implementation authorization, delivery, or canonical promotion.
 
 ## Dependencies and gates
 
@@ -17,8 +17,11 @@ For supported compatible versions/profiles, continuing from boundary T and savin
 - **Architecture gate:** choose supported scope, compatibility/versioning, numeric execution profile and restoration boundaries before a full technical design; current Phase 7 numeric portability is explicitly limited.
 - **Product gate:** if support matrix/compatibility promises exceed existing guarantees, obtain user approval.
 - **Exclusions:** historical fork guarantee as a Phase 12 result, universal event sourcing, implicit cross-host numeric portability.
+- **P12-A profile assumption:** use the clearly recommended, bounded `UnityBootstrap-Daily-v1` profile: same-build/current-host daily continuation through the normal Unity bootstrap and built-in providers, captured only at a successfully completed daily boundary. This is an orchestrator planning assumption, not an architecture amendment or broader product promise. No P13 history/fork guarantee, cross-host guarantee, loader/module state, generated-world state, or shared-activity state is implied.
+- **P12-A causal-input boundary:** pending external `WorldCommand` and P11 actor-choice inputs are unsupported profile state and must reject admission/capture rather than be omitted. This does not add a new security boundary; normal domain/action semantics remain authoritative.
 - **Replay/fork sensitivity:** all authoritative truth, plans, Knowledge, IDs/allocators, logical time/calendar, effective config/content and causal randomness needed to continue.
 - **Hotspots/parallelism:** `SimulationRuntime`, domain stores, command capture, diagnostics versus actual save state, composition/versioning; state inventory can start alongside P8/P9 work, integration is domain-gated.
+- **P12-A implementation gates:** implementation remains `WAIT_DEPENDENCY` until every included owner has exact export and staged hydration support validated for this profile, the live canonical composition and profile inventory are revalidated after P9-A promotion, and any selected P14 capability included in the profile is similarly inventoried and validated. If P9-A genesis-manifest state is admitted, capture its causal identity, ordered contributors, versions, random context, provenance, and generated outputs; never rerun genesis to restore a historical world. P8-E is canonical but is not a blanket daily-profile dependency. Preserve P8-C `PersonId` position identity and P8-D `PersonId`-owned Knowledge/route-plan identity, revisions, evidence, and one-active-plan-per-Person semantics wherever the profile supports those facts; reject unsupported populated spatial state instead of weakening those contracts.
 - **Downstream unlocks:** continuation foundation for P13 historical reconstruction/fork.
 - **Deferred:** final storage format, migration matrix and replay algorithm until entry design.
 
