@@ -14,15 +14,20 @@ for that selected first consumer. All implementation units below remain
 **Design baseline:** `codex/phase8/canonical` at
 `c285466c355103d3637ac165246591b72eb7bda0` (parent
 `4b6dd1d38cffeaf3cc1ac3effea0f8ede8771194`), refreshed P11 entry proposal in
-this worktree, and store candidate `0a32e86dd3c907e80c6439f3de7fe061618110ea`
-on `codex/phase11/ActorChoiceStore`. Current P8 State records P8-A/B/C
+this worktree, and corrected store candidate
+`f1221d4e3275e21a876076350ca12058927dbaa9` on
+`codex/phase11/ActorChoiceStore`, superseding initial store candidate
+`0a32e86dd3c907e80c6439f3de7fe061618110ea`. Current P8 State records P8-A/B/C
 canonical and P8-D as independently reviewed/validated but unpromoted; P8-E
 waits for promoted P8-D. Neither is a semantic or capability prerequisite for
 this local-market action. This design and store remain candidates; no Phase 11
 checkpoint IDs or promotion are approved.
 
-The store candidate and tests retain a daily-profile capture day and
-actor-turn-roster ordinal. This boundary is transitional and does not claim
+The corrected store candidate and tests retain a daily-profile capture day and
+actor-turn-roster ordinal. Disposition boundaries are monotonic by
+`(absoluteDay, actorTurnRosterOrdinal)`; an earlier-day or earlier same-day
+ordinal transition is rejected atomically, preserving the input's pending
+status and disposition list. This boundary is transitional and does not claim
 intraday support. Any P18-backed intraday application must carry the exact
 logical instant and deterministic causal sequence/order; a date and roster
 ordinal alone are insufficient. P20 is not a gate for one actor; future shared
@@ -35,9 +40,10 @@ distinct under the Phase 20 alignment.
 
 The slice is one choice by the trusted local single-player UI of the existing
 `SellGoods` action for a living, Person-backed, materialized merchant with a
-current city and no active `MerchantTradePlanRuntime`. When planning is
-available, that choice replaces autonomous selection for one turn; an
-unavailable choice follows the entry contract's autonomous fallback. The typed
+current city and no active `MerchantTradePlanRuntime`. The choice replaces
+autonomous selection for that decision. If normal gameplay state makes the
+action unavailable at application, record the ordinary rejection and do not
+select a different autonomous action in that same turn. The typed
 choice carries only `PersonId` and the supported
 `NpcActionData.DefinitionId`. Existing
 merchant planning selects the item, quantity, and action runtime using that
@@ -208,7 +214,9 @@ in `AdvanceDayAfterClockAdvance`. Existing paths retain precedence:
 4. For an ordinary actor turn, status evaluation and merchant plan advancement
    continue first; a scheduled directive is processed before the actor choice.
 5. Only when the turn reaches ordinary `EvaluateAction` is the actor choice
-   considered, then autonomous `ChooseAction` remains the fallback.
+   considered. With no choice pending, autonomous `ChooseAction` proceeds. A
+   pending choice that is rejected at this boundary consumes that decision;
+   do not run autonomous selection for a different action in the same turn.
 
 For a living, materialized actor skipped by travel, expedition, reservation,
 or a scheduled directive, append a `Deferred` disposition with day, roster
@@ -249,8 +257,10 @@ no market values, item selection, or quantity.
 
 If the action is no longer supported or the provider returns no runtime
 action, append a terminal `Rejected/ActionUnavailable` disposition at that
-normal boundary and continue with the unchanged autonomous `ChooseAction`
-path. No action or sale is fabricated, and the choice is not retried.
+normal boundary and do not run autonomous `ChooseAction` in the same turn. No
+action or sale is fabricated, and the choice is not retried. This is ordinary
+domain/action availability handling required for gameplay semantics, not
+defensive validation against forged commands.
 
 If action construction succeeds, record the choice as the
 `NpcDecisionOrigin.ActorChoice`, then append `DispatchStarted` immediately
@@ -274,9 +284,10 @@ swallow it, substitute `Failed`/`Unavailable`, or claim an `NpcActionResult`
 that was never returned. The choice remains consumed, no autonomous fallback
 or retry runs in that interrupted actor turn, and the exception propagates to
 the caller. This design asserts no automatic runtime fault-state transition.
-A terminal rejection occurs only before dispatch (for
-example, when the provider returns no action); it falls back to autonomous
-selection as specified above.
+A terminal rejection occurs only before dispatch (for example, when the
+provider returns no action); that rejected choice replaces autonomous selection
+for the current decision, so no alternative action is selected in the same
+turn.
 
 This boundary deliberately keeps the records separate:
 
@@ -305,7 +316,7 @@ Implementation should use isolated ownership for these shared files:
 | `SimulationRuntime.cs` | Runtime owner composes/clones/binds the store to the same world mutation guard, exposes the actor-choice store to diagnostics, captures handler input, reconciles unavailable actors, defers skipped turns, consumes at `EvaluateAction`, records the decision origin, and captures the post-attempt `NpcActionResult`. Keep `AdvanceDay` scheduling order intact. |
 | `DecisionRecords.cs` | Decision-history owner adds `ActorChoice` provenance only; it does not turn the input receipt into an outcome event. |
 | `Diagnostics/WorldStateSnapshot.cs`; new `Diagnostics/WorldStateActorChoiceSnapshots.cs`; `WorldStateCanonicalWriter.cs`, `WorldStateDiff.cs`, `WorldStateFormatter.cs`, `WorldStateInvariantValidator.cs` | Diagnostics owner projects immutable input/disposition values; adds semantic diff, canonical write, human formatting, and invariant validation. `WorldStateSnapshotDigest.cs` remains driven by canonical output unless its API requires a direct addition. |
-| New `Tests/EditMode/Editor/ActorActionChoiceCommandTests.cs`, `ActorChoiceStoreTests.cs`, `ActorChoiceRuntimeTests.cs`, `WorldStateDiagnostics/ActorChoiceDiagnosticsTests.cs`; existing orchestration/merchant/command suites | Test owner covers command ingress, store lifecycle, runtime ordering and fallback, Knowledge-bounded planning/current-truth execution, and diagnostics. Existing shared hotspots have one explicit owner at a time. |
+| New `Tests/EditMode/Editor/ActorActionChoiceCommandTests.cs`, `ActorChoiceStoreTests.cs`, `ActorChoiceRuntimeTests.cs`, `WorldStateDiagnostics/ActorChoiceDiagnosticsTests.cs`; existing orchestration/merchant/command suites | Test owner covers command ingress, store lifecycle, runtime ordering and rejection without a different same-turn autonomous choice, Knowledge-bounded planning/current-truth execution, and diagnostics. Existing shared hotspots have one explicit owner at a time. |
 
 `NpcDecisionSystem.CreateRequestedAction`, `MerchantSystem` action provider,
 and `EconomyTransactionService` are reused. They should need no behavior change
@@ -341,11 +352,11 @@ and absolute-day capture are recorded; application is identified by day,
 actor roster ordinal, PersonId, and the normal action-choice boundary. Actor
 choices do not sort or otherwise reorder the NPC roster. Creating or reading a
 choice, previewing it, snapshotting it, or diffing it does not consume
-authoritative randomness. A successfully constructed actor choice bypasses
-autonomous weighted selection for that one turn; an unavailable choice is
-rejected first and then the unchanged autonomous selector runs with its
-existing random-stream key and normal draw behavior. Deferral consumes no
-randomness.
+authoritative randomness. A pending actor choice replaces autonomous weighted
+selection for that decision. If normal action semantics reject it before
+dispatch, no different autonomous choice runs in that same turn. Autonomous
+choice retains its existing random-stream behavior only when no actor choice
+is pending. Deferral consumes no randomness.
 
 The store clone must copy capture sequence, normalized payloads, all pending
 choices, disposition order, dispatch markers, and terminal outcomes into the
@@ -414,8 +425,8 @@ slice; this documentation task does not run them.
 | Test surface | Required cases |
 |---|---|
 | `ActorActionChoiceCommandTests` and `WorldCommandFoundationTests` | Typed payload retains only PersonId/action DefinitionId; `LocalPlayer` is provenance; Request queues without sale mutation; Preview is read-only and allocates no choice/command identity; Suggest cannot execute; Declare/ForceOutcome do not execute this kind; `WorldCommandRecord.Success` means queued, not sold. Existing command authority behavior stays unchanged. |
-| `ActorChoiceStoreTests` | Capture order/IDs are deterministic; multiple same-actor choices remain FIFO; rejection and deferral transitions are one-shot; dispatch-start permanently consumes an input; exactly one returned/thrown terminal outcome follows; no disposition follows terminal resolution; dead/unmaterialized actor reconciliation terminates pending choice; clone is independent and preserves sequence, payload, lifecycle state, dispositions, and result; mutation guard blocks writes. |
-| `ActorChoiceRuntimeTests` and `SimulationRuntimeOrchestrationTests` | Choice is consumed immediately before action dispatch only on a normal actor turn; actor roster order is unchanged; travel, expedition, reservation, and scheduled directive precedence is unchanged and records deferral; actor unavailable at the input-processing boundary is rejected; stale action/provider/policy eligibility rejection falls through to autonomous selection; accepted action attempts once, with no same-day retry or autonomous second action. If action execution throws, assert one terminal `AttemptThrew`, no returned `NpcActionResult` status, no requeue/retry or autonomous fallback, and propagation of the same exception instance with the original throw frame preserved. Also cover non-null success/failure results versus a null return classified as `ReturnedNoResult`. |
+| `ActorChoiceStoreTests` | Capture order/IDs are deterministic; multiple same-actor choices remain FIFO; disposition boundaries are nondecreasing by `(absoluteDay, actorTurnRosterOrdinal)` (equal boundaries are valid); pre-capture-day, earlier-day, and earlier-same-day-ordinal transitions are rejected atomically with status/dispositions/count unchanged; rejection and deferral transitions are one-shot; dispatch-start permanently consumes an input; exactly one returned/thrown terminal outcome follows; no disposition follows terminal resolution; dead/unmaterialized actor reconciliation terminates pending choice; clone is independent and preserves sequence, payload, lifecycle state, dispositions, and result; mutation guard blocks writes. |
+| `ActorChoiceRuntimeTests` and `SimulationRuntimeOrchestrationTests` | Choice is consumed immediately before action dispatch only on a normal actor turn; actor roster order is unchanged; travel, expedition, reservation, and scheduled directive precedence is unchanged and records deferral; actor unavailable at the input-processing boundary is rejected; stale action/provider/policy eligibility rejection does not cause a different same-turn autonomous selection; accepted action attempts once, with no same-day retry or autonomous second action. If action execution throws, assert one terminal `AttemptThrew`, no returned `NpcActionResult` status, no requeue/retry or autonomous fallback, and propagation of the same exception instance with the original throw frame preserved. Also cover non-null success/failure results versus a null return classified as `ReturnedNoResult`. |
 | `MerchantLiquidityTests` plus actor-choice commerce cases | Actor's remembered price/liquidity and own inventory bound candidate planning; another NPC's current state and current market truth do not enrich planning; active plan is rejected; stale current market can return the normal failure/partial-fill action result; no Knowledge rewrite, fabricated transaction receipt, trade DomainEvent, or history entry. |
 | `ActorChoiceDiagnosticsTests` and WorldState diagnostics suites | Pending, deferred, rejected, dispatch-started, returned, and thrown states appear in immutable snapshots; returned `NpcActionResult` statuses are present only for non-null results, while null and thrown calls have distinct attempt outcomes and no result status; canonical export/digest/diff/formatting are deterministic; ordering is by causal input/boundary keys rather than collection iteration; validation catches illegal transitions and any disposition after terminal; diagnostic operations are read-only. |
 
@@ -486,6 +497,6 @@ implementation schedulable.
 | Candidate unit (UNAPPROVED) | Closure evidence |
 |---|---|
 | Typed actor-choice WorldCommand and capture owner | Request-only typed ingress retains PersonId, action DefinitionId, WorldCommand identity, stable queue order, and accepted/rejected capture result without domain mutation. |
-| Runtime decision-boundary adapter | Ordinary `EvaluateAction` consumes one FIFO choice before autonomous selection; higher-priority turn behavior is preserved; dead/unmaterialized inputs terminate; unavailable action falls back once; constructed action is attempted once through current merchant authority. |
+| Runtime decision-boundary adapter | Ordinary `EvaluateAction` considers one FIFO choice before autonomous selection; higher-priority turn behavior is preserved; dead/unmaterialized inputs terminate; an unavailable choice is rejected without another same-turn autonomous choice; a constructed action is attempted once through current merchant authority. |
 | Causal diagnostics and clone | Pending/disposition records are cloned without aliasing and included in deterministic snapshots, diff, canonical output, formatter, digest, and invariant validation. |
 | Integrated regression and independent review | Knowledge-bounded planning, current-market execution truth, one-shot result, command semantics, deterministic order, diagnostics, and affected Phase 8/Phase 5 regressions pass review and required integration gates. |

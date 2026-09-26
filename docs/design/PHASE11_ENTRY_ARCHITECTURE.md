@@ -50,10 +50,14 @@ also reviewed. Moddability is a current design constraint: keep semantic action
 and definition identity stable and the domain/application seam extension
 compatible where practical, while deferring public Mod API, loader, packaging,
 and module lifecycle to P19. The current record is
-`0a32e86dd3c907e80c6439f3de7fe061618110ea` (P11 store candidate) and its
-`ActorChoiceStoreTests`; its day plus actor-turn roster ordinal boundaries are
+corrected candidate `f1221d4e3275e21a876076350ca12058927dbaa9` on
+`codex/phase11/ActorChoiceStore` and its `ActorChoiceStoreTests`; its day plus
+actor-turn roster ordinal boundaries are
 explicitly legacy daily-profile data, not an intraday contract. P18-supported
 intraday application must retain the exact logical instant and causal sequence.
+The corrected store requires disposition boundaries to be monotonic by
+`(absoluteDay, actorTurnRosterOrdinal)` and rejects a regressing transition
+without changing the stored input or lifecycle.
 P20 is not a gate for this one-actor choice; future shared-participant inputs
 must use relevant P20 contracts. No separate ADR directory or ADR referenced
 by the Phase 11 Brief is present in this checkout. Relevant executable surfaces inspected include
@@ -342,7 +346,7 @@ no Phase 11 IDs, approval, or implementation authorization.
 | Candidate unit (UNAPPROVED) | Candidate closure evidence | Dependencies / ordering |
 |---|---|---|
 | Actor eligibility, perspective, and one-choice contract | Use the supported configured `SellGoods` action for a living Person-backed materialized `NpcRuntime` with a current city and no active trade plan; actor knowledge remains owned by that runtime. The UI chooses the action, while MerchantSystem chooses the local-market candidate and quantity. | Product scope is selected. Preserve the existing current-city merchant/action requirements; do not add a broader actor model or controller grants. |
-| Logical input boundary and envelope contract | Capture a normalized `PersonId` plus `NpcActionData.DefinitionId` through a dedicated typed `WorldCommand`/domain ingress; consume it at the next ordinary `EvaluateAction` before autonomous choice. Existing scheduled directives and activity exclusions retain their current precedence. | Use the normal actor-turn loop order. A choice unavailable at application is recorded as rejected and autonomous selection proceeds; a created action is attempted once and its normal domain result is returned. The new payload does not reuse GM `Declare` or `ForceOutcome` authority. |
+| Logical input boundary and envelope contract | Capture a normalized `PersonId` plus `NpcActionData.DefinitionId` through a dedicated typed `WorldCommand`/domain ingress; consume it at the next ordinary `EvaluateAction` before autonomous choice. Existing scheduled directives and activity exclusions retain their current precedence. | Use the normal actor-turn loop order. A choice unavailable at application is recorded as rejected and ends that actor's choice for the current decision without a different autonomous selection; a created action is attempted once and its normal domain result is returned. The new payload does not reuse GM `Declare` or `ForceOutcome` authority. |
 | Consumer adapter through existing domain authority | A bounded choice reaches the existing local-market `SellGoods` path through `MerchantSystem` and the current market transaction service, revalidates current market truth, and records no fabricated result. | Requires the local merchant/action composition and a contract for actor `CommercialKnowledge` access. No travel capability, blanket P8/P9 dependency, or new GM command authority is selected. |
 | Causal-input recording and integration | Captures the selected actor/action, decision boundary, and applied/rejected disposition separately from the sale outcome. The pending choice is authoritative future input. | Integrates the actor-choice input owner, runtime decision boundary, decision records and deterministic diagnostics. Phase 12/13 still own full continuation/reconstruction formats. |
 | Phase-specific regression and acceptance review | Tests Knowledge-bounded action planning, ordinary current-truth revalidation, one-shot use, scheduled-directive precedence, deterministic actor order, and unchanged GM command semantics. | Follows implementation and independent review; long-run validation is required only if daily-loop or long-horizon behavior changes. |
@@ -403,7 +407,8 @@ contract is:
   actor iteration order continues to determine ordering between actors.
 - If the selected action is no longer supported by normal gameplay state when
   applied, including when the actor has an active trade plan, record its
-  rejection and let autonomous selection proceed. If the action is
+  rejection and do not choose a different autonomous action in that same
+  decision. If the action is
   constructed, attempt it once through the existing action and transaction
   path; stale market truth produces the ordinary domain result, with no
   automatic retry and no Knowledge rewrite.
