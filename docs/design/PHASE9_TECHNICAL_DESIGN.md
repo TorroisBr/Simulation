@@ -4,40 +4,48 @@
 checkpoint IDs and authorizes no implementation. The current Phase 9 Brief
 and accepted checkpoint scope remain controlling.
 
-**Independent technical-design review:** PASS on commit
-`89dfd7329c1b1cb836b77ff5277b198c20dbe7c5`. This records review of the
-proposal only; checkpoint scope remains unapproved and implementation is not
-authorized.
+**Prior independent technical-design review:** PASS on commit
+`89dfd7329c1b1cb836b77ff5277b198c20dbe7c5`. This review applies to the
+previous proposal revision. The current scope/baseline refresh requires a new
+independent review; it assigns no checkpoint IDs and authorizes no
+implementation.
 
-**Baseline:** architecture and roadmap at `c285466c355103d3637ac165246591b72eb7bda0`;
-reviewed Phase 9 entry proposal at `5c1e39957440aee767bfe16d56faa01bee1660aa`;
-Phase 8 State refreshed against that architecture. The two architecture
-alignment records are `architecture/INTRADAY_EXTENSIBILITY_ALIGNMENT.md` and
+**Baseline:** `codex/phase8/canonical` at
+`c5b2e06b534f4b2af38f10e6510b10800aa8b28c`, containing the architecture and
+roadmap refresh at `c285466c355103d3637ac165246591b72eb7bda0`; refreshed Phase 9
+entry proposal at `05ba224da8cead8221d12fb1b9dc64da5a3b61d2`; and the Phase 8
+State at the canonical baseline. The architecture alignment records are
+`architecture/INTRADAY_EXTENSIBILITY_ALIGNMENT.md` and
 `architecture/MULTIPARTICIPANT_ACTIVITY_ALIGNMENT.md`.
 
 ## 1. Recommendation and bounded first profile
 
 Implement genesis as a deterministic pre-start pipeline over a resolved,
-explicit profile. For the first supported profile, this proposal recommends
-the ordinary Unity single-player bootstrap path backed by its authored
-`SimulationConfigData` and the domain facts that this path actually composes.
-Scope it to an explicitly identified daily-execution profile, with compatible
-simulation/content versions, effective configuration, effective calendar,
-authored initial inputs, and an explicit reproducible root seed. Keep the
-initial facts in existing domain authorities. Do not promise support for
-arbitrary hand-assembled `SimulationRuntime` instances or optional injected
-providers that the normal bootstrap did not select.
+explicit profile. The approved first delivery uses the existing authored Unity
+bootstrap world as a proving profile for generic deterministic genesis, backed
+by its `SimulationConfigData` and the domain facts this path actually composes.
+Its world and population extent come from authored configuration. It promises
+no procedurally generated terrain, settlements, population, or pre-simulation
+backstory. Keep initial facts in existing domain authorities and preserve the
+pipeline seam for later procedural consumers. Scope the proving profile to an
+explicit daily-execution profile, with compatible simulation/content versions,
+effective configuration, effective calendar, authored initial inputs, and an
+explicit reproducible root seed. Do not promise support for arbitrary
+hand-assembled `SimulationRuntime` instances or optional injected providers
+that the normal bootstrap did not select; this design does not promise an
+arbitrary-provider API or P19 loader/public surface.
 
-This is a bounded proposal for review, not product scope approval. An accepted
-checkpoint must enumerate the included authorities and prove profile
-completeness against their invariants before implementation begins. The
-proposal does not add local generation, route plans/Knowledge, initial timed
-activities, shared participation, a content catalog, or new gameplay. P8
-capabilities are required only when the selected initial facts consume them:
-P8-A for authored factual geography; P8-B for passages; P8-C for City/Site
-anchors or Person positions; P8-D for route plans or route Knowledge. P8-E is
-not a blanket prerequisite. P18 is conditional on initial temporal facts, and
-P20 is conditional on selected shared activity/participation facts. P19's
+The product boundary for this first delivery is approved; a later checkpoint
+must still enumerate the included authorities and prove profile completeness
+against their invariants before implementation begins. The proposal does not
+add local generation, route plans/Knowledge, initial timed activities, shared
+participation, a content catalog, or new gameplay. P8 capabilities are needed
+only when selected initial facts consume them: P8-A for authored factual
+geography; P8-B for passages; P8-C for City/Site anchors or Person positions;
+P8-D is canonical and available for route plans or route Knowledge if selected.
+P8-E remains a design-approved candidate with implementation/promotion
+pending, and is not a blanket prerequisite. P18 is conditional on initial
+temporal facts, and P20 on selected shared activity/participation facts. P19's
 loader and public API remain deferred.
 
 The inspected `TesteSimulacao.InitializeSimulation` path constructs time,
@@ -95,9 +103,10 @@ visible. Publication is a single composition handoff/seal before the first
 simulated boundary, not a series of live mutations. Concrete types and host
 composition API require implementation design after this proposal is accepted.
 
-Generated backstory may explain initial facts but is not simulated history.
-No simulated boundary exists until the complete initial profile is published
-and startup declares the first actual boundary. After that point, changes use
+Any future generated backstory may explain initial facts but is not simulated
+history; the approved first proving profile includes no backstory promise. No
+simulated boundary exists until the complete initial profile is published and
+startup declares the first actual boundary. After that point, changes use
 ordinary domain mutation authorities; genesis privilege is closed.
 
 ## 3. Identity, provenance, compatibility, and randomness
@@ -161,11 +170,9 @@ expansion likewise retains its own post-start authority and is out of scope.
 ## 6. Dependency and readiness effects
 
 This proposal consumes stable P8 contracts and the promoted capabilities
-actually needed by the chosen profile. At the reviewed baseline P8-A/B/C are
-canonical. P8-D's refreshed candidate remains unpromoted pending canonical
-promotion approval and is not yet promotion-ready: the targeted architecture-
-impact/temporal-profile revalidation required by the c285 Phase 8 State remains
-outstanding. P8-E waits for promoted P8-D and that review. P8-D is needed by
+actually needed by the chosen profile. At the current reviewed baseline,
+P8-A/B/C/D are canonical. P8-E remains a design-approved candidate with
+implementation/promotion pending in the current State. P8-D is relevant to
 this proposal only if the accepted profile selects route plans or route
 Knowledge; P8-E civil travel is not a P9 dependency. If the
 profile is daily-only and has no temporal initial facts, P18 is not a gate. If
@@ -183,10 +190,12 @@ requires recoverable initial and changed state. Neither downstream phase
 retroactively supplies missing genesis causality.
 
 Implementation remains unschedulable until a separate checkpoint contract
-accepts the first-profile inventory, exact stage/input/output and compatibility
+accepts the first-profile authority inventory (consistent with the approved
+authored-bootstrap proving profile), exact stage/input/output and compatibility
 set, semantic identity and provenance strategy, deterministic conflict/RNG
-rules, complete validation/publication boundary, and relevant promoted spatial
-capabilities. This proposal assigns no IDs and does not satisfy that gate.
+rules, complete validation/publication boundary, and any spatial capabilities
+not already promoted that the profile requires. This proposal assigns no IDs
+and does not satisfy that gate.
 
 ## 7. Validation obligations for an implementation candidate
 
@@ -217,12 +226,13 @@ independent architecture/design review.
 ## 8. Open gates
 
 - Independent review and acceptance of this technical design.
-- Explicit checkpoint scope selecting the supported initial-world authorities
-  and any optional spatial facts; no additional gameplay/content scope is
-  inferred here.
+- Checkpoint contract enumerating the authorities and optional spatial facts
+  used by the approved authored-bootstrap proving profile; no additional
+  gameplay/content scope is inferred here.
 - Selection/review of semantic ID and purpose-scoped random derivation
   algorithms as part of the accepted checkpoint contract.
-- Promoted P8 capabilities for any selected spatial outputs beyond those
-  already canonical; especially P8-D only if route plans/Knowledge are chosen.
+- P8 capabilities for selected spatial outputs; P8-A through P8-D are
+  canonical, while P8-E remains implementation/promotion pending and is not a
+  P9 prerequisite for this profile.
 - Separate implementation authorization, followed by candidate review and
   integration validation. No capability is promoted by this proposal.
