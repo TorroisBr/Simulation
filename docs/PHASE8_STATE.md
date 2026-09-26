@@ -8,10 +8,12 @@
   `094971b` on `codex/phase8/P8AGeographyIntegration` to the new
   `codex/phase8/canonical` branch. The canonical branch is pushed and its
   remote SHA was verified; the Phase 7 canonical baseline remains preserved.
-- Phase 8 remains open. P8-A through P8-C are canonical. P8-D is design-approved
-  and has a separate integration candidate; its pre-refresh READY classification
-  now requires the targeted architecture impact review recorded below. P8-E is
-  design-approved and waits for promoted P8-D capability and that impact review.
+- Phase 8 remains open. P8-A through P8-C are canonical. P8-D has a refreshed
+  integration candidate on `codex/phase8/P8DArchitectureRefreshIntegration`,
+  based on `c285466c355103d3637ac165246591b72eb7bda0`. Targeted temporal-profile
+  revalidation and the required validation gates pass; independent final review
+  and explicit approval for canonical promotion remain pending. P8-E is design-
+  approved and waits for promoted P8-D capability.
 
 ## Architecture requirement refresh — 2026-09-26
 
@@ -22,13 +24,13 @@ mod or generation capability and does not alter the retained validation records.
 See `architecture/INTRADAY_EXTENSIBILITY_ALIGNMENT.md`, the Roadmap and P18/P19
 Briefs for the new dependencies and candidate impact.
 
-P8-A/B/C remain canonical and valid in their delivered scope. P8-D's separate
-integration candidate requires targeted temporal-profile revalidation before
-promotion; this update does not mark that candidate canonical. P8-E's existing
-explicit-operation proving schedule remains a bounded transitional slice, with
-automatic intraday travel deferred to P18-D. Do not promote either candidate by
-assuming its pre-refresh readiness is sufficient without the recorded impact
-review. The spatial A → B/C → D → E capability graph remains unchanged.
+P8-A/B/C remain canonical and valid in their delivered scope. P8-D's refreshed
+integration candidate completed the targeted temporal-profile revalidation
+recorded below; it remains a candidate pending independent final review and
+explicit canonical-promotion approval. P8-E's existing explicit-operation
+proving schedule remains a bounded transitional slice, with automatic intraday
+travel deferred to P18-D. The spatial A → B/C → D → E capability graph remains
+unchanged.
 
 ## Multi-participant requirement refresh — 2026-09-26
 
@@ -119,8 +121,11 @@ run because P8-A does not change the daily loop or long-horizon behavior.
   endpoints, deterministic same-subject observation resolution, and excludes
   a traversal from new candidates when the actor's resolved belief is
   `KnownUnavailable`. P8-B and P8-C satisfy its capability dependencies.
-  The 2026-09-26 architecture refresh adds targeted temporal-profile
-  revalidation of its separate integration candidate before promotion.
+  The 2026-09-26 architecture refresh required targeted temporal-profile
+  revalidation, completed on the refreshed candidate recorded below. Its day-
+  based freshness, estimate and current-day acceptance semantics remain bounded
+  to the explicit profile; they do not impose a permanent per-day travel/action
+  limit. The individual PersonId route-plan slice has no P20 dependency.
 - **P8-E — Civil Travel Vertical Slice:** the technical design at
   `4b7127f57d354c851e4d8ddaaeb27e8fbd51686c` passed independent review and is
   included in this documentation integration. Its proving scenario uses
@@ -170,3 +175,38 @@ All listed final-gate XML files are parseable passed reports with coherent
 counts. `git diff --check` is part of the final candidate gate. No daily-loop
 or long-horizon behavior changed. P8-D implementation follows promoted B/C;
 P8-E follows promoted B/C/D and the Phase 8 integration validation gate.
+
+## P8-D architecture-refresh integration candidate — not promoted
+
+- Candidate branch: `codex/phase8/P8DArchitectureRefreshIntegration`, based on
+  current canonical architecture/code commit
+  `c285466c355103d3637ac165246591b72eb7bda0`.
+- The earlier candidate on
+  `codex/phase8/P8DKnowledgeRoutePlanIntegration` is preserved. Only its three
+  reviewed code commits were transplanted: feature `2a4e765e8a325297c18505e07ef9a93bbbade1d5`,
+  runtime/diagnostics integration `2faf3f873a7a434dc7330191e9292d09f6dd3014`,
+  and future-date correction `19fc34b395f45819b4ed10387ef9dcadcef08108`.
+  No older Phase docs or roadmaps were merged over the current canonical docs.
+- Independent architecture impact review confirmed that day-based observation
+  freshness, route estimates and plan acceptance remain explicit daily-profile
+  inputs; P8-D adds no daily-loop travel progression. Route planning and plan
+  history are PersonId-owned, with no Activity-to-Actor cardinality contract.
+  Same-day route-plan replacement remains possible; a stale selection from a
+  different current world day is rejected. P20 adds no gate to this individual
+  traveler. Automatic intraday travel remains a future P18-D consumer.
+- The previously found future-dated composition gap remains closed: runtime
+  composition rejects future Knowledge/plan history while preserving valid
+  past-dated state, and runtime invariants report future-dated owned entries.
+  The refreshed candidate's focused and final gates passed with zero failures
+  or skips:
+
+| Gate | Result | Retained XML and log |
+|---|---:|---|
+| `SpatialRoutePlanning` | 17/17 | `Library/ValidationResults/P8DArchitectureRefresh/EditMode-20260926-164348-0fc5d944329945dcb7dafd90a9c0e590.xml` and `.log` |
+| ALL EditMode | 1696/1696 | `Library/ValidationResults/P8DArchitectureRefresh/EditMode-20260926-164648-ab39afe3e39f4bb38941fa30a1e99f34.xml` and `.log` |
+| Official complete Smoke | 5/5 | `Library/ValidationResults/P8DArchitectureRefresh/EditMode-20260926-164953-cd6f3903f2504c0a999df903aeaafb18.xml` and `.log` |
+
+The daily loop and long-horizon behavior remain unchanged, so no long-run suite
+was run. `git diff --check` passes. Independent final review against the
+refreshed candidate remains pending; no canonical promotion is recorded or
+implied here.
