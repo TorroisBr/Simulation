@@ -2,7 +2,7 @@
 
 **Status:** `ENTRY_ARCHITECTURE_READY`; this recommended scope is pending independent entry review. It is a proposal for technical design, not canonical architecture, an implementation contract, checkpoint approval, or authorization to implement. No Phase 14 checkpoint IDs are approved.
 
-**Observed code base:** canonical `codex/phase8/canonical` at `ed7a40a86a6a16e9f4fda75703470c38135fda0e`. At that revision, P8-A/B/C are canonical; P8-D is design-approved and ready to implement; P8-E waits for promoted P8-D. The Phase 14 Brief is `ENTRY_ARCHITECTURE_READY`. This packet inspects current canonical code; any specifically historical P7 facts are labeled as such.
+**Observed code base:** Phase 8 canonical at `c5b2e06b534f4b2af38f10e6510b10800aa8b28c`, incorporating architecture baseline `c285466c355103d3637ac165246591b72eb7bda0`. P8-A through P8-D are canonical. P8-E remains a separate promotion-pending candidate; its existing design and candidate conclusions are preserved. The Phase 14 Brief is `ENTRY_ARCHITECTURE_READY`. This packet inspects the current canonical code; any specifically historical P7 facts are labeled as such.
 
 ## 1. Governing constraints
 
@@ -28,7 +28,7 @@ Relevant architecture rules in `docs/SIMULATION_ARCHITECTURE.md`:
 | Trade and inventories | `InventoryRuntime` stores integer item quantities on an `NpcRuntime`. `EconomyTransactionService` supports item transfers and checks money, stock, and capacity for its current transaction types. Trade receipts identify runtime IDs. | Merchant transfer, actor carriage, and durable title are outside the proposed first consumer. Their existing runtime-ID transaction path does not establish a general asset/title model. |
 | Money | `MoneyEffect` distinguishes transfers and deliberate monetary sources/sinks. Population consumption defaults to free; account-backed consumption is also implemented. | The proposed proving case uses free consumption and makes no monetary mutation. |
 | Property | `PropertyOwnershipStore` records `PropertyId → PersonId` and provides explicit property-transfer transitions. | It is a Person-based property foundation, not a generic stock or material-title store. |
-| Spatial authority | P8-A provides factual Hex/Location geography; P8-C composes stable City/Site anchor bindings and Person spatial position. P8-D/E travel behavior is not promoted at the observed base. | A source attached to a City needs only its current P8 Location anchor. No route or passage behavior is needed for same-City production and consumption. |
+| Spatial authority | P8-A provides factual Hex/Location geography; P8-C composes stable City/Site anchor bindings and Person spatial position; P8-D is now canonical. P8-E remains promotion-pending. | A source attached to a City uses that City's stable semantic key, the same City key used by its P8 anchor binding, and needs only its current P8 Location anchor. No route or passage behavior is needed for same-City production and consumption. |
 | Daily execution | With Economy enabled, `SimulationRuntime.AdvanceDay()` runs City production for all cities, then population consumption and price updates. | The proposed cadence follows this existing daily autonomous order. |
 
 The relevant existing coverage includes `SettlementStockOwnershipTests`, `PopulationConsumptionTests`, `EconomyTransactionTests`, and `PropertyTransferFoundationTests`. These tests demonstrate current behavior; they do not choose Phase 14 product scope. No tests were run as part of this documentation proposal.
@@ -50,20 +50,22 @@ The proving scenario isolates this source and sink. It does not include merchant
 These are the recommended entry decisions for this bounded v1; they are proposals, not accepted canonical decisions.
 
 1. **First consumer and closure:** one City’s configured daily production into its own market, followed by consumption by that City’s population. The closure boundary is the closing market balance after that consumption.
-2. **Source semantics:** each configured output is an explicit exogenous source. Inputs, finite reserves, depletion, and processing are outside v1.
+2. **Source semantics:** each configured output is an explicit exogenous source with a stable authored source key; source identity never comes from a list position. If a legacy entry has no key, compatibility is limited to a unique stable-City-key-plus-item identity within that City's configured sources. Duplicate entries that this scoped identity cannot distinguish require stable authored keys and are unsupported by that compatibility path. Inputs, finite reserves, depletion, and processing are outside v1.
 3. **Accounting depth:** count abstract integer quantities per `ItemDefinitionId`, stored as aggregate balances. Do not introduce physical units, lots, source provenance, or transformations.
-4. **Title and custody:** the settlement/City owns the configured source and output; the City market is the custodian of the aggregate stock. This v1 needs only that concrete settlement holder, not a universal holder model. Technical design must provide durable semantic settlement and store identities; runtime IDs alone are not the persistence contract.
+4. **Title and custody:** the settlement/City owns the configured source and output; the City market is the custodian of the aggregate stock. The settlement semantic identity is the stable City key already used by the P8 City anchor binding, never `CityRuntime.RuntimeId`; the P8 `LocationId` is an anchor reference and does not replace City identity. This v1 needs only that concrete settlement holder, not a universal holder model.
 5. **Spatial scope:** anchor the source at the current P8 City Location. No Hex footprint, route, passage, or physical transport is included.
 6. **Execution and cadence:** use the existing daily autonomous economy cadence, gated by `Economy.Enabled`, with production before consumption. This is not command-initiated production.
 7. **Money:** use free population consumption. No money moves in the proposed flow; no payer, receiver, account, or monetary source/sink is introduced.
 8. **Downstream promise:** this v1 makes no P15 construction-cost or P16 supply/logistics guarantee. Those consumers may use a promoted P14 capability only when their own scope requires it.
 9. **Explicit exclusions:** actor-owned inventories, merchant transfers, physical resource extraction, production inputs, transformation, spoilage/loss accounting, and a general trade or supply network are outside this proposed closure.
 
-## 5. Spatial dependencies
+## 5. Spatial and conditional dependencies
 
-P8-A/B/C are canonical at the observed base. The proposed local City scenario uses P8-A geography and the P8-C City anchor binding to a Location. It does not require P8-D or P8-E: no actor plans a route, traverses a passage, or carries material between locations.
+P8-A/B/C/D are canonical at the observed base; P8-E remains a separate promotion-pending candidate. The proposed local City scenario uses P8-A geography and the P8-C City anchor binding to a Location. It does not require P8-D or P8-E: no actor plans a route, traverses a passage, or carries material between locations.
 
 If later scope adds physical movement, that work must use the promoted P8 travel authority required by the actual flow. Legacy fixed-day City routes are not a substitute for that authority.
+
+P18 is conditional only if a later approved P14 consumer promises duration-based or intraday production; the existing bounded daily source/sink needs no P18 capability. P20 is conditional only for a later consumer that coordinates multiple participants; this single-City passive source/sink has no such dependency. Neither condition expands this entry proposal into a loader/API, physical resource gameplay, or broader economy system.
 
 ## 6. Reconstruction and fork-sensitive state
 
@@ -81,7 +83,7 @@ This is a reconstruction constraint, not a requirement to retain every operation
 
 If independent entry review accepts this proposal, technical design should resolve:
 
-1. How to assign durable semantic IDs to a City production source and its settlement/market store, including compatibility with the current P8 City anchor and the P12/P13 identity contract.
+1. How to assign durable semantic IDs to a City production source and its market store, using the stable City key shared with the P8 anchor binding for settlement identity, and preserving the P12/P13 identity contract.
 2. How to apply production and consumption without partial mutation, including overflow, insufficient stock, and the existing mutation guards.
 3. Which existing City market state is the authoritative owned store for this slice and how its title/custody projection composes with existing market counterparties and transaction paths.
 4. Which source, stock, configuration, order, and result fields must appear in deterministic diagnostics/reconstruction projections so later save/fork work can preserve the causal state.
