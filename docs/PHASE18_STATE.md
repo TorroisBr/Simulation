@@ -1,9 +1,12 @@
 # Phase 18 State — Intraday Temporal Execution v1
 
-**Status:** IN_PROGRESS  
-**Canonical base:** `codex/phase8/canonical` at `c5b2e06b534f4b2af38f10e6510b10800aa8b28c`  
-**Architecture update:** `c285466c355103d3637ac165246591b72eb7bda0`  
-**Integration branch:** `codex/phase18/TimelineIntegration`  
+**Status:** IN_PROGRESS
+
+**Canonical base:** `codex/phase8/canonical` at `c5b2e06b534f4b2af38f10e6510b10800aa8b28c`
+
+**Architecture update:** `c285466c355103d3637ac165246591b72eb7bda0`
+
+**Integration branch:** `codex/phase18/TimelineIntegration`
 **P18-A integrated code commit:** `350c6a049404b4f339044a31d1620a9596f55f5a`
 
 ## Phase status
