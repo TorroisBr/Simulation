@@ -85,6 +85,10 @@ contributor identity/version, typed input and output contracts, its owner
 mapping, explicit dependencies, conflict behavior, provenance, and
 purpose-scoped random needs.
 
+This local-generation contributor composes a later, separately accepted
+profile and stage set. It leaves P9's authored-only Unity bootstrap first
+profile unchanged and is not selected by that profile.
+
 The local stage consumes the already validated P8 location/anchor facts and
 the selected domain site's authored or generated definition inputs. It
 produces proposed domain-site and local-topology facts for isolated candidate
