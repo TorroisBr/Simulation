@@ -4,13 +4,15 @@
 **Independent technical design review:** PASS at content commit
 `8577ba589a0f9b40738fcf8738eee9589563d7b8`. The later lifecycle seam must
 invalidate capture eligibility on every supported authoritative write path.
-**Targeted architecture-impact refresh:** The design was rechecked against
+**Targeted architecture-impact revalidation:** PASS at candidate
+`01963fc07194b6ef2359cec40a4af01cae9b712b`. The design was rechecked against
 Phase 8 canonical docs tip `77f3e1a47a1e007492a794ea777d681a21a36d09`
 (including P8-E promotion `d95b60d174cb0b17df09e2775b3cbd134c74b21f`),
 architecture baseline `c285466c355103d3637ac165246591b72eb7bda0`, and both
 alignment records. The profile remains daily-only; §1 and §3 now explicitly
-account for P8-C Person positions and P8-E travel state. Independent re-review
-of this targeted update is pending.
+account for P8-C Person positions and P8-E travel state. The independent
+review confirmed the profile rejection boundary and preserved the existing
+temporal/cardinality assumptions.
 
 ## 1. Contract and supported boundary
 
