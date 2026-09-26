@@ -1,12 +1,14 @@
 # Phase 11 State — Actor Perspective & Commands v1
 
-**Status:** INTEGRATED REFRESHED CANDIDATE — final review pending; canonical promotion pending
+**Status:** INTEGRATED AND REVIEWED REFRESHED CANDIDATE — canonical promotion pending
 
 **Canonical base:** `codex/phase8/canonical` at `d95b60d174cb0b17df09e2775b3cbd134c74b21f`
 
 **Architecture baseline:** `c285466c355103d3637ac165246591b72eb7bda0`
 
 **Integrated source commit:** `e40ebd63bcdfb043caa7e50001404afaa0ce85b7` on `codex/phase11/ActorChoiceIntegrationPostP8E`; merge commit `5b4674cf8a59c7376a1d9cad4ca5dad956697cb7` refreshes the reviewed P11 candidate against canonical P8-E at `d95b60d174cb0b17df09e2775b3cbd134c74b21f`.
+
+**Final independent review:** PASS at candidate/State commit `aa8ecf6e722532a305e061a0106aad2a4a71947b`.
 
 The candidate combines the P11 actor-choice implementation and diagnostics
 with P8-E, which is now canonical. P11's local SellGoods contract has no
@@ -44,7 +46,7 @@ capability dependency for this rule.
 | P11-01 | Stable actor-choice input store, ordered dispositions, terminal attempt lifecycle | CANDIDATE COMPLETE | Store branch `codex/phase11/ActorChoiceStore`, commit `f1221d4e3275e21a876076350ca12058927dbaa9`; independent review against c5b2 and both alignment records; `ActorChoiceStoreTests` 9/9. |
 | P11-02 | Typed WorldCommand ingress and trusted local UI capture | INTEGRATED CANDIDATE | Integrated with the ordinary WorldCommand/domain boundary; `ActorActionChoiceCommandTests` 6/6. No GM authority expansion. |
 | P11-03 | Runtime application at the ordinary actor decision boundary and existing SellGoods path | INTEGRATED CANDIDATE | One-shot handling and no-fallback semantics implemented; exact P8-C position/location eligibility applied to input and autonomous local SellGoods. Refreshed `ActorChoice` tests 24/24. |
-| P11-04 | Deterministic diagnostics, invariants, focused integration tests, and acceptance review | INTEGRATED CANDIDATE; REFRESHED COMBINED REVIEW PENDING | Actor-choice state is included in canonical snapshots, diffs, formatting, and invariant validation. The prior candidate passed independent review at `a281d98`; missing failed/thrown execution regressions were restored at `e40ebd6`; final review of the corrected refreshed candidate is pending. |
+| P11-04 | Deterministic diagnostics, invariants, focused integration tests, and acceptance review | REFRESHED COMBINED REVIEW PASS | Actor-choice state is included in canonical snapshots, diffs, formatting, and invariant validation. Independent review at `aa8ecf6` passed after the returned-failure and thrown-execution regressions were restored at `e40ebd6`; `git diff --check` passed. |
 
 The initial integration review found two defects: autonomous SellGoods could
 execute during P8-C transit using stale `CurrentCity`, and P8-E interruption
@@ -81,11 +83,12 @@ Roadmap and Execution Model, and both 2026-09-26 alignment records.
   diagnostics hotspots, not because the SellGoods semantics require civil
   travel.
 
-The pre-promotion combined review at `a281d98` passed, confirming
-one-shot/no-fallback semantics, daily precedence, stable PersonId/action
-identity, diagnostics parity, the exact P8-C position rule, and conditional
-P18/P20/P19 boundaries. The refreshed candidate now includes canonical P8-E;
-independent review of the exact refreshed source is pending.
+The pre-promotion combined review at `a281d98` passed. The refreshed
+independent review at `aa8ecf6` also passed after restoring the two missing
+failure-path tests. It confirmed one-shot/no-fallback semantics, daily
+precedence, stable PersonId/action identity, diagnostics parity, the exact
+P8-C position rule, canonical P8-E's runtime-day guard, and conditional
+P18/P20/P19 boundaries.
 
 ## Validation evidence
 
@@ -109,8 +112,6 @@ recorded in `docs/PHASE8_STATE.md`.
 
 ## Next actions
 
-1. Complete independent review of refreshed source commit `5b4674c` and record
-   its verdict and final State SHA.
-2. Respect the explicit human promotion gate for this P11 candidate.
-3. After promotion, recompute the full DAG and continue only newly unblocked
+1. Respect the explicit human promotion gate for this P11 candidate.
+2. After promotion, recompute the full DAG and continue only newly unblocked
    Phase work.
