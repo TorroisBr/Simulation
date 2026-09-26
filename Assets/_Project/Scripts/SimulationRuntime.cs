@@ -7,7 +7,9 @@ public enum SimulationRuntimeAdvanceFailure
     None = 0,
     RuntimeFaulted = 1,
     InvalidDayCount = 2,
-    AbsoluteDayOverflow = 3
+    AbsoluteDayOverflow = 3,
+    TargetBeforeNow = 4,
+    TimelineDispatchFailure = 5
 }
 
 /// <summary>Adapts the spatial authority's passage child to the P8-C transit resolver seam.</summary>
@@ -68,6 +70,7 @@ public sealed class SimulationRuntime
 {
     private readonly AuthoritativeMutationGuard mutationGuard = new AuthoritativeMutationGuard();
     private readonly SimulationTime simulationTime;
+    private SimulationTimeline timeline;
     private readonly List<CityRuntime> cities;
     private readonly List<NpcRuntime> npcRuntimes;
     private readonly IReadOnlyList<NpcRuntime> npcRuntimeSnapshot;
@@ -130,6 +133,7 @@ public sealed class SimulationRuntime
     private readonly SimulationLogger logger;
 
     public SimulationTime SimulationTime => simulationTime;
+    public SimulationTimeline Timeline => timeline;
     public AuthoritativeMutationHealth MutationHealth => mutationGuard.Health;
     public bool IsMutationFaulted => mutationGuard.Health == AuthoritativeMutationHealth.Faulted;
     public AuthoritativeMutationFaultReason MutationFaultReason => mutationGuard.FaultReason;
@@ -268,7 +272,8 @@ public sealed class SimulationRuntime
         BattleDirectConsequencePolicy battleDirectConsequencePolicy = null,
         IDomainEventRecorder battleResolvedEventRecorder = null,
         LegacySpatialAnchorBindingStore legacySpatialAnchorBindingStore = null,
-        PersonSpatialPositionStore personSpatialPositionStore = null)
+        PersonSpatialPositionStore personSpatialPositionStore = null,
+        IDueWorkOwner timelineDueWorkOwner = null)
     {
         List<CityRuntime> resolvedCities = cities != null
             ? new List<CityRuntime>(cities)
@@ -658,6 +663,30 @@ public sealed class SimulationRuntime
             mutationGuard,
             battleResolvedEventRecorder);
         isComposingNpcRoster = false;
+
+        long maxSupportedDay = long.MaxValue / LogicalTick.TicksPerDay;
+        if (this.simulationTime.AbsoluteDay > maxSupportedDay)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(simulationTime),
+                "The initial day is outside the supported logical-timeline range.");
+        }
+        long initialTick = checked(this.simulationTime.AbsoluteDay * LogicalTick.TicksPerDay);
+        this.timeline = new SimulationTimeline(
+            this.calendar,
+            new LogicalTick(initialTick),
+            owner: timelineDueWorkOwner,
+            dailyBoundaryOperation: boundary =>
+            {
+                if (boundary.AbsoluteDay == checked(this.simulationTime.AbsoluteDay + 1L))
+                {
+                    if (!this.simulationTime.TryAdvanceDay(out _))
+                        throw new InvalidOperationException("The daily boundary could not advance SimulationTime.");
+                }
+                else if (boundary.AbsoluteDay != this.simulationTime.AbsoluteDay)
+                    throw new InvalidOperationException("The daily boundary is out of sequence.");
+                AdvanceDayAfterClockAdvance();
+            });
 
     }
 
@@ -2413,16 +2442,53 @@ public sealed class SimulationRuntime
             return false;
         }
 
-        if (simulationTime.TryAdvanceDay(out SimulationTimeAdvanceFailure timeFailure) == false)
+        try
         {
-            failure = timeFailure == SimulationTimeAdvanceFailure.RuntimeFaulted
-                ? SimulationRuntimeAdvanceFailure.RuntimeFaulted
-                : SimulationRuntimeAdvanceFailure.AbsoluteDayOverflow;
+            if (!timeline.TryAdvanceTo(timeline.CurrentInstant.NextDayBoundary, out TimelineFailure timelineFailure))
+            {
+                failure = timelineFailure == TimelineFailure.TargetBeforeNow
+                    ? SimulationRuntimeAdvanceFailure.TargetBeforeNow
+                    : timelineFailure == TimelineFailure.Overflow
+                        ? SimulationRuntimeAdvanceFailure.AbsoluteDayOverflow
+                        : SimulationRuntimeAdvanceFailure.TimelineDispatchFailure;
+                return false;
+            }
+            return true;
+        }
+        catch (OverflowException)
+        {
+            failure = SimulationRuntimeAdvanceFailure.AbsoluteDayOverflow;
             return false;
         }
+    }
 
-        AdvanceDayAfterClockAdvance();
-        return true;
+    /// <summary>Advances through every crossed daily boundary and due-work instant.</summary>
+    public bool TryAdvanceTo(LogicalTick target, out SimulationRuntimeAdvanceFailure failure)
+    {
+        if (!mutationGuard.CanMutate)
+        {
+            failure = SimulationRuntimeAdvanceFailure.RuntimeFaulted;
+            return false;
+        }
+        try
+        {
+            if (timeline.TryAdvanceTo(target, out TimelineFailure timelineFailure))
+            {
+                failure = SimulationRuntimeAdvanceFailure.None;
+                return true;
+            }
+            failure = timelineFailure == TimelineFailure.TargetBeforeNow
+                ? SimulationRuntimeAdvanceFailure.TargetBeforeNow
+                : timelineFailure == TimelineFailure.Overflow
+                    ? SimulationRuntimeAdvanceFailure.AbsoluteDayOverflow
+                    : SimulationRuntimeAdvanceFailure.TimelineDispatchFailure;
+            return false;
+        }
+        catch (OverflowException)
+        {
+            failure = SimulationRuntimeAdvanceFailure.AbsoluteDayOverflow;
+            return false;
+        }
     }
 
     private void AdvanceDayAfterClockAdvance()

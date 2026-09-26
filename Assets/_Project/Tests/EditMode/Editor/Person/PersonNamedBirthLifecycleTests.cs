@@ -63,7 +63,7 @@ public sealed class PersonNamedBirthLifecycleTests
     [Test]
     public void BirthAtLongAbsoluteDayAndAgeQueryRemainValid()
     {
-        const long birthDay = 1_000_000_000_000L;
+        const long birthDay = 100_000_000_000L;
         CityRuntime city = CreateCity("birth-long-day", 1);
         SimulationRuntime world = CreateWorld(new SimulationTime(birthDay), city);
 
