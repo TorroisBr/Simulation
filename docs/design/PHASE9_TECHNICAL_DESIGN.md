@@ -14,9 +14,18 @@ implementation.
 `c5b2e06b534f4b2af38f10e6510b10800aa8b28c`, containing the architecture and
 roadmap refresh at `c285466c355103d3637ac165246591b72eb7bda0`; refreshed Phase 9
 entry proposal at `05ba224da8cead8221d12fb1b9dc64da5a3b61d2`; and the Phase 8
-State at the canonical baseline. The architecture alignment records are
+State at that historical canonical baseline. The architecture alignment records are
 `architecture/INTRADAY_EXTENSIBILITY_ALIGNMENT.md` and
 `architecture/MULTIPARTICIPANT_ACTIVITY_ALIGNMENT.md`.
+
+**Targeted P8-E promotion revalidation:** checked against Phase 8 canonical
+tip `77f3e1a` (P8-E promotion `d95b60d174cb0b17df09e2775b3cbd134c74b21f`),
+with architecture baseline still `c285466c355103d3637ac165246591b72eb7bda0`
+and both alignment records current. P8-E is now canonical. Its civil-travel
+capability is not a blanket dependency for the approved authored
+Unity-bootstrap-only first profile; it is conditional only if a selected
+profile output consumes P8-E travel/route-plan facts. This revalidation does
+not add travel facts or change the first profile.
 
 ## 1. Recommendation and bounded first profile
 
@@ -43,10 +52,10 @@ participation, a content catalog, or new gameplay. P8 capabilities are needed
 only when selected initial facts consume them: P8-A for authored factual
 geography; P8-B for passages; P8-C for City/Site anchors or Person positions;
 P8-D is canonical and available for route plans or route Knowledge if selected.
-P8-E remains a design-approved candidate with implementation/promotion
-pending, and is not a blanket prerequisite. P18 is conditional on initial
-temporal facts, and P20 on selected shared activity/participation facts. P19's
-loader and public API remain deferred.
+P8-E is now canonical, but is not a blanket prerequisite; it is conditional
+only when selected initial outputs consume its travel/route-plan facts. P18 is
+conditional on initial temporal facts, and P20 on selected shared activity/
+participation facts. P19's loader and public API remain deferred.
 
 The inspected `TesteSimulacao.InitializeSimulation` path constructs time,
 randomness and runtime identity infrastructure, creates runtime objects from
@@ -170,11 +179,13 @@ expansion likewise retains its own post-start authority and is out of scope.
 ## 6. Dependency and readiness effects
 
 This proposal consumes stable P8 contracts and the promoted capabilities
-actually needed by the chosen profile. At the current reviewed baseline,
-P8-A/B/C/D are canonical. P8-E remains a design-approved candidate with
-implementation/promotion pending in the current State. P8-D is relevant to
-this proposal only if the accepted profile selects route plans or route
-Knowledge; P8-E civil travel is not a P9 dependency. If the
+actually needed by the chosen profile. At historical baseline `c5b2e06`,
+P8-A/B/C/D were canonical and P8-E was design-approved with
+implementation/promotion pending. At current revalidated canonical tip
+`77f3e1a`, P8-A through P8-E are canonical. P8-D is relevant to this proposal
+only if the accepted profile selects route plans or route Knowledge; P8-E is
+relevant only if selected outputs consume its civil-travel/route-plan facts.
+Neither capability is a blanket P9 dependency. If the
 profile is daily-only and has no temporal initial facts, P18 is not a gate. If
 it initializes timed activities, it must consume the relevant accepted and
 promoted P18 contracts/capabilities. If it initializes shared
@@ -231,8 +242,9 @@ independent architecture/design review.
   gameplay/content scope is inferred here.
 - Selection/review of semantic ID and purpose-scoped random derivation
   algorithms as part of the accepted checkpoint contract.
-- P8 capabilities for selected spatial outputs; P8-A through P8-D are
-  canonical, while P8-E remains implementation/promotion pending and is not a
-  P9 prerequisite for this profile.
+- P8 capabilities for selected outputs; P8-A through P8-E are canonical at
+  `77f3e1a`. P8-D route planning and P8-E civil travel are conditional only
+  when the selected profile includes their corresponding facts; neither is a
+  blanket prerequisite for the authored-only first profile.
 - Separate implementation authorization, followed by candidate review and
   integration validation. No capability is promoted by this proposal.
