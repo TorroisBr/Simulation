@@ -95,6 +95,31 @@ public sealed class ActorChoiceRuntimeTests
     }
 
     [Test]
+    public void PendingChoiceDoesNotAdvanceAutonomousMerchantPlanBeforeEligibility()
+    {
+        Fixture fixture = CreateFixture(inventoryAmount: 10);
+        CityRuntime plannedDestination = SimulationTestFactory.CreateCity(
+            "city-actor-choice-plan-destination",
+            "location-actor-choice-plan-destination");
+        fixture.Actor.SetMerchantTradePlan(
+            fixture.Item,
+            fixture.City,
+            plannedDestination,
+            5,
+            1f);
+        ActorChoiceInput input = Capture(fixture, "choice-active-trade-plan");
+
+        fixture.Runtime.AdvanceDay();
+
+        ActorChoiceInput rejected = GetInput(fixture.Runtime, input.InputId);
+        Assert.That(rejected.Status, Is.EqualTo(ActorChoiceInputStatus.Rejected));
+        Assert.That(rejected.Dispositions[0].Failure, Is.EqualTo(ActorChoiceFailure.ActionUnavailable));
+        Assert.That(fixture.Actor.MerchantTradePlan.TargetCity, Is.SameAs(plannedDestination));
+        Assert.That(fixture.Records.Decisions.Decisions, Is.Empty);
+        Assert.That(fixture.Actor.CurrentActionRuntime, Is.Null);
+    }
+
+    [Test]
     public void MultipleInputsForOnePersonConsumeOnlyTheEarliestPerDailyTurn()
     {
         Fixture fixture = CreateFixture(inventoryAmount: 10);

@@ -2623,6 +2623,24 @@ public sealed class SimulationRuntime
             }
 
             EvaluateStatus(npcRuntime);
+
+            if (HasPendingActorChoiceFor(npcRuntime.PersonId))
+            {
+                if (TryProcessScheduledDirective(npcRuntime) == true)
+                {
+                    DeferActorChoiceForPerson(
+                        npcRuntime.PersonId,
+                        actorTurnRosterOrdinal,
+                        ActorChoiceDeferralReason.ScheduledDirective);
+                    continue;
+                }
+
+                if (TryProcessActorChoice(npcRuntime, actorTurnRosterOrdinal))
+                {
+                    continue;
+                }
+            }
+
             if (configuration.MerchantTrade.Enabled)
             {
                 merchantSystem?.AdvanceNpcTradeState(npcRuntime);
