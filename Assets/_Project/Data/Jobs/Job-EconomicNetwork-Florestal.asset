@@ -12,6 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9b962bf2f9e6cab419e52899b98127c0, type: 3}
   m_Name: Job-EconomicNetwork-Florestal
   m_EditorClassIdentifier: Assembly-CSharp::NpcJobData
+  id: job/Job-EconomicNetwork-Florestal
   jobName: Mercador Florestal
   jobType: 1
   merchantBehavior: 0

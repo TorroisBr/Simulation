@@ -12,4 +12,5 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 65d09b832dd031a4d80906295d8973fe, type: 3}
   m_Name: Status-Preso
   m_EditorClassIdentifier: Assembly-CSharp::NPCStatusSO
+  id: status/Status-Preso
   statusName: PRESO

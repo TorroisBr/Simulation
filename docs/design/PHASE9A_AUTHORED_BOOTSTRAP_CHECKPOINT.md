@@ -102,10 +102,16 @@ silently skipped to publish a partial profile.
   Do not reject that supported multiplicity as a duplicate output key. The
   current ordered warrant/directive list positions are causal input and remain
   ordered.
+- `NpcStatusData` and `NpcJobData` selected by the profile carry explicit,
+  serialized, non-empty stable `DefinitionId` values. Display labels and coarse
+  job enums are not identities; selected definitions must have unique IDs.
+  Asset database GUIDs are not runtime identity inputs.
 - Optional list-valued fields that the existing model normalizes to empty
   produce no rows when null/empty. Required object references for a selected
-  row cannot be null. Invalid ranges, unresolved references, duplicate
-  semantic output keys, and owner invariant failures reject the candidate.
+  row cannot be null. Invalid ranges (including an invalid authored calendar),
+  unresolved references, duplicate semantic output keys, and owner invariant
+  failures reject the candidate. An omitted/null calendar alone uses the
+  existing documented default-calendar path.
 
 Output completeness is checked against this normalized, validated input
 inventory and owning-domain invariants, not against incidental host counts.

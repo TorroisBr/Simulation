@@ -6,6 +6,7 @@ using UnityEngine;
 public static class SimulationTestFactory
 {
     private static readonly List<UnityEngine.Object> createdDefinitions = new List<UnityEngine.Object>();
+    private static int nextTestJobDefinitionId;
 
     public static ItemData CreateItem(string id, float basePrice = 10f)
     {
@@ -35,6 +36,7 @@ public static class SimulationTestFactory
     public static NpcJobData CreateJob(NpcJobType jobType = NpcJobType.None, MerchantBehavior merchantBehavior = MerchantBehavior.Traveling)
     {
         NpcJobData job = Track(ScriptableObject.CreateInstance<NpcJobData>());
+        job.id = "test-job-" + (++nextTestJobDefinitionId).ToString(System.Globalization.CultureInfo.InvariantCulture);
         job.jobName = jobType + " job";
         job.jobType = jobType;
         job.merchantBehavior = merchantBehavior;
@@ -88,6 +90,7 @@ public static class SimulationTestFactory
     public static NpcStatusData CreateStatus(string id)
     {
         NpcStatusData status = Track(ScriptableObject.CreateInstance<NpcStatusData>());
+        status.id = id;
         status.statusName = id;
         return status;
     }

@@ -296,15 +296,7 @@ public sealed class ExplorableSiteKnowledgeTests
         });
         config.ExplorableSites.Add(new ExplorableSiteConfig { site = sharedDefinition, anchorCity = anchorDefinition });
         config.ExplorableSites.Add(new ExplorableSiteConfig { site = sharedDefinition, anchorCity = anchorDefinition });
-        LogAssert.Expect(
-            LogType.Error,
-            "Explorable site definition 'ambiguous-site' is ambiguous: 2 runtime instances exist. Resolve by RuntimeId instead.");
-
-        TesteSimulacao simulation = CreateSimulation(config);
-
-        Assert.That(simulation.ExplorableSites.Sites.Count, Is.EqualTo(2));
-        Assert.That(simulation.TryGetNpcRuntime("npc-000001", out NpcRuntime npc), Is.True);
-        Assert.That(npc.ExplorableSiteKnowledge.Observations, Is.Empty);
+        AssertBootstrapRejected(config);
     }
 
     [Test]
@@ -391,5 +383,17 @@ public sealed class ExplorableSiteKnowledgeTests
         configField.SetValue(simulation, config);
         simulation.Start();
         return simulation;
+    }
+
+    private void AssertBootstrapRejected(SimulationConfigData config)
+    {
+        GameObject simulationObject = new GameObject("invalid-explorable-site-bootstrap-test");
+        simulationObjects.Add(simulationObject);
+        TesteSimulacao simulation = simulationObject.AddComponent<TesteSimulacao>();
+        typeof(TesteSimulacao).GetField("simulationConfig", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(simulation, config);
+        Assert.Throws<System.InvalidOperationException>(() => simulation.Start());
+        Assert.That(simulation.Bootstrap, Is.Null);
+        Assert.That(simulation.Runtime, Is.Null);
+        Assert.That(simulation.History, Is.Null);
     }
 }

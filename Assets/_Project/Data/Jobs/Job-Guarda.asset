@@ -12,6 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9b962bf2f9e6cab419e52899b98127c0, type: 3}
   m_Name: Job-Guarda
   m_EditorClassIdentifier: Assembly-CSharp::NpcJobSO
+  id: job/Job-Guarda
   jobName: Guarda
   jobType: 2
   merchantBehavior: 0

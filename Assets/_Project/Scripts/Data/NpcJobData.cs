@@ -6,7 +6,9 @@ using UnityEngine;
 [CreateAssetMenu(menuName = "World Simulation/Job")]
 public class NpcJobData : ScriptableObject
 {
+    public string id;
     public string jobName;
+    public string DefinitionId => id;
     public NpcJobType jobType = NpcJobType.None;
     public MerchantBehavior merchantBehavior = MerchantBehavior.Traveling;
     public float minimumProfitPerItem = 1f;
