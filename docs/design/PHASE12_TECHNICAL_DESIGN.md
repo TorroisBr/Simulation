@@ -1,6 +1,9 @@
 # Phase 12 — Technical Design Proposal: Daily Continuation
 
 **Status:** Technical design proposal for `UnityBootstrap-Daily-v1`, based on refreshed entry proposal `a257092471607520f7da7f056f465bbb3f5384d3` as carried by base `fd7f39f4a3f6786bab687f35c5eddc43309fdc6b`. This document proposes no checkpoint IDs, changes no Phase State/Brief/Roadmap, and authorizes no implementation. It does not claim the architecture recommendation is canonically approved or that save/load exists.
+**Independent technical design review:** PASS at content commit
+`8577ba589a0f9b40738fcf8738eee9589563d7b8`. The later lifecycle seam must
+invalidate capture eligibility on every supported authoritative write path.
 
 ## 1. Contract and supported boundary
 
