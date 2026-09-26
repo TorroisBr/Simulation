@@ -373,6 +373,12 @@ public sealed class SpatialRoutePlanningTests
         SpatialRouteCandidate candidate = source.Planner.BuildKnownCandidates(
             Request(source.Actor, "hex.a", "hex.b", 0L)).Candidates.Single();
         Record(source, EstimateObservation(candidate, MetricId, MetricUnit, 1m, "journey.estimate", 0L), 0L);
+        SpatialRouteSegment reverseSegment = Segment("hex.b", "hex.a", "connection.ab");
+        Record(source, OptionObservation(reverseSegment, SpatialRouteOptionBelief.KnownAvailable,
+            "guide", "journey.reverse-option", 0L, 0L), 0L);
+        SpatialRouteCandidate reverseCandidate = source.Planner.BuildKnownCandidates(
+            Request(source.Actor, "hex.b", "hex.a", 0L)).Candidates.Single();
+        Record(source, EstimateObservation(reverseCandidate, MetricId, MetricUnit, 1m, "journey.reverse-estimate", 0L), 0L);
 
         PersonSpatialPositionStore positions = new PersonSpatialPositionStore(source.People, source.Spatial,
             new TestTraversalResolver(source.Spatial.PassageAuthority));
@@ -400,6 +406,16 @@ public sealed class SpatialRoutePlanningTests
         Assert.That(runtime.PersonRoutePlanStore.Revision, Is.EqualTo(2L));
         Assert.That(runtime.PersonSpatialPositionStore.TryGetPosition(source.Actor, out PersonSpatialPosition transit), Is.True);
         Assert.That(transit.IsInTransit, Is.True);
+        long inTransitPositionRevision = runtime.PersonSpatialPositionStore.Revision;
+        long inTransitPlanStoreRevision = runtime.PersonRoutePlanStore.Revision;
+        Assert.That(runtime.PersonRoutePlanStore.TryAcceptPlan(selected, "decision.illegal-in-transit", 1L,
+            runtime.CurrentDay, out PersonRoutePlanFailure transitPlanFailure), Is.False);
+        Assert.That(transitPlanFailure.Code, Is.EqualTo(PersonRoutePlanFailureCode.ActorInTransit));
+        Assert.That(runtime.PersonSpatialPositionStore.Revision, Is.EqualTo(inTransitPositionRevision));
+        Assert.That(runtime.PersonRoutePlanStore.Revision, Is.EqualTo(inTransitPlanStoreRevision));
+        Assert.That(runtime.PersonRoutePlanStore.TryGetCurrent(source.Actor, out PersonRoutePlan stillActive), Is.True);
+        Assert.That(stillActive.Status, Is.EqualTo(PersonRoutePlanStatus.Active));
+        Assert.That(runtime.PersonRoutePlanStore.History.Count, Is.EqualTo(1));
 
         Assert.That(runtime.P8ETravelTransactionCoordinator.TryAdvanceSegment(source.Actor,
             TraversalProgress.CompleteProgressTicks, out travelFailure), Is.True, travelFailure.Message);
@@ -411,6 +427,16 @@ public sealed class SpatialRoutePlanningTests
         Assert.That(completed.Status, Is.EqualTo(PersonRoutePlanStatus.Completed));
         Assert.That(runtime.PersonRoutePlanStore.Revision, Is.EqualTo(3L));
         Assert.That(runtime.PersonRoutePlanStore.PlanCount, Is.EqualTo(1));
+
+        SpatialRoutePlanningOutcome stableReplan = runtime.SelectKnownSpatialRoute(source.Actor,
+            StablePositionReference.ForHex(new HexId("hex.b")), StablePositionReference.ForHex(new HexId("hex.a")),
+            Policy(false, 0L, true));
+        Assert.That(stableReplan.IsSuccess, Is.True, stableReplan.FailureMessage);
+        Assert.That(runtime.PersonRoutePlanStore.TryAcceptPlan(stableReplan, "decision.stable-replan", 1L,
+            runtime.CurrentDay, out PersonRoutePlanFailure replanFailure), Is.True, replanFailure.ToString());
+        Assert.That(runtime.PersonRoutePlanStore.TryGetCurrent(source.Actor, out PersonRoutePlan replanned), Is.True);
+        Assert.That(replanned.Status, Is.EqualTo(PersonRoutePlanStatus.Accepted));
+        Assert.That(runtime.PersonRoutePlanStore.History[0].Status, Is.EqualTo(PersonRoutePlanStatus.Completed));
         Assert.That(runtime.ValidateSpatialInvariants().IsValid, Is.True,
             string.Join("; ", runtime.ValidateSpatialInvariants().Violations));
 
