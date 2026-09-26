@@ -6,7 +6,11 @@
 the current P8 City-anchor composition found that its owner lookup key is
 currently checked against `CityRuntime.RuntimeId`; it is not a durable City
 instance identity. This revision uses a separate authored `SettlementSemanticId`
-associated with the stable P8 `LocationId` and awaits independent re-review.
+associated with the stable P8 `LocationId`. Independent re-review of content
+commit `3d9ed793ae7fdfce74b9224856d40e5ea73ef2a0` passed against canonical
+`c5b2e06b534f4b2af38f10e6510b10800aa8b28c` and architecture update
+`c285466c355103d3637ac165246591b72eb7bda0`, confirming the exact LocationId
+association, uniqueness/cardinality rules, and conditional P18/P20 edges.
 
 ## 1. Scope and governing contracts
 
@@ -93,7 +97,7 @@ Likely code surfaces include `CityData`, `CityRuntime`, `MarketRuntime`, `CityPr
 ## 8. Gates that remain open
 
 - Phase 14 still has no approved checkpoint IDs, Phase State, implementation contract, or implementation authorization. The bounded entry proposal is a reviewed recommendation, but implementation requires an accepted checkpoint contract with closure and explicit dependencies.
-- This revised technical proposal requires independent review against its actual base and the current canonical architecture. Review should confirm that the authored settlement-instance identity and explicit Location association reconcile with the current runtime-keyed P8 anchor lookup, along with mutation ownership, title/custody separation, atomic overflow and stock-limited sink behavior, deterministic ordering, reconstructible causal fields, extension constraints, and exclusions.
+- Independent review of this identity-reconciled proposal passed on content commit `3d9ed793ae7fdfce74b9224856d40e5ea73ef2a0` against the current canonical architecture. It confirmed that the authored settlement-instance identity and explicit Location association reconcile with the runtime-keyed P8 anchor lookup, along with title/custody separation, uniqueness/cardinality, and conditional temporal/shared-activity dependencies. This review does not approve implementation.
 - Promotion/integration will require executable implementation, independent code review, targeted validation, and any repository-required integration gates. P8-D/E travel is not a dependency. P18 is not a dependency for the legacy daily profile. P20 is conditional on a later multi-participant consumer. P12/P13 remain the owners of save/reconstruction implementation.
 
 ## 9. Explicit exclusions
