@@ -319,3 +319,8 @@ or product gate before affected technical design proceeds.
 This document records a reviewable Phase 9 entry proposal at the stated
 baseline. It does not alter `SIMULATION_ARCHITECTURE.md`, the Roadmap, any
 Phase Brief or State, and it does not make Phase 9 implementation-ready.
+
+**Independent document review:** PASS against proposal commit
+`8a610a3c97762ee87026289361c286361136f906`. This records review of the entry
+proposal only; no P9 checkpoint IDs are approved and no implementation is
+authorized.
