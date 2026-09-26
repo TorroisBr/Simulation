@@ -2,7 +2,7 @@
 
 `SIMULATION_ARCHITECTURE.md` remains the semantic authority. This roadmap names intended phase scopes and likely dependency directions; it neither reports delivered behavior nor authorizes implementation or canonical promotion. The owning `PHASE*_STATE.md` and current canonical code establish delivery. Phase numbers primarily organize planning and closure, not a requirement to execute whole phases serially.
 
-Phases 5–7 are closed within their documented scopes. P8-A/B/C are canonical; `PHASE8_STATE.md` records subsequent candidates and readiness. Phases 9–17 retain their IDs and scopes. Phases 18–20 introduce intraday execution, the later code-mod platform and multi-participant activities; their numbers do not put them after strategic War in execution order. See the Phase Briefs and `EXECUTION_MODEL.md` for readiness and scheduling.
+Phases 5–7 are closed within their documented scopes. P8-A through P8-D are canonical; `PHASE8_STATE.md` records P8-E and subsequent readiness. Phases 9–17 retain their IDs and scopes. Phases 18–20 introduce intraday execution, the later code-mod platform and multi-participant activities; their numbers do not put them after strategic War in execution order. See the Phase Briefs and `EXECUTION_MODEL.md` for readiness and scheduling.
 
 | Phase | Planning objective |
 |---|---|
