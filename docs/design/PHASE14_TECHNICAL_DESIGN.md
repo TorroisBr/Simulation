@@ -1,6 +1,10 @@
 # Phase 14 Technical Design — Local Daily Material Flow v1
 
 **Status:** bounded technical proposal only. It is not an approved Phase 14 checkpoint contract, implementation authorization, Phase State, or canonical architecture change. No P14 checkpoint IDs exist in the observed canonical state. This proposal uses the independently reviewed entry boundary in `PHASE14_ENTRY_ARCHITECTURE.md` and the current architecture baseline `c285466c355103d3637ac165246591b72eb7bda0`.
+**Independent technical design review:** PASS at content commit
+`4a84b76a608a24fd74de032bfb274e0c59f9d3a0`. Implementation should bind the
+settlement semantic identity to the stable City key shared with the P8 anchor,
+never `CityRuntime.RuntimeId`.
 
 ## 1. Scope and governing contracts
 
