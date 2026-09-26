@@ -1,8 +1,8 @@
 # Phase 14 Entry Architecture — Bounded v1 Proposal
 
-**Status:** `ENTRY_ARCHITECTURE_READY`; this recommended scope is pending independent entry review. It is a proposal for technical design, not canonical architecture, an implementation contract, checkpoint approval, or authorization to implement. No Phase 14 checkpoint IDs are approved.
+**Status:** `ENTRY_ARCHITECTURE_READY`; refreshed against the current canonical architecture and pending independent entry review. It is a proposal for technical design, not canonical architecture, an implementation contract, checkpoint approval, or authorization to implement. No Phase 14 checkpoint IDs are approved.
 
-**Observed code base:** canonical `codex/phase8/canonical` at `ed7a40a86a6a16e9f4fda75703470c38135fda0e`. At that revision, P8-A/B/C are canonical; P8-D is design-approved and ready to implement; P8-E waits for promoted P8-D. The Phase 14 Brief is `ENTRY_ARCHITECTURE_READY`. This packet inspects current canonical code; any specifically historical P7 facts are labeled as such.
+**Observed code base:** canonical `codex/phase8/canonical` at `c285466c355103d3637ac165246591b72eb7bda0` (parent `4b6dd1d38cffeaf3cc1ac3effea0f8ede8771194`). At that revision, P8-A/B/C are canonical; P8-D remains a separate refreshed integration candidate and P8-E waits for promoted P8-D. The Phase 14 Brief is `ENTRY_ARCHITECTURE_READY`. The proposal's daily, same-City source/consumer scope remains compatible with the updated temporal, extensibility, and multi-participant contracts.
 
 ## 1. Governing constraints
 
@@ -16,6 +16,8 @@ Relevant architecture rules in `docs/SIMULATION_ARCHITECTURE.md`:
 - §69 establishes Hex/Location as simulation geography and separates Location identity from rendering coordinates.
 - §§91–92 require recoverable causal state at simulated boundaries and distinguish save/reconstruction from history; the project is not event-sourced by default.
 - §13 keeps economy, merchant autonomy, effective configuration, and commercial knowledge as distinct concerns.
+- §§2, 11–12 require moddable, composable semantic seams and a shared logical timeline for future timed work; current constraints apply to designs now, while P18 and P19 supply deferred runtime capabilities.
+- §91 requires stable semantic identities and effective content/configuration context for continuation; runtime IDs and mutable asset references alone are insufficient persistence identity.
 
 `docs/EXECUTION_MODEL.md` separates entry architecture, technical design, and implementation. The design proposal below must pass independent entry review before technical design. No Phase 14 State or checkpoint contract exists in the observed base.
 
@@ -50,26 +52,35 @@ The proving scenario isolates this source and sink. It does not include merchant
 These are the recommended entry decisions for this bounded v1; they are proposals, not accepted canonical decisions.
 
 1. **First consumer and closure:** one City’s configured daily production into its own market, followed by consumption by that City’s population. The closure boundary is the closing market balance after that consumption.
-2. **Source semantics:** each configured output is an explicit exogenous source. Inputs, finite reserves, depletion, and processing are outside v1.
+2. **Source semantics:** each configured output is an explicit exogenous source. Inputs, finite reserves, depletion, and processing are outside v1. Give the source/configuration a reconstructible semantic identity distinct from a runtime object or list position.
 3. **Accounting depth:** count abstract integer quantities per `ItemDefinitionId`, stored as aggregate balances. Do not introduce physical units, lots, source provenance, or transformations.
-4. **Title and custody:** the settlement/City owns the configured source and output; the City market is the custodian of the aggregate stock. This v1 needs only that concrete settlement holder, not a universal holder model. Technical design must provide durable semantic settlement and store identities; runtime IDs alone are not the persistence contract.
+4. **Title and custody:** the settlement/City owns the configured source and output; the City market is the custodian of the aggregate stock. This v1 needs only that concrete settlement holder, not a universal holder model. Technical design must provide durable semantic identities for source, settlement and store, and stable item-definition identity; runtime IDs, object references, and collection positions alone are not the persistence contract.
 5. **Spatial scope:** anchor the source at the current P8 City Location. No Hex footprint, route, passage, or physical transport is included.
 6. **Execution and cadence:** use the existing daily autonomous economy cadence, gated by `Economy.Enabled`, with production before consumption. This is not command-initiated production.
 7. **Money:** use free population consumption. No money moves in the proposed flow; no payer, receiver, account, or monetary source/sink is introduced.
 8. **Downstream promise:** this v1 makes no P15 construction-cost or P16 supply/logistics guarantee. Those consumers may use a promoted P14 capability only when their own scope requires it.
 9. **Explicit exclusions:** actor-owned inventories, merchant transfers, physical resource extraction, production inputs, transformation, spoilage/loss accounting, and a general trade or supply network are outside this proposed closure.
+10. **Extensibility constraint now:** keep source semantics and production/consumption behavior separable through real domain seams so an extension can add compatible content or behavior without rewriting a base-game manager or `NpcRuntime`. Compose independent contributions deterministically when this consumer actually has them. Do not make the domain contract intrinsically built-in-only; equally, do not invent speculative registries, hooks, extension frameworks, public APIs, or a loader. P19 remains deferred until concrete consumers establish the supported public surface.
 
-## 5. Spatial dependencies
+## 5. Temporal, extension, and participant dependencies
+
+This proposal promises only the existing daily autonomous Economy cadence and a manually authored local source. That bounded daily/static profile has no P18 implementation dependency. If a later scope promises duration, shifts, automatically progressed production or transport, or intraday opportunities, it must consume the specific promoted P18 scheduler/lifecycle/availability contracts required by that behavior; a day count is not an intraday timeline.
+
+The v1 consumer is passive and single-settlement. It does not coordinate several actors, so it has no P20 dependency. If a future consumer actually introduces shared work or multi-participant commitments, that consumer must use the relevant promoted P20 capability on the P18 foundation. P18 must not acquire a reverse dependency on P20.
+
+Current moddability/extensibility requirements constrain this design now as stated above, but no P19 loader, module lifecycle, or public extension API is a prerequisite for this v1.
+
+## 6. Spatial dependencies
 
 P8-A/B/C are canonical at the observed base. The proposed local City scenario uses P8-A geography and the P8-C City anchor binding to a Location. It does not require P8-D or P8-E: no actor plans a route, traverses a passage, or carries material between locations.
 
 If later scope adds physical movement, that work must use the promoted P8 travel authority required by the actual flow. Legacy fixed-day City routes are not a substitute for that authority.
 
-## 6. Reconstruction and fork-sensitive state
+## 7. Reconstruction and fork-sensitive state
 
 Per `EXECUTION_MODEL.md` and architecture §§91–92, authoritative state that affects a future boundary must remain reconstructible. The proposed scope adds no requirement for universal event sourcing or a save/replay implementation inside Phase 14. Its causal inventory must nevertheless be available to the persistence/reconstruction consumer:
 
-- durable semantic identity for the source, settlement, market store, and item definition;
+- durable semantic identity for each configured source, settlement, market store, and item definition, plus compatible source/content versions where they affect meaning;
 - opening market stock and the effective production/consumption configuration;
 - each committed daily source addition and actual population-consumption quantity, with the logical day and execution order;
 - settlement title and market custody; and
@@ -77,7 +88,7 @@ Per `EXECUTION_MODEL.md` and architecture §§91–92, authoritative state that 
 
 This is a reconstruction constraint, not a requirement to retain every operation as history. The specific P12/P13 storage and replay mechanism remains with those phases.
 
-## 7. Technical questions after entry review
+## 8. Technical questions after entry review
 
 If independent entry review accepts this proposal, technical design should resolve:
 
