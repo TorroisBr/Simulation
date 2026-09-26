@@ -2,12 +2,12 @@
 
 **Status:** INTEGRATED AND REVIEWED REFRESHED CANDIDATE — canonical promotion pending
 
-**Canonical base:** `codex/phase8/canonical` at `d95b60d174cb0b17df09e2775b3cbd134c74b21f`
+**Canonical base:** `codex/phase8/canonical` at `77f3e1a47a1e007492a794ea777d681a21a36d09`
 
 **Architecture update:** `c285466c355103d3637ac165246591b72eb7bda0`
 
 **Integration branch:** `codex/phase18/TimelineIntegrationPostP8E`
-**P18-A refreshed source commit:** `4dea565a95a05ff03f61a9c18cfc163d47e509e1` (merges the unchanged P18-A implementation onto promoted P8-E canonical)
+**P18-A refreshed source commit:** `4dea565a95a05ff03f61a9c18cfc163d47e509e1` (merges the unchanged P18-A implementation onto promoted P8-E canonical); later merge `b974276` synced canonical State/Roadmap-only updates at `77f3e1a`, with no P18 source changes.
 
 **Final refreshed review:** PASS at candidate/State commit `a1463e8d46ed8e4526de0b0aa7a8c86d6ecf666e`.
 
@@ -41,9 +41,10 @@
 
 ## Promotion and next actions
 
-P8-E was promoted to canonical at `d95b60d`. P18-A has no P8-E dependency and
-its implementation adds no overlapping source files; this refresh preserves
-the existing candidate on the new base. The repository's human
+P8-E was promoted to canonical at `d95b60d`, and canonical State/Roadmap were
+updated at `77f3e1a`. P18-A has no P8-E dependency and its implementation adds
+no overlapping source files; this refresh preserves the existing candidate on
+the current canonical base. The repository's human
 canonical-promotion gate remains in force. After approval, rebuild the DAG.
 P18-B implementation still requires its own accepted checkpoint; then
 continue to P18-C and only those P18-D adapters whose concrete consumer
