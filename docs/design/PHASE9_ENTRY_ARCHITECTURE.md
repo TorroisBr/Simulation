@@ -30,8 +30,9 @@ Future timed activities use stable `ActivityInstanceId` independently from
 `PersonId`, with participant cardinality represented explicitly; a multi-person
 activity adds only the relevant P20 edge. Current moddability constraints
 apply to seam/review design; P19 loader/API and lifecycle implementation remain
-deferred. The prior entry review applies to its earlier text; independent
-review of this refreshed entry proposal is pending.
+deferred. Independent review of this refreshed entry proposal passed at
+`4895cf91b8205d3ba75db8f2d9e3da8e76804fde`; no checkpoint ID or
+implementation authorization is added.
 
 **Authority:** `docs/SIMULATION_ARCHITECTURE.md` remains the semantic authority.
 The Phase 9 and Phase 8 Briefs and `docs/ROADMAP.md` define subordinate scope

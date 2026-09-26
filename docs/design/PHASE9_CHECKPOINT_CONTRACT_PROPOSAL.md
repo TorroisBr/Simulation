@@ -6,8 +6,9 @@ baseline `c5b2e06b534f4b2af38f10e6510b10800aa8b28c`, including architecture
 update `c285466` and both 2026-09-26 alignment records. That review found no
 blocking issue and confirmed the authored population/economy and order-sensitive
 input corrections. This revision refreshes the proposal after P8-E promotion;
-independent review of this refreshed text is pending. Formal acceptance remains
-pending. This document assigns no approved P9 checkpoint ID, changes no Phase
+independent review of this refreshed text passed at
+`4895cf91b8205d3ba75db8f2d9e3da8e76804fde`. Formal acceptance remains pending.
+This document assigns no approved P9 checkpoint ID, changes no Phase
 Brief/State/Roadmap, and authorizes no implementation.
 
 **Product scope:** the user-approved first delivery is the existing authored

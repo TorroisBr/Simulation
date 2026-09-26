@@ -8,9 +8,10 @@ Phase 9 Brief and accepted checkpoint scope remain controlling.
 `89dfd7329c1b1cb836b77ff5277b198c20dbe7c5`; that review applies to the earlier
 proposal revision. The P8-E promotion refresh passed targeted independent
 review at `4b3e651137824124cdb770a15bf23f51c618e4f7`. This revision clarifies
-the boundary between existing scheduled directives and P18 activity state;
-independent re-review of the refreshed document set is pending. No checkpoint
-IDs or implementation authorization are added.
+the boundary between existing scheduled directives and P18 activity state.
+Independent re-review of the refreshed document set passed at
+`4895cf91b8205d3ba75db8f2d9e3da8e76804fde`. No checkpoint IDs or implementation
+authorization are added.
 
 **Baseline:** `codex/phase8/canonical` at
 `c5b2e06b534f4b2af38f10e6510b10800aa8b28c`, containing the architecture and
