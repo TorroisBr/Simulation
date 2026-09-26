@@ -503,7 +503,7 @@ public sealed class SpatialRoutePlanningTests
         {
             runtime.AdvanceDay();
         }
-        SpatialObservation unsupportedDayObservation = OptionObservation(attempted,
+        SpatialObservation dayMismatchObservation = OptionObservation(attempted,
             SpatialRouteOptionBelief.KnownUnavailable, "interrupt-observer", "wrong-day-rejection",
             suppliedDay, suppliedDay);
         long positionRevision = runtime.PersonSpatialPositionStore.Revision;
@@ -512,7 +512,7 @@ public sealed class SpatialRoutePlanningTests
         int observationCount = runtime.SpatialRouteKnowledgeStore.ObservationCount;
 
         Assert.That(runtime.P8ETravelTransactionCoordinator.TryInterruptRejectedNextSegment(
-            source.Actor, movement, unsupportedDayObservation, suppliedDay, out travelFailure), Is.False);
+            source.Actor, movement, dayMismatchObservation, suppliedDay, out travelFailure), Is.False);
         Assert.That(travelFailure.Message, Does.Contain("does not match the current SimulationRuntime day"));
         Assert.That(runtime.PersonSpatialPositionStore.Revision, Is.EqualTo(positionRevision));
         Assert.That(runtime.PersonRoutePlanStore.Revision, Is.EqualTo(planRevision));
