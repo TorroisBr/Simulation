@@ -1,8 +1,8 @@
 # P9-A — Authored Bootstrap Genesis v1
 
-**Status:** bounded implementation checkpoint; implementation may begin after
-independent review of this record. This record is on a candidate branch and
-does not claim canonical delivery or authorize promotion.
+**Status:** `READY_FOR_IMPLEMENTATION`. Independent checkpoint-contract
+review passed on the contract recorded at `f14586b`. This record is on a
+candidate branch and does not claim canonical delivery or authorize promotion.
 
 ## Baseline and authority
 
