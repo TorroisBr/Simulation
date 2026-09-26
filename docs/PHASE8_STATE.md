@@ -1,4 +1,4 @@
-# Phase 8 — IN PROGRESS
+# Phase 8 — CLOSED (State-only closure candidate; canonical approval pending)
 
 ## Latest architecture baseline — 2026-09-26
 
@@ -14,7 +14,10 @@ Earlier dated sections preserve their historical baselines; use this section and
   `094971b` on `codex/phase8/P8AGeographyIntegration` to the new
   `codex/phase8/canonical` branch. The canonical branch is pushed and its
   remote SHA was verified; the Phase 7 canonical baseline remains preserved.
-- Phase 8 remains open. P8-A through P8-E are canonical. P8-D was promoted from
+- P8-A through P8-E are canonical on `codex/phase8/canonical` at
+  `77f3e1a47a1e007492a794ea777d681a21a36d09`. This candidate records the
+  Phase 8 closure marker; canonical State remains open until explicit closure
+  approval and State-only promotion. P8-D was promoted from
   integration implementation commit `dccff74831b5ecfa55d32f142185a437afb5579a`
   on `codex/phase8/P8DArchitectureRefreshIntegration`, based on
   `c285466c355103d3637ac165246591b72eb7bda0`, after targeted temporal-profile
@@ -23,6 +26,44 @@ Earlier dated sections preserve their historical baselines; use this section and
   P8-E's B/C/D capability dependencies are promoted. P8-E was promoted from
   its validated integration candidate at `d95b60d`; the promotion record is
   below.
+
+## Phase 8 closure candidate — State-only
+
+**Proposed status: CLOSED. Canonical closure is pending explicit approval.**
+
+The Phase 8 closure objective is complete: P8-A (Factual Geography), P8-B
+(Factual Passages), P8-C (Legacy Anchors and Civil Presence), P8-D (Knowledge
+and Route Plan), and P8-E (Civil Travel Vertical Slice) are all promoted to
+`codex/phase8/canonical`. Their independent implementation/design reviews,
+integration reviews, targeted temporal and architecture revalidations, and
+required Unity validation records are retained in this State. The closure
+review found no remaining Phase 8 code or runtime-validation work.
+
+This candidate changes State and reconciles historical readiness/dependency
+wording only; it introduces no runtime behavior. The canonical branch remains
+at the open State until the user approves this State-only closure candidate.
+Closure does not require downstream consumers to be implemented.
+
+Known limits and deferred consumers retained at closure:
+
+- P8-E remains an explicit-operation, individual-Person travel slice. It does
+  not add autonomous daily travel progression, an action/travel cap, or a
+  permanent Activity-to-Actor cardinality contract.
+- Automatic intraday travel is deferred to P18-D, subject to its own approved
+  contract and dependencies. The P8-E proof remains valid within its bounded
+  explicit-operation scope.
+- P20 multi-participant activity coordination remains a separate future
+  consumer; no P8 capability promises group travel or persistent group
+  membership.
+- P8-A uses finite authored geography and preserves terrain definition/revision
+  provenance but does not provide a terrain catalog or compatibility resolver.
+- The current authored proving fixture is not a production-world scale or
+  generated-content promise.
+
+Both current alignment records—`architecture/INTRADAY_EXTENSIBILITY_ALIGNMENT.md`
+and `architecture/MULTIPARTICIPANT_ACTIVITY_ALIGNMENT.md`—were included in the
+closure review. Neither invalidates the delivered P8 scopes or creates an
+additional P8 checkpoint.
 
 ## Architecture requirement refresh — 2026-09-26
 
@@ -113,7 +154,7 @@ and coherent counts. `git diff --check` passed for the candidate implementation
 diff and the integration state/brief/roadmap changes. A long-run suite was not
 run because P8-A does not change the daily loop or long-horizon behavior.
 
-## Remaining Phase 8 dependency state
+## Historical dependency/readiness record before P8-D/E promotions
 
 - **P8-B — Factual Passages:** feature commit
   `3814d814087d97f28de75447740b3db715532ed6` is published on
@@ -148,7 +189,9 @@ run because P8-A does not change the daily loop or long-horizon behavior.
   included in this documentation integration. Its proving scenario uses
   explicit actor-known estimates with an inclusive one-day freshness window;
   replan relies on P8-D's accepted `KnownUnavailable` rule. Implementation
-  waits for promoted P8-B/C/D capabilities and their published APIs.
+  originally waited for promoted P8-B/C/D capabilities and their published
+  APIs; those dependencies were satisfied before the P8-E implementation
+  recorded below was promoted.
 
 The accepted P8-B/C shared segment contract at
 `5faa5817a11b0ae7412ec3ed98240fb1d633de11` on
