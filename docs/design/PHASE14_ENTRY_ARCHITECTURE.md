@@ -21,7 +21,7 @@ Relevant architecture rules in `docs/SIMULATION_ARCHITECTURE.md`:
 - §§91–92 require recoverable causal state at simulated boundaries and distinguish save/reconstruction from history; the project is not event-sourced by default.
 - §13 keeps economy, merchant autonomy, effective configuration, and commercial knowledge as distinct concerns.
 
-`docs/EXECUTION_MODEL.md` separates entry architecture, technical design, and implementation. Independent entry review passed on the refreshed proposal; technical design remains a separate review gate. No Phase 14 State or checkpoint contract exists in the observed base.
+`docs/EXECUTION_MODEL.md` separates entry architecture, technical design, and implementation. The prior refreshed proposal passed independent entry review at `109341530c6d5f293974fc0475ff0c7c1279c7a4`; the identity and P8-E impact refresh is pending independent review. Technical design remains a separate review gate. No Phase 14 State or checkpoint contract exists in the observed base.
 
 ## 2. Current repository evidence
 
