@@ -1,10 +1,10 @@
 # P12-A — UnityBootstrap-Daily-v1
 
-**Record type:** planning checkpoint proposal; not accepted or authorized for implementation.  
-**Checkpoint ID:** `P12-A` (stable planning identifier).  
-**Candidate base:** `codex/phase8/canonical` at `77f3e1a47a1e007492a794ea777d681a21a36d09`.  
-**Current candidate planning ref:** `codex/phase12/UnityBootstrapDailyPlan`, based on refreshed P12 docs at `e08708fd159011b0a97d44422ddd189067ebb1a8`.  
-**Planning status:** `TECHNICAL_DESIGN_IN_PROGRESS`; current-base independent review is required before deriving `READY_FOR_IMPLEMENTATION`.  
+**Record type:** planning checkpoint proposal; not accepted or authorized for implementation.
+**Checkpoint ID:** `P12-A` (stable planning identifier).
+**Candidate base:** `codex/phase8/canonical` at `77f3e1a47a1e007492a794ea777d681a21a36d09`.
+**Current candidate planning ref:** `codex/phase12/UnityBootstrapDailyPlan`, based on refreshed P12 docs at `e08708fd159011b0a97d44422ddd189067ebb1a8`.
+**Planning status:** `TECHNICAL_DESIGN_IN_PROGRESS`; current-base independent review is required before deriving `READY_FOR_IMPLEMENTATION`.
 **Implementation status:** `WAIT_DEPENDENCY`.
 
 The checkpoint ID gives the Master a durable reference for this bounded plan. It does not mean the contract has human acceptance, does not create a P12 State, and does not claim save/load delivery or canonical promotion. The recommended profile below is recorded as an orchestrator assumption in response to the user's direction to choose clearly preferred repository-supported designs autonomously. It does not amend architecture or add a cross-host/product guarantee.
