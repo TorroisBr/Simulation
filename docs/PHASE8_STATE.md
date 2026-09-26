@@ -207,6 +207,6 @@ P8-E follows promoted B/C/D and the Phase 8 integration validation gate.
 | Official complete Smoke | 5/5 | `Library/ValidationResults/P8DArchitectureRefresh/EditMode-20260926-164953-cd6f3903f2504c0a999df903aeaafb18.xml` and `.log` |
 
 The daily loop and long-horizon behavior remain unchanged, so no long-run suite
-was run. `git diff --check` passes. Independent final review against the
-refreshed candidate remains pending; no canonical promotion is recorded or
-implied here.
+was run. Independent final review against refreshed candidate `8186e8d` passed;
+`git diff --check` passes. P8-D remains an integration candidate pending
+explicit canonical-promotion approval; no promotion is recorded or implied here.
