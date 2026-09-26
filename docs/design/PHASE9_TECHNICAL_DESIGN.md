@@ -158,8 +158,11 @@ expansion likewise retains its own post-start authority and is out of scope.
 This proposal consumes stable P8 contracts and the promoted capabilities
 actually needed by the chosen profile. At the reviewed baseline P8-A/B/C are
 canonical. P8-D's refreshed candidate remains unpromoted pending canonical
-promotion approval; it is needed only if the accepted profile selects route
-plans or route Knowledge. P8-E civil travel is not a P9 dependency. If the
+promotion approval and is not yet promotion-ready: the targeted architecture-
+impact/temporal-profile revalidation required by the c285 Phase 8 State remains
+outstanding. P8-E waits for promoted P8-D and that review. P8-D is needed by
+this proposal only if the accepted profile selects route plans or route
+Knowledge; P8-E civil travel is not a P9 dependency. If the
 profile is daily-only and has no temporal initial facts, P18 is not a gate. If
 it initializes timed activities, it must consume the relevant accepted and
 promoted P18 contracts/capabilities. If it initializes shared
