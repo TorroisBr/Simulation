@@ -4,6 +4,11 @@
 checkpoint IDs and authorizes no implementation. The current Phase 9 Brief
 and accepted checkpoint scope remain controlling.
 
+**Independent technical-design review:** PASS on commit
+`89dfd7329c1b1cb836b77ff5277b198c20dbe7c5`. This records review of the
+proposal only; checkpoint scope remains unapproved and implementation is not
+authorized.
+
 **Baseline:** architecture and roadmap at `c285466c355103d3637ac165246591b72eb7bda0`;
 reviewed Phase 9 entry proposal at `5c1e39957440aee767bfe16d56faa01bee1660aa`;
 Phase 8 State refreshed against that architecture. The two architecture
