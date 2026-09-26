@@ -1,78 +1,111 @@
 # Phase 11 State — Actor Perspective & Commands v1
 
-**Status:** IN_PROGRESS
+**Status:** IN_PROGRESS — integrated candidate; canonical promotion pending
+
 **Canonical base:** `codex/phase8/canonical` at `c5b2e06b534f4b2af38f10e6510b10800aa8b28c`
+
 **Architecture baseline:** `c285466c355103d3637ac165246591b72eb7bda0`
-**Current integration branch:** `codex/phase11/ActorChoiceIntegration` at `af3b7723ae3d40e859e54d5cc6e5bb5e2e6a833b`
+
+**Integrated code/design candidate:** `5d16851172ee8fd0815f944dcbec89f87966c581` on `codex/phase11/ActorChoiceIntegrationRefresh`
+
+The candidate combines the P11 actor-choice implementation and diagnostics
+with the separately validated P8-E integration candidate. P8-E remains
+noncanonical at this base. P11's local SellGoods contract has no semantic
+dependency on P8-E, but this shared-hotspot integration branch includes its
+code; therefore P8-E must pass its own human promotion gate before this
+combined branch can be promoted. The candidate is not a declaration that P8-E
+is canonical.
 
 ## Authorized bounded scope
 
-On 2026-09-26, the user selected one actor choosing one supported action, with
-Local SellGoods as the first consumer. The user specified trusted local
-game/UI input naming an eligible actor, without actor-control grants or
-security/anti-cheat defenses. The user then directed full-roadmap execution.
-The accepted behavior is one-shot: the choice replaces autonomous selection
-for that decision; ordinary gameplay and current-truth domain checks remain;
-rejection, inability to construct the action, or execution failure does not
-trigger an autonomous fallback for the same decision.
+The user selected one actor choosing one supported action, with local
+`SellGoods` as the first consumer. The ordinary local game/UI caller is trusted
+to name an eligible actor. No actor-control grants, player-to-actor ownership,
+anti-cheat, anti-tamper, or security architecture is introduced. The existing
+domain/action checks remain responsible for normal gameplay validity.
 
-The actor's `PersonId` and action `DefinitionId` are the input identity. The
-actor's `CommercialKnowledge` informs existing merchant planning; existing
-domain execution revalidates current market truth. This authorization is
-limited to the documented SellGoods slice and does not authorize new gameplay
-actions, a general actor-control system, a Mod API/loader, or a security layer.
+The choice uses stable `PersonId` and action `DefinitionId` input identity. It
+replaces autonomous action selection for one decision only. A rejected choice,
+inability to construct its action, or failed/partial execution does not trigger
+an autonomous fallback in that same decision. Scheduled-directive and existing
+activity precedence remain intact. Actor Knowledge informs the existing
+merchant path; the market transaction revalidates current truth.
 
-## Checkpoints
+If P8-C Person position is absent, the legacy `CurrentCity` behavior remains.
+If position exists, SellGoods requires the actor to be `At` the exact
+`LocationId` bound to its current City. `InTransit`, a stable position at a
+different Location, a Hex-only position (even at the City's anchor Hex), or a
+missing City binding makes the local action unavailable for that turn. This is
+gameplay position eligibility, not caller authorization. P8-E is not a
+capability dependency for this rule.
 
-| ID | Scope | Status | Dependency / evidence |
+## Checkpoint status
+
+| ID | Scope | Status | Evidence |
 |---|---|---|---|
-| P11-01 | Stable actor-choice input contracts/store, ordered dispositions, and terminal attempt lifecycle | CANDIDATE COMPLETE | Store branch `codex/phase11/ActorChoiceStore` commit `f1221d4e3275e21a876076350ca12058927dbaa9` independently reviewed for compatibility with c5b2 and both alignment records; `ActorChoiceStoreTests` pass 9/9 on this c5b2-based integration branch. |
-| P11-02 | Typed WorldCommand ingress and trusted local UI capture | READY | Use the existing WorldCommand/domain boundary; no GM authority expansion. |
-| P11-03 | Runtime application at the ordinary actor decision boundary and existing SellGoods path | READY | Preserve scheduled-directive/activity precedence; apply the reviewed P8-C position reconciliation; terminal rejection and every dispatched attempt return without same-decision autonomous fallback. |
-| P11-04 | Deterministic diagnostics, invariants, focused integration tests, and Phase acceptance review | BLOCKED BY P11-02/P11-03 | Include input payload, logical boundary, ordering, and terminal disposition in canonical snapshots/diffs. |
+| P11-01 | Stable actor-choice input store, ordered dispositions, terminal attempt lifecycle | CANDIDATE COMPLETE | Store branch `codex/phase11/ActorChoiceStore`, commit `f1221d4e3275e21a876076350ca12058927dbaa9`; independent review against c5b2 and both alignment records; `ActorChoiceStoreTests` 9/9. |
+| P11-02 | Typed WorldCommand ingress and trusted local UI capture | INTEGRATED CANDIDATE | Integrated with the ordinary WorldCommand/domain boundary; `ActorActionChoiceCommandTests` 6/6. No GM authority expansion. |
+| P11-03 | Runtime application at the ordinary actor decision boundary and existing SellGoods path | INTEGRATED CANDIDATE | One-shot handling and no-fallback semantics implemented; exact P8-C position/location eligibility applied to input and autonomous local SellGoods. `ActorChoice` tests 22/22. |
+| P11-04 | Deterministic diagnostics, invariants, focused integration tests, and acceptance review | INTEGRATED CANDIDATE; FINAL COMBINED REVIEW PENDING | Actor-choice state is included in canonical snapshots, diffs, formatting, and invariant validation. Diagnostics tests are included in the integration suite; final whole-candidate review remains outstanding. |
 
-P11-03 current-position eligibility is now specified against promoted P8-C:
-an absent optional Person position preserves legacy city behavior; `InTransit`
-uses the existing `Deferred/Traveling` path; a stable position must be the
-exact Location bound to the actor's current City. Anchor-Hex co-location does
-not establish Location entry/access. A stable mismatch or missing city
-binding rejects the one-shot input as unavailable without autonomous
-fallback. This compatibility check is based on P8-C authorities and does not
-make P8-E a capability dependency.
+The initial integration review found two defects: autonomous SellGoods could
+execute during P8-C transit using stale `CurrentCity`, and P8-E interruption
+could accept a caller-supplied day that differed from runtime time. Both were
+fixed in `32b16bf5ded371750fb2e028d3f39786dfb85c94` and
+`a554e8f9199ee77d98d4a512592e965057d72c0b`. Independent review of the complete
+fix diff passed; tests cover transit, exact Location mismatch at the same Hex,
+legacy no-position behavior, and future/stale caller days with no mutation.
 
-P11-02 and P11-03 are semantically independent of P8-E. They are serialized
-after the reviewed P8-E implementation only because both use `SimulationRuntime`
-and diagnostics shared with it. The P8-E integration candidate at
-`07b953bee214728c326a9a121c0f7360382f94a8` passed its independent review and
-required gates; P11 runtime work will use that candidate as its implementation
-base to preserve the validated owner changes. This is an integration ordering
-choice, not a P8-E capability dependency. The bounded daily adapter is
-transitional. Intraday use requires exact P18 logical instants and stable
-causal ordering. Shared activity participation requires P20 contracts; P20 is
-not a gate for this single-actor slice.
+## Architecture and dependency revalidation
 
-## Revalidation and implementation evidence
+The Phase 11 entry and technical contracts were reread against canonical
+`c5b2e06`, architecture update `c285466`, the current Phase 8 State, the
+Roadmap and Execution Model, and both 2026-09-26 alignment records.
 
-- The Phase 11 entry and technical designs were independently reviewed against
-  c5b2 and the updated architecture. The P11 Store candidate introduces only
-  `PersonId` and action-definition identity; it does not introduce an activity
-  identity, participant roster, or one-activity-to-one-actor rule.
-- `ActorChoiceStoreTests`: 9 passed, 0 failed, 0 skipped on the current
-  integration branch. XML:
-  `Temp/ValidationResults/EditMode-20260926-183513-9b6bd8038f304e4bab7c2342562384ac.xml`.
-- The Store's day/roster ordinal is bounded legacy daily-profile causality,
-  not a permanent actor cadence. P18 migration must preserve pending and
-  dispatched inputs and add exact logical-time/order fields.
-- P20 is not a prerequisite for one-actor SellGoods choice. P19's public
-  extension API/loader remains deferred; stable semantic action identity and
-  extension-compatible data are review constraints now.
-- Luna-first seam review confirmed the P8-C rule against the actual owner APIs
-  and the architecture's separation of Location containment, Hex co-location,
-  and traversal. It found no remaining product or canonical ambiguity.
+- The actor-choice input does not invent an activity identity, participant
+  roster, or permanent one-activity-to-one-actor rule. Activity definition,
+  instance and participant identities remain distinct under the multi-
+  participant alignment.
+- The current integration is a bounded daily adapter. Exact logical instants
+  and stable causal ordering are required if a selected input consumer moves
+  into P18 intraday execution; P18-D is the relevant later integration point.
+- P20 is not a prerequisite for the single-actor SellGoods choice. P19's public
+  extension API and loader remain deferred; stable semantic action identity and
+  extension-compatible data shape are review constraints now.
+- P8-C is the only spatial capability read by the selected local action. P8-E
+  is included in this integration history to serialize shared runtime and
+  diagnostics hotspots, not because the SellGoods semantics require civil
+  travel.
 
-## Next action
+## Validation evidence
 
-Implement P11-02 and P11-03 in one isolated runtime integration worktree after
-the current P8-E owner-level replan guard has passed independent review. Then
-complete P11-04, run targeted and required regression suites, and update this
-State before requesting any canonical promotion required by repository policy.
+All results below are from the merged integration worktree at candidate code
+commit `a554e8f` plus P8-E design-status synchronization. Every suite passed
+with zero failures and skips.
+
+| Gate | Result | Retained report |
+|---|---:|---|
+| `ActorChoice` | 22/22 | `Library/ValidationResults/P11IntegrationRefresh/EditMode-20260926-204716-fa49a3af3d054508a39eeed1e66f5221.xml` and `.log` |
+| `ActorActionChoiceCommandTests` | 6/6 | `Library/ValidationResults/P11IntegrationRefresh/EditMode-20260926-204744-8600c723a71149afa76f91f4aa279d0a.xml` and `.log` |
+| `SpatialRoutePlanning` | 20/20 | `Library/ValidationResults/P11IntegrationRefresh/EditMode-20260926-204801-102611ee16944b8c9561a29ce1741438.xml` and `.log` |
+| `SimulationRuntimeLongRunTests` | 7/7 | `Library/ValidationResults/P11IntegrationRefresh/EditMode-20260926-204850-6b875dd3f9e545a7955b742989ad77c4.xml` and `.log` |
+| ALL EditMode | 1727/1727 | `Library/ValidationResults/P11IntegrationRefresh/EditMode-20260926-204934-a1244488dc134cd9885336204f86f1e6.xml` and `.log` |
+| Official complete Smoke | 5/5 | `Library/ValidationResults/P11IntegrationRefresh/EditMode-20260926-205015-4d3539cf16654047b45c4bf92debba68.xml` and `.log` |
+
+Focused and final gates were run after the runtime/day fixes. The final
+combined-candidate independent review and `git diff --check` are the remaining
+integration gates before the required human canonical-promotion approval.
+P8-E's implementation and promotion evidence remain recorded independently in
+`docs/PHASE8_STATE.md`.
+
+## Next actions
+
+1. Finish independent review of this exact combined candidate and run
+   `git diff --check` against the canonical base.
+2. Record the final review result, exact integration SHA and diff-check in this
+   State; publish the candidate branch.
+3. Respect the explicit human promotion gate. Promote P8-E first because its
+   candidate code is part of this branch, then refresh this candidate's base
+   record and re-evaluate P11 promotion readiness.
+4. After successful promotion, recompute the full DAG and continue only the
+   newly unblocked Phase work.
