@@ -4,6 +4,10 @@
 **Independent technical design review:** PASS at content commit
 `8577ba589a0f9b40738fcf8738eee9589563d7b8`. The later lifecycle seam must
 invalidate capture eligibility on every supported authoritative write path.
+**Targeted architecture-impact revalidation:** PASS against Phase 8 canonical
+`c5b2e06b534f4b2af38f10e6510b10800aa8b28c`, including both the
+intraday/extensibility and multi-participant activity alignment records. The
+updated P8-D owner inventory and bounded-profile consequences are recorded in §3.
 
 ## 1. Contract and supported boundary
 
@@ -14,6 +18,15 @@ This profile is named `UnityBootstrap-Daily-v1`. It covers bootstrap-composed Ci
 The profile excludes arbitrary constructor-composed runtimes, injected providers, non-empty P8 physical geography/terrain/passages, P9/P10 generated worlds, pending external command queues and P11 actor-choice inputs, P19 modules/retrofit, P20 shared activities, `PlaceContentStore` and optional systems not composed by this bootstrap, and intraday save boundaries. It makes no P13 historical reconstruction/fork guarantee. No Sleep, Dreams, robbery/gang, ritual, War gameplay, or MegaEvento behavior is introduced by this design.
 
 P18, P19 and P20 are conditional extensions to the state inventory only if a future explicitly supported profile contains their temporal, module, or shared-activity state. The base daily profile has no blanket dependency on those phases. A date is not a future intraday ordering contract: adding intraday capture requires the relevant promoted P18 identity, exact logical-time, due-work and same-time ordering/hydration capabilities first. Adding extension-owned state requires the applicable P19 lifecycle/state compatibility contracts. Adding shared activities requires the relevant P20 participant and lifecycle contracts. These additions do not justify freezing this proposal's internal time field to a day-only scalar.
+
+The alignment records also apply as constraints while their capabilities remain
+out of profile: keep domain/application logic independent of Unity presentation
+where practical and compose independent semantic contributions deterministically;
+do not introduce speculative extension infrastructure. P19's public API,
+module loader and module-owned durable state remain deferred. A future
+multi-participant profile must preserve stable activity and participant identity,
+roles/agreements/reservations and lifecycle independently of a single actor; the
+current individual route-plan inventory does not impose such a cardinality rule.
 
 ## 2. Continuation envelope
 
@@ -57,6 +70,7 @@ The serialized records are value data, but each authoritative fact is emitted an
 | NPCs and daily condition | Each `NpcRuntime` stable runtime ID and mutable condition, status/life, current/destination location/city, action/behavior state, hidden-day counters, inventory and money account, and action definition identity. Preserve configured roster membership/order only where it is an explicit semantic tie-break; never use it as an identity substitute. | Resolve definitions and cross-links by stable IDs; recreate transient service references. Person existence is independent. Do not infer `PersonId` from an NPC or roster index. |
 | Persons, population and genealogy | `PersonStore`, `GenealogyStore`, settlement population/lifecycle/residence owners, if populated through supported core authorities: `PersonId`, birth/death day, parentage, residence, aggregates, and exact materialization relationship. | Age/maturity are derived from birth date plus calendar/configuration. Preserve Person-backed versus NPC-only representation distinction; materialization must not alter aggregate population. |
 | Legacy spatial and sites | Supported bootstrap `SpatialNetworkRuntime` route/location identity and route facts; `ExplorableSiteStore`, exploration state, visited/observed site facts, site links/anchors where present. | Rebuild navigational and registry indexes. Non-empty P8 Hex geometry, terrain, passage and physical-world composition is explicitly excluded. Do not confuse legacy `TravelPartyId` or `NpcRuntime` location links with future spatial identity contracts. |
+| P8-D spatial Knowledge and route plans | `SpatialRouteKnowledgeStore`: holder `PersonId`, observation/evidence identity and content, provenance/source, observed day/freshness inputs, history, and revisions consumed by stale checks. `PersonRoutePlanStore`: owner `PersonId`, active plan, plan history/replacement/disposition, endpoint Hex identities, estimate and Knowledge revisions used for selection, and store revision. Preserve one-active-plan-per-Person cardinality and same-day replacement semantics. | The daily profile may include spatial Knowledge when its referenced spatial facts are in profile. Route plans are profile-gated when their registered Hex endpoints are outside the supported profile. An empty plan store is represented explicitly; populated out-of-profile route plans or Knowledge referring to unsupported spatial facts reject capture/restore for this profile instead of being silently omitted or partially restored. Do not infer ActivityId, a permanent Activity-to-Actor relation, per-day travel cap, or automatic daily travel execution. |
 | Travel and expedition commitments | `TravelSystem` owner facts for each traveling NPC/plan, current progress and destination/route; `TravelPartyStore` instances with `TravelPartyId`, member RuntimeIds, order, costs and lifecycle; `ExpeditionStore` instance/objective/progress, site and party bindings; merchant plan state when enabled. | Validate reciprocal references and active membership using current domain rules; do not recompute an active commitment from current decisions. Legacy `TravelPartyId` is a bounded current domain identity. It is not a P20 ActivityId and does not establish one-Activity/one-Actor cardinality for future activity types. |
 | Directives and daily action | `ScheduledDirectiveStore`: stable directive ID, day, mode, operation, actor RuntimeId, selected action definition, state and processed/disposition day. Current NPC action and other future-affecting plan state. | Rebuild actor lookup map. Do not reapply already processed directives. This profile has no pending external command queue and no P11 actor-choice input. |
 | Knowledge | NPC commercial/spatial/exploration Knowledge and other Knowledge actually composed/populated by the supported bootstrap; holder identity, observed facts, provenance/source, freshness/observed/received day and stale-check revisions. | Knowledge is not regenerated from current truth. Rebuild indexes, not observations. Excluded extension/module Knowledge remains unsupported until an extension profile exists. |
