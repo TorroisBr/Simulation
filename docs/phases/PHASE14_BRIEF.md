@@ -1,26 +1,35 @@
 # Phase 14 — Productive Sources & Material Flow v1
 
-**Authority:** planning entry subordinate to `../SIMULATION_ARCHITECTURE.md`. **Readiness:** `ENTRY_ARCHITECTURE_READY` for a limited source/flow slice, not implementation readiness.
+**Authority:** planning entry subordinate to `../SIMULATION_ARCHITECTURE.md`. **Readiness:** P14-A implementation is `WAIT_DEPENDENCY` until the overlapping P9-A bootstrap/genesis integration is promoted; its current-base checkpoint contract also needs independent review before implementation readiness can be derived.
 
 ## Objective and closure
 
-Establish a bounded, factual account of productive sources and material movement with explicit ownership/custody and source/sink semantics. The exact v1 consumer and closure boundary require entry approval.
+Establish a bounded, factual account of productive sources and material movement with explicit ownership/custody and source/sink semantics. The selected first slice is one authored City, one configured exogenous daily source for one item, free same-City population consumption of that item, and closure at the closing aggregate market balance. Its candidate implementation contract is `../design/PHASE14A_LOCAL_DAILY_MATERIAL_FLOW_CHECKPOINT.md`.
 
-**Checkpoints:** to be defined at architecture/technical entry; no P14 checkpoint IDs are approved.
+**Checkpoints:** P14-A — Local Daily Material Flow v1 (candidate contract; implementation remains gated on independent current-base checkpoint review and the ordering below). No P14 capability is delivered or canonical yet.
 
 ## Dependencies and gates
 
-- **Hard semantic contract:** spatial identity/anchors from P8 for localized sources, plus constitutional distinctions among ownership, custody, control and economic flows.
-- **Hard capability:** an implemented localized-source slice needs relevant promoted spatial anchoring; route-dependent flow additionally needs relevant P8 passage/travel behavior. Do not impose all of P8-E on a local source without need.
+- **P14-A promoted-capability edges:** P8-A stable factual `LocationId` identity and the promoted P8-B/C City-anchor composition used to bind the authored City instance to that location. The profile verifies that the City anchor resolves to the same stable location. This slice does not consume P8-D passage or P8-E travel.
+- **P14-A semantic contract:** preserve the architecture distinction among ownership, custody, control and economic flows. Settlement title over the configured source/material remains distinct from the market store's custody of aggregate stock.
+- **Route-dependent flow:** a later transport/route checkpoint additionally requires the relevant promoted passage/travel capability. Do not impose all of P8-E on a local source without need.
 - **Integration dependency:** material movement that uses travel must integrate with the single spatial/travel authority, not parallel city-to-city fixed durations.
-- **Soft ordering:** generated content P9/P10 may populate sources but is not required for a manually authored v1.
-- **Architecture gate:** decide the first concrete source/material consumer, conservation and actor/asset authority before technical design.
-- **Product gate:** scope of production and material constraints remains a user choice if it changes v1 closure.
+- **P9 ordering and ownership:** P9 is not a semantic prerequisite for this manually authored profile. However, the active P9-A startup/genesis integration owns overlapping authored bootstrap/composition surfaces. P14-A implementation waits for P9-A's canonical integration, then rebases and composes against its effective authored inputs; this is a serial integration/ownership edge, not a blanket P9 generation capability dependency. P10 content is likewise optional for the authored profile.
+- **Checkpoint gate:** independently review the current-base P14-A contract and verify its implementation ordering/ownership boundary before deriving `READY_FOR_IMPLEMENTATION`.
+- **Deferred product scope:** changes that add sources, inputs, finite reserves, transformations, paid consumption, transport, multi-worker production, or a different closure boundary require a separately scoped checkpoint; they are not implicit extensions of P14-A.
 - **Exclusions:** universal macroeconomy, automatic trade network, general taxation and full supply simulation.
 - **Replay/fork sensitivity:** source identities, stock/ownership/custody, transformations, transfers, constraints and commands must be recoverable when authoritative.
 - **Hotspots/parallelism:** economy/merchant, property, spatial anchors, travel, runtime composition and diagnostics; localized truth design can advance before route-flow integration.
 - **Downstream unlocks:** material costs for P15 and logistics/supply for P16 where those consumers need them.
 - **Deferred:** exact goods catalog, production formulas, market macro-policy and global material optimization.
+
+P14-A's daily passive source/sink profile has no P18 or P20 dependency. P18 is
+conditional on a later approved consumer promising duration-based or intraday
+production/transport; P20 is conditional on a later consumer coordinating
+multiple participants. P19 loader/public API work remains deferred, while the
+current semantic-extension and deterministic-composition constraints apply to
+review now. See the P14-A contract and both current architecture alignment
+records for the corresponding causal and identity boundaries.
 
 ## Temporal consumer and extension boundary — 2026-09-26
 
