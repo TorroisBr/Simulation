@@ -1,12 +1,12 @@
 # Phase 11 — Actor Perspective & Commands v1
 
-**Authority:** planning entry subordinate to `../SIMULATION_ARCHITECTURE.md`. **Readiness:** `ENTRY_ARCHITECTURE_READY`; no implementation checkpoint is schedulable.
+**Authority:** planning entry subordinate to `../SIMULATION_ARCHITECTURE.md`. **Readiness:** `IMPLEMENTATION_READY` for the bounded SellGoods actor-choice slice selected by the user on 2026-09-26. The user's full-roadmap orchestration request authorizes execution of the checkpoints recorded in `../PHASE11_STATE.md`; canonical promotion remains subject to the repository's promotion gate.
 
 ## Objective and closure
 
 Establish a bounded actor-control and external-command slice in which a human choice replaces the actor's autonomous choice without granting hidden knowledge or outcome authority, while GM/external commands pass through explicit validation and domain execution.
 
-**Checkpoints:** to be defined at architecture/technical entry; no P11 checkpoint IDs are approved.
+**Checkpoints:** `P11-01` ActorChoice input store; `P11-02` typed WorldCommand capture; `P11-03` one-shot runtime decision adapter and SellGoods integration; `P11-04` diagnostics and regression verification. Current checkpoint status is recorded in `../PHASE11_STATE.md`.
 
 ## Dependencies and gates
 
@@ -29,6 +29,16 @@ single-player input, without actor-control grants. Ordinary gameplay eligibility
 Knowledge and execution validation remain; no adversarial authorization or
 anti-cheat layer is implied. The proposal/technical design remains candidate
 evidence until explicitly accepted/promoted; this paragraph does not promote it.
+
+For the local market consumer, P11-03 must conditionally reconcile the
+actor's optional P8-C Person position with legacy `CurrentCity`: no position
+entry preserves legacy behavior; `InTransit` defers with the existing
+`Traveling` reason; a stable position proceeds only at the exact Location
+bound to that City. Sharing the Location's anchor Hex does not prove Location
+entry or access. Other stable mismatches or a missing City binding are
+unavailable and terminally reject the one-shot choice without autonomous
+fallback. This is ordinary current-position eligibility and uses P8-C
+contracts; it adds no P8-E capability or security layer.
 
 A bounded existing daily-turn choice adapter may proceed after targeted review.
 It must not make one action per day the durable actor contract. P18-C/D supplies

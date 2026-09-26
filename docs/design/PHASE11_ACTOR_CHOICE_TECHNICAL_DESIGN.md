@@ -1,17 +1,16 @@
 # Phase 11 — Actor Choice Technical Design
 
-**Status: proposed technical design; targeted no-fallback/canonical-state
-correction awaiting independent re-review; not implementation authorization.**
-Earlier review applies only to its recorded earlier baseline, not to this
-correction.
+**Status: independent technical review PASS against Phase 8 canonical state
+`c5b2e06` and the 2026-09-26 alignment records, including the P8-C
+current-position compatibility addendum.** The selected bounded
+implementation checkpoints are recorded in [`../PHASE11_STATE.md`](../PHASE11_STATE.md).
 The Phase 11 entry contract is recorded in
 [`PHASE11_ENTRY_ARCHITECTURE.md`](PHASE11_ENTRY_ARCHITECTURE.md), refreshed
-against current Phase 8 canonical state c5b2 and awaiting targeted independent
-re-review. Earlier review commit `e96fa14` is historical evidence only and
-does not cover this correction. This document proposes
-interfaces, ownership, ordering, diagnostics, tests, and integration sequence
-for that selected first consumer. All implementation units below remain
-**UNAPPROVED**; Phase 11 has no approved checkpoint IDs or Phase State record.
+against current Phase 8 canonical state c5b2. Earlier review commit `e96fa14`
+is historical evidence only and does not cover this correction. This document
+defines interfaces, ownership, ordering, diagnostics, tests, and integration
+sequence for the selected first consumer. Checkpoint execution and current
+phase status are tracked in `../PHASE11_STATE.md`.
 
 **Design baseline:** current `codex/phase8/canonical` at
 `c5b2e06b534f4b2af38f10e6510b10800aa8b28c`, including architecture baseline
@@ -21,11 +20,15 @@ this worktree, and corrected store candidate
 `f1221d4e3275e21a876076350ca12058927dbaa9` on
 `codex/phase11/ActorChoiceStore`, superseding initial store candidate
 `0a32e86dd3c907e80c6439f3de7fe061618110ea`. Current Phase 8 State at c5b2
-records P8-A through P8-D canonical, with P8-E still unimplemented. P8-D
-promotion resolves the earlier capability wait but neither P8-D nor P8-E is a
-semantic or capability prerequisite for this local-market action. This design
-and store remain candidates; no Phase 11 checkpoint IDs or implementation
-authorization are approved.
+records P8-A through P8-D canonical. P8-E is not canonical at this base, but
+its integration candidate
+`07b953bee214728c326a9a121c0f7360382f94a8` is independently reviewed and
+integration-validated. Neither P8-D nor P8-E is a semantic or capability
+prerequisite for this local-market action. P11 runtime work stacks on the
+reviewed P8-E candidate only to serialize shared runtime and diagnostics
+hotspots. This design and Store are candidate integration artifacts based on
+c5b2; the Phase 11 State records their current checkpoint status and
+user-authorized scope.
 
 The corrected store candidate and tests retain a daily-profile capture day and
 actor-turn-roster ordinal. Disposition boundaries are monotonic by
@@ -53,6 +56,23 @@ choice carries only `PersonId` and the supported
 merchant planning selects the item, quantity, and action runtime using that
 actor's inventory and `CommercialKnowledge`; existing execution revalidates
 the current market. One choice replaces one autonomous action selection.
+
+Before constructing the action, conditionally cross-check P8-C's optional
+Person-level spatial position against the legacy city used by this local
+market path. If no position entry exists for the actor's `PersonId`, preserve
+the existing `CurrentCity` behavior; P8-C does not require a position for every
+Person. If the position is `InTransit`, retain the existing travel deferral
+(`Deferred/Traveling`) and return without autonomous selection. If the stable
+position is a `LocationId`, it must equal the `LocationId` bound to the
+actor's current City by `LegacySpatialAnchorBindingStore`; otherwise reject
+the choice as `ActionUnavailable` with no same-decision autonomous fallback.
+A stable Hex position, including a Hex equal to the City's
+`LocationRecord.AnchorHexId`, does not prove entry into or access to that
+Location. A Hex, Crossing, other Location, or missing City binding therefore
+cannot validate this local-market context and receives the same terminal
+`ActionUnavailable` rejection. This is ordinary current-position eligibility
+for the selected local action, not a caller-security check. It adds a read of
+the promoted P8-C contracts, not a P8-E, P19, or P20 dependency.
 
 This design does not add actor ownership grants, controller identity,
 authentication, security, anti-cheat, anti-tamper, multiplayer, a general
@@ -255,8 +275,19 @@ receipt's `PersonId` and revalidates the supported consumer. The action
 definition must still resolve to the configured `SellGoods` action; the actor
 must still be alive, Person-backed, materialized, a merchant, at a current
 city, with no active merchant trade plan; runtime policy/configuration must
-still enable the action. This is ordinary game-state validation, not a
-controller, ownership, or security check.
+still enable the action. If `PersonSpatialPositionStore.TryGetPosition` has no
+entry for this Person, keep the legacy current-city behavior. If it reports
+`IsInTransit`, defer with the existing `Traveling` reason before the ordinary
+decision boundary. Otherwise require `Position.Kind == Location` and
+`Position.LocationId` equal to the stable Location bound to
+`SpatialAnchorOwnerId(SpatialAnchorOwnerKind.City, npc.CurrentCity.RuntimeId)`
+in `LegacySpatialAnchorBindingStore`. Resolve that bound Location in
+`SpatialAuthorityStore` as the current Location identity. A Hex equal to its
+`AnchorHexId` is insufficient: co-location at an anchor does not establish
+containment, entry, or access. Any other stable position kind/value, or a
+missing City-to-Location binding, is terminal `Rejected/ActionUnavailable`
+with no autonomous selection in the same decision. This is ordinary
+current-position eligibility, not a controller, ownership, or security check.
 
 The selected action is constructed through the existing
 `NpcDecisionSystem.CreateRequestedAction(npcRuntime, actionData)` path, which
@@ -437,7 +468,7 @@ slice; this documentation task does not run them.
 |---|---|
 | `ActorActionChoiceCommandTests` and `WorldCommandFoundationTests` | Typed payload retains only PersonId/action DefinitionId; `LocalPlayer` is provenance; Request queues without sale mutation; Preview is read-only and allocates no choice/command identity; Suggest cannot execute; Declare/ForceOutcome do not execute this kind; `WorldCommandRecord.Success` means queued, not sold. Existing command authority behavior stays unchanged. |
 | `ActorChoiceStoreTests` | Capture order/IDs are deterministic; multiple same-actor choices remain FIFO; disposition boundaries are nondecreasing by `(absoluteDay, actorTurnRosterOrdinal)` (equal boundaries are valid); pre-capture-day, earlier-day, and earlier-same-day-ordinal transitions are rejected atomically with status/dispositions/count unchanged; rejection and deferral transitions are one-shot; dispatch-start permanently consumes an input; exactly one returned/thrown terminal outcome follows; no disposition follows terminal resolution; dead/unmaterialized actor reconciliation terminates pending choice; clone is independent and preserves sequence, payload, lifecycle state, dispositions, and result; mutation guard blocks writes. |
-| `ActorChoiceRuntimeTests` and `SimulationRuntimeOrchestrationTests` | Choice is consumed immediately before action dispatch only on a normal actor turn; actor roster order is unchanged; travel, expedition, reservation, and scheduled directive precedence is unchanged and records deferral; actor unavailable at the input-processing boundary is rejected; normal gameplay eligibility rejection or inability to construct the selected action records terminal rejection and does not call autonomous selection for a different action in that turn; a constructed choice is attempted once and current-world execution failure/partial result does not trigger same-decision autonomous selection. If action execution throws, assert one terminal `AttemptThrew`, no returned `NpcActionResult` status, no requeue/retry or autonomous fallback, and propagation of the same exception instance with the original throw frame preserved. Also cover non-null success/failure results versus a null return classified as `ReturnedNoResult`. |
+| `ActorChoiceRuntimeTests` and `SimulationRuntimeOrchestrationTests` | Choice is consumed immediately before action dispatch only on a normal actor turn; actor roster order is unchanged; travel, expedition, reservation, and scheduled directive precedence is unchanged and records deferral; actor unavailable at the input-processing boundary is rejected; no P8-C position entry preserves legacy CurrentCity behavior; InTransit defers as Traveling; exact bound Location position proceeds; a Hex at that Location's anchor, another stable position, or absent City binding is terminally rejected with no fallback; ordinary gameplay eligibility rejection or inability to construct the selected action records terminal rejection and does not call autonomous selection for a different action in that turn; a constructed choice is attempted once and current-world execution failure/partial result does not trigger same-decision autonomous selection. If action execution throws, assert one terminal `AttemptThrew`, no returned `NpcActionResult` status, no requeue/retry or autonomous fallback, and propagation of the same exception instance with the original throw frame preserved. Also cover non-null success/failure results versus a null return classified as `ReturnedNoResult`. |
 | `MerchantLiquidityTests` plus actor-choice commerce cases | Actor's remembered price/liquidity and own inventory bound candidate planning; another NPC's current state and current market truth do not enrich planning; active plan is rejected; stale current market can return the normal failure/partial-fill action result, recorded as the attempted choice's returned failure; no same-decision autonomous action, Knowledge rewrite, fabricated transaction receipt, trade DomainEvent, or history entry. |
 | `ActorChoiceDiagnosticsTests` and WorldState diagnostics suites | Pending, deferred, rejected, dispatch-started, returned, and thrown states appear in immutable snapshots; returned `NpcActionResult` statuses are present only for non-null results, while null and thrown calls have distinct attempt outcomes and no result status; canonical export/digest/diff/formatting are deterministic; ordering is by causal input/boundary keys rather than collection iteration; validation catches illegal transitions and any disposition after terminal; diagnostic operations are read-only. |
 
@@ -493,12 +524,12 @@ Proposed sequence after technical-design review:
    checkpoint identity/readiness. This design itself neither promotes code nor
    changes Phase 11 State or architecture.
 
-## 9. Proposed UNAPPROVED work decomposition
+## 9. Work decomposition
 
 These are candidate units only; names do not assign checkpoint IDs or make
 implementation schedulable.
 
-| Candidate unit (UNAPPROVED) | Closure evidence |
+| Work unit | Closure evidence |
 |---|---|
 | Typed actor-choice WorldCommand and capture owner | Request-only typed ingress retains PersonId, action DefinitionId, WorldCommand identity, stable queue order, and accepted/rejected capture result without domain mutation. |
 | Runtime decision-boundary adapter | Ordinary `EvaluateAction` considers one FIFO choice before autonomous selection; higher-priority turn behavior is preserved; dead/unmaterialized inputs terminate; an unavailable choice is rejected without another same-turn autonomous choice; a constructed action is attempted once through current merchant authority. |
