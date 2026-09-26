@@ -17,7 +17,24 @@ For supported compatible versions/profiles, continuing from boundary T and savin
 - **Architecture gate:** choose supported scope, compatibility/versioning, numeric execution profile and restoration boundaries before a full technical design; current Phase 7 numeric portability is explicitly limited.
 - **Product gate:** if support matrix/compatibility promises exceed existing guarantees, obtain user approval.
 - **Exclusions:** historical fork guarantee as a Phase 12 result, universal event sourcing, implicit cross-host numeric portability.
-- **Replay/fork sensitivity:** all authoritative truth, plans, Knowledge, IDs/allocators, day/calendar, effective config/content and causal randomness needed to continue.
+- **Replay/fork sensitivity:** all authoritative truth, plans, Knowledge, IDs/allocators, logical time/calendar, effective config/content and causal randomness needed to continue.
 - **Hotspots/parallelism:** `SimulationRuntime`, domain stores, command capture, diagnostics versus actual save state, composition/versioning; state inventory can start alongside P8/P9 work, integration is domain-gated.
 - **Downstream unlocks:** continuation foundation for P13 historical reconstruction/fork.
 - **Deferred:** final storage format, migration matrix and replay algorithm until entry design.
+
+## Temporal and extension-state inventory — 2026-09-26
+
+Inventory/design can proceed alongside P18 and generation work. A supported
+intraday save profile needs stable P18 state/ordering contracts and promoted
+capabilities for hydration/integration, including active activities, commitment,
+availability, pending work or reconstruction inputs and same-time causal sequences.
+An explicitly bounded daily profile can precede it; it cannot claim complete
+intraday coverage. Do not freeze storage around a day-only clock.
+
+Include causally relevant generation stage/contributor identities, effective
+versions and outputs. Mod-owned state joins the inventory when supported;
+P19 module lifecycle and explicit retrofit compatibility must be available before
+claiming those integrations. Do not invent mod schemas or require P19 to save
+ordinary official worlds. Missing compatible code/content cannot silently
+discard extension state. Revalidate pre-change continuation proposals against
+these additions; historical retained state is not regenerated on installation.

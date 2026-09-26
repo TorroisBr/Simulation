@@ -21,3 +21,24 @@ Establish a bounded actor-control and external-command slice in which a human ch
 - **Hotspots/parallelism:** `WorldCommandFoundation`, command handlers, Knowledge, `SimulationRuntime` and diagnostics; entry design may proceed independently of worldgen, but shared command/runtime edits require ownership.
 - **Downstream unlocks:** durable external-input semantics useful to continuation and historical reconstruction.
 - **Deferred:** client UI/API transports, multiplayer and a universal actor-control framework.
+
+## Actor availability and local-player alignment — 2026-09-26
+
+The first separately reviewed proposal chooses local SellGoods through trusted
+single-player input, without actor-control grants. Ordinary gameplay eligibility,
+Knowledge and execution validation remain; no adversarial authorization or
+anti-cheat layer is implied. The proposal/technical design remains candidate
+evidence until explicitly accepted/promoted; this paragraph does not promote it.
+
+A bounded existing daily-turn choice adapter may proceed after targeted review.
+It must not make one action per day the durable actor contract. P18-C/D supplies
+availability-driven decision/application boundaries and the later adapter
+migration; P11's basic typed input/capture need not wait for the whole of P18.
+Capture payload, authority, logical application boundary and ordering when
+introduced. In an intraday profile, a day/roster slot alone is insufficient.
+Deferred/pending inputs and dispatched attempts retain their causal lifecycle;
+future integration must not reinterpret old daily inputs or lose those records.
+
+Revalidate pre-change runtime/turn adapters against this boundary before further
+approval. Preserve the input store and existing SellGoods domain seam where
+compatible; public mod API/loader and UI transport remain later work.

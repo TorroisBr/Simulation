@@ -9,8 +9,26 @@
   `codex/phase8/canonical` branch. The canonical branch is pushed and its
   remote SHA was verified; the Phase 7 canonical baseline remains preserved.
 - Phase 8 remains open. P8-A through P8-C are canonical. P8-D is design-approved
-  and READY to implement from the current canonical branch. P8-E is
-  design-approved and waits for promoted P8-D capability.
+  and has a separate integration candidate; its pre-refresh READY classification
+  now requires the targeted architecture impact review recorded below. P8-E is
+  design-approved and waits for promoted P8-D capability and that impact review.
+
+## Architecture requirement refresh — 2026-09-26
+
+The user approved intraday temporal simulation, player-owned code extensibility
+and dependency-aware extensible genesis. This is a documentation-only alignment
+against canonical `ed7a40a86a6a16e9f4fda75703470c38135fda0e`; it adds no temporal,
+mod or generation capability and does not alter the retained validation records.
+See `architecture/INTRADAY_EXTENSIBILITY_ALIGNMENT.md`, the Roadmap and P18/P19
+Briefs for the new dependencies and candidate impact.
+
+P8-A/B/C remain canonical and valid in their delivered scope. P8-D's separate
+integration candidate requires targeted temporal-profile revalidation before
+promotion; this update does not mark that candidate canonical. P8-E's existing
+explicit-operation proving schedule remains a bounded transitional slice, with
+automatic intraday travel deferred to P18-D. Do not promote either candidate by
+assuming its pre-refresh readiness is sufficient without the recorded impact
+review. The spatial A → B/C → D → E capability graph remains unchanged.
 
 ## P8-A — Factual Geography
 
@@ -86,8 +104,9 @@ run because P8-A does not change the daily loop or long-horizon behavior.
   included in this documentation integration. It defines Hex-only route
   endpoints, deterministic same-subject observation resolution, and excludes
   a traversal from new candidates when the actor's resolved belief is
-  `KnownUnavailable`. With P8-B and P8-C promoted, P8-D is READY to implement
-  from the current `codex/phase8/canonical` HEAD.
+  `KnownUnavailable`. P8-B and P8-C satisfy its capability dependencies.
+  The 2026-09-26 architecture refresh adds targeted temporal-profile
+  revalidation of its separate integration candidate before promotion.
 - **P8-E — Civil Travel Vertical Slice:** the technical design at
   `4b7127f57d354c851e4d8ddaaeb27e8fbd51686c` passed independent review and is
   included in this documentation integration. Its proving scenario uses

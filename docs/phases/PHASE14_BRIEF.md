@@ -21,3 +21,13 @@ Establish a bounded, factual account of productive sources and material movement
 - **Hotspots/parallelism:** economy/merchant, property, spatial anchors, travel, runtime composition and diagnostics; localized truth design can advance before route-flow integration.
 - **Downstream unlocks:** material costs for P15 and logistics/supply for P16 where those consumers need them.
 - **Deferred:** exact goods catalog, production formulas, market macro-policy and global material optimization.
+
+## Temporal consumer and extension boundary — 2026-09-26
+
+Localized source/stock/ownership truth remains independent of P18. A slice that
+promises duration, work shifts or intraday production/transport consumes the
+relevant P18 scheduler/lifecycle contracts and capabilities; passive production
+does not become a mandatory actor-selected action. No new work/rest/theft
+behavior is required for infrastructure validation. Use existing semantic
+source/transfer seams and composable policy contributions only when actually
+needed; no mod loader or universal production extension engine in P14.

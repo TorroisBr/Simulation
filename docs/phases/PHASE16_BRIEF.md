@@ -21,3 +21,13 @@ Armed Forces can occupy and change factual position under military movement sema
 - **Hotspots/parallelism:** `ArmedForceSpatialPosition`, spatial traversal, military stores, Battle validation, runtime/diagnostics; movement and material work may be isolated after shared contracts stabilize.
 - **Downstream unlocks:** operational facts and pressure inputs for P17 strategic War.
 - **Deferred:** exact pathfinding, movement formula, weather/scouting catalog and full occupation policy.
+
+## Operational time integration — 2026-09-26
+
+Movement/logistics with duration consumes the relevant P18 timeline/scheduler
+and lifecycle contracts/capabilities. It keeps force-owned position/progress and
+military execution semantics; it does not reuse Person actor availability by
+assumption. Design can precede P18 promotion on stable contracts, but integrated
+intraday movement cannot use an independent daily/host clock. Supply/passive
+processes remain domain-owned. No Wind & Sail/weather mod, loader or alternative
+renderer is required for P16 closure.

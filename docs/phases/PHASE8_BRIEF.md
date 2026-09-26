@@ -29,3 +29,17 @@ Dependency direction is `P8-A → {P8-B, P8-C} → P8-D → P8-E`; B/C may proce
 - **Hotspots/parallelism:** `SpatialAuthority`, `SpatialRuntime`, `TravelSystem`, `SimulationRuntime`, Knowledge, diagnostics, City/Site anchors and configuration; B/C require isolation and explicit integration ownership. P8-D/E must wait for their shared contracts/capabilities.
 - **Downstream unlocks:** stable geography/identity for genesis and localized sources; passage/civil position for later travel/material and military consumers. They unlock only at the dependency level actually promoted.
 - **Intentionally deferred:** exact Hex distance, coordinate representation, pathfinding, speed formulas, worldgen IDs, multi-grid, groups/encounters, military movement and save format.
+
+## Temporal/extensibility alignment — 2026-09-26
+
+P8-A/B/C facts and the A → B/C → D → E graph remain unchanged. P8-D day-based
+observation/estimate policies and P8-E explicit-operation proving schedule are
+bounded profile/fixture semantics, not a permanent one-step-per-day travel law.
+P8-E may finish its reviewed explicit-operation slice without a blanket P18
+dependency. Automatic intraday travel/availability integration belongs to P18-D
+and consumes the promoted P8-E capability. Revalidate current candidate time,
+progress, observation and command adapters against this boundary before promotion.
+
+Keep spatial/travel domain/application seams independent of presentation where
+practical; no mod loader, universal extension registry or new scheduler is added
+to P8. Hooks follow real domain operations. Mod security is not spatial authority.

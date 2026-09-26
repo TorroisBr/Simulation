@@ -20,4 +20,27 @@ Produce a deterministic, semantically complete initial World Truth before the fi
 - **Replay/fork sensitivity:** effective seed/random context, generated IDs, content/configuration provenance and full initial authoritative state must be recoverable as required by the constitutional fork guarantee.
 - **Hotspots/parallelism:** spatial authority, composition/configuration, initialization, diagnostics and identity; entry architecture may proceed beside P8 work, implementation that consumes spatial code waits for relevant promotion.
 - **Downstream unlocks:** local/pre-start generation (P10) and a consistent initial state for save and historical reconstruction.
-- **Deferred:** generation passes, ID algorithm, mod schema, and exact content catalog.
+- **Deferred:** exact generation passes/APIs, ID algorithm, mod schema, and exact content catalog.
+
+## Extensible generation contract — 2026-09-26
+
+P9 must design an ordered dependency-aware pipeline, with explicit stage
+inputs/outputs, stable causal identities/version/provenance, deterministic
+contribution/conflict order and appropriate random context. Validate the stage
+graph and complete initial state before publication. Stage outputs enter their
+owning domain authorities; no monolithic opaque `GenerateEverything()` or
+separate generator truth. The first supported profile and algorithms remain
+entry/technical decisions, not implied new biome/climate/settlement scope.
+
+Future contributors can consume previous outputs, add persistent domain data,
+contribute scoring/policies and insert stages with declared dependencies. P9
+implements only its concrete generation needs; it does not wait for or implement
+P19's public loader/API. Pipeline provenance joins the reconstruction inventory.
+P18 is not a blanket prerequisite for genesis; a profile initializing temporal
+activities consumes the relevant accepted/promoted temporal contracts.
+
+New-world generation and optional explicit existing-world retrofit are distinct.
+Installing a mod does not rerun historical stages or change past settlement
+placement. Retrofit support belongs to the later module/domain migration scope;
+runtime expansion retains its own post-start mutation boundary. Revalidate
+pre-change P9 proposals before technical approval against this pipeline requirement.

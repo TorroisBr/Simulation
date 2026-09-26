@@ -32,7 +32,7 @@ Planning readiness vocabulary for a Phase or checkpoint entry:
 | `READY_FOR_IMPLEMENTATION` | Required technical review and implementation dependencies passed. |
 | `IN_PROGRESS` | Authorized implementation is under way. |
 
-These are planning views, not declarations that a whole Phase's capabilities exist. Phase 8 is `READY_FOR_TECHNICAL_DESIGN`, not `READY_FOR_IMPLEMENTATION`. No Phase 9–17 implementation checkpoint is schedulable merely because its entry architecture can be discussed.
+These are planning views, not declarations that a whole Phase's capabilities exist. Use the current Phase 8 State for checkpoint delivery/readiness, not a phase-wide label. No future implementation checkpoint is schedulable merely because its entry architecture or Brief can be discussed.
 
 Checkpoint execution states are `PLANNED`, `IN_PROGRESS`, `SUBMITTED`, `VALIDATED_CANDIDATE`, `APPROVED`, and `PROMOTED`. `READY`/`NOT_READY` are derived from current dependencies, gates, technical review, and available isolation rather than stored as independent truth. `CLOSED` is a Phase status. Block reasons (`BLOCKED_DEPENDENCY`, `BLOCKED_ARCHITECTURE`, `BLOCKED_PRODUCT_DECISION`, `BLOCKED_INTEGRATION`) annotate the affected track; a block in one track does not freeze independent work.
 
@@ -82,3 +82,25 @@ Each checkpoint introducing authoritative mutable state or external causal input
 Stop a run when all safe READY work is exhausted; only human/architecture gates remain; canonical promotion or phase closure awaits required approval; an active semantic conflict cannot be isolated; validation cannot be resolved in scope; canonical changed unexpectedly and impact cannot yet be classified; or resource/context limits require a resumable handoff. Do not promise background execution absent an actual scheduled/run mechanism, wait indefinitely inside a worker for a human decision, or start speculative distant phases to keep agents busy.
 
 Roadmap revisions may insert/split/merge phases or checkpoints. Preserve historical State, record new dependency impact, and reclassify candidates. A change to simulation meaning must go through architecture approval; a change to product scope or material roadmap priorities remains human-gated.
+
+## Intraday and extension impact review
+
+The 2026-09-26 approved requirements are consolidated in architecture §§2,
+11–12 and 91–92, Roadmap and Phase 18/19 Briefs. Preserve existing phase and
+checkpoint IDs. Read `architecture/INTRADAY_EXTENSIBILITY_ALIGNMENT.md` when
+refreshing pre-change candidates; do not infer that this documentation change
+promotes their code or cancels their delivered daily-profile contracts.
+
+For timed work, inventory the logical instant, pending work/activities,
+availability, same-time ordering/sequences and compatible calendar/profile.
+For extensible generation/mods, inventory stage/contributor identities and
+versions, causal contribution order, authoritative extension state, and explicit
+retrofit inputs. A daily timestamp or seed alone cannot capture this causality.
+Retain these semantics when introduced; later persistence cannot recover
+information discarded by an earlier checkpoint.
+
+Design to current natural semantic seams now. Defer loader/public API mechanics
+to P19; no worker may add speculative mod infrastructure or new sleep/theft/needs
+gameplay to satisfy P18. Day-based proof fixtures may remain explicitly scoped,
+but a worker may not turn their daily cadence into the permanent actor or travel
+contract. Domain validation is distinct from adversarial player/mod security.

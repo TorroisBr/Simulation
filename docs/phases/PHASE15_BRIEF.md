@@ -21,3 +21,14 @@ Create and change relevant structures or settlements during actually simulated h
 - **Hotspots/parallelism:** spatial authority, City/Site and property/material stores, runtime guard, commands, diagnostics; cross-domain write ownership requires isolation/integration review.
 - **Downstream unlocks:** construction consequences for later economy, settlement and strategic consumers.
 - **Deferred:** runtime world expansion, full building catalog and general crafting/construction framework.
+
+## Duration and generated-state alignment — 2026-09-26
+
+Factual creation at a validated boundary still needs no blanket P18 dependency.
+If the selected consumer includes timed construction/work, its lifecycle and
+completion consume relevant P18 capabilities. Start does not imply completed
+structure, and interruption effects need explicit domain semantics. Runtime
+construction, initial generation and mod retrofit remain distinct causal paths
+to normal World Truth. Neither generated origin nor installation reruns old
+construction or grants permanent generator authority. No general mod loader
+or temporal scheduler is implemented inside P15.

@@ -21,3 +21,18 @@ Reconstruct the authoritative state at any actually simulated boundary from the 
 - **Hotspots/parallelism:** persistence, input capture, domain state evolution, versioning and runtime composition; design can explore early, implementation waits for continuation and causal-input capabilities.
 - **Downstream unlocks:** safe historical forks for future runtime construction, material and war consequences; it is not a prerequisite for designing them to be reconstructible.
 - **Deferred:** exact storage, checkpoint and replay mechanisms.
+
+## Intraday and installation boundaries — 2026-09-26
+
+The guarantee includes actually simulated intraday boundaries, not just dates.
+Supported intraday reconstruction consumes P18's relevant temporal state/input
+ordering and P12 continuation. Preserve compatible historical daily semantics
+for pre-migration histories; do not infer intraday history that was never run.
+
+Reconstruct authoritative outputs of generation and modules, or recover them
+unambiguously under their original compatible inputs/versions. Explicit mod
+retrofit during simulation is a historical mutation at its own boundary; a fork
+before that boundary must not include its newly created facts. Installation
+does not reexecute historical placement/scoring stages. P19 integrations require
+their actual state/version/migration contracts, not a blanket loader dependency
+for unmodded-world reconstruction. This adds no early replay/storage schema.

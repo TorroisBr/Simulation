@@ -67,7 +67,7 @@ Nenhuma dessas setas deve significar “sempre acontece”. Cada domínio pode i
 
 **DIREÇÃO**
 
-Unity permanece extremamente importante como:
+Unity é o renderer/UI host oficial e permanece extremamente importante como:
 
 - autoria visual;
 - editor de conteúdo;
@@ -110,6 +110,43 @@ Save / DB          Diagnostics / Diff
 **Não existem duas simulações.** Todos os clientes devem operar sobre o mesmo modelo de domínio.
 
 `ScriptableObject` continua excelente como **fonte de authoring**. No futuro, um asset Unity pode produzir a mesma definição pura que JSON ou outro formato produziria.
+
+Lógica de domínio e de aplicação deve permanecer independente da apresentação
+Unity onde isso for prático. Um renderer alternativo ou aplicação externa deve
+poder interagir com a mesma simulação por contratos semânticos; IPC com o jogo
+hospedado em Unity é uma alternativa válida se extração direta do Core ainda
+não for viável. Isso não exige agora extração completa, transporte ou segundo
+renderer. Frames e `Update` do host não definem o tempo ou a causalidade do mundo.
+
+### Extensibilidade e mundo pertencente ao jogador
+
+**DECIDIDO**
+
+Esta é uma simulação local single-player pertencente ao jogador. Moddability é
+um princípio arquitetural explícito: mods futuros podem conter código real e
+adicionar sistemas, estado e mecânicas não antecipados pelo jogo base, além de
+conteúdo/configuração. Não introduzir anti-cheat, autorização adversarial ou
+restrições de mods para impedir o jogador de modificar seu próprio mundo.
+
+Validação de domínio, mutation guards, compatibilidade e autoridade semântica
+continuam protegendo coerência, atomicidade e explicabilidade das operações
+suportadas. Não são uma fronteira de segurança contra código escolhido pelo
+jogador. A garantia de determinismo/reconstrução corresponde ao conjunto
+compatível de código, conteúdo e inputs efetivamente usado; não certifica por
+implicação qualquer mod arbitrário ou conjunto de mods incompatível.
+
+Preferir hooks/eventos semânticos a polling. Registries, policies, modifiers e
+pipelines são apropriados quando contribuições de sistemas independentes têm
+uma necessidade real; sua composição causal deve ter ordem e conflitos
+explícitos e determinísticos. Não criar extension points especulativos em
+fases sem consumidor nem acoplar a lógica ao futuro loader.
+
+Uma mecânica útil de mod deve poder ser incorporada oficialmente preservando
+sua ontologia e integração, sem exigir reescrita conceitual completa.
+Expansões oficiais opcionais devem, idealmente, consumir a mesma superfície
+pública de extensão dos mods de terceiros. A API/loader, lifecycle de módulos,
+registro de estado próprio, versionamento e transportes terão trabalho dedicado
+posterior; estes princípios não anunciam que essa plataforma já existe.
 
 ---
 
@@ -442,26 +479,78 @@ Isso não obriga simulação microscópica.
 
 # Parte IV — Tempo, determinismo e configuração
 
-## 11. Tick base = um dia
+## 11. Tempo lógico intradiário, atividades e cadências de domínio
 
 **DECIDIDO**
 
-O tick principal continua sendo um dia.
+Simulação intradiária é requisito central. Um dia continua sendo unidade do
+calendário e uma cadência útil para processos agregados, mas não é a menor
+fronteira causal nem um limite de uma ação por ator. O modelo diário entregue
+é uma capability legada/transitória; esta seção descreve sua evolução, não uma
+implementação já existente.
 
-Nem tudo precisa rodar diariamente.
+Atividades podem ocupar intervalos arbitrários dentro de um dia ou atravessar
+dias, na precisão suportada pelo modelo temporal. A representação exata do
+instante/duração, resolução e limites numéricos exigem Technical Design; não
+dependem do relógio real, frame rate ou floating-point de rendering. Datas e
+projeções diárias devem ser coerentes com o mesmo tempo lógico monotônico.
 
-Exemplos:
+Um ator escolhe novamente quando está disponível, e não apenas uma vez por
+dia. Uma atividade com duração tem início e conclusão e mantém compromisso,
+progresso e disponibilidade autoritativos necessários. Interrupção/cancelamento
+exigem semântica explícita quando um consumidor os suportar; não se inferem
+rollback de efeitos, término ou sucesso a partir de uma notificação temporal.
+Atividades instantâneas continuam possíveis. Processos passivos, vencimentos e
+eventos não precisam ser ações escolhidas por um ator nem ocupar sua agenda.
+
+Disponibilidade de uma ação/atividade pode depender de data/hora e condições
+atuais do mundo. Decisão continua usando Knowledge permitido; execução
+revalida World Truth no início e nas fronteiras relevantes. Uma notificação
+factual pode exigir revalidação ou invalidar uma atividade, mas não concede
+automaticamente conhecimento ao ator. Duração/custo temporal podem informar
+utility, sem tornar utility-per-hour uma regra universal de seleção.
+
+### Scheduler e autoridade temporal
+
+A direção adotada é um scheduler temporal/event-driven central por mundo,
+que ordena trabalho devido e desperta atores/processos nas fronteiras relevantes
+(disponibilidade, conclusão, mudança pertinente, recorrência ou input).
+Não criar um `Update`/polling por ator ou exigir varredura de todos os atores
+a cada frame/tick. Domínios mantêm seus próprios fatos e efeitos; o scheduler
+coordena quando são considerados, sem se tornar uma authority universal de
+atividades, Knowledge ou outcomes.
+
+Empates no mesmo instante, inputs externos, callbacks que agendam trabalho
+no instante atual e reavaliações instantâneas precisam de ordenação determinística
+e regras de progresso/terminação. O Technical Design deve fechar essas regras
+antes de implementação, inclusive prevenção de ciclos infinitos de duração
+zero. Não usar ordem de registro incidental, CPU ou relógio do host como desempate.
+Não executar duas vezes uma conclusão nem manter uma segunda agenda autoritativa
+no domínio e no scheduler. Filas/índices podem ser derivados quando todo seu
+estado causal é recuperável de forma inequívoca e determinística.
+
+### Cadências e compatibilidade
+
+Nem tudo precisa rodar na mesma frequência. Exemplos de consumidores possíveis,
+sem autorização para implementar seu gameplay:
 
 | Frequência | Uso provável |
 |---|---|
-| diária | ações, viagem, efeitos ativos |
+| disponibilidade / intervalo | atividades de ator, viagem, espera, turnos de trabalho |
+| data/hora / condição | oportunidades noturnas ou dependentes de presença |
+| diária | efeitos agregados e consumidores legados explícitos |
 | semanal/mensal | avaliações agregadas, migração |
 | mensal | impostos/salários/demografia conforme política |
 | vencimento | contratos, eleições, mandatos |
 | evento | morte, vacância, transferência |
 | derivada | idade, tempo desde observação |
 
-Evitar framework temporal gigante; contador absoluto + calendário + `nextEvaluationDay`/vencimentos resolvem muitos casos.
+Uma camada temporal pequena deve integrar cadências diárias e vencimentos
+existentes sem reescrever todos os domínios. `AdvanceDay` pode permanecer uma
+operação de avanço até uma fronteira diária, processando cronologicamente o
+trabalho intradiário pertinente quando essa capability existir. Não saltar
+conclusões/vencimentos nem aplicar retrospectivamente efeitos no fim do dia.
+Cada adaptação declara sua ordem e mantém uma única autoridade de tempo.
 
 Uma ocorrência de calendário ou regra de recorrência determina quando uma
 operação é considerada. A mudança factual, se houver, pertence à autoridade
@@ -484,6 +573,10 @@ frequência.
 Cada domínio deve definir como seu estado temporal progride sem depender da
 execução diária completa da Utility AI. Active/Dormant não determina, por si
 só, a cadência de todos os sistemas.
+
+Trabalho, theft noturno/ausência, espera, viagem e futuro descanso/sono são
+consumidores possíveis, não demos obrigatórias da infraestrutura. Sono, sonhos,
+needs e novos comportamentos concretos não fazem parte da fundação temporal.
 
 ---
 
@@ -642,6 +735,41 @@ INITIAL GENERATED STATE != IMMUTABLE WORLD
 INITIAL GENERATION != RUNTIME MUTATION AUTHORITY
 RUNTIME-CREATED WORLD STRUCTURE = NORMAL WORLD TRUTH
 ```
+
+### Geração como pipeline extensível
+
+**DECIDIDO**
+
+Geração inicial é um pipeline ordenado por dependências, não uma operação opaca
+`GenerateEverything()`. Etapas têm identidade e contratos de inputs/outputs e
+contribuições semanticamente definidos; podem consumir dados de etapas
+anteriores, produzir estado próprio de mundo e contribuir para geração,
+scoring ou policies. Ordem, conflitos, dependências ausentes/cíclicas e
+contextos de aleatoriedade devem ser resolvidos deterministicamente antes
+da publicação do mundo completo. IDs de etapas, versões e ordenação são
+recuperáveis quando causais; não se fixam agora interfaces, schemas ou loader.
+
+Futuros mods podem acrescentar etapas e dados autoritativos através desses
+contratos. Seus resultados entram nas authorities do respectivo domínio;
+o pipeline não mantém uma segunda cópia de World Truth. Etapas e suas
+contribuições são resolvidas para aquela gênese; composição/validação completa
+precedem a primeira fronteira simulada. Fases de geração podem começar com
+etapas oficiais concretas sem implementar uma plataforma de mods.
+
+Resultados de geração são estado histórico do mundo. Instalar um mod em mundo
+existente não reexecuta implicitamente etapas anteriores nem recalcula sua
+história. Participação apenas em new-world generation é válida. Suporte a
+mundo existente é capability distinta e opcional: retrofit/migração explícito,
+validado, com contexto compatível e fronteira causal recuperável. Se não houver
+caminho suportado, a incompatibilidade é explícita; não se fabricam fatos
+retroativos ou se muda silenciosamente o estado passado.
+
+Exemplo motivador, sem implementação: um futuro Wind & Sail poderia gerar
+wind-field persistente após terrain/climate e contribuir para scoring de
+settlements/ports numa nova gênese. Instalado depois, pode criar o campo para
+efeitos futuros num retrofit suportado; não reposiciona settlements históricos
+nem reexecuta sua geração. A geração de dados do mod não exige implementar
+climate, vento ou portos agora.
 
 ---
 
@@ -4049,8 +4177,10 @@ nem custo contextual necessariamente realizado.
 Um viajante em trânsito mantém posição factual: pode estar em Hex, âncora/local ou
 num segmento de traversal, com direção e progresso determinístico suficientes
 para retomar a viagem. Não precisa de microposição contínua nem de coordenadas
-de rendering; a base temporal diária pode continuar. Uma travessia de vários
-dias não torna o viajante espacialmente inexistente. Esse estado deve
+de rendering. Perfis diários existentes podem continuar como capabilities
+legadas delimitadas; integração intradiária segue §11 e o planejamento da
+Phase 18, sem uma segunda authority de viagem. Uma travessia de vários dias
+não torna o viajante espacialmente inexistente. Esse estado deve
 permanecer autoritativo apesar de Dormant, descarregamento de representação e
 futura persistência, sem depender exclusivamente de uma instância
 `NpcRuntime`. Também permite que futuros consumidores de encontro ou
@@ -5251,7 +5381,7 @@ explicitamente como se relaciona com Organization, Institution e Faction.
 Save/load real precisa preservar:
 
 - IDs;
-- dia e calendário efetivo;
+- instante lógico e calendário efetivo, incluindo a projeção diária;
 - valores efetivos de policy e parameter, incluindo compatibilidade, versão ou
   revisão quando semanticamente necessários;
 - conteúdo e definições compatíveis necessários para interpretar o estado;
@@ -5316,6 +5446,14 @@ armazenar esse estado fora do `NpcRuntime` permanece uma decisão futura.
 O snapshot deve ser feito preferencialmente em limite consistente entre
 ticks/transações.
 
+Quando houver execução intradiária, continuação exige também atividades e
+compromissos em curso, disponibilidade, trabalho temporal pendente ou seus
+inputs reconstruíveis, ordenação no mesmo instante e sequências causais.
+Um contador de dias não substitui esses fatos. Dados autoritativos de mods,
+etapas de geração e retrofit participam do mesmo inventário, com identidade e
+versões compatíveis dos contribuintes. Isso não fixa formatos de save ou de
+estado de extensões nem exige loader antecipado.
+
 ---
 
 ## 92. Save != Replay != History
@@ -5358,6 +5496,12 @@ reproduzidas deterministicamente sem registro individual de cada escolha,
 desde que o estado reconstruído seja o mesmo na fronteira escolhida.
 
 O projeto não é event-sourced por padrão.
+
+Uma fronteira realmente simulada pode ser intradiária. A evolução temporal
+preserva a garantia de reconstrução também nessas fronteiras e não reinterpreta
+retroativamente históricos executados no perfil diário. Instalação/retrofit de
+mod que altera estado após o início participa da história na sua fronteira;
+não reexecuta gênese nem recebe existência ou efeitos anteriores à instalação.
 
 ---
 
@@ -5689,11 +5833,17 @@ MATERIALIZATION != ACTIVITY
 ACTIVE / DORMANT / LOADED / UNLOADED != POPULATION CHANGE
 PERSON IDENTITY IS NOT HUMAN-ONLY
 CALENDAR OCCURRENCE != DOMAIN EFFECT
+DAY CADENCE != MINIMUM CAUSAL TIME BOUNDARY
+ACTOR CHOOSES WHEN AVAILABLE != ONE ACTION PER DAY
+TEMPORAL SCHEDULER != DOMAIN OUTCOME AUTHORITY
+ACTIVITY != PASSIVE PROCESS
 
 INITIAL CONFIGURED WORLD → COMPLETE WORLD TRUTH BEFORE FIRST SIMULATED BOUNDARY
 GENERATED BACKSTORY != SIMULATED HISTORY
 INITIAL GENERATED STATE != IMMUTABLE WORLD
 INITIAL GENERATION != RUNTIME MUTATION AUTHORITY
+GENESIS = ORDERED DEPENDENCY-AWARE PIPELINE
+MOD INSTALLATION != IMPLICIT HISTORICAL REGENERATION
 RUNTIME-CREATED WORLD STRUCTURE = NORMAL WORLD TRUTH
 EVERY SIMULATED HISTORICAL BOUNDARY → RECONSTRUCTABLE AUTHORITATIVE STATE AND INDEPENDENT FORK
 
@@ -5708,6 +5858,9 @@ AUTHORING SOURCE != RESOLVED EFFECTIVE AUTHORITY
 EFFECTIVE CALENDAR = AUTHORITATIVE EXECUTION INPUT
 CONFIGURATION + CALENDAR IMMUTABLE PER NORMAL EXECUTION
 HOST COMPOSITION CHOOSES HOW, NOT WHAT POLICY IS
+UNITY = OFFICIAL PRESENTATION HOST, NOT DOMAIN AUTHORITY
+PLAYER-OWNED LOCAL WORLD → REAL CODE MODS / NEW MECHANICS
+DOMAIN INVARIANTS != ADVERSARIAL MOD SECURITY
 AVAILABLE != ENABLED != AUTONOMOUS != INSTANTIATED
 ENABLED → AVAILABLE AT EXECUTION BOUNDARY, OR EXPLICIT LAZY LOADING
 AUTONOMOUS = ORIGIN OF NEW DISCRETIONARY BEHAVIOR
