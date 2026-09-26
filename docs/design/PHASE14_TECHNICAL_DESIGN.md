@@ -1,6 +1,6 @@
 # Phase 14 Technical Design — Local Daily Material Flow v1
 
-**Status:** bounded technical proposal only. It is not an approved Phase 14 checkpoint contract, implementation authorization, Phase State, or canonical architecture change. No P14 checkpoint IDs exist in the observed canonical state. This proposal uses the independently reviewed entry boundary in `PHASE14_ENTRY_ARCHITECTURE.md` and the current architecture baseline `c285466c355103d3637ac165246591b72eb7bda0`.
+**Status:** bounded technical proposal only. It is not an approved Phase 14 checkpoint contract, implementation authorization, Phase State, or canonical architecture change. No P14 checkpoint IDs exist in the observed canonical state. This proposal uses the independently reviewed entry boundary in `PHASE14_ENTRY_ARCHITECTURE.md` and Phase 8 canonical State `c5b2e06b534f4b2af38f10e6510b10800aa8b28c`, which incorporates architecture baseline `c285466c355103d3637ac165246591b72eb7bda0`.
 **Independent technical design review:** PASS at content commit
 `4a84b76a608a24fd74de032bfb274e0c59f9d3a0`. Implementation should bind the
 settlement semantic identity to the stable City key shared with the P8 anchor,
@@ -17,9 +17,9 @@ The semantic rules are:
 - The domain source and market-stock authority own their mutations. A schedule/cadence invokes them; it does not define material truth. Existing daily automatic production and consumption need no P18 capability.
 - Preserve deterministic order and atomic domain transitions. Overflow cannot partially apply a source contribution. Insufficient stock caps the free population sink at actual available stock as the existing behavior intends; the stock decrease and reported consumed quantity are one atomic transition.
 - Preserve current moddability constraints: domain behavior remains independent of Unity presentation where practical, seams permit compatible extension, and independent contributions have stable identity and deterministic composition. P19 API/loader and module lifecycle remain deferred.
-- No P20 prerequisite applies to this single-settlement passive source/sink. P8-D/E travel is not used.
+- No P20 prerequisite applies to this single-settlement passive source/sink. P8-D is canonical and P8-E remains a separate promotion-pending candidate; neither travel capability is used here.
 
-The design follows architecture §§2, 11–13, 41–45, 69, 91–92; the current Roadmap and Execution Model; Phase 8 State at c285; and both intraday/extensibility and multi-participant alignment records. P18 is required only if a later approved consumer promises duration-based or intraday production. P20 is conditional only if a later consumer coordinates multiple participants.
+The design follows architecture §§2, 11–13, 41–45, 69, 91–92; the current Roadmap and Execution Model; Phase 8 State at c5b2e06 (including architecture baseline c285466); and both the intraday/extensibility and multi-participant alignment records. P18 is required only if a later approved consumer promises duration-based or intraday production. P20 is conditional only if a later consumer coordinates multiple participants.
 
 ## 2. Current implementation and fit
 
@@ -31,7 +31,7 @@ The existing daily order and aggregate stock are sufficient for this bounded pro
 
 ### 3.1 Authored source definition
 
-Give each configured source a stable authored `ProductionSourceId` (or equivalent stable semantic key) and an explicit compatible definition/content revision. The source identity is namespaced by the stable semantic City/settlement definition identity. It must not be derived from a configuration list index or runtime object identity. The one-source proving profile can use one explicit stable source key. If legacy content lacks a key, a narrowly scoped compatibility resolver may derive an identity only where the City definition plus item definition uniquely identifies that source; ambiguous duplicate entries must be surfaced as unsupported for this profile until authored identity is supplied. Do not silently assign order-dependent identities.
+Give each configured source a stable authored `ProductionSourceId` (or equivalent stable semantic key) and an explicit compatible definition/content revision. The source identity is namespaced by the stable City/settlement semantic key already used by the P8 City anchor binding; it must never use `CityRuntime.RuntimeId`. It must not be derived from a configuration list index or runtime object identity. The one-source proving profile can use one explicit stable source key. If legacy content lacks a key, a narrowly scoped compatibility resolver may derive an identity only when the stable City key plus item definition uniquely identifies that source within this City's configured production entries. Duplicate entries that cannot be distinguished by that scoped unique key are unsupported for this profile until stable authored source IDs are supplied. Do not silently assign order-dependent identities. The P8 `LocationId` remains an anchor reference and does not replace the semantic City key.
 
 The source definition carries item semantic identity and configured amount per enabled economy day. It is exogenous: it does not claim a physical producer, resource reserve, or material transformation. Its resolved effective content/configuration version participates in compatibility and reconstruction.
 
@@ -39,7 +39,7 @@ The source definition carries item semantic identity and configured amount per e
 
 Keep the source application as a small domain operation that receives the identified source, settlement/City authority, market stock authority, and logical daily boundary. It proposes/validates one exact addition and returns an applied/rejected result with a stable reason. The authoritative stock mutation remains in the market/domain stock owner; callers cannot update an independent mirror.
 
-Represent the concrete title/custody facts explicitly in the flow contract: `SettlementSemanticId` is title owner; `MarketStoreSemanticId` is custodian; the source refers to its owning settlement and the destination store. This is a P14-specific relation/projection, not a generic universal asset-holder framework. Reconcile the semantic settlement identity with the current P8 City anchor binding in technical implementation; use runtime IDs only as in-process lookup handles.
+Represent the concrete title/custody facts explicitly in the flow contract: `SettlementSemanticId` is the stable City key used by the P8 City anchor binding and is the title owner; `MarketStoreSemanticId` is custodian; the source refers to its owning settlement and the destination store. Never derive settlement identity from `CityRuntime.RuntimeId`, and do not substitute the P8 `LocationId` anchor for the City key. This is a P14-specific relation/projection, not a generic universal asset-holder framework. Runtime IDs may be used only as in-process lookup handles.
 
 The population consumption operation belongs to the existing City population-economy domain boundary and the same market stock authority. For v1 it uses the already-supported free-consumption semantics; it does not mutate money or use the account-backed branch. The simulation coordinator invokes the operations in the existing order and under the effective economy-enabled gate. No autonomous behavior or scheduling engine is added.
 
