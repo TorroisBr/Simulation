@@ -2662,8 +2662,8 @@ public sealed class SimulationRuntime
             }
 
             EvaluateAction(npcRuntime);
-            if (IsPersonInSpatialTransit(npcRuntime.PersonId)
-                && npcRuntime.CurrentAction?.actionType == NpcActionType.SellGoods)
+            if (npcRuntime.CurrentAction?.actionType == NpcActionType.SellGoods
+                && (npcRuntime.CurrentCity == null || !IsActorAtCurrentCityLocation(npcRuntime)))
             {
                 npcRuntime.SetCurrentActionRuntime(null);
                 continue;
@@ -2980,6 +2980,11 @@ public sealed class SimulationRuntime
             return false;
         }
 
+        if (npcRuntime.CurrentCity == null)
+        {
+            return false;
+        }
+
         SpatialAnchorOwnerId cityOwner = new SpatialAnchorOwnerId(
             SpatialAnchorOwnerKind.City,
             npcRuntime.CurrentCity.RuntimeId);
@@ -2992,13 +2997,6 @@ public sealed class SimulationRuntime
         return position.Position != null
             && position.Position.Kind == StablePositionReferenceKind.Location
             && position.Position.LocationId.Equals(cityLocationId);
-    }
-
-    private bool IsPersonInSpatialTransit(PersonId personId)
-    {
-        return personId != null
-            && personSpatialPositionStore.TryGetPosition(personId, out PersonSpatialPosition position)
-            && position.IsInTransit;
     }
 
     internal GenealogyStore GenealogyStoreForWorldBoundary => genealogyStore;

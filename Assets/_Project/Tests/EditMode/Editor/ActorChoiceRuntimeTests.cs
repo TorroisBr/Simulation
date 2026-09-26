@@ -111,6 +111,41 @@ public sealed class ActorChoiceRuntimeTests
     }
 
     [Test]
+    public void StablePositionAtDifferentLocationDoesNotExecuteAutonomousSellGoods()
+    {
+        Fixture fixture = CreateFixture(inventoryAmount: 10, forceAutonomousSell: true);
+        AddCityAnchor(fixture, "hex-choice-city");
+        LocationId otherLocation = new LocationId("location-other-choice");
+        Assert.That(fixture.Runtime.SpatialAuthorityStore.TryRegisterLocation(
+            new LocationRecord(otherLocation, new HexId("hex-choice-city")),
+            out SpatialAuthorityFailure locationFailure), Is.True, locationFailure?.ToString());
+        Assert.That(fixture.Runtime.PersonSpatialPositionStore.TrySetAt(
+            fixture.Actor.PersonId, StablePositionReference.ForLocation(otherLocation),
+            out PersonSpatialPositionFailure positionFailure), Is.True, positionFailure?.ToString());
+
+        fixture.Runtime.AdvanceDay();
+
+        Assert.That(fixture.Records.Decisions.Decisions, Has.Count.EqualTo(1));
+        Assert.That(fixture.Records.Decisions.Decisions[0].ActionDefinitionId,
+            Is.EqualTo(fixture.SellAction.DefinitionId));
+        Assert.That(fixture.AutonomousSellProvider.ExecutionCount, Is.Zero);
+        Assert.That(fixture.Actor.CurrentActionRuntime, Is.Null);
+        Assert.That(fixture.Actor.Inventory.GetAmount(fixture.Item), Is.EqualTo(10));
+    }
+
+    [Test]
+    public void AutonomousSellGoodsWithoutPersonPositionPreservesLegacyCurrentCityBehavior()
+    {
+        Fixture fixture = CreateFixture(inventoryAmount: 10, forceAutonomousSell: true);
+
+        fixture.Runtime.AdvanceDay();
+
+        Assert.That(fixture.Runtime.PersonSpatialPositionStore.TryGetPosition(
+            fixture.Actor.PersonId, out _), Is.False);
+        Assert.That(fixture.AutonomousSellProvider.ExecutionCount, Is.EqualTo(1));
+    }
+
+    [Test]
     public void PendingChoiceDoesNotAdvanceAutonomousMerchantPlanBeforeEligibility()
     {
         Fixture fixture = CreateFixture(inventoryAmount: 10);
