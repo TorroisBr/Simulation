@@ -8,13 +8,13 @@
   `094971b` on `codex/phase8/P8AGeographyIntegration` to the new
   `codex/phase8/canonical` branch. The canonical branch is pushed and its
   remote SHA was verified; the Phase 7 canonical baseline remains preserved.
-- Phase 8 remains open. P8-A through P8-C are canonical. P8-D has a refreshed
-  integration candidate on `codex/phase8/P8DArchitectureRefreshIntegration`,
-  based on `c285466c355103d3637ac165246591b72eb7bda0`. Targeted temporal-profile
-  revalidation and the required validation gates pass; independent final review
-  and final promotion check pass. P8-D is ready for canonical promotion but is
-  not promoted in this record. P8-E is design-approved and waits for promoted
-  P8-D capability.
+- Phase 8 remains open. P8-A through P8-D are canonical. P8-D was promoted from
+  integration implementation commit `dccff74831b5ecfa55d32f142185a437afb5579a`
+  on `codex/phase8/P8DArchitectureRefreshIntegration`, based on
+  `c285466c355103d3637ac165246591b72eb7bda0`, after targeted temporal-profile
+  revalidation, independent review, full validation, and final promotion check.
+  The candidate State/review record was `d1818fb475de271713efdd480d6a994353a705f2`.
+  P8-E is design-approved and now has its P8-D capability dependency promoted.
 
 ## Architecture requirement refresh — 2026-09-26
 
@@ -26,11 +26,10 @@ See `architecture/INTRADAY_EXTENSIBILITY_ALIGNMENT.md`, the Roadmap and P18/P19
 Briefs for the new dependencies and candidate impact.
 
 P8-A/B/C remain canonical and valid in their delivered scope. P8-D's refreshed
-integration candidate completed the targeted temporal-profile revalidation
-recorded below; its independent final review and promotion-readiness check pass.
-P8-E's existing explicit-operation proving schedule remains a bounded
-transitional slice, with automatic intraday travel deferred to P18-D. The
-spatial A → B/C → D → E capability graph remains unchanged.
+integration was promoted after the temporal-profile revalidation and gates
+recorded below. P8-E's existing explicit-operation proving schedule remains a
+bounded transitional slice, with automatic intraday travel deferred to P18-D.
+The spatial A → B/C → D → E capability graph remains unchanged.
 
 ## Multi-participant requirement refresh — 2026-09-26
 
@@ -184,11 +183,16 @@ counts. `git diff --check` is part of the final candidate gate. No daily-loop
 or long-horizon behavior changed. P8-D implementation follows promoted B/C;
 P8-E follows promoted B/C/D and the Phase 8 integration validation gate.
 
-## P8-D architecture-refresh integration candidate — not promoted
+## P8-D architecture-refresh integration — promoted
 
-- Candidate branch: `codex/phase8/P8DArchitectureRefreshIntegration`, based on
+- Integration branch: `codex/phase8/P8DArchitectureRefreshIntegration`, based on
   current canonical architecture/code commit
   `c285466c355103d3637ac165246591b72eb7bda0`.
+- Promoted implementation commit: `dccff74831b5ecfa55d32f142185a437afb5579a`.
+- Integration State and review record at promotion:
+  `d1818fb475de271713efdd480d6a994353a705f2`.
+- Canonical promotion: **COMPLETE** by fast-forward on 2026-09-26. Local and
+  remote synchronization is verified after the State promotion record below.
 - The earlier candidate on
   `codex/phase8/P8DKnowledgeRoutePlanIntegration` is preserved. Only its three
   reviewed code commits were transplanted: feature `2a4e765e8a325297c18505e07ef9a93bbbade1d5`,
@@ -217,5 +221,6 @@ P8-E follows promoted B/C/D and the Phase 8 integration validation gate.
 The daily loop and long-horizon behavior remain unchanged, so no long-run suite
 was run. Independent final review against refreshed candidate `8186e8d` passed;
 `git diff --check` passes. The final promotion-readiness check also passed
-against this candidate and its retained reports. P8-D remains an integration
-candidate until the canonical branch is advanced.
+against this candidate and its retained reports. The canonical branch was
+advanced to the validated integration, and this State update records the
+promotion.
