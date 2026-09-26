@@ -3,6 +3,13 @@
 **Design base:** `97b97c5c7523f39f3645bc018c82dbbab633648f` on
 `codex/phase20/MultiParticipantTechnicalDesign`, descended from canonical
 architecture `c285466c355103d3637ac165246591b72eb7bda0`.
+**Current canonical impact revalidation:** Phase 8 docs tip
+`77f3e1a47a1e007492a794ea777d681a21a36d09` includes P8-E promotion
+`d95b60d174cb0b17df09e2775b3cbd134c74b21f`. P20's synthetic shared-activity
+contract consumes no P8 travel capability; its relevant hard edges remain the
+promoted P18-A/B/C capabilities, not P18-D or P19. Activity instance identity
+remains independent of participant identity and supports the architecture's
+one-or-more participant cardinality.
 **Authority:** `docs/SIMULATION_ARCHITECTURE.md` §§11–12, 91–93;
 `docs/ROADMAP.md`; `docs/EXECUTION_MODEL.md`; the Phase 20 Brief and entry
 proposal; reviewed P18-A, P18-B, and P18-C technical designs; and both dated
@@ -10,8 +17,10 @@ architecture alignment records.
 **Status:** Proposed technical design only. No implementation authorization,
 checkpoint IDs, capability promotion, persistence schema, or Phase State change.
 **Independent technical design review:** PASS at content commit
-`b6ad17a26f9e663b956f0e575e033f7c816cd7c0` after the decline lifecycle
-mapping correction. This status note does not authorize implementation.
+`a85ab673c41154b7ac9be3943b3e0f2cba2c41e7` after the decline lifecycle
+mapping correction. This refresh adds an explicit single-participant
+compatibility validation and current P8-E impact note; independent re-review is
+pending. No implementation authorization is added.
 
 ## 1. Purpose and boundary
 
@@ -177,6 +186,9 @@ not a P12/P13 schema or persistence implementation.
 
 Before implementation review, the selected slice should demonstrate:
 
+- existing one-participant P18 instances remain valid and preserve their
+  lifecycle and due-work behavior without P20-only formation, coordination, or
+  effect requirements;
 - independent decisions and Knowledge boundaries for two distinct Persons;
 - one decline, one missing decision, duplicate PersonId, and reservation
   conflict each prevent formation/start without partial mutation;
