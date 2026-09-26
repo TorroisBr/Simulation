@@ -451,6 +451,77 @@ public sealed class SpatialRoutePlanningTests
             string.Join("; ", WorldStateInvariantValidator.Validate(snapshot).Errors));
     }
 
+    [TestCase(0L, 1L)]
+    [TestCase(1L, 0L)]
+    public void P8EInterruptRejectsCallerDayDifferentFromRuntimeWithoutMutation(
+        long runtimeDay,
+        long suppliedDay)
+    {
+        Fixture source = CreateFixture("person.p8e-interrupt-day." + runtimeDay + "." + suppliedDay);
+        foreach (SpatialRouteSegment segment in AllRouteSegments())
+        {
+            Record(source, OptionObservation(segment, SpatialRouteOptionBelief.KnownAvailable,
+                "interrupt-map", "interrupt-option." + segment.StableKey, 0L, 0L), 0L);
+        }
+        IReadOnlyList<SpatialRouteCandidate> candidates = source.Planner.BuildKnownCandidates(
+            Request(source.Actor, "hex.a", "hex.d", 0L)).Candidates;
+        foreach (SpatialRouteCandidate candidate in candidates)
+        {
+            Record(source, EstimateObservation(candidate, MetricId, MetricUnit, 1m,
+                "interrupt-estimate." + candidate.SequenceKey, 0L), 0L);
+        }
+
+        PersonSpatialPositionStore positions = new PersonSpatialPositionStore(source.People, source.Spatial,
+            new TestTraversalResolver(source.Spatial.PassageAuthority));
+        Assert.That(positions.TrySetAt(source.Actor, StablePositionReference.ForHex(new HexId("hex.a")),
+            out PersonSpatialPositionFailure positionFailure), Is.True, positionFailure.ToString());
+        SimulationRuntime runtime = new SimulationRuntime(new SimulationTime(), null, null,
+            personStore: source.People,
+            spatialAuthorityStore: source.Spatial,
+            personSpatialPositionStore: positions,
+            spatialRouteKnowledgeStore: source.Knowledge,
+            personRoutePlanStore: source.Plans);
+        SpatialRoutePlanningOutcome selected = runtime.SelectKnownSpatialRoute(source.Actor,
+            StablePositionReference.ForHex(new HexId("hex.a")), StablePositionReference.ForHex(new HexId("hex.d")),
+            Policy(false, 0L, true));
+        Assert.That(selected.IsSuccess, Is.True, selected.FailureMessage);
+        Assert.That(runtime.TryAcceptSpatialRoutePlan(selected, "decision.p8e-interrupt", 0L,
+            out PersonRoutePlanFailure planFailure), Is.True, planFailure.ToString());
+        TraversalCostContext movement = new TraversalCostContext("civil.profile", "v1", 1m, 1m, 1m);
+        Assert.That(runtime.P8ETravelTransactionCoordinator.TryBeginNextSegment(source.Actor, movement,
+            out P8ETravelFailure travelFailure), Is.True, travelFailure.Message);
+        Assert.That(runtime.P8ETravelTransactionCoordinator.TryAdvanceSegment(source.Actor,
+            TraversalProgress.CompleteProgressTicks, out travelFailure), Is.True, travelFailure.Message);
+        Assert.That(runtime.P8ETravelTransactionCoordinator.TryArriveAtIntermediateHex(source.Actor,
+            out travelFailure), Is.True, travelFailure.Message);
+
+        SpatialRouteSegment attempted = selected.SelectedCandidate.Segments[1];
+        Assert.That(runtime.SpatialAuthorityStore.PassageAuthority.TryChangePassageCondition(
+            attempted.Boundary, attempted.Option, PassageCondition.Closed,
+            out SpatialAuthorityFailure passageFailure), Is.True, passageFailure.ToString());
+        if (runtimeDay > 0L)
+        {
+            runtime.AdvanceDay();
+        }
+        SpatialObservation unsupportedDayObservation = OptionObservation(attempted,
+            SpatialRouteOptionBelief.KnownUnavailable, "interrupt-observer", "wrong-day-rejection",
+            suppliedDay, suppliedDay);
+        long positionRevision = runtime.PersonSpatialPositionStore.Revision;
+        long planRevision = runtime.PersonRoutePlanStore.Revision;
+        long knowledgeRevision = runtime.SpatialRouteKnowledgeStore.Revision;
+        int observationCount = runtime.SpatialRouteKnowledgeStore.ObservationCount;
+
+        Assert.That(runtime.P8ETravelTransactionCoordinator.TryInterruptRejectedNextSegment(
+            source.Actor, movement, unsupportedDayObservation, suppliedDay, out travelFailure), Is.False);
+        Assert.That(travelFailure.Message, Does.Contain("does not match the current SimulationRuntime day"));
+        Assert.That(runtime.PersonSpatialPositionStore.Revision, Is.EqualTo(positionRevision));
+        Assert.That(runtime.PersonRoutePlanStore.Revision, Is.EqualTo(planRevision));
+        Assert.That(runtime.PersonRoutePlanStore.TryGetCurrent(source.Actor, out PersonRoutePlan unchanged), Is.True);
+        Assert.That(unchanged.Status, Is.EqualTo(PersonRoutePlanStatus.Active));
+        Assert.That(runtime.SpatialRouteKnowledgeStore.Revision, Is.EqualTo(knowledgeRevision));
+        Assert.That(runtime.SpatialRouteKnowledgeStore.ObservationCount, Is.EqualTo(observationCount));
+    }
+
     [Test]
     public void RuntimeRejectsSelectionFromAnotherWorldDayThroughFacadeAndExposedPlanStore()
     {

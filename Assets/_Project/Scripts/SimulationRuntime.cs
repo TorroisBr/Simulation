@@ -583,7 +583,8 @@ public sealed class SimulationRuntime
         this.personRoutePlanStore = resolvedPersonRoutePlanStore;
         p8eTravelTransactionCoordinator = new P8ETravelTransactionCoordinator(
             resolvedPersonSpatialPositionStore, resolvedPersonRoutePlanStore, resolvedSpatialRouteKnowledgeStore,
-            resolvedSpatialAuthorityStore.PassageAuthority);
+            resolvedSpatialAuthorityStore.PassageAuthority,
+            () => CurrentDay);
         this.spatialRoutePlanningSystem = resolvedSpatialRoutePlanningSystem;
         this.armedForceStore = resolvedArmedForceStore;
         this.contingentManpowerStateStore = resolvedManpowerStateStore;
@@ -2661,6 +2662,12 @@ public sealed class SimulationRuntime
             }
 
             EvaluateAction(npcRuntime);
+            if (IsPersonInSpatialTransit(npcRuntime.PersonId)
+                && npcRuntime.CurrentAction?.actionType == NpcActionType.SellGoods)
+            {
+                npcRuntime.SetCurrentActionRuntime(null);
+                continue;
+            }
             TryExecuteCurrentAction(npcRuntime);
         }
 
@@ -2985,6 +2992,13 @@ public sealed class SimulationRuntime
         return position.Position != null
             && position.Position.Kind == StablePositionReferenceKind.Location
             && position.Position.LocationId.Equals(cityLocationId);
+    }
+
+    private bool IsPersonInSpatialTransit(PersonId personId)
+    {
+        return personId != null
+            && personSpatialPositionStore.TryGetPosition(personId, out PersonSpatialPosition position)
+            && position.IsInTransit;
     }
 
     internal GenealogyStore GenealogyStoreForWorldBoundary => genealogyStore;

@@ -95,6 +95,22 @@ public sealed class ActorChoiceRuntimeTests
     }
 
     [Test]
+    public void InTransitActorDoesNotExecuteAutonomousSellGoodsAgainstStaleCurrentCity()
+    {
+        Fixture fixture = CreateFixture(inventoryAmount: 10, forceAutonomousSell: true);
+        BeginActorTransit(fixture);
+
+        fixture.Runtime.AdvanceDay();
+
+        Assert.That(fixture.Records.Decisions.Decisions, Has.Count.EqualTo(1));
+        Assert.That(fixture.Records.Decisions.Decisions[0].ActionDefinitionId,
+            Is.EqualTo(fixture.SellAction.DefinitionId));
+        Assert.That(fixture.AutonomousSellProvider.ExecutionCount, Is.Zero);
+        Assert.That(fixture.Actor.CurrentActionRuntime, Is.Null);
+        Assert.That(fixture.Actor.Inventory.GetAmount(fixture.Item), Is.EqualTo(10));
+    }
+
+    [Test]
     public void PendingChoiceDoesNotAdvanceAutonomousMerchantPlanBeforeEligibility()
     {
         Fixture fixture = CreateFixture(inventoryAmount: 10);
@@ -144,7 +160,7 @@ public sealed class ActorChoiceRuntimeTests
         Assert.That(fixture.Runtime.ActorChoiceStore.ValidateInvariants().IsValid, Is.True);
     }
 
-    private static Fixture CreateFixture(int inventoryAmount)
+    private static Fixture CreateFixture(int inventoryAmount, bool forceAutonomousSell = false)
     {
         RecordFixture records = SimulationTestFactory.CreateRecordFixture();
         ItemData item = SimulationTestFactory.CreateItem("actor-choice-item", 10f);
@@ -165,7 +181,17 @@ public sealed class ActorChoiceRuntimeTests
             records.Time,
             records.DecisionRecorder,
             maxTradeAmount: 5);
-        NpcDecisionSystem decisionSystem = new NpcDecisionSystem(new List<INpcActionProvider> { merchantSystem });
+        AutonomousSellProvider autonomousSellProvider = forceAutonomousSell
+            ? new AutonomousSellProvider(item)
+            : null;
+        NpcDecisionSystem decisionSystem = forceAutonomousSell
+            ? new NpcDecisionSystem(new List<INpcActionProvider> { autonomousSellProvider })
+            : new NpcDecisionSystem(new List<INpcActionProvider> { merchantSystem });
+        if (forceAutonomousSell)
+        {
+            sellAction.baseUtility = 100f;
+            fallbackAction.baseUtility = 0f;
+        }
         EffectiveSimulationConfiguration configuration = SimulationConfigurationResolver.ResolveOrThrow(
             contentOverrides: new SimulationConfigurationOverrides(
                 economy: new EconomyConfigurationOverrides(false),
@@ -196,7 +222,8 @@ public sealed class ActorChoiceRuntimeTests
             actor.Inventory.AddItem(item, inventoryAmount, 1f);
         }
 
-        return new Fixture(runtime, records, city, actor, item, sellAction, fallbackStatus);
+        return new Fixture(runtime, records, city, actor, item, sellAction, fallbackStatus,
+            autonomousSellProvider);
     }
 
     private static void SetActorAtCurrentCityLocation(Fixture fixture)
@@ -293,6 +320,7 @@ public sealed class ActorChoiceRuntimeTests
         public ItemData Item { get; }
         public NpcActionData SellAction { get; }
         public NpcStatusData FallbackStatus { get; }
+        public AutonomousSellProvider AutonomousSellProvider { get; }
 
         public Fixture(
             SimulationRuntime runtime,
@@ -301,7 +329,8 @@ public sealed class ActorChoiceRuntimeTests
             NpcRuntime actor,
             ItemData item,
             NpcActionData sellAction,
-            NpcStatusData fallbackStatus)
+            NpcStatusData fallbackStatus,
+            AutonomousSellProvider autonomousSellProvider)
         {
             Runtime = runtime;
             Records = records;
@@ -310,6 +339,23 @@ public sealed class ActorChoiceRuntimeTests
             Item = item;
             SellAction = sellAction;
             FallbackStatus = fallbackStatus;
+            AutonomousSellProvider = autonomousSellProvider;
+        }
+    }
+
+    private sealed class AutonomousSellProvider : INpcActionProvider
+    {
+        private readonly ItemData item;
+        public int ExecutionCount { get; private set; }
+
+        public AutonomousSellProvider(ItemData item) { this.item = item; }
+        public bool HandlesAction(NpcActionData action) => action?.actionType == NpcActionType.SellGoods;
+        public NpcActionRuntime CreateAction(NpcRuntime npcRuntime, NpcActionData action, ref float utility)
+            => new NpcActionRuntime(action, npcRuntime.CurrentCity, item, 1, 1f);
+        public NpcActionResult TryExecuteAction(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime)
+        {
+            ExecutionCount++;
+            return NpcActionResult.Succeeded();
         }
     }
 }
