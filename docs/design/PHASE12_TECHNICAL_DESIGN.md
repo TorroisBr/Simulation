@@ -22,6 +22,11 @@ This profile is named `UnityBootstrap-Daily-v1`. It covers bootstrap-composed Ci
 
 The profile excludes arbitrary constructor-composed runtimes, injected providers, non-empty P8 physical geography/terrain/passages, non-empty `PersonSpatialPositionStore` state (`At` or `InTransit`) and P8-E Person travel state, P9/P10 generated worlds, pending external command queues and P11 actor-choice inputs, P19 modules/retrofit, P20 shared activities, `PlaceContentStore` and optional systems not composed by this bootstrap, and intraday save boundaries. It makes no P13 historical reconstruction/fork guarantee. No Sleep, Dreams, robbery/gang, ritual, War gameplay, or MegaEvento behavior is introduced by this design.
 
+Profile admission rejects a presented runtime containing a pending external
+WorldCommand or P11 actor-choice input, and load rejects any envelope that
+declares one of those excluded causal inputs. The daily profile cannot silently
+drop either input while claiming a complete continuation.
+
 P18, P19 and P20 are conditional extensions to the state inventory only if a future explicitly supported profile contains their temporal, module, or shared-activity state. The base daily profile has no blanket dependency on those phases. A date is not a future intraday ordering contract: adding intraday capture requires the relevant promoted P18 identity, exact logical-time, due-work and same-time ordering/hydration capabilities first. Adding extension-owned state requires the applicable P19 lifecycle/state compatibility contracts. Adding shared activities requires the relevant P20 participant and lifecycle contracts. These additions do not justify freezing this proposal's internal time field to a day-only scalar.
 
 The current profile also excludes P9/P10 generated worlds and P20 activity
@@ -41,6 +46,10 @@ Do not infer a one-Activity to one-actor relationship or duplicate one shared
 instance into actor-owned copies. These are conditional inventory/revalidation
 gates, not dependencies of `UnityBootstrap-Daily-v1`; relevant P9/P10/P20
 capabilities are required only when their state enters a supported profile.
+Before implementation, revalidate this envelope against promoted P9-A. If the
+authored-genesis manifest/version enters the selected bootstrap composition,
+include its compatibility identity and causal inputs or validate them without
+rerunning genesis; do not omit them silently.
 
 The alignment records also apply as constraints while their capabilities remain
 out of profile: keep domain/application logic independent of Unity presentation

@@ -14,6 +14,14 @@ document assigns no accepted Phase 12 checkpoint IDs, changes no Phase
 Brief/State/Roadmap, and authorizes no code implementation. It makes no claim
 that capture, hydration, or save/load parity currently exists.
 
+**Targeted current-baseline revalidation:** the refreshed daily-only technical
+design was independently rechecked against `codex/phase8/canonical` at
+`77f3e1a47a1e007492a794ea777d681a21a36d09`, including P8-E promotion
+`d95b60d174cb0b17df09e2775b3cbd134c74b21f`, architecture baseline
+`c285466c355103d3637ac165246591b72eb7bda0`, and both alignment records. This
+preserves the P8-C/P8-D identity and route-plan contracts and keeps P18/P19/P20
+state conditional and out of the first daily profile.
+
 **Profile:** `UnityBootstrap-Daily-v1`, the bounded daily profile recommended
 by the refreshed entry and technical proposals. Its scope is the validated
 Unity `TesteSimulacao.InitializeSimulation` bootstrap, the repository's built-in
@@ -23,10 +31,10 @@ generated P9/P10 worlds, P11 pending commands, P19 modules, or P20 shared
 activities.
 
 **Baseline:** current `codex/phase8/canonical` at
-`c5b2e06b534f4b2af38f10e6510b10800aa8b28c`, containing architecture/roadmap
-refresh `c285466c355103d3637ac165246591b72eb7bda0`. P8-A through P8-D are
-canonical. P8-E remains a design-approved candidate with implementation and
-promotion pending in the current Phase 8 State. Refreshed P12 entry proposal:
+`77f3e1a47a1e007492a794ea777d681a21a36d09`, including P8-E promotion
+`d95b60d174cb0b17df09e2775b3cbd134c74b21f` and architecture/roadmap refresh
+`c285466c355103d3637ac165246591b72eb7bda0`. P8-A through P8-E are canonical.
+Refreshed P12 entry proposal:
 `a257092471607520f7da7f056f465bbb3f5384d3`; current P12 technical proposal
 base: `f62e4fa16fca9de274515a693c7d71a1d605b129`.
 
@@ -74,6 +82,12 @@ profile includes empty/default state for its declared core owners and populated
 core-authority state only when that state is within the listed profile
 contracts. Unsupported populated state must reject capture/load; it cannot be
 omitted silently.
+
+In particular, a runtime presented for this profile that contains a pending
+external command queue or P11 actor-choice input is unsupported and must reject
+capture before export. Loading an envelope that declares either excluded input
+also rejects before publication. The daily profile never drops those inputs
+silently or claims their causal effects were captured.
 
 ## 2. Causal state and owner coverage
 
@@ -226,11 +240,11 @@ omits causal fields.
 
 ## 6. Conditional dependencies and exclusions
 
-- **P8:** P8-A through P8-D are canonical at this baseline. The profile
+- **P8:** P8-A through P8-E are canonical at the current impact-refresh
+  baseline. The profile
   preserves supported P8-C/P8-D state only when its owner facts and references
   fit the support matrix; non-empty physical P8 Hex/terrain/passage worlds are
-  excluded. P8-E is a design-approved candidate, with implementation and
-  promotion pending, and is not a blanket continuation prerequisite.
+  excluded. P8-E is not a blanket continuation prerequisite.
 - **P18:** daily-boundary `UnityBootstrap-Daily-v1` has no blanket P18
   dependency. Capturing intraday boundaries or P18 activities/availability/
   pending due-work requires the relevant promoted P18 temporal identity,
@@ -246,7 +260,11 @@ omits causal fields.
   a blanket dependency for this daily profile.
 - **P9/P10:** generated worlds/outputs and generation provenance are excluded.
   Historical generation output must be captured rather than regenerated if a
-  future explicitly supported profile includes it.
+  future explicitly supported profile includes it. Before implementation,
+  revalidate the profile against promoted P9-A: if the P9 authored-genesis
+  manifest/version becomes part of the selected bootstrap composition, its
+  compatible identity and causal inputs must be explicitly captured or checked
+  without rerunning genesis.
 - **P11:** external command queues and pending actor-choice inputs are not
   composed by the selected bootstrap and are excluded. Already-applied effects
   remain represented by their owner truth, not replayed from record summaries.
