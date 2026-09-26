@@ -5,7 +5,9 @@ commit `027006843327d226e00faf2de05422ca622bf2f4`. This document does not approv
 a checkpoint, assign checkpoint IDs, authorize implementation, or promote any
 Phase 9 candidate capability. The P8-E promotion impact update passed
 independent review at `b71505c`; the status does not approve a checkpoint or
-authorize implementation.
+authorize implementation. The baseline-only refresh at `329ce823` was
+independently revalidated against Phase 8 canonical `470667d`; it preserves the
+earlier semantic PASS and keeps P10 implementation at `WAIT_DEPENDENCY`.
 
 **Historical baseline:** architecture, Roadmap, Execution Model and Phase 8 State at
 `c285466c355103d3637ac165246591b72eb7bda0`; reviewed P9 entry proposal
