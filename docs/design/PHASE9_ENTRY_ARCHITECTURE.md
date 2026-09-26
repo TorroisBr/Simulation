@@ -10,12 +10,14 @@ Phase 8 state and initialization/content code. This refresh updates the
 proposal only; it does not approve its architecture or authorize implementation.
 
 **Current dependency review:** `docs/PHASE8_STATE.md` on
-`codex/phase8/canonical` at `ed7a40a86a6a16e9f4fda75703470c38135fda0e`.
-That state supersedes the P7-era Phase 8 readiness statements below. P8-A/B/C
-are canonical; P8-D and P8-E have reviewed designs but their candidate
-implementation/promotion states remain governed by the current Phase 8 State.
-Only a profile that consumes route-plan/route-Knowledge capability depends on
-P8-D promotion. P8-E is not a genesis prerequisite.
+`codex/phase8/canonical` at `1d65e59a4864391f3ed56334454f6eb4b6d71584`
+(the Phase 8 State at reviewed baseline `c285466c355103d3637ac165246591b72eb7bda0`).
+P8-A/B/C are canonical. P8-D's separate integration candidate needs targeted
+architecture-impact/temporal-profile revalidation before promotion; it is not
+currently a promoted capability. P8-E is design-approved but waits for
+promoted P8-D and that impact review. A P9 profile that consumes route-plan or
+route-Knowledge capability inherits the relevant P8-D promotion edge; P8-E
+remains no blanket genesis prerequisite.
 
 **Authority:** `docs/SIMULATION_ARCHITECTURE.md` remains the semantic authority.
 The Phase 9 and Phase 8 Briefs and `docs/ROADMAP.md` define subordinate scope
@@ -162,7 +164,7 @@ deterministic tie-break behavior.
 | Resolve profile and context | Authored world inputs; selected contributor set; effective configuration and calendar; compatible simulation/content versions | Immutable resolved profile, provenance, generation context and accepted contributor/stage graph | Resolve and validate compatibility before any stage runs. |
 | Establish spatial substrate (when selected) | Resolved profile; authored geography/scale/terrain inputs | P8-owned Hex, Location and selected passage/anchor facts | Use P8-A authority; include P8-B facts only when selected; include P8-C bindings/Person positions only when selected. |
 | Produce dependent domain facts | Declared earlier stage outputs and authored domain inputs | Facts for only the included domains, such as population, Person records, settlements, relationships or selected starting state | Edges name the exact consumed outputs. Contributors at the same dependency level use stable contributor/stage identity ordering; conflicts follow a declared deterministic policy, never registration or collection order. |
-| Add optional local or temporal facts | Earlier outputs plus the relevant accepted/promoted domain contract | Local topology/content under P10 scope, or temporal activity/commitment state only when the selected profile includes it | Local facts depend on the relevant P8/P9 capability. Temporal facts add only the applicable P18 contract/capability; no blanket P18 gate. |
+| Add optional local or temporal facts | Earlier outputs plus the relevant accepted/promoted domain contract | Local topology/content under P10 scope, or temporal activity/commitment state only when the selected profile includes it | Local facts depend on the relevant P8/P9 capability. Temporal facts add only the applicable P18 contract/capability; multi-participant activity/participation facts additionally depend on relevant P20 contracts/capability only when selected. Neither P18 nor P20 is a blanket P9 gate. |
 | Validate and publish | All candidate outputs in unpublished candidate domain authorities | One complete validated initial world and its provenance | Validate references, invariants and completeness before exposing the candidate; generated facts remain in their owning stores. |
 
 Randomness used by a stage is derived from stable causal context for that
@@ -211,8 +213,9 @@ resolved compatible profile + stable contributor/stage contracts
                                 ▼
                    first simulated boundary
 
-P8 capabilities, P18 temporal contracts, and P10 local generation
-attach only to the stages/profile that consume them.
+P8 capabilities, P18 temporal contracts, P20 multi-participant activity
+contracts, and P10 local generation attach only to the stages/profile that
+consume them.
 ```
 
 This is still an unapproved candidate pipeline and assigns no P9 checkpoint
@@ -301,7 +304,7 @@ invariants.
 | Which domain facts and optional capabilities belong to the first supported profile? | Scope / product boundary | The Brief requires a semantically complete configured initial world but defines no catalog or universal inventory. A profile must name included domains/capabilities and may not imply later-phase scope. |
 | What exact generated-ID derivation and compatibility/version representation will implementation use? | Technical design | Semantic identity must be stable and distinct from definition/runtime identity; the algorithm and concrete manifest/compatibility representation remain deferred. |
 | What world scale, population scale, procedural-generation extent and pre-simulation backstory should the first profile promise? | Product | No product gate is established. If the selected guarantee requires a product choice, surface it before the affected technical design is approved. |
-| Which optional initial Knowledge, commitments or temporal activity state does the selected profile include? | Profile / domain scope | Knowledge remains perspective-owned and distinct from World Truth. Activity state is included only when selected, with only the relevant accepted/promoted temporal contracts. |
+| Which optional initial Knowledge, commitments or temporal activity/participation state does the selected profile include? | Profile / domain scope | Knowledge remains perspective-owned and distinct from World Truth. Temporal activity state is included only when selected and uses relevant P18 contracts; multi-participant facts additionally use relevant P20 contracts only when selected. Neither phase is a blanket dependency. |
 
 No concrete algorithm, content catalog, world scale, or product promise is
 selected in this proposal. The dependency-aware stage/contributor contract,
