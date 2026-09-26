@@ -8,6 +8,10 @@ candidate branch and does not claim canonical delivery or authorize promotion.
 
 - Canonical base: `codex/phase8/canonical` at
   `77f3e1a47a1e007492a794ea777d681a21a36d09`.
+- The P9-A feature candidate now also includes the approved state-only
+  Phase 8 closure tip `0ae50551c8cc662469ef06e05f19389de6fbde7d` through a
+  non-rewriting merge. Its changed path is `docs/PHASE8_STATE.md`; implementation
+  and architecture impact is `UPSTREAM_IRRELEVANT`.
 - Architecture baseline: `c285466c355103d3637ac165246591b72eb7bda0`.
 - P8-E canonical promotion: `d95b60d174cb0b17df09e2775b3cbd134c74b21f`.
 - Current impact constraints: both
