@@ -4252,32 +4252,67 @@ public static class WorldStateInvariantValidator
             long expected = 1;
             long previousDay = choice.CapturedAbsoluteDay;
             ActorChoiceInputStatus derived = ActorChoiceInputStatus.Pending;
+            bool dispatchStarted = false;
+            bool terminal = false;
             foreach (ActorChoiceDisposition disposition in choice.Dispositions)
             {
                 if (disposition == null || disposition.TransitionOrdinal != expected++ || !Enum.IsDefined(typeof(ActorChoiceDispositionKind), disposition.Kind) || disposition.AbsoluteDay < previousDay || disposition.AbsoluteDay > absoluteDay || disposition.ActorTurnRosterOrdinal < 0)
                 { AddError(issues, "ActorChoiceDispositionInvalid", id, "Actor choice disposition ordering or boundary is invalid."); break; }
                 previousDay = disposition.AbsoluteDay;
+                if (terminal)
+                {
+                    AddError(issues, "ActorChoiceLifecycleTransitionInvalid", id, "Actor choice disposition follows a terminal outcome.");
+                    continue;
+                }
                 switch (disposition.Kind)
                 {
                     case ActorChoiceDispositionKind.Deferred:
-                        if (derived != ActorChoiceInputStatus.Pending || !disposition.DeferralReason.HasValue || !Enum.IsDefined(typeof(ActorChoiceDeferralReason), disposition.DeferralReason.Value)) AddError(issues, "ActorChoiceLifecycleTransitionInvalid", id, "Deferred disposition is invalid for the current lifecycle state.");
+                        if (dispatchStarted || !disposition.DeferralReason.HasValue || !Enum.IsDefined(typeof(ActorChoiceDeferralReason), disposition.DeferralReason.Value)
+                            || disposition.Failure.HasValue || disposition.DecisionRecordId != null || disposition.AttemptOutcome.HasValue || disposition.ReturnedResultStatus.HasValue)
+                            AddError(issues, "ActorChoiceLifecycleTransitionInvalid", id, "Deferred disposition is invalid for the current lifecycle state.");
                         derived = ActorChoiceInputStatus.Pending; break;
                     case ActorChoiceDispositionKind.Rejected:
-                        if (derived != ActorChoiceInputStatus.Pending || !disposition.Failure.HasValue || !Enum.IsDefined(typeof(ActorChoiceFailure), disposition.Failure.Value)) AddError(issues, "ActorChoiceLifecycleTransitionInvalid", id, "Rejected disposition is invalid for the current lifecycle state.");
-                        derived = ActorChoiceInputStatus.Rejected; break;
+                        if (dispatchStarted || !disposition.Failure.HasValue || !Enum.IsDefined(typeof(ActorChoiceFailure), disposition.Failure.Value)
+                            || disposition.DeferralReason.HasValue || disposition.DecisionRecordId != null || disposition.AttemptOutcome.HasValue || disposition.ReturnedResultStatus.HasValue)
+                            AddError(issues, "ActorChoiceLifecycleTransitionInvalid", id, "Rejected disposition is invalid for the current lifecycle state.");
+                        derived = ActorChoiceInputStatus.Rejected; terminal = true; break;
                     case ActorChoiceDispositionKind.DispatchStarted:
-                        if (derived != ActorChoiceInputStatus.Pending || string.IsNullOrWhiteSpace(disposition.DecisionRecordId)) AddError(issues, "ActorChoiceLifecycleTransitionInvalid", id, "Dispatch disposition is invalid for the current lifecycle state.");
+                        if (dispatchStarted || disposition.DeferralReason.HasValue || disposition.Failure.HasValue
+                            || disposition.AttemptOutcome.HasValue || disposition.ReturnedResultStatus.HasValue)
+                            AddError(issues, "ActorChoiceLifecycleTransitionInvalid", id, "Dispatch disposition is invalid for the current lifecycle state.");
+                        dispatchStarted = true;
                         derived = ActorChoiceInputStatus.ConsumedAwaitingTerminalAttempt; break;
                     case ActorChoiceDispositionKind.AttemptReturned:
-                        if (derived != ActorChoiceInputStatus.ConsumedAwaitingTerminalAttempt || !disposition.AttemptOutcome.HasValue || (disposition.AttemptOutcome != ActorChoiceAttemptOutcome.Succeeded && disposition.AttemptOutcome != ActorChoiceAttemptOutcome.Failed && disposition.AttemptOutcome != ActorChoiceAttemptOutcome.ReturnedNoResult)) AddError(issues, "ActorChoiceLifecycleTransitionInvalid", id, "Returned attempt is invalid for the current lifecycle state.");
-                        derived = ActorChoiceInputStatus.AttemptReturned; break;
+                        if (!dispatchStarted || !disposition.AttemptOutcome.HasValue
+                            || (disposition.AttemptOutcome != ActorChoiceAttemptOutcome.Succeeded && disposition.AttemptOutcome != ActorChoiceAttemptOutcome.Failed && disposition.AttemptOutcome != ActorChoiceAttemptOutcome.ReturnedNoResult)
+                            || disposition.DeferralReason.HasValue || disposition.Failure.HasValue || disposition.DecisionRecordId != null || HasActorChoiceResultStatusMismatch(disposition))
+                            AddError(issues, "ActorChoiceLifecycleTransitionInvalid", id, "Returned attempt must follow dispatch and match its result status.");
+                        derived = ActorChoiceInputStatus.AttemptReturned; terminal = true; break;
                     case ActorChoiceDispositionKind.AttemptThrew:
-                        if (derived != ActorChoiceInputStatus.ConsumedAwaitingTerminalAttempt || disposition.AttemptOutcome != ActorChoiceAttemptOutcome.Threw) AddError(issues, "ActorChoiceLifecycleTransitionInvalid", id, "Thrown attempt is invalid for the current lifecycle state.");
-                        derived = ActorChoiceInputStatus.AttemptThrew; break;
+                        if (!dispatchStarted || disposition.AttemptOutcome != ActorChoiceAttemptOutcome.Threw
+                            || disposition.ReturnedResultStatus.HasValue || disposition.DeferralReason.HasValue || disposition.Failure.HasValue || disposition.DecisionRecordId != null)
+                            AddError(issues, "ActorChoiceLifecycleTransitionInvalid", id, "Thrown attempt must follow dispatch and cannot contain a returned result.");
+                        derived = ActorChoiceInputStatus.AttemptThrew; terminal = true; break;
                 }
             }
             if (derived != choice.Status) AddError(issues, "ActorChoiceStatusMismatch", id, "Actor choice status does not match its ordered disposition history.");
         }
+    }
+
+    private static bool HasActorChoiceResultStatusMismatch(ActorChoiceDisposition disposition)
+    {
+        if (disposition.AttemptOutcome == ActorChoiceAttemptOutcome.Succeeded)
+        {
+            return disposition.ReturnedResultStatus != NpcActionResultType.Success;
+        }
+
+        if (disposition.AttemptOutcome == ActorChoiceAttemptOutcome.Failed)
+        {
+            return disposition.ReturnedResultStatus != NpcActionResultType.Failure;
+        }
+
+        return disposition.AttemptOutcome == ActorChoiceAttemptOutcome.ReturnedNoResult
+            && disposition.ReturnedResultStatus.HasValue;
     }
 
     private static void AddWarning(List<WorldStateInvariantIssue> issues, string code, string identity, string message)
