@@ -54,7 +54,7 @@ public enum PersonSpatialPositionFailureCode
     SpatialReferenceNotRegistered = 4, InvalidTransit = 5, BoundaryNotRegistered = 6,
     TraversalOptionNotRegistered = 7, PositionMismatch = 8, NoTransit = 9,
     ProgressOutOfRange = 10, ArrivalNotReady = 11, RevisionOverflow = 12,
-    PositionAlreadyRegistered = 13
+    PositionAlreadyRegistered = 13, RevisionMismatch = 14
 }
 
 public sealed class PersonSpatialPositionFailure
@@ -102,7 +102,7 @@ public sealed class PersonSpatialPositionStore : IAuthoritativeMutationGuardBind
     private readonly PersonStore personStore;
     private readonly SpatialAuthorityStore spatialAuthorityStore;
     private readonly ISpatialTraversalOptionResolver traversalResolver;
-    private readonly Dictionary<string, PersonSpatialPosition> positions = new Dictionary<string, PersonSpatialPosition>(StringComparer.Ordinal);
+    private Dictionary<string, PersonSpatialPosition> positions = new Dictionary<string, PersonSpatialPosition>(StringComparer.Ordinal);
     private long revision;
 
     public PersonSpatialPositionStore(PersonStore personStore, SpatialAuthorityStore spatialAuthorityStore, ISpatialTraversalOptionResolver traversalResolver)
@@ -113,6 +113,43 @@ public sealed class PersonSpatialPositionStore : IAuthoritativeMutationGuardBind
     }
 
     public long Revision => revision;
+    internal bool TryPrepareBeginTransit(PersonId id, TraversalOptionRef option, HexBoundaryKey boundary,
+        HexId from, HexId to, long expectedRevision, out PreparedPersonSpatialPositionChange prepared,
+        out PersonSpatialPositionFailure failure) => TryPrepareOperation(id, expectedRevision,
+            (PersonSpatialPositionStore copy, out PersonSpatialPositionFailure local) => copy.TryBeginTransit(id, option, boundary, from, to, out local), out prepared, out failure);
+
+    internal bool TryPrepareAdvanceTransit(PersonId id, int progressTicks, long expectedRevision,
+        out PreparedPersonSpatialPositionChange prepared, out PersonSpatialPositionFailure failure) =>
+        TryPrepareOperation(id, expectedRevision,
+            (PersonSpatialPositionStore copy, out PersonSpatialPositionFailure local) => copy.TryAdvanceTransit(id, progressTicks, out local), out prepared, out failure);
+
+    internal bool TryPrepareArrive(PersonId id, StablePositionReference destination, long expectedRevision,
+        out PreparedPersonSpatialPositionChange prepared, out PersonSpatialPositionFailure failure) =>
+        TryPrepareOperation(id, expectedRevision,
+            (PersonSpatialPositionStore copy, out PersonSpatialPositionFailure local) => copy.TryArrive(id, destination, out local), out prepared, out failure);
+
+    private bool TryPrepareOperation(PersonId id, long expectedRevision,
+        PositionPreparationOperation operation, out PreparedPersonSpatialPositionChange prepared,
+        out PersonSpatialPositionFailure failure)
+    {
+        prepared = null;
+        if (!CanMutate(out failure)) return false;
+        if (revision != expectedRevision) return Fail(PersonSpatialPositionFailureCode.RevisionMismatch, "Person position changed during travel preparation.", out failure);
+        PersonSpatialPositionStore copy = Clone(personStore, spatialAuthorityStore, traversalResolver);
+        if (!operation(copy, out failure)) return false;
+        prepared = new PreparedPersonSpatialPositionChange(this, revision, copy.revision, copy.positions);
+        failure = PersonSpatialPositionFailure.None;
+        return true;
+    }
+
+    private delegate bool PositionPreparationOperation(PersonSpatialPositionStore copy, out PersonSpatialPositionFailure failure);
+
+    internal bool CanInstall(PreparedPersonSpatialPositionChange prepared) => prepared != null
+        && ReferenceEquals(prepared.Owner, this) && revision == prepared.ExpectedRevision;
+
+    /// <summary>No-fail commit primitive; caller must complete all CanInstall checks first.</summary>
+    internal void InstallPrepared(PreparedPersonSpatialPositionChange prepared)
+    { positions = prepared.NextPositions; revision = prepared.NextRevision; }
     public int Count => positions.Count;
     public IReadOnlyList<PersonSpatialPosition> Positions
     {
@@ -273,6 +310,16 @@ public sealed class PersonSpatialPositionStore : IAuthoritativeMutationGuardBind
     internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard) => mutationGuardBinding.TryBindTo(guard);
     bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard) => CanBindMutationGuard(guard);
     bool IAuthoritativeMutationGuardBindable.TryBindMutationGuard(AuthoritativeMutationGuard guard) => TryBindMutationGuard(guard);
+}
+
+internal sealed class PreparedPersonSpatialPositionChange
+{
+    internal readonly PersonSpatialPositionStore Owner;
+    internal readonly long ExpectedRevision;
+    internal readonly long NextRevision;
+    internal readonly Dictionary<string, PersonSpatialPosition> NextPositions;
+    internal PreparedPersonSpatialPositionChange(PersonSpatialPositionStore owner, long expected, long next, Dictionary<string, PersonSpatialPosition> positions)
+    { Owner = owner; ExpectedRevision = expected; NextRevision = next; NextPositions = positions; }
 }
 
 public sealed class PersonSpatialPositionInvariantReport
