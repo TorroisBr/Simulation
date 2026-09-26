@@ -1,6 +1,6 @@
 # Phase 14 Technical Design — Local Daily Material Flow v1
 
-**Status:** bounded technical proposal only. It is not an approved Phase 14 checkpoint contract, implementation authorization, Phase State, or canonical architecture change. No P14 checkpoint IDs exist in the observed canonical state. This proposal uses the entry boundary at `71838a3477d598e73fbc2a3a56e23a7cbfbdaaf7` in `codex/phase14/MaterialFlowEntryDecision` and Phase 8 canonical State `c5b2e06b534f4b2af38f10e6510b10800aa8b28c`, which incorporates architecture baseline `c285466c355103d3637ac165246591b72eb7bda0`.
+**Status:** bounded technical proposal only. It is not an approved Phase 14 checkpoint contract, implementation authorization, Phase State, or canonical architecture change. No P14 checkpoint IDs exist in the observed canonical state. This proposal uses the entry boundary at `8b6a3455b00bc25a0be8a2d5c50ec254de0ba7f5` in `codex/phase14/MaterialFlowEntryDecision` and Phase 8 canonical State `c5b2e06b534f4b2af38f10e6510b10800aa8b28c`, which incorporates architecture baseline `c285466c355103d3637ac165246591b72eb7bda0`.
 **Prior independent technical-design review:** PASS at content commit
 `4a84b76a608a24fd74de032bfb274e0c59f9d3a0`. Targeted revalidation against
 the current P8 City-anchor composition found that its owner lookup key is
