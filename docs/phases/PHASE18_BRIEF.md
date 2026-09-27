@@ -6,6 +6,16 @@ passed independent review and its bounded core is ready for implementation.
 P18-D remains dependency-gated. Phase numbering preserves existing IDs, not
 execution order.
 
+P18-D's existing P11 external-input consumer also requires the separate
+P18-C external-input/deferral adapter design at
+`../design/PHASE18_C_EXTERNAL_INPUT_ADAPTER_DESIGN.md`. Its current status is
+proposed/review-pending; this does not promote or implement an additional P18-C
+capability. P18-D implementation remains blocked until that independent design
+review passes, the additive P18-A boundary-facts/subphase extension is accepted
+and promoted, and the serialized `SimulationRuntime` ownership window is
+available. Preserve P11's retained-input authority and exact P18-C/P18-A causal
+identities; no second input queue or scheduler is allowed.
+
 ## Objective and closure
 
 One world advances logical time through intraday boundaries deterministically.

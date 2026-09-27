@@ -86,6 +86,16 @@ promoted tip. Promotion was approved and fast-forwarded to
 
 ## Promotion impact and next work
 
+**P18-C external-input/deferral adapter:** separate docs-only technical-design
+proposal at `docs/design/PHASE18_C_EXTERNAL_INPUT_ADAPTER_DESIGN.md`, candidate
+branch `codex/phase18/P18CExternalInputDeferralDesign` (review pending). It
+defines exact P11 input binding, C-owned request sequencing, due/FIFO selection,
+nonterminal deferral and later-trigger eligibility. This is not a new promoted
+capability or implementation result. Independent design review is required;
+P18-D remains BLOCKED until that review passes, the P18-A returned-facts/
+subphase extension is accepted/promoted, and the serialized `SimulationRuntime`
+ownership window is released. No tests were run for this proposal.
+
 P11 Actor Choice is canonical at closure tip `308e24d0744112e8f2b741521b8b3e4acb51ebbf`
 (code `0cd4281`). P18-A has no P11 dependency, and P11's promotion changed no
 P18-A source; the P18-A candidate and its validation remain applicable
