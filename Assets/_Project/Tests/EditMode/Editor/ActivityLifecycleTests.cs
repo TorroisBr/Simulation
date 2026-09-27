@@ -94,7 +94,17 @@ public sealed class ActivityLifecycleTests
         store.TryPropose(Definition(), "first", out ActivityInstanceSnapshot instance, out _);
         store.TrySchedule(timeline, instance.Id, new LogicalTick(0), new LogicalTick(10), new LogicalTick(10), new[] { "person" }, out _);
         DueWorkReference oldWork = store.PendingWork[0];
-        Assert.That(store.TryCancel(instance.Id, new LogicalTick(5), "consumer-cancelled", out _), Is.True);
+        Assert.That(timeline.TrySealInputsThrough(new LogicalTick(5), out _), Is.True);
+        Assert.That(timeline.TryAdvanceTo(new LogicalTick(5), out _), Is.True);
+        Assert.That(store.TryCancel(timeline, instance.Id, new LogicalTick(4), "past", out ActivityFailure past), Is.False);
+        Assert.That(past, Is.EqualTo(ActivityFailure.InvalidInstant));
+        Assert.That(store.TryCancel(timeline, instance.Id, new LogicalTick(6), "future", out ActivityFailure future), Is.False);
+        Assert.That(future, Is.EqualTo(ActivityFailure.InvalidInstant));
+        Assert.That(store.TryGet(instance.Id, out ActivityInstanceSnapshot stillScheduled), Is.True);
+        Assert.That(stillScheduled.State, Is.EqualTo(ActivityLifecycleState.Scheduled));
+        Assert.That(store.GetCommitment("person"), Is.Not.Null);
+        Assert.That(store.PendingWork.Count, Is.EqualTo(2));
+        Assert.That(store.TryCancel(timeline, instance.Id, "consumer-cancelled", out _), Is.True);
         Assert.That(store.IsCurrent(oldWork), Is.False);
         Assert.That(store.GetCommitment("person"), Is.Null);
         Assert.That(store.TryGet(instance.Id, out ActivityInstanceSnapshot cancelled), Is.True);
@@ -108,14 +118,14 @@ public sealed class ActivityLifecycleTests
         ActivityLifecycleStore store = new ActivityLifecycleStore("world");
         SimulationTimeline timeline = new SimulationTimeline(Calendar(), new LogicalTick(0), store);
         store.TryPropose(Definition(), "interrupt", out ActivityInstanceSnapshot instance, out _);
-        Assert.That(store.TryInterrupt(instance.Id, new LogicalTick(0), "early", out ActivityFailure proposedFailure), Is.False);
+        Assert.That(store.TryInterrupt(timeline, instance.Id, "early", out ActivityFailure proposedFailure), Is.False);
         Assert.That(proposedFailure, Is.EqualTo(ActivityFailure.InvalidState));
         Assert.That(store.TrySchedule(timeline, instance.Id, new LogicalTick(0), new LogicalTick(10), new LogicalTick(10), new[] { "person" }, out _), Is.True);
-        Assert.That(store.TryInterrupt(instance.Id, new LogicalTick(5), "early", out ActivityFailure scheduledFailure), Is.False);
+        Assert.That(store.TryInterrupt(timeline, instance.Id, "early", out ActivityFailure scheduledFailure), Is.False);
         Assert.That(scheduledFailure, Is.EqualTo(ActivityFailure.InvalidState));
         Assert.That(timeline.TrySealInputsThrough(new LogicalTick(10), out _), Is.True);
         Assert.That(timeline.TryAdvanceTo(new LogicalTick(10), out _), Is.True);
-        Assert.That(store.TryInterrupt(instance.Id, new LogicalTick(10), "condition-changed", out _), Is.True);
+        Assert.That(store.TryInterrupt(timeline, instance.Id, "condition-changed", out _), Is.True);
         Assert.That(store.GetCommitment("person"), Is.Null);
         Assert.That(store.PendingWork, Is.Empty);
     }

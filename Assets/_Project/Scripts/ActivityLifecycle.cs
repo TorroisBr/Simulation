@@ -5,7 +5,7 @@ using System.Linq;
 
 public enum ActivityLifecycleState { Proposed = 0, Scheduled = 1, Active = 2, Completed = 3, Cancelled = 4, Interrupted = 5 }
 public enum ActivityTransitionKind { Start = 1, Complete = 2 }
-public enum ActivityFailure { None = 0, InvalidDefinition = 1, DuplicateCreation = 2, UnknownInstance = 3, InvalidState = 4, NoParticipants = 5, InvalidInterval = 6, ParticipantConflict = 7, StaleWork = 8, RevisionOverflow = 9, TimelinePublicationFailed = 10 }
+public enum ActivityFailure { None = 0, InvalidDefinition = 1, DuplicateCreation = 2, UnknownInstance = 3, InvalidState = 4, NoParticipants = 5, InvalidInterval = 6, ParticipantConflict = 7, StaleWork = 8, RevisionOverflow = 9, TimelinePublicationFailed = 10, InvalidInstant = 11, TimelineMismatch = 12 }
 
 public interface IActivityStartValidator
 {
@@ -91,6 +91,7 @@ public sealed class ActivityLifecycleStore : IDueWorkOwner
     private List<DueWorkReference> pending = new List<DueWorkReference>();
     private readonly string worldId;
     private readonly IActivityStartValidator startValidator;
+    private SimulationTimeline authoritativeTimeline;
     private long nextIdentity;
 
     public ActivityLifecycleStore(string worldId, long nextIdentity = 0, IActivityStartValidator startValidator = null)
@@ -152,6 +153,8 @@ public sealed class ActivityLifecycleStore : IDueWorkOwner
         IReadOnlyList<string> participantIds, out ActivityFailure failure)
     {
         if (timeline == null) throw new ArgumentNullException(nameof(timeline));
+        if (authoritativeTimeline != null && !ReferenceEquals(authoritativeTimeline, timeline))
+        { failure = ActivityFailure.TimelineMismatch; return false; }
         if (!instances.TryGetValue(instanceId, out ActivityInstance item)) { failure = ActivityFailure.UnknownInstance; return false; }
         if (item.State != ActivityLifecycleState.Proposed) { failure = ActivityFailure.InvalidState; return false; }
         if (participantIds == null || participantIds.Count == 0) { failure = ActivityFailure.NoParticipants; return false; }
@@ -196,26 +199,43 @@ public sealed class ActivityLifecycleStore : IDueWorkOwner
             commitments = stagedCommitments; pending = stagedPending; return TimelineFailure.None;
         }, out _);
         if (!committed) { failure = ActivityFailure.TimelinePublicationFailed; return false; }
+        authoritativeTimeline = timeline;
         failure = ActivityFailure.None; return true;
     }
 
     public bool TryRebuildTimelineIndex(SimulationTimeline timeline, out TimelineFailure failure)
     {
         if (timeline == null) throw new ArgumentNullException(nameof(timeline));
+        if (authoritativeTimeline != null && !ReferenceEquals(authoritativeTimeline, timeline))
+        { failure = TimelineFailure.DispatchFailed; return false; }
         List<DueWorkReference> facts = new List<DueWorkReference>(pending);
         facts.Sort((a, b) => { int c = a.DueAt.CompareTo(b.DueAt); if (c != 0) return c; c = string.CompareOrdinal(a.InstanceId, b.InstanceId); return c != 0 ? c : string.CompareOrdinal(a.DueWorkId, b.DueWorkId); });
         facts.RemoveAll(fact => !instances.TryGetValue(fact.InstanceId, out ActivityInstance instance) || instance.Revision != fact.Revision
             || (instance.State != ActivityLifecycleState.Scheduled && instance.State != ActivityLifecycleState.Active));
-        return timeline.TryIndexOwnerFacts(facts, out failure);
+        if (!timeline.TryIndexOwnerFacts(facts, out failure)) return false;
+        authoritativeTimeline = timeline;
+        return true;
     }
 
-    public bool TryCancel(string instanceId, LogicalTick now, string disposition, out ActivityFailure failure) =>
-        TryTerminate(instanceId, now, ActivityLifecycleState.Cancelled, disposition, out failure);
-    public bool TryInterrupt(string instanceId, LogicalTick now, string disposition, out ActivityFailure failure) =>
-        TryTerminate(instanceId, now, ActivityLifecycleState.Interrupted, disposition, out failure);
+    public bool TryCancel(SimulationTimeline timeline, string instanceId, string disposition, out ActivityFailure failure) =>
+        TryTerminate(timeline, instanceId, ActivityLifecycleState.Cancelled, disposition, out failure);
+    public bool TryInterrupt(SimulationTimeline timeline, string instanceId, string disposition, out ActivityFailure failure) =>
+        TryTerminate(timeline, instanceId, ActivityLifecycleState.Interrupted, disposition, out failure);
 
-    private bool TryTerminate(string id, LogicalTick now, ActivityLifecycleState terminal, string disposition, out ActivityFailure failure)
+    /// <summary>Compatibility guard only; the supplied instant is compared and never persisted as authority.</summary>
+    public bool TryCancel(SimulationTimeline timeline, string instanceId, LogicalTick requestedInstant, string disposition, out ActivityFailure failure) =>
+        TryTerminate(timeline, instanceId, requestedInstant, ActivityLifecycleState.Cancelled, disposition, out failure);
+
+    private bool TryTerminate(SimulationTimeline timeline, string id, ActivityLifecycleState terminal, string disposition, out ActivityFailure failure) =>
+        TryTerminate(timeline, id, timeline == null ? default(LogicalTick) : timeline.CurrentInstant, terminal, disposition, out failure);
+
+    private bool TryTerminate(SimulationTimeline timeline, string id, LogicalTick requestedInstant, ActivityLifecycleState terminal, string disposition, out ActivityFailure failure)
     {
+        if (timeline == null) throw new ArgumentNullException(nameof(timeline));
+        if (authoritativeTimeline != null && !ReferenceEquals(authoritativeTimeline, timeline))
+        { failure = ActivityFailure.TimelineMismatch; return false; }
+        LogicalTick authoritativeInstant = timeline.CurrentInstant;
+        if (requestedInstant != authoritativeInstant) { failure = ActivityFailure.InvalidInstant; return false; }
         if (!instances.TryGetValue(id, out ActivityInstance item)) { failure = ActivityFailure.UnknownInstance; return false; }
         if (terminal == ActivityLifecycleState.Interrupted && item.State != ActivityLifecycleState.Active)
         { failure = ActivityFailure.InvalidState; return false; }
@@ -223,9 +243,9 @@ public sealed class ActivityLifecycleStore : IDueWorkOwner
         { failure = ActivityFailure.InvalidState; return false; }
         long revision; try { revision = checked(item.Revision + 1); } catch (OverflowException) { failure = ActivityFailure.RevisionOverflow; return false; }
         List<DueWorkReference> stagedPending = pending.Where(fact => fact.InstanceId != item.Id).ToList();
-        item.Revision = revision; item.State = terminal; item.TerminalInstant = now; item.Disposition = disposition ?? string.Empty;
+        item.Revision = revision; item.State = terminal; item.TerminalInstant = authoritativeInstant; item.Disposition = disposition ?? string.Empty;
         pending = stagedPending;
-        ReleaseCommitments(item); failure = ActivityFailure.None; return true;
+        ReleaseCommitments(item); authoritativeTimeline = timeline; failure = ActivityFailure.None; return true;
     }
 
     public ActivityParticipantCommitment GetCommitment(string participantId)
