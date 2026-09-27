@@ -47,18 +47,22 @@ Knowledge; neither participant, proposer, roster, nor UI may decide for the
 other. Retain each decision and its causal identity/boundary. Acceptance records
 that Person's reservation intent for one common future half-open interval
 `[start, end)`; it does not install a partial active commitment. Missing or
-declined decisions never count as acceptance. Once an instance exists, a
-decline, missing decision, or failed pre-schedule revalidation records P20
-`NotFormed` atomically; the P18-B instance remains `Proposed` with no Schedule
-receipt, active commitments, or start/completion due work. Duplicate PersonIds
-reject the proposal before mutation, publishing no instance or due work.
+declined decisions never count as acceptance. Partial responses leave the
+instance `Proposed` while formation remains open. There is no timeout or
+implicit close: P20 evaluates completeness only on an explicit, bounded
+formation-close attempt. If a required decision is still missing or is declined
+at that attempt, P20 records `NotFormed` atomically; the P18-B instance remains
+`Proposed` with no Schedule receipt, active commitments, or start/completion due
+work. Duplicate PersonIds reject the proposal before mutation, publishing no
+instance or due work.
 
-After both accept, revalidate the full required set and current eligibility,
-then make one P18-B `TrySchedule` call with both participants and the common
-interval. P18-B atomically installs the complete commitment set, participant
-relations, due work and Scheduled transition/receipt. A conflict or stale
-revalidation before scheduling yields `NotFormed`; the already-created instance
-remains `Proposed` without a Schedule receipt, active commitments or due work.
+At a formation-close attempt where both have accepted, revalidate the full
+required set and current eligibility, then make one P18-B `TrySchedule` call
+with both participants and the common interval. P18-B atomically installs the
+complete commitment set, participant relations, due work and Scheduled
+transition/receipt. A conflict or stale revalidation before scheduling yields
+`NotFormed`; the already-created instance remains `Proposed` without a Schedule
+receipt, active commitments or due work.
 
 P18-C hands off accepted actor decisions only after successful advance. Require
 the scheduled start to be strictly later than
@@ -107,8 +111,10 @@ Implementation validation must cover at least:
 
 - existing one-participant P18 activity/lifecycle behavior remains compatible;
 - each Person's decision is independent and Knowledge-bounded;
-- decline, missing decision, duplicate PersonId, reservation conflict, stale
-  state, late/sealed start and overflow create no partial commitment or start;
+- an unanswered partial response remains Proposed before formation-close; a
+  still-missing or declined decision at explicit formation-close, duplicate
+  PersonId, reservation conflict, stale state, late/sealed start and overflow
+  create no partial commitment or start;
 - the Proposed instance remains accurately represented when formation fails;
 - exactly one complete-set `TrySchedule` publishes both commitments and due
   work atomically;
