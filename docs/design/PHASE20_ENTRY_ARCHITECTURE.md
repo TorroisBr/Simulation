@@ -14,11 +14,15 @@ small. Its two-Person requirement and lack of differentiated roles apply only to
 this proving slice; they do not establish universal activity cardinality, role
 policy, or an arrangement catalog.
 
-Current P18 canonical tip `3d4fe829f4be41fc9e9bb11052a320c3eb00d94d`
-promotes P18-A (`985c56c`) and P18-B
-(`97918cbbe4238a65a216b1a1f0ef84c70b4d080c`). P18-C design candidate
-`97b97c5` remains unpromoted. Promoted P18-A/B contracts inform entry and
-technical design. P18-B includes stale-node skipping without consuming the
+Current P18 canonical tip `18ecc6e56d3c6303edfaf8a38257355d262a6ea5`
+promotes P18-A (`985c56c`), P18-B
+(`97918cbbe4238a65a216b1a1f0ef84c70b4d080c`), and P18-C
+(`ab05ecfe976e80badf6f509b8e9be25ff556ca23`). All relevant A/B/C
+capabilities are now promoted. P18-C provides per-Person availability-driven
+decisions from lifecycle receipts but no general request-enqueue API or
+durable P20 formation-decision store; those remain explicit P20 adapter/API
+work. P18-A/B/C contracts inform entry and technical design. P18-B includes
+stale-node skipping without consuming the
 dispatch cap and the bounded ActivityLifecycle composition/owner-dispatch
 path. P18-B's `TrySchedule` is an atomic full, nonempty participant-set
 operation; it does not expose a partial-acceptance scheduling API. Its start
@@ -26,11 +30,10 @@ validator returns a bool/disposition and cannot atomically couple P20's
 synthetic effect with `Scheduled → Active`. P20 must design/review these
 missing interfaces and transaction boundary rather than treating them as
 delivered B behavior. P20 must also revalidate stable instance/revision
-references and due-work invalidation against the promoted APIs. P18-C availability/decision
-capability remains unpromoted; runtime execution remains `WAIT_DEPENDENCY` on
-relevant P18-C capability and independently reviewed P20 API/transaction
-design, in addition to revalidation against promoted A/B. P18 work does not
-wait for P20, so this adds no P18 → P20 cycle. There
+references and due-work invalidation against the promoted APIs. Runtime
+execution remains `WAIT_DEPENDENCY` on independently reviewed P20
+formation/transaction APIs and targeted revalidation against promoted A/B/C;
+the former P18-C promotion gate is cleared. P18 work does not wait for P20, so this adds no P18 → P20 cycle. There
 is no blanket dependency on all P18-D migrations, P19, P8 travel, P12/P13
 persistence, or a persistent Group/Organization.
 
@@ -70,15 +73,27 @@ distinct facts.
 
 ## Formation, scheduled start, and terminal outcomes
 
-The intended proving outcome schedules only after both distinct required
-Persons have accepted. Their retained reservation intents are not active
-commitments; P20 revalidates the full set and submits it to P18-B
-`TrySchedule`, whose existing transaction atomically creates the instance,
-scheduled start, and all matching participant commitments. Partial decision
-retention remains P20-owned; P18-B exposes no partial-set scheduling API. An
-intervening conflicting commitment rejects the whole formation. The existing
-P18 timeline/scheduler owns the logical start boundary; the activity layer
-does not create a second clock or authoritative agenda.
+P18-B `TryPropose` creates the stable `Proposed` instance before participant
+decisions. The intended proving outcome schedules only after both distinct
+required Persons have accepted. Their retained reservation intents are not
+active commitments; P20 revalidates the full set and submits that existing
+Proposed instance and complete participant set to P18-B `TrySchedule`, whose
+transaction transitions it to `Scheduled` and atomically creates all matching
+participant commitments and start due work. Partial decision retention
+remains P20-owned; P18-B exposes no partial-set scheduling API. On decline or
+an intervening commitment conflict, P20 records `NotFormed`; the P18-B
+instance remains `Proposed` with no Schedule receipt, active commitments, or
+start/completion due work. The existing P18 timeline/scheduler owns the
+logical start boundary; the activity layer does not create a second clock or
+authoritative agenda.
+
+Because accepted actor decisions are handed off only after a successful P18-C
+advance, a timed start must satisfy the promoted C/A sealed-input rule:
+`start > max(CurrentInstant, InputsSealedThrough)`, using one checked logical
+tick beyond that maximum. A tick overflow, or a proposed start at/before this
+bound, records P20 `NotFormed` and must not partially schedule the P18-B
+instance or publish commitments/due work. P18-B's weaker `start >= now`
+check is not sufficient for this post-advance handoff.
 
 At that boundary, P18-B's start validator supplies a bool/disposition result;
 it does not transactionally couple `Scheduled → Active` with a P20 operation
@@ -111,7 +126,7 @@ unresolved P20 interface and transaction work; they are not implied by
 
 | Condition | P20 outcome and P18-B mapping | Commitment / due-work result |
 |---|---|---|
-| Either participant declines before full-set scheduling | P20 `NotFormed`; no P18-B instance/lifecycle receipt exists. | No active commitment or start work is created. |
+| Either participant declines before full-set scheduling | P20 `NotFormed`; the existing P18-B instance remains `Proposed` and has no Schedule receipt. | No active commitment or start/completion due work is created. |
 | A required participant or matching commitment is missing at scheduled start | P20 disposition `FailedToStart`; P18-B state `Cancelled` with `FailedStart` receipt. | The coordinated terminal transition releases commitments and invalidates pending start/completion work. |
 | Revalidation finds stale/unavailable/conflicting state | P20 disposition `FailedToStart`; P18-B state `Cancelled` with `FailedStart` receipt; apply no operation effect. | Release all instance commitments and invalidate pending due work in the same coordinated P20 boundary. |
 | Explicit cancellation before or during execution | P20 outcome `Cancelled`; P18-B state `Cancelled` with `Cancel` receipt. | The coordinated terminal transition releases commitments and invalidates pending due work. |
