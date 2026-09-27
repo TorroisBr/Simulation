@@ -2,12 +2,18 @@
 
 **Status:** INTEGRATED AND REVIEWED REFRESHED CANDIDATE — canonical promotion pending
 
-**Canonical base:** `codex/phase8/canonical` at `77f3e1a47a1e007492a794ea777d681a21a36d09`
+**Current canonical base:** `codex/phase8/canonical` at `470667d37863384edadb3d93ef64d8004aff46a3`
 
 **Architecture update:** `c285466c355103d3637ac165246591b72eb7bda0`
 
 **Integration branch:** `codex/phase18/TimelineIntegrationPostP8E`
 **P18-A refreshed source commit:** `4dea565a95a05ff03f61a9c18cfc163d47e509e1` (merges the unchanged P18-A implementation onto promoted P8-E canonical); later merge `b974276` synced canonical State/Roadmap-only updates at `77f3e1a`, with no P18 source changes.
+
+The candidate now includes current P8 canonical at `470667d` through the
+State-only merge `84d4977`. The upstream delta from `77f3e1a` changes only
+`docs/PHASE8_STATE.md`; no P18 source or test code changed. The architecture
+baseline remains `c285466`. The `77f3e1a` reference above is retained as the
+historical base of the earlier review, not the current integration base.
 
 **Final refreshed review:** PASS at candidate/State commit `a1463e8d46ed8e4526de0b0aa7a8c86d6ecf666e`.
 
