@@ -2,6 +2,11 @@
 
 **Authority:** planning entry subordinate to `../SIMULATION_ARCHITECTURE.md`. **Readiness:** `WAIT_DEPENDENCY`; no implementation checkpoint is schedulable.
 
+An unaccepted entry exploration is recorded in
+[`../design/PHASE13_RECONSTRUCTION_ENTRY_PROPOSAL.md`](../design/PHASE13_RECONSTRUCTION_ENTRY_PROPOSAL.md).
+It does not approve a P13 State, assign checkpoint IDs, or change this
+dependency-gated readiness.
+
 ## Objective and closure
 
 Reconstruct the authoritative state at any actually simulated boundary from the first onward, then independently continue a fork from it under compatible semantics. The guarantee does not extend inside generated pre-simulation backstory.
