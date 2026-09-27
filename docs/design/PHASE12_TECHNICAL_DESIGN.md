@@ -77,7 +77,7 @@ gates, not dependencies of `UnityBootstrap-Daily-v1`; relevant P9/P10/P20
 capabilities are required only when their state enters a supported profile.
 The manifest is part of this profile because the selected bootstrap already
 publishes it. This refresh inventories the promoted P9-A manifest as a required
-compatibility input. The pending independent review of this exact candidate
+compatibility input. Independent review of the current integrated docs package
 must verify that mapping; implementation must validate retained manifest
 evidence without rerunning genesis or replacing evolved owner state.
 
@@ -190,7 +190,7 @@ Phase 13 parity is separate: it must reconstruct every actually simulated bounda
 
 The technical choices above resolve the bounded design questions using reviewed defaults. The remaining gates are process/capability gates, not unresolved product questions:
 
-- The entry proposal and this technical design require independent technical review and acceptance under the execution model. That review may reject or request changes; this proposal cannot self-approve. Review of exact candidate `424b8f3` is pending.
+- The entry proposal and this technical design require independent technical review and acceptance under the execution model. That review may reject or request changes; this proposal cannot self-approve. Independent current-base review of the integrated docs package remains pending.
 - `P12-A` is a proposed stable identifier for the bounded daily continuation checkpoint, not an accepted or schedulable checkpoint. The Phase Brief and checkpoint contract must record acceptance and dependencies before implementation readiness can be derived. No implementation authorization exists.
 - Complete implementation remains capability-gated by owner-export/hydration support for every domain included in `UnityBootstrap-Daily-v1`; each owner must be inventoried against the refreshed canonical composition at implementation time.
 - P18/P19/P20 support remains conditional as specified in §1; P9/P10 generated state and external command/P11 input queues remain excluded from this initial profile.
@@ -239,8 +239,9 @@ The refreshed alignment records preserve explicit temporal and participant
 identity boundaries. The P8 `77f3e1a`→`470667d` advance changes only Phase 8
 State wording; P9 and P11 closure updates likewise do not change the promoted
 runtime APIs. This planning refresh changes no supported scope, serialization
-choice, or compatibility promise. Independent review must still inspect exact
-candidate `424b8f3` and confirm these current-base mappings.
+choice, or compatibility promise. Independent review of the current integrated
+package on `codex/phase12/ContinuationDesignIntegration` must confirm these
+current-base mappings.
 
 - `docs/SIMULATION_ARCHITECTURE.md` §§8, 11–13, 91–93.
 - `docs/ROADMAP.md`, `docs/EXECUTION_MODEL.md`, `docs/phases/PHASE12_BRIEF.md`, and `docs/phases/PHASE13_BRIEF.md`.
