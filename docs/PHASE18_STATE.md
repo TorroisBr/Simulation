@@ -119,6 +119,9 @@ tree are unchanged. The independent exact-tip refresh review passed at
 `e2af495`; the existing focused, ALL EditMode, and official Smoke results above
 therefore remain applicable. `git diff --check 99cac77..e2af495` passed. The
 refreshed integration candidate remains unpromoted pending its formal gate.
+The State-only follow-up at `e73d203` passed independent factual re-review;
+its only delta from reviewed source/integration tip `e2af495` is this State
+record, with a clean range diff-check.
 
 Temporal identity/cardinality was revalidated: `PersonId` identifies the
 decision actor while `ActivityInstanceId` remains distinct; one-actor fixtures
