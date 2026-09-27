@@ -1,6 +1,6 @@
 # Phase 12 — Technical Design Proposal: Daily Continuation
 
-**Status:** Candidate technical design for proposed checkpoint `P12-A — UnityBootstrap Daily Continuation v1`, based on the bounded `UnityBootstrap-Daily-v1` profile. The profile covers the SampleScene-selected `Simulation-GeneralTest.asset` through the validated `TesteSimulacao.InitializeSimulation` bootstrap, exact compatible build/runtime and current-host numeric profile, and completed-day capture boundaries. That asset enables the P9-B authored-geography profile, present on `codex/phase9/canonical` at `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf` and based on implementation tip `00395ef80cfa2364d34ed2170e0735d3a4b1513d`. P9-A-only configurations are incompatible with this profile and require separate profile identity/admission if retained. This proposal is not an accepted checkpoint contract, implementation authorization, Phase State delivery, or proof that save/load exists. Independent full-design/current-base review passed at `9fde12a`; the later current-base refresh review passed at `d1a8414` for the refreshed P9/P10/P20/alignment references and their consistency with the bounded profile. That scoped refresh review is not a new full-design review, and neither review accepts P12-A or demonstrates owner export/hydration coverage.
+**Status:** Candidate technical design for proposed checkpoint `P12-A — UnityBootstrap Daily Continuation v1`, based on the bounded `UnityBootstrap-Daily-v1` profile. The profile covers the SampleScene-selected `Simulation-GeneralTest.asset` through the validated `TesteSimulacao.InitializeSimulation` bootstrap, exact compatible build/runtime and current-host numeric profile, and completed-day capture boundaries. The selected asset enables P9-B authored geography. P9 canonical closure is `82396ae7ffaf407fda278928da456b06dc5394d`; P9-B code integration is `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf` (implementation `00395ef80cfa2364d34ed2170e0735d3a4b1513d`), with promotion State/status record `14a2e8ee01e49f1ffdcecf8fd64d274c728ead44`. P9-A-only configurations are incompatible with this profile and require separate profile identity/admission if retained. This proposal is not an accepted checkpoint contract, implementation authorization, Phase State delivery, or proof that save/load exists. Independent full-design/current-base review passed at `9fde12a`; the later current-base refresh review passed at `d1a8414` for the refreshed P9/P10/P20/alignment references and their consistency with the bounded profile. That scoped refresh review is not a new full-design review, and neither review accepts P12-A or demonstrates owner export/hydration coverage.
 **Historical independent technical design review:** PASS at content commit
 `8577ba589a0f9b40738fcf8738eee9589563d7b8`. The later lifecycle seam must
 invalidate capture eligibility on every supported authoritative write path.
@@ -12,7 +12,7 @@ architecture baseline `c285466c355103d3637ac165246591b72eb7bda0`, and both
 alignment records. That review predates later P9 manifest and current-base
 clarifications and does not review this exact revision. Current references for
 this refresh are P8 canonical State `470667d37863384edadb3d93ef64d8004aff46a3`,
-P9-A code promotion `43f08b3dfbf042380c2f8a8b037bbf3ebd309ccb` / P9-B
+P9 canonical closure `82396ae7ffaf407fda278928da456b06dc5394d`, P9-A code promotion `43f08b3dfbf042380c2f8a8b037bbf3ebd309ccb` / P9-B
 promotion-record State `14a2e8ee01e49f1ffdcecf8fd64d274c728ead44`, P9-B canonical integration
 `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf` (implementation tip
 `00395ef80cfa2364d34ed2170e0735d3a4b1513d`), P11 code promotion
@@ -21,11 +21,18 @@ promotion-record State `14a2e8ee01e49f1ffdcecf8fd64d274c728ead44`, P9-B canonica
 `c285466c355103d3637ac165246591b72eb7bda0`. P8's `77f3e1a`→`470667d`
 advance is State-only. Both alignment records remain current.
 The P9-B promotion record is canonical in State/status tip `14a2e8e`; use that
-record alongside canonical code tip `d9a62d7` when checking P9-B capability and
-profile provenance. P10-A's current reviewed profile is one Ruin at an existing
+record alongside P9-B code integration `d9a62d7` and current P9 closure
+`82396ae` when checking capability and profile provenance. P10 canonical/Brief
+tip is `95f98829f9da7abdcb9202a3c62ae717c60a19d8` (P10-A code
+`9501bf076d506fb64d6ee3e6d178574fff36e153`, State record
+`9e79b58397dc9a89ddcc562be139b79987cb55b9`). P10-A's current reviewed profile is one Ruin at an existing
 P8 Location with finite LocalTopology; it is implementation-ready but has no
-delivered runtime, so this P12 profile excludes generated P10 state. P20-A is a
-reviewed proposed synthetic two-Person proof at `1a6ad537`, not an accepted
+delivered runtime, so this P12 profile excludes generated P10 state. P14-A code
+promotion is `c44904bb4b0a066eced1d7e8a773b7dc1eea76c0` with State
+`f8a61fe9634ba9ab56ee31d50b57b45fef292a6f`; the selected GeneralTest City
+assets do not configure its material-flow source. P20-A is a reviewed proposed
+synthetic two-Person proof at checkpoint proposal
+`2a03edadcb411c7ca7aa2d0c67ee8d36f972779e`, not an accepted
 checkpoint or implementation capability; its exact-two fixture does not narrow
 the architecture's one-or-more participant cardinality.
 
@@ -225,13 +232,14 @@ No genuinely unresolved product or canonical semantic decision is identified wit
 This design remains limited to `UnityBootstrap-Daily-v1`. `P12-A` is a
 proposed identifier only; this refresh grants no implementation authorization
 and records no review verdict. The current-base dependency check uses P8
-canonical State `470667d`, P9-A code promotion `43f08b3` and P9-B
-promotion-record State `14a2e8e`, P9-B canonical integration `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf`
+canonical State `470667d`, P9 canonical closure `82396ae`, P9-A code promotion
+`43f08b3` and P9-B promotion-record State `14a2e8e`, P9-B code integration
+`d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf`
 (implementation tip `00395ef80cfa2364d34ed2170e0735d3a4b1513d`), P11 code promotion `0cd4281` and
-closure State `308e24d`, current P18 State `311baa9` (P18-A/B/C promoted;
+closure State `308e24d`, current P18 canonical/State `99cac77` (P18-A/B/C promoted;
 P18-D implementation blocked), P14 State `f8a61fe` (P14-A daily and promoted),
 P20 Entry Architecture `2f9c93b`, Technical Design `6a0d164`, and proposed
-P20-A checkpoint `1a6ad537` (reviewed design/proposal; acceptance pending),
+P20-A proposed checkpoint `2a03eda` (reviewed design/proposal; acceptance pending),
 P10-A's approved bounded P8-C LocationId-neutral seam with design/checkpoint
 review PASS at `345dcbc` and `READY_FOR_IMPLEMENTATION` status, while P10 runtime
 remains absent, and

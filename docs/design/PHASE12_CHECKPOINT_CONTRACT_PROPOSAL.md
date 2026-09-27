@@ -32,8 +32,9 @@ selected `Simulation-GeneralTest.asset`, the validated Unity
 `TesteSimulacao.InitializeSimulation` bootstrap, repository built-in providers,
 and one `SimulationRuntime`, captured only after a successful daily advance.
 The selected asset enables P9-B authored geography and publishes exactly one
-P8-A Hex and one Location anchored to it before day one. P9-B is present on
-`codex/phase9/canonical` at `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf`,
+P8-A Hex and one Location anchored to it before day one. P9 canonical closure
+is `82396ae7ffaf407fda278928da456b06dc5394d`; P9-B code integration is
+`d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf`,
 including implementation tip `00395ef80cfa2364d34ed2170e0735d3a4b1513d`.
 P9-A-only configs are incompatible with this
 profile. Any separately retained P9-A-only profile requires its own identity
@@ -47,13 +48,15 @@ decision services and claims no intraday state.
 
 **Revalidated references:** P8 State `470667d37863384edadb3d93ef64d8004aff46a3`;
 architecture `c285466c355103d3637ac165246591b72eb7bda0`; P9-A code promotion
-`43f08b3` / current P9-B promotion-record State/status `14a2e8e`; P9-B canonical integration
+`43f08b3` / P9 canonical closure `82396ae7ffaf407fda278928da456b06dc5394d` /
+current P9-B promotion-record State/status `14a2e8e`; P9-B code integration
 `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf` (implementation tip
 `00395ef80cfa2364d34ed2170e0735d3a4b1513d`); P11 code promotion `0cd4281` /
 current canonical closure State `308e24d0744112e8f2b741521b8b3e4acb51ebbf`;
 P18 canonical/current State `99cac77f7d66e8eb61fe68efb6959a4a5b7029ca`
-(P18-A/B/C promoted; P18-D implementation blocked); P14-A canonical
-promotion `c44904bb4b0a066eced1d7e8a773b7dc1eea76c0`;
+(P18-A/B/C promoted; P18-D implementation blocked); P14-A code promotion
+`c44904bb4b0a066eced1d7e8a773b7dc1eea76c0` / State
+`f8a61fe9634ba9ab56ee31d50b57b45fef292a6f`;
 P20 Entry Architecture `2f9c93b`, Technical Design `6a0d164`, and proposed
 P20-A checkpoint refresh `2a03edadcb411c7ca7aa2d0c67ee8d36f972779e`
 (design and proposal reviewed; checkpoint
@@ -63,7 +66,8 @@ Both architecture alignment records remain current. P10-A's user-approved
 Ruin/LocalTopology profile was promoted at code candidate `9501bf0`; canonical
 State records it at `9e79b58`. The P9-B promotion record is current at
 State/status tip `14a2e8e`;
-use it alongside canonical code tip `d9a62d7` for P9-B capability and profile
+use it alongside P9-B code integration `d9a62d7` and canonical closure
+`82396ae` for P9-B capability and profile
 evidence.
 Refreshed P12 entry proposal:
 `a257092471607520f7da7f056f465bbb3f5384d3`; current P12 technical proposal
