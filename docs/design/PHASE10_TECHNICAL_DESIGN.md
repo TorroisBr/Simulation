@@ -31,10 +31,13 @@ P10 `b0158984c70c008cacdfe4390463b9250ad1f0ad`; P9 refreshed entry
 P9-A's later promotion is recorded in the current-baseline revalidation below.
 
 **Current baseline revalidation:** P9 canonical `codex/phase9/canonical` at
-`988b6f5d14e12359e93464bae5e0048ca970ad86`, with architecture baseline
+`96f2c1aaf742f313bbb9643e5f5b3d844c402c78`, with architecture baseline
 `c285466c355103d3637ac165246591b72eb7bda0`, the canonical Phase 8 State, and
 the intraday/extensibility and multi-participant alignment records referenced
-there. P8-A through P8-E and P9-A are promoted. P9-A establishes the authored
+there. The P9 advance from `988b6f5d14e12359e93464bae5e0048ca970ad86` to
+`96f2c1aaf742f313bbb9643e5f5b3d844c402c78` records Phase 9 State/Brief closure
+only; it changes no P9-A capability, APIs, or content boundary. P8-A through
+P8-E and P9-A are promoted. P9-A establishes the authored
 Unity-bootstrap profile and a dependency-aware pre-start pipeline, but its
 selected profile creates no local topology or P8-owned spatial outputs. The
 P9 genesis/pipeline foundation edge is satisfied; P10's later local contributor
@@ -256,7 +259,7 @@ bounded profile while preserving compatible semantic seams.
 | Track | Current dependency/readiness consequence |
 |---|---|
 | P8-A/B/C/D/E | All are canonical. This profile requires P8-A Location/anchor truth and P8-C City/Site anchor bindings for applicable owner kinds; P8-B is conditional on chosen passage facts. P8-D/E are not dependencies for the proposed daily profile. |
-| P9-A | Promoted at P9 canonical `988b6f5`; the authored-bootstrap genesis pipeline foundation is available. The local contributor/output capability is not delivered by P9-A and must integrate against its actual APIs under a separately accepted and validated P10 profile. |
+| P9-A | Promoted at P9 canonical closure tip `96f2c1a`; the authored-bootstrap genesis pipeline foundation is available. The State/Brief-only closure advance preserves that capability and content boundary. The local contributor/output capability is not delivered by P9-A and must integrate against its actual APIs under a separately accepted and validated P10 profile. |
 | LocalTopology | Existing store is not yet a LocationId-neutral owner contract. The bounded migration/adapter and its consuming integrations must be implemented and promoted before P10 can publish these facts. |
 | P18/P20 | Not required by the recommended daily-only, single-site profile. Add dependencies only if the approved scope actually initializes temporal activity or multi-participant facts. |
 | Product/checkpoint gate | First site kind, included authorities, exact topology content/semantics, and compatibility/identity algorithms require explicit checkpoint acceptance. No Phase 10 checkpoint IDs currently exist. |
