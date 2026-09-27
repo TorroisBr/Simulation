@@ -102,8 +102,12 @@ P18-A boundary/subphase extension proposal `6bbbc33` also passed independent
 design review against P18 canonical `18ecc6e`; it remains proposed and
 unpromoted. P18-D implementation remains blocked on acceptance/promotion of
 that extension, a reviewed P18-C external-input/deferral adapter, and the
-separate `SimulationRuntime` ownership window. P20's entry and technical
-designs are being refreshed against promoted A/B/C. The latest independent
-review requires consistent treatment of the pre-schedule Proposed instance
-and the post-advance sealed-input start bound; P20 implementation waits for
-that refreshed review and its own API/transaction design, not P18-D or P19.
+separate `SimulationRuntime` ownership window. P20 Entry Architecture
+`2f9c93b588ffccaae60aedf6c16191c1251f6a1f` and Technical Design
+`6a0d16494735853ce35a8974ab348551650afd6b` both passed independent refreshed
+review against promoted P18-A/B/C and current P18 State `bcb3f67`. Review
+confirmed the pre-schedule `Proposed` instance, atomic scheduling/commitments,
+the sealed-input start bound, and distinct activity/participant identities.
+P20's Brief still has no approved implementation checkpoint ID; design PASS
+does not supply that authorization. P20's checkpoint gate is separate and does
+not depend on P18-D or P19.
