@@ -113,6 +113,12 @@ public interface IDueWorkOwner
     bool TryPrepare(DueWorkReference reference, out IDueWorkCommit prepared, out TimelineFailure failure);
 }
 
+/// <summary>Optional guard for owners whose facts may be dispatched by exactly one composed timeline.</summary>
+public interface ITimelineBoundDueWorkOwner
+{
+    bool IsBoundToTimeline(SimulationTimeline timeline);
+}
+
 public interface IDueWorkCommit
 {
     IReadOnlyList<DueWorkReference> NewOwnerFacts { get; }
@@ -413,6 +419,8 @@ public sealed class SimulationTimeline
                         { failure = TimelineFailure.InstantWorkLimitExceeded; return false; }
                         ScheduledDueWork scheduled = items[0];
                         DueWorkReference item = scheduled.Reference;
+                        if (dueWorkOwner is ITimelineBoundDueWorkOwner boundOwner && !boundOwner.IsBoundToTimeline(this))
+                        { failure = TimelineFailure.DispatchFailed; return false; }
                         if (dueWorkOwner == null || !dueWorkOwner.IsCurrent(item))
                         {
                             items.RemoveAt(0);

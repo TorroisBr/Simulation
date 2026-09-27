@@ -82,7 +82,7 @@ internal sealed class ActivityInstance
 }
 
 /// <summary>Authoritative activity lifecycle, participant relations, commitments and due facts.</summary>
-public sealed class ActivityLifecycleStore : IDueWorkOwner
+public sealed class ActivityLifecycleStore : IDueWorkOwner, ITimelineBoundDueWorkOwner
 {
     public const string DueOwnerId = "activity-lifecycle";
     private readonly Dictionary<string, ActivityInstance> instances = new Dictionary<string, ActivityInstance>(StringComparer.Ordinal);
@@ -111,6 +111,8 @@ public sealed class ActivityLifecycleStore : IDueWorkOwner
             throw new InvalidOperationException("Activity lifecycle is already bound to another timeline.");
         authoritativeTimeline = timeline;
     }
+
+    public bool IsBoundToTimeline(SimulationTimeline timeline) => ReferenceEquals(authoritativeTimeline, timeline);
 
     public ActivityLifecycleStore Clone()
     {

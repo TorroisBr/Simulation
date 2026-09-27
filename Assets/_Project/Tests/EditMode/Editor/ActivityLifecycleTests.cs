@@ -235,6 +235,35 @@ public sealed class ActivityLifecycleTests
     }
 
     [Test]
+    public void ForeignTimelineCannotDispatchBoundActivityFacts()
+    {
+        ActivityLifecycleStore store = new ActivityLifecycleStore("world");
+        SimulationTimeline ownerTimeline = Compose(store).Timeline;
+        store.TryPropose(Definition(), "owned-dispatch", out ActivityInstanceSnapshot instance, out _);
+        Assert.That(store.TrySchedule(ownerTimeline, instance.Id, new LogicalTick(0), new LogicalTick(10), new LogicalTick(5), new[] { "person" }, out _), Is.True);
+        DueWorkReference[] authoritativeBefore = new List<DueWorkReference>(store.PendingWork).ToArray();
+        ActivityParticipantCommitment commitmentBefore = store.GetCommitment("person");
+
+        SimulationTimeline foreign = new SimulationTimeline(Calendar(), new LogicalTick(0), store);
+        Assert.That(foreign.TryIndexOwnerFacts(authoritativeBefore, out TimelineFailure indexed), Is.True, indexed.ToString());
+        Assert.That(foreign.TrySealInputsThrough(new LogicalTick(10), out _), Is.True);
+        Assert.That(foreign.TryAdvanceTo(new LogicalTick(10), out TimelineFailure rejected), Is.False);
+        Assert.That(rejected, Is.EqualTo(TimelineFailure.DispatchFailed));
+        Assert.That(store.TryGet(instance.Id, out ActivityInstanceSnapshot unchanged), Is.True);
+        Assert.That(unchanged.State, Is.EqualTo(ActivityLifecycleState.Scheduled));
+        Assert.That(unchanged.Revision, Is.EqualTo(instance.Revision + 1));
+        Assert.That(store.GetCommitment("person"), Is.SameAs(commitmentBefore));
+        Assert.That(store.PendingWork.Count, Is.EqualTo(authoritativeBefore.Length));
+        for (int i = 0; i < authoritativeBefore.Length; i++)
+            Assert.That(store.PendingWork[i], Is.SameAs(authoritativeBefore[i]));
+
+        Assert.That(ownerTimeline.TrySealInputsThrough(new LogicalTick(10), out _), Is.True);
+        Assert.That(ownerTimeline.TryAdvanceTo(new LogicalTick(10), out TimelineFailure ownerFailure), Is.True, ownerFailure.ToString());
+        Assert.That(store.TryGet(instance.Id, out ActivityInstanceSnapshot active), Is.True);
+        Assert.That(active.State, Is.EqualTo(ActivityLifecycleState.Active));
+    }
+
+    [Test]
     public void InstanceScopedDueIdsAllowEqualRevisionsAtSameAndDifferentInstantsAndAtomicRebuildRetry()
     {
         ActivityLifecycleStore store = new ActivityLifecycleStore("world");
