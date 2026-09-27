@@ -1,15 +1,17 @@
 ---
 name: phase-checkpoint-implementation
-description: Implement one explicitly authorized, implementation-ready simulation checkpoint in an isolated worktree and submit evidence; do not approve or promote your own work.
+description: Carry an approved, implementation-ready checkpoint through an isolated, validated, independently reviewed candidate and integration preparation; stop before canonical promotion.
 ---
 
 # Phase checkpoint implementation
 
-Use only after a checkpoint has approved architecture/scope, reviewed technical design where needed, promoted implementation prerequisites, closure criteria and explicit authorization to implement. Skill availability alone grants none of these.
+Use only after scope and architecture are approved, required technical design is reviewed, and implementation prerequisites are canonical. Skill availability does not authorize roadmap execution.
 
-1. Verify named canonical local/remote HEAD against supplied SHA; inspect checkout status. Read `AGENTS.md`, current architecture, roadmap/execution model, owning Brief/State, upstream contracts and the approved technical design. Stop on unexpected baseline change until impact is classified.
-2. Work in an isolated branch/worktree with explicit file/hotspot ownership. Do not have concurrent writers in one checkout. Stay within the checkpoint's exclusions and implementation boundary; do not edit canonical architecture to justify new behavior.
-3. For each new mutable authoritative fact or causal external input, state what future reconstruction must recover. Preserve current authority, determinism, stale validation and domain boundaries.
-4. Run focused tests and appropriate affected regressions, inspect the full diff, and run `git diff --check`. Diagnose failures in scope; surface architecture/product blockers instead of inventing answers.
+1. Verify canonical local/remote HEAD and checkout status. Read `AGENTS.md`, current architecture, Roadmap, Execution Model, owning Brief/State, upstream contracts, and approved technical design. Classify any newer baseline before continuing.
+2. Create or reuse an isolated feature branch/worktree from the required canonical base, and record file/hotspot ownership. Implement only the checkpoint contract and exclusions. Preserve authority boundaries, determinism, stale-state semantics, and reconstruction-sensitive inputs/state.
+3. Run focused tests during implementation, then the required affected regressions and promotion-level suites stated by `AGENTS.md`, Brief, State, and Execution Model. Keep durable result artifacts and record exact base/candidate SHAs, changed files, tests, replay/fork impact, risks, and integration needs. Run `git diff --check`.
+4. Commit/push a durable candidate and validation record under standing Git authority. Request an independent exact-tip review using `candidate-review`; the author must not approve their own work.
+5. Address findings with additive commits where possible, rerun affected validation, and obtain a new review for each changed code tip. Prepare dependency-safe integration when required, preserving candidate provenance and rerunning integration validation.
+6. Stop at canonical promotion. The candidate and its integration evidence are reviewable inputs to the separate `canonical-promotion` gate, not promotion approval.
 
-Submit base SHA, branch/candidate SHA, changed files, closure evidence, tests, replay/fork declaration, unresolved risks and integration needs. Do not self-approve, merge/promote canonical, or push a shared branch beyond the separately authorized workflow.
+Diagnose failed tests and ordinary conflicts from repository evidence. Escalate only an actual unresolved product or canonical architecture decision; do not broaden scope to resolve a blocker speculatively.

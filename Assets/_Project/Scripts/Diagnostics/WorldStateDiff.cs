@@ -116,6 +116,19 @@ public sealed class WorldStateDiff
             WorldStateCanonicalWriter.IntValue(after.SocialReactionCount),
             differences);
         CompareCalendar(before.Metadata.CalendarDate, after.Metadata.CalendarDate, differences);
+        CompareEntities("ActorChoice", before.ActorChoices, after.ActorChoices, choice => choice.InputId,
+            (identity, left, right) =>
+            {
+                CompareValue("ActorChoice", identity, "WorldCommandId", WorldStateCanonicalWriter.StringValue(left.WorldCommandId), WorldStateCanonicalWriter.StringValue(right.WorldCommandId), differences);
+                CompareValue("ActorChoice", identity, "InputSequence", WorldStateCanonicalWriter.Int64Value(left.InputSequence), WorldStateCanonicalWriter.Int64Value(right.InputSequence), differences);
+                CompareValue("ActorChoice", identity, "PersonId", WorldStateCanonicalWriter.StringValue(left.PersonId), WorldStateCanonicalWriter.StringValue(right.PersonId), differences);
+                CompareValue("ActorChoice", identity, "ActionDefinitionId", WorldStateCanonicalWriter.StringValue(left.ActionDefinitionId), WorldStateCanonicalWriter.StringValue(right.ActionDefinitionId), differences);
+                CompareValue("ActorChoice", identity, "Origin", WorldStateCanonicalWriter.EnumValue(left.Origin), WorldStateCanonicalWriter.EnumValue(right.Origin), differences);
+                CompareValue("ActorChoice", identity, "Authority", WorldStateCanonicalWriter.EnumValue(left.Authority), WorldStateCanonicalWriter.EnumValue(right.Authority), differences);
+                CompareValue("ActorChoice", identity, "CapturedAbsoluteDay", WorldStateCanonicalWriter.Int64Value(left.CapturedAbsoluteDay), WorldStateCanonicalWriter.Int64Value(right.CapturedAbsoluteDay), differences);
+                CompareValue("ActorChoice", identity, "Status", WorldStateCanonicalWriter.EnumValue(left.Status), WorldStateCanonicalWriter.EnumValue(right.Status), differences);
+                CompareValue("ActorChoice", identity, "Dispositions", ActorChoiceDispositionsValue(left), ActorChoiceDispositionsValue(right), differences);
+            }, differences);
 
         CompareValue("SpatialAuthorityStore", "world", "StatePresent",
             WorldStateCanonicalWriter.BoolValue(before.Spatial.AuthorityRevision.HasValue),
@@ -1364,6 +1377,23 @@ public sealed class WorldStateDiff
         CompareValue("Battle", identity, "D6B2PlanSchemaVersion", WorldStateCanonicalWriter.StringValue(left?.D6B2PlanSchemaVersion), WorldStateCanonicalWriter.StringValue(right?.D6B2PlanSchemaVersion), differences);
         CompareValue("Battle", identity, "D6B2CoverageVersion", WorldStateCanonicalWriter.StringValue(left?.D6B2CoverageVersion), WorldStateCanonicalWriter.StringValue(right?.D6B2CoverageVersion), differences);
         CompareValue("Battle", identity, "D6B2PlanFingerprint", WorldStateCanonicalWriter.StringValue(left?.D6B2PlanFingerprint), WorldStateCanonicalWriter.StringValue(right?.D6B2PlanFingerprint), differences);
+    }
+
+    private static string ActorChoiceDispositionsValue(WorldStateActorChoiceSnapshot choice)
+    {
+        List<string> values = new List<string>();
+        foreach (ActorChoiceDisposition item in choice.Dispositions)
+        {
+            values.Add(string.Join("|", WorldStateCanonicalWriter.Int64Value(item.TransitionOrdinal),
+                WorldStateCanonicalWriter.EnumValue(item.Kind), WorldStateCanonicalWriter.Int64Value(item.AbsoluteDay),
+                WorldStateCanonicalWriter.IntValue(item.ActorTurnRosterOrdinal),
+                item.DeferralReason.HasValue ? WorldStateCanonicalWriter.EnumValue(item.DeferralReason.Value) : null,
+                item.Failure.HasValue ? WorldStateCanonicalWriter.EnumValue(item.Failure.Value) : null,
+                WorldStateCanonicalWriter.StringValue(item.DecisionRecordId),
+                item.AttemptOutcome.HasValue ? WorldStateCanonicalWriter.EnumValue(item.AttemptOutcome.Value) : null,
+                item.ReturnedResultStatus.HasValue ? WorldStateCanonicalWriter.EnumValue(item.ReturnedResultStatus.Value) : null));
+        }
+        return string.Join(";", values);
     }
 
     private static void CompareValue(

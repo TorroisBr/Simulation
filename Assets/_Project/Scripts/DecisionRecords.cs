@@ -40,7 +40,8 @@ public enum NpcDecisionType
 public enum NpcDecisionOrigin
 {
     Autonomous,
-    ScheduledDirective
+    ScheduledDirective,
+    ActorChoice
 }
 
 public enum NpcDecisionParticipantRole

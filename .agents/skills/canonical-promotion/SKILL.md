@@ -5,11 +5,11 @@ description: Promote an independently validated simulation checkpoint candidate 
 
 # Canonical promotion
 
-Use only for an explicitly authorized promotion. Human approval is required under the initial multi-phase policy; invoking or discovering this skill does not grant it.
+Use when an independently validated candidate is ready for canonical consideration. Prepare the complete preflight without asking about routine Git mechanics. Canonical promotion still requires the formal human approval defined in the current `AGENTS.md` and `docs/EXECUTION_MODEL.md`; this skill does not grant it.
 
-1. Verify named canonical branch, expected local/remote HEAD, candidate SHA/base/ancestry and clean relevant worktrees. Stop on unexpected advancement or unreviewed divergence.
-2. Confirm owning Brief checkpoint scope/closure, approved architecture, reviewed technical design where required, independent candidate review, absence of unresolved blockers, expected diff, integration order and risk-appropriate focused/regression tests. Run `git diff --check` on the promoted candidate/integration.
-3. Review the proposed Phase State update for factual delivery, exact SHAs, tests and known limitations. Candidate status does not count as promoted capability until the canonical branch and State reflect the validated result.
-4. Under the approved Git workflow, promote without force-push, shared-history rewrite, main merge or discarded user work; push the intended canonical branch and verify local/remote synchronization. Recompute the dependency DAG only after promotion is confirmed.
+1. Verify named canonical branch, local/remote HEAD, candidate SHA/base/ancestry, clean relevant worktrees, and all upstream changes. Refresh or reintegrate the candidate when required; do not silently promote an outdated candidate.
+2. Confirm checkpoint scope, required design approval, independent exact-tip review, blockers, integration order, and all risk-appropriate validation including `git diff --check`. Ensure the review and tests cover the exact proposed promotion tip.
+3. Prepare a factual State update with full SHAs, validation/review evidence, and known limits. Present the concrete candidate, diff/integration path, evidence, and required formal approval as the sole human gate. Stop before promotion until approval arrives.
+4. After approval, promote additively under the approved Git workflow, update State, push the intended canonical branch, and verify local/remote synchronization. Immediately refresh the full dependency DAG and continue newly READY work.
 
-Output prior/final full SHAs, files and integration path, validation/review evidence, State update, remote synchronization and newly eligible dependency refresh. Stop if approval, evidence, authority, tests or remote consistency is missing. Do not silently broaden scope to later checkpoints.
+Output prior/final full SHAs, files and integration path, validation/review evidence, State update, remote synchronization, and the refreshed DAG. Stop if approval, evidence, authority, tests, or remote consistency is missing. Do not silently broaden scope to later checkpoints.
