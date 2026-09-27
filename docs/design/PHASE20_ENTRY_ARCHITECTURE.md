@@ -63,11 +63,13 @@ noncommitting reservation intent for that Person and proposed interval. The
 intent records what the participant accepted; it does not create an active
 P18-B commitment or reserve availability. Once the complete required set has
 accepted, P20 revalidates it and submits the whole set atomically to P18-B
-`TrySchedule`, which creates the activity and all participant commitments
-together. An intervening conflicting commitment makes full-set scheduling
-fail coherently; P20 records `NotFormed` and no partial activity or commitment
-is published. Both participants may use the same fixture interval for
-simplicity; this is a scoped test choice, not a universal activity/role rule.
+`TrySchedule`, which transitions the existing `Proposed` instance to
+`Scheduled` and atomically creates all participant commitments and start due
+work. An intervening conflicting commitment makes full-set scheduling fail
+coherently; P20 records `NotFormed`, while the existing instance remains
+`Proposed` with no Schedule receipt, commitments, or due work. Both participants
+may use the same fixture interval for simplicity; this is a scoped test choice,
+not a universal activity/role rule.
 Acceptance, reservation intent, committed availability, and execution remain
 distinct facts.
 
@@ -89,11 +91,11 @@ authoritative agenda.
 
 Because accepted actor decisions are handed off only after a successful P18-C
 advance, a timed start must satisfy the promoted C/A sealed-input rule:
-`start > max(CurrentInstant, InputsSealedThrough)`, using one checked logical
-tick beyond that maximum. A tick overflow, or a proposed start at/before this
-bound, records P20 `NotFormed` and must not partially schedule the P18-B
-instance or publish commitments/due work. P18-B's weaker `start >= now`
-check is not sufficient for this post-advance handoff.
+`start > max(CurrentInstant, InputsSealedThrough ?? CurrentInstant)`, using
+one checked logical tick beyond that maximum. A tick overflow or proposed
+start at or before this bound records P20 `NotFormed` and must not partially
+schedule the P18-B instance or publish commitments/due work. P18-B's weaker
+`start >= now` check is not sufficient for this post-advance handoff.
 
 At that boundary, P18-B's start validator supplies a bool/disposition result;
 it does not transactionally couple `Scheduled → Active` with a P20 operation
