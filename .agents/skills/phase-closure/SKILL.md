@@ -5,11 +5,11 @@ description: Formally close an approved simulation Phase after its mandatory che
 
 # Phase closure
 
-Use only when the user has authorized a closure review or formal closure. The last checkpoint promotion does not itself close the Phase; human closure approval is required initially.
+Use when a Phase appears to have delivered its mandatory checkpoints. Prepare a concrete closure candidate and independent review without conflating the last checkpoint promotion with closure. Formal Phase closure approval remains a separate human gate where required by the current `AGENTS.md` and `docs/EXECUTION_MODEL.md`.
 
-1. Verify named canonical branch, exact local/remote baseline and current Brief/State. Read current architecture and applicable evidence; stop on unexpected advancement.
-2. Check the Phase objective and all mandatory checkpoints against canonical code and State, including integration/regression results, open findings and whether known limitations invalidate closure. Keep deferred future consumers separate from required work.
-3. Obtain independent closure review and explicit human approval. Do not invent a missing feature to make closure look complete or erase historical State records.
-4. If authorized, record formal `COMPLETED` status, closure SHA/evidence, known limitations and deferred consumers in the Phase State. A documentation-only closure commit is allowed when appropriate; run `git diff --check`, commit/push under the approved canonical workflow and verify synchronization.
+1. Verify canonical branch and local/remote baseline; read current architecture, Brief/State, and applicable evidence. Refresh if the baseline advanced.
+2. Check the Phase objective and every mandatory accepted checkpoint against canonical code and State, including reviews, integration/regression results, open findings, and limitations. Preserve explicit scope boundaries and deferred consumers; do not add gameplay or erase historical evidence to make closure appear complete.
+3. Obtain an independent closure review. Prepare a docs/State-only closure candidate recording the factual verdict, exact evidence, known limitations, and deferred work. Present the concrete record at the formal closure gate and stop until approval.
+4. After approval, record formal `COMPLETED` status and closure SHA/evidence, run `git diff --check`, commit/push under the approved workflow, verify synchronization, and refresh the DAG. Closure does not itself authorize unrelated roadmap implementation.
 
-Output closure verdict, remaining REQUIRED versus OPTIONAL/DEFERRED items, review evidence, files changed and final SHA. Stop on any unmet required checkpoint, unresolved blocking mismatch or missing approval. Do not start the next Phase by virtue of closure.
+Output closure verdict, remaining REQUIRED versus OPTIONAL/DEFERRED items, review evidence, files changed, final SHA, and refreshed readiness. Stop on any unmet required checkpoint, unresolved blocking mismatch, or missing approval.

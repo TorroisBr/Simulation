@@ -5,10 +5,10 @@ description: Independently review a submitted simulation checkpoint candidate ag
 
 # Candidate review
 
-Use after a worker submits a bounded candidate. Reviewer must be independent of the candidate's author and must not edit the candidate while reviewing.
+Use after a worker submits a bounded candidate or integration candidate. Reviewer must be independent of the candidate's author and must not edit the candidate while reviewing.
 
-1. Verify candidate branch/SHA, exact base commit, current canonical SHA and whether upstream has advanced. Read current architecture, owning Brief/State, checkpoint contract and reviewed technical design if one exists.
-2. Inspect the complete diff against the real base, not a convenient branch comparison. Check scope, semantic authority, mutation/stale/atomic behavior, deterministic ordering/randomness, knowledge boundary, reconstruction-sensitive state/inputs, hotspot overlap and test coverage.
-3. Check focused and affected regression results, but do not infer correctness solely from green tests. Identify whether a change requires revalidation or reintegration against newer canonical.
+1. Verify the full candidate SHA, exact base, branch, current canonical SHA, clean checkout, and whether the candidate tip changed after tests or earlier review. Read current architecture, owning Brief/State, checkpoint contract, reviewed technical design, and required validation gates.
+2. Inspect the complete diff against the actual base, not a convenient branch comparison. Check scope, authority, mutation/stale/atomic behavior, deterministic ordering/randomness, knowledge boundary, reconstruction-sensitive state/inputs, temporal identity/cardinality assumptions where applicable, hotspot overlap, and test coverage.
+3. Verify validation evidence belongs to this exact tip and includes the required focused, regression, full-suite, Smoke, and diff-check gates. Do not infer correctness solely from green tests. A changed code tip requires affected validation and a fresh review; classify newer-canonical impact using `dependency-refresh`.
 
-Return `REJECTED`, `NEEDS_CHANGES`, or `VALIDATED_CANDIDATE` with severity, precise evidence, base/current SHAs, test gaps and integration constraints. A validated candidate is not human approval or canonical promotion. Stop and report unresolved architecture/product decisions instead of resolving them in review.
+Record the review result durably, with `REJECTED`, `NEEDS_CHANGES`, or `VALIDATED_CANDIDATE`, precise evidence, full base/candidate/current-canonical SHAs, test gaps, and integration constraints. A validated candidate is not human approval or canonical promotion. Stop and report unresolved architecture/product decisions instead of resolving them in review.
