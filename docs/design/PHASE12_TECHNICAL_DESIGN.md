@@ -233,9 +233,9 @@ No genuinely unresolved product or canonical semantic decision is identified wit
 
 ### Promotion impact revalidation — 2026-09-27
 
-This design remains limited to `UnityBootstrap-Daily-v1`. `P12-A` is a
-proposed identifier only; this refresh grants no implementation authorization
-and records no review verdict. The current-base dependency check uses P8
+This design remains limited to `UnityBootstrap-Daily-v1`. P12-A scope is
+accepted; this refresh grants no implementation authorization and records no
+review verdict. The current-base dependency check uses P8
 canonical State `470667d`, P9 canonical closure `82396ae`, P9-A code promotion
 `43f08b3` and P9-B promotion-record State `14a2e8e`, P9-B code integration
 `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf`
