@@ -260,6 +260,51 @@ public sealed class ActorChoiceStoreTests
         Assert.That(store.ValidateInvariants().IsValid, Is.True);
     }
 
+    [Test]
+    public void TemporalCaptureAndTransitionsAreIdempotentAndRemainSeparateFromDailyStream()
+    {
+        ActorChoiceStore store = CreateStore();
+        PersonId actor = new PersonId("merchant-temporal");
+        TimelineInputReference accepted = new TimelineInputReference(44, "timeline-input-44", "actor-choice", "payload-v1", new LogicalTick(150));
+        Assert.That(store.TryCaptureTemporal("command-temporal", actor, "sell-goods/v1", WorldCommandOrigin.System,
+            WorldCommandAuthorityMode.Request, "profile-a", accepted, out ActorChoiceInput captured, out ActorChoiceStoreFailureCode failure), Is.True, failure.ToString());
+        Assert.That(store.TryCaptureTemporal("command-temporal", actor, "sell-goods/v1", WorldCommandOrigin.System,
+            WorldCommandAuthorityMode.Request, "profile-a", accepted, out ActorChoiceInput retried, out failure), Is.True, failure.ToString());
+        Assert.That(retried.InputId, Is.EqualTo(captured.InputId));
+        Assert.That(captured.TemporalCapture.TargetInstant, Is.EqualTo(new LogicalTick(150)));
+        Assert.That(captured.TemporalCapture.AcceptedInput.Sequence, Is.EqualTo(44));
+        Assert.That(captured.Dispositions, Is.Empty);
+        ActorChoiceTemporalBoundaryReference boundary = new ActorChoiceTemporalBoundaryReference("profile-a", new LogicalTick(150), "receipt-1", 3);
+        Assert.That(store.TryRecordTemporalDispatchStarted(captured.InputId, boundary, "dispatch-op", "decision-1", out failure), Is.True, failure.ToString());
+        Assert.That(store.TryRecordTemporalDispatchStarted(captured.InputId, boundary, "dispatch-op", "decision-1", out failure), Is.True, failure.ToString());
+        Assert.That(store.TryRecordTemporalAttemptReturned(captured.InputId, boundary, "finish-op", NpcActionResult.Succeeded(), out failure), Is.True, failure.ToString());
+        Assert.That(store.TryGet(captured.InputId, out ActorChoiceInput finished), Is.True);
+        Assert.That(finished.Status, Is.EqualTo(ActorChoiceInputStatus.AttemptReturned));
+        Assert.That(finished.TemporalDispositions, Has.Count.EqualTo(2));
+        Assert.That(finished.Dispositions, Is.Empty);
+        Assert.That(store.ValidateInvariants().IsValid, Is.True, string.Join(";", store.ValidateInvariants().Issues));
+    }
+
+    [Test]
+    public void TemporalReferenceReuseWithDifferentPayloadOrBoundaryIsRejected()
+    {
+        ActorChoiceStore store = CreateStore();
+        TimelineInputReference accepted = new TimelineInputReference(1, "timeline-input", "actor-choice", "payload-a", new LogicalTick(10));
+        Assert.That(store.TryCaptureTemporal("cmd-a", new PersonId("a"), "act", WorldCommandOrigin.System,
+            WorldCommandAuthorityMode.Request, "profile", accepted, out ActorChoiceInput input, out _), Is.True);
+        TimelineInputReference changed = new TimelineInputReference(1, "timeline-input", "actor-choice", "payload-b", new LogicalTick(10));
+        Assert.That(store.TryCaptureTemporal("cmd-a", new PersonId("a"), "act", WorldCommandOrigin.System,
+            WorldCommandAuthorityMode.Request, "profile", changed, out _, out ActorChoiceStoreFailureCode captureFailure), Is.False);
+        Assert.That(captureFailure, Is.EqualTo(ActorChoiceStoreFailureCode.CorrelationConflict));
+        Assert.That(store.TryRecordTemporalRejected(input.InputId,
+            new ActorChoiceTemporalBoundaryReference("other-profile", new LogicalTick(10), "receipt", 1),
+            "reject", ActorChoiceFailure.ActionUnavailable, out ActorChoiceStoreFailureCode boundaryFailure), Is.False);
+        Assert.That(boundaryFailure, Is.EqualTo(ActorChoiceStoreFailureCode.CorrelationConflict));
+        Assert.That(store.TryGet(input.InputId, out ActorChoiceInput unchanged), Is.True);
+        Assert.That(unchanged.Status, Is.EqualTo(ActorChoiceInputStatus.Pending));
+        Assert.That(unchanged.TemporalDispositions, Is.Empty);
+    }
+
     private static ActorChoiceStore CreateStore()
     {
         return new ActorChoiceStore(new PersonStore());

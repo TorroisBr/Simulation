@@ -88,7 +88,53 @@ public enum ActorChoiceStoreFailureCode
     InvalidLifecycleTransition,
     InvalidBoundary,
     InvalidReason,
-    SequenceExhausted
+    SequenceExhausted,
+    CorrelationConflict
+}
+
+public sealed class ActorChoiceTemporalBoundaryReference
+{
+    public string ProfileId { get; }
+    public LogicalTick Instant { get; }
+    public string SourceReceiptId { get; }
+    public long SourceRevision { get; }
+    public ActorChoiceTemporalBoundaryReference(string profileId, LogicalTick instant, string sourceReceiptId, long sourceRevision)
+    {
+        if (string.IsNullOrWhiteSpace(profileId)) throw new ArgumentException("Profile identity is required.", nameof(profileId));
+        if (string.IsNullOrWhiteSpace(sourceReceiptId)) throw new ArgumentException("Source receipt identity is required.", nameof(sourceReceiptId));
+        if (sourceRevision < 0L) throw new ArgumentOutOfRangeException(nameof(sourceRevision));
+        ProfileId = profileId; Instant = instant; SourceReceiptId = sourceReceiptId; SourceRevision = sourceRevision;
+    }
+    internal bool SameAs(ActorChoiceTemporalBoundaryReference other) => other != null
+        && string.Equals(ProfileId, other.ProfileId, StringComparison.Ordinal) && Instant == other.Instant
+        && string.Equals(SourceReceiptId, other.SourceReceiptId, StringComparison.Ordinal) && SourceRevision == other.SourceRevision;
+}
+
+public enum ActorChoiceTemporalDispositionKind { DispatchStarted = 1, Rejected = 2, AttemptReturned = 3, AttemptThrew = 4 }
+
+public sealed class ActorChoiceTemporalDisposition
+{
+    public long TransitionOrdinal { get; }
+    public ActorChoiceTemporalDispositionKind Kind { get; }
+    public ActorChoiceTemporalBoundaryReference Boundary { get; }
+    public string OperationId { get; }
+    public string DecisionRecordId { get; }
+    public ActorChoiceFailure? Failure { get; }
+    public ActorChoiceAttemptOutcome? AttemptOutcome { get; }
+    public NpcActionResultType? ReturnedResultStatus { get; }
+    internal ActorChoiceTemporalDisposition(long ordinal, ActorChoiceTemporalDispositionKind kind, ActorChoiceTemporalBoundaryReference boundary,
+        string operationId, string decisionRecordId, ActorChoiceFailure? failure, ActorChoiceAttemptOutcome? outcome, NpcActionResultType? resultStatus)
+    { TransitionOrdinal = ordinal; Kind = kind; Boundary = boundary; OperationId = operationId; DecisionRecordId = decisionRecordId; Failure = failure; AttemptOutcome = outcome; ReturnedResultStatus = resultStatus; }
+    internal ActorChoiceTemporalDisposition Copy() => new ActorChoiceTemporalDisposition(TransitionOrdinal, Kind, Boundary, OperationId, DecisionRecordId, Failure, AttemptOutcome, ReturnedResultStatus);
+}
+
+public sealed class ActorChoiceTemporalCapture
+{
+    public string ProfileId { get; }
+    public LogicalTick TargetInstant { get; }
+    public TimelineInputReference AcceptedInput { get; }
+    internal ActorChoiceTemporalCapture(string profileId, LogicalTick target, TimelineInputReference accepted)
+    { ProfileId = profileId; TargetInstant = target; AcceptedInput = new TimelineInputReference(accepted.Sequence, accepted.InputId, accepted.CommandKind, accepted.CommandData, accepted.TargetInstant); }
 }
 
 /// <summary>
@@ -151,6 +197,7 @@ public sealed class ActorChoiceDisposition
 public sealed class ActorChoiceInput
 {
     private readonly IReadOnlyList<ActorChoiceDisposition> dispositions;
+    private readonly IReadOnlyList<ActorChoiceTemporalDisposition> temporalDispositions;
 
     public ActorChoiceInputId InputId { get; }
     public string WorldCommandId { get; }
@@ -162,6 +209,8 @@ public sealed class ActorChoiceInput
     public long CapturedAbsoluteDay { get; }
     public ActorChoiceInputStatus Status { get; }
     public IReadOnlyList<ActorChoiceDisposition> Dispositions => dispositions;
+    public ActorChoiceTemporalCapture TemporalCapture { get; }
+    public IReadOnlyList<ActorChoiceTemporalDisposition> TemporalDispositions => temporalDispositions;
 
     internal ActorChoiceInput(
         ActorChoiceInputId inputId,
@@ -173,7 +222,9 @@ public sealed class ActorChoiceInput
         WorldCommandAuthorityMode authority,
         long capturedAbsoluteDay,
         ActorChoiceInputStatus status,
-        IEnumerable<ActorChoiceDisposition> dispositions)
+        IEnumerable<ActorChoiceDisposition> dispositions,
+        ActorChoiceTemporalCapture temporalCapture = null,
+        IEnumerable<ActorChoiceTemporalDisposition> temporalDispositions = null)
     {
         InputId = inputId;
         WorldCommandId = worldCommandId;
@@ -195,6 +246,10 @@ public sealed class ActorChoiceInput
         }
 
         this.dispositions = copy.AsReadOnly();
+        TemporalCapture = temporalCapture;
+        List<ActorChoiceTemporalDisposition> temporalCopy = new List<ActorChoiceTemporalDisposition>();
+        if (temporalDispositions != null) foreach (ActorChoiceTemporalDisposition disposition in temporalDispositions) temporalCopy.Add(disposition.Copy());
+        this.temporalDispositions = temporalCopy.AsReadOnly();
     }
 
     internal ActorChoiceInput WithDisposition(
@@ -218,7 +273,14 @@ public sealed class ActorChoiceInput
             Authority,
             CapturedAbsoluteDay,
             status,
-            next);
+            next, TemporalCapture, temporalDispositions);
+    }
+
+    internal ActorChoiceInput WithTemporalDisposition(ActorChoiceInputStatus status, ActorChoiceTemporalDisposition disposition)
+    {
+        List<ActorChoiceTemporalDisposition> next = new List<ActorChoiceTemporalDisposition>(temporalDispositions) { disposition };
+        return new ActorChoiceInput(InputId, WorldCommandId, InputSequence, PersonId, ActionDefinitionId, Origin, Authority,
+            CapturedAbsoluteDay, status, dispositions, TemporalCapture, next);
     }
 
     internal ActorChoiceInput Copy()
@@ -233,7 +295,7 @@ public sealed class ActorChoiceInput
             Authority,
             CapturedAbsoluteDay,
             Status,
-            dispositions);
+            dispositions, TemporalCapture, temporalDispositions);
     }
 }
 

@@ -187,4 +187,47 @@ public sealed class ActorAvailabilityDecisionTests
         Assert.That(executor.Executed[2].Id, Is.Not.EqualTo(retryId));
         Assert.That(executor.Executed[3].Id, Is.EqualTo(executor.Executed[2].Id));
     }
+
+    [Test]
+    public void RequestStateAllocatesIndependentCSequenceAndIdempotentlyRecordsCorrelations()
+    {
+        ActorDecisionRequestState state = new ActorDecisionRequestState();
+        PersonId actor = new PersonId("person-a");
+        Assert.That(state.TryBindInput("bind-op", "actor-choice-1", actor, new LogicalTick(20), "profile-x", 91,
+            "input-receipt", 4, out ActorDecisionRequestReceipt bound), Is.True);
+        Assert.That(bound.BoundarySequence, Is.EqualTo(1));
+        Assert.That(bound.RequestId, Is.Not.EqualTo("actor-choice-1"));
+        Assert.That(state.TryBindInput("bind-op", "actor-choice-1", actor, new LogicalTick(20), "profile-x", 91,
+            "input-receipt", 4, out ActorDecisionRequestReceipt duplicate), Is.True);
+        Assert.That(duplicate.RequestId, Is.EqualTo(bound.RequestId));
+        string triggerRequestId = new ActorDecisionRequest(actor, new LogicalTick(25), "activity-boundary", 2, 8).Id;
+        Assert.That(state.TryObserveTrigger("trigger-op", triggerRequestId, "lifecycle-receipt", actor,
+            new LogicalTick(25), "activity-boundary", 8, 123, "actor-choice-1", out ActorDecisionRequestReceipt trigger), Is.True);
+        Assert.That(trigger.BoundarySequence, Is.EqualTo(2));
+        Assert.That(trigger.SourceSequence, Is.EqualTo(123));
+        Assert.That(trigger.BoundarySequence, Is.Not.EqualTo(trigger.SourceSequence));
+        Assert.That(state.TryObserveTrigger("trigger-redelivery", triggerRequestId, "lifecycle-receipt", actor,
+            new LogicalTick(25), "activity-boundary", 8, 123, "actor-choice-1", out ActorDecisionRequestReceipt redelivered), Is.True);
+        Assert.That(redelivered.BoundarySequence, Is.EqualTo(trigger.BoundarySequence));
+        Assert.That(state.NextBoundarySequence, Is.EqualTo(3));
+        Assert.That(state.TryDefer("defer-op", trigger.RequestId, trigger.InputId, actor, trigger.Instant,
+            trigger.BoundaryId, trigger.BoundaryRevision, trigger.SourceSequence,
+            ActorDecisionDeferralReason.DecisionBoundaryAlreadyUsed, out ActorDecisionRequestReceipt deferred), Is.True);
+        Assert.That(deferred.BoundarySequence, Is.EqualTo(trigger.BoundarySequence));
+        Assert.That(state.TryDefer("defer-op", trigger.RequestId, trigger.InputId, actor, trigger.Instant,
+            trigger.BoundaryId, trigger.BoundaryRevision, trigger.SourceSequence,
+            ActorDecisionDeferralReason.DecisionBoundaryAlreadyUsed, out _), Is.True);
+        Assert.That(state.TryDefer("defer-op", trigger.RequestId, trigger.InputId, actor, trigger.Instant,
+            trigger.BoundaryId, trigger.BoundaryRevision, trigger.SourceSequence,
+            ActorDecisionDeferralReason.TemporarilyUnavailable, out _), Is.False);
+        ActorDecisionRequestState clone = state.Clone();
+        Assert.That(clone.NextBoundarySequence, Is.EqualTo(state.NextBoundarySequence));
+        Assert.That(clone.Snapshot().Count, Is.EqualTo(state.Snapshot().Count));
+        Assert.That(state.ValidateInvariants(), Is.Empty);
+        Assert.That(clone.ValidateInvariants(), Is.Empty);
+        Assert.That(ActorDecisionRequestState.TryRestore(state.Snapshot(), state.NextBoundarySequence,
+            out ActorDecisionRequestState restored), Is.True);
+        Assert.That(restored.Snapshot().Count, Is.EqualTo(state.Snapshot().Count));
+        Assert.That(restored.ValidateInvariants(), Is.Empty);
+    }
 }
