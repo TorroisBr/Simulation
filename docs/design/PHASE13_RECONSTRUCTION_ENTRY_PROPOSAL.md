@@ -13,17 +13,19 @@ This P10 promotion is docs-only: it refreshes the P9 closure/State pointer in
 the P10 State and Brief, without changing P10 capability or dependencies;
 P10-A remains a bounded promoted capability, not universal Ruin/topology
 support. P12's accepted scope record is `4a1d364` (scope only, still
-`WAIT_DEPENDENCY`;
-latest docs-only owner-inventory refresh candidate `18f1cbb`); P14 canonical is
-`4caecbb`. P18 canonical is `99cac77` with its A/B/C core promoted; additive
-P18-A contract `2175bf2` was accepted, with acceptance recorded in implementation
-branch commit `9de70ae`; its implementation remains in progress and unpromoted.
-P18-C adapter `405c5c0` is reviewed but unpromoted, and P18-D design `aa5f182`
-remains implementation-blocked. The current P20-A checkpoint proposal is `2a03eda`
-(proposed/unaccepted, acceptance pending); technical design `6a0d164` does not
-establish a delivered P20 capability. Architecture baseline `c285466` and both
-alignment records remain active constraints. These status updates do not
-narrow P13's full boundary guarantee or satisfy its P12 hard edge.
+`WAIT_DEPENDENCY`; current docs-only owner-inventory refresh candidate
+`bd15b92` continues to find no profile-included owner group with demonstrated
+complete exact immutable export plus staged hydration). P14 canonical is
+`4caecbb`. P18 canonical State tip is `eabc1c2`: P18-A/B/C core is promoted,
+including the additive P18-A extension at code tip `1dd0479`; the P18-C
+external-input/deferral adapter still needs post-extension revalidation before
+promotion, and P18-D remains implementation-blocked. The P20-A scope proposal
+`2a03eda` was user-accepted on 2026-09-27; this accepts scope only, with no
+P20 capability delivered and no blanket P20 dependency introduced. Technical
+design `6a0d164` does not establish delivered capability. Architecture
+baseline `c285466` and both alignment records remain active constraints. These
+status updates do not narrow P13's full boundary guarantee or satisfy its P12
+hard edge.
 
 ## 1. Purpose and guarantee
 
@@ -114,7 +116,7 @@ which boundaries the product supports.
 
 P12-A scope was accepted at `codex/phase12/ContinuationDesignP9BRevalidation`
 tip `4a1d364`, but that is scope acceptance only. The latest owner-inventory
-refresh candidate `18f1cbb` still reports no profile-included owner
+refresh candidate `bd15b92` still reports no profile-included owner
 group with demonstrated complete exact immutable export plus staged
 hydration. It identifies missing envelope/admission, identity allocator
 restoration, owner DTOs and hydrators, causal inputs/commitments,
@@ -167,10 +169,10 @@ account for:
   exact logical instant/day, order and idempotency/terminal disposition;
 - deterministic execution context and random state/context only where consumed;
 - temporal time/calendar, pending owner work, activity lifecycle and causal
-  ordering where the history actually used P18. P18 canonical is `99cac77`;
-  the additive P18-A returned-facts/subphase contract `2175bf2` was accepted
-  (acceptance record `9de70ae`) but is not yet implemented/promoted, and P18-D
-  remains blocked. Do not invent
+  ordering where the history actually used P18. P18 canonical State tip is
+  `eabc1c2`, including promoted P18-A extension code `1dd0479`. The P18-C
+  external-input/deferral adapter requires post-extension revalidation before
+  promotion, and P18-D remains blocked. Do not invent
   intraday facts absent from the execution history;
 - P20 `ActivityInstanceId` as identity distinct from `PersonId` and participant
   identities, plus the boundary-specific participant/role set;
@@ -255,16 +257,18 @@ These are planning/design candidates, not promoted capability evidence:
 - `docs/design/PHASE18_C_TECHNICAL_DESIGN.md`: availability/input-boundary
   decisions; candidate design is subordinate to current promoted code/State.
 - `docs/phases/PHASE18_BRIEF.md`: temporal objective and conditional P13 edge.
-- `docs/phases/PHASE20_BRIEF.md`, current scope proposal
-  `codex/phase20/P20FirstCheckpointProposal` at `2a03eda` (proposed/unaccepted),
-  and technical design `6a0d164`: boundary-specific shared-instance and atomic
-  effect requirements. The exact-two fixture is not general cardinality and
-  candidate text does not prove runtime capability.
+- `docs/phases/PHASE20_BRIEF.md`, scope proposal
+  `codex/phase20/P20FirstCheckpointProposal` at `2a03eda` (user-accepted scope
+  on 2026-09-27), and technical design `6a0d164`: boundary-specific
+  shared-instance and atomic effect requirements. No P20 capability is
+  delivered; acceptance adds no blanket P20 dependency. The exact-two fixture
+  is not general cardinality and proposal/design text does not prove runtime
+  capability.
 - `docs/architecture/INTRADAY_EXTENSIBILITY_ALIGNMENT.md` and
   `docs/architecture/MULTIPARTICIPANT_ACTIVITY_ALIGNMENT.md`: accepted
   cross-phase constraints, including no blanket P18-D/P19/P20 edge.
 - P12 owner inventory refresh candidate `codex/phase12/ContinuationDesignP9BRevalidation`
-  at `18f1cbb` (accepted scope remains `4a1d364`): evidence of current export/hydration gaps, not a completed
+  at `bd15b92` (accepted scope remains `4a1d364`): evidence of current export/hydration gaps, not a completed
   continuation contract or implementation authorization.
 
 The implementation dependency graph must be refreshed against canonical
