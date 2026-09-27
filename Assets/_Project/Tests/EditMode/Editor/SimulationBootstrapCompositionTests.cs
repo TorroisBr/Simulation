@@ -200,7 +200,7 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(hex.AuthoredRevisionToken, Is.EqualTo("sample-world-v1"));
         Assert.That(authority.TryGet(new LocationId("location/sample-origin"), out LocationRecord location), Is.True);
         Assert.That(location.AnchorHexId.Value, Is.EqualTo("hex/sample-origin"));
-        Assert.That(authority.ScaleContext.ResolvedConventionId, Is.EqualTo("axial-hex-v1"));
+        Assert.That(authority.ScaleContext.ResolvedConventionId, Is.EqualTo("world-scale/Simulation-GeneralTest/v1"));
         Assert.That(authority.ScaleContext.SourceIdentity, Is.EqualTo("profile/Simulation-GeneralTest"));
         Assert.That(authority.ScaleContext.SourceVersion, Is.EqualTo("1"));
         Assert.That(authority.ScaleContext.DistancePerNeighborStep, Is.EqualTo(1m));

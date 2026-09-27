@@ -96,7 +96,7 @@ MonoBehaviour:
   authoredTerrainDefinitionId: terrain/sample-plains
   authoredTerrainRevisionToken: sample-world-v1
   authoredLocationId: location/sample-origin
-  authoredScaleConventionId: axial-hex-v1
+  authoredScaleConventionId: world-scale/Simulation-GeneralTest/v1
   authoredScaleSourceIdentity: profile/Simulation-GeneralTest
   authoredScaleSourceVersion: 1
   authoredDistancePerNeighborStep: 1
