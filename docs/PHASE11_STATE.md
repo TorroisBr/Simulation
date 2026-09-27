@@ -1,6 +1,6 @@
-# Phase 11 State — Actor Perspective & Commands v1
+# Phase 11 State — Actor Perspective & Commands v1 — CLOSED
 
-**Status:** PROMOTED — canonical Phase 11 capability; closure review pending
+**Status:** CLOSED within the user-approved one-shot Local SellGoods actor-choice scope; P11-01 through P11-04 are canonical.
 
 **Current canonical base:** `codex/phase8/canonical` at `470667d37863384edadb3d93ef64d8004aff46a3`
 
@@ -27,6 +27,21 @@ therefore remain valid; no targeted Unity revalidation was required.
 `0cd4281804ecc6a2d110352d1a238959e93867f0` was promoted to
 `codex/phase11/canonical`. A detached clean worktree was used for promotion;
 the exact candidate branch tip and remote ref matched before promotion.
+
+## Phase-level closure review
+
+- Independent Phase 11 closure review: **PASS** against canonical State tip
+  `0803670cfa2c39163b54ff46a21daa06df5a16f6`.
+- The review confirmed P11-01 through P11-04 are present in canonical ancestry,
+  their implementation and regression evidence is recorded below, and they
+  satisfy the user's bounded first consumer: one trusted local game/UI input
+  selects one supported action for one eligible actor, anchored by Local
+  SellGoods.
+- Closure does not claim a general player-to-actor permission system, broad GM
+  command catalog, multiplayer/network transport, omniscient control, or an
+  intraday adapter. Those scopes remain deferred to their documented consumers.
+- Formal State marker: **CLOSED**. No runtime behavior changed in this
+  State/Brief closure record.
 
 **Impact review after P9-A promotion:** P11 has no P9 capability dependency.
 The combined compatibility ref `004c6f99e72c63dfd374fca9197ba7ac0818ebca`
@@ -70,10 +85,10 @@ capability dependency for this rule.
 
 | ID | Scope | Status | Evidence |
 |---|---|---|---|
-| P11-01 | Stable actor-choice input store, ordered dispositions, terminal attempt lifecycle | CANDIDATE COMPLETE | Store branch `codex/phase11/ActorChoiceStore`, commit `f1221d4e3275e21a876076350ca12058927dbaa9`; independent review against c5b2 and both alignment records; `ActorChoiceStoreTests` 9/9. |
-| P11-02 | Typed WorldCommand ingress and trusted local UI capture | INTEGRATED CANDIDATE | Integrated with the ordinary WorldCommand/domain boundary; `ActorActionChoiceCommandTests` 6/6. No GM authority expansion. |
-| P11-03 | Runtime application at the ordinary actor decision boundary and existing SellGoods path | INTEGRATED CANDIDATE | One-shot handling and no-fallback semantics implemented; exact P8-C position/location eligibility applied to input and autonomous local SellGoods. Refreshed `ActorChoice` tests 24/24. |
-| P11-04 | Deterministic diagnostics, invariants, focused integration tests, and acceptance review | REFRESHED COMBINED REVIEW PASS | Actor-choice state is included in canonical snapshots, diffs, formatting, and invariant validation. Independent review at `aa8ecf6` passed after the returned-failure and thrown-execution regressions were restored at `e40ebd6`; `git diff --check` passed. |
+| P11-01 | Stable actor-choice input store, ordered dispositions, terminal attempt lifecycle | PROMOTED | Canonical ancestry includes the store and independent review against the Phase 11 contract/alignment records; `ActorChoiceStoreTests` 9/9. |
+| P11-02 | Typed WorldCommand ingress and trusted local UI capture | PROMOTED | Integrated with the ordinary WorldCommand/domain boundary; `ActorActionChoiceCommandTests` 6/6. No GM authority expansion. |
+| P11-03 | Runtime application at the ordinary actor decision boundary and existing SellGoods path | PROMOTED | One-shot handling and no-fallback semantics; exact P8-C position/location eligibility for input and autonomous local SellGoods; refreshed `ActorChoice` tests 24/24. |
+| P11-04 | Deterministic diagnostics, invariants, focused integration tests, and acceptance review | PROMOTED | Actor-choice state is included in canonical snapshots, diffs, formatting, and invariant validation. Independent review at `aa8ecf6` passed after restoring returned-failure and thrown-execution regressions at `e40ebd6`; `git diff --check` passed. |
 
 The initial integration review found two defects: autonomous SellGoods could
 execute during P8-C transit using stale `CurrentCity`, and P8-E interruption
@@ -139,6 +154,5 @@ recorded in `docs/PHASE8_STATE.md`.
 ## Closure status
 
 P11-01 through P11-04 are promoted and satisfy the bounded user-selected
-SellGoods actor-choice objective. An independent Phase 11 closure review is
-pending; this State does not claim formal Phase 11 closure until that review is
-recorded.
+SellGoods actor-choice objective. The independent phase-level closure review
+and formal **CLOSED** State marker are recorded above.

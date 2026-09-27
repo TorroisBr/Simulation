@@ -1,6 +1,6 @@
 # Phase 11 — Actor Perspective & Commands v1
 
-**Authority:** planning entry subordinate to `../SIMULATION_ARCHITECTURE.md`. **Readiness:** `IMPLEMENTATION_READY` for the bounded SellGoods actor-choice slice selected by the user on 2026-09-26. The user's full-roadmap orchestration request authorizes execution of the checkpoints recorded in `../PHASE11_STATE.md`; canonical promotion remains subject to the repository's promotion gate.
+**Authority:** planning entry subordinate to `../SIMULATION_ARCHITECTURE.md`. **Status:** Phase 11 is **CLOSED** within the user-approved one-shot Local SellGoods actor-choice slice, as recorded in `../PHASE11_STATE.md`. The status does not claim a general actor-control, GM-command, network, or intraday system.
 
 ## Objective and closure
 
