@@ -74,13 +74,19 @@ public class CityRuntime
     }
     public List<NpcRuntime> ImportantNpcs => importantNpcs ?? (importantNpcs = new List<NpcRuntime>());
     public string CityName => cityData != null ? cityData.cityName : "Cidade desconhecida";
-    public bool HasLocalDailyMaterialFlow => cityData != null && !string.IsNullOrWhiteSpace(cityData.settlementSemanticId);
+    public bool HasLocalDailyMaterialFlow => cityData != null
+        && (!string.IsNullOrWhiteSpace(cityData.settlementSemanticId)
+            || !string.IsNullOrWhiteSpace(cityData.materialFlowLocationId)
+            || !string.IsNullOrWhiteSpace(cityData.marketStoreSemanticId)
+            || (cityData.productionConfigs != null && cityData.productionConfigs.Exists(source =>
+                source != null && !string.IsNullOrWhiteSpace(source.productionSourceId))));
     public LocalDailyMaterialFlowResult LastMaterialFlow => lastMaterialFlow;
 
     internal void ValidateLocalDailyMaterialFlowAnchor(LegacySpatialAnchorBindingStore bindings, SpatialAuthorityStore spatial)
     {
         if (!HasLocalDailyMaterialFlow) return;
-        if (string.IsNullOrWhiteSpace(cityData.materialFlowLocationId)
+        if (string.IsNullOrWhiteSpace(cityData.settlementSemanticId)
+            || string.IsNullOrWhiteSpace(cityData.materialFlowLocationId)
             || string.IsNullOrWhiteSpace(cityData.marketStoreSemanticId)
             || cityData.productionConfigs == null || cityData.productionConfigs.Count != 1)
             throw new LocalDailyMaterialFlowRejectedException("P14-A requires settlement, LocationId, market store, and exactly one authored source.");
@@ -89,9 +95,10 @@ public class CityRuntime
             || string.IsNullOrWhiteSpace(source.productionSourceId) || string.IsNullOrWhiteSpace(source.contentRevision))
             throw new LocalDailyMaterialFlowRejectedException("P14-A source identity, item, positive quantity, and content revision are required.");
         if (PopulationEconomy.PaymentMode != ConsumptionPaymentMode.Free
-            || cityData.marketItems == null || !cityData.marketItems.Exists(item => item != null && item.item != null
-                && string.Equals(item.item.DefinitionId, source.item.DefinitionId, StringComparison.Ordinal)))
-            throw new LocalDailyMaterialFlowRejectedException("P14-A requires a matching market item and free population consumption.");
+            || cityData.marketItems == null || cityData.marketItems.Count != 1
+            || cityData.marketItems[0] == null || cityData.marketItems[0].item == null
+            || !string.Equals(cityData.marketItems[0].item.DefinitionId, source.item.DefinitionId, StringComparison.Ordinal))
+            throw new LocalDailyMaterialFlowRejectedException("P14-A requires exactly one market item row matching its source item and free population consumption.");
         SpatialAnchorOwnerId owner = new SpatialAnchorOwnerId(SpatialAnchorOwnerKind.City, RuntimeId);
         if (bindings == null || !bindings.TryGet(owner, out LocationId bound)
             || !string.Equals(bound?.Value, cityData.materialFlowLocationId, StringComparison.Ordinal)
