@@ -5,7 +5,8 @@ review at `a30db22f9d8e3117a668c463a70d4100149387bd`. Its implementation at
 `00395ef80cfa2364d34ed2170e0735d3a4b1513d` passed independent code and
 integration review, required validation, and user-approved canonical
 promotion. P9-B code is integrated at `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf`;
-the current P9 State/status tip is `14a2e8ee01e49f1ffdcecf8fd64d274c728ead44`.
+the P9-B promotion-record State/status tip, before Phase 9 closure finalization,
+is `14a2e8ee01e49f1ffdcecf8fd64d274c728ead44`.
 Exact validation and promotion evidence is recorded in `../PHASE9_STATE.md`.
 P9-B is a separate capability after promoted P9-A and does not amend P9-A's
 accepted contract, code, or historical closure evidence.

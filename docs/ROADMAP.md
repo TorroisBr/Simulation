@@ -7,7 +7,7 @@ Phases 5–7 are closed within their documented scopes. P8-A/B/C/D/E are canonic
 | Phase | Planning objective |
 |---|---|
 | 8 — Spatial Truth & Civil Travel v1 | Factual Hex geography and a Knowledge-bounded civil travel vertical slice. |
-| 9 — Initial Deterministic Genesis v1 | P9-A: promoted authored-bootstrap genesis. P9-B: promoted at `d9a62d7`; one authored P8-A Hex/Location source for P10 through the same deterministic pre-start pipeline. Formal Phase 9 closure record pending. |
+| 9 — Initial Deterministic Genesis v1 | P9-A: promoted authored-bootstrap genesis. P9-B: promoted at `d9a62d7`; one authored P8-A Hex/Location source for P10 through the same deterministic pre-start pipeline. Phase 9 closure review passed on candidate `89fa904`; formal State-only promotion is pending and the canonical marker remains OPEN. |
 | 10 — Local Generation & Pre-start Authoring | Local content/topology generated or authored into the same initial ontology. |
 | 11 — Actor Perspective & Commands v1 | Actor-limited information/decision authority and validated external commands. |
 | 12 — Save & Deterministic Continuation | Save/load that continues with the same authoritative future under compatible inputs. |
