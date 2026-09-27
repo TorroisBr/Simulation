@@ -164,7 +164,28 @@ and P18/P19/P20 do not become blanket prerequisites.
 
 **Design review:** Independent review **PASS** on exact contract tip
 `a30db22f9d8e3117a668c463a70d4100149387bd`. Scope is user-approved and an
-isolated implementation candidate may proceed under the execution model.
-Implementation validation, independent code review, integration and canonical
-promotion remain subsequent gates. No code, Unity validation, implementation,
-delivery or promotion is claimed by this State update.
+isolated implementation candidate proceeded under the execution model.
+
+**Implementation candidate:** `codex/phase9/P9BImplementation` at
+`00395ef80cfa2364d34ed2170e0735d3a4b1513d`. Independent code review:
+**PASS** against base `641eece1e7878267c2c0401a51b87c250e4a7e76`. The review
+verified that the selected profile uses the distinct physical-scale identity
+`world-scale/Simulation-GeneralTest/v1`, separate from the axial coordinate
+convention `axial-hex-v1`. A non-gating provenance NIT remains: the generic
+manifest output-owner list omits `SpatialAuthorityStore`, while the P9-B
+stage-output fingerprint explicitly includes that authority; no required
+provenance is missing from the stage record.
+
+**Implementation validation:** on exact code tip `00395ef`,
+`SimulationBootstrapCompositionTests` 14/14, `SpatialGeographyTests` 13/13,
+ALL EditMode 1712/1712, and the complete official Smoke filter 5/5 passed;
+`git diff --check` passed. The selected `Simulation-GeneralTest` profile
+publishes exactly one authored P8-A Hex and anchored Location before day one.
+
+**Integration candidate:** `codex/phase9/P9BIntegration` fast-forwarded from
+P9 canonical `96f2c1aaf742f313bbb9643e5f5b3d844c402c78` to the reviewed code
+tip. This State record is added on top of that unchanged implementation.
+P9-B remains noncanonical; exact integration-tip review and explicit
+canonical-promotion approval are still required. Phase 9 remains reopened for
+this bounded P9-B capability, and P9-A's historical closure and scope remain
+unchanged.
