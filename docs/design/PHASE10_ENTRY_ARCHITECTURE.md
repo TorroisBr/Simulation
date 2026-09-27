@@ -20,9 +20,11 @@ P8-D was promoted to canonical at `c5b2e06b534f4b2af38f10e6510b10800aa8b28c`.
 
 **Current revalidation baseline:** P9 canonical `codex/phase9/canonical` at
 `96f2c1aaf742f313bbb9643e5f5b3d844c402c78`, with current architecture baseline
-`c285466c355103d3637ac165246591b72eb7bda0`, the canonical Phase 8 State, and
-the intraday/extensibility and multi-participant alignment records referenced
-there. The P9 advance from `988b6f5d14e12359e93464bae5e0048ca970ad86` to
+`c285466c355103d3637ac165246591b72eb7bda0`, current P8 canonical State
+`470667d37863384edadb3d93ef64d8004aff46a3`, and both current alignment
+records (intraday/extensibility at `c285466`; multi-participant at
+`4b6dd1d38cffeaf3cc1ac3effea0f8ede8771194`). The P9 advance from
+`988b6f5d14e12359e93464bae5e0048ca970ad86` to
 `96f2c1aaf742f313bbb9643e5f5b3d844c402c78` records Phase 9 State/Brief closure
 only; it changes no P9-A capability, APIs, or content boundary. P8-A through
 P8-E and P9-A are promoted. P9-A delivers the authored
@@ -84,22 +86,37 @@ The existing `LocalTopologyStore` is a reusable foundation, not proof that
 P8-C delivered a `LocationId`-based local-world composition contract. Its
 current owner references are City/Site and its macro-location link is a legacy
 runtime reference. Architecture §69 directs that LocalTopology accept a
-neutral spatial owner when needed. P10 design must therefore specify how the
-chosen profile binds local topology to the same canonical Location identity,
-without making `Location` a universal `WorldEntity`, promoting runtime IDs to
-semantic IDs, or claiming P8-C already migrated LocalTopology. This is an
-explicit technical-design/integration seam; do not silently bridge it with
-rendering or legacy identity.
+neutral spatial owner when needed. For this bounded profile, the proposed
+adapter preserves existing City/Site runtime-ID factories and consumers while
+adding a stable `ExplorableSite` owner reference keyed by
+`ExplorableSiteData.DefinitionId` and the canonical `LocationId`. Resolve the
+stable site key through the existing P8-C site anchor binding and a semantic
+site-store lookup; retain RuntimeIds only as resolver handles. Stable place
+and connection IDs are resolved through that owner. This seam does not make
+`Location` a universal `WorldEntity`, promote runtime IDs to semantic IDs, or
+claim P8-C already migrated LocalTopology.
 
 ## 3. Pre-start lifecycle and P9 contribution ordering
 
 P10 consumes P9's promoted authored-bootstrap selection and genesis
 provenance; it does not rerun genesis, add a local generation algorithm, or
-produce generated content. Its bounded composition contribution must preserve
-P9's stage identity/version, dependency provenance and publication contract,
-and compose exactly one Ruin plus finite topology facts from declared profile
-inputs. Stable semantic identities and typed references must be independent
-of runtime allocation and collection order.
+produce generated content. The current P9 `SimulationGenesisPipeline` is a
+fixed built-in DAG of five stage IDs executed through `ExecuteStages(Action<string>)`;
+it has no contribution or output registry. The proposed P10 implementation
+therefore adds exactly one internal in-repository built-in stage after
+`p9.genesis.authored-world/v1` and before
+`p9.genesis.validate-profile/v1`, with a typed candidate LocalTopology output.
+Its stable stage identity/version, dependency, and output owner appear in the
+combined profile provenance and fingerprint. This is not a public contributor
+registry or mod hook. The stage builds exactly one Ruin plus finite topology
+facts from declared profile inputs, preserving the P9 base-profile evidence.
+Keep the P9 base fingerprint/provenance independently identifiable; extend the
+combined profile using an explicit compatibility/schema version that includes
+the P10 stage, dependency, output owner, Ruin DefinitionId, canonical
+LocationId, fixture keys/values, and resulting stable IDs. Bump that combined
+schema when key encoding, stage semantics/order, output schema, or causal
+fingerprint inputs change. Stable semantic identities and typed references
+are independent of runtime allocation and collection order.
 
 The recommended lifecycle is:
 
@@ -123,13 +140,16 @@ explicit retrofit/migration is separate later work.
 
 ## 4. Identity, provenance, and reconstruction obligations
 
-The Ruin instance, places and connections that participate in authoritative
-local truth need stable semantic identities distinct from definition IDs,
-display name, Unity object, or transient runtime ID. The exact ID derivation,
-collision handling and version strategy are technical-design decisions; this
-entry proposal does not invent them. Local topology identity and references
-must remain resolvable through the canonical Location anchor and the site that
-owns the relevant domain semantics.
+For this one-profile Ruin, `ExplorableSiteData.DefinitionId` is its semantic
+site key; it is not a universal Ruin schema. Place and connection identities
+use explicit fixture-local keys in a typed, versioned namespace and the
+existing injective length-prefixed stable-key encoding. Neither display names,
+Unity object identity, runtime IDs, nor source-list position contribute to
+identity. Duplicate keys or encoded collisions reject the candidate before
+publication. The stable site owner reference combines the site semantic key
+with the canonical P8 `LocationId`; local topology identity and references
+must resolve through the existing site anchor binding and semantic site
+identity.
 
 The initial result must be reconstructible under its declared compatible
 profile. The later implementation/persistence contracts must retain either
@@ -156,9 +176,10 @@ inputs. Do not claim persistence/replay implementation in P10.
 ## 5. Extensibility now and later
 
 Current design constraints include Unity-independent domain/application seams
-where practical, semantic hooks instead of polling, stable contributor/stage
-identity, declared dependencies and deterministic composition where independent
-contributors have a real need. A future code mod must be incorporable as an
+where practical, semantic hooks instead of polling, stable stage identity,
+declared dependencies and deterministic composition. The bounded P10 stage is
+an internal built-in in the fixed P9 DAG; it does not introduce an extensible
+registration API. A future code mod must be incorporable as an
 official expansion without rewriting the local-world ontology. These are
 review constraints for P10's contracts now.
 
@@ -180,13 +201,14 @@ player from their own modifications.
 | P8-D canonical route Knowledge/plan capability | Available if the selected profile consumes it; no blanket dependency. |
 | P8-E canonical civil travel | No blanket P10 dependency; the proposed local-topology profile creates no route-plan or travel facts. |
 | P9-A authored-bootstrap genesis | Promoted at P9 canonical closure tip `96f2c1a`; its pre-start pipeline and authored profile are available. The State/Brief-only closure advance preserves that capability and content boundary. It does not itself compose P10 local-site outputs. |
-| P10 pipeline consumer integration | Design must revalidate its contributor/stage contract against the promoted P9 API and demonstrate candidate ownership, validation and complete-world publication for the accepted profile before integration. No new P9 promotion is implied by this entry refresh. |
-| P10 approval gates | User-accepted first-profile scope is exactly one Ruin and the finite topology in §1. Independent review of refreshed entry/design, explicit checkpoint acceptance, required promoted P8/P9 authorities, and the LocalTopology ownership seam remain before implementation. |
+| P10 pipeline consumer integration | The proposed implementation adds one internal built-in stage to the fixed P9 DAG after authored-world and before validation. Typed candidate output, declared identity/version/dependency/output owner, complete-profile validation, and atomic publication are required. No public registry or new P9 promotion is implied. |
+| P10 approval gates | User-accepted first-profile scope is exactly one Ruin and the finite topology in §1. Identity, stable owner resolution, compatibility adapter, stage order and fingerprint/provenance extension are now specified for independent review. Explicit checkpoint acceptance and implementation authorization remain required. |
 
 P10 scope is accepted for design only; implementation remains
 `WAIT_DEPENDENCY`. The P9-A genesis foundation and P8-C owner-kind contract are
-promoted, but the bounded stable Ruin/LocationId topology seam is not delivered.
-No checkpoint ID is assigned, and this entry proposal does not authorize
+promoted, but the bounded stable Ruin/LocationId topology seam is not yet
+implemented or promoted. The contract is specified here for review; no
+checkpoint ID is assigned, and this entry proposal does not authorize
 implementation or capability promotion. No gameplay or unbounded content
 catalog is inferred.
 
@@ -204,15 +226,17 @@ validation should prove that:
    Location/LocalTopology ontology and domain authorities, without local
    content generation;
 2. stable identities and references do not depend on runtime allocation or
-   source collection order;
+   source collection order, and duplicate keys/collisions reject before
+   publication;
 3. P9 dependency/provenance inputs remain intact and composition is
    deterministic under compatible profile inputs;
 4. missing dependencies, invalid local ownership/topology and complete-profile
    invariant failures stop before publication;
 5. a failed stage cannot expose partial initial state, while post-start changes
    require normal runtime authority; and
-6. provenance contains the profile/content/contributor and causal random inputs
-   needed by the chosen reconstruction guarantee.
+6. provenance preserves the P9 base evidence and records the P10 stage/version,
+   dependency, output owner and profile/content/causal inputs needed by the
+   chosen reconstruction guarantee.
 
 This documentation proposal requires independent review and `git diff --check`.
 It changes no executable code; Unity validation is not applicable at this
