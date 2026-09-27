@@ -162,9 +162,9 @@ present-day review constraint but adds no P9-B facts or dependency.
 
 **Dependency edges:** P9-B requires promoted P8-A geography authority and the
 P9-A genesis pipeline/handoff. P10's Ruin profile requires P9-B's authored
-`LocationId` source and the separately promoted P8-C Ruin/site owner and
-local-topology capability. These are capability-specific edges; P8-E travel
-and P18/P19/P20 do not become blanket prerequisites.
+`LocationId` source and the separately promoted P8-C Ruin/site anchor contract;
+P10-A owns the bounded LocalTopology seam. These are capability-specific
+edges; P8-E travel and P18/P19/P20 do not become blanket prerequisites.
 
 **Design review:** Independent review **PASS** on exact contract tip
 `a30db22f9d8e3117a668c463a70d4100149387bd`. Scope is user-approved and an

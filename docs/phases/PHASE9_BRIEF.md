@@ -69,19 +69,20 @@ placement. Retrofit support belongs to the later module/domain migration scope;
 runtime expansion retains its own post-start mutation boundary. Revalidate
 pre-change P9 proposals before technical approval against this pipeline requirement.
 
-## P9-B authored geography source — proposed, 2026-09-27
+## P9-B authored geography source — promoted, 2026-09-27
 
 P9-B is a separate profile capability and preserves P9-A's promoted scope,
 code, fingerprint/compatibility identity and closure evidence. It uses the
 existing dependency-aware genesis stages and atomic bootstrap handoff, adds a
 versioned geography stage, and composes exactly one Hex and one anchored
 Location through `SpatialAuthorityStore.TryComposeGeography`. P8-A remains the
-owner of these facts and authority. See the proposal for the complete
-reconstruction inventory and implementation gates.
+owner of these facts and authority. See the approved checkpoint at
+`../design/PHASE9B_AUTHORED_GEOGRAPHY_CHECKPOINT.md` for the reconstruction
+inventory and implementation gates.
 
 P9-B requires P8-A's promoted authority and P9-A's promoted pipeline. P10's
 Ruin profile requires P9-B's produced `LocationId` plus P8-C's promoted
-Ruin/site ownership and LocalTopology capability. P10 does not generate or
+Ruin/site anchor contract; P10-A owns the bounded LocalTopology seam. P10 does not generate or
 own regional geography. P9-B does not include Ruin/site binding, topology,
 travel, procedural terrain, City/Market, population, backstory, runtime
 expansion, Mod API/loader or P18/P20 activity facts. The intraday/extensibility
