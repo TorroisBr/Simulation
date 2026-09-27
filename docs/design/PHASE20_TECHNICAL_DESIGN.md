@@ -31,7 +31,8 @@ current. Activity instance identity remains independent of participant identity
 and supports the architecture's one-or-more participant cardinality.
 **Authority:** `docs/SIMULATION_ARCHITECTURE.md` §§11–12, 91–93;
 `docs/ROADMAP.md`; `docs/EXECUTION_MODEL.md`; the Phase 20 Brief and entry
-proposal; reviewed P18-A, P18-B, and P18-C technical designs; and both dated
+proposal (refreshed at `ff8908ff81f53c6392535f6a23d0bd954b86220b`);
+reviewed P18-A, P18-B, and P18-C technical designs; and both dated
 architecture alignment records.
 **Status:** Proposed technical design only. No implementation authorization,
 checkpoint IDs, capability promotion, persistence schema, or Phase State change.
@@ -101,8 +102,9 @@ that cross-participant transaction.
 
 ## 3. Bounded formation and commitments
 
-The fixture creates one supported operation definition/version and one
-Proposed activity instance with a stable identity allocated by a deterministic
+The fixture creates one supported operation definition/version and uses
+P18-B `TryPropose` to create one stable `Proposed` activity instance before
+participant decisions. Its identity is allocated from a deterministic
 accepted input/owner operation identity or persisted domain sequence, as
 specified by P18-B. It arranges exactly two distinct required `PersonId`s in
 stable semantic order. Duplicate identities reject the proposal without
@@ -112,9 +114,10 @@ Each required Person independently receives an accept-or-decline opportunity.
 The decision reads only that Person's allowed Knowledge and records its
 decision identity, logical boundary, and relevant source revision. P20 needs a
 bounded owner/API to retain these partial per-Person decisions; P18-B does not
-expose partial-acceptance scheduling. A decline's mapping to a P20
-`NotFormed` outcome, not an existing P18-B decline API. `NotFormed` is recorded
-before the instance is scheduled; it is not a P18-B lifecycle state or receipt.
+expose partial-acceptance scheduling. A decline maps to the P20
+`NotFormed` outcome; this is not an existing P18-B decline API. `NotFormed`
+is recorded before the instance is scheduled; it is not a P18-B lifecycle
+state or receipt.
 A missing decision must not be treated as acceptance. No acceptance is
 inferred from another participant, the proposer, a roster, shared context, or
 the UI.
@@ -130,9 +133,23 @@ the Scheduled transition/receipt. P20 must not require matching active
 commitments before this call because no P18-B partial-reservation API exists.
 If a new conflict intervenes after P20's revalidation, `TrySchedule` fails
 coherently (for example `ParticipantConflict`): no participant is committed,
-no due work is published, and P20 records `NotFormed` before scheduling. P20
-must preserve the Proposed/unscheduled lifecycle fact without claiming a
-Scheduled receipt or commitment.
+no due work is published, and P20 records `NotFormed` before scheduling. The
+already-created P18-B instance remains `Proposed` with no Schedule receipt,
+active commitments, or start/completion due work. P20 must preserve this
+Proposed/unscheduled lifecycle fact; it must not imply the instance was never
+created or claim a Scheduled receipt/commitment.
+
+When accepted actor decisions reach formation through P18-C, they are handed
+off only after a successful advance. Therefore any timed start must satisfy
+the promoted P18-C/P18-A sealed-input rule. Let `sealedThrough` be
+`InputsSealedThrough ?? CurrentInstant`; require
+`start > max(CurrentInstant, sealedThrough)`, with earliest permitted start
+`checked(max(CurrentInstant, sealedThrough) + 1 tick)`. If the proposed start
+is at or before this bound, or computing the next tick overflows, P20 records
+`NotFormed` atomically in its formation state and does not call `TrySchedule`;
+the P18-B instance remains
+`Proposed` without a Schedule receipt, commitments, or due work. P18-B's
+`start >= now` check alone does not enforce this post-advance bound.
 
 This proof uses one common interval to keep its validation surface bounded.
 It does not require all future activities or role-specific commitments to use
@@ -180,7 +197,7 @@ P20 terminal labels map to the existing P18-B lifecycle facts as follows:
 
 | P20 outcome | Timing | P18-B lifecycle/receipt and commitment behavior |
 |---|---|---|
-| `NotFormed` | Before `TrySchedule` succeeds, including a decline, missing decision, stale revalidation, or intervening participant conflict | No scheduled instance transition/receipt or active commitments. Keep the instance Proposed/unscheduled and record the P20 formation disposition. |
+| `NotFormed` | Before `TrySchedule` succeeds, including a decline, missing decision, stale revalidation, an intervening participant conflict, a late/sealed start, or tick overflow | The P18-B instance remains Proposed with no Schedule receipt, active commitments, or start/completion due work. Record the P20 formation disposition atomically. |
 | `FailedToStart` | Scheduled start validation or P20 current-truth validation fails | P18-B state becomes `Cancelled` and emits `FailedStart`; start/completion due work for the instance is invalidated and all its commitments are released. The P20 label is a disposition, not a new lifecycle state. |
 | `Cancelled` | Explicit cancellation after scheduling | P18-B state becomes `Cancelled` and emits `Cancel`; due work is invalidated and all instance commitments are released. |
 | `Started` | Coordinated scheduled-start validation succeeds | P18-B state becomes `Active` and emits `Start`; P20 effects commit together, and commitments remain installed through the Active interval. |
@@ -275,7 +292,12 @@ Before implementation review, the selected slice should demonstrate:
 - the complete set is revalidated before `TrySchedule`, which creates both
   commitments and the stable instance's due work atomically; an intervening
   conflict leaves the instance Proposed with no commitments or due work and
-  yields P20 `NotFormed`;
+  yields P20 `NotFormed` while preserving that Proposed instance;
+- after the successful-advance P18-C handoff, with
+  `sealedThrough = InputsSealedThrough ?? CurrentInstant`, a timed start is
+  strictly later than `max(CurrentInstant, sealedThrough)`; a sealed/late
+  start or checked next-tick overflow records `NotFormed` without scheduling,
+  commitments, or due facts;
 - the P18-B bool/disposition start validator is mapped to a P20 reviewed
   `Scheduled → Active` plus two-result transaction; failure/retry cannot create
   partial lifecycle or duplicate effects;
