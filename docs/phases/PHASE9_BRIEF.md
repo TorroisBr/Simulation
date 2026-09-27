@@ -1,6 +1,6 @@
 # Phase 9 — Initial Deterministic Genesis v1
 
-**Authority:** planning entry subordinate to `../SIMULATION_ARCHITECTURE.md`. **Status:** P9-A is promoted at `43f08b3` and remains scope-closed within its approved authored-bootstrap-first-delivery scope. The separately user-approved P9-B scope passed independent design review at `a30db22`; its implementation candidate may proceed, while the capability remains noncanonical. See `../PHASE9_STATE.md`.
+**Authority:** planning entry subordinate to `../SIMULATION_ARCHITECTURE.md`. **Status:** P9-A remains scope-closed within its approved authored-bootstrap-first-delivery scope. P9-B is promoted at `d9a62d7` for the separate authored P8-A Hex/Location source capability. Phase 9's formal closure record remains pending. See `../PHASE9_STATE.md`.
 
 ## Objective and closure
 
@@ -8,7 +8,7 @@ Produce a deterministic, semantically complete initial World Truth before the fi
 
 **Promoted checkpoint:** `P9-A — Authored Bootstrap Genesis v1`. It establishes the dependency-aware, deterministic pre-start pipeline using the existing authored Unity bootstrap profile. Its reviewed scope and acceptance evidence are recorded in `../design/PHASE9A_AUTHORED_BOOTSTRAP_CHECKPOINT.md`.
 
-**Approved checkpoint scope:** `P9-B — Authored Geography Source for Local Authoring v1`. It composes exactly one authored P8-A geographic Hex and one anchored Location through the existing genesis handoff, providing P10's upstream Location source. Its design review passed; an isolated implementation candidate may proceed under the execution model. The capability remains noncanonical until separately validated, reviewed, integrated and promoted. This is not a promise of procedural terrain or broader generation/content algorithms.
+**Promoted checkpoint:** `P9-B — Authored Geography Source for Local Authoring v1`. It composes exactly one authored P8-A geographic Hex and one anchored Location through the existing genesis handoff, providing P10's upstream Location source. Its validation, independent reviews, integration, and promotion evidence are recorded in `../PHASE9_STATE.md`. This is not a promise of procedural terrain or broader generation/content algorithms.
 
 ## Dependencies and gates
 
@@ -86,6 +86,5 @@ own regional geography. P9-B does not include Ruin/site binding, topology,
 travel, procedural terrain, City/Market, population, backstory, runtime
 expansion, Mod API/loader or P18/P20 activity facts. The intraday/extensibility
 and multi-participant alignments remain review constraints but add no P9-B
-capability or gameplay scope. P9-B design review passed and its bounded
-implementation candidate may proceed; Phase 9 remains open through the
-implementation, validation, integration and promotion gates.
+capability or gameplay scope. P9-B is promoted at `d9a62d7`. Phase 9's
+separate formal closure record remains pending.

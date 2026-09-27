@@ -1,4 +1,4 @@
-# Phase 9 — REOPENED FOR P9-B; INTEGRATION CANDIDATE IN FINAL REVIEW
+# Phase 9 — P9-B PROMOTED; FORMAL PHASE-CLOSURE RECORD PENDING
 
 P9-A remains promoted and scope-closed within its approved authored-bootstrap-
 only scope. Phase 9 is reopened for the separately user-approved P9-B
@@ -6,8 +6,9 @@ authored-geography capability below. Independent design review passed on the
 exact P9-B contract at `a30db22f9d8e3117a668c463a70d4100149387bd`; an isolated
 implementation candidate proceeded. The implementation and required
 validation are complete on `00395ef80cfa2364d34ed2170e0735d3a4b1513d`.
-`codex/phase9/P9BIntegration` is the noncanonical integration candidate; final
-integration review and canonical-promotion approval are still required.
+Following exact-tip integration review and user approval, P9-B was promoted to
+`codex/phase9/canonical` at `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf`.
+Phase 9 remains open only for its separate formal closure record.
 
 ## Current authority and candidate
 
@@ -20,8 +21,8 @@ integration review and canonical-promotion approval are still required.
 - P9-A implementation candidate: `974a8d72a158962619d7ba8aa1ccf854eeadd47e`.
 - P9-A code promotion commit: `43f08b3dfbf042380c2f8a8b037bbf3ebd309ccb` on `codex/phase9/canonical`.
 - **P9-A status: PROMOTED and scope-closed.** Its original accepted scope and historical closure record remain intact. P9-B is a separately approved checkpoint, not an expansion or rewrite of P9-A.
-- **P9-B status: USER-APPROVED; DESIGN, CODE REVIEW, AND IMPLEMENTATION VALIDATION PASS; INTEGRATION REVIEW IN FINAL GATE.** It remains noncanonical pending integration review and canonical-promotion approval.
-- **Phase 9 status: REOPENED for the P9-B capability.** Local/pre-start content generation remains P10; public mod loading, retrofit and runtime expansion remain deferred consumers.
+- **P9-B status: PROMOTED.** Design, code, integration review, required validation, and user-approved canonical promotion are complete at `d9a62d7`.
+- **Phase 9 status: PHASE-CLOSURE RECORD PENDING.** P9-A remains scope-closed; P9-B delivers the separately approved authored-geography source. P10 owns the next local Ruin/topology capability; public mod loading, retrofit and runtime expansion remain deferred consumers.
 
 ## Historical P9-A phase-closure review
 
@@ -120,7 +121,7 @@ P9-A's phase-closure marker remains historical evidence for that bounded
 delivery; P9-B reopens Phase 9 only for the additional geography source
 capability described next.
 
-## P9-B — Authored Geography Source for Local Authoring v1 (APPROVED; NONCANONICAL)
+## P9-B — Authored Geography Source for Local Authoring v1 (PROMOTED)
 
 The user approved a separate upstream authored geography prerequisite for
 P10: one bounded P8-A `Hex` and one `Location` anchored to it, composed by the
@@ -187,8 +188,10 @@ publishes exactly one authored P8-A Hex and anchored Location before day one.
 
 **Integration candidate:** `codex/phase9/P9BIntegration` fast-forwarded from
 P9 canonical `96f2c1aaf742f313bbb9643e5f5b3d844c402c78` to the reviewed code
-tip. This State record is added on top of that unchanged implementation.
-P9-B remains noncanonical; exact integration-tip review and explicit
-canonical-promotion approval are still required. Phase 9 remains reopened for
-this bounded P9-B capability, and P9-A's historical closure and scope remain
-unchanged.
+tip. Independent integration review **PASS** on exact tip
+`d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf`; the review confirmed only the
+State-record correction followed the validated code and that the candidate
+descends from the P9 canonical base. The user approved promotion, and local and
+remote `codex/phase9/canonical` refs were verified at that tip. P9-B is
+promoted; P9-A's historical closure and scope remain unchanged. A separate
+formal Phase 9 closure record remains pending.
