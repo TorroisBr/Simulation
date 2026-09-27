@@ -1,9 +1,9 @@
 # P18-A Additive Boundary Subphase Extension — Technical Design Proposal
 
-**Design base:** `99cac77f7d66e8eb61fe68efb6959a4a5b7029ca` (`codex/phase18/canonical`, including promoted P18-C core). The separate external-input/deferral adapter candidate is `405c5c0df80f210892a1db9932688550bb06c463` and remains unpromoted pending its canonical gate.
+**Design base:** `99cac77f7d66e8eb61fe68efb6959a4a5b7029ca` (`codex/phase18/canonical`, including promoted P18-C core). At the time of this design, the separate external-input/deferral adapter candidate was `405c5c0df80f210892a1db9932688550bb06c463`; its preserved implementation was later promoted at code `a535441` / integration tip `b75c5b8`.
 **Architecture baseline:** `c285466c355103d3637ac165246591b72eb7bda0`
-**Authority:** `docs/design/PHASE18_A_TECHNICAL_DESIGN.md`, promoted P18-C core at the design base, unpromoted P18-C external-input/deferral adapter candidate `405c5c0df80f210892a1db9932688550bb06c463`, the revised P18-D technical design candidate `aa5f182f0f5a93f26092179d1708a1f3429fbb1f`, the intraday/extensibility and multi-participant alignment records, `docs/EXECUTION_MODEL.md`, and `docs/phases/PHASE18_BRIEF.md`.
-**Status:** User-accepted additive P18-A contract, bounded implementation in progress. The accepted scope does not change the already-promoted scheduler's behavior until the reviewed implementation is promoted, and it does not authorize P18-D implementation before its separate prerequisites clear.
+**Authority:** `docs/design/PHASE18_A_TECHNICAL_DESIGN.md`, promoted P18-C core at the design base, the then-unpromoted P18-C external-input/deferral adapter candidate `405c5c0df80f210892a1db9932688550bb06c463` (later promoted at `b75c5b8`), the revised P18-D technical design candidate `aa5f182f0f5a93f26092179d1708a1f3429fbb1f`, the intraday/extensibility and multi-participant alignment records, `docs/EXECUTION_MODEL.md`, and `docs/phases/PHASE18_BRIEF.md`.
+**Status:** The user-accepted additive P18-A contract was implemented, independently reviewed, validated, and promoted at integration tip `1dd0479`. It does not change the already-promoted scheduler's behavior outside its opt-in extension and does not authorize P18-D implementation before its separate owner prerequisites and serialized `SimulationRuntime` window clear.
 
 ## 1. Purpose and compatibility boundary
 
@@ -68,11 +68,10 @@ The proposal is additive and does not invalidate promoted P18-A/B/C. It is a har
 ## 8. Acceptance record
 
 The user accepted this exact refreshed contract, commit
-`2175bf2718df4ef344e4dc8e2760d4abb8a2532d`, on 2026-09-27. Acceptance
-authorizes implementation of this bounded P18-A extension on
-`codex/phase18/P18ABoundarySubphaseExtensionImplementation`. It does not claim
-delivery or canonical promotion; independent implementation review, required
-Unity validation, integration, and a separate canonical promotion gate remain.
-P18-D remains blocked until this extension is implemented and promoted, the
-P18-C external-input/deferral adapter clears its promotion gate, and the
-separate `SimulationRuntime` ownership window is scheduled.
+`2175bf2718df4ef344e4dc8e2760d4abb8a2532d`, on 2026-09-27. At acceptance,
+this authorized implementation of the bounded P18-A extension on
+`codex/phase18/P18ABoundarySubphaseExtensionImplementation`; later exact-tip
+review, validation, integration, and promotion completed at `1dd0479`. The
+P18-C external-input/deferral adapter was subsequently promoted at `b75c5b8`.
+P18-D remains blocked on its P11/economy-owner contracts and the separate
+`SimulationRuntime` ownership window.

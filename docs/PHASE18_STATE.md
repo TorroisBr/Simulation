@@ -233,10 +233,12 @@ Technical Design `6a0d16494735853ce35a8974ab348551650afd6b` passed their prior
 design review; the current-base refresh `318cacb` independently passed review
 against P18 State `eabc1c2` and code `1dd0479`. The refresh records
 continuation-barrier ordering, returned-fact publication before ordinary
-same-instant work, and post-successful-advance P18-C handoff. P18-C adapter
-promotion at `b75c5b8` changes no ActivityLifecycle/P20 files, and the
-synthetic P20-A slice does not consume the adapter; the implementation remains
-in progress from prior base `eabc1c2` and must be integrated and revalidated
-against `b75c5b8`. P20-A — Synthetic Multi-participant Operation was accepted
-as bounded scope only on 2026-09-27; the two-Person rule remains fixture-only.
-No P20 capability is yet promoted. P20 remains independent of P18-D and P19.
+same-instant work, and post-successful-advance P18-C handoff. P20-A — Synthetic
+Multi-participant Operation was accepted as bounded scope only on 2026-09-27;
+the two-Person rule remains fixture-only. Feature implementation `22df7b3`
+was integrated against P18 canonical `b75c5b8` at `ee8502f`; independent
+integration review passed. P20SyntheticOperation 11/11, ActivityLifecycle
+17/17, LogicalTimeline 35/35, ALL EditMode 1805/1805, official complete Smoke
+5/5, and `git diff --check b75c5b8..ee8502f` passed. The P18-C adapter changes
+no P20 code/API and does not change this slice's contract. P20 capability
+promotion remains a separate gate. P20 remains independent of P18-D and P19.

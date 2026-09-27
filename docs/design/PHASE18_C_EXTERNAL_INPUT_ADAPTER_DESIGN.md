@@ -1,16 +1,18 @@
 # P18-C — External-input and deferral adapter design
 
-**Status:** This bounded design passed independent review at exact tip
-`358c65c85e1eafdd91ef4a6553ba3b0a8c4af249` against the then-current P18 State
-`311baa9`, when the adapter was `READY_FOR_IMPLEMENTATION`. Its implementation
-is now assembled on P18 canonical State tip `eabc1c2` / promoted extension code
-`1dd0479` at code integration candidate `a535441`; post-extension validation
-and exact-tip implementation review passed. Canonical promotion has not
-occurred; subsequent docs/status follow-ups do not alter the implementation.
-This remains an additive supporting capability required by P18-D. P18-C's
-existing core remains promoted at `7aa7626`.
+**Design review:** This bounded design passed independent review at exact tip
+`358c65c85e1eafdd91ef4a6553ba3b0a8c4af249` against then-current P18 State
+`311baa9`, when the adapter was `READY_FOR_IMPLEMENTATION`.
+**Current delivery status:** The implementation was assembled against P18
+canonical State tip `eabc1c2` / promoted extension code `1dd0479` at code
+integration `a535441`; post-extension validation and exact-tip implementation
+review passed. It was promoted to `codex/phase18/canonical` at integration tip
+`b75c5b8`. This remains an additive supporting capability for P18-D, not the
+P18-D live consumer. P18-C's existing core remains promoted at `7aa7626`.
 Architecture baseline is `c285466`. P11's bounded Actor Choice is canonical
-at `308e24d` (code `0cd4281`). P18-D's reviewed consumer design is `aa5f182`.
+at `308e24d` (code `0cd4281`). P18-D's prior consumer design candidate is
+`aa5f182`; it requires refresh against P18 State `b75c5b8` and P14 State
+`4caecbb` before implementation.
 
 **Authority:** `SIMULATION_ARCHITECTURE.md` §§2, 11–12, 91–92; `ROADMAP.md`;
 `EXECUTION_MODEL.md`; Phase 11 and 18 Briefs/States; P18-A/B/C designs; the
@@ -340,14 +342,14 @@ cross-domain transaction framework is introduced. If the existing economy
 owner cannot provide this narrow contract, P18-D stays blocked for a focused
 architecture review.
 
-P18-D implementation remains blocked until this adapter implementation passes
-post-extension validation and exact-tip review, is canonically promoted, and
-the serialized `SimulationRuntime` ownership window is released. The P18-A
-returned-facts/subphase extension and this design review are already accepted
-and promoted/passed, respectively. This gate is separate from the adapter
-implementation. This design document records the contract; the assembled
-implementation candidate is `a535441`, and no canonical adapter promotion is
-claimed here.
+P18-D implementation remains blocked on the serialized `SimulationRuntime`
+ownership window and its owner contracts: P11-owned exact temporal capture
+linked to the accepted P18-A reference, plus the existing economy owner's
+operation receipt with immutable proposal correlation and a current-truth
+execution snapshot. The adapter passed post-extension validation and exact-tip
+review and was promoted at `b75c5b8`; the P18-A returned-facts/subphase
+extension was promoted at `1dd0479`. This design remains separate from the
+P18-D implementation.
 
 ## 8. Additive implementation contract requirements
 
@@ -370,9 +372,9 @@ choices:
    economy owner and idempotently reconciles separate P11/C owner commits.
    P18-C does not implement SellGoods.
 
-The additive adapter was implemented on its reviewed pre-extension base and is
-now assembled against the promoted P18-A extension at `a535441`. Its post-
-extension focused/full validation and final exact-tip review passed. P18-D
-remains blocked until the adapter is promoted and the serialized
-`SimulationRuntime` ownership window is available; the P18-A extension is
-already accepted and promoted.
+The additive adapter was implemented on its reviewed pre-extension base and
+assembled against the promoted P18-A extension at code integration `a535441`.
+Its post-extension focused/full validation and final exact-tip review passed;
+it was promoted at canonical integration tip `b75c5b8`. P18-D remains blocked
+on the serialized `SimulationRuntime` ownership window and its P11/economy-owner
+contracts. The P18-A extension is promoted at `1dd0479`.
