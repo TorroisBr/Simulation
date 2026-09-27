@@ -10,7 +10,7 @@ closure `82396ae7ffaf407fda278928da456b06dc5394d4` (P9-B code integration
 `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf`, implementation
 `00395ef80cfa2364d34ed2170e0735d3a4b1513d`, promotion State/status record
 `14a2e8ee01e49f1ffdcecf8fd64d274c728ead44`); P10 canonical/Brief
-`95f98829f9da7abdcb9202a3c62ae717c60a19d8` (P10-A code
+`252ad6b9a507f1c001c05a1e19c2546ebd0707a2` (P10-A code
 `9501bf076d506fb64d6ee3e6d178574fff36e153`, State record
 `9e79b58397dc9a89ddcc562be139b79987cb55b9`); P11 canonical closure
 `308e24d0744112e8f2b741521b8b3e4acb51ebbf` (code `0cd4281804ecc6a2d110352d1a238959e93867f0`);
@@ -68,9 +68,10 @@ cross-reference/cardinality checks, or atomic publication.
 ## Explicit profile boundary
 
 P8-B through P8-E are explicit empty sections for this profile; populated state
-must reject admission. P10-A is promoted (`9501bf0`, with P10 canonical/Brief
-tip `95f9882`) but its Ruin/LocalTopology output is not composed by the selected
-GeneralTest bootstrap and remains excluded. P14-A is promoted (`c44904b`,
+must reject admission. P10-A is promoted (`9501bf0`, with current P10
+canonical State/Brief tip `252ad6b`), but its Ruin/LocalTopology output is not
+composed by the selected GeneralTest bootstrap and remains excluded. P14-A is
+promoted (`c44904b`,
 historical promotion State `f8a61fe`; current P14 State/Brief `4caecbb` is
 docs-only) but the selected GeneralTest City assets do not configure its
 exogenous local material source; their existing `productionConfigs` are the

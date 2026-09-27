@@ -22,13 +22,15 @@ promotion-record State `14a2e8ee01e49f1ffdcecf8fd64d274c728ead44`, P9-B canonica
 advance is State-only. Both alignment records remain current.
 The P9-B promotion record is canonical in State/status tip `14a2e8e`; use that
 record alongside P9-B code integration `d9a62d7` and current P9 closure
-`82396ae` when checking capability and profile provenance. P10 canonical/Brief
-tip is `95f98829f9da7abdcb9202a3c62ae717c60a19d8` (P10-A code
+`82396ae` when checking capability and profile provenance. P10 canonical
+State/Brief tip
+tip is `252ad6b9a507f1c001c05a1e19c2546ebd0707a2` (P10-A code
 `9501bf076d506fb64d6ee3e6d178574fff36e153`, State record
 `9e79b58397dc9a89ddcc562be139b79987cb55b9`). P10-A's current reviewed profile is one Ruin at an existing
 P8 Location with finite LocalTopology. Its runtime is promoted at code
 `9501bf076d506fb64d6ee3e6d178574fff36e153`, with P10 State `9e79b58397dc9a89ddcc562be139b79987cb55b9`
-and current canonical Brief `95f98829f9da7abdcb9202a3c62ae717c60a19d8`, but
+and current canonical State/Brief tip
+`252ad6b9a507f1c001c05a1e19c2546ebd0707a2`, but
 its Ruin/LocalTopology output is outside `UnityBootstrap-Daily-v1` composition
 and remains excluded from this profile. P14-A code promotion is
 `c44904bb4b0a066eced1d7e8a773b7dc1eea76c0` with historical State
@@ -249,7 +251,8 @@ P20 Entry Architecture `2f9c93b`, Technical Design `6a0d164`, and proposed
 P20-A proposed checkpoint `2a03eda` (reviewed design/proposal; acceptance pending),
 P10-A's approved bounded P8-C LocationId-neutral seam with design/checkpoint
 review PASS at `345dcbc` and `READY_FOR_IMPLEMENTATION` status; the P10 runtime
-is promoted at code `9501bf0` / State `9e79b58` / current Brief `95f9882`, but
+is promoted at code `9501bf0` / State `9e79b58` / current canonical State/Brief
+`252ad6b`, but
 its Ruin/LocalTopology output is outside this profile's composition/scope, and
 architecture baseline `c285466`, including both current alignment records.
 
