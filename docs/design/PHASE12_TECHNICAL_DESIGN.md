@@ -171,6 +171,38 @@ No genuinely unresolved product or canonical semantic decision is identified wit
 
 ## 8. Sources rechecked
 
+### Promotion impact revalidation — 2026-09-26
+
+This design remains limited to `UnityBootstrap-Daily-v1`; this refresh creates
+no checkpoint IDs and grants no implementation authorization. The post-promotion
+dependency check uses P8 canonical State `470667d`, P9-A authored-bootstrap
+promotion `988b6f5`, P11 Actor Choice State promotion `0803670`, P18-A State
+promotion `0b52898`, and architecture baseline
+`c285466c355103d3637ac165246591b72eb7bda0`, including the current
+intraday/extensibility and multi-participant alignment records.
+
+- **P9-A manifest/version:** this profile still excludes P9/P10 generated
+  worlds. Before implementation, inspect the selected bootstrap composition.
+  If it executes P9-A, the compatibility envelope must include or validate
+  selected manifest/stage identities and versions, inputs, outputs and
+  provenance without rerunning genesis. If it does not execute genesis, retain
+  the explicit exclusion. Do not silently omit causally relevant genesis
+  state.
+- **P11 Actor Choice ingress:** pending WorldCommand and actor-choice inputs
+  remain outside this profile. Capture admission and load validation reject
+  their presence; the promoted ingress does not authorize dropping them from a
+  continuation envelope. Reconfirm this rejection against current command and
+  actor-choice authorities before implementation.
+- **P18-A:** upstream-irrelevant to this daily-only profile. No intraday time,
+  activity or due-work state is claimed. Any intraday profile requires the
+  relevant promoted P18 state, ordering and hydration capabilities first.
+- **P20:** conditional only if a future supported profile includes shared
+  activities; no blanket dependency is introduced.
+
+The refreshed alignment records preserve explicit temporal and participant
+identity boundaries. This review changes no supported scope, serialization
+choice, or compatibility promise.
+
 - `docs/SIMULATION_ARCHITECTURE.md` §§8, 11–13, 91–93.
 - `docs/ROADMAP.md`, `docs/EXECUTION_MODEL.md`, `docs/phases/PHASE12_BRIEF.md`, and `docs/phases/PHASE13_BRIEF.md`.
 - Refreshed `docs/design/PHASE12_ENTRY_ARCHITECTURE.md`, current `docs/PHASE8_STATE.md`, and formal `docs/PHASE5_STATE.md`, `docs/PHASE6_STATE.md`, and `docs/PHASE7_STATE.md` records.
