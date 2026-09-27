@@ -107,9 +107,10 @@ No long-run suite was required: P9-A introduces no daily-loop behavior.
   dependency.
 - P9-A satisfies the authored-bootstrap genesis prerequisite. The approved P10
   Ruin profile consumes P9-B's promoted authored P8-A `LocationId` source at
-  `d9a62d7` and P8-C's promoted Ruin/site anchor capability. Its remaining
-  capability/design gate is the LocationId-neutral LocalTopology owner/migration
-  seam; this does not reopen P8 or add P8-E, P18, P19 or P20 dependencies.
+  `d9a62d7` and P8-C's promoted Ruin/site anchor capability. P10-A owns the
+  bounded LocationId-neutral LocalTopology owner/migration seam and finite
+  Ruin topology; this does not reopen P8 or add P8-E, P18, P19 or P20
+  dependencies.
 - P11 Actor Choice is independently canonical at `0803670`; the combined
   compatibility validation confirms the promoted runtime composition with P9-A.
 - P18, P19 and P20 work remains governed by the explicit dependency edges in
