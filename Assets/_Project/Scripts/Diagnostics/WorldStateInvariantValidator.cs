@@ -310,6 +310,7 @@ public static class WorldStateInvariantValidator
 
         ValidateParentages(snapshot.Parentages, personIds, issues);
         ValidateSpatialAuthority(snapshot, issues);
+        ValidateSpatialRouteKnowledgeAndPlans(snapshot, personIds, issues);
         ValidateArmedForces(snapshot, personIds, issues);
         ValidateContingentManpower(snapshot, issues);
         ValidateArmedForcePositions(snapshot, issues);
@@ -800,6 +801,232 @@ public static class WorldStateInvariantValidator
         }
 
         ValidateSpatialPassagesAndPresence(snapshot, hexesById, locationIds, crossingIds, issues);
+    }
+
+    private static void ValidateSpatialRouteKnowledgeAndPlans(
+        WorldStateSnapshot snapshot,
+        HashSet<string> personIds,
+        List<WorldStateInvariantIssue> issues)
+    {
+        WorldStateSpatialSnapshot spatial = snapshot?.Spatial;
+        if (spatial == null) return;
+
+        if (spatial.SpatialRouteKnowledgeRevision.HasValue)
+        {
+            if (spatial.SpatialRouteKnowledgeRevision.Value < 0L)
+                AddError(issues, "SpatialRouteKnowledgeNegativeRevision", "world", "Spatial route Knowledge revision cannot be negative.");
+        }
+        else if (spatial.SpatialRouteObservations != null && spatial.SpatialRouteObservations.Count > 0)
+        {
+            AddError(issues, "SpatialRouteKnowledgeStateMissing", "world", "Spatial route observations exist without a Knowledge store revision.");
+        }
+
+        Dictionary<string, WorldStateSpatialRouteObservationSnapshot> observationsByActorAndIdentity =
+            new Dictionary<string, WorldStateSpatialRouteObservationSnapshot>(StringComparer.Ordinal);
+        foreach (WorldStateSpatialRouteObservationSnapshot observation in spatial.SpatialRouteObservations ?? Array.Empty<WorldStateSpatialRouteObservationSnapshot>())
+        {
+            if (observation == null)
+            {
+                AddError(issues, "SpatialRouteObservationNull", "observation", "Spatial route Knowledge contains a null observation.");
+                continue;
+            }
+
+            string identity = observation.StableKey;
+            if (string.IsNullOrWhiteSpace(observation.ActorPersonId)
+                || !personIds.Contains(observation.ActorPersonId))
+                AddError(issues, "SpatialRouteObservationActorMissing", identity, "Spatial route observation actor PersonId is absent from the Person snapshot.");
+            if (string.IsNullOrWhiteSpace(observation.StableIdentity)
+                || observationsByActorAndIdentity.ContainsKey(identity))
+                AddError(issues, "SpatialRouteObservationIdentityInvalid", identity, "Spatial route observation identity is empty or duplicated for its actor.");
+            else
+                observationsByActorAndIdentity.Add(identity, observation);
+            if (!Enum.IsDefined(typeof(SpatialSubjectKind), observation.SubjectKind)
+                || string.IsNullOrWhiteSpace(observation.SubjectStableKey))
+                AddError(issues, "SpatialRouteObservationSubjectInvalid", identity, "Spatial route observation requires a defined typed subject with stable identity.");
+            if (!Enum.IsDefined(typeof(SpatialObservationValueKind), observation.ValueKind)
+                || !Enum.IsDefined(typeof(SpatialObservationSourceKind), observation.SourceKind)
+                || string.IsNullOrWhiteSpace(observation.SourceIdentity)
+                || string.IsNullOrWhiteSpace(observation.OriginIdentity)
+                || string.IsNullOrWhiteSpace(observation.PrecisionIdentity)
+                || observation.ObservedDay < 0L
+                || observation.ReceivedDay < observation.ObservedDay
+                || observation.ReceivedDay > snapshot.AbsoluteDay
+                || observation.ConfidencePermille < 0
+                || observation.ConfidencePermille > 1000)
+                AddError(issues, "SpatialRouteObservationEvidenceInvalid", identity, "Spatial route observation evidence, timing, confidence, or precision is invalid for the captured world day.");
+            if (observation.TransmittingPersonId != null && !personIds.Contains(observation.TransmittingPersonId))
+                AddError(issues, "SpatialRouteObservationTransmitterMissing", identity, "Spatial route observation transmitter PersonId is absent from the Person snapshot.");
+            if (observation.SourceKind == SpatialObservationSourceKind.SharedByPerson
+                && string.IsNullOrWhiteSpace(observation.TransmittingPersonId))
+                AddError(issues, "SpatialRouteObservationTransmitterMissing", identity, "SharedByPerson spatial route observation has no transmitting PersonId.");
+
+            bool subjectValueMatches = observation.SubjectKind == SpatialSubjectKind.TraversalOption
+                ? observation.ValueKind == SpatialObservationValueKind.RouteOptionBelief
+                : observation.SubjectKind == SpatialSubjectKind.RouteEstimate
+                    ? observation.ValueKind == SpatialObservationValueKind.RouteEstimate
+                    : observation.ValueKind == SpatialObservationValueKind.EntityPresence;
+            if (!subjectValueMatches)
+                AddError(issues, "SpatialRouteObservationValueKindMismatch", identity, "Spatial route observation value type does not match its typed subject.");
+            if (observation.ValueKind == SpatialObservationValueKind.RouteOptionBelief
+                && !Enum.IsDefined(typeof(SpatialRouteOptionBelief), observation.RouteOptionBelief))
+                AddError(issues, "SpatialRouteObservationBeliefInvalid", identity, "Spatial route option belief is undefined.");
+            if (observation.ValueKind == SpatialObservationValueKind.EntityPresence
+                && !Enum.IsDefined(typeof(SpatialEntityBelief), observation.EntityBelief))
+                AddError(issues, "SpatialRouteObservationEntityBeliefInvalid", identity, "Spatial entity belief is undefined.");
+            if (observation.ValueKind == SpatialObservationValueKind.RouteEstimate
+                && (string.IsNullOrWhiteSpace(observation.EstimateUnit)
+                    || observation.SubjectKind != SpatialSubjectKind.RouteEstimate
+                    || string.IsNullOrWhiteSpace(observation.SubjectRouteCandidateId)
+                    || string.IsNullOrWhiteSpace(observation.SubjectEstimateMetricId)))
+                AddError(issues, "SpatialRouteObservationEstimateInvalid", identity, "Spatial route estimate lacks a typed candidate, metric, or unit identity.");
+
+            if (observation.SubjectKind == SpatialSubjectKind.Hex && string.IsNullOrWhiteSpace(observation.SubjectHexId)
+                || observation.SubjectKind == SpatialSubjectKind.Location && string.IsNullOrWhiteSpace(observation.SubjectLocationId)
+                || observation.SubjectKind == SpatialSubjectKind.Crossing && string.IsNullOrWhiteSpace(observation.SubjectCrossingId))
+                AddError(issues, "SpatialRouteObservationSubjectInvalid", identity, "Spatial route observation subject identity is incomplete.");
+            if (observation.SubjectKind == SpatialSubjectKind.TraversalOption
+                && (string.IsNullOrWhiteSpace(observation.RouteSegmentStableKey)
+                    || string.IsNullOrWhiteSpace(observation.BoundaryFirstHexId)
+                    || string.IsNullOrWhiteSpace(observation.BoundarySecondHexId)
+                    || string.IsNullOrWhiteSpace(observation.FromHexId)
+                    || string.IsNullOrWhiteSpace(observation.ToHexId)
+                    || !observation.OptionKind.HasValue
+                    || !Enum.IsDefined(typeof(TraversalOptionKind), observation.OptionKind.Value)
+                    || observation.FromHexId == observation.ToHexId))
+                AddError(issues, "SpatialRouteObservationSegmentInvalid", identity, "Traversal-option Knowledge requires a complete stable directed segment.");
+        }
+
+        if (spatial.PersonRoutePlanRevision.HasValue)
+        {
+            if (spatial.PersonRoutePlanRevision.Value < 0L)
+                AddError(issues, "PersonRoutePlanNegativeRevision", "world", "Person route-plan revision cannot be negative.");
+        }
+        else if (spatial.PersonRoutePlans != null && spatial.PersonRoutePlans.Count > 0)
+        {
+            AddError(issues, "PersonRoutePlanStateMissing", "world", "Person route plans exist without a plan-store revision.");
+        }
+
+        long planCount = 0L;
+        HashSet<string> planKeys = new HashSet<string>(StringComparer.Ordinal);
+        Dictionary<string, List<WorldStatePersonRoutePlanSnapshot>> plansByActor =
+            new Dictionary<string, List<WorldStatePersonRoutePlanSnapshot>>(StringComparer.Ordinal);
+        foreach (WorldStatePersonRoutePlanSnapshot plan in spatial.PersonRoutePlans ?? Array.Empty<WorldStatePersonRoutePlanSnapshot>())
+        {
+            if (plan == null)
+            {
+                AddError(issues, "PersonRoutePlanNull", "plan", "Person route-plan history contains a null plan.");
+                continue;
+            }
+
+            planCount++;
+            string identity = plan.StableKey;
+            if (string.IsNullOrWhiteSpace(plan.ActorPersonId) || !personIds.Contains(plan.ActorPersonId))
+                AddError(issues, "PersonRoutePlanActorMissing", identity, "Person route plan actor is absent from the Person snapshot.");
+            if (!planKeys.Add(identity))
+                AddError(issues, "PersonRoutePlanIdentityDuplicate", identity, "Person route-plan identity appears more than once.");
+            if (!plansByActor.TryGetValue(plan.ActorPersonId ?? string.Empty, out List<WorldStatePersonRoutePlanSnapshot> actorPlans))
+            {
+                actorPlans = new List<WorldStatePersonRoutePlanSnapshot>();
+                plansByActor.Add(plan.ActorPersonId ?? string.Empty, actorPlans);
+            }
+            actorPlans.Add(plan);
+
+            if (string.IsNullOrWhiteSpace(plan.DestinationHexId)
+                || string.IsNullOrWhiteSpace(plan.CandidateOriginHexId)
+                || string.IsNullOrWhiteSpace(plan.CandidateSequenceKey)
+                || string.IsNullOrWhiteSpace(plan.DecisionIdentity)
+                || string.IsNullOrWhiteSpace(plan.PolicyId)
+                || string.IsNullOrWhiteSpace(plan.PolicyVersion)
+                || string.IsNullOrWhiteSpace(plan.EstimateMetricId)
+                || string.IsNullOrWhiteSpace(plan.EstimateUnitIdentity)
+                || plan.MaximumEstimateAgeDays < 0L
+                || plan.KnowledgeActorRevision < 0L
+                || plan.AcceptedDay < 0L
+                || plan.AcceptedDay > snapshot.AbsoluteDay
+                || plan.PlanRevision <= 0L
+                || !Enum.IsDefined(typeof(PersonRoutePlanStatus), plan.Status))
+                AddError(issues, "PersonRoutePlanFieldsInvalid", identity, "Person route plan has invalid destination, policy, basis, day, revision, or status fields.");
+            if (!string.Equals(plan.KnowledgeBasisFingerprint,
+                    SpatialStableKey.Encode((plan.KnowledgeObservationIdentities ?? Array.Empty<string>()).ToArray()),
+                    StringComparison.Ordinal))
+                AddError(issues, "PersonRoutePlanBasisInvalid", identity, "Person route plan Knowledge basis fingerprint is inconsistent.");
+
+            HashSet<string> basisIdentities = new HashSet<string>(StringComparer.Ordinal);
+            foreach (string observationIdentity in plan.KnowledgeObservationIdentities ?? Array.Empty<string>())
+            {
+                if (string.IsNullOrWhiteSpace(observationIdentity)
+                    || !basisIdentities.Add(observationIdentity)
+                    || !observationsByActorAndIdentity.ContainsKey(SpatialStableKey.Encode(plan.ActorPersonId, observationIdentity)))
+                    AddError(issues, "PersonRoutePlanKnowledgeEvidenceMissing", identity, "Person route plan basis references missing or duplicate actor Knowledge evidence.");
+            }
+
+            HashSet<string> visitedHexes = new HashSet<string>(StringComparer.Ordinal);
+            if (!string.IsNullOrWhiteSpace(plan.CandidateOriginHexId)) visitedHexes.Add(plan.CandidateOriginHexId);
+            string currentHexId = plan.CandidateOriginHexId;
+            List<string> candidateParts = new List<string> { "route-candidate-v1", plan.CandidateOriginHexId ?? string.Empty, plan.DestinationHexId ?? string.Empty };
+            IReadOnlyList<WorldStatePersonRoutePlanLegSnapshot> legs = plan.Legs ?? Array.Empty<WorldStatePersonRoutePlanLegSnapshot>();
+            foreach (WorldStatePersonRoutePlanLegSnapshot leg in legs)
+            {
+                if (leg == null)
+                {
+                    AddError(issues, "PersonRoutePlanLegInvalid", identity, "Person route plan contains a null leg.");
+                    continue;
+                }
+                candidateParts.Add(leg.StableKey ?? string.Empty);
+                bool optionIdentityValid = leg.OptionKind == TraversalOptionKind.Connection
+                    ? !string.IsNullOrWhiteSpace(leg.OptionConnectionId)
+                    : leg.OptionKind == TraversalOptionKind.Crossing
+                        ? !string.IsNullOrWhiteSpace(leg.OptionCrossingId)
+                        : leg.OptionKind == TraversalOptionKind.WildernessRule
+                            && !string.IsNullOrWhiteSpace(leg.OptionRuleIdentity)
+                            && !string.IsNullOrWhiteSpace(leg.OptionRuleVersion);
+                if (string.IsNullOrWhiteSpace(leg.StableKey)
+                    || string.IsNullOrWhiteSpace(leg.FromHexId)
+                    || string.IsNullOrWhiteSpace(leg.ToHexId)
+                    || leg.FromHexId != currentHexId
+                    || leg.FromHexId == leg.ToHexId
+                    || !visitedHexes.Add(leg.ToHexId)
+                    || !Enum.IsDefined(typeof(TraversalOptionKind), leg.OptionKind)
+                    || !optionIdentityValid
+                    || !Enum.IsDefined(typeof(SpatialRouteOptionBelief), leg.Belief)
+                    || string.IsNullOrWhiteSpace(leg.BeliefObservationIdentity)
+                    || !basisIdentities.Contains(leg.BeliefObservationIdentity))
+                    AddError(issues, "PersonRoutePlanLegInvalid", identity, "Person route plan contains an invalid, disconnected, repeated, or unsupported intended segment.");
+                if (!observationsByActorAndIdentity.ContainsKey(SpatialStableKey.Encode(plan.ActorPersonId, leg.BeliefObservationIdentity)))
+                    AddError(issues, "PersonRoutePlanLegEvidenceMissing", identity, "Person route plan leg references a missing actor Knowledge observation.");
+                currentHexId = leg.ToHexId;
+            }
+            if (!string.Equals(currentHexId, plan.DestinationHexId, StringComparison.Ordinal)
+                || !string.Equals(plan.CandidateSequenceKey, SpatialStableKey.Encode(candidateParts.ToArray()), StringComparison.Ordinal))
+                AddError(issues, "PersonRoutePlanCandidateInvalid", identity, "Person route plan candidate does not reconstruct from its ordered segments and endpoints.");
+            string expectedPlanKey = SpatialStableKey.Encode(
+                plan.ActorPersonId ?? string.Empty,
+                plan.PlanRevision.ToString(CultureInfo.InvariantCulture),
+                plan.DecisionIdentity ?? string.Empty,
+                plan.CandidateSequenceKey ?? string.Empty);
+            if (!string.Equals(plan.StableKey, expectedPlanKey, StringComparison.Ordinal))
+                AddError(issues, "PersonRoutePlanIdentityInvalid", identity, "Person route plan stable identity does not match its decision and candidate.");
+        }
+
+        if (spatial.PersonRoutePlanRevision.HasValue && planCount > spatial.PersonRoutePlanRevision.Value)
+            AddError(issues, "PersonRoutePlanRevisionMismatch", "world", "Person route-plan history count exceeds its mutation revision.");
+        foreach (KeyValuePair<string, List<WorldStatePersonRoutePlanSnapshot>> entry in plansByActor)
+        {
+            entry.Value.Sort((left, right) => left.PlanRevision.CompareTo(right.PlanRevision));
+            int activeCount = 0;
+            long expectedRevision = 1L;
+            foreach (WorldStatePersonRoutePlanSnapshot plan in entry.Value)
+            {
+                if (plan.PlanRevision != expectedRevision)
+                    AddError(issues, "PersonRoutePlanActorRevisionGap", entry.Key, "Person route-plan revisions must be contiguous and begin at one.");
+                expectedRevision++;
+                if (plan.Status == PersonRoutePlanStatus.Active) activeCount++;
+            }
+            if (activeCount > 1)
+                AddError(issues, "PersonRoutePlanMultipleActive", entry.Key, "A Person cannot have multiple active route plans.");
+            if (entry.Value.Count > 0 && entry.Value[entry.Value.Count - 1].Status == PersonRoutePlanStatus.Superseded)
+                AddError(issues, "PersonRoutePlanLatestSuperseded", entry.Key, "The latest Person route plan cannot already be superseded.");
+        }
     }
 
     private static void ValidateSpatialPassagesAndPresence(
