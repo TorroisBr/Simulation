@@ -7,9 +7,13 @@ change the Phase 13 Brief's `WAIT_DEPENDENCY` readiness. It is subordinate to
 
 **Current-base revalidation (2026-09-27):** P9 canonical is `82396ae` (closed
 within P9-A/P9-B; P9-B's selected authored geography is exactly one P8-A Hex
-and one anchored Location with provenance); P10 canonical is `95f9882` (P10-A
-promoted, Phase 10 open, with no universal Ruin/topology assumption);
-P12's accepted scope record is `4a1d364` (scope only, still `WAIT_DEPENDENCY`;
+and one anchored Location with provenance); P10 canonical is `252ad6b`
+(P10-A promoted, Phase 10 open, with no universal Ruin/topology assumption).
+This P10 promotion is docs-only: it refreshes the P9 closure/State pointer in
+the P10 State and Brief, without changing P10 capability or dependencies;
+P10-A remains a bounded promoted capability, not universal Ruin/topology
+support. P12's accepted scope record is `4a1d364` (scope only, still
+`WAIT_DEPENDENCY`;
 latest docs-only owner-inventory refresh candidate `18f1cbb`); P14 canonical is
 `4caecbb`. P18 canonical is `99cac77` with its A/B/C core promoted; additive
 P18-A contract `2175bf2` was accepted, with acceptance recorded in implementation
