@@ -55,7 +55,7 @@ gate, deterministic closing-balance diagnostics, and the reconstruction
 inventory in the checkpoint contract.
 
 Implementation validation on the candidate: focused EditMode suites passed for
-`LocalDailyMaterialFlowTests` (8), `SettlementStockOwnershipTests` (14),
+`LocalDailyMaterialFlowTests` (11), `SettlementStockOwnershipTests` (14),
 `PopulationConsumptionTests` (22), `WorldStateDiagnosticsTests` (46), and
 `EconomyTransactionTests` (33). `git diff --check` passed. Independent review
 and integration/regression gates remain outstanding; these results do not

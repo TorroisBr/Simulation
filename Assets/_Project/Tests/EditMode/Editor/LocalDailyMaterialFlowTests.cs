@@ -60,6 +60,66 @@ public sealed class LocalDailyMaterialFlowTests
         Assert.That(city.LastMaterialFlow.ClosingStock, Is.EqualTo(city.LastMaterialFlow.OpeningStock));
     }
 
+    [Test]
+    public void DailyFlowCapsFreeConsumptionAtAvailableStock()
+    {
+        ItemData item = SimulationTestFactory.CreateItem("p14-stock-limited-item");
+        CityData data = SimulationTestFactory.CreateCityData("p14-stock-limited", SimulationTestFactory.CreateMarketItem(item, 0, 20));
+        data.initialPopulation = 1000;
+        data.settlementSemanticId = "settlement.stock-limited";
+        data.marketStoreSemanticId = "store.stock-limited";
+        data.materialFlowLocationId = "location.stock-limited";
+        data.productionConfigs.Add(new CityProductionConfig { item = item, amountPerDay = 5, productionSourceId = "source.stock-limited", contentRevision = "rev-a" });
+        data.marketItems[0].consumptionPer1000Population = 10f;
+        CityRuntime city = new CityRuntime("runtime.stock-limited", data, new SpatialLocationRuntime("location-runtime-stock-limited"));
+
+        Simulate(city, 7);
+
+        Assert.That(city.LastMaterialFlow.RequestedFreeConsumption, Is.EqualTo(10));
+        Assert.That(city.LastMaterialFlow.ActualFreeConsumption, Is.EqualTo(5));
+        Assert.That(city.LastMaterialFlow.OpeningStock + city.LastMaterialFlow.AppliedSourceQuantity
+            - city.LastMaterialFlow.ActualFreeConsumption, Is.EqualTo(city.LastMaterialFlow.ClosingStock));
+        Assert.That(city.LastMaterialFlow.ClosingStock, Is.Zero);
+    }
+
+    [Test]
+    public void SameAuthoredInputsProduceSameDeterministicFlowProjection()
+    {
+        ItemData firstItem = SimulationTestFactory.CreateItem("p14-determinism-item");
+        ItemData secondItem = SimulationTestFactory.CreateItem("p14-determinism-item");
+        CityRuntime first = CreateDeterminismCity("runtime-determinism-a", firstItem);
+        CityRuntime second = CreateDeterminismCity("runtime-determinism-b", secondItem);
+
+        Simulate(first, 19);
+        Simulate(second, 19);
+
+        string firstProjection = MaterialFlowProjection(first);
+        string secondProjection = MaterialFlowProjection(second);
+        Assert.That(firstProjection, Is.EqualTo(secondProjection));
+        Assert.That(first.Market.GetAmount(firstItem), Is.EqualTo(second.Market.GetAmount(secondItem)));
+    }
+
+    [Test]
+    public void EnabledRuntimeAdvanceDayAppliesSourceAndFreeConsumption()
+    {
+        ItemData item = SimulationTestFactory.CreateItem("p14-enabled-runtime-item");
+        CityRuntime city = new CityRuntime("runtime-enabled-flow", ProfileData("p14-enabled-runtime", item), new SpatialLocationRuntime("legacy-enabled-runtime"));
+        SpatialAuthorityStore authority = CreateSpatialAuthority("p14-enabled-runtime-location");
+        LegacySpatialAnchorBindingStore anchors = BindCity(authority, city, "p14-enabled-runtime-location");
+        SimulationRuntime runtime = CreateRuntime(city, authority, anchors, true);
+
+        runtime.AdvanceDay();
+
+        Assert.That(runtime.CurrentDay, Is.EqualTo(1L));
+        Assert.That(city.LastMaterialFlow, Is.Not.Null);
+        Assert.That(city.LastMaterialFlow.AbsoluteDay, Is.EqualTo(1L));
+        Assert.That(city.LastMaterialFlow.AppliedSourceQuantity, Is.EqualTo(3));
+        Assert.That(city.LastMaterialFlow.RequestedFreeConsumption, Is.EqualTo(2));
+        Assert.That(city.LastMaterialFlow.ActualFreeConsumption, Is.EqualTo(2));
+        Assert.That(city.LastMaterialFlow.ClosingStock, Is.EqualTo(11));
+        Assert.That(city.Market.GetAmount(item), Is.EqualTo(11));
+    }
+
     [TestCase(false)]
     [TestCase(true)]
     public void RuntimeRejectsExtraOrDuplicateMarketItemRows(bool duplicateSourceItem)
@@ -154,6 +214,34 @@ public sealed class LocalDailyMaterialFlowTests
             contentRevision = "content-v1"
         });
         return data;
+    }
+
+    private static CityRuntime CreateDeterminismCity(string runtimeId, ItemData item)
+    {
+        CityData data = SimulationTestFactory.CreateCityData("p14-deterministic-definition", SimulationTestFactory.CreateMarketItem(item, 6, 20));
+        data.settlementSemanticId = "settlement.deterministic";
+        data.marketStoreSemanticId = "store.deterministic";
+        data.materialFlowLocationId = "location.deterministic";
+        data.initialPopulation = 1000;
+        data.marketItems[0].consumptionPer1000Population = 2f;
+        data.productionConfigs.Add(new CityProductionConfig
+        {
+            item = item,
+            amountPerDay = 3,
+            productionSourceId = "source.deterministic",
+            contentRevision = "content-v1"
+        });
+        return new CityRuntime(runtimeId, data, new SpatialLocationRuntime("legacy-" + runtimeId));
+    }
+
+    private static string MaterialFlowProjection(CityRuntime city)
+    {
+        string canonical = WorldStateCanonicalWriter.Write(WorldStateSnapshotBuilder.BuildSnapshot(
+            new WorldStateSnapshotContext(cities: new[] { city })));
+        int start = canonical.IndexOf("CITY_MATERIAL_FLOW|", StringComparison.Ordinal);
+        Assert.That(start, Is.GreaterThanOrEqualTo(0));
+        int end = canonical.IndexOf('\n', start);
+        return end >= 0 ? canonical.Substring(start, end - start) : canonical.Substring(start);
     }
 
     private static SpatialAuthorityStore CreateSpatialAuthority(params string[] locationIds)
