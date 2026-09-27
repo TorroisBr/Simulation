@@ -326,7 +326,9 @@ refresh review passed at `d1a8414` and did not repeat the full-design review.
 Remaining gates are formal acceptance of the checkpoint contract and
 scope/status through the repository workflow, separate implementation
 authorization, and demonstrated complete staged owner export/hydration plus
-the live profile inventory.
+the live profile inventory. The read-only gap ledger at
+`PHASE12_OWNER_COVERAGE_INVENTORY.md` records the current per-owner evidence;
+it does not satisfy those capability gates or authorize implementation.
 Preserve the selected P9-B profile/stage identity and manifest provenance for
 the `TesteSimulacao` path; generated P9/P10 world content remains excluded. Owner
 export/hydration and parity requirements remain capability gates for closure,
