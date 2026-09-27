@@ -1,4 +1,9 @@
-# Phase 9 — CLOSED
+# Phase 9 — REOPENED FOR P9-B DESIGN
+
+P9-A remains promoted and closed within its approved authored-bootstrap-only
+scope. Phase 9 is reopened solely to evaluate the separately approved P9-B
+authored-geography capability below. P9-B is **PROPOSED / UNACCEPTED**: this
+documentation candidate does not authorize implementation or claim delivery.
 
 ## Current authority and candidate
 
@@ -10,27 +15,26 @@
 - P9-A candidate integration record: `12a1e0dfb8b856525a84a9f8373711e9584f95a9`.
 - P9-A implementation candidate: `974a8d72a158962619d7ba8aa1ccf854eeadd47e`.
 - P9-A code promotion commit: `43f08b3dfbf042380c2f8a8b037bbf3ebd309ccb` on `codex/phase9/canonical`.
-- **P9-A status: PROMOTED.** The user approved promotion of the reviewed candidate; this State-only commit records that promotion.
-- **Phase 9 status: CLOSED** within the approved authored-bootstrap-first-delivery scope. P9-A is the sole approved Phase 9 checkpoint and is canonical. Local/pre-start content generation is tracked by P10; public mod loading, retrofit and runtime expansion remain deferred consumers, not uncompleted P9 checkpoints.
+- **P9-A status: PROMOTED and scope-closed.** Its original accepted scope and closure record remain intact. P9-B is a new proposed checkpoint, not an expansion or rewrite of P9-A.
+- **Phase 9 status: REOPENED for P9-B design only.** Local/pre-start content generation remains P10; public mod loading, retrofit and runtime expansion remain deferred consumers.
 
-## Phase-level closure review
+## Historical P9-A phase-closure review
 
 - Independent closure review: **PASS** for this State/Brief closure candidate,
   against exact canonical baseline
   `988b6f5d14e12359e93464bae5e0048ca970ad86`.
 - The review confirmed that P9-A satisfies the approved initial-world objective
-  for the selected existing authored Unity bootstrap profile, that no other
-  Phase 9 checkpoint is approved or marked must-complete, and that later
-  generation algorithms/content and the P19 loader remain outside this Phase's
-  closure boundary.
+  for the selected existing authored Unity bootstrap profile, with no other
+  checkpoint approved at that time. This historical P9-A closure review does
+  not review or accept the subsequently proposed P9-B checkpoint.
 - The closure boundary preserves the approved limits: no new procedural
   terrain, settlements, population, local topology, generated backstory,
   runtime expansion or new gameplay. P9-A's existing authored content and
   deterministic pre-start pipeline remain canonical.
 - Required implementation, integration and compatibility evidence is recorded
   below and in `docs/design/PHASE9A_AUTHORED_BOOTSTRAP_CHECKPOINT.md`.
-- Formal State marker: **CLOSED**. This is a State-only closure record; no
-  runtime files or P9-A behavior changed.
+- Historical P9-A State marker: **CLOSED**. Phase 9 is now reopened for P9-B
+  design only; no P9-A runtime files or behavior changed.
 
 ## P9-A — Authored Bootstrap Genesis v1
 
@@ -94,9 +98,11 @@ No long-run suite was required: P9-A introduces no daily-loop behavior.
   route, travel, or presence facts. P8's promoted baseline is recorded for
   ancestry and regression compatibility, not as an invented P9-A capability
   dependency.
-- P9-A promotion satisfies the P9 genesis prerequisite for P10, and the
-  relevant P8-C local/anchor capability is canonical. P10 may advance under
-  its own reviewed entry architecture, checkpoint scope and technical gates.
+- P9-A satisfies the authored-bootstrap genesis prerequisite. The newly
+  approved P10 Ruin profile additionally waits for P9-B's authored P8-A
+  `LocationId` source and P8-C's promoted Ruin/site owner and LocalTopology
+  capability. P9-B remains proposed, so this P10 capability edge is not yet
+  satisfied.
 - P11 Actor Choice is independently canonical at `0803670`; the combined
   compatibility validation confirms the promoted runtime composition with P9-A.
 - P18, P19 and P20 work remains governed by the explicit dependency edges in
@@ -104,5 +110,55 @@ No long-run suite was required: P9-A introduces no daily-loop behavior.
 
 Promotion record: the approved integration candidate was promoted to
 `codex/phase9/canonical` at `43f08b3`; local and remote refs were verified.
-Phase-level closure is separately reviewed and recorded above, with the
-approved scope limits and deferred consumers retained.
+P9-A's phase-closure marker remains historical evidence for that bounded
+delivery; P9-B reopens Phase 9 only for the additional geography source
+capability described next.
+
+## P9-B — Authored Geography Source for Local Authoring v1 (PROPOSED)
+
+The user approved a separate upstream authored geography prerequisite for
+P10: one bounded P8-A `Hex` and one `Location` anchored to it, composed by the
+selected authored Unity genesis profile. P8-A continues to own geographic
+facts and authority; P9 owns the selected authored profile inputs, deterministic
+stage composition, provenance and atomic pre-boundary publication. P8 remains
+closed. P9-A's promoted behavior, accepted inputs, tests, and authored-bootstrap
+scope are unchanged; P9-B adds a distinct selected profile capability.
+
+The proposed implementation contract is in
+`docs/design/PHASE9B_AUTHORED_GEOGRAPHY_CHECKPOINT.md`. It consumes canonical
+P8-A authority and the promoted P9-A genesis handoff, calls
+`SpatialAuthorityStore.TryComposeGeography` with one explicit
+`SpatialGeographyDefinition`, and includes that authority in the existing
+atomic P9 publication boundary. It must not create a parallel geography
+authority or mint a Location in P10. The chosen authored Unity profile carries
+exactly one stable Hex and one stable Location/AnchorHexId, including P8-A's
+coordinate convention, terrain definition/revision pair, and scale value/unit
+with stable scale provenance. Values absent from existing accepted content
+remain fixture-level authoring details and must not be generalized into
+universal terrain or scale rules.
+
+The new built-in stage has stable identity, version, declared inputs/outputs,
+dependency, canonical contribution order, fingerprint inclusion, and
+reconstruction records. It composes geography only into an otherwise empty
+P8-A authority and completes before first simulated boundary through the
+existing genesis handoff. Validation occurs before publication; there is no
+partial profile publication. The stage's selected geography facts are
+available to downstream P10, while P10 owns only its bounded Ruin identity
+binding and finite LocalTopology capability.
+
+P9-B expressly excludes procedural terrain, settlement/population/backstory,
+City/Market, Ruin/site binding, local topology, travel/passages, Knowledge,
+activities, runtime expansion, code-mod loader/API, P18/P20 gameplay and
+security/attack concerns. Multi-participant activity alignment remains a
+present-day review constraint but adds no P9-B facts or dependency.
+
+**Dependency edges:** P9-B requires promoted P8-A geography authority and the
+P9-A genesis pipeline/handoff. P10's Ruin profile requires P9-B's authored
+`LocationId` source and the separately promoted P8-C Ruin/site owner and
+local-topology capability. These are capability-specific edges; P8-E travel
+and P18/P19/P20 do not become blanket prerequisites.
+
+**Gate:** P9-B remains proposed pending independent contract review and
+subsequent implementation authorization under the execution model. No code,
+Unity validation, implementation review, integration, or promotion is claimed
+by this State update.
