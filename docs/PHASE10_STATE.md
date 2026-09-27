@@ -1,7 +1,7 @@
 # Phase 10 State — Local Generation & Pre-start Authoring
 
-**Status:** PHASE 10 IN PROGRESS — P10-A READY FOR IMPLEMENTATION; no P10
-runtime capability is delivered or canonical.
+**Status:** PHASE 10 IN PROGRESS — P10-A implementation review passed;
+canonical promotion is pending. No P10 runtime capability is canonical yet.
 
 **Architecture baseline:** `c285466c355103d3637ac165246591b72eb7bda0`.
 
@@ -25,7 +25,7 @@ The durable checkpoint record and refreshed technical design are on
 `345dcbc8f05e0d64fed1b058d30f08ad0be8937d`. Independent technical review:
 **PASS** on that exact candidate against P8 canonical, P9-B code/current State
 and architecture `c285466`. The user-approved scope and satisfied promoted
-dependencies put P10-A in `READY_FOR_IMPLEMENTATION`.
+dependencies made P10-A ready for implementation.
 
 The checkpoint adds no procedural terrain, settlement/population generation,
 regional routes, Knowledge, activities, loot, encounters, construction, runtime
@@ -35,16 +35,35 @@ creates no P18/P20 state or dependency. P19 loader/API work remains deferred.
 
 ## Delivery status and next gate
 
-Implementation has not started. No P10 tests, code review, integration, or
-canonical promotion are claimed. The implementation candidate must prove the
-actual selected P9-B profile handoff and provenance, semantic
-DefinitionId/LocationId-to-RuntimeId mapping through P8-C's composed-runtime
-validator, atomic pre-boundary publication, stable finite topology, and
-City/Site compatibility. The focused suites and full EditMode/Smoke gates are
-specified in `docs/design/PHASE10_A_CHECKPOINT_RECORD.md`.
+The implementation candidate is
+`codex/phase10/RuinLocalTopologyGenesis` at
+`88720a690a2bc9853d1e3967b4f99d2abd294fd3`, based on the reviewed readiness
+record `d721aa48479f5239d9d52a1e5fc397e382487d24`. Independent code review:
+**PASS** on the exact implementation candidate and exact base. The review
+confirmed the selected P9-B Location/anchor handoff, one-Ruin constraint,
+ordered and validated pre-start publication, stable semantic identity across
+runtime allocator changes, and P8-C composition checks. No blocking findings.
 
-After implementation, require independent code review, integration regression
-gates, `git diff --check`, and explicit human approval for canonical promotion.
-Phase 10 remains open until its approved objective and any separately accepted
-mandatory checkpoints are complete with an independent closure review and a
-formal State closure marker.
+The candidate fast-forwarded unchanged onto
+`codex/phase10/RuinLocalTopologyIntegration`. Validation was run against the
+same exact code SHA before that ref-only integration: P10 focused tests 6/6,
+bootstrap composition 14/14, ALL EditMode 1718/1718, complete official Smoke
+5/5, and `git diff --check` passed. A replay attempt in the fresh integration
+worktree could not produce test results because Unity package resolution
+failed with `ENOSPC`; that attempt is not counted as a pass. The integration
+branch contains the same tested code tree and commit.
+
+The delivered candidate implements the actual selected P9-B profile handoff
+and provenance, semantic DefinitionId/LocationId-to-RuntimeId mapping through
+P8-C's composed-runtime validator, atomic pre-boundary publication, stable
+finite topology, and City/Site compatibility. The focused suites and full
+EditMode/Smoke gates are specified in
+`docs/design/PHASE10_A_CHECKPOINT_RECORD.md`.
+
+The feature and integration candidates are not canonical until the explicit
+promotion gate is satisfied. Phase 10 remains open until its approved
+objective and any separately accepted mandatory checkpoints are complete
+with an independent closure review and a formal State closure marker.
+
+Canonical promotion still requires the integration regression gates,
+`git diff --check`, and explicit human approval.
