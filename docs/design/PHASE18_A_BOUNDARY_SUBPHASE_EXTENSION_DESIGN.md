@@ -1,8 +1,8 @@
 # P18-A Additive Boundary Subphase Extension — Technical Design Proposal
 
-**Design base:** `18ecc6e56d3c6303edfaf8a38257355d262a6ea5` (`codex/phase18/canonical`, including promoted P18-C)
+**Design base:** `99cac77f7d66e8eb61fe68efb6959a4a5b7029ca` (`codex/phase18/canonical`, including promoted P18-C core). The separate external-input/deferral adapter candidate is `405c5c0df80f210892a1db9932688550bb06c463` and remains unpromoted pending its canonical gate.
 **Architecture baseline:** `c285466c355103d3637ac165246591b72eb7bda0`
-**Authority:** `docs/design/PHASE18_A_TECHNICAL_DESIGN.md`, promoted P18-C at the design base, the revised P18-D adapter candidate `b8bfe93c66b9b5fe3bbffbce4855ba496c7354c5`, the intraday/extensibility and multi-participant alignment records, `docs/EXECUTION_MODEL.md`, and `docs/phases/PHASE18_BRIEF.md`.
+**Authority:** `docs/design/PHASE18_A_TECHNICAL_DESIGN.md`, promoted P18-C core at the design base, unpromoted P18-C external-input/deferral adapter candidate `405c5c0df80f210892a1db9932688550bb06c463`, the revised P18-D technical design candidate `aa5f182f0f5a93f26092179d1708a1f3429fbb1f`, the intraday/extensibility and multi-participant alignment records, `docs/EXECUTION_MODEL.md`, and `docs/phases/PHASE18_BRIEF.md`.
 **Status:** Proposed, additive, unaccepted prerequisite to P18-D implementation. This document does not change the promoted P18-A implementation, create a State/closure record, or authorize P18-D implementation.
 
 ## 1. Purpose and compatibility boundary
@@ -55,7 +55,7 @@ Temporal identity is the absolute day boundary at the exact `LogicalTick`, combi
 
 ## 6. Extension seam and non-goals
 
-The additive seam may be expressed through typed optional boundary activation/continuation contracts (or equivalent internal P18-A interfaces): activation returns a prepared atomic commit plus a frozen continuation descriptor; the timeline persists/resolves continuation identity and ordered progress; owners prepare/commit individual steps and return data-only signals; and the outer advance validates/publishes returned facts atomically after success. Exact API names and storage layout remain implementation design, but the atomicity, identity, barrier, and reconstruction semantics above are requirements.
+The additive seam may be expressed through typed optional boundary activation/continuation contracts (or equivalent internal P18-A interfaces): activation returns a prepared atomic commit plus a frozen continuation descriptor; the timeline persists/resolves continuation identity and ordered progress; owners prepare/commit individual steps and return data-only signals; the timeline validates/publishes returned timeline facts atomically after continuation completion and before same-instant ordinary work; and P18-C source-signal handoff occurs only after successful outer advance return. Exact API names and storage layout remain implementation design, but the atomicity, identity, barrier, and reconstruction semantics above are requirements.
 
 This does not add a generic world transaction, arbitrary plugin callbacks, a public mod API/loader, a universal recurring-process model, a general workflow engine, or gameplay beyond the explicitly selected P18-D consumer. Moddability/extensibility remains a present review constraint: typed semantic descriptors and stable identities must be compatible with future extension without exposing a public registry in P18-A. Phase 19's public extension surface remains deferred.
 
