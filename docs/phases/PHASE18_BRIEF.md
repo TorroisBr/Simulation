@@ -2,7 +2,7 @@
 
 **Authority:** planning scope under `../SIMULATION_ARCHITECTURE.md` §§11–12, 91–92. **Readiness:** P18-A/B/C core capabilities and the accepted additive A extension are promoted.
 The additive P18-A boundary/continuation contract was accepted at `2175bf2`; corrected implementation candidate `f1bfe818565c3fca81b373d1bc9a70a16f4eda10` passed exact-tip review and required validation and was promoted at integration tip `1dd0479`.
-The preserved P18-C external-input/deferral adapter candidate is assembled against current P18 canonical State tip `eabc1c2` / code tip `1dd0479`; post-extension revalidation and exact-tip independent review are in progress before its promotion gate. P18-D remains dependency-gated. Phase numbering preserves existing IDs, not execution order.
+The preserved P18-C external-input/deferral adapter code integration `a535441` is assembled against current P18 canonical State tip `eabc1c2` / extension code tip `1dd0479`. Post-extension exact-tip implementation review passed; the focused suites, ALL EditMode 1794/1794, and complete Smoke 5/5 passed. Its canonical promotion approval remains a separate pending gate. P18-D remains dependency-gated. Phase numbering preserves existing IDs, not execution order.
 
 P18-D's existing P11 external-input consumer also requires the separate
 P18-C external-input/deferral adapter design at
@@ -16,9 +16,10 @@ Post-P9-B/P11 compatibility
 validation at `2d6b3ce` passed focused suites 14/13/24/6, ALL EditMode
 1742/1742 and official Smoke 5/5; this is upstream compatibility evidence,
 not adapter test evidence. The adapter's pre-extension focused/full results are
-historical only; its assembled post-extension tree is being revalidated. This
-does not promote or claim implementation of the adapter. P18-D implementation
-remains blocked until the adapter capability is independently reviewed and
+historical only; its assembled post-extension tree passed focused and full
+validation and exact-tip independent review. This does not promote the adapter.
+P18-D implementation
+remains blocked until the independently validated adapter integration is
 promoted and the serialized `SimulationRuntime` ownership window is available;
 the accepted P18-A extension is already promoted. The P18-D
 SellGoods consumer also requires a stable

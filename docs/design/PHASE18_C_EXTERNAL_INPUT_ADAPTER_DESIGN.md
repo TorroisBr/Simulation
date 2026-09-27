@@ -4,8 +4,9 @@
 `358c65c85e1eafdd91ef4a6553ba3b0a8c4af249` against the then-current P18 State
 `311baa9`, when the adapter was `READY_FOR_IMPLEMENTATION`. Its implementation
 is now assembled on P18 canonical State tip `eabc1c2` / promoted extension code
-`1dd0479` at integration candidate `a535441`; post-extension validation and
-exact-tip review are in progress, and canonical promotion has not occurred.
+`1dd0479` at code integration candidate `a535441`; post-extension validation
+and exact-tip implementation review passed. Canonical promotion has not
+occurred; subsequent docs/status follow-ups do not alter the implementation.
 This remains an additive supporting capability required by P18-D. P18-C's
 existing core remains promoted at `7aa7626`.
 Architecture baseline is `c285466`. P11's bounded Actor Choice is canonical
@@ -370,8 +371,8 @@ choices:
    P18-C does not implement SellGoods.
 
 The additive adapter was implemented on its reviewed pre-extension base and is
-now assembled against the promoted P18-A extension at `a535441`. Its current
-focused/full validation and final exact-tip review remain in progress. P18-D
+now assembled against the promoted P18-A extension at `a535441`. Its post-
+extension focused/full validation and final exact-tip review passed. P18-D
 remains blocked until the adapter is promoted and the serialized
 `SimulationRuntime` ownership window is available; the P18-A extension is
 already accepted and promoted.
