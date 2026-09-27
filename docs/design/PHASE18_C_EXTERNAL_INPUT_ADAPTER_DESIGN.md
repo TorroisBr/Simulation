@@ -1,10 +1,13 @@
 # P18-C — External-input and deferral adapter design
 
-**Status:** Independent design review PASS at exact tip
-`358c65c85e1eafdd91ef4a6553ba3b0a8c4af249`; bounded adapter is
-`READY_FOR_IMPLEMENTATION`. This is an additive supporting capability required
-by P18-D; no implementation or runtime behavior is claimed here. P18-C's
-existing core remains promoted at `7aa7626`; current Phase 18 State is `311baa9`.
+**Status:** This bounded design passed independent review at exact tip
+`358c65c85e1eafdd91ef4a6553ba3b0a8c4af249` against the then-current P18 State
+`311baa9`, when the adapter was `READY_FOR_IMPLEMENTATION`. Its implementation
+is now assembled on P18 canonical State tip `eabc1c2` / promoted extension code
+`1dd0479` at integration candidate `a535441`; post-extension validation and
+exact-tip review are in progress, and canonical promotion has not occurred.
+This remains an additive supporting capability required by P18-D. P18-C's
+existing core remains promoted at `7aa7626`.
 Architecture baseline is `c285466`. P11's bounded Actor Choice is canonical
 at `308e24d` (code `0cd4281`). P18-D's reviewed consumer design is `aa5f182`.
 
@@ -363,7 +366,9 @@ choices:
    economy owner and idempotently reconciles separate P11/C owner commits.
    P18-C does not implement SellGoods.
 
-These additive adapter contracts may be implemented after independent design
-review and completion of P9/P11 validation. P18-D remains blocked by the
-separate P18-A extension acceptance/promotion and `SimulationRuntime` ownership
-window even if adapter implementation is complete.
+The additive adapter was implemented on its reviewed pre-extension base and is
+now assembled against the promoted P18-A extension at `a535441`. Its current
+focused/full validation and final exact-tip review remain in progress. P18-D
+remains blocked until the adapter is promoted and the serialized
+`SimulationRuntime` ownership window is available; the P18-A extension is
+already accepted and promoted.
