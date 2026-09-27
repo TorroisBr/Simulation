@@ -12,13 +12,15 @@ public sealed class ActorDecisionRequest
     public PersonId Actor { get; }
     public LogicalTick Instant { get; }
     public string BoundaryId { get; }
+    public long BoundarySequence { get; }
     public long BoundaryRevision { get; }
-    internal ActorDecisionRequest(PersonId actor, LogicalTick instant, string boundaryId, long revision)
+    internal ActorDecisionRequest(PersonId actor, LogicalTick instant, string boundaryId, long sequence, long revision)
     {
         Actor = actor ?? throw new ArgumentNullException(nameof(actor));
         if (string.IsNullOrWhiteSpace(boundaryId)) throw new ArgumentException("Boundary identity is required.", nameof(boundaryId));
-        Instant = instant; BoundaryId = boundaryId; BoundaryRevision = revision;
-        Id = SpatialStableKey.Encode(actor.Value, instant.Value.ToString(CultureInfo.InvariantCulture), boundaryId, revision.ToString(CultureInfo.InvariantCulture));
+        if (sequence <= 0) throw new ArgumentOutOfRangeException(nameof(sequence));
+        Instant = instant; BoundaryId = boundaryId; BoundarySequence = sequence; BoundaryRevision = revision;
+        Id = SpatialStableKey.Encode(actor.Value, instant.Value.ToString(CultureInfo.InvariantCulture), sequence.ToString(CultureInfo.InvariantCulture), boundaryId, revision.ToString(CultureInfo.InvariantCulture));
     }
 }
 
@@ -83,7 +85,29 @@ public interface IActorDecisionPlanner
 /// <summary>Owning domain resolves semantic IDs and revalidates current truth before mutation.</summary>
 public interface ICurrentTruthProposalExecutor
 {
-    bool TryExecute(ActorDecisionProposal proposal, out string disposition);
+    ProposalExecutionResult Execute(ActorDecisionProposal proposal);
+}
+
+public enum ProposalExecutionStatus
+{
+    UncommittedRetryable = 1,
+    CommittedAccepted = 2,
+    CommittedRejected = 3
+}
+
+/// <summary>Distinguishes a transaction that did not commit from a terminal committed rejection.</summary>
+public sealed class ProposalExecutionResult
+{
+    public ProposalExecutionStatus Status { get; }
+    public string Disposition { get; }
+    public bool IsCommitted => Status == ProposalExecutionStatus.CommittedAccepted || Status == ProposalExecutionStatus.CommittedRejected;
+
+    public ProposalExecutionResult(ProposalExecutionStatus status, string disposition)
+    {
+        if ((int)status < (int)ProposalExecutionStatus.UncommittedRetryable || (int)status > (int)ProposalExecutionStatus.CommittedRejected)
+            throw new ArgumentOutOfRangeException(nameof(status));
+        Status = status; Disposition = disposition ?? string.Empty;
+    }
 }
 
 public sealed class ActorDecisionCoordinator
@@ -91,7 +115,8 @@ public sealed class ActorDecisionCoordinator
     private readonly ActivityLifecycleStore lifecycle;
     private readonly SimulationTimeline timeline;
     private readonly SortedDictionary<string, ActorDecisionRequest> pending = new SortedDictionary<string, ActorDecisionRequest>(StringComparer.Ordinal);
-    private readonly HashSet<string> processedBoundaries = new HashSet<string>(StringComparer.Ordinal);
+    private readonly HashSet<string> processedRequests = new HashSet<string>(StringComparer.Ordinal);
+    private readonly Dictionary<string, ActorDecisionProposal> retryableProposals = new Dictionary<string, ActorDecisionProposal>(StringComparer.Ordinal);
     private long receiptCursor;
 
     public ActorDecisionCoordinator(ActivityLifecycleStore lifecycle, SimulationTimeline timeline, long receiptCursor = 0)
@@ -120,39 +145,63 @@ public sealed class ActorDecisionCoordinator
             {
                 PersonId actor;
                 try { actor = new PersonId(participant); } catch (ArgumentException) { continue; }
-                var request = new ActorDecisionRequest(actor, receipt.Instant, receipt.Id, receipt.ActivityRevision);
-                if (!pending.ContainsKey(request.Id)) pending.Add(request.Id, request);
+                var request = new ActorDecisionRequest(actor, receipt.Instant, receipt.Id, receipt.Sequence, receipt.ActivityRevision);
+                if (!processedRequests.Contains(request.Id) && !pending.ContainsKey(request.Id)) pending.Add(request.Id, request);
             }
 
         List<ActorDecisionProposal> emitted = new List<ActorDecisionProposal>();
         LogicalTick now = timeline.CurrentInstant;
         LogicalTick sealedThrough = timeline.InputsSealedThrough ?? now;
         long boundary = Math.Max(now.Value, sealedThrough.Value);
-        foreach (ActorDecisionRequest request in pending.Values.OrderBy(r => r.Actor.Value, StringComparer.Ordinal).ThenBy(r => r.Instant.Value).ThenBy(r => r.Id, StringComparer.Ordinal).ToArray())
+        HashSet<string> blockedActors = new HashSet<string>(StringComparer.Ordinal);
+        foreach (ActorDecisionRequest request in pending.Values.OrderBy(r => r.Actor.Value, StringComparer.Ordinal)
+            .ThenBy(r => r.BoundarySequence).ThenBy(r => r.Id, StringComparer.Ordinal).ToArray())
         {
-            string actorBoundary = SpatialStableKey.Encode(request.Actor.Value, now.Value.ToString(CultureInfo.InvariantCulture));
-            if (processedBoundaries.Contains(actorBoundary)) { pending.Remove(request.Id); continue; }
+            if (blockedActors.Contains(request.Actor.Value)) continue;
+            if (processedRequests.Contains(request.Id)) { pending.Remove(request.Id); continue; }
             if (request.Instant.Value > now.Value) continue;
-            if (!lifecycle.IsAvailable(request.Actor.Value, now)) { pending.Remove(request.Id); continue; }
+            if (retryableProposals.TryGetValue(request.Id, out ActorDecisionProposal retryable))
+            {
+                ProposalExecutionResult retryResult = executor.Execute(retryable);
+                if (retryResult == null || !retryResult.IsCommitted)
+                { blockedActors.Add(request.Actor.Value); continue; }
+                emitted.Add(retryable); Consume(request.Id); continue;
+            }
+
+            if (!lifecycle.IsAvailable(request.Actor.Value, now)) { Consume(request.Id); continue; }
+
             if (!knowledge.TryRead(request.Actor, now, out KnowledgeDecisionSnapshot snapshot) || snapshot == null)
-            { pending.Remove(request.Id); processedBoundaries.Add(actorBoundary); continue; }
+            { Consume(request.Id); continue; }
             if (!planner.TryPlan(request, snapshot, out ActorDecisionProposal candidate) || candidate == null)
-            { pending.Remove(request.Id); processedBoundaries.Add(actorBoundary); continue; }
+            { Consume(request.Id); continue; }
             LogicalTick? scheduledStart = null;
             if (candidate.Kind == ActorDecisionProposalKind.TimedActivity)
             {
                 try { scheduledStart = new LogicalTick(checked(boundary + 1L)); }
-                catch (OverflowException) { pending.Remove(request.Id); processedBoundaries.Add(actorBoundary); continue; }
+                catch (OverflowException) { Consume(request.Id); continue; }
             }
-            ActorDecisionProposal proposal = new ActorDecisionProposal(candidate.Id, request.Id, request.Actor, candidate.ActionId,
+            string stableProposalId = SpatialStableKey.Encode(request.Id, candidate.ActionId, candidate.TargetId ?? string.Empty, ((int)candidate.Kind).ToString(CultureInfo.InvariantCulture));
+            ActorDecisionProposal proposal = new ActorDecisionProposal(stableProposalId, request.Id, request.Actor, candidate.ActionId,
                 candidate.TargetId, candidate.Kind, now, scheduledStart, snapshot.KnowledgeRevision, candidate.DurationTicks);
-            executor.TryExecute(proposal, out _);
+            ProposalExecutionResult result = executor.Execute(proposal);
+            if (result == null || !result.IsCommitted)
+            {
+                retryableProposals[request.Id] = proposal;
+                blockedActors.Add(request.Actor.Value);
+                continue;
+            }
             emitted.Add(proposal);
-            pending.Remove(request.Id);
-            processedBoundaries.Add(actorBoundary);
+            Consume(request.Id);
         }
         if (receipts.Count > 0) receiptCursor = receipts[receipts.Count - 1].Sequence;
         proposals = Array.AsReadOnly(emitted.ToArray());
         return true;
+    }
+
+    private void Consume(string requestId)
+    {
+        pending.Remove(requestId);
+        retryableProposals.Remove(requestId);
+        processedRequests.Add(requestId);
     }
 }
