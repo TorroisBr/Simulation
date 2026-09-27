@@ -13,6 +13,8 @@ public sealed class ActivityLifecycleTests
     private static ActivityDefinition Definition() => new ActivityDefinition("work", "v1");
     private static SimulationCalendar Calendar() => new SimulationCalendar(new CalendarDefinition(2, 2, 3));
     private static string Key(string first, string second) => first.Length + ":" + first + second.Length + ":" + second;
+    private static ActivityLifecycleComposition Compose(ActivityLifecycleStore store, long initial = 0) =>
+        new ActivityLifecycleComposition(store, Calendar(), new LogicalTick(initial));
 
     [Test]
     public void DefinitionInstanceAndParticipantIdentitiesAreSeparateAndProposedMayBeUnformed()
@@ -31,7 +33,7 @@ public sealed class ActivityLifecycleTests
     public void ScheduleRequiresParticipantsAndPublishesCommitmentAndTypedDueFacts()
     {
         ActivityLifecycleStore store = new ActivityLifecycleStore("world");
-        SimulationTimeline timeline = new SimulationTimeline(Calendar(), new LogicalTick(0), store);
+        SimulationTimeline timeline = Compose(store).Timeline;
         store.TryPropose(Definition(), "command:1", out ActivityInstanceSnapshot proposed, out _);
         Assert.That(store.TrySchedule(timeline, proposed.Id, new LogicalTick(0), new LogicalTick(10), new LogicalTick(5),
             Array.Empty<string>(), out ActivityFailure noParticipants), Is.False);
@@ -56,7 +58,7 @@ public sealed class ActivityLifecycleTests
     public void SchedulingRejectsConflictingParticipantWithoutPartialState()
     {
         ActivityLifecycleStore store = new ActivityLifecycleStore("world");
-        SimulationTimeline timeline = new SimulationTimeline(Calendar(), new LogicalTick(0), store);
+        SimulationTimeline timeline = Compose(store).Timeline;
         store.TryPropose(Definition(), "first", out ActivityInstanceSnapshot first, out _);
         store.TryPropose(Definition(), "second", out ActivityInstanceSnapshot second, out _);
         Assert.That(store.TrySchedule(timeline, first.Id, new LogicalTick(0), new LogicalTick(10), new LogicalTick(10), new[] { "person" }, out _), Is.True);
@@ -72,7 +74,7 @@ public sealed class ActivityLifecycleTests
     public void TimelineIndexValidationFailureLeavesScheduleFactsUnpublished()
     {
         ActivityLifecycleStore store = new ActivityLifecycleStore("world");
-        SimulationTimeline timeline = new SimulationTimeline(Calendar(), new LogicalTick(0), store);
+        SimulationTimeline timeline = Compose(store).Timeline;
         store.TryPropose(Definition(), "rejected", out ActivityInstanceSnapshot instance, out _);
         DueWorkReference collision = new DueWorkReference(ActivityLifecycleStore.DueOwnerId, Key(instance.Id, "start"), "other-instance", 9, 1, new LogicalTick(10));
         Assert.That(timeline.TryIndexOwnerFact(collision, out _), Is.True);
@@ -90,7 +92,7 @@ public sealed class ActivityLifecycleTests
     public void CancellationInvalidatesPendingStartAndReleasesCommitment()
     {
         ActivityLifecycleStore store = new ActivityLifecycleStore("world");
-        SimulationTimeline timeline = new SimulationTimeline(Calendar(), new LogicalTick(0), store);
+        SimulationTimeline timeline = Compose(store).Timeline;
         store.TryPropose(Definition(), "first", out ActivityInstanceSnapshot instance, out _);
         store.TrySchedule(timeline, instance.Id, new LogicalTick(0), new LogicalTick(10), new LogicalTick(10), new[] { "person" }, out _);
         DueWorkReference oldWork = store.PendingWork[0];
@@ -116,7 +118,7 @@ public sealed class ActivityLifecycleTests
     public void InterruptIsOnlyValidForActiveInstances()
     {
         ActivityLifecycleStore store = new ActivityLifecycleStore("world");
-        SimulationTimeline timeline = new SimulationTimeline(Calendar(), new LogicalTick(0), store);
+        SimulationTimeline timeline = Compose(store).Timeline;
         store.TryPropose(Definition(), "interrupt", out ActivityInstanceSnapshot instance, out _);
         Assert.That(store.TryInterrupt(timeline, instance.Id, "early", out ActivityFailure proposedFailure), Is.False);
         Assert.That(proposedFailure, Is.EqualTo(ActivityFailure.InvalidState));
@@ -135,7 +137,7 @@ public sealed class ActivityLifecycleTests
     {
         MutableStartValidator validator = new MutableStartValidator();
         ActivityLifecycleStore store = new ActivityLifecycleStore("world", startValidator: validator);
-        SimulationTimeline timeline = new SimulationTimeline(Calendar(), new LogicalTick(0), store);
+        SimulationTimeline timeline = Compose(store).Timeline;
         store.TryPropose(Definition(), "invalid-at-start", out ActivityInstanceSnapshot instance, out _);
         Assert.That(store.TrySchedule(timeline, instance.Id, new LogicalTick(0), new LogicalTick(10), new LogicalTick(5), new[] { "person" }, out _), Is.True);
         validator.Available = false;
@@ -164,7 +166,7 @@ public sealed class ActivityLifecycleTests
     public void StaleScheduledEndIsSkippedAndReplacementCompletionRunsExactlyOnce()
     {
         ActivityLifecycleStore store = new ActivityLifecycleStore("world");
-        SimulationTimeline timeline = new SimulationTimeline(Calendar(), new LogicalTick(0), store);
+        SimulationTimeline timeline = Compose(store).Timeline;
         store.TryPropose(Definition(), "start-end", out ActivityInstanceSnapshot instance, out _);
         Assert.That(store.TrySchedule(timeline, instance.Id, new LogicalTick(0), new LogicalTick(10), new LogicalTick(5), new[] { "person" }, out _), Is.True);
         Assert.That(timeline.TrySealInputsThrough(new LogicalTick(15), out _), Is.True);
@@ -193,11 +195,11 @@ public sealed class ActivityLifecycleTests
     public void ReconstructedStoreCloneRebuildsSamePendingOrderAndCompletesIndependently()
     {
         ActivityLifecycleStore original = new ActivityLifecycleStore("world");
-        SimulationTimeline originalTimeline = new SimulationTimeline(Calendar(), new LogicalTick(0), original);
+        SimulationTimeline originalTimeline = Compose(original).Timeline;
         original.TryPropose(Definition(), "fork-source", out ActivityInstanceSnapshot instance, out _);
         Assert.That(original.TrySchedule(originalTimeline, instance.Id, new LogicalTick(0), new LogicalTick(10), new LogicalTick(5), new[] { "person" }, out _), Is.True);
         ActivityLifecycleStore fork = original.Clone();
-        SimulationTimeline forkTimeline = new SimulationTimeline(Calendar(), new LogicalTick(0), fork);
+        SimulationTimeline forkTimeline = Compose(fork).Timeline;
         Assert.That(fork.TryRebuildTimelineIndex(forkTimeline, out TimelineFailure rebuildFailure), Is.True, rebuildFailure.ToString());
         Assert.That(forkTimeline.PreviewDueWork(new LogicalTick(15)).Count, Is.EqualTo(1));
         Assert.That(forkTimeline.TrySealInputsThrough(new LogicalTick(15), out _), Is.True);
@@ -211,10 +213,32 @@ public sealed class ActivityLifecycleTests
     }
 
     [Test]
+    public void ForeignTimelineCannotClaimFirstBindingForTermination()
+    {
+        ActivityLifecycleStore store = new ActivityLifecycleStore("world");
+        store.TryPropose(Definition(), "unbound", out ActivityInstanceSnapshot instance, out _);
+        SimulationTimeline foreign = new SimulationTimeline(Calendar(), new LogicalTick(77), store);
+        Assert.That(store.TryCancel(foreign, instance.Id, "foreign", out ActivityFailure cancelFailure), Is.False);
+        Assert.That(cancelFailure, Is.EqualTo(ActivityFailure.TimelineMismatch));
+        Assert.That(store.TryInterrupt(foreign, instance.Id, "foreign", out ActivityFailure interruptFailure), Is.False);
+        Assert.That(interruptFailure, Is.EqualTo(ActivityFailure.TimelineMismatch));
+        Assert.That(store.TryGet(instance.Id, out ActivityInstanceSnapshot unchanged), Is.True);
+        Assert.That(unchanged.State, Is.EqualTo(ActivityLifecycleState.Proposed));
+        Assert.That(unchanged.Revision, Is.Zero);
+        Assert.That(store.GetCommitment("person"), Is.Null);
+        Assert.That(store.PendingWork, Is.Empty);
+
+        ActivityLifecycleComposition owner = Compose(store, 2);
+        Assert.That(store.TryCancel(owner.Timeline, instance.Id, "owner-cancelled", out _), Is.True);
+        Assert.That(store.TryGet(instance.Id, out ActivityInstanceSnapshot cancelled), Is.True);
+        Assert.That(cancelled.TerminalInstant.Value, Is.EqualTo(new LogicalTick(2)));
+    }
+
+    [Test]
     public void InstanceScopedDueIdsAllowEqualRevisionsAtSameAndDifferentInstantsAndAtomicRebuildRetry()
     {
         ActivityLifecycleStore store = new ActivityLifecycleStore("world");
-        SimulationTimeline sourceTimeline = new SimulationTimeline(Calendar(), new LogicalTick(0), store);
+        SimulationTimeline sourceTimeline = Compose(store).Timeline;
         store.TryPropose(Definition(), "same-a", out ActivityInstanceSnapshot a, out _);
         store.TryPropose(Definition(), "same-b", out ActivityInstanceSnapshot b, out _);
         store.TryPropose(Definition(), "later", out ActivityInstanceSnapshot later, out _);
@@ -225,7 +249,7 @@ public sealed class ActivityLifecycleTests
 
         ActivityLifecycleStore fork = store.Clone();
         DueWorkReference collisionSource = fork.PendingWork[2];
-        SimulationTimeline failedRebuild = new SimulationTimeline(Calendar(), new LogicalTick(0), fork);
+        SimulationTimeline failedRebuild = Compose(fork).Timeline;
         DueWorkReference collision = new DueWorkReference(collisionSource.OwnerId, collisionSource.DueWorkId,
             "unrelated-instance", 99, collisionSource.OccurrenceSequence, collisionSource.DueAt);
         Assert.That(failedRebuild.TryIndexOwnerFact(collision, out _), Is.True);
@@ -235,14 +259,15 @@ public sealed class ActivityLifecycleTests
         Assert.That(failedRebuild.CausalSequence, Is.EqualTo(before));
         Assert.That(failedRebuild.IsDue(new LogicalTick(10), fork.PendingWork[0].DueWorkId), Is.False);
 
-        SimulationTimeline retry = new SimulationTimeline(Calendar(), new LogicalTick(0), fork);
-        Assert.That(fork.TryRebuildTimelineIndex(retry, out TimelineFailure retryFailure), Is.True, retryFailure.ToString());
+        ActivityLifecycleStore retryFork = fork.Clone();
+        SimulationTimeline retry = Compose(retryFork).Timeline;
+        Assert.That(retryFork.TryRebuildTimelineIndex(retry, out TimelineFailure retryFailure), Is.True, retryFailure.ToString());
         Assert.That(retry.PreviewDueWork(new LogicalTick(10)).Count, Is.EqualTo(2));
         Assert.That(retry.TrySealInputsThrough(new LogicalTick(13), out _), Is.True);
         Assert.That(retry.TryAdvanceTo(new LogicalTick(13), out TimelineFailure advanceFailure), Is.True, advanceFailure.ToString());
-        Assert.That(fork.TryGet(a.Id, out ActivityInstanceSnapshot doneA), Is.True);
-        Assert.That(fork.TryGet(b.Id, out ActivityInstanceSnapshot doneB), Is.True);
-        Assert.That(fork.TryGet(later.Id, out ActivityInstanceSnapshot doneLater), Is.True);
+        Assert.That(retryFork.TryGet(a.Id, out ActivityInstanceSnapshot doneA), Is.True);
+        Assert.That(retryFork.TryGet(b.Id, out ActivityInstanceSnapshot doneB), Is.True);
+        Assert.That(retryFork.TryGet(later.Id, out ActivityInstanceSnapshot doneLater), Is.True);
         Assert.That(doneA.State, Is.EqualTo(ActivityLifecycleState.Completed));
         Assert.That(doneB.State, Is.EqualTo(ActivityLifecycleState.Completed));
         Assert.That(doneLater.State, Is.EqualTo(ActivityLifecycleState.Completed));
@@ -252,7 +277,7 @@ public sealed class ActivityLifecycleTests
     public void MultipleParticipantsZeroDurationAndNoEndAvailabilityHaveExplicitBounds()
     {
         ActivityLifecycleStore store = new ActivityLifecycleStore("world");
-        SimulationTimeline timeline = new SimulationTimeline(Calendar(), new LogicalTick(0), store);
+        SimulationTimeline timeline = Compose(store).Timeline;
         store.TryPropose(Definition(), "shared", out ActivityInstanceSnapshot shared, out _);
         Assert.That(store.TrySchedule(timeline, shared.Id, new LogicalTick(0), new LogicalTick(5), new LogicalTick(0), new[] { "p1", "p2" }, out _), Is.True);
         store.TryPropose(Definition(), "open-ended", out ActivityInstanceSnapshot openEnded, out _);

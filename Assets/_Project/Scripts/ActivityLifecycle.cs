@@ -104,6 +104,14 @@ public sealed class ActivityLifecycleStore : IDueWorkOwner
     public long NextIdentity => nextIdentity;
     public IReadOnlyList<DueWorkReference> PendingWork => pending.AsReadOnly();
 
+    internal void BindTimeline(SimulationTimeline timeline)
+    {
+        if (timeline == null) throw new ArgumentNullException(nameof(timeline));
+        if (authoritativeTimeline != null && !ReferenceEquals(authoritativeTimeline, timeline))
+            throw new InvalidOperationException("Activity lifecycle is already bound to another timeline.");
+        authoritativeTimeline = timeline;
+    }
+
     public ActivityLifecycleStore Clone()
     {
         ActivityLifecycleStore clone = new ActivityLifecycleStore(worldId, nextIdentity, startValidator);
@@ -153,7 +161,7 @@ public sealed class ActivityLifecycleStore : IDueWorkOwner
         IReadOnlyList<string> participantIds, out ActivityFailure failure)
     {
         if (timeline == null) throw new ArgumentNullException(nameof(timeline));
-        if (authoritativeTimeline != null && !ReferenceEquals(authoritativeTimeline, timeline))
+        if (!ReferenceEquals(authoritativeTimeline, timeline))
         { failure = ActivityFailure.TimelineMismatch; return false; }
         if (!instances.TryGetValue(instanceId, out ActivityInstance item)) { failure = ActivityFailure.UnknownInstance; return false; }
         if (item.State != ActivityLifecycleState.Proposed) { failure = ActivityFailure.InvalidState; return false; }
@@ -199,21 +207,19 @@ public sealed class ActivityLifecycleStore : IDueWorkOwner
             commitments = stagedCommitments; pending = stagedPending; return TimelineFailure.None;
         }, out _);
         if (!committed) { failure = ActivityFailure.TimelinePublicationFailed; return false; }
-        authoritativeTimeline = timeline;
         failure = ActivityFailure.None; return true;
     }
 
     public bool TryRebuildTimelineIndex(SimulationTimeline timeline, out TimelineFailure failure)
     {
         if (timeline == null) throw new ArgumentNullException(nameof(timeline));
-        if (authoritativeTimeline != null && !ReferenceEquals(authoritativeTimeline, timeline))
+        if (!ReferenceEquals(authoritativeTimeline, timeline))
         { failure = TimelineFailure.DispatchFailed; return false; }
         List<DueWorkReference> facts = new List<DueWorkReference>(pending);
         facts.Sort((a, b) => { int c = a.DueAt.CompareTo(b.DueAt); if (c != 0) return c; c = string.CompareOrdinal(a.InstanceId, b.InstanceId); return c != 0 ? c : string.CompareOrdinal(a.DueWorkId, b.DueWorkId); });
         facts.RemoveAll(fact => !instances.TryGetValue(fact.InstanceId, out ActivityInstance instance) || instance.Revision != fact.Revision
             || (instance.State != ActivityLifecycleState.Scheduled && instance.State != ActivityLifecycleState.Active));
         if (!timeline.TryIndexOwnerFacts(facts, out failure)) return false;
-        authoritativeTimeline = timeline;
         return true;
     }
 
@@ -232,7 +238,7 @@ public sealed class ActivityLifecycleStore : IDueWorkOwner
     private bool TryTerminate(SimulationTimeline timeline, string id, LogicalTick requestedInstant, ActivityLifecycleState terminal, string disposition, out ActivityFailure failure)
     {
         if (timeline == null) throw new ArgumentNullException(nameof(timeline));
-        if (authoritativeTimeline != null && !ReferenceEquals(authoritativeTimeline, timeline))
+        if (!ReferenceEquals(authoritativeTimeline, timeline))
         { failure = ActivityFailure.TimelineMismatch; return false; }
         LogicalTick authoritativeInstant = timeline.CurrentInstant;
         if (requestedInstant != authoritativeInstant) { failure = ActivityFailure.InvalidInstant; return false; }
@@ -245,7 +251,7 @@ public sealed class ActivityLifecycleStore : IDueWorkOwner
         List<DueWorkReference> stagedPending = pending.Where(fact => fact.InstanceId != item.Id).ToList();
         item.Revision = revision; item.State = terminal; item.TerminalInstant = authoritativeInstant; item.Disposition = disposition ?? string.Empty;
         pending = stagedPending;
-        ReleaseCommitments(item); authoritativeTimeline = timeline; failure = ActivityFailure.None; return true;
+        ReleaseCommitments(item); failure = ActivityFailure.None; return true;
     }
 
     public ActivityParticipantCommitment GetCommitment(string participantId)
@@ -345,5 +351,24 @@ public sealed class ActivityLifecycleStore : IDueWorkOwner
             }
         }
         public bool TryCommit(out TimelineFailure failure) => owner.CommitTransition(reference, kind, startAllowed, failureDisposition, out failure);
+    }
+}
+
+/// <summary>Trusted host composition that creates/binds the one lifecycle timeline before exposing either object.</summary>
+public sealed class ActivityLifecycleComposition
+{
+    public ActivityLifecycleStore Store { get; }
+    public SimulationTimeline Timeline { get; }
+
+    public ActivityLifecycleComposition(string worldId, SimulationCalendar calendar, LogicalTick initialInstant,
+        long nextIdentity = 0, IActivityStartValidator startValidator = null)
+        : this(new ActivityLifecycleStore(worldId, nextIdentity, startValidator), calendar, initialInstant) { }
+
+    /// <summary>Recompose a cloned/restored store with its new authoritative timeline before lifecycle operations.</summary>
+    public ActivityLifecycleComposition(ActivityLifecycleStore store, SimulationCalendar calendar, LogicalTick initialInstant)
+    {
+        Store = store ?? throw new ArgumentNullException(nameof(store));
+        Timeline = new SimulationTimeline(calendar, initialInstant, Store);
+        Store.BindTimeline(Timeline);
     }
 }
