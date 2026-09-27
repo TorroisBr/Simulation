@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Globalization;
 using System.Text;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -22,6 +23,7 @@ public class TesteSimulacao : MonoBehaviour
     private RuntimeIdAllocator runtimeIdAllocator;
     private RuntimeIdentityRegistry runtimeIdentityRegistry;
     private SpatialNetworkRuntime spatialNetwork;
+    private SpatialAuthorityStore genesisSpatialAuthority;
     private DomainEventStore domainEventStore;
     private HistoryStore historyStore;
     private DomainEventRecorder domainEventRecorder;
@@ -127,6 +129,7 @@ public class TesteSimulacao : MonoBehaviour
                     calendarDefinition = ResolveCalendarDefinition();
                     enabledModules = new SimulationModuleSet(simulationConfig, logger);
                     effectiveConfiguration = ResolveRuntimeConfiguration();
+                    genesisSpatialAuthority = new SpatialAuthorityStore();
                     profileFingerprint = SimulationGenesisPipeline.CreateFingerprint(
                         simulationConfig, effectiveConfiguration, calendarDefinition, out profileProvenanceRecords);
                     AppendScenarioDiagnostics(effectiveConfiguration);
@@ -154,6 +157,9 @@ public class TesteSimulacao : MonoBehaviour
                     CreateExplorableSiteRuntimes();
                     CreateSpatialRoutes();
                     break;
+                case SimulationGenesisPipeline.GeographyStageId:
+                    ComposeAuthoredGeography();
+                    break;
                 case "p9.genesis.authored-actors/v1":
                     NpcRuntimeList.Clear();
                     npcRuntimesByDefinition.Clear();
@@ -178,7 +184,8 @@ public class TesteSimulacao : MonoBehaviour
                         logger: logger, explorableSiteStore: explorableSiteStore,
                         explorableSiteKnowledgeSystem: explorableSiteKnowledgeSystem, expeditionSystem: expeditionSystem,
                         configuration: effectiveConfiguration, randomSource: authoritativeRandomSource,
-                        calendarDefinition: calendarDefinition);
+                        calendarDefinition: calendarDefinition,
+                        spatialAuthorityStore: genesisSpatialAuthority);
                     ValidateCandidateProfile();
                     break;
                 case "p9.genesis.publish/v1":
@@ -192,7 +199,21 @@ public class TesteSimulacao : MonoBehaviour
                     throw new System.InvalidOperationException("Undeclared authored genesis stage: " + stageId);
             }
             stageCompleted?.Invoke(stageId);
-        });
+        }, simulationConfig != null && simulationConfig.useAuthoredGeographyProfile);
+    }
+
+    private void ComposeAuthoredGeography()
+    {
+        SimulationConfigData input = simulationConfig;
+        decimal scale = decimal.Parse(input.authoredDistancePerNeighborStep, NumberStyles.Number, CultureInfo.InvariantCulture);
+        var definition = new SpatialGeographyDefinition(
+            new SpatialWorldScaleContext(input.authoredScaleConventionId, input.authoredScaleSourceIdentity,
+                input.authoredScaleSourceVersion, scale, input.authoredScaleUnit),
+            new[] { new HexRecord(new HexId(input.authoredHexId), new HexCoordinate(input.authoredHexQ, input.authoredHexR),
+                new TerrainReference(new TerrainDefinitionId(input.authoredTerrainDefinitionId), input.authoredTerrainRevisionToken)) },
+            new[] { new LocationRecord(new LocationId(input.authoredLocationId), new HexId(input.authoredHexId)) });
+        if (!genesisSpatialAuthority.TryComposeGeography(definition, out SpatialAuthorityFailure failure))
+            throw new System.InvalidOperationException("Authored geography stage failed atomically: " + failure);
     }
 
     public string GetFullLog()

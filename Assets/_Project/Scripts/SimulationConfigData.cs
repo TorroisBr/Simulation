@@ -16,6 +16,19 @@ public class SimulationConfigData : ScriptableObject
     public List<NpcJobData> jobs = new List<NpcJobData>();
     public List<InitialWantedRecordConfig> initialWarrants = new List<InitialWantedRecordConfig>();
     public List<ScheduledDirectiveConfig> scheduledDirectives = new List<ScheduledDirectiveConfig>();
+    [Header("Authored Geography (P9-B profile)")]
+    public bool useAuthoredGeographyProfile;
+    public string authoredHexId;
+    public int authoredHexQ;
+    public int authoredHexR;
+    public string authoredTerrainDefinitionId;
+    public string authoredTerrainRevisionToken;
+    public string authoredLocationId;
+    public string authoredScaleConventionId;
+    public string authoredScaleSourceIdentity;
+    public string authoredScaleSourceVersion;
+    public string authoredDistancePerNeighborStep;
+    public string authoredScaleUnit;
     public float travelCostPerDay = 10f;
     public bool allowMerchantTradeRepositioning;
     public int maxMerchantTradeAmount = 5;

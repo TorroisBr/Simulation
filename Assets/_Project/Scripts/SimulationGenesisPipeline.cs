@@ -8,6 +8,8 @@ using System.Text;
 public static class SimulationGenesisPipeline
 {
     public const string ProfileContractIdentity = "unity-authored-bootstrap/genesis-v1";
+    public const string GeographyProfileContractIdentity = "unity-authored-bootstrap/authored-geography-v1";
+    public const string GeographyStageId = "p9.genesis.authored-geography/v1";
 
     private static readonly string[] StageIds =
     {
@@ -18,8 +20,11 @@ public static class SimulationGenesisPipeline
         "p9.genesis.publish/v1"
     };
 
-    public static IReadOnlyList<string> ResolveStageOrder()
+    public static IReadOnlyList<string> ResolveStageOrder(bool includeAuthoredGeography = false)
     {
+        string[] stages = includeAuthoredGeography
+            ? new[] { StageIds[0], StageIds[1], GeographyStageId, StageIds[2], StageIds[3], StageIds[4] }
+            : StageIds;
         var dependencies = new Dictionary<string, string[]>(StringComparer.Ordinal)
         {
             [StageIds[0]] = Array.Empty<string>(),
@@ -28,12 +33,18 @@ public static class SimulationGenesisPipeline
             [StageIds[3]] = new[] { StageIds[1], StageIds[2] },
             [StageIds[4]] = new[] { StageIds[3] }
         };
-        var remaining = new HashSet<string>(StageIds, StringComparer.Ordinal);
-        var ordered = new List<string>(StageIds.Length);
+        if (includeAuthoredGeography)
+        {
+            dependencies[GeographyStageId] = new[] { StageIds[0], StageIds[1] };
+            dependencies[StageIds[2]] = new[] { StageIds[0], StageIds[1], GeographyStageId };
+            dependencies[StageIds[3]] = new[] { StageIds[1], StageIds[2], GeographyStageId };
+        }
+        var remaining = new HashSet<string>(stages, StringComparer.Ordinal);
+        var ordered = new List<string>(stages.Length);
         while (remaining.Count > 0)
         {
             string next = null;
-            foreach (string candidate in StageIds)
+            foreach (string candidate in stages)
             {
                 if (!remaining.Contains(candidate)) continue;
                 bool ready = true;
@@ -48,10 +59,10 @@ public static class SimulationGenesisPipeline
         return ordered.AsReadOnly();
     }
 
-    public static void ExecuteStages(System.Action<string> execute)
+    public static void ExecuteStages(System.Action<string> execute, bool includeAuthoredGeography = false)
     {
         if (execute == null) throw new ArgumentNullException(nameof(execute));
-        foreach (string stageId in ResolveStageOrder()) execute(stageId);
+        foreach (string stageId in ResolveStageOrder(includeAuthoredGeography)) execute(stageId);
     }
 
     public static string CreateFingerprint(
@@ -65,8 +76,8 @@ public static class SimulationGenesisPipeline
         if (resolvedCalendar == null) throw new ArgumentNullException(nameof(resolvedCalendar));
         var fields = new List<string>
         {
-            ProfileContractIdentity,
-            "schema=1",
+            config.useAuthoredGeographyProfile ? GeographyProfileContractIdentity : ProfileContractIdentity,
+            config.useAuthoredGeographyProfile ? "schema=2" : "schema=1",
             config.useFixedSimulationSeed ? "fixed-seed" : "default-seed",
             (config.useFixedSimulationSeed ? config.simulationSeed : 0).ToString(CultureInfo.InvariantCulture),
         };
@@ -242,7 +253,23 @@ public static class SimulationGenesisPipeline
             Pack(value?.target?.DefinitionId, value?.city?.DefinitionId, value?.bounty.ToString("R", CultureInfo.InvariantCulture), value?.sentenceDays));
         AddOrdered(fields, "directive", config.ScheduledDirectives, value =>
             Pack(value?.absoluteDay, value?.mode, value?.operation, value?.actor?.DefinitionId, value?.action?.DefinitionId));
-        foreach (string stage in ResolveStageOrder()) fields.Add("stage:" + stage);
+        if (config.useAuthoredGeographyProfile)
+        {
+            Add(fields, "authored-geography-stage", GeographyStageId, 1);
+            Add(fields, "authored-hex", config.authoredHexId, config.authoredHexQ, config.authoredHexR,
+                HexCoordinate.ConventionVersion, HexCoordinate.CanonicalOrder, config.authoredTerrainDefinitionId,
+                config.authoredTerrainRevisionToken);
+            Add(fields, "authored-location", config.authoredLocationId, config.authoredHexId);
+            Add(fields, "authored-scale", config.authoredScaleConventionId, config.authoredScaleSourceIdentity,
+                config.authoredScaleSourceVersion, config.authoredDistancePerNeighborStep, config.authoredScaleUnit);
+            Add(fields, "stage-input", GeographyStageId, "authored-geography-profile/v1");
+            Add(fields, "stage-output", GeographyStageId, "SpatialAuthorityStore/geography-v1");
+            fields.Add("edge:p9.genesis.resolve-profile/v1>" + GeographyStageId);
+            fields.Add("edge:p9.genesis.authored-world/v1>" + GeographyStageId);
+            fields.Add("edge:" + GeographyStageId + ">p9.genesis.authored-actors/v1");
+            fields.Add("edge:" + GeographyStageId + ">p9.genesis.validate-profile/v1");
+        }
+        foreach (string stage in ResolveStageOrder(config.useAuthoredGeographyProfile)) fields.Add("stage:" + stage);
         fields.Add("edge:p9.genesis.resolve-profile/v1>p9.genesis.authored-world/v1");
         fields.Add("edge:p9.genesis.resolve-profile/v1>p9.genesis.authored-actors/v1");
         fields.Add("edge:p9.genesis.authored-world/v1>p9.genesis.authored-actors/v1");
@@ -295,6 +322,27 @@ public static class SimulationGenesisPipeline
     public static void ValidateProfile(SimulationConfigData config)
     {
         if (config == null) throw new InvalidOperationException("Authored bootstrap requires SimulationConfigData.");
+        if (config.useAuthoredGeographyProfile)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(config.authoredHexId)
+                    || string.IsNullOrWhiteSpace(config.authoredTerrainDefinitionId)
+                    || string.IsNullOrWhiteSpace(config.authoredTerrainRevisionToken)
+                    || string.IsNullOrWhiteSpace(config.authoredLocationId)
+                    || string.IsNullOrWhiteSpace(config.authoredScaleConventionId)
+                    || string.IsNullOrWhiteSpace(config.authoredScaleSourceIdentity)
+                    || string.IsNullOrWhiteSpace(config.authoredScaleSourceVersion)
+                    || string.IsNullOrWhiteSpace(config.authoredScaleUnit))
+                    throw new InvalidOperationException("Authored geography requires stable Hex, terrain, Location, and scale provenance identities.");
+                decimal scale = decimal.Parse(config.authoredDistancePerNeighborStep, NumberStyles.Number, CultureInfo.InvariantCulture);
+                if (scale <= 0m) throw new InvalidOperationException("Authored geography scale must be positive.");
+            }
+            catch (Exception exception) when (exception is ArgumentException || exception is FormatException || exception is OverflowException)
+            {
+                throw new InvalidOperationException("Authored geography scale value or required identity is invalid.", exception);
+            }
+        }
         var cities = new HashSet<CityData>();
         var cityIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (CityData city in config.Cities)
@@ -535,13 +583,15 @@ public sealed class SimulationGenesisManifest
         string fingerprint,
         IReadOnlyList<string> canonicalRecords)
     {
-        ContractIdentity = SimulationGenesisPipeline.ProfileContractIdentity;
-        SchemaVersion = 1;
+        SchemaVersion = config.useAuthoredGeographyProfile ? 2 : 1;
         Fingerprint = fingerprint;
         EffectiveConfiguration = effectiveConfiguration;
         Seed = config.useFixedSimulationSeed ? config.simulationSeed : 0;
         SeedSource = config.useFixedSimulationSeed ? "authored-fixed" : "default-zero";
-        StageOrder = SimulationGenesisPipeline.ResolveStageOrder();
+        ContractIdentity = config.useAuthoredGeographyProfile
+            ? SimulationGenesisPipeline.GeographyProfileContractIdentity
+            : SimulationGenesisPipeline.ProfileContractIdentity;
+        StageOrder = SimulationGenesisPipeline.ResolveStageOrder(config.useAuthoredGeographyProfile);
         CanonicalProvenanceRecords = canonicalRecords;
         CalendarMonthsPerYear = calendar.MonthsPerYear;
         CalendarWeeksPerMonth = calendar.WeeksPerMonth;
@@ -555,6 +605,12 @@ public sealed class SimulationGenesisManifest
             foreach (CityProductionConfig production in city.productionConfigs) AddId(ids, "item", production.item);
         }
         foreach (ExplorableSiteConfig site in config.ExplorableSites) ids.Add("site/" + site.site.DefinitionId);
+        if (config.useAuthoredGeographyProfile)
+        {
+            ids.Add("hex/" + config.authoredHexId);
+            ids.Add("location/" + config.authoredLocationId);
+            ids.Add("terrain/" + config.authoredTerrainDefinitionId);
+        }
         foreach (NpcSimulationConfig npc in config.Npcs)
         {
             ids.Add("npc/" + npc.npc.DefinitionId);
@@ -584,11 +640,12 @@ public sealed class SimulationGenesisManifest
         var orderedIds = new List<string>(ids);
         orderedIds.Sort(StringComparer.Ordinal);
         AuthoredDefinitionIds = orderedIds.AsReadOnly();
-        OutputOwners = Array.AsReadOnly(new[] { "CityRuntime", "MarketCounterpartyRuntime", "PopulationEconomyRuntime", "CityProductionInputs", "SpatialNetworkRuntime", "ExplorableSiteStore", "NpcRuntime", "InventoryRuntime", "InitialKnowledge", "JusticeSystem", "ScheduledDirectiveStore", "SimulationRuntime" });
-        StageDependencyRecords = Array.AsReadOnly(new[] {
-            "resolve-profile -> authored-world", "resolve-profile -> authored-actors", "authored-world -> authored-actors",
-            "authored-world -> validate-profile", "authored-actors -> validate-profile", "validate-profile -> publish"
-        });
+        OutputOwners = Array.AsReadOnly(config.useAuthoredGeographyProfile
+            ? new[] { "CityRuntime", "MarketCounterpartyRuntime", "PopulationEconomyRuntime", "CityProductionInputs", "SpatialNetworkRuntime", "ExplorableSiteStore", "NpcRuntime", "InventoryRuntime", "InitialKnowledge", "JusticeSystem", "ScheduledDirectiveStore", "SpatialAuthorityStore", "SimulationRuntime" }
+            : new[] { "CityRuntime", "MarketCounterpartyRuntime", "PopulationEconomyRuntime", "CityProductionInputs", "SpatialNetworkRuntime", "ExplorableSiteStore", "NpcRuntime", "InventoryRuntime", "InitialKnowledge", "JusticeSystem", "ScheduledDirectiveStore", "SimulationRuntime" });
+        StageDependencyRecords = Array.AsReadOnly(config.useAuthoredGeographyProfile
+            ? new[] { "resolve-profile -> authored-world", "resolve-profile -> authored-geography", "authored-world -> authored-geography", "authored-geography -> authored-actors", "authored-geography -> validate-profile", "authored-world -> validate-profile", "authored-actors -> validate-profile", "validate-profile -> publish" }
+            : new[] { "resolve-profile -> authored-world", "resolve-profile -> authored-actors", "authored-world -> authored-actors", "authored-world -> validate-profile", "authored-actors -> validate-profile", "validate-profile -> publish" });
         FirstSimulatedBoundary = "advance-day:1";
     }
 

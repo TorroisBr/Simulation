@@ -146,6 +146,105 @@ public sealed class SimulationBootstrapCompositionTests
     }
 
     [Test]
+    public void AuthoredGeographyProfilePublishesOneReconstructibleP8AuthorityBeforeSimulation()
+    {
+        SimulationConfigData config = SimulationTestFactory.CreateSimulationConfig();
+        ConfigureGeography(config);
+        GameObject simulationObject = new GameObject("p9b-authored-geography-test");
+        simulationObjects.Add(simulationObject);
+        TesteSimulacao simulation = simulationObject.AddComponent<TesteSimulacao>();
+        typeof(TesteSimulacao).GetField("simulationConfig", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(simulation, config);
+
+        simulation.Start();
+
+        Assert.That(simulation.Bootstrap.ProfileContractIdentity, Is.EqualTo(SimulationGenesisPipeline.GeographyProfileContractIdentity));
+        Assert.That(simulation.Bootstrap.Manifest.StageOrder, Does.Contain(SimulationGenesisPipeline.GeographyStageId));
+        Assert.That(simulation.Bootstrap.SpatialAuthority.HexCount, Is.EqualTo(1));
+        Assert.That(simulation.Bootstrap.SpatialAuthority.LocationCount, Is.EqualTo(1));
+        Assert.That(simulation.Bootstrap.SpatialAuthority.HasGeography, Is.True);
+        Assert.That(simulation.Bootstrap.SpatialAuthority.TryGet(new HexId("authored-hex-one"), out HexRecord hex), Is.True);
+        Assert.That(hex.Coordinate, Is.EqualTo(new HexCoordinate(4, -2)));
+        Assert.That(hex.TerrainDefinitionId.Value, Is.EqualTo("terrain/authored-fixture"));
+        Assert.That(hex.AuthoredRevisionToken, Is.EqualTo("rev-7"));
+        Assert.That(simulation.Bootstrap.SpatialAuthority.TryGet(new LocationId("authored-location-one"), out LocationRecord location), Is.True);
+        Assert.That(location.AnchorHexId.Value, Is.EqualTo("authored-hex-one"));
+        Assert.That(simulation.Bootstrap.SpatialAuthority.ScaleContext.DistancePerNeighborStep, Is.EqualTo(3.5m));
+        Assert.That(simulation.Bootstrap.Manifest.CanonicalProvenanceRecords, Has.Some.Contains("authored-geography-stage"));
+        Assert.That(simulation.Bootstrap.Manifest.AuthoredDefinitionIds, Does.Contain("hex/authored-hex-one"));
+        Assert.That(simulation.Bootstrap.Manifest.AuthoredDefinitionIds, Does.Contain("location/authored-location-one"));
+        Assert.That(simulation.History.HistoricalEvents, Is.Empty);
+    }
+
+    [Test]
+    public void AuthoredGeographyProfileRejectsIncompleteInputsBeforePublication()
+    {
+        SimulationConfigData config = SimulationTestFactory.CreateSimulationConfig();
+        ConfigureGeography(config);
+        config.authoredTerrainRevisionToken = " ";
+        GameObject simulationObject = new GameObject("p9b-invalid-geography-test");
+        simulationObjects.Add(simulationObject);
+        TesteSimulacao simulation = simulationObject.AddComponent<TesteSimulacao>();
+        typeof(TesteSimulacao).GetField("simulationConfig", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(simulation, config);
+
+        Assert.Throws<System.InvalidOperationException>(() => simulation.Start());
+        Assert.That(simulation.Bootstrap, Is.Null);
+        Assert.That(simulation.Runtime, Is.Null);
+    }
+
+    [Test]
+    public void AuthoredGeographyFingerprintIncludesEverySelectedGeographyInput()
+    {
+        SimulationConfigData config = SimulationTestFactory.CreateSimulationConfig();
+        ConfigureGeography(config);
+        EffectiveSimulationConfiguration effective = SimulationConfigurationResolver.ResolveOrThrow(contentOverrides: config.CreateConfigurationOverrides());
+        CalendarDefinition calendar = CalendarDefinition.CreateValidatedOrDefault(config.Calendar, out _);
+        string fingerprint = SimulationGenesisPipeline.CreateFingerprint(config, effective, calendar, out IReadOnlyList<string> records);
+        Assert.That(records.Any(record => record.StartsWith("stage-input|", System.StringComparison.Ordinal)), Is.True);
+        Assert.That(records.Any(record => record.StartsWith("stage-output|", System.StringComparison.Ordinal)), Is.True);
+        Assert.That(records, Has.Some.EqualTo("edge:p9.genesis.resolve-profile/v1>" + SimulationGenesisPipeline.GeographyStageId));
+        AssertGeographyFingerprintChanges(config, effective, calendar, fingerprint, value => config.authoredHexId = value, "authored-hex-two");
+        AssertGeographyFingerprintChanges(config, effective, calendar, fingerprint, value => config.authoredHexQ = int.Parse(value), "5");
+        AssertGeographyFingerprintChanges(config, effective, calendar, fingerprint, value => config.authoredHexR = int.Parse(value), "-1");
+        AssertGeographyFingerprintChanges(config, effective, calendar, fingerprint, value => config.authoredTerrainDefinitionId = value, "terrain/other");
+        AssertGeographyFingerprintChanges(config, effective, calendar, fingerprint, value => config.authoredTerrainRevisionToken = value, "rev-8");
+        AssertGeographyFingerprintChanges(config, effective, calendar, fingerprint, value => config.authoredLocationId = value, "authored-location-two");
+        AssertGeographyFingerprintChanges(config, effective, calendar, fingerprint, value => config.authoredScaleConventionId = value, "world-scale/other");
+        AssertGeographyFingerprintChanges(config, effective, calendar, fingerprint, value => config.authoredScaleSourceIdentity = value, "profile/other");
+        AssertGeographyFingerprintChanges(config, effective, calendar, fingerprint, value => config.authoredScaleSourceVersion = value, "2");
+        AssertGeographyFingerprintChanges(config, effective, calendar, fingerprint, value => config.authoredDistancePerNeighborStep = value, "4.5");
+        AssertGeographyFingerprintChanges(config, effective, calendar, fingerprint, value => config.authoredScaleUnit = value, "mile");
+    }
+
+    private static void AssertGeographyFingerprintChanges(
+        SimulationConfigData config,
+        EffectiveSimulationConfiguration effective,
+        CalendarDefinition calendar,
+        string original,
+        System.Action<string> setValue,
+        string changedValue)
+    {
+        setValue(changedValue);
+        Assert.That(SimulationGenesisPipeline.CreateFingerprint(config, effective, calendar, out _), Is.Not.EqualTo(original));
+        ConfigureGeography(config);
+    }
+
+    private static void ConfigureGeography(SimulationConfigData config)
+    {
+        config.useAuthoredGeographyProfile = true;
+        config.authoredHexId = "authored-hex-one";
+        config.authoredHexQ = 4;
+        config.authoredHexR = -2;
+        config.authoredTerrainDefinitionId = "terrain/authored-fixture";
+        config.authoredTerrainRevisionToken = "rev-7";
+        config.authoredLocationId = "authored-location-one";
+        config.authoredScaleConventionId = "world-scale/authored-fixture";
+        config.authoredScaleSourceIdentity = "profile/authored-fixture";
+        config.authoredScaleSourceVersion = "1";
+        config.authoredDistancePerNeighborStep = "3.5";
+        config.authoredScaleUnit = "league";
+    }
+
+    [Test]
     public void RouteIdentityUsesTupleComponentsEvenWhenDefinitionIdsContainSeparator()
     {
         SimulationConfigData config = SimulationTestFactory.CreateSimulationConfig();

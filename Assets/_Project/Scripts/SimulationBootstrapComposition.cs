@@ -52,6 +52,8 @@ public sealed class SimulationBootstrapComposition
     public TravelPartyStore TravelParties { get; }
     public TravelPartySystem GroupTravel { get; }
     public SimulationRuntime Runtime { get; }
+    /// <summary>The P8-owned spatial truth authority published with the genesis handoff.</summary>
+    public SpatialAuthorityStore SpatialAuthority => Runtime.SpatialAuthorityStore;
     public ExplorableSiteStore ExplorableSites { get; }
     public ExpeditionStore Expeditions { get; }
     public ExpeditionSystem ExpeditionSystem { get; }
