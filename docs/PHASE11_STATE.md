@@ -16,6 +16,13 @@ historical base of the earlier review, not the current integration base.
 
 **Final independent review:** PASS at candidate/State commit `aa8ecf6e722532a305e061a0106aad2a4a71947b`.
 
+**Current canonical-base refresh review:** PASS at exact candidate tip
+`780ed2f5155b04c9606bf07b039198a000ab42af`. The refresh brings in only the
+P8 closure State update and updates this State's base reference; P11 source
+and tests are unchanged. Architecture `c285466` and both current alignment
+records remain applicable. The prior P11 implementation review and validation
+therefore remain valid; no targeted Unity revalidation was required.
+
 The candidate combines the P11 actor-choice implementation and diagnostics
 with P8-E, which is now canonical. P11's local SellGoods contract has no
 semantic dependency on P8-E; the refreshed branch records the shared-runtime
