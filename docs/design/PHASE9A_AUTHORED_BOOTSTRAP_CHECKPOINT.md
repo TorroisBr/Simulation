@@ -213,7 +213,8 @@ adds daily-loop behavior; P9-A itself must not introduce new autonomous work.
   participant, or mod-installed state. Existing scheduled directives retain
   their current semantics.
 - **Downstream:** P10 implementation consumes promoted P9 genesis and the
-  relevant P8-C local/anchor capability. P10 may retain its already reviewed
+  relevant P8-C Ruin/site anchor contract. P10-A owns the bounded
+  LocationId-neutral LocalTopology seam. P10 may retain its already reviewed
   design work in parallel, but its code integration waits for P9 promotion.
 - The checkpoint does not satisfy any canonical capability until separately
   reviewed, validated, approved, and promoted.

@@ -1,9 +1,12 @@
 # P9-B — Authored Geography Source for Local Authoring v1
 
-**Status:** User-approved bounded scope; independent design review **PASS** on
-the exact contract at `a30db22f9d8e3117a668c463a70d4100149387bd`. An
-implementation candidate may proceed on an isolated noncanonical branch. This
-does not claim implementation, delivery, integration or canonical promotion.
+**Status: PROMOTED.** The user-approved contract passed independent design
+review at `a30db22f9d8e3117a668c463a70d4100149387bd`. Its implementation at
+`00395ef80cfa2364d34ed2170e0735d3a4b1513d` passed independent code and
+integration review, required validation, and user-approved canonical
+promotion. P9-B code is integrated at `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf`;
+the current P9 State/status tip is `14a2e8ee01e49f1ffdcecf8fd64d274c728ead44`.
+Exact validation and promotion evidence is recorded in `../PHASE9_STATE.md`.
 P9-B is a separate capability after promoted P9-A and does not amend P9-A's
 accepted contract, code, or historical closure evidence.
 
@@ -23,6 +26,9 @@ P8-A owns Hex, Location, terrain-reference and world-scale facts and the
 them. P9-B owns the authored selected-profile input and its deterministic
 genesis-stage composition/provenance. It must use the existing authority and
 publication handoff. P8 remains closed; P9-A remains promoted and scope-closed.
+P9-B adds no P8-C Ruin/site binding or LocalTopology facts. P8-C supplies the
+promoted Ruin/site anchor contract; the separately approved P10-A profile owns
+the bounded LocalTopology owner/migration seam.
 
 ## Objective and exact profile scope
 
@@ -108,19 +114,18 @@ role, reservation or cardinality facts and adds no P20 dependency.
 
 ```text
 P8-A promoted geography authority ─┐
-                                   ├→ P9-B authored geography profile
-P9-A promoted genesis pipeline ────┘             │
-                                                 ├→ P10 Ruin binds LocationId
-P8-C promoted Ruin/site owner and LocalTopology ─┘
+                                   ├→ P9-B authored geography profile ─┐
+P9-A promoted genesis pipeline ────┘                                   ├→ P10-A Ruin + LocalTopology
+P8-C promoted Ruin/site anchor contract ───────────────────────────────┘   (P10-A owns topology seam)
 ```
 
-P9-B has no dependency on P8-B/D/E or P18/P19/P20. P10 requires both the
-P9-B-produced authored `LocationId` and P8-C's promoted Ruin/site ownership
-and local-topology capability. The P9-B profile contains no Ruin identity or
-LocalTopology facts. Its presence does not turn P9-A's authored-only scope
-into a procedural-content promise.
+P9-B has no dependency on P8-B/D/E or P18/P19/P20. P10-A consumes the P9-B
+authored `LocationId` and P8-C's promoted Ruin/site anchor contract, then owns
+the Ruin binding and bounded LocationId-neutral LocalTopology seam. P9-B
+contains no Ruin identity or LocalTopology facts. Its presence does not turn
+P9-A's authored-only scope into a procedural-content promise.
 
-## Acceptance gates for a later implementation proposal
+## Implementation acceptance gates (delivered)
 
 An implementation candidate must prove, at minimum:
 
@@ -138,12 +143,11 @@ An implementation candidate must prove, at minimum:
    candidate; failure occurs before the first simulated boundary.
 5. The authority is available via the normal bootstrap handoff and no parallel
    geography owner or daily-loop mutation is introduced.
-6. P10 can consume the resulting `LocationId` while the Ruin/site and local
-   topology facts remain under P8-C ownership.
+6. P10-A can consume the resulting `LocationId` and P8-C anchor contract.
+   P10-A owns the Ruin binding and LocationId-neutral LocalTopology seam;
+   P8-C's delivered City/Site anchor behavior remains compatible.
 
-No code or test results are claimed by this design candidate. The user-approved
-scope and passed design review permit an isolated implementation candidate;
-the execution model still requires its implementation validation, independent
-code review, integration and a separate canonical promotion gate. This
-docs-only proposal itself requires `git diff --check`; it does not close Phase
-9 or satisfy downstream canonical capability dependencies.
+Implementation, code/integration review, focused and full validation, and
+canonical promotion are complete as recorded in `../PHASE9_STATE.md`. The P9-B
+capability is available to P10 at its canonical code tip. This checkpoint
+record defines the delivered bounded scope; it does not itself close Phase 9.
