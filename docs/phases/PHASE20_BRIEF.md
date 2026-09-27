@@ -7,8 +7,9 @@ clarification is undergoing independent refresh review. The first
 implementation checkpoint, `P20-A — Synthetic Multi-participant Operation`, is
 proposed in `../design/PHASE20_P20A_CHECKPOINT_PROPOSAL.md`; its ID and scope are
 not yet accepted. Implementation remains gated on explicit checkpoint
-acceptance and independent code-candidate review. No P20 capability is
-promoted.
+acceptance. After implementation and focused validation, independent review of
+the code candidate gates validated-candidate status and any promotion request.
+No P20 capability is promoted.
 
 ## Objective and closure
 
