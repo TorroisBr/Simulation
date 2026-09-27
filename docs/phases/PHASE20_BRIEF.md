@@ -2,14 +2,16 @@
 
 **Authority:** planning scope under `../SIMULATION_ARCHITECTURE.md` §§11–12,
 91–93. **Readiness:** entry architecture and technical design, including the
-formation-close clarification, passed independent refresh review at docs
+formation-close clarification, passed independent review at docs
 candidate `5ea4283b0c0dc15336c3eed477dd24ef276897f4` against promoted P18-A/B/C,
-current P18 State `311baa9`, and both current alignment records. The first
-implementation checkpoint, `P20-A — Synthetic Multi-participant Operation`, is
-proposed in `../design/PHASE20_P20A_CHECKPOINT_PROPOSAL.md`; its ID and scope are
-not yet accepted. Implementation remains gated on explicit checkpoint
-acceptance. After implementation and focused validation, independent review of
-the code candidate gates validated-candidate status and any promotion request.
+P18 State `311baa9`, and both alignment records. Current-base refresh against
+P18 State `eabc1c2` / code integration `1dd0479`, including P18-A continuation
+barrier semantics, awaits independent review. The user accepted the bounded
+checkpoint scope `P20-A — Synthetic Multi-participant Operation` on 2026-09-27.
+That scope acceptance does not claim a capability; implementation waits for
+independent review of this refresh. After implementation and focused
+validation, independent review of the code candidate gates validated-candidate
+status and any promotion request.
 No P20 capability is promoted.
 
 ## Objective and closure
@@ -100,18 +102,20 @@ to demonstrate the generic capability.
 
 ## First checkpoint status
 
-`P20-A — Synthetic Multi-participant Operation` is a proposed, bounded
+`P20-A — Synthetic Multi-participant Operation` is an accepted, bounded
 implementation checkpoint using the synthetic test operation permitted above.
 It uses exactly two distinct `PersonId`s only as a fixture policy; this does not
 fix general P20 cardinality or narrow P18's nonempty participant-set contract.
 See the proposal for its participant decisions, reservation intents and joint
 commitment boundary, sealed-input start rule, all-or-none per-person test
 effects, cancellation/loss behavior, reconstruction inventory and validation
-gates. The proposed ID is not yet an approved checkpoint ID, and no code work is
-authorized by this proposal.
+gates. The user accepted this bounded scope on 2026-09-27. Implementation
+awaits independent review of the current-base P20 documentation refresh; no P20
+capability is claimed.
 
 The capability prerequisites are promoted on `codex/phase18/canonical` at
-`311baa930227371a807fb324ff11fc024800ddf9`: P18-A timeline/scheduler
-(`985c56c`), P18-B activity lifecycle (`97918cb`), and P18-C availability and
-actor decisions (`ab05ecf`). P18-D legacy consumer migration and P19 loader/API
-work are not dependencies of this synthetic proof.
+`eabc1c24a0ba8951ded87280472cc7137e741434` / P18-A code integration
+`1dd0479626ddf00bf08aa66533f54fef7328a421`: P18-A timeline/scheduler with
+continuation extension, P18-B activity lifecycle (`97918cb`), and P18-C
+availability and actor decisions (`ab05ecf`). P18-D legacy consumer migration
+and P19 loader/API work are not dependencies of this synthetic proof.

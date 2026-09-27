@@ -2,9 +2,11 @@
 
 **Status:** Entry review **PASS**, including the formation-close clarification,
 at docs candidate `5ea4283b0c0dc15336c3eed477dd24ef276897f4` against architecture
-`c285466` and current P18 State `311baa9`. This document proposes a bounded
-decomposition and does not authorize implementation, define an approved P20
-checkpoint ID, or promote any capability. It is subordinate to
+`c285466` and P18 State `311baa9`. Current-base refresh against P18 State
+`eabc1c2` / code integration `1dd0479` is pending independent review. The user
+accepted P20-A scope on 2026-09-27; no P20 capability is implemented or
+promoted. This document proposes a bounded decomposition and remains subject
+to that review before implementation; it does not promote a capability. It is subordinate to
 `SIMULATION_ARCHITECTURE.md` §§11–12, 91–93 and the Phase 20 Brief.
 
 ## Purpose and readiness
@@ -16,10 +18,14 @@ small. Its two-Person requirement and lack of differentiated roles apply only to
 this proving slice; they do not establish universal activity cardinality, role
 policy, or an arrangement catalog.
 
-Accepted P18-A/B/C contracts may inform entry and technical design. Runtime
-execution remains `WAIT_DEPENDENCY` until the relevant P18-A timeline/scheduler,
-P18-B lifecycle, and P18-C availability/decision capabilities are promoted and
-the bounded technical design is independently reviewed. P18 work does not wait
+Accepted P18-A/B/C contracts may inform entry and technical design. Their
+relevant capabilities are now promoted; runtime implementation waits for
+independent review of this current-base refresh and the accepted P20-A scope.
+P20 start work uses the existing P18-A due-work path and remains behind any
+incomplete boundary continuation barrier. P18-A publishes returned timeline
+facts before ordinary same-instant work, including a P20 start; P18-C source
+signals are handed off only after successful outer advance return. P20 does not
+own or implement continuation state. P18 work does not wait
 for P20, so this adds no P18 → P20 cycle. There is no blanket dependency on all
 P18-D migrations, P19, P8 travel, P12/P13 persistence, or a persistent
 Group/Organization.

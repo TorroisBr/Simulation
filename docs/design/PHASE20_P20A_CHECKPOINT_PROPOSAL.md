@@ -1,20 +1,20 @@
-# Proposed checkpoint P20-A — Synthetic Multi-participant Operation
+# Accepted-scope checkpoint P20-A — Synthetic Multi-participant Operation
 
-**Status:** `PROPOSED`; this record is not checkpoint acceptance or authority to
-implement. The ID and scope require the normal explicit checkpoint-acceptance
-gate.
+**Status:** Scope accepted by the user on 2026-09-27. Acceptance covers only
+the checkpoint ID and bounded synthetic proof below; it does not claim a P20
+capability or permit implementation before independent review of the refreshed
+P20 documentation against current P18 canonical.
 
 ## Baseline and design evidence
 
 - Architecture: `c285466c355103d3637ac165246591b72eb7bda0`.
-- Latest P18 canonical tip: `99cac77f7d66e8eb61fe68efb6959a4a5b7029ca` on
-  `codex/phase18/canonical`. Since the reviewed `311baa9` baseline, only
-  `AGENTS.md` and workflow skills changed; P18-A/B/C contracts, code, State,
-  and both alignment records are unchanged. Independent impact review
-  classifies this as `UPSTREAM_IRRELEVANT`; the existing P20 design reviews
-  remain applicable. This reference refresh does not accept the checkpoint or
-  authorize implementation.
-- Promoted prerequisites: P18-A timeline/scheduler `985c56c40fc01dc6a4d392120e2d32151a558d03`,
+- Current P18 canonical State tip: `eabc1c24a0ba8951ded87280472cc7137e741434`;
+  promoted code integration: `1dd0479626ddf00bf08aa66533f54fef7328a421`.
+  P18-A includes the additive boundary continuation, returned-fact publication,
+  and post-successful-advance P18-C handoff contract; this refresh records those
+  requirements below and requires independent current-base review.
+- Promoted prerequisites: P18-A timeline/scheduler plus continuation extension
+  `1dd0479626ddf00bf08aa66533f54fef7328a421`,
   P18-B activity lifecycle `97918cbbe4238a65a216b1a1f0ef84c70b4d080c`, and
   P18-C availability/actor decisions `ab05ecfe976e80badf6f509b8e9be25ff556ca23`.
 - P20 entry architecture `2f9c93b588ffccaae60aedf6c16191c1251f6a1f` and
@@ -22,8 +22,9 @@ gate.
   design-review **PASS** recorded in the latest P18 State. Review covered the
   Proposed-before-schedule instance, complete-set atomic commitments, the
   post-advance sealed-input start bound, and distinct activity/participant
-  identities. The 311baa9 State-only update adds no relevant P18 API or code
-  change.
+  identities. P18-A due start-work remains behind its continuation barrier;
+  this does not change P20's bounded cardinality or grant P20 ownership of
+  continuation state.
 - Current review constraints include both
   `../architecture/INTRADAY_EXTENSIBILITY_ALIGNMENT.md` and
   `../architecture/MULTIPARTICIPANT_ACTIVITY_ALIGNMENT.md`: deterministic logical
@@ -73,7 +74,14 @@ the scheduled start to be strictly later than
 `max(CurrentInstant, InputsSealedThrough ?? CurrentInstant)`. A late/sealed start
 or checked next-tick overflow yields `NotFormed` without scheduling.
 
-At the scheduled instant, validate the complete set together: the instance is
+At the scheduled instant, the P20 start is ordinary P18-A due work. If a
+boundary continuation is pending at that instant, the P18-A barrier retains
+this work until continuation completion; P20 must not bypass the barrier or
+advance past its boundary. P18-A publishes all returned timeline facts after
+continuation completion and before dispatching ordinary same-instant work.
+P18-C source signals remain withheld until the outer timeline advance returns
+successfully. P20 neither owns nor implements continuation state. Then validate
+the complete set together: the instance is
 still Scheduled at the expected revision; both required Persons and matching
 commitments remain present; both are currently eligible; the operation's
 current factual preconditions hold; and the effect identity has not committed.
@@ -129,15 +137,23 @@ Implementation validation must cover at least:
   separately identified results, with no duplicate effect on retry;
 - stable IDs and results do not vary with participant insertion order,
   materialization, UI state, or incidental iteration order; and
+- a pending P18-A boundary continuation blocks a P20 start due at the same
+  instant; upon completion, returned timeline facts publish before that start,
+  and P18-C signals are handed off only after successful outer advance return;
 - promoted P18 timeline/lifecycle/availability regressions remain green.
 
 ## Acceptance and next gate
 
-Accepting `P20-A` would approve only this bounded checkpoint scope and ID. It
-would not approve a concrete gameplay consumer, a general activity framework,
+Acceptance of `P20-A` approves only this bounded checkpoint scope and ID. It
+does not approve a concrete gameplay consumer, a general activity framework,
 arbitrary group sizes or roles, cross-domain transactions, a mod API/loader,
-save/replay, or any other Phase 20 scope. After acceptance, implementation must
-start from the then-current canonical dependency base in an isolated worktree,
-map the reviewed contracts to concrete APIs, and pass independent implementation
-review and the required validation gates before any promotion request. Until
-separate explicit acceptance, this proposal authorizes no code changes.
+save/replay, or any other Phase 20 scope. After independent review of the
+current-base documentation refresh, implementation must start from the then-
+current canonical dependency base in an isolated worktree, map the reviewed
+contracts to concrete APIs, and pass independent implementation review and the
+required validation gates before any promotion request. Until that review
+passes, this proposal authorizes no code changes. The
+accepted scope does not establish a general participant count: exactly two
+distinct PersonIds is only this fixture's policy, while the architecture's
+one-or-more participant cardinality remains unchanged. Implementation starts
+only after independent review of the current-base P20 documentation refresh.

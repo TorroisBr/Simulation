@@ -1,15 +1,16 @@
 # P20 — Multi-participant Synthetic Operation Technical Design
 
-**Refresh base:** latest P18 canonical tip
-`311baa930227371a807fb324ff11fc024800ddf9` on `codex/phase18/canonical`,
-merged into this design branch. This latest canonical update changes only
-`PHASE18_STATE.md`; the relevant promoted P18 contracts and code remain those
-already reviewed at `18ecc6e56d3c6303edfaf8a38257355d262a6ea5`. The design
+**Refresh base:** P18 canonical State tip
+`eabc1c24a0ba8951ded87280472cc7137e741434` on `codex/phase18/canonical`,
+with promoted code integration `1dd0479626ddf00bf08aa66533f54fef7328a421`,
+merged into this design branch. P18-A now includes the additive boundary
+continuation contract; P18-B/C code remains as previously promoted. The design
 originated at `97b97c5c7523f39f3645bc018c82dbbab633648f` and remains subordinate
 to architecture `c285466c355103d3637ac165246591b72eb7bda0`.
 **Current P18 capability revalidation:** P18-A, P18-B, and P18-C are promoted
-on the latest canonical State at `311baa9`. Their source tips are P18-A `985c56c40fc01dc6a4d392120e2d32151a558d03`,
-P18-B `97918cbbe4238a65a216b1a1f0ef84c70b4d080c`, and P18-C
+on current canonical State `eabc1c2`. P18-A includes extension integration
+`1dd0479`; P18-B source tip is `97918cbbe4238a65a216b1a1f0ef84c70b4d080c`,
+and P18-C
 `ab05ecfe976e80badf6f509b8e9be25ff556ca23` (promotion/State tip
 `7aa76268c49058fedb997392e676c6a29169c8b0`). P18-B includes stale-node
 skipping without consuming the dispatch cap and the bounded
@@ -39,21 +40,24 @@ architecture alignment records.
 **Status:** The technical design at candidate `6a0d164` and the formation-close
 clarification at docs candidate
 `5ea4283b0c0dc15336c3eed477dd24ef276897f4` passed independent review against
-architecture `c285466`, current P18 State `311baa9`, and both alignment
-records. Checkpoint `P20-A — Synthetic Multi-participant Operation` remains
-proposed separately in `PHASE20_P20A_CHECKPOINT_PROPOSAL.md`; its ID and scope
-have not been accepted. No implementation authorization, capability
-promotion, or persistence schema is granted.
+architecture `c285466`, P18 State `311baa9`, and both alignment records. This
+current-base refresh records the promoted P18-A extension and P20-A scope
+acceptance; independent review of this refresh is pending. The user accepted
+`P20-A — Synthetic Multi-participant Operation` on 2026-09-27 as scope only.
+No implementation begins until this current-base documentation refresh passes
+independent review. No P20 capability promotion or persistence schema is
+granted.
 **Independent technical-design review history:** Earlier PASS at content commit
 `a85ab673c41154b7ac9be3943b3e0f2cba2c41e7` after the decline lifecycle
 mapping correction and refreshed PASS at `3c69fee`. The current P20 technical
 design at `6a0d16494735853ce35a8974ab348551650afd6b` was independently reviewed
-against promoted P18-A/B/C and P18 State `bcb3f67`; the latest P18 State-only
-tip `311baa9` records that PASS and does not change relevant contracts. Review
+against promoted P18-A/B/C and P18 State `bcb3f67`; a later review recorded
+the same result against P18 State `311baa9`. Review
 confirmed the pre-schedule Proposed instance, atomic full-set commitments,
 sealed-input start bound, and separate activity/participant identity. The
 formation-close clarification was independently refreshed and reviewed at docs
-candidate `5ea4283`; current P18 code/API contracts remain unchanged.
+candidate `5ea4283`. The continuation-specific refresh is separately pending
+independent review.
 
 ## 1. Purpose and boundary
 
@@ -76,7 +80,7 @@ operation has no gameplay meaning.
 
 | Concern | Authority and contract mapping |
 |---|---|
-| Logical instant, sealed inputs, due-work order and dispatch | P18-A. Start is a typed due-work reference ordered by exact `LogicalTick`, causal wave, stable owner/domain ID, `DueWorkId`, and persisted occurrence sequence. P20 owns no scheduler or clock. |
+| Logical instant, sealed inputs, due-work order and dispatch | P18-A. Start is a typed due-work reference ordered by exact `LogicalTick`, causal wave, stable owner/domain ID, `DueWorkId`, and persisted occurrence sequence. P20 owns no scheduler or clock. P20 start work is ordinary due work: it cannot dispatch while a boundary continuation at that instant is incomplete, and cannot cause advance beyond that boundary. |
 | Definition/version, stable instance ID, lifecycle/revision, participant relations and commitments | Promoted P18-B activity domain. Instance identity is independent of definition, `PersonId`, and `NpcRuntime`. `TrySchedule` atomically schedules a full nonempty participant set; it has no partial-acceptance scheduling API. Its rebuildable P18-A descriptor resolves the authoritative instance/revision before transition. |
 | Each Person's accept/decline proposal and decision boundary | Promoted P18-C provides `PersonId`-keyed decision request/proposal types, Knowledge-bounded snapshot/planner ports, and executor result semantics. Its current coordinator creates requests from committed P18-B transition receipts; it exposes no general P20 request-enqueue API or durable formation-decision store. P20 must define the supported request trigger/adapter and compose individual outcomes into a separate formation authority; one Person cannot decide for another. Current truth and commitments are revalidated at execution/start. |
 | Individual availability and commitment facts | P18-B and its individual availability authority own these facts; P18-C consumes committed transition receipts after successful advance and queries current availability. P20 must design how per-Person decisions/reservation requests are retained and how the complete set reaches `TrySchedule`; the P20 coordinated write is not a delivered B/C API. |
@@ -92,6 +96,17 @@ activity instance through stable semantic boundary data without making the
 instance an actor-owned child. Definition, instance, and each participant
 relation carry compatible stable semantic IDs; runtime references and
 collection order are not causal identity.
+
+The promoted P18-A additive continuation contract is an existing timeline
+barrier, not a P20-owned workflow. If a boundary activation freezes a
+continuation manifest, P20 start work remains queued as ordinary due work until
+all continuation steps complete. P18-A publishes the complete returned
+timeline-fact set after continuation completion and before ordinary work at
+that same instant. P18-C source signals remain retained but are handed off to
+actor-choice coordination only after the outer timeline advance returns
+successfully. P20 neither creates nor manages continuation state and cannot
+bypass this ordering. Its post-successful-advance scheduling rule and strict
+sealed-input start bound remain compatible with the barrier.
 
 P18-B's promoted ActivityLifecycle composition and owner-dispatch path is the
 bounded lifecycle/dispatch capability P20 can build on. P18-C's promoted
@@ -323,7 +338,11 @@ Before implementation review, the selected slice should demonstrate:
   `Cancelled` + `Cancel` receipt, while due-work invalidation is coherent;
 - P18-A same-instant ordering and non-reentrant dispatch, P18-B full-set
   `TrySchedule`/stale-node behavior, and P18-C Knowledge/availability/retry
-  behavior remain intact; and
+  behavior remain intact;
+- a P20 start due at a boundary cannot dispatch while a P18-A continuation is
+  pending; after completion, returned timeline facts publish before that P20
+  ordinary due work, and P18-C source signals are not handed off before
+  successful outer advance return; and
 - stable identity and causal state survive clone/dormancy/materialization
   permutations within the later supported runtime scope.
 
@@ -340,10 +359,13 @@ capabilities.
 
 P20 runtime implementation has its relevant P18-A timeline/scheduler,
 P18-B lifecycle, and P18-C availability/decision prerequisites promoted; the
-latest canonical State is `311baa9`, with code sources listed above. The former
-P18-C promotion gate is cleared. P20-A remains gated on explicit checkpoint
-acceptance; the formation-close clarification passed independent review at
-docs candidate `5ea4283`. Its P20-owned
+latest canonical State is `eabc1c2`, with code sources listed above. P18-A's
+continuation barrier and publication/handoff ordering are part of that base;
+P20 start work is subject to them. The former P18-C promotion gate is cleared.
+The user accepted P20-A scope on 2026-09-27; implementation remains gated on
+independent review of this current-base documentation refresh. The
+formation-close clarification passed independent review at docs candidate
+`5ea4283`. Its P20-owned
 APIs/transactions must still be implemented and independently reviewed as
 described above; the proposal creates no promoted capability. P18-B stale-owner skipping and bounded lifecycle
 composition are available; P18-C transition receipts and post-advance
@@ -379,5 +401,8 @@ No additional product choice is identified within the entry-approved scope.
 The technical-design review records the API and transaction contracts, and the
 formation-close timing clarification passed independent review at docs
 candidate `5ea4283`. Code-level mapping and behavior remain subject to independent
-implementation review against current promoted P18 capabilities. The proposed
-P20-A checkpoint is not accepted and authorizes no implementation.
+implementation review against current promoted P18 capabilities. Accepted
+P20-A scope authorizes only the bounded synthetic two-Person proving
+scope; it does not claim a P20 capability or start implementation before the
+current-base independent documentation review passes. P20 remains independent
+of P18-D and P19.
