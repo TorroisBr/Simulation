@@ -36,7 +36,8 @@ public enum TimelineFailure
     None = 0, TargetBeforeNow = 1, Overflow = 2, ReentrantAdvance = 3,
     UnknownWorkKind = 4, StaleWork = 5, DispatchFailed = 6, InstantWorkLimitExceeded = 7,
     DailyBoundaryFailed = 8, InputNotSealed = 9, LateInput = 10,
-    DuplicateInputSequence = 11, DuplicateWorkSequence = 12
+    DuplicateInputSequence = 11, DuplicateWorkSequence = 12,
+    ContinuationPending = 13, ContinuationFailed = 14, PublicationFailed = 15
 }
 
 /// <summary>Closed descriptor kinds currently understood by the timeline.</summary>
@@ -149,6 +150,156 @@ public interface IDayBoundaryCommit
     bool TryCommit(out TimelineFailure failure);
 }
 
+/// <summary>One immutable, data-only operation selected when a boundary is activated.</summary>
+public sealed class BoundaryContinuationStep
+{
+    public int Ordinal { get; }
+    public string StepId { get; }
+    public string OwnerId { get; }
+    public string OperationKind { get; }
+    public string OperationVersion { get; }
+    public string OwnerRevision { get; }
+    public string Payload { get; }
+    public string PersonId { get; }
+    public string Disposition { get; }
+
+    public BoundaryContinuationStep(int ordinal, string stepId, string ownerId, string operationKind,
+        string operationVersion, string ownerRevision, string payload, string personId = null,
+        string disposition = "included")
+    {
+        if (ordinal < 0) throw new ArgumentOutOfRangeException(nameof(ordinal));
+        if (string.IsNullOrWhiteSpace(stepId) || string.IsNullOrWhiteSpace(ownerId)
+            || string.IsNullOrWhiteSpace(operationKind) || string.IsNullOrWhiteSpace(operationVersion))
+            throw new ArgumentException("Step, owner, operation kind, and version identities are required.");
+        if (string.IsNullOrWhiteSpace(disposition)) throw new ArgumentException("A frozen disposition is required.", nameof(disposition));
+        Ordinal = ordinal; StepId = stepId; OwnerId = ownerId; OperationKind = operationKind;
+        OperationVersion = operationVersion; OwnerRevision = ownerRevision ?? string.Empty;
+        Payload = payload ?? string.Empty; PersonId = personId ?? string.Empty; Disposition = disposition;
+    }
+}
+
+/// <summary>Frozen activation input; step order and roster cannot be regenerated on retry.</summary>
+public sealed class BoundaryContinuationManifest
+{
+    private readonly IReadOnlyList<BoundaryContinuationStep> steps;
+    public string BoundaryOccurrenceId { get; }
+    public string ContinuationId { get; }
+    public string SubphaseKind { get; }
+    public string SubphaseVersion { get; }
+    public string WorldId { get; }
+    public string ProfileId { get; }
+    public long AbsoluteDay { get; }
+    public string ConfigurationIdentity { get; }
+    public string ContentIdentity { get; }
+    public IReadOnlyList<BoundaryContinuationStep> Steps => steps;
+    public string GetExecutionStepIdentity(BoundaryContinuationStep step)
+    {
+        if (step == null || step.Ordinal >= steps.Count || !ReferenceEquals(steps[step.Ordinal], step))
+            throw new ArgumentException("Step must be the frozen manifest descriptor at its ordinal.", nameof(step));
+        return SpatialStableKey.Encode(ContinuationId, step.Ordinal.ToString(CultureInfo.InvariantCulture), step.StepId);
+    }
+
+    public BoundaryContinuationManifest(DailyBoundaryOperation operation, string subphaseKind,
+        string subphaseVersion, string configurationIdentity, IReadOnlyList<BoundaryContinuationStep> steps,
+        string contentIdentity = null)
+    {
+        if (operation == null) throw new ArgumentNullException(nameof(operation));
+        if (string.IsNullOrWhiteSpace(subphaseKind) || string.IsNullOrWhiteSpace(subphaseVersion))
+            throw new ArgumentException("Subphase kind and version are required.");
+        if (steps == null) throw new ArgumentNullException(nameof(steps));
+        List<BoundaryContinuationStep> copy = new List<BoundaryContinuationStep>(steps.Count);
+        HashSet<string> ids = new HashSet<string>(StringComparer.Ordinal);
+        for (int i = 0; i < steps.Count; i++)
+        {
+            BoundaryContinuationStep step = steps[i] ?? throw new ArgumentException("Manifest steps cannot be null.", nameof(steps));
+            if (step.Ordinal != i || !ids.Add(step.StepId)) throw new ArgumentException("Manifest ordinals must be contiguous and step identities unique.", nameof(steps));
+            copy.Add(step);
+        }
+        BoundaryOccurrenceId = operation.OccurrenceId;
+        ContinuationId = SpatialStableKey.Encode(BoundaryOccurrenceId, subphaseKind, subphaseVersion);
+        SubphaseKind = subphaseKind; SubphaseVersion = subphaseVersion;
+        WorldId = operation.WorldId; ProfileId = operation.ProfileId; AbsoluteDay = operation.AbsoluteDay;
+        ConfigurationIdentity = configurationIdentity ?? string.Empty;
+        ContentIdentity = contentIdentity ?? string.Empty;
+        this.steps = copy.AsReadOnly();
+    }
+}
+
+public sealed class BoundaryPublishedFact
+{
+    public DueWorkReference Fact { get; }
+    public long CausalSequence { get; }
+    public BoundaryPublishedFact(DueWorkReference fact, long causalSequence)
+    {
+        Fact = fact ?? throw new ArgumentNullException(nameof(fact));
+        if (causalSequence < 0) throw new ArgumentOutOfRangeException(nameof(causalSequence));
+        CausalSequence = causalSequence;
+    }
+}
+
+/// <summary>Owner-held, reconstruction-safe continuation state.</summary>
+public sealed class BoundaryContinuationState
+{
+    public BoundaryContinuationManifest Manifest { get; }
+    public int NextStepOrdinal { get; }
+    public bool IsComplete { get; }
+    public bool TimelineFactsPublished { get; }
+    public IReadOnlyList<BoundaryPublishedFact> PublishedFacts { get; }
+    public IReadOnlyList<DueWorkReference> RetainedTimelineFacts { get; }
+    public IReadOnlyList<string> RetainedSourceSignals { get; }
+    public bool SignalsHandedOff { get; }
+
+    public BoundaryContinuationState(BoundaryContinuationManifest manifest, int nextStepOrdinal, bool isComplete,
+        bool timelineFactsPublished, IReadOnlyList<BoundaryPublishedFact> publishedFacts,
+        IReadOnlyList<DueWorkReference> retainedTimelineFacts, IReadOnlyList<string> retainedSourceSignals,
+        bool signalsHandedOff)
+    {
+        Manifest = manifest ?? throw new ArgumentNullException(nameof(manifest));
+        if (nextStepOrdinal < 0 || nextStepOrdinal > manifest.Steps.Count) throw new ArgumentOutOfRangeException(nameof(nextStepOrdinal));
+        if (isComplete && nextStepOrdinal != manifest.Steps.Count) throw new ArgumentException("Completed continuation must have all steps resolved.");
+        NextStepOrdinal = nextStepOrdinal; IsComplete = isComplete; TimelineFactsPublished = timelineFactsPublished;
+        PublishedFacts = Copy(publishedFacts); RetainedTimelineFacts = Copy(retainedTimelineFacts);
+        RetainedSourceSignals = Copy(retainedSourceSignals); SignalsHandedOff = signalsHandedOff;
+    }
+    private static IReadOnlyList<T> Copy<T>(IReadOnlyList<T> source) =>
+        source == null ? Array.Empty<T>() : new List<T>(source).AsReadOnly();
+}
+
+public interface IBoundaryActivationCommit
+{
+    BoundaryContinuationManifest Manifest { get; }
+    bool TryCommit(out TimelineFailure failure);
+}
+
+public interface IBoundaryContinuationStepCommit
+{
+    IReadOnlyList<DueWorkReference> RetainedTimelineFacts { get; }
+    IReadOnlyList<string> RetainedSourceSignals { get; }
+    bool TryCommit(out TimelineFailure failure);
+}
+
+public interface IBoundaryTimelinePublicationCommit
+{
+    bool TryCommit(IReadOnlyList<BoundaryPublishedFact> facts, out TimelineFailure failure);
+}
+
+/// <summary>Optional P18-A extension. Implementations retain activation, receipts, and outputs in domain stores.</summary>
+public interface IResumableDayBoundaryOwner : IDayBoundaryOwner
+{
+    bool TryPrepareActivation(DailyBoundaryOperation operation, out IBoundaryActivationCommit prepared, out TimelineFailure failure);
+    bool TryResolveContinuation(string continuationId, out BoundaryContinuationState state, out TimelineFailure failure);
+    bool TryPrepareStep(BoundaryContinuationManifest manifest, BoundaryContinuationStep step,
+        out IBoundaryContinuationStepCommit prepared, out TimelineFailure failure);
+    bool TryPrepareTimelinePublication(BoundaryContinuationManifest manifest,
+        out IBoundaryTimelinePublicationCommit prepared, out TimelineFailure failure);
+}
+
+/// <summary>Optional handoff for retained P18-C source signals after the entire outer advance succeeds.</summary>
+public interface IBoundarySourceSignalHandoff
+{
+    bool TryHandoff(BoundaryContinuationManifest manifest, IReadOnlyList<string> retainedSignals, out TimelineFailure failure);
+}
+
 /// <summary>
 /// World-local logical clock and rebuildable due-work index. Domain owners and the input authority
 /// retain facts; this object only orders stable references and delegates mutation to prepared owners.
@@ -171,6 +322,8 @@ public sealed class SimulationTimeline
     private long causalSequence;
     private long sealedThrough = -1L;
     private long pendingBoundaryDay = -1L;
+    private string pendingContinuationId;
+    private readonly List<string> pendingSignalHandoffIds = new List<string>();
     private bool advancing;
     private bool dispatching;
     private bool ownerCommitWindow;
@@ -178,19 +331,33 @@ public sealed class SimulationTimeline
     public SimulationTimeline(SimulationCalendar calendar, LogicalTick initialInstant,
         IDueWorkOwner dueWorkOwner = null, ITimelineInputOwner inputOwner = null,
         IDayBoundaryOwner boundaryOwner = null, string worldId = null, string profileId = "default",
-        int maxDispatchesPerInstant = DefaultMaxDispatchesPerInstant, long? pendingBoundaryDay = null)
+        int maxDispatchesPerInstant = DefaultMaxDispatchesPerInstant, long? pendingBoundaryDay = null,
+        string pendingContinuationId = null, IReadOnlyList<string> pendingSignalHandoffIds = null,
+        long initialCausalSequence = 0L)
     {
         this.calendar = calendar ?? throw new ArgumentNullException(nameof(calendar));
         if (maxDispatchesPerInstant <= 0) throw new ArgumentOutOfRangeException(nameof(maxDispatchesPerInstant));
+        if (initialCausalSequence < 0L) throw new ArgumentOutOfRangeException(nameof(initialCausalSequence));
         if (boundaryOwner != null && string.IsNullOrWhiteSpace(worldId)) throw new ArgumentException("World identity is required for boundary work.", nameof(worldId));
         if (boundaryOwner != null && string.IsNullOrWhiteSpace(profileId)) throw new ArgumentException("Profile identity is required for boundary work.", nameof(profileId));
         this.dueWorkOwner = dueWorkOwner; this.inputOwner = inputOwner; this.boundaryOwner = boundaryOwner;
         this.worldId = worldId; this.profileId = profileId; this.maxDispatchesPerInstant = maxDispatchesPerInstant;
+        causalSequence = initialCausalSequence;
         now = initialInstant.Value;
         if (pendingBoundaryDay.HasValue && (boundaryOwner == null || pendingBoundaryDay.Value <= 0L
             || initialInstant.TickOfDay != 0L || pendingBoundaryDay.Value != initialInstant.AbsoluteDay))
             throw new ArgumentException("A restored pending boundary must match the initial boundary instant and have an owner.", nameof(pendingBoundaryDay));
         this.pendingBoundaryDay = pendingBoundaryDay ?? -1L;
+        if (pendingContinuationId != null && !(boundaryOwner is IResumableDayBoundaryOwner))
+            throw new ArgumentException("A restored continuation requires a resumable boundary owner.", nameof(pendingContinuationId));
+        this.pendingContinuationId = pendingContinuationId;
+        if (pendingSignalHandoffIds != null)
+        {
+            if (!(boundaryOwner is IResumableDayBoundaryOwner)) throw new ArgumentException("Restored continuation handoffs require a resumable boundary owner.", nameof(pendingSignalHandoffIds));
+            foreach (string id in pendingSignalHandoffIds)
+                if (string.IsNullOrWhiteSpace(id) || this.pendingSignalHandoffIds.Contains(id)) throw new ArgumentException("Restored handoff identities must be nonempty and unique.", nameof(pendingSignalHandoffIds));
+                else this.pendingSignalHandoffIds.Add(id);
+        }
         calendar.GetDate(initialInstant.AbsoluteDay);
     }
 
@@ -198,6 +365,8 @@ public sealed class SimulationTimeline
     public SimulationDate CurrentDate => CurrentInstant.ToDate(calendar);
     public long CausalSequence => causalSequence;
     public long? PendingBoundaryDay => pendingBoundaryDay < 0L ? (long?)null : pendingBoundaryDay;
+    public string PendingContinuationId => pendingContinuationId;
+    public IReadOnlyList<string> PendingSignalHandoffIds => pendingSignalHandoffIds.AsReadOnly();
     public LogicalTick? NextDueInstant
     {
         get
@@ -398,17 +567,55 @@ public sealed class SimulationTimeline
                     if (dispatchesAtInstant >= maxDispatchesPerInstant)
                     { failure = TimelineFailure.InstantWorkLimitExceeded; return false; }
                     DailyBoundaryOperation operation = new DailyBoundaryOperation(worldId, profileId, pendingBoundaryDay);
-                    if (!boundaryOwner.TryPrepare(operation, out IDayBoundaryCommit boundaryCommit, out failure) || boundaryCommit == null)
-                    { if (failure == TimelineFailure.None) failure = TimelineFailure.DailyBoundaryFailed; return false; }
-                    dispatching = true;
-                    bool boundaryCommitted;
-                    try { boundaryCommitted = boundaryCommit.TryCommit(out failure); }
-                    catch (Exception) { failure = TimelineFailure.DailyBoundaryFailed; return false; }
-                    finally { dispatching = false; }
-                    if (!boundaryCommitted) { if (failure == TimelineFailure.None) failure = TimelineFailure.DailyBoundaryFailed; return false; }
-                    pendingBoundaryDay = -1L;
+                    if (boundaryOwner is IResumableDayBoundaryOwner resumableOwner)
+                    {
+                        if (!resumableOwner.TryPrepareActivation(operation, out IBoundaryActivationCommit activation, out failure) || activation == null)
+                        { if (failure == TimelineFailure.None) failure = TimelineFailure.DailyBoundaryFailed; return false; }
+                        if (activation.Manifest == null || activation.Manifest.BoundaryOccurrenceId != operation.OccurrenceId
+                            || activation.Manifest.WorldId != worldId || activation.Manifest.ProfileId != profileId
+                            || activation.Manifest.AbsoluteDay != operation.AbsoluteDay
+                            || activation.Manifest.ContinuationId != SpatialStableKey.Encode(operation.OccurrenceId,
+                                activation.Manifest.SubphaseKind, activation.Manifest.SubphaseVersion))
+                        { failure = TimelineFailure.ContinuationFailed; return false; }
+                        dispatching = true;
+                        bool activationCommitted;
+                        try { activationCommitted = activation.TryCommit(out failure); }
+                        catch (Exception) { failure = TimelineFailure.DailyBoundaryFailed; return false; }
+                        finally { dispatching = false; }
+                        if (!activationCommitted || activation.Manifest == null)
+                        { if (failure == TimelineFailure.None) failure = TimelineFailure.DailyBoundaryFailed; return false; }
+                        pendingBoundaryDay = -1L;
+                        pendingContinuationId = activation.Manifest.ContinuationId;
+                        dispatchesAtInstant++;
+                    }
+                    else
+                    {
+                        if (!boundaryOwner.TryPrepare(operation, out IDayBoundaryCommit boundaryCommit, out failure) || boundaryCommit == null)
+                        { if (failure == TimelineFailure.None) failure = TimelineFailure.DailyBoundaryFailed; return false; }
+                        dispatching = true;
+                        bool boundaryCommitted;
+                        try { boundaryCommitted = boundaryCommit.TryCommit(out failure); }
+                        catch (Exception) { failure = TimelineFailure.DailyBoundaryFailed; return false; }
+                        finally { dispatching = false; }
+                        if (!boundaryCommitted) { if (failure == TimelineFailure.None) failure = TimelineFailure.DailyBoundaryFailed; return false; }
+                        pendingBoundaryDay = -1L;
+                        dispatchesAtInstant++;
+                    }
+                }
+
+                // A resumable subphase is a barrier: finish and publish it before ordinary work at this instant.
+                if (pendingContinuationId != null)
+                {
+                    if (dispatchesAtInstant >= maxDispatchesPerInstant)
+                    { failure = TimelineFailure.InstantWorkLimitExceeded; return false; }
+                    if (!TryResumeBoundaryContinuation(out BoundaryContinuationManifest completedManifest, out failure)) return false;
+                    pendingContinuationId = null;
+                    if (!pendingSignalHandoffIds.Contains(completedManifest.ContinuationId))
+                        pendingSignalHandoffIds.Add(completedManifest.ContinuationId);
                     dispatchesAtInstant++;
                 }
+
+                if (!TryRestorePendingBoundaryFacts(out failure)) return false;
 
                 if (agenda.TryGetValue(now, out List<ScheduledDueWork> items))
                 {
@@ -448,6 +655,7 @@ public sealed class SimulationTimeline
 
                 if (now == target.Value) break;
             }
+            if (!TryHandoffBoundarySignals(out failure)) return false;
             failure = TimelineFailure.None;
             return true;
         }
@@ -460,6 +668,140 @@ public sealed class SimulationTimeline
         if (reference == null) throw new ArgumentNullException(nameof(reference));
         if (reference.DueAt.Value < instant) { failure = TimelineFailure.TargetBeforeNow; return false; }
         if (reference.Kind != DueWorkKind.DomainOperation) { failure = TimelineFailure.UnknownWorkKind; return false; }
+        failure = TimelineFailure.None;
+        return true;
+    }
+
+    private bool TryResumeBoundaryContinuation(out BoundaryContinuationManifest completedManifest, out TimelineFailure failure)
+    {
+        completedManifest = null;
+        failure = TimelineFailure.None;
+        if (!(boundaryOwner is IResumableDayBoundaryOwner owner)
+            || !owner.TryResolveContinuation(pendingContinuationId, out BoundaryContinuationState state, out failure)
+            || state == null)
+        { if (failure == TimelineFailure.None) failure = TimelineFailure.ContinuationFailed; return false; }
+        BoundaryContinuationManifest manifest = state.Manifest;
+        if (manifest.ContinuationId != pendingContinuationId
+            || manifest.ContinuationId != SpatialStableKey.Encode(manifest.BoundaryOccurrenceId, manifest.SubphaseKind, manifest.SubphaseVersion)
+            || manifest.AbsoluteDay != now / LogicalTick.TicksPerDay || now % LogicalTick.TicksPerDay != 0L)
+        { failure = TimelineFailure.ContinuationFailed; return false; }
+
+        while (!state.IsComplete)
+        {
+            int ordinal = state.NextStepOrdinal;
+            if (ordinal < 0 || ordinal >= manifest.Steps.Count)
+            { failure = TimelineFailure.ContinuationFailed; return false; }
+            BoundaryContinuationStep step = manifest.Steps[ordinal];
+            if (!owner.TryPrepareStep(manifest, step, out IBoundaryContinuationStepCommit stepCommit, out failure)
+                || stepCommit == null)
+            { if (failure == TimelineFailure.None) failure = TimelineFailure.ContinuationFailed; return false; }
+            // Outputs must be retained with the step receipt; publication is a later timeline boundary.
+            if (stepCommit.RetainedTimelineFacts == null || stepCommit.RetainedSourceSignals == null)
+            { failure = TimelineFailure.ContinuationFailed; return false; }
+            dispatching = true;
+            bool committed;
+            try { committed = stepCommit.TryCommit(out failure); }
+            catch (Exception) { failure = TimelineFailure.ContinuationFailed; return false; }
+            finally { dispatching = false; }
+            if (!committed)
+            { if (failure == TimelineFailure.None) failure = TimelineFailure.ContinuationFailed; return false; }
+            if (!owner.TryResolveContinuation(pendingContinuationId, out state, out failure) || state == null)
+            { if (failure == TimelineFailure.None) failure = TimelineFailure.ContinuationFailed; return false; }
+            if (!ReferenceEquals(state.Manifest, manifest) && state.Manifest.ContinuationId != manifest.ContinuationId)
+            { failure = TimelineFailure.ContinuationFailed; return false; }
+        }
+
+        if (!state.TimelineFactsPublished)
+        {
+            List<DueWorkReference> facts = new List<DueWorkReference>(state.RetainedTimelineFacts);
+            HashSet<string> factIdentities = new HashSet<string>(StringComparer.Ordinal);
+            foreach (DueWorkReference fact in facts)
+                if (fact == null || !factIdentities.Add(Identity(fact)))
+                { failure = TimelineFailure.PublicationFailed; return false; }
+            if (!TryStageOwnerFacts(facts, 0, out List<ScheduledDueWork> staged, out long nextSequence, out failure))
+            { if (failure == TimelineFailure.None) failure = TimelineFailure.PublicationFailed; return false; }
+            List<BoundaryPublishedFact> receipts = staged.ConvertAll(item => new BoundaryPublishedFact(item.Reference, item.CausalSequence));
+            if (!owner.TryPrepareTimelinePublication(manifest, out IBoundaryTimelinePublicationCommit publication, out failure)
+                || publication == null)
+            { if (failure == TimelineFailure.None) failure = TimelineFailure.PublicationFailed; return false; }
+            dispatching = true;
+            bool published;
+            try { published = publication.TryCommit(receipts.AsReadOnly(), out failure); }
+            catch (Exception) { failure = TimelineFailure.PublicationFailed; return false; }
+            finally { dispatching = false; }
+            if (!published)
+            { if (failure == TimelineFailure.None) failure = TimelineFailure.PublicationFailed; return false; }
+            PublishOwnerFacts(staged, nextSequence);
+        }
+        else if (!TryRestorePublishedBoundaryFacts(state.PublishedFacts, out failure)) return false;
+
+        completedManifest = manifest;
+        failure = TimelineFailure.None;
+        return true;
+    }
+
+    private bool TryRestorePublishedBoundaryFacts(IReadOnlyList<BoundaryPublishedFact> facts, out TimelineFailure failure)
+    {
+        if (facts == null) { failure = TimelineFailure.PublicationFailed; return false; }
+        HashSet<string> identities = new HashSet<string>(StringComparer.Ordinal);
+        foreach (BoundaryPublishedFact published in facts)
+        {
+            if (published == null || published.Fact == null || !identities.Add(Identity(published.Fact)))
+            { failure = TimelineFailure.PublicationFailed; return false; }
+            if (published.Fact.DueAt.Value < now) continue;
+            string identity = Identity(published.Fact);
+            if (workIdentities.Contains(identity)) continue;
+            if (!CanIndex(published.Fact, now, out failure)) return false;
+            foreach (List<ScheduledDueWork> indexed in agenda.Values)
+                foreach (ScheduledDueWork existing in indexed)
+                    if (existing.CausalSequence == published.CausalSequence)
+                    { failure = TimelineFailure.PublicationFailed; return false; }
+            workIdentities.Add(identity);
+            AddToAgenda(new ScheduledDueWork(published.Fact, 0, published.CausalSequence));
+            if (published.CausalSequence > causalSequence) causalSequence = published.CausalSequence;
+        }
+        failure = TimelineFailure.None;
+        return true;
+    }
+
+    private bool TryRestorePendingBoundaryFacts(out TimelineFailure failure)
+    {
+        if (pendingSignalHandoffIds.Count == 0) { failure = TimelineFailure.None; return true; }
+        if (!(boundaryOwner is IResumableDayBoundaryOwner owner))
+        { failure = TimelineFailure.ContinuationFailed; return false; }
+        foreach (string id in pendingSignalHandoffIds)
+        {
+            if (!owner.TryResolveContinuation(id, out BoundaryContinuationState state, out failure)
+                || state == null || !state.IsComplete || !state.TimelineFactsPublished)
+            { if (failure == TimelineFailure.None) failure = TimelineFailure.ContinuationFailed; return false; }
+            if (!TryRestorePublishedBoundaryFacts(state.PublishedFacts, out failure)) return false;
+        }
+        failure = TimelineFailure.None;
+        return true;
+    }
+
+    private bool TryHandoffBoundarySignals(out TimelineFailure failure)
+    {
+        failure = TimelineFailure.None;
+        if (pendingSignalHandoffIds.Count == 0) { failure = TimelineFailure.None; return true; }
+        if (!(boundaryOwner is IResumableDayBoundaryOwner owner))
+        { failure = TimelineFailure.ContinuationFailed; return false; }
+        if (!(boundaryOwner is IBoundarySourceSignalHandoff handoff))
+        {
+            foreach (string id in pendingSignalHandoffIds)
+                if (!owner.TryResolveContinuation(id, out BoundaryContinuationState state, out failure) || state == null || state.RetainedSourceSignals.Count != 0)
+                { if (failure == TimelineFailure.None) failure = TimelineFailure.ContinuationFailed; return false; }
+            pendingSignalHandoffIds.Clear(); failure = TimelineFailure.None; return true;
+        }
+        for (int i = 0; i < pendingSignalHandoffIds.Count;)
+        {
+            string id = pendingSignalHandoffIds[i];
+            if (!owner.TryResolveContinuation(id, out BoundaryContinuationState state, out failure) || state == null || !state.IsComplete)
+            { if (failure == TimelineFailure.None) failure = TimelineFailure.ContinuationFailed; return false; }
+            if (!state.SignalsHandedOff && !handoff.TryHandoff(state.Manifest, state.RetainedSourceSignals, out failure))
+            { if (failure == TimelineFailure.None) failure = TimelineFailure.ContinuationFailed; return false; }
+            pendingSignalHandoffIds.RemoveAt(i);
+        }
         failure = TimelineFailure.None;
         return true;
     }
