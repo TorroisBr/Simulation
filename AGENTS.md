@@ -31,11 +31,21 @@ Do not implement a roadmap item, start an orchestration run, or change `docs/SIM
 
 Typical hotspots include `SimulationRuntime`, `AdvanceDay`, spatial/travel and Knowledge authorities, diagnostics, command capture, persistence composition, and shared domain stores. Prefer explicit integration order to a general lock framework. Read-only exploration/review can be parallel when useful.
 
+## Agent and model economy
+
+Follow the established Luna-first, cost-effective agent policy: use Luna for ordinary exploration, implementation, testing, and review; prefer more focused Luna attempts or safe parallelism before escalating to Sol for a concrete difficult ambiguity. Terra is exceptional where available. Task size alone is not a reason to escalate. Keep independent review independent.
+
 ## Candidates, review, and validation
 
 Worker completion is not a validated candidate; a validated candidate is not canonical. Review the full candidate diff against its actual base, including architecture, mutation authority, stale-state handling, atomicity, determinism, replay/fork sensitivity, scope, and shared hotspots. A worker does not approve its own work. Green tests alone do not approve a change.
 
 Run focused tests during implementation, affected regressions at checkpoint/integration, and the promotion gate appropriate to risk and the current Brief/State. A change to daily-loop or long-horizon causal behavior requires corresponding long-run validation. Run `git diff --check`. Diagnose failed tests rather than treating every failure as a product decision. Documentation-only changes do not need Unity tests unless they unexpectedly affect executable content.
+
+## Standing Git authority
+
+Within the active user objective and runtime permissions, the Master Orchestrator may autonomously inspect/fetch refs; create, update, and switch isolated branches/worktrees; commit and push candidate, design, review, validation, and State evidence; refresh candidates against newer canonical tips; and merge, rebase, or cherry-pick isolated candidates after dependency and semantic review. Resolve ordinary conflicts when repository evidence makes the correct resolution unambiguous. Remove disposable local worktrees or temporary branches only after confirming their work is pushed or saved in a recoverable snapshot. Do not ask for conversational confirmation for these routine mechanics.
+
+This standing authority does not grant canonical or formal Phase-closure promotion approval, authorize architecture/product decisions, or permit destructive shared-history changes. Preserve the approval gates in `docs/EXECUTION_MODEL.md`. Never force-push, rewrite shared history, delete a remote branch with unintegrated work, discard unrelated user changes, or reset/clean work that is not explicitly disposable. Prefer additive commits and durable evidence. If the runtime requires sandbox approval, request only the minimum technical permission and continue.
 
 For concurrent branches, establish their common base, inspect both diffs and semantic overlap, select integration order, and rerun affected validation after integration. Do not discard either branch silently.
 
@@ -44,6 +54,17 @@ For concurrent branches, establish their common base, inspect both diffs and sem
 Initially, canonical promotion and phase closure require explicit human approval. Before promotion verify canonical ancestry/remote state, candidate review, required tests, scope, architecture compliance, unresolved blockers, State accuracy, and diff checks. Never force-push, rewrite shared history, delete tags/main, merge or modify main, or discard user changes. Preserve blocked/stale candidate work for diagnosis or recovery.
 
 After an approved promotion, record the final SHA and evidence in the owning Phase State, push the intended canonical branch, verify local/remote synchronization, and recompute readiness. Phase closure is a separate review of its objective, required promoted checkpoints, regressions, known limitations, and deferred consumers; a state-only closure commit may be appropriate.
+
+## Workflow skills
+
+These files are reusable procedures, not new architecture or authorization. Read the relevant skill when starting the matching workflow:
+
+- Approved implementation-ready checkpoint: `.agents/skills/phase-checkpoint-implementation/SKILL.md`; then use `.agents/skills/candidate-review/SKILL.md` for independent exact-tip review.
+- Candidate ready for canonical consideration: `.agents/skills/canonical-promotion/SKILL.md`; prepare and present the formal gate, then promote and rebuild the DAG only after approval.
+- All mandatory checkpoints canonical: `.agents/skills/phase-closure/SKILL.md`; prepare the independently reviewed closure candidate and stop at its formal gate.
+- Architecture, Roadmap, State, or canonical baseline changed: `.agents/skills/dependency-refresh/SKILL.md`; compare completed and in-flight work before scheduling. Use `.agents/skills/architecture-blocker-report/SKILL.md` for a genuine unresolved decision.
+- A run or task was interrupted: `.agents/skills/interrupted-run-recovery/SKILL.md`, followed by dependency refresh.
+- An implementation-ready checkpoint still lacks a technical boundary: `.agents/skills/checkpoint-technical-design/SKILL.md`.
 
 Routine read/search, Git, and relevant Unity validation operations may be performed within the active task and permission policy. If the sandbox requires technical approval, request the minimum permission. No operational rule here overrides a user's explicit read-only or narrower scope.
 
