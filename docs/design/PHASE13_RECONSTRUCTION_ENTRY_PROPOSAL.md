@@ -10,7 +10,7 @@ within P9-A/P9-B; P9-B's selected authored geography is exactly one P8-A Hex
 and one anchored Location with provenance); P10 canonical is `95f9882` (P10-A
 promoted, Phase 10 open, with no universal Ruin/topology assumption);
 P12's accepted scope record is `4a1d364` (scope only, still `WAIT_DEPENDENCY`;
-latest docs-only owner-inventory refresh candidate `66de8f1`); P14 canonical is
+latest docs-only owner-inventory refresh candidate `18f1cbb`); P14 canonical is
 `4caecbb`. P18 canonical is `99cac77` with its A/B/C core promoted; additive
 P18-A contract `2175bf2` was accepted, with acceptance recorded in implementation
 branch commit `9de70ae`; its implementation remains in progress and unpromoted.
@@ -110,7 +110,7 @@ which boundaries the product supports.
 
 P12-A scope was accepted at `codex/phase12/ContinuationDesignP9BRevalidation`
 tip `4a1d364`, but that is scope acceptance only. The latest owner-inventory
-refresh candidate `66de8f1` still reports no profile-included owner
+refresh candidate `18f1cbb` still reports no profile-included owner
 group with demonstrated complete exact immutable export plus staged
 hydration. It identifies missing envelope/admission, identity allocator
 restoration, owner DTOs and hydrators, causal inputs/commitments,
@@ -260,7 +260,7 @@ These are planning/design candidates, not promoted capability evidence:
   `docs/architecture/MULTIPARTICIPANT_ACTIVITY_ALIGNMENT.md`: accepted
   cross-phase constraints, including no blanket P18-D/P19/P20 edge.
 - P12 owner inventory refresh candidate `codex/phase12/ContinuationDesignP9BRevalidation`
-  at `66de8f1` (accepted scope remains `4a1d364`): evidence of current export/hydration gaps, not a completed
+  at `18f1cbb` (accepted scope remains `4a1d364`): evidence of current export/hydration gaps, not a completed
   continuation contract or implementation authorization.
 
 The implementation dependency graph must be refreshed against canonical
