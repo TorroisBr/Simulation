@@ -36,12 +36,14 @@ and supports the architecture's one-or-more participant cardinality.
 proposal (refreshed at `ff8908ff81f53c6392535f6a23d0bd954b86220b`);
 reviewed P18-A, P18-B, and P18-C technical designs; and both dated
 architecture alignment records.
-**Status:** Technical-design review **PASS**; checkpoint `P20-A — Synthetic
-Multi-participant Operation` is proposed separately in
-`PHASE20_P20A_CHECKPOINT_PROPOSAL.md`. Its ID and scope have not been accepted,
-so this record grants no implementation authorization, capability promotion,
-or persistence schema.
-**Independent technical-design review:** Earlier PASS at content commit
+**Status:** The technical design at candidate `6a0d164` passed independent
+review. This candidate clarifies when partial formation becomes terminal;
+that clarification is pending independent refresh review. Checkpoint `P20-A —
+Synthetic Multi-participant Operation` remains proposed separately in
+`PHASE20_P20A_CHECKPOINT_PROPOSAL.md`; its ID and scope have not been accepted.
+No implementation authorization, capability promotion, or persistence schema
+is granted.
+**Independent technical-design review history:** Earlier PASS at content commit
 `a85ab673c41154b7ac9be3943b3e0f2cba2c41e7` after the decline lifecycle
 mapping correction and refreshed PASS at `3c69fee`. The current P20 technical
 design at `6a0d16494735853ce35a8974ab348551650afd6b` was independently reviewed
@@ -122,20 +124,23 @@ Each required Person independently receives an accept-or-decline opportunity.
 The decision reads only that Person's allowed Knowledge and records its
 decision identity, logical boundary, and relevant source revision. P20 needs a
 bounded owner/API to retain these partial per-Person decisions; P18-B does not
-expose partial-acceptance scheduling. A decline maps to the P20
-`NotFormed` outcome; this is not an existing P18-B decline API. `NotFormed`
-is recorded before the instance is scheduled; it is not a P18-B lifecycle
-state or receipt.
-A missing decision must not be treated as acceptance. No acceptance is
-inferred from another participant, the proposer, a roster, shared context, or
-the UI.
+expose partial-acceptance scheduling. A partial response set, including a
+recorded decline, remains pending on the P18-B `Proposed` instance until an
+explicit bounded formation-close attempt. There is no timeout or implicit
+close. At that attempt, a still-missing or declined required decision maps to
+P20 `NotFormed`; this is not a P18-B lifecycle state or receipt. The existing
+instance remains `Proposed`, with no Schedule receipt, active commitments, or
+start/completion due work. A missing decision must not be treated as
+acceptance. No acceptance is inferred from another participant, the proposer,
+a roster, shared context, or the UI.
 
 Each acceptance records only that Person's decision and reservation intent for
 the common half-open fixture interval `[start, end)`, using integer P18-A ticks
-and checked range. It does not create an active P18-B commitment. When every
-required Person has accepted, P20 revalidates the full accepted set and current
-eligibility, then calls P18-B `TrySchedule` once with the complete participant
-set and interval. `TrySchedule` is the authority that atomically validates
+and checked range. It does not create an active P18-B commitment. On a
+formation-close attempt where every required Person has accepted, P20
+revalidates the full accepted set and current eligibility, then calls P18-B
+`TrySchedule` once with the complete participant set and interval.
+`TrySchedule` is the authority that atomically validates
 conflicts and installs all commitments, due work, participant relations, and
 the Scheduled transition/receipt. P20 must not require matching active
 commitments before this call because no P18-B partial-reservation API exists.
@@ -205,7 +210,7 @@ P20 terminal labels map to the existing P18-B lifecycle facts as follows:
 
 | P20 outcome | Timing | P18-B lifecycle/receipt and commitment behavior |
 |---|---|---|
-| `NotFormed` | Before `TrySchedule` succeeds, including a decline, missing decision, stale revalidation, an intervening participant conflict, a late/sealed start, or tick overflow | The P18-B instance remains Proposed with no Schedule receipt, active commitments, or start/completion due work. Record the P20 formation disposition atomically. |
+| `NotFormed` | At explicit formation close with a still-missing/declined decision, or before `TrySchedule` succeeds due to stale revalidation, participant conflict, a late/sealed start, or tick overflow | The P18-B instance remains Proposed with no Schedule receipt, active commitments, or start/completion due work. Record the P20 formation disposition atomically. |
 | `FailedToStart` | Scheduled start validation or P20 current-truth validation fails | P18-B state becomes `Cancelled` and emits `FailedStart`; start/completion due work for the instance is invalidated and all its commitments are released. The P20 label is a disposition, not a new lifecycle state. |
 | `Cancelled` | Explicit cancellation after scheduling | P18-B state becomes `Cancelled` and emits `Cancel`; due work is invalidated and all instance commitments are released. |
 | `Started` | Coordinated scheduled-start validation succeeds | P18-B state becomes `Active` and emits `Start`; P20 effects commit together, and commitments remain installed through the Active interval. |
@@ -289,12 +294,14 @@ Before implementation review, the selected slice should demonstrate:
   rejecting duplicate/blank participant IDs, and P20's exact-two condition is
   only this synthetic proof's fixture policy;
 - independent decisions and Knowledge boundaries for two distinct Persons;
-- P20 can retain partial per-Person decisions and reservation intents without
-  active commitments or scheduling, then revalidate and submit the complete
-  nonempty required set through P18-B `TrySchedule`; empty or incomplete sets
-  cannot create a Scheduled instance;
-- one decline, one missing decision, duplicate PersonId, and reservation
-  conflict each prevent formation/start without partial mutation;
+- partial per-Person decisions and reservation intents remain Proposed without
+  active commitments until an explicit bounded formation-close attempt; a
+  still-missing or declined decision at close records `NotFormed` without
+  scheduling;
+- at close with every required Person accepted, P20 revalidates and submits the
+  complete nonempty set through P18-B `TrySchedule`; empty or incomplete sets
+  cannot create a Scheduled instance, and duplicate PersonId or reservation
+  conflict cannot partially mutate it;
 - deterministic ordering under participant insertion/materialization
   permutations;
 - the complete set is revalidated before `TrySchedule`, which creates both
@@ -334,7 +341,8 @@ P20 runtime implementation has its relevant P18-A timeline/scheduler,
 P18-B lifecycle, and P18-C availability/decision prerequisites promoted; the
 latest canonical State is `311baa9`, with code sources listed above. The former
 P18-C promotion gate is cleared. P20-A remains gated on explicit checkpoint
-acceptance; the technical-design review gate is passed. Its P20-owned
+acceptance and independent review of the current formation-close clarification.
+The prior technical-design review remains recorded at its cited candidate. Its P20-owned
 APIs/transactions must still be implemented and independently reviewed as
 described above; the proposal creates no promoted capability. P18-B stale-owner skipping and bounded lifecycle
 composition are available; P18-C transition receipts and post-advance
@@ -366,8 +374,9 @@ domain-owned effects must allow future extensions without rewriting
 `NpcRuntime` or creating one manager per mechanic; the public mod platform is
 deferred to its documented Phase.
 
-No unresolved semantic or product blocker is identified within the
-entry-approved scope. The reviewed technical design records the API and
-transaction contracts; code-level mapping and behavior remain subject to
-independent implementation review against current promoted P18 capabilities.
-The proposed P20-A checkpoint is not accepted and authorizes no implementation.
+No additional product choice is identified within the entry-approved scope.
+The prior technical-design review records the API and transaction contracts;
+this candidate's formation-close timing clarification awaits independent
+review. Code-level mapping and behavior remain subject to independent
+implementation review against current promoted P18 capabilities. The proposed
+P20-A checkpoint is not accepted and authorizes no implementation.

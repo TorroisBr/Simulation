@@ -1,13 +1,14 @@
 # Phase 20 — Multi-participant Activities v1
 
 **Authority:** planning scope under `../SIMULATION_ARCHITECTURE.md` §§11–12,
-91–93. **Readiness:** entry architecture and technical design are independently
-reviewed **PASS** against promoted P18-A/B/C. The first implementation
-checkpoint, `P20-A — Synthetic Multi-participant Operation`, is proposed in
-`../design/PHASE20_P20A_CHECKPOINT_PROPOSAL.md`; its ID and scope are not yet
-accepted. Implementation remains gated on explicit acceptance of that
-checkpoint and independent review at the code-candidate gate. No P20 capability
-is promoted.
+91–93. **Readiness:** prior entry and technical-design versions passed
+independent review against promoted P18-A/B/C. The current formation-close
+clarification is undergoing independent refresh review. The first
+implementation checkpoint, `P20-A — Synthetic Multi-participant Operation`, is
+proposed in `../design/PHASE20_P20A_CHECKPOINT_PROPOSAL.md`; its ID and scope are
+not yet accepted. Implementation remains gated on explicit checkpoint
+acceptance and independent code-candidate review. No P20 capability is
+promoted.
 
 ## Objective and closure
 
@@ -34,8 +35,10 @@ to demonstrate the generic capability.
 - **Formation and commitments:** optional formation/proposal precedes execution
   where recruitment is needed. Agreement may reserve a future interval;
   agreement/reservation does not imply availability or a valid start. Partially
-  formed proposals are valid nonexecuting state; each authoritative transition
-  must be coherent, not a half-applied reservation mutation.
+  formed proposals remain valid nonexecuting state until an explicit bounded
+  formation-close attempt; a still-missing or declined response at close yields
+  `NotFormed`. No timeout implicitly closes a proposal. Each authoritative
+  transition must be coherent, not a half-applied reservation mutation.
 - **Coordinated start:** validate required roles/counts, every required actor's
   current capability/availability and matching commitments together. Conflict
   or stale state cannot start only part of the required activity accidentally.

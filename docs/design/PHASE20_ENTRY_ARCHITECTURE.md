@@ -1,8 +1,10 @@
 # Phase 20 Entry Architecture — bounded multi-participant proving slice
 
-**Status:** `ENTRY_ARCHITECTURE_READY`; independent entry review **PASS**. This
-document proposes a bounded decomposition and does not authorize implementation,
-define P20 checkpoint IDs, or promote any capability. It is subordinate to
+**Status:** Prior entry review **PASS** at candidate
+`2f9c93b588ffccaae60aedf6c16191c1251f6a1f`; formation-close clarification is
+under independent refresh review on this candidate branch. This document
+proposes a bounded decomposition and does not authorize implementation, define
+an approved P20 checkpoint ID, or promote any capability. It is subordinate to
 `SIMULATION_ARCHITECTURE.md` §§11–12, 91–93 and the Phase 20 Brief.
 
 ## Purpose and readiness
@@ -40,25 +42,31 @@ from this fixture.
 Each Person receives an independent accept-or-decline decision opportunity.
 The fixture records each decision against that Person's semantic identity; one
 Person cannot accept, decline, or recruit on behalf of the other. Decisions use
-only the deciding Person's permitted Knowledge. Either decline leaves the
-instance unformed and not executable.
+only the deciding Person's permitted Knowledge. A partial response set remains
+pending on the `Proposed` instance. A recorded decline does not by itself close
+formation or make the instance terminal.
 
-On acceptance, the fixture records a commitment/reservation for the operation's
-future interval under the relevant temporal/availability authority. Both
-participants reserve the same fixture interval for simplicity. This is a
-scoped test choice, not a rule that every activity or role shares one interval.
-Acceptance, reservation, availability at start, and execution are distinct
-facts. Reservation creation must be coherent for the accepting participant and
-must reject a known interval conflict without partially changing that
-participant's commitment state.
+On acceptance, the fixture records that Person's decision and reservation intent
+for the operation's future interval. It does not install an active commitment
+for only that Person. Both participants use the same fixture interval for
+simplicity. This is a scoped test choice, not a rule that every activity or role
+shares one interval. Acceptance, reservation intent, authoritative commitment,
+availability at start, and execution are distinct facts.
 
 ## Formation, scheduled start, and terminal outcomes
 
-The instance becomes scheduled only after both distinct required Persons have
-accepted and their matching reservations are present. A partial proposal may
-remain pending, but cannot start. The existing P18 timeline/scheduler owns the
-logical start boundary; the activity layer does not create a second clock or
-authoritative agenda.
+An explicit, bounded formation-close attempt evaluates the recorded decisions;
+there is no timeout or implicit close. Before that attempt, a missing response
+leaves the instance `Proposed` and pending. If a required response is still
+missing or is declined at close, record P20 `NotFormed` while retaining the
+P18-B instance as `Proposed`, with no Schedule receipt, active commitments, or
+start/completion due work. If both required Persons accepted, revalidate the
+complete set and call P18-B `TrySchedule` once. Only its atomic success installs
+both commitments, participant relations, due work, and the Scheduled
+transition/receipt. A conflict or stale pre-schedule revalidation records
+`NotFormed` and leaves the instance `Proposed` without those scheduled facts.
+The existing P18 timeline/scheduler owns the logical start boundary; the
+activity layer does not create a second clock or authoritative agenda.
 
 At that boundary, one coordinated validation checks, before any operation
 effect:
@@ -80,11 +88,12 @@ The fixture exposes these outcomes explicitly:
 
 | Condition | Instance outcome | Reservation outcome |
 |---|---|---|
-| Either participant declines | `NotFormed` | Release any reservation already made for this instance. |
+| Formation-close attempt finds a required decision missing or declined | `NotFormed` | Preserve the `Proposed` instance and decision facts; install no commitments or due work. |
+| Complete-set revalidation or `TrySchedule` fails before scheduling | `NotFormed` | Preserve the `Proposed` instance; install no commitments or due work. |
 | A required participant or matching reservation is missing at scheduled start | `FailedToStart` | Release both instance reservations as one transition. |
 | Revalidation finds stale/unavailable/conflicting state | `FailedToStart` | Release both instance reservations as one transition; apply no operation effect. |
 | Explicit cancellation before start | `Cancelled` | Release both instance reservations as one transition. |
-| Both participants pass coordinated start validation | `Started` | Consume/close the start reservations according to the P18 commitment contract. |
+| Both participants pass coordinated start validation | `Started` | Retain both commitments through the Active interval; release them at the supported terminal transition. |
 
 These are terminal outcomes for the proving slice. It does not support automatic
 recruitment, retry, withdrawal after start, mid-execution composition changes,

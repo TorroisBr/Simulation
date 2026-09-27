@@ -90,16 +90,19 @@ P19 merely because its number is higher. P19's activity extension adapter
 consumes the relevant P20 capability when multi-participant support is exposed;
 P20's official bounded implementation does not wait for the mod loader.
 
-P18-A/B/C are now promoted on `codex/phase18/canonical` at `311baa9`. P20's
-entry architecture and technical design have independent review PASS. The
+P18-A/B/C are now promoted on `codex/phase18/canonical` at `311baa9`. The prior
+P20 entry architecture and technical design passed independent review; their
+formation-close clarification is undergoing a targeted refresh review. The
 current first-checkpoint proposal is `P20-A — Synthetic Multi-participant
 Operation` (`docs/design/PHASE20_P20A_CHECKPOINT_PROPOSAL.md`): a two-Person,
 role-free synthetic test operation with independent decisions, a common future
 interval, coordinated validated start, distinct per-Person effects, and bounded
-failure/cancellation handling. The two participants are fixture cardinality;
-they do not set a universal count or role policy. P20-A remains proposed and
-requires explicit checkpoint acceptance before implementation. P18-D and P19
-are not its prerequisites.
+failure/cancellation handling. Partial responses remain Proposed until explicit
+bounded formation-close; missing/declined at close records `NotFormed` without
+scheduling. The two participants are fixture cardinality; they do not set a
+universal count or role policy. P20-A remains proposed and requires explicit
+checkpoint acceptance before implementation. P18-D and P19 are not its
+prerequisites.
 
 ```text
 P18-A/B/C relevant contracts → P20 entry / technical design
