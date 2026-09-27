@@ -14,13 +14,20 @@ small. Its two-Person requirement and lack of differentiated roles apply only to
 this proving slice; they do not establish universal activity cardinality, role
 policy, or an arrangement catalog.
 
-Accepted P18-A/B/C contracts may inform entry and technical design. Runtime
-execution remains `WAIT_DEPENDENCY` until the relevant P18-A timeline/scheduler,
-P18-B lifecycle, and P18-C availability/decision capabilities are promoted and
-the bounded technical design is independently reviewed. P18 work does not wait
-for P20, so this adds no P18 → P20 cycle. There is no blanket dependency on all
-P18-D migrations, P19, P8 travel, P12/P13 persistence, or a persistent
-Group/Organization.
+Current P18 canonical tip `3d4fe829f4be41fc9e9bb11052a320c3eb00d94d`
+promotes P18-A (`985c56c`) and P18-B
+(`97918cbbe4238a65a216b1a1f0ef84c70b4d080c`). P18-C design candidate
+`97b97c5` remains unpromoted. Promoted P18-A/B contracts inform entry and
+technical design. P18-B includes stale-node skipping without consuming the
+dispatch cap and the bounded ActivityLifecycle composition/owner-dispatch
+path. P20 must still revalidate
+that its stable instance/revision references, due-work invalidation, and
+coordinated transitions fit the promoted APIs. P18-C availability/decision
+capability remains unpromoted; runtime execution remains `WAIT_DEPENDENCY` on
+the relevant promoted P18-A/B/C capabilities and independent technical design
+review. P18 work does not wait for P20, so this adds no P18 → P20 cycle. There
+is no blanket dependency on all P18-D migrations, P19, P8 travel, P12/P13
+persistence, or a persistent Group/Organization.
 
 ## Bounded proving fixture
 
