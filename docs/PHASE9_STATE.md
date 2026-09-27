@@ -1,11 +1,13 @@
-# Phase 9 — REOPENED FOR P9-B IMPLEMENTATION
+# Phase 9 — REOPENED FOR P9-B; INTEGRATION CANDIDATE IN FINAL REVIEW
 
 P9-A remains promoted and scope-closed within its approved authored-bootstrap-
 only scope. Phase 9 is reopened for the separately user-approved P9-B
 authored-geography capability below. Independent design review passed on the
 exact P9-B contract at `a30db22f9d8e3117a668c463a70d4100149387bd`; an isolated
-implementation candidate may proceed. P9-B remains noncanonical, with no
-implementation or delivery claimed by this docs-only record.
+implementation candidate proceeded. The implementation and required
+validation are complete on `00395ef80cfa2364d34ed2170e0735d3a4b1513d`.
+`codex/phase9/P9BIntegration` is the noncanonical integration candidate; final
+integration review and canonical-promotion approval are still required.
 
 ## Current authority and candidate
 
@@ -18,8 +20,8 @@ implementation or delivery claimed by this docs-only record.
 - P9-A implementation candidate: `974a8d72a158962619d7ba8aa1ccf854eeadd47e`.
 - P9-A code promotion commit: `43f08b3dfbf042380c2f8a8b037bbf3ebd309ccb` on `codex/phase9/canonical`.
 - **P9-A status: PROMOTED and scope-closed.** Its original accepted scope and historical closure record remain intact. P9-B is a separately approved checkpoint, not an expansion or rewrite of P9-A.
-- **P9-B status: USER-APPROVED; DESIGN REVIEW PASS; IMPLEMENTATION CANDIDATE MAY PROCEED.** It is noncanonical and not delivered.
-- **Phase 9 status: REOPENED for the P9-B implementation path.** Local/pre-start content generation remains P10; public mod loading, retrofit and runtime expansion remain deferred consumers.
+- **P9-B status: USER-APPROVED; DESIGN, CODE REVIEW, AND IMPLEMENTATION VALIDATION PASS; INTEGRATION REVIEW IN FINAL GATE.** It remains noncanonical pending integration review and canonical-promotion approval.
+- **Phase 9 status: REOPENED for the P9-B capability.** Local/pre-start content generation remains P10; public mod loading, retrofit and runtime expansion remain deferred consumers.
 
 ## Historical P9-A phase-closure review
 
@@ -172,9 +174,10 @@ isolated implementation candidate proceeded under the execution model.
 verified that the selected profile uses the distinct physical-scale identity
 `world-scale/Simulation-GeneralTest/v1`, separate from the axial coordinate
 convention `axial-hex-v1`. A non-gating provenance NIT remains: the generic
-manifest output-owner list omits `SpatialAuthorityStore`, while the P9-B
-stage-output fingerprint explicitly includes that authority; no required
-provenance is missing from the stage record.
+`output-owner` fingerprint record is absent for `SpatialAuthorityStore`, while
+the manifest's declared `OutputOwners` and the P9-B `stage-output` fingerprint
+both include the spatial authority. No required P9-B provenance is missing;
+this is a non-blocking fingerprint-record asymmetry.
 
 **Implementation validation:** on exact code tip `00395ef`,
 `SimulationBootstrapCompositionTests` 14/14, `SpatialGeographyTests` 13/13,
