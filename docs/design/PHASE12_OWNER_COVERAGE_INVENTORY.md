@@ -10,13 +10,14 @@ P18 canonical/State `99cac77f7d66e8eb61fe68efb6959a4a5b7029ca`, P10 code
 `c44904bb4b0a066eced1d7e8a773b7dc1eea76c0`, P20-A proposal refresh
 `2a03edadcb411c7ca7aa2d0c67ee8d36f972779e`, and architecture `c285466`.
 
-This remains a documentation-only cross-branch inventory. The P12 proposal
-branch does not inherit P11 executable code or P18 executable code; those
-canonical refs were inspected for composition facts and contract compatibility.
-Any later implementation/integration candidate must include the promoted P11
-runtime (or prove equivalent current composition) before claiming ActorChoice
-support. It must not imply that P18 code present in the review context is
-composed by the selected legacy daily bootstrap.
+This remains a documentation-only cross-branch inventory. The proposal branch
+does not inherit P11 executable code; P11 canonical was inspected separately
+for current composition facts. P18 source is present through the merged
+`99cac77` parent, but the selected legacy daily bootstrap does not compose its
+timeline, activity lifecycle, or availability-decision services. Any later
+implementation/integration candidate must include the promoted P11 runtime (or
+prove equivalent current composition) before claiming ActorChoice support and
+must not treat the P18 source files as composed runtime behavior.
 
 This is a read-only gap inventory from the current runtime composition and
 owner APIs. **No profile-included group currently has a demonstrated complete,
