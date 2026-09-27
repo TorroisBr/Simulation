@@ -29,13 +29,31 @@ drop either input while claiming a complete continuation.
 
 P18, P19 and P20 are conditional extensions to the state inventory only if a future explicitly supported profile contains their temporal, module, or shared-activity state. The base daily profile has no blanket dependency on those phases. A date is not a future intraday ordering contract: adding intraday capture requires the relevant promoted P18 identity, exact logical-time, due-work and same-time ordering/hydration capabilities first. Adding extension-owned state requires the applicable P19 lifecycle/state compatibility contracts. Adding shared activities requires the relevant P20 participant and lifecycle contracts. These additions do not justify freezing this proposal's internal time field to a day-only scalar.
 
-The current profile also excludes P9/P10 generated worlds and P20 activity
-instances. If a later supported profile includes generated worlds, its causal
-inventory must retain stable generation stage/contributor identities, compatible
-versions and provenance, selected authored inputs, dependency and deterministic
-contribution/conflict order, purpose-scoped random context, and generated
-outputs needed to continue; installation must not silently rerun historical
-generation. If a later profile includes a P20 activity, preserve the
+The current profile excludes P9/P10 generated-world content and P20 activity
+instances. It does include the P9-A authored-genesis manifest identity for the
+selected `TesteSimulacao.InitializeSimulation` bootstrap: that path executes
+`SimulationGenesisPipeline.ExecuteStages` and publishes a
+`SimulationGenesisManifest` with the bootstrapped composition. The continuation
+envelope must preserve or validate the manifest's stable profile-contract
+identity and schema version, fingerprint, seed source/value, effective
+configuration/calendar, ordered stage identities, dependencies, authored
+definition identities, output-owner set, canonical provenance records, and
+first simulated boundary. Store this genesis-origin identity/provenance with
+the saved world's profile compatibility data and cover it together with the
+owner sections under the envelope integrity digest. On load, validate it
+against the compatible P9-A contract and the saved envelope's world/profile
+identity; the manifest describes genesis inputs and outputs, not the later
+evolved owner values at the save boundary. Hydration restores the captured
+owner state and retained manifest evidence; it never reruns genesis or executes
+the stage pipeline. This manifest identity/provenance is causal compatibility
+data, not a requirement to carry or regenerate P9/P10 generated-world content.
+
+If a later supported profile includes generated worlds, its causal inventory
+must additionally retain stable generation stage/contributor identities,
+compatible versions and provenance, selected authored inputs, dependency and
+deterministic contribution/conflict order, purpose-scoped random context, and
+generated outputs needed to continue; installation must not silently rerun
+historical generation. If a later profile includes a P20 activity, preserve the
 definition/version and stable instance identity separately from participants;
 formation state, semantic participant identities (using `PersonId` for Person
 participants without requiring materialized `NpcRuntime`), roles as of the save
@@ -181,13 +199,13 @@ promotion `0b52898`, and architecture baseline
 `c285466c355103d3637ac165246591b72eb7bda0`, including the current
 intraday/extensibility and multi-participant alignment records.
 
-- **P9-A manifest/version:** this profile still excludes P9/P10 generated
-  worlds. Before implementation, inspect the selected bootstrap composition.
-  If it executes P9-A, the compatibility envelope must include or validate
-  selected manifest/stage identities and versions, inputs, outputs and
-  provenance without rerunning genesis. If it does not execute genesis, retain
-  the explicit exclusion. Do not silently omit causally relevant genesis
-  state.
+- **P9-A manifest/version:** the selected bootstrap executes P9-A and publishes
+  a `SimulationGenesisManifest`. Preserve or validate its stable profile/schema/
+  contract identity, ordered stage identities/versions/dependencies, fingerprint,
+  selected-input and output provenance, configuration/calendar, and seed source/
+  value against the saved world. Hydration restores saved owner state and never
+  reruns genesis. This compatibility evidence does not bring generated P9/P10
+  content into the daily profile.
 - **P11 Actor Choice ingress:** pending WorldCommand and actor-choice inputs
   remain outside this profile. Capture admission and load validation reject
   their presence; the promoted ingress does not authorize dropping them from a
