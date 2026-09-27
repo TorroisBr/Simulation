@@ -12,7 +12,9 @@ canonical baseline `c5b2e06b534f4b2af38f10e6510b10800aa8b28c` and architecture u
 `c285466c355103d3637ac165246591b72eb7bda0`, confirming the exact LocationId
 association, uniqueness/cardinality rules, and conditional P18/P20 edges.
 **P8-E promotion impact revalidation:** the latest canonical Phase 8 State is
-at `77f3e1a`; P8-E was promoted at `d95b60d174cb0b17df09e2775b3cbd134c74b21f`.
+at `470667d37863384edadb3d93ef64d8004aff46a3`; the advance from `77f3e1a` is a
+State-only closure update. P8-E was promoted at
+`d95b60d174cb0b17df09e2775b3cbd134c74b21f`.
 The reviewed P14 single-settlement source/sink scope includes no transport,
 route flow, or multi-actor work, so P8-E is now canonical but is not a
 dependency for this design. The reviewed architecture baseline remains
@@ -20,15 +22,15 @@ dependency for this design. The reviewed architecture baseline remains
 
 ## 1. Scope and governing contracts
 
-Design one manually authored City, one configured daily source for an item, and the same City's population consumption of that item, when effective `Economy.Enabled` is true. The configured production is an explicit exogenous source: there are no inputs, finite reserves, depletion, or transformation. The boundary is the closing aggregate market stock after that day's consumption.
+Design one manually authored City, exactly one configured daily source for exactly one item, and the same City's population consumption of that item, when effective `Economy.Enabled` is true. The configured production is an explicit exogenous source: there are no inputs, finite reserves, depletion, or transformation. Multi-source, multi-item, and contributor composition are outside P14-A and require a separately reviewed future checkpoint. The boundary is the closing aggregate market stock after that day's consumption.
 
 The semantic rules are:
 
 - Keep City/settlement title over the configured source and resulting material distinct from the market's custody of aggregate stock. Existing market-counterparty identity and purchasing power are not title records.
 - Use stable semantic source, settlement/City, market-store, item, and effective-content identities. Each selected City instance carries an authored `SettlementSemanticId`, unique across City instances in the supported world/profile and distinct from `CityData.DefinitionId`, `CityRuntime.RuntimeId`, and the P8 anchor-owner lookup key. Missing or duplicate settlement IDs reject composition. The selected profile associates that identity with the current stable P8 `LocationId`; runtime IDs and object references are in-process lookup handles only. Runtime IDs, Unity object references, display names, list positions, and diagnostic event IDs are not durable identity.
 - The domain source and market-stock authority own their mutations. A schedule/cadence invokes them; it does not define material truth. Existing daily automatic production and consumption need no P18 capability.
-- Preserve deterministic order and atomic domain transitions. Overflow cannot partially apply a source contribution. Insufficient stock caps the free population sink at actual available stock as the existing behavior intends; the stock decrease and reported consumed quantity are one atomic transition.
-- Preserve current moddability constraints: domain behavior remains independent of Unity presentation where practical, seams permit compatible extension, and independent contributions have stable identity and deterministic composition. P19 API/loader and module lifecycle remain deferred.
+- Preserve the existing deterministic daily order and atomic domain transitions. The single source addition either fits completely in aggregate stock or rejects without partial mutation. Insufficient stock caps the free population sink at actual available stock as the existing behavior intends; the stock decrease and reported consumed quantity are one atomic transition.
+- Preserve current moddability constraints: domain behavior remains independent of Unity presentation where practical, and semantic seams remain compatible with later extension. Multi-contributor ordering/merging and duplicate-key rules require a separate future checkpoint. P19 API/loader and module lifecycle remain deferred.
 - No P20 prerequisite applies to this single-settlement passive source/sink.
   P8-D and P8-E are canonical, but neither route/travel capability is used by
   this design; transport, route flow, and multi-actor work remain excluded.
@@ -62,10 +64,10 @@ The population consumption operation belongs to the existing City population-eco
 At each enabled daily boundary:
 
 1. Capture/refer to the opening balance for the selected `ItemDefinitionId` and the resolved source/configuration identity and revision.
-2. Resolve due configured source contributions. Order contributions by stable semantic source ID using ordinal comparison; do not rely on authored list or dictionary iteration order. A single source contribution is accepted only if the complete positive quantity fits the destination aggregate integer balance. Validate the resulting balance before mutation, then apply the full quantity once. On overflow, reject that contribution without changing stock, record a deterministic failure diagnostic, and continue independent contributions in stable order. Never saturate or wrap the balance.
-3. After all source contributions, calculate the existing configured daily population request from the authoritative population count and resolved consumption parameters. For the v1 item, determine `actual = min(requested, available stock)`; the stock removal and resulting `actual` are one mutation. If no stock is available, apply zero. No reservation or partial account debit is involved because this profile uses free consumption.
+2. Resolve the one configured source for the selected item. Its complete positive quantity either fits the destination aggregate integer balance and is applied once, or rejects without changing stock and records a deterministic failure diagnostic. Never saturate or wrap the balance. P14-A defines no contributor ordering, continuation, or merging behavior.
+3. Calculate the existing configured daily population request for the authoritative population count and resolved consumption parameters. Determine `actual = min(requested, available stock)`; the stock removal and resulting `actual` are one mutation. If no stock is available, apply zero. No reservation or partial account debit is involved because this profile uses free consumption.
 4. Update derived market prices after the production and consumption operations, as in the current daily sequence.
-5. Expose the closing stock and operation outcomes as projections. The material balance for successful source contributions is `closing = opening + sum(applied source quantities) - actual free consumption`.
+5. Expose the closing stock and operation outcomes as projections. The material balance is `closing = opening + applied source quantity - actual free consumption`.
 
 The current `MarketRuntime` stock methods are the aggregate stock authority and mutate directly; the existing runtime mutation-guard binding does not bind `MarketRuntime`. This profile therefore does not assume a market stock guard exists. If the accepted implementation introduces or explicitly binds one, a guard rejection must leave that operation unapplied and report rejection without a success result. Any such binding belongs to the runtime-owned mutation boundary. A later paid-consumption scope would require a separately reviewed atomic stock-and-money contract and is outside this proposal.
 
@@ -80,13 +82,13 @@ The authoritative reconstruction inventory for this slice must expose or retain:
 - the initial/opening aggregate item stock at the reconstruction boundary;
 - daily boundary and deterministic source-application order, each accepted source identity and quantity (or sufficient compatible inputs/state to deterministically reproduce those results), and actual population sink quantity;
 - title owner and stock custodian as distinct semantic facts; and
-- closing aggregate stock and any rejected contribution reason needed to make diagnostics explain the applied result.
+- closing aggregate stock and any rejected source-application reason needed to make diagnostics explain the applied result.
 
 This is an inventory contract for future P12 save and P13 historical reconstruction work, not an event-sourcing mandate, history-retention policy, or save schema. Diagnostics/canonical writers should sort by stable semantic IDs and include the causal inputs/results above where available. A projection must not become an alternative authority or consume randomness.
 
 ## 6. Extensibility seam within current constraints
 
-Keep the source definition and its application semantics separate from City presentation/bootstrap and from a single hard-coded manager. The initial built-in source is one deterministic contribution provider. Its contract should permit additional compatible source definitions or behavior contributors later, each with stable identity/version and explicit effective enablement. Merge contributions by stable semantic key and reject duplicate keys deterministically during composition; contributor registration alone does not enable behavior. A disabled Economy capability does not execute sources.
+Keep the one source definition and its application semantics separate from City presentation/bootstrap and from a single hard-coded manager. P14-A composes exactly one explicitly selected source and does not define contributor registration, sorting, merging, or duplicate-key behavior. Additional compatible source definitions or behavior contributors, including their stable identities/versions, enablement, ordering, and duplicate-key policy, require a separate reviewed future checkpoint; registration alone must not imply execution. A disabled Economy capability does not execute the P14-A source.
 
 Do not add a general plugin registry, public mod API, loader, package protocol, arbitrary code execution boundary, mod security model, or retroactive world-generation hook here. P19 defines the supported public extension lifecycle after real consumers stabilize it. If later extensions change existing-world state, that must be an explicit new boundary and participate in P12/P13 causal compatibility; installation must not implicitly rerun genesis.
 
@@ -97,7 +99,7 @@ If a bounded implementation checkpoint is later accepted, keep it on an isolated
 1. Carry a globally unique within-world authored `SettlementSemanticId` and P8 `LocationId` association for the selected City instance in compatible profile input; validate before publication that the Location resolves and equals the selected City instance's current P8 anchor. Add stable authored semantic source identity/version and narrowly validate the selected local source profile. Reject missing, duplicate, unresolved, or mismatched identity/binding inputs rather than deriving them from runtime IDs, content definitions, or ordering.
 2. Add the P14 source/title/custody operation at the domain boundary and mutate aggregate stock through the existing `MarketRuntime` stock authority. Do not assume a market mutation guard; compose with a guard only if the accepted implementation introduces or binds one. Keep `CityRuntime` as coordinator, not owner of new universal rules.
 3. Preserve the existing daily economy ordering and Economy.Enabled gate while invoking source operations; constrain the v1 consumer to one City and its own market/population.
-4. Extend deterministic diagnostics/reconstruction projections and focused tests for identity stability, deterministic ordering, complete-add overflow rejection, stock-limited consumption, title/custody distinction, disabled economy, and repeatable same-input results.
+4. Extend deterministic diagnostics/reconstruction projections and focused tests for identity stability, complete-add overflow rejection, stock-limited consumption, title/custody distinction, disabled economy, and repeatable same-input results. Multi-contributor ordering and duplicate-key tests are outside P14-A and belong to the future checkpoint that introduces those semantics.
 5. Review the full diff against the selected base and run relevant economy, market, population-consumption, and diagnostics suites. Add mutation-guard composition coverage only if the accepted implementation introduces or binds a guard for market stock. Any required broader regression gates follow the accepted checkpoint and repository execution policy.
 
 Likely code surfaces include `CityData`, `CityRuntime`, `MarketRuntime`, `CityProductionResult`, the `SimulationRuntime` economy-pass composition, and authoritative diagnostics/projection components. These are change-risk indicators, not authorization to edit those files. No code or tests are changed by this proposal.
@@ -111,3 +113,42 @@ Likely code surfaces include `CityData`, `CityRuntime`, `MarketRuntime`, `CityPr
 ## 9. Explicit exclusions
 
 This design adds no resource extraction, finite source reserves, production inputs, transformation, spoilage, transport, route/network flow, merchant transactions, trade repositioning, money mutation, paid population consumption, multi-worker operation, collective activity, job/crew system, gameplay loop, or production framework. It does not implement Sleep, Dreams, robbery/gangs, rituals, War gameplay, or MegaEventos.
+
+## 10. Promotion impact revalidation — 2026-09-26
+
+This proposal remains bounded to manually authored daily production and
+population consumption within one settlement and its own market. It introduces
+no transport or route flow and remains a proposal, not an approved checkpoint
+contract or implementation authorization. Revalidation uses P8 canonical
+State `470667d`, P9-A closure tip `96f2c1aaf742f313bbb9643e5f5b3d844c402c78`,
+P11 Actor Choice closure tip `308e24d0744112e8f2b741521b8b3e4acb51ebbf`,
+P18-A State promotion `0b52898`, and architecture baseline
+`c285466c355103d3637ac165246591b72eb7bda0`, including current
+intraday/extensibility and multi-participant alignment records.
+
+The P9 and P11 advances after code promotion record closure in State/Brief
+documents only; they change no runtime capabilities. P9-A's authored daily
+bootstrap boundary and P11's promoted actor-choice implementation remain the
+same implementations considered by this impact review.
+
+- **P8:** retain the actual dependency on the promoted spatial authority and
+  City-to-Location anchoring. Confirm the selected City's Location resolves
+  and matches its current anchor. P8 passage/travel capability remains
+  irrelevant because this profile moves no material.
+- **P9-A:** upstream-irrelevant to the manually authored v1. Generated content
+  may populate sources in a later profile, but is not required here.
+- **P11 Actor Choice:** upstream-irrelevant because production and consumption
+  remain passive daily Economy behavior, not actor-selected actions or pending
+  command inputs.
+- **P18-A:** upstream-irrelevant to the existing daily cadence. If a later
+  accepted scope promises duration-based, shift-based or intraday operation,
+  it must consume the specific promoted P18 scheduler/lifecycle capabilities
+  required by that behavior.
+- **P20:** conditional only for a later consumer that actually coordinates
+  multiple participants, using relevant P20 capability on P18. No shared
+  activity or crew is introduced here.
+
+The alignment records constrain future temporal and participant extensions
+without changing this design's closure. The open product/entry gate remains
+acceptance of the first consumer, conservation boundary, and actor/asset
+authority; no new content scope is inferred by this revalidation.
