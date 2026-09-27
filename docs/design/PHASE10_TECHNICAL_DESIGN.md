@@ -1,8 +1,10 @@
 # Phase 10 Technical Design Proposal — UNAPPROVED
 
-**Status:** bounded technical design proposal — UNAPPROVED. This document
-assigns no checkpoint ID, changes no Phase State/Roadmap, and does not
-authorize implementation. The user-approved first-profile scope is exactly
+**Status:** bounded technical design proposal — UNAPPROVED. The durable
+proposed P10-A checkpoint identity and boundary are recorded in
+`PHASE10_A_CHECKPOINT_RECORD.md`; both documents await independent review.
+This proposal changes no Phase State/Roadmap and does not authorize
+implementation. The user-approved first-profile scope is exactly
 one `ExplorableSiteKind.Ruin` at an existing canonical P8 `LocationId`, with a
 finite local topology limited to semantic places, one or more entry points,
 containment only if needed, and explicit local connections. Entrance →
@@ -86,7 +88,7 @@ Ruin against the actual selected-profile `LocationId` and anchor from this
 authority. It must not copy fixture IDs, create a replacement Location, or
 infer geography from legacy `SpatialLocationRuntime`.
 
-The geography-enabled P9 profile is now canonical. P10 implementation is not ready until this refreshed technical design passes independent review and the bounded checkpoint is recorded under a stable ID. P9-B and the delivered P8-C anchor/site-kind capabilities are canonical; the minimal adapter/migration seam described below is in P10-A's user-approved scope. A test-only prepopulated authority does not prove the selected-profile integration.
+The geography-enabled P9 profile is now canonical. P10 implementation is not ready until this refreshed technical design and the durable P10-A checkpoint record pass independent review. P9-B and the delivered P8-C anchor/site-kind capabilities are canonical; the minimal adapter/migration seam described below is in P10-A's user-approved scope. A test-only prepopulated authority does not prove the selected-profile integration.
 
 ## 1. Recommendation and bounded first profile
 
@@ -349,15 +351,18 @@ bounded profile while preserving compatible semantic seams.
 | P9-A/P9-B | P9-A remains promoted and scope-closed. P9-B is promoted on current P9 canonical `d9a62d7`; its authored-geography profile, stage, provenance and spatial-authority handoff are available. P10 consumes the actual selected profile's LocationId and anchor through that handoff. |
 | LocalTopology | Existing store is not yet a LocationId-neutral semantic-owner contract. The bounded owner/store adapter in §2 is P10-A implementation scope; it preserves legacy City/Site runtime paths and is validated with the Ruin composition. |
 | P18/P20 | Not required by this daily-only, single-site profile. P18-A/P20 become conditionally relevant only if a future explicitly accepted scope adds temporal activity or multi-participant facts. |
-| Product/checkpoint gate | The user accepted the bounded Ruin profile and its minimal LocalTopology seam in §1/§2; P9-B supplies the canonical authored Hex/Location source. The refreshed technical design requires independent review, and the substantial checkpoint still needs its durable P10-A ID/base/scope record before implementation. No additional product choice is open. |
+| Product/checkpoint gate | The user accepted the bounded Ruin profile and its minimal LocalTopology seam in §1/§2; P9-B supplies the canonical authored Hex/Location source. The durable P10-A record identifies the design baseline, dependencies, scope and validation; independent review of the refreshed design and record is pending before implementation. No additional product choice is open. |
 
-### Proposed checkpoint identity and closure (not approved)
+### P10-A checkpoint record
 
-Proposed identity: **P10-A — Ruin LocalTopology Genesis Composition**.
-This document proposes a bounded P10-A identity for review; it is not yet the durable approved checkpoint record and does not authorize implementation. Scope is the user-approved Ruin profile and its minimal stable-owner/LocationId-neutral LocalTopology adapter, published through normal authorities. Dependencies are promoted P8-A Location/anchor truth, P9-B's promoted authored-geography profile and P9 genesis handoff, and P8-C's promoted ExplorableSite owner-kind/anchor contract. P10-A implements the narrow adapter specified in §2. P8-B/D/E, P18/P20, and P19 are excluded.
-Proposed closure evidence: exactly one Ruin resolves to the actual selected P9-B LocationId; its finite semantic places, entry point(s), any needed containment, and explicit local connections validate as a coherent topology; stable IDs are injective, namespaced/versioned, and independent of runtime allocation and source-list order; duplicate/colliding inputs fail before publication; the DefinitionId/LocationId semantic owner resolves to exactly one site RuntimeId, and the selected profile passes composed-runtime validation with the legacy anchor value resolving through `ExplorableSiteStore.TryGetByRuntimeId`; candidate facts publish atomically before the first simulated boundary through normal domain authorities; the selected P9-B geography-profile fingerprint and provenance remain intact while combined provenance includes P10 stage and outputs; genesis is not rerun; and the exclusions in §1 remain absent. Existing City/Site topology and anchor consumers remain compatible. Independent design review, formal checkpoint recording, implementation, required validation, and promotion remain separate gates.
-
-The user-approved scope is recorded in this proposal. P10 technical design remains IN_PROGRESS until independent review passes and the durable checkpoint record identifies P10-A, its canonical base, and its reviewed boundary. No further product choice is open. P9-B and the P8-C anchor/site-kind contracts are promoted; the narrow LocalTopology adapter in §2 belongs to P10-A implementation scope. The fixed-array tie-break is explicit, and the accepted content exclusions remain in force.
+The durable checkpoint proposal, baseline SHAs, accepted boundary, dependencies,
+exclusions, closure evidence, and validation plan are recorded in
+`PHASE10_A_CHECKPOINT_RECORD.md`. That record is proposed for independent
+review and does not authorize implementation. P10 technical design remains
+`TECHNICAL_DESIGN_IN_PROGRESS` until the refreshed design and checkpoint record
+pass independent review. The user-approved Ruin scope and the narrow
+LocationId-neutral LocalTopology adapter in §2 remain unchanged; no further
+product choice is open.
 
 After a checkpoint and the relevant capabilities are accepted/promoted,
 implementation validation must demonstrate:
