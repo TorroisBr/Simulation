@@ -7,7 +7,7 @@ Phases 5–7 are closed within their documented scopes. P8-A/B/C/D/E are canonic
 | Phase | Planning objective |
 |---|---|
 | 8 — Spatial Truth & Civil Travel v1 | Factual Hex geography and a Knowledge-bounded civil travel vertical slice. |
-| 9 — Initial Deterministic Genesis v1 | P9-A: promoted authored-bootstrap genesis. Proposed P9-B: one authored P8-A Hex/Location source for P10 through the same deterministic pre-start pipeline. |
+| 9 — Initial Deterministic Genesis v1 | P9-A: promoted authored-bootstrap genesis. P9-B: user-approved, design-reviewed implementation candidate for one authored P8-A Hex/Location source for P10 through the same deterministic pre-start pipeline; not yet canonical. |
 | 10 — Local Generation & Pre-start Authoring | Local content/topology generated or authored into the same initial ontology. |
 | 11 — Actor Perspective & Commands v1 | Actor-limited information/decision authority and validated external commands. |
 | 12 — Save & Deterministic Continuation | Save/load that continues with the same authoritative future under compatible inputs. |
@@ -59,8 +59,8 @@ P18 promoted capability + P12 hydration → supported intraday continuation
 P12 continuation + recoverable temporal inputs/state → P13 intraday fork
 P18 relevant capability → timed P14/P15/P16 consumers
 
-P8-A geography + P9-A genesis pipeline → proposed P9-B authored geography source
-P9-B authored LocationId + P8-C Ruin/site owner and LocalTopology → P10 Ruin profile
+P8-A geography + P9-A genesis pipeline → P9-B authored geography capability
+P9-B canonical LocationId + P8-C Ruin/site owner and LocalTopology → P10 Ruin profile
 stable real extension consumers → P19 API/loader
   relevant P9/P10 → generation extensions
   relevant P18 → temporal extensions
@@ -116,7 +116,7 @@ is added. Technical representation and exact role APIs remain design work.
 ## Dependency directions, not blanket phase locks
 
 - P8-A establishes factual geography. P8-B (passages) and P8-C (anchors/civil presence) may proceed with isolation after their shared identity/segment contract is stable. P8-D (Knowledge/route) consumes the needed passage and position contracts; P8-E integrates the travel slice. Each implementation dependency must distinguish accepted contract from promoted capability.
-- Phase 9 design may use stable Phase 8 spatial contracts; code that needs working spatial authority waits for the relevant promoted capability. P9-A remains promoted and scope-closed. P9-B is proposed/unaccepted and, if reviewed and implemented, consumes P8-A geography plus P9-A's pipeline. The approved P10 Ruin profile requires the P9-B authored `LocationId` source and P8-C Ruin/site ownership plus LocalTopology; it does not mint regional geography or Location identity. These are separate capability edges, not a blanket P8 completion lock.
+- Phase 9 design may use stable Phase 8 spatial contracts; code that needs working spatial authority waits for the relevant promoted capability. P9-A remains promoted and scope-closed. P9-B's bounded scope is user-approved and its design review passed; its implementation candidate consumes P8-A geography plus P9-A's pipeline, but does not satisfy downstream canonical capability requirements until promoted. The approved P10 Ruin profile requires the P9-B canonical authored `LocationId` source and P8-C Ruin/site ownership plus LocalTopology; it does not mint regional geography or Location identity. These are separate capability edges, not a blanket P8 completion lock.
 - P9/P10 generation is an ordered pipeline with explicit stage dependencies and deterministic contributions. New-world participation and existing-world retrofit are separate contracts; later installation never implicitly reruns historical stages. Runtime World Expansion must also obey these distinctions.
 - Phase 11 entry architecture and Phase 12 causal-state inventory can progress independently of Phase 8 worldgen. Their code integrations must still wait for whichever concrete command, state, or domain capability they actually consume.
 - Phase 13's product guarantee needs Phase 12 continuation plus recoverable causal inputs and initial-world/mutation semantics. Save continuation alone does not fulfill historical forkability.

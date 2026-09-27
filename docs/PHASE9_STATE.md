@@ -1,9 +1,11 @@
-# Phase 9 — REOPENED FOR P9-B DESIGN
+# Phase 9 — REOPENED FOR P9-B IMPLEMENTATION
 
-P9-A remains promoted and closed within its approved authored-bootstrap-only
-scope. Phase 9 is reopened solely to evaluate the separately approved P9-B
-authored-geography capability below. P9-B is **PROPOSED / UNACCEPTED**: this
-documentation candidate does not authorize implementation or claim delivery.
+P9-A remains promoted and scope-closed within its approved authored-bootstrap-
+only scope. Phase 9 is reopened for the separately user-approved P9-B
+authored-geography capability below. Independent design review passed on the
+exact P9-B contract at `a30db22f9d8e3117a668c463a70d4100149387bd`; an isolated
+implementation candidate may proceed. P9-B remains noncanonical, with no
+implementation or delivery claimed by this docs-only record.
 
 ## Current authority and candidate
 
@@ -15,8 +17,9 @@ documentation candidate does not authorize implementation or claim delivery.
 - P9-A candidate integration record: `12a1e0dfb8b856525a84a9f8373711e9584f95a9`.
 - P9-A implementation candidate: `974a8d72a158962619d7ba8aa1ccf854eeadd47e`.
 - P9-A code promotion commit: `43f08b3dfbf042380c2f8a8b037bbf3ebd309ccb` on `codex/phase9/canonical`.
-- **P9-A status: PROMOTED and scope-closed.** Its original accepted scope and closure record remain intact. P9-B is a new proposed checkpoint, not an expansion or rewrite of P9-A.
-- **Phase 9 status: REOPENED for P9-B design only.** Local/pre-start content generation remains P10; public mod loading, retrofit and runtime expansion remain deferred consumers.
+- **P9-A status: PROMOTED and scope-closed.** Its original accepted scope and historical closure record remain intact. P9-B is a separately approved checkpoint, not an expansion or rewrite of P9-A.
+- **P9-B status: USER-APPROVED; DESIGN REVIEW PASS; IMPLEMENTATION CANDIDATE MAY PROCEED.** It is noncanonical and not delivered.
+- **Phase 9 status: REOPENED for the P9-B implementation path.** Local/pre-start content generation remains P10; public mod loading, retrofit and runtime expansion remain deferred consumers.
 
 ## Historical P9-A phase-closure review
 
@@ -26,15 +29,16 @@ documentation candidate does not authorize implementation or claim delivery.
 - The review confirmed that P9-A satisfies the approved initial-world objective
   for the selected existing authored Unity bootstrap profile, with no other
   checkpoint approved at that time. This historical P9-A closure review does
-  not review or accept the subsequently proposed P9-B checkpoint.
+  not review P9-B, whose separate design review is recorded below.
 - The closure boundary preserves the approved limits: no new procedural
   terrain, settlements, population, local topology, generated backstory,
   runtime expansion or new gameplay. P9-A's existing authored content and
   deterministic pre-start pipeline remain canonical.
 - Required implementation, integration and compatibility evidence is recorded
   below and in `docs/design/PHASE9A_AUTHORED_BOOTSTRAP_CHECKPOINT.md`.
-- Historical P9-A State marker: **CLOSED**. Phase 9 is now reopened for P9-B
-  design only; no P9-A runtime files or behavior changed.
+- Historical P9-A State marker: **CLOSED**. Phase 9 is now reopened for the
+  separately approved P9-B implementation path; no P9-A runtime files or
+  behavior changed.
 
 ## P9-A — Authored Bootstrap Genesis v1
 
@@ -101,8 +105,8 @@ No long-run suite was required: P9-A introduces no daily-loop behavior.
 - P9-A satisfies the authored-bootstrap genesis prerequisite. The newly
   approved P10 Ruin profile additionally waits for P9-B's authored P8-A
   `LocationId` source and P8-C's promoted Ruin/site owner and LocalTopology
-  capability. P9-B remains proposed, so this P10 capability edge is not yet
-  satisfied.
+  capability. P9-B's approved implementation candidate is not yet canonical,
+  so this P10 capability edge is not yet satisfied.
 - P11 Actor Choice is independently canonical at `0803670`; the combined
   compatibility validation confirms the promoted runtime composition with P9-A.
 - P18, P19 and P20 work remains governed by the explicit dependency edges in
@@ -114,7 +118,7 @@ P9-A's phase-closure marker remains historical evidence for that bounded
 delivery; P9-B reopens Phase 9 only for the additional geography source
 capability described next.
 
-## P9-B — Authored Geography Source for Local Authoring v1 (PROPOSED)
+## P9-B — Authored Geography Source for Local Authoring v1 (APPROVED; NONCANONICAL)
 
 The user approved a separate upstream authored geography prerequisite for
 P10: one bounded P8-A `Hex` and one `Location` anchored to it, composed by the
@@ -124,7 +128,7 @@ stage composition, provenance and atomic pre-boundary publication. P8 remains
 closed. P9-A's promoted behavior, accepted inputs, tests, and authored-bootstrap
 scope are unchanged; P9-B adds a distinct selected profile capability.
 
-The proposed implementation contract is in
+The approved implementation contract is in
 `docs/design/PHASE9B_AUTHORED_GEOGRAPHY_CHECKPOINT.md`. It consumes canonical
 P8-A authority and the promoted P9-A genesis handoff, calls
 `SpatialAuthorityStore.TryComposeGeography` with one explicit
@@ -158,7 +162,9 @@ P9-A genesis pipeline/handoff. P10's Ruin profile requires P9-B's authored
 local-topology capability. These are capability-specific edges; P8-E travel
 and P18/P19/P20 do not become blanket prerequisites.
 
-**Gate:** P9-B remains proposed pending independent contract review and
-subsequent implementation authorization under the execution model. No code,
-Unity validation, implementation review, integration, or promotion is claimed
-by this State update.
+**Design review:** Independent review **PASS** on exact contract tip
+`a30db22f9d8e3117a668c463a70d4100149387bd`. Scope is user-approved and an
+isolated implementation candidate may proceed under the execution model.
+Implementation validation, independent code review, integration and canonical
+promotion remain subsequent gates. No code, Unity validation, implementation,
+delivery or promotion is claimed by this State update.

@@ -1,8 +1,11 @@
 # P9-B — Authored Geography Source for Local Authoring v1
 
-**Status:** Proposed for independent contract review; unaccepted and not
-authorized for implementation. This is a separate capability after promoted
-P9-A. It does not amend P9-A's accepted contract, code, or closure evidence.
+**Status:** User-approved bounded scope; independent design review **PASS** on
+the exact contract at `a30db22f9d8e3117a668c463a70d4100149387bd`. An
+implementation candidate may proceed on an isolated noncanonical branch. This
+does not claim implementation, delivery, integration or canonical promotion.
+P9-B is a separate capability after promoted P9-A and does not amend P9-A's
+accepted contract, code, or historical closure evidence.
 
 ## Baseline and ownership
 
@@ -138,8 +141,9 @@ An implementation candidate must prove, at minimum:
 6. P10 can consume the resulting `LocationId` while the Ruin/site and local
    topology facts remain under P8-C ownership.
 
-No code or test results are claimed by this design candidate. After independent
-contract review and implementation authorization, the execution model
-determines isolated implementation, targeted/full validation, independent
-implementation review, integration and promotion gates. This docs-only
-proposal itself requires `git diff --check`; it does not close Phase 9.
+No code or test results are claimed by this design candidate. The user-approved
+scope and passed design review permit an isolated implementation candidate;
+the execution model still requires its implementation validation, independent
+code review, integration and a separate canonical promotion gate. This
+docs-only proposal itself requires `git diff --check`; it does not close Phase
+9 or satisfy downstream canonical capability dependencies.

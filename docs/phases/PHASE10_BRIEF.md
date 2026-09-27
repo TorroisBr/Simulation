@@ -13,7 +13,7 @@ The P10-owned seam is the bounded, `LocationId`-neutral LocalTopology ownership/
 ## Dependencies and gates
 
 - **Hard semantic contracts:** relevant P9 genesis/provenance contract and P8 Location/LocalTopology/anchor contract.
-- **Hard capabilities:** this approved Ruin profile needs P9-B's authored existing-`LocationId` source and P8-C's promoted Ruin/site owner plus `LocationId`-neutral LocalTopology ownership/migration capability. P9-B remains proposed/unaccepted, so this profile is currently blocked on that dependency. Entry into actual world composition also requires accepted technical/authority design and the promoted implementation capabilities for the bounded slice.
+- **Hard capabilities:** this approved Ruin profile needs P9-B's authored existing-`LocationId` source and P8-C's promoted Ruin/site owner plus `LocationId`-neutral LocalTopology ownership/migration capability. P9-B's approved implementation candidate is not yet canonical, so this profile is currently blocked on that capability. Entry into actual world composition also requires accepted technical/authority design and the promoted implementation capabilities for the bounded slice.
 - **Integration dependency:** authored and generated sites must resolve through one factual Location/local topology model.
 - **Soft ordering:** broader Phase 8 civil-travel validation can exercise sites, but does not define all local generation.
 - **Architecture gate:** local containment/entry and the exact pre-start versus post-start mutation boundary require consumer-specific design.
