@@ -103,7 +103,9 @@ passed; the request-ID test fix at `dd90f37` and integration fixture correction
 at `652e16e` each passed independent review. Integration review at `ff2631f`
 passed code/composition and requested only that this State point to the current
 candidate and retain validation evidence. This record corrects those two items.
-The candidate has not been promoted.
+Follow-up integration review at `6b3bec5` passed the corrected State and
+retained XML evidence, confirming local/tracking/remote synchronization and a
+clean range diff. The candidate has not been promoted.
 
 Temporal identity/cardinality was revalidated: `PersonId` identifies the
 decision actor while `ActivityInstanceId` remains distinct; one-actor fixtures
