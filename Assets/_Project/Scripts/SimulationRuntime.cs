@@ -78,6 +78,7 @@ public sealed class SimulationRuntime
     private readonly IAggregateDemographyProvider aggregateDemographyProvider;
     private DailyDemographyReport lastDailyDemographyReport;
     private readonly PersonStore personStore;
+    private readonly ActorChoiceStore actorChoiceStore;
     private readonly SpatialAuthorityStore spatialAuthorityStore;
     private readonly LegacySpatialAnchorBindingStore legacySpatialAnchorBindingStore;
     private readonly PersonSpatialPositionStore personSpatialPositionStore;
@@ -143,6 +144,7 @@ public sealed class SimulationRuntime
     public SimulationCalendar Calendar => calendar;
     public DailyDemographyReport LastDailyDemographyReport => lastDailyDemographyReport;
     public PersonStore PersonStore => personStore;
+    public ActorChoiceStore ActorChoiceStore => actorChoiceStore;
     public SpatialAuthorityStore SpatialAuthorityStore => spatialAuthorityStore;
     public LegacySpatialAnchorBindingStore LegacySpatialAnchorBindingStore => legacySpatialAnchorBindingStore;
     public PersonSpatialPositionStore PersonSpatialPositionStore => personSpatialPositionStore;
@@ -339,7 +341,8 @@ public sealed class SimulationRuntime
         LegacySpatialAnchorBindingStore legacySpatialAnchorBindingStore = null,
         PersonSpatialPositionStore personSpatialPositionStore = null,
         SpatialRouteKnowledgeStore spatialRouteKnowledgeStore = null,
-        PersonRoutePlanStore personRoutePlanStore = null)
+        PersonRoutePlanStore personRoutePlanStore = null,
+        ActorChoiceStore actorChoiceStore = null)
     {
         List<CityRuntime> resolvedCities = cities != null
             ? new List<CityRuntime>(cities)
@@ -453,6 +456,10 @@ public sealed class SimulationRuntime
                 "The supplied PersonStore is already bound to another SimulationRuntime.",
                 nameof(personStore));
         }
+
+        ActorChoiceStore resolvedActorChoiceStore = actorChoiceStore == null
+            ? new ActorChoiceStore(resolvedPersonStore)
+            : actorChoiceStore.Clone(resolvedPersonStore);
 
         if (politicalWorldRevision.HasValue && politicalWorldRevision.Value < 0L)
         {
@@ -568,6 +575,7 @@ public sealed class SimulationRuntime
         this.naturalMortalitySamples = naturalMortalitySamples;
         this.aggregateDemographyProvider = aggregateDemographyProvider;
         this.personStore = resolvedPersonStore;
+        this.actorChoiceStore = resolvedActorChoiceStore;
         this.spatialAuthorityStore = resolvedSpatialAuthorityStore;
         this.legacySpatialAnchorBindingStore = resolvedLegacySpatialAnchorBindingStore;
         this.personSpatialPositionStore = resolvedPersonSpatialPositionStore;
@@ -763,6 +771,7 @@ public sealed class SimulationRuntime
         List<IAuthoritativeMutationGuardBindable> authorities = new List<IAuthoritativeMutationGuardBindable>();
         AddRequiredMutationGuardBinding(authorities, simulationTime, nameof(SimulationTime));
         AddRequiredMutationGuardBinding(authorities, personStore, nameof(PersonStore));
+        AddRequiredMutationGuardBinding(authorities, actorChoiceStore, nameof(ActorChoiceStore));
         AddRequiredMutationGuardBinding(authorities, spatialAuthorityStore, nameof(SpatialAuthorityStore));
         AddRequiredMutationGuardBinding(authorities, legacySpatialAnchorBindingStore, nameof(LegacySpatialAnchorBindingStore));
         AddRequiredMutationGuardBinding(authorities, personSpatialPositionStore, nameof(PersonSpatialPositionStore));
@@ -2557,8 +2566,9 @@ public sealed class SimulationRuntime
             }
         }
 
-        foreach (NpcRuntime npcRuntime in npcRuntimes)
+        for (int actorTurnRosterOrdinal = 0; actorTurnRosterOrdinal < npcRuntimes.Count; actorTurnRosterOrdinal++)
         {
+            NpcRuntime npcRuntime = npcRuntimes[actorTurnRosterOrdinal];
             if (npcRuntime == null)
             {
                 continue;
@@ -2566,12 +2576,29 @@ public sealed class SimulationRuntime
 
             if (npcRuntime.IsAlive == false)
             {
+                RejectActorChoicesForPerson(npcRuntime.PersonId, actorTurnRosterOrdinal);
+                continue;
+            }
+
+            if (HasPendingActorChoiceFor(npcRuntime.PersonId)
+                && IsCurrentMaterializedPersonActor(npcRuntime) == false)
+            {
+                RejectActorChoicesForPerson(npcRuntime.PersonId, actorTurnRosterOrdinal);
+                continue;
+            }
+
+            if (TryDeferActorChoiceForSpatialTransit(npcRuntime, actorTurnRosterOrdinal))
+            {
                 continue;
             }
 
             if (npcRuntime.IsTraveling == true)
             {
                 TryProcessScheduledDirective(npcRuntime);
+                DeferActorChoiceForPerson(
+                    npcRuntime.PersonId,
+                    actorTurnRosterOrdinal,
+                    ActorChoiceDeferralReason.Traveling);
                 continue;
             }
 
@@ -2579,16 +2606,42 @@ public sealed class SimulationRuntime
                 && expeditionSystem.IsNpcOnActiveExpedition(npcRuntime.RuntimeId) == true)
             {
                 TryProcessScheduledDirective(npcRuntime);
+                DeferActorChoiceForPerson(
+                    npcRuntime.PersonId,
+                    actorTurnRosterOrdinal,
+                    ActorChoiceDeferralReason.ExpeditionParticipant);
                 continue;
             }
 
             if (adventureExpeditionAutonomySystem != null
                 && adventureExpeditionAutonomySystem.IsReservedToday(npcRuntime.RuntimeId))
             {
+                DeferActorChoiceForPerson(
+                    npcRuntime.PersonId,
+                    actorTurnRosterOrdinal,
+                    ActorChoiceDeferralReason.ReservedExpeditionActivity);
                 continue;
             }
 
             EvaluateStatus(npcRuntime);
+
+            if (HasPendingActorChoiceFor(npcRuntime.PersonId))
+            {
+                if (TryProcessScheduledDirective(npcRuntime) == true)
+                {
+                    DeferActorChoiceForPerson(
+                        npcRuntime.PersonId,
+                        actorTurnRosterOrdinal,
+                        ActorChoiceDeferralReason.ScheduledDirective);
+                    continue;
+                }
+
+                if (TryProcessActorChoice(npcRuntime, actorTurnRosterOrdinal))
+                {
+                    continue;
+                }
+            }
+
             if (configuration.MerchantTrade.Enabled)
             {
                 merchantSystem?.AdvanceNpcTradeState(npcRuntime);
@@ -2596,12 +2649,29 @@ public sealed class SimulationRuntime
 
             if (TryProcessScheduledDirective(npcRuntime) == true)
             {
+                DeferActorChoiceForPerson(
+                    npcRuntime.PersonId,
+                    actorTurnRosterOrdinal,
+                    ActorChoiceDeferralReason.ScheduledDirective);
+                continue;
+            }
+
+            if (TryProcessActorChoice(npcRuntime, actorTurnRosterOrdinal))
+            {
                 continue;
             }
 
             EvaluateAction(npcRuntime);
+            if (npcRuntime.CurrentAction?.actionType == NpcActionType.SellGoods
+                && (npcRuntime.CurrentCity == null || !IsActorAtCurrentCityLocation(npcRuntime)))
+            {
+                npcRuntime.SetCurrentActionRuntime(null);
+                continue;
+            }
             TryExecuteCurrentAction(npcRuntime);
         }
+
+        RejectActorChoicesWithoutMaterializedTurn(npcRuntimes.Count);
 
         List<NpcRuntime> arrivedNpcs = new List<NpcRuntime>();
 
@@ -2637,6 +2707,296 @@ public sealed class SimulationRuntime
         return failure == SimulationRuntimeAdvanceFailure.AbsoluteDayOverflow
             ? new InvalidOperationException("SimulationTime cannot advance beyond the maximum AbsoluteDay.")
             : new InvalidOperationException("A faulted SimulationRuntime cannot advance its world.");
+    }
+
+    internal bool TryCaptureActorChoiceInput(
+        string worldCommandId,
+        PersonId personId,
+        string actionDefinitionId,
+        WorldCommandOrigin origin,
+        WorldCommandAuthorityMode authority,
+        out ActorChoiceStoreFailureCode failure)
+    {
+        return actorChoiceStore.TryCapture(
+            worldCommandId,
+            personId,
+            actionDefinitionId,
+            origin,
+            authority,
+            CurrentDay,
+            out _,
+            out failure);
+    }
+
+    private bool TryDeferActorChoiceForSpatialTransit(NpcRuntime npcRuntime, int actorTurnRosterOrdinal)
+    {
+        if (npcRuntime == null
+            || !HasPendingActorChoiceFor(npcRuntime.PersonId)
+            || !personSpatialPositionStore.TryGetPosition(npcRuntime.PersonId, out PersonSpatialPosition position)
+            || !position.IsInTransit)
+        {
+            return false;
+        }
+
+        TryProcessScheduledDirective(npcRuntime);
+        DeferActorChoiceForPerson(
+            npcRuntime.PersonId,
+            actorTurnRosterOrdinal,
+            ActorChoiceDeferralReason.Traveling);
+        return true;
+    }
+
+    private bool HasPendingActorChoiceFor(PersonId personId)
+    {
+        return personId != null
+            && actorChoiceStore.TryGetNextPendingForActor(personId, out _);
+    }
+
+    private bool IsCurrentMaterializedPersonActor(NpcRuntime npcRuntime)
+    {
+        if (npcRuntime?.PersonId == null
+            || !personStore.TryGet(npcRuntime.PersonId, out PersonRuntime person)
+            || person.IsDeadAt(CurrentDay)
+            || !person.IsMaterialized
+            || !string.Equals(person.MaterializedNpcRuntimeId, npcRuntime.RuntimeId, StringComparison.Ordinal)
+            || !personStore.TryGetByMaterializedNpcRuntimeId(npcRuntime.RuntimeId, out PersonRuntime byNpcId)
+            || !ReferenceEquals(person, byNpcId))
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private void RejectActorChoicesForPerson(PersonId personId, int actorTurnRosterOrdinal)
+    {
+        if (personId == null)
+        {
+            return;
+        }
+
+        foreach (ActorChoiceInput input in actorChoiceStore.PendingInputs)
+        {
+            if (input.PersonId.Equals(personId))
+            {
+                RejectActorChoice(input, actorTurnRosterOrdinal, ActorChoiceFailure.ActorUnavailable);
+            }
+        }
+    }
+
+    private void DeferActorChoiceForPerson(
+        PersonId personId,
+        int actorTurnRosterOrdinal,
+        ActorChoiceDeferralReason reason)
+    {
+        if (actorChoiceStore.TryGetNextPendingForActor(personId, out ActorChoiceInput input))
+        {
+            if (!actorChoiceStore.TryDefer(
+                    input.InputId,
+                    CurrentDay,
+                    actorTurnRosterOrdinal,
+                    reason,
+                    out ActorChoiceStoreFailureCode failure))
+            {
+                throw new InvalidOperationException(
+                    "Actor choice could not record its required deferral: " + failure + ".");
+            }
+        }
+    }
+
+    private void RejectActorChoice(
+        ActorChoiceInput input,
+        int actorTurnRosterOrdinal,
+        ActorChoiceFailure reason)
+    {
+        if (input == null)
+        {
+            throw new InvalidOperationException(
+                "Actor choice could not record its required rejection: missing input.");
+        }
+
+        if (!actorChoiceStore.TryReject(
+                input.InputId,
+                CurrentDay,
+                actorTurnRosterOrdinal,
+                reason,
+                out ActorChoiceStoreFailureCode failure))
+        {
+            throw new InvalidOperationException(
+                "Actor choice could not record its required rejection: " + failure + ".");
+        }
+    }
+
+    private void RejectActorChoicesWithoutMaterializedTurn(int actorTurnRosterOrdinal)
+    {
+        HashSet<PersonId> presentActors = new HashSet<PersonId>();
+        foreach (NpcRuntime npcRuntime in npcRuntimes)
+        {
+            if (npcRuntime?.PersonId != null)
+            {
+                presentActors.Add(npcRuntime.PersonId);
+            }
+        }
+
+        foreach (ActorChoiceInput input in actorChoiceStore.PendingInputs)
+        {
+            if (!presentActors.Contains(input.PersonId))
+            {
+                RejectActorChoice(input, actorTurnRosterOrdinal, ActorChoiceFailure.ActorUnavailable);
+            }
+        }
+    }
+
+    private bool TryProcessActorChoice(NpcRuntime npcRuntime, int actorTurnRosterOrdinal)
+    {
+        if (npcRuntime?.PersonId == null
+            || !actorChoiceStore.TryGetNextPendingForActor(npcRuntime.PersonId, out ActorChoiceInput input))
+        {
+            return false;
+        }
+
+        // A captured choice replaces this actor's ordinary decision slot. Clear
+        // a prior day's action even when today's current-truth checks reject it.
+        npcRuntime.SetCurrentActionRuntime(null);
+
+        if (npcRuntime.CurrentCity == null
+            || !IsActorAtCurrentCityLocation(npcRuntime))
+        {
+            RejectActorChoice(input, actorTurnRosterOrdinal, ActorChoiceFailure.ActionUnavailable);
+            return true;
+        }
+
+        if (configuration.MerchantTrade.Enabled == false
+            || npcRuntime.MerchantTradePlan.IsActive
+            || npcDecisionSystem == null)
+        {
+            RejectActorChoice(input, actorTurnRosterOrdinal, ActorChoiceFailure.ActionUnavailable);
+            return true;
+        }
+
+        NpcActionData requestedDefinition = null;
+        int matchingDefinitions = 0;
+        if (configuredActions != null)
+        {
+            foreach (NpcActionData configuredAction in configuredActions)
+            {
+                if (configuredAction != null
+                    && string.Equals(
+                        configuredAction.DefinitionId,
+                        input.ActionDefinitionId,
+                        StringComparison.Ordinal))
+                {
+                    requestedDefinition = configuredAction;
+                    matchingDefinitions++;
+                }
+            }
+        }
+
+        if (matchingDefinitions != 1
+            || requestedDefinition == null
+            || requestedDefinition.actionType != NpcActionType.SellGoods
+            || !IsActionEnabledForRuntime(requestedDefinition))
+        {
+            RejectActorChoice(input, actorTurnRosterOrdinal, ActorChoiceFailure.ActionUnavailable);
+            return true;
+        }
+
+        NpcActionRuntime requestedAction = npcDecisionSystem.CreateRequestedAction(npcRuntime, requestedDefinition);
+        if (requestedAction == null
+            || !ReferenceEquals(requestedAction.Action, requestedDefinition)
+            || requestedAction.Action.actionType != NpcActionType.SellGoods
+            || requestedAction.TargetCity != npcRuntime.CurrentCity
+            || requestedAction.TargetNpc != null
+            || requestedAction.TargetItem == null
+            || requestedAction.Amount <= 0)
+        {
+            RejectActorChoice(input, actorTurnRosterOrdinal, ActorChoiceFailure.ActionUnavailable);
+            return true;
+        }
+
+        NpcDecisionRecord decision = decisionRecorder?.RecordChosenAction(
+            npcRuntime,
+            requestedAction,
+            NpcDecisionOrigin.ActorChoice);
+        npcRuntime.SetCurrentActionRuntime(requestedAction);
+
+        if (!actorChoiceStore.TryMarkDispatchStarted(
+                input.InputId,
+                CurrentDay,
+                actorTurnRosterOrdinal,
+                decision?.DecisionId,
+                out ActorChoiceStoreFailureCode startFailure))
+        {
+            throw new InvalidOperationException(
+                "Actor choice could not cross its dispatch boundary: " + startFailure + ".");
+        }
+
+        try
+        {
+            NpcActionResult result = TryExecuteCurrentAction(npcRuntime);
+            if (!actorChoiceStore.TryRecordAttemptReturned(
+                    input.InputId,
+                    CurrentDay,
+                    actorTurnRosterOrdinal,
+                    result,
+                    out ActorChoiceStoreFailureCode returnFailure))
+            {
+                throw new InvalidOperationException(
+                    "Actor choice could not record its returned attempt: " + returnFailure + ".");
+            }
+        }
+        catch (Exception exception)
+        {
+            if (!actorChoiceStore.TryRecordAttemptThrew(
+                    input.InputId,
+                    CurrentDay,
+                    actorTurnRosterOrdinal,
+                    out ActorChoiceStoreFailureCode throwFailure))
+            {
+                throw new InvalidOperationException(
+                    "Actor choice threw and its terminal attempt could not be recorded: "
+                    + throwFailure
+                    + ".",
+                    exception);
+            }
+
+            throw;
+        }
+
+        return true;
+    }
+
+    private bool IsActorAtCurrentCityLocation(NpcRuntime npcRuntime)
+    {
+        if (!personSpatialPositionStore.TryGetPosition(npcRuntime.PersonId, out PersonSpatialPosition position))
+        {
+            // The P8-C position is optional for legacy actors. Preserve their
+            // existing CurrentCity contract when no factual position is stored.
+            return true;
+        }
+
+        if (position.IsInTransit)
+        {
+            return false;
+        }
+
+        if (npcRuntime.CurrentCity == null)
+        {
+            return false;
+        }
+
+        SpatialAnchorOwnerId cityOwner = new SpatialAnchorOwnerId(
+            SpatialAnchorOwnerKind.City,
+            npcRuntime.CurrentCity.RuntimeId);
+        if (!legacySpatialAnchorBindingStore.TryGet(cityOwner, out LocationId cityLocationId)
+            || !spatialAuthorityStore.TryGet(cityLocationId, out _))
+        {
+            return false;
+        }
+
+        return position.Position != null
+            && position.Position.Kind == StablePositionReferenceKind.Location
+            && position.Position.LocationId.Equals(cityLocationId);
     }
 
     internal GenealogyStore GenealogyStoreForWorldBoundary => genealogyStore;
