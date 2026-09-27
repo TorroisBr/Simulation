@@ -55,34 +55,45 @@ Person cannot accept, decline, or recruit on behalf of the other. Decisions use
 only the deciding Person's permitted Knowledge. Either decline leaves the
 instance unformed and not executable.
 
-The exact relationship between each acceptance and reservation remains a P20
-design question. P18-B `TrySchedule` accepts an atomic full nonempty set; it
-does not provide partial acceptance. P20 must specify whether individual
-decisions/commitment requests are retained in a separate proposal owner and
-how a complete accepted set is assembled and submitted to `TrySchedule`.
-Both participants may use the same fixture interval for simplicity; this is a
-scoped test choice, not a universal activity/role rule. Acceptance,
-reservation, availability at start, and execution remain distinct facts.
+Each individual acceptance is retained as a P20-owned decision plus a
+noncommitting reservation intent for that Person and proposed interval. The
+intent records what the participant accepted; it does not create an active
+P18-B commitment or reserve availability. Once the complete required set has
+accepted, P20 revalidates it and submits the whole set atomically to P18-B
+`TrySchedule`, which creates the activity and all participant commitments
+together. An intervening conflicting commitment makes full-set scheduling
+fail coherently; P20 records `NotFormed` and no partial activity or commitment
+is published. Both participants may use the same fixture interval for
+simplicity; this is a scoped test choice, not a universal activity/role rule.
+Acceptance, reservation intent, committed availability, and execution remain
+distinct facts.
 
 ## Formation, scheduled start, and terminal outcomes
 
 The intended proving outcome schedules only after both distinct required
-Persons have accepted and matching reservations are present. P20 still needs
-an API/design for retaining partial per-Person decisions and submitting the
-complete set to P18-B `TrySchedule`; partial Proposed state is not an existing
-P18-B scheduling capability. The existing P18 timeline/scheduler owns the
-logical start boundary; the activity layer does not create a second clock or
-authoritative agenda.
+Persons have accepted. Their retained reservation intents are not active
+commitments; P20 revalidates the full set and submits it to P18-B
+`TrySchedule`, whose existing transaction atomically creates the instance,
+scheduled start, and all matching participant commitments. Partial decision
+retention remains P20-owned; P18-B exposes no partial-set scheduling API. An
+intervening conflicting commitment rejects the whole formation. The existing
+P18 timeline/scheduler owns the logical start boundary; the activity layer
+does not create a second clock or authoritative agenda.
 
 At that boundary, P18-B's start validator supplies a bool/disposition result;
 it does not transactionally couple `Scheduled → Active` with a P20 operation
-effect. P20 needs a reviewed coordinated owner/API boundary that validates the
-complete required set and publishes the lifecycle transition plus both
-participant-specific synthetic results together, or publishes neither. Its
-checks must include:
+effect. `ActivityLifecycleStore` retains each commitment while the instance
+is `Scheduled` or `Active` for its planned interval `[start, end)`; successful
+start does not consume or release commitments. Completion, cancellation, or
+interruption releases them and invalidates pending due work through the
+existing lifecycle owner. P20 needs a reviewed coordinated owner/API boundary
+that validates the complete required set and publishes the lifecycle
+transition plus both participant-specific synthetic results together, or
+publishes neither. Its checks must include:
 
 - the instance is still scheduled and both required `PersonId`s remain present;
-- both decisions and reservations match the instance and required interval;
+- both accepted decisions, reservation intents, and P18-B commitments match
+  the instance and required interval;
 - current factual availability and operation preconditions still hold for each
   required participant; and
 - the operation has not already started or applied its effects.
@@ -98,15 +109,19 @@ The fixture requires explicit dispositions, but the transitions below are
 unresolved P20 interface and transaction work; they are not implied by
 `TrySchedule` or the bool/disposition start validator:
 
-| Condition | Instance outcome | Reservation outcome |
+| Condition | P20 outcome and P18-B mapping | Commitment / due-work result |
 |---|---|---|
-| Either participant declines | `NotFormed` | Release any reservation already made for this instance. |
-| A required participant or matching reservation is missing at scheduled start | `FailedToStart` | Release both instance reservations as one transition. |
-| Revalidation finds stale/unavailable/conflicting state | `FailedToStart` | Release both instance reservations as one transition; apply no operation effect. |
-| Explicit cancellation before start | `Cancelled` | Release both instance reservations as one transition. |
-| Both participants pass coordinated start validation | `Started` | Consume/close the start reservations according to the P18 commitment contract. |
+| Either participant declines before full-set scheduling | P20 `NotFormed`; no P18-B instance/lifecycle receipt exists. | No active commitment or start work is created. |
+| A required participant or matching commitment is missing at scheduled start | P20 disposition `FailedToStart`; P18-B state `Cancelled` with `FailedStart` receipt. | The coordinated terminal transition releases commitments and invalidates pending start/completion work. |
+| Revalidation finds stale/unavailable/conflicting state | P20 disposition `FailedToStart`; P18-B state `Cancelled` with `FailedStart` receipt; apply no operation effect. | Release all instance commitments and invalidate pending due work in the same coordinated P20 boundary. |
+| Explicit cancellation before or during execution | P20 outcome `Cancelled`; P18-B state `Cancelled` with `Cancel` receipt. | The coordinated terminal transition releases commitments and invalidates pending due work. |
+| Both participants pass coordinated start validation | P20 outcome `Started`; P18-B state `Active` with `Start` receipt. | Keep commitments active throughout the planned interval; lifecycle completion/termination releases them. |
 
-These are target outcomes for the proving slice, subject to P20 API design and
+The coordinated P20 transaction/API described here is a required design
+capability, not an existing P18-B API. It must atomically couple the exact
+P18-B lifecycle state/receipt and due-work invalidation with P20 participant
+effects/disposition; it does not reinterpret P18-B's existing ownership. These
+are target outcomes for the proving slice, subject to P20 API design and
 review. It does not support automatic recruitment, activity retry, withdrawal
 after start, mid-execution composition changes, or rollback of already-applied
 effects. Stale descriptor invalidation/retry behavior remains required P20
@@ -150,12 +165,12 @@ order cannot select a participant or result.
 ## Design and review gates
 
 Before any implementation is considered, bounded technical design must map the
-proposed transitions onto promoted P18-A/B contracts and the P18-C design, then
-specify partial-decision retention, complete-set `TrySchedule` submission,
-reservation conflict/rollback, stale revision invalidation/retry, decline and
-cancel/release, and the coordinated `Scheduled → Active` plus synthetic-effect
-transaction. P18-B's bool/disposition start validator does not provide effect
-coupling. Targeted validation must cover these APIs/transactions, deterministic
+proposed transitions onto promoted P18-A/B/C capabilities and specify
+noncommitting partial reservation intents, complete-set `TrySchedule`
+submission, intervening commitment conflict, stale revision invalidation/retry,
+decline and cancel/release, and the coordinated `Scheduled → Active` plus
+synthetic-effect transaction. P18-B's bool/disposition start validator does
+not provide effect coupling. Targeted validation must cover these APIs/transactions, deterministic
 ordering, and reconstruction inputs. Independent
 technical review must pass before implementation readiness. Independent entry
 review of this proposal passed on the entry candidate; it is not a substitute
