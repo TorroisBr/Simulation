@@ -1,12 +1,8 @@
 # Phase 18 — Intraday Temporal Execution v1
 
-**Authority:** planning scope under `../SIMULATION_ARCHITECTURE.md` §§11–12,
-91–92. **Readiness:** P18-A/B/C core capabilities are promoted. The additive
-P18-A boundary/continuation contract was accepted at `2175bf2` and its bounded
-implementation is in progress. A separate P18-C external-input/deferral
-adapter candidate passed exact-tip review and validation but still awaits its
-canonical promotion gate. P18-D remains dependency-gated. Phase numbering
-preserves existing IDs, not execution order.
+**Authority:** planning scope under `../SIMULATION_ARCHITECTURE.md` §§11–12, 91–92. **Readiness:** P18-A/B/C core capabilities are promoted.
+The additive P18-A boundary/continuation contract was accepted at `2175bf2`; corrected implementation candidate `f1bfe818565c3fca81b373d1bc9a70a16f4eda10` passed exact-tip review and required validation, with canonical promotion pending.
+The P18-C external-input/deferral adapter passed review and validation against canonical `99cac77`; revalidate its code against the promoted P18-A extension before promotion. P18-D remains dependency-gated. Phase numbering preserves existing IDs, not execution order.
 
 ## Objective and closure
 
@@ -30,7 +26,7 @@ constraint now, not a requirement to implement participant roles or recruitment.
 
 | ID | Closure boundary | Dependencies |
 |---|---|---|
-| P18-A — Logical Timeline, Due-work Scheduler and Accepted Boundary Continuation Extension | Monotonic logical intraday time/calendar mapping; deterministic due-work scheduling; pure queries; explicit same-instant/zero-duration/stale-work rules; accepted additive atomic boundary activation, frozen manifest, distinct resumable continuation/step identities, barrier and returned-fact publication. | Canonical calendar, determinism, mutation/input contracts; bounded technical design and independent review. Extension contract `2175bf2` accepted; implementation remains subject to separate review, validation and promotion. |
+| P18-A — Logical Timeline, Due-work Scheduler and Accepted Boundary Continuation Extension | Monotonic logical intraday time/calendar mapping; deterministic due-work scheduling; pure queries; explicit same-instant/zero-duration/stale-work rules; accepted additive atomic boundary activation, frozen manifest, distinct resumable continuation/step identities, barrier and returned-fact publication. | Canonical calendar, determinism, mutation/input contracts; bounded technical design and independent review. Extension contract `2175bf2` accepted; corrected implementation candidate `f1bfe818565c3fca81b373d1bc9a70a16f4eda10` passed exact-tip review and required validation; canonical promotion remains pending. |
 | P18-B — Activity Lifecycle | Domain-owned duration, start/completion, commitment and availability; supported cancellation/interruption semantics; no duplicate pending authority. | P18-A stable contract for design; promoted capability for integration. |
 | P18-C — Availability-driven Actor Decisions | Re-evaluation on relevant availability/condition/input boundaries, Knowledge-bounded decision and factual execution checks, instantaneous actions without infinite loops. | P18-A/B contracts and relevant promoted capabilities; current decision/action authority. |
 | P18-D — Bounded Consumer and Daily Compatibility Integration | Selected existing actor-input/travel and daily processes advance chronologically with one authority; legacy profile boundaries explicit. | P18-A/B/C; only the actual P8-E/P11 or other consumer capabilities selected in reviewed scope. |
