@@ -14,6 +14,10 @@ public class TesteSimulacao : MonoBehaviour
     private List<NpcRuntime> npcRuntimeList = new List<NpcRuntime>();
     private List<CityRuntime> cityRuntimeList = new List<CityRuntime>();
     private ExplorableSiteStore explorableSiteStore;
+    private LocalTopologyStore genesisLocalTopologyStore;
+    private LegacySpatialAnchorBindingStore genesisLegacySpatialAnchorBindingStore;
+    private P10RuinLocalTopologyCandidate p10RuinCandidate;
+    private ExplorableSiteRuntime p10RuinRuntime;
 
     private readonly List<INpcActionProvider> actionProviders = new List<INpcActionProvider>();
     private Dictionary<CityData, List<CityRuntime>> cityRuntimesByDefinition = new Dictionary<CityData, List<CityRuntime>>();
@@ -177,6 +181,7 @@ public class TesteSimulacao : MonoBehaviour
         }
 
         string profileFingerprint = null;
+        string selectedP9ProfileFingerprint = null;
         System.Collections.Generic.IReadOnlyList<string> profileProvenanceRecords = null;
         Thread initializeThread = Thread.CurrentThread;
         int initializeThreadId = initializeThread.ManagedThreadId;
@@ -203,6 +208,7 @@ public class TesteSimulacao : MonoBehaviour
                         genesisSpatialAuthority = new SpatialAuthorityStore();
                         profileFingerprint = SimulationGenesisPipeline.CreateFingerprint(
                             simulationConfig, effectiveConfiguration, calendarDefinition, out profileProvenanceRecords);
+                        selectedP9ProfileFingerprint = profileFingerprint;
                         AppendScenarioDiagnostics(effectiveConfiguration);
                         runtimeIdAllocator = new RuntimeIdAllocator();
                         explorableSiteKnowledgeSystem = new ExplorableSiteKnowledgeSystem();
@@ -231,6 +237,13 @@ public class TesteSimulacao : MonoBehaviour
                     case SimulationGenesisPipeline.GeographyStageId:
                         ComposeAuthoredGeography();
                         break;
+                    case P10RuinLocalTopologyGenesis.StageId:
+                        ComposeP10RuinLocalTopology();
+                        profileFingerprint = SimulationGenesisPipeline.CreateP10CombinedFingerprint(
+                            selectedP9ProfileFingerprint, profileProvenanceRecords, p10RuinCandidate,
+                            out System.Collections.Generic.IReadOnlyList<string> combinedProvenanceRecords);
+                        profileProvenanceRecords = combinedProvenanceRecords;
+                        break;
                     case "p9.genesis.authored-actors/v1":
                         NpcRuntimeList.Clear();
                         npcRuntimesByDefinition.Clear();
@@ -257,6 +270,8 @@ public class TesteSimulacao : MonoBehaviour
                             configuration: effectiveConfiguration, randomSource: authoritativeRandomSource,
                             calendarDefinition: calendarDefinition,
                             spatialAuthorityStore: genesisSpatialAuthority,
+                            localTopologyStore: genesisLocalTopologyStore,
+                            legacySpatialAnchorBindingStore: genesisLegacySpatialAnchorBindingStore,
                             runtimeAdmissionContext: runtimeAdmissionContext,
                             recordSequence: recordSequence,
                             worldId: unpublishedWorldId,
@@ -273,7 +288,7 @@ public class TesteSimulacao : MonoBehaviour
                     case "p9.genesis.publish/v1":
                         draftComposition = new SimulationBootstrapComposition(
                             unpublishedWorldId,
-                            new SimulationGenesisManifest(simulationConfig, effectiveConfiguration, calendarDefinition, profileFingerprint, profileProvenanceRecords), simulationTime, calendarDefinition, spatialNetwork, domainEventStore,
+                            new SimulationGenesisManifest(simulationConfig, effectiveConfiguration, calendarDefinition, selectedP9ProfileFingerprint, profileFingerprint, profileProvenanceRecords, P10RuinLocalTopologyGenesis.IsEnabled(simulationConfig)), simulationTime, calendarDefinition, spatialNetwork, domainEventStore,
                             historyStore, scheduledDirectiveStore, decisionStore, decisionRecorder, recordSequence, economyTransactionService, npcChronicleService,
                             npcChronicleFormatter, travelPartyStore, travelPartySystem, simulationRuntime,
                             runtimeIdentityRegistry,
@@ -284,7 +299,7 @@ public class TesteSimulacao : MonoBehaviour
                         throw new System.InvalidOperationException("Undeclared authored genesis stage: " + stageId);
                 }
                 stageCompleted?.Invoke(stageId);
-            }, simulationConfig != null && simulationConfig.useAuthoredGeographyProfile);
+            }, simulationConfig != null && simulationConfig.useAuthoredGeographyProfile, P10RuinLocalTopologyGenesis.IsEnabled(simulationConfig));
 
             if (draftComposition == null)
                 throw new System.InvalidOperationException("Simulation genesis returned without creating its private composition draft.");
@@ -337,6 +352,17 @@ public class TesteSimulacao : MonoBehaviour
         }
     }
 
+    private void ComposeP10RuinLocalTopology()
+    {
+        p10RuinCandidate = P10RuinLocalTopologyGenesis.CreateCandidate(simulationConfig, genesisSpatialAuthority);
+        genesisLocalTopologyStore = new LocalTopologyStore(runtimeIdentityRegistry);
+        if (!P10RuinLocalTopologyGenesis.TryCompose(
+                p10RuinCandidate, runtimeIdAllocator, runtimeIdentityRegistry, spatialNetwork,
+                explorableSiteStore, genesisSpatialAuthority, genesisLocalTopologyStore,
+                out p10RuinRuntime, out _, out genesisLegacySpatialAnchorBindingStore, out string diagnostic))
+            throw new System.InvalidOperationException("P10 Ruin topology genesis stage failed before publication: " + diagnostic);
+        AddExplorableSiteRuntimeByDefinition(p10RuinRuntime.Definition, p10RuinRuntime);
+    }
     private bool IsBootstrapStartThreadCurrent()
     {
         return bootstrapStartThread != null
@@ -1605,3 +1631,4 @@ public class TesteSimulacao : MonoBehaviour
         return string.IsNullOrEmpty(siteData.id) == false ? siteData.id : siteData.siteName;
     }
 }
+

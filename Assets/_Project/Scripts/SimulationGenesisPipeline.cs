@@ -10,6 +10,7 @@ public static class SimulationGenesisPipeline
     public const string ProfileContractIdentity = "unity-authored-bootstrap/genesis-v1";
     public const string GeographyProfileContractIdentity = "unity-authored-bootstrap/authored-geography-v1";
     public const string GeographyStageId = "p9.genesis.authored-geography/v1";
+    public const string P10RuinProfileContractIdentity = P10RuinLocalTopologyGenesis.ContractIdentity;
 
     private static readonly string[] StageIds =
     {
@@ -20,11 +21,17 @@ public static class SimulationGenesisPipeline
         "p9.genesis.publish/v1"
     };
 
-    public static IReadOnlyList<string> ResolveStageOrder(bool includeAuthoredGeography = false)
+    public static IReadOnlyList<string> ResolveStageOrder(
+        bool includeAuthoredGeography = false,
+        bool includeP10RuinLocalTopology = false)
     {
-        string[] stages = includeAuthoredGeography
-            ? new[] { StageIds[0], StageIds[1], GeographyStageId, StageIds[2], StageIds[3], StageIds[4] }
-            : StageIds;
+        if (includeP10RuinLocalTopology && !includeAuthoredGeography)
+            throw new ArgumentException("P10 Ruin topology requires the P9-B authored geography stage.", nameof(includeP10RuinLocalTopology));
+        string[] stages = includeP10RuinLocalTopology
+            ? new[] { StageIds[0], StageIds[1], GeographyStageId, StageIds[2], P10RuinLocalTopologyGenesis.StageId, StageIds[3], StageIds[4] }
+            : includeAuthoredGeography
+                ? new[] { StageIds[0], StageIds[1], GeographyStageId, StageIds[2], StageIds[3], StageIds[4] }
+                : StageIds;
         var dependencies = new Dictionary<string, string[]>(StringComparer.Ordinal)
         {
             [StageIds[0]] = Array.Empty<string>(),
@@ -38,6 +45,14 @@ public static class SimulationGenesisPipeline
             dependencies[GeographyStageId] = new[] { StageIds[0], StageIds[1] };
             dependencies[StageIds[2]] = new[] { StageIds[0], StageIds[1], GeographyStageId };
             dependencies[StageIds[3]] = new[] { StageIds[1], StageIds[2], GeographyStageId };
+        }
+        if (includeP10RuinLocalTopology)
+        {
+            dependencies[P10RuinLocalTopologyGenesis.StageId] = new[] { StageIds[1], GeographyStageId };
+            dependencies[StageIds[3]] = new[]
+            {
+                StageIds[1], StageIds[2], GeographyStageId, P10RuinLocalTopologyGenesis.StageId
+            };
         }
         var remaining = new HashSet<string>(stages, StringComparer.Ordinal);
         var ordered = new List<string>(stages.Length);
@@ -59,10 +74,50 @@ public static class SimulationGenesisPipeline
         return ordered.AsReadOnly();
     }
 
-    public static void ExecuteStages(System.Action<string> execute, bool includeAuthoredGeography = false)
+    public static void ExecuteStages(
+        System.Action<string> execute,
+        bool includeAuthoredGeography = false,
+        bool includeP10RuinLocalTopology = false)
     {
         if (execute == null) throw new ArgumentNullException(nameof(execute));
-        foreach (string stageId in ResolveStageOrder(includeAuthoredGeography)) execute(stageId);
+        foreach (string stageId in ResolveStageOrder(includeAuthoredGeography, includeP10RuinLocalTopology)) execute(stageId);
+    }
+
+    public static string CreateP10CombinedFingerprint(
+        string selectedP9Fingerprint,
+        IReadOnlyList<string> selectedP9Records,
+        P10RuinLocalTopologyCandidate candidate,
+        out IReadOnlyList<string> canonicalRecords)
+    {
+        if (string.IsNullOrWhiteSpace(selectedP9Fingerprint)) throw new ArgumentException("The selected P9 fingerprint is required.", nameof(selectedP9Fingerprint));
+        if (selectedP9Records == null) throw new ArgumentNullException(nameof(selectedP9Records));
+        if (candidate == null) throw new ArgumentNullException(nameof(candidate));
+        var fields = new List<string>(selectedP9Records)
+        {
+            "selected-p9-profile-fingerprint|" + WorldStateSnapshotValue.EncodeStableKey(selectedP9Fingerprint)
+        };
+        foreach (string record in P10RuinLocalTopologyGenesis.CreateProvenanceRecords(candidate))
+            fields.Add("p10-record|" + WorldStateSnapshotValue.EncodeStableKey(record));
+        canonicalRecords = fields.AsReadOnly();
+        return ComputeFingerprint(fields);
+    }
+
+    private static string ComputeFingerprint(IEnumerable<string> fields)
+    {
+        using (SHA256 sha = SHA256.Create())
+        {
+            var bytes = new List<byte>();
+            foreach (string field in fields)
+            {
+                byte[] value = Encoding.UTF8.GetBytes(field ?? "");
+                bytes.Add((byte)((value.Length >> 24) & 0xff));
+                bytes.Add((byte)((value.Length >> 16) & 0xff));
+                bytes.Add((byte)((value.Length >> 8) & 0xff));
+                bytes.Add((byte)(value.Length & 0xff));
+                bytes.AddRange(value);
+            }
+            return BitConverter.ToString(sha.ComputeHash(bytes.ToArray())).Replace("-", "").ToLowerInvariant();
+        }
     }
 
     public static string CreateFingerprint(
@@ -379,6 +434,18 @@ public static class SimulationGenesisPipeline
             if (row == null || row.site == null || string.IsNullOrWhiteSpace(row.site.DefinitionId)
                 || !siteIds.Add(row.site.DefinitionId) || !cities.Contains(row.anchorCity) || row.travelDaysFromAnchor < 1)
                 throw new InvalidOperationException("Explorable-site rows require a unique definition, selected anchor, and valid travel duration.");
+        if (config.authoredP10RuinSite != null)
+        {
+            if (!config.useAuthoredGeographyProfile)
+                throw new InvalidOperationException("P10 Ruin topology requires the selected P9-B authored geography profile.");
+            if (string.IsNullOrWhiteSpace(config.authoredP10RuinSite.DefinitionId)
+                || config.authoredP10RuinSite.kind != ExplorableSiteKind.Ruin
+                || siteIds.Contains(config.authoredP10RuinSite.DefinitionId))
+                throw new InvalidOperationException("The P10 profile requires one unique authored ExplorableSiteKind.Ruin definition.");
+            foreach (ExplorableSiteConfig row in config.ExplorableSites)
+                if (row?.site != null && row.site.kind == ExplorableSiteKind.Ruin)
+                    throw new InvalidOperationException("The P10 profile may compose exactly one Ruin; authored P9 site/route rows cannot add another.");
+        }
         foreach (InitialWantedRecordConfig row in config.InitialWarrants)
             if (row == null || row.target == null || !npcIds.Contains(row.target.DefinitionId)
                 || row.city == null || !cities.Contains(row.city) || row.bounty < 0f || row.sentenceDays < 1)
@@ -580,18 +647,27 @@ public sealed class SimulationGenesisManifest
         SimulationConfigData config,
         EffectiveSimulationConfiguration effectiveConfiguration,
         CalendarDefinition calendar,
+        string selectedP9Fingerprint,
         string fingerprint,
-        IReadOnlyList<string> canonicalRecords)
+        IReadOnlyList<string> canonicalRecords,
+        bool includeP10RuinLocalTopology)
     {
-        SchemaVersion = config.useAuthoredGeographyProfile ? 2 : 1;
+        SchemaVersion = includeP10RuinLocalTopology
+            ? P10RuinLocalTopologyGenesis.ContractSchemaVersion
+            : config.useAuthoredGeographyProfile ? 2 : 1;
         Fingerprint = fingerprint;
+        SelectedP9ProfileFingerprint = selectedP9Fingerprint;
+        SelectedP9ContractIdentity = config.useAuthoredGeographyProfile
+            ? SimulationGenesisPipeline.GeographyProfileContractIdentity
+            : SimulationGenesisPipeline.ProfileContractIdentity;
+        SelectedP9SchemaVersion = config.useAuthoredGeographyProfile ? 2 : 1;
         EffectiveConfiguration = effectiveConfiguration;
         Seed = config.useFixedSimulationSeed ? config.simulationSeed : 0;
         SeedSource = config.useFixedSimulationSeed ? "authored-fixed" : "default-zero";
-        ContractIdentity = config.useAuthoredGeographyProfile
-            ? SimulationGenesisPipeline.GeographyProfileContractIdentity
-            : SimulationGenesisPipeline.ProfileContractIdentity;
-        StageOrder = SimulationGenesisPipeline.ResolveStageOrder(config.useAuthoredGeographyProfile);
+        ContractIdentity = includeP10RuinLocalTopology
+            ? P10RuinLocalTopologyGenesis.ContractIdentity
+            : SelectedP9ContractIdentity;
+        StageOrder = SimulationGenesisPipeline.ResolveStageOrder(config.useAuthoredGeographyProfile, includeP10RuinLocalTopology);
         CanonicalProvenanceRecords = canonicalRecords;
         CalendarMonthsPerYear = calendar.MonthsPerYear;
         CalendarWeeksPerMonth = calendar.WeeksPerMonth;
@@ -605,6 +681,8 @@ public sealed class SimulationGenesisManifest
             foreach (CityProductionConfig production in city.productionConfigs) AddId(ids, "item", production.item);
         }
         foreach (ExplorableSiteConfig site in config.ExplorableSites) ids.Add("site/" + site.site.DefinitionId);
+        if (includeP10RuinLocalTopology)
+            ids.Add("site/" + config.authoredP10RuinSite.DefinitionId);
         if (config.useAuthoredGeographyProfile)
         {
             ids.Add("hex/" + config.authoredHexId);
@@ -640,12 +718,38 @@ public sealed class SimulationGenesisManifest
         var orderedIds = new List<string>(ids);
         orderedIds.Sort(StringComparer.Ordinal);
         AuthoredDefinitionIds = orderedIds.AsReadOnly();
-        OutputOwners = Array.AsReadOnly(config.useAuthoredGeographyProfile
-            ? new[] { "CityRuntime", "MarketCounterpartyRuntime", "PopulationEconomyRuntime", "CityProductionInputs", "SpatialNetworkRuntime", "ExplorableSiteStore", "NpcRuntime", "InventoryRuntime", "InitialKnowledge", "JusticeSystem", "ScheduledDirectiveStore", "SpatialAuthorityStore", "SimulationRuntime" }
-            : new[] { "CityRuntime", "MarketCounterpartyRuntime", "PopulationEconomyRuntime", "CityProductionInputs", "SpatialNetworkRuntime", "ExplorableSiteStore", "NpcRuntime", "InventoryRuntime", "InitialKnowledge", "JusticeSystem", "ScheduledDirectiveStore", "SimulationRuntime" });
-        StageDependencyRecords = Array.AsReadOnly(config.useAuthoredGeographyProfile
-            ? new[] { "resolve-profile -> authored-world", "resolve-profile -> authored-geography", "authored-world -> authored-geography", "authored-geography -> authored-actors", "authored-geography -> validate-profile", "authored-world -> validate-profile", "authored-actors -> validate-profile", "validate-profile -> publish" }
-            : new[] { "resolve-profile -> authored-world", "resolve-profile -> authored-actors", "authored-world -> authored-actors", "authored-world -> validate-profile", "authored-actors -> validate-profile", "validate-profile -> publish" });
+        var outputOwners = new List<string>
+        {
+            "CityRuntime", "MarketCounterpartyRuntime", "PopulationEconomyRuntime", "CityProductionInputs",
+            "SpatialNetworkRuntime", "ExplorableSiteStore", "NpcRuntime", "InventoryRuntime", "InitialKnowledge",
+            "JusticeSystem", "ScheduledDirectiveStore", "SpatialAuthorityStore", "SimulationRuntime"
+        };
+        if (includeP10RuinLocalTopology)
+        {
+            outputOwners.Add("LocalTopologyStore");
+            outputOwners.Add("LegacySpatialAnchorBindingStore");
+        }
+        OutputOwners = Array.AsReadOnly(outputOwners.ToArray());
+        var dependencies = new List<string>
+        {
+            "resolve-profile -> authored-world", "resolve-profile -> authored-actors",
+            "authored-world -> authored-actors", "authored-world -> validate-profile",
+            "authored-actors -> validate-profile", "validate-profile -> publish"
+        };
+        if (config.useAuthoredGeographyProfile)
+        {
+            dependencies.Add("resolve-profile -> authored-geography");
+            dependencies.Add("authored-world -> authored-geography");
+            dependencies.Add("authored-geography -> authored-actors");
+            dependencies.Add("authored-geography -> validate-profile");
+        }
+        if (includeP10RuinLocalTopology)
+        {
+            dependencies.Add("authored-world -> " + P10RuinLocalTopologyGenesis.StageId);
+            dependencies.Add(SimulationGenesisPipeline.GeographyStageId + " -> " + P10RuinLocalTopologyGenesis.StageId);
+            dependencies.Add(P10RuinLocalTopologyGenesis.StageId + " -> p9.genesis.validate-profile/v1");
+        }
+        StageDependencyRecords = Array.AsReadOnly(dependencies.ToArray());
         FirstSimulatedBoundary = "advance-day:1";
     }
 
@@ -685,6 +789,9 @@ public sealed class SimulationGenesisManifest
     public string ContractIdentity { get; }
     public int SchemaVersion { get; }
     public string Fingerprint { get; }
+    public string SelectedP9ProfileFingerprint { get; }
+    public string SelectedP9ContractIdentity { get; }
+    public int SelectedP9SchemaVersion { get; }
     public EffectiveSimulationConfiguration EffectiveConfiguration { get; }
     public IReadOnlyList<string> CanonicalProvenanceRecords { get; }
     public IReadOnlyList<string> AuthoredDefinitionIds { get; }
