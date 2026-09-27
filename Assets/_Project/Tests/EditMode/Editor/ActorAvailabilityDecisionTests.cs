@@ -1,10 +1,27 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Reflection;
 using NUnit.Framework;
 
 public sealed class ActorAvailabilityDecisionTests
 {
+    private static string RequestId(PersonId actor, LogicalTick instant, string boundaryId, long sequence, long revision)
+    {
+        string[] components =
+        {
+            actor.Value,
+            instant.Value.ToString(CultureInfo.InvariantCulture),
+            sequence.ToString(CultureInfo.InvariantCulture),
+            boundaryId,
+            revision.ToString(CultureInfo.InvariantCulture)
+        };
+        System.Text.StringBuilder result = new System.Text.StringBuilder();
+        foreach (string component in components)
+            result.Append(component.Length.ToString(CultureInfo.InvariantCulture)).Append(':').Append(component);
+        return result.ToString();
+    }
+
     private sealed class KnowledgePort : IKnowledgeDecisionSnapshotPort
     {
         public int Reads;
@@ -201,7 +218,7 @@ public sealed class ActorAvailabilityDecisionTests
         Assert.That(state.TryBindInput("bind-op", "actor-choice-1", actor, new LogicalTick(20), "profile-x", 91,
             "input-receipt", 4, out ActorDecisionRequestReceipt duplicate), Is.True);
         Assert.That(duplicate.RequestId, Is.EqualTo(bound.RequestId));
-        string triggerRequestId = new ActorDecisionRequest(actor, new LogicalTick(25), "activity-boundary", 2, 8).Id;
+        string triggerRequestId = RequestId(actor, new LogicalTick(25), "activity-boundary", 2, 8);
         Assert.That(state.TryObserveTrigger("trigger-op", triggerRequestId, "lifecycle-receipt", actor,
             new LogicalTick(25), "activity-boundary", 8, 123, "actor-choice-1", out ActorDecisionRequestReceipt trigger), Is.True);
         Assert.That(trigger.BoundarySequence, Is.EqualTo(2));
@@ -292,8 +309,8 @@ public sealed class ActorAvailabilityDecisionTests
             "capture-a", 1, out _), Is.True);
         Assert.That(state.TryBindInput("bind-b", "input-b", secondActor, new LogicalTick(5), "profile", 2,
             "capture-b", 1, out _), Is.True);
-        string firstRequestId = new ActorDecisionRequest(firstActor, new LogicalTick(10), "lifecycle-receipt", 3, 4).Id;
-        string secondRequestId = new ActorDecisionRequest(secondActor, new LogicalTick(10), "lifecycle-receipt", 4, 4).Id;
+        string firstRequestId = RequestId(firstActor, new LogicalTick(10), "lifecycle-receipt", 3, 4);
+        string secondRequestId = RequestId(secondActor, new LogicalTick(10), "lifecycle-receipt", 4, 4);
         Assert.That(state.TryObserveTrigger("trigger-a", firstRequestId, "lifecycle-receipt", firstActor,
             new LogicalTick(10), "lifecycle-receipt", 4, 22, "input-a", out ActorDecisionRequestReceipt first), Is.True);
         Assert.That(state.TryObserveTrigger("trigger-b", secondRequestId, "lifecycle-receipt", secondActor,
@@ -315,7 +332,7 @@ public sealed class ActorAvailabilityDecisionTests
         Assert.That(state.TryRecordRetryableProposal("premature-retry", bound.RequestId, bound.InputId, actor,
             bound.Instant, "proposal-1", "proven-uncommitted", out _), Is.False);
 
-        string laterRequestId = new ActorDecisionRequest(actor, new LogicalTick(20), "later-trigger", 2, 3).Id;
+        string laterRequestId = RequestId(actor, new LogicalTick(20), "later-trigger", 2, 3);
         Assert.That(state.TryObserveTrigger("later-trigger-op", laterRequestId, "later-trigger-receipt", actor,
             new LogicalTick(20), "later-trigger", 3, 9, bound.InputId, out ActorDecisionRequestReceipt later), Is.True);
         Assert.That(later.RequestId, Is.Not.EqualTo(bound.RequestId));
