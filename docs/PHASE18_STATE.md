@@ -178,16 +178,24 @@ then-current P14 promotion State `f8a61fe` (current P14 State tip `4caecbb`);
 it retains P14 exclusion and has no P20/P19 blanket
 dependency. The earlier additive P18-A boundary/subphase design `6bbbc33` was
 refreshed into contract `2175bf2`, accepted with durable acceptance record
-`9de70ae`. Implementation candidate `3acb5b9` was returned for correction
+`9de70ae`. The initial implementation candidate `3acb5b9` was returned
+for correction
 after review identified missing world/profile binding for restored continuation
 and pending-signal identities, missing frozen-manifest equivalence on reload,
 and C handoff occurring before `TryAdvanceTo` returns; review also requested an
-invariant for conflicting already-indexed published facts. Corrective work is
-in progress; no P18-A extension implementation is promoted. P18-D implementation
-remains blocked on implementation,
-review/validation, and promotion of that extension; promotion of the
-independently reviewed P18-C external-input/deferral adapter candidate; and
-the separate `SimulationRuntime` ownership window. P20 Entry Architecture
+invariant for conflicting already-indexed published facts. The corrected
+implementation candidate is `f1bfe818565c3fca81b373d1bc9a70a16f4eda10`.
+Exact-tip independent review passed: reconstruction validates world/profile
+identity and the frozen manifest; post-success handoff is explicit and outside
+the advancing call; and conflicting indexed facts are rejected by due instant
+and causal sequence. Candidate validation passed LogicalTimeline 35/35, ALL
+EditMode 1756/1756, official complete Smoke 5/5, and `git diff --check`
+(worker-reported results; the independent review did not rerun Unity). The
+candidate has not been promoted; canonical promotion remains pending. P18-D
+implementation remains blocked on promotion of this extension, promotion and
+post-extension revalidation of the independently reviewed P18-C
+external-input/deferral adapter candidate, and the separate `SimulationRuntime`
+ownership window. P20 Entry Architecture
 `2f9c93b588ffccaae60aedf6c16191c1251f6a1f` and Technical Design
 `6a0d16494735853ce35a8974ab348551650afd6b` both passed independent refreshed
 review against promoted P18-A/B/C and then-current P18 State `bcb3f67`; targeted
