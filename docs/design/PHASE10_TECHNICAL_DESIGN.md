@@ -2,11 +2,15 @@
 
 **Status:** bounded technical design proposal — UNAPPROVED. This document
 assigns no checkpoint IDs, changes no Phase State/Roadmap, does not approve the
-first content profile, and does not authorize implementation. Implementation
-remains `WAIT_DEPENDENCY` on promoted P9 capability and this phase's accepted
-profile/checkpoint scope.
+first content profile, and does not authorize implementation. P9-A's
+authored-bootstrap genesis foundation is now promoted, but P10 profile
+acceptance and the LocationId-neutral LocalTopology composition capability
+remain outstanding. This refresh does not substitute for independent review
+against the current baseline.
 
-**Independent technical-design review:** PASS for the candidate semantics.
+**Prior independent technical-design review:** PASS for the candidate semantics
+at its then-reviewed baseline; the present P9-promotion refresh requires
+independent re-review.
 The final P9-profile boundary wording clarification was independently reviewed
 at P10 document commit `a914a0d7d9fb5f8f2f74d5b87b15923a12a9af78`. Review
 approval does not constitute formal P10 acceptance or implementation approval.
@@ -23,16 +27,30 @@ multi-participant-activity alignment at
 `4b6dd1d38cffeaf3cc1ac3effea0f8ede8771194`. Existing reviewed entry baselines:
 P10 `b0158984c70c008cacdfe4390463b9250ad1f0ad`; P9 refreshed entry
 `05ba224da8cead8221d12fb1b9dc64da5a3b61d2` and technical design
-`7bb3312c7b045067dd2dee55451d71c8fd796880`. P9 contract review does not mean
-its implementation capability is promoted.
+`7bb3312c7b045067dd2dee55451d71c8fd796880`. Those reviews were design evidence;
+P9-A's later promotion is recorded in the current-baseline revalidation below.
 
-**Targeted P8-E promotion revalidation:** checked against Phase 8 canonical
-tip `77f3e1a` (P8-E promotion `d95b60d174cb0b17df09e2775b3cbd134c74b21f`);
-architecture baseline remains `c285466c355103d3637ac165246591b72eb7bda0`,
-with both alignment records current. P8-E is now canonical. The proposed daily
-local-topology profile consumes P8 Location/anchor and local-topology facts,
-but no P8-E route-plan/civil-travel, intraday temporal, or shared-activity
-behavior. P8-E is therefore not a blanket dependency for this profile.
+**Current baseline revalidation:** P9 canonical `codex/phase9/canonical` at
+`988b6f5d14e12359e93464bae5e0048ca970ad86`, with architecture baseline
+`c285466c355103d3637ac165246591b72eb7bda0`, the canonical Phase 8 State, and
+the intraday/extensibility and multi-participant alignment records referenced
+there. P8-A through P8-E and P9-A are promoted. P9-A establishes the authored
+Unity-bootstrap profile and a dependency-aware pre-start pipeline, but its
+selected profile creates no local topology or P8-owned spatial outputs. The
+P9 genesis/pipeline foundation edge is satisfied; P10's later local contributor
+must still bind to the actual promoted P9 stage, candidate-publication and
+provenance APIs, with its additional output capability separately reviewed
+and validated. P8-C's City/Site anchor bindings are promoted and available for
+their delivered owner kinds. P8-C does not migrate `LocalTopologyStore` to a
+neutral `LocationId` owner; that explicit migration/adapter seam remains a
+capability prerequisite for publishing this profile. P8-B passage facts remain
+conditional on selected content. P8-E, intraday P18, and multi-participant P20
+are not dependencies for this daily-only profile because it adds no route,
+travel, temporal-activity, or shared-participation facts. Current extensibility
+alignment requires declared stage/contributor identities and versions,
+typed inputs/outputs, explicit dependencies, deterministic ordering/conflict
+handling, purpose-scoped randomness where needed, causal provenance, and no
+implicit regeneration/retrofit. P19 loader/API and retrofit remain deferred.
 
 ## 1. Recommendation and bounded first profile
 
@@ -237,18 +255,23 @@ bounded profile while preserving compatible semantic seams.
 
 | Track | Current dependency/readiness consequence |
 |---|---|
-| P8-A/B/C/D/E | Canonical promoted contracts are available at `77f3e1a`. This profile requires P8-A Location/anchor truth and the P8-C-relevant site anchor contract; P8-B is conditional on chosen passage facts. It consumes no P8-E route/plan/travel behavior, so P8-E is not a dependency for the proposed daily local-topology profile. |
-| P9 | Reviewed entry and technical proposals provide the intended pipeline contract, but P9 implementation/capability is not promoted. P10 may design against the contract; actual generator composition must wait for the relevant promoted P9 capability. |
+| P8-A/B/C/D/E | All are canonical. This profile requires P8-A Location/anchor truth and P8-C City/Site anchor bindings for applicable owner kinds; P8-B is conditional on chosen passage facts. P8-D/E are not dependencies for the proposed daily profile. |
+| P9-A | Promoted at P9 canonical `988b6f5`; the authored-bootstrap genesis pipeline foundation is available. The local contributor/output capability is not delivered by P9-A and must integrate against its actual APIs under a separately accepted and validated P10 profile. |
 | LocalTopology | Existing store is not yet a LocationId-neutral owner contract. The bounded migration/adapter and its consuming integrations must be implemented and promoted before P10 can publish these facts. |
 | P18/P20 | Not required by the recommended daily-only, single-site profile. Add dependencies only if the approved scope actually initializes temporal activity or multi-participant facts. |
 | Product/checkpoint gate | First site kind, included authorities, exact topology content/semantics, and compatibility/identity algorithms require explicit checkpoint acceptance. No Phase 10 checkpoint IDs currently exist. |
 
-P10 remains `WAIT_DEPENDENCY` for implementation. This proposal is design
-evidence only and does not satisfy the product/checkpoint gate, P9 promotion,
-or LocalTopology migration. It preserves the entry proposal's one-site
-recommendation while keeping implementation gated until the first content
-profile is explicitly accepted. There is no additional unresolved semantic
-choice asserted by this document.
+P10 remains `WAIT_DEPENDENCY` for implementation. P9-A genesis and the
+relevant P8-C anchor contract are promoted; P9-A does not itself deliver this
+local-site profile, and the LocalTopology owner migration remains unpromoted.
+This proposal is design evidence only and does not satisfy the product or
+checkpoint gate. The one-site recommendation remains a candidate and does not
+select a site kind, included domain authorities, topology catalog/content, or
+gameplay semantics. Explicit acceptance of those boundaries is required before
+checkpoint IDs and implementation authorization can be set. Depending on that
+choice, passage, temporal-activity, and multi-participant contracts remain
+conditional rather than blanket dependencies. No additional product choice
+is settled here.
 
 After a checkpoint and the relevant capabilities are accepted/promoted,
 implementation validation must demonstrate:
