@@ -144,14 +144,22 @@ P8 behavior:
    and current City/Site consumer behavior.
 2. Add a stable semantic site-owner representation containing owner kind
    `ExplorableSite`, `ExplorableSiteData.DefinitionId`, and canonical P8
-   `LocationId`. Runtime site and legacy macro-location IDs may remain
-   resolver handles but are excluded from semantic equality, stable keys, and
-   fingerprints.
-3. Add semantic lookup keyed by DefinitionId in `ExplorableSiteStore`. Resolve
-   the stable owner through the existing `LegacySpatialAnchorBindingStore`
-   site binding for that DefinitionId; verify it resolves to the selected
-   canonical LocationId and exactly one site runtime handle. Missing,
-   duplicate, or conflicting mappings reject the unpublished candidate.
+   `LocationId`. Keep `ExplorableSiteRuntime.RuntimeId` as a resolver handle
+   for existing runtime indexes and P8-C compatibility; exclude it from
+   semantic equality, stable keys, and fingerprints.
+3. Add a semantic-to-runtime resolver/index keyed by DefinitionId. Resolve the
+   stable owner to exactly one composed `ExplorableSiteRuntime`, then verify
+   that runtime site is bound to the selected canonical LocationId. P8-C's
+   composed-runtime validation currently interprets
+   `SpatialAnchorOwnerId.Value` as an `ExplorableSiteRuntime.RuntimeId` and
+   dereferences it through `ExplorableSiteStore.TryGetByRuntimeId`. Therefore
+   the existing `LegacySpatialAnchorBindingStore` compatibility binding must
+   use that resolved RuntimeId as its owner value; DefinitionId must not be
+   passed as though it were a runtime handle. The P10 semantic index retains
+   the DefinitionId/LocationId-to-runtime-handle mapping so stable topology
+   owners resolve through the same composed authority. Missing, duplicate, or
+   conflicting semantic/runtime/Location mappings reject the unpublished
+   candidate before publication.
 4. Have the P10 composition adapter write local places and connections through
    the stable owner reference while retaining compatibility resolver handles.
    Keep existing City/Site topology records and runtime lookups intact; update
@@ -347,7 +355,7 @@ bounded profile while preserving compatible semantic seams.
 
 Proposed identity: **P10-A — Ruin LocalTopology Genesis Composition**.
 This document proposes a bounded P10-A identity for review; it is not yet the durable approved checkpoint record and does not authorize implementation. Scope is the user-approved Ruin profile and its minimal stable-owner/LocationId-neutral LocalTopology adapter, published through normal authorities. Dependencies are promoted P8-A Location/anchor truth, P9-B's promoted authored-geography profile and P9 genesis handoff, and P8-C's promoted ExplorableSite owner-kind/anchor contract. P10-A implements the narrow adapter specified in §2. P8-B/D/E, P18/P20, and P19 are excluded.
-Proposed closure evidence: exactly one Ruin resolves to the actual selected P9-B LocationId; its finite semantic places, entry point(s), any needed containment, and explicit local connections validate as a coherent topology; stable IDs are injective, namespaced/versioned, and independent of runtime allocation and source-list order; duplicate/colliding inputs fail before publication; stable site ownership resolves through P8 anchor binding and semantic site lookup; candidate facts publish atomically before the first simulated boundary through normal domain authorities; the selected P9-B geography-profile fingerprint and provenance remain intact while combined provenance includes P10 stage and outputs; genesis is not rerun; and the exclusions in §1 remain absent. Existing City/Site topology and anchor consumers remain compatible. Independent design review, formal checkpoint recording, implementation, required validation, and promotion remain separate gates.
+Proposed closure evidence: exactly one Ruin resolves to the actual selected P9-B LocationId; its finite semantic places, entry point(s), any needed containment, and explicit local connections validate as a coherent topology; stable IDs are injective, namespaced/versioned, and independent of runtime allocation and source-list order; duplicate/colliding inputs fail before publication; the DefinitionId/LocationId semantic owner resolves to exactly one site RuntimeId, and the selected profile passes composed-runtime validation with the legacy anchor value resolving through `ExplorableSiteStore.TryGetByRuntimeId`; candidate facts publish atomically before the first simulated boundary through normal domain authorities; the selected P9-B geography-profile fingerprint and provenance remain intact while combined provenance includes P10 stage and outputs; genesis is not rerun; and the exclusions in §1 remain absent. Existing City/Site topology and anchor consumers remain compatible. Independent design review, formal checkpoint recording, implementation, required validation, and promotion remain separate gates.
 
 The user-approved scope is recorded in this proposal. P10 technical design remains IN_PROGRESS until independent review passes and the durable checkpoint record identifies P10-A, its canonical base, and its reviewed boundary. No further product choice is open. P9-B and the P8-C anchor/site-kind contracts are promoted; the narrow LocalTopology adapter in §2 belongs to P10-A implementation scope. The fixed-array tie-break is explicit, and the accepted content exclusions remain in force.
 
@@ -358,24 +366,28 @@ implementation validation must demonstrate:
    P8-owned Hex/Location/anchor through `SimulationBootstrapComposition`, and
    P10 composes exactly one Ruin through the same Location and local-topology
    authorities, without local content generation;
-2. P8-C's existing City/Site anchor behavior remains valid while topology
-   owners resolve through stable spatial identity, not runtime allocation;
-3. equivalent compatible inputs produce equivalent semantic facts under
+2. selected-profile composed-runtime validation accepts the P10 Ruin anchor:
+   its semantic DefinitionId/LocationId resolves to exactly one current site
+   RuntimeId, `SpatialAnchorOwnerId.Value` resolves by
+   `ExplorableSiteStore.TryGetByRuntimeId`, and no RuntimeId contributes to
+   semantic topology identity;
+3. P8-C's existing City/Site anchor behavior and the existing City/Site
+   LocalTopology factory/consumer paths remain valid through their RuntimeId
+   compatibility handles;
+4. equivalent compatible inputs produce equivalent semantic facts under
    reordered authored collections and different runtime allocation; fixed DAG
    order remains the declared dependency order;
-4. the profile preserves P9's root-seed/random provenance without consuming
+5. the profile preserves P9's root-seed/random provenance without consuming
    local randomness or rerunning genesis;
-5. missing site anchors, duplicate semantic keys, encoded-ID collisions,
+6. missing site anchors, duplicate semantic keys, encoded-ID collisions,
    incompatible P10 schema, invalid containment/entry/connectivity, or
    unresolved cross-authority refs fail before publication;
-6. stage failure or full-profile invariant failure leaves no partial live
-   world, and post-start mutation requires ordinary domain authority; and
-7. retained provenance/reconstruction inputs preserve the selected P9-B
+7. stage failure or full-profile invariant failure leaves no partial live
+   world, and post-start mutation requires ordinary domain authority;
+8. retained provenance/reconstruction inputs preserve the selected P9-B
    geography-profile fingerprint and causal inputs, and identify the P10
    stage, dependencies, output owner and every causal value without
-   claiming persistence delivery; and
-8. existing City/Site anchor and LocalTopology factory/consumer paths
-   continue to resolve through their RuntimeId compatibility handles.
+   claiming persistence delivery.
 
 This proposal changes no executable code. It requires independent technical
 review and `git diff --check`; Unity tests are not applicable to this document
