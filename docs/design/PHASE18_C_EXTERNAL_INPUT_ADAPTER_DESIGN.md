@@ -20,11 +20,12 @@ not implement P18-D's SellGoods consumer, timeline driver, daily-boundary
 manifest, or `SimulationRuntime` migration.
 
 P11 `ActorChoiceStore` remains the authoritative accepted-input, payload,
-sequence and disposition owner. P18-A remains the sole timeline/input agenda
-and ordering authority. P18-C owns decision-request identity/sequence,
-availability-triggered reevaluation and the actor decision attempt. The adapter
-is a narrow mapping/selection seam between those owners; it must not add a
-second input queue, retained-command store, scheduler, or activity authority.
+input-sequence and status/disposition owner. P18-A remains the sole
+timeline/input agenda and ordering authority. P18-C adds a request-state owner
+for stable-value request, binding, trigger, deferral, retry and terminal
+reconciliation receipts, with its own C sequence allocator. This is not a
+second command queue: it stores correlations and causal receipts, never a copy
+of P11 payload/status, availability truth, or scheduled work.
 
 The selected command still means trusted local input for one `PersonId` and one
 supported action. Its payload remains P11's existing actor/action semantic
@@ -44,6 +45,7 @@ Keep these identities distinct:
 | P18-A input sequence/reference | Timeline-owned dispatch order at one exact `LogicalTick`; it does not order actor decisions. |
 | P18-C `ActorDecisionRequest.Id` | Causal decision boundary identity, derived using the C-owned `BoundarySequence`, actor, instant, boundary ID and revision. |
 | P18-C `BoundarySequence` | Monotonic C decision/request order. Never copied from P11 input sequence or P18-A sequence. |
+| P18-B lifecycle receipt sequence | Source sequence for committed activity transitions; it triggers C work but is never allocated from or reused as the C sequence. |
 | `ActivityInstanceId` | P18-B identity of a concrete scheduled activity, distinct from Person and command/request IDs. |
 
 On initial command dispatch, the exact input ID is the request's triggering
@@ -56,26 +58,37 @@ selected exact pending input ID separately. Do not rewrite the command's
 payload, target tick, P11 input sequence, original boundary identity, or original
 C selection sequence.
 
-P18-C's existing pending-request/retry state remains the request owner. Its
-external-input adapter may keep a deterministic correlation/projection keyed
-by stable request and input IDs, but may not retain a second independently
-mutable copy of accepted commands. P11 remains authoritative for whether an
-input is pending, deferred, dispatch-started, rejected or terminal. Queue/index
-entries are rebuildable from P11 owner facts plus committed P18-C request and
-trigger facts.
+The additive P18-C request-state owner stores immutable stable-value receipts
+for request creation, exact input binding, trigger observation, deferral,
+retryable proposal, and terminal reconciliation. It owns and atomically
+allocates the C sequence with its corresponding receipt; duplicate operation
+IDs return the existing matching result, while an ID reused with different
+content is an invariant failure. It exposes ordered snapshots, clone semantics,
+reconstruction inputs and invariant validation. It does not retain P11 status
+or payload. Pending/input lookup indexes are rebuildable projections only.
+Lifecycle receipt source sequence is retained as provenance and remains
+distinct from the allocated C sequence. The owner does not schedule timeline
+work or decide current availability.
+
+P11 alone answers whether its command is Pending, DispatchStarted, rejected,
+returned, or thrown. Adapter deferral is represented by a P18-C deferral
+receipt; P11 remains Pending and its payload/status are unchanged. P11 receives
+only the temporal dispatch/reject/return/throw transition owned by its typed
+intraday API below.
 
 ## 3. Ingress and eligibility
 
 Ingress accepts only a committed P11 input receipt after the outer timeline
-advance has successfully returned. The receipt carries exact
-`ActorChoiceInputId`, actor `PersonId`, immutable target `LogicalTick`, P11
-input sequence, and committed receipt revision/correlation. It is not accepted
-from an owner callback during timeline dispatch. P18-C validates the correlation
-against the retained P11 record by ID, allocates its own positive
-`BoundarySequence`, derives the initial request ID, and records the immutable
-originating C sequence used for FIFO selection. Duplicate delivery of the same
-committed receipt is idempotent: it resolves to the same request/binding and
-does not allocate another C sequence or attempt.
+advance has successfully returned. It carries exact `ActorChoiceInputId`, actor
+`PersonId`, immutable target `LogicalTick`, profile identity, P11 input
+sequence, and committed receipt revision/correlation. It is not accepted from
+an owner callback during timeline dispatch. P18-C validates the correlation
+against the retained P11 record by ID, then atomically commits its
+request/binding receipt and its own positive `BoundarySequence`. The receipt
+stores any P18-B lifecycle source sequence separately from this allocated C
+sequence. Duplicate delivery of the same committed receipt is idempotent: it
+resolves to the same request/binding and does not allocate another C sequence
+or attempt.
 
 At a completed decision boundary for actor A at tick `t`, the adapter considers
 only P11 inputs that remain pending, are bound to A, have target tick `<= t`,
@@ -88,16 +101,10 @@ input sequence controls timeline dispatch only; it does not override this
 selection order.
 
 For one actor and one exact meaningful boundary, make at most one decision
-attempt. Every other due pending input stays pending and receives, at most, a
+attempt. Every other due pending input stays pending and receives a P18-C
 nonterminal deferral receipt identifying `DecisionBoundaryAlreadyUsed` at `t`.
-“Defer without consuming/mutating the P11 input” means the accepted payload,
-input identity, target, P11 sequence and pending eligibility are unchanged;
-the store may append its already-supported nonterminal `Deferred` disposition
-for diagnostics, but must not transition it to dispatch-started, rejected, or
-terminal. If P11's current transition API cannot record a temporal deferral
-without changing these command facts, the implementation must add an additive
-owner operation or keep the deferral marker in P18-C's correlation projection;
-it must not fake an absolute day/roster ordinal for an intraday tick.
+P11 remains Pending and its payload/status are unchanged. Do not write this
+deferral into P11 or map an intraday tick to a day/roster ordinal.
 
 An attempt is bound to one exact `ActorChoiceInputId`; never select through
 `TryGetNextPendingForActor`, which can let an earlier future-dated choice mask
@@ -105,6 +112,39 @@ a due one. P11 retains its one-shot rule: a rejected, failed, returned-without
 result, or durably thrown attempt has no autonomous fallback at that boundary.
 Existing terminal P11 outcomes remain terminal. They are not retried as pending
 commands.
+
+### P11 intraday transition records
+
+P11 keeps its existing daily `Dispositions` collection and APIs unchanged in
+byte-level and semantic behavior. Add a separate typed `TemporalDispositions` list
+for intraday-profile transitions. Each record carries an immutable
+`TemporalBoundaryReference` containing profile ID, exact `LogicalTick`, source
+receipt/correlation ID and source revision, plus a per-input monotonic temporal
+transition ordinal and the typed outcome. This temporal ordinal orders only
+the temporal records for that input; daily and temporal streams cannot be mixed
+for one accepted input. A profile transition is fixed at capture, and a legacy
+daily input is never silently assigned a tick.
+
+Add explicit idempotent owner methods for temporal `DispatchStarted`,
+`Rejected`, `AttemptReturned`, and `AttemptThrew`. Each operation is keyed by
+the stable temporal boundary/operation receipt reference. Repeating the same
+reference and byte-equivalent typed result returns the original disposition;
+reusing it with different tick, profile, input, source revision, or result is
+an invariant/correlation failure. The methods do not accept or synthesize an
+absolute day or roster ordinal. P11 remains the authority for resulting input
+status. The accepted command payload and original capture facts remain
+immutable.
+
+Temporal invariants validate unique input and source references, contiguous
+positive temporal ordinals, nondecreasing exact ticks, and valid lifecycle
+order. A temporal rejection may terminalize before dispatch; a returned/thrown
+attempt requires exactly one preceding dispatch. No transition may follow any
+terminal result, and status must agree with the selected temporal stream. Daily
+records continue to use their existing legacy invariant path. Diagnostics
+expose both streams with explicit profile/boundary labels and must detect
+duplicate operation references, profile mixing, bad ordering, missing
+dispatch/terminal correlation, and disagreement between P11 and P18-C terminal
+reconciliation.
 
 ## 4. Deferral, retries, and re-eligibility
 
@@ -137,12 +177,15 @@ coherence, not security validation.
 Distinguish decision-boundary deferral from an uncommitted execution result.
 P18-C's existing `UncommittedRetryable` retains and retries the same request,
 proposal and stable proposal identity; it does not replan or consume a P11
-terminal disposition. The adapter must resolve uncertain owner commit through
-the existing owner receipt/idempotency contract before retrying. Only a
-committed P11 terminal disposition retires the selected input. If the coordinator
-cannot atomically retain request status, proposal/retry state and the P11
-dispatch/disposition correlation, this is a design gap for the implementation
-review, not permission to add a generic cross-domain transaction framework.
+terminal disposition. Extend the P18-C executor boundary with operation-receipt
+resolution keyed by the stable `ActorDecisionProposal.Id`: `Committed`,
+`ProvenUncommitted`, or `Unresolved`. Retry the same proposal only after
+`ProvenUncommitted`; unresolved status holds the request/input pending without
+replanning or another effect attempt. The P18-C request-state owner records the
+retry and terminal-reconciliation receipts idempotently. P11 dispatch-start and
+terminal status remain separate owner commits from the sale effect. Recovery
+queries the sale receipt and idempotently finalizes matching P11 and P18-C
+terminal state; no generic cross-domain transaction is introduced.
 
 ## 5. Determinism, stale inputs, and failure
 
@@ -172,16 +215,20 @@ deterministically rebuild:
 - P18-A profile/calendar, current instant, sealed input boundary, exact accepted
   input receipts and input sequence/order;
 - P11 immutable command identity/payload, actor, action/version, target tick,
-  input sequence, command correlation, current status, ordered dispositions and
-  next transition/input sequences;
+  input sequence, command correlation, current status, legacy daily
+  dispositions or additive temporal dispositions (not a mixture), and next
+  transition/input sequences;
 - P18-C next `BoundarySequence`, every external-input request ID and binding,
   immutable original C selection sequence, distinct later trigger identity/tick/
   revision/sequence, per-actor/per-boundary attempt or deferral marker, pending
-  and processed request state, and any retryable proposal/idempotency receipt;
+  and processed request state, request-owner receipt sequence/snapshot, and any
+  retryable proposal or terminal reconciliation receipt;
 - the P18-B activity-instance identities, participant relations, lifecycle
   revisions/receipts and owner state required to recompute availability triggers;
 - stable action semantic ID/version and configuration/content inputs needed to
-  resolve the existing action provider.
+  resolve the existing action provider; and any consumer-owned operation
+  receipt needed to distinguish committed, proven-uncommitted, and unresolved
+  execution status.
 
 Derived selection indexes and projection entries can be rebuilt only from those
 owner facts. `PersonId` is actor identity; `ActivityInstanceId` and participant
@@ -203,35 +250,67 @@ Reconstruction/invariant tests must detect orphan/multiply-bound inputs,
 duplicate or nonmonotonic C sequences, future input masking, forgotten/duplicate
 deferral, attempt without exact input binding, same-boundary reattempt, and
 confusion among input, request, activity-instance and participant identities.
+Also cover request-owner snapshot/clone equivalence, duplicate owner operations
+with identical and conflicting payloads, temporal versus legacy P11 disposition
+stream invariants, exact tick/profile correlation, and crash/retry between
+DispatchStarted, sale receipt commit, and terminal P11/C reconciliation.
 
 P11 owns `ActorChoiceStore` payload, pending/terminal lifecycle and disposition
-authority. P18-C owns external request IDs/sequences, request binding and
-availability-triggered coordinator handoff. P18-A owns timeline agenda,
-accepted input ordering and exact logical time. P18-D later owns composition
-between those seams and the selected SellGoods execution path. Keep the adapter
-out of `SimulationRuntime.cs`; P18-D alone edits that hotspot during its
-explicit serialized ownership window. P18-D also owns its daily profile adapter,
-boundary-yielding chronological driver, daily owner manifest/barrier and
-SellGoods consumer. This design changes none of those files or behaviors.
+authority. P18-C owns its request-state records, external request IDs/sequences,
+input binding, trigger/defer/retry/terminal receipts, reconstruction and
+availability-triggered coordinator handoff. P18-B lifecycle source sequences
+are trigger provenance only, distinct from C sequence allocation. P18-A owns
+timeline agenda, accepted input ordering and exact logical time. The adapter
+code can be implemented independently after this design passes review and P9
+and P11 validation is concluded; it does not require the P18-D
+`SimulationRuntime` ownership window. Keep it out of `SimulationRuntime.cs`.
 
-## 8. Open technical gaps for independent review
+P18-D later owns composition with the selected SellGoods execution path, its
+daily profile adapter, boundary-yielding chronological driver and daily owner
+manifest/barrier. There is currently no SellGoods operation/idempotency receipt
+contract. Before P18-D implementation, add the following bounded contract to
+the existing economy transaction owner: an operation receipt/lookup keyed by
+stable `ActorDecisionProposal.Id`, committed atomically with all sale effects;
+immutable correlation matching; and lookup results of committed,
+proven-uncommitted, or unresolved. Same-ID/same-correlation retry is
+idempotent; same ID with different correlation is a hard mismatch. The owner
+must not report proven-uncommitted while a commit may have succeeded. P18-C's
+executor boundary uses receipt resolution but does not implement SellGoods or
+economy mutation. P11 `DispatchStarted` and the sale effect are separate owner
+commits: after interruption, the adapter looks up the operation receipt and
+idempotently finalizes the matching P11 temporal terminal result and P18-C
+terminal reconciliation. No generic cross-domain transaction framework is
+introduced. If the existing economy owner cannot provide this narrow contract,
+P18-D stays blocked for a focused architecture review.
 
-These are implementation-contract questions, not product choices:
+P18-D implementation remains blocked until the additive P18-A
+returned-facts/subphase extension is accepted and promoted, this adapter design
+passes independent review, and the serialized `SimulationRuntime` ownership
+window is released. This gate is separate from the adapter implementation.
+No implementation or capability promotion is claimed here.
 
-1. The promoted P18-C implementation has only lifecycle-receipt ingress and
-   an in-memory pending/retry coordinator. Review must decide the smallest
-   owner-backed representation for external request/binding/deferral cursors
-   needed by this profile and its reconstruction inventory. It must not create
-   a second command queue or assume a save implementation.
-2. P11's current disposition boundary is day/roster based. Review must establish
-   an additive exact-`LogicalTick` deferral/attempt receipt seam for intraday
-   records while preserving historical daily records. A synthetic day or roster
-   ordinal is not acceptable.
-3. Exact atomic coordination among P11 dispatch-start/terminal disposition,
-   C request/proposal state, and the existing action owner's idempotency receipt
-   must be checked against concrete APIs before P18-D code is declared retry
-   safe. No cross-domain transaction framework is authorized.
+## 8. Additive implementation contract requirements
 
-If these gaps cannot be resolved within existing owners and the bounded
-contracts, return for a focused architecture review. Do not broaden scope to
-solve them speculatively.
+These are specified bounded contracts, not unresolved product/canonical
+choices:
+
+1. P18-C implementation adds the request-state owner and idempotent stable-value
+   receipts/operations, C sequence allocation, snapshots, clone/reconstruction
+   inputs and invariant validation. Rebuildable indexes are projections only;
+   no duplicate P11 payload/status, availability truth, or scheduled work.
+2. P11 implementation adds a typed temporal boundary reference and explicit
+   idempotent temporal dispatch/reject/return/throw methods. Exact tick/profile
+   live in temporal records; P11 remains status/disposition authority; C deferral
+   is a P18-C receipt and leaves P11 Pending. Daily APIs/records preserve their
+   existing behavior, with a separate typed temporal disposition stream and
+   explicit lifecycle/ordering diagnostics.
+3. P18-C executor integration resolves operation receipt status by stable
+   proposal ID and only retries after proven-uncommitted. The selected P18-D
+   SellGoods consumer adds the operation receipt contract to the existing
+   economy owner and idempotently reconciles separate P11/C owner commits.
+   P18-C does not implement SellGoods.
+
+These additive adapter contracts may be implemented after independent design
+review and completion of P9/P11 validation. P18-D remains blocked by the
+separate P18-A extension acceptance/promotion and `SimulationRuntime` ownership
+window even if adapter implementation is complete.

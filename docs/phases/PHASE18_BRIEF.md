@@ -9,11 +9,16 @@ execution order.
 P18-D's existing P11 external-input consumer also requires the separate
 P18-C external-input/deferral adapter design at
 `../design/PHASE18_C_EXTERNAL_INPUT_ADAPTER_DESIGN.md`. Its current status is
-proposed/review-pending; this does not promote or implement an additional P18-C
-capability. P18-D implementation remains blocked until that independent design
-review passes, the additive P18-A boundary-facts/subphase extension is accepted
-and promoted, and the serialized `SimulationRuntime` ownership window is
-available. Preserve P11's retained-input authority and exact P18-C/P18-A causal
+proposed/review-pending. The design adds a P18-C request-state owner and typed
+P11 temporal transition stream while preserving legacy daily records/APIs;
+P18-C deferral leaves P11 Pending. The adapter can be implemented after
+independent design review and completion of P9/P11 validation. This does not
+promote or implement the adapter. P18-D implementation remains blocked until
+the adapter is promoted, the additive P18-A boundary-facts/subphase extension
+is accepted and promoted, and the serialized `SimulationRuntime` ownership
+window is available. The P18-D SellGoods consumer also requires a stable
+proposal-ID operation receipt from the existing economy owner. Preserve trusted
+local-input scope, P11's retained-input authority and exact P18-C/P18-A causal
 identities; no second input queue or scheduler is allowed.
 
 ## Objective and closure
