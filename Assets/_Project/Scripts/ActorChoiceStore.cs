@@ -138,12 +138,13 @@ public sealed class ActorChoiceStore : IAuthoritativeMutationGuardBindable
             || personId == null || string.IsNullOrWhiteSpace(actionDefinitionId)
             || !Enum.IsDefined(typeof(WorldCommandOrigin), origin) || !Enum.IsDefined(typeof(WorldCommandAuthorityMode), authority))
         { failure = ActorChoiceStoreFailureCode.InvalidInput; return false; }
-        string referenceKey = TemporalReferenceKey(profileId, acceptedInput.InputId);
+        string referenceKey = TemporalReferenceKey(acceptedInput.InputId);
         if (temporalInputByReference.TryGetValue(referenceKey, out string existingId))
         {
             if (TryGet(new ActorChoiceInputId(existingId), out ActorChoiceInput existing)
                 && existing.WorldCommandId == worldCommandId && existing.PersonId.Equals(personId)
                 && existing.ActionDefinitionId == actionDefinitionId && existing.Origin == origin && existing.Authority == authority
+                && existing.TemporalCapture.ProfileId == profileId
                 && existing.TemporalCapture.TargetInstant == acceptedInput.TargetInstant
                 && existing.TemporalCapture.AcceptedInput.Sequence == acceptedInput.Sequence
                 && existing.TemporalCapture.AcceptedInput.CommandKind == acceptedInput.CommandKind
@@ -212,6 +213,10 @@ public sealed class ActorChoiceStore : IAuthoritativeMutationGuardBindable
                     && prior.ReturnedResultStatus == resultStatus) { failure = ActorChoiceStoreFailureCode.None; return true; }
             failure = ActorChoiceStoreFailureCode.CorrelationConflict; return false;
         }
+        foreach (ActorChoiceInput otherInput in inputs)
+            foreach (ActorChoiceTemporalDisposition prior in otherInput.TemporalDispositions)
+                if (prior.Boundary.SourceReceiptId == boundary.SourceReceiptId)
+                { failure = ActorChoiceStoreFailureCode.CorrelationConflict; return false; }
         if (current.TemporalDispositions.Count > 0 && boundary.Instant.Value < current.TemporalDispositions[current.TemporalDispositions.Count - 1].Boundary.Instant.Value)
         { failure = ActorChoiceStoreFailureCode.InvalidLifecycleTransition; return false; }
         bool dispatched = false, terminal = false;
@@ -233,7 +238,7 @@ public sealed class ActorChoiceStore : IAuthoritativeMutationGuardBindable
     private static bool FailTemporal(out ActorChoiceStoreFailureCode failure)
     { failure = ActorChoiceStoreFailureCode.InvalidInput; return false; }
 
-    private static string TemporalReferenceKey(string profileId, string inputId) => SpatialStableKey.Encode(profileId, inputId);
+    private static string TemporalReferenceKey(string inputId) => inputId;
 
     public bool TryGet(ActorChoiceInputId inputId, out ActorChoiceInput input)
     {
@@ -458,6 +463,7 @@ public sealed class ActorChoiceStore : IAuthoritativeMutationGuardBindable
         HashSet<string> seenCommandIds = new HashSet<string>(StringComparer.Ordinal);
         HashSet<string> seenTemporalReferences = new HashSet<string>(StringComparer.Ordinal);
         HashSet<string> seenTemporalOperations = new HashSet<string>(StringComparer.Ordinal);
+        HashSet<string> seenTemporalSources = new HashSet<string>(StringComparer.Ordinal);
         long previousSequence = 0L;
 
         for (int i = 0; i < inputs.Count; i++)
@@ -499,11 +505,16 @@ public sealed class ActorChoiceStore : IAuthoritativeMutationGuardBindable
             ValidateTemporalLifecycle(input, issues);
             if (input.TemporalCapture != null && input.TemporalCapture.AcceptedInput != null)
             {
-                string temporalKey = TemporalReferenceKey(input.TemporalCapture.ProfileId, input.TemporalCapture.AcceptedInput.InputId);
+                string temporalKey = TemporalReferenceKey(input.TemporalCapture.AcceptedInput.InputId);
                 if (!seenTemporalReferences.Add(temporalKey) || !temporalInputByReference.TryGetValue(temporalKey, out string linkedId) || linkedId != input.InputId.Value)
                     issues.Add("Temporal P18-A accepted input reference is missing or multiply bound.");
                 foreach (ActorChoiceTemporalDisposition disposition in input.TemporalDispositions)
-                    if (disposition != null && !seenTemporalOperations.Add(disposition.OperationId)) issues.Add("Temporal operation reference is duplicated.");
+                    if (disposition != null)
+                    {
+                        if (!seenTemporalOperations.Add(disposition.OperationId)) issues.Add("Temporal operation reference is duplicated.");
+                        if (disposition.Boundary == null || !seenTemporalSources.Add(disposition.Boundary.SourceReceiptId))
+                            issues.Add("Temporal source receipt reference is missing or duplicated.");
+                    }
             }
             if (input.InputId != null
                 && (!indexByInputId.TryGetValue(input.InputId.Value, out int indexedAt) || indexedAt != i))
@@ -561,7 +572,7 @@ public sealed class ActorChoiceStore : IAuthoritativeMutationGuardBindable
             copy.inputs.Add(clonedInput);
             copy.worldCommandIds.Add(clonedInput.WorldCommandId);
             if (clonedInput.TemporalCapture != null)
-                copy.temporalInputByReference.Add(TemporalReferenceKey(clonedInput.TemporalCapture.ProfileId, clonedInput.TemporalCapture.AcceptedInput.InputId), clonedInput.InputId.Value);
+                copy.temporalInputByReference.Add(TemporalReferenceKey(clonedInput.TemporalCapture.AcceptedInput.InputId), clonedInput.InputId.Value);
             foreach (ActorChoiceTemporalDisposition disposition in clonedInput.TemporalDispositions) copy.temporalOperationIds.Add(disposition.OperationId);
         }
 

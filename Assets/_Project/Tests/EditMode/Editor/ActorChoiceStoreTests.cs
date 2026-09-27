@@ -277,12 +277,35 @@ public sealed class ActorChoiceStoreTests
         ActorChoiceTemporalBoundaryReference boundary = new ActorChoiceTemporalBoundaryReference("profile-a", new LogicalTick(150), "receipt-1", 3);
         Assert.That(store.TryRecordTemporalDispatchStarted(captured.InputId, boundary, "dispatch-op", "decision-1", out failure), Is.True, failure.ToString());
         Assert.That(store.TryRecordTemporalDispatchStarted(captured.InputId, boundary, "dispatch-op", "decision-1", out failure), Is.True, failure.ToString());
-        Assert.That(store.TryRecordTemporalAttemptReturned(captured.InputId, boundary, "finish-op", NpcActionResult.Succeeded(), out failure), Is.True, failure.ToString());
+        Assert.That(store.TryRecordTemporalAttemptReturned(captured.InputId, boundary, "finish-op", NpcActionResult.Succeeded(), out failure), Is.False);
+        Assert.That(failure, Is.EqualTo(ActorChoiceStoreFailureCode.CorrelationConflict));
+        ActorChoiceTemporalBoundaryReference terminalBoundary = new ActorChoiceTemporalBoundaryReference("profile-a", new LogicalTick(150), "receipt-2", 4);
+        Assert.That(store.TryRecordTemporalAttemptReturned(captured.InputId, terminalBoundary, "finish-op", NpcActionResult.Succeeded(), out failure), Is.True, failure.ToString());
         Assert.That(store.TryGet(captured.InputId, out ActorChoiceInput finished), Is.True);
         Assert.That(finished.Status, Is.EqualTo(ActorChoiceInputStatus.AttemptReturned));
         Assert.That(finished.TemporalDispositions, Has.Count.EqualTo(2));
         Assert.That(finished.Dispositions, Is.Empty);
         Assert.That(store.ValidateInvariants().IsValid, Is.True, string.Join(";", store.ValidateInvariants().Issues));
+    }
+
+    [Test]
+    public void TemporalSourceReceiptCannotBeReusedAcrossInputs()
+    {
+        ActorChoiceStore store = CreateStore();
+        Assert.That(store.TryCaptureTemporal("cmd-a", new PersonId("a"), "act", WorldCommandOrigin.System,
+            WorldCommandAuthorityMode.Request, "profile", new TimelineInputReference(1, "input-a", "actor-choice", "a", new LogicalTick(10)),
+            out ActorChoiceInput first, out _), Is.True);
+        Assert.That(store.TryCaptureTemporal("cmd-b", new PersonId("b"), "act", WorldCommandOrigin.System,
+            WorldCommandAuthorityMode.Request, "profile", new TimelineInputReference(2, "input-b", "actor-choice", "b", new LogicalTick(10)),
+            out ActorChoiceInput second, out _), Is.True);
+        Assert.That(store.TryRecordTemporalRejected(first.InputId,
+            new ActorChoiceTemporalBoundaryReference("profile", new LogicalTick(10), "shared-receipt", 1),
+            "reject-a", ActorChoiceFailure.ActionUnavailable, out _), Is.True);
+        Assert.That(store.TryRecordTemporalRejected(second.InputId,
+            new ActorChoiceTemporalBoundaryReference("profile", new LogicalTick(10), "shared-receipt", 1),
+            "reject-b", ActorChoiceFailure.ActionUnavailable, out ActorChoiceStoreFailureCode failure), Is.False);
+        Assert.That(failure, Is.EqualTo(ActorChoiceStoreFailureCode.CorrelationConflict));
+        Assert.That(store.ValidateInvariants().IsValid, Is.True);
     }
 
     [Test]
@@ -295,6 +318,9 @@ public sealed class ActorChoiceStoreTests
         TimelineInputReference changed = new TimelineInputReference(1, "timeline-input", "actor-choice", "payload-b", new LogicalTick(10));
         Assert.That(store.TryCaptureTemporal("cmd-a", new PersonId("a"), "act", WorldCommandOrigin.System,
             WorldCommandAuthorityMode.Request, "profile", changed, out _, out ActorChoiceStoreFailureCode captureFailure), Is.False);
+        Assert.That(captureFailure, Is.EqualTo(ActorChoiceStoreFailureCode.CorrelationConflict));
+        Assert.That(store.TryCaptureTemporal("cmd-a", new PersonId("a"), "act", WorldCommandOrigin.System,
+            WorldCommandAuthorityMode.Request, "different-profile", accepted, out _, out captureFailure), Is.False);
         Assert.That(captureFailure, Is.EqualTo(ActorChoiceStoreFailureCode.CorrelationConflict));
         Assert.That(store.TryRecordTemporalRejected(input.InputId,
             new ActorChoiceTemporalBoundaryReference("other-profile", new LogicalTick(10), "receipt", 1),

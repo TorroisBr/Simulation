@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using NUnit.Framework;
 
 public sealed class ActorAvailabilityDecisionTests
@@ -229,5 +230,75 @@ public sealed class ActorAvailabilityDecisionTests
             out ActorDecisionRequestState restored), Is.True);
         Assert.That(restored.Snapshot().Count, Is.EqualTo(state.Snapshot().Count));
         Assert.That(restored.ValidateInvariants(), Is.Empty);
+    }
+
+    [Test]
+    public void RequestStateRejectsOrphanAndMismatchedCausalReceipts()
+    {
+        ActorDecisionRequestState state = new ActorDecisionRequestState();
+        PersonId actor = new PersonId("person-a");
+        Assert.That(state.TryDefer("orphan-defer", "missing-request", "input-a", actor, new LogicalTick(20),
+            "boundary", 0, 0, ActorDecisionDeferralReason.DecisionBoundaryAlreadyUsed, out _), Is.False);
+        Assert.That(state.TryRecordRetryableProposal("orphan-retry", "missing-request", "input-a", actor,
+            new LogicalTick(20), "proposal", "uncommitted", out _), Is.False);
+
+        Assert.That(state.TryBindInput("bind", "input-a", actor, new LogicalTick(20), "profile", 7,
+            "accepted-input-receipt", 2, out ActorDecisionRequestReceipt bound), Is.True);
+        Assert.That(state.TryDefer("wrong-actor", bound.RequestId, "input-a", new PersonId("person-b"),
+            new LogicalTick(20), "input-a", 2, 7, ActorDecisionDeferralReason.DecisionBoundaryAlreadyUsed, out _), Is.False);
+        Assert.That(state.TryDefer("wrong-input", bound.RequestId, "input-b", actor,
+            new LogicalTick(20), "input-a", 2, 7, ActorDecisionDeferralReason.DecisionBoundaryAlreadyUsed, out _), Is.False);
+        Assert.That(state.TryDefer("wrong-instant", bound.RequestId, "input-a", actor,
+            new LogicalTick(21), "input-a", 2, 7, ActorDecisionDeferralReason.DecisionBoundaryAlreadyUsed, out _), Is.False);
+        Assert.That(state.TryRecordRetryableProposal("wrong-retry", bound.RequestId, "input-a", new PersonId("person-b"),
+            new LogicalTick(20), "proposal", "uncommitted", out _), Is.False);
+
+        ActorDecisionRequestReceipt orphan = (ActorDecisionRequestReceipt)Activator.CreateInstance(
+            typeof(ActorDecisionRequestReceipt), BindingFlags.Instance | BindingFlags.NonPublic, null,
+            new object[] { 2L, bound.BoundarySequence, ActorDecisionRequestReceiptKind.Deferred, "orphan", bound.RequestId,
+                "other-input", null, actor, new LogicalTick(20), "input-a", 2L, 7L,
+                (ActorDecisionDeferralReason?)ActorDecisionDeferralReason.DecisionBoundaryAlreadyUsed, null, null, null }, null);
+        Assert.That(ActorDecisionRequestState.TryRestore(new[] { bound, orphan }, state.NextBoundarySequence, out _), Is.False);
+    }
+
+    [Test]
+    public void TerminalReconciliationIsIdempotentAndCannotConflictForOneProposal()
+    {
+        ActorDecisionRequestState state = new ActorDecisionRequestState();
+        PersonId actor = new PersonId("person-a");
+        Assert.That(state.TryBindInput("bind", "input-a", actor, new LogicalTick(20), "profile", 7,
+            "accepted-input-receipt", 2, out ActorDecisionRequestReceipt bound), Is.True);
+        Assert.That(state.TryRecordRetryableProposal("retry", bound.RequestId, "input-a", actor,
+            new LogicalTick(20), "proposal-a", "proven-uncommitted", out _), Is.True);
+        Assert.That(state.TryReconcileTerminal("terminal", bound.RequestId, "input-a", actor,
+            new LogicalTick(20), "proposal-a", "committed", out ActorDecisionRequestReceipt terminal), Is.True);
+        Assert.That(state.TryReconcileTerminal("terminal-replay", bound.RequestId, "input-a", actor,
+            new LogicalTick(20), "proposal-a", "committed", out ActorDecisionRequestReceipt replay), Is.True);
+        Assert.That(replay.ReceiptSequence, Is.EqualTo(terminal.ReceiptSequence));
+        Assert.That(state.TryReconcileTerminal("terminal-conflict", bound.RequestId, "input-a", actor,
+            new LogicalTick(20), "proposal-a", "rejected", out _), Is.False);
+        Assert.That(state.TryRecordRetryableProposal("retry-after-terminal", bound.RequestId, "input-a", actor,
+            new LogicalTick(20), "proposal-a", "uncommitted", out _), Is.False);
+        Assert.That(state.ValidateInvariants(), Is.Empty);
+    }
+
+    [Test]
+    public void OneLifecycleReceiptCanTriggerDistinctParticipantRequests()
+    {
+        ActorDecisionRequestState state = new ActorDecisionRequestState();
+        PersonId firstActor = new PersonId("person-a");
+        PersonId secondActor = new PersonId("person-b");
+        Assert.That(state.TryBindInput("bind-a", "input-a", firstActor, new LogicalTick(5), "profile", 1,
+            "capture-a", 1, out _), Is.True);
+        Assert.That(state.TryBindInput("bind-b", "input-b", secondActor, new LogicalTick(5), "profile", 2,
+            "capture-b", 1, out _), Is.True);
+        string firstRequestId = new ActorDecisionRequest(firstActor, new LogicalTick(10), "lifecycle-receipt", 3, 4).Id;
+        string secondRequestId = new ActorDecisionRequest(secondActor, new LogicalTick(10), "lifecycle-receipt", 4, 4).Id;
+        Assert.That(state.TryObserveTrigger("trigger-a", firstRequestId, "lifecycle-receipt", firstActor,
+            new LogicalTick(10), "lifecycle-receipt", 4, 22, "input-a", out ActorDecisionRequestReceipt first), Is.True);
+        Assert.That(state.TryObserveTrigger("trigger-b", secondRequestId, "lifecycle-receipt", secondActor,
+            new LogicalTick(10), "lifecycle-receipt", 4, 22, "input-b", out ActorDecisionRequestReceipt second), Is.True);
+        Assert.That(first.BoundarySequence, Is.Not.EqualTo(second.BoundarySequence));
+        Assert.That(state.ValidateInvariants(), Is.Empty);
     }
 }
