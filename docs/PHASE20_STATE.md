@@ -7,12 +7,23 @@ checkpoint remains proposed; no P20 capability is promoted.
 **Architecture baseline:** `c285466c355103d3637ac165246591b72eb7bda0`.
 
 **Current prerequisite base:** `codex/phase18/canonical` at
-`311baa930227371a807fb324ff11fc024800ddf9`. Its promoted relevant capabilities
+`99cac77f7d66e8eb61fe68efb6959a4a5b7029ca`. Its promoted relevant capabilities
 are P18-A timeline/scheduler (`985c56c40fc01dc6a4d392120e2d32151a558d03`),
 P18-B activity lifecycle (`97918cbbe4238a65a216b1a1f0ef84c70b4d080c`), and
 P18-C availability/actor decisions (`ab05ecfe976e80badf6f509b8e9be25ff556ca23`).
 The latest P18 State-only update changes no relevant P18 code or API. P18-D and
 P19 are not blanket prerequisites for this Phase 20 proof.
+
+**Current-base refresh:** the proposal's prior review baseline `311baa9` was
+advanced to `99cac77`. Independent impact review classifies this as
+`UPSTREAM_IRRELEVANT`: the update changes only standing agent instructions and
+workflow skills; architecture, Roadmap, P18 code/State and both alignment
+records are unchanged. The proposal branch includes current P18 canonical as
+an ancestor. Existing entry, technical-design, and formation-close reviews
+remain semantically applicable. `ActivityInstanceId` remains separate from
+`PersonId`; the exactly-two-Person fixture is still only fixture cardinality,
+not a universal contract. P20-A remains proposed and awaits explicit
+checkpoint acceptance.
 
 ## Work status
 

@@ -7,9 +7,13 @@ gate.
 ## Baseline and design evidence
 
 - Architecture: `c285466c355103d3637ac165246591b72eb7bda0`.
-- Latest P18 canonical tip: `311baa930227371a807fb324ff11fc024800ddf9` on
-  `codex/phase18/canonical`. Its latest change updates only `PHASE18_STATE.md`;
-  P18-A/B/C contracts and code remain those already reviewed and promoted.
+- Latest P18 canonical tip: `99cac77f7d66e8eb61fe68efb6959a4a5b7029ca` on
+  `codex/phase18/canonical`. Since the reviewed `311baa9` baseline, only
+  `AGENTS.md` and workflow skills changed; P18-A/B/C contracts, code, State,
+  and both alignment records are unchanged. Independent impact review
+  classifies this as `UPSTREAM_IRRELEVANT`; the existing P20 design reviews
+  remain applicable. This reference refresh does not accept the checkpoint or
+  authorize implementation.
 - Promoted prerequisites: P18-A timeline/scheduler `985c56c40fc01dc6a4d392120e2d32151a558d03`,
   P18-B activity lifecycle `97918cbbe4238a65a216b1a1f0ef84c70b4d080c`, and
   P18-C availability/actor decisions `ab05ecfe976e80badf6f509b8e9be25ff556ca23`.
