@@ -1,8 +1,10 @@
 # P9-A — Authored Bootstrap Genesis v1
 
-**Status:** `READY_FOR_IMPLEMENTATION`. Independent checkpoint-contract
-review passed on the contract recorded at `f14586b`. This record is on a
-candidate branch and does not claim canonical delivery or authorize promotion.
+**Status:** `VALIDATED_CANDIDATE`. Independent checkpoint-contract review
+passed on the contract recorded at `f14586b`; independent implementation review
+passed on code candidate `974a8d72a158962619d7ba8aa1ccf854eeadd47e`. This record
+is on an integration candidate branch and does not claim canonical delivery or
+authorize promotion.
 
 ## Baseline and authority
 
@@ -213,3 +215,30 @@ adds daily-loop behavior; P9-A itself must not introduce new autonomous work.
   design work in parallel, but its code integration waits for P9 promotion.
 - The checkpoint does not satisfy any canonical capability until separately
   reviewed, validated, approved, and promoted.
+
+## Implementation candidate and integration validation — 2026-09-26
+
+The implementation candidate is `974a8d72a158962619d7ba8aa1ccf854eeadd47e`
+on `codex/phase9/GenesisAuthoredBootstrap`, integrated by fast-forward into
+`codex/phase9/GenesisAuthoredBootstrapIntegration` from current Phase 8
+canonical `470667d37863384edadb3d93ef64d8004aff46a3`. Architecture baseline
+`c285466c355103d3637ac165246591b72eb7bda0` is unchanged. The P8 closure-state
+wording update was classified `UPSTREAM_IRRELEVANT` to runtime behavior.
+
+Independent implementation review passed on the exact `974a8d7` candidate.
+The integration worktree passed `SimulationBootstrapCompositionTests` 10/10,
+`SpatialRoutePlanningTests` 20/20, all EditMode tests 1708/1708, the complete
+official `Smoke` filter 5/5, and `git diff --check`.
+
+Because P9-A changes world startup composition while P11 Actor Choice remains
+an unpromoted candidate, their compatibility was checked in the separate,
+validation-only ref `codex/phase9/P11CompatibilityValidation` at
+`004c6f99e72c63dfd374fca9197ba7ac0818ebca`. That ref combines P9 code `974a8d7`
+with P11 candidate `be236710ce17768a6b4b457eb0d7e218ff944ddd`; it passed
+`ActorActionChoiceCommandTests` 6/6, `ActorChoice` tests 24/24, P9 bootstrap
+tests 10/10, all EditMode tests 1738/1738, the complete official `Smoke`
+filter 5/5, and `git diff --check`. This is compatibility evidence only: it
+does not promote P11 or change either phase's canonical status.
+
+No long-run suite was required because P9-A adds no daily-loop behavior. P9-A
+remains an unpromoted candidate; this record does not mark Phase 9 complete.
