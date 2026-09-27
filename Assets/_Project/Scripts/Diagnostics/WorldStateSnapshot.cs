@@ -14,6 +14,8 @@ public sealed class WorldStateSnapshotContext
     public SpatialAuthorityStore SpatialAuthorityStore { get; }
     public LegacySpatialAnchorBindingStore LegacySpatialAnchorBindingStore { get; }
     public PersonSpatialPositionStore PersonSpatialPositionStore { get; }
+    public SpatialRouteKnowledgeStore SpatialRouteKnowledgeStore { get; }
+    public PersonRoutePlanStore PersonRoutePlanStore { get; }
     public ExplorableSiteStore ExplorableSiteStore { get; }
     public ExpeditionStore ExpeditionStore { get; }
     public PlaceContentStore PlaceContentStore { get; }
@@ -84,7 +86,9 @@ public sealed class WorldStateSnapshotContext
         ArmedForceSpatialStateStore armedForceSpatialStateStore = null,
         ContingentManpowerStateStore contingentManpowerStateStore = null,
         LegacySpatialAnchorBindingStore legacySpatialAnchorBindingStore = null,
-        PersonSpatialPositionStore personSpatialPositionStore = null)
+        PersonSpatialPositionStore personSpatialPositionStore = null,
+        SpatialRouteKnowledgeStore spatialRouteKnowledgeStore = null,
+        PersonRoutePlanStore personRoutePlanStore = null)
     {
         SimulationTime = simulationTime;
         Calendar = calendar ?? (calendarDefinition != null ? new SimulationCalendar(calendarDefinition) : null);
@@ -94,6 +98,8 @@ public sealed class WorldStateSnapshotContext
         SpatialAuthorityStore = spatialAuthorityStore;
         LegacySpatialAnchorBindingStore = legacySpatialAnchorBindingStore;
         PersonSpatialPositionStore = personSpatialPositionStore;
+        SpatialRouteKnowledgeStore = spatialRouteKnowledgeStore;
+        PersonRoutePlanStore = personRoutePlanStore;
         ExplorableSiteStore = explorableSiteStore;
         ExpeditionStore = expeditionStore;
         PlaceContentStore = placeContentStore;
@@ -1401,6 +1407,12 @@ public sealed class WorldStateSpatialSnapshot
     public IReadOnlyList<WorldStateSpatialAnchorBindingSnapshot> LegacySpatialAnchorBindings { get; }
     public long? PersonSpatialPositionRevision { get; }
     public long? LegacySpatialAnchorBindingRevision { get; }
+    public long? SpatialRouteKnowledgeRevision { get; }
+    public bool HasSpatialRouteKnowledgeState => SpatialRouteKnowledgeRevision.HasValue;
+    public IReadOnlyList<WorldStateSpatialRouteObservationSnapshot> SpatialRouteObservations { get; }
+    public long? PersonRoutePlanRevision { get; }
+    public bool HasPersonRoutePlanState => PersonRoutePlanRevision.HasValue;
+    public IReadOnlyList<WorldStatePersonRoutePlanSnapshot> PersonRoutePlans { get; }
     public IReadOnlyList<WorldStateSpatialTopologyBindingSnapshot> TopologyBindings { get; }
     public IReadOnlyList<WorldStateLocationSnapshot> Locations { get; }
     public IReadOnlyList<WorldStateRouteSnapshot> Routes { get; }
@@ -1421,7 +1433,11 @@ public sealed class WorldStateSpatialSnapshot
         IEnumerable<WorldStatePersonSpatialPositionSnapshot> personSpatialPositions = null,
         IEnumerable<WorldStateSpatialAnchorBindingSnapshot> legacySpatialAnchorBindings = null,
         long? personSpatialPositionRevision = null,
-        long? legacySpatialAnchorBindingRevision = null)
+        long? legacySpatialAnchorBindingRevision = null,
+        IEnumerable<WorldStateSpatialRouteObservationSnapshot> spatialRouteObservations = null,
+        long? spatialRouteKnowledgeRevision = null,
+        IEnumerable<WorldStatePersonRoutePlanSnapshot> personRoutePlans = null,
+        long? personRoutePlanRevision = null)
     {
         AuthorityRevision = authorityRevision;
         CoordinateConventionVersion = coordinateConventionVersion;
@@ -1438,6 +1454,29 @@ public sealed class WorldStateSpatialSnapshot
             binding => binding?.StableKey);
         PersonSpatialPositionRevision = personSpatialPositionRevision;
         LegacySpatialAnchorBindingRevision = legacySpatialAnchorBindingRevision;
+        SpatialRouteKnowledgeRevision = spatialRouteKnowledgeRevision;
+        List<WorldStateSpatialRouteObservationSnapshot> observations = SnapshotCollections.Materialize(spatialRouteObservations);
+        observations.Sort((left, right) =>
+        {
+            int actor = StringComparer.Ordinal.Compare(left?.ActorPersonId, right?.ActorPersonId);
+            if (actor != 0) return actor;
+            int subject = StringComparer.Ordinal.Compare(left?.SubjectStableKey, right?.SubjectStableKey);
+            if (subject != 0) return subject;
+            int observed = Nullable.Compare(left?.ObservedDay, right?.ObservedDay);
+            if (observed != 0) return observed;
+            int received = Nullable.Compare(left?.ReceivedDay, right?.ReceivedDay);
+            if (received != 0) return received;
+            return StringComparer.Ordinal.Compare(left?.StableIdentity, right?.StableIdentity);
+        });
+        SpatialRouteObservations = observations.AsReadOnly();
+        PersonRoutePlanRevision = personRoutePlanRevision;
+        List<WorldStatePersonRoutePlanSnapshot> plans = SnapshotCollections.Materialize(personRoutePlans);
+        plans.Sort((left, right) =>
+        {
+            int actor = StringComparer.Ordinal.Compare(left?.ActorPersonId, right?.ActorPersonId);
+            return actor != 0 ? actor : Nullable.Compare(left?.PlanRevision, right?.PlanRevision);
+        });
+        PersonRoutePlans = plans.AsReadOnly();
         TopologyBindings = SnapshotCollections.CopySorted(topologyBindings, binding => binding?.StableKey);
         Locations = SnapshotCollections.CopySorted(locations, location => location?.RuntimeId);
         Routes = SnapshotCollections.CopySorted(routes, route => route?.RuntimeId);
@@ -1634,6 +1673,176 @@ public sealed class WorldStatePersonSpatialPositionSnapshot
         PersonId = position.PersonId.Value;
         Position = position.Position == null ? null : new WorldStateStablePositionReferenceSnapshot(position.Position);
         Transit = position.Transit == null ? null : new WorldStateTransitSnapshot(position.Transit);
+    }
+}
+
+/// <summary>Stable diagnostic projection of one actor-owned spatial observation.</summary>
+public sealed class WorldStateSpatialRouteObservationSnapshot
+{
+    public string ActorPersonId { get; }
+    public string StableIdentity { get; }
+    public string StableKey => SpatialStableKey.Encode(ActorPersonId, StableIdentity);
+    public SpatialSubjectKind SubjectKind { get; }
+    public string SubjectStableKey { get; }
+    public string SubjectHexId { get; }
+    public string SubjectLocationId { get; }
+    public string SubjectCrossingId { get; }
+    public string SubjectRouteCandidateId { get; }
+    public string SubjectEstimateMetricId { get; }
+    public string RouteSegmentStableKey { get; }
+    public string BoundaryFirstHexId { get; }
+    public string BoundarySecondHexId { get; }
+    public string FromHexId { get; }
+    public string ToHexId { get; }
+    public TraversalOptionKind? OptionKind { get; }
+    public string OptionConnectionId { get; }
+    public string OptionCrossingId { get; }
+    public string OptionRuleIdentity { get; }
+    public string OptionRuleVersion { get; }
+    public SpatialObservationValueKind ValueKind { get; }
+    public SpatialEntityBelief EntityBelief { get; }
+    public SpatialRouteOptionBelief RouteOptionBelief { get; }
+    public decimal Estimate { get; }
+    public string EstimateUnit { get; }
+    public SpatialObservationSourceKind SourceKind { get; }
+    public string SourceIdentity { get; }
+    public string OriginIdentity { get; }
+    public string TransmittingPersonId { get; }
+    public long ObservedDay { get; }
+    public long ReceivedDay { get; }
+    public int ConfidencePermille { get; }
+    public string PrecisionIdentity { get; }
+
+    public WorldStateSpatialRouteObservationSnapshot(PersonId actor, SpatialObservation observation)
+    {
+        if (actor == null) throw new ArgumentNullException(nameof(actor));
+        if (observation == null) throw new ArgumentNullException(nameof(observation));
+        ActorPersonId = actor.Value;
+        StableIdentity = observation.StableIdentity;
+        SubjectKind = observation.Subject.Kind;
+        SubjectStableKey = observation.Subject.StableKey;
+        SubjectHexId = observation.Subject.HexId?.Value;
+        SubjectLocationId = observation.Subject.LocationId?.Value;
+        SubjectCrossingId = observation.Subject.CrossingId?.Value;
+        SubjectRouteCandidateId = observation.Subject.CandidateId?.StableKey;
+        SubjectEstimateMetricId = observation.Subject.EstimateMetricId;
+        SpatialRouteSegment segment = observation.Subject.RouteSegment;
+        if (segment != null)
+        {
+            RouteSegmentStableKey = segment.StableKey;
+            BoundaryFirstHexId = segment.Boundary.FirstHexId.Value;
+            BoundarySecondHexId = segment.Boundary.SecondHexId.Value;
+            FromHexId = segment.FromHexId.Value;
+            ToHexId = segment.ToHexId.Value;
+            OptionKind = segment.Option.Kind;
+            OptionConnectionId = segment.Option.ConnectionId?.Value;
+            OptionCrossingId = segment.Option.CrossingId?.Value;
+            OptionRuleIdentity = segment.Option.RuleIdentity;
+            OptionRuleVersion = segment.Option.RuleVersion;
+        }
+        ValueKind = observation.Value.Kind;
+        EntityBelief = observation.Value.EntityBelief;
+        RouteOptionBelief = observation.Value.RouteOptionBelief;
+        Estimate = observation.Value.Estimate;
+        EstimateUnit = observation.Value.EstimateUnit;
+        SourceKind = observation.Provenance.SourceKind;
+        SourceIdentity = observation.Provenance.SourceIdentity;
+        OriginIdentity = observation.Provenance.OriginIdentity;
+        TransmittingPersonId = observation.Provenance.TransmittingPersonId?.Value;
+        ObservedDay = observation.ObservedDay;
+        ReceivedDay = observation.ReceivedDay;
+        ConfidencePermille = observation.ConfidencePermille;
+        PrecisionIdentity = observation.PrecisionIdentity;
+    }
+}
+
+/// <summary>One ordered intended segment from a route plan, with its source belief.</summary>
+public sealed class WorldStatePersonRoutePlanLegSnapshot
+{
+    public string StableKey { get; }
+    public string BoundaryFirstHexId { get; }
+    public string BoundarySecondHexId { get; }
+    public string FromHexId { get; }
+    public string ToHexId { get; }
+    public TraversalOptionKind OptionKind { get; }
+    public string OptionConnectionId { get; }
+    public string OptionCrossingId { get; }
+    public string OptionRuleIdentity { get; }
+    public string OptionRuleVersion { get; }
+    public SpatialRouteOptionBelief Belief { get; }
+    public bool IsBeliefStale { get; }
+    public string BeliefObservationIdentity { get; }
+
+    public WorldStatePersonRoutePlanLegSnapshot(SpatialRouteCandidateLeg leg)
+    {
+        if (leg == null) throw new ArgumentNullException(nameof(leg));
+        StableKey = leg.Segment.StableKey;
+        BoundaryFirstHexId = leg.Segment.Boundary.FirstHexId.Value;
+        BoundarySecondHexId = leg.Segment.Boundary.SecondHexId.Value;
+        FromHexId = leg.Segment.FromHexId.Value;
+        ToHexId = leg.Segment.ToHexId.Value;
+        OptionKind = leg.Segment.Option.Kind;
+        OptionConnectionId = leg.Segment.Option.ConnectionId?.Value;
+        OptionCrossingId = leg.Segment.Option.CrossingId?.Value;
+        OptionRuleIdentity = leg.Segment.Option.RuleIdentity;
+        OptionRuleVersion = leg.Segment.Option.RuleVersion;
+        Belief = leg.Belief;
+        IsBeliefStale = leg.IsBeliefStale;
+        BeliefObservationIdentity = leg.BeliefObservationIdentity;
+    }
+}
+
+/// <summary>Stable, intent-only diagnostic projection of an accepted Person route plan.</summary>
+public sealed class WorldStatePersonRoutePlanSnapshot
+{
+    public string StableKey { get; }
+    public string ActorPersonId { get; }
+    public string DestinationHexId { get; }
+    public string CandidateOriginHexId { get; }
+    public string CandidateSequenceKey { get; }
+    public IReadOnlyList<WorldStatePersonRoutePlanLegSnapshot> Legs { get; }
+    public string PolicyId { get; }
+    public string PolicyVersion { get; }
+    public string EstimateMetricId { get; }
+    public string EstimateUnitIdentity { get; }
+    public bool PreferHigherEstimate { get; }
+    public long MaximumEstimateAgeDays { get; }
+    public bool RequireKnownAvailableOptions { get; }
+    public long KnowledgeActorRevision { get; }
+    public string KnowledgeBasisFingerprint { get; }
+    public IReadOnlyList<string> KnowledgeObservationIdentities { get; }
+    public string DecisionIdentity { get; }
+    public long AcceptedDay { get; }
+    public long PlanRevision { get; }
+    public PersonRoutePlanStatus Status { get; }
+
+    public WorldStatePersonRoutePlanSnapshot(PersonRoutePlan plan)
+    {
+        if (plan == null) throw new ArgumentNullException(nameof(plan));
+        StableKey = plan.StableKey;
+        ActorPersonId = plan.ActorPersonId.Value;
+        DestinationHexId = plan.DestinationHexId.Value;
+        CandidateOriginHexId = plan.Candidate.OriginHexId.Value;
+        CandidateSequenceKey = plan.Candidate.SequenceKey;
+        List<WorldStatePersonRoutePlanLegSnapshot> legs = new List<WorldStatePersonRoutePlanLegSnapshot>();
+        foreach (SpatialRouteCandidateLeg leg in plan.Candidate.Legs)
+            legs.Add(new WorldStatePersonRoutePlanLegSnapshot(leg));
+        Legs = legs.AsReadOnly();
+        PolicyId = plan.SelectionPolicy.PolicyId;
+        PolicyVersion = plan.SelectionPolicy.Version;
+        EstimateMetricId = plan.SelectionPolicy.EstimateMetricId;
+        EstimateUnitIdentity = plan.SelectionPolicy.EstimateUnitIdentity;
+        PreferHigherEstimate = plan.SelectionPolicy.PreferHigherEstimate;
+        MaximumEstimateAgeDays = plan.SelectionPolicy.MaximumEstimateAgeDays;
+        RequireKnownAvailableOptions = plan.SelectionPolicy.RequireKnownAvailableOptions;
+        KnowledgeActorRevision = plan.KnowledgeBasis.ActorKnowledgeRevision;
+        KnowledgeBasisFingerprint = plan.KnowledgeBasis.Fingerprint;
+        KnowledgeObservationIdentities = SnapshotCollections.CopySorted(
+            plan.KnowledgeBasis.ObservationIdentities, identity => identity);
+        DecisionIdentity = plan.DecisionIdentity;
+        AcceptedDay = plan.AcceptedDay;
+        PlanRevision = plan.PlanRevision;
+        Status = plan.Status;
     }
 }
 
@@ -2105,7 +2314,9 @@ public static class WorldStateSnapshotBuilder
                     ?? context.ArmedForceSpatialStateStore?.SpatialAuthorityStore
                     ?? context.BattleStore?.SpatialAuthorityStore,
                 context.PersonSpatialPositionStore,
-                context.LegacySpatialAnchorBindingStore),
+                context.LegacySpatialAnchorBindingStore,
+                context.SpatialRouteKnowledgeStore,
+                context.PersonRoutePlanStore),
             BuildSiteSnapshots(context.ExplorableSiteStore),
             expeditions,
             BuildPlaceContentSnapshots(context.PlaceContentStore),
@@ -3311,7 +3522,9 @@ public static class WorldStateSnapshotBuilder
         SpatialNetworkRuntime network,
         SpatialAuthorityStore authority,
         PersonSpatialPositionStore personPositions,
-        LegacySpatialAnchorBindingStore legacyAnchorBindings)
+        LegacySpatialAnchorBindingStore legacyAnchorBindings,
+        SpatialRouteKnowledgeStore spatialRouteKnowledge,
+        PersonRoutePlanStore personRoutePlans)
     {
         List<WorldStateHexSnapshot> hexSnapshots = new List<WorldStateHexSnapshot>();
         List<WorldStateAnchoredLocationSnapshot> anchoredLocationSnapshots =
@@ -3326,6 +3539,10 @@ public static class WorldStateSnapshotBuilder
             new List<WorldStatePersonSpatialPositionSnapshot>();
         List<WorldStateSpatialAnchorBindingSnapshot> legacyAnchorBindingSnapshots =
             new List<WorldStateSpatialAnchorBindingSnapshot>();
+        List<WorldStateSpatialRouteObservationSnapshot> routeObservationSnapshots =
+            BuildSpatialRouteObservationSnapshots(spatialRouteKnowledge);
+        List<WorldStatePersonRoutePlanSnapshot> routePlanSnapshots =
+            BuildPersonRoutePlanSnapshots(personRoutePlans);
         long? authorityRevision = null;
         string coordinateConventionVersion = null;
         string coordinateCanonicalOrder = null;
@@ -3483,7 +3700,11 @@ public static class WorldStateSnapshotBuilder
                 personSpatialPositions: personPositionSnapshots,
                 legacySpatialAnchorBindings: legacyAnchorBindingSnapshots,
                 personSpatialPositionRevision: personPositions?.Revision,
-                legacySpatialAnchorBindingRevision: legacyAnchorBindings?.Revision);
+                legacySpatialAnchorBindingRevision: legacyAnchorBindings?.Revision,
+                spatialRouteObservations: routeObservationSnapshots,
+                spatialRouteKnowledgeRevision: spatialRouteKnowledge?.Revision,
+                personRoutePlans: routePlanSnapshots,
+                personRoutePlanRevision: personRoutePlans?.Revision);
         }
 
         List<SpatialLocationRuntime> locations = new List<SpatialLocationRuntime>(network.Locations);
@@ -3524,7 +3745,35 @@ public static class WorldStateSnapshotBuilder
             personPositionSnapshots,
             legacyAnchorBindingSnapshots,
             personPositions?.Revision,
-            legacyAnchorBindings?.Revision);
+            legacyAnchorBindings?.Revision,
+            routeObservationSnapshots,
+            spatialRouteKnowledge?.Revision,
+            routePlanSnapshots,
+            personRoutePlans?.Revision);
+    }
+
+    private static List<WorldStateSpatialRouteObservationSnapshot> BuildSpatialRouteObservationSnapshots(
+        SpatialRouteKnowledgeStore store)
+    {
+        List<WorldStateSpatialRouteObservationSnapshot> result =
+            new List<WorldStateSpatialRouteObservationSnapshot>();
+        if (store == null) return result;
+        foreach (PersonId actor in store.Actors)
+            foreach (SpatialObservation observation in store.GetObservations(actor))
+                if (observation != null)
+                    result.Add(new WorldStateSpatialRouteObservationSnapshot(actor, observation));
+        return result;
+    }
+
+    private static List<WorldStatePersonRoutePlanSnapshot> BuildPersonRoutePlanSnapshots(
+        PersonRoutePlanStore store)
+    {
+        List<WorldStatePersonRoutePlanSnapshot> result = new List<WorldStatePersonRoutePlanSnapshot>();
+        if (store == null) return result;
+        foreach (PersonRoutePlan plan in store.History)
+            if (plan != null)
+                result.Add(new WorldStatePersonRoutePlanSnapshot(plan));
+        return result;
     }
 
     private static List<WorldStateSiteSnapshot> BuildSiteSnapshots(ExplorableSiteStore store)

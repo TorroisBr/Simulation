@@ -203,6 +203,78 @@ public static class WorldStateSnapshotFormatter
             }
         }
 
+        if (snapshot.Spatial.HasSpatialRouteKnowledgeState)
+        {
+            output.Append("\nSpatial route Knowledge revision: ")
+                .Append(WorldStateCanonicalWriter.Int64Value(snapshot.Spatial.SpatialRouteKnowledgeRevision.Value))
+                .Append('\n');
+            foreach (WorldStateSpatialRouteObservationSnapshot observation in snapshot.Spatial.SpatialRouteObservations)
+            {
+                if (observation == null) continue;
+                output.Append("SPATIAL KNOWLEDGE ").Append(Value(observation.ActorPersonId))
+                    .Append(" subject ").Append(WorldStateCanonicalWriter.EnumValue(observation.SubjectKind))
+                    .Append(' ').Append(Value(observation.SubjectStableKey)).Append(" value ");
+                if (observation.ValueKind == SpatialObservationValueKind.RouteOptionBelief)
+                    output.Append(WorldStateCanonicalWriter.EnumValue(observation.RouteOptionBelief));
+                else if (observation.ValueKind == SpatialObservationValueKind.RouteEstimate)
+                    output.Append(WorldStateCanonicalWriter.DecimalValue(observation.Estimate))
+                        .Append(' ').Append(Value(observation.EstimateUnit));
+                else
+                    output.Append(WorldStateCanonicalWriter.EnumValue(observation.EntityBelief));
+                output.Append(" source ").Append(WorldStateCanonicalWriter.EnumValue(observation.SourceKind))
+                    .Append(':').Append(Value(observation.SourceIdentity))
+                    .Append(" origin ").Append(Value(observation.OriginIdentity))
+                    .Append(" transmitter ").Append(Value(observation.TransmittingPersonId))
+                    .Append(" observed ").Append(WorldStateCanonicalWriter.Int64Value(observation.ObservedDay))
+                    .Append(" received ").Append(WorldStateCanonicalWriter.Int64Value(observation.ReceivedDay))
+                    .Append(" confidence ").Append(WorldStateCanonicalWriter.IntValue(observation.ConfidencePermille))
+                    .Append(" precision ").Append(Value(observation.PrecisionIdentity)).Append('\n');
+                if (observation.RouteSegmentStableKey != null)
+                {
+                    output.Append("  SEGMENT ").Append(Value(observation.RouteSegmentStableKey))
+                        .Append(" boundary ").Append(Value(observation.BoundaryFirstHexId)).Append('|').Append(Value(observation.BoundarySecondHexId))
+                        .Append(" direction ").Append(Value(observation.FromHexId)).Append('>').Append(Value(observation.ToHexId))
+                        .Append(" option ").Append(WorldStateCanonicalWriter.EnumValue(observation.OptionKind.Value))
+                        .Append(':').Append(Value(observation.OptionConnectionId ?? observation.OptionCrossingId ?? observation.OptionRuleIdentity))
+                        .Append('@').Append(Value(observation.OptionRuleVersion)).Append('\n');
+                }
+            }
+        }
+
+        if (snapshot.Spatial.HasPersonRoutePlanState)
+        {
+            output.Append("\nPerson route-plan revision: ")
+                .Append(WorldStateCanonicalWriter.Int64Value(snapshot.Spatial.PersonRoutePlanRevision.Value))
+                .Append('\n');
+            foreach (WorldStatePersonRoutePlanSnapshot plan in snapshot.Spatial.PersonRoutePlans)
+            {
+                if (plan == null) continue;
+                output.Append("ROUTE PLAN ").Append(Value(plan.ActorPersonId))
+                    .Append(" revision ").Append(WorldStateCanonicalWriter.Int64Value(plan.PlanRevision))
+                    .Append(" status ").Append(WorldStateCanonicalWriter.EnumValue(plan.Status))
+                    .Append(" destination ").Append(Value(plan.DestinationHexId))
+                    .Append(" accepted ").Append(WorldStateCanonicalWriter.Int64Value(plan.AcceptedDay))
+                    .Append(" decision ").Append(Value(plan.DecisionIdentity))
+                    .Append(" candidate ").Append(Value(plan.CandidateSequenceKey))
+                    .Append(" policy ").Append(Value(plan.PolicyId)).Append('@').Append(Value(plan.PolicyVersion))
+                    .Append(" estimate ").Append(Value(plan.EstimateMetricId)).Append(' ')
+                    .Append(Value(plan.EstimateUnitIdentity)).Append(" basis ")
+                    .Append(Value(plan.KnowledgeBasisFingerprint)).Append('\n');
+                for (int index = 0; index < plan.Legs.Count; index++)
+                {
+                    WorldStatePersonRoutePlanLegSnapshot leg = plan.Legs[index];
+                    if (leg == null) continue;
+                    output.Append("  ROUTE LEG ").Append(WorldStateCanonicalWriter.IntValue(index))
+                        .Append(' ').Append(Value(leg.FromHexId)).Append('>').Append(Value(leg.ToHexId))
+                        .Append(" option ").Append(WorldStateCanonicalWriter.EnumValue(leg.OptionKind))
+                        .Append(':').Append(Value(leg.OptionConnectionId ?? leg.OptionCrossingId ?? leg.OptionRuleIdentity))
+                        .Append(" belief ").Append(WorldStateCanonicalWriter.EnumValue(leg.Belief))
+                        .Append(" stale ").Append(WorldStateCanonicalWriter.BoolValue(leg.IsBeliefStale))
+                        .Append(" observation ").Append(Value(leg.BeliefObservationIdentity)).Append('\n');
+                }
+            }
+        }
+
         if (snapshot.HasArmedForceState)
         {
             output.Append("\nArmed force revision: ")
