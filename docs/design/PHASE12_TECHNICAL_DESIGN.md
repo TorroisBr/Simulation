@@ -1,6 +1,6 @@
 # Phase 12 — Technical Design Proposal: Daily Continuation
 
-**Status:** Candidate technical design for proposed checkpoint `P12-A — UnityBootstrap Daily Continuation v1`, based on the bounded `UnityBootstrap-Daily-v1` profile. The profile covers the validated `TesteSimulacao.InitializeSimulation` bootstrap, exact compatible build/runtime and current-host numeric profile, and completed-day capture boundaries. This proposal is not an accepted checkpoint contract, implementation authorization, Phase State delivery, or proof that save/load exists. Independent review of this exact revision remains pending.
+**Status:** Candidate technical design for proposed checkpoint `P12-A — UnityBootstrap Daily Continuation v1`, based on the bounded `UnityBootstrap-Daily-v1` profile. The profile covers the SampleScene-selected `Simulation-GeneralTest.asset` through the validated `TesteSimulacao.InitializeSimulation` bootstrap, exact compatible build/runtime and current-host numeric profile, and completed-day capture boundaries. That asset enables the P9-B authored-geography profile, present on `codex/phase9/canonical` at `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf` and based on implementation tip `00395ef80cfa2364d34ed2170e0735d3a4b1513d`. P9-A-only configurations are incompatible with this profile and require separate profile identity/admission if retained. This proposal is not an accepted checkpoint contract, implementation authorization, Phase State delivery, or proof that save/load exists. Independent review of this exact revision remains pending.
 **Historical independent technical design review:** PASS at content commit
 `8577ba589a0f9b40738fcf8738eee9589563d7b8`. The later lifecycle seam must
 invalidate capture eligibility on every supported authoritative write path.
@@ -13,19 +13,27 @@ alignment records. That review predates later P9 manifest and current-base
 clarifications and does not review this exact revision. Current references for
 this refresh are P8 canonical State `470667d37863384edadb3d93ef64d8004aff46a3`,
 P9-A code promotion `43f08b3dfbf042380c2f8a8b037bbf3ebd309ccb` / closure
-State `96f2c1aaf742f313bbb9643e5f5b3d844c402c78`, P11 code promotion
+State `96f2c1aaf742f313bbb9643e5f5b3d844c402c78`, P9-B canonical integration
+`d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf` (implementation tip
+`00395ef80cfa2364d34ed2170e0735d3a4b1513d`), P11 code promotion
 `0cd4281804ecc6a2d110352d1a238959e93867f0` / closure State
 `308e24d0744112e8f2b741521b8b3e4acb51ebbf`, and architecture baseline
 `c285466c355103d3637ac165246591b72eb7bda0`. P8's `77f3e1a`→`470667d`
 advance is State-only. Both alignment records remain current.
+At canonical tip `d9a62d7`, `docs/PHASE9_STATE.md` still contains pre-promotion
+wording for P9-B. The state-only correction candidate is
+`codex/phase9/P9BPromotionRecord` at `282d22e`, pending independent review.
+This discrepancy is recorded for source-ledger synchronization; the P9-B code
+capability is present on the canonical branch tip and this stale State wording
+does not reinstate a P9-B dependency blocker for P12.
 
 ## 1. Contract and supported boundary
 
 For one normal single-player world created by the validated `TesteSimulacao.InitializeSimulation` path from a non-null `SimulationConfigData`, capture is permitted only after `SimulationRuntime.AdvanceDay` has returned successfully and all synchronous work for that daily advance is complete. On restore, the same compatible build/runtime, current-host numeric profile, effective configuration, calendar, official definitions/content, and built-in provider composition must produce the same future authoritative results when given the same subsequent inputs.
 
-This profile is named `UnityBootstrap-Daily-v1`. It covers bootstrap-composed Cities/markets/population aggregates, configured NPCs and their state, authored sites/routes, exploration/expedition/travel-party state and existing supported directives, initial Knowledge, and the official daily systems composed under the resolved effective configuration. It also captures any populated core authorities that belong to the supported `SimulationRuntime` composition, including Person/genealogy, political, force/conflict, and legacy spatial authorities. Empty stores are still represented by the profile's defined empty state. `PersonStore` and genealogy begin empty for configured NPCs; an `NpcRuntime` does not imply a `PersonId`.
+This profile is named `UnityBootstrap-Daily-v1`. It covers the SampleScene-selected `Simulation-GeneralTest.asset` and its bootstrap-composed Cities/markets/population aggregates, configured NPCs and their state, authored sites/routes, exploration/expedition/travel-party state and existing supported directives, initial Knowledge, and official daily systems composed under the resolved effective configuration. It also captures supported core authorities in the selected `SimulationRuntime` composition, including Person/genealogy, political, force/conflict, legacy spatial authorities, and the selected P9-B P8-A geography facts. The P9-B profile composes exactly one authored Hex, one Location anchored to that Hex, and one scale context before day one. `PersonStore` and genealogy begin empty for configured NPCs; an `NpcRuntime` does not imply a `PersonId`.
 
-The profile excludes arbitrary constructor-composed runtimes, injected providers, any populated P8-owned spatial/geography, passage, anchor, position, spatial Knowledge/route-plan, or P8-E travel authority, P9/P10 generated worlds, pending or mid-dispatch P11 actor-choice inputs, external WorldCommand service/queue composition, P19 modules/retrofit, P20 shared activities, `PlaceContentStore` and optional systems not composed by this bootstrap, and intraday save boundaries. It makes no P13 historical reconstruction/fork guarantee. No Sleep, Dreams, robbery/gang, ritual, War gameplay, or MegaEvento behavior is introduced by this design.
+The profile excludes arbitrary constructor-composed runtimes, injected providers, any P8-owned facts beyond the selected P8-A Hex/Location/scale set (including P8-B passage, P8-C City/Site anchors and Person positions, P8-D spatial Knowledge/route plans, and P8-E travel), P9/P10 generated worlds, pending or mid-dispatch P11 actor-choice inputs, external WorldCommand service/queue composition, P19 modules/retrofit, P20 shared activities, `PlaceContentStore` and optional systems not composed by this bootstrap, and intraday save boundaries. P9-A-only configs and legacy manifests are not admitted by this v1 profile. A separately versioned P9-A-only profile may retain an explicit admission check requiring authored geography disabled and the P9-A-only contract identity. This profile makes no P13 historical reconstruction/fork guarantee. No Sleep, Dreams, robbery/gang, ritual, War gameplay, or MegaEvento behavior is introduced by this design.
 
 The selected bootstrap does not compose an external WorldCommand service or
 queue; adding that composition or queued external commands is unsupported and
@@ -38,26 +46,32 @@ terminal and may be captured; `Pending` (including deferred choices) and
 profile cannot silently drop causal input state while claiming a complete
 continuation.
 
-P18, P19 and P20 are conditional extensions to the state inventory only if a future explicitly supported profile contains their temporal, module, or shared-activity state. The base daily profile has no blanket dependency on those phases. A date is not a future intraday ordering contract: adding intraday capture requires the relevant promoted P18 identity, exact logical-time, due-work and same-time ordering/hydration capabilities first. Adding extension-owned state requires the applicable P19 lifecycle/state compatibility contracts. Adding shared activities requires the relevant P20 participant and lifecycle contracts. These additions do not justify freezing this proposal's internal time field to a day-only scalar.
+P18, P19 and P20 are conditional extensions to the state inventory only if a future explicitly supported profile contains their temporal, module, or shared-activity state. The base daily profile has no blanket dependency on those phases. P18-A/B/C are promoted, but P18-D remains blocked and P18-A is not integrated into the legacy `SimulationRuntime.AdvanceDay` path. If a future profile composes P18, preserve boundary identity `(worldId, profileId, absoluteDay)`, work identity `(ownerId, workId, revision, occurrence)`, exact logical instant, causal wave and same-instant order, pending boundary/work, persisted occurrence/sequence, and owner idempotency/effect state; include P18-B activity lifecycle/revision/receipts and participant commitments/availability plus P18-C PersonId-keyed decision/attempt state when used by its consumer. A date is not an intraday ordering contract. Extension-owned state requires applicable P19 lifecycle/state compatibility contracts. P20 remains conditional: a profile that includes it must preserve stable activity identity separately from definition and one-or-more participants; the reviewed two-Person fixture does not define universal cardinality or role policy. These additions do not justify freezing this proposal's internal time field to a day-only scalar.
 
 The current profile excludes P9/P10 generated-world content and P20 activity
-instances. It does include the P9-A authored-genesis manifest identity for the
-selected `TesteSimulacao.InitializeSimulation` bootstrap: that path executes
-`SimulationGenesisPipeline.ExecuteStages` and publishes a
-`SimulationGenesisManifest` with the bootstrapped composition. The continuation
-envelope must preserve or validate the manifest's stable profile-contract
-identity and schema version, fingerprint, seed source/value, effective
-configuration/calendar, ordered stage identities, dependencies, authored
-definition identities, output-owner set, canonical provenance records, and
-first simulated boundary. Store this genesis-origin identity/provenance with
-the saved world's profile compatibility data and cover it together with the
-owner sections under the envelope integrity digest. On load, validate it
-against the compatible P9-A contract and the saved envelope's world/profile
-identity; the manifest describes genesis inputs and outputs, not the later
-evolved owner values at the save boundary. Hydration restores the captured
-owner state and retained manifest evidence; it never reruns genesis or executes
-the stage pipeline. This manifest identity/provenance is causal compatibility
-data, not a requirement to carry or regenerate P9/P10 generated-world content.
+instances. It includes the selected P9-B authored-geography profile identity for
+the `TesteSimulacao.InitializeSimulation` bootstrap, distinct from P9-A's
+historical `unity-authored-bootstrap/genesis-v1` identity. The promoted P9-B
+profile uses
+`unity-authored-bootstrap/authored-geography-v1` and stage
+`p9.genesis.authored-geography/v1`. Its manifest/fingerprint must be versioned
+separately so the additional P8 facts cannot be represented as P9-A-only output.
+The continuation envelope preserves the selected P9-B contract/schema identity
+and fingerprint, inherited P9-A stage identities plus P9-B stage/version/
+dependencies, seed source/value, effective configuration/calendar, selected
+authored definition IDs, output-owner set, canonical provenance and first
+simulated boundary. For the
+current selected asset, that provenance includes Hex `hex/sample-origin` at
+axial `(0,0)`, terrain `terrain/sample-plains` with revision
+`sample-world-v1`, Location `location/sample-origin` anchored to that Hex, and
+scale convention `world-scale/Simulation-GeneralTest/v1`, source
+`profile/Simulation-GeneralTest` version `1`, distance `1 km` per neighbor
+step. Cover the genesis evidence and owner sections together under the envelope
+integrity digest. On load, validate evidence against the selected P9-B contract,
+its inherited P9-A stage lineage, and saved world/profile identity; manifest evidence describes genesis
+inputs/outputs, not evolved owner values. Hydration restores captured owner
+state and retained manifest evidence, never reruns genesis. This does not bring
+P9/P10 generated-world content into scope.
 
 If a later supported profile includes generated worlds, its causal inventory
 must additionally retain stable generation stage/contributor identities,
@@ -75,20 +89,23 @@ Do not infer a one-Activity to one-actor relationship or duplicate one shared
 instance into actor-owned copies. These are conditional inventory/revalidation
 gates, not dependencies of `UnityBootstrap-Daily-v1`; relevant P9/P10/P20
 capabilities are required only when their state enters a supported profile.
-The manifest is part of this profile because the selected bootstrap already
-publishes it. This refresh inventories the promoted P9-A manifest as a required
-compatibility input. Independent review of the current integrated docs package
-must verify that mapping; implementation must validate retained manifest
-evidence without rerunning genesis or replacing evolved owner state.
+The selected bootstrap publishes the P9-B profile manifest through the existing
+P9 genesis handoff. Independent review of the current integrated docs package
+must verify the P9-A stage lineage/P9-B profile mapping; implementation must
+validate retained profile-manifest evidence without rerunning genesis or
+replacing evolved owner state.
 
 The alignment records also apply as constraints while their capabilities remain
 out of profile: keep domain/application logic independent of Unity presentation
 where practical and compose independent semantic contributions deterministically;
 do not introduce speculative extension infrastructure. P19's public API,
 module loader and module-owned durable state remain deferred. A future
-multi-participant profile must preserve stable activity and participant identity,
-roles/agreements/reservations and lifecycle independently of a single actor; the
-current individual route-plan inventory does not impose such a cardinality rule.
+multi-participant profile must preserve stable `ActivityInstanceId` independently
+of activity definition, PersonId/NpcRuntimeId and participant identity, plus
+formation/decision state, roles where applicable, agreements/reservations,
+lifecycle/context, effects and pending causal work. The architecture's one-or-more
+participant cardinality applies; P20's exactly-two fixture is not a global rule.
+The current individual route-plan inventory imposes no activity cardinality rule.
 
 ## 2. Continuation envelope
 
@@ -131,11 +148,11 @@ The serialized records are value data, but each authoritative fact is emitted an
 | Cities and economy | `CityRuntime`, `MarketRuntime`, `MarketItemRuntime`, population economy, inventories/accounts and current authoritative balances/stock; preserve any mutable price or commitment consumed later unless proven derived under the exact profile. | Resolve `ItemDefinitionId`, city IDs and account/custodian references against the exact official manifest. Rebuild price/query caches only when owner contracts define them as projections. |
 | NPCs and daily condition | Each `NpcRuntime` stable runtime ID and mutable condition, status/life, current/destination location/city, action/behavior state, hidden-day counters, inventory and money account, and action definition identity. Preserve configured roster membership/order only where it is an explicit semantic tie-break; never use it as an identity substitute. | Resolve definitions and cross-links by stable IDs; recreate transient service references. Person existence is independent. Do not infer `PersonId` from an NPC or roster index. |
 | Persons, population and genealogy | `PersonStore`, `GenealogyStore`, settlement population/lifecycle/residence owners, if populated through supported core authorities: `PersonId`, birth/death day, parentage, residence, aggregates, and exact materialization relationship. | Age/maturity are derived from birth date plus calendar/configuration. Preserve Person-backed versus NPC-only representation distinction; materialization must not alter aggregate population. |
-| P8-owned geography and spatial authorities | All P8-A `SpatialAuthorityStore` geography (Hexes, Locations, scale and registration), P8-B passage/route facts, P8-C City/Site anchors and `PersonSpatialPositionStore`, P8-D `SpatialRouteKnowledgeStore` and `PersonRoutePlanStore`, and P8-E travel state are explicitly empty in `UnityBootstrap-Daily-v1`. | The authored P9-A bootstrap creates no P8-owned spatial facts. Preserve explicit empty owner sections and reject any populated P8 authority; do not infer or migrate P8 identity from legacy `SpatialNetworkRuntime`. Reconsider inclusion only when a selected bootstrap/profile supplies and supports those facts. P8-E is not a blanket dependency. |
+| P8-owned geography and spatial authorities | The selected P9-B profile has exactly one populated P8-A Hex, one P8-A Location anchored to that Hex, and one `SpatialWorldScaleContext`: `hex/sample-origin`, coordinate `(0,0)` under `axial-hex-v1`, terrain `terrain/sample-plains`/`sample-world-v1`, `location/sample-origin` with its `AnchorHexId`, and the authored scale convention/source/version/distance/unit recorded in the manifest. | Export and hydrate complete `SpatialAuthorityStore` facts through P8-A ownership, including stable IDs, terrain reference and revision, anchor relation, coordinate convention, scale context and owner invariants. Preserve exact one-Hex/one-Location cardinality for this selected profile; reject missing/duplicate/malformed/extra facts. P8-B passage/route, P8-C City/Site anchors and `PersonSpatialPositionStore`, P8-D `SpatialRouteKnowledgeStore` and `PersonRoutePlanStore`, and P8-E travel remain explicitly empty and reject populated state. Never infer P8 identity from legacy `SpatialNetworkRuntime`. P8-A is included; P8-E is not a blanket dependency. |
 | Travel and expedition commitments | `TravelSystem` owner facts for each traveling NPC/plan, current progress and destination/route; `TravelPartyStore` instances with `TravelPartyId`, member RuntimeIds, order, costs and lifecycle; `ExpeditionStore` instance/objective/progress, site and party bindings; merchant plan state when enabled. | Validate reciprocal references and active membership using current domain rules; do not recompute an active commitment from current decisions. Legacy `TravelPartyId` is a bounded current domain identity. It is not a P20 ActivityId and does not establish one-Activity/one-Actor cardinality for future activity types. |
 | Directives, daily action, and actor-choice ingress | `ScheduledDirectiveStore`: stable directive ID, day, mode, operation, actor RuntimeId, selected action definition, state and processed/disposition day. Current NPC action and other future-affecting plan state. Where composed, full P11 `ActorChoiceStore` inputs/dispositions, next sequence, and duplicate WorldCommand-ID history. | Rebuild actor lookup map. Do not reapply processed directives. Preserve terminal actor-choice records (`Rejected`, `AttemptReturned`, `AttemptThrew`) for idempotency; reject `Pending` or `ConsumedAwaitingTerminalAttempt` at capture/load. The bootstrap does not compose an external WorldCommand service/queue; reject a profile that adds one. |
 | Knowledge | NPC commercial/spatial/exploration Knowledge and other Knowledge actually composed/populated by the supported bootstrap; holder identity, observed facts, provenance/source, freshness/observed/received day and stale-check revisions. | Knowledge is not regenerated from current truth. Rebuild indexes, not observations. Excluded extension/module Knowledge remains unsupported until an extension profile exists. |
-| Optional official daily domains | Economy/demography/mortality, merchant trade/sharing, crime/justice/social appraisal and guard/crime state when selected by effective configuration and actually composed. Preserve the owner stores' truth, current commitments, revisions, and any provider-derived causal facts. | Resolve the exact selected built-in providers/policies from compatibility manifest. Unsupported injected/custom providers cause profile rejection. Empty/uncomposed optional services are represented by profile composition, not fabricated stores. |
+| Optional official daily domains | Economy/demography/mortality, merchant trade/sharing, crime/justice/social appraisal and guard/crime state when selected by effective configuration and actually composed. Preserve the owner stores' truth, current commitments, revisions, and any provider-derived causal facts. P14-A material flow is included only if its authored settlement/source is selected and composed; the selected `Simulation-GeneralTest.asset` and its referenced City assets currently contain no P14-A source configuration. | Resolve exact selected built-in providers/policies from compatibility manifest. Unsupported injected/custom providers cause profile rejection. Empty/uncomposed optional services are represented by profile composition, not fabricated stores. If a later admitted config activates P14-A, revise the profile to include its settlement/source/store/item identities, effective policy/config/calendar, daily source application and consumption state/order, stock/revisions and reconstruction facts; otherwise reject it under this profile. |
 | Core political and military authorities | Persist any populated core authorities included by `SimulationRuntime`: institutions/offices/tenures, property/estate, claims/recognition/factions/support/Knowledge/decisions, armed forces/manpower/positions, persistent Conflict/War/Battle and accepted state/outcome. Preserve each store's owner and revision/fingerprint when future validation reads it. | Empty state is valid where the bootstrap creates an empty authority. No gameplay loop or unsupported provider is inferred. Restore relations only after their referenced owners exist. |
 | Mutation health and revisions | Per-domain revisions, stale-plan inputs and causally read sequence values; mutation guard must be healthy at capture. | Recompute derived fingerprints after validation. A captured faulted guard is rejected; restore starts with a fresh guard bound only after staged validation. Do not reset a faulted runtime to healthy. |
 | Events, history and diagnostics | Not part of the minimum causal envelope unless an owner fact is independently required above. The profile does not promise event/history/log retention as continuation state. | `WorldStateSnapshot`, canonical writer/digest, log text, Chronicle, decision and event records are not save DTOs or replay logs. Retain them only under separate owner/retention requirements; never use them as primary truth. |
@@ -146,7 +163,7 @@ Every stored reference is a typed stable identity and is checked for uniqueness,
 
 ### Capture
 
-1. The bootstrap issues a capture eligibility token only after `AdvanceDay` returns normally. It is bound to the runtime instance and the completed absolute-day/boundary sequence.
+1. The bootstrap issues a capture eligibility token only after `AdvanceDay` returns normally. It is bound to the runtime instance and the completed absolute-day/boundary sequence. Admission verifies the selected `Simulation-GeneralTest.asset`, `useAuthoredGeographyProfile`, and P9-B contract identity/schema; a P9-A-only manifest or a different geography inventory is rejected for this profile.
 2. Any supported authoritative mutation that completes after that `AdvanceDay` return—including a domain/UI command or bootstrap mutation—invalidates the token. The v1 boundary capture therefore occurs before later supported state changes; eligibility is reissued only after a subsequent successful `AdvanceDay`. Diagnostics-only reads do not invalidate it.
 3. Capture is single-threaded on the simulation owner thread, between calls, with no daily system, domain transaction, command handler, or bootstrap mutation in progress. Re-entrant advance/capture and concurrent mutation are rejected. The current API does not expose a global transaction, so the implementation must add this lifecycle seam rather than assume snapshot atomicity.
 4. A thrown/failed advance, a runtime faulted by the mutation guard, a stale or invalidated token, or an active operation cannot be captured. Do not attempt rollback or infer a successful boundary from the incremented day alone.
@@ -158,7 +175,7 @@ Every stored reference is a typed stable identity and is checked for uniqueness,
 1. Parse into inert envelope values. Validate envelope schema, required sections, digest, profile ID, build/runtime/numeric identity, official content manifest, exact effective configuration, calendar, and built-in provider set before allocating live domain objects.
 2. Resolve immutable definitions and providers from the compatible official catalog. Build a fresh, private staging composition; never hydrate into or clear/mutate the live runtime.
 3. Stage logical time/calendar and all semantic identities/ID high-water marks without allocating persisted entity IDs. Validate global uniqueness and allocator monotonicity.
-4. Restore factual roots first: cities/markets/accounts, population aggregates, Persons and NPCs; then content/site/spatial legacy facts. Instantiate owner state through explicit domain hydration factories or owner-approved constructors. No general reflection serializer and no bypass of semantic/domain validation.
+4. Restore factual roots first: cities/markets/accounts, population aggregates, Persons and NPCs; then the complete P8-A geography authority, content/site/spatial legacy facts. Validate the selected Hex, terrain/revision provenance, anchored Location and scale through the P8 owner before restoring any dependent spatial relation. Instantiate owner state through explicit domain hydration factories or owner-approved constructors. No general reflection serializer and no bypass of semantic/domain validation.
 5. Restore relations and Knowledge by stable references: residence/genealogy; political/institutional relations; optional official domains; then force/conflict relations in their actual constructor dependency order. Restore per-owner revisions/stale inputs required by domain checks.
 6. Restore active commitments and pending official work: directives, travel plans/parties, expeditions and merchant plans. Validate reciprocal member/actor/party/site references, progress/cost consistency and disposition state. Do not start, cancel, replay or replan work during hydration.
 7. Recreate the built-in deterministic random source and supported causal state; compose the exact official system/provider set; rebuild runtime registries, indexes, caches and read-only projections from authoritative owner values. Bind one new `AuthoritativeMutationGuard` to the fully staged object graph only after all stores report bind compatibility.
@@ -194,54 +211,77 @@ The technical choices above resolve the bounded design questions using reviewed 
 - `P12-A` is a proposed stable identifier for the bounded daily continuation checkpoint, not an accepted or schedulable checkpoint. The Phase Brief and checkpoint contract must record acceptance and dependencies before implementation readiness can be derived. No implementation authorization exists.
 - Complete implementation remains capability-gated by owner-export/hydration support for every domain included in `UnityBootstrap-Daily-v1`; each owner must be inventoried against the refreshed canonical composition at implementation time.
 - P18/P19/P20 support remains conditional as specified in §1; P9/P10 generated state and external command/P11 input queues remain excluded from this initial profile.
-- P8 dependencies are state-specific, not a blanket A–E execution edge. Every P8-owned spatial/geography, passage, anchor, position, route Knowledge/plan, and travel store is explicitly empty in this authored bootstrap profile; reject populated state instead of using legacy locations or partially exporting P8 identity. P8-E is not required merely for daily continuation.
-- P9-A's promoted authored-genesis manifest is required compatibility evidence for this bootstrap, while generated P9/P10 worlds are excluded. The bootstrap has no external WorldCommand service/queue composition. Where P11 ActorChoiceStore is composed, preserve complete terminal history/idempotency state and reject `Pending`/`ConsumedAwaitingTerminalAttempt` inputs.
+- P8 dependencies are state-specific, not a blanket A–E execution edge. The selected profile requires complete P8-A export/hydration for its one authored Hex, anchored Location and scale. P8-B/C/D/E sections remain explicitly empty and populated state rejects; legacy routes do not substitute for P8 identity. P8-E is not required merely for daily continuation.
+- P9-A's historical authored-genesis contract and the selected P9-B geography profile contract are distinct required compatibility evidence. The P9-B implementation at `00395ef80cfa2364d34ed2170e0735d3a4b1513d` is included on current `codex/phase9/canonical` at `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf`. P12 implementation remains blocked on included-owner export/hydration coverage and P12's independent review, formal checkpoint acceptance and implementation authorization. The bootstrap has no external WorldCommand service/queue composition. Where P11 ActorChoiceStore is composed, preserve complete terminal history/idempotency state and reject `Pending`/`ConsumedAwaitingTerminalAttempt` inputs.
 
 No genuinely unresolved product or canonical semantic decision is identified within the reviewed profile. Any request to expand compatibility guarantees or include an excluded state source requires a new scoped decision/design rather than an implicit change to this proposal.
 
 ## 8. Sources rechecked
 
-### Promotion impact revalidation — 2026-09-26
+### Promotion impact revalidation — 2026-09-27
 
 This design remains limited to `UnityBootstrap-Daily-v1`. `P12-A` is a
 proposed identifier only; this refresh grants no implementation authorization
 and records no review verdict. The current-base dependency check uses P8
 canonical State `470667d`, P9-A code promotion `43f08b3` and Phase 9 closure
-State `96f2c1a`, P11 code promotion `0cd4281` and closure State `308e24d`,
-P10 Technical Design branch tip `fbd7fdc` (P10 remains `WAIT_DEPENDENCY`, with
-no P10 State or approved checkpoint), and architecture baseline `c285466`,
-including both current alignment records.
+State `96f2c1a`, P9-B canonical integration `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf`
+(implementation tip `00395ef80cfa2364d34ed2170e0735d3a4b1513d`), P11 code promotion `0cd4281` and
+closure State `308e24d`, current P18 State `311baa9` (P18-A/B/C promoted;
+P18-D implementation blocked), P14 State `f8a61fe` (P14-A daily and promoted),
+P20 Entry Architecture `2f9c93b` and Technical Design `6a0d164` (reviewed designs,
+no implementation authorization), P10 Technical Design branch tip `fbd7fdc`
+(P10 remains `WAIT_DEPENDENCY`, with no P10 State or approved checkpoint), and
+architecture baseline `c285466`, including both current alignment records.
 
-- **P9-A manifest/version:** the selected bootstrap executes P9-A and publishes
-  a `SimulationGenesisManifest`. Preserve or validate its stable profile/schema/
-  contract identity, ordered stage identities/versions/dependencies, fingerprint,
-  selected-input and output provenance, configuration/calendar, and seed source/
-  value against the saved world. Hydration restores saved owner state and never
-  reruns genesis. This compatibility evidence does not bring generated P9/P10
-  content into the daily profile.
+- **P9-A/P9-B manifest and version:** the selected bootstrap executes P9-A and
+  the P9-B authored-geography stage/profile. Preserve the historical P9-A
+  `unity-authored-bootstrap/genesis-v1` identity separately from P9-B's
+  `unity-authored-bootstrap/authored-geography-v1` contract/schema and
+  `p9.genesis.authored-geography/v1` stage identity. Validate ordered stage
+  identities/versions/dependencies, fingerprint, seed source/value, selected
+  authored inputs/outputs, P8-A output facts, configuration/calendar and
+  provenance against the saved world. Hydration restores saved owner state and
+  never reruns genesis. Generated P9/P10 content remains excluded. The P9-B
+  implementation is present on current P9 canonical at `d9a62d7`; this P12
+  record does not certify P12 export/hydration or checkpoint gates.
 - **P11 Actor Choice ingress:** the selected bootstrap has no external
   WorldCommand service/queue composition. When `ActorChoiceStore` is composed,
   preserve its full terminal history and idempotency sequence; reject pending
   (including deferred) or `ConsumedAwaitingTerminalAttempt` records. P11 is not
   a gameplay dependency; its current authority is queried for this boundary.
-- **P8 spatial capability:** represent every P8-owned spatial/geography,
-  passage, anchor, position, route Knowledge/plan, and travel authority as
-  explicitly empty for this bootstrap profile. Detect and reject populated P8
-  state; do not infer stable Location identity or anchors from legacy routes.
-  No P8-E blanket dependency exists.
-- **P18-A:** upstream-irrelevant to this daily-only profile. No intraday time,
-  activity or due-work state is claimed. Any intraday profile requires the
-  relevant promoted P18 state, ordering and hydration capabilities first.
-- **P20:** conditional only if a future supported profile includes shared
-  activities; no blanket dependency is introduced.
+- **P8 spatial capability:** require exactly the selected P9-B P8-A geography
+  authority (one Hex, one anchored Location, one world-scale context) and export/
+  hydrate every authored fact and provenance field. Preserve P8-B passage, P8-C
+  City/Site anchor and Person-position, P8-D route Knowledge/plan and P8-E travel
+  as empty sections; reject populated state. Do not infer stable Location
+  identity or anchors from legacy routes. P8-E is not a blanket dependency.
+- **P18:** the selected daily profile does not compose P18 temporal state and
+  does not claim intraday continuation. If a future supported profile composes
+  P18, inventory `(worldId, profileId, absoluteDay)` boundary identity,
+  `(ownerId, workId, revision, occurrence)` work identity, exact logical time,
+  same-instant causal order, pending boundary/work, occurrence/sequence and
+  owner idempotency/effect state. Preserve ActivityInstanceId separately from
+  PersonId/NpcRuntimeId and participant identity, plus P18-B lifecycle/revision/
+  receipts, commitments/availability and P18-C PersonId-keyed decision/attempt
+  state when the consumer composes them. P18-A/B/C are promoted; P18-D is not
+  implemented and the daily runtime has not migrated to that timeline.
+- **P20:** shared activities remain outside this profile. If later included,
+  preserve stable ActivityInstanceId separately from definition and participant
+  identities, one-or-more participant cardinality, partial formation/decisions,
+  roles where applicable, agreements, reservation intent and committed
+  intervals, scheduled start, lifecycle/context, participant effects and pending
+  causal work/order/idempotency. P20's reviewed exactly-two fixture does not
+  establish universal cardinality; its reviewed design is not implementation
+  authorization or a blanket dependency.
 
 The refreshed alignment records preserve explicit temporal and participant
 identity boundaries. The P8 `77f3e1a`→`470667d` advance changes only Phase 8
 State wording; P9 and P11 closure updates likewise do not change the promoted
-runtime APIs. This planning refresh changes no supported scope, serialization
-choice, or compatibility promise. Independent review of the current integrated
-package on `codex/phase12/ContinuationDesignIntegration` must confirm these
-current-base mappings.
+runtime APIs. This refresh narrows the profile admission to the selected
+geography-enabled asset, records P9-B's current canonical integration and
+required P8-A state, and leaves P20 conditional. Independent review of the
+current integrated package must confirm these current-base mappings and the
+remaining capability/acceptance gates.
 
 - `docs/SIMULATION_ARCHITECTURE.md` §§8, 11–13, 91–93.
 - `docs/ROADMAP.md`, `docs/EXECUTION_MODEL.md`, `docs/phases/PHASE12_BRIEF.md`, and `docs/phases/PHASE13_BRIEF.md`.
