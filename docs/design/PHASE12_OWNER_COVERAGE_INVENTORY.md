@@ -59,11 +59,11 @@ P18-A/B/C are promoted on their canonical branch, but the selected bootstrap
 does not compose that separate temporal implementation; no P18 state is claimed.
 
 This inventory records implementation evidence and gaps only. It is not P12-A
-checkpoint acceptance, implementation authorization, proof of save/load, or a
-claim of profile closure. Keep P12-A at `WAIT_DEPENDENCY` until every included
-owner has exact immutable export and staged hydration coverage, and the live
-canonical composition/profile inventory is demonstrated. Formal checkpoint
-acceptance and separate implementation authorization remain independent gates.
+scope acceptance (recorded separately), implementation authorization, proof of
+save/load, or a claim of profile closure. Keep P12-A at `WAIT_DEPENDENCY` until
+every included owner has exact immutable export and staged hydration coverage,
+and the live canonical composition/profile inventory is demonstrated. Separate
+implementation authorization remains an independent gate.
 
 **Source basis:** `SimulationRuntime.cs`, `SimulationModuleSet.cs`,
 `TesteSimulacao.cs`, `RuntimeIdentity.cs`, owner/store implementations under

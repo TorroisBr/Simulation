@@ -1,13 +1,16 @@
-# Phase 12 `UnityBootstrap-Daily-v1` Checkpoint Contract Proposal — UNAPPROVED
+# Phase 12 `UnityBootstrap-Daily-v1` Checkpoint Contract — ACCEPTED SCOPE
 
-**Status:** proposed checkpoint contract for planning identifier `P12-A`; it
-is not accepted or authorized for implementation. The earlier independent
+**Status:** `P12-A` scope accepted by the user after independent review of
+candidate `5264f0c2c143326c2042a8ca29e632fc02d50a87`; implementation is not
+authorized. The earlier independent
 review at `a9699e4` and targeted review against P8 `77f3e1a` predate the current
 P9 manifest mapping. The full design/current-base review passed at candidate
 `9fde12a`. The scoped current-base refresh review passed at `d1a8414`, covering
 the refreshed P9/P10/P20/alignment references and confirming consistency with
-the bounded profile; it did not repeat a full-design review. Formal P12-A
-checkpoint acceptance and implementation authorization remain pending.
+the bounded profile; it did not repeat a full-design review. The scoped P18/P11
+refresh passed at `5264f0c`; separate implementation authorization remains
+pending. Scope acceptance does not clear owner-export/hydration or live-profile
+inventory dependencies.
 This proposal changes no canonical capability and makes no claim that capture,
 hydration, or save/load parity currently exists.
 
@@ -344,15 +347,14 @@ omits causal fields.
 
 ## 7. Proposal boundary and review gates
 
-This document is the bounded P12-A contract proposal and its planning
-identifier record. It does not amend `SIMULATION_ARCHITECTURE.md`, establish
-an accepted checkpoint, or authorize implementation.
+This document is the bounded P12-A contract and accepted scope record. It does
+not amend `SIMULATION_ARCHITECTURE.md` or authorize implementation.
 
 The full design/current-base review passed at `9fde12a`; the scoped current-base
 refresh review passed at `d1a8414` and did not repeat the full-design review.
-Remaining gates are formal acceptance of the checkpoint contract and
-scope/status through the repository workflow, separate implementation
-authorization, and demonstrated complete staged owner export/hydration plus
+The user accepted the bounded P12-A scope after refreshed exact-tip review at
+`5264f0c`. Remaining implementation gates are separate implementation
+authorization and demonstrated complete staged owner export/hydration plus
 the live profile inventory. The read-only gap ledger at
 `PHASE12_OWNER_COVERAGE_INVENTORY.md` records the current per-owner evidence;
 it does not satisfy those capability gates or authorize implementation.
