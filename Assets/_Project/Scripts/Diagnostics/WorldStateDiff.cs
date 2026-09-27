@@ -153,6 +153,38 @@ public sealed class WorldStateDiff
                 ? WorldStateCanonicalWriter.Int64Value(after.Spatial.PersonSpatialPositionRevision.Value)
                 : null,
             differences);
+        CompareValue("SpatialRouteKnowledgeStore", "world", "StatePresent",
+            WorldStateCanonicalWriter.BoolValue(before.Spatial.SpatialRouteKnowledgeRevision.HasValue),
+            WorldStateCanonicalWriter.BoolValue(after.Spatial.SpatialRouteKnowledgeRevision.HasValue),
+            differences);
+        CompareValue("SpatialRouteKnowledgeStore", "world", "Revision",
+            before.Spatial.SpatialRouteKnowledgeRevision.HasValue
+                ? WorldStateCanonicalWriter.Int64Value(before.Spatial.SpatialRouteKnowledgeRevision.Value)
+                : null,
+            after.Spatial.SpatialRouteKnowledgeRevision.HasValue
+                ? WorldStateCanonicalWriter.Int64Value(after.Spatial.SpatialRouteKnowledgeRevision.Value)
+                : null,
+            differences);
+        CompareValue("SpatialRouteKnowledgeStore", "world", "ObservationCount",
+            WorldStateCanonicalWriter.IntValue(before.Spatial.SpatialRouteObservations.Count),
+            WorldStateCanonicalWriter.IntValue(after.Spatial.SpatialRouteObservations.Count),
+            differences);
+        CompareValue("PersonRoutePlanStore", "world", "StatePresent",
+            WorldStateCanonicalWriter.BoolValue(before.Spatial.PersonRoutePlanRevision.HasValue),
+            WorldStateCanonicalWriter.BoolValue(after.Spatial.PersonRoutePlanRevision.HasValue),
+            differences);
+        CompareValue("PersonRoutePlanStore", "world", "Revision",
+            before.Spatial.PersonRoutePlanRevision.HasValue
+                ? WorldStateCanonicalWriter.Int64Value(before.Spatial.PersonRoutePlanRevision.Value)
+                : null,
+            after.Spatial.PersonRoutePlanRevision.HasValue
+                ? WorldStateCanonicalWriter.Int64Value(after.Spatial.PersonRoutePlanRevision.Value)
+                : null,
+            differences);
+        CompareValue("PersonRoutePlanStore", "world", "PlanHistoryCount",
+            WorldStateCanonicalWriter.IntValue(before.Spatial.PersonRoutePlans.Count),
+            WorldStateCanonicalWriter.IntValue(after.Spatial.PersonRoutePlans.Count),
+            differences);
         CompareValue("LegacySpatialAnchorBindingStore", "world", "StatePresent",
             WorldStateCanonicalWriter.BoolValue(before.Spatial.LegacySpatialAnchorBindingRevision.HasValue),
             WorldStateCanonicalWriter.BoolValue(after.Spatial.LegacySpatialAnchorBindingRevision.HasValue),
@@ -305,6 +337,26 @@ public sealed class WorldStateDiff
                 CompareValue("LegacySpatialAnchorBinding", identity, "OwnerId", WorldStateCanonicalWriter.StringValue(left.OwnerId), WorldStateCanonicalWriter.StringValue(right.OwnerId), differences);
                 CompareValue("LegacySpatialAnchorBinding", identity, "LocationId", WorldStateCanonicalWriter.StringValue(left.LocationId), WorldStateCanonicalWriter.StringValue(right.LocationId), differences);
             },
+            differences);
+        CompareEntities("SpatialRouteObservation", before.Spatial.SpatialRouteObservations, after.Spatial.SpatialRouteObservations,
+            observation => observation.StableKey,
+            (identity, left, right) => CompareValue(
+                "SpatialRouteObservation",
+                identity,
+                "Projection",
+                WorldStateCanonicalWriter.StringValue(WorldStateCanonicalWriter.SpatialRouteObservationProjection(left)),
+                WorldStateCanonicalWriter.StringValue(WorldStateCanonicalWriter.SpatialRouteObservationProjection(right)),
+                differences),
+            differences);
+        CompareEntities("PersonRoutePlan", before.Spatial.PersonRoutePlans, after.Spatial.PersonRoutePlans,
+            plan => plan.StableKey,
+            (identity, left, right) => CompareValue(
+                "PersonRoutePlan",
+                identity,
+                "Projection",
+                WorldStateCanonicalWriter.StringValue(WorldStateCanonicalWriter.PersonRoutePlanProjection(left)),
+                WorldStateCanonicalWriter.StringValue(WorldStateCanonicalWriter.PersonRoutePlanProjection(right)),
+                differences),
             differences);
 
         CompareEntities("NPC", before.Npcs, after.Npcs, npc => npc.RuntimeId,

@@ -2,7 +2,7 @@
 
 `SIMULATION_ARCHITECTURE.md` remains the semantic authority. This roadmap names intended phase scopes and likely dependency directions; it neither reports delivered behavior nor authorizes implementation or canonical promotion. The owning `PHASE*_STATE.md` and current canonical code establish delivery. Phase numbers primarily organize planning and closure, not a requirement to execute whole phases serially.
 
-Phases 5–7 are closed within their documented scopes. P8-A/B/C are canonical; `PHASE8_STATE.md` records subsequent candidates and readiness. Phases 9–17 retain their IDs and scopes. Phases 18–20 introduce intraday execution, the later code-mod platform and multi-participant activities; their numbers do not put them after strategic War in execution order. See the Phase Briefs and `EXECUTION_MODEL.md` for readiness and scheduling.
+Phases 5–7 are closed within their documented scopes. P8-A/B/C/D/E are canonical; `PHASE8_STATE.md` records Phase 8 delivery and remaining readiness. Phases 9–17 retain their IDs and scopes. Phases 18–20 introduce intraday execution, the later code-mod platform and multi-participant activities; their numbers do not put them after strategic War in execution order. See the Phase Briefs and `EXECUTION_MODEL.md` for readiness and scheduling.
 
 | Phase | Planning objective |
 |---|---|
@@ -33,8 +33,8 @@ begin now; implementation is not authorized by this roadmap.
 
 Prioritize P18 foundations before consumers promise work shifts, arbitrary
 activity duration, intraday opportunities or complete intraday saves. P8-E's
-explicit-operation travel proof and the P11 daily SellGoods slice can proceed
-as bounded transitional capabilities after impact review; neither proves P18.
+explicit-operation travel capability and the P11 daily SellGoods slice are
+bounded transitional capabilities after impact review; neither proves P18.
 P18-D waits only for the consumers selected for its reviewed integration scope,
 not for whole unrelated phases. There is no P18 dependency on worldgen or War.
 
@@ -115,7 +115,7 @@ is added. Technical representation and exact role APIs remain design work.
 ## Dependency directions, not blanket phase locks
 
 - P8-A establishes factual geography. P8-B (passages) and P8-C (anchors/civil presence) may proceed with isolation after their shared identity/segment contract is stable. P8-D (Knowledge/route) consumes the needed passage and position contracts; P8-E integrates the travel slice. Each implementation dependency must distinguish accepted contract from promoted capability.
-- Phase 9 may design against stable Phase 8 spatial contracts before P8-E closes; code that needs working spatial authority waits for the relevant promoted capability. Phase 10 consumes the relevant Phase 9 genesis and P8-C local/anchor contracts.
+- Phase 9 design may use stable Phase 8 spatial contracts; code that needs working spatial authority waits for the relevant promoted capability. Phase 10 consumes the relevant Phase 9 genesis and P8-C local/anchor contracts.
 - P9/P10 generation is an ordered pipeline with explicit stage dependencies and deterministic contributions. New-world participation and existing-world retrofit are separate contracts; later installation never implicitly reruns historical stages. Runtime World Expansion must also obey these distinctions.
 - Phase 11 entry architecture and Phase 12 causal-state inventory can progress independently of Phase 8 worldgen. Their code integrations must still wait for whichever concrete command, state, or domain capability they actually consume.
 - Phase 13's product guarantee needs Phase 12 continuation plus recoverable causal inputs and initial-world/mutation semantics. Save continuation alone does not fulfill historical forkability.
@@ -152,11 +152,12 @@ These are planning edges, not fabricated checkpoint IDs for Phases 9–17. Hard 
   history; no missing causality may be reconstructed retroactively.
 
 The dated impact record is `architecture/INTRADAY_EXTENSIBILITY_ALIGNMENT.md`.
-Promoted P8-A/B/C and closed Phases 5–7 remain valid in their delivered scopes.
-P8-D/E and P11 candidates require targeted revalidation of temporal adapters,
-not wholesale redesign. P9 and P12 entry proposals need their new pipeline and
-temporal/extension inventories incorporated before further approval. No existing
-phase is automatically implementation-ready, cancelled, or retroactively rewritten.
+Promoted P8-A/B/C/D/E and closed Phases 5–7 remain valid in their delivered
+scopes. P8-E passed targeted temporal-impact revalidation and was promoted at
+`d95b60d`; P11 and P18-A candidates were refreshed against that base. P9 and
+P12 entry proposals need their new pipeline and temporal/extension inventories
+incorporated before further approval. No existing phase is automatically
+implementation-ready, cancelled, or retroactively rewritten.
 
 The additional impact record is `architecture/MULTIPARTICIPANT_ACTIVITY_ALIGNMENT.md`
 (base `4b6dd1d`). P18-B/C technical work requires a targeted cardinality/identity

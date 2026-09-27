@@ -28,6 +28,18 @@ public static class WorldStateCanonicalWriter
         AppendLine(output, "METADATA", "TheftOutcomeCount", IntValue(snapshot.TheftOutcomeCount));
         AppendLine(output, "METADATA", "CrimeKnowledgeCount", IntValue(snapshot.CrimeKnowledgeCount));
         AppendLine(output, "METADATA", "SocialReactionCount", IntValue(snapshot.SocialReactionCount));
+        AppendLine(output, "METADATA", "SpatialRouteKnowledgeStatePresent", BoolValue(snapshot.Spatial.HasSpatialRouteKnowledgeState));
+        if (snapshot.Spatial.SpatialRouteKnowledgeRevision.HasValue)
+        {
+            AppendLine(output, "METADATA", "SpatialRouteKnowledgeRevision", Int64Value(snapshot.Spatial.SpatialRouteKnowledgeRevision.Value));
+            AppendLine(output, "METADATA", "SpatialRouteObservationCount", IntValue(snapshot.Spatial.SpatialRouteObservations.Count));
+        }
+        AppendLine(output, "METADATA", "PersonRoutePlanStatePresent", BoolValue(snapshot.Spatial.HasPersonRoutePlanState));
+        if (snapshot.Spatial.PersonRoutePlanRevision.HasValue)
+        {
+            AppendLine(output, "METADATA", "PersonRoutePlanRevision", Int64Value(snapshot.Spatial.PersonRoutePlanRevision.Value));
+            AppendLine(output, "METADATA", "PersonRoutePlanHistoryCount", IntValue(snapshot.Spatial.PersonRoutePlans.Count));
+        }
         if (snapshot.Spatial.AuthorityRevision.HasValue)
         {
             AppendLine(output, "METADATA", "SpatialAuthorityStatePresent", BoolValue(true));
@@ -192,6 +204,11 @@ public static class WorldStateCanonicalWriter
                     scale.Unit);
             }
         }
+
+        foreach (WorldStateSpatialRouteObservationSnapshot observation in snapshot.Spatial.SpatialRouteObservations)
+            AppendSpatialRouteObservation(output, observation);
+        foreach (WorldStatePersonRoutePlanSnapshot plan in snapshot.Spatial.PersonRoutePlans)
+            AppendPersonRoutePlan(output, plan);
 
         if (snapshot.HasArmedForceState)
         {
@@ -966,6 +983,111 @@ public static class WorldStateCanonicalWriter
         }
 
         return result.ToString();
+    }
+
+    internal static string SpatialRouteObservationProjection(WorldStateSpatialRouteObservationSnapshot observation)
+    {
+        StringBuilder output = new StringBuilder();
+        AppendSpatialRouteObservation(output, observation);
+        return output.ToString();
+    }
+
+    internal static string PersonRoutePlanProjection(WorldStatePersonRoutePlanSnapshot plan)
+    {
+        StringBuilder output = new StringBuilder();
+        AppendPersonRoutePlan(output, plan);
+        return output.ToString();
+    }
+
+    private static void AppendSpatialRouteObservation(
+        StringBuilder output,
+        WorldStateSpatialRouteObservationSnapshot observation)
+    {
+        if (observation == null) return;
+        AppendLine(output, "SPATIAL_ROUTE_OBSERVATION",
+            observation.ActorPersonId,
+            observation.StableIdentity,
+            EnumValue(observation.SubjectKind),
+            observation.SubjectStableKey,
+            observation.SubjectHexId,
+            observation.SubjectLocationId,
+            observation.SubjectCrossingId,
+            observation.SubjectRouteCandidateId,
+            observation.SubjectEstimateMetricId,
+            EnumValue(observation.ValueKind),
+            EnumValue(observation.EntityBelief),
+            EnumValue(observation.RouteOptionBelief),
+            DecimalValue(observation.Estimate),
+            observation.EstimateUnit,
+            EnumValue(observation.SourceKind),
+            observation.SourceIdentity,
+            observation.OriginIdentity,
+            observation.TransmittingPersonId,
+            Int64Value(observation.ObservedDay),
+            Int64Value(observation.ReceivedDay),
+            IntValue(observation.ConfidencePermille),
+            observation.PrecisionIdentity);
+        if (observation.RouteSegmentStableKey != null)
+        {
+            AppendLine(output, "SPATIAL_ROUTE_OBSERVATION_SEGMENT",
+                observation.StableIdentity,
+                observation.RouteSegmentStableKey,
+                observation.BoundaryFirstHexId,
+                observation.BoundarySecondHexId,
+                observation.FromHexId,
+                observation.ToHexId,
+                EnumValueOrNull(observation.OptionKind),
+                observation.OptionConnectionId,
+                observation.OptionCrossingId,
+                observation.OptionRuleIdentity,
+                observation.OptionRuleVersion);
+        }
+    }
+
+    private static void AppendPersonRoutePlan(StringBuilder output, WorldStatePersonRoutePlanSnapshot plan)
+    {
+        if (plan == null) return;
+        AppendLine(output, "PERSON_ROUTE_PLAN",
+            plan.StableKey,
+            plan.ActorPersonId,
+            plan.DestinationHexId,
+            plan.CandidateOriginHexId,
+            plan.CandidateSequenceKey,
+            plan.PolicyId,
+            plan.PolicyVersion,
+            plan.EstimateMetricId,
+            plan.EstimateUnitIdentity,
+            BoolValue(plan.PreferHigherEstimate),
+            Int64Value(plan.MaximumEstimateAgeDays),
+            BoolValue(plan.RequireKnownAvailableOptions),
+            Int64Value(plan.KnowledgeActorRevision),
+            plan.KnowledgeBasisFingerprint,
+            plan.DecisionIdentity,
+            Int64Value(plan.AcceptedDay),
+            Int64Value(plan.PlanRevision),
+            EnumValue(plan.Status));
+        foreach (string observationIdentity in plan.KnowledgeObservationIdentities)
+            AppendLine(output, "PERSON_ROUTE_PLAN_KNOWLEDGE_OBSERVATION", plan.StableKey, observationIdentity);
+        for (int index = 0; index < plan.Legs.Count; index++)
+        {
+            WorldStatePersonRoutePlanLegSnapshot leg = plan.Legs[index];
+            AppendLine(output, "PERSON_ROUTE_PLAN_LEG",
+                plan.StableKey,
+                IntValue(index),
+                leg.StableKey,
+                leg.BoundaryFirstHexId,
+                leg.BoundarySecondHexId,
+                leg.FromHexId,
+                leg.ToHexId,
+                EnumValue(leg.OptionKind),
+                leg.OptionConnectionId,
+                leg.OptionCrossingId,
+                leg.OptionRuleIdentity,
+                leg.OptionRuleVersion,
+                EnumValue(leg.Belief),
+                BoolValue(leg.IsBeliefStale),
+                leg.BeliefObservationIdentity);
+        }
     }
 
     private static void AppendIds(
