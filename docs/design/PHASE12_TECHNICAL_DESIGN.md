@@ -1,18 +1,23 @@
 # Phase 12 — Technical Design Proposal: Daily Continuation
 
-**Status:** Technical design proposal for `UnityBootstrap-Daily-v1`, based on refreshed entry proposal `a257092471607520f7da7f056f465bbb3f5384d3` as carried by base `fd7f39f4a3f6786bab687f35c5eddc43309fdc6b`. This document proposes no checkpoint IDs, changes no Phase State/Brief/Roadmap, and authorizes no implementation. It does not claim the architecture recommendation is canonically approved or that save/load exists.
-**Independent technical design review:** PASS at content commit
+**Status:** Candidate technical design for proposed checkpoint `P12-A — UnityBootstrap Daily Continuation v1`, based on the bounded `UnityBootstrap-Daily-v1` profile. The profile covers the validated `TesteSimulacao.InitializeSimulation` bootstrap, exact compatible build/runtime and current-host numeric profile, and completed-day capture boundaries. This proposal is not an accepted checkpoint contract, implementation authorization, Phase State delivery, or proof that save/load exists. Independent review of this exact revision remains pending.
+**Historical independent technical design review:** PASS at content commit
 `8577ba589a0f9b40738fcf8738eee9589563d7b8`. The later lifecycle seam must
 invalidate capture eligibility on every supported authoritative write path.
-**Targeted architecture-impact revalidation:** PASS at candidate
+**Historical targeted architecture-impact revalidation:** PASS at candidate
 `01963fc07194b6ef2359cec40a4af01cae9b712b`. The design was rechecked against
 Phase 8 canonical docs tip `77f3e1a47a1e007492a794ea777d681a21a36d09`
 (including P8-E promotion `d95b60d174cb0b17df09e2775b3cbd134c74b21f`),
 architecture baseline `c285466c355103d3637ac165246591b72eb7bda0`, and both
-alignment records. The profile remains daily-only; §1 and §3 now explicitly
-account for P8-C Person positions and P8-E travel state. The independent
-review confirmed the profile rejection boundary and preserved the existing
-temporal/cardinality assumptions.
+alignment records. That review predates later P9 manifest and current-base
+clarifications and does not review this exact revision. Current references for
+this refresh are P8 canonical State `470667d37863384edadb3d93ef64d8004aff46a3`,
+P9-A code promotion `43f08b3dfbf042380c2f8a8b037bbf3ebd309ccb` / closure
+State `96f2c1aaf742f313bbb9643e5f5b3d844c402c78`, P11 code promotion
+`0cd4281804ecc6a2d110352d1a238959e93867f0` / closure State
+`308e24d0744112e8f2b741521b8b3e4acb51ebbf`, and architecture baseline
+`c285466c355103d3637ac165246591b72eb7bda0`. P8's `77f3e1a`→`470667d`
+advance is State-only. Both alignment records remain current.
 
 ## 1. Contract and supported boundary
 
@@ -64,10 +69,11 @@ Do not infer a one-Activity to one-actor relationship or duplicate one shared
 instance into actor-owned copies. These are conditional inventory/revalidation
 gates, not dependencies of `UnityBootstrap-Daily-v1`; relevant P9/P10/P20
 capabilities are required only when their state enters a supported profile.
-Before implementation, revalidate this envelope against promoted P9-A. If the
-authored-genesis manifest/version enters the selected bootstrap composition,
-include its compatibility identity and causal inputs or validate them without
-rerunning genesis; do not omit them silently.
+The manifest is part of this profile because the selected bootstrap already
+publishes it. This refresh inventories the promoted P9-A manifest as a required
+compatibility input. The pending independent review of this exact candidate
+must verify that mapping; implementation must validate retained manifest
+evidence without rerunning genesis or replacing evolved owner state.
 
 The alignment records also apply as constraints while their capabilities remain
 out of profile: keep domain/application logic independent of Unity presentation
@@ -180,10 +186,12 @@ Phase 13 parity is separate: it must reconstruct every actually simulated bounda
 
 The technical choices above resolve the bounded design questions using reviewed defaults. The remaining gates are process/capability gates, not unresolved product questions:
 
-- The entry proposal and this technical design require independent technical review and acceptance under the execution model. That review may reject or request changes; this proposal cannot self-approve.
-- No P12 checkpoint IDs or implementation authorization exist. A reviewed, accepted technical design still needs the Phase's checkpoint scope and status record established through the normal architecture/planning workflow before code implementation.
+- The entry proposal and this technical design require independent technical review and acceptance under the execution model. That review may reject or request changes; this proposal cannot self-approve. Review of exact candidate `424b8f3` is pending.
+- `P12-A` is a proposed stable identifier for the bounded daily continuation checkpoint, not an accepted or schedulable checkpoint. The Phase Brief and checkpoint contract must record acceptance and dependencies before implementation readiness can be derived. No implementation authorization exists.
 - Complete implementation remains capability-gated by owner-export/hydration support for every domain included in `UnityBootstrap-Daily-v1`; each owner must be inventoried against the refreshed canonical composition at implementation time.
 - P18/P19/P20 support remains conditional as specified in §1; P9/P10 generated state and external command/P11 input queues remain excluded from this initial profile.
+- P8 dependencies are state-specific, not a blanket A–E edge: use stable P8-A `LocationId` and promoted P8-C City/Site anchor composition when present in the selected bootstrap; export/validate included P8-D state only when its referenced facts are in-profile. Reject non-empty P8 Person-position state, unsupported P8 geometry/terrain/passage, P8-D Knowledge/plans that refer to excluded spatial facts, or P8-E travel state. P8-E is not required merely for daily continuation.
+- P9-A's promoted authored-genesis manifest is required compatibility evidence for this bootstrap, while generated P9/P10 worlds are excluded. Pending WorldCommand and Actor Choice inputs remain excluded and must cause profile rejection.
 
 No genuinely unresolved product or canonical semantic decision is identified within the reviewed profile. Any request to expand compatibility guarantees or include an excluded state source requires a new scoped decision/design rather than an implicit change to this proposal.
 
@@ -191,13 +199,14 @@ No genuinely unresolved product or canonical semantic decision is identified wit
 
 ### Promotion impact revalidation — 2026-09-26
 
-This design remains limited to `UnityBootstrap-Daily-v1`; this refresh creates
-no checkpoint IDs and grants no implementation authorization. The post-promotion
-dependency check uses P8 canonical State `470667d`, P9-A authored-bootstrap
-promotion `988b6f5`, P11 Actor Choice State promotion `0803670`, P18-A State
-promotion `0b52898`, and architecture baseline
-`c285466c355103d3637ac165246591b72eb7bda0`, including the current
-intraday/extensibility and multi-participant alignment records.
+This design remains limited to `UnityBootstrap-Daily-v1`. `P12-A` is a
+proposed identifier only; this refresh grants no implementation authorization
+and records no review verdict. The current-base dependency check uses P8
+canonical State `470667d`, P9-A code promotion `43f08b3` and Phase 9 closure
+State `96f2c1a`, P11 code promotion `0cd4281` and closure State `308e24d`,
+P10 Technical Design branch tip `fbd7fdc` (P10 remains `WAIT_DEPENDENCY`, with
+no P10 State or approved checkpoint), and architecture baseline `c285466`,
+including both current alignment records.
 
 - **P9-A manifest/version:** the selected bootstrap executes P9-A and publishes
   a `SimulationGenesisManifest`. Preserve or validate its stable profile/schema/
@@ -209,8 +218,13 @@ intraday/extensibility and multi-participant alignment records.
 - **P11 Actor Choice ingress:** pending WorldCommand and actor-choice inputs
   remain outside this profile. Capture admission and load validation reject
   their presence; the promoted ingress does not authorize dropping them from a
-  continuation envelope. Reconfirm this rejection against current command and
-  actor-choice authorities before implementation.
+  continuation envelope. P11 is not a gameplay dependency; its current input
+  authority must be queried to enforce the profile's rejection boundary.
+- **P8 spatial capability:** consume stable Location identity and City/Site
+  anchor APIs only where those facts are composed by the selected bootstrap.
+  Non-empty Person-position state, physical geography/passages, P8-D state
+  referencing excluded facts, and P8-E travel state are excluded and must be
+  detected/rejected. No P8-E blanket dependency exists.
 - **P18-A:** upstream-irrelevant to this daily-only profile. No intraday time,
   activity or due-work state is claimed. Any intraday profile requires the
   relevant promoted P18 state, ordering and hydration capabilities first.
@@ -218,8 +232,11 @@ intraday/extensibility and multi-participant alignment records.
   activities; no blanket dependency is introduced.
 
 The refreshed alignment records preserve explicit temporal and participant
-identity boundaries. This review changes no supported scope, serialization
-choice, or compatibility promise.
+identity boundaries. The P8 `77f3e1a`→`470667d` advance changes only Phase 8
+State wording; P9 and P11 closure updates likewise do not change the promoted
+runtime APIs. This planning refresh changes no supported scope, serialization
+choice, or compatibility promise. Independent review must still inspect exact
+candidate `424b8f3` and confirm these current-base mappings.
 
 - `docs/SIMULATION_ARCHITECTURE.md` §§8, 11–13, 91–93.
 - `docs/ROADMAP.md`, `docs/EXECUTION_MODEL.md`, `docs/phases/PHASE12_BRIEF.md`, and `docs/phases/PHASE13_BRIEF.md`.
