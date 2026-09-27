@@ -3,16 +3,26 @@
 **Design base:** `97b97c5c7523f39f3645bc018c82dbbab633648f` on
 `codex/phase20/MultiParticipantTechnicalDesign`, descended from canonical
 architecture `c285466c355103d3637ac165246591b72eb7bda0`.
-**Current canonical impact revalidation:** Phase 8 canonical docs/State tip
+**Prior P18 baseline:** P18-A (`0b52898a479fe48ea8fb2fd7b2c43af82445f26c`)
+was promoted; P18-B/C were then unpromoted. This is historical context only.
+**Current canonical impact revalidation:** P18 canonical tip
+`3d4fe829f4be41fc9e9bb11052a320c3eb00d94d` promotes P18-A from source
+`985c56c` and P18-B from source
+`97918cbbe4238a65a216b1a1f0ef84c70b4d080c`. P18-C design candidate remains
+`97b97c5`; C capability is unpromoted.
+P18-B includes stale-node skipping without consuming the dispatch cap and its
+bounded ActivityLifecycle composition/owner-dispatch path. P20 may rely on
+those promoted capabilities, while still revalidating its stable instance/
+revision references, due-work invalidation/retry behavior, and coordinated
+transition integration against the actual A/B APIs. P20 runtime therefore
+remains `WAIT_DEPENDENCY` on relevant promoted A/B/C capabilities, with C
+outstanding. Phase 8 canonical docs/State tip
 `470667d37863384edadb3d93ef64d8004aff46a3` includes the P8-E promotion
 `d95b60d174cb0b17df09e2775b3cbd134c74b21f`; `77f3e1a47a1e007492a794ea777d681a21a36d09`
 is the earlier review tip. P20's synthetic shared-activity contract consumes
 no P8 travel capability. P9-A (`988b6f5d14e12359e93464bae5e0048ca970ad86`)
 and P11 Actor Choice (`0803670cfa2c39163b54ff46a21daa06df5a16f6`) are
-upstream-irrelevant to this synthetic operation. P18-A (`0b52898a479fe48ea8fb2fd7b2c43af82445f26c`)
-is promoted and provides the instance-based timeline/due-work contract; P18-B
-and P18-C remain unpromoted, so P20 implementation remains `WAIT_DEPENDENCY`
-on their relevant capabilities. The architecture baseline remains
+upstream-irrelevant to this synthetic operation. The architecture baseline remains
 `c285466c355103d3637ac165246591b72eb7bda0`, with both alignment records
 current. Activity instance identity remains independent of participant identity
 and supports the architecture's one-or-more participant cardinality.
@@ -28,9 +38,10 @@ mapping correction. This refresh adds an explicit single-participant
 compatibility validation and current P8-E impact note. Independent refreshed
 re-review **PASS** on content commit `3c69fee`; the targeted review also
 confirmed current P8-E status, P18-A/B/C identity and cardinality seams, and no
-P18-D/P19/travel blanket dependency. That review predates P18-A promotion and
-the current P8 docs tip. The current impact refresh does not itself approve
-implementation or create checkpoint IDs.
+P18-D/P19/travel blanket dependency. That review predates P18-A/B promotion
+and the current P8 docs tip. This refresh itself does not approve
+implementation or create checkpoint IDs; refreshed independent review remains
+required.
 
 ## 1. Purpose and boundary
 
@@ -65,6 +76,13 @@ P18-C's actor decision state remains individually keyed by `PersonId` and may
 reference the instance without making it an actor-owned child. Definition,
 instance, and each participant relation carry compatible stable semantic IDs;
 runtime references and collection order are not causal identity.
+
+P18-B's promoted ActivityLifecycle composition and owner-dispatch path is the
+bounded lifecycle/dispatch capability P20 can build on. The technical design
+must still map the P20 coordinated required-set validation and test effect
+boundary onto that owner path; P20 must not introduce a parallel lifecycle
+dispatcher or assume that owner dispatch alone supplies a cross-participant
+transaction.
 
 ## 3. Bounded formation and commitments
 
@@ -226,20 +244,26 @@ capabilities.
 
 P20 runtime implementation requires the **relevant promoted P18-A timeline/
 scheduler, P18-B lifecycle, and P18-C availability/decision capabilities**,
-plus independent technical-design review of this bounded proposal. P18-A is
-promoted at `0b52898a479fe48ea8fb2fd7b2c43af82445f26c`; P18-B and P18-C are not
-yet promoted. Thus A's instance-based time and due-work identity contract is
-available, while B/C remain implementation dependencies. P20 does not wait for
-all P18-D migrations or P19. P18 does not depend on P20, so no dependency cycle
-is introduced.
+plus independent refreshed technical-design review. P18-A/B are now promoted
+at canonical tip `3d4fe829f4be41fc9e9bb11052a320c3eb00d94d`; their source
+promotions are `985c56c` and
+`97918cbbe4238a65a216b1a1f0ef84c70b4d080c`, respectively. P18-B's stale-node
+behavior skips stale owner references without consuming the dispatch cap, and
+its bounded ActivityLifecycle composition/owner-dispatch path is available.
+P20 may rely on those A/B capabilities. P18-C remains unpromoted; its design
+candidate is `97b97c5`. Availability and
+independent actor-decision behavior remain implementation dependencies. P20
+does not wait for all P18-D migrations or P19. P18 does not depend on P20, so
+no dependency cycle is introduced.
 
-**Promoted-runtime compatibility note:** P18-A's technical design says stale
-queue nodes are discarded, but the promoted runtime currently stops
-`AdvanceTo` when it encounters a stale owner reference. P18-B is implementing
-the narrow correction. Before P20 implementation, revalidate the final
-promoted temporal code against this design's stale instance/revision, due-work
-invalidation, and retry expectations; do not assume the documented discard
-behavior is already present in the P18-A runtime.
+Before implementation, revalidate P20's stable instance/revision resolution,
+due-work invalidation/retry assumptions, coordinated required-set validation,
+and atomic lifecycle/effect composition against the promoted A/B APIs. In
+particular, skipping a stale node without consuming the dispatch cap is a
+scheduler behavior, not proof that P20's stale owner descriptor or multi-owner
+transition is correct. No stale-node incompatibility is currently asserted;
+the prior P18-A-only warning is superseded by P18-B promotion and this scoped
+revalidation requirement.
 
 The work remains limited to the synthetic two-Person proof. It does not add
 Sleep, Dreams, robbery, gangs, rituals, War, MegaEventos, co-travel, meals,
