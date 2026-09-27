@@ -1,6 +1,6 @@
 # Phase 14 Technical Design — Local Daily Material Flow v1
 
-**Status:** bounded technical proposal only. It is not an approved Phase 14 checkpoint contract, implementation authorization, Phase State, or canonical architecture change. No P14 checkpoint IDs exist in the observed canonical state. This proposal uses the entry boundary at `8b6a3455b00bc25a0be8a2d5c50ec254de0ba7f5` in `codex/phase14/MaterialFlowEntryDecision` and Phase 8 canonical State `c5b2e06b534f4b2af38f10e6510b10800aa8b28c`, which incorporates architecture baseline `c285466c355103d3637ac165246591b72eb7bda0`.
+**Status:** reviewed technical design for approved checkpoint P14-A — Local Daily Material Flow v1. This design supports isolated implementation on `codex/phase14/P14ALocalMaterialFlow`; it records no delivered code capability or canonical architecture change. P14-A's checkpoint contract passed current-base review against P8 canonical `470667d37863384edadb3d93ef64d8004aff46a3` and architecture baseline `c285466c355103d3637ac165246591b72eb7bda0`, including the current intraday/extensibility and multi-participant alignment records.
 **Prior independent technical-design review:** PASS at content commit
 `4a84b76a608a24fd74de032bfb274e0c59f9d3a0`. Targeted revalidation against
 the current P8 City-anchor composition found that its owner lookup key is
@@ -104,11 +104,11 @@ If a bounded implementation checkpoint is later accepted, keep it on an isolated
 
 Likely code surfaces include `CityData`, `CityRuntime`, `MarketRuntime`, `CityProductionResult`, the `SimulationRuntime` economy-pass composition, and authoritative diagnostics/projection components. These are change-risk indicators, not authorization to edit those files. No code or tests are changed by this proposal.
 
-## 8. Gates that remain open
+## 8. Implementation and promotion gates
 
-- Phase 14 still has no approved checkpoint IDs, Phase State, implementation contract, or implementation authorization. The bounded entry proposal is a reviewed recommendation, but implementation requires an accepted checkpoint contract with closure and explicit dependencies.
+- P14-A is the approved bounded checkpoint contract in `PHASE14A_LOCAL_DAILY_MATERIAL_FLOW_CHECKPOINT.md`; the current-base review passed on candidate checkpoint content `7a9e8d71ed7a53578b7dc36ef1cafd03b856b0f0` together with this technical design at `565a3c0e7d19c14736149ecae90887e8357dfef1`.
 - Independent review of this identity-reconciled proposal passed on content commit `3d9ed793ae7fdfce74b9224856d40e5ea73ef2a0` against the current canonical architecture. It confirmed that the authored settlement-instance identity and explicit Location association reconcile with the runtime-keyed P8 anchor lookup, along with title/custody separation, uniqueness/cardinality, and conditional temporal/shared-activity dependencies. This review does not approve implementation.
-- Promotion/integration will require executable implementation, independent code review, targeted validation, and any repository-required integration gates. P8-D/E travel is not a dependency. P18 is not a dependency for the legacy daily profile. P20 is conditional on a later multi-participant consumer. P12/P13 remain the owners of save/reconstruction implementation.
+- The user's bounded profile approval and active full-roadmap task authorize proceeding to isolated implementation after this current-base design/checkpoint review. Canonical promotion remains separately human-gated and will require executable implementation, independent code review, targeted validation, and repository-required integration gates. P8-D/E travel is not a dependency. P18 is not a dependency for the legacy daily profile. P20 is conditional on a later multi-participant consumer. P12/P13 remain the owners of save/reconstruction implementation.
 
 ## 9. Explicit exclusions
 
@@ -116,10 +116,9 @@ This design adds no resource extraction, finite source reserves, production inpu
 
 ## 10. Promotion impact revalidation — 2026-09-26
 
-This proposal remains bounded to manually authored daily production and
+This design remains bounded to manually authored daily production and
 population consumption within one settlement and its own market. It introduces
-no transport or route flow and remains a proposal, not an approved checkpoint
-contract or implementation authorization. Revalidation uses P8 canonical
+no transport or route flow. Revalidation uses P8 canonical
 State `470667d`, P9-A closure tip `96f2c1aaf742f313bbb9643e5f5b3d844c402c78`,
 P11 Actor Choice closure tip `308e24d0744112e8f2b741521b8b3e4acb51ebbf`,
 P18-A State promotion `0b52898`, and architecture baseline
@@ -149,6 +148,6 @@ same implementations considered by this impact review.
   activity or crew is introduced here.
 
 The alignment records constrain future temporal and participant extensions
-without changing this design's closure. The open product/entry gate remains
-acceptance of the first consumer, conservation boundary, and actor/asset
-authority; no new content scope is inferred by this revalidation.
+without changing this design's closure. The first consumer, conservation
+boundary, and actor/asset authority are resolved by the approved P14-A
+checkpoint. No new content scope is inferred by this revalidation.

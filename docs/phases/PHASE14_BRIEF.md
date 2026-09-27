@@ -1,12 +1,12 @@
 # Phase 14 — Productive Sources & Material Flow v1
 
-**Authority:** planning entry subordinate to `../SIMULATION_ARCHITECTURE.md`. **Readiness:** P14-A implementation remains `WAIT_DEPENDENCY` pending independent review of its current-base checkpoint contract. The user-approved bounded profile resolves the profile/product choice only; it does not grant implementation authorization. The overlapping P9-A bootstrap/genesis integration is promoted.
+**Authority:** planning entry subordinate to `../SIMULATION_ARCHITECTURE.md`. **Readiness:** P14-A is `IN_PROGRESS` after its bounded checkpoint contract passed independent current-base review. The user-approved scope remains limited to the profile below; the full-roadmap task authorizes isolated implementation. The overlapping P9-A bootstrap/genesis integration is promoted.
 
 ## Objective and closure
 
-Establish a bounded, factual account of productive sources and material movement with explicit ownership/custody and source/sink semantics. The selected first slice is one authored City, one configured exogenous daily source for one item, free same-City population consumption of that item, and closure at the closing aggregate market balance. Its candidate implementation contract is `../design/PHASE14A_LOCAL_DAILY_MATERIAL_FLOW_CHECKPOINT.md`.
+Establish a bounded, factual account of productive sources and material movement with explicit ownership/custody and source/sink semantics. The selected first slice is one authored City, one configured exogenous daily source for one item, free same-City population consumption of that item, and closure at the closing aggregate market balance. Its approved implementation contract is `../design/PHASE14A_LOCAL_DAILY_MATERIAL_FLOW_CHECKPOINT.md`.
 
-**Checkpoints:** P14-A — Local Daily Material Flow v1 (candidate contract; implementation remains gated on independent current-base checkpoint review and the ordering below). No P14 capability is delivered or canonical yet.
+**Checkpoints:** P14-A — Local Daily Material Flow v1 (approved bounded contract; implementation in progress on `codex/phase14/P14ALocalMaterialFlow`). No P14 capability is delivered or canonical yet.
 
 ## Dependencies and gates
 
@@ -15,8 +15,8 @@ Establish a bounded, factual account of productive sources and material movement
 - **Route-dependent flow:** a later transport/route checkpoint additionally requires the relevant promoted passage/travel capability. Do not impose all of P8-E on a local source without need.
 - **Integration dependency:** material movement that uses travel must integrate with the single spatial/travel authority, not parallel city-to-city fixed durations.
 - **P9 ordering and ownership:** P9 is not a semantic prerequisite for this manually authored profile. P9-A was promoted at code tip `43f08b3`; its State/Brief closure was recorded at canonical tip `96f2c1a`. The former serial integration/ownership edge to overlapping P9-A startup/composition work is satisfied, without creating a P9 generation capability dependency. P10 content is likewise optional for the authored profile.
-- **Checkpoint gate:** independently review the current-base P14-A contract and verify its implementation ordering/ownership boundary before deriving `READY_FOR_IMPLEMENTATION`.
-- **Resolved profile/product choice:** the user approved the one-City, one-exogenous-source, one-item daily profile stated above. This does not approve added sources, items, Cities, gameplay, checkpoint IDs, or implementation.
+- **Checkpoint gate:** current-base independent review passed for P14-A candidate checkpoint content `7a9e8d7` and technical design `565a3c0` against P8 canonical `470667d`, architecture `c285466`, and both alignment records.
+- **Resolved profile/product choice:** the user approved the one-City, one-exogenous-source, one-item daily profile stated above. This does not authorize added sources, items, Cities, or gameplay.
 - **Deferred product scope:** changes that add sources, inputs, finite reserves, transformations, paid consumption, transport, multi-worker production, or a different closure boundary require a separately scoped checkpoint; they are not implicit extensions of P14-A.
 - **Exclusions:** universal macroeconomy, automatic trade network, general taxation and full supply simulation.
 - **Replay/fork sensitivity:** source identities, stock/ownership/custody, transformations, transfers, constraints and commands must be recoverable when authoritative.
