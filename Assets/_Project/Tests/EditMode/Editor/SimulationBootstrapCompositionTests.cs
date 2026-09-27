@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using NUnit.Framework;
+using UnityEditor;
 using UnityEngine;
 
 public sealed class SimulationBootstrapCompositionTests
@@ -172,6 +173,39 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(simulation.Bootstrap.Manifest.CanonicalProvenanceRecords, Has.Some.Contains("authored-geography-stage"));
         Assert.That(simulation.Bootstrap.Manifest.AuthoredDefinitionIds, Does.Contain("hex/authored-hex-one"));
         Assert.That(simulation.Bootstrap.Manifest.AuthoredDefinitionIds, Does.Contain("location/authored-location-one"));
+        Assert.That(simulation.History.HistoricalEvents, Is.Empty);
+    }
+
+    [Test]
+    public void SelectedSampleSceneProfileBootstrapsItsAuthoredP8GeographyBeforeDayOne()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-GeneralTest.asset");
+        Assert.That(config, Is.Not.Null);
+        Assert.That(config.useAuthoredGeographyProfile, Is.True);
+        GameObject simulationObject = new GameObject("selected-sample-profile-p9b-test");
+        simulationObjects.Add(simulationObject);
+        TesteSimulacao simulation = simulationObject.AddComponent<TesteSimulacao>();
+        typeof(TesteSimulacao).GetField("simulationConfig", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(simulation, config);
+
+        simulation.Start();
+
+        SpatialAuthorityStore authority = simulation.Bootstrap.SpatialAuthority;
+        Assert.That(simulation.Bootstrap.ProfileContractIdentity, Is.EqualTo(SimulationGenesisPipeline.GeographyProfileContractIdentity));
+        Assert.That(authority.HexCount, Is.EqualTo(1));
+        Assert.That(authority.LocationCount, Is.EqualTo(1));
+        Assert.That(authority.TryGet(new HexId("hex/sample-origin"), out HexRecord hex), Is.True);
+        Assert.That(hex.Coordinate, Is.EqualTo(new HexCoordinate(0, 0)));
+        Assert.That(hex.TerrainDefinitionId.Value, Is.EqualTo("terrain/sample-plains"));
+        Assert.That(hex.AuthoredRevisionToken, Is.EqualTo("sample-world-v1"));
+        Assert.That(authority.TryGet(new LocationId("location/sample-origin"), out LocationRecord location), Is.True);
+        Assert.That(location.AnchorHexId.Value, Is.EqualTo("hex/sample-origin"));
+        Assert.That(authority.ScaleContext.ResolvedConventionId, Is.EqualTo("axial-hex-v1"));
+        Assert.That(authority.ScaleContext.SourceIdentity, Is.EqualTo("profile/Simulation-GeneralTest"));
+        Assert.That(authority.ScaleContext.SourceVersion, Is.EqualTo("1"));
+        Assert.That(authority.ScaleContext.DistancePerNeighborStep, Is.EqualTo(1m));
+        Assert.That(authority.ScaleContext.Unit, Is.EqualTo("km"));
+        Assert.That(simulation.CurrentDay, Is.Zero);
         Assert.That(simulation.History.HistoricalEvents, Is.Empty);
     }
 

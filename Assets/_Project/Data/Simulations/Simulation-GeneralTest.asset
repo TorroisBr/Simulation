@@ -89,6 +89,18 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 3b65695fde8eb5b4aaa3942aeb26d625, type: 2}
   - {fileID: 11400000, guid: 6e6fe1f0766480141bc9187ff8175e29, type: 2}
   initialWarrants: []
+  useAuthoredGeographyProfile: 1
+  authoredHexId: hex/sample-origin
+  authoredHexQ: 0
+  authoredHexR: 0
+  authoredTerrainDefinitionId: terrain/sample-plains
+  authoredTerrainRevisionToken: sample-world-v1
+  authoredLocationId: location/sample-origin
+  authoredScaleConventionId: axial-hex-v1
+  authoredScaleSourceIdentity: profile/Simulation-GeneralTest
+  authoredScaleSourceVersion: 1
+  authoredDistancePerNeighborStep: 1
+  authoredScaleUnit: km
   travelCostPerDay: 10
   logSettings:
     showDay: 1
