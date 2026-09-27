@@ -3,7 +3,7 @@
 **Design base:** `99cac77f7d66e8eb61fe68efb6959a4a5b7029ca` (`codex/phase18/canonical`, including promoted P18-C core). The separate external-input/deferral adapter candidate is `405c5c0df80f210892a1db9932688550bb06c463` and remains unpromoted pending its canonical gate.
 **Architecture baseline:** `c285466c355103d3637ac165246591b72eb7bda0`
 **Authority:** `docs/design/PHASE18_A_TECHNICAL_DESIGN.md`, promoted P18-C core at the design base, unpromoted P18-C external-input/deferral adapter candidate `405c5c0df80f210892a1db9932688550bb06c463`, the revised P18-D technical design candidate `aa5f182f0f5a93f26092179d1708a1f3429fbb1f`, the intraday/extensibility and multi-participant alignment records, `docs/EXECUTION_MODEL.md`, and `docs/phases/PHASE18_BRIEF.md`.
-**Status:** Proposed, additive, unaccepted prerequisite to P18-D implementation. This document does not change the promoted P18-A implementation, create a State/closure record, or authorize P18-D implementation.
+**Status:** User-accepted additive P18-A contract, bounded implementation in progress. The accepted scope does not change the already-promoted scheduler's behavior until the reviewed implementation is promoted, and it does not authorize P18-D implementation before its separate prerequisites clear.
 
 ## 1. Purpose and compatibility boundary
 
@@ -64,3 +64,15 @@ This does not add a generic world transaction, arbitrary plugin callbacks, a pub
 Before P18-D implementation, this additive contract must be accepted through the repository execution model and implemented/reviewed in P18-A (or an explicitly approved compatible integration). The implementation must demonstrate activation retry idempotency; distinct occurrence/continuation/step identities including delimiter-bearing IDs; frozen order/roster/disposition through reconstruction; failure and retry after one or more committed steps; atomic effect-plus-receipt-plus-output semantics; no ordinary same-instant dispatch, advance beyond the instant, or P18-C handoff while incomplete; complete validated timeline-fact publication before releasing same-instant ordinary work; idempotent retention of published facts after later outer-advance failure; P18-C handoff only after successful outer return; no sequence drift on pre-publication failure; and no reentrant publication. Targeted temporal identity/cardinality tests must include zero/one/multiple actor descriptors where applicable and assert that ActivityInstanceId is not conflated with PersonId. Independent review must compare against the promoted P18-A/B/C implementations, both alignment records, and the revised P18-D adapter requirement. Unity validation is required for code changes under the normal P18 gates; this proposal itself is documentation-only.
 
 The proposal is additive and does not invalidate promoted P18-A/B/C. It is a hard technical prerequisite to P18-D implementation, not a prerequisite to P18-D design review or unrelated P20 work. P18-D remains responsible for its selected profile's daily-effect inventory, ordering, consumer semantics, and any separate shared-hotspot ownership window.
+
+## 8. Acceptance record
+
+The user accepted this exact refreshed contract, commit
+`2175bf2718df4ef344e4dc8e2760d4abb8a2532d`, on 2026-09-27. Acceptance
+authorizes implementation of this bounded P18-A extension on
+`codex/phase18/P18ABoundarySubphaseExtensionImplementation`. It does not claim
+delivery or canonical promotion; independent implementation review, required
+Unity validation, integration, and a separate canonical promotion gate remain.
+P18-D remains blocked until this extension is implemented and promoted, the
+P18-C external-input/deferral adapter clears its promotion gate, and the
+separate `SimulationRuntime` ownership window is scheduled.
