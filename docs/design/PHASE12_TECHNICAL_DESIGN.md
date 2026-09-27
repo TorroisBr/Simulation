@@ -20,12 +20,9 @@ State `96f2c1aaf742f313bbb9643e5f5b3d844c402c78`, P9-B canonical integration
 `308e24d0744112e8f2b741521b8b3e4acb51ebbf`, and architecture baseline
 `c285466c355103d3637ac165246591b72eb7bda0`. P8's `77f3e1a`→`470667d`
 advance is State-only. Both alignment records remain current.
-At canonical tip `d9a62d7`, `docs/PHASE9_STATE.md` still contains pre-promotion
-wording for P9-B. The state-only correction candidate is
-`codex/phase9/P9BPromotionRecord` at `282d22e`, pending independent review.
-This discrepancy is recorded for source-ledger synchronization; the P9-B code
-capability is present on the canonical branch tip and this stale State wording
-does not reinstate a P9-B dependency blocker for P12.
+The P9-B promotion record is refreshed at `codex/phase9/P9BPromotionRecord`
+tip `1b32be4`; use that record alongside canonical code tip `d9a62d7` when
+checking P9-B capability and profile provenance.
 
 ## 1. Contract and supported boundary
 
@@ -46,7 +43,7 @@ terminal and may be captured; `Pending` (including deferred choices) and
 profile cannot silently drop causal input state while claiming a complete
 continuation.
 
-P18, P19 and P20 are conditional extensions to the state inventory only if a future explicitly supported profile contains their temporal, module, or shared-activity state. The base daily profile has no blanket dependency on those phases. P18-A/B/C are promoted, but P18-D remains blocked and P18-A is not integrated into the legacy `SimulationRuntime.AdvanceDay` path. If a future profile composes P18, preserve boundary identity `(worldId, profileId, absoluteDay)`, work identity `(ownerId, workId, revision, occurrence)`, exact logical instant, causal wave and same-instant order, pending boundary/work, persisted occurrence/sequence, and owner idempotency/effect state; include P18-B activity lifecycle/revision/receipts and participant commitments/availability plus P18-C PersonId-keyed decision/attempt state when used by its consumer. A date is not an intraday ordering contract. Extension-owned state requires applicable P19 lifecycle/state compatibility contracts. P20 remains conditional: a profile that includes it must preserve stable activity identity separately from definition and one-or-more participants; the reviewed two-Person fixture does not define universal cardinality or role policy. These additions do not justify freezing this proposal's internal time field to a day-only scalar.
+P18, P19 and P20 are conditional extensions to the state inventory only if a future explicitly supported profile contains their temporal, module, or shared-activity state. The base daily profile has no blanket dependency on those phases. P18-A/B/C are promoted, but P18-D remains blocked and P18-A is not integrated into the legacy `SimulationRuntime.AdvanceDay` path. If a future profile composes P18, preserve boundary identity `(worldId, profileId, absoluteDay)`, tick quantum/version, effective `MaxDispatchesPerInstant` or equivalent dispatch limit, work identity `(ownerId, workId, revision, occurrence)`, exact logical instant, causal wave and same-instant order, pending boundary/work, persisted occurrence/sequence, and owner idempotency/effect state. Preserve sealed external inputs with target `LogicalTick`, accepted sequence/order, and boundary state. Include P18-B activity lifecycle/revision/receipts and participant commitments/availability plus P18-C PersonId-keyed decision/attempt state when used by its consumer. A date is not an intraday ordering contract. Extension-owned state requires applicable P19 lifecycle/state compatibility contracts. P20 remains conditional: a profile that includes it must preserve stable activity identity separately from definition and one-or-more participants; the reviewed two-Person fixture does not define universal cardinality or role policy. These additions do not justify freezing this proposal's internal time field to a day-only scalar.
 
 The current profile excludes P9/P10 generated-world content and P20 activity
 instances. It includes the selected P9-B authored-geography profile identity for
@@ -229,8 +226,9 @@ State `96f2c1a`, P9-B canonical integration `d9a62d7c6bea242653c2d68cc0a70911bb5
 closure State `308e24d`, current P18 State `311baa9` (P18-A/B/C promoted;
 P18-D implementation blocked), P14 State `f8a61fe` (P14-A daily and promoted),
 P20 Entry Architecture `2f9c93b` and Technical Design `6a0d164` (reviewed designs,
-no implementation authorization), P10 Technical Design branch tip `fbd7fdc`
-(P10 remains `WAIT_DEPENDENCY`, with no P10 State or approved checkpoint), and
+no implementation authorization), P10-A's approved bounded P8-C
+LocationId-neutral seam and current technical-review/checkpoint-process gates,
+and
 architecture baseline `c285466`, including both current alignment records.
 
 - **P9-A/P9-B manifest and version:** the selected bootstrap executes P9-A and

@@ -37,13 +37,11 @@ closure State `308e24d`; current P18 State `311baa9` (P18-A/B/C promoted;
 P18-D implementation blocked); P14 State `f8a61fe` (P14-A daily and promoted);
 P20 Entry Architecture `2f9c93b` and Technical Design `6a0d164` (reviewed
 designs, not implementation authorization). Both architecture alignment records
-remain current. P10 has no approved checkpoint or State and remains
-`WAIT_DEPENDENCY`.
-At P9 canonical tip `d9a62d7`, `docs/PHASE9_STATE.md` still contains
-pre-promotion P9-B wording. The state-only correction candidate is
-`codex/phase9/P9BPromotionRecord` at `282d22e`, pending independent review.
-This source-ledger discrepancy is explicit; the canonical branch contains P9-B
-code and the stale State wording is not treated as a P12 capability blocker.
+remain current. P10-A includes the approved bounded P8-C LocationId-neutral
+seam; its current gates are technical review and checkpoint process. The P9-B
+promotion record is refreshed at `codex/phase9/P9BPromotionRecord` tip
+`1b32be4`; use that record alongside canonical code tip `d9a62d7` for P9-B
+capability and profile evidence.
 Refreshed P12 entry proposal:
 `a257092471607520f7da7f056f465bbb3f5384d3`; current P12 technical proposal
 refresh: `e0023d2` on `codex/phase12/ContinuationTechnicalDesign`.
@@ -268,10 +266,13 @@ omits causal fields.
   proposal does not establish P12 export/hydration coverage or checkpoint gates.
 - **P18:** the daily profile does not compose P18 temporal state and does not
   claim intraday continuation. If a future supported profile composes it,
-  preserve `(worldId, profileId, absoluteDay)` boundary identity,
-  `(ownerId, workId, revision, occurrence)` work identity, exact logical time,
-  causal wave and same-instant order, pending boundary/work, occurrence/sequence,
-  and owner idempotency/effect state. Include P18-B ActivityInstanceId/lifecycle
+  preserve `(worldId, profileId, absoluteDay)` boundary identity, tick
+  quantum/version, effective `MaxDispatchesPerInstant` or equivalent dispatch
+  limit, `(ownerId, workId, revision, occurrence)` work identity, exact logical
+  time, causal wave and same-instant order, pending boundary/work,
+  occurrence/sequence, and owner idempotency/effect state. Preserve sealed
+  external inputs with target `LogicalTick`, accepted sequence/order, and
+  boundary state. Include P18-B ActivityInstanceId/lifecycle
   revision/receipts and participant commitments/availability, plus P18-C
   PersonId-keyed decision/attempt state only where composed. P18-A/B/C are
   promoted; P18-D remains blocked and the legacy daily path remains authoritative.
@@ -335,7 +336,8 @@ profile contract.
 - Current canonical `docs/PHASE8_STATE.md` at `470667d`, P9-A promotion
   `43f08b3` and closure State `96f2c1a`, P9-B canonical integration
   `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf` (implementation tip
-  `00395ef80cfa2364d34ed2170e0735d3a4b1513d`), P11 promotion `0cd4281` and
+  `00395ef80cfa2364d34ed2170e0735d3a4b1513d`, promotion record `1b32be4`),
+  P11 promotion `0cd4281` and
   closure State `308e24d`, current P18 State `311baa9`, P14 State `f8a61fe`,
   P20 Entry Architecture `2f9c93b` and Technical Design `6a0d164`, architecture
   `c285466`, `docs/architecture/INTRADAY_EXTENSIBILITY_ALIGNMENT.md`, and

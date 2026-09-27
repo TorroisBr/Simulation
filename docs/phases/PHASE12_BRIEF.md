@@ -14,7 +14,7 @@ For supported compatible versions/profiles, continuing from boundary T and savin
 - **Hard capabilities:** complete closure needs hydration/continuation for every authoritative domain in the declared supported save scope; domain-specific integrations wait for stable corresponding contracts/capabilities.
 - **Integration dependency:** restoration occurs at consistent boundaries and composes all relevant stores, plans, RNG state and command context without a second world authority.
 - **Soft ordering:** generation and content may evolve in parallel; this does not excuse a false claim of complete save coverage.
-- **Resolved bounded profile:** `UnityBootstrap-Daily-v1` uses the SampleScene-selected `Simulation-GeneralTest.asset` through the validated Unity bootstrap, exact compatible build/runtime and current-host numeric profile, and completed-day capture boundaries. The selected asset enables the P9-B authored-geography profile and publishes exactly one P8-A Hex and one anchored Location before day one. P9-B is included on `codex/phase9/canonical` at `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf`; its implementation tip is `00395ef80cfa2364d34ed2170e0735d3a4b1513d`. This P12 profile is incompatible with P9-A-only configs. Any retained P9-A-only profile requires a distinct profile identity and admission that explicitly rejects authored geography. P12 excludes intraday state, P9/P10 generated worlds, P19 module state, P20 shared activities, and P13 historical fork guarantees.
+- **Resolved bounded profile:** `UnityBootstrap-Daily-v1` uses the SampleScene-selected `Simulation-GeneralTest.asset` through the validated Unity bootstrap, exact compatible build/runtime and current-host numeric profile, and completed-day capture boundaries. The selected asset enables the P9-B authored-geography profile and publishes exactly one P8-A Hex and one anchored Location before day one. P9-B is included on `codex/phase9/canonical` at `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf`; its implementation tip is `00395ef80cfa2364d34ed2170e0735d3a4b1513d` and promotion record is `1b32be4`. This P12 profile is incompatible with P9-A-only configs. Any retained P9-A-only profile requires a distinct profile identity and admission that explicitly rejects authored geography. P12 excludes intraday state, P9/P10 generated worlds, P19 module state, P20 shared activities, and P13 historical fork guarantees.
 - **Architecture/checkpoint gate:** P12-A's candidate contract must pass independent review against current canonical architecture, Roadmap, Execution Model, P8 State, P9-A/P9-B profile-manifest contracts, P11 input authorities, current P18 State, reviewed P20 technical design, and both alignment records. The selected P9-B geography capability is present on current P9 canonical at `d9a62d7`; this P12 design does not substitute for P12's independent review or acceptance gates.
 - **Exclusions:** historical fork guarantee as a Phase 12 result, universal event sourcing, implicit cross-host numeric portability.
 - **P12-A profile assumption:** use the clearly recommended, bounded `UnityBootstrap-Daily-v1` profile: same-build/current-host daily continuation through the normal Unity bootstrap and built-in providers, captured only at a successfully completed daily boundary. This is an orchestrator planning assumption, not an architecture amendment or broader product promise. No P13 history/fork guarantee, cross-host guarantee, loader/module state, generated-world state, or shared-activity state is implied.
@@ -30,10 +30,12 @@ For supported compatible versions/profiles, continuing from boundary T and savin
 Inventory/design can proceed alongside P18 and generation work. This daily
 profile does not compose the P18 timeline and makes no intraday continuation
 claim. If a later profile includes P18 state, reconstruct its boundary identity
-`(worldId, profileId, absoluteDay)`, work identity
+`(worldId, profileId, absoluteDay)`, tick quantum/version, effective
+`MaxDispatchesPerInstant` (or equivalent dispatch limit), work identity
 `(ownerId, workId, revision, occurrence)`, exact logical instant, causal wave and
 same-instant order, pending boundary/work, persisted occurrence/sequence and
-owner idempotency/effect state. Include promoted P18-B activity instance,
+owner idempotency/effect state. Preserve sealed external inputs with target
+`LogicalTick`, accepted sequence/order, and boundary state. Include promoted P18-B activity instance,
 lifecycle/revision/receipt, participant commitments and availability facts, and
 P18-C PersonId-keyed decision/attempt state only when the selected consumer
 composes them. P18-A/B/C are promoted; P18-D is still blocked and legacy daily
