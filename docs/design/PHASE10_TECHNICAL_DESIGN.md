@@ -1,24 +1,25 @@
-# Phase 10 Technical Design Proposal — UNAPPROVED
+# Phase 10 Technical Design — P10-A REVIEWED PASS
 
-**Status:** bounded technical design proposal — UNAPPROVED. The durable
-proposed P10-A checkpoint identity and boundary are recorded in
-`PHASE10_A_CHECKPOINT_RECORD.md`; both documents await independent review.
-This proposal changes no Phase State/Roadmap and does not authorize
-implementation. The user-approved first-profile scope is exactly
+**Status:** the refreshed technical design and durable P10-A checkpoint record
+passed independent review together on docs integration candidate
+`345dcbc8f05e0d64fed1b058d30f08ad0be8937d`. The user-approved first-profile
+scope is exactly
 one `ExplorableSiteKind.Ruin` at an existing canonical P8 `LocationId`, with a
 finite local topology limited to semantic places, one or more entry points,
 containment only if needed, and explicit local connections. Entrance →
 Courtyard → Inner Chamber may be a tiny deterministic proof fixture. P9
 genesis/provenance is consumed; this profile adds no generated content. The
 LocationId-neutral LocalTopology ownership/migration capability remains
-unpromoted, and this refresh requires independent review.
+unpromoted. P10-A is ready for isolated implementation under the accepted
+scope; this review does not promote runtime code or close Phase 10.
 
-**Prior independent technical-design review:** PASS for the candidate semantics
-at its then-reviewed baseline; this refreshed P9-B dependency contract requires
-independent re-review.
+**Prior independent technical-design review:** PASS for the earlier candidate
+semantics. The refreshed P9-B dependency contract and checkpoint record passed
+exact-tip re-review together at `345dcbc8f05e0d64fed1b058d30f08ad0be8937d`.
 The final P9-profile boundary wording clarification was independently reviewed
-at P10 document commit `a914a0d7d9fb5f8f2f74d5b87b15923a12a9af78`. Review
-approval does not constitute formal P10 acceptance or implementation approval.
+at P10 document commit `a914a0d7d9fb5f8f2f74d5b87b15923a12a9af78`. The user's
+bounded scope approval and the current technical review authorize P10-A
+implementation only; code promotion and Phase 10 closure remain separate gates.
 
 **Reviewed baseline:** `codex/phase8/canonical` at
 `c5b2e06b534f4b2af38f10e6510b10800aa8b28c`, containing architecture refresh
@@ -90,7 +91,12 @@ Ruin against the actual selected-profile `LocationId` and anchor from this
 authority. It must not copy fixture IDs, create a replacement Location, or
 infer geography from legacy `SpatialLocationRuntime`.
 
-The geography-enabled P9 profile is now canonical. P10 implementation is not ready until this refreshed technical design and the durable P10-A checkpoint record pass independent review. P9-B and the delivered P8-C anchor/site-kind capabilities are canonical; the minimal adapter/migration seam described below is in P10-A's user-approved scope. A test-only prepopulated authority does not prove the selected-profile integration.
+The geography-enabled P9 profile is canonical. The refreshed technical design
+and durable P10-A checkpoint record passed independent review on exact docs
+candidate `345dcbc`. P9-B and the delivered P8-C anchor/site-kind capabilities
+are canonical; the minimal adapter/migration seam described below is in
+P10-A's user-approved scope. A test-only prepopulated authority does not prove
+the selected-profile integration.
 
 ## 1. Recommendation and bounded first profile
 
@@ -353,18 +359,17 @@ bounded profile while preserving compatible semantic seams.
 | P9-A/P9-B | P9-A remains promoted and scope-closed. P9-B's authored-geography profile, stage, provenance and spatial-authority handoff are canonical; code integration is `d9a62d7`, and the current P9 State/status tip is `14a2e8e`. P10 consumes the actual selected profile's LocationId and anchor through that handoff. |
 | LocalTopology | Existing store is not yet a LocationId-neutral semantic-owner contract. The bounded owner/store adapter in §2 is P10-A implementation scope; it preserves legacy City/Site runtime paths and is validated with the Ruin composition. |
 | P18/P20 | Not required by this daily-only, single-site profile. P18-A/P20 become conditionally relevant only if a future explicitly accepted scope adds temporal activity or multi-participant facts. |
-| Product/checkpoint gate | The user accepted the bounded Ruin profile and its minimal LocalTopology seam in §1/§2; P9-B supplies the canonical authored Hex/Location source. The durable P10-A record identifies the design baseline, dependencies, scope and validation; independent review of the refreshed design and record is pending before implementation. No additional product choice is open. |
+| Product/checkpoint gate | The user accepted the bounded Ruin profile and its minimal LocalTopology seam in §1/§2; P9-B supplies the canonical authored Hex/Location source. The durable P10-A record identifies the design baseline, dependencies, scope and validation; independent review of the refreshed design and record passed on exact candidate `345dcbc`. No additional product choice is open. |
 
 ### P10-A checkpoint record
 
-The durable checkpoint proposal, baseline SHAs, accepted boundary, dependencies,
+The durable checkpoint record, baseline SHAs, accepted boundary, dependencies,
 exclusions, closure evidence, and validation plan are recorded in
-`PHASE10_A_CHECKPOINT_RECORD.md`. That record is proposed for independent
-review and does not authorize implementation. P10 technical design remains
-`TECHNICAL_DESIGN_IN_PROGRESS` until the refreshed design and checkpoint record
-pass independent review. The user-approved Ruin scope and the narrow
-LocationId-neutral LocalTopology adapter in §2 remain unchanged; no further
-product choice is open.
+`PHASE10_A_CHECKPOINT_RECORD.md`. The refreshed design and record passed
+independent review together on exact candidate `345dcbc`; the user-approved
+Ruin scope and narrow LocationId-neutral LocalTopology adapter in §2 remain
+unchanged. P10-A is ready for implementation; code promotion and Phase 10
+closure remain separate gates.
 
 After a checkpoint and the relevant capabilities are accepted/promoted,
 implementation validation must demonstrate:

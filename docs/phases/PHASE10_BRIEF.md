@@ -1,12 +1,12 @@
 # Phase 10 — Local Generation & Pre-start Authoring
 
-**Authority:** planning entry subordinate to `../SIMULATION_ARCHITECTURE.md`. **Readiness:** user-approved first-profile scope; P10-A has a durable bounded checkpoint record at `../design/PHASE10_A_CHECKPOINT_RECORD.md`, and the refreshed technical design plus record await independent review. P9-B's geography capability is promoted at `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf`; the current P9 canonical State/status tip is `14a2e8ee01e49f1ffdcecf8fd64d274c728ead44`. No product choice is open; implementation is not ready pending review.
+**Authority:** planning entry subordinate to `../SIMULATION_ARCHITECTURE.md`. **Readiness:** P10-A's user-approved bounded scope and refreshed technical design/checkpoint record passed independent review at `345dcbc8f05e0d64fed1b058d30f08ad0be8937d`; the checkpoint is `READY_FOR_IMPLEMENTATION`. P9-B's geography capability is promoted at code tip `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf`; the current P9 canonical State/status tip is `14a2e8ee01e49f1ffdcecf8fd64d274c728ead44`. No P10 runtime capability is delivered yet, and Phase 10 remains open.
 
 ## Objective and closure
 
 The approved first profile composes exactly one `ExplorableSiteKind.Ruin` at an existing canonical P8 `LocationId`, with the minimum finite local topology needed to represent semantic places, one or more entry points, containment only where needed, and explicit local connections. P9 authored-bootstrap genesis/provenance is consumed; this profile adds no new generated content.
 
-**Checkpoint:** P10-A — Ruin LocalTopology Genesis Composition. Its bounded record documents the user-approved scope and current design baseline, but independent review is pending. It does not authorize implementation or constitute Phase 10 closure.
+**Checkpoint:** P10-A — Ruin LocalTopology Genesis Composition. The user approved its scope; its durable record and technical design passed independent review. It is ready for isolated implementation, but is not a delivered capability or Phase 10 closure.
 
 ## Dependencies and gates
 
@@ -15,7 +15,7 @@ The approved first profile composes exactly one `ExplorableSiteKind.Ruin` at an 
 - **Promoted P9-B source:** the selected geography-enabled P9 profile supplies exactly one authored Hex and one Location anchored to it, with the accepted P8-A coordinate, terrain-reference and scale provenance inputs. P9 composes these through `SpatialAuthorityStore.TryComposeGeography` before validation/publication and exposes the same P8 authority and profile manifest through `SimulationBootstrapComposition`. P10 must resolve the actual selected-profile LocationId and anchor from that handoff; it cannot mint/adapt a Location, substitute a test-fixture ID, or infer geography from legacy runtime locations.
 - **Integration dependency:** the Ruin's stable identity and Location binding resolve through one factual Location/local-topology model.
 - **Soft ordering:** broader Phase 8 civil-travel validation is not needed for this profile.
-- **Architecture boundary:** the technical design specifies local containment/entry and the pre-start versus post-start mutation boundary; independent review is pending.
+- **Architecture boundary:** the technical design specifies local containment/entry and the pre-start versus post-start mutation boundary; independent review passed for the recorded P10-A checkpoint candidate.
 - **Product gate:** resolved only for the bounded Ruin profile above. No City, Market, population/NPC/economy, Passage/Route, Knowledge, activity, loot, encounter, construction, or other gameplay content is in scope.
 - **P10-A implementation scope:** implement the minimal stable-owner/LocationId-neutral LocalTopology ownership/migration seam needed to publish the Ruin through normal authorities. P8-C's promoted `ExplorableSite` anchor contract is consumed; its current runtime owner resolution and LocalTopology owner references retain runtime-ID assumptions. Preserve existing City/Site consumers, and do not expand P8-C or generalize the adapter beyond this profile.
 - **Exclusions:** runtime construction/founding, automatic world expansion, renderer authority, and a universal WorldEntity.

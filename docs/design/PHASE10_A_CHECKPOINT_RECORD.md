@@ -1,9 +1,8 @@
 # P10-A — Ruin LocalTopology Genesis Composition
 
-**Record status:** bounded P10-A record for the user's accepted scope;
-independent technical review pending. This record documents the technical
-boundary for review. It does not approve implementation, promote a capability,
-or close Phase 10.
+**Record status:** the user-approved bounded P10-A scope and technical boundary
+passed independent review. P10-A is `READY_FOR_IMPLEMENTATION` under this
+record. It does not promote a runtime capability or close Phase 10.
 
 ## Identity and baseline
 
@@ -11,6 +10,10 @@ or close Phase 10.
 - **Name:** Ruin LocalTopology Genesis Composition
 - **P10 design baseline:** `codex/phase10/P10DesignRefresh` at
   `78c617d959662940b7c14b9c8115dd5917397976`.
+- **Reviewed integrated docs candidate:**
+  `codex/phase10/P10ARecordIntegration` at
+  `345dcbc8f05e0d64fed1b058d30f08ad0be8937d`, which combines the refreshed
+  design and record on current P9 canonical State/status tip `14a2e8e`.
 - **Architecture baseline:** `codex/architecture/multi-participant-activities`
   at `c285466c355103d3637ac165246591b72eb7bda0`.
 - **Intraday/extensibility alignment:**
@@ -24,14 +27,16 @@ or close Phase 10.
   `470667d37863384edadb3d93ef64d8004aff46a3`; P9-B capability code at
   `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf`, with the current P9 canonical
   State/status tip at `14a2e8ee01e49f1ffdcecf8fd64d274c728ead44`.
-- **P10 canonical implementation baseline:** none exists yet. Before any
-  implementation starts, refresh these refs and confirm that the exact P8/P9
-  capabilities and P10 technical design remain current.
-- **Independent technical review:** pending for the refreshed P10 design and
-  this durable checkpoint record. No reviewer verdict is claimed here.
-- **Architecture assumption status:** the referenced architecture and both
-  alignment records are identified below; current validity remains for the
-  independent reviewer to confirm.
+- **P10 canonical implementation baseline:** none exists yet. Begin isolated
+  implementation from the reviewed docs candidate above; refresh these refs if
+  an upstream canonical tip advances before implementation/integration.
+- **Independent technical review:** **PASS** on exact integrated docs
+  candidate `345dcbc8f05e0d64fed1b058d30f08ad0be8937d`. The review confirmed the
+  P8-C runtime-owner mapping, selected P9-B profile handoff, current P9 status
+  reference, scope boundaries and validation obligations.
+- **Architecture assumption status:** current architecture `c285466`, P8
+  canonical `470667d`, P9-B code `d9a62d7`, and P9 State/status tip `14a2e8e`
+  were confirmed current and compatible by that review.
 
 The scope approval is the user's explicit decision for one
 `ExplorableSiteKind.Ruin` at a Location supplied by promoted P9-B, with only
@@ -116,12 +121,12 @@ genesis publication handoff. P9-A provenance is retained as lineage where
 applicable. P8-B/D/E, P18, P19, and P20 are not implementation dependencies for
 this bounded profile.
 
-P10-A remains **not ready for implementation** until independent review passes
-on the refreshed technical design and this record against the baselines above.
-This record claims no review, implementation, integration, validation, or
-promotion result. Once review passes, implementation still requires its own
-authorized work branch, independent implementation review, integration, and
-the applicable validation and human promotion gate.
+P10-A is **READY_FOR_IMPLEMENTATION** after the independent review PASS on
+exact docs candidate `345dcbc8f05e0d64fed1b058d30f08ad0be8937d` recorded above.
+No implementation, integration, validation, or runtime promotion is claimed by
+this record. Implementation still requires its own isolated work branch,
+independent code review, integration, the applicable validation, and a separate
+human promotion gate.
 
 ## Validation plan
 
