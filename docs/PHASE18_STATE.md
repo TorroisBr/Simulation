@@ -95,13 +95,15 @@ P11 temporal boundary records, retained P11 Pending status during C-owned
 deferral, and a distinct P18-D economy operation receipt with immutable request
 correlation/current-truth snapshot.
 
-The adapter integration candidate is `codex/phase18/P18CExternalInputDeferralIntegration`
-at `652e16e`. It is based on P18 canonical `311baa9` and retains the approved
-P11 actor-choice authority boundary. The implementation review at `4825b41`
-and source-provenance architecture review passed; the follow-on request-ID test
-fix at `dd90f37` and integration fixture correction at `652e16e` each passed
-independent review. Final integration review is pending, and this candidate has
-not been promoted.
+The adapter code candidate is `652e16e` on integration branch
+`codex/phase18/P18CExternalInputDeferralIntegration`, based on P18 canonical
+`311baa9`. It retains the approved P11 actor-choice authority boundary. The
+implementation review at `4825b41` and source-provenance architecture review
+passed; the request-ID test fix at `dd90f37` and integration fixture correction
+at `652e16e` each passed independent review. Integration review at `ff2631f`
+passed code/composition and requested only that this State point to the current
+candidate and retain validation evidence. This record corrects those two items.
+The candidate has not been promoted.
 
 Temporal identity/cardinality was revalidated: `PersonId` identifies the
 decision actor while `ActivityInstanceId` remains distinct; one-actor fixtures
@@ -111,16 +113,28 @@ store-wide unique `OperationId` values identify individual transitions and
 exact retries. `ActorChoiceStoreTests.TemporalSourceReceiptCanFanOutAcrossInputsWithDistinctOperationIds`
 and the actor-decision shared-receipt tests exercise these cases.
 
-On the integration tree, focused validation passed: ActorAvailabilityDecision
-10/10, ActorChoiceStore 12/12, ActorChoiceRuntime 11/11,
-ActorChoiceDiagnostics 4/4, ActorActionChoiceCommand 6/6, ActivityLifecycle
-17/17, LogicalTimeline 19/19, SimulationRuntimeOrchestration 10/10, and
-SpatialRoutePlanning 20/20. ALL EditMode passed 1778/1778 and the complete
-official EditMode `Smoke` filter passed 5/5. Results are under
-`Temp/ValidationResults` on the integration worktree; `git diff --check`
-passed. The first diagnostics run exposed a stale reflection fixture
-signature; the fixture now matches the temporal constructor and all four
-tests pass.
+Focused validation on the reviewed `ff2631f` code tree passed:
+
+| Suite | Result | XML under `Library/ValidationResults/P18CAdapter` |
+|---|---:|---|
+| ActorAvailabilityDecision | 10/10 | `EditMode-20260927-162914-dd6b36244668415c813334aea1e07b7f.xml` |
+| ActorChoiceStore | 12/12 | `EditMode-20260927-162853-389f76a98e5c477d9c6bb7114ca6a00a.xml` |
+| ActorChoiceRuntime | 11/11 | `EditMode-20260927-162925-d1634bb1f5bf40c7a6fa3f33797dbb03.xml` |
+| ActorChoiceDiagnostics | 4/4 | `EditMode-20260927-162935-9a1936e29ef044d1af819c2ba7302e24.xml` |
+| ActorActionChoiceCommand | 6/6 | `EditMode-20260927-162945-c2ee7d39e89741a5960055162595add6.xml` |
+| ActivityLifecycle | 17/17 | `EditMode-20260927-163001-d9399682384343c29373fd898a7fd2fb.xml` |
+| LogicalTimeline | 19/19 | `EditMode-20260927-163011-26281ff0a7bf4c79b00ad5828bc7a383.xml` |
+| SimulationRuntimeOrchestration | 10/10 | `EditMode-20260927-163021-46cdb5e43dfb43f684d5c3ae518d7803.xml` |
+| SpatialRoutePlanning | 20/20 | `EditMode-20260927-163031-065498b0037348b6aed7b06b263131da.xml` |
+| ALL EditMode | 1778/1778 | `EditMode-20260927-163046-9329b9254f1b474ebf22d54f594ce980.xml` |
+| Official complete EditMode `Smoke` | 5/5 | `EditMode-20260927-163119-37f10b734f524945af59cf5ec16022ed.xml` |
+
+The XML files report `Passed` with zero failed, inconclusive, or skipped tests.
+`git diff --check` passed. The first diagnostics run exposed a stale
+reflection-fixture signature; it now matches the temporal constructor and all
+four diagnostics tests pass. These artifacts are retained in the integration
+worktree's dedicated Library validation directory so later Unity runs do not
+replace the referenced evidence.
 
 The complete EditMode run includes the current P9/P11 compatibility tests; the
 earlier upstream P9-B/P11 run at `2d6b3ce` remains supporting evidence, not a
