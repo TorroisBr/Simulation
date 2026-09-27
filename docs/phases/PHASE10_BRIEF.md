@@ -1,12 +1,12 @@
 # Phase 10 — Local Generation & Pre-start Authoring
 
-**Authority:** planning entry subordinate to `../SIMULATION_ARCHITECTURE.md`. **Readiness:** P10-A's user-approved bounded scope and refreshed technical design/checkpoint record passed independent review at `345dcbc8f05e0d64fed1b058d30f08ad0be8937d`; the checkpoint is `READY_FOR_IMPLEMENTATION`. P9-B's geography capability is promoted at code tip `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf`; the current P9 canonical State/status tip is `14a2e8ee01e49f1ffdcecf8fd64d274c728ead44`. No P10 runtime capability is delivered yet, and Phase 10 remains open.
+**Authority:** planning entry subordinate to `../SIMULATION_ARCHITECTURE.md`. **Readiness:** P10-A's user-approved bounded scope and refreshed technical design/checkpoint record passed independent review at `345dcbc8f05e0d64fed1b058d30f08ad0be8937d`; its implementation candidate passed independent review, validation and promotion preflight, then was user-approved and promoted at code tip `9501bf076d506fb64d6ee3e6d178574fff36e153` (State record `9e79b58`). P9-B's geography capability is promoted at code tip `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf`; the current P9 canonical State/status tip is `14a2e8ee01e49f1ffdcecf8fd64d274c728ead44`. P10-A is delivered; Phase 10 remains open for its broader objective and any separately accepted mandatory checkpoints.
 
 ## Objective and closure
 
 The approved first profile composes exactly one `ExplorableSiteKind.Ruin` at an existing canonical P8 `LocationId`, with the minimum finite local topology needed to represent semantic places, one or more entry points, containment only where needed, and explicit local connections. P9 authored-bootstrap genesis/provenance is consumed; this profile adds no new generated content.
 
-**Checkpoint:** P10-A — Ruin LocalTopology Genesis Composition. The user approved its scope; its durable record and technical design passed independent review. It is ready for isolated implementation, but is not a delivered capability or Phase 10 closure.
+**Checkpoint:** P10-A — Ruin LocalTopology Genesis Composition. The user approved its scope; its durable record and technical design passed independent review. The bounded Ruin/LocalTopology capability is promoted on `codex/phase10/canonical`; this checkpoint promotion does not close Phase 10.
 
 ## Dependencies and gates
 
