@@ -1,6 +1,6 @@
 # Phase 14 — Productive Sources & Material Flow v1
 
-**Authority:** planning entry subordinate to `../SIMULATION_ARCHITECTURE.md`. **Readiness:** P14-A implementation remains `WAIT_DEPENDENCY` pending independent review of its current-base checkpoint contract and the explicit profile/product gates below. The overlapping P9-A bootstrap/genesis integration is promoted; this update grants no implementation authorization.
+**Authority:** planning entry subordinate to `../SIMULATION_ARCHITECTURE.md`. **Readiness:** P14-A implementation remains `WAIT_DEPENDENCY` pending independent review of its current-base checkpoint contract. The user-approved bounded profile resolves the profile/product choice only; it does not grant implementation authorization. The overlapping P9-A bootstrap/genesis integration is promoted.
 
 ## Objective and closure
 
@@ -16,6 +16,7 @@ Establish a bounded, factual account of productive sources and material movement
 - **Integration dependency:** material movement that uses travel must integrate with the single spatial/travel authority, not parallel city-to-city fixed durations.
 - **P9 ordering and ownership:** P9 is not a semantic prerequisite for this manually authored profile. P9-A was promoted at code tip `43f08b3`; its State/Brief closure was recorded at canonical tip `96f2c1a`. The former serial integration/ownership edge to overlapping P9-A startup/composition work is satisfied, without creating a P9 generation capability dependency. P10 content is likewise optional for the authored profile.
 - **Checkpoint gate:** independently review the current-base P14-A contract and verify its implementation ordering/ownership boundary before deriving `READY_FOR_IMPLEMENTATION`.
+- **Resolved profile/product choice:** the user approved the one-City, one-exogenous-source, one-item daily profile stated above. This does not approve added sources, items, Cities, gameplay, checkpoint IDs, or implementation.
 - **Deferred product scope:** changes that add sources, inputs, finite reserves, transformations, paid consumption, transport, multi-worker production, or a different closure boundary require a separately scoped checkpoint; they are not implicit extensions of P14-A.
 - **Exclusions:** universal macroeconomy, automatic trade network, general taxation and full supply simulation.
 - **Replay/fork sensitivity:** source identities, stock/ownership/custody, transformations, transfers, constraints and commands must be recoverable when authoritative.

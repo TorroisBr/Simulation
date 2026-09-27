@@ -4,6 +4,12 @@
 the current canonical base. It is not an implementation authorization, delivery
 record, Phase State, or canonical capability.
 
+**Profile/product gate:** the user has approved the bounded profile stated
+below: one authored City, one exogenous daily source for one item, and that
+City's free population consumption. This resolves the profile/product choice
+only; current-base independent review and implementation authorization remain
+separate gates.
+
 **Planning base:** Phase 8 canonical `470667d37863384edadb3d93ef64d8004aff46a3`;
 architecture baseline `c285466c355103d3637ac165246591b72eb7bda0`. The Phase 8
 advance from `77f3e1a47a1e007492a794ea777d681a21a36d09` to `470667d` records
@@ -149,9 +155,10 @@ promoted at code tip `43f08b3` and Phase 9 closure was recorded at canonical
 State/Brief tip `96f2c1aaf742f313bbb9643e5f5b3d844c402c78`. Its authored
 bootstrap integration is complete; the serialized P9 ownership edge is
 satisfied. That closure-only advance changes no P9-A APIs or content boundary.
-P14-A still requires independent review of this current-base contract and its
-own explicit scope/product gates before implementation readiness can be
-derived. This is not a claim that P14 consumes P9's generation capability.
+P14-A still requires independent review of this current-base contract before
+implementation readiness can be derived. The approved profile does not
+establish implementation authorization. This is not a claim that P14 consumes
+P9's generation capability.
 P10 is optional content. P14-A does not need to rerun genesis or infer identity
 from generated ordering.
 
@@ -196,11 +203,12 @@ robbery/gangs, rituals, War gameplay, or MegaEventos.
   design review and identity/cardinality re-review remain useful evidence.
 - Current-base independent checkpoint review: **pending**.
 - Current implementation status: **`WAIT_DEPENDENCY`**, pending independent
-  current-base checkpoint review and the explicit profile/product gates above.
+  current-base checkpoint review. The bounded profile/product choice is
+  approved; implementation authorization remains ungranted.
   The former serial owner edge to overlapping P9-A startup/genesis work is
   satisfied by P9-A's promotion; P9 remains no semantic prerequisite.
-- Implementation readiness: **not yet derived**. After current-base review and
-  acceptance of the bounded profile, the Master must recompute dependencies,
-  file ownership, and integration order. No checkpoint IDs or implementation
-  authorization are established by this refresh.
+- Implementation readiness: **not yet derived**. After current-base review,
+  the Master must recompute dependencies, file ownership, and integration
+  order. No checkpoint IDs or implementation authorization are established by
+  this refresh.
 - No code/tests changed; no capability delivered; no canonical State claim.
