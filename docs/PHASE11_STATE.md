@@ -1,6 +1,6 @@
 # Phase 11 State — Actor Perspective & Commands v1
 
-**Status:** INTEGRATED AND REVIEWED REFRESHED CANDIDATE — canonical promotion pending
+**Status:** PROMOTED — canonical Phase 11 capability; closure review pending
 
 **Current canonical base:** `codex/phase8/canonical` at `470667d37863384edadb3d93ef64d8004aff46a3`
 
@@ -22,6 +22,20 @@ P8 closure State update and updates this State's base reference; P11 source
 and tests are unchanged. Architecture `c285466` and both current alignment
 records remain applicable. The prior P11 implementation review and validation
 therefore remain valid; no targeted Unity revalidation was required.
+
+**Canonical promotion:** user-approved code candidate
+`0cd4281804ecc6a2d110352d1a238959e93867f0` was promoted to
+`codex/phase11/canonical`. A detached clean worktree was used for promotion;
+the exact candidate branch tip and remote ref matched before promotion.
+
+**Impact review after P9-A promotion:** P11 has no P9 capability dependency.
+The combined compatibility ref `004c6f99e72c63dfd374fca9197ba7ac0818ebca`
+contains the same P9 runtime code (`974a8d7`, unchanged through P9 canonical
+`988b6f5`) and P11 runtime code (`be23671`, unchanged through P11 canonical
+`0cd4281`). It passed P9 bootstrap 10/10, P11 Actor Choice 24/24, typed
+command tests 6/6, all EditMode 1738/1738, complete Smoke 5/5, and
+`git diff --check`. P9's later canonical commits changed documentation only;
+the combined runtime validation remains applicable.
 
 The candidate combines the P11 actor-choice implementation and diagnostics
 with P8-E, which is now canonical. P11's local SellGoods contract has no
@@ -122,8 +136,9 @@ EditMode, and Smoke were rerun after the test-only coverage correction at
 candidate's code review remains applicable because the later sync changed only canonical State/Roadmap docs. Its own human canonical-promotion approval remains required. P8-E's implementation and promotion evidence remain
 recorded in `docs/PHASE8_STATE.md`.
 
-## Next actions
+## Closure status
 
-1. Respect the explicit human promotion gate for this P11 candidate.
-2. After promotion, recompute the full DAG and continue only newly unblocked
-   Phase work.
+P11-01 through P11-04 are promoted and satisfy the bounded user-selected
+SellGoods actor-choice objective. An independent Phase 11 closure review is
+pending; this State does not claim formal Phase 11 closure until that review is
+recorded.
