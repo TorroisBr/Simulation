@@ -236,5 +236,6 @@ tip. Independent integration review **PASS** on exact tip
 State-record correction followed the validated code and that the candidate
 descends from the P9 canonical base. The user approved promotion, and local and
 remote `codex/phase9/canonical` refs were verified at that tip. P9-B is
-promoted; P9-A's historical closure and scope remain unchanged. A separate
-formal Phase 9 closure record remains pending.
+promoted; P9-A's historical closure and scope remain unchanged. The separate
+formal Phase 9 closure record was promoted at `3bd0eb3`; Phase 9 is closed only
+within the two approved checkpoints.
