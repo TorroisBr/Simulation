@@ -45,12 +45,13 @@ documentation/design review; no new code or test result is claimed.
 |---|---|---|
 | P18-A — Logical Timeline Scheduler | PROMOTED | Original source commit `dd4d46ae1a4519d5ae07931965fbb6156692830e`; integrated as `1af92a1` plus collision-safe identity fix `350c6a0`, then refreshed against P8-E canonical in `4dea565`. The P18-A source diff is unchanged. Refreshed `LogicalTimelineTests` 18/18 (`Temp/ValidationResults/EditMode-20260926-212439-794ceaae956f47f7aebde4fade3d05bc.xml`), ALL EditMode 1717/1717 (`Temp/ValidationResults/EditMode-20260926-212600-77374b90b7ad4504b1c0408a27e4dbec.xml`), and complete Smoke 5/5 (`Temp/ValidationResults/EditMode-20260926-212641-e7c2128b74f54c5eb8e7872fd2700d85.xml`); `git diff --check d95b60d 4dea565` passed. Independent refreshed review at `a1463e8` and exact-base refresh review at `4c87ed9` passed, confirming the alignment/cardinality/reconstruction boundaries. |
 | P18-B — Activity Lifecycle | PROMOTED | Implementation `97918cbbe4238a65a216b1a1f0ef84c70b4d080c` was promoted through integration commit `8f0cc4a6764abfc238e2497e4fad19487c6db82f` after independent review and user approval. A foreign timeline cannot dispatch lifecycle facts. Integration validation: ActivityLifecycle 16/16 (`EditMode-20260927-015240-ce080762386744cd9063484f033c5531.xml`), LogicalTimeline 19/19 (`EditMode-20260927-015352-fd3eb5a52fc9441ab7df66ba3b693dd0.xml`), ALL EditMode 1734/1734 (`EditMode-20260927-015417-28accf72f1ca42e79738072790b84001.xml`), official Smoke 5/5 (`EditMode-20260927-015453-960eaed7ce0443329ae1d54f33b4aacf.xml`), and `git diff --check` passed. |
-| P18-C — Availability-Driven Decisions | READY FOR IMPLEMENTATION | Refreshed technical design independently passed at `d090b54` against P18 canonical `3d4fe82`. Implement the additive transition receipts and PersonId-keyed decision coordinator/proposal seam with synthetic composition tests. Keep ActivityInstanceId distinct from actor identity, retain Knowledge-bounded planning/current-truth execution, and preserve P20-compatible participant relations. |
+| P18-C — Availability-Driven Decisions | IMPLEMENTED — FEATURE CANDIDATE; RE-REVIEW PENDING | Source tip `ab05ecfe976e80badf6f509b8e9be25ff556ca23` (initial implementation `5e95a5356b54bebc89a532e2309be59b7ab7edfa`), based exactly on `39bd42e9e78f80c1e40b35b099e980ee8bc44a43`; architecture/alignment baseline `c285466c355103d3637ac165246591b72eb7bda0`. Refreshed technical design review passed at `d090b54` against promoted P18 base `3d4fe82`; independent implementation review requested two corrections, now applied for re-review. Focused ActorAvailabilityDecision 5/5 (`EditMode-20260927-031900-b609bdccc79143319b5e3ab54106cb84.xml`), ActivityLifecycle 17/17 (`EditMode-20260927-031918-7c40152d1d6545e29f127d8709a89542.xml`), ALL EditMode 1740/1740 (`EditMode-20260927-031934-f18b558a02a84818985c816b664106ab.xml`), and complete official Smoke 5/5 (`EditMode-20260927-032011-5c51d8ccde5a4fc8bec922bebcd88dd0.xml`) passed; `git diff --check` passed. This remains a branch candidate; re-review and canonical promotion are not claimed. |
 | P18-D — Consumer Integration | BLOCKED BY P18-C AND SELECTED CONSUMER CAPABILITIES | Integrate only explicit consumers whose prerequisites are met. No blanket P8/P11/P20 gate is implied. |
 
 ## P18-C implementation ownership
 
-The isolated P18-C implementation branch owns the additive receipt log in
+Candidate source `ab05ecfe976e80badf6f509b8e9be25ff556ca23` is based exactly on
+`39bd42e9e78f80c1e40b35b099e980ee8bc44a43` and owns the additive receipt log in
 `ActivityLifecycle.cs`, new PersonId-keyed decision/coordinator contracts, and
 their focused EditMode tests. The coordinator is composed with the same
 `SimulationTimeline` and `ActivityLifecycleStore`; tests exercise committed
@@ -58,7 +59,10 @@ availability transitions and post-advance handoff without adding a second
 scheduler. This bounded core does not own `SimulationRuntime.cs`, `CityRuntime.cs`,
 or the P14 material-flow files. It does not claim that the legacy daily runtime
 has migrated; a selected live consumer and daily compatibility adapter remain
-P18-D integration work after P18-C promotion.
+P18-D integration work after P18-C promotion. The implementation review
+requested corrections to same-tick causal request handling and executor retry
+semantics; both are addressed in the source tip above and await independent
+re-review. This State entry records implementation evidence only.
 
 ## Architecture constraints carried forward
 
@@ -89,8 +93,9 @@ alongside only the specific promoted spatial/travel capability its reviewed
 scope requires.
 
 P18-B's independently reviewed design is at `002ddc394339f924739f67fc4a8ff4420d3aecf3`;
-its implementation is promoted. P18-C can now implement the reviewed seam on
-an isolated branch. P18-D's technical design may proceed against the accepted
+its implementation is promoted. P18-C's implementation candidate is available
+on `codex/phase18/P18CActorDecision`; obtain independent review before integration.
+P18-D's technical design may proceed against the accepted
 A/B/C contracts and actual selected P8/P11 consumer APIs; its code integration
 waits for promoted P18-C and the separate `SimulationRuntime` ownership window.
 P20's entry and technical design are reviewed, while implementation waits for
