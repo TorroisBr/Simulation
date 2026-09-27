@@ -12,6 +12,26 @@ public interface IActivityStartValidator
     bool TryValidate(ActivityInstanceSnapshot instance, LogicalTick instant, out string failureDisposition);
 }
 
+/// <summary>Bounded owner seam for a domain that must publish facts with lifecycle transitions.</summary>
+internal interface IActivityLifecycleTransitionParticipant
+{
+    bool TryPrepareStart(ActivityInstanceSnapshot instance, LogicalTick instant,
+        out IActivityLifecycleTransitionCommit prepared, out string failureDisposition);
+    bool TryPrepareTerminal(ActivityInstanceSnapshot instance, ActivityLifecycleState terminal,
+        ActivityTransitionKind kind, LogicalTick instant, string disposition,
+        out IActivityLifecycleTransitionCommit prepared);
+}
+
+internal interface IActivityLifecycleTransitionCommit
+{
+    bool StartAllowed { get; }
+    string FailureDisposition { get; }
+    // Implementations must allocate/validate during preparation and publish prebuilt state only here.
+    void CommitStarted();
+    void CommitFailedStart();
+    void CommitTerminal();
+}
+
 internal sealed class AcceptActivityStartValidator : IActivityStartValidator
 {
     public static readonly AcceptActivityStartValidator Instance = new AcceptActivityStartValidator();
@@ -113,6 +133,7 @@ public sealed class ActivityLifecycleStore : IDueWorkOwner, ITimelineBoundDueWor
     private List<DueWorkReference> pending = new List<DueWorkReference>();
     private readonly string worldId;
     private readonly IActivityStartValidator startValidator;
+    private IActivityLifecycleTransitionParticipant transitionParticipant;
     private SimulationTimeline authoritativeTimeline;
     private long nextIdentity;
     private readonly List<ActivityTransitionReceipt> transitionReceipts = new List<ActivityTransitionReceipt>();
@@ -138,6 +159,14 @@ public sealed class ActivityLifecycleStore : IDueWorkOwner, ITimelineBoundDueWor
     }
 
     public bool IsBoundToTimeline(SimulationTimeline timeline) => ReferenceEquals(authoritativeTimeline, timeline);
+
+    internal void BindTransitionParticipant(IActivityLifecycleTransitionParticipant participant)
+    {
+        if (participant == null) throw new ArgumentNullException(nameof(participant));
+        if (transitionParticipant != null && !ReferenceEquals(transitionParticipant, participant))
+            throw new InvalidOperationException("Activity lifecycle already has a transition participant.");
+        transitionParticipant = participant;
+    }
 
     public ActivityLifecycleStore Clone()
     {
@@ -195,6 +224,10 @@ public sealed class ActivityLifecycleStore : IDueWorkOwner, ITimelineBoundDueWor
 
     public bool TrySchedule(SimulationTimeline timeline, string instanceId, LogicalTick now, LogicalTick start, LogicalTick? duration,
         IReadOnlyList<string> participantIds, out ActivityFailure failure)
+        => TrySchedule(timeline, instanceId, now, start, duration, participantIds, null, out failure);
+
+    internal bool TrySchedule(SimulationTimeline timeline, string instanceId, LogicalTick now, LogicalTick start, LogicalTick? duration,
+        IReadOnlyList<string> participantIds, Action commitParticipant, out ActivityFailure failure)
     {
         if (timeline == null) throw new ArgumentNullException(nameof(timeline));
         if (!ReferenceEquals(authoritativeTimeline, timeline))
@@ -243,7 +276,8 @@ public sealed class ActivityLifecycleStore : IDueWorkOwner, ITimelineBoundDueWor
         {
             item.Participants = stagedParticipants; item.PlannedStart = start; item.PlannedEnd = end;
             item.Revision = revision; item.State = ActivityLifecycleState.Scheduled;
-            commitments = stagedCommitments; pending = stagedPending; PublishReceipt(scheduledReceipt); return TimelineFailure.None;
+            commitments = stagedCommitments; pending = stagedPending; PublishReceipt(scheduledReceipt);
+            commitParticipant?.Invoke(); return TimelineFailure.None;
         }, out _);
         if (!committed) { failure = ActivityFailure.TimelinePublicationFailed; return false; }
         failure = ActivityFailure.None; return true;
@@ -286,15 +320,19 @@ public sealed class ActivityLifecycleStore : IDueWorkOwner, ITimelineBoundDueWor
         { failure = ActivityFailure.InvalidState; return false; }
         if (item.State == ActivityLifecycleState.Completed || item.State == ActivityLifecycleState.Cancelled || item.State == ActivityLifecycleState.Interrupted)
         { failure = ActivityFailure.InvalidState; return false; }
+        IActivityLifecycleTransitionCommit coordinated = null;
+        ActivityTransitionKind kind = terminal == ActivityLifecycleState.Cancelled ? ActivityTransitionKind.Cancel : ActivityTransitionKind.Interrupt;
+        if (transitionParticipant != null && !transitionParticipant.TryPrepareTerminal(new ActivityInstanceSnapshot(item), terminal, kind,
+            authoritativeInstant, disposition, out coordinated))
+        { failure = ActivityFailure.InvalidState; return false; }
         long revision; try { revision = checked(item.Revision + 1); } catch (OverflowException) { failure = ActivityFailure.RevisionOverflow; return false; }
         List<DueWorkReference> stagedPending = pending.Where(fact => fact.InstanceId != item.Id).ToList();
-        ActivityTransitionKind kind = terminal == ActivityLifecycleState.Cancelled ? ActivityTransitionKind.Cancel : ActivityTransitionKind.Interrupt;
         if (!TryStageReceipt(item, revision, kind, authoritativeInstant, item.Participants, disposition, out ActivityTransitionReceipt receipt))
         { failure = ActivityFailure.RevisionOverflow; return false; }
         bool committed = timeline.TryCommitOwnerFacts(Array.Empty<DueWorkReference>(), () =>
         {
             item.Revision = revision; item.State = terminal; item.TerminalInstant = authoritativeInstant; item.Disposition = disposition ?? string.Empty;
-            pending = stagedPending; ReleaseCommitments(item); PublishReceipt(receipt); return TimelineFailure.None;
+            pending = stagedPending; ReleaseCommitments(item); PublishReceipt(receipt); coordinated?.CommitTerminal(); return TimelineFailure.None;
         }, out _);
         failure = committed ? ActivityFailure.None : ActivityFailure.TimelinePublicationFailed; return committed;
     }
@@ -314,6 +352,20 @@ public sealed class ActivityLifecycleStore : IDueWorkOwner, ITimelineBoundDueWor
         return true;
     }
 
+    /// <summary>Availability check for a scheduled activity, excluding only its own accepted reservation.</summary>
+    internal bool IsAvailableForActivity(string participantId, LogicalTick at, string activityInstanceId)
+    {
+        if (!commitments.TryGetValue(participantId, out List<ActivityParticipantCommitment> values)) return true;
+        foreach (ActivityParticipantCommitment value in values)
+        {
+            if (value.ActivityInstanceId == activityInstanceId) continue;
+            if (instances.TryGetValue(value.ActivityInstanceId, out ActivityInstance instance)
+                && (instance.State == ActivityLifecycleState.Scheduled || instance.State == ActivityLifecycleState.Active)
+                && at.Value >= value.Start.Value && (!value.End.HasValue || at.Value < value.End.Value.Value)) return false;
+        }
+        return true;
+    }
+
     public bool IsCurrent(DueWorkReference reference)
     {
         if (reference == null || reference.OwnerId != DueOwnerId || !instances.TryGetValue(reference.InstanceId, out ActivityInstance item)) return false;
@@ -329,16 +381,30 @@ public sealed class ActivityLifecycleStore : IDueWorkOwner, ITimelineBoundDueWor
         if (!IsCurrent(reference)) { failure = TimelineFailure.StaleWork; return false; }
         ActivityTransitionKind kind = reference.DueWorkId == WorkId(reference.InstanceId, ActivityTransitionKind.Start) ? ActivityTransitionKind.Start : ActivityTransitionKind.Complete;
         string disposition = string.Empty;
-        if (kind == ActivityTransitionKind.Start && !startValidator.TryValidate(new ActivityInstanceSnapshot(instances[reference.InstanceId]), reference.DueAt, out disposition))
-            prepared = new ActivityCommit(this, reference, kind, false, string.IsNullOrWhiteSpace(disposition) ? "start-precondition-failed" : disposition);
-        else prepared = new ActivityCommit(this, reference, kind, true, null);
+        IActivityLifecycleTransitionCommit coordinated = null;
+        bool allowed = true;
+        if (kind == ActivityTransitionKind.Start)
+        {
+            ActivityInstanceSnapshot snapshot = new ActivityInstanceSnapshot(instances[reference.InstanceId]);
+            allowed = startValidator.TryValidate(snapshot, reference.DueAt, out disposition);
+            if (transitionParticipant != null)
+            {
+                if (!transitionParticipant.TryPrepareStart(snapshot, reference.DueAt, out coordinated, out string participantDisposition))
+                    allowed = false;
+                if (string.IsNullOrWhiteSpace(disposition)) disposition = participantDisposition;
+                if (coordinated != null && !coordinated.StartAllowed) allowed = false;
+            }
+        }
+        if (!allowed) disposition = string.IsNullOrWhiteSpace(disposition) ? (coordinated?.FailureDisposition ?? "start-precondition-failed") : disposition;
+        prepared = new ActivityCommit(this, reference, kind, allowed, disposition, coordinated);
         failure = TimelineFailure.None; return true;
     }
 
     public IReadOnlyList<DueWorkReference> RebuildPendingReferences()
     { return pending.AsReadOnly(); }
 
-    private bool CommitTransition(DueWorkReference reference, ActivityTransitionKind kind, bool startAllowed, string failureDisposition, out TimelineFailure failure)
+    private bool CommitTransition(DueWorkReference reference, ActivityTransitionKind kind, bool startAllowed, string failureDisposition,
+        IActivityLifecycleTransitionCommit coordinated, out TimelineFailure failure)
     {
         if (!IsCurrent(reference)) { failure = TimelineFailure.StaleWork; return false; }
         ActivityInstance item = instances[reference.InstanceId];
@@ -353,7 +419,7 @@ public sealed class ActivityLifecycleStore : IDueWorkOwner, ITimelineBoundDueWor
             { failure = TimelineFailure.DispatchFailed; return false; }
             item.Revision = terminalRevision; item.State = ActivityLifecycleState.Cancelled;
             item.TerminalInstant = reference.DueAt; item.Disposition = failedDisposition;
-            pending = terminalPending; ReleaseCommitments(item); PublishReceipt(failedReceipt); failure = TimelineFailure.None; return true;
+            pending = terminalPending; ReleaseCommitments(item); PublishReceipt(failedReceipt); coordinated?.CommitFailedStart(); failure = TimelineFailure.None; return true;
         }
         if (!TryStageReceipt(item, revision, kind, reference.DueAt, item.Participants, kind == ActivityTransitionKind.Start ? "started" : "completed", out ActivityTransitionReceipt receipt))
         { failure = TimelineFailure.DispatchFailed; return false; }
@@ -365,7 +431,7 @@ public sealed class ActivityLifecycleStore : IDueWorkOwner, ITimelineBoundDueWor
         if (kind == ActivityTransitionKind.Start)
         {
             item.State = ActivityLifecycleState.Active; item.ActualStart = reference.DueAt;
-            pending = stagedPending; PublishReceipt(receipt); failure = TimelineFailure.None; return true;
+            pending = stagedPending; PublishReceipt(receipt); coordinated?.CommitStarted(); failure = TimelineFailure.None; return true;
         }
         item.State = ActivityLifecycleState.Completed; item.TerminalInstant = reference.DueAt;
         pending = stagedPending; ReleaseCommitments(item); PublishReceipt(receipt); failure = TimelineFailure.None; return true;
@@ -398,8 +464,10 @@ public sealed class ActivityLifecycleStore : IDueWorkOwner, ITimelineBoundDueWor
     {
         private readonly ActivityLifecycleStore owner; private readonly DueWorkReference reference; private readonly ActivityTransitionKind kind;
         private readonly bool startAllowed; private readonly string failureDisposition;
-        public ActivityCommit(ActivityLifecycleStore owner, DueWorkReference reference, ActivityTransitionKind kind, bool startAllowed, string failureDisposition)
-        { this.owner = owner; this.reference = reference; this.kind = kind; this.startAllowed = startAllowed; this.failureDisposition = failureDisposition; }
+        private readonly IActivityLifecycleTransitionCommit coordinated;
+        public ActivityCommit(ActivityLifecycleStore owner, DueWorkReference reference, ActivityTransitionKind kind, bool startAllowed,
+            string failureDisposition, IActivityLifecycleTransitionCommit coordinated)
+        { this.owner = owner; this.reference = reference; this.kind = kind; this.startAllowed = startAllowed; this.failureDisposition = failureDisposition; this.coordinated = coordinated; }
         public IReadOnlyList<DueWorkReference> NewOwnerFacts
         {
             get
@@ -410,7 +478,7 @@ public sealed class ActivityLifecycleStore : IDueWorkOwner, ITimelineBoundDueWor
                 return new[] { owner.Reference(item, reference.Revision + 1, ActivityTransitionKind.Complete, item.PlannedEnd.Value) };
             }
         }
-        public bool TryCommit(out TimelineFailure failure) => owner.CommitTransition(reference, kind, startAllowed, failureDisposition, out failure);
+        public bool TryCommit(out TimelineFailure failure) => owner.CommitTransition(reference, kind, startAllowed, failureDisposition, coordinated, out failure);
     }
 }
 
@@ -429,6 +497,16 @@ public sealed class ActivityLifecycleComposition
     {
         Store = store ?? throw new ArgumentNullException(nameof(store));
         Timeline = new SimulationTimeline(calendar, initialInstant, Store);
+        Store.BindTimeline(Timeline);
+    }
+
+    /// <summary>Trusted composition for owners that also coordinate a timeline boundary authority.</summary>
+    public ActivityLifecycleComposition(ActivityLifecycleStore store, SimulationCalendar calendar, LogicalTick initialInstant,
+        IDayBoundaryOwner boundaryOwner, string timelineWorldId, string timelineProfileId = "default")
+    {
+        Store = store ?? throw new ArgumentNullException(nameof(store));
+        Timeline = new SimulationTimeline(calendar, initialInstant, Store, boundaryOwner: boundaryOwner,
+            worldId: timelineWorldId, profileId: timelineProfileId);
         Store.BindTimeline(Timeline);
     }
 }
