@@ -5,11 +5,13 @@
 - Current canonical architecture baseline: `c285466c355103d3637ac165246591b72eb7bda0`.
 - Upstream canonical baseline: `codex/phase8/canonical` at
   `470667d37863384edadb3d93ef64d8004aff46a3`.
-- Current P9 integration candidate: `codex/phase9/GenesisAuthoredBootstrapIntegration`.
+- Promoted P9 branch: `codex/phase9/canonical`.
+- Source integration branch: `codex/phase9/GenesisAuthoredBootstrapIntegration`.
 - P9-A candidate integration record: `12a1e0dfb8b856525a84a9f8373711e9584f95a9`.
 - P9-A implementation candidate: `974a8d72a158962619d7ba8aa1ccf854eeadd47e`.
-- **P9-A status: VALIDATED_CANDIDATE; canonical promotion awaits the initial human approval required by `docs/EXECUTION_MODEL.md`.**
-- **Phase 9 remains open.** This record establishes no Phase 9 canonical branch or promoted capability and does not claim the full Phase 9 objective is closed.
+- P9-A code promotion commit: `43f08b3dfbf042380c2f8a8b037bbf3ebd309ccb` on `codex/phase9/canonical`.
+- **P9-A status: PROMOTED.** The user approved promotion of the reviewed candidate; this State-only commit records that promotion.
+- **Phase 9 remains open.** P9-A is canonical; this record does not claim the full Phase 9 objective is closed.
 
 ## P9-A — Authored Bootstrap Genesis v1
 
@@ -72,16 +74,15 @@ No long-run suite was required: P9-A introduces no daily-loop behavior.
   route, travel, or presence facts. P8's promoted baseline is recorded for
   ancestry and regression compatibility, not as an invented P9-A capability
   dependency.
-- P10 implementation still waits for promoted P9 genesis and its relevant
-  promoted P8-C local/anchor capability. Its reviewed entry architecture may
-  continue as design evidence; it is not implementation readiness.
+- P9-A promotion satisfies the P9 genesis prerequisite for P10, and the
+  relevant P8-C local/anchor capability is canonical. P10 may advance under
+  its own reviewed entry architecture, checkpoint scope and technical gates.
 - P11 Actor Choice remains a separate unpromoted candidate. Combined
   compatibility validation does not merge or promote it.
 - P18, P19 and P20 work remains governed by the explicit dependency edges in
   the Roadmap and Phase Briefs; none is pulled forward by P9-A.
 
-Canonical promotion requires the exact validated integration tip, clean and
-verified local/remote state, this State record, independent review, retained
-validation evidence and explicit human approval. Phase closure requires its
-own objective/checkpoint review and State update; P9-A promotion alone is not
-Phase 9 closure.
+Promotion record: the approved integration candidate was promoted to
+`codex/phase9/canonical` at `43f08b3`; local and remote refs were verified.
+Phase closure remains separate and requires its own objective/checkpoint
+review, known limitations and deferred consumers, and formal State marker.
