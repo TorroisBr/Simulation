@@ -119,6 +119,7 @@ public sealed class LogicalTimelineTests
         public bool FailNextStep;
         public string FailStepId;
         public bool FailNextPublication;
+        public bool ChangeManifestAfterStep;
         public Action OnPublished;
         public SimulationTimeline Timeline;
 
@@ -142,6 +143,7 @@ public sealed class LogicalTimelineTests
         { prepared = new Publication(this, manifest); failure = TimelineFailure.None; return true; }
         public bool TryHandoff(BoundaryContinuationManifest manifest, IReadOnlyList<string> signals, out TimelineFailure failure)
         {
+            Assert.That(Timeline.IsAdvanceInProgress, Is.False);
             if (!states.TryGetValue(manifest.ContinuationId, out BoundaryContinuationState state)) { failure = TimelineFailure.ContinuationFailed; return false; }
             foreach (string signal in signals) if (!HandedOffSignals.Contains(signal)) HandedOffSignals.Add(signal);
             states[manifest.ContinuationId] = CopyState(state, signalsHandedOff: true);
@@ -170,6 +172,27 @@ public sealed class LogicalTimelineTests
             int next = step.Ordinal + 1;
             states[manifest.ContinuationId] = new BoundaryContinuationState(manifest, next, next == manifest.Steps.Count,
                 false, Array.Empty<BoundaryPublishedFact>(), retainedFacts, retainedSignals, false);
+            if (ChangeManifestAfterStep)
+            {
+                ChangeManifestAfterStep = false;
+                List<BoundaryContinuationStep> altered = new List<BoundaryContinuationStep>(manifest.Steps);
+                int changedOrdinal = Math.Min(next, altered.Count - 1);
+                if (changedOrdinal >= 0)
+                {
+                    BoundaryContinuationStep old = altered[changedOrdinal];
+                    altered[changedOrdinal] = new BoundaryContinuationStep(old.Ordinal, old.StepId, old.OwnerId,
+                        old.OperationKind, old.OperationVersion, old.OwnerRevision, old.Payload + " changed",
+                        old.PersonId, old.Disposition);
+                }
+                BoundaryContinuationManifest changed = new BoundaryContinuationManifest(
+                    new DailyBoundaryOperation(manifest.WorldId, manifest.ProfileId, manifest.AbsoluteDay),
+                    manifest.SubphaseKind, manifest.SubphaseVersion, manifest.ConfigurationIdentity,
+                    altered.AsReadOnly(), manifest.ContentIdentity);
+                BoundaryContinuationState current = states[manifest.ContinuationId];
+                states[manifest.ContinuationId] = new BoundaryContinuationState(changed, current.NextStepOrdinal,
+                    current.IsComplete, current.TimelineFactsPublished, current.PublishedFacts,
+                    current.RetainedTimelineFacts, current.RetainedSourceSignals, current.SignalsHandedOff);
+            }
             failure = TimelineFailure.None; return true;
         }
         private bool CommitPublication(BoundaryContinuationManifest manifest, IReadOnlyList<BoundaryPublishedFact> facts, out TimelineFailure failure)
@@ -222,11 +245,11 @@ public sealed class LogicalTimelineTests
     }
 
     private static SimulationTimeline ResumableTimeline(ResumableBoundaryOwner owner, DueOwner due, string restoredId = null,
-        IReadOnlyList<string> handoffIds = null)
+        IReadOnlyList<string> handoffIds = null, string worldId = "world|one", string profileId = "profile:one")
     {
         LogicalTick boundary = new LogicalTick(LogicalTick.TicksPerDay);
         SimulationTimeline timeline = new SimulationTimeline(Calendar(), new LogicalTick(0), due,
-            boundaryOwner: owner, worldId: "world|one", profileId: "profile:one", pendingContinuationId: restoredId,
+            boundaryOwner: owner, worldId: worldId, profileId: profileId, pendingContinuationId: restoredId,
             pendingSignalHandoffIds: handoffIds);
         due.Timeline = timeline; owner.Timeline = timeline;
         due.Current.Add("ordinary");
@@ -471,6 +494,10 @@ public sealed class LogicalTimelineTests
         SimulationTimeline timeline = ResumableTimeline(owner, due);
         LogicalTick boundary = new LogicalTick(LogicalTick.TicksPerDay);
         Assert.That(timeline.TryAdvanceTo(boundary, out TimelineFailure failure), Is.True, failure.ToString());
+        Assert.That(owner.HandedOffSignals, Is.Empty, "signals remain pending until the host completes post-advance handoff");
+        Assert.That(timeline.TryAdvanceTo(boundary, out failure), Is.False);
+        Assert.That(failure, Is.EqualTo(TimelineFailure.ContinuationPending));
+        Assert.That(timeline.TryCompleteSuccessfulAdvanceHandoffs(out failure), Is.True, failure.ToString());
         string occurrence = StableKey("world|one", "profile:one", "1");
         string continuation = StableKey(occurrence, "test-subphase", "v1");
         Assert.That(owner.PreparedOccurrences[0], Is.EqualTo(occurrence));
@@ -501,6 +528,7 @@ public sealed class LogicalTimelineTests
 
         owner.SelectedSteps = new[] { Step(0, "changed"), Step(1, "changed"), Step(2, "changed") };
         Assert.That(timeline.TryAdvanceTo(boundary, out failure), Is.True, failure.ToString());
+        Assert.That(timeline.TryCompleteSuccessfulAdvanceHandoffs(out failure), Is.True, failure.ToString());
         CollectionAssert.AreEqual(new[] { Step(0, "person|a").StepId, Step(1, "person|b").StepId, Step(2, "person|c").StepId }, owner.AppliedSteps);
         CollectionAssert.AreEqual(new[] { "ordinary" }, due.Committed);
         Assert.That(owner.PreparedOccurrences.Count, Is.EqualTo(1));
@@ -524,6 +552,8 @@ public sealed class LogicalTimelineTests
         Assert.That(timeline.TryAdvanceTo(boundary, out failure), Is.True, failure.ToString());
         Assert.That(timeline.CausalSequence, Is.EqualTo(before + 1));
         Assert.That(owner.AppliedSteps.Count, Is.EqualTo(1));
+        Assert.That(owner.HandedOffSignals, Is.Empty);
+        Assert.That(timeline.TryCompleteSuccessfulAdvanceHandoffs(out failure), Is.True, failure.ToString());
         Assert.That(owner.HandedOffSignals, Has.Count.EqualTo(1));
     }
 
@@ -546,6 +576,8 @@ public sealed class LogicalTimelineTests
         Assert.That(owner.HandedOffSignals, Is.Empty);
         due.CommitSucceeds = true;
         Assert.That(timeline.TryAdvanceTo(boundary, out failure), Is.True, failure.ToString());
+        Assert.That(owner.HandedOffSignals, Is.Empty);
+        Assert.That(timeline.TryCompleteSuccessfulAdvanceHandoffs(out failure), Is.True, failure.ToString());
         Assert.That(owner.HandedOffSignals, Has.Count.EqualTo(1));
         Assert.That(owner.AppliedSteps.Count, Is.EqualTo(1));
     }
@@ -571,6 +603,8 @@ public sealed class LogicalTimelineTests
         Assert.That(restored.TryIndexOwnerFact(Work("ordinary-owner", "ordinary", "activity|instance", 0, boundary.Value), out _), Is.True);
         Assert.That(restored.TrySealInputsThrough(boundary, out _), Is.True);
         Assert.That(restored.TryAdvanceTo(boundary, out TimelineFailure failure), Is.True, failure.ToString());
+        Assert.That(owner.HandedOffSignals, Is.Empty);
+        Assert.That(restored.TryCompleteSuccessfulAdvanceHandoffs(out failure), Is.True, failure.ToString());
         CollectionAssert.AreEqual(new[] { "signal:" + Step(0, "person|one").StepId }, owner.HandedOffSignals);
         Assert.That(owner.AppliedSteps.Count, Is.EqualTo(1));
     }
@@ -590,7 +624,101 @@ public sealed class LogicalTimelineTests
         DueOwner restoredDue = new DueOwner();
         SimulationTimeline restored = ResumableTimeline(owner, restoredDue, continuationId);
         Assert.That(restored.TryAdvanceTo(boundary, out TimelineFailure failure), Is.True, failure.ToString());
+        Assert.That(restored.TryCompleteSuccessfulAdvanceHandoffs(out failure), Is.True, failure.ToString());
         CollectionAssert.AreEqual(new[] { Step(0, "person|a").StepId, Step(1, "person|b").StepId }, owner.AppliedSteps);
+    }
+
+    [TestCase("different-world", "profile:one")]
+    [TestCase("world|one", "different-profile")]
+    public void PendingContinuationReconstructionRejectsWrongWorldOrProfile(string worldId, string profileId)
+    {
+        ResumableBoundaryOwner owner = new ResumableBoundaryOwner { FailStepId = Step(1, "person|b").StepId };
+        owner.SelectedSteps = new[] { Step(0, "person|a"), Step(1, "person|b") };
+        SimulationTimeline original = ResumableTimeline(owner, new DueOwner());
+        LogicalTick boundary = new LogicalTick(LogicalTick.TicksPerDay);
+        Assert.That(original.TryAdvanceTo(boundary, out _), Is.False);
+
+        DueOwner restoredDue = new DueOwner();
+        SimulationTimeline restored = new SimulationTimeline(Calendar(), boundary, restoredDue, boundaryOwner: owner,
+            worldId: worldId, profileId: profileId, pendingContinuationId: original.PendingContinuationId);
+        owner.Timeline = restored; restoredDue.Timeline = restored;
+        Assert.That(restored.TryIndexOwnerFact(Work("ordinary-owner", "ordinary", "activity|instance", 0, boundary.Value), out _), Is.True);
+        Assert.That(restored.TrySealInputsThrough(boundary, out _), Is.True);
+        Assert.That(restored.TryAdvanceTo(boundary, out TimelineFailure failure), Is.False);
+        Assert.That(failure, Is.EqualTo(TimelineFailure.ContinuationFailed));
+        CollectionAssert.AreEqual(new[] { Step(0, "person|a").StepId }, owner.AppliedSteps);
+    }
+
+    [TestCase("different-world", "profile:one")]
+    [TestCase("world|one", "different-profile")]
+    public void RestoredSignalHandoffRejectsWrongWorldOrProfile(string worldId, string profileId)
+    {
+        ResumableBoundaryOwner owner = new ResumableBoundaryOwner(); owner.SelectedSteps = new[] { Step(0, "person|one") };
+        SimulationTimeline original = ResumableTimeline(owner, new DueOwner { CommitSucceeds = false });
+        LogicalTick boundary = new LogicalTick(LogicalTick.TicksPerDay);
+        Assert.That(original.TryAdvanceTo(boundary, out _), Is.False);
+        Assert.That(original.PendingSignalHandoffIds, Has.Count.EqualTo(1));
+
+        DueOwner restoredDue = new DueOwner();
+        SimulationTimeline restored = new SimulationTimeline(Calendar(), boundary, restoredDue, boundaryOwner: owner,
+            worldId: worldId, profileId: profileId, pendingSignalHandoffIds: original.PendingSignalHandoffIds,
+            initialCausalSequence: original.CausalSequence);
+        owner.Timeline = restored; restoredDue.Timeline = restored; restoredDue.Current.Add("ordinary");
+        Assert.That(restored.TryIndexOwnerFact(Work("ordinary-owner", "ordinary", "activity|instance", 0, boundary.Value), out _), Is.True);
+        Assert.That(restored.TrySealInputsThrough(boundary, out _), Is.True);
+        Assert.That(restored.TryAdvanceTo(boundary, out TimelineFailure failure), Is.False);
+        Assert.That(failure, Is.EqualTo(TimelineFailure.ContinuationFailed));
+        Assert.That(owner.HandedOffSignals, Is.Empty);
+    }
+
+    [Test]
+    public void ReloadedContinuationRejectsChangedFrozenDescriptorContent()
+    {
+        ResumableBoundaryOwner owner = new ResumableBoundaryOwner
+        { FailStepId = Step(1, "person|b").StepId, ChangeManifestAfterStep = true };
+        owner.SelectedSteps = new[] { Step(0, "person|a"), Step(1, "person|b") };
+        SimulationTimeline timeline = ResumableTimeline(owner, new DueOwner());
+        Assert.That(timeline.TryAdvanceTo(new LogicalTick(LogicalTick.TicksPerDay), out TimelineFailure failure), Is.False);
+        Assert.That(failure, Is.EqualTo(TimelineFailure.ContinuationFailed));
+        CollectionAssert.AreEqual(new[] { Step(0, "person|a").StepId }, owner.AppliedSteps);
+    }
+
+    [Test]
+    public void FrozenManifestValueComparisonRejectsDescriptorReorderingAndIdentityConflicts()
+    {
+        DailyBoundaryOperation operation = new DailyBoundaryOperation("world|a", "profile:b", 1);
+        BoundaryContinuationStep first = Step(0, "person|a");
+        BoundaryContinuationStep second = Step(1, "person|b");
+        BoundaryContinuationManifest frozen = new BoundaryContinuationManifest(operation, "phase", "v1", "cfg", new[] { first, second }, "content");
+        BoundaryContinuationManifest reordered = new BoundaryContinuationManifest(operation, "phase", "v1", "cfg",
+            new[] { new BoundaryContinuationStep(0, second.StepId, second.OwnerId, second.OperationKind, second.OperationVersion,
+                second.OwnerRevision, second.Payload, second.PersonId, second.Disposition),
+                new BoundaryContinuationStep(1, first.StepId, first.OwnerId, first.OperationKind, first.OperationVersion,
+                    first.OwnerRevision, first.Payload, first.PersonId, first.Disposition) }, "content");
+        Assert.That(frozen.HasSameFrozenContent(reordered), Is.False);
+        Assert.That(frozen.GetExecutionStepIdentity(first), Is.Not.EqualTo(frozen.ContinuationId));
+        Assert.That(frozen.GetExecutionStepIdentity(first), Is.Not.EqualTo(frozen.BoundaryOccurrenceId));
+    }
+
+    [TestCase(false)]
+    [TestCase(true)]
+    public void PublishedFactReconciliationRejectsIndexedIdentityWithDifferentDueOrCausalSequence(bool causalSequenceConflict)
+    {
+        ResumableBoundaryOwner owner = new ResumableBoundaryOwner(); owner.SelectedSteps = new[] { Step(0, "person|one") };
+        SimulationTimeline first = ResumableTimeline(owner, new DueOwner { CommitSucceeds = false });
+        LogicalTick boundary = new LogicalTick(LogicalTick.TicksPerDay);
+        Assert.That(first.TryAdvanceTo(boundary, out _), Is.False);
+        string factId = StableKey(Step(0, "person|one").StepId, "fact");
+        long restoredSequence = causalSequenceConflict ? 5L : 1L;
+        SimulationTimeline restored = new SimulationTimeline(Calendar(), boundary, new DueOwner(), boundaryOwner: owner,
+            worldId: "world|one", profileId: "profile:one", pendingSignalHandoffIds: first.PendingSignalHandoffIds,
+            initialCausalSequence: restoredSequence);
+        LogicalTick conflictingDueAt = causalSequenceConflict ? boundary : new LogicalTick(boundary.Value + 1L);
+        Assert.That(restored.TryIndexOwnerFact(new DueWorkReference("z-boundary-owner", factId, "activity|shared", 0, 1,
+            conflictingDueAt), out _), Is.True);
+        Assert.That(restored.TrySealInputsThrough(boundary, out _), Is.True);
+        Assert.That(restored.TryAdvanceTo(boundary, out TimelineFailure failure), Is.False);
+        Assert.That(failure, Is.EqualTo(TimelineFailure.PublicationFailed));
     }
 
     [Test]

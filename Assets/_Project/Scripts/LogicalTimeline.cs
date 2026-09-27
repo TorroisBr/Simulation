@@ -198,6 +198,23 @@ public sealed class BoundaryContinuationManifest
             throw new ArgumentException("Step must be the frozen manifest descriptor at its ordinal.", nameof(step));
         return SpatialStableKey.Encode(ContinuationId, step.Ordinal.ToString(CultureInfo.InvariantCulture), step.StepId);
     }
+    public bool HasSameFrozenContent(BoundaryContinuationManifest other)
+    {
+        if (other == null || BoundaryOccurrenceId != other.BoundaryOccurrenceId || ContinuationId != other.ContinuationId
+            || SubphaseKind != other.SubphaseKind || SubphaseVersion != other.SubphaseVersion
+            || WorldId != other.WorldId || ProfileId != other.ProfileId || AbsoluteDay != other.AbsoluteDay
+            || ConfigurationIdentity != other.ConfigurationIdentity || ContentIdentity != other.ContentIdentity
+            || steps.Count != other.steps.Count) return false;
+        for (int i = 0; i < steps.Count; i++)
+        {
+            BoundaryContinuationStep left = steps[i]; BoundaryContinuationStep right = other.steps[i];
+            if (left.Ordinal != right.Ordinal || left.StepId != right.StepId || left.OwnerId != right.OwnerId
+                || left.OperationKind != right.OperationKind || left.OperationVersion != right.OperationVersion
+                || left.OwnerRevision != right.OwnerRevision || left.Payload != right.Payload
+                || left.PersonId != right.PersonId || left.Disposition != right.Disposition) return false;
+        }
+        return true;
+    }
 
     public BoundaryContinuationManifest(DailyBoundaryOperation operation, string subphaseKind,
         string subphaseVersion, string configurationIdentity, IReadOnlyList<BoundaryContinuationStep> steps,
@@ -232,7 +249,7 @@ public sealed class BoundaryPublishedFact
     public BoundaryPublishedFact(DueWorkReference fact, long causalSequence)
     {
         Fact = fact ?? throw new ArgumentNullException(nameof(fact));
-        if (causalSequence < 0) throw new ArgumentOutOfRangeException(nameof(causalSequence));
+        if (causalSequence <= 0) throw new ArgumentOutOfRangeException(nameof(causalSequence));
         CausalSequence = causalSequence;
     }
 }
@@ -317,6 +334,7 @@ public sealed class SimulationTimeline
     private readonly SortedDictionary<long, List<ScheduledDueWork>> agenda = new SortedDictionary<long, List<ScheduledDueWork>>();
     private readonly SortedDictionary<long, List<TimelineInputReference>> inputs = new SortedDictionary<long, List<TimelineInputReference>>();
     private readonly HashSet<string> workIdentities = new HashSet<string>(StringComparer.Ordinal);
+    private readonly Dictionary<string, ScheduledDueWork> indexedWork = new Dictionary<string, ScheduledDueWork>(StringComparer.Ordinal);
     private readonly HashSet<long> acceptedInputSequences = new HashSet<long>();
     private long now;
     private long causalSequence;
@@ -327,13 +345,14 @@ public sealed class SimulationTimeline
     private bool advancing;
     private bool dispatching;
     private bool ownerCommitWindow;
+    private bool successfulAdvanceAwaitingHandoff;
 
     public SimulationTimeline(SimulationCalendar calendar, LogicalTick initialInstant,
         IDueWorkOwner dueWorkOwner = null, ITimelineInputOwner inputOwner = null,
         IDayBoundaryOwner boundaryOwner = null, string worldId = null, string profileId = "default",
         int maxDispatchesPerInstant = DefaultMaxDispatchesPerInstant, long? pendingBoundaryDay = null,
         string pendingContinuationId = null, IReadOnlyList<string> pendingSignalHandoffIds = null,
-        long initialCausalSequence = 0L)
+        long initialCausalSequence = 0L, bool successfulAdvanceAwaitingHandoff = false)
     {
         this.calendar = calendar ?? throw new ArgumentNullException(nameof(calendar));
         if (maxDispatchesPerInstant <= 0) throw new ArgumentOutOfRangeException(nameof(maxDispatchesPerInstant));
@@ -358,6 +377,9 @@ public sealed class SimulationTimeline
                 if (string.IsNullOrWhiteSpace(id) || this.pendingSignalHandoffIds.Contains(id)) throw new ArgumentException("Restored handoff identities must be nonempty and unique.", nameof(pendingSignalHandoffIds));
                 else this.pendingSignalHandoffIds.Add(id);
         }
+        if (successfulAdvanceAwaitingHandoff && this.pendingSignalHandoffIds.Count == 0)
+            throw new ArgumentException("A restored post-advance handoff requires pending continuation identities.", nameof(successfulAdvanceAwaitingHandoff));
+        this.successfulAdvanceAwaitingHandoff = successfulAdvanceAwaitingHandoff;
         calendar.GetDate(initialInstant.AbsoluteDay);
     }
 
@@ -367,6 +389,8 @@ public sealed class SimulationTimeline
     public long? PendingBoundaryDay => pendingBoundaryDay < 0L ? (long?)null : pendingBoundaryDay;
     public string PendingContinuationId => pendingContinuationId;
     public IReadOnlyList<string> PendingSignalHandoffIds => pendingSignalHandoffIds.AsReadOnly();
+    public bool IsAdvanceInProgress => advancing;
+    public bool SuccessfulAdvanceAwaitingHandoff => successfulAdvanceAwaitingHandoff;
     public LogicalTick? NextDueInstant
     {
         get
@@ -446,8 +470,11 @@ public sealed class SimulationTimeline
         long sequence;
         try { sequence = checked(causalSequence + 1L); }
         catch (OverflowException) { failure = TimelineFailure.Overflow; return false; }
-        workIdentities.Add(Identity(reference));
-        AddToAgenda(new ScheduledDueWork(reference, 0, sequence));
+        string identity = Identity(reference);
+        ScheduledDueWork scheduled = new ScheduledDueWork(reference, 0, sequence);
+        workIdentities.Add(identity);
+        indexedWork.Add(identity, scheduled);
+        AddToAgenda(scheduled);
         causalSequence = sequence;
         failure = TimelineFailure.None;
         return true;
@@ -511,6 +538,7 @@ public sealed class SimulationTimeline
     public bool TryAdvanceTo(LogicalTick target, out TimelineFailure failure)
     {
         if (advancing || ownerCommitWindow) { failure = TimelineFailure.ReentrantAdvance; return false; }
+        if (successfulAdvanceAwaitingHandoff) { failure = TimelineFailure.ContinuationPending; return false; }
         if (target.Value < now) { failure = TimelineFailure.TargetBeforeNow; return false; }
         if (sealedThrough < target.Value) { failure = TimelineFailure.InputNotSealed; return false; }
         advancing = true;
@@ -655,12 +683,23 @@ public sealed class SimulationTimeline
 
                 if (now == target.Value) break;
             }
-            if (!TryHandoffBoundarySignals(out failure)) return false;
             failure = TimelineFailure.None;
-            return true;
+            successfulAdvanceAwaitingHandoff = pendingSignalHandoffIds.Count > 0;
         }
         catch (OverflowException) { failure = TimelineFailure.Overflow; return false; }
         finally { advancing = false; }
+        return true;
+    }
+
+    /// <summary>Called by the host after TryAdvanceTo returned success; external signal callbacks run outside the advance.</summary>
+    public bool TryCompleteSuccessfulAdvanceHandoffs(out TimelineFailure failure)
+    {
+        if (advancing || ownerCommitWindow) { failure = TimelineFailure.ReentrantAdvance; return false; }
+        if (!successfulAdvanceAwaitingHandoff) { failure = TimelineFailure.DispatchFailed; return false; }
+        if (!TryHandoffBoundarySignals(out failure)) return false;
+        successfulAdvanceAwaitingHandoff = pendingSignalHandoffIds.Count > 0;
+        failure = TimelineFailure.None;
+        return true;
     }
 
     private static bool CanIndex(DueWorkReference reference, long instant, out TimelineFailure failure)
@@ -682,7 +721,7 @@ public sealed class SimulationTimeline
         { if (failure == TimelineFailure.None) failure = TimelineFailure.ContinuationFailed; return false; }
         BoundaryContinuationManifest manifest = state.Manifest;
         if (manifest.ContinuationId != pendingContinuationId
-            || manifest.ContinuationId != SpatialStableKey.Encode(manifest.BoundaryOccurrenceId, manifest.SubphaseKind, manifest.SubphaseVersion)
+            || !IsManifestForThisTimeline(manifest)
             || manifest.AbsoluteDay != now / LogicalTick.TicksPerDay || now % LogicalTick.TicksPerDay != 0L)
         { failure = TimelineFailure.ContinuationFailed; return false; }
 
@@ -707,7 +746,7 @@ public sealed class SimulationTimeline
             { if (failure == TimelineFailure.None) failure = TimelineFailure.ContinuationFailed; return false; }
             if (!owner.TryResolveContinuation(pendingContinuationId, out state, out failure) || state == null)
             { if (failure == TimelineFailure.None) failure = TimelineFailure.ContinuationFailed; return false; }
-            if (!ReferenceEquals(state.Manifest, manifest) && state.Manifest.ContinuationId != manifest.ContinuationId)
+            if (!manifest.HasSameFrozenContent(state.Manifest))
             { failure = TimelineFailure.ContinuationFailed; return false; }
         }
 
@@ -740,6 +779,13 @@ public sealed class SimulationTimeline
         return true;
     }
 
+    private bool IsManifestForThisTimeline(BoundaryContinuationManifest manifest) =>
+        manifest != null && manifest.WorldId == worldId && manifest.ProfileId == profileId
+        && manifest.BoundaryOccurrenceId == SpatialStableKey.Encode(worldId, profileId,
+            manifest.AbsoluteDay.ToString(CultureInfo.InvariantCulture))
+        && manifest.ContinuationId == SpatialStableKey.Encode(manifest.BoundaryOccurrenceId,
+            manifest.SubphaseKind, manifest.SubphaseVersion);
+
     private bool TryRestorePublishedBoundaryFacts(IReadOnlyList<BoundaryPublishedFact> facts, out TimelineFailure failure)
     {
         if (facts == null) { failure = TimelineFailure.PublicationFailed; return false; }
@@ -748,16 +794,24 @@ public sealed class SimulationTimeline
         {
             if (published == null || published.Fact == null || !identities.Add(Identity(published.Fact)))
             { failure = TimelineFailure.PublicationFailed; return false; }
-            if (published.Fact.DueAt.Value < now) continue;
             string identity = Identity(published.Fact);
-            if (workIdentities.Contains(identity)) continue;
+            if (workIdentities.Contains(identity))
+            {
+                if (!indexedWork.TryGetValue(identity, out ScheduledDueWork existing)
+                    || existing.Reference.DueAt != published.Fact.DueAt
+                    || existing.CausalSequence != published.CausalSequence)
+                { failure = TimelineFailure.PublicationFailed; return false; }
+                continue;
+            }
+            if (published.Fact.DueAt.Value < now) continue;
             if (!CanIndex(published.Fact, now, out failure)) return false;
-            foreach (List<ScheduledDueWork> indexed in agenda.Values)
-                foreach (ScheduledDueWork existing in indexed)
-                    if (existing.CausalSequence == published.CausalSequence)
-                    { failure = TimelineFailure.PublicationFailed; return false; }
+            foreach (ScheduledDueWork existing in indexedWork.Values)
+                if (existing.CausalSequence == published.CausalSequence)
+                { failure = TimelineFailure.PublicationFailed; return false; }
+            ScheduledDueWork restored = new ScheduledDueWork(published.Fact, 0, published.CausalSequence);
             workIdentities.Add(identity);
-            AddToAgenda(new ScheduledDueWork(published.Fact, 0, published.CausalSequence));
+            indexedWork.Add(identity, restored);
+            AddToAgenda(restored);
             if (published.CausalSequence > causalSequence) causalSequence = published.CausalSequence;
         }
         failure = TimelineFailure.None;
@@ -772,7 +826,8 @@ public sealed class SimulationTimeline
         foreach (string id in pendingSignalHandoffIds)
         {
             if (!owner.TryResolveContinuation(id, out BoundaryContinuationState state, out failure)
-                || state == null || !state.IsComplete || !state.TimelineFactsPublished)
+                || state == null || !state.IsComplete || !state.TimelineFactsPublished
+                || !IsManifestForThisTimeline(state.Manifest))
             { if (failure == TimelineFailure.None) failure = TimelineFailure.ContinuationFailed; return false; }
             if (!TryRestorePublishedBoundaryFacts(state.PublishedFacts, out failure)) return false;
         }
@@ -789,14 +844,16 @@ public sealed class SimulationTimeline
         if (!(boundaryOwner is IBoundarySourceSignalHandoff handoff))
         {
             foreach (string id in pendingSignalHandoffIds)
-                if (!owner.TryResolveContinuation(id, out BoundaryContinuationState state, out failure) || state == null || state.RetainedSourceSignals.Count != 0)
+                if (!owner.TryResolveContinuation(id, out BoundaryContinuationState state, out failure) || state == null
+                    || !IsManifestForThisTimeline(state.Manifest) || state.RetainedSourceSignals.Count != 0)
                 { if (failure == TimelineFailure.None) failure = TimelineFailure.ContinuationFailed; return false; }
             pendingSignalHandoffIds.Clear(); failure = TimelineFailure.None; return true;
         }
         for (int i = 0; i < pendingSignalHandoffIds.Count;)
         {
             string id = pendingSignalHandoffIds[i];
-            if (!owner.TryResolveContinuation(id, out BoundaryContinuationState state, out failure) || state == null || !state.IsComplete)
+            if (!owner.TryResolveContinuation(id, out BoundaryContinuationState state, out failure) || state == null || !state.IsComplete
+                || !IsManifestForThisTimeline(state.Manifest))
             { if (failure == TimelineFailure.None) failure = TimelineFailure.ContinuationFailed; return false; }
             if (!state.SignalsHandedOff && !handoff.TryHandoff(state.Manifest, state.RetainedSourceSignals, out failure))
             { if (failure == TimelineFailure.None) failure = TimelineFailure.ContinuationFailed; return false; }
@@ -841,7 +898,9 @@ public sealed class SimulationTimeline
     {
         foreach (ScheduledDueWork fact in facts)
         {
-            workIdentities.Add(Identity(fact.Reference));
+            string identity = Identity(fact.Reference);
+            workIdentities.Add(identity);
+            indexedWork.Add(identity, fact);
             AddToAgenda(fact);
         }
         causalSequence = nextSequence;
