@@ -18,10 +18,13 @@ proposal `a89ada7692fd9950fc8424cadaacefaae14ccb80`. Since that design base,
 P8-D was promoted to canonical at `c5b2e06b534f4b2af38f10e6510b10800aa8b28c`.
 
 **Current revalidation baseline:** P9 canonical `codex/phase9/canonical` at
-`988b6f5d14e12359e93464bae5e0048ca970ad86`, with current architecture baseline
+`96f2c1aaf742f313bbb9643e5f5b3d844c402c78`, with current architecture baseline
 `c285466c355103d3637ac165246591b72eb7bda0`, the canonical Phase 8 State, and
 the intraday/extensibility and multi-participant alignment records referenced
-there. P8-A through P8-E and P9-A are promoted. P9-A delivers the authored
+there. The P9 advance from `988b6f5d14e12359e93464bae5e0048ca970ad86` to
+`96f2c1aaf742f313bbb9643e5f5b3d844c402c78` records Phase 9 State/Brief closure
+only; it changes no P9-A capability, APIs, or content boundary. P8-A through
+P8-E and P9-A are promoted. P9-A delivers the authored
 Unity-bootstrap profile and a dependency-aware pre-start pipeline; it does not
 deliver generated local sites, P8 spatial outputs in that profile, or local
 topology composition. Thus the P9 genesis/pipeline foundation edge is satisfied
@@ -174,7 +177,7 @@ player from their own modifications.
 | P8-B canonical passage facts | Conditional on local profile including passages. |
 | P8-D canonical route Knowledge/plan capability | Available if the selected profile consumes it; no blanket dependency. |
 | P8-E canonical civil travel | No blanket P10 dependency; the proposed local-topology profile creates no route-plan or travel facts. |
-| P9-A authored-bootstrap genesis | Promoted at P9 canonical `988b6f5`; its pre-start pipeline and authored profile are available. It does not itself compose P10 local-site outputs. |
+| P9-A authored-bootstrap genesis | Promoted at P9 canonical closure tip `96f2c1a`; its pre-start pipeline and authored profile are available. The State/Brief-only closure advance preserves that capability and content boundary. It does not itself compose P10 local-site outputs. |
 | P10 pipeline consumer integration | Design must revalidate its contributor/stage contract against the promoted P9 API and demonstrate candidate ownership, validation and complete-world publication for the accepted profile before integration. No new P9 promotion is implied by this entry refresh. |
 | P10 approval gates | Independent review of refreshed entry; explicit acceptance of the first profile/domain inventory and site/topology semantics; technical design and independent review; explicit checkpoint IDs and implementation authorization; relevant promoted P8/P9 authorities and LocalTopology ownership seam. |
 
