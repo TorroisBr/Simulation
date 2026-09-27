@@ -36,6 +36,7 @@ P19. No gameplay consumer is included.
 The only P20 checkpoint currently proposed is P20-A. Its acceptance would
 authorize that bounded synthetic proof alone. Until acceptance, implementation
 is not authorized. After acceptance, refresh the canonical base, implement in
-an isolated worktree, independently review the code against the actual P18
-contracts, run its focused and required regression gates, and request canonical
-promotion separately. P18-D or P19 progress does not gate this checkpoint.
+an isolated worktree, run focused validation, and submit the candidate for
+independent review against the actual P18 contracts. After review passes, run
+the required integration/regression gates and request canonical promotion
+separately. P18-D or P19 progress does not gate this checkpoint.
