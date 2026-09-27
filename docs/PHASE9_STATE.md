@@ -1,4 +1,4 @@
-# Phase 9 — IN PROGRESS
+# Phase 9 — CLOSED
 
 ## Current authority and candidate
 
@@ -11,7 +11,26 @@
 - P9-A implementation candidate: `974a8d72a158962619d7ba8aa1ccf854eeadd47e`.
 - P9-A code promotion commit: `43f08b3dfbf042380c2f8a8b037bbf3ebd309ccb` on `codex/phase9/canonical`.
 - **P9-A status: PROMOTED.** The user approved promotion of the reviewed candidate; this State-only commit records that promotion.
-- **Phase 9 remains open.** P9-A is canonical; this record does not claim the full Phase 9 objective is closed.
+- **Phase 9 status: CLOSED** within the approved authored-bootstrap-first-delivery scope. P9-A is the sole approved Phase 9 checkpoint and is canonical. Local/pre-start content generation is tracked by P10; public mod loading, retrofit and runtime expansion remain deferred consumers, not uncompleted P9 checkpoints.
+
+## Phase-level closure review
+
+- Independent closure review: **PASS** for this State/Brief closure candidate,
+  against exact canonical baseline
+  `988b6f5d14e12359e93464bae5e0048ca970ad86`.
+- The review confirmed that P9-A satisfies the approved initial-world objective
+  for the selected existing authored Unity bootstrap profile, that no other
+  Phase 9 checkpoint is approved or marked must-complete, and that later
+  generation algorithms/content and the P19 loader remain outside this Phase's
+  closure boundary.
+- The closure boundary preserves the approved limits: no new procedural
+  terrain, settlements, population, local topology, generated backstory,
+  runtime expansion or new gameplay. P9-A's existing authored content and
+  deterministic pre-start pipeline remain canonical.
+- Required implementation, integration and compatibility evidence is recorded
+  below and in `docs/design/PHASE9A_AUTHORED_BOOTSTRAP_CHECKPOINT.md`.
+- Formal State marker: **CLOSED**. This is a State-only closure record; no
+  runtime files or P9-A behavior changed.
 
 ## P9-A — Authored Bootstrap Genesis v1
 
@@ -58,13 +77,14 @@ The integration branch passed the following gates on the P9-A candidate:
 | Complete official `Smoke` filter | 5/5 passed |
 | `git diff --check` | Passed |
 
-P9-A and the unpromoted P11 Actor Choice candidate were also checked together
+P9-A and the P11 Actor Choice candidate were also checked together
 on the validation-only ref `codex/phase9/P11CompatibilityValidation` at
 `004c6f99e72c63dfd374fca9197ba7ac0818ebca`. That ref passed Actor Action
 Choice 6/6, Actor Choice 24/24, P9 bootstrap 10/10, all EditMode 1738/1738,
-complete Smoke 5/5, and `git diff --check`. This is compatibility evidence;
-it does not promote P11, satisfy its separate promotion gate, or change its
-canonical status.
+complete Smoke 5/5, and `git diff --check`. This is compatibility evidence.
+P11 Actor Choice was subsequently promoted to `codex/phase11/canonical` at
+`0803670cfa2c39163b54ff46a21daa06df5a16f6`; its post-promotion changes are
+State-only, so the tested P11 runtime remains the promoted implementation.
 
 No long-run suite was required: P9-A introduces no daily-loop behavior.
 
@@ -77,12 +97,12 @@ No long-run suite was required: P9-A introduces no daily-loop behavior.
 - P9-A promotion satisfies the P9 genesis prerequisite for P10, and the
   relevant P8-C local/anchor capability is canonical. P10 may advance under
   its own reviewed entry architecture, checkpoint scope and technical gates.
-- P11 Actor Choice remains a separate unpromoted candidate. Combined
-  compatibility validation does not merge or promote it.
+- P11 Actor Choice is independently canonical at `0803670`; the combined
+  compatibility validation confirms the promoted runtime composition with P9-A.
 - P18, P19 and P20 work remains governed by the explicit dependency edges in
   the Roadmap and Phase Briefs; none is pulled forward by P9-A.
 
 Promotion record: the approved integration candidate was promoted to
 `codex/phase9/canonical` at `43f08b3`; local and remote refs were verified.
-Phase closure remains separate and requires its own objective/checkpoint
-review, known limitations and deferred consumers, and formal State marker.
+Phase-level closure is separately reviewed and recorded above, with the
+approved scope limits and deferred consumers retained.

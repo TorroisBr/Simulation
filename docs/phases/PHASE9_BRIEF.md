@@ -1,6 +1,6 @@
 # Phase 9 — Initial Deterministic Genesis v1
 
-**Authority:** planning entry subordinate to `../SIMULATION_ARCHITECTURE.md`. **Readiness:** P9-A is promoted at `43f08b3`; later generation/content algorithms remain separate future scope, and Phase 9 closure is recorded in `../PHASE9_STATE.md`.
+**Authority:** planning entry subordinate to `../SIMULATION_ARCHITECTURE.md`. **Status:** Phase 9 is **CLOSED** within the approved authored-bootstrap-first-delivery scope, recorded in `../PHASE9_STATE.md`. P9-A is promoted at `43f08b3`; later generation/content algorithms remain separate future scope.
 
 ## Objective and closure
 
