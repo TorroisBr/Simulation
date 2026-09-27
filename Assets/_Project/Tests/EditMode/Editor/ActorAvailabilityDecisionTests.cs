@@ -301,4 +301,39 @@ public sealed class ActorAvailabilityDecisionTests
         Assert.That(first.BoundarySequence, Is.Not.EqualTo(second.BoundarySequence));
         Assert.That(state.ValidateInvariants(), Is.Empty);
     }
+
+    [Test]
+    public void DeferredRequestCannotRetryUntilFreshTriggerCreatesNewRequestIdentity()
+    {
+        ActorDecisionRequestState state = new ActorDecisionRequestState();
+        PersonId actor = new PersonId("person-a");
+        Assert.That(state.TryBindInput("bind", "input-a", actor, new LogicalTick(10), "profile", 5,
+            "accepted-input", 1, out ActorDecisionRequestReceipt bound), Is.True);
+        Assert.That(state.TryDefer("defer", bound.RequestId, bound.InputId, actor, bound.Instant,
+            bound.BoundaryId, bound.BoundaryRevision, bound.SourceSequence,
+            ActorDecisionDeferralReason.DecisionBoundaryAlreadyUsed, out _), Is.True);
+        Assert.That(state.TryRecordRetryableProposal("premature-retry", bound.RequestId, bound.InputId, actor,
+            bound.Instant, "proposal-1", "proven-uncommitted", out _), Is.False);
+
+        string laterRequestId = new ActorDecisionRequest(actor, new LogicalTick(20), "later-trigger", 2, 3).Id;
+        Assert.That(state.TryObserveTrigger("later-trigger-op", laterRequestId, "later-trigger-receipt", actor,
+            new LogicalTick(20), "later-trigger", 3, 9, bound.InputId, out ActorDecisionRequestReceipt later), Is.True);
+        Assert.That(later.RequestId, Is.Not.EqualTo(bound.RequestId));
+        Assert.That(state.TryRecordRetryableProposal("retry-new-request", later.RequestId, later.InputId, actor,
+            later.Instant, "proposal-2", "proven-uncommitted", out _), Is.True);
+        Assert.That(state.ValidateInvariants(), Is.Empty);
+
+        ActorDecisionRequestReceipt malformedRetry = (ActorDecisionRequestReceipt)Activator.CreateInstance(
+            typeof(ActorDecisionRequestReceipt), BindingFlags.Instance | BindingFlags.NonPublic, null,
+            new object[] { 3L, bound.BoundarySequence, ActorDecisionRequestReceiptKind.RetryableProposal,
+                "malformed-retry", bound.RequestId, bound.InputId, null, actor, bound.Instant, bound.RequestId,
+                0L, 0L, null, "proposal-1", "proven-uncommitted", null }, null);
+        Assert.That(ActorDecisionRequestState.TryRestore(new[] { bound,
+            (ActorDecisionRequestReceipt)Activator.CreateInstance(typeof(ActorDecisionRequestReceipt),
+                BindingFlags.Instance | BindingFlags.NonPublic, null,
+                new object[] { 2L, bound.BoundarySequence, ActorDecisionRequestReceiptKind.Deferred, "defer", bound.RequestId,
+                    bound.InputId, null, actor, bound.Instant, bound.BoundaryId, bound.BoundaryRevision, bound.SourceSequence,
+                    (ActorDecisionDeferralReason?)ActorDecisionDeferralReason.DecisionBoundaryAlreadyUsed, null, null, null }, null),
+            malformedRetry }, 2L, out _), Is.False);
+    }
 }

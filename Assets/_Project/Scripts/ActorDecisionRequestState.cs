@@ -199,7 +199,11 @@ public sealed class ActorDecisionRequestState
         }
         if (kind == ActorDecisionRequestReceiptKind.RetryableProposal)
             foreach (ActorDecisionRequestReceipt prior in receipts)
-                if (prior.Kind == kind && prior.RequestId == requestId && prior.InputId == inputId && prior.ProposalId != proposalId) return false;
+            {
+                if (prior.RequestId != requestId || prior.InputId != inputId) continue;
+                if (prior.Kind == ActorDecisionRequestReceiptKind.Deferred) return false;
+                if (prior.Kind == kind && prior.ProposalId != proposalId) return false;
+            }
         long boundarySequence = kind == ActorDecisionRequestReceiptKind.RequestBound || kind == ActorDecisionRequestReceiptKind.TriggerObserved
             ? nextBoundarySequence : FindRequestSequence(requestId);
         if (boundarySequence <= 0L) return false;
@@ -328,8 +332,9 @@ public sealed class ActorDecisionRequestState
         if (item.Kind == ActorDecisionRequestReceiptKind.RetryableProposal)
         {
             if (string.IsNullOrWhiteSpace(item.ProposalId)) return false;
-            return !ordered.Take(index).Any(x => x.Kind == ActorDecisionRequestReceiptKind.RetryableProposal
-                && x.RequestId == item.RequestId && x.InputId == item.InputId && x.ProposalId != item.ProposalId);
+            return !ordered.Take(index).Any(x => x.RequestId == item.RequestId && x.InputId == item.InputId
+                && (x.Kind == ActorDecisionRequestReceiptKind.Deferred
+                    || x.Kind == ActorDecisionRequestReceiptKind.RetryableProposal && x.ProposalId != item.ProposalId));
         }
         if (item.Kind == ActorDecisionRequestReceiptKind.TerminalReconciled)
         {
