@@ -1,10 +1,10 @@
 # Phase 18 — Intraday Temporal Execution v1
 
 **Authority:** planning scope under `../SIMULATION_ARCHITECTURE.md` §§11–12,
-91–92. **Readiness:** P18-A and P18-B are promoted; P18-C requires design
-revalidation against the promoted lifecycle capability. P18-D remains
-dependency-gated. Phase
-numbering preserves existing IDs, not execution order.
+91–92. **Readiness:** P18-A and P18-B are promoted; P18-C's refreshed design
+passed independent review and its bounded core is ready for implementation.
+P18-D remains dependency-gated. Phase numbering preserves existing IDs, not
+execution order.
 
 ## Objective and closure
 
