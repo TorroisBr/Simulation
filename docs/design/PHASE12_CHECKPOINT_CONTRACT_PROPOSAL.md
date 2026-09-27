@@ -54,7 +54,9 @@ current P9-B promotion-record State/status `14a2e8e`; P9-B code integration
 `00395ef80cfa2364d34ed2170e0735d3a4b1513d`); P11 code promotion `0cd4281` /
 current canonical closure State `308e24d0744112e8f2b741521b8b3e4acb51ebbf`;
 P18 canonical/current State `99cac77f7d66e8eb61fe68efb6959a4a5b7029ca`
-(P18-A/B/C promoted; P18-D implementation blocked); P14-A code promotion
+(P18-A/B/C promoted; P18-D implementation blocked); P14 current canonical
+State/Brief `4caecbb` (docs-only update) and historical promotion State
+`f8a61fe9634ba9ab56ee31d50b57b45fef292a6f`; P14-A code promotion
 `c44904bb4b0a066eced1d7e8a773b7dc1eea76c0` / State
 `f8a61fe9634ba9ab56ee31d50b57b45fef292a6f`;
 P20 Entry Architecture `2f9c93b`, Technical Design `6a0d164`, and proposed
@@ -383,8 +385,9 @@ profile contract.
   `00395ef80cfa2364d34ed2170e0735d3a4b1513d`),
   P11 promotion `0cd4281` and canonical closure State
   `308e24d0744112e8f2b741521b8b3e4acb51ebbf`, current P18 canonical/State
-  `99cac77f7d66e8eb61fe68efb6959a4a5b7029ca`, P14-A canonical promotion
-  `c44904bb4b0a066eced1d7e8a773b7dc1eea76c0`, P20 Entry Architecture
+  `99cac77f7d66e8eb61fe68efb6959a4a5b7029ca`, P14 current canonical
+  State/Brief `4caecbb` (docs-only), historical promotion State `f8a61fe`
+  and P14-A code promotion `c44904bb4b0a066eced1d7e8a773b7dc1eea76c0`, P20 Entry Architecture
   `2f9c93b`, Technical Design `6a0d164`, and refreshed proposed P20-A checkpoint
   `2a03edadcb411c7ca7aa2d0c67ee8d36f972779e`, P10-A promoted code
   `9501bf076d506fb64d6ee3e6d178574fff36e153` / State `9e79b58`, architecture

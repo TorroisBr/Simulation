@@ -26,11 +26,15 @@ record alongside P9-B code integration `d9a62d7` and current P9 closure
 tip is `95f98829f9da7abdcb9202a3c62ae717c60a19d8` (P10-A code
 `9501bf076d506fb64d6ee3e6d178574fff36e153`, State record
 `9e79b58397dc9a89ddcc562be139b79987cb55b9`). P10-A's current reviewed profile is one Ruin at an existing
-P8 Location with finite LocalTopology; it is implementation-ready but has no
-delivered runtime, so this P12 profile excludes generated P10 state. P14-A code
-promotion is `c44904bb4b0a066eced1d7e8a773b7dc1eea76c0` with State
-`f8a61fe9634ba9ab56ee31d50b57b45fef292a6f`; the selected GeneralTest City
-assets do not configure its material-flow source. P20-A is a reviewed proposed
+P8 Location with finite LocalTopology. Its runtime is promoted at code
+`9501bf076d506fb64d6ee3e6d178574fff36e153`, with P10 State `9e79b58397dc9a89ddcc562be139b79987cb55b9`
+and current canonical Brief `95f98829f9da7abdcb9202a3c62ae717c60a19d8`, but
+its Ruin/LocalTopology output is outside `UnityBootstrap-Daily-v1` composition
+and remains excluded from this profile. P14-A code promotion is
+`c44904bb4b0a066eced1d7e8a773b7dc1eea76c0` with historical State
+`f8a61fe9634ba9ab56ee31d50b57b45fef292a6f`; current P14 canonical State/Brief
+`4caecbb` is a docs-only update. The selected GeneralTest City assets do not
+configure P14-A's material-flow source. P20-A is a reviewed proposed
 synthetic two-Person proof at checkpoint proposal
 `2a03edadcb411c7ca7aa2d0c67ee8d36f972779e`, not an accepted
 checkpoint or implementation capability; its exact-two fixture does not narrow
@@ -237,7 +241,8 @@ canonical State `470667d`, P9 canonical closure `82396ae`, P9-A code promotion
 `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf`
 (implementation tip `00395ef80cfa2364d34ed2170e0735d3a4b1513d`), P11 code promotion `0cd4281` and
 closure State `308e24d`, current P18 canonical/State `99cac77` (P18-A/B/C promoted;
-P18-D implementation blocked), P14 State `f8a61fe` (P14-A daily and promoted),
+P18-D implementation blocked), P14 historical promotion State `f8a61fe` and
+current docs-only canonical State/Brief `4caecbb`,
 P20 Entry Architecture `2f9c93b`, Technical Design `6a0d164`, and proposed
 P20-A proposed checkpoint `2a03eda` (reviewed design/proposal; acceptance pending),
 P10-A's approved bounded P8-C LocationId-neutral seam with design/checkpoint
@@ -293,9 +298,10 @@ The refreshed alignment records preserve explicit temporal and participant
 identity boundaries. The P8 `77f3e1a`→`470667d` advance changes only Phase 8
 State wording; P9's current promotion-record State/status tip is `14a2e8e`, for
 code at `d9a62d7`. This refresh records P9-B's canonical integration and
-required P8-A state, recognizes P10-A's reviewed readiness without implying
-delivered runtime, and leaves P18 intraday, P19 modules and P20 shared
-activities conditional and outside this profile. Independent review of the
+required P8-A state, records P10-A runtime promotion while keeping its
+Ruin/LocalTopology output outside the selected profile's composition/scope,
+and leaves P18 intraday, P19 modules and P20 shared activities conditional and
+outside this profile. Independent review of the
 current integrated package must confirm these current-base mappings and the
 remaining capability/acceptance gates.
 

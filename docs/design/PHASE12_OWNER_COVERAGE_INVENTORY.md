@@ -14,8 +14,9 @@ closure `82396ae7ffaf407fda278928da456b06dc5394d4` (P9-B code integration
 `9501bf076d506fb64d6ee3e6d178574fff36e153`, State record
 `9e79b58397dc9a89ddcc562be139b79987cb55b9`); P11 canonical closure
 `308e24d0744112e8f2b741521b8b3e4acb51ebbf` (code `0cd4281804ecc6a2d110352d1a238959e93867f0`);
-P14 State `f8a61fe9634ba9ab56ee31d50b57b45fef292a6f` (P14-A code
-`c44904bb4b0a066eced1d7e8a773b7dc1eea76c0`); P18 canonical/State
+P14 historical promotion State `f8a61fe9634ba9ab56ee31d50b57b45fef292a6f`
+(P14-A code `c44904bb4b0a066eced1d7e8a773b7dc1eea76c0`); current P14
+canonical State/Brief `4caecbb` is a docs-only update; P18 canonical/State
 `99cac77f7d66e8eb61fe68efb6959a4a5b7029ca`; P20-A proposed checkpoint
 `2a03edadcb411c7ca7aa2d0c67ee8d36f972779e` (not accepted); and the current
 architecture alignments.
@@ -69,8 +70,9 @@ cross-reference/cardinality checks, or atomic publication.
 P8-B through P8-E are explicit empty sections for this profile; populated state
 must reject admission. P10-A is promoted (`9501bf0`, with P10 canonical/Brief
 tip `95f9882`) but its Ruin/LocalTopology output is not composed by the selected
-GeneralTest bootstrap and remains excluded. P14-A is promoted (`c44904b`, State
-`f8a61fe`) but the selected GeneralTest City assets do not configure its
+GeneralTest bootstrap and remains excluded. P14-A is promoted (`c44904b`,
+historical promotion State `f8a61fe`; current P14 State/Brief `4caecbb` is
+docs-only) but the selected GeneralTest City assets do not configure its
 exogenous local material source; their existing `productionConfigs` are the
 legacy economy producer and do not make P14-A material-flow state present.
 P18 intraday state, P19 module state, P20 shared activities, P13 historical
