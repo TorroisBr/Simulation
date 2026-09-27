@@ -1344,6 +1344,7 @@ public sealed class WorldStateCitySnapshot
     public float MarketBalance { get; }
     public IReadOnlyList<string> ResidentNpcRuntimeIds { get; }
     public IReadOnlyList<WorldStateMarketStackSnapshot> MarketStock { get; }
+    public LocalDailyMaterialFlowResult LastMaterialFlow { get; }
 
     public WorldStateCitySnapshot(
         string runtimeId,
@@ -1358,7 +1359,8 @@ public sealed class WorldStateCitySnapshot
         string cityName = null,
         long populationRevision = 0L,
         int namedResidentCount = 0,
-        int namedPresentCount = 0)
+        int namedPresentCount = 0,
+        LocalDailyMaterialFlowResult lastMaterialFlow = null)
     {
         RuntimeId = runtimeId;
         DefinitionId = definitionId;
@@ -1373,6 +1375,7 @@ public sealed class WorldStateCitySnapshot
         MarketBalance = marketBalance;
         ResidentNpcRuntimeIds = SnapshotCollections.CopySorted(residentNpcRuntimeIds, resident => resident);
         MarketStock = SnapshotCollections.CopySorted(marketStock, stock => stock?.ItemDefinitionId);
+        LastMaterialFlow = lastMaterialFlow;
     }
 }
 
@@ -3484,7 +3487,8 @@ public static class WorldStateSnapshotBuilder
                 city.CityName,
                 city.Population.Revision,
                 presence?.NamedResidentCount ?? 0,
-                presence?.NamedPresentCount ?? 0));
+                presence?.NamedPresentCount ?? 0,
+                city.LastMaterialFlow));
         }
 
         return result;

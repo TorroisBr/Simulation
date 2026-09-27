@@ -664,6 +664,18 @@ public static class WorldStateCanonicalWriter
                 EnumValue(city.MarketLiquidityMode),
                 FloatValue(city.MarketBalance));
 
+            if (city.LastMaterialFlow != null)
+            {
+                LocalDailyMaterialFlowResult flow = city.LastMaterialFlow;
+                AppendLine(output, "CITY_MATERIAL_FLOW", flow.SettlementSemanticId, flow.ProductionSourceId,
+                    flow.MarketStoreSemanticId, flow.LocationId, flow.ItemDefinitionId, flow.ContentRevision,
+                    flow.EffectiveConfiguration, flow.CalendarIdentity, flow.CalendarVersion,
+                    flow.EconomyEnabled ? "true" : "false", IntValue(flow.PopulationCount), FloatValue(flow.ConsumptionPer1000Population),
+                    Int64Value(flow.AbsoluteDay), IntValue(flow.OpeningStock), IntValue(flow.ConfiguredSourceQuantity),
+                    IntValue(flow.AppliedSourceQuantity), flow.SourceRejectionReason,
+                    IntValue(flow.RequestedFreeConsumption), IntValue(flow.ActualFreeConsumption), IntValue(flow.ClosingStock));
+            }
+
             foreach (string residentNpcRuntimeId in city.ResidentNpcRuntimeIds)
             {
                 AppendLine(output, "CITY_RESIDENT", city.RuntimeId, residentNpcRuntimeId);

@@ -9,10 +9,10 @@
 `docs/architecture/INTRADAY_EXTENSIBILITY_ALIGNMENT.md` and
 `docs/architecture/MULTIPARTICIPANT_ACTIVITY_ALIGNMENT.md`.
 
-**Current candidate branch:** `codex/phase14/P14ALocalMaterialFlow`. The branch
-is based on the P8 canonical tip above and includes the reviewed P14 planning
-artifacts. This State records planning and execution progress only; no P14 code
-capability has been delivered or promoted.
+**Planning parent:** `codex/phase14/P14ALocalMaterialFlow`.
+**Implementation candidate:** `codex/phase14/P14AImplementation`, based on
+`0bb47b1db9e350127074768024c6de1a7d4b3d0c` (reviewed planning artifacts on
+the P8 baseline). Implementation remains IN_PROGRESS and is not canonical.
 
 ## Checkpoint status
 
@@ -47,13 +47,19 @@ human-gated.
 
 ## Implementation, validation, and closure
 
-Implementation has started on the isolated candidate branch from the P8
-canonical base. No implementation commit or validation result is recorded
-yet. The candidate must preserve stable settlement/source/store/item identity,
+Implementation is underway on the isolated implementation candidate branch.
+The candidate must preserve stable settlement/source/store/item identity,
 LocationId-to-City anchor agreement, title/custody separation, atomic source
 overflow rejection, stock-limited actual consumption, the `Economy.Enabled`
 gate, deterministic closing-balance diagnostics, and the reconstruction
 inventory in the checkpoint contract.
+
+Implementation validation on the candidate: focused EditMode suites passed for
+`LocalDailyMaterialFlowTests` (2), `SettlementStockOwnershipTests` (14),
+`PopulationConsumptionTests` (22), `WorldStateDiagnosticsTests` (46), and
+`EconomyTransactionTests` (33). `git diff --check` passed. Independent review
+and integration/regression gates remain outstanding; these results do not
+promote P14-A or alter canonical state.
 
 Run focused economy, market stock, free-consumption, identity/anchor, overflow,
 disabled-economy, diagnostic, and same-input determinism coverage. Independently
