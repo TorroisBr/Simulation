@@ -10,11 +10,12 @@ within P9-A/P9-B; P9-B's selected authored geography is exactly one P8-A Hex
 and one anchored Location with provenance); P10 canonical is `95f9882` (P10-A
 promoted, Phase 10 open, with no universal Ruin/topology assumption);
 P12's accepted scope record is `4a1d364` (scope only, still `WAIT_DEPENDENCY`;
-latest docs-only owner-inventory refresh candidate `4cbac1d`); P14 canonical is
+latest docs-only owner-inventory refresh candidate `371c24f`); P14 canonical is
 `4caecbb`. P18 canonical is `99cac77` with its A/B/C core promoted; additive
-P18-A contract `2175bf2` is accepted but not implemented/promoted, P18-C adapter
-`405c5c0` is reviewed but unpromoted, and P18-D design `aa5f182` remains
-implementation-blocked. The current P20-A checkpoint proposal is `2a03eda`
+P18-A contract `2175bf2` was accepted, with acceptance recorded in implementation
+branch commit `9de70ae`; its implementation remains in progress and unpromoted.
+P18-C adapter `405c5c0` is reviewed but unpromoted, and P18-D design `aa5f182`
+remains implementation-blocked. The current P20-A checkpoint proposal is `2a03eda`
 (proposed/unaccepted, acceptance pending); technical design `6a0d164` does not
 establish a delivered P20 capability. Architecture baseline `c285466` and both
 alignment records remain active constraints. These status updates do not
@@ -109,7 +110,7 @@ which boundaries the product supports.
 
 P12-A scope was accepted at `codex/phase12/ContinuationDesignP9BRevalidation`
 tip `4a1d364`, but that is scope acceptance only. The latest owner-inventory
-refresh candidate `4cbac1d` still reports no profile-included owner
+refresh candidate `371c24f` still reports no profile-included owner
 group with demonstrated complete exact immutable export plus staged
 hydration. It identifies missing envelope/admission, identity allocator
 restoration, owner DTOs and hydrators, causal inputs/commitments,
@@ -163,8 +164,9 @@ account for:
 - deterministic execution context and random state/context only where consumed;
 - temporal time/calendar, pending owner work, activity lifecycle and causal
   ordering where the history actually used P18. P18 canonical is `99cac77`;
-  the additive P18-A returned-facts/subphase contract `2175bf2` is accepted
-  but not yet implemented/promoted, and P18-D remains blocked. Do not invent
+  the additive P18-A returned-facts/subphase contract `2175bf2` was accepted
+  (acceptance record `9de70ae`) but is not yet implemented/promoted, and P18-D
+  remains blocked. Do not invent
   intraday facts absent from the execution history;
 - P20 `ActivityInstanceId` as identity distinct from `PersonId` and participant
   identities, plus the boundary-specific participant/role set;
@@ -258,7 +260,7 @@ These are planning/design candidates, not promoted capability evidence:
   `docs/architecture/MULTIPARTICIPANT_ACTIVITY_ALIGNMENT.md`: accepted
   cross-phase constraints, including no blanket P18-D/P19/P20 edge.
 - P12 owner inventory refresh candidate `codex/phase12/ContinuationDesignP9BRevalidation`
-  at `4cbac1d` (accepted scope remains `4a1d364`): evidence of current export/hydration gaps, not a completed
+  at `371c24f` (accepted scope remains `4a1d364`): evidence of current export/hydration gaps, not a completed
   continuation contract or implementation authorization.
 
 The implementation dependency graph must be refreshed against canonical
