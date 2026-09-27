@@ -23,8 +23,8 @@ advance is State-only. Both alignment records remain current.
 The P9-B promotion record is canonical in State/status tip `14a2e8e`; use that
 record alongside P9-B code integration `d9a62d7` and current P9 closure
 `82396ae` when checking capability and profile provenance. P10 canonical
-State/Brief tip
-tip is `252ad6b9a507f1c001c05a1e19c2546ebd0707a2` (P10-A code
+State/Brief tip is
+`252ad6b9a507f1c001c05a1e19c2546ebd0707a2` (P10-A code
 `9501bf076d506fb64d6ee3e6d178574fff36e153`, State record
 `9e79b58397dc9a89ddcc562be139b79987cb55b9`). P10-A's current reviewed profile is one Ruin at an existing
 P8 Location with finite LocalTopology. Its runtime is promoted at code
@@ -242,13 +242,17 @@ canonical State `470667d`, P9 canonical closure `82396ae`, P9-A code promotion
 `43f08b3` and P9-B promotion-record State `14a2e8e`, P9-B code integration
 `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf`
 (implementation tip `00395ef80cfa2364d34ed2170e0735d3a4b1513d`), P11 code promotion `0cd4281` and
-closure State `308e24d`, current P18 canonical/State `99cac77` (P18-A/B/C promoted;
+closure State `308e24d`, current P18 canonical State tip
+`eabc1c24a0ba8951ded87280472cc7137e741434` (P18-A/B/C promoted by code
+extension `1dd0479`;
 P18-D implementation blocked), accepted P18-A continuation extension contract
 `2175bf2` (the implementation candidate/acceptance record `9de70ae` is not
 delivered/promoted capability), P14 historical promotion State `f8a61fe` and
 current docs-only canonical State/Brief `4caecbb`,
 P20 Entry Architecture `2f9c93b`, Technical Design `6a0d164`, and proposed
-P20-A proposed checkpoint `2a03eda` (reviewed design/proposal; acceptance pending),
+P20-A proposed checkpoint `2a03eda` (the user accepted its bounded scope on
+2026-09-27; this accepts scope only, delivers no P20 capability, and implies
+no P12 dependency),
 P10-A's approved bounded P8-C LocationId-neutral seam with design/checkpoint
 review PASS at `345dcbc` and `READY_FOR_IMPLEMENTATION` status; the P10 runtime
 is promoted at code `9501bf0` / State `9e79b58` / current canonical State/Brief
