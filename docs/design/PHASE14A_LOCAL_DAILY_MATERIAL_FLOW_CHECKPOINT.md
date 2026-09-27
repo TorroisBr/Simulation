@@ -4,8 +4,10 @@
 the current canonical base. It is not an implementation authorization, delivery
 record, Phase State, or canonical capability.
 
-**Planning base:** Phase 8 canonical `77f3e1a47a1e007492a794ea777d681a21a36d09`;
-architecture baseline `c285466c355103d3637ac165246591b72eb7bda0`. The reviewed
+**Planning base:** Phase 8 canonical `470667d37863384edadb3d93ef64d8004aff46a3`;
+architecture baseline `c285466c355103d3637ac165246591b72eb7bda0`. The Phase 8
+advance from `77f3e1a47a1e007492a794ea777d681a21a36d09` to `470667d` records
+State-only closure and changes no P8 capability. The reviewed
 technical proposal carried in
 [`PHASE14_TECHNICAL_DESIGN.md`](PHASE14_TECHNICAL_DESIGN.md) originated at
 `f31b806` and records its earlier independent design and identity/cardinality
@@ -142,12 +144,14 @@ are conditional dependencies only for later route-dependent, timed,
 mod-defined, or multi-participant consumers respectively. The passive daily
 source/sink adds no sleep, theft, work-shift, crew, or other gameplay behavior.
 
-P9 is not a semantic prerequisite: the profile is authored manually. For safe
-integration, however, P9-A currently owns overlapping authored bootstrap and
-composition surfaces. P14-A implementation must wait until P9-A's candidate is
-integrated and promoted, then use the resulting canonical effective authored
-inputs and ownership boundaries. This is a checkpoint-specific serialized
-integration edge, not a claim that P14 consumes P9's generation capability.
+P9 is not a semantic prerequisite: the profile is authored manually. P9-A was
+promoted at code tip `43f08b3` and Phase 9 closure was recorded at canonical
+State/Brief tip `96f2c1aaf742f313bbb9643e5f5b3d844c402c78`. Its authored
+bootstrap integration is complete; the serialized P9 ownership edge is
+satisfied. That closure-only advance changes no P9-A APIs or content boundary.
+P14-A still requires independent review of this current-base contract and its
+own explicit scope/product gates before implementation readiness can be
+derived. This is not a claim that P14 consumes P9's generation capability.
 P10 is optional content. P14-A does not need to rerun genesis or infer identity
 from generated ordering.
 
@@ -185,16 +189,18 @@ robbery/gangs, rituals, War gameplay, or MegaEventos.
 
 ## Review and readiness record
 
-- Planning base: `77f3e1a47a1e007492a794ea777d681a21a36d09`.
+- Planning base: Phase 8 canonical `470667d37863384edadb3d93ef64d8004aff46a3`;
+  its advance from `77f3e1a` is State-only closure.
 - Architecture baseline: `c285466c355103d3637ac165246591b72eb7bda0`.
 - Technical design provenance: `f31b806`; its recorded historical independent
   design review and identity/cardinality re-review remain useful evidence.
 - Current-base independent checkpoint review: **pending**.
-- Current implementation status: **`WAIT_DEPENDENCY`**, serialized behind the
-  overlapping P9-A startup/genesis integration. P9 is not a semantic
-  prerequisite, but this owner boundary prevents concurrent work on shared
-  composition surfaces.
+- Current implementation status: **`WAIT_DEPENDENCY`**, pending independent
+  current-base checkpoint review and the explicit profile/product gates above.
+  The former serial owner edge to overlapping P9-A startup/genesis work is
+  satisfied by P9-A's promotion; P9 remains no semantic prerequisite.
 - Implementation readiness: **not yet derived**. After current-base review and
-  P9-A promotion, the Master must refresh the base and recompute dependencies,
-  file ownership, and integration order.
+  acceptance of the bounded profile, the Master must recompute dependencies,
+  file ownership, and integration order. No checkpoint IDs or implementation
+  authorization are established by this refresh.
 - No code/tests changed; no capability delivered; no canonical State claim.

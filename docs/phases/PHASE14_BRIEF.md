@@ -1,6 +1,6 @@
 # Phase 14 — Productive Sources & Material Flow v1
 
-**Authority:** planning entry subordinate to `../SIMULATION_ARCHITECTURE.md`. **Readiness:** P14-A implementation is `WAIT_DEPENDENCY` until the overlapping P9-A bootstrap/genesis integration is promoted; its current-base checkpoint contract also needs independent review before implementation readiness can be derived.
+**Authority:** planning entry subordinate to `../SIMULATION_ARCHITECTURE.md`. **Readiness:** P14-A implementation remains `WAIT_DEPENDENCY` pending independent review of its current-base checkpoint contract and the explicit profile/product gates below. The overlapping P9-A bootstrap/genesis integration is promoted; this update grants no implementation authorization.
 
 ## Objective and closure
 
@@ -14,7 +14,7 @@ Establish a bounded, factual account of productive sources and material movement
 - **P14-A semantic contract:** preserve the architecture distinction among ownership, custody, control and economic flows. Settlement title over the configured source/material remains distinct from the market store's custody of aggregate stock.
 - **Route-dependent flow:** a later transport/route checkpoint additionally requires the relevant promoted passage/travel capability. Do not impose all of P8-E on a local source without need.
 - **Integration dependency:** material movement that uses travel must integrate with the single spatial/travel authority, not parallel city-to-city fixed durations.
-- **P9 ordering and ownership:** P9 is not a semantic prerequisite for this manually authored profile. However, the active P9-A startup/genesis integration owns overlapping authored bootstrap/composition surfaces. P14-A implementation waits for P9-A's canonical integration, then rebases and composes against its effective authored inputs; this is a serial integration/ownership edge, not a blanket P9 generation capability dependency. P10 content is likewise optional for the authored profile.
+- **P9 ordering and ownership:** P9 is not a semantic prerequisite for this manually authored profile. P9-A was promoted at code tip `43f08b3`; its State/Brief closure was recorded at canonical tip `96f2c1a`. The former serial integration/ownership edge to overlapping P9-A startup/composition work is satisfied, without creating a P9 generation capability dependency. P10 content is likewise optional for the authored profile.
 - **Checkpoint gate:** independently review the current-base P14-A contract and verify its implementation ordering/ownership boundary before deriving `READY_FOR_IMPLEMENTATION`.
 - **Deferred product scope:** changes that add sources, inputs, finite reserves, transformations, paid consumption, transport, multi-worker production, or a different closure boundary require a separately scoped checkpoint; they are not implicit extensions of P14-A.
 - **Exclusions:** universal macroeconomy, automatic trade network, general taxation and full supply simulation.
