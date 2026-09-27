@@ -48,3 +48,33 @@ Preserve participant-specific effects already applied and pending causal work
 without duplicating the activity into separate actor-owned truths. Inventory can
 begin on accepted P20 contracts; hydration waits for actual capabilities. This
 is conditional coverage, not a blanket P20 dependency for all P12 saves.
+
+## Promotion impact refresh — 2026-09-26
+
+This entry remains `ENTRY_ARCHITECTURE_READY`; no implementation checkpoint
+is schedulable. Revalidation against current promoted records found:
+
+- P9-A (`988b6f5`) is the authored-bootstrap genesis capability. The existing
+  `UnityBootstrap-Daily-v1` proposal excludes P9/P10 generated worlds and does
+  not silently include genesis state. Before implementation, confirm whether
+  the selected bootstrap profile executes P9-A. If it does, include or
+  validate the selected manifest/stage versions, inputs, outputs and
+  provenance without rerunning genesis; otherwise preserve the explicit
+  exclusion. This is a profile compatibility check, not a P9 dependency for
+  daily continuation generally.
+- P11 Actor Choice (`0803670`) is now promoted. The daily proposal continues
+  to exclude pending external WorldCommand and actor-choice inputs and rejects
+  capture/load when either is present. Recheck this admission boundary against
+  the promoted ingress at implementation time; do not discard an input while
+  claiming complete continuation.
+- P18-A (`0b52898`) is upstream-irrelevant to the explicitly daily boundary.
+  Intraday continuation remains out of scope and must wait for the relevant
+  promoted P18 state, ordering and hydration capabilities if later added.
+- The current P8 baseline (`470667d`) and architecture baseline
+  `c285466c355103d3637ac165246591b72eb7bda0`, including the intraday/
+  extensibility and multi-participant alignment records, do not change the
+  daily-only boundary. P20 state remains conditional on a supported shared-
+  activity profile.
+
+The technical proposal remains a proposal only: no checkpoint IDs, approved
+support matrix, or implementation authorization are created by this refresh.
