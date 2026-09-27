@@ -107,6 +107,19 @@ Follow-up integration review at `6b3bec5` passed the corrected State and
 retained XML evidence, confirming local/tracking/remote synchronization and a
 clean range diff. The candidate has not been promoted.
 
+After canonical advanced from `311baa9` to `99cac77`, an independent impact
+review classified the workflow-instruction-only change as
+`UPSTREAM_IRRELEVANT`. The integration branch now composes original candidate
+`1ba60f5` with current canonical `99cac77` at exact refreshed tip
+`e2af495d9255e9a1b4d1c41e2ff0617831ab2a3d`; the refreshed tip contains the
+current canonical commit as an ancestor. The only tree delta from `1ba60f5` is
+the seven `AGENTS.md`/`.agents/skills` workflow files. P11/P18 code, briefs,
+designs, temporal identity/cardinality contracts, and the validated executable
+tree are unchanged. The independent exact-tip refresh review passed at
+`e2af495`; the existing focused, ALL EditMode, and official Smoke results above
+therefore remain applicable. `git diff --check 99cac77..e2af495` passed. The
+refreshed integration candidate remains unpromoted pending its formal gate.
+
 Temporal identity/cardinality was revalidated: `PersonId` identifies the
 decision actor while `ActivityInstanceId` remains distinct; one-actor fixtures
 do not establish one-to-one activity/actor cardinality. A `SourceReceiptId` is
@@ -141,8 +154,9 @@ replace the referenced evidence.
 The complete EditMode run includes the current P9/P11 compatibility tests; the
 earlier upstream P9-B/P11 run at `2d6b3ce` remains supporting evidence, not a
 substitute for this integration result. P18-D remains BLOCKED pending P18-A
-extension acceptance/promotion, promotion of this adapter candidate, and the
-serialized `SimulationRuntime` ownership window. The adapter does not
+extension acceptance/promotion, promotion of the independently reviewed
+adapter integration candidate, and the serialized `SimulationRuntime`
+ownership window. The adapter does not
 implement the P18-D SellGoods consumer or claim a daily runtime migration.
 
 P11 Actor Choice is canonical at closure tip `308e24d0744112e8f2b741521b8b3e4acb51ebbf`
@@ -160,8 +174,8 @@ it retains P14 exclusion and has no P20/P19 blanket dependency. The additive
 P18-A boundary/subphase extension proposal `6bbbc33` also passed independent
 design review against P18 canonical `18ecc6e`; it remains proposed and
 unpromoted. P18-D implementation remains blocked on acceptance/promotion of
-that extension, independent review and implementation/promotion of the P18-C
-external-input/deferral adapter, and the separate `SimulationRuntime` ownership
+that extension, promotion of the independently reviewed P18-C external-input/
+deferral adapter candidate, and the separate `SimulationRuntime` ownership
 window. P20 Entry Architecture
 `2f9c93b588ffccaae60aedf6c16191c1251f6a1f` and Technical Design
 `6a0d16494735853ce35a8974ab348551650afd6b` both passed independent refreshed
