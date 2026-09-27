@@ -159,9 +159,16 @@ absolute day or roster ordinal. P11 remains the authority for resulting input
 status. The accepted command payload and original capture facts remain
 immutable.
 
-Temporal invariants validate unique input and source references, contiguous
-positive temporal ordinals, nondecreasing exact ticks, and valid lifecycle
-order. A temporal rejection may terminalize before dispatch; a returned/thrown
+Temporal invariants validate unique accepted-input references and unique
+temporal operation references, contiguous positive temporal ordinals,
+nondecreasing exact ticks, and valid lifecycle order. `SourceReceiptId` is
+causal provenance/correlation, not the transition's operation identity; it may
+be shared by distinct per-input and per-actor transitions when one source event
+fans out (as P18-B activity receipts do to participants). Repeating one
+`OperationId` with matching content is idempotent; reusing it with conflicting
+boundary or result content is an invariant failure. This is the technical
+interpretation of “unique source references” required to preserve
+multi-participant fanout. A temporal rejection may terminalize before dispatch; a returned/thrown
 attempt requires exactly one preceding dispatch. No transition may follow any
 terminal result, and status must agree with the selected temporal stream. Daily
 records continue to use their existing legacy invariant path. Diagnostics

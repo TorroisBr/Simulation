@@ -213,10 +213,6 @@ public sealed class ActorChoiceStore : IAuthoritativeMutationGuardBindable
                     && prior.ReturnedResultStatus == resultStatus) { failure = ActorChoiceStoreFailureCode.None; return true; }
             failure = ActorChoiceStoreFailureCode.CorrelationConflict; return false;
         }
-        foreach (ActorChoiceInput otherInput in inputs)
-            foreach (ActorChoiceTemporalDisposition prior in otherInput.TemporalDispositions)
-                if (prior.Boundary.SourceReceiptId == boundary.SourceReceiptId)
-                { failure = ActorChoiceStoreFailureCode.CorrelationConflict; return false; }
         if (current.TemporalDispositions.Count > 0 && boundary.Instant.Value < current.TemporalDispositions[current.TemporalDispositions.Count - 1].Boundary.Instant.Value)
         { failure = ActorChoiceStoreFailureCode.InvalidLifecycleTransition; return false; }
         bool dispatched = false, terminal = false;
@@ -463,7 +459,6 @@ public sealed class ActorChoiceStore : IAuthoritativeMutationGuardBindable
         HashSet<string> seenCommandIds = new HashSet<string>(StringComparer.Ordinal);
         HashSet<string> seenTemporalReferences = new HashSet<string>(StringComparer.Ordinal);
         HashSet<string> seenTemporalOperations = new HashSet<string>(StringComparer.Ordinal);
-        HashSet<string> seenTemporalSources = new HashSet<string>(StringComparer.Ordinal);
         long previousSequence = 0L;
 
         for (int i = 0; i < inputs.Count; i++)
@@ -512,8 +507,8 @@ public sealed class ActorChoiceStore : IAuthoritativeMutationGuardBindable
                     if (disposition != null)
                     {
                         if (!seenTemporalOperations.Add(disposition.OperationId)) issues.Add("Temporal operation reference is duplicated.");
-                        if (disposition.Boundary == null || !seenTemporalSources.Add(disposition.Boundary.SourceReceiptId))
-                            issues.Add("Temporal source receipt reference is missing or duplicated.");
+                        if (disposition.Boundary == null || string.IsNullOrWhiteSpace(disposition.Boundary.SourceReceiptId))
+                            issues.Add("Temporal source receipt correlation is missing.");
                     }
             }
             if (input.InputId != null
