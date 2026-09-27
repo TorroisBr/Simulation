@@ -86,20 +86,21 @@ promoted tip. Promotion was approved and fast-forwarded to
 
 ## Promotion impact and next work
 
-**P18-C external-input/deferral adapter:** additive docs-only technical design
-at `docs/design/PHASE18_C_EXTERNAL_INPUT_ADAPTER_DESIGN.md`, candidate branch
-`codex/phase18/P18CExternalInputDeferralDesign` (revised review pending). It
-specifies a P18-C request-state owner, C-owned sequence allocation separate
-from lifecycle source sequences, P11-owned exact temporal capture linked to
-P18-A's accepted reference, exact P11 temporal boundary records, retained P11
-Pending status during C-owned deferral, and a distinct P18-D economy operation
-receipt with immutable request correlation/current-truth snapshot. Adapter
-implementation may proceed after design review and P9/P11 validation complete.
-P18-D remains blocked pending this
-adapter's promotion, acceptance/promotion of the P18-A returned-facts/subphase
-extension, and release of the serialized `SimulationRuntime` ownership window.
-This is not a promoted capability or implementation result. No tests were run
-for this docs-only revision.
+**P18-C external-input/deferral adapter:** independent design review PASS at
+exact tip `358c65c85e1eafdd91ef4a6553ba3b0a8c4af249`; bounded scope is
+`READY_FOR_IMPLEMENTATION`. The design specifies a P18-C request-state owner,
+C-owned sequence allocation separate from lifecycle source sequences,
+P11-owned exact temporal capture linked to P18-A's accepted reference, exact
+P11 temporal boundary records, retained P11 Pending status during C-owned
+deferral, and a distinct P18-D economy operation receipt with immutable request
+correlation/current-truth snapshot. Post-P9-B/P11 compatibility validation at
+`2d6b3ce` passed focused suites 14/13/24/6, ALL EditMode 1742/1742 and official
+Smoke 5/5. This is upstream compatibility evidence only; it is not adapter
+implementation validation. No adapter tests were run. P18-D remains BLOCKED
+pending acceptance/promotion of the P18-A returned-facts/subphase extension,
+implementation/promotion of this adapter capability, and release of the
+serialized `SimulationRuntime` ownership window. No adapter implementation or
+runtime behavior is claimed.
 
 P11 Actor Choice is canonical at closure tip `308e24d0744112e8f2b741521b8b3e4acb51ebbf`
 (code `0cd4281`). P18-A has no P11 dependency, and P11's promotion changed no

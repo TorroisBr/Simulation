@@ -1,8 +1,10 @@
 # P18-C — External-input and deferral adapter design
 
-**Status:** Proposed technical design; independent review pending. This is a
-bounded additive adapter required by P18-D, not a new P18-C capability claim.
-P18-C remains promoted at `7aa7626`; current Phase 18 State is `311baa9`.
+**Status:** Independent design review PASS at exact tip
+`358c65c85e1eafdd91ef4a6553ba3b0a8c4af249`; bounded adapter is
+`READY_FOR_IMPLEMENTATION`. This is an additive supporting capability required
+by P18-D; no implementation or runtime behavior is claimed here. P18-C's
+existing core remains promoted at `7aa7626`; current Phase 18 State is `311baa9`.
 Architecture baseline is `c285466`. P11's bounded Actor Choice is canonical
 at `308e24d` (code `0cd4281`). P18-D's reviewed consumer design is `aa5f182`.
 
