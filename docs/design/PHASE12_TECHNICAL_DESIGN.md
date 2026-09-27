@@ -256,9 +256,12 @@ architecture baseline `c285466`, including both current alignment records.
 - **P18:** the selected daily profile does not compose P18 temporal state and
   does not claim intraday continuation. If a future supported profile composes
   P18, inventory `(worldId, profileId, absoluteDay)` boundary identity,
-  `(ownerId, workId, revision, occurrence)` work identity, exact logical time,
-  same-instant causal order, pending boundary/work, occurrence/sequence and
-  owner idempotency/effect state. Preserve ActivityInstanceId separately from
+  tick quantum/version, effective `MaxDispatchesPerInstant` or equivalent
+  dispatch limit, `(ownerId, workId, revision, occurrence)` work identity, exact
+  logical time, causal wave and same-instant order, pending boundary/work,
+  occurrence/sequence and owner idempotency/effect state. Preserve sealed
+  external inputs with target `LogicalTick`, accepted sequence/order, and
+  boundary state. Preserve ActivityInstanceId separately from
   PersonId/NpcRuntimeId and participant identity, plus P18-B lifecycle/revision/
   receipts, commitments/availability and P18-C PersonId-keyed decision/attempt
   state when the consumer composes them. P18-A/B/C are promoted; P18-D is not
