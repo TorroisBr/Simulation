@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using NUnit.Framework;
 
 public sealed class ActivityLifecycleTests
@@ -52,6 +53,9 @@ public sealed class ActivityLifecycleTests
         Assert.That(store.PendingWork.Count, Is.EqualTo(2));
         Assert.That(store.PendingWork[0].DueWorkId, Does.EndWith("5:start"));
         Assert.That(store.PendingWork[1].DueWorkId, Does.EndWith("8:complete"));
+        Assert.That(store.SnapshotTransitionReceipts().Count, Is.EqualTo(1));
+        Assert.That(store.SnapshotTransitionReceipts()[0].Kind, Is.EqualTo(ActivityTransitionKind.Schedule));
+        Assert.That(store.SnapshotTransitionReceipts()[0].ParticipantIds, Is.EqualTo(new[] { "person-1" }));
     }
 
     [Test]
@@ -71,6 +75,21 @@ public sealed class ActivityLifecycleTests
     }
 
     [Test]
+    public void ScheduleReceiptUsesExactAuthoritativeCommitInstantAndRejectsStaleCallerInstant()
+    {
+        ActivityLifecycleStore store = new ActivityLifecycleStore("world");
+        SimulationTimeline timeline = Compose(store, 5).Timeline;
+        store.TryPropose(Definition(), "exact-instant", out ActivityInstanceSnapshot instance, out _);
+        Assert.That(store.TrySchedule(timeline, instance.Id, new LogicalTick(4), new LogicalTick(10), null,
+            new[] { "person" }, out ActivityFailure staleInstant), Is.False);
+        Assert.That(staleInstant, Is.EqualTo(ActivityFailure.InvalidInstant));
+        Assert.That(store.SnapshotTransitionReceipts(), Is.Empty);
+        Assert.That(store.TrySchedule(timeline, instance.Id, new LogicalTick(5), new LogicalTick(10), null,
+            new[] { "person" }, out _), Is.True);
+        Assert.That(store.SnapshotTransitionReceipts()[0].Instant, Is.EqualTo(new LogicalTick(5)));
+    }
+
+    [Test]
     public void TimelineIndexValidationFailureLeavesScheduleFactsUnpublished()
     {
         ActivityLifecycleStore store = new ActivityLifecycleStore("world");
@@ -86,6 +105,8 @@ public sealed class ActivityLifecycleTests
         Assert.That(store.GetCommitment("person"), Is.Null);
         Assert.That(store.PendingWork, Is.Empty);
         Assert.That(timeline.CausalSequence, Is.EqualTo(sequenceBefore));
+        Assert.That(store.SnapshotTransitionReceipts(), Is.Empty);
+        Assert.That(store.NextTransitionSequence, Is.EqualTo(1));
     }
 
     [Test]
@@ -107,6 +128,7 @@ public sealed class ActivityLifecycleTests
         Assert.That(store.GetCommitment("person"), Is.Not.Null);
         Assert.That(store.PendingWork.Count, Is.EqualTo(2));
         Assert.That(store.TryCancel(timeline, instance.Id, "consumer-cancelled", out _), Is.True);
+        Assert.That(store.SnapshotTransitionReceipts().Select(r => r.Kind), Is.EqualTo(new[] { ActivityTransitionKind.Schedule, ActivityTransitionKind.Cancel }));
         Assert.That(store.IsCurrent(oldWork), Is.False);
         Assert.That(store.GetCommitment("person"), Is.Null);
         Assert.That(store.TryGet(instance.Id, out ActivityInstanceSnapshot cancelled), Is.True);
@@ -128,6 +150,7 @@ public sealed class ActivityLifecycleTests
         Assert.That(timeline.TrySealInputsThrough(new LogicalTick(10), out _), Is.True);
         Assert.That(timeline.TryAdvanceTo(new LogicalTick(10), out _), Is.True);
         Assert.That(store.TryInterrupt(timeline, instance.Id, "condition-changed", out _), Is.True);
+        Assert.That(store.SnapshotTransitionReceipts().Last().Kind, Is.EqualTo(ActivityTransitionKind.Interrupt));
         Assert.That(store.GetCommitment("person"), Is.Null);
         Assert.That(store.PendingWork, Is.Empty);
     }
@@ -147,6 +170,7 @@ public sealed class ActivityLifecycleTests
         Assert.That(cancelled.State, Is.EqualTo(ActivityLifecycleState.Cancelled));
         Assert.That(cancelled.ActualStart, Is.Null);
         Assert.That(cancelled.Disposition, Is.EqualTo("participant-became-unavailable"));
+        Assert.That(store.SnapshotTransitionReceipts().Last().Kind, Is.EqualTo(ActivityTransitionKind.FailedStart));
         Assert.That(store.GetCommitment("person"), Is.Null);
         Assert.That(store.PendingWork, Is.Empty);
     }
@@ -208,6 +232,8 @@ public sealed class ActivityLifecycleTests
         Assert.That(forkTimeline.TryAdvanceTo(new LogicalTick(15), out TimelineFailure advanceFailure), Is.True, advanceFailure.ToString());
         Assert.That(fork.TryGet(instance.Id, out ActivityInstanceSnapshot forkResult), Is.True);
         Assert.That(forkResult.State, Is.EqualTo(ActivityLifecycleState.Completed));
+        Assert.That(fork.SnapshotTransitionReceipts().Select(r => r.Id).Take(1), Is.EqualTo(original.SnapshotTransitionReceipts().Select(r => r.Id)));
+        Assert.That(fork.NextTransitionSequence, Is.EqualTo(original.NextTransitionSequence + 2));
         Assert.That(original.TryGet(instance.Id, out ActivityInstanceSnapshot sourceResult), Is.True);
         Assert.That(sourceResult.State, Is.EqualTo(ActivityLifecycleState.Scheduled));
     }
