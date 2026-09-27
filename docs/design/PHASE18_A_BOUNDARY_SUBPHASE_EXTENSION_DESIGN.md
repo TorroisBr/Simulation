@@ -73,5 +73,11 @@ this authorized implementation of the bounded P18-A extension on
 `codex/phase18/P18ABoundarySubphaseExtensionImplementation`; later exact-tip
 review, validation, integration, and promotion completed at `1dd0479`. The
 P18-C external-input/deferral adapter was subsequently promoted at `b75c5b8`.
-P18-D remains blocked on its P11/economy-owner contracts and the separate
-`SimulationRuntime` ownership window.
+The P11 exact temporal capture contract described here is available and
+promoted as part of P18-C code `a535441` at integration tip `b75c5b8`.
+P18-D consumes it and owns the composition bridge that binds committed P11
+receipts into request state after successful advance, records later trigger
+and deferral state, and admits the exact allocated request to execution. The
+remaining P18-D blockers are the economy owner's stable operation-receipt
+contract (or a focused architecture review if it cannot provide it) and the
+separate serialized `SimulationRuntime` ownership window.

@@ -303,11 +303,18 @@ implementation was delivered independently of the P18-D `SimulationRuntime`
 ownership window, after this design passed review and P9/P11 validation. Keep
 the adapter itself out of `SimulationRuntime.cs`.
 
-P18-D later owns composition with the selected SellGoods execution path, its
-daily profile adapter, boundary-yielding chronological driver and daily owner
-manifest/barrier. There is currently no SellGoods operation/idempotency receipt
-contract. Before P18-D implementation, add the following bounded contract to
-the existing economy transaction owner: an operation receipt/lookup keyed by
+P18-D owns composition with the selected SellGoods execution path, its daily
+profile adapter, boundary-yielding chronological driver and daily owner
+manifest/barrier. The P11 exact temporal capture and disposition contract
+specified above is implemented in P18-C code `a535441` and promoted at
+`b75c5b8`; P18-D consumes it. P18-D also owns the bridge that binds committed
+P11 receipts into `ActorDecisionRequestState` after successful advance,
+observes later trigger/deferral receipts, and admits the exact allocated
+request into decision execution. The current `ActorDecisionCoordinator`
+imports lifecycle receipts only, so this bridge is P18-D composition work.
+There is currently no SellGoods operation/idempotency receipt contract.
+Before P18-D implementation, add the following bounded contract to the
+existing economy transaction owner: an operation receipt/lookup keyed by
 stable `ActorDecisionProposal.Id`, committed atomically with all sale effects.
 Every attempt supplies an immutable request correlation/fingerprint containing
 at minimum `ActorChoiceInputId`, P18-C `ActorDecisionRequest.Id`, actor
@@ -342,14 +349,17 @@ cross-domain transaction framework is introduced. If the existing economy
 owner cannot provide this narrow contract, P18-D stays blocked for a focused
 architecture review.
 
-P18-D implementation remains blocked on the serialized `SimulationRuntime`
-ownership window and its owner contracts: P11-owned exact temporal capture
-linked to the accepted P18-A reference, plus the existing economy owner's
-operation receipt with immutable proposal correlation and a current-truth
-execution snapshot. The adapter passed post-extension validation and exact-tip
-review and was promoted at `b75c5b8`; the P18-A returned-facts/subphase
-extension was promoted at `1dd0479`. This design remains separate from the
-P18-D implementation.
+The P11-owned exact temporal capture contract is available and promoted at
+`b75c5b8`; it is consumed by P18-D composition work and is not a remaining
+upstream blocker. The only hard P18-D implementation blockers are the
+serialized `SimulationRuntime` ownership window and the existing economy
+owner operation receipt with immutable proposal correlation and first-
+execution current-truth snapshot, idempotent committed replay, and retry only
+after proven-uncommitted. If the economy owner cannot provide it, retain the
+focused architecture-review blocker. The adapter passed post-extension
+validation and exact-tip review and was promoted at `b75c5b8`; the P18-A
+returned-facts/subphase extension was promoted at `1dd0479`. This design
+records the promoted P18-C capability and the separate P18-D composition seam.
 
 ## 8. Additive implementation contract requirements
 
@@ -375,6 +385,10 @@ choices:
 The additive adapter was implemented on its reviewed pre-extension base and
 assembled against the promoted P18-A extension at code integration `a535441`.
 Its post-extension focused/full validation and final exact-tip review passed;
-it was promoted at canonical integration tip `b75c5b8`. P18-D remains blocked
-on the serialized `SimulationRuntime` ownership window and its P11/economy-owner
-contracts. The P18-A extension is promoted at `1dd0479`.
+it was promoted at canonical integration tip `b75c5b8`. P18-D consumes the
+promoted P11 temporal capture/disposition capability; its input bridge and
+request admission are composition work in P18-D. The only hard blockers are
+the serialized `SimulationRuntime` ownership window and the economy-owner
+operation receipt with immutable proposal correlation/current-truth snapshot,
+idempotent committed replay, and retry only after proven-uncommitted. The
+P18-A extension is promoted at `1dd0479`.
