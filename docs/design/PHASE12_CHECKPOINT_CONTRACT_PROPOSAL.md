@@ -30,18 +30,21 @@ pending commands, P19 modules, or P20 shared activities.
 
 **Revalidated references:** P8 State `470667d37863384edadb3d93ef64d8004aff46a3`;
 architecture `c285466c355103d3637ac165246591b72eb7bda0`; P9-A code promotion
-`43f08b3` / closure State `96f2c1a`; P9-B canonical integration
+`43f08b3` / current P9-B promotion-record State/status `14a2e8e`; P9-B canonical integration
 `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf` (implementation tip
 `00395ef80cfa2364d34ed2170e0735d3a4b1513d`); P11 code promotion `0cd4281` /
 closure State `308e24d`; current P18 State `311baa9` (P18-A/B/C promoted;
 P18-D implementation blocked); P14 State `f8a61fe` (P14-A daily and promoted);
-P20 Entry Architecture `2f9c93b` and Technical Design `6a0d164` (reviewed
-designs, not implementation authorization). Both architecture alignment records
-remain current. P10-A includes the approved bounded P8-C LocationId-neutral
-seam; its current gates are technical review and checkpoint process. The P9-B
-promotion record is refreshed at `codex/phase9/P9BPromotionRecord` tip
-`1b32be4`; use that record alongside canonical code tip `d9a62d7` for P9-B
-capability and profile evidence.
+P20 Entry Architecture `2f9c93b`, Technical Design `6a0d164`, and proposed
+P20-A checkpoint `1a6ad537` (design and proposal reviewed; checkpoint
+acceptance/implementation remain pending). Its two-Person fixture is bounded
+proof evidence, not universal participant cardinality or a P12 dependency.
+Both architecture alignment records remain current. P10-A is the user-approved
+Ruin/LocalTopology profile; design and checkpoint review passed at `345dcbc`,
+and it is `READY_FOR_IMPLEMENTATION`, but no P10 runtime capability is
+delivered. The P9-B promotion record is current at State/status tip `14a2e8e`;
+use it alongside canonical code tip `d9a62d7` for P9-B capability and profile
+evidence.
 Refreshed P12 entry proposal:
 `a257092471607520f7da7f056f465bbb3f5384d3`; current P12 technical proposal
 refresh: `e0023d2` on `codex/phase12/ContinuationTechnicalDesign`.
@@ -334,12 +337,14 @@ profile contract.
 - `docs/SIMULATION_ARCHITECTURE.md`, `docs/EXECUTION_MODEL.md`,
   `docs/phases/PHASE12_BRIEF.md`, and refreshed P12 entry/technical proposals.
 - Current canonical `docs/PHASE8_STATE.md` at `470667d`, P9-A promotion
-  `43f08b3` and closure State `96f2c1a`, P9-B canonical integration
-  `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf` (implementation tip
-  `00395ef80cfa2364d34ed2170e0735d3a4b1513d`, promotion record `1b32be4`),
+  `43f08b3`, P9-B promotion-record State/status `14a2e8e`, P9-B canonical
+  integration `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf` (implementation tip
+  `00395ef80cfa2364d34ed2170e0735d3a4b1513d`),
   P11 promotion `0cd4281` and
   closure State `308e24d`, current P18 State `311baa9`, P14 State `f8a61fe`,
-  P20 Entry Architecture `2f9c93b` and Technical Design `6a0d164`, architecture
+  P20 Entry Architecture `2f9c93b`, Technical Design `6a0d164`, and proposed
+  P20-A checkpoint `1a6ad537`, P10-A reviewed design/checkpoint candidate
+  `345dcbc` (ready, runtime not delivered), architecture
   `c285466`, `docs/architecture/INTRADAY_EXTENSIBILITY_ALIGNMENT.md`, and
   `docs/architecture/MULTIPARTICIPANT_ACTIVITY_ALIGNMENT.md`.
 - `Assets/_Project/Scripts/TesteSimulacao.cs`, `SimulationConfigData.cs`,

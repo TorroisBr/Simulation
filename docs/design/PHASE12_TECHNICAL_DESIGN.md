@@ -12,17 +12,22 @@ architecture baseline `c285466c355103d3637ac165246591b72eb7bda0`, and both
 alignment records. That review predates later P9 manifest and current-base
 clarifications and does not review this exact revision. Current references for
 this refresh are P8 canonical State `470667d37863384edadb3d93ef64d8004aff46a3`,
-P9-A code promotion `43f08b3dfbf042380c2f8a8b037bbf3ebd309ccb` / closure
-State `96f2c1aaf742f313bbb9643e5f5b3d844c402c78`, P9-B canonical integration
+P9-A code promotion `43f08b3dfbf042380c2f8a8b037bbf3ebd309ccb` / P9-B
+promotion-record State `14a2e8ee01e49f1ffdcecf8fd64d274c728ead44`, P9-B canonical integration
 `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf` (implementation tip
 `00395ef80cfa2364d34ed2170e0735d3a4b1513d`), P11 code promotion
 `0cd4281804ecc6a2d110352d1a238959e93867f0` / closure State
 `308e24d0744112e8f2b741521b8b3e4acb51ebbf`, and architecture baseline
 `c285466c355103d3637ac165246591b72eb7bda0`. P8's `77f3e1a`→`470667d`
 advance is State-only. Both alignment records remain current.
-The P9-B promotion record is refreshed at `codex/phase9/P9BPromotionRecord`
-tip `1b32be4`; use that record alongside canonical code tip `d9a62d7` when
-checking P9-B capability and profile provenance.
+The P9-B promotion record is canonical in State/status tip `14a2e8e`; use that
+record alongside canonical code tip `d9a62d7` when checking P9-B capability and
+profile provenance. P10-A's current reviewed profile is one Ruin at an existing
+P8 Location with finite LocalTopology; it is implementation-ready but has no
+delivered runtime, so this P12 profile excludes generated P10 state. P20-A is a
+reviewed proposed synthetic two-Person proof at `1a6ad537`, not an accepted
+checkpoint or implementation capability; its exact-two fixture does not narrow
+the architecture's one-or-more participant cardinality.
 
 ## 1. Contract and supported boundary
 
@@ -220,15 +225,16 @@ No genuinely unresolved product or canonical semantic decision is identified wit
 This design remains limited to `UnityBootstrap-Daily-v1`. `P12-A` is a
 proposed identifier only; this refresh grants no implementation authorization
 and records no review verdict. The current-base dependency check uses P8
-canonical State `470667d`, P9-A code promotion `43f08b3` and Phase 9 closure
-State `96f2c1a`, P9-B canonical integration `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf`
+canonical State `470667d`, P9-A code promotion `43f08b3` and P9-B
+promotion-record State `14a2e8e`, P9-B canonical integration `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf`
 (implementation tip `00395ef80cfa2364d34ed2170e0735d3a4b1513d`), P11 code promotion `0cd4281` and
 closure State `308e24d`, current P18 State `311baa9` (P18-A/B/C promoted;
 P18-D implementation blocked), P14 State `f8a61fe` (P14-A daily and promoted),
-P20 Entry Architecture `2f9c93b` and Technical Design `6a0d164` (reviewed designs,
-no implementation authorization), P10-A's approved bounded P8-C
-LocationId-neutral seam and current technical-review/checkpoint-process gates,
-and
+P20 Entry Architecture `2f9c93b`, Technical Design `6a0d164`, and proposed
+P20-A checkpoint `1a6ad537` (reviewed design/proposal; acceptance pending),
+P10-A's approved bounded P8-C LocationId-neutral seam with design/checkpoint
+review PASS at `345dcbc` and `READY_FOR_IMPLEMENTATION` status, while P10 runtime
+remains absent, and
 architecture baseline `c285466`, including both current alignment records.
 
 - **P9-A/P9-B manifest and version:** the selected bootstrap executes P9-A and
@@ -277,10 +283,11 @@ architecture baseline `c285466`, including both current alignment records.
 
 The refreshed alignment records preserve explicit temporal and participant
 identity boundaries. The P8 `77f3e1a`→`470667d` advance changes only Phase 8
-State wording; P9 and P11 closure updates likewise do not change the promoted
-runtime APIs. This refresh narrows the profile admission to the selected
-geography-enabled asset, records P9-B's current canonical integration and
-required P8-A state, and leaves P20 conditional. Independent review of the
+State wording; P9's current promotion-record State/status tip is `14a2e8e`, for
+code at `d9a62d7`. This refresh records P9-B's canonical integration and
+required P8-A state, recognizes P10-A's reviewed readiness without implying
+delivered runtime, and leaves P18 intraday, P19 modules and P20 shared
+activities conditional and outside this profile. Independent review of the
 current integrated package must confirm these current-base mappings and the
 remaining capability/acceptance gates.
 
