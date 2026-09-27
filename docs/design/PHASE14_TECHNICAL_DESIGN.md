@@ -12,7 +12,9 @@ canonical baseline `c5b2e06b534f4b2af38f10e6510b10800aa8b28c` and architecture u
 `c285466c355103d3637ac165246591b72eb7bda0`, confirming the exact LocationId
 association, uniqueness/cardinality rules, and conditional P18/P20 edges.
 **P8-E promotion impact revalidation:** the latest canonical Phase 8 State is
-at `77f3e1a`; P8-E was promoted at `d95b60d174cb0b17df09e2775b3cbd134c74b21f`.
+at `470667d37863384edadb3d93ef64d8004aff46a3`; the advance from `77f3e1a` is a
+State-only closure update. P8-E was promoted at
+`d95b60d174cb0b17df09e2775b3cbd134c74b21f`.
 The reviewed P14 single-settlement source/sink scope includes no transport,
 route flow, or multi-actor work, so P8-E is now canonical but is not a
 dependency for this design. The reviewed architecture baseline remains
@@ -118,10 +120,16 @@ This proposal remains bounded to manually authored daily production and
 population consumption within one settlement and its own market. It introduces
 no transport or route flow and remains a proposal, not an approved checkpoint
 contract or implementation authorization. Revalidation uses P8 canonical
-State `470667d`, P9-A promotion `988b6f5`, P11 Actor Choice State promotion
-`0803670`, P18-A State promotion `0b52898`, and architecture baseline
+State `470667d`, P9-A closure tip `96f2c1aaf742f313bbb9643e5f5b3d844c402c78`,
+P11 Actor Choice closure tip `308e24d0744112e8f2b741521b8b3e4acb51ebbf`,
+P18-A State promotion `0b52898`, and architecture baseline
 `c285466c355103d3637ac165246591b72eb7bda0`, including current
 intraday/extensibility and multi-participant alignment records.
+
+The P9 and P11 advances after code promotion record closure in State/Brief
+documents only; they change no runtime capabilities. P9-A's authored daily
+bootstrap boundary and P11's promoted actor-choice implementation remain the
+same implementations considered by this impact review.
 
 - **P8:** retain the actual dependency on the promoted spatial authority and
   City-to-Location anchoring. Confirm the selected City's Location resolves
