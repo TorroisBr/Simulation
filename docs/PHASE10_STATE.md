@@ -6,8 +6,8 @@
 
 **Upstream canonical capabilities:** P8 at
 `470667d37863384edadb3d93ef64d8004aff46a3`; P9-B authored-geography code at
-`d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf`, with current P9 State/status tip
-`14a2e8ee01e49f1ffdcecf8fd64d274c728ead44`.
+`d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf`, with current P9 canonical
+closure/State tip `82396ae7ffaf407fda278928da456b06dc5394d4`.
 
 ## P10-A — Ruin LocalTopology Genesis Composition
 
