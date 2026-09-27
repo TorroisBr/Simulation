@@ -1,10 +1,10 @@
 # Phase 20 Entry Architecture — bounded multi-participant proving slice
 
-**Status:** Prior entry review **PASS** at candidate
-`2f9c93b588ffccaae60aedf6c16191c1251f6a1f`; formation-close clarification is
-under independent refresh review on this candidate branch. This document
-proposes a bounded decomposition and does not authorize implementation, define
-an approved P20 checkpoint ID, or promote any capability. It is subordinate to
+**Status:** Entry review **PASS**, including the formation-close clarification,
+at docs candidate `5ea4283b0c0dc15336c3eed477dd24ef276897f4` against architecture
+`c285466` and current P18 State `311baa9`. This document proposes a bounded
+decomposition and does not authorize implementation, define an approved P20
+checkpoint ID, or promote any capability. It is subordinate to
 `SIMULATION_ARCHITECTURE.md` §§11–12, 91–93 and the Phase 20 Brief.
 
 ## Purpose and readiness

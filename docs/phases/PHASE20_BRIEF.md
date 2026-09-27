@@ -1,9 +1,10 @@
 # Phase 20 — Multi-participant Activities v1
 
 **Authority:** planning scope under `../SIMULATION_ARCHITECTURE.md` §§11–12,
-91–93. **Readiness:** prior entry and technical-design versions passed
-independent review against promoted P18-A/B/C. The current formation-close
-clarification is undergoing independent refresh review. The first
+91–93. **Readiness:** entry architecture and technical design, including the
+formation-close clarification, passed independent refresh review at docs
+candidate `5ea4283b0c0dc15336c3eed477dd24ef276897f4` against promoted P18-A/B/C,
+current P18 State `311baa9`, and both current alignment records. The first
 implementation checkpoint, `P20-A — Synthetic Multi-participant Operation`, is
 proposed in `../design/PHASE20_P20A_CHECKPOINT_PROPOSAL.md`; its ID and scope are
 not yet accepted. Implementation remains gated on explicit checkpoint

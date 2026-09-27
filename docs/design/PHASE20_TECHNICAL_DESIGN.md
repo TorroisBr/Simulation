@@ -36,13 +36,14 @@ and supports the architecture's one-or-more participant cardinality.
 proposal (refreshed at `ff8908ff81f53c6392535f6a23d0bd954b86220b`);
 reviewed P18-A, P18-B, and P18-C technical designs; and both dated
 architecture alignment records.
-**Status:** The technical design at candidate `6a0d164` passed independent
-review. This candidate clarifies when partial formation becomes terminal;
-that clarification is pending independent refresh review. Checkpoint `P20-A —
-Synthetic Multi-participant Operation` remains proposed separately in
-`PHASE20_P20A_CHECKPOINT_PROPOSAL.md`; its ID and scope have not been accepted.
-No implementation authorization, capability promotion, or persistence schema
-is granted.
+**Status:** The technical design at candidate `6a0d164` and the formation-close
+clarification at docs candidate
+`5ea4283b0c0dc15336c3eed477dd24ef276897f4` passed independent review against
+architecture `c285466`, current P18 State `311baa9`, and both alignment
+records. Checkpoint `P20-A — Synthetic Multi-participant Operation` remains
+proposed separately in `PHASE20_P20A_CHECKPOINT_PROPOSAL.md`; its ID and scope
+have not been accepted. No implementation authorization, capability
+promotion, or persistence schema is granted.
 **Independent technical-design review history:** Earlier PASS at content commit
 `a85ab673c41154b7ac9be3943b3e0f2cba2c41e7` after the decline lifecycle
 mapping correction and refreshed PASS at `3c69fee`. The current P20 technical
@@ -50,9 +51,9 @@ design at `6a0d16494735853ce35a8974ab348551650afd6b` was independently reviewed
 against promoted P18-A/B/C and P18 State `bcb3f67`; the latest P18 State-only
 tip `311baa9` records that PASS and does not change relevant contracts. Review
 confirmed the pre-schedule Proposed instance, atomic full-set commitments,
-sealed-input start bound, and separate activity/participant identity. This
-checkpoint proposal adds no new simulation semantics; its own documentation
-diff still requires independent review before publication.
+sealed-input start bound, and separate activity/participant identity. The
+formation-close clarification was independently refreshed and reviewed at docs
+candidate `5ea4283`; current P18 code/API contracts remain unchanged.
 
 ## 1. Purpose and boundary
 
@@ -341,8 +342,8 @@ P20 runtime implementation has its relevant P18-A timeline/scheduler,
 P18-B lifecycle, and P18-C availability/decision prerequisites promoted; the
 latest canonical State is `311baa9`, with code sources listed above. The former
 P18-C promotion gate is cleared. P20-A remains gated on explicit checkpoint
-acceptance and independent review of the current formation-close clarification.
-The prior technical-design review remains recorded at its cited candidate. Its P20-owned
+acceptance; the formation-close clarification passed independent review at
+docs candidate `5ea4283`. Its P20-owned
 APIs/transactions must still be implemented and independently reviewed as
 described above; the proposal creates no promoted capability. P18-B stale-owner skipping and bounded lifecycle
 composition are available; P18-C transition receipts and post-advance
@@ -375,8 +376,8 @@ domain-owned effects must allow future extensions without rewriting
 deferred to its documented Phase.
 
 No additional product choice is identified within the entry-approved scope.
-The prior technical-design review records the API and transaction contracts;
-this candidate's formation-close timing clarification awaits independent
-review. Code-level mapping and behavior remain subject to independent
+The technical-design review records the API and transaction contracts, and the
+formation-close timing clarification passed independent review at docs
+candidate `5ea4283`. Code-level mapping and behavior remain subject to independent
 implementation review against current promoted P18 capabilities. The proposed
 P20-A checkpoint is not accepted and authorizes no implementation.

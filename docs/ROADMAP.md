@@ -90,9 +90,10 @@ P19 merely because its number is higher. P19's activity extension adapter
 consumes the relevant P20 capability when multi-participant support is exposed;
 P20's official bounded implementation does not wait for the mod loader.
 
-P18-A/B/C are now promoted on `codex/phase18/canonical` at `311baa9`. The prior
-P20 entry architecture and technical design passed independent review; their
-formation-close clarification is undergoing a targeted refresh review. The
+P18-A/B/C are now promoted on `codex/phase18/canonical` at `311baa9`. P20's
+entry architecture and technical design, including the formation-close
+clarification, passed independent refresh review at docs candidate `5ea4283`
+against this prerequisite base and both alignment records. The
 current first-checkpoint proposal is `P20-A — Synthetic Multi-participant
 Operation` (`docs/design/PHASE20_P20A_CHECKPOINT_PROPOSAL.md`): a two-Person,
 role-free synthetic test operation with independent decisions, a common future

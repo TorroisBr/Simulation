@@ -1,8 +1,8 @@
 # Phase 20 State — Multi-participant Activities v1
 
-**Status:** OPEN — prior entry and technical designs reviewed; a
-formation-close clarification is under independent refresh review; the first
-implementation checkpoint remains proposed; no P20 capability is promoted.
+**Status:** OPEN — entry and technical designs, including the formation-close
+clarification, passed independent refresh review; the first implementation
+checkpoint remains proposed; no P20 capability is promoted.
 
 **Architecture baseline:** `c285466c355103d3637ac165246591b72eb7bda0`.
 
@@ -18,8 +18,8 @@ P19 are not blanket prerequisites for this Phase 20 proof.
 
 | Work | Status | Evidence / gate |
 |---|---|---|
-| Entry architecture | PRIOR VERSION REVIEWED — PASS; REFRESH PENDING | `docs/design/PHASE20_ENTRY_ARCHITECTURE.md`, prior candidate `2f9c93b588ffccaae60aedf6c16191c1251f6a1f`; current clarification aligns bounded formation-close timing and awaits independent refresh review. |
-| Technical design | PRIOR VERSION REVIEWED — PASS; REFRESH PENDING | `docs/design/PHASE20_TECHNICAL_DESIGN.md`, prior candidate `6a0d16494735853ce35a8974ab348551650afd6b`; prior review was against promoted P18-A/B/C and State `bcb3f67`. Current P18 State `311baa9` records that review; this clarification awaits independent refresh review. |
+| Entry architecture | REVIEWED — PASS | `docs/design/PHASE20_ENTRY_ARCHITECTURE.md`; formation-close refresh reviewed at docs candidate `5ea4283b0c0dc15336c3eed477dd24ef276897f4` against architecture `c285466`, current P18 State `311baa9`, and both alignment records. |
+| Technical design | REVIEWED — PASS | `docs/design/PHASE20_TECHNICAL_DESIGN.md`; prior technical/API review at `6a0d16494735853ce35a8974ab348551650afd6b`, with formation-close refresh reviewed at docs candidate `5ea4283b0c0dc15336c3eed477dd24ef276897f4` against current P18 State `311baa9` and both alignment records. |
 | P20-A — Synthetic Multi-participant Operation | SCOPE PROPOSED; NOT ACCEPTED | `docs/design/PHASE20_P20A_CHECKPOINT_PROPOSAL.md`. Proposed ID only. Explicit checkpoint acceptance is still required before implementation. |
 | Runtime capability / Phase closure | NOT PROMOTED / OPEN | No P20 code, runtime capability, or closure marker is claimed. |
 
