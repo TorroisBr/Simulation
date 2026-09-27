@@ -36,3 +36,31 @@ If a future chosen production consumer requires several actors, its shared
 participation/commitment coordination consumes relevant P20 capability on P18.
 Static source/stock truth and passive production remain independent; no crew,
 job, hunting or meal system is introduced for this requirement.
+
+## Promotion impact refresh — 2026-09-26
+
+Readiness remains `ENTRY_ARCHITECTURE_READY` for the proposed bounded slice;
+there are no approved checkpoint IDs or implementation authorization. The
+proposal remains manually authored, daily, single-settlement production into
+that settlement's own market followed by its own population sink. It has no
+transport, route/network flow, or multi-actor coordination.
+
+- P8 canonical State `470667d` is the relevant upstream capability. The
+  selected City must resolve through its current P8 Location anchor. P8
+  passage/travel behavior is not required for this no-transport slice.
+- P9-A (`988b6f5`) is upstream-irrelevant: authored generation may populate
+  sources later, but the proposed v1 uses manually authored content.
+- P11 Actor Choice (`0803670`) is upstream-irrelevant: the proposed source and
+  population sink run on the existing daily Economy cadence and are not
+  actor-selected commands.
+- P18-A (`0b52898`) is upstream-irrelevant to passive daily production. A
+  future scope promising duration, shifts or intraday production/transport
+  needs the relevant P18 scheduler/lifecycle capabilities.
+- P20 is conditional only if later scope coordinates several participants;
+  this proposal introduces no crew, job or shared activity.
+
+The current architecture baseline is `c285466c355103d3637ac165246591b72eb7bda0`;
+the intraday/extensibility and multi-participant alignment records preserve
+these conditional edges without expanding this proposal. Entry approval of the
+first consumer, conservation boundary and title/custody semantics remains
+open before technical design or implementation can be treated as approved.
