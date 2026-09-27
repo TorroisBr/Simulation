@@ -1,9 +1,14 @@
 # Phase 20 — Multi-participant Activities v1
 
 **Authority:** planning scope under `../SIMULATION_ARCHITECTURE.md` §§11–12,
-91–93. **Readiness:** `ENTRY_ARCHITECTURE_READY` for bounded decomposition/design;
-implementation `WAIT_DEPENDENCY` on relevant P18 capabilities and reviewed
-technical design. No P20 implementation or checkpoint IDs are approved.
+91–93. **Readiness:** P20-A — Synthetic Multi-participant Operation scope was
+accepted on 2026-09-27; its two-Person example is fixture-only. Feature
+implementation `22df7b3` was integrated against P18 canonical `b75c5b8` at
+`ee8502f`. Independent integration review and focused P20 (11/11),
+ActivityLifecycle (17/17), LogicalTimeline (35/35), ALL EditMode (1805/1805),
+complete Smoke (5/5), and `git diff --check` passed. The canonical promotion
+gate remains pending; Phase 20 remains open and broader gameplay consumers are
+not approved by this slice.
 
 ## Objective and closure
 
