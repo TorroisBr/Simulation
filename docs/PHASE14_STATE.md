@@ -1,6 +1,6 @@
 # Phase 14 State — Productive Sources & Material Flow v1
 
-**Status:** PHASE 14 IN PROGRESS — P14-A IMPLEMENTATION
+**Status:** PHASE 14 IN PROGRESS — P14-A INTEGRATION VALIDATED; PROMOTION PENDING
 
 **Canonical implementation base:** `codex/phase8/canonical` at
 `470667d37863384edadb3d93ef64d8004aff46a3`.
@@ -10,9 +10,12 @@
 `docs/architecture/MULTIPARTICIPANT_ACTIVITY_ALIGNMENT.md`.
 
 **Planning parent:** `codex/phase14/P14ALocalMaterialFlow`.
-**Implementation candidate:** `codex/phase14/P14AImplementation`, based on
+**Implementation source:** `codex/phase14/P14AImplementation` at
+`6d37afa8891be4cbf3bbbc3aef36f5c91f194dd2`, based on
 `0bb47b1db9e350127074768024c6de1a7d4b3d0c` (reviewed planning artifacts on
-the P8 baseline). Implementation remains IN_PROGRESS and is not canonical.
+the P8 baseline). **Integration candidate:** `codex/phase14/P14ALocalMaterialFlow`
+at the same code tip; fast-forward integration has no code divergence. P14-A
+remains IN_PROGRESS and is not canonical pending the separate promotion gate.
 
 ## Checkpoint status
 
@@ -47,19 +50,26 @@ human-gated.
 
 ## Implementation, validation, and closure
 
-Implementation is underway on the isolated implementation candidate branch.
-The candidate must preserve stable settlement/source/store/item identity,
+The candidate preserves stable settlement/source/store/item identity,
 LocationId-to-City anchor agreement, title/custody separation, atomic source
 overflow rejection, stock-limited actual consumption, the `Economy.Enabled`
 gate, deterministic closing-balance diagnostics, and the reconstruction
 inventory in the checkpoint contract.
 
-Implementation validation on the candidate: focused EditMode suites passed for
-`LocalDailyMaterialFlowTests` (11), `SettlementStockOwnershipTests` (14),
-`PopulationConsumptionTests` (22), `WorldStateDiagnosticsTests` (46), and
-`EconomyTransactionTests` (33). `git diff --check` passed. Independent review
-and integration/regression gates remain outstanding; these results do not
-promote P14-A or alter canonical state.
+Independent code review passed at exact candidate `6d37afa` against base
+`0bb47b1`. The five focused EditMode suites passed on that exact integrated
+tree: `LocalDailyMaterialFlowTests` 13/13,
+`SettlementStockOwnershipTests` 14/14, `PopulationConsumptionTests` 22/22,
+`WorldStateDiagnosticsTests` 46/46, and `EconomyTransactionTests` 33/33.
+Final integration gates also passed: ALL EditMode 1712/1712, official complete
+EditMode `Smoke` 5/5, `SimulationRuntimeLongRunTests` 7/7, and
+`git diff --check`. Unity result XML/logs are under `Temp/ValidationResults`
+in the P14 implementation worktree for this exact commit; the separate
+integration checkout's first cold Unity invocation stopped during package
+resolution with `ENOSPC` before test discovery, so the gates were rerun
+successfully using the already-resolved checkout at the identical commit.
+These results validate the integration candidate but do not promote P14-A or
+alter canonical state.
 
 Run focused economy, market stock, free-consumption, identity/anchor, overflow,
 disabled-economy, diagnostic, and same-input determinism coverage. Independently
