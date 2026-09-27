@@ -1,14 +1,12 @@
-# Phase 9 — P9-B PROMOTED; FORMAL PHASE-CLOSURE RECORD PENDING
+# Phase 9 — CLOSURE CANDIDATE; INDEPENDENT REVIEW PENDING
 
-P9-A remains promoted and scope-closed within its approved authored-bootstrap-
-only scope. Phase 9 is reopened for the separately user-approved P9-B
-authored-geography capability below. Independent design review passed on the
-exact P9-B contract at `a30db22f9d8e3117a668c463a70d4100149387bd`; an isolated
-implementation candidate proceeded. The implementation and required
-validation are complete on `00395ef80cfa2364d34ed2170e0735d3a4b1513d`.
-Following exact-tip integration review and user approval, P9-B was promoted to
-`codex/phase9/canonical` at `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf`.
-Phase 9 remains open only for its separate formal closure record.
+P9-A and the separately user-approved P9-B are promoted. This branch proposes
+the formal Phase 9 closure record for independent review; the canonical Phase
+State remains open until that review passes and the reviewed State-only record
+is promoted. The proposal closes only the accepted P9-A authored-bootstrap
+profile and P9-B authored-geography source capability. Later local authoring,
+generation algorithms, public extensions and runtime expansion remain outside
+this Phase 9 closure boundary.
 
 ## Current authority and candidate
 
@@ -22,7 +20,36 @@ Phase 9 remains open only for its separate formal closure record.
 - P9-A code promotion commit: `43f08b3dfbf042380c2f8a8b037bbf3ebd309ccb` on `codex/phase9/canonical`.
 - **P9-A status: PROMOTED and scope-closed.** Its original accepted scope and historical closure record remain intact. P9-B is a separately approved checkpoint, not an expansion or rewrite of P9-A.
 - **P9-B status: PROMOTED.** Design, code, integration review, required validation, and user-approved canonical promotion are complete at `d9a62d7`.
-- **Phase 9 status: PHASE-CLOSURE RECORD PENDING.** P9-A remains scope-closed; P9-B delivers the separately approved authored-geography source. P10 owns the next local Ruin/topology capability; public mod loading, retrofit and runtime expansion remain deferred consumers.
+- **Phase 9 status: CLOSURE CANDIDATE; REVIEW PENDING.** P9-A remains scope-closed; P9-B delivers the separately approved authored-geography source. P10 owns the next local Ruin/topology capability; public mod loading, retrofit and runtime expansion remain deferred consumers.
+
+## Proposed Phase 9 closure boundary — review pending
+
+- The mandatory approved checkpoints are P9-A — Authored Bootstrap Genesis
+  v1 and P9-B — Authored Geography Source for Local Authoring v1. Both are
+  canonical on `codex/phase9/canonical`; their exact scope, implementation,
+  independent reviews, integration evidence, validation and promotion SHAs are
+  recorded below.
+- P9-A remains closed only within the selected existing authored Unity
+  bootstrap profile. P9-B adds one authored P8-A Hex and one anchored Location
+  through the same pre-start genesis handoff. Neither checkpoint promises
+  procedural terrain, settlements/population, local Ruin topology, generated
+  backstory, runtime expansion or new gameplay.
+- P9's ordered, dependency-aware stages, deterministic composition, provenance,
+  atomic pre-start publication and owning-domain authority boundaries are
+  current review constraints. P19 loader/API, module retrofit and runtime
+  expansion remain deferred; installing an extension does not rerun historical
+  generation.
+- The selected P9 profiles create no P18 timed work or P20 multi-participant
+  activity facts. The intraday/extensibility and multi-participant alignments
+  remain review constraints, not added P9 capability dependencies.
+- No other P9 checkpoint is accepted or marked mandatory. P10 owns its separate
+  Ruin/LocalTopology profile and seam. Phase 9's accepted objective is therefore
+  complete within the two approved checkpoint boundaries; this is not a claim
+  that all future world-generation content is implemented.
+- Independent phase-closure review: **PENDING** on this candidate, against
+  canonical Phase 9 tip `14a2e8ee01e49f1ffdcecf8fd64d274c728ead44`.
+- Formal Phase 9 marker: **OPEN** until independent review passes and a
+  State-only closure record is promoted.
 
 ## Historical P9-A phase-closure review
 

@@ -1,6 +1,6 @@
 # Phase 9 — Initial Deterministic Genesis v1
 
-**Authority:** planning entry subordinate to `../SIMULATION_ARCHITECTURE.md`. **Status:** P9-A remains scope-closed within its approved authored-bootstrap-first-delivery scope. P9-B is promoted at `d9a62d7` for the separate authored P8-A Hex/Location source capability. Phase 9's formal closure record remains pending. See `../PHASE9_STATE.md`.
+**Authority:** planning entry subordinate to `../SIMULATION_ARCHITECTURE.md`. **Status:** P9-A and P9-B are promoted within their approved bounded scopes. A State-only Phase 9 closure candidate is under independent review; the canonical Phase remains open until that record is reviewed and promoted. See `../PHASE9_STATE.md`.
 
 ## Objective and closure
 
