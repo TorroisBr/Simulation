@@ -296,9 +296,9 @@ input binding, trigger/defer/retry/terminal receipts, reconstruction and
 availability-triggered coordinator handoff. P18-B lifecycle source sequences
 are trigger provenance only, distinct from C sequence allocation. P18-A owns
 timeline agenda, accepted input ordering and exact logical time. The adapter
-code can be implemented independently after this design passes review and P9
-and P11 validation is concluded; it does not require the P18-D
-`SimulationRuntime` ownership window. Keep it out of `SimulationRuntime.cs`.
+implementation was delivered independently of the P18-D `SimulationRuntime`
+ownership window, after this design passed review and P9/P11 validation. Keep
+the adapter itself out of `SimulationRuntime.cs`.
 
 P18-D later owns composition with the selected SellGoods execution path, its
 daily profile adapter, boundary-yielding chronological driver and daily owner
@@ -339,11 +339,14 @@ cross-domain transaction framework is introduced. If the existing economy
 owner cannot provide this narrow contract, P18-D stays blocked for a focused
 architecture review.
 
-P18-D implementation remains blocked until the additive P18-A
-returned-facts/subphase extension is accepted and promoted, this adapter design
-passes independent review, and the serialized `SimulationRuntime` ownership
-window is released. This gate is separate from the adapter implementation.
-No implementation or capability promotion is claimed here.
+P18-D implementation remains blocked until this adapter implementation passes
+post-extension validation and exact-tip review, is canonically promoted, and
+the serialized `SimulationRuntime` ownership window is released. The P18-A
+returned-facts/subphase extension and this design review are already accepted
+and promoted/passed, respectively. This gate is separate from the adapter
+implementation. This design document records the contract; the assembled
+implementation candidate is `a535441`, and no canonical adapter promotion is
+claimed here.
 
 ## 8. Additive implementation contract requirements
 
