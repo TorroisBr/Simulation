@@ -2,11 +2,17 @@
 
 **Status:** INTEGRATED AND REVIEWED REFRESHED CANDIDATE — canonical promotion pending
 
-**Canonical base:** `codex/phase8/canonical` at `77f3e1a47a1e007492a794ea777d681a21a36d09`
+**Current canonical base:** `codex/phase8/canonical` at `470667d37863384edadb3d93ef64d8004aff46a3`
 
 **Architecture baseline:** `c285466c355103d3637ac165246591b72eb7bda0`
 
 **Integrated source commit:** `e40ebd63bcdfb043caa7e50001404afaa0ce85b7` on `codex/phase11/ActorChoiceIntegrationPostP8E`; merge commit `5b4674cf8a59c7376a1d9cad4ca5dad956697cb7` refreshes the reviewed P11 candidate against canonical P8-E at `d95b60d174cb0b17df09e2775b3cbd134c74b21f`. Merge `2acff8e` then synced the canonical State/Roadmap-only update at `77f3e1a`; no P11 runtime or test source changed.
+
+The candidate now includes current P8 canonical at `470667d` through the
+State-only merge `23c6901`. The upstream delta from `77f3e1a` changes only
+`docs/PHASE8_STATE.md`; no P11 runtime or test source changed. The architecture
+baseline remains `c285466`. The `77f3e1a` reference above is retained as the
+historical base of the earlier review, not the current integration base.
 
 **Final independent review:** PASS at candidate/State commit `aa8ecf6e722532a305e061a0106aad2a4a71947b`.
 
