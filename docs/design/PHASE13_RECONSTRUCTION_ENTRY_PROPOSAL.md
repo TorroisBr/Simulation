@@ -5,6 +5,21 @@ does not create a checkpoint, approve a P13 State, authorize implementation, or
 change the Phase 13 Brief's `WAIT_DEPENDENCY` readiness. It is subordinate to
 `SIMULATION_ARCHITECTURE.md`, the Phase 13 Brief, and actual promoted capabilities.
 
+**Current-base revalidation (2026-09-27):** P9 canonical is `82396ae` (closed
+within P9-A/P9-B; P9-B's selected authored geography is exactly one P8-A Hex
+and one anchored Location with provenance); P10 canonical is `95f9882` (P10-A
+promoted, Phase 10 open, with no universal Ruin/topology assumption);
+P12's accepted scope record is `4a1d364` (scope only, still `WAIT_DEPENDENCY`;
+latest docs-only owner-inventory refresh candidate `4cbac1d`); P14 canonical is
+`4caecbb`. P18 canonical is `99cac77` with its A/B/C core promoted; additive
+P18-A contract `2175bf2` is accepted but not implemented/promoted, P18-C adapter
+`405c5c0` is reviewed but unpromoted, and P18-D design `aa5f182` remains
+implementation-blocked. The current P20-A checkpoint proposal is `2a03eda`
+(proposed/unaccepted, acceptance pending); technical design `6a0d164` does not
+establish a delivered P20 capability. Architecture baseline `c285466` and both
+alignment records remain active constraints. These status updates do not
+narrow P13's full boundary guarantee or satisfy its P12 hard edge.
+
 ## 1. Purpose and guarantee
 
 Phase 13's product guarantee remains: reconstruct the authoritative world at
@@ -92,14 +107,16 @@ which boundaries the product supports.
   input semantics are needed for boundaries containing that activity's
   formation, participant decisions, reservations, start/abort or effects.
 
-P12 is still blocked. Candidate evidence at
-`codex/phase12/ContinuationDesignP9BRevalidation` (`e987e82`, owner coverage
-inventory) reports no profile-included owner group with demonstrated complete
-exact immutable export plus staged hydration. It specifically identifies
-missing envelope/admission, identity allocator restoration, owner DTOs and
-hydrators, causal inputs/commitments, mutation-health/quiescence and atomic
-staged publication. This is implementation evidence, not a P12 acceptance or
-capability. Therefore P13 implementation remains `WAIT_DEPENDENCY`.
+P12-A scope was accepted at `codex/phase12/ContinuationDesignP9BRevalidation`
+tip `4a1d364`, but that is scope acceptance only. The latest owner-inventory
+refresh candidate `4cbac1d` still reports no profile-included owner
+group with demonstrated complete exact immutable export plus staged
+hydration. It identifies missing envelope/admission, identity allocator
+restoration, owner DTOs and hydrators, causal inputs/commitments,
+mutation-health/quiescence and atomic staged publication. The refreshed P12
+record also retains `WAIT_DEPENDENCY` and no implementation authorization.
+This is evidence of the hard P12 blocker, not a P12 capability. Therefore P13
+implementation remains `WAIT_DEPENDENCY`.
 
 ### Conditional module and extension coverage
 
@@ -145,8 +162,12 @@ account for:
   exact logical instant/day, order and idempotency/terminal disposition;
 - deterministic execution context and random state/context only where consumed;
 - temporal time/calendar, pending owner work, activity lifecycle and causal
-  ordering where the history actually used P18;
-- P20 activity instance identity, the boundary-specific participant/role set,
+  ordering where the history actually used P18. P18 canonical is `99cac77`;
+  the additive P18-A returned-facts/subphase contract `2175bf2` is accepted
+  but not yet implemented/promoted, and P18-D remains blocked. Do not invent
+  intraday facts absent from the execution history;
+- P20 `ActivityInstanceId` as identity distinct from `PersonId` and participant
+  identities, plus the boundary-specific participant/role set;
   independent agreements/withdrawals, reservations, scheduled/validated start,
   cancellation/abort and already-applied participant/shared effects where used;
 - module identities/versions, module-owned authoritative state, migration or
@@ -156,10 +177,13 @@ account for:
 
 For P20, an earlier boundary preserves its then-current pending or executing
 instance and participant set. It must never receive a later final roster
-retroactively. For P18, reconstruction consumes supported recorded temporal
-state/order and inputs; it cannot manufacture intraday detail absent from the
-historical execution. Indexes may be rebuilt only when their ordering and
-validity derive completely from retained authoritative facts.
+retroactively. General participant cardinality is one or more; one- or
+two-person fixtures are bounded proofs, not a cardinality rule. `ActivityInstanceId`
+never aliases a `PersonId` or participant identity. For P18, reconstruction
+consumes supported recorded temporal state/order and inputs; it cannot
+manufacture intraday detail absent from the historical execution. Indexes may
+be rebuilt only when their ordering and validity derive completely from
+retained authoritative facts.
 
 ## 6. Proposed technical proof obligations
 
@@ -225,15 +249,17 @@ These are planning/design candidates, not promoted capability evidence:
 - `docs/design/PHASE18_C_TECHNICAL_DESIGN.md`: availability/input-boundary
   decisions; candidate design is subordinate to current promoted code/State.
 - `docs/phases/PHASE18_BRIEF.md`: temporal objective and conditional P13 edge.
-- `docs/phases/PHASE20_BRIEF.md`, branch candidate
-  `codex/phase20/MultiParticipantTechnicalDesign` and its current
-  `PHASE20_TECHNICAL_DESIGN` artifact: boundary-specific shared-instance and
-  atomic effect requirements. Candidate text does not prove runtime capability.
+- `docs/phases/PHASE20_BRIEF.md`, current scope proposal
+  `codex/phase20/P20FirstCheckpointProposal` at `2a03eda` (proposed/unaccepted),
+  and technical design `6a0d164`: boundary-specific shared-instance and atomic
+  effect requirements. The exact-two fixture is not general cardinality and
+  candidate text does not prove runtime capability.
 - `docs/architecture/INTRADAY_EXTENSIBILITY_ALIGNMENT.md` and
   `docs/architecture/MULTIPARTICIPANT_ACTIVITY_ALIGNMENT.md`: accepted
   cross-phase constraints, including no blanket P18-D/P19/P20 edge.
-- P12 owner inventory `e987e82`: evidence of current export/hydration gaps,
-  not a completed continuation contract.
+- P12 owner inventory refresh candidate `codex/phase12/ContinuationDesignP9BRevalidation`
+  at `4cbac1d` (accepted scope remains `4a1d364`): evidence of current export/hydration gaps, not a completed
+  continuation contract or implementation authorization.
 
 The implementation dependency graph must be refreshed against canonical
 Phase 12/18/19/20 States and code before scheduling. This proposal creates no
