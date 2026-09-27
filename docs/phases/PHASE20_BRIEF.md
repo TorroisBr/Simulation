@@ -3,12 +3,14 @@
 **Authority:** planning scope under `../SIMULATION_ARCHITECTURE.md` §§11–12,
 91–93. **Readiness:** P20-A — Synthetic Multi-participant Operation scope was
 accepted on 2026-09-27; its two-Person example is fixture-only. Feature
-implementation `22df7b3` was integrated against P18 canonical `b75c5b8` at
-`ee8502f`. Independent integration review and focused P20 (11/11),
-ActivityLifecycle (17/17), LogicalTimeline (35/35), ALL EditMode (1805/1805),
-complete Smoke (5/5), and `git diff --check` passed. The canonical promotion
-gate remains pending; Phase 20 remains open and broader gameplay consumers are
-not approved by this slice.
+implementation `22df7b3` was integrated against P18 code canonical `b75c5b8` at
+`ee8502f`. P18 later advanced to `b390262` with documentation-only changes;
+P20 exact-tip review confirmed those changes do not alter its code/API or
+validation applicability. Independent integration review and focused P20
+(11/11), ActivityLifecycle (17/17), LogicalTimeline (35/35), ALL EditMode
+(1805/1805), complete Smoke (5/5), and `git diff --check` passed. P20-A was
+approved and promoted at `codex/phase20/canonical` tip `1dcf67a`. Phase 20
+remains open; broader gameplay consumers are not approved by this slice.
 
 ## Objective and closure
 
