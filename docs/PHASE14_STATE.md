@@ -1,6 +1,6 @@
 # Phase 14 State — Productive Sources & Material Flow v1
 
-**Status:** PHASE 14 IN PROGRESS — P14-A INTEGRATION VALIDATED; PROMOTION PENDING
+**Status:** PHASE 14 IN PROGRESS — P14-A PROMOTED; REMAINING PHASE WORK OPEN
 
 **Canonical implementation base:** `codex/phase8/canonical` at
 `470667d37863384edadb3d93ef64d8004aff46a3`.
@@ -15,7 +15,9 @@
 `0bb47b1db9e350127074768024c6de1a7d4b3d0c` (reviewed planning artifacts on
 the P8 baseline). **Integration candidate:** `codex/phase14/P14ALocalMaterialFlow`
 at the same code tip; fast-forward integration has no code divergence. P14-A
-remains IN_PROGRESS and is not canonical pending the separate promotion gate.
+remains IN_PROGRESS as a checkpoint, and Phase 14 remains open. The user
+approved promotion; `codex/phase14/canonical` was fast-forwarded to
+`c44904bb4b0a066eced1d7e8a773b7dc1eea76c0`.
 
 ## Checkpoint status
 
@@ -68,8 +70,8 @@ in the P14 implementation worktree for this exact commit; the separate
 integration checkout's first cold Unity invocation stopped during package
 resolution with `ENOSPC` before test discovery, so the gates were rerun
 successfully using the already-resolved checkout at the identical commit.
-These results validate the integration candidate but do not promote P14-A or
-alter canonical state.
+These results validate the integration candidate promoted to
+`codex/phase14/canonical` at `c44904bb4b0a066eced1d7e8a773b7dc1eea76c0`.
 
 Run focused economy, market stock, free-consumption, identity/anchor, overflow,
 disabled-economy, diagnostic, and same-input determinism coverage. Independently
