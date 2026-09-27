@@ -26,6 +26,21 @@ closure boundary.
 
 ## Proposed Phase 9 closure boundary — closure review passed; promotion pending
 
+### Downstream revalidation after P10-A promotion
+
+After this closure candidate's original review, P10-A was promoted on
+`codex/phase10/canonical` at code tip
+`9501bf076d506fb64d6ee3e6d178574fff36e153`; its State-only promotion record is
+`9e79b58397dc9a89ddcc562be139b79987cb55b9`, and the promoted Brief status
+refresh is `95f98829f9da7abdcb9202a3c62ae717c60a19d8`. This downstream
+LocalTopology capability consumes P9-B's authored Location source and keeps
+the P9/P10 ownership boundary explicit. Impact to P9's delivered contracts and
+closure scope is `UPSTREAM_IRRELEVANT`: P9-A and P9-B remain the only approved
+P9 checkpoints, and the closure does not absorb P10 Ruin/topology behavior.
+The exact closure candidate after this note requires the recorded factual
+re-review; the prior independent closure review remains evidence for the
+unchanged closure semantics.
+
 - The mandatory approved checkpoints are P9-A — Authored Bootstrap Genesis
   v1 and P9-B — Authored Geography Source for Local Authoring v1. Both are
   canonical on `codex/phase9/canonical`; their exact scope, implementation,
