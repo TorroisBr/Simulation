@@ -1,8 +1,9 @@
 # Phase 18 — Intraday Temporal Execution v1
 
 **Authority:** planning scope under `../SIMULATION_ARCHITECTURE.md` §§11–12,
-91–92. **Readiness:** `READY_FOR_TECHNICAL_DESIGN` for P18-A; no implementation
-has started. Phase numbering preserves existing IDs, not execution order.
+91–92. **Readiness:** P18-A is promoted; P18-B implementation is underway on
+an isolated feature branch. P18-C and P18-D remain dependency-gated. Phase
+numbering preserves existing IDs, not execution order.
 
 ## Objective and closure
 

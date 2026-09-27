@@ -276,6 +276,41 @@ public sealed class SimulationTimeline
         return true;
     }
 
+    /// <summary>Stages an owner's pending facts, commits its authority, then publishes the derived index atomically.</summary>
+    public bool TryCommitOwnerFacts(IReadOnlyList<DueWorkReference> facts, Func<TimelineFailure> commitOwner, out TimelineFailure failure)
+    {
+        if (facts == null) throw new ArgumentNullException(nameof(facts));
+        if (commitOwner == null) throw new ArgumentNullException(nameof(commitOwner));
+        if (dispatching || advancing) { failure = TimelineFailure.DispatchFailed; return false; }
+        List<ScheduledDueWork> staged = new List<ScheduledDueWork>(facts.Count);
+        HashSet<string> identities = new HashSet<string>(StringComparer.Ordinal);
+        long nextSequence = causalSequence;
+        try
+        {
+            foreach (DueWorkReference fact in facts)
+            {
+                if (!CanIndex(fact, now, out failure)) return false;
+                if (fact.DueAt.Value <= sealedThrough) { failure = TimelineFailure.LateInput; return false; }
+                string identity = Identity(fact);
+                if (workIdentities.Contains(identity) || !identities.Add(identity)) { failure = TimelineFailure.StaleWork; return false; }
+                if (agenda.TryGetValue(fact.DueAt.Value, out List<ScheduledDueWork> sameInstant))
+                    foreach (ScheduledDueWork existing in sameInstant)
+                        if (SameStableSequence(existing.Reference, fact)) { failure = TimelineFailure.DuplicateWorkSequence; return false; }
+                foreach (ScheduledDueWork other in staged)
+                    if (other.Reference.DueAt == fact.DueAt && SameStableSequence(other.Reference, fact))
+                    { failure = TimelineFailure.DuplicateWorkSequence; return false; }
+                nextSequence = checked(nextSequence + 1L);
+                staged.Add(new ScheduledDueWork(fact, 0, nextSequence));
+            }
+        }
+        catch (OverflowException) { failure = TimelineFailure.Overflow; return false; }
+        try { failure = commitOwner(); }
+        catch (Exception) { failure = TimelineFailure.DispatchFailed; return false; }
+        if (failure != TimelineFailure.None) return false;
+        PublishOwnerFacts(staged, nextSequence);
+        return true;
+    }
+
     public bool TryAdvanceTo(LogicalTick target, out TimelineFailure failure)
     {
         if (advancing) { failure = TimelineFailure.ReentrantAdvance; return false; }
@@ -360,8 +395,9 @@ public sealed class SimulationTimeline
                         {
                             items.RemoveAt(0);
                             if (items.Count == 0) agenda.Remove(now);
-                            failure = TimelineFailure.StaleWork;
-                            return false;
+                            // Obsolete owner references are inert index nodes; continue to the next causal item.
+                            dispatchesAtInstant++;
+                            continue;
                         }
                         if (!dueWorkOwner.TryPrepare(item, out IDueWorkCommit prepared, out failure) || prepared == null)
                         { if (failure == TimelineFailure.None) failure = TimelineFailure.DispatchFailed; return false; }

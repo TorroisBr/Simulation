@@ -350,7 +350,7 @@ public sealed class LogicalTimelineTests
     }
 
     [Test]
-    public void DispatchLimitAndStaleWorkStopAtFailureInstantWithQueuedWorkPreserved()
+    public void DispatchLimitStopsAtFailureInstantAndStaleWorkIsDiscardedAsInert()
     {
         DueOwner owner = new DueOwner();
         SimulationTimeline limited = new SimulationTimeline(Calendar(), new LogicalTick(0), owner, maxDispatchesPerInstant: 1);
@@ -368,9 +368,9 @@ public sealed class LogicalTimelineTests
         SimulationTimeline stale = new SimulationTimeline(Calendar(), new LogicalTick(0), staleOwner);
         Assert.That(stale.TryIndexOwnerFact(Work("owner", "stale", "i", 0, 7), out _), Is.True);
         Assert.That(stale.TrySealInputsThrough(new LogicalTick(20), out _), Is.True);
-        Assert.That(stale.TryAdvanceTo(new LogicalTick(20), out TimelineFailure staleFailure), Is.False);
-        Assert.That(staleFailure, Is.EqualTo(TimelineFailure.StaleWork));
-        Assert.That(stale.CurrentInstant.Value, Is.EqualTo(7));
+        Assert.That(stale.TryAdvanceTo(new LogicalTick(20), out TimelineFailure staleFailure), Is.True, staleFailure.ToString());
+        Assert.That(stale.CurrentInstant.Value, Is.EqualTo(20));
+        Assert.That(stale.IsDue(new LogicalTick(7), "stale"), Is.False);
     }
 
     [Test]
