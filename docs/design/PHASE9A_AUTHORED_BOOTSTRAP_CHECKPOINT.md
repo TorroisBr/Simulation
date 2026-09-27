@@ -1,10 +1,12 @@
 # P9-A — Authored Bootstrap Genesis v1
 
-**Status:** `VALIDATED_CANDIDATE`. Independent checkpoint-contract review
-passed on the contract recorded at `f14586b`; independent implementation review
-passed on code candidate `974a8d72a158962619d7ba8aa1ccf854eeadd47e`. This record
-is on an integration candidate branch and does not claim canonical delivery or
-authorize promotion.
+**Status:** `PROMOTED` to `codex/phase9/canonical` at
+`43f08b3dfbf042380c2f8a8b037bbf3ebd309ccb`. Independent checkpoint-contract
+review passed on the contract recorded at `f14586b`; independent implementation
+review passed on code candidate `974a8d72a158962619d7ba8aa1ccf854eeadd47e`.
+The integration and validation history below remains the evidence for the
+promoted checkpoint. Phase 9 closure is tracked separately in
+`docs/PHASE9_STATE.md`.
 
 ## Baseline and authority
 
@@ -241,4 +243,6 @@ filter 5/5, and `git diff --check`. This is compatibility evidence only: it
 does not promote P11 or change either phase's canonical status.
 
 No long-run suite was required because P9-A adds no daily-loop behavior. P9-A
-remains an unpromoted candidate; this record does not mark Phase 9 complete.
+was promoted to `codex/phase9/canonical` at `43f08b3`; the promotion State
+record is in `docs/PHASE9_STATE.md`. This checkpoint does not mark Phase 9
+complete.

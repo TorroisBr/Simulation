@@ -1,6 +1,6 @@
 # Phase 9 — Initial Deterministic Genesis v1
 
-**Authority:** planning entry subordinate to `../SIMULATION_ARCHITECTURE.md`. **Readiness:** P9-A is `READY_FOR_IMPLEMENTATION` after independent checkpoint-contract review; this status is a candidate-branch planning update until promotion.
+**Authority:** planning entry subordinate to `../SIMULATION_ARCHITECTURE.md`. **Readiness:** P9-A is promoted at `43f08b3`; later generation/content algorithms remain separate future scope, and Phase 9 closure is recorded in `../PHASE9_STATE.md`.
 
 ## Objective and closure
 
