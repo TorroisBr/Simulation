@@ -20,8 +20,9 @@ reconstruction inventory and acceptance criteria are defined in
 `docs/design/PHASE9A_AUTHORED_BOOTSTRAP_CHECKPOINT.md`. The approved first
 delivery adds no generated terrain, settlement, population, local topology,
 pre-simulation backstory, runtime expansion or new gameplay. P19 loader/public
-API mechanics remain deferred. P9-A has no P18 or P20 capability dependency;
-the built-in profile creates no timed activities or multi-participant state.
+API mechanics remain deferred. P9-A has no P18, P19 or P20 capability
+dependency; the built-in profile creates no timed activities or
+multi-participant state.
 
 Current extensibility constraints are review constraints: explicit stage
 identities, versions, inputs/outputs, declared dependencies, deterministic
