@@ -150,6 +150,19 @@ public sealed class LocalDailyMaterialFlowTests
     }
 
     [Test]
+    public void RuntimeRejectsSourceItemWithoutSemanticDefinitionId()
+    {
+        ItemData item = SimulationTestFactory.CreateItem("p14-missing-item-identity");
+        item.id = string.Empty;
+        CityRuntime city = new CityRuntime("runtime-missing-item-identity",
+            ProfileData("p14-missing-item-identity", item), new SpatialLocationRuntime("legacy-missing-item-identity"));
+        SpatialAuthorityStore authority = CreateSpatialAuthority("p14-missing-item-identity-location");
+        LegacySpatialAnchorBindingStore anchors = BindCity(authority, city, "p14-missing-item-identity-location");
+
+        Assert.Throws<LocalDailyMaterialFlowRejectedException>(() => CreateRuntime(city, authority, anchors, true));
+    }
+
+    [Test]
     public void RuntimeRejectsMultipleP14SettlementProfiles()
     {
         ItemData firstItem = SimulationTestFactory.CreateItem("p14-duplicate-first");
@@ -196,6 +209,19 @@ public sealed class LocalDailyMaterialFlowTests
             entry.Section == "LocalDailyMaterialFlow" && entry.Field == "AppliedSourceQuantity"
             && entry.BeforeValue == "5" && entry.AfterValue == "6"));
         Assert.That(diff.Differences, Has.None.Matches<WorldStateDifference>(entry => entry.Section == "CityStock"));
+    }
+
+    [Test]
+    public void DiffReportsSettlementSemanticIdentityChangeInReceipt()
+    {
+        WorldStateSnapshot before = Snapshot(Flow(5, 0, 9));
+        WorldStateSnapshot after = Snapshot(Flow(5, 0, 9, "settlement.reidentified"));
+
+        WorldStateDiff diff = WorldStateDiff.Compare(before, after);
+
+        Assert.That(diff.Differences, Has.Some.Matches<WorldStateDifference>(entry =>
+            entry.Section == "LocalDailyMaterialFlow" && entry.Field == "SettlementSemanticId"
+            && entry.BeforeValue == "settlement.diff" && entry.AfterValue == "settlement.reidentified"));
     }
 
     private static CityData ProfileData(string id, ItemData item)
@@ -271,8 +297,9 @@ public sealed class LocalDailyMaterialFlowTests
             new[] { new WorldStateMarketStackSnapshot("item-diff", 9, 20, 1f) },
             lastMaterialFlow: flow) });
 
-    private static LocalDailyMaterialFlowResult Flow(int applied, int actualConsumption, int closing) => new LocalDailyMaterialFlowResult(
-        "settlement.diff", "source.diff", "store.diff", "location.diff", "item-diff", "content-v1",
+    private static LocalDailyMaterialFlowResult Flow(int applied, int actualConsumption, int closing,
+        string settlementId = "settlement.diff") => new LocalDailyMaterialFlowResult(
+        settlementId, "source.diff", "store.diff", "location.diff", "item-diff", "content-v1",
         "Economy.Enabled=true;PaymentMode=Free", "simulation-calendar", "calendar-v1", true, 1000, 2f,
         1L, 4, applied, applied, string.Empty, actualConsumption == 0 ? 0 : 2, actualConsumption, closing);
 

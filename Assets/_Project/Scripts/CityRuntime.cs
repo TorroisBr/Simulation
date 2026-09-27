@@ -91,7 +91,8 @@ public class CityRuntime
             || cityData.productionConfigs == null || cityData.productionConfigs.Count != 1)
             throw new LocalDailyMaterialFlowRejectedException("P14-A requires settlement, LocationId, market store, and exactly one authored source.");
         CityProductionConfig source = cityData.productionConfigs[0];
-        if (source == null || source.item == null || source.amountPerDay <= 0
+        if (source == null || source.item == null || string.IsNullOrWhiteSpace(source.item.DefinitionId)
+            || source.amountPerDay <= 0
             || string.IsNullOrWhiteSpace(source.productionSourceId) || string.IsNullOrWhiteSpace(source.contentRevision))
             throw new LocalDailyMaterialFlowRejectedException("P14-A source identity, item, positive quantity, and content revision are required.");
         if (PopulationEconomy.PaymentMode != ConsumptionPaymentMode.Free

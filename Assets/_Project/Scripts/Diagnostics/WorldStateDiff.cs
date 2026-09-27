@@ -1506,6 +1506,9 @@ public sealed class WorldStateDiff
         string identity = after?.SettlementSemanticId ?? before?.SettlementSemanticId ?? cityIdentity;
         CompareValue("LocalDailyMaterialFlow", identity, "Present",
             WorldStateCanonicalWriter.BoolValue(before != null), WorldStateCanonicalWriter.BoolValue(after != null), differences);
+        CompareValue("LocalDailyMaterialFlow", identity, "SettlementSemanticId",
+            WorldStateCanonicalWriter.StringValue(before?.SettlementSemanticId),
+            WorldStateCanonicalWriter.StringValue(after?.SettlementSemanticId), differences);
         CompareValue("LocalDailyMaterialFlow", identity, "ProductionSourceId",
             WorldStateCanonicalWriter.StringValue(before?.ProductionSourceId), WorldStateCanonicalWriter.StringValue(after?.ProductionSourceId), differences);
         CompareValue("LocalDailyMaterialFlow", identity, "MarketStoreSemanticId",
