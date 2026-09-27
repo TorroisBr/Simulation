@@ -281,11 +281,9 @@ omits causal fields.
 
 ## 7. Proposal boundary and review gates
 
-This is the general proposed-contract source. The bounded candidate contract
-and planning identifier are recorded in
-[`P12-A_UNITYBOOTSTRAP_DAILY_V1_CHECKPOINT.md`](P12-A_UNITYBOOTSTRAP_DAILY_V1_CHECKPOINT.md).
-Neither record amends `SIMULATION_ARCHITECTURE.md`, establishes an accepted
-checkpoint, nor authorizes implementation.
+This document is the bounded P12-A contract proposal and its planning
+identifier record. It does not amend `SIMULATION_ARCHITECTURE.md`, establish
+an accepted checkpoint, or authorize implementation.
 
 Remaining gates are independent current-base review, formal acceptance of the
 checkpoint contract and scope/status through the repository workflow, and

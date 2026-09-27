@@ -6,7 +6,7 @@
 
 For supported compatible versions/profiles, continuing from boundary T and saving at T, loading, then continuing with the same inputs produce the same future authoritative results. Save is not replay or selective History.
 
-**Checkpoint plan:** P12-A — `UnityBootstrap-Daily-v1` (proposal; durable record at `../design/P12-A_UNITYBOOTSTRAP_DAILY_V1_CHECKPOINT.md`). The ID is assigned for planning traceability only; it is not human acceptance, implementation authorization, delivery, or canonical promotion.
+**Checkpoint plan:** P12-A — `UnityBootstrap-Daily-v1` (proposal; contract proposal at `../design/PHASE12_CHECKPOINT_CONTRACT_PROPOSAL.md`). The ID is assigned for planning traceability only; it is not human acceptance, implementation authorization, delivery, or canonical promotion.
 
 ## Dependencies and gates
 
