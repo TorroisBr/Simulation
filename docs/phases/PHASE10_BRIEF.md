@@ -1,12 +1,12 @@
 # Phase 10 — Local Generation & Pre-start Authoring
 
-**Authority:** planning entry subordinate to `../SIMULATION_ARCHITECTURE.md`. **Readiness:** user-approved first-profile scope; technical design is `TECHNICAL_DESIGN_IN_PROGRESS` pending independent review and a durable checkpoint record. P9-B is promoted at P9 canonical `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf` and supplies the selected profile's authored P8 Hex/Location source through the P9 genesis handoff. No product choice is open; implementation is not ready until technical review and checkpoint recording pass.
+**Authority:** planning entry subordinate to `../SIMULATION_ARCHITECTURE.md`. **Readiness:** user-approved first-profile scope; P10-A has a durable bounded checkpoint record at `../design/PHASE10_A_CHECKPOINT_RECORD.md`, and the refreshed technical design plus record await independent review. P9-B's geography capability is promoted at `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf`; the current P9 canonical State/status tip is `14a2e8ee01e49f1ffdcecf8fd64d274c728ead44`. No product choice is open; implementation is not ready pending review.
 
 ## Objective and closure
 
 The approved first profile composes exactly one `ExplorableSiteKind.Ruin` at an existing canonical P8 `LocationId`, with the minimum finite local topology needed to represent semantic places, one or more entry points, containment only where needed, and explicit local connections. P9 authored-bootstrap genesis/provenance is consumed; this profile adds no new generated content.
 
-**Checkpoints:** no P10 checkpoint ID or closure contract is approved. The technical design may propose one bounded checkpoint for review; that proposal does not authorize implementation.
+**Checkpoint:** P10-A — Ruin LocalTopology Genesis Composition. Its bounded record documents the user-approved scope and current design baseline, but independent review is pending. It does not authorize implementation or constitute Phase 10 closure.
 
 ## Dependencies and gates
 
