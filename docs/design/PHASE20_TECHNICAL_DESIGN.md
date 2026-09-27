@@ -1,22 +1,24 @@
 # P20 — Multi-participant Synthetic Operation Technical Design
 
-**Design base:** `97b97c5c7523f39f3645bc018c82dbbab633648f` on
-`codex/phase20/MultiParticipantTechnicalDesign`, descended from canonical
+**Refresh base:** P18 canonical tip
+`18ecc6e56d3c6303edfaf8a38257355d262a6ea5` on
+`codex/phase18/canonical`, merged into this design branch. The design originated
+at `97b97c5c7523f39f3645bc018c82dbbab633648f` and remains subordinate to
 architecture `c285466c355103d3637ac165246591b72eb7bda0`.
-**Prior P18 baseline:** P18-A (`0b52898a479fe48ea8fb2fd7b2c43af82445f26c`)
-was promoted; P18-B/C were then unpromoted. This is historical context only.
-**Current canonical impact revalidation:** P18 canonical tip
-`3d4fe829f4be41fc9e9bb11052a320c3eb00d94d` promotes P18-A from source
-`985c56c` and P18-B from source
-`97918cbbe4238a65a216b1a1f0ef84c70b4d080c`. P18-C design candidate remains
-`97b97c5`; C capability is unpromoted.
-P18-B includes stale-node skipping without consuming the dispatch cap and its
-bounded ActivityLifecycle composition/owner-dispatch path. P20 may rely on
-those promoted capabilities, while still revalidating its stable instance/
-revision references, due-work invalidation/retry behavior, and coordinated
-transition integration against the actual A/B APIs. P20 runtime therefore
-remains `WAIT_DEPENDENCY` on the unpromoted relevant P18-C capability and
-independently reviewed P20 APIs/transactions; P18-A/B are available. Phase 8
+**Current P18 capability revalidation:** P18-A, P18-B, and P18-C are promoted
+at `18ecc6e`. Their source tips are P18-A `985c56c40fc01dc6a4d392120e2d32151a558d03`,
+P18-B `97918cbbe4238a65a216b1a1f0ef84c70b4d080c`, and P18-C
+`ab05ecfe976e80badf6f509b8e9be25ff556ca23` (promotion/State tip
+`7aa76268c49058fedb997392e676c6a29169c8b0`). P18-B includes stale-node
+skipping without consuming the dispatch cap and the bounded
+ActivityLifecycle composition/owner-dispatch path. P18-C adds the committed
+transition-receipt log on the lifecycle owner, PersonId-keyed actor decision
+requests, post-successful-advance coordination, Knowledge-bounded planning,
+stable semantic proposals, and committed-versus-retryable executor results.
+These are available dependencies, not remaining P20 implementation tasks.
+P20 still owns multi-person partial decision/formation coordination, complete
+required-set submission, P20-specific start validation, coordinated lifecycle
+plus effect transaction, and coherent cancellation/release semantics. Phase 8
 canonical docs/State tip
 `470667d37863384edadb3d93ef64d8004aff46a3` includes the P8-E promotion
 `d95b60d174cb0b17df09e2775b3cbd134c74b21f`; `77f3e1a47a1e007492a794ea777d681a21a36d09`
@@ -33,16 +35,13 @@ proposal; reviewed P18-A, P18-B, and P18-C technical designs; and both dated
 architecture alignment records.
 **Status:** Proposed technical design only. No implementation authorization,
 checkpoint IDs, capability promotion, persistence schema, or Phase State change.
-**Prior independent technical design review:** PASS at content commit
+**Prior independent technical-design review:** PASS at content commit
 `a85ab673c41154b7ac9be3943b3e0f2cba2c41e7` after the decline lifecycle
-mapping correction. This refresh adds an explicit single-participant
-compatibility validation and current P8-E impact note. Independent refreshed
-re-review **PASS** on content commit `3c69fee`; the targeted review also
-confirmed current P8-E status, P18-A/B/C identity and cardinality seams, and no
-P18-D/P19/travel blanket dependency. That review predates P18-A/B promotion
-and the current P8 docs tip. This refresh itself does not approve
-implementation or create checkpoint IDs; refreshed independent review remains
-required.
+mapping correction; refreshed review PASS at `3c69fee` before the latest P18
+promotions. This refresh updates capability and readiness claims to promoted
+P18-A/B/C at the exact refresh base. The prior review does not cover this
+mapping; independent refreshed review remains required. This remains a
+technical-design candidate only and creates no implementation checkpoint IDs.
 
 ## 1. Purpose and boundary
 
@@ -67,25 +66,38 @@ operation has no gameplay meaning.
 |---|---|
 | Logical instant, sealed inputs, due-work order and dispatch | P18-A. Start is a typed due-work reference ordered by exact `LogicalTick`, causal wave, stable owner/domain ID, `DueWorkId`, and persisted occurrence sequence. P20 owns no scheduler or clock. |
 | Definition/version, stable instance ID, lifecycle/revision, participant relations and commitments | Promoted P18-B activity domain. Instance identity is independent of definition, `PersonId`, and `NpcRuntime`. `TrySchedule` atomically schedules a full nonempty participant set; it has no partial-acceptance scheduling API. Its rebuildable P18-A descriptor resolves the authoritative instance/revision before transition. |
-| Each Person's accept/decline proposal and decision boundary | P18-C using that Person's stable `PersonId` and own permitted Knowledge. A separate decision for each required participant is recorded; one Person cannot decide for another. Current truth and commitments are revalidated at execution/start. |
-| Individual availability and commitment facts | P18-B and its individual availability authority own these facts. P20 must design how per-Person decisions/reservation requests are retained and how the complete set reaches `TrySchedule`; the P20 coordinated write is not a delivered B API. |
+| Each Person's accept/decline proposal and decision boundary | Promoted P18-C provides `PersonId`-keyed decision request/proposal types, Knowledge-bounded snapshot/planner ports, and executor result semantics. Its current coordinator creates requests from committed P18-B transition receipts; it exposes no general P20 request-enqueue API or durable formation-decision store. P20 must define the supported request trigger/adapter and compose individual outcomes into a separate formation authority; one Person cannot decide for another. Current truth and commitments are revalidated at execution/start. |
+| Individual availability and commitment facts | P18-B and its individual availability authority own these facts; P18-C consumes committed transition receipts after successful advance and queries current availability. P20 must design how per-Person decisions/reservation requests are retained and how the complete set reaches `TrySchedule`; the P20 coordinated write is not a delivered B/C API. |
 | Synthetic operation preconditions and participant results | Proposed test-only synthetic domain authority. P20 must define the all-or-none result transaction and couple it with lifecycle transition through a reviewed API; this does not exist in the promoted B start validator. |
 
 P18-A's due-work identity names the activity instance/domain transition, never
-an implicit single actor. P18-B's participant relation remains stable-ID based.
-P18-C's actor decision state remains individually keyed by `PersonId` and may
-reference the instance without making it an actor-owned child. Definition,
-instance, and each participant relation carry compatible stable semantic IDs;
-runtime references and collection order are not causal identity.
+an implicit single actor. P18-B's participant relation remains stable-ID based
+and its promoted `TrySchedule` accepts a nonempty participant set, rejects
+duplicate/blank IDs, and atomically creates commitments for the full supplied
+set; it imposes no universal fixed cardinality. P18-C's decision
+request/proposal is individually keyed by `PersonId` and may reference an
+activity instance through stable semantic boundary data without making the
+instance an actor-owned child. Definition, instance, and each participant
+relation carry compatible stable semantic IDs; runtime references and
+collection order are not causal identity.
 
 P18-B's promoted ActivityLifecycle composition and owner-dispatch path is the
-bounded lifecycle/dispatch capability P20 can build on. P20 must still design
-and review partial per-Person decision retention, full-set submission to
+bounded lifecycle/dispatch capability P20 can build on. P18-C's promoted
+coordinator drains P18-B transition receipts only after successful timeline
+advance, checks current lifecycle availability, plans from a Knowledge-bounded
+snapshot, and retries an uncommitted execution with the same stable proposal
+identity; committed rejections consume that request. The coordinator currently
+derives requests from lifecycle receipts and exposes no general request
+injection API or durable P20 formation-decision storage. This does not provide
+P20-specific partial participant decisions, all-required-set formation, or
+shared outcome semantics. P20 must design and review its request
+trigger/adapter, partial per-Person decision retention, full-set submission to
 `TrySchedule`, decline/cancel/release and stale-retry interfaces, and a
 coordinated lifecycle-plus-effect transaction. The existing start validator
 returns a bool/disposition and cannot atomically couple `Scheduled → Active`
-with P20 effects. P20 must not introduce a parallel lifecycle dispatcher or
-assume owner dispatch supplies that cross-participant transaction.
+with P20 effects. P20 must not
+introduce a parallel lifecycle dispatcher or assume owner dispatch supplies
+that cross-participant transaction.
 
 ## 3. Bounded formation and commitments
 
@@ -178,8 +190,10 @@ does not by itself establish P20 owner-state semantics. P20's required
 transaction must publish no partial reservation, lifecycle, sequence
 allocation, effect, or success signal on failure. Cancellation/failure
 dispositions and availability notification timing remain part of the P20 API
-design. P18-C's one-attempt-per-actor/causal-boundary and refusal/stale retry
-semantics remain to be validated against the unpromoted C capability.
+design. P18-C's one-attempt-per-actor/causal-boundary and uncommitted retry
+semantics are promoted constraints. P20 must validate composed multi-person
+requests against them: terminal committed rejections consume a request, while
+uncommitted execution retries the same stable proposal identity.
 
 ## 6. Causal and reconstruction inventory
 
@@ -216,7 +230,9 @@ Before implementation review, the selected slice should demonstrate:
 
 - existing one-participant P18 instances remain valid and preserve their
   lifecycle and due-work behavior without P20-only formation, coordination, or
-  effect requirements;
+  effect requirements; promoted B accepts any nonempty participant set while
+  rejecting duplicate/blank participant IDs, and P20's exact-two condition is
+  only this synthetic proof's fixture policy;
 - independent decisions and Knowledge boundaries for two distinct Persons;
 - P20 can retain partial per-Person decisions without scheduling, then submit
   the complete nonempty required set through P18-B `TrySchedule`; empty or
@@ -239,39 +255,39 @@ Before implementation review, the selected slice should demonstrate:
 - stable identity and causal state survive clone/dormancy/materialization
   permutations within the later supported runtime scope.
 
-The design review must compare these obligations to actual promoted P18-A/B
-capabilities and the still-unpromoted P18-C design before implementation. The
-P20 partial-decision API, complete-set schedule call, decline/cancel/release
-handling, stale retry semantics, and atomic lifecycle/effect transaction are
-required design/API work, not delivered P18-B capabilities. The current
-documents and candidate designs define contracts only; their existence does
-not establish runtime capabilities.
+The refreshed design review must compare these obligations to actual promoted
+P18-A/B/C code at `18ecc6e` before implementation. The P20 partial-decision
+API, complete-set schedule call, decline/cancel/release handling, P20 stale
+retry composition, and atomic lifecycle/effect transaction are required
+design/API work, not delivered P18-B/C capabilities. The current P20 documents
+define candidate contracts only; their existence does not establish runtime
+capabilities.
 
 ## 8. Dependency gate and exclusions
 
-P20 runtime implementation requires the **promoted P18-A timeline/scheduler
-and P18-B lifecycle, the relevant P18-C availability/decision capability once
-promoted, and independently reviewed P20 APIs/transactions for the gaps
-described above**. P18-A/B are now promoted
-at canonical tip `3d4fe829f4be41fc9e9bb11052a320c3eb00d94d`; their source
-promotions are `985c56c` and
-`97918cbbe4238a65a216b1a1f0ef84c70b4d080c`, respectively. P18-B's stale-node
-behavior skips stale owner references without consuming the dispatch cap, and
-its bounded ActivityLifecycle composition/owner-dispatch path is available.
-P20 may rely on those A/B capabilities. P18-C remains unpromoted; its design
-candidate is `97b97c5`. Availability and
-independent actor-decision behavior remain implementation dependencies. P20
-does not wait for all P18-D migrations or P19. P18 does not depend on P20, so
-no dependency cycle is introduced.
+P20 runtime implementation has its relevant P18-A timeline/scheduler,
+P18-B lifecycle, and P18-C availability/decision prerequisites promoted at
+`18ecc6e`. The former P18-C promotion gate is cleared. P20 remains gated on
+independent review of this refreshed design and P20-owned APIs/transactions
+for the gaps described above; this document creates no P20 State or
+implementation checkpoint. P18-B stale-owner skipping and bounded lifecycle
+composition are available; P18-C transition receipts and post-advance
+actor-decision coordination are available. P20 does not wait for P18-D or P19,
+and no blanket dependency on either is introduced. P18 does not depend on P20,
+so no dependency cycle is introduced.
 
-Before implementation, revalidate P20's stable instance/revision resolution,
-due-work invalidation/retry assumptions, coordinated required-set validation,
-and atomic lifecycle/effect composition against the promoted A/B APIs. In
-particular, skipping a stale node without consuming the dispatch cap is a
+Before implementation, independently review P20's stable instance/revision
+resolution, due-work invalidation/retry assumptions, coordinated required-set
+validation, and atomic lifecycle/effect composition against exact promoted
+A/B/C APIs. Skipping a stale node without consuming the dispatch cap is a
 scheduler behavior, not proof that P20's stale owner descriptor or multi-owner
-transition is correct. No stale-node incompatibility is currently asserted;
-the prior P18-A-only warning is superseded by P18-B promotion and this scoped
-revalidation requirement.
+transition is correct. No incompatibility is currently asserted. Both current
+alignment records remain active review constraints: use stable semantic
+identity and deterministic composition; preserve ActivityInstanceId
+independently from PersonId and participant cardinality; keep Unity
+presentation out of domain authority; and defer public Mod API/loader
+mechanics to P19. Neither alignment adds a blanket P18-D or P19 dependency to
+P20.
 
 The work remains limited to the synthetic two-Person proof. It does not add
 Sleep, Dreams, robbery, gangs, rituals, War, MegaEventos, co-travel, meals,
