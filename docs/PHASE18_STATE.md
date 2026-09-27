@@ -1,6 +1,6 @@
 # Phase 18 State — Intraday Temporal Execution v1
 
-**Status:** PHASE 18 IN PROGRESS — P18-A/B/C promoted, including the additive extension at `1dd0479`; P18-C adapter needs post-extension revalidation; P18-D remains dependency-gated
+**Status:** PHASE 18 IN PROGRESS — P18-A/B/C promoted, including the additive extension at `1dd0479`; the external-input/deferral adapter passed post-extension review and validation at its integration candidate, with canonical promotion pending; P18-D remains dependency-gated
 
 **Current canonical base:** `codex/phase8/canonical` at `470667d37863384edadb3d93ef64d8004aff46a3`
 
@@ -89,8 +89,11 @@ promoted tip. Promotion was approved and fast-forwarded to
 ## Promotion impact and next work
 
 **P18-C external-input/deferral adapter:** independent design review PASS at
-exact tip `358c65c85e1eafdd91ef4a6553ba3b0a8c4af249`; bounded scope is
-`READY_FOR_IMPLEMENTATION`. The design specifies a P18-C request-state owner,
+exact tip `358c65c85e1eafdd91ef4a6553ba3b0a8c4af249`; the implementation is
+assembled and validated at code integration `a535441` against promoted P18-A
+extension `1dd0479`. Exact-tip implementation review and post-extension
+validation passed; canonical promotion is pending. The bounded design specifies
+a P18-C request-state owner,
 C-owned sequence allocation separate from lifecycle source sequences,
 P11-owned exact temporal capture linked to P18-A's accepted reference, exact
 P11 temporal boundary records, retained P11 Pending status during C-owned
@@ -158,25 +161,25 @@ replace the referenced evidence.
 
 The complete EditMode run includes the current P9/P11 compatibility tests; the
 earlier upstream P9-B/P11 run at `2d6b3ce` remains supporting evidence, not a
-substitute for this historical candidate result. P18-D remains BLOCKED pending P18-C adapter revalidation and promotion against current P18-A extension `1dd0479`, plus the serialized `SimulationRuntime` ownership window. The adapter does not
+substitute for this historical candidate result. P18-D remains BLOCKED pending canonical promotion of the independently validated P18-C adapter against current P18-A extension `1dd0479`, plus the serialized `SimulationRuntime` ownership window. The adapter does not
 implement the P18-D SellGoods consumer or claim a daily runtime migration.
 
 Post-extension validation on code integration `a535441` passed:
 
-| Suite | Result | XML under `Temp/ValidationResults` |
+| Suite | Result | XML under `Library/ValidationResults/P18CPostExtension` |
 |---|---:|---|
-| Temporal source-receipt fanout / distinct operation IDs | 1/1 | `EditMode-20260927-193011-b1896916267f42d5995100d31cc63f0f.xml` |
-| ActorAvailabilityDecision | 10/10 | `EditMode-20260927-193430-d2136f12d9044f54a55c5221dd066088.xml` |
-| ActorChoiceStore | 12/12 | `EditMode-20260927-193443-a498af5ec33d49d58eec609f0c313503.xml` |
-| ActorActionChoiceCommand | 6/6 | `EditMode-20260927-193457-4ed794512e744fb882f9d2ec9c0ca9f0.xml` |
-| ActivityLifecycle | 17/17 | `EditMode-20260927-193510-2a79651abc8c4a7d84cee791a88ce472.xml` |
-| LogicalTimeline | 35/35 | `EditMode-20260927-193524-4cde4e8fcda14f7c93bb9eda4b67d75c.xml` |
-| ActorChoiceRuntime | 11/11 | `EditMode-20260927-193542-6906332c31c842a280af81d10460efbd.xml` |
-| ActorChoiceDiagnostics | 4/4 | `EditMode-20260927-193557-b4c51635a2624f10aafe57aa6c24648b.xml` |
-| SimulationRuntimeOrchestration | 10/10 | `EditMode-20260927-193611-db8f5a39c70046728493bdd98d744598.xml` |
-| SpatialRoutePlanning | 20/20 | `EditMode-20260927-193625-bb5ddbd662834b589ec6b271961a5a06.xml` |
-| ALL EditMode | 1794/1794 | `EditMode-20260927-193641-a8e75e61e15448efb6f22b496e894b6f.xml` |
-| Official complete EditMode `Smoke` | 5/5 | `EditMode-20260927-193713-4bd1658f3e8542048f09bad17b7bb469.xml` |
+| Temporal source-receipt fanout / distinct operation IDs | 1/1 | `EditMode-20260927-194223-335ca38ee84b4cc8900d7b1808a44129.xml` |
+| ActorAvailabilityDecision | 10/10 | `EditMode-20260927-194237-4067adcb6ff1451b9cbeb5ac9a27e2f5.xml` |
+| ActorChoiceStore | 12/12 | `EditMode-20260927-194259-14cfc5728ca34412b9204f1f31aa5db4.xml` |
+| ActorActionChoiceCommand | 6/6 | `EditMode-20260927-194313-57fc327f21cb493bbe60c832017197d3.xml` |
+| ActivityLifecycle | 17/17 | `EditMode-20260927-194326-eb72171d9fe14107aded02a686bd0d89.xml` |
+| LogicalTimeline | 35/35 | `EditMode-20260927-194340-979a68f4a97242e580c0f985b58269fc.xml` |
+| ActorChoiceRuntime | 11/11 | `EditMode-20260927-194826-bcc59af572184a009ba1df7b69d3fdac.xml` |
+| ActorChoiceDiagnostics | 4/4 | `EditMode-20260927-194839-421cbd5f3c804a9ab29aa55e0e0a9450.xml` |
+| SimulationRuntimeOrchestration | 10/10 | `EditMode-20260927-194853-6e438ba68319464dac92ef519ecf1aff.xml` |
+| SpatialRoutePlanning | 20/20 | `EditMode-20260927-194906-41bc315b75dd4bbaa901660ffd995688.xml` |
+| ALL EditMode | 1794/1794 | `EditMode-20260927-194921-baa9171b59084cf48142218ca7130700.xml` |
+| Official complete EditMode `Smoke` | 5/5 | `EditMode-20260927-194951-6c1d34fbbdf14dec889095c79f1d8c62.xml` |
 
 All XML results report zero failed, inconclusive, or skipped tests. The focused
 fanout test preserves a shared causal source receipt across distinct per-actor
@@ -215,12 +218,18 @@ and causal sequence. Candidate validation passed LogicalTimeline 35/35, ALL
 EditMode 1756/1756, official complete Smoke 5/5, and `git diff --check`
 (worker-reported results; the independent review did not rerun Unity). The
 corrected candidate was promoted through integration tip `1dd0479` to `codex/phase18/canonical`. P18-D
-implementation remains blocked on revalidation and promotion of the P18-C external-input/deferral adapter against canonical extension `1dd0479`, and the separate `SimulationRuntime` ownership window. P20 Entry Architecture
-`2f9c93b588ffccaae60aedf6c16191c1251f6a1f` and Technical Design
-`6a0d16494735853ce35a8974ab348551650afd6b` both passed independent refreshed
-review against promoted P18-A/B/C and then-current P18 State `bcb3f67`; targeted
-revalidation against accepted P18-A contract `2175bf2` found no P20 contract
-change (`UPSTREAM_IRRELEVANT`) against the accepted contract; that review preceded promotion of extension implementation at `1dd0479`. Revalidate P20 design/code against this canonical tip before implementation. Review
-confirmed the pre-schedule `Proposed` instance, atomic scheduling/commitments,
-the sealed-input start bound, and distinct activity/participant identities.
-P20-A — Synthetic Multi-participant Operation proposal `2a03eda` was accepted by the user on 2026-09-27; this accepts bounded scope only. No P20 capability has been implemented or promoted. Revalidate P20 against current P18 canonical State tip `eabc1c2` (promoted code `1dd0479`) before implementation. P20 remains independent of P18-D and P19.
+implementation remains blocked on canonical promotion of the independently
+validated P18-C external-input/deferral adapter and the separate
+`SimulationRuntime` ownership window.
+
+P20 Entry Architecture `2f9c93b588ffccaae60aedf6c16191c1251f6a1f` and
+Technical Design `6a0d16494735853ce35a8974ab348551650afd6b` passed their prior
+design review; the current-base refresh `318cacb` independently passed review
+against P18 canonical State `eabc1c2` and code `1dd0479`. The refresh records
+continuation-barrier ordering, returned-fact publication before ordinary
+same-instant work, and post-successful-advance P18-C handoff. P20-A — Synthetic
+Multi-participant Operation was accepted as bounded scope only on 2026-09-27;
+the two-Person rule remains fixture-only. No P20 capability is yet promoted.
+Implementation is running in isolated branch
+`codex/phase20/P20AMultiParticipantOperation` from current canonical base.
+P20 remains independent of P18-D and P19.

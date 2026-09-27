@@ -6,9 +6,10 @@ The preserved P18-C external-input/deferral adapter code integration `a535441` i
 
 P18-D's existing P11 external-input consumer also requires the separate
 P18-C external-input/deferral adapter design at
-`../design/PHASE18_C_EXTERNAL_INPUT_ADAPTER_DESIGN.md`. Its current status is
-`READY_FOR_IMPLEMENTATION` after independent design review PASS at exact tip
-`358c65c85e1eafdd91ef4a6553ba3b0a8c4af249`. The design adds a P18-C
+`../design/PHASE18_C_EXTERNAL_INPUT_ADAPTER_DESIGN.md`. The design passed
+independent review at exact tip `358c65c85e1eafdd91ef4a6553ba3b0a8c4af249`;
+its implementation passed post-extension review and validation at code tip
+`a535441`, with canonical promotion pending. The design adds a P18-C
 request-state owner and typed P11-owned temporal capture record linked to
 P18-A's accepted input reference, plus a typed temporal transition stream
 while preserving legacy daily records/APIs; P18-C deferral leaves P11 Pending.
