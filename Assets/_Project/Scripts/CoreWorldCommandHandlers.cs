@@ -144,6 +144,22 @@ public static class WorldCommandHandlerRegistration
     }
 }
 
+/// <summary>Registration entry point reserved for the trusted local UI composition.</summary>
+public static class TrustedLocalUiWorldCommandHandlerRegistration
+{
+    public static bool RegisterActorActionChoiceHandler(
+        WorldCommandService service,
+        SimulationRuntime worldRuntime)
+    {
+        if (service == null || worldRuntime == null)
+        {
+            return false;
+        }
+
+        return service.RegisterHandler(new ActorActionChoiceWorldCommandHandler(worldRuntime));
+    }
+}
+
 public sealed class CoreWorldCommandDependencies
 {
     public RuntimeIdAllocator RuntimeIdAllocator { get; }
