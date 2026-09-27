@@ -12,20 +12,26 @@ and one anchored Location with provenance); P10 canonical is `252ad6b`
 This P10 promotion is docs-only: it refreshes the P9 closure/State pointer in
 the P10 State and Brief, without changing P10 capability or dependencies;
 P10-A remains a bounded promoted capability, not universal Ruin/topology
-support. P12's accepted scope record is `4a1d364` (scope only, still
-`WAIT_DEPENDENCY`; current docs-only owner-inventory refresh candidate
-`bd15b92` continues to find no profile-included owner group with demonstrated
-complete exact immutable export plus staged hydration). P14 canonical is
-`4caecbb`. P18 canonical State tip is `eabc1c2`: P18-A/B/C core is promoted,
-including the additive P18-A extension at code tip `1dd0479`; the P18-C
-external-input/deferral adapter still needs post-extension revalidation before
-promotion, and P18-D remains implementation-blocked. The P20-A scope proposal
-`2a03eda` was user-accepted on 2026-09-27; this accepts scope only, with no
-P20 capability delivered and no blanket P20 dependency introduced. Technical
-design `6a0d164` does not establish delivered capability. Architecture
-baseline `c285466` and both alignment records remain active constraints. These
-status updates do not narrow P13's full boundary guarantee or satisfy its P12
-hard edge.
+support. The current P12 candidate tip is `fb4da0b`, which records accepted
+P12-A scope only and retains `WAIT_DEPENDENCY` with no implementation
+authorization. The distinct owner-inventory evidence commit `bd15b92` reports
+no profile-included owner group with demonstrated complete exact immutable
+export plus staged hydration; it is not the scope-acceptance record. P14
+canonical is `4caecbb`. The P18 canonical branch is at `b75c5b8`, with P18-A
+extension code `1dd0479` and the post-extension external-input/deferral adapter
+code `a535441` promoted. The `PHASE18_STATE.md` stored at `b75c5b8` still says
+the adapter promotion is pending, so its status prose is stale relative to the
+canonical branch history; this proposal records the branch/code evidence and
+does not treat any unpromoted docs-only correction as canonical. The adapter
+does not establish a P18-D live consumer migration. P20-A is an implementation
+and integration candidate at `1dcf67a` (`ee8502f` code integration against
+P18 `b75c5b8`); the P20 Brief at that candidate records review/validation pass
+and canonical promotion pending. Treat P20 as candidate evidence only, not
+promoted capability. Its accepted scope and two-Person fixture do not impose a
+blanket P20 dependency or universal cardinality. Architecture baseline
+`c285466` and both alignment records remain active constraints. These status
+updates do not narrow P13's full boundary guarantee or satisfy its P12 hard
+edge.
 
 ## 1. Purpose and guarantee
 
@@ -169,15 +175,34 @@ account for:
   exact logical instant/day, order and idempotency/terminal disposition;
 - deterministic execution context and random state/context only where consumed;
 - temporal time/calendar, pending owner work, activity lifecycle and causal
-  ordering where the history actually used P18. P18 canonical State tip is
-  `eabc1c2`, including promoted P18-A extension code `1dd0479`. The P18-C
-  external-input/deferral adapter requires post-extension revalidation before
-  promotion, and P18-D remains blocked. Do not invent
-  intraday facts absent from the execution history;
-- P20 `ActivityInstanceId` as identity distinct from `PersonId` and participant
-  identities, plus the boundary-specific participant/role set;
-  independent agreements/withdrawals, reservations, scheduled/validated start,
-  cancellation/abort and already-applied participant/shared effects where used;
+  ordering where the history actually used P18. At P18 canonical branch tip
+  `b75c5b8`, the promoted implementation includes the P18-A extension (`1dd0479`)
+  and P18-C external-input/deferral adapter (`a535441`); the State prose at that
+  tip is stale about the adapter's promotion. For any supported P18 history,
+  preserve the world/profile/absolute-day boundary identity, exact logical
+  instant and tick/version, frozen activation manifest and cursor, stable
+  continuation identity bound to the boundary occurrence and subphase kind and
+  version, and execution-step identities bound to that continuation, ordinal
+  and stable step ID. Retain per-step completion receipts, returned timeline
+  facts with provisional causal sequence identities, retained source signals,
+  and pending-versus-complete continuation/publication barrier. The manifest
+  binds ordered/versioned owner descriptors to the boundary; a retry resumes
+  its next unresolved step rather than regenerating the roster or repeating
+  completed work. Published facts and their causal-sequence receipts are
+  retained by the owner, and source signals are handed off only after the outer
+  advance succeeds. Preserve applicable P18-C input/decision dispositions and
+  owner receipts at their actual causal boundary. Do not infer intraday facts
+  absent from the execution history or assume P18-D migrated a consumer;
+- P20 `ActivityInstanceId` as identity distinct from definition, `PersonId`,
+  and participant identities, plus the boundary-specific participant/role set.
+  Preserve each participant's independent decision and its own Knowledge and
+  causal-boundary references; reservation intent and exact interval; scheduled
+  start and lifecycle transitions; and participant-specific results and the
+  applied identities/dispositions needed to prevent replaying an already
+  committed effect. Agreement/reservation does not imply current availability
+  or a validated start. Keep the general cardinality at one or more; P20's
+  two-Person candidate fixture is not a global rule. The P20 candidate at
+  `1dcf67a` is not promoted capability;
 - module identities/versions, module-owned authoritative state, migration or
   explicit retrofit inputs/results at their actual installation boundaries;
 - compatibility metadata sufficient to reject unsupported execution rather
@@ -185,13 +210,23 @@ account for:
 
 For P20, an earlier boundary preserves its then-current pending or executing
 instance and participant set. It must never receive a later final roster
-retroactively. General participant cardinality is one or more; one- or
-two-person fixtures are bounded proofs, not a cardinality rule. `ActivityInstanceId`
-never aliases a `PersonId` or participant identity. For P18, reconstruction
-consumes supported recorded temporal state/order and inputs; it cannot
-manufacture intraday detail absent from the historical execution. Indexes may
-be rebuilt only when their ordering and validity derive completely from
-retained authoritative facts.
+retroactively. Each participant's decision is causally distinct and tied to
+that participant's Knowledge boundary; agreement/reservation and its interval
+remain separate from validated start. Retain each participant-specific result
+and stable applied identity/disposition at the boundary where it committed.
+General participant cardinality is one or more; the exact-two P20 candidate is
+fixture-only, and P20 remains a candidate at `1dcf67a`, not promoted capability.
+`ActivityInstanceId` never aliases a `PersonId` or participant identity. For
+P18, reconstruction consumes supported recorded temporal state/order and
+inputs; it cannot manufacture intraday detail absent from the historical
+execution. The P18-A continuation state distinguishes a frozen manifest, next
+step cursor, committed step receipts, returned/published timeline facts and
+causal sequences, retained signals, and completion/publication/handoff state.
+Ordinary same-instant due work remains behind the continuation barrier until
+the continuation is complete and its facts are published; retained owner
+signals are handed off only after successful outer advance. Indexes may be
+rebuilt only when their ordering and validity derive completely from retained
+authoritative facts.
 
 ## 6. Proposed technical proof obligations
 
@@ -257,19 +292,23 @@ These are planning/design candidates, not promoted capability evidence:
 - `docs/design/PHASE18_C_TECHNICAL_DESIGN.md`: availability/input-boundary
   decisions; candidate design is subordinate to current promoted code/State.
 - `docs/phases/PHASE18_BRIEF.md`: temporal objective and conditional P13 edge.
-- `docs/phases/PHASE20_BRIEF.md`, scope proposal
+- `docs/phases/PHASE20_BRIEF.md` at candidate `1dcf67a`, integration code
+  `ee8502f` against P18 canonical `b75c5b8`, scope proposal
   `codex/phase20/P20FirstCheckpointProposal` at `2a03eda` (user-accepted scope
   on 2026-09-27), and technical design `6a0d164`: boundary-specific
-  shared-instance and atomic effect requirements. No P20 capability is
-  delivered; acceptance adds no blanket P20 dependency. The exact-two fixture
-  is not general cardinality and proposal/design text does not prove runtime
-  capability.
+  shared-instance and participant-result requirements. The P20 implementation
+  and integration remain candidates pending canonical promotion. The exact-two
+  fixture is not general cardinality; P20 is conditional on a history that
+  actually contains supported shared-activity state and is not a blanket P13
+  dependency.
 - `docs/architecture/INTRADAY_EXTENSIBILITY_ALIGNMENT.md` and
   `docs/architecture/MULTIPARTICIPANT_ACTIVITY_ALIGNMENT.md`: accepted
   cross-phase constraints, including no blanket P18-D/P19/P20 edge.
-- P12 owner inventory refresh candidate `codex/phase12/ContinuationDesignP9BRevalidation`
-  at `bd15b92` (accepted scope remains `4a1d364`): evidence of current export/hydration gaps, not a completed
-  continuation contract or implementation authorization.
+- P12 accepted-scope candidate `codex/phase12/ContinuationDesignP9BRevalidation`
+  at `fb4da0b` (scope acceptance record `4a1d364`): P12-A remains
+  `WAIT_DEPENDENCY` and has no implementation authorization. The separate
+  owner-inventory evidence commit `bd15b92` reports current export/hydration
+  gaps; it is not the scope acceptance or a completed continuation capability.
 
 The implementation dependency graph must be refreshed against canonical
 Phase 12/18/19/20 States and code before scheduling. This proposal creates no
