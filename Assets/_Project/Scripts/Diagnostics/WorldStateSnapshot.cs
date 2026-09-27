@@ -46,6 +46,7 @@ public sealed class WorldStateSnapshotContext
     public IEnumerable<PoliticalKnowledgeRuntime> PoliticalKnowledgeRuntimes { get; }
     public long? PoliticalKnowledgeRevision { get; }
     public CrimeSocialAppraisalWorldState CrimeSocialAppraisal { get; }
+    public ActorChoiceStore ActorChoiceStore { get; }
 
     public WorldStateSnapshotContext(
         SimulationTime simulationTime = null,
@@ -88,7 +89,8 @@ public sealed class WorldStateSnapshotContext
         LegacySpatialAnchorBindingStore legacySpatialAnchorBindingStore = null,
         PersonSpatialPositionStore personSpatialPositionStore = null,
         SpatialRouteKnowledgeStore spatialRouteKnowledgeStore = null,
-        PersonRoutePlanStore personRoutePlanStore = null)
+        PersonRoutePlanStore personRoutePlanStore = null,
+        ActorChoiceStore actorChoiceStore = null)
     {
         SimulationTime = simulationTime;
         Calendar = calendar ?? (calendarDefinition != null ? new SimulationCalendar(calendarDefinition) : null);
@@ -100,6 +102,7 @@ public sealed class WorldStateSnapshotContext
         PersonSpatialPositionStore = personSpatialPositionStore;
         SpatialRouteKnowledgeStore = spatialRouteKnowledgeStore;
         PersonRoutePlanStore = personRoutePlanStore;
+        ActorChoiceStore = actorChoiceStore;
         ExplorableSiteStore = explorableSiteStore;
         ExpeditionStore = expeditionStore;
         PlaceContentStore = placeContentStore;
@@ -135,12 +138,41 @@ public sealed class WorldStateSnapshotContext
     }
 }
 
+public sealed class WorldStateActorChoiceSnapshot
+{
+    public string InputId { get; }
+    public string WorldCommandId { get; }
+    public long InputSequence { get; }
+    public string PersonId { get; }
+    public string ActionDefinitionId { get; }
+    public WorldCommandOrigin Origin { get; }
+    public WorldCommandAuthorityMode Authority { get; }
+    public long CapturedAbsoluteDay { get; }
+    public ActorChoiceInputStatus Status { get; }
+    public IReadOnlyList<ActorChoiceDisposition> Dispositions { get; }
+
+    public WorldStateActorChoiceSnapshot(ActorChoiceInput input)
+    {
+        InputId = input?.InputId?.Value;
+        WorldCommandId = input?.WorldCommandId;
+        InputSequence = input?.InputSequence ?? 0L;
+        PersonId = input?.PersonId?.Value;
+        ActionDefinitionId = input?.ActionDefinitionId;
+        Origin = input?.Origin ?? default(WorldCommandOrigin);
+        Authority = input?.Authority ?? default(WorldCommandAuthorityMode);
+        CapturedAbsoluteDay = input?.CapturedAbsoluteDay ?? 0L;
+        Status = input?.Status ?? default(ActorChoiceInputStatus);
+        Dispositions = input?.Dispositions ?? Array.Empty<ActorChoiceDisposition>();
+    }
+}
+
 public sealed class WorldStateSnapshot
 {
     public WorldStateSnapshotMetadata Metadata { get; }
     public long AbsoluteDay => Metadata.AbsoluteDay;
     public WorldStateCalendarSnapshot Calendar => Metadata.CalendarDate;
     public IReadOnlyList<WorldStateNpcSnapshot> Npcs { get; }
+    public IReadOnlyList<WorldStateActorChoiceSnapshot> ActorChoices { get; }
     public IReadOnlyList<WorldStateCitySnapshot> Cities { get; }
     public IReadOnlyList<WorldStateCitySnapshot> Settlements => Cities;
     public int SettlementCount => Cities.Count;
@@ -267,7 +299,8 @@ public sealed class WorldStateSnapshot
         IEnumerable<WorldStateArmedForcePositionSnapshot> armedForcePositions = null,
         long? armedForceSpatialRevision = null,
         IEnumerable<WorldStateContingentManpowerSnapshot> contingentManpowerStates = null,
-        long? contingentManpowerRevision = null)
+        long? contingentManpowerRevision = null,
+        IEnumerable<WorldStateActorChoiceSnapshot> actorChoices = null)
     {
         Metadata = new WorldStateSnapshotMetadata(absoluteDay, calendarDate);
         Npcs = SnapshotCollections.CopySorted(npcs, npc => npc?.RuntimeId);
@@ -371,6 +404,7 @@ public sealed class WorldStateSnapshot
                 ? null
                 : observation.EvaluatorPersonId + "\u001f" + observation.OutcomeId);
         SocialReactions = SnapshotCollections.CopySorted(socialReactions, reaction => reaction?.ReactionId);
+        ActorChoices = SnapshotCollections.CopySorted(actorChoices, choice => choice?.InputId);
     }
 
     private static IReadOnlyList<WorldStateParentageSnapshot> SortParentages(
@@ -2371,7 +2405,8 @@ public static class WorldStateSnapshotBuilder
             BuildContingentManpowerSnapshots(context.ContingentManpowerStateStore),
             context.ContingentManpowerStateStore == null
                 ? (long?)null
-                : context.ContingentManpowerStateStore.Revision);
+                : context.ContingentManpowerStateStore.Revision,
+            context.ActorChoiceStore?.Inputs.Select(input => new WorldStateActorChoiceSnapshot(input)));
     }
 
     private static List<WorldStateConflictSnapshot> BuildConflictSnapshots(PersistentConflictStore store)

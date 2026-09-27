@@ -1,0 +1,445 @@
+# Phase 11 Entry Architecture Proposal
+
+> **Status: independent review PASS against Phase 8 canonical state `c5b2e06` and the 2026-09-26 alignment records, including the P8-C current-position compatibility addendum.** The user selected the bounded first consumer and trusted local caller, then explicitly resumed full-roadmap execution on 2026-09-26. Implementation checkpoint IDs and current status are recorded in [`../PHASE11_STATE.md`](../PHASE11_STATE.md). This bounded execution record does not amend canonical architecture or promote a canonical branch.
+
+## Purpose and evidence boundary
+
+Phase 11's Brief describes a bounded actor-control and external-command slice.
+The user selected the first consumer: **one actor-scoped choice of a local
+`SellGoods` action, with candidate planning based on that actor's
+`CommercialKnowledge` and existing domain execution revalidating current
+world state.** The choice replaces that actor's autonomous action choice for
+one decision. The selected slice is the actor's existing local-market
+`SellGoods` behavior at its current city. It does not include active-plan
+sales, which can use current state from other NPCs during candidate planning;
+remote trade travel, a new sale outcome path, hidden knowledge, broader
+ongoing control, and additional GM/external interventions are also excluded. The
+user selected a trusted single-player game/UI caller, with no player-to-actor
+ownership, control grants, authentication, anti-cheat, anti-tamper, or security
+validation layer. The supported actor is a living, materialized,
+Person-backed merchant `NpcRuntime` with a current city and no active
+`MerchantTradePlanRuntime`, matching the existing `CommercialKnowledge` owner
+and local-market `SellGoods` path. The UI chooses the supported `SellGoods`
+action only; the existing merchant planner selects its candidate and quantity
+from that actor's Knowledge and inventory. Current market facts remain
+execution-time validation. These choices bound the entry
+contract; routine type names and storage/API shapes remain technical design
+work. The Brief marks the phase `ENTRY_ARCHITECTURE_READY`; this update does
+not itself authorize implementation.
+
+This refresh is based on the current `codex/phase8/canonical` state/code at
+`c5b2e06b534f4b2af38f10e6510b10800aa8b28c`, which includes architecture
+baseline `c285466c355103d3637ac165246591b72eb7bda0` (parent
+`4b6dd1d38cffeaf3cc1ac3effea0f8ede8771194`). The current Phase 8 State
+records P8-A through P8-D canonical, including the refreshed P8-D promotion.
+P8-E is not canonical at c5b2, but its integration candidate
+`07b953bee214728c326a9a121c0f7360382f94a8` is independently reviewed and
+integration-validated. Neither P8-D nor P8-E is a prerequisite for this
+current-city local-market action. No capability dependency is inferred from
+P11's later use of that candidate as a shared-runtime integration base.
+
+Relevant authorities reread against current canonical state: `AGENTS.md`, `docs/SIMULATION_ARCHITECTURE.md`
+(§§2, 11–12, 81–85, 91–92), `docs/ROADMAP.md`, `docs/EXECUTION_MODEL.md`, `docs/PHASE5_STATE.md`,
+`docs/PHASE6_STATE.md`, `docs/PHASE7_STATE.md`, and the Phase 8–13 Briefs.
+The current intraday/extensibility and multi-participant alignment records were
+also reviewed. Moddability is a current design constraint: keep semantic action
+and definition identity stable and the domain/application seam extension
+compatible where practical, while deferring public Mod API, loader, packaging,
+and module lifecycle to P19. The current record is
+corrected candidate `f1221d4e3275e21a876076350ca12058927dbaa9` on
+`codex/phase11/ActorChoiceStore` and its `ActorChoiceStoreTests`; its day plus
+actor-turn roster ordinal boundaries are
+explicitly legacy daily-profile data, not an intraday contract. P18-supported
+intraday application must retain the exact logical instant and causal sequence.
+The corrected store requires disposition boundaries to be monotonic by
+`(absoluteDay, actorTurnRosterOrdinal)` and rejects a regressing transition
+without changing the stored input or lifecycle.
+P20 is not a gate for this one-actor choice; future shared-participant inputs
+must use relevant P20 contracts. No separate ADR directory or ADR referenced
+by the Phase 11 Brief is present in this checkout. Relevant executable surfaces inspected include
+`WorldCommandFoundation.cs`, `CoreWorldCommandHandlers.cs`,
+`NaturalLanguageWorldCommandContracts.cs`,
+`DeterministicWorldCommandNaturalLanguageTranslator.cs`, `GMConsolePanel.cs`,
+`WorldObserverDemoBootstrap.cs`, `NpcDecisionSystem.cs`, `NpcActionRuntime.cs`,
+`NpcRuntime.cs`, `PersonRuntime.cs`, `PersonMaterialization.cs`,
+`PoliticalKnowledge.cs`, `SpatialKnowledge.cs`, `LocalTopologyKnowledge.cs`,
+and `SimulationRuntime.cs`, plus their command, translator, and mutation-guard
+EditMode tests. Tests were inspected as evidence; none were run for this
+documentation-only task.
+
+## Current facts from canonical code and contracts
+
+### Semantic contracts
+
+- World Truth, Knowledge, interpretation, decision, execution, outcome, event,
+  and history are separate layers. Planning/decision uses the relevant
+  actor's Knowledge; execution revalidates current World Truth.
+- A trusted game/UI caller's ability to select an actor action does not grant
+  omniscient information or authority to decide the resulting domain outcome.
+  An in-world actor, the local single-player UI, a GM, and an external
+  controller remain distinct roles. This first consumer adds no controller
+  identity or authorization model.
+- A command or explicit request is not autonomous behavior. Availability,
+  domain enablement, autonomous policy, and provider/service registration are
+  distinct. Explicit input still needs an available, supported domain path.
+- `PersonId` is the durable individual identity. `PersonRuntime` currently
+  carries identity, life dates, residence, and a materialization link; rich
+  behavior and several legacy per-NPC knowledge stores are on `NpcRuntime`.
+  A Person may exist without a materialized `NpcRuntime`. Existing command
+  payloads that name an NPC commonly use `NpcRuntimeId`; they do not establish
+  a general actor identity or control relationship.
+- There is no universal Knowledge holder abstraction. The architecture
+  explicitly leaves room for Person, Institution, and Faction knowledge
+  without requiring one generic base class. Current political knowledge uses
+  typed holders and stable Person/Institution/Faction IDs; spatial and local
+  topology Knowledge are legacy NpcRuntime-owned models.
+- Decisions, supported execution, and authoritative mutation must remain
+  distinct. A preview or candidate-generation step cannot mutate, consume
+  authoritative randomness, allocate causal identity, or choose on behalf of
+  an ambiguous input.
+
+### Existing autonomous and requested-action paths
+
+`NpcDecisionSystem.ChooseAction` filters action definitions by current status,
+creates available runtime actions/providers, applies autonomous-action policy,
+calculates utilities, and chooses using a contextual authoritative random
+source. The active decision is recorded as `Autonomous` by
+`SimulationRuntime.EvaluateAction`.
+
+`NpcDecisionSystem.CreateRequestedAction` can construct a requested action
+after checking that the NPC is alive and its required status is present. It
+does not itself provide the selected action-choice input or its causal record.
+The selected local UI is trusted; no controller-to-actor grant or security
+check is added. The runtime's scheduled `RequestAction` and narrow
+`ForceOutcome` directive path are separate from this actor-choice input. The
+trusted UI choice is a distinct semantic input from GM/external declarations,
+but its capture enters through a dedicated typed `WorldCommand`/domain
+boundary as required by the Phase 11 Brief; it queues a choice rather than
+applying a sale. In current `SimulationRuntime` order, travel and
+reserved-activity checks and scheduled directives can bypass ordinary
+autonomous evaluation. A queued actor choice is consumed only at the same
+normal `EvaluateAction` boundary, immediately before autonomous
+`ChooseAction`, so those existing higher-priority paths keep their behavior.
+
+For the selected consumer, the existing local-sale path provides a concrete
+domain seam. `MerchantSystem.CreateSellGoodsAction` builds a local sale from
+the merchant's inventory and current-city `CommercialKnowledge` observation,
+including remembered price/freshness, then selects a sale quantity. This
+Knowledge-bounded path applies when the actor has no active trade plan. An
+active plan may select a local NPC buyer by reading other NPCs' current state
+and funds during planning, so that mode is outside this first consumer. The
+ordinary market execution path delegates to the existing transaction service
+against the actor's current-city market; a stale candidate can fail or
+partially fill against current market truth. The current provider constructs a
+best sale, not a general actor-facing list of typed sale candidates, and its
+runtime action contains content/runtime references. This is evidence for the
+consumer, not an approved candidate-list or input-payload contract. This
+current-city market sale requires no travel capability.
+
+Because P8-C Person positions are optional and P8-E can change the Person-level
+position without updating legacy `NpcRuntime.CurrentCity`, P11-03 must
+conditionally reconcile the two facts before using that city as the local
+market. No P8-C position entry preserves current legacy behavior. An
+`InTransit` position follows the existing `Deferred/Traveling` path. At a
+stable position, only the exact `LocationId` bound to the actor's current City
+validates this local context. Sharing the City's anchor Hex does not prove
+Location entry or access; a Hex, Crossing, different Location, or missing
+City binding is unavailable and terminally rejects the one-shot choice without
+autonomous fallback. The check relies on `PersonSpatialPositionStore`,
+`LegacySpatialAnchorBindingStore`, and `SpatialAuthorityStore`; it introduces
+no P8-E capability dependency and no security/authorization validation.
+
+### Existing external command path
+
+`WorldCommand` is a typed envelope with `Kind`, `Origin`, `Authority`, and a
+typed payload. `WorldCommandService` registers one handler per kind, exposes a
+preview, executes a handler, and records a result. Core handlers revalidate on
+execution and delegate to domain-owned services/stores; the command layer is
+not itself a general-purpose mutation authority.
+
+Current core command kinds are `RelocateNpc`, `DeclareStackResource`,
+`DeclareNotableItem`, `AddLocalPlace`, `AddLocalConnection`,
+`GrantSiteKnowledge`, `GrantAdventureIntel`, `ResolveConflict`, and
+`PlaceOpposition`. Current core authority rules are command-specific:
+
+| Command kinds | Current accepted execution authority | Current meaning in the implementation |
+|---|---|---|
+| All listed kinds except the last two | `Declare` | The other modes are rejected by these handlers. This does not authorize a new command kind or bypass its domain checks. |
+| `ResolveConflict`, `PlaceOpposition` | `Request`, `Declare`, or `ForceOutcome` | `Request` and unconstrained `Declare` use normal conflict resolution. Forced winner/outcome/participant constraints require `ForceOutcome`; structural identity, participant, and domain invariants remain enforced. |
+| All kinds | `Suggest` for preview only | It is not executable authority. |
+
+The `Request` distinction is important: it is a request through normal domain
+rules, not an instruction to accept. `Declare` is only supported where an
+existing handler defines a canonical declared operation. `ForceOutcome` is
+currently limited to the supported conflict outcome constraints. Do not
+generalize any of these into universal command modes.
+
+The command ID allocator is an in-memory sequence. `WorldCommandRecord`
+currently retains ID, absolute day, origin, authority, kind, success,
+affected/created runtime IDs, event IDs, and diagnostic. It does **not** retain
+the command payload, an actor/controller identity, submission/receipt order, or
+a logical boundary ordinal. The record store is an in-memory guarded audit
+store, not a persistence or replay contract. A result/record is not itself a
+Domain Event or World Truth.
+
+The deterministic natural-language translator returns a typed command or a
+structured ambiguous/missing/unsupported result. It does not mutate; the GM
+console requires explicit preview and then executes the original typed command
+so the handler revalidates. The current GM console is an observer/GM surface
+with access to the supplied world NPC/entity lists. It is not an actor-limited
+client or an authorization boundary. `Origin` and `Authority` are supplied by
+the command caller; current handlers do not authenticate a submitter or prove
+that the submitter may control the referenced actor.
+
+## Boundary map
+
+The following describes current authority boundaries and the missing Phase 11
+edges. `(?)` marks semantics not selected by this proposal.
+
+```text
+CURRENT AUTONOMOUS PATH
+Actor Knowledge + current actor state
+    → NpcDecisionSystem chooses an autonomous NpcActionRuntime
+    → existing action/domain execution revalidates World Truth
+    → domain outcome → Domain Event / History / UI
+
+SELECTED ACTOR-CHOICE SCOPE
+Trusted local game/UI caller
+    → dedicated typed WorldCommand payload (PersonId + action DefinitionId)
+    → capture the choice in the actor-input owner at the domain boundary
+    → at that actor's next normal EvaluateAction boundary, construct the
+      existing local sale using that actor's inventory and CommercialKnowledge
+    → existing MerchantSystem selects a local-market candidate and amount
+    → current market World Truth validation
+    → transient transaction result returned; input/decision record retained
+
+CURRENT GM / EXTERNAL COMMAND PATH
+Structured input or deterministic translation
+    → typed WorldCommand → optional read-only Preview
+    → Execute → per-kind authority check + current validation
+    → existing domain-owned authority → outcome / Knowledge / Truth
+    → command audit record and domain events where applicable
+```
+
+The selected actor path replaces the actor's autonomous *choice*. It uses the
+actor's `CommercialKnowledge` and existing merchant planner to build one local
+sale action; the human selects the action, not an item, quantity, price, or
+transaction result. It must not present current market truth as remembered
+knowledge, directly write an outcome, or skip the normal action and
+domain checks. The GM/external path remains a separate authority surface and is not
+part of this selected first-consumer scope. The shared `WorldCommand` ingress
+does not give this actor choice GM authority or authorize a world mutation;
+its dedicated payload records a request that the existing actor/domain path
+may apply at the next decision boundary. No authentication or defensive
+validation for forged inputs is added; invalid inputs outside the normal UI
+flow are outside the supported contract. Its command identity remains
+separate from actor-action acceptance and domain outcome records.
+
+## Selected first consumer and adjacent options
+
+The selected first-consumer product scope is one actor-scoped choice of the
+existing local-market `SellGoods` action in place of that actor's autonomous
+choice. Candidate planning uses the actor's `CommercialKnowledge`; ordinary
+merchant execution remains authoritative and revalidates current market
+truth. An actor with an active `MerchantTradePlanRuntime` is outside this
+consumer, because its existing planner may use other NPCs' current state and
+funds. This scope does not include remote trade travel or mutation by the input
+layer. The supported actor is a living, Person-backed, materialized merchant
+with a current city and no active trade plan. The trusted single-player UI
+submits only the selected supported action identity. Existing merchant
+planning chooses its local-market candidate and quantity; no current market
+truth is added to the actor-facing view. The choice is consumed at the actor's
+next normal `EvaluateAction` boundary, before autonomous selection; existing
+travel/reservation and scheduled-directive precedence remains intact.
+
+| Candidate | What it could prove | Constraints and dependencies |
+|---|---|---|
+| **Selected:** one actor-scoped local-market `SellGoods` choice | Replaces that actor's autonomous action choice for one decision. The trusted local UI selects the action for a living Person-backed materialized merchant with a current city and no active trade plan. Existing `MerchantSystem` plans the local-market sale from that actor's inventory and `CommercialKnowledge`; execution revalidates current market truth. | The input identifies `PersonId` and the supported action definition, not item/quantity or outcome. It is consumed at the next normal `EvaluateAction` boundary, after existing scheduled directives and activity exclusions. If optional P8-C position exists, it must be at the exact Location bound to `CurrentCity`; transit defers and a stable mismatch rejects with no fallback. A Hex anchor alone proves no Location access. No controller grant/auth/security layer or travel capability is added. `CreateRequestedAction` alone still supplies no causal input record. |
+| GM/external `Request` through `ResolveConflict` or `PlaceOpposition` | Exercises the existing normal-resolver command path and its distinction from supported forced outcomes. | **Not selected** as the first consumer and not included in the selected actor-choice scope. Existing command support does not imply additional command, actor-control, or ForceOutcome permissions. |
+| GM `Declare` through a supported existing command | Exercises a typed declared operation through its existing domain authority; Knowledge grants can change Knowledge without asserting underlying Truth. | **Not selected** as the first consumer or part of the selected actor-choice scope. Each command has distinct truth/knowledge semantics and capability; there is no blanket `Declare` support. |
+| Remote trade, travel, or route intent | Could later join actor choice, spatial perspective, and domain execution. | Not part of the selected local-market sale. Civil Travel is a soft ordering for Phase 11, not a dependency for this consumer; a later travel consumer waits for the exact promoted spatial/travel capability it uses. |
+
+The first-consumer action, trusted caller, eligible actor shape, actor-limited
+view, and normal-turn application point are now bounded. A technical design
+must map this contract onto a small causal input representation and existing
+runtime/action seams. This selection does not authorize a security framework,
+a GM command expansion, or any new market outcome authority.
+
+## Actor-limited information and authority implications
+
+1. **Separate caller, actor, and domain authority.** The trusted game/UI caller,
+   the in-world actor (`PersonId`), and the operation's domain authority are
+   distinct. The caller is trusted by the single-player product contract; there
+   is no controller principal, actor ownership grant, or authentication layer.
+   A command's `Origin` label is provenance, not proof of authorization. A GM
+   may have an external authority that an in-world actor does not.
+2. **Build choice context from actor Knowledge.** An actor's unknown or stale
+   information stays unknown or stale. For the selected sale, remembered
+   prices, stock, and liquidity estimates come from that merchant's
+   `CommercialKnowledge`; current market state is consulted for domain
+   execution, not substituted into the candidate's Knowledge view. The
+   actor-facing choice does not include observer/GM assistance or market-truth
+   enrichment. Knowledge gained from an explicit GM action remains a Knowledge
+   mutation, not automatic factual discovery by the actor.
+3. **Keep Person identity durable.** The choice identifies the actor through
+   `PersonId` and resolves the currently materialized `NpcRuntime` at the
+   normal decision boundary. An unmaterialized Person is not eligible for this
+   `SellGoods` consumer because it has no current merchant runtime or
+   `CommercialKnowledge`; the input must not materialize or activate a Person.
+4. **Replace a decision, not execution truth.** Explicit choice supplies only
+   the supported `SellGoods` action identity. The existing merchant planner
+   selects its sale from the actor's inventory and Knowledge. Domain code still
+   checks life/state,
+   policy, capability, seller inventory, current price and market capacity,
+   counterparty funds for account-backed markets or the existing
+   explicit-source money path for open markets, and other operation
+   preconditions at execution. If
+   facts changed since action choice, return the transaction's supported
+   result; do not expose hidden Truth as an automatic explanation or update to
+   Knowledge. Do not add validation whose purpose is to defend against a
+   manually forged input outside the supported game/UI flow.
+5. **Do not widen command modes.** Preserve `Suggest` as preview-only,
+   `Request` as subject to normal rules, `Declare` as a supported declared
+   operation, and `ForceOutcome` only for constraints a domain explicitly
+   supports. External/GM authority must not introduce arbitrary client
+   mutation, generic force flags, or a second outcome resolver.
+6. **Keep the decision record separate from the outcome record.** An input
+   should be explainable as an input/decision with explicit acceptance or
+   rejection semantics. The domain event/history remains downstream of a
+   successful domain mutation and is not a substitute for capturing the
+   causal input.
+
+## Causal and replay-sensitive inputs
+
+Authoritative determinism depends on the same initial state, effective
+configuration/calendar/content, deterministic randomness, and the same
+logically ordered external command sequence. A Phase 11 implementation that
+claims durable continuation or later reconstruction must therefore make the
+following causal facts recoverable in principle:
+
+- the normalized typed actor choice: stable `PersonId` and supported action
+  definition identity, not only human text or a command kind;
+- no item, quantity, price, or market outcome is selected by the UI. Existing
+  `MerchantSystem` chooses the local sale from inventory and Knowledge. The
+  transaction service returns its result during execution, but current
+  `MerchantSystem` does not retain a trade DomainEvent or history entry;
+- the trusted local game/UI input origin and the logical application boundary;
+  there is no controller/principal identity or authorization grant in scope;
+- deterministic actor-turn order at application. The existing daily roster
+  iteration and scheduled-directive/activity precedence remain the ordering
+  authority; a choice does not reorder other actors' transactions;
+- which logical day/boundary received, considered, applied, rejected, or
+  deferred the input, and the defined acceptance/rejection result;
+- the versioned action/content/definitions and domain policy needed to
+  interpret the input, plus the authoritative facts and causal random context
+  the supported domain execution consumed;
+- any Knowledge observations or explicit knowledge injections relevant to
+  the choice, including provenance and observed/received time where that
+  domain stores them.
+
+The present `WorldCommandRecord` is useful audit metadata but lacks payload and
+logical queue order. The actor choice remains semantically distinct from
+GM/external authority operations, while its trusted UI ingress uses the
+required `WorldCommand`/domain boundary with a dedicated typed payload. Its
+normalized selection, queue order, application boundary, and result must be
+recoverable without treating diagnostic/history output as authority. The
+current allocator's local sequence does not alone prove ordering across a
+save/load or fork. Exact schema/versioning remains Phase 12/13 work; Phase 11
+must not claim to solve those phases by adding a generic event log.
+
+## Checkpoint decomposition
+
+The work units below map to the implementation checkpoint IDs recorded in
+`../PHASE11_STATE.md`. Their contract remains bounded to the selected local
+SellGoods consumer.
+
+| Work unit | Closure evidence | Dependencies / ordering |
+|---|---|---|
+| Actor eligibility, perspective, and one-choice contract | Use the supported configured `SellGoods` action for a living Person-backed materialized `NpcRuntime` with a current city and no active trade plan; actor knowledge remains owned by that runtime. If optional P8-C position exists, require the exact Location bound to that City; transit defers, while a stable mismatch (including only sharing its anchor Hex) is unavailable. The UI chooses the action, while MerchantSystem chooses the local-market candidate and quantity. | Product scope is selected. Preserve the existing current-city merchant/action requirements; do not add a broader actor model or controller grants. |
+| Logical input boundary and envelope contract | Capture a normalized `PersonId` plus `NpcActionData.DefinitionId` through a dedicated typed `WorldCommand`/domain ingress; consume it at the next ordinary `EvaluateAction` before autonomous choice. Existing scheduled directives and activity exclusions retain their current precedence. | Use the normal actor-turn loop order. The one-shot choice owns that decision: if ordinary eligibility rejects it or the provider cannot construct it, record terminal rejection and do not call autonomous selection for a different action in that turn. If constructed, attempt it once; record the ordinary current-world domain result, including failure/partial result, without autonomous fallback. The payload does not reuse GM `Declare` or `ForceOutcome` authority. |
+| Consumer adapter through existing domain authority | A bounded choice reaches the existing local-market `SellGoods` path through `MerchantSystem` and the current market transaction service, revalidates current market truth, and records no fabricated result. | Requires the local merchant/action composition, actor `CommercialKnowledge` access, and conditional reads of the promoted P8-C position/binding/spatial authorities. No P8-E capability, blanket P8/P9 dependency, or new GM command authority is selected. |
+| Causal-input recording and integration | Captures the selected actor/action, decision boundary, and applied/rejected disposition separately from the sale outcome. The pending choice is authoritative future input. | Integrates the actor-choice input owner, runtime decision boundary, decision records and deterministic diagnostics. Phase 12/13 still own full continuation/reconstruction formats. |
+| Phase-specific regression and acceptance review | Tests Knowledge-bounded action planning, ordinary current-truth revalidation, one-shot use, scheduled-directive precedence, deterministic actor order, and unchanged GM command semantics. | Follows implementation and independent review; long-run validation is required only if daily-loop or long-horizon behavior changes. |
+
+Implementation touching `WorldCommandFoundation`, `NpcDecisionSystem`,
+`SimulationRuntime`/`EvaluateAction`, decision records, Knowledge, or merchant
+transaction composition needs explicit file ownership and an isolated
+worktree. The actor-choice payload/handler remains semantically distinct from
+GM command handlers and authority modes; it does not justify a generic
+concurrency lock or universal actor framework.
+
+## Dependencies and scheduling implications
+
+- Phase 11 entry design can proceed independently of Phase 8 world generation.
+  The selected current-city local sale uses the existing merchant and
+  transaction execution paths and does not require travel. Registering a
+  provider or handler alone still does not establish domain availability or
+  enablement.
+- Phase 11 has hard semantic dependencies on Person/Knowledge/decision versus
+  execution contracts and on the existing `Request`/`Declare`/supported
+  `ForceOutcome` distinctions. These contracts do not establish a universal
+  actor model or command permission matrix.
+- Any actor-information query depends on the specific Knowledge model being
+  consumed. The selected sale uses `CommercialKnowledge`, currently owned by
+  the `NpcRuntime` representation; there is no current general actor Knowledge
+  projection covering all domains.
+- Any live input integration depends on a selected logical application
+  boundary that coexists with autonomous and scheduled processing. If
+  `AdvanceDay` ordering or long-horizon effects change, the corresponding
+  runtime regression and long-run validation gates apply.
+- Phase 12 continuation benefits from stable causal input semantics, but
+  Phase 11 is not a substitute for Phase 12's full authoritative save scope.
+  Phase 13 needs both continuation and reconstructible inputs/mutations; a
+  Phase 11 command audit record alone cannot satisfy it.
+- Civil travel is not a dependency for this local sale. Any later travel or
+  remote-trade consumer waits for the relevant promoted Phase 8 authority only.
+
+## Resolved entry boundary and remaining technical work
+
+The first actor-choice consumer has no remaining product gate. Its supported
+contract is:
+
+- The trusted local single-player UI submits one supported action choice for a
+  living, Person-backed, materialized actor currently eligible for the
+  configured local-market `SellGoods` path and with no active trade plan. There is no controller identity,
+  ownership grant, authentication, anti-cheat, anti-tamper, or security layer.
+- The normalized choice carries the actor's `PersonId` and the selected
+  `NpcActionData.DefinitionId`. The user chooses the action only; the existing
+  `MerchantSystem` plans the local-market candidate and quantity from the
+  actor's inventory and `CommercialKnowledge`.
+- Preserve a stable semantic action/definition identity and keep the input and
+  domain seam compatible with future extensions. This is a present review
+  constraint, not a request for speculative extension registries; the public
+  Mod API/loader remains deferred to P19.
+- The choice is consumed at that actor's next ordinary `EvaluateAction`
+  boundary immediately before autonomous `ChooseAction`. Travel/reservation
+  exclusions and scheduled-directive precedence remain unchanged. Existing
+  actor iteration order continues to determine ordering between actors.
+- If the selected action is no longer supported by normal gameplay state when
+  applied, including when the actor has an active trade plan, record its
+  rejection and do not choose a different autonomous action in that same
+  decision. If the action is
+  constructed, attempt it once through the existing action and transaction
+  path; stale market truth produces the ordinary domain result, with no
+  automatic retry, no same-decision autonomous selection, and no Knowledge
+  rewrite. A pre-dispatch eligibility/provider rejection is a terminal
+  `Rejected` disposition; a constructed action whose current-world transaction
+  returns failure is an attempted action with its ordinary failed result. Both
+  consume the one-shot choice for that decision.
+- GM/external `WorldCommand` behavior remains on its existing validated path
+  and is not widened by this actor-choice consumer. Phase 12/13 own later
+  save-schema and full historical reconstruction guarantees.
+
+The current store candidate records capture day and actor-turn roster ordinal.
+That is sufficient only for its bounded daily profile. An intraday profile
+must record the exact logical application instant and deterministic causal
+ordering/sequence, along with compatible calendar/content context; this design
+does not claim such support. The activity identity and participant identity
+remain separate architecture constraints, but no shared activity behavior is
+introduced by this one-actor slice.
+
+The next work is technical: implement the small normalized input owner and
+runtime seam, include pending and applied/rejected input in deterministic
+diagnostics, and add focused ordering, Knowledge-perspective, stale-market,
+and no-regression coverage. Type/member naming and internal store shape are
+ordinary implementation choices; they do not reopen the selected semantics.
