@@ -15,23 +15,23 @@
 `0bb47b1db9e350127074768024c6de1a7d4b3d0c` (reviewed planning artifacts on
 the P8 baseline). **Integration candidate:** `codex/phase14/P14ALocalMaterialFlow`
 at the same code tip; fast-forward integration has no code divergence. P14-A
-remains IN_PROGRESS as a checkpoint, and Phase 14 remains open. The user
-approved promotion; `codex/phase14/canonical` was fast-forwarded to
-`c44904bb4b0a066eced1d7e8a773b7dc1eea76c0`.
+is PROMOTED at `c44904bb4b0a066eced1d7e8a773b7dc1eea76c0`, with this
+State-only promotion record at `f8a61fe9634ba9ab56ee31d50b57b45fef292a6f`.
+Phase 14 remains open; this promotion does not close the Phase.
 
 ## Checkpoint status
 
 | Checkpoint | Status | Scope / evidence |
 |---|---|---|
-| P14-A — Local Daily Material Flow v1 | IN_PROGRESS | Approved scope: one authored City, one exogenous daily source for one item, that City's free population consumption, and closing stock `opening + applied source − actual free consumption`. The source has no inputs, reserves, depletion, or transformation. Settlement owns the material; the market is custodian. Contract: `docs/design/PHASE14A_LOCAL_DAILY_MATERIAL_FLOW_CHECKPOINT.md`. |
+| P14-A — Local Daily Material Flow v1 | PROMOTED | Approved scope: one authored City, one exogenous daily source for one item, that City's free population consumption, and closing stock `opening + applied source − actual free consumption`. The source has no inputs, reserves, depletion, or transformation. Settlement owns the material; the market is custodian. Contract: `docs/design/PHASE14A_LOCAL_DAILY_MATERIAL_FLOW_CHECKPOINT.md`. |
 
 The user approved this bounded profile and current-base independent review
 passed for checkpoint content `7a9e8d71ed7a53578b7dc36ef1cafd03b856b0f0` with
 technical design `565a3c0e7d19c14736149ecae90887e8357dfef1`, against P8
 canonical `470667d` and architecture `c285466`, including both alignment
-records. The approved checkpoint and the active full-roadmap task permit
-isolated implementation to proceed. Canonical promotion remains separately
-human-gated.
+records. The user approved promotion; the capability is canonical at
+`c44904b`, recorded in State at `f8a61fe`. Any future P14 checkpoint and its
+canonical promotion remain separately scoped and gated.
 
 ## Dependency and impact record
 
