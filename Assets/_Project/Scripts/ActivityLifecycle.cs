@@ -7,6 +7,19 @@ public enum ActivityLifecycleState { Proposed = 0, Scheduled = 1, Active = 2, Co
 public enum ActivityTransitionKind { Start = 1, Complete = 2 }
 public enum ActivityFailure { None = 0, InvalidDefinition = 1, DuplicateCreation = 2, UnknownInstance = 3, InvalidState = 4, NoParticipants = 5, InvalidInterval = 6, ParticipantConflict = 7, StaleWork = 8, RevisionOverflow = 9, TimelinePublicationFailed = 10 }
 
+public interface IActivityStartValidator
+{
+    bool TryValidate(ActivityInstanceSnapshot instance, LogicalTick instant, out string failureDisposition);
+}
+
+internal sealed class AcceptActivityStartValidator : IActivityStartValidator
+{
+    public static readonly AcceptActivityStartValidator Instance = new AcceptActivityStartValidator();
+    private AcceptActivityStartValidator() { }
+    public bool TryValidate(ActivityInstanceSnapshot instance, LogicalTick instant, out string failureDisposition)
+    { failureDisposition = null; return true; }
+}
+
 public sealed class ActivityDefinition
 {
     public string Id { get; }
@@ -24,9 +37,9 @@ public sealed class ActivityParticipantCommitment
     public string ParticipantId { get; }
     public string ActivityInstanceId { get; }
     public LogicalTick Start { get; }
-    public LogicalTick End { get; }
+    public LogicalTick? End { get; }
     public long Revision { get; }
-    internal ActivityParticipantCommitment(string participantId, string instanceId, LogicalTick start, LogicalTick end, long revision)
+    internal ActivityParticipantCommitment(string participantId, string instanceId, LogicalTick start, LogicalTick? end, long revision)
     { ParticipantId = participantId; ActivityInstanceId = instanceId; Start = start; End = end; Revision = revision; }
 }
 
@@ -77,13 +90,14 @@ public sealed class ActivityLifecycleStore : IDueWorkOwner
     private Dictionary<string, List<ActivityParticipantCommitment>> commitments = new Dictionary<string, List<ActivityParticipantCommitment>>(StringComparer.Ordinal);
     private List<DueWorkReference> pending = new List<DueWorkReference>();
     private readonly string worldId;
+    private readonly IActivityStartValidator startValidator;
     private long nextIdentity;
 
-    public ActivityLifecycleStore(string worldId, long nextIdentity = 0)
+    public ActivityLifecycleStore(string worldId, long nextIdentity = 0, IActivityStartValidator startValidator = null)
     {
         if (string.IsNullOrWhiteSpace(worldId)) throw new ArgumentException("World identity is required.", nameof(worldId));
         if (nextIdentity < 0) throw new ArgumentOutOfRangeException(nameof(nextIdentity));
-        this.worldId = worldId; this.nextIdentity = nextIdentity;
+        this.worldId = worldId; this.nextIdentity = nextIdentity; this.startValidator = startValidator ?? AcceptActivityStartValidator.Instance;
     }
 
     public long NextIdentity => nextIdentity;
@@ -91,7 +105,7 @@ public sealed class ActivityLifecycleStore : IDueWorkOwner
 
     public ActivityLifecycleStore Clone()
     {
-        ActivityLifecycleStore clone = new ActivityLifecycleStore(worldId, nextIdentity);
+        ActivityLifecycleStore clone = new ActivityLifecycleStore(worldId, nextIdentity, startValidator);
         foreach (ActivityInstance source in instances.Values)
         {
             ActivityInstance copy = new ActivityInstance(source.Id, source.CreationIdentity, source.Definition)
@@ -155,7 +169,8 @@ public sealed class ActivityLifecycleStore : IDueWorkOwner
         foreach (string participant in participants)
             if (commitments.TryGetValue(participant, out List<ActivityParticipantCommitment> current))
                 foreach (ActivityParticipantCommitment commitment in current)
-                    if (start.Value < commitment.End.Value && commitment.Start.Value < (end ?? new LogicalTick(long.MaxValue)).Value)
+                    if ((!commitment.End.HasValue || start.Value < commitment.End.Value.Value)
+                        && (!end.HasValue || commitment.Start.Value < end.Value.Value))
                     { failure = ActivityFailure.ParticipantConflict; return false; }
         long revision;
         try { revision = checked(item.Revision + 1); }
@@ -169,7 +184,7 @@ public sealed class ActivityLifecycleStore : IDueWorkOwner
         {
             List<ActivityParticipantCommitment> participantCommitments = stagedCommitments.TryGetValue(participant, out List<ActivityParticipantCommitment> existing)
                 ? new List<ActivityParticipantCommitment>(existing) : new List<ActivityParticipantCommitment>();
-            participantCommitments.Add(new ActivityParticipantCommitment(participant, item.Id, start, end ?? new LogicalTick(long.MaxValue), revision));
+            participantCommitments.Add(new ActivityParticipantCommitment(participant, item.Id, start, end, revision));
             stagedCommitments[participant] = participantCommitments;
         }
         List<DueWorkReference> stagedPending = new List<DueWorkReference>(pending);
@@ -189,13 +204,9 @@ public sealed class ActivityLifecycleStore : IDueWorkOwner
         if (timeline == null) throw new ArgumentNullException(nameof(timeline));
         List<DueWorkReference> facts = new List<DueWorkReference>(pending);
         facts.Sort((a, b) => { int c = a.DueAt.CompareTo(b.DueAt); if (c != 0) return c; c = string.CompareOrdinal(a.InstanceId, b.InstanceId); return c != 0 ? c : string.CompareOrdinal(a.DueWorkId, b.DueWorkId); });
-        foreach (DueWorkReference fact in facts)
-        {
-            if (!instances.TryGetValue(fact.InstanceId, out ActivityInstance instance) || instance.Revision != fact.Revision
-                || (instance.State != ActivityLifecycleState.Scheduled && instance.State != ActivityLifecycleState.Active)) continue;
-            if (!timeline.TryIndexOwnerFact(fact, out failure)) return false;
-        }
-        failure = TimelineFailure.None; return true;
+        facts.RemoveAll(fact => !instances.TryGetValue(fact.InstanceId, out ActivityInstance instance) || instance.Revision != fact.Revision
+            || (instance.State != ActivityLifecycleState.Scheduled && instance.State != ActivityLifecycleState.Active));
+        return timeline.TryIndexOwnerFacts(facts, out failure);
     }
 
     public bool TryCancel(string instanceId, LogicalTick now, string disposition, out ActivityFailure failure) =>
@@ -206,10 +217,14 @@ public sealed class ActivityLifecycleStore : IDueWorkOwner
     private bool TryTerminate(string id, LogicalTick now, ActivityLifecycleState terminal, string disposition, out ActivityFailure failure)
     {
         if (!instances.TryGetValue(id, out ActivityInstance item)) { failure = ActivityFailure.UnknownInstance; return false; }
+        if (terminal == ActivityLifecycleState.Interrupted && item.State != ActivityLifecycleState.Active)
+        { failure = ActivityFailure.InvalidState; return false; }
         if (item.State == ActivityLifecycleState.Completed || item.State == ActivityLifecycleState.Cancelled || item.State == ActivityLifecycleState.Interrupted)
         { failure = ActivityFailure.InvalidState; return false; }
         long revision; try { revision = checked(item.Revision + 1); } catch (OverflowException) { failure = ActivityFailure.RevisionOverflow; return false; }
+        List<DueWorkReference> stagedPending = pending.Where(fact => fact.InstanceId != item.Id).ToList();
         item.Revision = revision; item.State = terminal; item.TerminalInstant = now; item.Disposition = disposition ?? string.Empty;
+        pending = stagedPending;
         ReleaseCommitments(item); failure = ActivityFailure.None; return true;
     }
 
@@ -224,7 +239,7 @@ public sealed class ActivityLifecycleStore : IDueWorkOwner
         foreach (ActivityParticipantCommitment value in values)
             if (instances.TryGetValue(value.ActivityInstanceId, out ActivityInstance instance)
                 && (instance.State == ActivityLifecycleState.Scheduled || instance.State == ActivityLifecycleState.Active)
-                && at.Value >= value.Start.Value && at.Value < value.End.Value) return false;
+                && at.Value >= value.Start.Value && (!value.End.HasValue || at.Value < value.End.Value.Value)) return false;
         return true;
     }
 
@@ -232,8 +247,8 @@ public sealed class ActivityLifecycleStore : IDueWorkOwner
     {
         if (reference == null || reference.OwnerId != DueOwnerId || !instances.TryGetValue(reference.InstanceId, out ActivityInstance item)) return false;
         if (item.Revision != reference.Revision) return false;
-        if (reference.DueWorkId == WorkId(ActivityTransitionKind.Start)) return item.State == ActivityLifecycleState.Scheduled && item.PlannedStart == reference.DueAt;
-        if (reference.DueWorkId == WorkId(ActivityTransitionKind.Complete)) return item.State == ActivityLifecycleState.Active && item.PlannedEnd == reference.DueAt;
+        if (reference.DueWorkId == WorkId(item.Id, ActivityTransitionKind.Start)) return item.State == ActivityLifecycleState.Scheduled && item.PlannedStart == reference.DueAt;
+        if (reference.DueWorkId == WorkId(item.Id, ActivityTransitionKind.Complete)) return item.State == ActivityLifecycleState.Active && item.PlannedEnd == reference.DueAt;
         return false;
     }
 
@@ -241,21 +256,34 @@ public sealed class ActivityLifecycleStore : IDueWorkOwner
     {
         prepared = null;
         if (!IsCurrent(reference)) { failure = TimelineFailure.StaleWork; return false; }
-        ActivityTransitionKind kind = reference.DueWorkId == WorkId(ActivityTransitionKind.Start) ? ActivityTransitionKind.Start : ActivityTransitionKind.Complete;
-        prepared = new ActivityCommit(this, reference, kind); failure = TimelineFailure.None; return true;
+        ActivityTransitionKind kind = reference.DueWorkId == WorkId(reference.InstanceId, ActivityTransitionKind.Start) ? ActivityTransitionKind.Start : ActivityTransitionKind.Complete;
+        string disposition = string.Empty;
+        if (kind == ActivityTransitionKind.Start && !startValidator.TryValidate(new ActivityInstanceSnapshot(instances[reference.InstanceId]), reference.DueAt, out disposition))
+            prepared = new ActivityCommit(this, reference, kind, false, string.IsNullOrWhiteSpace(disposition) ? "start-precondition-failed" : disposition);
+        else prepared = new ActivityCommit(this, reference, kind, true, null);
+        failure = TimelineFailure.None; return true;
     }
 
     public IReadOnlyList<DueWorkReference> RebuildPendingReferences()
     { return pending.AsReadOnly(); }
 
-    private bool CommitTransition(DueWorkReference reference, ActivityTransitionKind kind, out TimelineFailure failure)
+    private bool CommitTransition(DueWorkReference reference, ActivityTransitionKind kind, bool startAllowed, string failureDisposition, out TimelineFailure failure)
     {
         if (!IsCurrent(reference)) { failure = TimelineFailure.StaleWork; return false; }
         ActivityInstance item = instances[reference.InstanceId];
         long revision; try { revision = checked(item.Revision + 1); } catch (OverflowException) { failure = TimelineFailure.DispatchFailed; return false; }
+        if (kind == ActivityTransitionKind.Start && !startAllowed)
+        {
+            long terminalRevision; try { terminalRevision = checked(item.Revision + 1); }
+            catch (OverflowException) { failure = TimelineFailure.DispatchFailed; return false; }
+            List<DueWorkReference> terminalPending = pending.Where(fact => fact.InstanceId != item.Id).ToList();
+            item.Revision = terminalRevision; item.State = ActivityLifecycleState.Cancelled;
+            item.TerminalInstant = reference.DueAt; item.Disposition = string.IsNullOrWhiteSpace(failureDisposition) ? "start-precondition-failed" : failureDisposition;
+            pending = terminalPending; ReleaseCommitments(item); failure = TimelineFailure.None; return true;
+        }
         DueWorkReference completion = kind == ActivityTransitionKind.Start && item.PlannedEnd.HasValue
             ? Reference(item, revision, ActivityTransitionKind.Complete, item.PlannedEnd.Value) : null;
-        List<DueWorkReference> stagedPending = new List<DueWorkReference>(pending);
+        List<DueWorkReference> stagedPending = pending.Where(fact => fact.InstanceId != item.Id).ToList();
         if (completion != null) stagedPending.Add(completion);
         item.Revision = revision;
         if (kind == ActivityTransitionKind.Start)
@@ -276,25 +304,26 @@ public sealed class ActivityLifecycleStore : IDueWorkOwner
                 if (values.Count == 0) commitments.Remove(participant);
             }
     }
-    private static string WorkId(ActivityTransitionKind kind) => kind == ActivityTransitionKind.Start ? "start" : "complete";
+    private static string WorkId(string instanceId, ActivityTransitionKind kind) => SpatialStableKey.Encode(instanceId, kind == ActivityTransitionKind.Start ? "start" : "complete");
     private DueWorkReference Reference(ActivityInstance item, long revision, ActivityTransitionKind kind, LogicalTick at) =>
-        new DueWorkReference(DueOwnerId, WorkId(kind), item.Id, revision, revision, at);
+        new DueWorkReference(DueOwnerId, WorkId(item.Id, kind), item.Id, revision, revision, at);
 
     private sealed class ActivityCommit : IDueWorkCommit
     {
         private readonly ActivityLifecycleStore owner; private readonly DueWorkReference reference; private readonly ActivityTransitionKind kind;
-        public ActivityCommit(ActivityLifecycleStore owner, DueWorkReference reference, ActivityTransitionKind kind)
-        { this.owner = owner; this.reference = reference; this.kind = kind; }
+        private readonly bool startAllowed; private readonly string failureDisposition;
+        public ActivityCommit(ActivityLifecycleStore owner, DueWorkReference reference, ActivityTransitionKind kind, bool startAllowed, string failureDisposition)
+        { this.owner = owner; this.reference = reference; this.kind = kind; this.startAllowed = startAllowed; this.failureDisposition = failureDisposition; }
         public IReadOnlyList<DueWorkReference> NewOwnerFacts
         {
             get
             {
-                if (kind != ActivityTransitionKind.Start || reference.Revision == long.MaxValue
+                if (!startAllowed || kind != ActivityTransitionKind.Start || reference.Revision == long.MaxValue
                     || !owner.instances.TryGetValue(reference.InstanceId, out ActivityInstance item) || !item.PlannedEnd.HasValue)
                     return Array.Empty<DueWorkReference>();
                 return new[] { owner.Reference(item, reference.Revision + 1, ActivityTransitionKind.Complete, item.PlannedEnd.Value) };
             }
         }
-        public bool TryCommit(out TimelineFailure failure) => owner.CommitTransition(reference, kind, out failure);
+        public bool TryCommit(out TimelineFailure failure) => owner.CommitTransition(reference, kind, startAllowed, failureDisposition, out failure);
     }
 }

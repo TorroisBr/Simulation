@@ -167,6 +167,7 @@ public sealed class SimulationTimeline
     private long pendingBoundaryDay = -1L;
     private bool advancing;
     private bool dispatching;
+    private bool ownerCommitWindow;
 
     public SimulationTimeline(SimulationCalendar calendar, LogicalTick initialInstant,
         IDueWorkOwner dueWorkOwner = null, ITimelineInputOwner inputOwner = null,
@@ -207,6 +208,7 @@ public sealed class SimulationTimeline
     public bool TryAcceptInput(TimelineInputReference input, out TimelineFailure failure)
     {
         if (input == null) throw new ArgumentNullException(nameof(input));
+        if (ownerCommitWindow) { failure = TimelineFailure.ReentrantAdvance; return false; }
         if (dispatching || input.TargetInstant.Value < now || input.TargetInstant.Value <= sealedThrough)
         { failure = TimelineFailure.LateInput; return false; }
         if (!acceptedInputSequences.Add(input.Sequence)) { failure = TimelineFailure.DuplicateInputSequence; return false; }
@@ -221,7 +223,7 @@ public sealed class SimulationTimeline
     /// <summary>Closes the input prefix so no later command can rewrite any instant through this tick.</summary>
     public bool TrySealInputsThrough(LogicalTick instant, out TimelineFailure failure)
     {
-        if (dispatching || instant.Value < sealedThrough || instant.Value < now)
+        if (dispatching || ownerCommitWindow || instant.Value < sealedThrough || instant.Value < now)
         { failure = TimelineFailure.LateInput; return false; }
         sealedThrough = instant.Value;
         failure = TimelineFailure.None;
@@ -256,7 +258,7 @@ public sealed class SimulationTimeline
     public bool TryIndexOwnerFact(DueWorkReference reference, out TimelineFailure failure)
     {
         if (reference == null) throw new ArgumentNullException(nameof(reference));
-        if (dispatching) { failure = TimelineFailure.DispatchFailed; return false; }
+        if (dispatching || ownerCommitWindow) { failure = TimelineFailure.DispatchFailed; return false; }
         if (reference.DueAt.Value <= sealedThrough) { failure = TimelineFailure.LateInput; return false; }
         if (!CanIndex(reference, now, out failure)) return false;
         if (agenda.TryGetValue(reference.DueAt.Value, out List<ScheduledDueWork> sameInstant))
@@ -281,10 +283,33 @@ public sealed class SimulationTimeline
     {
         if (facts == null) throw new ArgumentNullException(nameof(facts));
         if (commitOwner == null) throw new ArgumentNullException(nameof(commitOwner));
-        if (dispatching || advancing) { failure = TimelineFailure.DispatchFailed; return false; }
-        List<ScheduledDueWork> staged = new List<ScheduledDueWork>(facts.Count);
+        if (dispatching || advancing || ownerCommitWindow) { failure = TimelineFailure.DispatchFailed; return false; }
+        if (!TryStageExternalFacts(facts, out List<ScheduledDueWork> staged, out long nextSequence, out failure)) return false;
+        ownerCommitWindow = true;
+        try { failure = commitOwner(); }
+        catch (Exception) { failure = TimelineFailure.DispatchFailed; return false; }
+        finally { ownerCommitWindow = false; }
+        if (failure != TimelineFailure.None) return false;
+        PublishOwnerFacts(staged, nextSequence);
+        return true;
+    }
+
+    /// <summary>Atomically validates and indexes an owner's complete authoritative fact set.</summary>
+    public bool TryIndexOwnerFacts(IReadOnlyList<DueWorkReference> facts, out TimelineFailure failure)
+    {
+        if (facts == null) throw new ArgumentNullException(nameof(facts));
+        if (dispatching || advancing || ownerCommitWindow) { failure = TimelineFailure.DispatchFailed; return false; }
+        if (!TryStageExternalFacts(facts, out List<ScheduledDueWork> staged, out long nextSequence, out failure)) return false;
+        PublishOwnerFacts(staged, nextSequence);
+        return true;
+    }
+
+    private bool TryStageExternalFacts(IReadOnlyList<DueWorkReference> facts, out List<ScheduledDueWork> staged,
+        out long nextSequence, out TimelineFailure failure)
+    {
+        staged = new List<ScheduledDueWork>(facts.Count);
         HashSet<string> identities = new HashSet<string>(StringComparer.Ordinal);
-        long nextSequence = causalSequence;
+        nextSequence = causalSequence;
         try
         {
             foreach (DueWorkReference fact in facts)
@@ -304,16 +329,13 @@ public sealed class SimulationTimeline
             }
         }
         catch (OverflowException) { failure = TimelineFailure.Overflow; return false; }
-        try { failure = commitOwner(); }
-        catch (Exception) { failure = TimelineFailure.DispatchFailed; return false; }
-        if (failure != TimelineFailure.None) return false;
-        PublishOwnerFacts(staged, nextSequence);
+        failure = TimelineFailure.None;
         return true;
     }
 
     public bool TryAdvanceTo(LogicalTick target, out TimelineFailure failure)
     {
-        if (advancing) { failure = TimelineFailure.ReentrantAdvance; return false; }
+        if (advancing || ownerCommitWindow) { failure = TimelineFailure.ReentrantAdvance; return false; }
         if (target.Value < now) { failure = TimelineFailure.TargetBeforeNow; return false; }
         if (sealedThrough < target.Value) { failure = TimelineFailure.InputNotSealed; return false; }
         advancing = true;
@@ -396,7 +418,6 @@ public sealed class SimulationTimeline
                             items.RemoveAt(0);
                             if (items.Count == 0) agenda.Remove(now);
                             // Obsolete owner references are inert index nodes; continue to the next causal item.
-                            dispatchesAtInstant++;
                             continue;
                         }
                         if (!dueWorkOwner.TryPrepare(item, out IDueWorkCommit prepared, out failure) || prepared == null)

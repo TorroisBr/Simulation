@@ -4,8 +4,15 @@ using NUnit.Framework;
 
 public sealed class ActivityLifecycleTests
 {
+    private sealed class MutableStartValidator : IActivityStartValidator
+    {
+        public bool Available = true;
+        public bool TryValidate(ActivityInstanceSnapshot instance, LogicalTick instant, out string disposition)
+        { disposition = Available ? null : "participant-became-unavailable"; return Available; }
+    }
     private static ActivityDefinition Definition() => new ActivityDefinition("work", "v1");
     private static SimulationCalendar Calendar() => new SimulationCalendar(new CalendarDefinition(2, 2, 3));
+    private static string Key(string first, string second) => first.Length + ":" + first + second.Length + ":" + second;
 
     [Test]
     public void DefinitionInstanceAndParticipantIdentitiesAreSeparateAndProposedMayBeUnformed()
@@ -41,8 +48,8 @@ public sealed class ActivityLifecycleTests
         Assert.That(store.IsAvailable("person-1", new LogicalTick(10)), Is.False);
         Assert.That(store.IsAvailable("person-1", new LogicalTick(15)), Is.True);
         Assert.That(store.PendingWork.Count, Is.EqualTo(2));
-        Assert.That(store.PendingWork[0].DueWorkId, Is.EqualTo("start"));
-        Assert.That(store.PendingWork[1].DueWorkId, Is.EqualTo("complete"));
+        Assert.That(store.PendingWork[0].DueWorkId, Does.EndWith("5:start"));
+        Assert.That(store.PendingWork[1].DueWorkId, Does.EndWith("8:complete"));
     }
 
     [Test]
@@ -67,7 +74,7 @@ public sealed class ActivityLifecycleTests
         ActivityLifecycleStore store = new ActivityLifecycleStore("world");
         SimulationTimeline timeline = new SimulationTimeline(Calendar(), new LogicalTick(0), store);
         store.TryPropose(Definition(), "rejected", out ActivityInstanceSnapshot instance, out _);
-        DueWorkReference collision = new DueWorkReference(ActivityLifecycleStore.DueOwnerId, "start", "other-instance", 9, 1, new LogicalTick(10));
+        DueWorkReference collision = new DueWorkReference(ActivityLifecycleStore.DueOwnerId, Key(instance.Id, "start"), "other-instance", 9, 1, new LogicalTick(10));
         Assert.That(timeline.TryIndexOwnerFact(collision, out _), Is.True);
         long sequenceBefore = timeline.CausalSequence;
         Assert.That(store.TrySchedule(timeline, instance.Id, new LogicalTick(0), new LogicalTick(10), new LogicalTick(5), new[] { "person" }, out ActivityFailure failure), Is.False);
@@ -96,6 +103,43 @@ public sealed class ActivityLifecycleTests
     }
 
     [Test]
+    public void InterruptIsOnlyValidForActiveInstances()
+    {
+        ActivityLifecycleStore store = new ActivityLifecycleStore("world");
+        SimulationTimeline timeline = new SimulationTimeline(Calendar(), new LogicalTick(0), store);
+        store.TryPropose(Definition(), "interrupt", out ActivityInstanceSnapshot instance, out _);
+        Assert.That(store.TryInterrupt(instance.Id, new LogicalTick(0), "early", out ActivityFailure proposedFailure), Is.False);
+        Assert.That(proposedFailure, Is.EqualTo(ActivityFailure.InvalidState));
+        Assert.That(store.TrySchedule(timeline, instance.Id, new LogicalTick(0), new LogicalTick(10), new LogicalTick(10), new[] { "person" }, out _), Is.True);
+        Assert.That(store.TryInterrupt(instance.Id, new LogicalTick(5), "early", out ActivityFailure scheduledFailure), Is.False);
+        Assert.That(scheduledFailure, Is.EqualTo(ActivityFailure.InvalidState));
+        Assert.That(timeline.TrySealInputsThrough(new LogicalTick(10), out _), Is.True);
+        Assert.That(timeline.TryAdvanceTo(new LogicalTick(10), out _), Is.True);
+        Assert.That(store.TryInterrupt(instance.Id, new LogicalTick(10), "condition-changed", out _), Is.True);
+        Assert.That(store.GetCommitment("person"), Is.Null);
+        Assert.That(store.PendingWork, Is.Empty);
+    }
+
+    [Test]
+    public void FailedStartValidationCancelsAndReleasesCommitmentWithoutActivation()
+    {
+        MutableStartValidator validator = new MutableStartValidator();
+        ActivityLifecycleStore store = new ActivityLifecycleStore("world", startValidator: validator);
+        SimulationTimeline timeline = new SimulationTimeline(Calendar(), new LogicalTick(0), store);
+        store.TryPropose(Definition(), "invalid-at-start", out ActivityInstanceSnapshot instance, out _);
+        Assert.That(store.TrySchedule(timeline, instance.Id, new LogicalTick(0), new LogicalTick(10), new LogicalTick(5), new[] { "person" }, out _), Is.True);
+        validator.Available = false;
+        Assert.That(timeline.TrySealInputsThrough(new LogicalTick(15), out _), Is.True);
+        Assert.That(timeline.TryAdvanceTo(new LogicalTick(15), out TimelineFailure failure), Is.True, failure.ToString());
+        Assert.That(store.TryGet(instance.Id, out ActivityInstanceSnapshot cancelled), Is.True);
+        Assert.That(cancelled.State, Is.EqualTo(ActivityLifecycleState.Cancelled));
+        Assert.That(cancelled.ActualStart, Is.Null);
+        Assert.That(cancelled.Disposition, Is.EqualTo("participant-became-unavailable"));
+        Assert.That(store.GetCommitment("person"), Is.Null);
+        Assert.That(store.PendingWork, Is.Empty);
+    }
+
+    [Test]
     public void IdentitySequenceAndParticipantRelationsSurviveStoreReconstructionInputs()
     {
         ActivityLifecycleStore store = new ActivityLifecycleStore("world", 7);
@@ -120,6 +164,7 @@ public sealed class ActivityLifecycleTests
         Assert.That(completed.ActualStart.Value.Value, Is.EqualTo(10));
         Assert.That(completed.TerminalInstant.Value.Value, Is.EqualTo(15));
         Assert.That(store.GetCommitment("person"), Is.Null);
+        Assert.That(store.PendingWork, Is.Empty);
     }
 
     [Test]
@@ -153,5 +198,86 @@ public sealed class ActivityLifecycleTests
         Assert.That(forkResult.State, Is.EqualTo(ActivityLifecycleState.Completed));
         Assert.That(original.TryGet(instance.Id, out ActivityInstanceSnapshot sourceResult), Is.True);
         Assert.That(sourceResult.State, Is.EqualTo(ActivityLifecycleState.Scheduled));
+    }
+
+    [Test]
+    public void InstanceScopedDueIdsAllowEqualRevisionsAtSameAndDifferentInstantsAndAtomicRebuildRetry()
+    {
+        ActivityLifecycleStore store = new ActivityLifecycleStore("world");
+        SimulationTimeline sourceTimeline = new SimulationTimeline(Calendar(), new LogicalTick(0), store);
+        store.TryPropose(Definition(), "same-a", out ActivityInstanceSnapshot a, out _);
+        store.TryPropose(Definition(), "same-b", out ActivityInstanceSnapshot b, out _);
+        store.TryPropose(Definition(), "later", out ActivityInstanceSnapshot later, out _);
+        Assert.That(store.TrySchedule(sourceTimeline, a.Id, new LogicalTick(0), new LogicalTick(10), new LogicalTick(1), new[] { "p-a" }, out _), Is.True);
+        Assert.That(store.TrySchedule(sourceTimeline, b.Id, new LogicalTick(0), new LogicalTick(10), new LogicalTick(1), new[] { "p-b" }, out _), Is.True);
+        Assert.That(store.TrySchedule(sourceTimeline, later.Id, new LogicalTick(0), new LogicalTick(12), new LogicalTick(1), new[] { "p-c" }, out _), Is.True);
+        Assert.That(store.PendingWork[0].DueWorkId, Is.Not.EqualTo(store.PendingWork[2].DueWorkId));
+
+        ActivityLifecycleStore fork = store.Clone();
+        DueWorkReference collisionSource = fork.PendingWork[2];
+        SimulationTimeline failedRebuild = new SimulationTimeline(Calendar(), new LogicalTick(0), fork);
+        DueWorkReference collision = new DueWorkReference(collisionSource.OwnerId, collisionSource.DueWorkId,
+            "unrelated-instance", 99, collisionSource.OccurrenceSequence, collisionSource.DueAt);
+        Assert.That(failedRebuild.TryIndexOwnerFact(collision, out _), Is.True);
+        long before = failedRebuild.CausalSequence;
+        Assert.That(fork.TryRebuildTimelineIndex(failedRebuild, out TimelineFailure rejected), Is.False);
+        Assert.That(rejected, Is.EqualTo(TimelineFailure.DuplicateWorkSequence));
+        Assert.That(failedRebuild.CausalSequence, Is.EqualTo(before));
+        Assert.That(failedRebuild.IsDue(new LogicalTick(10), fork.PendingWork[0].DueWorkId), Is.False);
+
+        SimulationTimeline retry = new SimulationTimeline(Calendar(), new LogicalTick(0), fork);
+        Assert.That(fork.TryRebuildTimelineIndex(retry, out TimelineFailure retryFailure), Is.True, retryFailure.ToString());
+        Assert.That(retry.PreviewDueWork(new LogicalTick(10)).Count, Is.EqualTo(2));
+        Assert.That(retry.TrySealInputsThrough(new LogicalTick(13), out _), Is.True);
+        Assert.That(retry.TryAdvanceTo(new LogicalTick(13), out TimelineFailure advanceFailure), Is.True, advanceFailure.ToString());
+        Assert.That(fork.TryGet(a.Id, out ActivityInstanceSnapshot doneA), Is.True);
+        Assert.That(fork.TryGet(b.Id, out ActivityInstanceSnapshot doneB), Is.True);
+        Assert.That(fork.TryGet(later.Id, out ActivityInstanceSnapshot doneLater), Is.True);
+        Assert.That(doneA.State, Is.EqualTo(ActivityLifecycleState.Completed));
+        Assert.That(doneB.State, Is.EqualTo(ActivityLifecycleState.Completed));
+        Assert.That(doneLater.State, Is.EqualTo(ActivityLifecycleState.Completed));
+    }
+
+    [Test]
+    public void MultipleParticipantsZeroDurationAndNoEndAvailabilityHaveExplicitBounds()
+    {
+        ActivityLifecycleStore store = new ActivityLifecycleStore("world");
+        SimulationTimeline timeline = new SimulationTimeline(Calendar(), new LogicalTick(0), store);
+        store.TryPropose(Definition(), "shared", out ActivityInstanceSnapshot shared, out _);
+        Assert.That(store.TrySchedule(timeline, shared.Id, new LogicalTick(0), new LogicalTick(5), new LogicalTick(0), new[] { "p1", "p2" }, out _), Is.True);
+        store.TryPropose(Definition(), "open-ended", out ActivityInstanceSnapshot openEnded, out _);
+        Assert.That(store.TrySchedule(timeline, openEnded.Id, new LogicalTick(0), new LogicalTick(8), null, new[] { "p3" }, out _), Is.True);
+        Assert.That(store.TryGet(shared.Id, out ActivityInstanceSnapshot multi), Is.True);
+        Assert.That(multi.Participants, Is.EqualTo(new[] { "p1", "p2" }));
+        Assert.That(store.GetCommitment("p3").End, Is.Null);
+        Assert.That(store.IsAvailable("p3", new LogicalTick(long.MaxValue)), Is.False);
+        Assert.That(timeline.TrySealInputsThrough(new LogicalTick(8), out _), Is.True);
+        Assert.That(timeline.TryAdvanceTo(new LogicalTick(8), out TimelineFailure failure), Is.True, failure.ToString());
+        Assert.That(store.TryGet(shared.Id, out ActivityInstanceSnapshot zeroDone), Is.True);
+        Assert.That(zeroDone.State, Is.EqualTo(ActivityLifecycleState.Completed));
+        Assert.That(zeroDone.ActualStart.Value, Is.EqualTo(new LogicalTick(5)));
+        Assert.That(zeroDone.TerminalInstant.Value, Is.EqualTo(new LogicalTick(5)));
+        Assert.That(store.TryGet(openEnded.Id, out ActivityInstanceSnapshot openActive), Is.True);
+        Assert.That(openActive.State, Is.EqualTo(ActivityLifecycleState.Active));
+        Assert.That(store.IsAvailable("p3", new LogicalTick(long.MaxValue)), Is.False);
+    }
+
+    [Test]
+    public void OwnerCommitWindowRejectsReentrantTimelineMutationAndAdvance()
+    {
+        SimulationTimeline timeline = new SimulationTimeline(Calendar(), new LogicalTick(0));
+        DueWorkReference fact = new DueWorkReference("owner", "fact", "instance", 1, 1, new LogicalTick(10));
+        bool advanceRejected = false, mutationRejected = false;
+        Assert.That(timeline.TryCommitOwnerFacts(new[] { fact }, () =>
+        {
+            advanceRejected = !timeline.TryAdvanceTo(new LogicalTick(10), out TimelineFailure advanceFailure)
+                && advanceFailure == TimelineFailure.ReentrantAdvance;
+            mutationRejected = !timeline.TryIndexOwnerFact(new DueWorkReference("other", "nested", "i", 1, 2, new LogicalTick(11)), out _);
+            return TimelineFailure.None;
+        }, out _), Is.True);
+        Assert.That(advanceRejected, Is.True);
+        Assert.That(mutationRejected, Is.True);
+        Assert.That(timeline.CausalSequence, Is.EqualTo(1));
+        Assert.That(timeline.PreviewDueWork(new LogicalTick(11)), Is.Empty);
     }
 }

@@ -374,6 +374,21 @@ public sealed class LogicalTimelineTests
     }
 
     [Test]
+    public void StaleReferenceDoesNotConsumeCommittedDispatchLimit()
+    {
+        DueOwner owner = new DueOwner();
+        SimulationTimeline timeline = new SimulationTimeline(Calendar(), new LogicalTick(0), owner, maxDispatchesPerInstant: 1);
+        owner.Timeline = timeline;
+        owner.Current.Add("valid");
+        Assert.That(timeline.TryIndexOwnerFact(Work("owner", "obsolete", "instance-a", 0, 9), out _), Is.True);
+        Assert.That(timeline.TryIndexOwnerFact(Work("owner", "valid", "instance-b", 0, 9), out _), Is.True);
+        Assert.That(timeline.TrySealInputsThrough(new LogicalTick(9), out _), Is.True);
+        Assert.That(timeline.TryAdvanceTo(new LogicalTick(9), out TimelineFailure failure), Is.True, failure.ToString());
+        CollectionAssert.AreEqual(new[] { "valid" }, owner.Committed);
+        Assert.That(timeline.CurrentInstant.Value, Is.EqualTo(9));
+    }
+
+    [Test]
     public void QueriesArePureAndInputFailureRetainsUnappliedCommandForRetry()
     {
         InputOwner input = new InputOwner();
