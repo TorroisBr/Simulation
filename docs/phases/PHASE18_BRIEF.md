@@ -2,14 +2,14 @@
 
 **Authority:** planning scope under `../SIMULATION_ARCHITECTURE.md` §§11–12, 91–92. **Readiness:** P18-A/B/C core capabilities and the accepted additive A extension are promoted.
 The additive P18-A boundary/continuation contract was accepted at `2175bf2`; corrected implementation candidate `f1bfe818565c3fca81b373d1bc9a70a16f4eda10` passed exact-tip review and required validation and was promoted at integration tip `1dd0479`.
-The preserved P18-C external-input/deferral adapter code integration `a535441` is assembled against current P18 canonical State tip `eabc1c2` / extension code tip `1dd0479`. Post-extension exact-tip implementation review passed; the focused suites, ALL EditMode 1794/1794, and complete Smoke 5/5 passed. Its canonical promotion approval remains a separate pending gate. P18-D remains dependency-gated. Phase numbering preserves existing IDs, not execution order.
+The preserved P18-C external-input/deferral adapter code integration `a535441` was assembled against P18 canonical State tip `eabc1c2` / extension code tip `1dd0479`, passed post-extension exact-tip implementation review and focused/full validation, and was promoted at canonical integration tip `b75c5b8`. P18-D remains implementation-blocked on its P11/economy-owner prerequisites and serialized `SimulationRuntime` ownership window. Phase numbering preserves existing IDs, not execution order.
 
 P18-D's existing P11 external-input consumer also requires the separate
 P18-C external-input/deferral adapter design at
 `../design/PHASE18_C_EXTERNAL_INPUT_ADAPTER_DESIGN.md`. The design passed
 independent review at exact tip `358c65c85e1eafdd91ef4a6553ba3b0a8c4af249`;
 its implementation passed post-extension review and validation at code tip
-`a535441`, with canonical promotion pending. The design adds a P18-C
+`a535441`, and the adapter was promoted at `b75c5b8`. The design adds a P18-C
 request-state owner and typed P11-owned temporal capture record linked to
 P18-A's accepted input reference, plus a typed temporal transition stream
 while preserving legacy daily records/APIs; P18-C deferral leaves P11 Pending.
@@ -18,10 +18,10 @@ validation at `2d6b3ce` passed focused suites 14/13/24/6, ALL EditMode
 1742/1742 and official Smoke 5/5; this is upstream compatibility evidence,
 not adapter test evidence. The adapter's pre-extension focused/full results are
 historical only; its assembled post-extension tree passed focused and full
-validation and exact-tip independent review. This does not promote the adapter.
-P18-D implementation
-remains blocked until the independently validated adapter integration is
-promoted and the serialized `SimulationRuntime` ownership window is available;
+validation and exact-tip independent review; the adapter was promoted at
+`b75c5b8`. P18-D implementation remains blocked until the serialized
+`SimulationRuntime` ownership window and its P11/economy-owner prerequisites
+are available;
 the accepted P18-A extension is already promoted. The P18-D
 SellGoods consumer also requires a stable
 proposal-ID operation receipt from the existing economy owner, including an

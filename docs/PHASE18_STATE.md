@@ -1,6 +1,6 @@
 # Phase 18 State — Intraday Temporal Execution v1
 
-**Status:** PHASE 18 IN PROGRESS — P18-A/B/C promoted, including the additive extension at `1dd0479`; the external-input/deferral adapter passed post-extension review and validation at its integration candidate, with canonical promotion pending; P18-D remains dependency-gated
+**Status:** PHASE 18 IN PROGRESS — P18-A/B/C promoted, including the additive extension at `1dd0479` and the external-input/deferral adapter at integration tip `b75c5b8` (code `a535441`); P18-D implementation remains blocked on its owner prerequisites and serialized `SimulationRuntime` window
 
 **Current canonical base:** `codex/phase8/canonical` at `470667d37863384edadb3d93ef64d8004aff46a3`
 
@@ -47,8 +47,8 @@ documentation/design review; no new code or test result is claimed.
 | P18-A — Additive Boundary/Continuation | PROMOTED at integration tip `1dd0479` | Accepted contract `2175bf2` (acceptance `9de70ae`); corrected candidate `f1bfe818565c3fca81b373d1bc9a70a16f4eda10`; exact-tip independent review PASS; LogicalTimeline 35/35, ALL EditMode 1756/1756, official Smoke 5/5, and diff-check PASS (validation results worker-reported). |
 | P18-B — Activity Lifecycle | PROMOTED | Implementation `97918cbbe4238a65a216b1a1f0ef84c70b4d080c` was promoted through integration commit `8f0cc4a6764abfc238e2497e4fad19487c6db82f` after independent review and user approval. A foreign timeline cannot dispatch lifecycle facts. Integration validation: ActivityLifecycle 16/16 (`EditMode-20260927-015240-ce080762386744cd9063484f033c5531.xml`), LogicalTimeline 19/19 (`EditMode-20260927-015352-fd3eb5a52fc9441ab7df66ba3b693dd0.xml`), ALL EditMode 1734/1734 (`EditMode-20260927-015417-28accf72f1ca42e79738072790b84001.xml`), official Smoke 5/5 (`EditMode-20260927-015453-960eaed7ce0443329ae1d54f33b4aacf.xml`), and `git diff --check` passed. |
 | P18-C — Availability-Driven Decisions | PROMOTED | Source tip `ab05ecfe976e80badf6f509b8e9be25ff556ca23` (review-corrected State/promotion tip `7aa76268c49058fedb997392e676c6a29169c8b0`), based exactly on `39bd42e9e78f80c1e40b35b099e980ee8bc44a43`; architecture/alignment baseline `c285466c355103d3637ac165246591b72eb7bda0`. Independent implementation re-review passed after preserving distinct same-actor/same-tick causal receipts and retrying uncommitted execution with the same stable proposal ID. Focused ActorAvailabilityDecision 5/5 (`EditMode-20260927-031900-b609bdccc79143319b5e3ab54106cb84.xml`), ActivityLifecycle 17/17 (`EditMode-20260927-031918-7c40152d1d6545e29f127d8709a89542.xml`), ALL EditMode 1740/1740 (`EditMode-20260927-031934-f18b558a02a84818985c816b664106ab.xml`), and complete official Smoke 5/5 (`EditMode-20260927-032011-5c51d8ccde5a4fc8bec922bebcd88dd0.xml`) passed; `git diff --check` passed. User approved promotion; `codex/phase18/canonical` is promoted at `7aa7626`. |
-| P18-C — External-Input/Deferral Adapter | POST-EXTENSION IMPLEMENTATION REVIEW AND VALIDATION PASS; CANONICAL PROMOTION GATE PENDING | Code integration `a535441` is based on P18 canonical State tip `eabc1c2` (promoted extension code `1dd0479`); docs-only follow-ups `fe9a479` and `38999cb` refresh current status. Independent exact-tip implementation review passed. Identity/cardinality, focused domain suites, ALL EditMode 1794/1794, complete Smoke 5/5, and diff-check passed on the assembled code tree. This adapter remains unpromoted; its separately required canonical promotion approval is still pending. |
-| P18-D — Consumer Integration | TECHNICAL DESIGN REVIEW PASS; IMPLEMENTATION BLOCKED | Docs candidate `codex/phase18/P18DIntradaySellGoodsDesign` at `aa5f182f0f5a93f26092179d1708a1f3429fbb1f` passed independent refreshed review against then-current P18 State/canonical `18ecc6e` and P14 State `f8a61fe`. Implementation remains blocked on canonical promotion of the independently validated P18-C adapter integration and the serialized `SimulationRuntime` ownership window. The adapter is a separately bounded capability, not the P18-D live consumer. P11 must own the exact intraday capture record linked to the P18-A accepted reference. The P18-D SellGoods slice must add an economy-owner operation receipt with immutable proposal correlation and current-truth execution snapshot; no such receipt currently exists. P14 remains excluded without a reviewed temporal owner adapter; no blanket P20/P19 dependency is implied. |
+| P18-C — External-Input/Deferral Adapter | PROMOTED at integration tip `b75c5b8` (code `a535441`) | Code integration `a535441` was assembled against P18 State tip `eabc1c2` (promoted extension code `1dd0479`) and promoted to `codex/phase18/canonical` at `b75c5b8`. Exact-tip independent implementation review passed. Temporal identity/cardinality, focused domain suites, ALL EditMode 1794/1794, complete Smoke 5/5, and diff-check passed. The promoted candidate State still carried stale pending-gate wording; this docs-only correction reconciles it. |
+| P18-D — Consumer Integration | DESIGN REVALIDATION REQUIRED; IMPLEMENTATION BLOCKED | Docs candidate `codex/phase18/P18DIntradaySellGoodsDesign` at `aa5f182f0f5a93f26092179d1708a1f3429fbb1f` passed independent review against then-current P18 State/canonical `18ecc6e` and P14 State `f8a61fe`; refresh it against promoted P18 State `b75c5b8` and P14 State `4caecbb`. The P18-C adapter is now promoted as a separately bounded capability, not the P18-D live consumer. Implementation remains blocked on a serialized `SimulationRuntime` ownership window and owner prerequisites: P11 must own exact intraday capture linked to the accepted P18-A reference, and the economy owner must provide an operation receipt with immutable proposal correlation and a current-truth execution snapshot. P14 remains excluded without a reviewed temporal owner adapter; no blanket P20/P19 dependency is implied. |
 
 ## P18-C implementation ownership
 
@@ -61,7 +61,8 @@ availability transitions and post-advance handoff without adding a second
 scheduler. This bounded core does not own `SimulationRuntime.cs`, `CityRuntime.cs`,
 or the P14 material-flow files. It does not claim that the legacy daily runtime
 has migrated; a selected live consumer and daily compatibility adapter remain
-P18-D integration work after P18-C promotion. The implementation review
+P18-D integration work after its design and owner prerequisites are refreshed.
+The implementation review
 requested corrections to same-tick causal request handling and executor retry
 semantics; both were addressed and independently re-reviewed at the exact
 promoted tip. Promotion was approved and fast-forwarded to
@@ -91,8 +92,9 @@ promoted tip. Promotion was approved and fast-forwarded to
 **P18-C external-input/deferral adapter:** independent design review PASS at
 exact tip `358c65c85e1eafdd91ef4a6553ba3b0a8c4af249`; the implementation is
 assembled and validated at code integration `a535441` against promoted P18-A
-extension `1dd0479`. Exact-tip implementation review and post-extension
-validation passed; canonical promotion is pending. The bounded design specifies
+extension `1dd0479`, then promoted to `codex/phase18/canonical` at integration
+tip `b75c5b8`. Exact-tip implementation review and post-extension validation
+passed. The bounded design specifies
 a P18-C request-state owner,
 C-owned sequence allocation separate from lifecycle source sequences,
 P11-owned exact temporal capture linked to P18-A's accepted reference, exact
@@ -110,7 +112,9 @@ passed code/composition and requested only that this State point to the current
 candidate and retain validation evidence. This record corrects those two items.
 Follow-up integration review at `6b3bec5` passed the corrected State and
 retained XML evidence, confirming local/tracking/remote synchronization and a
-clean range diff. The candidate has not been promoted.
+clean range diff. At that pre-extension stage, this candidate had not been
+promoted; the preserved implementation was subsequently rebuilt and
+revalidated against the promoted P18-A extension below.
 
 After canonical advanced from `311baa9` to `99cac77`, the adapter integration
 was refreshed at `e2af495` and recorded at `e4ff318`; exact-tip review and the
@@ -124,8 +128,9 @@ gates passed on code integration `a535441`; docs-only status follow-ups are
 `fe9a479` and `38999cb`. The independent exact-tip implementation review
 passed on `a535441` and confirmed that the current timeline continuation
 barrier prevents ordinary due work from dispatching until successful-advance
-handoff completes. The adapter is ready for its separate canonical promotion
-gate; no promotion is claimed.
+handoff completes. The adapter was promoted at canonical integration tip
+`b75c5b8`; this State correction reconciles the promoted candidate's stale
+pending-gate statement.
 
 Temporal identity/cardinality was revalidated: `PersonId` identifies the
 decision actor while `ActivityInstanceId` remains distinct; one-actor fixtures
@@ -161,7 +166,11 @@ replace the referenced evidence.
 
 The complete EditMode run includes the current P9/P11 compatibility tests; the
 earlier upstream P9-B/P11 run at `2d6b3ce` remains supporting evidence, not a
-substitute for this historical candidate result. P18-D remains BLOCKED pending canonical promotion of the independently validated P18-C adapter against current P18-A extension `1dd0479`, plus the serialized `SimulationRuntime` ownership window. The adapter does not
+substitute for this historical candidate result. P18-C adapter promotion to
+canonical `b75c5b8` satisfies that P18-D dependency. P18-D remains BLOCKED on
+the serialized `SimulationRuntime` ownership window, P11-owned exact temporal
+capture, and the economy-owner operation receipt with immutable proposal
+correlation and current-truth execution snapshot. The adapter does not
 implement the P18-D SellGoods consumer or claim a daily runtime migration.
 
 Post-extension validation on code integration `a535441` passed:
@@ -217,19 +226,17 @@ the advancing call; and conflicting indexed facts are rejected by due instant
 and causal sequence. Candidate validation passed LogicalTimeline 35/35, ALL
 EditMode 1756/1756, official complete Smoke 5/5, and `git diff --check`
 (worker-reported results; the independent review did not rerun Unity). The
-corrected candidate was promoted through integration tip `1dd0479` to `codex/phase18/canonical`. P18-D
-implementation remains blocked on canonical promotion of the independently
-validated P18-C external-input/deferral adapter and the separate
-`SimulationRuntime` ownership window.
+corrected candidate was promoted through integration tip `1dd0479` to `codex/phase18/canonical`. P18-C's external-input/deferral adapter was subsequently promoted at `b75c5b8`. P18-D implementation remains blocked on its P11/economy-owner prerequisites and the separate `SimulationRuntime` ownership window.
 
 P20 Entry Architecture `2f9c93b588ffccaae60aedf6c16191c1251f6a1f` and
 Technical Design `6a0d16494735853ce35a8974ab348551650afd6b` passed their prior
 design review; the current-base refresh `318cacb` independently passed review
-against P18 canonical State `eabc1c2` and code `1dd0479`. The refresh records
+against P18 State `eabc1c2` and code `1dd0479`. The refresh records
 continuation-barrier ordering, returned-fact publication before ordinary
-same-instant work, and post-successful-advance P18-C handoff. P20-A — Synthetic
-Multi-participant Operation was accepted as bounded scope only on 2026-09-27;
-the two-Person rule remains fixture-only. No P20 capability is yet promoted.
-Implementation is running in isolated branch
-`codex/phase20/P20AMultiParticipantOperation` from current canonical base.
-P20 remains independent of P18-D and P19.
+same-instant work, and post-successful-advance P18-C handoff. P18-C adapter
+promotion at `b75c5b8` changes no ActivityLifecycle/P20 files, and the
+synthetic P20-A slice does not consume the adapter; the implementation remains
+in progress from prior base `eabc1c2` and must be integrated and revalidated
+against `b75c5b8`. P20-A — Synthetic Multi-participant Operation was accepted
+as bounded scope only on 2026-09-27; the two-Person rule remains fixture-only.
+No P20 capability is yet promoted. P20 remains independent of P18-D and P19.
