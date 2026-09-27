@@ -1,7 +1,6 @@
 # Phase 10 State — Local Generation & Pre-start Authoring
 
-**Status:** PHASE 10 IN PROGRESS — P10-A implementation review passed;
-canonical promotion is pending. No P10 runtime capability is canonical yet.
+**Status:** PHASE 10 IN PROGRESS — P10-A is promoted; Phase 10 remains open.
 
 **Architecture baseline:** `c285466c355103d3637ac165246591b72eb7bda0`.
 
@@ -60,10 +59,11 @@ finite topology, and City/Site compatibility. The focused suites and full
 EditMode/Smoke gates are specified in
 `docs/design/PHASE10_A_CHECKPOINT_RECORD.md`.
 
-The feature and integration candidates are not canonical until the explicit
-promotion gate is satisfied. Phase 10 remains open until its approved
-objective and any separately accepted mandatory checkpoints are complete
-with an independent closure review and a formal State closure marker.
-
-Canonical promotion still requires the integration regression gates,
-`git diff --check`, and explicit human approval.
+The user approved promotion after the exact-tip independent review, regression
+gates, and promotion preflight passed. `codex/phase10/canonical` was created at
+and pushed to `9501bf076d506fb64d6ee3e6d178574fff36e153`; this record is a
+documentation-only follow-up on the integration branch. P10-A now delivers the
+bounded Ruin/LocalTopology runtime capability described above. Phase 10 remains
+open until its approved objective and any separately accepted mandatory
+checkpoints are complete with an independent closure review and a formal State
+closure marker.
