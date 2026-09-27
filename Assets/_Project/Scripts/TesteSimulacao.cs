@@ -12,6 +12,10 @@ public class TesteSimulacao : MonoBehaviour
     private List<NpcRuntime> npcRuntimeList = new List<NpcRuntime>();
     private List<CityRuntime> cityRuntimeList = new List<CityRuntime>();
     private ExplorableSiteStore explorableSiteStore;
+    private LocalTopologyStore genesisLocalTopologyStore;
+    private LegacySpatialAnchorBindingStore genesisLegacySpatialAnchorBindingStore;
+    private P10RuinLocalTopologyCandidate p10RuinCandidate;
+    private ExplorableSiteRuntime p10RuinRuntime;
 
     private readonly List<INpcActionProvider> actionProviders = new List<INpcActionProvider>();
     private Dictionary<CityData, List<CityRuntime>> cityRuntimesByDefinition = new Dictionary<CityData, List<CityRuntime>>();
@@ -114,6 +118,7 @@ public class TesteSimulacao : MonoBehaviour
     {
         if (publishedComposition != null) return;
         string profileFingerprint = null;
+        string selectedP9ProfileFingerprint = null;
         System.Collections.Generic.IReadOnlyList<string> profileProvenanceRecords = null;
         SimulationGenesisPipeline.ExecuteStages(stageId =>
         {
@@ -132,6 +137,7 @@ public class TesteSimulacao : MonoBehaviour
                     genesisSpatialAuthority = new SpatialAuthorityStore();
                     profileFingerprint = SimulationGenesisPipeline.CreateFingerprint(
                         simulationConfig, effectiveConfiguration, calendarDefinition, out profileProvenanceRecords);
+                    selectedP9ProfileFingerprint = profileFingerprint;
                     AppendScenarioDiagnostics(effectiveConfiguration);
                     runtimeIdAllocator = new RuntimeIdAllocator();
                     explorableSiteKnowledgeSystem = new ExplorableSiteKnowledgeSystem();
@@ -160,6 +166,15 @@ public class TesteSimulacao : MonoBehaviour
                 case SimulationGenesisPipeline.GeographyStageId:
                     ComposeAuthoredGeography();
                     break;
+                case P10RuinLocalTopologyGenesis.StageId:
+                    ComposeP10RuinLocalTopology();
+                    profileFingerprint = SimulationGenesisPipeline.CreateP10CombinedFingerprint(
+                        selectedP9ProfileFingerprint,
+                        profileProvenanceRecords,
+                        p10RuinCandidate,
+                        out System.Collections.Generic.IReadOnlyList<string> combinedProvenanceRecords);
+                    profileProvenanceRecords = combinedProvenanceRecords;
+                    break;
                 case "p9.genesis.authored-actors/v1":
                     NpcRuntimeList.Clear();
                     npcRuntimesByDefinition.Clear();
@@ -185,12 +200,18 @@ public class TesteSimulacao : MonoBehaviour
                         explorableSiteKnowledgeSystem: explorableSiteKnowledgeSystem, expeditionSystem: expeditionSystem,
                         configuration: effectiveConfiguration, randomSource: authoritativeRandomSource,
                         calendarDefinition: calendarDefinition,
-                        spatialAuthorityStore: genesisSpatialAuthority);
+                        spatialAuthorityStore: genesisSpatialAuthority,
+                        localTopologyStore: genesisLocalTopologyStore,
+                        legacySpatialAnchorBindingStore: genesisLegacySpatialAnchorBindingStore);
                     ValidateCandidateProfile();
                     break;
                 case "p9.genesis.publish/v1":
                     publishedComposition = new SimulationBootstrapComposition(
-                        new SimulationGenesisManifest(simulationConfig, effectiveConfiguration, calendarDefinition, profileFingerprint, profileProvenanceRecords), simulationTime, calendarDefinition, spatialNetwork, domainEventStore,
+                        new SimulationGenesisManifest(
+                            simulationConfig, effectiveConfiguration, calendarDefinition,
+                            selectedP9ProfileFingerprint, profileFingerprint, profileProvenanceRecords,
+                            P10RuinLocalTopologyGenesis.IsEnabled(simulationConfig)),
+                        simulationTime, calendarDefinition, spatialNetwork, domainEventStore,
                         historyStore, scheduledDirectiveStore, decisionStore, npcChronicleService,
                         npcChronicleFormatter, travelPartyStore, travelPartySystem, simulationRuntime,
                         explorableSiteStore, expeditionStore, expeditionSystem);
@@ -199,7 +220,29 @@ public class TesteSimulacao : MonoBehaviour
                     throw new System.InvalidOperationException("Undeclared authored genesis stage: " + stageId);
             }
             stageCompleted?.Invoke(stageId);
-        }, simulationConfig != null && simulationConfig.useAuthoredGeographyProfile);
+        },
+        simulationConfig != null && simulationConfig.useAuthoredGeographyProfile,
+        P10RuinLocalTopologyGenesis.IsEnabled(simulationConfig));
+    }
+
+    private void ComposeP10RuinLocalTopology()
+    {
+        p10RuinCandidate = P10RuinLocalTopologyGenesis.CreateCandidate(simulationConfig, genesisSpatialAuthority);
+        genesisLocalTopologyStore = new LocalTopologyStore(runtimeIdentityRegistry);
+        if (!P10RuinLocalTopologyGenesis.TryCompose(
+                p10RuinCandidate,
+                runtimeIdAllocator,
+                runtimeIdentityRegistry,
+                spatialNetwork,
+                explorableSiteStore,
+                genesisSpatialAuthority,
+                genesisLocalTopologyStore,
+                out p10RuinRuntime,
+                out _,
+                out genesisLegacySpatialAnchorBindingStore,
+                out string diagnostic))
+            throw new System.InvalidOperationException("P10 Ruin topology genesis stage failed before publication: " + diagnostic);
+        AddExplorableSiteRuntimeByDefinition(p10RuinRuntime.Definition, p10RuinRuntime);
     }
 
     private void ComposeAuthoredGeography()
@@ -223,11 +266,47 @@ public class TesteSimulacao : MonoBehaviour
 
     private void ValidateCandidateProfile()
     {
+        int p10SiteCount = P10RuinLocalTopologyGenesis.IsEnabled(simulationConfig) ? 1 : 0;
         if (CityRuntimeList.Count != simulationConfig.Cities.Count
             || NpcRuntimeList.Count != simulationConfig.Npcs.Count
-            || explorableSiteStore.Sites.Count != simulationConfig.ExplorableSites.Count
+            || explorableSiteStore.Sites.Count != simulationConfig.ExplorableSites.Count + p10SiteCount
             || scheduledDirectiveStore.Directives.Count != simulationConfig.ScheduledDirectives.Count)
             throw new System.InvalidOperationException("Authored bootstrap output inventory does not match its selected profile.");
+
+        if (p10SiteCount == 1)
+        {
+            if (p10RuinCandidate == null || p10RuinRuntime == null
+                || p10RuinRuntime.Definition != simulationConfig.authoredP10RuinSite
+                || p10RuinRuntime.Definition.kind != ExplorableSiteKind.Ruin
+                || !simulationRuntime.SpatialAuthorityStore.TryGet(p10RuinCandidate.Location.Id, out LocationRecord selectedLocation)
+                || selectedLocation.AnchorHexId != p10RuinCandidate.Anchor.Id
+                || !simulationRuntime.LegacySpatialAnchorBindingStore.TryGet(
+                    new SpatialAnchorOwnerId(SpatialAnchorOwnerKind.ExplorableSite, p10RuinRuntime.RuntimeId),
+                    out LocationId boundLocation)
+                || boundLocation != p10RuinCandidate.Location.Id)
+                throw new System.InvalidOperationException("P10 Ruin identity or selected P8 Location anchor handoff is incomplete.");
+
+            LocalTopologySemanticOwnerReference semanticOwner = new LocalTopologySemanticOwnerReference(
+                p10RuinRuntime.DefinitionId, p10RuinCandidate.Location.Id);
+            if (genesisLocalTopologyStore == null
+                || !genesisLocalTopologyStore.TryGetTopologyForSemanticOwner(semanticOwner, out LocalTopologyRuntime topology)
+                || !genesisLocalTopologyStore.TryResolveSemanticOwnerRuntimeId(semanticOwner, out string resolvedRuntimeId)
+                || !string.Equals(resolvedRuntimeId, p10RuinRuntime.RuntimeId, System.StringComparison.Ordinal)
+                || topology.Places.Count != 3
+                || topology.EntryPointCount != 1
+                || topology.Connections.Count != 2
+                || !simulationRuntime.SpatialAuthorityStore.ValidateInvariants(genesisLocalTopologyStore).IsValid)
+                throw new System.InvalidOperationException("P10 semantic owner resolution or composed finite LocalTopology validation failed.");
+
+            LocalPlaceRuntime entry = topology.EntryPoints[0];
+            if (!simulationRuntime.SpatialAuthorityStore.TryResolve(
+                    SpatialReference.ForSubLocation(topology.Owner, entry.RuntimeId),
+                    genesisLocalTopologyStore,
+                    out SpatialResolution resolution,
+                    out SpatialAuthorityFailure resolutionFailure)
+                || resolution?.Location?.Id != p10RuinCandidate.Location.Id)
+                throw new System.InvalidOperationException("P10 entry point did not resolve through the selected P8 Location: " + resolutionFailure);
+        }
 
         int expectedRouteCount = 0;
         foreach (CityData city in simulationConfig.Cities)

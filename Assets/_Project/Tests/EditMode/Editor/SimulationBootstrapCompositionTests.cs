@@ -183,6 +183,7 @@ public sealed class SimulationBootstrapCompositionTests
             "Assets/_Project/Data/Simulations/Simulation-GeneralTest.asset");
         Assert.That(config, Is.Not.Null);
         Assert.That(config.useAuthoredGeographyProfile, Is.True);
+        Assert.That(config.authoredP10RuinSite, Is.Not.Null);
         GameObject simulationObject = new GameObject("selected-sample-profile-p9b-test");
         simulationObjects.Add(simulationObject);
         TesteSimulacao simulation = simulationObject.AddComponent<TesteSimulacao>();
@@ -191,7 +192,22 @@ public sealed class SimulationBootstrapCompositionTests
         simulation.Start();
 
         SpatialAuthorityStore authority = simulation.Bootstrap.SpatialAuthority;
-        Assert.That(simulation.Bootstrap.ProfileContractIdentity, Is.EqualTo(SimulationGenesisPipeline.GeographyProfileContractIdentity));
+        Assert.That(simulation.Bootstrap.ProfileContractIdentity, Is.EqualTo(P10RuinLocalTopologyGenesis.ContractIdentity));
+        Assert.That(simulation.Bootstrap.Manifest.SelectedP9ContractIdentity, Is.EqualTo(SimulationGenesisPipeline.GeographyProfileContractIdentity));
+        Assert.That(simulation.Bootstrap.Manifest.SelectedP9SchemaVersion, Is.EqualTo(2));
+        Assert.That(simulation.Bootstrap.Manifest.SelectedP9ProfileFingerprint, Is.Not.Empty);
+        Assert.That(simulation.Bootstrap.Manifest.Fingerprint, Is.Not.EqualTo(simulation.Bootstrap.Manifest.SelectedP9ProfileFingerprint));
+        Assert.That(simulation.Bootstrap.Manifest.SchemaVersion, Is.EqualTo(P10RuinLocalTopologyGenesis.ContractSchemaVersion));
+        Assert.That(simulation.Bootstrap.Manifest.StageOrder, Is.EqualTo(new[]
+        {
+            "p9.genesis.resolve-profile/v1",
+            "p9.genesis.authored-world/v1",
+            SimulationGenesisPipeline.GeographyStageId,
+            "p9.genesis.authored-actors/v1",
+            P10RuinLocalTopologyGenesis.StageId,
+            "p9.genesis.validate-profile/v1",
+            "p9.genesis.publish/v1"
+        }));
         Assert.That(authority.HexCount, Is.EqualTo(1));
         Assert.That(authority.LocationCount, Is.EqualTo(1));
         Assert.That(authority.TryGet(new HexId("hex/sample-origin"), out HexRecord hex), Is.True);
@@ -207,6 +223,54 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(authority.ScaleContext.Unit, Is.EqualTo("km"));
         Assert.That(simulation.CurrentDay, Is.Zero);
         Assert.That(simulation.History.HistoricalEvents, Is.Empty);
+
+        ExplorableSiteRuntime ruin = simulation.ExplorableSites.Sites.Single(site => site.Definition == config.authoredP10RuinSite);
+        Assert.That(ruin.Definition.kind, Is.EqualTo(ExplorableSiteKind.Ruin));
+        Assert.That(simulation.ExplorableSites.Sites.Count, Is.EqualTo(config.ExplorableSites.Count + 1));
+        Assert.That(simulation.Runtime.LegacySpatialAnchorBindingStore.TryGet(
+            new SpatialAnchorOwnerId(SpatialAnchorOwnerKind.ExplorableSite, ruin.RuntimeId), out LocationId siteLocation), Is.True);
+        Assert.That(siteLocation.Value, Is.EqualTo("location/sample-origin"));
+        Assert.That(simulation.ExplorableSites.TryGetByRuntimeId(ruin.RuntimeId, out ExplorableSiteRuntime resolvedRuin), Is.True);
+        Assert.That(resolvedRuin, Is.SameAs(ruin));
+
+        LocalTopologySemanticOwnerReference owner = new LocalTopologySemanticOwnerReference(ruin.DefinitionId, siteLocation);
+        LocalTopologyStore topologyStore = simulation.Runtime.LocalTopologyStore;
+        Assert.That(topologyStore.TryGetTopologyForSemanticOwner(owner, out LocalTopologyRuntime topology), Is.True);
+        Assert.That(topology.Owner.SemanticOwner.StableKey, Is.EqualTo(owner.StableKey));
+        Assert.That(topology.Owner.OwnerRuntimeId, Is.EqualTo(ruin.RuntimeId));
+        Assert.That(topologyStore.TryResolveSemanticOwnerRuntimeId(owner, out string resolvedRuntimeId), Is.True);
+        Assert.That(resolvedRuntimeId, Is.EqualTo(ruin.RuntimeId));
+        Assert.That(topologyStore.TryResolveSemanticOwner(owner, out ExplorableSiteRuntime resolvedSemanticSite), Is.True);
+        Assert.That(resolvedSemanticSite, Is.SameAs(ruin));
+        Assert.That(topology.Places.Select(place => place.DisplayName), Is.EqualTo(new[] { "Entrance", "Courtyard", "Inner Chamber" }));
+        Assert.That(topology.Places.Select(place => place.SemanticId), Is.EqualTo(new[]
+        {
+            P10RuinLocalTopologyGenesis.CreatePlaceSemanticId(ruin.DefinitionId, "entrance"),
+            P10RuinLocalTopologyGenesis.CreatePlaceSemanticId(ruin.DefinitionId, "courtyard"),
+            P10RuinLocalTopologyGenesis.CreatePlaceSemanticId(ruin.DefinitionId, "inner-chamber")
+        }));
+        Assert.That(topology.EntryPoints.Select(place => place.DisplayName), Is.EqualTo(new[] { "Entrance" }));
+        Assert.That(topology.Connections.Select(connection => connection.SemanticId), Is.EqualTo(new[]
+        {
+            P10RuinLocalTopologyGenesis.CreateConnectionSemanticId(ruin.DefinitionId, "entrance-to-courtyard"),
+            P10RuinLocalTopologyGenesis.CreateConnectionSemanticId(ruin.DefinitionId, "courtyard-to-inner-chamber")
+        }));
+        Assert.That(authority.ValidateInvariants(topologyStore).IsValid, Is.True);
+        Assert.That(authority.TryResolve(
+            SpatialReference.ForSubLocation(topology.Owner, topology.EntryPoints[0].RuntimeId),
+            topologyStore,
+            out SpatialResolution entryResolution,
+            out SpatialAuthorityFailure entryFailure), Is.True, entryFailure.ToString());
+        Assert.That(entryResolution.Location.Id.Value, Is.EqualTo("location/sample-origin"));
+        Assert.That(simulation.Bootstrap.Manifest.CanonicalProvenanceRecords,
+            Has.Some.Contains("selected-p9-profile-fingerprint"));
+        Assert.That(simulation.Bootstrap.Manifest.CanonicalProvenanceRecords,
+            Has.Some.Contains("combined-stage-order"));
+
+        int expectedP9RouteCount = config.Cities.Sum(city => city.connections.Count)
+            + config.ExplorableSites.Count * 2;
+        Assert.That(simulation.SpatialNetwork.Routes.Count, Is.EqualTo(expectedP9RouteCount),
+            "P10 adds no regional travel route for the Ruin profile.");
     }
 
     [Test]

@@ -29,6 +29,8 @@ public class SimulationConfigData : ScriptableObject
     public string authoredScaleSourceVersion;
     public string authoredDistancePerNeighborStep;
     public string authoredScaleUnit;
+    [Header("Local Ruin Topology (P10-A profile)")]
+    public ExplorableSiteData authoredP10RuinSite;
     public float travelCostPerDay = 10f;
     public bool allowMerchantTradeRepositioning;
     public int maxMerchantTradeAmount = 5;
