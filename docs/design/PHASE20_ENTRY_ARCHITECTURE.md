@@ -20,12 +20,17 @@ promotes P18-A (`985c56c`) and P18-B
 `97b97c5` remains unpromoted. Promoted P18-A/B contracts inform entry and
 technical design. P18-B includes stale-node skipping without consuming the
 dispatch cap and the bounded ActivityLifecycle composition/owner-dispatch
-path. P20 must still revalidate
-that its stable instance/revision references, due-work invalidation, and
-coordinated transitions fit the promoted APIs. P18-C availability/decision
+path. P18-B's `TrySchedule` is an atomic full, nonempty participant-set
+operation; it does not expose a partial-acceptance scheduling API. Its start
+validator returns a bool/disposition and cannot atomically couple P20's
+synthetic effect with `Scheduled → Active`. P20 must design/review these
+missing interfaces and transaction boundary rather than treating them as
+delivered B behavior. P20 must also revalidate stable instance/revision
+references and due-work invalidation against the promoted APIs. P18-C availability/decision
 capability remains unpromoted; runtime execution remains `WAIT_DEPENDENCY` on
-the relevant promoted P18-A/B/C capabilities and independent technical design
-review. P18 work does not wait for P20, so this adds no P18 → P20 cycle. There
+relevant P18-C capability and independently reviewed P20 API/transaction
+design, in addition to revalidation against promoted A/B. P18 work does not
+wait for P20, so this adds no P18 → P20 cycle. There
 is no blanket dependency on all P18-D migrations, P19, P8 travel, P12/P13
 persistence, or a persistent Group/Organization.
 
@@ -50,25 +55,31 @@ Person cannot accept, decline, or recruit on behalf of the other. Decisions use
 only the deciding Person's permitted Knowledge. Either decline leaves the
 instance unformed and not executable.
 
-On acceptance, the fixture records a commitment/reservation for the operation's
-future interval under the relevant temporal/availability authority. Both
-participants reserve the same fixture interval for simplicity. This is a
-scoped test choice, not a rule that every activity or role shares one interval.
-Acceptance, reservation, availability at start, and execution are distinct
-facts. Reservation creation must be coherent for the accepting participant and
-must reject a known interval conflict without partially changing that
-participant's commitment state.
+The exact relationship between each acceptance and reservation remains a P20
+design question. P18-B `TrySchedule` accepts an atomic full nonempty set; it
+does not provide partial acceptance. P20 must specify whether individual
+decisions/commitment requests are retained in a separate proposal owner and
+how a complete accepted set is assembled and submitted to `TrySchedule`.
+Both participants may use the same fixture interval for simplicity; this is a
+scoped test choice, not a universal activity/role rule. Acceptance,
+reservation, availability at start, and execution remain distinct facts.
 
 ## Formation, scheduled start, and terminal outcomes
 
-The instance becomes scheduled only after both distinct required Persons have
-accepted and their matching reservations are present. A partial proposal may
-remain pending, but cannot start. The existing P18 timeline/scheduler owns the
+The intended proving outcome schedules only after both distinct required
+Persons have accepted and matching reservations are present. P20 still needs
+an API/design for retaining partial per-Person decisions and submitting the
+complete set to P18-B `TrySchedule`; partial Proposed state is not an existing
+P18-B scheduling capability. The existing P18 timeline/scheduler owns the
 logical start boundary; the activity layer does not create a second clock or
 authoritative agenda.
 
-At that boundary, one coordinated validation checks, before any operation
-effect:
+At that boundary, P18-B's start validator supplies a bool/disposition result;
+it does not transactionally couple `Scheduled → Active` with a P20 operation
+effect. P20 needs a reviewed coordinated owner/API boundary that validates the
+complete required set and publishes the lifecycle transition plus both
+participant-specific synthetic results together, or publishes neither. Its
+checks must include:
 
 - the instance is still scheduled and both required `PersonId`s remain present;
 - both decisions and reservations match the instance and required interval;
@@ -76,14 +87,16 @@ effect:
   required participant; and
 - the operation has not already started or applied its effects.
 
-Validation and start publication form one coherent transition. A stale or
-conflicting participant state cannot start only half of the required activity
-or publish one participant's effect before the other is accepted for start.
-Participant iteration and any result ordering must be deterministic by a
+That atomicity is a P20-required API/transaction design, not current P18-B
+behavior. A stale or conflicting participant state must not start half the
+activity or publish only one participant's effect. Participant iteration and
+any result ordering must be deterministic by a
 semantic order, such as stable `PersonId` order where order is otherwise
 irrelevant.
 
-The fixture exposes these outcomes explicitly:
+The fixture requires explicit dispositions, but the transitions below are
+unresolved P20 interface and transaction work; they are not implied by
+`TrySchedule` or the bool/disposition start validator:
 
 | Condition | Instance outcome | Reservation outcome |
 |---|---|---|
@@ -93,11 +106,13 @@ The fixture exposes these outcomes explicitly:
 | Explicit cancellation before start | `Cancelled` | Release both instance reservations as one transition. |
 | Both participants pass coordinated start validation | `Started` | Consume/close the start reservations according to the P18 commitment contract. |
 
-These are terminal outcomes for the proving slice. It does not support automatic
-recruitment, retry, withdrawal after start, mid-execution composition changes,
-or rollback of already-applied effects. Those require a separately bounded
-consumer contract. Cancellation and failed start preserve the instance's
-causal outcome; they do not erase prior decisions or silently rewrite history.
+These are target outcomes for the proving slice, subject to P20 API design and
+review. It does not support automatic recruitment, activity retry, withdrawal
+after start, mid-execution composition changes, or rollback of already-applied
+effects. Stale descriptor invalidation/retry behavior remains required P20
+design and targeted validation. Cancellation and failed start preserve the
+instance's causal outcome; they do not erase prior decisions or silently
+rewrite history.
 
 ## Effects and authority
 
@@ -108,12 +123,14 @@ and the inputs explicitly supplied to that operation. It must not read another
 Person's hidden Knowledge or make outcomes identical merely because execution
 is shared.
 
-The activity lifecycle coordinates validation and the start boundary; it does
-not own a universal effects engine or mutate arbitrary domain truth. For this
-fixture, one synthetic domain authority owns both test results and exposes a
-single all-or-none application boundary after coordinated validation. A future
-consumer spanning multiple authorities needs its own reviewed coherent commit
-contract; this entry proposal does not invent cross-domain transactions.
+The promoted ActivityLifecycle composition/owner-dispatch path coordinates
+lifecycle dispatch; it does not supply P20's all-or-none coupling of the
+`Scheduled → Active` transition with a synthetic effect. P20 design must
+specify that bounded API/transaction for this fixture. It does not imply a
+universal effects engine or authority to mutate arbitrary domain truth. A
+future consumer spanning multiple authorities needs its own reviewed coherent
+commit contract; this entry proposal does not invent cross-domain
+transactions.
 
 ## Causal state and determinism
 
@@ -133,10 +150,13 @@ order cannot select a participant or result.
 ## Design and review gates
 
 Before any implementation is considered, bounded technical design must map the
-proposed transitions onto promoted P18-A/B/C contracts and settle concrete
-ownership/interfaces, reservation conflict and stale-state handling, atomic
-start/effect publication, cancellation/release behavior, deterministic
-ordering, reconstruction inputs, and targeted regression coverage. Independent
+proposed transitions onto promoted P18-A/B contracts and the P18-C design, then
+specify partial-decision retention, complete-set `TrySchedule` submission,
+reservation conflict/rollback, stale revision invalidation/retry, decline and
+cancel/release, and the coordinated `Scheduled → Active` plus synthetic-effect
+transaction. P18-B's bool/disposition start validator does not provide effect
+coupling. Targeted validation must cover these APIs/transactions, deterministic
+ordering, and reconstruction inputs. Independent
 technical review must pass before implementation readiness. Independent entry
 review of this proposal passed on the entry candidate; it is not a substitute
 for that later technical review.
