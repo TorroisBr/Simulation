@@ -1,26 +1,17 @@
 # Phase 12 `UnityBootstrap-Daily-v1` Checkpoint Contract Proposal — UNAPPROVED
 
-**Status:** proposed checkpoint contract; independent review **PASS** for
-content commit `a9699e46aaffd12616353975b447caed12ff3d27`. The review used
-`codex/phase8/canonical` at `c5b2e06b534f4b2af38f10e6510b10800aa8b28c`,
-including architecture refresh `c285466c355103d3637ac165246591b72eb7bda0`,
-and both alignment records: intraday/extensibility at `c285466c355103d3637ac165246591b72eb7bda0`
-and multi-participant activity at `4b6dd1d38cffeaf3cc1ac3effea0f8ede8771194`.
-No blockers were found. If P9 genesis outputs enter this supported profile,
-recheck their stage/contributor identity, deterministic order, random context,
-provenance and output-capture coverage; capture generated outputs rather than
-rerunning historical genesis. Formal human acceptance remains pending. This
-document assigns no accepted Phase 12 checkpoint IDs, changes no Phase
-Brief/State/Roadmap, and authorizes no code implementation. It makes no claim
-that capture, hydration, or save/load parity currently exists.
+**Status:** proposed checkpoint contract for planning identifier `P12-A`; it
+is not accepted or authorized for implementation. The earlier independent
+review at `a9699e4` and targeted review against P8 `77f3e1a` predate the current
+P9 manifest mapping and do not review this revision. Independent review of the
+exact refreshed contract, Brief and technical-design tips remains pending.
+This proposal changes no canonical capability and makes no claim that capture,
+hydration, or save/load parity currently exists.
 
-**Targeted current-baseline revalidation:** the refreshed daily-only technical
-design was independently rechecked against `codex/phase8/canonical` at
-`77f3e1a47a1e007492a794ea777d681a21a36d09`, including P8-E promotion
-`d95b60d174cb0b17df09e2775b3cbd134c74b21f`, architecture baseline
-`c285466c355103d3637ac165246591b72eb7bda0`, and both alignment records. This
-preserves the P8-C/P8-D identity and route-plan contracts and keeps P18/P19/P20
-state conditional and out of the first daily profile.
+**Historical targeted revalidation:** the earlier review used P8 canonical
+`77f3e1a47a1e007492a794ea777d681a21a36d09` and predates the current P9
+manifest mapping. It remains historical evidence only; it is not a current-base
+review of this candidate.
 
 **Profile:** `UnityBootstrap-Daily-v1`, the bounded daily profile recommended
 by the refreshed entry and technical proposals. Its scope is the validated
@@ -30,13 +21,14 @@ advance. This proposal adds no cross-host guarantee, P13 history/fork behavior,
 generated P9/P10 worlds, P11 pending commands, P19 modules, or P20 shared
 activities.
 
-**Baseline:** current `codex/phase8/canonical` at
-`77f3e1a47a1e007492a794ea777d681a21a36d09`, including P8-E promotion
-`d95b60d174cb0b17df09e2775b3cbd134c74b21f` and architecture/roadmap refresh
-`c285466c355103d3637ac165246591b72eb7bda0`. P8-A through P8-E are canonical.
+**Current canonical references:** P8 State `470667d37863384edadb3d93ef64d8004aff46a3`;
+architecture `c285466c355103d3637ac165246591b72eb7bda0`; P9-A code promotion
+`43f08b3` / closure State `96f2c1a`; P11 code promotion `0cd4281` / closure
+State `308e24d`. Both architecture alignment records remain current. P10 has
+no approved checkpoint or State and remains `WAIT_DEPENDENCY`.
 Refreshed P12 entry proposal:
 `a257092471607520f7da7f056f465bbb3f5384d3`; current P12 technical proposal
-base: `f62e4fa16fca9de274515a693c7d71a1d605b129`.
+refresh: `e0023d2` on `codex/phase12/ContinuationTechnicalDesign`.
 
 **Authority:** `docs/SIMULATION_ARCHITECTURE.md` controls semantic boundaries.
 The Phase 12 Brief, refreshed P12 entry/technical proposals, Phase 8 State,
@@ -258,16 +250,18 @@ omits causal fields.
   applied and pending causal work. Do not infer an Activity-to-single-actor
   relationship or split a shared instance into actor-owned copies. P20 is not
   a blanket dependency for this daily profile.
-- **P9/P10:** generated worlds/outputs and generation provenance are excluded.
-  Historical generation output must be captured rather than regenerated if a
-  future explicitly supported profile includes it. Before implementation,
-  revalidate the profile against promoted P9-A: if the P9 authored-genesis
-  manifest/version becomes part of the selected bootstrap composition, its
-  compatible identity and causal inputs must be explicitly captured or checked
-  without rerunning genesis.
-- **P11:** external command queues and pending actor-choice inputs are not
-  composed by the selected bootstrap and are excluded. Already-applied effects
-  remain represented by their owner truth, not replayed from record summaries.
+- **P9-A/P10:** P9-A's authored bootstrap is executed by the selected
+  `TesteSimulacao.InitializeSimulation` path and publishes a
+  `SimulationGenesisManifest`; its compatible identity/schema, fingerprint,
+  seed provenance, effective configuration/calendar, ordered stage identities
+  and dependencies, authored provenance, and first boundary are required
+  compatibility evidence. Preserve or validate this evidence without
+  rerunning genesis. P9/P10 generated-world content remains excluded; P10 is
+  not a dependency of P12-A.
+- **P11:** external command queues and pending actor-choice inputs are excluded.
+  Profile admission must query the promoted authorities and reject when either
+  is pending; already-applied effects remain represented by owner truth, not
+  replayed from record summaries.
 - **P19:** modules, module-owned state and retrofit are deferred. Official
   configuration-selected built-in providers remain distinct from code mods.
 - **P13:** historical reconstruction/fork of every actually simulated
@@ -276,17 +270,19 @@ omits causal fields.
 
 ## 7. Proposal boundary and review gates
 
-This document is a proposed checkpoint-contract input. It does not amend
-`SIMULATION_ARCHITECTURE.md`, Phase 12 Brief/State, Roadmap, or Phase 8 State.
-It assigns no accepted P12 checkpoint IDs and authorizes no implementation.
+This is the general proposed-contract source. The bounded candidate contract
+and planning identifier are recorded in
+[`P12-A_UNITYBOOTSTRAP_DAILY_V1_CHECKPOINT.md`](P12-A_UNITYBOOTSTRAP_DAILY_V1_CHECKPOINT.md).
+Neither record amends `SIMULATION_ARCHITECTURE.md`, establishes an accepted
+checkpoint, nor authorizes implementation.
 
-Remaining gates are formal human acceptance of this contract, then
-establishment of actual checkpoint scope/status and separate implementation
-authorization through the repository workflow. The owner export/hydration and
+Remaining gates are independent current-base review, formal acceptance of the
+checkpoint contract and scope/status through the repository workflow, and
+separate implementation authorization. The P9-A authored-bootstrap manifest
+is required compatibility evidence for the selected `TesteSimulacao` path;
+generated P9/P10 world content remains excluded. Owner export/hydration and
 parity requirements are capability gates for closure, not permission to claim
-completion before implementation evidence exists. The independent review's
-conditional P9 recheck applies only if genesis outputs enter the supported
-profile; they remain excluded from this proposal.
+completion before implementation evidence exists.
 
 No unresolved product or canonical semantic choice is required for this
 bounded profile by the reviewed documents. Expanding to cross-host/runtime
@@ -298,9 +294,9 @@ profile contract.
 
 - `docs/SIMULATION_ARCHITECTURE.md`, `docs/EXECUTION_MODEL.md`,
   `docs/phases/PHASE12_BRIEF.md`, and refreshed P12 entry/technical proposals.
-- Canonical `docs/PHASE8_STATE.md` at `c5b2e06`, including P8-D promotion and
-  the pending P8-E candidate; `INTRADAY_EXTENSIBILITY_ALIGNMENT.md` at
-  `c285466`; and `MULTIPARTICIPANT_ACTIVITY_ALIGNMENT.md` at `4b6dd1`.
+- Current canonical `docs/PHASE8_STATE.md` at `470667d`, P9-A promotion
+  `43f08b3` and closure State `96f2c1a`, P11 promotion `0cd4281` and closure
+  State `308e24d`, architecture `c285466`, and both alignment records.
 - `Assets/_Project/Scripts/TesteSimulacao.cs`, `SimulationConfigData.cs`,
   `SimulationRuntime.cs` composition and `AdvanceDay`/`TryAdvanceDay`,
   `RuntimeIdentity.cs`, `DeterministicRandom.cs`, and
