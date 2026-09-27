@@ -1,6 +1,6 @@
 # Phase 9 — Initial Deterministic Genesis v1
 
-**Authority:** planning entry subordinate to `../SIMULATION_ARCHITECTURE.md`. **Status:** P9-A and P9-B are promoted within their approved bounded scopes. A State-only Phase 9 closure candidate is under independent review; the canonical Phase remains open until that record is reviewed and promoted. See `../PHASE9_STATE.md`.
+**Authority:** planning entry subordinate to `../SIMULATION_ARCHITECTURE.md`. **Status:** Phase 9 is closed within the approved P9-A and P9-B scopes. The user-approved State-only closure record is canonical at `3bd0eb3`; see `../PHASE9_STATE.md` for evidence and preserved exclusions.
 
 ## Objective and closure
 
@@ -87,5 +87,7 @@ own regional geography. P9-B does not include Ruin/site binding, topology,
 travel, procedural terrain, City/Market, population, backstory, runtime
 expansion, Mod API/loader or P18/P20 activity facts. The intraday/extensibility
 and multi-participant alignments remain review constraints but add no P9-B
-capability or gameplay scope. P9-B is promoted at `d9a62d7`. Phase 9's
-separate formal closure record remains pending.
+capability or gameplay scope. P9-B is promoted at `d9a62d7`. The separate
+formal Phase 9 closure record was promoted at `3bd0eb3`; closure is limited to
+the two approved checkpoint boundaries and adds no later content or gameplay
+scope.
