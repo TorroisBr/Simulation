@@ -2,10 +2,21 @@
 
 **Profile:** `UnityBootstrap-Daily-v1` (the bounded SampleScene
 `Simulation-GeneralTest.asset` → `TesteSimulacao.InitializeSimulation` daily
-profile). **Reviewed source baseline:** P12 current-base candidate
-`d1a84143a3a212fe3addd5eb0a49b860ba1e8666`, with P8 `470667d`, P9 code
-`d9a62d7` / State-status `14a2e8e`, P11 `308e24d`, P18 `311baa9`, and
-architecture `c285466`.
+profile). **Reviewed source baseline:** docs-only P12 refresh parent
+`35b03ffc447c348f367a23872879ad5075ceacd0`, with P8 `470667d`, P9 code
+`d9a62d7` / State-status `14a2e8e`, P11 canonical `308e24d0744112e8f2b741521b8b3e4acb51ebbf`,
+P18 canonical/State `99cac77f7d66e8eb61fe68efb6959a4a5b7029ca`, P10 code
+`9501bf076d506fb64d6ee3e6d178574fff36e153`, P14-A promotion
+`c44904bb4b0a066eced1d7e8a773b7dc1eea76c0`, P20-A proposal refresh
+`2a03edadcb411c7ca7aa2d0c67ee8d36f972779e`, and architecture `c285466`.
+
+This remains a documentation-only cross-branch inventory. The P12 proposal
+branch does not inherit P11 executable code or P18 executable code; those
+canonical refs were inspected for composition facts and contract compatibility.
+Any later implementation/integration candidate must include the promoted P11
+runtime (or prove equivalent current composition) before claiming ActorChoice
+support. It must not imply that P18 code present in the review context is
+composed by the selected legacy daily bootstrap.
 
 This is a read-only gap inventory from the current runtime composition and
 owner APIs. **No profile-included group currently has a demonstrated complete,
@@ -21,7 +32,7 @@ The profile therefore remains `WAIT_DEPENDENCY`.
 | Semantic/runtime IDs, allocator/high-water marks, record sequence and identity indexes | No | No | IDs and registries are used by live owners and partly observed by diagnostics, but there is no complete immutable owner export or restore API that reinstates exact identities/counters and validates global uniqueness before publication. |
 | Bootstrap roots: Cities/markets/accounts, NPC roster and mutable NPC/action/inventory/plan state | No | No | Unity assets and `[SerializeField]` fields describe authored inputs and selected object fields; they do not capture all evolved owner state, revisions, causal ordering and references. Owner-specific value DTOs, exact admission checks and validated hydration constructors are missing. |
 | Population aggregates, Persons, residence/lifecycle/materialization and genealogy | No | No | In-memory stores, registrations, clones and transaction snapshots support runtime operations/rollback, not a complete immutable representation and staged restore of aggregate/Person/NPC links, dates, relations, allocator state and owner revisions. |
-| Knowledge, directives, actor-choice dispositions, travel parties, expeditions and other active commitments | No | No | Diagnostic projections cover selected fields; there is no owner export/hydration contract covering all observations/provenance/freshness, terminal input idempotency/sequence, commitment progress/costs and reciprocal references. The bootstrap has no external WorldCommand queue; any composed P11 store still needs complete terminal-history handling and in-flight rejection. |
+| Knowledge, directives, P11 actor-choice dispositions, travel parties, expeditions and other active commitments | No | No | Diagnostic projections cover selected fields; there is no owner export/hydration contract covering all observations/provenance/freshness, terminal input idempotency/sequence, commitment progress/costs and reciprocal references. P11's current canonical SimulationRuntime composes ActorChoiceStore by default even though the selected Unity bootstrap has no external WorldCommand service/queue; preserve complete records/dispositions, duplicate command IDs and next sequence, and reject in-flight inputs. The queue remains excluded. |
 | P9-A/P9-B genesis identity, P9-B authored inputs/outputs and selected P8-A Hex/Location/scale provenance | No | No | P9 can produce and validate the authored geography/manifest, but that pipeline is not a P12 export of evolved P8 owner truth or a staged hydration factory. P8-A exact facts and provenance must be captured and restored through the owning authority. |
 | Official daily-domain owner state selected by effective configuration (economy, demography, mortality, trade/Knowledge sharing, crime/social appraisal, and related provider context) | No | No | The profile has no inventory-backed exact export and hydrate implementation for every actually composed provider/owner, including causal random/draw context, mutations, revisions and reconstructible projections. A provider list or runtime clone does not close this gap. |
 | Core political, institutional, property, faction/support/recognition, force/manpower/position, conflict/war/battle authorities present in the selected runtime composition | No | No | Owner stores and some transaction snapshots/diagnostic records exist, but no complete profile export/hydration graph restores populated truth, relations, terminal outcomes, revisions and allocator state in owner dependency order. Empty-at-start does not establish handling of later populated state. |
@@ -42,6 +53,9 @@ must reject admission. P10 generated state, P18 intraday state, P19 module
 state, P20 shared activities, P13 historical reconstruction/fork guarantees,
 and P14-A material-flow state are outside P12-A. Their exclusion does not
 remove the P9-B/P8-A authored-geography provenance and truth required above.
+P10-A is promoted but its Ruin/LocalTopology profile is not selected here.
+P18-A/B/C are promoted on their canonical branch, but the selected bootstrap
+does not compose that separate temporal implementation; no P18 state is claimed.
 
 This inventory records implementation evidence and gaps only. It is not P12-A
 checkpoint acceptance, implementation authorization, proof of save/load, or a

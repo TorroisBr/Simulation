@@ -11,6 +11,13 @@ checkpoint acceptance and implementation authorization remain pending.
 This proposal changes no canonical capability and makes no claim that capture,
 hydration, or save/load parity currently exists.
 
+**Current-base refresh:** after merging P18 canonical `99cac77` into this
+documentation candidate, an independent scoped review found the daily profile
+still compatible. The P18 source tree is present in this proposal branch only
+as review context; this branch has no executable P11 ancestry and is not an
+integrated runtime composition. The current P11 capability is checked by its
+separate canonical ref. P12-A remains `WAIT_DEPENDENCY` for implementation.
+
 **Historical targeted revalidation:** the earlier review used P8 canonical
 `77f3e1a47a1e007492a794ea777d681a21a36d09` and predates the current P9
 manifest mapping. It remains historical evidence only; it is not a current-base
@@ -30,22 +37,29 @@ profile. Any separately retained P9-A-only profile requires its own identity
 and explicit admission that rejects P9-B/geography. This proposal adds no
 cross-host guarantee, P13 history/fork behavior, generated P9/P10 worlds, P11
 pending commands, P19 modules, or P20 shared activities.
+P10-A is now promoted, but this selected profile does not compose its Ruin or
+LocalTopology facts. P18-A/B/C are promoted, but the selected legacy daily
+bootstrap does not compose the P18 timeline, activity lifecycle, or availability
+decision services and claims no intraday state.
 
 **Revalidated references:** P8 State `470667d37863384edadb3d93ef64d8004aff46a3`;
 architecture `c285466c355103d3637ac165246591b72eb7bda0`; P9-A code promotion
 `43f08b3` / current P9-B promotion-record State/status `14a2e8e`; P9-B canonical integration
 `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf` (implementation tip
 `00395ef80cfa2364d34ed2170e0735d3a4b1513d`); P11 code promotion `0cd4281` /
-closure State `308e24d`; current P18 State `311baa9` (P18-A/B/C promoted;
-P18-D implementation blocked); P14 State `f8a61fe` (P14-A daily and promoted);
+current canonical closure State `308e24d0744112e8f2b741521b8b3e4acb51ebbf`;
+P18 canonical/current State `99cac77f7d66e8eb61fe68efb6959a4a5b7029ca`
+(P18-A/B/C promoted; P18-D implementation blocked); P14-A canonical
+promotion `c44904bb4b0a066eced1d7e8a773b7dc1eea76c0`;
 P20 Entry Architecture `2f9c93b`, Technical Design `6a0d164`, and proposed
-P20-A checkpoint `1a6ad537` (design and proposal reviewed; checkpoint
+P20-A checkpoint refresh `2a03edadcb411c7ca7aa2d0c67ee8d36f972779e`
+(design and proposal reviewed; checkpoint
 acceptance/implementation remain pending). Its two-Person fixture is bounded
 proof evidence, not universal participant cardinality or a P12 dependency.
-Both architecture alignment records remain current. P10-A is the user-approved
-Ruin/LocalTopology profile; design and checkpoint review passed at `345dcbc`,
-and it is `READY_FOR_IMPLEMENTATION`, but no P10 runtime capability is
-delivered. The P9-B promotion record is current at State/status tip `14a2e8e`;
+Both architecture alignment records remain current. P10-A's user-approved
+Ruin/LocalTopology profile was promoted at code candidate `9501bf0`; canonical
+State records it at `9e79b58`. The P9-B promotion record is current at
+State/status tip `14a2e8e`;
 use it alongside canonical code tip `d9a62d7` for P9-B capability and profile
 evidence.
 Refreshed P12 entry proposal:
@@ -99,17 +113,25 @@ authority specified here; unsupported populated state is rejected.
 Unsupported populated state must reject capture/load; it cannot be omitted
 silently.
 
-In particular, the selected Unity bootstrap has no external WorldCommand
-service/queue composition; adding that service or any queued external command
-input is outside this profile and must reject admission rather than be omitted.
-Where the promoted P11 `ActorChoiceStore` is composed, preserve its complete
-input/disposition history, duplicate-command identity history, and next input
-sequence so terminal idempotency remains intact. `Rejected`, `AttemptReturned`,
-and `AttemptThrew` are terminal and may be captured; `Pending` (including
-deferred inputs) and `ConsumedAwaitingTerminalAttempt` are in-flight causal
-inputs and reject capture. Loading an envelope with an in-flight input also
-rejects before publication. The daily profile never drops causal input state
-silently or claims its effects were captured when they were not.
+The selected Unity bootstrap does not compose an external `WorldCommandService`
+or queue; adding one is outside this profile and must reject admission. The P11
+canonical `SimulationRuntime` at `308e24d0744112e8f2b741521b8b3e4acb51ebbf`
+does construct an `ActorChoiceStore` by default, even without that external
+queue. For this profile on the P11-compatible runtime, the store is included
+(including an explicit empty section when empty); preserve complete input and
+disposition history, duplicate-command identity history, and next input sequence.
+The proposal branch itself is documentation-only and does not include P11 code
+ancestry; its eventual implementation/integration branch must include the
+promoted P11 code or prove equivalent current composition before claiming
+support. `Rejected` and `AttemptReturned` are terminal. `AttemptThrew` is also
+terminal owner state, but the `AdvanceDay` call that records it rethrows and is
+not a capture boundary. It may be captured only after a later successful daily
+advance issues a fresh eligible boundary while the runtime remains healthy; a
+faulted runtime/guard remains ineligible. `Pending` (including deferred inputs)
+and `ConsumedAwaitingTerminalAttempt` are in-flight causal inputs and reject
+capture. Loading an envelope with an in-flight input also rejects before
+publication. The daily profile never drops causal input state silently or
+claims its effects were captured when they were not.
 
 ## 2. Causal state and owner coverage
 
@@ -270,8 +292,11 @@ omits causal fields.
   do not substitute for P8 identity. P8-E is not a blanket continuation
   prerequisite. P9-B is on current P9 canonical at `d9a62d7`; this P12
   proposal does not establish P12 export/hydration coverage or checkpoint gates.
-- **P18:** the daily profile does not compose P18 temporal state and does not
-  claim intraday continuation. If a future supported profile composes it,
+- **P18:** P18 canonical/State is `99cac77`; the selected daily profile does
+  not compose its timeline, activity lifecycle, availability decisions, or
+  temporal state, and does not claim intraday continuation. P18 is present in
+  this docs-only refresh branch as review context, not integrated runtime code.
+  If a future supported profile composes it,
   preserve `(worldId, profileId, absoluteDay)` boundary identity, tick
   quantum/version, effective `MaxDispatchesPerInstant` or equivalent dispatch
   limit, `(ownerId, workId, revision, occurrence)` work identity, exact logical
@@ -302,13 +327,15 @@ omits causal fields.
   including all P8-A facts, without rerunning genesis. P9-B is on current P9
   canonical at `d9a62d7`. P9/P10 generated-world content remains excluded; P10
   is not a dependency of P12-A.
-- **P11:** the selected bootstrap has no external WorldCommand
-  service/queue composition; adding it is unsupported and must be rejected.
-  When `ActorChoiceStore` is composed, capture its full input/disposition and
+- **P11:** the selected bootstrap has no external WorldCommand service/queue;
+  adding it is unsupported and must be rejected. P11's canonical runtime still
+  composes `ActorChoiceStore` by default. Include its full input/disposition and
   idempotency history plus sequence. Reject pending/deferred and
-  `ConsumedAwaitingTerminalAttempt` records; preserve terminal rejected,
-  returned, and threw records. Applied effects remain represented by owner
-  truth and are never replayed from record summaries.
+  `ConsumedAwaitingTerminalAttempt` records; preserve terminal rejected and
+  returned records. A thrown attempt is capturable only at a later successful
+  daily boundary because its own `AdvanceDay` rethrows without establishing a
+  capture boundary. Applied effects remain represented by owner truth and are
+  never replayed from record summaries.
 - **P19:** modules, module-owned state and retrofit are deferred. Official
   configuration-selected built-in providers remain distinct from code mods.
 - **P13:** historical reconstruction/fork of every actually simulated
@@ -348,11 +375,13 @@ profile contract.
   `43f08b3`, P9-B promotion-record State/status `14a2e8e`, P9-B canonical
   integration `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf` (implementation tip
   `00395ef80cfa2364d34ed2170e0735d3a4b1513d`),
-  P11 promotion `0cd4281` and
-  closure State `308e24d`, current P18 State `311baa9`, P14 State `f8a61fe`,
-  P20 Entry Architecture `2f9c93b`, Technical Design `6a0d164`, and proposed
-  P20-A checkpoint `1a6ad537`, P10-A reviewed design/checkpoint candidate
-  `345dcbc` (ready, runtime not delivered), architecture
+  P11 promotion `0cd4281` and canonical closure State
+  `308e24d0744112e8f2b741521b8b3e4acb51ebbf`, current P18 canonical/State
+  `99cac77f7d66e8eb61fe68efb6959a4a5b7029ca`, P14-A canonical promotion
+  `c44904bb4b0a066eced1d7e8a773b7dc1eea76c0`, P20 Entry Architecture
+  `2f9c93b`, Technical Design `6a0d164`, and refreshed proposed P20-A checkpoint
+  `2a03edadcb411c7ca7aa2d0c67ee8d36f972779e`, P10-A promoted code
+  `9501bf076d506fb64d6ee3e6d178574fff36e153` / State `9e79b58`, architecture
   `c285466`, `docs/architecture/INTRADAY_EXTENSIBILITY_ALIGNMENT.md`, and
   `docs/architecture/MULTIPARTICIPANT_ACTIVITY_ALIGNMENT.md`.
 - `Assets/_Project/Scripts/TesteSimulacao.cs`, `SimulationConfigData.cs`,
