@@ -1,12 +1,14 @@
 # P20 — Multi-participant Synthetic Operation Technical Design
 
-**Refresh base:** P18 canonical tip
-`18ecc6e56d3c6303edfaf8a38257355d262a6ea5` on
-`codex/phase18/canonical`, merged into this design branch. The design originated
-at `97b97c5c7523f39f3645bc018c82dbbab633648f` and remains subordinate to
-architecture `c285466c355103d3637ac165246591b72eb7bda0`.
+**Refresh base:** latest P18 canonical tip
+`311baa930227371a807fb324ff11fc024800ddf9` on `codex/phase18/canonical`,
+merged into this design branch. This latest canonical update changes only
+`PHASE18_STATE.md`; the relevant promoted P18 contracts and code remain those
+already reviewed at `18ecc6e56d3c6303edfaf8a38257355d262a6ea5`. The design
+originated at `97b97c5c7523f39f3645bc018c82dbbab633648f` and remains subordinate
+to architecture `c285466c355103d3637ac165246591b72eb7bda0`.
 **Current P18 capability revalidation:** P18-A, P18-B, and P18-C are promoted
-at `18ecc6e`. Their source tips are P18-A `985c56c40fc01dc6a4d392120e2d32151a558d03`,
+on the latest canonical State at `311baa9`. Their source tips are P18-A `985c56c40fc01dc6a4d392120e2d32151a558d03`,
 P18-B `97918cbbe4238a65a216b1a1f0ef84c70b4d080c`, and P18-C
 `ab05ecfe976e80badf6f509b8e9be25ff556ca23` (promotion/State tip
 `7aa76268c49058fedb997392e676c6a29169c8b0`). P18-B includes stale-node
@@ -34,15 +36,21 @@ and supports the architecture's one-or-more participant cardinality.
 proposal (refreshed at `ff8908ff81f53c6392535f6a23d0bd954b86220b`);
 reviewed P18-A, P18-B, and P18-C technical designs; and both dated
 architecture alignment records.
-**Status:** Proposed technical design only. No implementation authorization,
-checkpoint IDs, capability promotion, persistence schema, or Phase State change.
-**Prior independent technical-design review:** PASS at content commit
+**Status:** Technical-design review **PASS**; checkpoint `P20-A — Synthetic
+Multi-participant Operation` is proposed separately in
+`PHASE20_P20A_CHECKPOINT_PROPOSAL.md`. Its ID and scope have not been accepted,
+so this record grants no implementation authorization, capability promotion,
+or persistence schema.
+**Independent technical-design review:** Earlier PASS at content commit
 `a85ab673c41154b7ac9be3943b3e0f2cba2c41e7` after the decline lifecycle
-mapping correction; refreshed review PASS at `3c69fee` before the latest P18
-promotions. This refresh updates capability and readiness claims to promoted
-P18-A/B/C at the exact refresh base. The prior review does not cover this
-mapping; independent refreshed review remains required. This remains a
-technical-design candidate only and creates no implementation checkpoint IDs.
+mapping correction and refreshed PASS at `3c69fee`. The current P20 technical
+design at `6a0d16494735853ce35a8974ab348551650afd6b` was independently reviewed
+against promoted P18-A/B/C and P18 State `bcb3f67`; the latest P18 State-only
+tip `311baa9` records that PASS and does not change relevant contracts. Review
+confirmed the pre-schedule Proposed instance, atomic full-set commitments,
+sealed-input start bound, and separate activity/participant identity. This
+checkpoint proposal adds no new simulation semantics; its own documentation
+diff still requires independent review before publication.
 
 ## 1. Purpose and boundary
 
@@ -311,8 +319,9 @@ Before implementation review, the selected slice should demonstrate:
 - stable identity and causal state survive clone/dormancy/materialization
   permutations within the later supported runtime scope.
 
-The refreshed design review must compare these obligations to actual promoted
-P18-A/B/C code at `18ecc6e` before implementation. The P20 partial-decision
+The completed independent design review compared these obligations to actual
+promoted P18-A/B/C code at `18ecc6e`. Before implementation, the P20
+partial-decision
 API, complete-set schedule call, decline/cancel/release handling, P20 stale
 retry composition, and atomic lifecycle/effect transaction are required
 design/API work, not delivered P18-B/C capabilities. The current P20 documents
@@ -322,17 +331,18 @@ capabilities.
 ## 8. Dependency gate and exclusions
 
 P20 runtime implementation has its relevant P18-A timeline/scheduler,
-P18-B lifecycle, and P18-C availability/decision prerequisites promoted at
-`18ecc6e`. The former P18-C promotion gate is cleared. P20 remains gated on
-independent review of this refreshed design and P20-owned APIs/transactions
-for the gaps described above; this document creates no P20 State or
-implementation checkpoint. P18-B stale-owner skipping and bounded lifecycle
+P18-B lifecycle, and P18-C availability/decision prerequisites promoted; the
+latest canonical State is `311baa9`, with code sources listed above. The former
+P18-C promotion gate is cleared. P20-A remains gated on explicit checkpoint
+acceptance; the technical-design review gate is passed. Its P20-owned
+APIs/transactions must still be implemented and independently reviewed as
+described above; the proposal creates no promoted capability. P18-B stale-owner skipping and bounded lifecycle
 composition are available; P18-C transition receipts and post-advance
 actor-decision coordination are available. P20 does not wait for P18-D or P19,
 and no blanket dependency on either is introduced. P18 does not depend on P20,
 so no dependency cycle is introduced.
 
-Before implementation, independently review P20's stable instance/revision
+During implementation and candidate review, verify P20's stable instance/revision
 resolution, due-work invalidation/retry assumptions, coordinated required-set
 validation, and atomic lifecycle/effect composition against exact promoted
 A/B/C APIs. Skipping a stale node without consuming the dispatch cap is a
@@ -357,7 +367,7 @@ domain-owned effects must allow future extensions without rewriting
 deferred to its documented Phase.
 
 No unresolved semantic or product blocker is identified within the
-entry-approved scope. Exact interfaces and code-level transaction composition
-remain subject to independent technical review against the then-promoted P18
-capabilities. This proposal authorizes no implementation and creates no
-checkpoint ID.
+entry-approved scope. The reviewed technical design records the API and
+transaction contracts; code-level mapping and behavior remain subject to
+independent implementation review against current promoted P18 capabilities.
+The proposed P20-A checkpoint is not accepted and authorizes no implementation.

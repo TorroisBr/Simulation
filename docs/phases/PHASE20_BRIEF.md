@@ -1,9 +1,13 @@
 # Phase 20 — Multi-participant Activities v1
 
 **Authority:** planning scope under `../SIMULATION_ARCHITECTURE.md` §§11–12,
-91–93. **Readiness:** `ENTRY_ARCHITECTURE_READY` for bounded decomposition/design;
-implementation `WAIT_DEPENDENCY` on relevant P18 capabilities and reviewed
-technical design. No P20 implementation or checkpoint IDs are approved.
+91–93. **Readiness:** entry architecture and technical design are independently
+reviewed **PASS** against promoted P18-A/B/C. The first implementation
+checkpoint, `P20-A — Synthetic Multi-participant Operation`, is proposed in
+`../design/PHASE20_P20A_CHECKPOINT_PROPOSAL.md`; its ID and scope are not yet
+accepted. Implementation remains gated on explicit acceptance of that
+checkpoint and independent review at the code-candidate gate. No P20 capability
+is promoted.
 
 ## Objective and closure
 
@@ -88,3 +92,21 @@ to demonstrate the generic capability.
 - **Hotspots:** temporal/activity/availability authorities, actor decisions,
   domain commit boundaries, commands and diagnostics. Isolate writers and
   review integrations; participant logic must not accumulate in `AdvanceDay`.
+
+## First checkpoint status
+
+`P20-A — Synthetic Multi-participant Operation` is a proposed, bounded
+implementation checkpoint using the synthetic test operation permitted above.
+It uses exactly two distinct `PersonId`s only as a fixture policy; this does not
+fix general P20 cardinality or narrow P18's nonempty participant-set contract.
+See the proposal for its participant decisions, reservation intents and joint
+commitment boundary, sealed-input start rule, all-or-none per-person test
+effects, cancellation/loss behavior, reconstruction inventory and validation
+gates. The proposed ID is not yet an approved checkpoint ID, and no code work is
+authorized by this proposal.
+
+The capability prerequisites are promoted on `codex/phase18/canonical` at
+`311baa930227371a807fb324ff11fc024800ddf9`: P18-A timeline/scheduler
+(`985c56c`), P18-B activity lifecycle (`97918cb`), and P18-C availability and
+actor decisions (`ab05ecf`). P18-D legacy consumer migration and P19 loader/API
+work are not dependencies of this synthetic proof.

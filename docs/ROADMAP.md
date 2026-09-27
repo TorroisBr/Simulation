@@ -90,6 +90,17 @@ P19 merely because its number is higher. P19's activity extension adapter
 consumes the relevant P20 capability when multi-participant support is exposed;
 P20's official bounded implementation does not wait for the mod loader.
 
+P18-A/B/C are now promoted on `codex/phase18/canonical` at `311baa9`. P20's
+entry architecture and technical design have independent review PASS. The
+current first-checkpoint proposal is `P20-A — Synthetic Multi-participant
+Operation` (`docs/design/PHASE20_P20A_CHECKPOINT_PROPOSAL.md`): a two-Person,
+role-free synthetic test operation with independent decisions, a common future
+interval, coordinated validated start, distinct per-Person effects, and bounded
+failure/cancellation handling. The two participants are fixture cardinality;
+they do not set a universal count or role policy. P20-A remains proposed and
+requires explicit checkpoint acceptance before implementation. P18-D and P19
+are not its prerequisites.
+
 ```text
 P18-A/B/C relevant contracts → P20 entry / technical design
 P18-A/B/C relevant promoted capabilities → P20 shared activity execution
@@ -143,10 +154,13 @@ These are planning edges, not fabricated checkpoint IDs for Phases 9–17. Hard 
 - Before P19 implementation: real supported extension scope and public contracts;
   define module compatibility/state lifecycle, deterministic composition and
   explicit new-world versus optional retrofit behavior. No generic security platform.
-- Before P20 implementation: reviewed bounded participation/formation contract
-  and relevant promoted P18 capabilities; close atomic reservation/start/release,
-  independent decision/Knowledge, role validation and loss-of-participant rules
-  for the selected proving slice. No per-gameplay manager or NPC rewrite is required.
+- Before P20 implementation: accept a bounded checkpoint scope and use the
+  reviewed P20-A synthetic proof proposal (or another explicitly accepted
+  checkpoint), with relevant promoted P18 capabilities. Preserve the joint
+  commitment/start/release transaction, independent decision/Knowledge,
+  participant identity/cardinality, and supported loss-of-participant rules.
+  No per-gameplay manager or NPC rewrite is required. P20-A is currently
+  proposed, not an approved checkpoint ID.
 - Before claiming save/fork with mods or intraday execution: supported temporal
   and extension-state inventory, recoverable compatible code/content, inputs and
   history; no missing causality may be reconstructed retroactively.
