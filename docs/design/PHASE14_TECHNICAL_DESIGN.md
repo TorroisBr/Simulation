@@ -111,3 +111,36 @@ Likely code surfaces include `CityData`, `CityRuntime`, `MarketRuntime`, `CityPr
 ## 9. Explicit exclusions
 
 This design adds no resource extraction, finite source reserves, production inputs, transformation, spoilage, transport, route/network flow, merchant transactions, trade repositioning, money mutation, paid population consumption, multi-worker operation, collective activity, job/crew system, gameplay loop, or production framework. It does not implement Sleep, Dreams, robbery/gangs, rituals, War gameplay, or MegaEventos.
+
+## 10. Promotion impact revalidation — 2026-09-26
+
+This proposal remains bounded to manually authored daily production and
+population consumption within one settlement and its own market. It introduces
+no transport or route flow and remains a proposal, not an approved checkpoint
+contract or implementation authorization. Revalidation uses P8 canonical
+State `470667d`, P9-A promotion `988b6f5`, P11 Actor Choice State promotion
+`0803670`, P18-A State promotion `0b52898`, and architecture baseline
+`c285466c355103d3637ac165246591b72eb7bda0`, including current
+intraday/extensibility and multi-participant alignment records.
+
+- **P8:** retain the actual dependency on the promoted spatial authority and
+  City-to-Location anchoring. Confirm the selected City's Location resolves
+  and matches its current anchor. P8 passage/travel capability remains
+  irrelevant because this profile moves no material.
+- **P9-A:** upstream-irrelevant to the manually authored v1. Generated content
+  may populate sources in a later profile, but is not required here.
+- **P11 Actor Choice:** upstream-irrelevant because production and consumption
+  remain passive daily Economy behavior, not actor-selected actions or pending
+  command inputs.
+- **P18-A:** upstream-irrelevant to the existing daily cadence. If a later
+  accepted scope promises duration-based, shift-based or intraday operation,
+  it must consume the specific promoted P18 scheduler/lifecycle capabilities
+  required by that behavior.
+- **P20:** conditional only for a later consumer that actually coordinates
+  multiple participants, using relevant P20 capability on P18. No shared
+  activity or crew is introduced here.
+
+The alignment records constrain future temporal and participant extensions
+without changing this design's closure. The open product/entry gate remains
+acceptance of the first consumer, conservation boundary, and actor/asset
+authority; no new content scope is inferred by this revalidation.
