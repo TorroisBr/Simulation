@@ -17,6 +17,15 @@ historical base of the earlier review, not the current integration base.
 
 **Final refreshed review:** PASS at candidate/State commit `a1463e8d46ed8e4526de0b0aa7a8c86d6ecf666e`.
 
+**Current canonical-base refresh review:** PASS at exact candidate tip
+`4c87ed9ec191cf04d235ed5cdf236c9e4eec93e1`. The refresh brings in only the
+P8 closure State update and updates this State's base reference; P18-A source
+and tests are unchanged. Architecture `c285466` and both current alignment
+records remain applicable. Temporal identity/cardinality and the shared-
+instance multi-participant tests remain compatible with P20. The prior P18-A
+implementation review and validation therefore remain valid; no targeted
+Unity revalidation was required.
+
 ## Phase status
 
 | Work | Status | Evidence / prerequisite |
