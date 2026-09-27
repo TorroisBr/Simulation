@@ -1,6 +1,6 @@
 # Phase 10 — Local Generation & Pre-start Authoring
 
-**Authority:** planning entry subordinate to `../SIMULATION_ARCHITECTURE.md`. **Readiness:** approved first-profile scope; technical design and capability dependencies remain open; implementation is not authorized.
+**Authority:** planning entry subordinate to `../SIMULATION_ARCHITECTURE.md`. **Readiness:** approved first-profile scope; implementation is `WAIT_DEPENDENCY` because the selected P9 authored-bootstrap profile currently supplies no P8 `LocationId` for the required existing-Location binding. The refreshed design records this upstream source gap; no implementation is authorized.
 
 ## Objective and closure
 
@@ -12,6 +12,7 @@ The approved first profile composes exactly one `ExplorableSiteKind.Ruin` at an 
 
 - **Hard semantic contracts:** relevant P9 genesis/provenance contract and P8 Location/LocalTopology/anchor contract.
 - **Hard capabilities:** entry into actual world composition needs promoted generator and spatial/local authority appropriate to the chosen slice.
+- **Current upstream source gap:** P9-A's selected bootstrap creates legacy spatial locations but does not compose any P8 `SpatialAuthorityStore` Location/anchor. P10 cannot mint/adapt one under the approved existing-Location scope. An explicitly authored P8 geography input must be composed before the P10 stage, or this profile remains blocked.
 - **Integration dependency:** the Ruin's stable identity and Location binding resolve through one factual Location/local-topology model.
 - **Soft ordering:** broader Phase 8 civil-travel validation is not needed for this profile.
 - **Architecture gate:** local containment/entry and the exact pre-start versus post-start mutation boundary require consumer-specific design.

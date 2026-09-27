@@ -65,6 +65,26 @@ typed inputs/outputs, explicit dependencies, deterministic ordering/conflict
 handling, purpose-scoped randomness where needed, causal provenance, and no
 implicit regeneration/retrofit. P19 loader/API and retrofit remain deferred.
 
+**Upstream profile-source finding (blocks implementation):** independent
+current-base review and a separate source audit found no existing P8
+`LocationId` in the selected P9 authored-bootstrap profile. Its
+`TesteSimulacao.InitializeSimulation` creates only legacy
+`SpatialLocationRuntime` values in `SpatialNetworkRuntime` and constructs
+`SimulationRuntime` without a populated `SpatialAuthorityStore` or anchor
+bindings; the runtime consequently owns an empty P8 spatial authority. The P9
+State/Brief explicitly say this profile produces no P8-owned geography. A test
+fixture `LocationId` is not profile input. P10 cannot truthfully claim to bind
+the approved Ruin without an upstream authored P8 geography source. P10 may
+consume that source, but must not mint/adapt the P8 Location inside its own
+stage. Until an upstream source is selected and composed before P10,
+implementation readiness is `WAIT_DEPENDENCY`.
+
+The remaining scope choice is whether to add a separate, explicitly authored
+P8 Hex/Location input and normal bootstrap composition edge for this existing
+Unity profile, or leave this P10 profile blocked until a different approved
+profile supplies an existing P8 Location. An isolated prepopulated test proves
+only the local topology seam; it does not close the selected-profile integration.
+
 ## 1. Recommendation and bounded first profile
 
 The approved first profile is exactly one domain-owned
@@ -156,8 +176,15 @@ stage, `p10.genesis.ruin-local-topology/v1`, after
 `p9.genesis.validate-profile/v1`. It declares its version, dependency, typed
 `P10LocalTopologyCandidate` output schema, and stable ExplorableSite/LocationId
 output owner in provenance. The authored-actors stage retains its existing
-dependency on authored-world and remains before validation. This is not a
-public contributor registry, plugin API, or mod hook.
+dependency on authored-world and remains before validation. The existing P9
+Kahn scheduler breaks ready-stage ties by scanning its fixed `StageIds` array.
+Preserve that declared tie-break and insert the P10 ID immediately after
+`p9.genesis.authored-actors/v1`, yielding the exact order
+`resolve-profile → authored-world → authored-actors → p10.ruin-local-topology
+→ validate-profile → publish`. P10 has an explicit semantic dependency on
+authored-world; authored-actors remains an independent sibling, ordered before
+P10 by this fixed, fingerprinted tie-break rather than a fabricated semantic
+dependency. This is not a public contributor registry, plugin API, or mod hook.
 
 The stage builds an immutable candidate from selected P9 authored inputs and
 the bounded local-profile fixture. Validation checks inherited P9 output and
@@ -214,10 +241,13 @@ Bump the combined schema whenever key encoding, stage semantics/order, output
 schema, or fingerprint inputs change; reject incompatible versions before
 publication.
 
-The fixed P9 DAG gains only this one built-in stage. Execution order follows
-explicit dependency edges; no generic contributor scheduler, registration
-ordering, list ordering, map iteration, host scheduling, or last-writer-wins
-policy participates. The P10 stage owns only its typed candidate output.
+The fixed P9 DAG gains only this one built-in stage. Dependency edges define
+eligibility; when several stages are ready, the existing fixed `StageIds` array
+scan is the explicit deterministic tie-break. Record the combined ordered stage
+IDs and semantic dependency edges in the combined fingerprint/provenance. No
+generic contributor scheduler, registration ordering, dictionary/map iteration,
+host scheduling, or last-writer-wins policy participates. The P10 stage owns
+only its typed candidate output.
 
 This profile introduces no local generation randomness. Preserve/validate the
 root-seed and algorithm provenance selected by P9 as part of genesis identity;
@@ -297,7 +327,7 @@ bounded profile while preserving compatible semantic seams.
 | P9-A | Promoted at P9 canonical closure tip `96f2c1a`; its authored-bootstrap genesis foundation and atomic publication boundary are available. The State/Brief-only closure advance preserves that capability and content boundary. P10 adds one internal stage and typed output to the fixed DAG; no P9 output registry is presumed. |
 | LocalTopology | Existing store is not yet a LocationId-neutral owner contract. The bounded semantic owner/store adapter in §2 must be implemented and promoted before P10 publishes these facts; legacy City/Site runtime paths remain compatible. |
 | P18/P20 | Not required by this daily-only, single-site profile. P18-A/P20 become conditionally relevant only if a future explicitly accepted scope adds temporal activity or multi-participant facts. |
-| Product/checkpoint gate | The user accepted the bounded Ruin profile in §1. Stable identities, compatibility schema, stage/output contract, adapter migration, and closure tests are specified here for independent review; no Phase 10 checkpoint ID is approved. |
+| Product/checkpoint gate | The user accepted the bounded Ruin profile in §1. The selected P9 profile currently supplies no P8 LocationId; implementation waits for an upstream authored geography source or a different approved profile. Stable identities, compatibility schema, stage/output contract, adapter migration, and closure tests remain proposed; no Phase 10 checkpoint ID is approved. |
 
 ### Proposed checkpoint identity and closure (not approved)
 
@@ -326,13 +356,13 @@ review, explicit checkpoint acceptance, implementation, required validation,
 and promotion remain separate gates.
 
 P10 scope is accepted for technical design only. Implementation remains
-`WAIT_DEPENDENCY`: the bounded owner/store migration is unpromoted, this
-checkpoint contract awaits independent review and explicit checkpoint
-acceptance, and no implementation authorization exists. P9-A and the P8-C
-owner-kind contract are promoted, but neither delivers the Ruin's stable
-LocationId/topology binding. Identity/versioning, finite topology, fixed-DAG
-stage integration, compatibility schema, and closure tests are specified here
-for review. No additional content or gameplay choice is implied.
+`WAIT_DEPENDENCY`: the selected P9 profile lacks the required pre-existing P8
+LocationId source, and the bounded owner/store migration is unpromoted. The
+checkpoint contract requires independent review and explicit checkpoint
+acceptance after that upstream input exists; no implementation authorization
+is implied. P9-A and the P8-C owner-kind contract are promoted, but neither
+delivers the Ruin's stable LocationId/topology binding. The fixed-array
+tie-break is now explicit; no additional content or gameplay choice is implied.
 
 After a checkpoint and the relevant capabilities are accepted/promoted,
 implementation validation must demonstrate:
