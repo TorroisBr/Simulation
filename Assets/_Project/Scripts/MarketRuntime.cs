@@ -124,7 +124,7 @@ public class MarketRuntime
     public MarketItemRuntime GetItem(ItemData item)
     {
         MarketItemRuntime value = (items ?? (items = new List<MarketItemRuntime>())).Find(x => x != null && x.Item == item);
-        return value == null ? null : new MarketItemRuntime(value.Item, value.Amount, value.DesiredAmount);
+        return value == null ? null : new MarketItemRuntime(value);
     }
 
     public int GetAmount(ItemData item)
