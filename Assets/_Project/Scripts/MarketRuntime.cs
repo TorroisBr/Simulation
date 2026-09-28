@@ -264,11 +264,30 @@ public class MarketRuntime
 
     internal bool CanInstall(long expectedRevision) => revision == expectedRevision && revision < long.MaxValue;
 
+    internal bool CanInstall(long expectedRevision, long revisionIncrements) =>
+        revision == expectedRevision && revisionIncrements >= 0
+        && revisionIncrements <= long.MaxValue - expectedRevision;
+
     internal void InstallPrepared(long expectedRevision, PreparedMarketState replacement)
     {
         items = replacement.Items;
         readOnlyItems = replacement.ReadOnlyItems;
         revision = expectedRevision + 1;
+    }
+
+    internal void InstallPrepared(long expectedRevision, long revisionIncrements, PreparedMarketState replacement)
+    {
+        items = replacement.Items;
+        readOnlyItems = replacement.ReadOnlyItems;
+        revision = expectedRevision + revisionIncrements;
+    }
+
+    internal PreparedMarketState CreatePreparedSnapshot()
+    {
+        List<MarketItemRuntime> replacement = new List<MarketItemRuntime>();
+        foreach (MarketItemRuntime item in items ?? (items = new List<MarketItemRuntime>()))
+            replacement.Add(item == null ? null : new MarketItemRuntime(item));
+        return new PreparedMarketState(replacement);
     }
 
     internal PreparedMarketState PrepareReplacement(ItemData item, int delta, int desiredAmount)

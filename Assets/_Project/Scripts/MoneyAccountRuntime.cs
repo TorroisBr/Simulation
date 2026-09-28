@@ -22,6 +22,19 @@ public sealed class MoneyAccountRuntime
         revision = expectedRevision + 1;
     }
 
+    internal bool CanInstall(long expectedRevision, long revisionIncrements, float replacement)
+    {
+        return revision == expectedRevision && revisionIncrements >= 0
+            && revisionIncrements <= long.MaxValue - expectedRevision
+            && IsValidNonNegativeFiniteAmount(replacement);
+    }
+
+    internal void InstallPrepared(long expectedRevision, long revisionIncrements, float replacement)
+    {
+        balance = replacement;
+        revision = expectedRevision + revisionIncrements;
+    }
+
     public MoneyAccountRuntime()
         : this(0f)
     {
