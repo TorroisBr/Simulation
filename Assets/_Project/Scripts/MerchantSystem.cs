@@ -358,10 +358,8 @@ public class MerchantSystem : INpcActionProvider, IAuthoritativeMutationGuardBin
         out KeyedSaleReceipt receipt)
     {
         receipt = null;
-        if (!mutationGuardBinding.CanMutate
-            || seller == null
+        if (seller == null
             || actorPersonId == null
-            || seller.PersonId != null && seller.PersonId != actorPersonId
             || actionRuntime == null
             || actionRuntime.Action == null
             || actionRuntime.Action.actionType != NpcActionType.SellGoods
@@ -369,9 +367,6 @@ public class MerchantSystem : INpcActionProvider, IAuthoritativeMutationGuardBin
             || actionRuntime.TargetItem == null
             || actionRuntime.Amount <= 0
             || actionRuntime.TargetCity == null
-            || !ReferenceEquals(actionRuntime.TargetCity, seller.CurrentCity)
-            || seller.MerchantTradePlan.IsActive
-            || !tradeConfiguration.Enabled
             || string.IsNullOrWhiteSpace(proposalId)
             || string.IsNullOrWhiteSpace(fingerprint)
             || string.IsNullOrWhiteSpace(actorChoiceInputId)
@@ -391,16 +386,48 @@ public class MerchantSystem : INpcActionProvider, IAuthoritativeMutationGuardBin
             return false;
         }
 
+        string logicalTickValue = logicalTick.Value.ToString(CultureInfo.InvariantCulture);
+        string actionSemanticId = actionRuntime.Action.DefinitionId;
+        KeyedSaleReceipt prior = transactionService.FindKeyedSaleReceipt(
+            proposalId,
+            fingerprint,
+            actorChoiceInputId,
+            requestId,
+            actorPersonId.Value,
+            actionSemanticId,
+            LocalMarketSellGoodsActionVersion,
+            profileId,
+            logicalTickValue,
+            marketSiteId,
+            seller,
+            market,
+            actionRuntime.TargetItem,
+            actionRuntime.Amount);
+        if (prior != null && prior.Outcome != KeyedSaleOutcome.ProvenNoInstall)
+        {
+            receipt = prior;
+            return true;
+        }
+
+        if (!mutationGuardBinding.CanMutate
+            || seller.PersonId != null && seller.PersonId != actorPersonId
+            || !ReferenceEquals(actionRuntime.TargetCity, seller.CurrentCity)
+            || seller.MerchantTradePlan.IsActive
+            || !tradeConfiguration.Enabled)
+        {
+            return false;
+        }
+
         receipt = transactionService.TryExecuteKeyedMarketSale(
             proposalId,
             fingerprint,
             actorChoiceInputId,
             requestId,
             actorPersonId.Value,
-            actionRuntime.Action.DefinitionId,
+            actionSemanticId,
             LocalMarketSellGoodsActionVersion,
             profileId,
-            logicalTick.Value.ToString(CultureInfo.InvariantCulture),
+            logicalTickValue,
             marketSiteId,
             seller,
             market,

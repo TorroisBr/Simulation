@@ -124,6 +124,8 @@ public sealed class MerchantLiquidityTests
         Assert.That(first, Is.Not.Null);
         Assert.That(first.Outcome, Is.EqualTo(KeyedSaleOutcome.Committed));
 
+        fixture.Merchant.SetMerchantTradePlan(fixture.Item, fixture.City, fixture.City, 5, 1f);
+
         int inventoryAfterFirst = fixture.Merchant.Inventory.GetAmount(fixture.Item);
         int marketAfterFirst = fixture.City.Market.GetAmount(fixture.Item);
         float moneyAfterFirst = fixture.Merchant.Money;
