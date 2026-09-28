@@ -103,10 +103,15 @@ diagnostic projection. Each value includes the `ActorChoiceInputId`, original
 `WorldCommandId`, input sequence, `PersonId`, action definition, origin,
 authority mode, capture day, final status, and the ordered immutable
 disposition history with transition ordinal, day, actor-turn roster ordinal,
-decision-record correlation, deferral/failure reason, and attempt outcome or
-returned result status as applicable. Preserve the exact next input sequence
+optional opaque `DecisionRecordId` correlation, deferral/failure reason, and
+attempt outcome or returned result status as applicable. Preserve the exact next input sequence
 and the store's complete command-ID idempotency set (which must agree exactly
 with retained input history).
+
+`DecisionRecordId` is an optional retained correlation string, not a foreign
+key. Preserve its exact nullable value; do not require a matching
+`NpcDecisionStore` row or validate its existence during hydration. The
+ActorChoice owner permits null, and runtime does not resolve this value.
 
 Capturable states are the terminal `Rejected`, `AttemptReturned`, and
 `AttemptThrew` records, including their complete preceding dispositions. A
@@ -122,9 +127,11 @@ the exact next sequence without allocating a new input. It verifies unique
 input and command IDs, strictly increasing positive input sequences,
 next-sequence greater than all retained inputs, contiguous disposition
 ordinals, legal lifecycle transitions, nondecreasing causal boundaries,
-terminal-status consistency, and valid C/D identity references. Any
-`Pending`/in-flight record, inconsistent duplicate index, unsupported enum or
-broken correlation rejects the entire staged ActorChoice section. P11's
+terminal-status consistency, and valid C/D identity references for actual
+typed IDs such as `PersonId`. Optional opaque decision correlations are
+preserved as values and do not add a graph edge. Any `Pending`/in-flight
+record, inconsistent duplicate index, or unsupported enum rejects the entire
+staged ActorChoice section. P11's
 trusted normal game/UI input contract remains unchanged; F introduces no
 control grants, ownership checks, anti-cheat boundary, or adversarial-command
 model.
@@ -153,7 +160,9 @@ omitting it.
 Do not serialize derived plans as if they were domain authority. Include
 plan/commitment values only where their current owner retains them as causal
 state (including the F slice of `NpcRuntime`); reconstruct only indexes or
-service references expressly derived by that owner. Validate local identity,
+service references expressly derived by that owner. Preserve any optional
+`OriginDecisionId` as an exact nullable opaque correlation string; it is not a
+foreign key and does not require a corresponding decision row. Validate local identity,
 membership/cardinality, lifecycle and reciprocal references against C/D roots,
 and emit E-owned unresolved market/provider bindings for P12-G. Hydration
 restores the exact current commitment without choosing, replanning,
@@ -200,6 +209,18 @@ dependency order:
 The concrete constructor order follows actual owner references, not this
 semantic list when an owner dependency requires a different sequence. No
 candidate is bound to the active mutation guard or published by F.
+
+### 3.1 Omitted noncausal read models
+
+`NpcDecisionStore` and `DomainEventStore` are classified as
+`OmittedNonCausalReadModel` for this profile: populated decision/event history
+is not included in continuation state. `HistoryStore` is a subset of
+event/history data and is omitted with it; `NpcChronicle` is derived. P12-F
+does not promise history or chronicle UI parity. These classifications do not
+remove causal state owned by F: ActorChoice terminal receipts and directive or
+commitment owner truth remain included according to their contracts. An
+optional opaque correlation string is preserved as-is and is not required to
+resolve into an omitted read-model row.
 
 ## 4. Rejection and no-replay rules
 
@@ -259,15 +280,19 @@ completion criterion, not P12-A readiness or Phase 12 closure.
   duplicate/missing IDs, non-increasing or nonpositive input sequences,
   disposition transition ordinals that are not contiguous from one, illegal
   transitions, invalid terminal state, a next input sequence that does not
-  exceed all retained inputs, overflow, and broken Person/decision references
-  without changing the source. Input sequence values must be strictly
-  increasing and unique, but need not be gap-free.
+  exceed all retained inputs, overflow, and broken typed Person references
+  without changing the source. Opaque optional `DecisionRecordId` values,
+  including null and strings without a retained decision row, round-trip
+  exactly and do not create a relationship-validation failure. Input sequence
+  values must be strictly increasing and unique, but need not be gap-free.
 - Commitments: for each owner proven in the refreshed profile, empty and
   active fixtures round-trip stable identities, progress, costs and reciprocal
   links; next normal domain execution matches uninterrupted execution without
-  replayed planning or effects. Corrupt/dangling/duplicate/contradictory
-  references reject. Do not substitute P20 activity tests or infer universal
-  participant counts.
+  replayed planning or effects. Optional opaque `OriginDecisionId` values,
+  including null and strings without a retained decision row, round-trip
+  exactly without target-existence validation. Corrupt/dangling/duplicate/
+  contradictory typed references reject. Do not substitute P20 activity tests
+  or infer universal participant counts.
 - Shared NPC owner: D/E/F values are exported from one immutable snapshot and
   revision, merged once, and hydrated by one staged NpcRuntime factory;
   duplicated fields, mismatched snapshot IDs/revisions, or mutation during
