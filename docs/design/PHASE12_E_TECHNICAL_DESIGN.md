@@ -4,7 +4,7 @@
 independent exact-tip review. It authorizes no implementation by itself, makes
 no delivery/readiness claim, and does not establish P12-A readiness.
 
-**Design base:** refreshed P12 owner inventory at `73cf6c28060d1ea9e73e7b5f220c1fbbb68699b9`.
+**Design base:** reviewed P12 owner inventory at `d01cd6225ff98a9952b466f7f045ec871b9e3ecc`.
 The accepted scopes are P12-A `UnityBootstrap-Daily-v1` and prerequisite
 checkpoint P12-E as recorded in the current P12 Brief and capability
 decomposition. P12-E implementation depends on P12-B admission and P12-C
@@ -13,13 +13,53 @@ sections where referenced roots are required. D/E may develop in isolation,
 but shared City ownership requires a planned interface/handoff and joint
 integration. No code or final P12-A integration is part of this design.
 
-**Authority checked:** current architecture `c285466`, current P12 Brief and
-capability decomposition, accepted P12-A profile contract, inventory
-`73cf6c2`, the current P8/P9/P11/P14/P18/P20 profile boundaries, and the
-intraday/extensibility and multi-participant alignment records. The inventory
-is a live-composition audit candidate, not an owner export/hydration result or
+**Authority checked:** architecture `c285466c355103d3637ac165246591b72eb7bda0`,
+intraday/extensibility alignment `4b6dd1d38cffeaf3cc1ac3effea0f8ede8771194`,
+multi-participant alignment incorporated at `c285466c355103d3637ac165246591b72eb7bda0`,
+the current P12 Brief and capability decomposition, accepted P12-A profile
+contract, and reviewed owner inventory `d01cd62`. The checked canonical refs
+include P8 `470667d`, P9 `82396ae`, P10 `252ad6b`, P11 `308e24d`, P14
+`4caecbb`, P18 `9e790c5`, and P20 `7a81cc0`. The inventory is a
+live-composition audit candidate, not an owner export/hydration result or
 P12-A readiness evidence. Recheck canonical refs and actual provider
 composition before implementation.
+
+## Current-base evidence revalidation
+
+Inventory `d01cd62` records the selected P9-B/P11 composition candidate
+`af656e7710fce0ba171fae1d6684331d2dc0b743` as validated but unpromoted. For
+that candidate, the effective selected module set resolves to Economy,
+Merchant, GuardCrime, and Crime; City production, free-population consumption,
+and market-price updates are active; merchant trade/commercial sharing,
+Justice, configured Crime infrastructure/action, and Guard action providers
+are composed. Natural mortality, aggregate demography, and their hash-based
+providers are disabled by the selected overrides, and no sample-specific
+provider is injected. These remain candidate-scoped inventory observations,
+not a permanent module rule or canonical live-profile proof. P14-A has no
+configured exogenous material source; ordinary legacy City economy remains
+included. `LocalTopologyStore` is instantiated but must be witnessed empty.
+
+The inventory's owner/mutation map is explicitly partial: it does not prove a
+complete live owner-revision census, committed-mutation invalidation, immutable
+exports, or staged hydration. P12-B refresh `ef8c72c` and P12-C candidate
+`edc5157` are documentation-only. P12-D refresh `e8b83d7` is also
+documentation-only; it preserves the accepted D boundary and hidden-day
+counter contract but does not deliver D roots. E implementation remains
+blocked on delivered P12-B/C and D roots or a reviewed isolated interface,
+plus the exact current provider/owner census and planned shared-owner
+handoffs. P12-A remains `WAIT_DEPENDENCY` and separately gated.
+
+P18 canonical `9e790c5` contains the approved D1/D2 prerequisites. The full
+P18-D consumer remains unpromoted at integration candidate
+`5d7eb2687c3866fb2399faf8b366a299484d8dd4`; separate owner candidates,
+including local-knowledge hardening recorded at `43363ddde2e8c9ed48ef9e220e2b49fa4cbf3c47`,
+are not integrated into that consumer or canonical. The selected daily profile
+does not compose P18 timeline, activity, continuation, or input state. The
+intraday alignment remains a review constraint if such temporal state enters a
+future supported profile. P20 shared activities likewise remain excluded;
+future coverage must preserve stable `ActivityInstanceId` independent of
+participant identity and the one-or-more participant rule, not treat the
+P20-A exactly-two fixture as universal. This refresh adds no P18/P20 scope.
 
 ## 1. Purpose and boundary
 
@@ -53,7 +93,7 @@ successful completed-day boundary. Effective configuration and actual
 instantiated providers, not serialized module flags alone, decide which
 conditional E providers are present.
 
-The refreshed inventory reports the selected module inputs resolving to
+The reviewed inventory `d01cd62` reports the selected module inputs resolving to
 Economy, Merchant, GuardCrime, and Crime; City production, free-population
 consumption, and price updates run through `CityRuntime`; merchant trade and
 commercial Knowledge sharing are composed under the selected effective
