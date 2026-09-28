@@ -256,9 +256,12 @@ completion criterion, not P12-A readiness or Phase 12 closure.
 - ActorChoice: preserve each allowed terminal status and all disposition
   variants, exact order, command-ID history, next sequence, and identical
   duplicate-command handling after restore. Reject every in-flight state,
-  duplicate/missing IDs, gaps/invalid ordinals, illegal transitions, invalid
-  terminal state, sequence regression/overflow, and broken Person/decision
-  references without changing the source.
+  duplicate/missing IDs, non-increasing or nonpositive input sequences,
+  disposition transition ordinals that are not contiguous from one, illegal
+  transitions, invalid terminal state, a next input sequence that does not
+  exceed all retained inputs, overflow, and broken Person/decision references
+  without changing the source. Input sequence values must be strictly
+  increasing and unique, but need not be gap-free.
 - Commitments: for each owner proven in the refreshed profile, empty and
   active fixtures round-trip stable identities, progress, costs and reciprocal
   links; next normal domain execution matches uninterrupted execution without
