@@ -8,14 +8,25 @@ implementation, or establish P12-A readiness. Its listed composition,
 serialized-runtime, and complete mutation-census dependencies still block
 P12-B implementation.
 
+**Current-base revalidation:** P18 code was checked at
+`9e790c59e14ca7f7ed195c0e6267e10f3cd039d7`; P18 State text at that tip still
+contains lagging P18-D2 pending-promotion wording. The code contains the
+per-runtime legacy advance lease from `ea7b3e7` (an ancestor of the checked
+tip). This does not establish P18-D completion/readiness. P9/P11 composition
+was checked against validated but unpromoted two-parent candidate
+`af656e7710fce0ba171fae1d6684331d2dc0b743`; this is not canonical live
+composition evidence. The intraday alignment is `4b6dd1d38cffeaf3cc1ac3effea0f8ede8771194`; the
+multi-participant alignment is `c285466c355103d3637ac165246591b72eb7bda0`.
+Both were checked for temporal and participant identity boundaries. P12-A blockers remain in force.
+
 **Canonical references checked from available local refs (no remote fetch was
 performed):** architecture
 `c285466c355103d3637ac165246591b72eb7bda0`; P8 `470667d37863384edadb3d93ef64d8004aff46a3`;
 P9 `82396ae7ffaf407fda278928da456b06dc5394d4` (P9-B code integration
 `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf`); P11
 `308e24d0744112e8f2b741521b8b3e4acb51ebbf`; P14
-`4caecbbfb0464c965811402b3c11d8717605114a`; P18
-`ba8076c3bc2c8c354a8755e6efaca30bfeab7bf7`; P20
+`4caecbbfb0464c965811402b3c11d8717605114a`; P18 code `9e790c59e14ca7f7ed195c0e6267e10f3cd039d7` (State wording at this tip
+is explicitly lagging for P18-D2); P20
 `7a81cc0ecbc511dd36c248ec62c7b20f7e477f53`; and both current architecture
 alignment records. The P12 planning base is `36618a8`; P12-A remains
 `WAIT_DEPENDENCY` and P12-C through P12-G remain downstream.
@@ -343,28 +354,27 @@ reads do not invalidate a token.
 
 ## 5. P18-D2 shared `SimulationRuntime` hotspot
 
-P18-D2 technical design review passed at `6f82bf4`; implementation candidate
-`ea7b3e7` passed validation and independent review. Canonical promotion is
-pending, and the exclusive `SimulationRuntime` hotspot has not been handed off
-to P12. Its scope is the per-runtime non-reentrant
+P18-D2 technical design review passed at `6f82bf4`; implementation `ea7b3e7`
+is present in checked P18 code `9e790c5` (ancestor verified). The checked P18
+State text remains lagging and describes promotion as pending; this refresh
+distinguishes status wording from code evidence. The per-runtime non-reentrant
 lease around the currently composed legacy `TryAdvanceDay` and
 `TryAdvanceDays` APIs and the narrow future owner seam. It does not compose the
 P18 timeline, boundary chronology, subphases, or successful P18-C handoff;
 those remain P18-D integration obligations. The lease is not a general
-thread-safety guarantee. The active P18-D2 implementation owns
-`SimulationRuntime.cs` and the advance-lease seam.
+thread-safety guarantee. P18-D2 introduced the `SimulationRuntime` lease; P12 implementation still requires explicit handoff of that shared hotspot.
 
 Therefore:
 
 - P12-B design introduces no second lease, lock, universal busy framework, or
   P18 timeline composition.
 - Do not edit `SimulationRuntime.cs`, its public advance wrappers, or the
-  lease seam while P18-D2 has the explicit ownership window. The current
+  lease seam without explicit shared-hotspot handoff. The current
   branch is documentation-only and makes no code change.
-- Before P12-B implementation touches the runtime, P18-D2 must pass
-  implementation review/validation, receive canonical promotion, and hand
-  over the exclusive runtime hotspot. Revalidate this design against the
-  promoted API. P12-B then uses that same lease to ensure capture cannot
+- Before P12-B implementation touches the runtime, verify active P18 canonical
+  code and obtain explicit ownership handoff for the exclusive runtime
+  hotspot; the P18 State wording alone is stale evidence. Revalidate this
+  design against the checked API. P12-B then uses that same lease to ensure capture cannot
   observe an in-progress legacy advance; it must not nest or wrap the lease
   in a way that changes `TryAdvanceDays` behavior.
 - P12-B's success-boundary callback and mutation-epoch seam are separate
@@ -378,7 +388,7 @@ with a chronological P18 runtime, P18-D must extend its lease continuously
 through the outer timeline advance, continuation barriers, all due boundary
 subphases/work, and successful P18-C handoff; P12-B does not add that path.
 This is a hotspot serialization/implementation-order constraint. It does not
-create a new semantic dependency from P12 to P18 or claim P18-D2 is promoted.
+create a new semantic dependency from P12 to P18 or claim full P18-D chronological integration is complete.
 
 ## 6. Files, ownership, and integration order
 
@@ -394,31 +404,31 @@ create a new semantic dependency from P12 to P18 or claim P18-D2 is promoted.
   eligibility state, token validation and mutation notification interface.
   This is lifecycle admission, not the P12 envelope/store serializer.
 - `Assets/_Project/Scripts/SimulationRuntime.cs`: one success-boundary hook
-  and delegation to the eligibility coordinator, only after P18-D2 completes
-  or explicitly hands over this hotspot. Keep existing `AdvanceDay` result,
+  and delegation to the eligibility coordinator, only after the P18-D2 lease seam is explicitly handed over. Keep existing `AdvanceDay` result,
   error, order and `TryAdvanceDays` behavior.
 - Existing included mutation owners: integrate notifications after successful
   authoritative commits. The exact owner/file list is blocked on validation
   of the current canonical P9-B/P11 composition and a refreshed live
   profile/provider inventory; do not infer a complete list from guard
   bindings alone. The `af656e7` candidate audit is useful composition evidence,
-  but its unpromoted status means current canonical composition and owner
+  and remains unpromoted; current canonical combined composition and live owner
   census remain blockers.
 - Focused EditMode tests beside bootstrap/profile admission and runtime
   orchestration tests; no diagnostics snapshot becomes a save contract.
 
 Integration sequence:
 
-1. Candidate `af656e7` and its selected provider graph have passed code review,
+1. Exact candidate `af656e7710fce0ba171fae1d6684331d2dc0b743` and its selected provider graph have passed code review,
    validation, and a local owner/profile audit recorded at `99739fd`. The
    candidate remains unpromoted, and no remote fetch was performed; obtain
    current canonical composition evidence and a final live profile/owner
    census before finalizing the admission manifest or claiming P12-B readiness.
-2. P18-D2 implementation candidate `ea7b3e7` passed validation and independent
-   review, but canonical promotion is pending and the exclusive
-   `SimulationRuntime` hotspot has not been handed off. Require both before
-   P12-B touches that runtime. Then revalidate P12-B seams against the promoted
-   API before opening the P12-B runtime owner window.
+2. P18-D2 implementation `ea7b3e7` is present in checked P18 code
+   `9e790c59e14ca7f7ed195c0e6267e10f3cd039d7`; the P18 State wording is
+   lagging. Verify code ancestry and obtain explicit exclusive
+   `SimulationRuntime` hotspot handoff before P12-B touches the runtime. Then
+   revalidate P12-B seams against that API before opening the P12-B runtime
+   owner window.
 3. Implement immutable admission values/source and rejection behavior without
    serializing owner state. Implement the runtime boundary/token hook using
    the single D2 lease contract. Instrument mutation paths only after the
@@ -556,10 +566,11 @@ This design is bounded to accepted P12-B scope, but P12-B is **not**
    composition evidence and a refreshed canonical live profile/owner census
    remain blockers. The candidate audit alone does not identify the current
    canonical combined runtime.
-2. P18-D2 candidate `ea7b3e7` passed validation and independent review. Its
-   accepted scope guards only the currently composed legacy
-   `TryAdvanceDay`/`TryAdvanceDays` calls. Canonical promotion and explicit
-   `SimulationRuntime` hotspot handoff remain required before P12-B touches
+2. P18-D2 code `ea7b3e7` is present in checked P18 code
+   `9e790c59e14ca7f7ed195c0e6267e10f3cd039d7`. Its accepted scope guards only
+   the currently composed legacy
+   `TryAdvanceDay`/`TryAdvanceDays` calls. Explicit
+   `SimulationRuntime` hotspot handoff remains required before P12-B touches
    the runtime; P18-D still owns the future chronological
    continuation/subphase/handoff window.
 3. The exhaustive source-method census for candidate snapshot `af656e7` is

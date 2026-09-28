@@ -242,12 +242,12 @@ canonical State `470667d`, P9 canonical closure `82396ae`, P9-A code promotion
 `43f08b3` and P9-B promotion-record State `14a2e8e`, P9-B code integration
 `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf`
 (implementation tip `00395ef80cfa2364d34ed2170e0735d3a4b1513d`), P11 code promotion `0803670` and
-closure State `308e24d`, current P18 canonical State tip
-`ba8076c3bc2c8c354a8755e6efaca30bfeab7bf7` (P18-A/B/C promoted by code
-extension `1dd0479`;
-P18-D implementation blocked), accepted P18-A continuation extension contract
-`2175bf2` (the implementation candidate/acceptance record `9de70ae` is not
-delivered/promoted capability), P14 historical promotion State `f8a61fe` and
+closure State `308e24d`, current P18 code tip
+`9e790c59e14ca7f7ed195c0e6267e10f3cd039d7`; its P18 State text is explicitly
+lagging on P18-D2 promotion wording. The code contains the `ea7b3e7` legacy
+advance lease, but P18-D remains blocked, accepted P18-A continuation extension contract
+`2175bf2` (implementation is present in the checked P18 code lineage; the
+acceptance record `9de70ae` alone is not capability evidence), P14 historical promotion State `f8a61fe` and
 current docs-only canonical State/Brief `4caecbb`,
 P20 Entry Architecture `2f9c93b`, Technical Design `6a0d164`, and proposed
 P20-A proposed checkpoint `2a03eda` (the user accepted its bounded scope on
@@ -293,8 +293,9 @@ architecture baseline `c285466`, including both current alignment records.
   boundary state. Preserve ActivityInstanceId separately from
   PersonId/NpcRuntimeId and participant identity, plus P18-B lifecycle/revision/
   receipts, commitments/availability and P18-C PersonId-keyed decision/attempt
-  state when the consumer composes them. P18-A/B/C are promoted; P18-D is not
-  implemented and the daily runtime has not migrated to that timeline.
+  state when the consumer composes them. P18-A/B/C are present in canonical code; the legacy advance lease is present,
+  while chronological P18-D consumer integration is not complete and the daily
+  runtime has not migrated to that timeline.
 - **P20:** shared activities remain outside this profile. If later included,
   preserve stable ActivityInstanceId separately from definition and participant
   identities, one-or-more participant cardinality, partial formation/decisions,
@@ -304,8 +305,15 @@ architecture baseline `c285466`, including both current alignment records.
   establish universal cardinality; its reviewed design is not implementation
   authorization or a blanket dependency.
 
-The refreshed alignment records preserve explicit temporal and participant
-identity boundaries. The P8 `77f3e1a`→`470667d` advance changes only Phase 8
+The refreshed `INTRADAY_EXTENSIBILITY_ALIGNMENT.md` (`4b6dd1d`) and
+`MULTIPARTICIPANT_ACTIVITY_ALIGNMENT.md` (`c285466`) records preserve explicit
+temporal and participant identity boundaries. Current-base revalidation checked P18 code
+`9e790c59e14ca7f7ed195c0e6267e10f3cd039d7`, including the ancestor lease
+implementation `ea7b3e7`; the accompanying P18 State text remains explicitly
+lagging on P18-D2. Exact candidate `af656e7710fce0ba171fae1d6684331d2dc0b743`
+validates additive P9-B/P11 composition but is unpromoted and does not establish
+canonical composition or owner coverage. The source-method census is not
+owner-revision or mutation-proof evidence. The P8 `77f3e1a`→`470667d` advance changes only Phase 8
 State wording; P9's current promotion-record State/status tip is `14a2e8e`, for
 code at `d9a62d7`. This refresh records P9-B's canonical integration and
 required P8-A state, records P10-A runtime promotion while keeping its

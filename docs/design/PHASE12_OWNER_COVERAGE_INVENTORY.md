@@ -5,7 +5,8 @@
 profile). **Reviewed source baseline:** this P12 revalidation candidate starts
 at `4a1d36407487e3d342785d4d895993044d610cf4`. Exact upstream tips checked:
 architecture `c285466c355103d3637ac165246591b72eb7bda0` and both alignment
-records; P8 State `470667d37863384edadb3d93ef64d8004aff46a3`; P9 canonical
+records: intraday `4b6dd1d38cffeaf3cc1ac3effea0f8ede8771194`, multi-participant
+`c285466c355103d3637ac165246591b72eb7bda0`; P8 State `470667d37863384edadb3d93ef64d8004aff46a3`; P9 canonical
 closure `82396ae7ffaf407fda278928da456b06dc5394d4` (P9-B code integration
 `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf`, implementation
 `00395ef80cfa2364d34ed2170e0735d3a4b1513d`, promotion State/status record
@@ -18,14 +19,21 @@ closure `82396ae7ffaf407fda278928da456b06dc5394d4` (P9-B code integration
 P14 historical promotion State `f8a61fe9634ba9ab56ee31d50b57b45fef292a6f`
 (P14-A code `c44904bb4b0a066eced1d7e8a773b7dc1eea76c0`); current P14
 canonical State/Brief `4caecbbfb0464c965811402b3c11d8717605114a` is a docs-only
-update; P18 canonical/State
-`ba8076c3bc2c8c354a8755e6efaca30bfeab7bf7` (P18-A/B/C and additive P18-A
-continuation extension promoted; P18-D technical design candidate
-`9ed6d90455cc793244ee7207adb62960e45a9972` independently reviewed and
-recorded in State at `ba8076c`; P18-D remains not implementation-ready); P20 canonical/State
+update; P18 code tip `9e790c59e14ca7f7ed195c0e6267e10f3cd039d7` (P18 State text at
+that tip is lagging on P18-D2: `ea7b3e7` is an ancestor and its legacy
+per-runtime advance lease is in code; this does not establish full P18-D
+readiness); P20 canonical/State
 `7a81cc0ecbc511dd36c248ec62c7b20f7e477f53` (P20-A promoted, code
 `22df7b307528e705e6e84d1d8d54852a17cfc848`); and the current architecture
 alignments.
+
+Current-base revalidation also inspected P9/P11 composition candidate
+`af656e7710fce0ba171fae1d6684331d2dc0b743`, which is validated but
+unpromoted, plus both current alignment records. Candidate composition evidence
+does not substitute for canonical live-composition evidence. The exhaustive
+source-method census below is a source/API map only: it is not a live
+owner-revision census, committed-mutation notification proof, or complete
+invalidation guarantee.
 
 This remains a documentation-only cross-branch inventory. The proposal branch
 does not inherit P11 executable code; P11 canonical was inspected separately
@@ -37,9 +45,10 @@ WorldCommand-ID history, and next sequence. Reject `Pending` (including
 deferred) and `ConsumedAwaitingTerminalAttempt` state. `Rejected`,
 `AttemptReturned`, and `AttemptThrew` are terminal; after a throw, capture is
 allowed only at a later successful daily boundary while the runtime is healthy.
-The P12 candidate must include the promoted P11 runtime (or prove equivalent
-composition) before claiming this coverage. P18-A/B/C and the additive P18-A
-continuation extension are promoted at current P18 canonical `ba8076c`; the
+The exact candidate `af656e7` contains P11 composition, but remains unpromoted;
+canonical combined composition must be revalidated before this becomes live
+profile evidence. P18-A/B/C and the additive P18-A continuation extension are present in the
+checked P18 code lineage; the
 extension was accepted under contract `2175bf2` (acceptance record `9de70ae`)
 and implemented at integration `1dd0479`. The selected legacy
 `TesteSimulacao` profile still does not compose the P18 timeline, activity
@@ -283,11 +292,12 @@ exogenous local material source; their existing `productionConfigs` are the
 legacy economy producer and do not make P14-A material-flow state present.
 P18 intraday state, P19 module state, P20 shared activities, P13 historical
 reconstruction/fork guarantees, and generated P9/P10 content remain outside
-P12-A. P18-A/B/C and the additive P18-A continuation extension are promoted
-at current P18 canonical/State `ba8076c`. The P18-D technical design candidate
-`9ed6d90` passed independent review and is recorded in that State, but P18-D
-remains not implementation-ready pending the economy operation receipt and
-serialized `SimulationRuntime` ownership window. The selected bootstrap does
+P12-A. P18-A/B/C and the additive P18-A continuation extension are present in
+the checked P18 code lineage; the checked P18 State text is lagging on P18-D2.
+P18-D remains not implementation-ready pending the economy operation receipt
+and serialized chronological `SimulationRuntime` ownership window. The narrow
+P18-D2 legacy advance lease exists in checked code, but does not satisfy those
+full P18-D gates. The selected bootstrap does
 not compose the P18 timeline, activity/availability runtime, continuation
 extension, or intraday state; no P18 state is claimed. P20-A is promoted at
 current P20 canonical/State `7a81cc0`,
