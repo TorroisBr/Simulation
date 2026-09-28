@@ -1,5 +1,8 @@
+using System;
 using System.Collections.Generic;
+using System.Text;
 using NUnit.Framework;
+using UnityEngine;
 
 public sealed class CommercialKnowledgeSharingTests
 {
@@ -111,6 +114,155 @@ public sealed class CommercialKnowledgeSharingTests
         Assert.That(marta.CommercialKnowledge.TryGetObservation(
             city.Location.RuntimeId, item.DefinitionId, out _), Is.False);
     }
+
+    [Test]
+    public void BoundaryProvider_RetainsSnapshotCapturedAfterPriorObservationAndUsesFrozenPairing()
+    {
+        ItemData item = SimulationTestFactory.CreateItem("item-frozen-share");
+        CityRuntime city = SimulationTestFactory.CreateCity("city-frozen", "location-frozen");
+        NpcRuntime first = new NpcRuntime("npc-a", SimulationTestFactory.CreateNpc("first", NpcJobType.Merchant), city, 100f);
+        NpcRuntime second = new NpcRuntime("npc-b", SimulationTestFactory.CreateNpc("second", NpcJobType.Merchant), city, 100f);
+        Dictionary<string, NpcRuntime> actors = new Dictionary<string, NpcRuntime>
+        {
+            [first.RuntimeId] = first,
+            [second.RuntimeId] = second
+        };
+        CommercialKnowledgeSharingSystem sharing = new CommercialKnowledgeSharingSystem(
+            new SimulationTime(3L), new EffectiveCommercialKnowledgeConfiguration());
+        CommercialKnowledgeSharingDailyBoundaryStepProvider provider =
+            new CommercialKnowledgeSharingDailyBoundaryStepProvider(() => new[] { first, second },
+                id => actors.TryGetValue(id, out NpcRuntime npc) ? npc : null, sharing);
+        DailyBoundaryOperation operation = new DailyBoundaryOperation("world", "profile", 3L);
+
+        Assert.That(provider.TryCreateSteps(operation, 0, out IReadOnlyList<BoundaryContinuationStep> steps, out _), Is.True);
+        Assert.That(steps.Count, Is.EqualTo(3));
+        Assert.That(steps[0].OperationKind, Is.EqualTo("commercial-sharing.snapshot"));
+        Assert.That(steps[1].StepId, Is.EqualTo(GetEdgeStepId(second.RuntimeId, first.RuntimeId)));
+
+        // This is the prior local-observation step in the boundary sequence.
+        first.CommercialKnowledge.RecordObservation(SimulationTestFactory.CreateObservation(
+            city.Location.RuntimeId, item, 51f, 9, 2, 2));
+        BoundaryContinuationManifest manifest = new BoundaryContinuationManifest(operation,
+            "test", "1", "config", steps, "content");
+        Assert.That(provider.TryPrepareStep(manifest, steps[0], out IBoundaryContinuationStepCommit snapshot, out _), Is.True);
+        Assert.That(snapshot.TryCommit(out _), Is.True);
+
+        // A replay after a recipient mutation must return the retained source snapshot.
+        ItemData recipientItem = SimulationTestFactory.CreateItem("item-recipient-local");
+        second.CommercialKnowledge.RecordObservation(SimulationTestFactory.CreateObservation(
+            "location-recipient", recipientItem, 9f, 1, 3, 3));
+        Assert.That(provider.TryPrepareStep(manifest, steps[0], out IBoundaryContinuationStepCommit replaySnapshot, out _), Is.True);
+        Assert.That(replaySnapshot.TryCommit(out _), Is.True);
+
+        // Later source changes cannot alter this boundary's retained phase snapshot.
+        first.CommercialKnowledge.RecordObservation(SimulationTestFactory.CreateObservation(
+            city.Location.RuntimeId, item, 88f, 3, 3, 3));
+        foreach (BoundaryContinuationStep edge in new[] { steps[1], steps[2] })
+        {
+            Assert.That(provider.TryPrepareStep(manifest, edge, out IBoundaryContinuationStepCommit prepared, out _), Is.True);
+            Assert.That(prepared.TryCommit(out _), Is.True);
+        }
+
+        Assert.That(second.CommercialKnowledge.TryGetObservation(city.Location.RuntimeId,
+            item.DefinitionId, out CommercialMarketObservation received), Is.True);
+        Assert.That(received.ObservedPrice, Is.EqualTo(51f));
+        Assert.That(received.ReceivedDay, Is.EqualTo(3L));
+        Assert.That(received.SourceRuntimeId, Is.EqualTo(first.RuntimeId));
+        Assert.That(second.CommercialKnowledge.TryGetObservation("location-recipient",
+            recipientItem.DefinitionId, out _), Is.True);
+    }
+
+    [Test]
+    public void BoundaryProvider_FreezesFullRosterOrderMerchantCardinalityCityIdentityAndRotation()
+    {
+        CityRuntime city = SimulationTestFactory.CreateCity("city-shared-id", "location-shared-id");
+        CityRuntime sameIdentityDifferentObject = SimulationTestFactory.CreateCity("city-shared-id", "location-shared-id");
+        NpcRuntime a = CreateMerchant("npc-a", city);
+        NpcRuntime b = CreateMerchant("npc-b", city);
+        NpcRuntime c = CreateMerchant("npc-c", city);
+        NpcRuntime d = CreateMerchant("npc-d", city);
+        NpcRuntime e = CreateMerchant("npc-e", sameIdentityDifferentObject);
+        NpcRuntime nonMerchant = new NpcRuntime("npc-non-merchant",
+            SimulationTestFactory.CreateNpc("non-merchant", NpcJobType.None), city, 100f);
+        NpcRuntime[] roster = { d, nonMerchant, b, e, a, c };
+        Dictionary<string, NpcRuntime> actors = new Dictionary<string, NpcRuntime>();
+        foreach (NpcRuntime npc in roster) actors.Add(npc.RuntimeId, npc);
+        CommercialKnowledgeSharingDailyBoundaryStepProvider provider = CreateProvider(roster, actors);
+
+        Assert.That(provider.TryCreateSteps(new DailyBoundaryOperation("world", "profile", 1L), 5,
+            out IReadOnlyList<BoundaryContinuationStep> dayOne, out _), Is.True);
+        FrozenSharePlan plan = JsonUtility.FromJson<FrozenSharePlan>(dayOne[0].Payload);
+        Assert.That(Array.ConvertAll(plan.runtimeRoster, entry => entry.runtimeId),
+            Is.EqualTo(new[] { "npc-d", "npc-non-merchant", "npc-b", "npc-e", "npc-a", "npc-c" }));
+        Assert.That(Array.ConvertAll(plan.participants, entry => entry.runtimeId),
+            Is.EqualTo(new[] { "npc-a", "npc-b", "npc-c", "npc-d", "npc-e" }));
+        Assert.That(plan.edges.Length, Is.EqualTo(4));
+        Assert.That(Array.ConvertAll(plan.edges, edge => edge.senderRuntimeId + ">" + edge.receiverRuntimeId),
+            Is.EqualTo(new[] { "npc-b>npc-c", "npc-c>npc-b", "npc-d>npc-a", "npc-a>npc-d" }));
+        for (int i = 0; i < plan.edges.Length; i++)
+            Assert.That(dayOne[i + 1].StepId, Is.EqualTo(GetEdgeStepId(plan.edges[i].senderRuntimeId,
+                plan.edges[i].receiverRuntimeId)));
+
+        Assert.That(provider.TryCreateSteps(new DailyBoundaryOperation("world", "profile", 2L), 0,
+            out IReadOnlyList<BoundaryContinuationStep> dayTwo, out _), Is.True);
+        FrozenSharePlan nextDay = JsonUtility.FromJson<FrozenSharePlan>(dayTwo[0].Payload);
+        Assert.That(Array.ConvertAll(nextDay.edges, edge => edge.senderRuntimeId + ">" + edge.receiverRuntimeId),
+            Is.EqualTo(new[] { "npc-c>npc-d", "npc-d>npc-c", "npc-a>npc-b", "npc-b>npc-a" }));
+    }
+
+    [Test]
+    public void BoundaryProvider_RejectsParticipantMovedToReplacementCityWithSameIds()
+    {
+        CityRuntime original = SimulationTestFactory.CreateCity("city-stable", "location-stable");
+        CityRuntime replacement = SimulationTestFactory.CreateCity("city-stable", "location-stable");
+        NpcRuntime first = CreateMerchant("npc-first", original);
+        NpcRuntime second = CreateMerchant("npc-second", original);
+        NpcRuntime[] roster = { first, second };
+        Dictionary<string, NpcRuntime> actors = new Dictionary<string, NpcRuntime>
+        {
+            [first.RuntimeId] = first,
+            [second.RuntimeId] = second
+        };
+        CommercialKnowledgeSharingDailyBoundaryStepProvider provider = CreateProvider(roster, actors);
+        DailyBoundaryOperation operation = new DailyBoundaryOperation("world", "profile", 4L);
+        Assert.That(provider.TryCreateSteps(operation, 0, out IReadOnlyList<BoundaryContinuationStep> steps, out _), Is.True);
+        BoundaryContinuationManifest manifest = new BoundaryContinuationManifest(operation, "test", "1", "config", steps);
+        Assert.That(provider.TryPrepareStep(manifest, steps[0], out IBoundaryContinuationStepCommit snapshot, out _), Is.True);
+        Assert.That(snapshot.TryCommit(out _), Is.True);
+
+        Assert.That(first.SetCurrentPresence(replacement.Location, replacement), Is.True);
+        Assert.That(provider.TryPrepareStep(manifest, steps[1], out _, out _), Is.False);
+    }
+
+    private static NpcRuntime CreateMerchant(string id, CityRuntime city) => new NpcRuntime(id,
+        SimulationTestFactory.CreateNpc(id, NpcJobType.Merchant), city, 100f);
+
+    private static CommercialKnowledgeSharingDailyBoundaryStepProvider CreateProvider(
+        IReadOnlyList<NpcRuntime> roster, IReadOnlyDictionary<string, NpcRuntime> actors)
+    {
+        CommercialKnowledgeSharingSystem owner = new CommercialKnowledgeSharingSystem(
+            new SimulationTime(20L), new EffectiveCommercialKnowledgeConfiguration());
+        return new CommercialKnowledgeSharingDailyBoundaryStepProvider(() => roster,
+            id => actors.TryGetValue(id, out NpcRuntime npc) ? npc : null, owner);
+    }
+
+    private static string GetEdgeStepId(string sender, string receiver)
+    {
+        string[] parts = { "edge/v1", sender, receiver };
+        StringBuilder encoded = new StringBuilder();
+        foreach (string part in parts) encoded.Append(part.Length).Append(':').Append(part);
+        return "commercial-share-edge:" + Convert.ToBase64String(Encoding.UTF8.GetBytes(encoded.ToString()));
+    }
+
+    [Serializable] private sealed class FrozenSharePlan
+    {
+        public FrozenRosterMember[] runtimeRoster;
+        public FrozenParticipant[] participants;
+        public FrozenEdge[] edges;
+    }
+    [Serializable] private sealed class FrozenRosterMember { public string runtimeId; public string personId; }
+    [Serializable] private sealed class FrozenParticipant { public string runtimeId; }
+    [Serializable] private sealed class FrozenEdge { public string senderRuntimeId; public string receiverRuntimeId; }
 
     [Test]
     public void Sharing_RequiresSameCityAndStationaryMerchants()
