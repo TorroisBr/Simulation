@@ -92,6 +92,42 @@ The day-boundary owner emits any typed availability/condition receipts from incl
 The P18-A activation occurrence `(worldId, profileId, absoluteDay)` is consumed atomically with this manifest and the exact returned barrier-fact descriptor. A separate barrier identity tracks subphase completion. For each frozen step `(worldId, profileId, absoluteDay, stepId)`, the coordinator queries the declared owner's compatible-revision receipt. A committed receipt advances the cursor without reapplying effects. If absent, the coordinator invokes only that owner; the owner atomically commits the effect, step receipt, and source signals. If the response is uncertain, keep the barrier pending at `t`; retry resolves that exact receipt and either skips the committed step or retries that first uncommitted step. Preserve source signals in owner receipts and barrier aggregation across failures; do not publish/consume them as P18-C triggers until the outer chronological advance through `t` succeeds. A missing atomic or compatible-revision seam means that step is excluded from this intraday composition; its legacy operation remains in the legacy profile, or the narrower profile remains not ready pending explicit product approval for omitted behavior.
 
 After all included manifest entries have committed or their frozen conditional disposition has completed, atomically complete the separate barrier identity. Only then can P18-A drain ordinary same-instant due work. The P18-A activation identity remains consumed throughout and is never reopened or held pending for individual owner commits. If ordinary due work fails after barrier completion, P18-A keeps `now=t` and resumes that work on retry without repeating boundary activation or the daily subphase. P18-C receives no post-advance handoff and the timeline does not move beyond `t` until both the barrier and all due work at `t` succeed. The coordinator owns only the frozen manifest, progress cursor, and signal aggregation; domain owners remain sole authorities for daily truth and step receipts. No cross-owner transaction, world-wide rollback, or generic transaction framework is introduced.
+### Justice owner-step sequencing note
+
+The `justice.advance-sentences` entry preserves the complete existing
+`JusticeSystem.AdvanceSentences(roster)` operation: reverse sentence traversal,
+sentence decrement and expiry/release, release of arrested roster members
+without an active sentence, and the method's embedded first
+`SyncWantedStatuses(roster)` pass. The following `justice.sync-wanted-statuses`
+entry remains a distinct later step because it is an explicit second legacy
+pass; duplicate wanted markers make that pass observably different because
+`NpcRuntime.RemoveStatus` removes one occurrence at a time. Do not move the
+embedded pass out of sentence advancement or collapse the two receipts.
+
+The frozen roster descriptor preserves list order, null slots, repeated runtime
+references, and cardinality. Person-backed entries carry `PersonId` as well as
+`NpcRuntimeId`; unbacked entries retain `NpcRuntimeId`. Sentence and warrant
+traversal order/cardinality and the Justice-owned values used by the operation
+remain part of its captured owner state. The operation emits no domain event or
+SellGoods eligibility signal; its existing log messages are diagnostics, not
+causal receipts. SellGoods has no current arrested, wanted, or hidden-state
+eligibility check.
+
+The ordered Crime step precedes sentence advancement and can decrement the
+hidden timer or remove the hidden marker on the same NPCs. Justice release also
+clears hidden state. Therefore a Justice descriptor must not freeze those
+Crime-owned hidden values into a mutable pre-subphase owner revision that would
+reject the declared predecessor's committed effects. Its compatible owner
+revision uses the frozen ordered roster identity/cardinality and the Justice
+operation version; `TryPrepare` captures current Justice and roster state after
+the prior steps, and the prepared commit revalidates that exact snapshot before
+mutation. The later wanted-status step follows the same rule: validate its live
+snapshot after sentence advancement, while retaining its distinct manifest
+identity. Receipt identity is `(BoundaryOccurrenceId, StepId)`; descriptor
+fingerprints retain ordinal, subphase, configuration, content, and all step
+fields. This is a sequential compatibility rule for the accepted daily
+manifest, not a new gameplay or general concurrency contract.
+
 ## 5. Current-truth execution, outcome, and failure atomicity
 
 P11's decision proposal may use only the actor's permitted Knowledge and typed input. Its canonical command payload remains `PersonId` plus `ActionDefinitionId`. P18-C may retain a resolved proposal containing the item/amount/other action parameters returned by the existing `CreateRequestedAction` path, but those resolved values are proposal state, not new command fields. The execution adapter resolves the current materialized actor by `PersonId`, current action definition/version, item, location/city/market and applicable target through current owners at the requested logical instant. It rechecks alive/eligible state, local position and city-location consistency, enabled SellGoods configuration, merchant-plan restrictions, inventory/item availability and all existing provider/domain preconditions. Stale known facts or proposal values do not authorize a sale.
