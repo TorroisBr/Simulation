@@ -818,9 +818,10 @@ public sealed class JusticeSyncWantedStatusesBoundaryOwnerTests
         Assert.That(receipt.OwnerRevisionAfter, Is.EqualTo(receipt.OwnerRevisionBefore + 1));
 
         target.CurrentStatus.Add(wanted);
+        int markerCountBeforeReplay = CountStatusReference(target, wanted);
         Assert.That(justice.TryPrepareSyncWantedStatusesStep(manifest, syncStep, roster, out IBoundaryContinuationStepCommit replay, out failure), Is.True);
         Assert.That(replay.TryCommit(out failure), Is.True);
-        Assert.That(CountStatusReference(target, wanted), Is.EqualTo(1));
+        Assert.That(CountStatusReference(target, wanted), Is.EqualTo(markerCountBeforeReplay));
     }
 
     [Test]
