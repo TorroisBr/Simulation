@@ -532,6 +532,71 @@ public sealed class CommercialKnowledgeRuntime
         return false;
     }
 
+    internal bool TryPrepareDirectObservationBatch(
+        IReadOnlyList<CommercialMarketObservation> marketObservations,
+        CommercialLiquidityObservation liquidityObservation,
+        out CommercialKnowledgeObservationInstall prepared)
+    {
+        prepared = null;
+        if (marketObservations == null) return false;
+
+        List<CommercialMarketObservation> nextMarkets =
+            new List<CommercialMarketObservation>(ObservationList);
+        List<CommercialLiquidityObservation> nextLiquidity =
+            new List<CommercialLiquidityObservation>(LiquidityObservationList);
+        long appliedChanges = 0L;
+
+        foreach (CommercialMarketObservation observation in marketObservations)
+        {
+            if (observation == null || observation.ItemDefinition == null
+                || observation.ItemDefinition.DefinitionId != observation.ItemDefinitionId) return false;
+
+            int index = FindObservationIndex(nextMarkets,
+                observation.LocationRuntimeId, observation.ItemDefinitionId);
+            if (index < 0)
+            {
+                nextMarkets.Add(observation);
+                appliedChanges++;
+            }
+            else if (ShouldReplace(nextMarkets[index], observation))
+            {
+                nextMarkets[index] = observation;
+                appliedChanges++;
+            }
+        }
+
+        if (liquidityObservation != null)
+        {
+            int index = FindLiquidityObservationIndex(nextLiquidity,
+                liquidityObservation.LocationRuntimeId);
+            if (index < 0)
+            {
+                nextLiquidity.Add(liquidityObservation);
+                appliedChanges++;
+            }
+            else if (ShouldReplace(nextLiquidity[index], liquidityObservation))
+            {
+                nextLiquidity[index] = liquidityObservation;
+                appliedChanges++;
+            }
+        }
+
+        if (appliedChanges > long.MaxValue - revision) return false;
+        prepared = new CommercialKnowledgeObservationInstall(this, revision,
+            revision + appliedChanges, nextMarkets, nextLiquidity);
+        return true;
+    }
+
+    internal bool CanInstall(CommercialKnowledgeObservationInstall prepared) =>
+        prepared != null && prepared.Owner == this && revision == prepared.ExpectedRevision;
+
+    internal void InstallPrepared(CommercialKnowledgeObservationInstall prepared)
+    {
+        observations = prepared.NextMarketObservations;
+        liquidityObservations = prepared.NextLiquidityObservations;
+        revision = prepared.NextRevision;
+    }
+
     public bool TryGetShareReceipt(string operationIdentity, out CommercialKnowledgeShareReceipt receipt)
     {
         receipt = null;
@@ -735,6 +800,30 @@ public sealed class CommercialKnowledgeRuntime
                 return 0;
         }
     }
+}
+
+internal sealed class CommercialKnowledgeObservationInstall
+{
+    internal CommercialKnowledgeRuntime Owner { get; }
+    internal long ExpectedRevision { get; }
+    internal long NextRevision { get; }
+    internal List<CommercialMarketObservation> NextMarketObservations { get; }
+    internal List<CommercialLiquidityObservation> NextLiquidityObservations { get; }
+
+    internal CommercialKnowledgeObservationInstall(CommercialKnowledgeRuntime owner,
+        long expectedRevision, long nextRevision,
+        List<CommercialMarketObservation> nextMarketObservations,
+        List<CommercialLiquidityObservation> nextLiquidityObservations)
+    {
+        Owner = owner;
+        ExpectedRevision = expectedRevision;
+        NextRevision = nextRevision;
+        NextMarketObservations = nextMarketObservations;
+        NextLiquidityObservations = nextLiquidityObservations;
+    }
+
+    internal bool CanInstall(CommercialKnowledgeRuntime owner) => owner != null
+        && owner.CanInstall(this);
 }
 
 [Serializable]
