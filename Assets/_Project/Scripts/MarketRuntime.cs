@@ -173,7 +173,7 @@ public class MarketRuntime
 
     public bool CanAddStock(ItemData item, int amount)
     {
-        if (item == null || amount <= 0 || revision == long.MaxValue)
+        if (item == null || amount <= 0)
         {
             return false;
         }
@@ -268,11 +268,14 @@ public class MarketRuntime
         bool found = false;
         foreach (MarketItemRuntime existing in items)
         {
-            if (existing == null) continue;
-            if (existing.Item != item) { replacement.Add(new MarketItemRuntime(existing.Item, existing.Amount, existing.DesiredAmount)); continue; }
-            found = true;
-            MarketItemRuntime updated = new MarketItemRuntime(item, existing.Amount + delta, existing.DesiredAmount);
-            replacement.Add(updated);
+            if (existing == null) { replacement.Add(null); continue; }
+            if (!found && existing.Item == item)
+            {
+                found = true;
+                replacement.Add(new MarketItemRuntime(item, existing.Amount + delta, existing.DesiredAmount));
+                continue;
+            }
+            replacement.Add(new MarketItemRuntime(existing.Item, existing.Amount, existing.DesiredAmount));
         }
         if (!found) replacement.Add(new MarketItemRuntime(item, delta, desiredAmount));
         return new PreparedMarketState(replacement);
