@@ -1,6 +1,6 @@
 # Phase 18 State — Intraday Temporal Execution v1
 
-**Status:** PHASE 18 IN PROGRESS — P18-A/B/C promoted, including the additive extension at `1dd0479` and the external-input/deferral adapter at integration tip `b75c5b8` (code `a535441`); P20-A is promoted (code `22df7b3`, P20 State tip `7a81cc0`). P18-D consumes the promoted P11 temporal capture contract. Technical design candidate `9ed6d90` passed independent exact-tip review against P18 canonical `85f1f21` and the current P14/P20/P11/architecture/alignment refs recorded below. P18-D is not implementation-ready: it still needs the sale-owner operation receipt/prepared-install capability and an exclusive serialized `SimulationRuntime` ownership window.
+**Status:** PHASE 18 IN PROGRESS — P18-A/B/C promoted, including the additive extension at `1dd0479` and the external-input/deferral adapter at integration tip `b75c5b8` (code `a535441`); P20-A is promoted (code `22df7b3`, P20 State tip `7a81cc0`). P18-D consumes the promoted P11 temporal capture contract. Its exact technical design passed independent review; the sale-owner receipt/prepared-install and per-runtime serialized advance prerequisites were implemented, validated, and promoted at `9e790c59e14ca7f7ed195c0e6267e10f3cd039d7`. P18-D consumer integration is now READY FOR IMPLEMENTATION; the SellGoods bridge and intraday daily compatibility adapter remain undelivered.
 
 **Current canonical base:** `codex/phase8/canonical` at `470667d37863384edadb3d93ef64d8004aff46a3`
 
@@ -48,7 +48,15 @@ documentation/design review; no new code or test result is claimed.
 | P18-B — Activity Lifecycle | PROMOTED | Implementation `97918cbbe4238a65a216b1a1f0ef84c70b4d080c` was promoted through integration commit `8f0cc4a6764abfc238e2497e4fad19487c6db82f` after independent review and user approval. A foreign timeline cannot dispatch lifecycle facts. Integration validation: ActivityLifecycle 16/16 (`EditMode-20260927-015240-ce080762386744cd9063484f033c5531.xml`), LogicalTimeline 19/19 (`EditMode-20260927-015352-fd3eb5a52fc9441ab7df66ba3b693dd0.xml`), ALL EditMode 1734/1734 (`EditMode-20260927-015417-28accf72f1ca42e79738072790b84001.xml`), official Smoke 5/5 (`EditMode-20260927-015453-960eaed7ce0443329ae1d54f33b4aacf.xml`), and `git diff --check` passed. |
 | P18-C — Availability-Driven Decisions | PROMOTED | Source tip `ab05ecfe976e80badf6f509b8e9be25ff556ca23` (review-corrected State/promotion tip `7aa76268c49058fedb997392e676c6a29169c8b0`), based exactly on `39bd42e9e78f80c1e40b35b099e980ee8bc44a43`; architecture/alignment baseline `c285466c355103d3637ac165246591b72eb7bda0`. Independent implementation re-review passed after preserving distinct same-actor/same-tick causal receipts and retrying uncommitted execution with the same stable proposal ID. Focused ActorAvailabilityDecision 5/5 (`EditMode-20260927-031900-b609bdccc79143319b5e3ab54106cb84.xml`), ActivityLifecycle 17/17 (`EditMode-20260927-031918-7c40152d1d6545e29f127d8709a89542.xml`), ALL EditMode 1740/1740 (`EditMode-20260927-031934-f18b558a02a84818985c816b664106ab.xml`), and complete official Smoke 5/5 (`EditMode-20260927-032011-5c51d8ccde5a4fc8bec922bebcd88dd0.xml`) passed; `git diff --check` passed. User approved promotion; `codex/phase18/canonical` is promoted at `7aa7626`. |
 | P18-C — External-Input/Deferral Adapter | PROMOTED at integration tip `b75c5b8` (code `a535441`) | Code integration `a535441` was assembled against P18 State tip `eabc1c2` (promoted extension code `1dd0479`) and promoted to `codex/phase18/canonical` at `b75c5b8`. Exact-tip independent implementation review passed. Temporal identity/cardinality, focused domain suites, ALL EditMode 1794/1794, complete Smoke 5/5, and diff-check passed. The promoted candidate State still carried stale pending-gate wording; this docs-only correction reconciles it. |
-| P18-D — Consumer Integration | TECHNICAL DESIGN REVIEWED; NOT IMPLEMENTATION-READY | Technical design candidate `9ed6d90455cc793244ee7207adb62960e45a9972` passed independent exact-tip review against P18 canonical `85f1f21`, P14 State `4caecbb` / code `c44904b`, P20 State `7a81cc0` / P20-A integration `1dcf67a` (implementation `22df7b3`), P11 canonical `308e24d`, architecture `c285466`, intraday-extensibility alignment `4b6dd1d`, and multi-participant alignment `c285466`. This was a documentation/design review only; it does not claim code, tests, or an implemented atomic sale. The earlier `aa5f182` review against P18 `18ecc6e` and P14 `f8a61fe`, and the intervening State review at `89efa8b`, are historical and do not describe the exact technical-design tip. P20-A is promoted but creates no P18-D dependency. Promoted P18-C code `a535441` / P18 State `85f1f21` provides P11 `TryCaptureTemporal`, exact P18-A reference linkage, and typed temporal lifecycle dispositions. The P18-D composition bridge remains to bind committed P11 receipts into `ActorDecisionRequestState` after successful advance, observe later triggers/deferrals, and admit the exact allocated request; preserve P11 semantic validation. Two implementation blockers remain: (1) `EconomyTransactionService` must implement and validate the recommended sale-owner operation receipt and owner-local prepared-install capability, including stable proposal identity/fingerprint, current-truth snapshot, committed replay, and retry only after proven-no-install; (2) an exclusive serialized `SimulationRuntime` ownership window must be opened for the full chronological advance, boundary subphases, and successful post-advance P18-C handoff. P14 remains excluded absent a separately reviewed temporal owner adapter; no blanket P20/P19 dependency is implied. The recommendation scopes receipt retention to the current `SimulationRuntime` lifetime and makes no restart/save/crash-recovery claim. Any later supported intraday save/fork must include this causal state under P12/P13 design, not by selecting the daily profile. |
+| P18-D prerequisite — Economy sale receipt/prepared install | PROMOTED at `9e790c5` | Stable proposal/fingerprint identity, first-execution current-truth snapshot, committed replay, retry only after proven-no-install, expected-revision preflight, and owner-local prepared installation across inventory, market, and account state. Receipt retention is scoped to the current `SimulationRuntime` lifetime; no restart/save/crash-recovery guarantee is claimed. |
+| P18-D prerequisite — serialized runtime advance window | PROMOTED at `9e790c5` | A per-runtime, single-writer, non-reentrant lease covers `TryAdvanceDay` and the outer `TryAdvanceDays` call. It is not a general thread-safety promise. The P18-D consumer must keep its full chronological advance, boundary subphases, and successful post-advance P18-C handoff inside this lease. |
+| P18-D — Consumer Integration | READY FOR IMPLEMENTATION | Technical design candidate `9ed6d90455cc793244ee7207adb62960e45a9972` passed independent exact-tip review against P18 canonical `85f1f21`, P14 State `4caecbb` / code `c44904b`, P20 State `7a81cc0` / P20-A integration `1dcf67a` (implementation `22df7b3`), P11 canonical `308e24d`, architecture `c285466`, intraday-extensibility alignment `4b6dd1d`, and multi-participant alignment `c285466`. The prerequisites above are now promoted; P18-D still must bind committed P11 receipts into `ActorDecisionRequestState` after successful advance, observe later triggers/deferrals, admit the exact allocated request, integrate the existing SellGoods provider, and implement the intraday daily compatibility adapter while preserving P11 semantic validation. P14 remains excluded absent a separately reviewed temporal owner adapter; no blanket P20/P19 dependency is implied. |
+
+### P18-D prerequisite integration — promoted `9e790c5`
+
+The reviewed code integration was based on P18 canonical `ba8076c3bc2c8c354a8755e6efaca30bfeab7bf7`, independently reviewed at exact tip `9e790c59e14ca7f7ed195c0e6267e10f3cd039d7`, and approved for canonical promotion. It combines the bounded economy sale-owner receipt/prepared-install capability with the per-runtime serialized advance lease. The runtime lease protects the existing advance entrypoints and is the ownership seam for the forthcoming P18-D chronological consumer; it does not itself deliver that consumer.
+
+On the exact candidate tip, EconomyTransactionTests passed 45/45, ALL EditMode passed 1808/1808 (`EditMode-20260928-025030-63d4104987f8414ab0d311e21bb58220.xml`), official complete Smoke passed 5/5 (`EditMode-20260928-025133-46136d27c60f440aa256aaf0aa1925b3.xml`), and `SimulationRuntimeLongRunTests` passed 7/7 (`EditMode-20260928-025209-0da1288bb5d046e1a0b7cff86d01754c.xml`). `git diff --check` passed. The sale regression verifies an item-definition price change does not replace the market's cached sale price before the price-refresh operation. These results promote only the prerequisites; they do not claim a P18-D consumer migration or Phase 18 closure.
 
 ## P18-C implementation ownership
 
@@ -61,7 +69,10 @@ availability transitions and post-advance handoff without adding a second
 scheduler. This bounded core does not own `SimulationRuntime.cs`, `CityRuntime.cs`,
 or the P14 material-flow files. It does not claim that the legacy daily runtime
 has migrated; a selected live consumer and daily compatibility adapter remain
-P18-D integration work after its design refresh; implementation still needs the serialized `SimulationRuntime` ownership window and the economy operation-receipt contract.
+P18-D integration work. The serialized `SimulationRuntime` ownership window
+and economy operation-receipt contract were promoted together at `9e790c5`;
+the consumer migration must reuse them rather than introduce another receipt
+owner or advance lock.
 The implementation review
 requested corrections to same-tick causal request handling and executor retry
 semantics; both were addressed and independently re-reviewed at the exact
@@ -170,10 +181,12 @@ substitute for this historical candidate result. P18-C adapter promotion to
 canonical `b75c5b8` satisfies the P18-D dependency on temporal input capture:
 P11 `TryCaptureTemporal` and typed temporal lifecycle dispositions are
 promoted in code `a535441`. P18-D consumes those APIs and preserves P11's
-semantic validation. P18-D remains BLOCKED on the serialized
-`SimulationRuntime` ownership window and the economy-owner operation receipt
-with immutable proposal correlation and current-truth execution snapshot. The adapter does not
-implement the P18-D SellGoods consumer or claim a daily runtime migration.
+semantic validation. At the time of this P18-C adapter record, P18-D still
+awaited the serialized `SimulationRuntime` ownership window and economy-owner
+operation receipt with immutable proposal correlation and current-truth
+execution snapshot. Both prerequisites were subsequently promoted at
+`9e790c5`; this adapter itself does not implement the P18-D SellGoods consumer
+or claim a daily runtime migration.
 
 Post-extension validation on code integration `a535441` passed:
 
@@ -228,7 +241,7 @@ the advancing call; and conflicting indexed facts are rejected by due instant
 and causal sequence. Candidate validation passed LogicalTimeline 35/35, ALL
 EditMode 1756/1756, official complete Smoke 5/5, and `git diff --check`
 (worker-reported results; the independent review did not rerun Unity). The
-corrected candidate was promoted through integration tip `1dd0479` to `codex/phase18/canonical`. P18-C's external-input/deferral adapter, including P11 temporal capture/dispositions, was subsequently promoted at `b75c5b8`. P18-D consumes this available contract; implementation remains blocked only on the economy-owner operation receipt and the separate `SimulationRuntime` ownership window.
+corrected candidate was promoted through integration tip `1dd0479` to `codex/phase18/canonical`. P18-C's external-input/deferral adapter, including P11 temporal capture/dispositions, was subsequently promoted at `b75c5b8`. At that historical checkpoint P18-D still awaited its economy-owner operation receipt and separate `SimulationRuntime` ownership window; both prerequisites were later promoted at `9e790c5`.
 
 At the then-recorded P18 checkpoint: P20 Entry Architecture `2f9c93b588ffccaae60aedf6c16191c1251f6a1f` and
 Technical Design `6a0d16494735853ce35a8974ab348551650afd6b` passed their prior
