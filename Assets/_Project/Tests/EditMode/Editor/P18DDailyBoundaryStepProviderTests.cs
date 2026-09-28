@@ -1,8 +1,15 @@
 using System;
+using System.Collections.Generic;
 using NUnit.Framework;
 
 public sealed class P18DDailyBoundaryStepProviderTests
 {
+    [SetUp]
+    public void SetUp() => SimulationTestFactory.CleanupDefinitions();
+
+    [TearDown]
+    public void TearDown() => SimulationTestFactory.CleanupDefinitions();
+
     [Test]
     public void ExistingPlaceContentAndLoggerOwnersRunInTheirDeclaredOrderWithReceipts()
     {
@@ -67,5 +74,126 @@ public sealed class P18DDailyBoundaryStepProviderTests
         Assert.That(provider.OwnsStep(foreign), Is.False);
         Assert.That(provider.TryPrepareStep(null, foreign, out _, out failure), Is.False);
         Assert.That(failure, Is.EqualTo(TimelineFailure.ContinuationFailed));
+    }
+
+    [Test]
+    public void JusticeCrimeAndMerchantProvidersExposeTheApprovedRelativeDailyOrder()
+    {
+        JusticeSystem justice = CreateJustice();
+        List<NpcRuntime> roster = new List<NpcRuntime>();
+        CrimeSystem crime = new CrimeSystem(justice, null,
+            SimulationTestFactory.CreateStatus("p18d-provider-hidden"));
+        MerchantSystem merchant = SimulationTestFactory.CreateMerchantSystem(null, new SimulationTime(1));
+        DailyBoundaryOperation operation = new DailyBoundaryOperation("world", "intraday", 6L);
+
+        JusticeBeginDayDailyBoundaryStepProvider beginDay =
+            new JusticeBeginDayDailyBoundaryStepProvider(justice);
+        CrimeHiddenStatusesDailyBoundaryStepProvider hiddenStatuses =
+            new CrimeHiddenStatusesDailyBoundaryStepProvider(crime, roster);
+        JusticeResolutionDailyBoundaryStepProvider justiceResolution =
+            new JusticeResolutionDailyBoundaryStepProvider(justice, roster);
+        MerchantPlanUrgencyDailyBoundaryStepProvider planUrgency =
+            new MerchantPlanUrgencyDailyBoundaryStepProvider(merchant, roster);
+
+        AssertStep(beginDay, operation, 0, "justice-begin-day");
+        AssertStep(hiddenStatuses, operation, 1, "crime-hidden-statuses");
+        Assert.That(justiceResolution.TryCreateSteps(operation, 2,
+            out IReadOnlyList<BoundaryContinuationStep> justiceSteps, out TimelineFailure failure), Is.True);
+        Assert.That(failure, Is.EqualTo(TimelineFailure.None));
+        Assert.That(justiceSteps.Count, Is.EqualTo(2));
+        Assert.That(justiceSteps[0].StepId, Is.EqualTo("justice-advance-sentences"));
+        Assert.That(justiceSteps[0].Ordinal, Is.EqualTo(2));
+        Assert.That(justiceSteps[1].StepId, Is.EqualTo("justice-sync-wanted-statuses"));
+        Assert.That(justiceSteps[1].Ordinal, Is.EqualTo(3));
+        AssertStep(planUrgency, operation, 4, "merchant-plan-urgency");
+
+        // The absent demographic owner remains an earlier P18-D readiness blocker;
+        // these adapters prove only their relative segment and are not a profile composition.
+    }
+
+    [Test]
+    public void JusticeCrimeAndMerchantProvidersDelegatePreparationToTheirDomainOwners()
+    {
+        JusticeSystem justice = CreateJustice();
+        List<NpcRuntime> roster = new List<NpcRuntime>();
+        CrimeSystem crime = new CrimeSystem(justice, null,
+            SimulationTestFactory.CreateStatus("p18d-provider-prepare-hidden"));
+        MerchantSystem merchant = SimulationTestFactory.CreateMerchantSystem(null, new SimulationTime(1));
+
+        JusticeBeginDayDailyBoundaryStepProvider beginDay =
+            new JusticeBeginDayDailyBoundaryStepProvider(justice);
+        IBoundaryContinuationStepCommit beginOperation = PrepareSingleStep(beginDay,
+            new DailyBoundaryOperation("world", "intraday", 10L), out BoundaryContinuationManifest beginManifest,
+            out BoundaryContinuationStep beginStep);
+        Assert.That(beginOperation.TryCommit(out TimelineFailure failure), Is.True);
+        Assert.That(justice.TryResolveBeginDayReceipt(beginManifest, beginStep, out _, out failure), Is.True);
+
+        CrimeHiddenStatusesDailyBoundaryStepProvider hiddenStatuses =
+            new CrimeHiddenStatusesDailyBoundaryStepProvider(crime, roster);
+        IBoundaryContinuationStepCommit crimeOperation = PrepareSingleStep(hiddenStatuses,
+            new DailyBoundaryOperation("world", "intraday", 11L), out BoundaryContinuationManifest crimeManifest,
+            out BoundaryContinuationStep crimeStep);
+        Assert.That(crimeOperation.TryCommit(out failure), Is.True);
+        Assert.That(crime.TryResolveAdvanceHiddenStatusesReceipt(crimeManifest, crimeStep, out _, out failure), Is.True);
+
+        JusticeResolutionDailyBoundaryStepProvider resolution =
+            new JusticeResolutionDailyBoundaryStepProvider(justice, roster);
+        DailyBoundaryOperation resolutionOperation = new DailyBoundaryOperation("world", "intraday", 12L);
+        Assert.That(resolution.TryCreateSteps(resolutionOperation, 0,
+            out IReadOnlyList<BoundaryContinuationStep> resolutionSteps, out failure), Is.True);
+        BoundaryContinuationManifest resolutionManifest = new BoundaryContinuationManifest(
+            resolutionOperation, "daily-boundary", "1", "configuration", resolutionSteps);
+        Assert.That(resolution.TryPrepareStep(resolutionManifest, resolutionSteps[0],
+            out IBoundaryContinuationStepCommit sentenceAdvance, out failure), Is.True);
+        Assert.That(sentenceAdvance.TryCommit(out failure), Is.True);
+        Assert.That(resolution.TryPrepareStep(resolutionManifest, resolutionSteps[1],
+            out IBoundaryContinuationStepCommit wantedSync, out failure), Is.True);
+        Assert.That(wantedSync.TryCommit(out failure), Is.True);
+        Assert.That(justice.TryResolveAdvanceSentencesReceipt(resolutionManifest, resolutionSteps[0], out _, out failure), Is.True);
+        Assert.That(justice.TryResolveSyncWantedStatusesReceipt(resolutionManifest, resolutionSteps[1], out _, out failure), Is.True);
+
+        MerchantPlanUrgencyDailyBoundaryStepProvider planUrgency =
+            new MerchantPlanUrgencyDailyBoundaryStepProvider(merchant, roster);
+        IBoundaryContinuationStepCommit merchantOperation = PrepareSingleStep(planUrgency,
+            new DailyBoundaryOperation("world", "intraday", 13L), out BoundaryContinuationManifest merchantManifest,
+            out BoundaryContinuationStep merchantStep);
+        Assert.That(merchantOperation.TryCommit(out failure), Is.True);
+        Assert.That(merchant.TryResolvePlanUrgencyReceipt(merchantManifest, merchantStep, out _, out failure), Is.True);
+    }
+
+    private static JusticeSystem CreateJustice()
+    {
+        return new JusticeSystem(
+            SimulationTestFactory.CreateStatus("p18d-provider-free"),
+            SimulationTestFactory.CreateStatus("p18d-provider-wanted"),
+            SimulationTestFactory.CreateStatus("p18d-provider-arrested"),
+            SimulationTestFactory.CreateStatus("p18d-provider-justice-hidden"));
+    }
+
+    private static void AssertStep(IP18DDailyBoundaryStepProvider provider,
+        DailyBoundaryOperation operation, int ordinal, string stepId)
+    {
+        Assert.That(provider.TryCreateSteps(operation, ordinal,
+            out IReadOnlyList<BoundaryContinuationStep> steps, out TimelineFailure failure), Is.True);
+        Assert.That(failure, Is.EqualTo(TimelineFailure.None));
+        Assert.That(steps.Count, Is.EqualTo(1));
+        Assert.That(steps[0].Ordinal, Is.EqualTo(ordinal));
+        Assert.That(steps[0].StepId, Is.EqualTo(stepId));
+        Assert.That(provider.OwnsStep(steps[0]), Is.True);
+    }
+
+    private static IBoundaryContinuationStepCommit PrepareSingleStep(
+        IP18DDailyBoundaryStepProvider provider, DailyBoundaryOperation operation,
+        out BoundaryContinuationManifest manifest, out BoundaryContinuationStep step)
+    {
+        Assert.That(provider.TryCreateSteps(operation, 0,
+            out IReadOnlyList<BoundaryContinuationStep> steps, out TimelineFailure failure), Is.True);
+        Assert.That(steps.Count, Is.EqualTo(1));
+        step = steps[0];
+        manifest = new BoundaryContinuationManifest(operation, "daily-boundary", "1",
+            "configuration", steps);
+        Assert.That(provider.TryPrepareStep(manifest, step,
+            out IBoundaryContinuationStepCommit prepared, out failure), Is.True);
+        return prepared;
     }
 }
