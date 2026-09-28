@@ -170,15 +170,7 @@ predecessor effects, records enough owner-local progress to reconstruct the
 same report and skip committed effects, and does not delegate cross-authority
 mutation sequencing to the P18-D coordinator.
 
-Local observation descriptors preserve the exact NPC roster order,
-null/repeated slots, and cardinality used by the existing loop. A
-Person-backed actor carries both `PersonId` and its `NpcRuntimeId`; an
-unbacked actor retains `NpcRuntimeId`. The owner captures the actor's current
-location and ordered market-item/liquidity values only when preparing this
-step after earlier boundary effects, then installs that observation batch with
-its receipt. One actor-owned operation covers each target's exact multiplicity
-in the frozen roster and atomically installs its affected spatial and
-commercial knowledge; otherwise keep the operation outside intraday composition.
+Local observation descriptors preserve the effective runtime roster: registration rejects null entries and duplicate `NpcRuntimeId` values, and the runtime sorts accepted entries by runtime ID before the daily loop. Freeze that sorted unique target order and cardinality. A Person-backed actor carries both `PersonId` and its `NpcRuntimeId`; an unbacked actor retains `NpcRuntimeId`. The owner captures current truth only when preparing this step after earlier boundary effects. Preserve both ordered discoveries: `NpcRuntime.CurrentLocation` for each eligible actor, then `CurrentCity.Location` for eligible merchants inside `MerchantSystem.ObserveCurrentMarket`, followed by that market's ordered item and liquidity observations. Even if the location IDs are equal, retain both calls in legacy order. One actor-owned operation atomically installs the affected spatial and commercial knowledge together with its receipt; otherwise keep the operation outside intraday composition.
 
 Commercial sharing preserves the frozen eligible merchant membership,
 location-group order, and deterministic rotation/pairing, including duplicate
