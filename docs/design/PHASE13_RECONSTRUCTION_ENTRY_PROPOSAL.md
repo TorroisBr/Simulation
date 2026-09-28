@@ -17,21 +17,22 @@ P12-A scope only and retains `WAIT_DEPENDENCY` with no implementation
 authorization. The distinct owner-inventory evidence commit `bd15b92` reports
 no profile-included owner group with demonstrated complete exact immutable
 export plus staged hydration; it is not the scope-acceptance record. P14
-canonical is `4caecbb`. The P18 canonical branch is at `b75c5b8`, with P18-A
-extension code `1dd0479` and the post-extension external-input/deferral adapter
-code `a535441` promoted. The `PHASE18_STATE.md` stored at `b75c5b8` still says
-the adapter promotion is pending, so its status prose is stale relative to the
-canonical branch history; this proposal records the branch/code evidence and
-does not treat any unpromoted docs-only correction as canonical. The adapter
-does not establish a P18-D live consumer migration. P20-A is an implementation
-and integration candidate at `1dcf67a` (`ee8502f` code integration against
-P18 `b75c5b8`); the P20 Brief at that candidate records review/validation pass
-and canonical promotion pending. Treat P20 as candidate evidence only, not
-promoted capability. Its accepted scope and two-Person fixture do not impose a
-blanket P20 dependency or universal cardinality. Architecture baseline
-`c285466` and both alignment records remain active constraints. These status
-updates do not narrow P13's full boundary guarantee or satisfy its P12 hard
-edge.
+canonical is `4caecbb`. P18 canonical is `b3902623f0ab34ce1a96ffd3674c0a1236160d11`; P18-A's additive
+extension and P18-C's external-input/deferral adapter are promoted. The adapter
+does not establish a P18-D live consumer migration. P18-D remains
+implementation-blocked on the economy owner's operation-receipt contract and a
+serialized `SimulationRuntime` ownership window; P14 remains excluded without a
+reviewed temporal owner adapter. P20-A is promoted at `1dcf67a`, with its
+promotion recorded in P20 State `7a81cc0`. Architecture baseline `c285466` and
+both alignment records remain active constraints. Targeted identity/cardinality
+revalidation against both alignments, current P18 State, the P20 Brief/State,
+and P12/P13 Briefs passes: `ActivityInstanceId` is distinct from activity
+definition identity and every participant `PersonId`; P20's two-Person example
+is fixture-only; cardinality remains one-or-more/general. P20 is conditional
+only for histories that actually include supported shared activities. This
+status refresh does not accept the proposal, create checkpoint IDs, authorize
+implementation, alter product scope, narrow P13's boundary guarantee, or
+satisfy its P12 hard edge.
 
 ## 1. Purpose and guarantee
 
@@ -175,10 +176,9 @@ account for:
   exact logical instant/day, order and idempotency/terminal disposition;
 - deterministic execution context and random state/context only where consumed;
 - temporal time/calendar, pending owner work, activity lifecycle and causal
-  ordering where the history actually used P18. At P18 canonical branch tip
-  `b75c5b8`, the promoted implementation includes the P18-A extension (`1dd0479`)
-  and P18-C external-input/deferral adapter (`a535441`); the State prose at that
-  tip is stale about the adapter's promotion. For any supported P18 history,
+  ordering where the history actually used P18. At current P18 canonical
+  `b390262`, the promoted implementation includes the P18-A extension (`1dd0479`)
+  and P18-C external-input/deferral adapter (`a535441`). For any supported P18 history,
   preserve the world/profile/absolute-day boundary identity, exact logical
   instant and tick/version, frozen activation manifest and cursor, stable
   continuation identity bound to the boundary occurrence and subphase kind and
@@ -201,8 +201,7 @@ account for:
   applied identities/dispositions needed to prevent replaying an already
   committed effect. Agreement/reservation does not imply current availability
   or a validated start. Keep the general cardinality at one or more; P20's
-  two-Person candidate fixture is not a global rule. The P20 candidate at
-  `1dcf67a` is not promoted capability;
+  two-Person fixture is not a global rule. P20-A is promoted at `1dcf67a`;
 - module identities/versions, module-owned authoritative state, migration or
   explicit retrofit inputs/results at their actual installation boundaries;
 - compatibility metadata sufficient to reject unsupported execution rather
@@ -214,8 +213,8 @@ retroactively. Each participant's decision is causally distinct and tied to
 that participant's Knowledge boundary; agreement/reservation and its interval
 remain separate from validated start. Retain each participant-specific result
 and stable applied identity/disposition at the boundary where it committed.
-General participant cardinality is one or more; the exact-two P20 candidate is
-fixture-only, and P20 remains a candidate at `1dcf67a`, not promoted capability.
+General participant cardinality is one or more; P20's exact-two fixture is
+fixture-only, and P20-A is promoted at `1dcf67a`.
 `ActivityInstanceId` never aliases a `PersonId` or participant identity. For
 P18, reconstruction consumes supported recorded temporal state/order and
 inputs; it cannot manufacture intraday detail absent from the historical
@@ -292,12 +291,12 @@ These are planning/design candidates, not promoted capability evidence:
 - `docs/design/PHASE18_C_TECHNICAL_DESIGN.md`: availability/input-boundary
   decisions; candidate design is subordinate to current promoted code/State.
 - `docs/phases/PHASE18_BRIEF.md`: temporal objective and conditional P13 edge.
-- `docs/phases/PHASE20_BRIEF.md` at candidate `1dcf67a`, integration code
-  `ee8502f` against P18 canonical `b75c5b8`, scope proposal
+- `docs/phases/PHASE20_BRIEF.md` and P20 State `7a81cc0` (P20-A promoted at `1dcf67a`), integration code
+  `ee8502f` against then-current P18 canonical `b75c5b8`, scope proposal
   `codex/phase20/P20FirstCheckpointProposal` at `2a03eda` (user-accepted scope
   on 2026-09-27), and technical design `6a0d164`: boundary-specific
-  shared-instance and participant-result requirements. The P20 implementation
-  and integration remain candidates pending canonical promotion. The exact-two
+  shared-instance and participant-result requirements. P20-A is promoted.
+  The exact-two
   fixture is not general cardinality; P20 is conditional on a history that
   actually contains supported shared-activity state and is not a blanket P13
   dependency.
