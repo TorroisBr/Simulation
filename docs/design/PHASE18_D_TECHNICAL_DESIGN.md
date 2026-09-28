@@ -106,27 +106,36 @@ embedded pass out of sentence advancement or collapse the two receipts.
 
 The frozen roster descriptor preserves list order, null slots, repeated runtime
 references, and cardinality. Person-backed entries carry `PersonId` as well as
-`NpcRuntimeId`; unbacked entries retain `NpcRuntimeId`. Sentence and warrant
-traversal order/cardinality and the Justice-owned values used by the operation
-remain part of its captured owner state. The operation emits no domain event or
-SellGoods eligibility signal; its existing log messages are diagnostics, not
-causal receipts. SellGoods has no current arrested, wanted, or hidden-state
-eligibility check.
+`NpcRuntimeId`; unbacked entries retain `NpcRuntimeId`. The sentence-advance
+descriptor also freezes the ordered sentence and wanted-record target/city
+identities, null slots, and cardinality. The later wanted-status descriptor
+freezes the ordered roster and wanted-record target identities/cardinality.
+Mutable sentence counters, warrant activity, and status values are captured by
+`TryPrepare` after earlier manifest steps and revalidated immediately before
+commit; they are not incorrectly frozen to pre-subphase values. The operation
+emits no domain event or SellGoods eligibility signal; its existing log
+messages are diagnostics, not causal receipts. SellGoods has no current
+arrested, wanted, or hidden-state eligibility check.
 
 The ordered Crime step precedes sentence advancement and can decrement the
 hidden timer or remove the hidden marker on the same NPCs. Justice release also
 clears hidden state. Therefore a Justice descriptor must not freeze those
 Crime-owned hidden values into a mutable pre-subphase owner revision that would
 reject the declared predecessor's committed effects. Its compatible owner
-revision uses the frozen ordered roster identity/cardinality and the Justice
-operation version; `TryPrepare` captures current Justice and roster state after
-the prior steps, and the prepared commit revalidates that exact snapshot before
-mutation. The later wanted-status step follows the same rule: validate its live
-snapshot after sentence advancement, while retaining its distinct manifest
-identity. Receipt identity is `(BoundaryOccurrenceId, StepId)`; descriptor
-fingerprints retain ordinal, subphase, configuration, content, and all step
-fields. This is a sequential compatibility rule for the accepted daily
-manifest, not a new gameplay or general concurrency contract.
+revision freezes the ordered roster identity/cardinality and the ordered
+sentence and wanted-record target/city identities, null slots, and
+cardinalities, together with the Justice operation version. It deliberately
+excludes mutable Justice and roster values that declared predecessor steps can
+change, including Crime-owned hidden values. `TryPrepare` captures the current
+Justice and roster values after those steps, and the prepared commit revalidates
+that exact snapshot before mutation. The later wanted-status step likewise
+freezes the ordered roster and wanted-record target identities/cardinality,
+then validates its live mutable snapshot after sentence advancement while
+retaining a distinct manifest identity. Receipt identity is
+`(BoundaryOccurrenceId, StepId)`; descriptor fingerprints retain ordinal,
+subphase, configuration, content, and all step fields. This is a sequential
+compatibility rule for the accepted daily manifest, not a new gameplay or
+general concurrency contract.
 
 ## 5. Current-truth execution, outcome, and failure atomicity
 
