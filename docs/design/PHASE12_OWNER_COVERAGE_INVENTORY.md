@@ -16,10 +16,13 @@ closure `82396ae7ffaf407fda278928da456b06dc5394d4` (P9-B code integration
 `308e24d0744112e8f2b741521b8b3e4acb51ebbf` (code `0cd4281804ecc6a2d110352d1a238959e93867f0`);
 P14 historical promotion State `f8a61fe9634ba9ab56ee31d50b57b45fef292a6f`
 (P14-A code `c44904bb4b0a066eced1d7e8a773b7dc1eea76c0`); current P14
-canonical State/Brief `4caecbb` is a docs-only update; P18 canonical/State
-`99cac77f7d66e8eb61fe68efb6959a4a5b7029ca`; P20-A proposed checkpoint
-`2a03edadcb411c7ca7aa2d0c67ee8d36f972779e` (not accepted); and the current
-architecture alignments.
+canonical State/Brief `4caecbbfb0464c965811402b3c11d8717605114a` is a docs-only
+update; P18 canonical/State
+`85f1f21da0a8a438edfd80c90053ce333223154c` (P18-A/B/C and additive P18-A
+continuation extension promoted; P18-D blocked); P20 canonical/State
+`7a81cc0ecbc511dd36c248ec62c7b20f7e477f53` (P20-A promoted, code
+`22df7b307528e705e6e84d1d8d54852a17cfc848`); and the current architecture
+alignments.
 
 This remains a documentation-only cross-branch inventory. The proposal branch
 does not inherit P11 executable code; P11 canonical was inspected separately
@@ -32,10 +35,13 @@ deferred) and `ConsumedAwaitingTerminalAttempt` state. `Rejected`,
 `AttemptReturned`, and `AttemptThrew` are terminal; after a throw, capture is
 allowed only at a later successful daily boundary while the runtime is healthy.
 The P12 candidate must include the promoted P11 runtime (or prove equivalent
-composition) before claiming this coverage. P18-A/B/C are promoted at the
-reviewed P18 source tip, but the selected legacy `TesteSimulacao` profile does
-not compose its timeline, activity lifecycle, or availability-decision
-services. Their code being available for review does not make it profile state.
+composition) before claiming this coverage. P18-A/B/C and the additive P18-A
+continuation extension are promoted at current P18 canonical `85f1f21`; the
+extension was accepted under contract `2175bf2` (acceptance record `9de70ae`)
+and implemented at integration `1dd0479`. The selected legacy
+`TesteSimulacao` profile still does not compose the P18 timeline, activity
+lifecycle, availability-decision services, or continuation extension. Their
+promoted code does not make that state part of this profile.
 
 This is a read-only gap inventory from the current runtime composition and
 owner APIs. **No profile-included group currently has a demonstrated complete,
@@ -44,6 +50,30 @@ clone, transaction rollback, Unity serialization and diagnostic snapshot APIs
 do not establish those capabilities. There is no P12 save envelope, complete
 owner hydration factory graph, or staged runtime publication/single-swap path.
 The profile therefore remains `WAIT_DEPENDENCY`.
+
+## Selected Unity bootstrap evidence
+
+`SampleScene.unity` selects `Simulation-GeneralTest.asset`. That authored asset
+references two Cities (`City-CampoVerde` and `City-SerraDeFerro`), 10 NPC
+configuration rows, 12 action definitions, five job definitions, two NPCs
+with initial inventories of four units each, and no initial warrants. It
+serializes the Economy, Merchant, Crime, and GuardCrime modules. These are
+starting-content facts only; they do not cap evolved NPC counts, inventory,
+warrants, plans, or other runtime state. The effective configuration resolves
+which optional systems actually run.
+
+The normal bootstrap constructs City/NPC/site/route state, `RuntimeIdentityRegistry`,
+legacy `SpatialNetworkRuntime`, `ScheduledDirectiveStore`,
+`EconomyTransactionService`, `ExpeditionStore`, travel/travel-party/expedition
+services, and `JusticeSystem`. It composes `MerchantSystem` and commercial
+Knowledge sharing when effective merchant policy enables them, `CrimeSystem`
+infrastructure for the configured justice domain, and crime/guard action
+providers when the corresponding effective policies enable them.
+`SimulationRuntime` composes `ActorChoiceStore` by default. History/domain-event
+and decision stores/recorders are also created for audit/diagnostic records;
+those records do not substitute for their owning world-truth stores. This
+evidence bounds the profile's real composition; it does not demonstrate export
+or staged hydration for any of these owners.
 
 | Included authority group | Exact immutable export | Staged hydration | Concrete gap blocking P12-A |
 |---|---|---|---|
@@ -78,9 +108,12 @@ exogenous local material source; their existing `productionConfigs` are the
 legacy economy producer and do not make P14-A material-flow state present.
 P18 intraday state, P19 module state, P20 shared activities, P13 historical
 reconstruction/fork guarantees, and generated P9/P10 content remain outside
-P12-A. P18-A/B/C are promoted at P18 canonical/State `99cac77`, but the
-selected bootstrap does not compose that timeline/activity/availability
-runtime; no P18 state is claimed.
+P12-A. P18-A/B/C and the additive P18-A continuation extension are promoted
+at current P18 canonical/State `85f1f21`, but the selected bootstrap does not
+compose that timeline, activity/availability runtime, or extension; no P18
+state is claimed. P20-A is promoted at current P20 canonical/State `7a81cc0`,
+but shared activities are not composed by this profile and no P20 state is
+claimed.
 
 This inventory records implementation evidence and gaps only. It is not P12-A
 scope acceptance (recorded separately), implementation authorization, proof of
