@@ -4,7 +4,7 @@
 independent exact-tip review. It authorizes no implementation by itself, makes
 no delivery/readiness claim, and does not establish P12-A readiness.
 
-**Design base:** refreshed P12 owner inventory at `ba6f79fb87e851316be84d4f2a89d94186b8f802`.
+**Design base:** refreshed P12 owner inventory at `73cf6c28060d1ea9e73e7b5f220c1fbbb68699b9`.
 The accepted scopes are P12-A `UnityBootstrap-Daily-v1` and prerequisite
 checkpoint P12-E as recorded in the current P12 Brief and capability
 decomposition. P12-E implementation depends on P12-B admission and P12-C
@@ -15,7 +15,7 @@ integration. No code or final P12-A integration is part of this design.
 
 **Authority checked:** current architecture `c285466`, current P12 Brief and
 capability decomposition, accepted P12-A profile contract, inventory
-`ba6f79f`, the current P8/P9/P11/P14/P18/P20 profile boundaries, and the
+`73cf6c2`, the current P8/P9/P11/P14/P18/P20 profile boundaries, and the
 intraday/extensibility and multi-participant alignment records. The inventory
 is a live-composition audit candidate, not an owner export/hydration result or
 P12-A readiness evidence. Recheck canonical refs and actual provider
@@ -240,7 +240,8 @@ D/E revision. Capture must be rejected while the runtime is in an active
 advance/operation scope or if an owner changes during snapshot. This section
 does not create a second lock, thread-safety promise, or capture lifecycle;
 P12-B owns eligibility and the promoted P18-D2 lease/handoff contract governs
-the runtime hotspot. Snapshot operations should use owner atomic-copy methods
+the runtime hotspot. The active P18-D consumer integration retains the current
+`SimulationRuntime` editing window until an explicit handoff. Snapshot operations should use owner atomic-copy methods
 or before/after revision equality under the approved completed-boundary
 protocol; if neither proves a coherent read, the owner remains unsupported.
 
