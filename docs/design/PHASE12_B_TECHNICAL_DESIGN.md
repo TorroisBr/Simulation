@@ -275,15 +275,20 @@ P18-D2 technical design review passed at `6f82bf4`; its implementation
 `ea7b3e7` and the economy receipt/prepared-install prerequisite are promoted
 at P18 canonical code tip `9e790c5`, although the Phase 18 State text there
 still has stale pending-gate wording. P18-D consumer integration is active on
-the unpromoted feature candidate `c199662` and currently owns the shared
-runtime hotspot. D2's scope is the per-runtime non-reentrant
+the pushed, unpromoted integration candidate `04abdcb`. It now includes the
+resumable boundary manifest/cursor coordinator and PlaceContent/logger owner
+adapters, but still has no `SimulationRuntime` chronological composition or
+completed daily profile. P18-D remains the designated owner of the shared
+runtime hotspot until its consumer path is complete and explicitly handed off.
+D2's scope is the per-runtime non-reentrant
 lease around the currently composed legacy `TryAdvanceDay` and
 `TryAdvanceDays` APIs and the narrow future owner seam. It does not compose the
 P18 timeline, boundary chronology, subphases, or successful P18-C handoff;
 those remain P18-D integration obligations. The lease is not a general
 thread-safety guarantee. The promoted D2 API owns the advance-lease seam; the
-active P18-D consumer integration owns the current `SimulationRuntime.cs`
-editing window.
+P18-D integration retains the planned `SimulationRuntime.cs` editing window.
+Its current tip `04abdcb` has not yet composed the chronological path or handed
+that hotspot to P12.
 
 Therefore:
 
@@ -346,8 +351,9 @@ Integration sequence:
    census. Until promotion and a complete census, the admission manifest
    cannot be finalized and P12-B runtime integration is blocked.
 2. P18-D2 design and implementation are promoted at `6f82bf4` / `9e790c5`.
-   P18-D consumer candidate `c199662` remains incomplete and owns the runtime
-   hotspot; require the completed integration, validation, and explicit owner
+   P18-D integration tip `04abdcb` contains the resumable coordinator and two
+   owner adapters but remains incomplete and has not handed off the runtime
+   hotspot. Require the completed integration, validation, and explicit owner
    handoff before opening the P12-B runtime owner window. Revalidate P12-B
    seams against the promoted D2 API.
 3. Implement immutable admission values/source and rejection behavior without
@@ -478,9 +484,9 @@ This design is bounded to accepted P12-B scope, but P12-B is **not**
    `012e04b` does not demonstrate the live owner revision census.
 2. P18-D2 is already validated and canonical at `9e790c5`; it guards the
    currently composed legacy `TryAdvanceDay`/`TryAdvanceDays` calls. P18-D
-   consumer work still owns the future chronological continuation/subphase/
-   handoff window. Require explicit hotspot handoff before P12-B touches
-   `SimulationRuntime`.
+   integration `04abdcb` still owns the future chronological
+   continuation/subphase/handoff window and has not handed it off. Require
+   explicit hotspot handoff before P12-B touches `SimulationRuntime`.
 3. Demonstrate the complete versioned owner-section census and
    mutation-notification inventory. P12-B's eligibility kernel must fail
    closed until P12-C/D/E/F owners register their required adapters; P12-G

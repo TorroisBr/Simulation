@@ -13,16 +13,21 @@ closure `82396ae7ffaf407fda278928da456b06dc5394d4` (P9-B code integration
 `252ad6b9a507f1c001c05a1e19c2546ebd0707a2` (P10-A code
 `9501bf076d506fb64d6ee3e6d178574fff36e153`, State record
 `9e79b58397dc9a89ddcc562be139b79987cb55b9`); P11 canonical closure
-`308e24d0744112e8f2b741521b8b3e4acb51ebbf` (code promotion
-`0803670cfa2c39163b54ff46a21daa06df5a16f6`);
+`308e24d0744112e8f2b741521b8b3e4acb51ebbf` (Actor Choice code promotion
+`0cd4281804ecc6a2d110352d1a238959e93867f0`);
 P14 historical promotion State `f8a61fe9634ba9ab56ee31d50b57b45fef292a6f`
 (P14-A code `c44904bb4b0a066eced1d7e8a773b7dc1eea76c0`); current P14
 canonical State/Brief `4caecbbfb0464c965811402b3c11d8717605114a` is a docs-only
-update; P18 canonical/State
-`ba8076c3bc2c8c354a8755e6efaca30bfeab7bf7` (P18-A/B/C and additive P18-A
-continuation extension promoted; P18-D technical design candidate
-`9ed6d90455cc793244ee7207adb62960e45a9972` independently reviewed and
-recorded in State at `ba8076c`; P18-D remains not implementation-ready); P20 canonical/State
+update; P18 canonical code tip
+`9e790c59e14ca7f7ed195c0e6267e10f3cd039d7` (P18-A/B/C, additive P18-A
+continuation extension, and the P18-D sale-receipt/runtime-lease prerequisites
+are promoted; the canonical State header retains stale pre-promotion blocker
+wording). P18-D's approved technical design is candidate
+`9ed6d90455cc793244ee7207adb62960e45a9972`; the current pushed integration
+candidate `04abdcb` adds the resumable boundary coordinator and PlaceContent/
+logger adapters, but still has no chronological `SimulationRuntime`
+composition or complete daily profile. P18-D remains in progress; P12-A does
+not compose intraday state. P20 canonical/State
 `7a81cc0ecbc511dd36c248ec62c7b20f7e477f53` (P20-A promoted, code
 `22df7b307528e705e6e84d1d8d54852a17cfc848`); and the current architecture
 alignments.
@@ -111,13 +116,13 @@ exogenous local material source; their existing `productionConfigs` are the
 legacy economy producer and do not make P14-A material-flow state present.
 P18 intraday state, P19 module state, P20 shared activities, P13 historical
 reconstruction/fork guarantees, and generated P9/P10 content remain outside
-P12-A. P18-A/B/C and the additive P18-A continuation extension are promoted
-at current P18 canonical/State `ba8076c`. The P18-D technical design candidate
-`9ed6d90` passed independent review and is recorded in that State, but P18-D
-remains not implementation-ready pending the economy operation receipt and
-serialized `SimulationRuntime` ownership window. The selected bootstrap does
-not compose the P18 timeline, activity/availability runtime, continuation
-extension, or intraday state; no P18 state is claimed. P20-A is promoted at
+P12-A. P18-A/B/C, the additive P18-A continuation extension, and P18-D
+receipt/lease prerequisites are promoted at current P18 canonical code
+`9e790c5`. P18-D integration candidate `04abdcb` adds the resumable boundary
+coordinator and PlaceContent/logger adapters; it has not composed the
+chronological runtime path or completed the daily profile. The selected
+bootstrap does not compose the P18 timeline, activity/availability runtime,
+continuation extension, or intraday state; no P18 state is claimed. P20-A is promoted at
 current P20 canonical/State `7a81cc0`,
 but shared activities are not composed by this profile and no P20 state is
 claimed.
