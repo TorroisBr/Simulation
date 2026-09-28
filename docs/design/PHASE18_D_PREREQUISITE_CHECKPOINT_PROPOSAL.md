@@ -1,0 +1,69 @@
+# P18-D Prerequisite Checkpoint Proposal
+
+**Status:** proposed scope only; neither checkpoint is accepted, implementation-ready, or READY. This proposal adds no P18-D consumer behavior and does not change the canonical Phase 18 State or Brief.
+
+**Base:** P18 canonical `ba8076c3bc2c8c354a8755e6efaca30bfeab7bf7`, including the promoted P18-D technical design. The P18-D consumer integration remains downstream of both prerequisite capabilities.
+
+**Purpose:** split the two concrete P18-D implementation blockers identified by the canonical design into the smallest independently reviewable capabilities. Their technical ownership is independent, so implementation may proceed in separate isolated worktrees after each scope is accepted and independently reviewed. Integration and validation of the combined P18-D consumer remain serial and depend on both. No overlapping writer may own `SimulationRuntime.cs` or the economy/store files concurrently.
+
+## Economy market-sale operation receipt and prepared install
+
+**Scope:** add a bounded, keyed owner operation to `EconomyTransactionService` for the accepted P11 Local SellGoods open-market path. P11's actor-choice runtime rejects a requested action whose `TargetNpc` is non-null, so an accepted actor-choice sale cannot enter MerchantSystem's NPC-to-NPC branch. This checkpoint therefore covers the existing market sale path only; it does not make autonomous SellGoods or NPC-to-NPC trade idempotent.
+
+The keyed operation accepts the stable P18-C `ActorDecisionProposal.Id` and an immutable request fingerprint. Keep the existing unkeyed economy APIs source-compatible and preserve their established gameplay behavior. P18-D later supplies the keyed operation from its accepted proposal; do not invent a proposal ID for existing autonomous or direct market callers.
+
+The immutable fingerprint must include all sale-defining input identity and parameters: ActorChoice input ID, P18-C request ID, actor `PersonId`, proposal ID, action semantic ID/version, profile and execution `LogicalTick`, resolved current market/site and counterparty identity, item semantic ID, requested quantity, and liquidity/transaction mode. IDs are distinct causal identities and must not be substituted for one another. The first keyed attempt resolves and snapshots current truth at the sale owner, including effective market/site mapping, market/counterparty identity and mode, current price, stock and capacity, seller inventory and balance, counterparty balance/capacity where applicable, and every precondition actually used. The receipt records that snapshot, its authority revisions, the effective quantity and price, and the first result.
+
+For each authority actually participating in the sale, prepare a complete replacement state without mutating live truth. The bounded owners are the seller and, for account-backed liquidity, counterparty `MoneyAccountRuntime`; seller `InventoryRuntime`; and `MarketRuntime`. The owner then verifies each prepared change with its expected revision and `CanInstall`. Allocate the receipt, replacement roots, operation-index capacity, and any new item entries before installation starts. Once installation starts, perform only precomputed, no-allocation, no-callback, no-fail assignments, and retain the immutable result/snapshot in the same synchronous owner commit. This is runtime-lifetime in-memory atomicity under the serialized caller; it is not a durable or crash-atomic transaction.
+
+Operation semantics:
+
+- Same proposal ID and exact same fingerprint after a committed operation returns the original immutable receipt/result/snapshot without reapplying effects.
+- Same proposal ID with a different fingerprint is an invariant failure; it never overwrites or re-executes the first operation.
+- A semantic terminal rejection before any install is retained as the first result and replayed exactly.
+- A stale expected revision or other failure proven to occur before any installation is `ProvenNoInstall` and may be retried with the same proposal identity after current truth is resolved again under the established contract.
+- If installation may have begun and the owner cannot prove whether the receipt and effects committed, retain an `Unresolved` outcome. Do not retry or attempt compensating mutations blindly. The P18-D consumer remains pending until the matching receipt resolves.
+- Receipt retention is scoped to the containing `SimulationRuntime` lifetime. No save/load, fork, restart, process-crash recovery, or durable idempotency behavior is added.
+
+**Required mutation/version safety:** current money has no revision; inventory and market have no revision or prepared-install seam. `InventoryRuntime.Items` and `MarketRuntime.Items` expose mutable lists, and their item runtime objects expose public mutation methods. Revision counters added without addressing those escape hatches cannot establish expected-revision safety. Replace mutable collection exposure with a non-castable read-only view or equivalent owner-controlled query surface; restrict item mutation to the owning store; and advance each store revision for every successful authoritative mutation, including legacy `AddItem`/`RemoveItem`, `TryCredit`/`TryDebit`, `AddStock`/`RemoveStockUpTo`, price refreshes that change current price, and existing callers such as City daily production/consumption, Expedition, PlaceContent, and other economy operations. Preserve read/query behavior. If all mutation paths cannot be brought under owner control, record that precise blocker and do not claim prepared-install/revision safety.
+
+**Owned files and tests:**
+
+- `Assets/_Project/Scripts/EconomyTransactionService.cs` — keyed operation, immutable receipt/fingerprint/result, operation lookup and prepared owner coordination.
+- `Assets/_Project/Scripts/MoneyAccountRuntime.cs` — revision and prepared balance replacement/install.
+- `Assets/_Project/Scripts/InventoryRuntime.cs` — revision, controlled read view, prepared inventory replacement/install.
+- `Assets/_Project/Scripts/MarketRuntime.cs` — revision, controlled read view, prepared stock/price replacement/install.
+- `Assets/_Project/Tests/EditMode/Editor/EconomyTransactionTests.cs` and focused authority tests, adding cases for exact replay, ID/fingerprint collision, retained terminal rejection, proven-no-install retry, unresolved non-retry, open and account-backed sale, current-truth snapshot stability, intervening mutation invalidation for every authority, unchanged live state on preparation/preflight failure, capacity/overflow, and legacy mutation revision coverage.
+
+Preserve and run the existing `EconomyTransactionTests`, `MoneyAccountTests`, `MerchantLiquidityTests`, and `SettlementStockOwnershipTests`; also run affected existing suites that mutate these authorities (including relevant PlaceContent, Expedition, and daily economy tests), ALL EditMode, complete official Smoke, and `git diff --check` before candidate review/promotion under the normal execution model. The receipt owner and its operation table must be composed with the owning `SimulationRuntime` lifetime; a newly constructed service per retry cannot serve as the receipt authority.
+
+**Dependencies:** accepted checkpoint scope; P11 Local SellGoods rejection of non-null `TargetNpc`; promoted P18-C proposal identity and P18-D receipt design; P8-E prepared-commit pattern. This capability is independent of the runtime ownership-window checkpoint, although P18-D integration cannot consume it until both are delivered. No dependency on P14, P20, or P19.
+
+**Closure criteria:** exact keyed replay and collision semantics pass; every participating authority has complete revision/prepared-install ownership with no mutable collection bypass; pre-install failures leave all authorities unchanged; install contains no fallible or allocating work after it begins; receipt/result/snapshot is retained for the owning runtime lifetime; existing unkeyed sale behavior and regression suites pass; independent review validates the base, full diff, scope, mutation ownership, and tests. Closure delivers only the capability and does not claim P18-D consumer readiness.
+
+## Per-runtime non-reentrant serialized advance window
+
+**Scope:** add a per-instance, non-reentrant ownership window to `SimulationRuntime` spanning one complete chronological advance operation: timeline continuation, every due boundary subphase encountered, all same-instant due work included by the call, and the post-success P18-C handoff. The window prevents a second advance or reentrant composition entry on that same runtime while the first operation is active. It must release on every success, typed failure, and thrown exception path.
+
+The window is an explicit single-writer execution contract for one `SimulationRuntime`; it is not a lock, a cross-runtime coordinator, or a general thread-safety promise. `AuthoritativeMutationGuard` remains mutation-health/fault protection, and `SimulationTimeline` retains its narrower reentrancy checks. Neither substitutes for this composition-wide window. Calls rejected because the window is already held must not advance time, dispatch work, consume input, activate a boundary, or run P18-C handoff. Keep legacy daily-profile behavior unchanged when no intraday advance is active.
+
+The operation boundary must be acquired before beginning the outer chronological advance and held continuously while each causal boundary is advanced/yielded, its blocking daily subphase completes, and due work at that instant drains. Only after the full requested outer advance succeeds may the existing P18-C post-success handoff execute; the window is released after that handoff. On advance or subphase failure, do not hand off to P18-C; preserve P18-A retry semantics and release the runtime window so the same operation may be resumed through its owner-defined retry path. Do not invoke external/domain callbacks after releasing the window.
+
+**Owned files and tests:**
+
+- `Assets/_Project/Scripts/SimulationRuntime.cs` — private per-instance ownership state and one scoped entry/exit around the full chronological advance + subphase + successful handoff path. Do not change the semantics of `AuthoritativeMutationGuard` or the timeline's own guard.
+- `Assets/_Project/Tests/EditMode/Editor/SimulationRuntimeOrchestrationTests.cs` plus focused intraday composition tests — verify the window is held across continuation and boundary subphase, a nested/reentrant advance is rejected before side effects, no handoff occurs after failed advance/subphase, successful handoff occurs once before release, exception/failure paths release the window, separate runtime instances do not block each other, and the legacy daily path retains its existing ordering/results.
+
+Preserve current `SimulationRuntimeOrchestrationTests` and relevant `LogicalTimeline` tests; run the focused composition/actor-choice suites, ALL EditMode, complete official Smoke, and `git diff --check` before candidate review/promotion under the normal execution model.
+
+**Dependencies:** accepted checkpoint scope and promoted P18-A continuation/subphase and P18-C handoff contracts. This ownership capability is independent of the economy receipt capability and may be implemented in parallel only in an isolated worktree. The shared `SimulationRuntime.cs` hotspot must be exclusively assigned to this checkpoint during its implementation; P18-D consumer integration must wait until this checkpoint is promoted/available and must have a separate explicit ownership window or serialized integration turn.
+
+**Closure criteria:** the full operation is guarded with no release gap; reentrant entry is rejected before any side effect; failure/exception paths release safely without falsely reporting successful P18-C handoff; independent runtime instances remain independent; the legacy daily path and P18-A retry ordering remain unchanged; focused and required regression gates pass; independent review confirms the per-runtime scope and absence of a thread-safety claim. Closure delivers only the ownership capability and does not claim P18-D consumer readiness.
+
+## Readiness and exclusions
+
+Both checkpoint scopes remain **proposed**, not accepted, not READY, and not implementation-authorized. Under the Execution Model, explicit scope acceptance and independent technical review precede implementation readiness; this proposal does not create that readiness or approve canonical promotion. P18-D consumer integration remains downstream of both capabilities and its other design requirements.
+
+Excluded from both scopes: NPC-to-NPC/autonomous trade receipts; other economy operation receipt migrations; a generic transaction or lock framework; cross-runtime/thread safety; P14 material-flow or temporal adapters; P20 activity behavior; P19 public extension/loader work; persistence, save/fork/restart/crash recovery; and concrete new gameplay.
+
+No unresolved product or canonical architecture choice is identified in these bounded proposals. If implementation cannot close mutable-store ownership for the sale authorities, or cannot make the complete serialized window cover the P18-A/P18-C composition boundary without changing its established semantics, stop that capability with the exact technical blocker rather than widening scope or claiming readiness.
