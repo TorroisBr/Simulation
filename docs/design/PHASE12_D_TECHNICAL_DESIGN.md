@@ -1,6 +1,6 @@
 # P12-D — Technical Design: Bootstrap Factual Roots and Person/Population Relations
 
-**Status:** Technical-design candidate for the accepted P12-D capability boundary. This document defines owner export and staged hydration only; it is not a delivered capability, an implementation-readiness claim, or P12-A profile integration. The candidate is based on `ba6f79fb87e851316be84d4f2a89d94186b8f802` and must receive independent exact-content review. P12-D implementation remains blocked on P12-B and P12-C delivery and their compatible owner-capture/identity seams. P12-A remains `WAIT_DEPENDENCY` and separately gated.
+**Status:** Technical-design candidate for the accepted P12-D capability boundary. This document defines owner export and staged hydration only; it is not a delivered capability, an implementation-readiness claim, or P12-A profile integration. Its current evidence baseline is the refreshed owner inventory `73cf6c2`; this reference-only revalidation preserves the earlier bounded D contract. The updated candidate requires independent exact-content review. P12-D implementation remains blocked on P12-B and P12-C delivery and their compatible owner-capture/identity seams. P12-A remains `WAIT_DEPENDENCY` and separately gated.
 
 ## 1. Purpose and boundary
 
