@@ -5,14 +5,26 @@ review. It defines no implementation readiness and delivers no owner export,
 hydrator, envelope, or publication path. P12-A remains `WAIT_DEPENDENCY` and
 separately gated.
 
-**Design base:** P12-F branch tip `c0849df782fe8a100af7d01083dd08d2a6deb670`.
-This proposal consumes the accepted P12 capability decomposition and bounded
-`UnityBootstrap-Daily-v1` P12-A contract. Its owner-contract inputs are P12-B
-`4c384ab`, P12-C corrected candidate `6a33419` (exact-tip independent review
-passed), P12-D `796eadc`, P12-E `51718c7`, and P12-F `f2ef496` (exact-tip
-independent re-review passed). These are design artifacts, not proof that the
-corresponding capabilities have been delivered. Revalidate hashes and owner
-interfaces before implementation.
+**Authored base:** P12-F branch tip
+`c0849df782fe8a100af7d01083dd08d2a6deb670`. This identifies the source on
+which the original G proposal was authored; it is not the current governing
+input set.
+
+**Current governing reviewed inputs:** accepted decomposition and owner
+inventory/B design `45e6be83fc40a1b78908aa79500e46e64532ac4b`; P12-C corrected
+design `ceb37049ddbe54602063ba92a92cceafdce50096` (exact-tip review PASS);
+P12-D design `796eadc1a0bd6b44b646f27f5eeb63de71f6b14`; P12-E design
+`51718c7bd38e9582433d1fa38ff4011ef9cf20c5`; and P12-F semantic contract
+content at `c8` (review PASS), with refreshed metadata-reference candidate
+`dc2e63d3c19a597a4d811875c6cb6866912ce934` (exact-tip metadata re-review
+pending). D/E review results apply to their identified design tips; revalidate
+hashes and owner interfaces before implementation. These are design artifacts,
+not proof that the corresponding capabilities have been delivered.
+
+**P12-G review status:** the prior `b5d9c1b` proposal passed exact review;
+semantic changes at `5a5f417` remain pending fresh exact-tip review. This
+traceability refresh does not change those semantic-review requirements or
+implementation readiness.
 
 The accepted architecture baseline is `c285466`; current intraday/extensibility
 and multi-participant alignment records remain constraints. The selected daily
