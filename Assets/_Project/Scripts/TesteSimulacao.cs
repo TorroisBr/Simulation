@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Globalization;
 using System.Text;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -22,6 +23,7 @@ public class TesteSimulacao : MonoBehaviour
     private RuntimeIdAllocator runtimeIdAllocator;
     private RuntimeIdentityRegistry runtimeIdentityRegistry;
     private SpatialNetworkRuntime spatialNetwork;
+    private SpatialAuthorityStore genesisSpatialAuthority;
     private DomainEventStore domainEventStore;
     private HistoryStore historyStore;
     private DomainEventRecorder domainEventRecorder;
@@ -50,34 +52,35 @@ public class TesteSimulacao : MonoBehaviour
     private EffectiveSimulationConfiguration effectiveConfiguration;
     private IAuthoritativeRandomSource authoritativeRandomSource;
     private long lastEconomySnapshotDay;
+    private SimulationBootstrapComposition publishedComposition;
 
-    public string FullLog => logger != null ? logger.FullLog : string.Empty;
-    public SimulationTime SimulationTime => simulationTime;
-    public CalendarDefinition Calendar => calendarDefinition;
-    public SpatialNetworkRuntime SpatialNetwork => spatialNetwork;
-    public DomainEventStore DomainEventStore => domainEventStore;
-    public HistoryStore History => historyStore;
-    public ScheduledDirectiveStore ScheduledDirectives => scheduledDirectiveStore;
-    public NpcDecisionStore Decisions => decisionStore;
-    public NpcChronicleService NpcChronicles => npcChronicleService;
-    public NpcChronicleFormatter ChronicleFormatter => npcChronicleFormatter;
-    public TravelPartyStore TravelParties => travelPartyStore;
-    public TravelPartySystem GroupTravel => travelPartySystem;
-    public SimulationRuntime Runtime => simulationRuntime;
-    public ExplorableSiteStore ExplorableSites => explorableSiteStore;
-    public ExpeditionStore Expeditions => expeditionStore;
-    public ExpeditionSystem ExpeditionRuntime => expeditionSystem;
-    public ExpeditionSystem ExpeditionSystem => expeditionSystem;
-    public long CurrentDay => simulationTime.AbsoluteDay;
-    public SimulationDate CurrentDate => simulationRuntime != null
-        ? simulationRuntime.Calendar.GetDate(CurrentDay)
-        : calendarDefinition.GetDate(CurrentDay);
+
+    public SimulationBootstrapComposition Bootstrap => publishedComposition;
+    public string FullLog => publishedComposition != null && logger != null ? logger.FullLog : string.Empty;
+    public SimulationTime SimulationTime => publishedComposition?.SimulationTime;
+    public CalendarDefinition Calendar => publishedComposition?.Calendar;
+    public SpatialNetworkRuntime SpatialNetwork => publishedComposition?.SpatialNetwork;
+    public DomainEventStore DomainEventStore => publishedComposition?.DomainEventStore;
+    public HistoryStore History => publishedComposition?.History;
+    public ScheduledDirectiveStore ScheduledDirectives => publishedComposition?.ScheduledDirectives;
+    public NpcDecisionStore Decisions => publishedComposition?.Decisions;
+    public NpcChronicleService NpcChronicles => publishedComposition?.NpcChronicles;
+    public NpcChronicleFormatter ChronicleFormatter => publishedComposition?.ChronicleFormatter;
+    public TravelPartyStore TravelParties => publishedComposition?.TravelParties;
+    public TravelPartySystem GroupTravel => publishedComposition?.GroupTravel;
+    public SimulationRuntime Runtime => publishedComposition?.Runtime;
+    public ExplorableSiteStore ExplorableSites => publishedComposition?.ExplorableSites;
+    public ExpeditionStore Expeditions => publishedComposition?.Expeditions;
+    public ExpeditionSystem ExpeditionRuntime => publishedComposition?.ExpeditionSystem;
+    public ExpeditionSystem ExpeditionSystem => publishedComposition?.ExpeditionSystem;
+    public long CurrentDay => publishedComposition != null ? publishedComposition.SimulationTime.AbsoluteDay : 0;
+    public SimulationDate CurrentDate => publishedComposition != null
+        ? publishedComposition.Runtime.Calendar.GetDate(CurrentDay)
+        : default(SimulationDate);
 
     public bool TryStartTravelParty(ActionExecutionContext context)
     {
-        return simulationRuntime != null
-            ? simulationRuntime.TryStartTravelParty(context)
-            : travelPartySystem != null && travelPartySystem.TryStartTravelParty(context);
+        return publishedComposition != null && publishedComposition.Runtime.TryStartTravelParty(context);
     }
 
     public bool TryStartExpedition(
@@ -85,13 +88,13 @@ public class TesteSimulacao : MonoBehaviour
         ActionExecutionContext context,
         out ExpeditionRuntime expedition)
     {
-        if (expeditionSystem == null)
+        if (publishedComposition == null || publishedComposition.ExpeditionSystem == null)
         {
             expedition = null;
             return false;
         }
 
-        return expeditionSystem.TryStartExpedition(targetSite, context, out expedition);
+        return publishedComposition.ExpeditionSystem.TryStartExpedition(targetSite, context, out expedition);
     }
 
     public void Start()
@@ -107,85 +110,110 @@ public class TesteSimulacao : MonoBehaviour
         }
     }
 
-    private void InitializeSimulation()
+    private void InitializeSimulation(System.Action<string> stageCompleted = null)
     {
-        simulationTime = new SimulationTime();
-        authoritativeRandomSource = new DeterministicRandomSource(
-            simulationConfig != null && simulationConfig.useFixedSimulationSeed
-                ? simulationConfig.simulationSeed
-                : 0);
-        lastEconomySnapshotDay = 0;
-        logger = new SimulationLogger(simulationConfig != null ? simulationConfig.LogSettings : null);
-        logger.BeginSimulation(
-            simulationConfig != null ? simulationConfig.simulationName : "Unnamed",
-            simulationConfig != null ? simulationConfig.EnabledModules : null,
-            simulationConfig != null ? simulationConfig.Cities.Count : 0,
-            simulationConfig != null ? simulationConfig.Npcs.Count : 0);
-        calendarDefinition = ResolveCalendarDefinition();
-        enabledModules = new SimulationModuleSet(simulationConfig, logger);
-        effectiveConfiguration = ResolveRuntimeConfiguration();
-        AppendScenarioDiagnostics(effectiveConfiguration);
-        runtimeIdAllocator = new RuntimeIdAllocator();
-        explorableSiteKnowledgeSystem = new ExplorableSiteKnowledgeSystem();
-        recordSequence = new SimulationRecordSequence();
-        historyStore = new HistoryStore();
-        domainEventStore = new DomainEventStore(historyStore, new HistoryPolicy(), logger);
-        domainEventRecorder = new DomainEventRecorder(runtimeIdAllocator, simulationTime, recordSequence, domainEventStore, logger);
-        decisionStore = new NpcDecisionStore(logger);
-        decisionRecorder = new NpcDecisionRecorder(runtimeIdAllocator, simulationTime, recordSequence, decisionStore, logger);
-        npcChronicleService = new NpcChronicleService(decisionStore, domainEventStore);
-        npcChronicleFormatter = new NpcChronicleFormatter(
-            ResolveNpcDisplayName,
-            ResolveLocationDisplayName,
-            ResolveItemDisplayName,
-            ResolveActionDisplayName);
-        scheduledDirectiveStore = new ScheduledDirectiveStore(simulationTime, logger);
-        runtimeIdentityRegistry = new RuntimeIdentityRegistry(logger);
-        spatialNetwork = new SpatialNetworkRuntime(runtimeIdentityRegistry, logger);
+        if (publishedComposition != null) return;
+        string profileFingerprint = null;
+        System.Collections.Generic.IReadOnlyList<string> profileProvenanceRecords = null;
+        SimulationGenesisPipeline.ExecuteStages(stageId =>
+        {
+            switch (stageId)
+            {
+                case "p9.genesis.resolve-profile/v1":
+                    SimulationGenesisPipeline.ValidateProfile(simulationConfig);
+                    simulationTime = new SimulationTime();
+                    authoritativeRandomSource = new DeterministicRandomSource(simulationConfig.useFixedSimulationSeed ? simulationConfig.simulationSeed : 0);
+                    lastEconomySnapshotDay = 0;
+                    logger = new SimulationLogger(simulationConfig.LogSettings);
+                    logger.BeginSimulation(simulationConfig.simulationName, simulationConfig.EnabledModules, simulationConfig.Cities.Count, simulationConfig.Npcs.Count);
+                    calendarDefinition = ResolveCalendarDefinition();
+                    enabledModules = new SimulationModuleSet(simulationConfig, logger);
+                    effectiveConfiguration = ResolveRuntimeConfiguration();
+                    genesisSpatialAuthority = new SpatialAuthorityStore();
+                    profileFingerprint = SimulationGenesisPipeline.CreateFingerprint(
+                        simulationConfig, effectiveConfiguration, calendarDefinition, out profileProvenanceRecords);
+                    AppendScenarioDiagnostics(effectiveConfiguration);
+                    runtimeIdAllocator = new RuntimeIdAllocator();
+                    explorableSiteKnowledgeSystem = new ExplorableSiteKnowledgeSystem();
+                    recordSequence = new SimulationRecordSequence();
+                    historyStore = new HistoryStore();
+                    domainEventStore = new DomainEventStore(historyStore, new HistoryPolicy(), logger);
+                    domainEventRecorder = new DomainEventRecorder(runtimeIdAllocator, simulationTime, recordSequence, domainEventStore, logger);
+                    decisionStore = new NpcDecisionStore(logger);
+                    decisionRecorder = new NpcDecisionRecorder(runtimeIdAllocator, simulationTime, recordSequence, decisionStore, logger);
+                    npcChronicleService = new NpcChronicleService(decisionStore, domainEventStore);
+                    npcChronicleFormatter = new NpcChronicleFormatter(ResolveNpcDisplayName, ResolveLocationDisplayName, ResolveItemDisplayName, ResolveActionDisplayName);
+                    scheduledDirectiveStore = new ScheduledDirectiveStore(simulationTime, logger);
+                    runtimeIdentityRegistry = new RuntimeIdentityRegistry(logger);
+                    spatialNetwork = new SpatialNetworkRuntime(runtimeIdentityRegistry, logger);
+                    break;
+                case "p9.genesis.authored-world/v1":
+                    CityRuntimeList.Clear();
+                    cityRuntimesByDefinition.Clear();
+                    cityRuntimeByLocation.Clear();
+                    CreateCityRuntimes();
+                    explorableSiteStore = new ExplorableSiteStore();
+                    explorableSiteRuntimesByDefinition.Clear();
+                    CreateExplorableSiteRuntimes();
+                    CreateSpatialRoutes();
+                    break;
+                case SimulationGenesisPipeline.GeographyStageId:
+                    ComposeAuthoredGeography();
+                    break;
+                case "p9.genesis.authored-actors/v1":
+                    NpcRuntimeList.Clear();
+                    npcRuntimesByDefinition.Clear();
+                    CreateNpcRuntimes();
+                    CreateScheduledDirectives();
+                    scheduledDirectiveSystem = new ScheduledDirectiveSystem(scheduledDirectiveStore, runtimeIdentityRegistry, logger);
+                    economyTransactionService = new EconomyTransactionService();
+                    expeditionStore = new ExpeditionStore();
+                    break;
+                case "p9.genesis.validate-profile/v1":
+                    RebuildSystems(effectiveConfiguration);
+                    BootstrapInitialSpatialKnowledge();
+                    BootstrapInitialExplorableSiteKnowledge();
+                    BootstrapInitialCommercialKnowledge();
+                    InitializeJusticeState();
+                    simulationRuntime = new SimulationRuntime(
+                        simulationTime: simulationTime, cities: CityRuntimeList, npcRuntimes: NpcRuntimeList,
+                        configuredActions: ConfiguredActions, scheduledDirectiveSystem: scheduledDirectiveSystem,
+                        justiceSystem: justiceSystem, crimeSystem: crimeSystem, npcDecisionSystem: npcDecisionSystem,
+                        travelSystem: travelSystem, travelPartySystem: travelPartySystem, merchantSystem: merchantSystem,
+                        commercialKnowledgeSharingSystem: commercialKnowledgeSharingSystem, decisionRecorder: decisionRecorder,
+                        logger: logger, explorableSiteStore: explorableSiteStore,
+                        explorableSiteKnowledgeSystem: explorableSiteKnowledgeSystem, expeditionSystem: expeditionSystem,
+                        configuration: effectiveConfiguration, randomSource: authoritativeRandomSource,
+                        calendarDefinition: calendarDefinition,
+                        spatialAuthorityStore: genesisSpatialAuthority);
+                    ValidateCandidateProfile();
+                    break;
+                case "p9.genesis.publish/v1":
+                    publishedComposition = new SimulationBootstrapComposition(
+                        new SimulationGenesisManifest(simulationConfig, effectiveConfiguration, calendarDefinition, profileFingerprint, profileProvenanceRecords), simulationTime, calendarDefinition, spatialNetwork, domainEventStore,
+                        historyStore, scheduledDirectiveStore, decisionStore, npcChronicleService,
+                        npcChronicleFormatter, travelPartyStore, travelPartySystem, simulationRuntime,
+                        explorableSiteStore, expeditionStore, expeditionSystem);
+                    break;
+                default:
+                    throw new System.InvalidOperationException("Undeclared authored genesis stage: " + stageId);
+            }
+            stageCompleted?.Invoke(stageId);
+        }, simulationConfig != null && simulationConfig.useAuthoredGeographyProfile);
+    }
 
-        CityRuntimeList.Clear();
-        cityRuntimesByDefinition.Clear();
-        cityRuntimeByLocation.Clear();
-        CreateCityRuntimes();
-        explorableSiteStore = new ExplorableSiteStore();
-        explorableSiteRuntimesByDefinition.Clear();
-        CreateExplorableSiteRuntimes();
-        CreateSpatialRoutes();
-
-        NpcRuntimeList.Clear();
-        npcRuntimesByDefinition.Clear();
-        CreateNpcRuntimes();
-        CreateScheduledDirectives();
-        scheduledDirectiveSystem = new ScheduledDirectiveSystem(scheduledDirectiveStore, runtimeIdentityRegistry, logger);
-        economyTransactionService = new EconomyTransactionService();
-        expeditionStore = new ExpeditionStore();
-
-        RebuildSystems(effectiveConfiguration);
-        BootstrapInitialSpatialKnowledge();
-        BootstrapInitialExplorableSiteKnowledge();
-        BootstrapInitialCommercialKnowledge();
-        InitializeJusticeState();
-        simulationRuntime = new SimulationRuntime(
-            simulationTime: simulationTime,
-            cities: CityRuntimeList,
-            npcRuntimes: NpcRuntimeList,
-            configuredActions: ConfiguredActions,
-            scheduledDirectiveSystem: scheduledDirectiveSystem,
-            justiceSystem: justiceSystem,
-            crimeSystem: crimeSystem,
-            npcDecisionSystem: npcDecisionSystem,
-            travelSystem: travelSystem,
-            travelPartySystem: travelPartySystem,
-            merchantSystem: merchantSystem,
-            commercialKnowledgeSharingSystem: commercialKnowledgeSharingSystem,
-            decisionRecorder: decisionRecorder,
-            logger: logger,
-            explorableSiteStore: explorableSiteStore,
-            explorableSiteKnowledgeSystem: explorableSiteKnowledgeSystem,
-            expeditionSystem: expeditionSystem,
-            configuration: effectiveConfiguration,
-            randomSource: authoritativeRandomSource,
-            calendarDefinition: calendarDefinition);
+    private void ComposeAuthoredGeography()
+    {
+        SimulationConfigData input = simulationConfig;
+        decimal scale = decimal.Parse(input.authoredDistancePerNeighborStep, NumberStyles.Number, CultureInfo.InvariantCulture);
+        var definition = new SpatialGeographyDefinition(
+            new SpatialWorldScaleContext(input.authoredScaleConventionId, input.authoredScaleSourceIdentity,
+                input.authoredScaleSourceVersion, scale, input.authoredScaleUnit),
+            new[] { new HexRecord(new HexId(input.authoredHexId), new HexCoordinate(input.authoredHexQ, input.authoredHexR),
+                new TerrainReference(new TerrainDefinitionId(input.authoredTerrainDefinitionId), input.authoredTerrainRevisionToken)) },
+            new[] { new LocationRecord(new LocationId(input.authoredLocationId), new HexId(input.authoredHexId)) });
+        if (!genesisSpatialAuthority.TryComposeGeography(definition, out SpatialAuthorityFailure failure))
+            throw new System.InvalidOperationException("Authored geography stage failed atomically: " + failure);
     }
 
     public string GetFullLog()
@@ -193,9 +221,140 @@ public class TesteSimulacao : MonoBehaviour
         return FullLog;
     }
 
+    private void ValidateCandidateProfile()
+    {
+        if (CityRuntimeList.Count != simulationConfig.Cities.Count
+            || NpcRuntimeList.Count != simulationConfig.Npcs.Count
+            || explorableSiteStore.Sites.Count != simulationConfig.ExplorableSites.Count
+            || scheduledDirectiveStore.Directives.Count != simulationConfig.ScheduledDirectives.Count)
+            throw new System.InvalidOperationException("Authored bootstrap output inventory does not match its selected profile.");
+
+        int expectedRouteCount = 0;
+        foreach (CityData city in simulationConfig.Cities)
+        {
+            expectedRouteCount += city.connections.Count;
+            CityRuntime runtime = GetSingleCityRuntimeByDefinition(city);
+            if (runtime == null || runtime.CurrentPopulation != city.initialPopulation
+                || runtime.CityData != city || runtime.Market.Items.Count != city.marketItems.Count
+                || runtime.CityData.productionConfigs.Count != city.productionConfigs.Count
+                || runtime.MarketCounterparty.LiquidityMode != city.MarketLiquidity.liquidityMode
+                || runtime.PopulationEconomy.PaymentMode != city.PopulationConsumption.paymentMode
+                || runtime.MarketCounterparty.CounterpartyRuntimeId != runtime.RuntimeId
+                || (city.MarketLiquidity.liquidityMode == MarketLiquidityMode.AccountBacked
+                    && (runtime.MarketCounterparty.MoneyAccount == null
+                        || runtime.MarketCounterparty.MoneyAccount.Balance != city.MarketLiquidity.initialPurchasingPower))
+                || (city.PopulationConsumption.paymentMode == ConsumptionPaymentMode.AccountBacked
+                    && (runtime.PopulationEconomy.MoneyAccount == null
+                        || runtime.PopulationEconomy.MoneyAccount.Balance != city.PopulationConsumption.initialPurchasingPower)))
+                throw new System.InvalidOperationException("Authored city owner output is incomplete.");
+            for (int i = 0; i < city.marketItems.Count; i++)
+            {
+                MarketItemConfig input = city.marketItems[i];
+                MarketItemRuntime output = runtime.Market.Items[i];
+                if (input.item != output.Item || input.initialAmount != output.Amount || input.desiredAmount != output.DesiredAmount)
+                    throw new System.InvalidOperationException("Authored city market output does not match its selected row.");
+            }
+            for (int i = 0; i < city.productionConfigs.Count; i++)
+            {
+                CityProductionConfig input = city.productionConfigs[i];
+                CityProductionConfig output = runtime.CityData.productionConfigs[i];
+                if (input.item != output.item || input.amountPerDay != output.amountPerDay)
+                    throw new System.InvalidOperationException("Authored city production inputs do not match their selected rows.");
+            }
+        }
+        expectedRouteCount += simulationConfig.ExplorableSites.Count * 2;
+        if (spatialNetwork.Routes.Count != expectedRouteCount)
+            throw new System.InvalidOperationException("Authored spatial route output inventory is incomplete.");
+
+        foreach (NpcSimulationConfig row in simulationConfig.Npcs)
+        {
+            NpcRuntime runtime = GetSingleNpcRuntimeByDefinition(row.npc);
+            CityRuntime expectedCity = GetSingleCityRuntimeByDefinition(row.startingCity);
+            var expectedStatuses = new System.Collections.Generic.List<NpcStatusData>(row.npc.statusPadrao);
+            bool hasActiveWarrant = false;
+            foreach (InitialWantedRecordConfig warrant in simulationConfig.InitialWarrants)
+                if (warrant.target == row.npc) { hasActiveWarrant = true; break; }
+            if (hasActiveWarrant && simulationConfig.wantedStatus != null && !expectedStatuses.Contains(simulationConfig.wantedStatus))
+                expectedStatuses.Add(simulationConfig.wantedStatus);
+            if (runtime == null || runtime.NpcData != row.npc || runtime.Money != row.initialMoney
+                || runtime.CurrentCity != expectedCity || runtime.CurrentLocation != expectedCity.Location
+                || runtime.CurrentStatus.Count != expectedStatuses.Count)
+                throw new System.InvalidOperationException("Authored NPC owner output is incomplete.");
+            for (int statusIndex = 0; statusIndex < expectedStatuses.Count; statusIndex++)
+                if (runtime.CurrentStatus[statusIndex] != expectedStatuses[statusIndex])
+                    throw new System.InvalidOperationException("Authored NPC status output does not preserve authored/domain order.");
+            // Job, default actions, traits and capability values remain authored inputs on the
+            // preserved NpcData owner; P9-A does not copy them into a second runtime owner.
+            if (runtime.NpcData.job != row.npc.job
+                || runtime.NpcData.acoesPadrao.Count != row.npc.acoesPadrao.Count
+                || runtime.NpcData.traits.Count != row.npc.traits.Count
+                || runtime.NpcData.capabilityValues.Count != row.npc.capabilityValues.Count)
+                throw new System.InvalidOperationException("Authored NPC definition inputs were not preserved by their owner.");
+            for (int actionIndex = 0; actionIndex < row.npc.acoesPadrao.Count; actionIndex++)
+                if (runtime.NpcData.acoesPadrao[actionIndex].action != row.npc.acoesPadrao[actionIndex].action
+                    || runtime.NpcData.acoesPadrao[actionIndex].baseUtility != row.npc.acoesPadrao[actionIndex].baseUtility)
+                    throw new System.InvalidOperationException("Authored NPC default actions were not preserved by their owner.");
+            var expectedInventoryItems = new System.Collections.Generic.HashSet<ItemData>();
+            var expectedInventory = new InventoryRuntime();
+            foreach (NpcInitialInventoryItemConfig item in row.InitialInventory)
+            {
+                if (item.amount > 0) expectedInventoryItems.Add(item.item);
+                expectedInventory.AddItem(item.item, item.amount, item.averageUnitCost);
+            }
+            var validatedInventoryItems = new System.Collections.Generic.HashSet<ItemData>();
+            foreach (NpcInitialInventoryItemConfig item in row.InitialInventory)
+            {
+                if (!validatedInventoryItems.Add(item.item)) continue;
+                int expectedAmount = 0;
+                foreach (NpcInitialInventoryItemConfig candidate in row.InitialInventory)
+                    if (candidate.item == item.item) expectedAmount = checked(expectedAmount + candidate.amount);
+                if (runtime.Inventory.GetAmount(item.item) != expectedAmount)
+                    throw new System.InvalidOperationException("Authored NPC inventory output does not match its selected rows.");
+                if (runtime.Inventory.GetAverageUnitCost(item.item) != expectedInventory.GetAverageUnitCost(item.item))
+                    throw new System.InvalidOperationException("Authored NPC inventory costs do not match their ordered selected rows.");
+            }
+            if (runtime.Inventory.Items.Count != expectedInventoryItems.Count)
+                throw new System.InvalidOperationException("Authored NPC inventory contains unexpected output rows.");
+            foreach (ExplorableSiteData known in row.InitialKnownExplorableSites)
+            {
+                if (!explorableSiteRuntimesByDefinition.TryGetValue(known, out List<ExplorableSiteRuntime> sites)
+                    || sites.Count != 1 || !runtime.ExplorableSiteKnowledge.KnowsSite(sites[0].RuntimeId))
+                    throw new System.InvalidOperationException("Authored initial Knowledge output is incomplete.");
+                if (!runtime.ExplorableSiteKnowledge.TryGetObservation(sites[0].RuntimeId, out ExplorableSiteKnowledgeObservation observation)
+                    || observation.Source != ExplorableSiteKnowledgeSource.InitialScenarioKnowledge
+                    || observation.ObservedDay != 0 || observation.ReceivedDay != 0
+                    || observation.LocationRuntimeId != sites[0].Location.RuntimeId)
+                    throw new System.InvalidOperationException("Authored initial Knowledge provenance does not match its selected site.");
+            }
+            int expectedKnowledgeCount = new System.Collections.Generic.HashSet<ExplorableSiteData>(row.InitialKnownExplorableSites).Count;
+            if (runtime.ExplorableSiteKnowledge.Observations.Count != expectedKnowledgeCount)
+                throw new System.InvalidOperationException("Authored initial Knowledge contains unexpected observations.");
+        }
+
+        foreach (InitialWantedRecordConfig row in simulationConfig.InitialWarrants)
+        {
+            NpcRuntime target = GetSingleNpcRuntimeByDefinition(row.target);
+            List<WantedRecordRuntime> records = justiceSystem?.GetActiveWarrants(target);
+            CityRuntime city = GetSingleCityRuntimeByDefinition(row.city);
+            WantedRecordRuntime record = records?.Find(value => value.City == city);
+            float expectedBounty = 0f;
+            int expectedSentenceDays = 0;
+            foreach (InitialWantedRecordConfig candidate in simulationConfig.InitialWarrants)
+                if (candidate.target == row.target && candidate.city == row.city)
+                {
+                    expectedBounty += candidate.bounty;
+                    expectedSentenceDays += candidate.sentenceDays;
+                }
+            if (record == null || record.Bounty != expectedBounty || record.SentenceDays != expectedSentenceDays)
+                throw new System.InvalidOperationException("Authored warrant owner output is incomplete.");
+        }
+        if (historyStore.HistoricalEvents.Count != 0)
+            throw new System.InvalidOperationException("Genesis must not create simulated history before the first boundary.");
+    }
+
     public bool TryGetNpcRuntime(string runtimeId, out NpcRuntime npcRuntime)
     {
-        if (runtimeIdentityRegistry != null)
+        if (publishedComposition != null && runtimeIdentityRegistry != null)
         {
             return runtimeIdentityRegistry.TryGetNpc(runtimeId, out npcRuntime);
         }
@@ -207,7 +366,7 @@ public class TesteSimulacao : MonoBehaviour
 
     public bool TryGetCityRuntime(string runtimeId, out CityRuntime cityRuntime)
     {
-        if (runtimeIdentityRegistry != null)
+        if (publishedComposition != null && runtimeIdentityRegistry != null)
         {
             return runtimeIdentityRegistry.TryGetCity(runtimeId, out cityRuntime);
         }
@@ -219,7 +378,7 @@ public class TesteSimulacao : MonoBehaviour
 
     public bool TryGetSpatialLocation(string runtimeId, out SpatialLocationRuntime location)
     {
-        if (spatialNetwork != null)
+        if (publishedComposition != null && spatialNetwork != null)
         {
             return spatialNetwork.TryGetLocation(runtimeId, out location);
         }
@@ -231,7 +390,7 @@ public class TesteSimulacao : MonoBehaviour
 
     public bool TryGetSpatialRoute(string runtimeId, out SpatialRouteRuntime route)
     {
-        if (spatialNetwork != null)
+        if (publishedComposition != null && spatialNetwork != null)
         {
             return spatialNetwork.TryGetRoute(runtimeId, out route);
         }
@@ -243,7 +402,7 @@ public class TesteSimulacao : MonoBehaviour
 
     public bool TryGetExplorableSiteRuntime(string runtimeId, out ExplorableSiteRuntime siteRuntime)
     {
-        if (runtimeIdentityRegistry != null)
+        if (publishedComposition != null && runtimeIdentityRegistry != null)
         {
             return runtimeIdentityRegistry.TryGetExplorableSite(runtimeId, out siteRuntime);
         }
@@ -255,7 +414,7 @@ public class TesteSimulacao : MonoBehaviour
 
     public IReadOnlyList<NpcChronicleEntry> GetNpcChronicle(string npcRuntimeId)
     {
-        return npcChronicleService != null
+        return publishedComposition != null && npcChronicleService != null
             ? npcChronicleService.GetChronicle(npcRuntimeId)
             : System.Array.Empty<NpcChronicleEntry>();
     }
@@ -263,14 +422,13 @@ public class TesteSimulacao : MonoBehaviour
     private CalendarDefinition ResolveCalendarDefinition()
     {
         CalendarDefinition configuredCalendar = simulationConfig != null ? simulationConfig.Calendar : null;
-        CalendarDefinition resolvedCalendar = CalendarDefinition.CreateValidatedOrDefault(configuredCalendar, out string diagnostic);
-
-        if (string.IsNullOrEmpty(diagnostic) == false)
+        if (configuredCalendar == null)
         {
-            logger.LogWarning(diagnostic);
+            return CalendarDefinition.CreateDefault();
         }
-
-        return resolvedCalendar;
+        if (!configuredCalendar.TryValidate(out string diagnostic))
+            throw new System.InvalidOperationException("Authored CalendarDefinition is invalid: " + diagnostic);
+        return configuredCalendar;
     }
 
     private EffectiveSimulationConfiguration ResolveRuntimeConfiguration()
@@ -286,7 +444,7 @@ public class TesteSimulacao : MonoBehaviour
 
     private void Simulate(int daysToSimulate)
     {
-        if (simulationRuntime == null)
+        if (publishedComposition == null || simulationRuntime == null)
         {
             return;
         }
@@ -611,7 +769,9 @@ public class TesteSimulacao : MonoBehaviour
             return;
         }
 
-        foreach (CityData cityData in simulationConfig.Cities)
+        List<CityData> orderedCities = new List<CityData>(simulationConfig.Cities);
+        orderedCities.Sort((left, right) => System.StringComparer.Ordinal.Compare(left?.DefinitionId, right?.DefinitionId));
+        foreach (CityData cityData in orderedCities)
         {
             if (cityData == null)
             {
@@ -647,7 +807,13 @@ public class TesteSimulacao : MonoBehaviour
                 continue;
             }
 
-            foreach (CityConnection connection in originCity.CityData.connections)
+            List<CityConnection> orderedConnections = new List<CityConnection>(originCity.CityData.connections);
+            orderedConnections.Sort((left, right) =>
+            {
+                int destination = System.StringComparer.Ordinal.Compare(left?.destination?.DefinitionId, right?.destination?.DefinitionId);
+                return destination != 0 ? destination : System.Nullable.Compare(left?.travelDays, right?.travelDays);
+            });
+            foreach (CityConnection connection in orderedConnections)
             {
                 if (connection == null)
                 {
@@ -691,7 +857,9 @@ public class TesteSimulacao : MonoBehaviour
             return;
         }
 
-        foreach (ExplorableSiteConfig siteConfig in simulationConfig.ExplorableSites)
+        List<ExplorableSiteConfig> orderedSites = new List<ExplorableSiteConfig>(simulationConfig.ExplorableSites);
+        orderedSites.Sort((left, right) => System.StringComparer.Ordinal.Compare(left?.site?.DefinitionId, right?.site?.DefinitionId));
+        foreach (ExplorableSiteConfig siteConfig in orderedSites)
         {
             if (siteConfig == null)
             {
@@ -800,7 +968,9 @@ public class TesteSimulacao : MonoBehaviour
             return;
         }
 
-        foreach (NpcSimulationConfig npcConfig in simulationConfig.Npcs)
+        List<NpcSimulationConfig> orderedNpcs = new List<NpcSimulationConfig>(simulationConfig.Npcs);
+        orderedNpcs.Sort((left, right) => System.StringComparer.Ordinal.Compare(left?.npc?.DefinitionId, right?.npc?.DefinitionId));
+        foreach (NpcSimulationConfig npcConfig in orderedNpcs)
         {
             if (npcConfig == null || npcConfig.npc == null)
             {

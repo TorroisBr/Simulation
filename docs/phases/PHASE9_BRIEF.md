@@ -1,17 +1,19 @@
 # Phase 9 — Initial Deterministic Genesis v1
 
-**Authority:** planning entry subordinate to `../SIMULATION_ARCHITECTURE.md`. **Readiness:** `ENTRY_ARCHITECTURE_READY`; no implementation checkpoint is schedulable.
+**Authority:** planning entry subordinate to `../SIMULATION_ARCHITECTURE.md`. **Status:** Phase 9 is closed within the approved P9-A and P9-B scopes. The user-approved State-only closure record is canonical at `3bd0eb3`; see `../PHASE9_STATE.md` for evidence and preserved exclusions.
 
 ## Objective and closure
 
 Produce a deterministic, semantically complete initial World Truth before the first actually simulated boundary, using the same world ontology as authored worlds. Generated backstory may explain that initial state but is not itself simulated history.
 
-**Checkpoints:** to be defined at architecture/technical entry; no P9 checkpoint IDs are approved.
+**Promoted checkpoint:** `P9-A — Authored Bootstrap Genesis v1`. It establishes the dependency-aware, deterministic pre-start pipeline using the existing authored Unity bootstrap profile. Its reviewed scope and acceptance evidence are recorded in `../design/PHASE9A_AUTHORED_BOOTSTRAP_CHECKPOINT.md`.
+
+**Promoted checkpoint:** `P9-B — Authored Geography Source for Local Authoring v1`. It composes exactly one authored P8-A geographic Hex and one anchored Location through the existing genesis handoff, providing P10's upstream Location source. Its validation, independent reviews, integration, and promotion evidence are recorded in `../PHASE9_STATE.md`. This is not a promise of procedural terrain or broader generation/content algorithms.
 
 ## Dependencies and gates
 
-- **Hard semantic contract:** stable P8 factual geography, spatial identity/anchors, and the existing initial-world/determinism guarantees.
-- **Hard capability:** generation integration needs the relevant promoted spatial authority; it need not wait for the whole P8-E civil travel slice.
+- **Hard semantic contract:** the existing initial-world and determinism guarantees. Stable P8 factual geography, identity and anchors apply only when a selected profile output explicitly consumes P8-owned facts; P9-A's authored profile selects none.
+- **Hard capability:** a profile output that consumes P8-owned facts needs the relevant promoted spatial authority. P9-A's profile remains on its legacy bootstrap spatial model; approved P9-B consumes promoted P8-A geography and composes it into that authority. No P9 profile needs the whole P8-E civil travel slice by default.
 - **Integration dependency:** generated state must enter the same world authorities and compatibility/diagnostic boundary as manual state.
 - **Soft ordering:** P8 travel completion may supply end-to-end validation but is not a blanket prerequisite.
 - **Architecture gate:** deterministic generated identity, provenance, compatible content/configuration and the pre-start boundary need entry design; do not invent an ID algorithm here.
@@ -21,6 +23,28 @@ Produce a deterministic, semantically complete initial World Truth before the fi
 - **Hotspots/parallelism:** spatial authority, composition/configuration, initialization, diagnostics and identity; entry architecture may proceed beside P8 work, implementation that consumes spatial code waits for relevant promotion.
 - **Downstream unlocks:** local/pre-start generation (P10) and a consistent initial state for save and historical reconstruction.
 - **Deferred:** exact generation passes/APIs, ID algorithm, mod schema, and exact content catalog.
+
+## P9-A dependency and scope record — 2026-09-26
+
+P9-A is scoped to the existing `TesteSimulacao.InitializeSimulation` authored
+bootstrap profile. The implementation uses only the promoted capabilities
+selected by this profile. It does not initialize P8 spatial facts where the
+authored inputs provide no explicit P8 identities/provenance, and it adds no
+P8-E route-plan, travel-progress, P18 temporal-activity, P20 participation, or
+P19 extension-loader state. P8-A through P8-E are nevertheless canonical at
+the implementation baseline.
+
+P9-A has no dependency on P18, P19, or P20. Existing scheduled directives
+retain their present domain semantics. The profile creates no P18 Activity
+instances and no P20 shared participants. Current extensibility constraints
+apply to stage seams, declared inputs/outputs, compatibility, ordering and
+domain ownership; the P19 loader/API remains deferred.
+
+The selected product scope is the user's approved authored-bootstrap-only
+first delivery. No generated terrain, settlements, population additions,
+local topology, pre-simulation backstory, runtime expansion, or new gameplay is
+promised. `CityData.initialPopulation`, authored markets/liquidity, and other
+existing authored inputs remain part of the profile.
 
 ## Extensible generation contract — 2026-09-26
 
@@ -44,3 +68,26 @@ Installing a mod does not rerun historical stages or change past settlement
 placement. Retrofit support belongs to the later module/domain migration scope;
 runtime expansion retains its own post-start mutation boundary. Revalidate
 pre-change P9 proposals before technical approval against this pipeline requirement.
+
+## P9-B authored geography source — promoted, 2026-09-27
+
+P9-B is a separate profile capability and preserves P9-A's promoted scope,
+code, fingerprint/compatibility identity and closure evidence. It uses the
+existing dependency-aware genesis stages and atomic bootstrap handoff, adds a
+versioned geography stage, and composes exactly one Hex and one anchored
+Location through `SpatialAuthorityStore.TryComposeGeography`. P8-A remains the
+owner of these facts and authority. See the approved checkpoint at
+`../design/PHASE9B_AUTHORED_GEOGRAPHY_CHECKPOINT.md` for the reconstruction
+inventory and implementation gates.
+
+P9-B requires P8-A's promoted authority and P9-A's promoted pipeline. P10's
+Ruin profile requires P9-B's produced `LocationId` plus P8-C's promoted
+Ruin/site anchor contract; P10-A owns the bounded LocalTopology seam. P10 does not generate or
+own regional geography. P9-B does not include Ruin/site binding, topology,
+travel, procedural terrain, City/Market, population, backstory, runtime
+expansion, Mod API/loader or P18/P20 activity facts. The intraday/extensibility
+and multi-participant alignments remain review constraints but add no P9-B
+capability or gameplay scope. P9-B is promoted at `d9a62d7`. The separate
+formal Phase 9 closure record was promoted at `3bd0eb3`; closure is limited to
+the two approved checkpoint boundaries and adds no later content or gameplay
+scope.

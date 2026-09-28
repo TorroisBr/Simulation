@@ -71,7 +71,7 @@ public sealed class ExplorableSiteScenarioTests
     }
 
     [Test]
-    public void Scenario_IsolatedSiteCreatesTruthWithoutAnchorRoutes()
+    public void Scenario_IsolatedSiteWithoutSelectedAnchorRejectsWholeBootstrap()
     {
         SimulationConfigData config = SimulationTestFactory.CreateSimulationConfig();
         ExplorableSiteData siteDefinition = SimulationTestFactory.CreateExplorableSite("isolated-definition", ExplorableSiteKind.Cave);
@@ -82,17 +82,11 @@ public sealed class ExplorableSiteScenarioTests
             travelDaysFromAnchor = 4
         });
 
-        TesteSimulacao simulation = CreateSimulation(config);
-
-        Assert.That(simulation.ExplorableSites.Sites.Count, Is.EqualTo(1));
-        ExplorableSiteRuntime site = simulation.ExplorableSites.Sites[0];
-        Assert.That(simulation.SpatialNetwork.Locations, Has.Member(site.Location));
-        Assert.That(simulation.SpatialNetwork.Routes.Count, Is.EqualTo(0));
-        Assert.That(simulation.SpatialNetwork.GetOutgoingRoutes(site.Location).Count, Is.EqualTo(0));
+        AssertBootstrapRejected(config);
     }
 
     [Test]
-    public void Scenario_SameDefinitionCreatesDistinctRuntimeInstancesAndLocations()
+    public void Scenario_DuplicateSiteOutputIdentityRejectsWholeBootstrap()
     {
         CityData anchorDefinition = SimulationTestFactory.CreateCityData("anchor-city");
         ExplorableSiteData sharedDefinition = SimulationTestFactory.CreateExplorableSite("shared-definition");
@@ -111,20 +105,7 @@ public sealed class ExplorableSiteScenarioTests
             travelDaysFromAnchor = 2
         });
 
-        TesteSimulacao simulation = CreateSimulation(config);
-
-        Assert.That(simulation.ExplorableSites.Sites.Count, Is.EqualTo(2));
-        ExplorableSiteRuntime first = simulation.ExplorableSites.Sites[0];
-        ExplorableSiteRuntime second = simulation.ExplorableSites.Sites[1];
-        Assert.That(first.Definition, Is.SameAs(sharedDefinition));
-        Assert.That(second.Definition, Is.SameAs(sharedDefinition));
-        Assert.That(first.RuntimeId, Is.Not.EqualTo(second.RuntimeId));
-        Assert.That(first.Location.RuntimeId, Is.Not.EqualTo(second.Location.RuntimeId));
-        Assert.That(simulation.SpatialNetwork.Routes.Count, Is.EqualTo(4));
-        Assert.That(simulation.SpatialNetwork.TryGetSingleDirectRoute(
-            new SpatialLocationRuntime("not-registered"),
-            first.Location,
-            out _), Is.False);
+        AssertBootstrapRejected(config);
     }
 
     [Test]
@@ -146,19 +127,7 @@ public sealed class ExplorableSiteScenarioTests
             travelDaysFromAnchor = 2
         });
 
-        LogAssert.Expect(LogType.Warning, "Skipping null explorable site configuration.");
-        LogAssert.Expect(LogType.Warning, "Skipping explorable site configuration: site definition is null.");
-        LogAssert.Expect(LogType.Warning, "Skipping explorable site configuration: site DefinitionId is empty.");
-        LogAssert.Expect(LogType.Warning, "City definition 'missing-anchor' has no runtime instance.");
-        LogAssert.Expect(LogType.Warning, "Explorable site 'valid-definition' remains isolated because its anchor city could not be resolved.");
-
-        TesteSimulacao simulation = CreateSimulation(config);
-
-        Assert.That(simulation.ExplorableSites.Sites.Count, Is.EqualTo(1));
-        ExplorableSiteRuntime site = simulation.ExplorableSites.Sites[0];
-        Assert.That(site.Definition, Is.SameAs(validDefinition));
-        Assert.That(simulation.TryGetExplorableSiteRuntime(site.RuntimeId, out _), Is.True);
-        Assert.That(simulation.SpatialNetwork.Routes.Count, Is.EqualTo(0));
+        AssertBootstrapRejected(config);
     }
 
     [Test]
@@ -272,5 +241,17 @@ public sealed class ExplorableSiteScenarioTests
         configField.SetValue(simulation, config);
         simulation.Start();
         return simulation;
+    }
+
+    private void AssertBootstrapRejected(SimulationConfigData config)
+    {
+        GameObject simulationObject = new GameObject("invalid-explorable-site-bootstrap");
+        simulationObjects.Add(simulationObject);
+        TesteSimulacao simulation = simulationObject.AddComponent<TesteSimulacao>();
+        typeof(TesteSimulacao).GetField("simulationConfig", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(simulation, config);
+        Assert.Throws<System.InvalidOperationException>(() => simulation.Start());
+        Assert.That(simulation.Bootstrap, Is.Null);
+        Assert.That(simulation.Runtime, Is.Null);
+        Assert.That(simulation.History, Is.Null);
     }
 }
