@@ -69,12 +69,19 @@ public sealed class SimulationLoggerBoundaryOwnerTests
         BoundaryContinuationManifest manifest = CreateManifest(logger, operation, 0, out BoundaryContinuationStep step);
         Assert.That(logger.TryPrepareBeginDayStep(manifest, step, out IBoundaryContinuationStepCommit prepared, out TimelineFailure failure), Is.True);
 
-        // A failed/lost attempt before owner commit has no effect; the exact prepared operation remains retryable.
+        // A retry plan may be prepared while the owner is still unchanged, but only one
+        // sibling can commit against that snapshot; the other must observe its stale revision.
         Assert.That(logger.TryPrepareBeginDayStep(manifest, step, out IBoundaryContinuationStepCommit retry, out failure), Is.True);
         Assert.That(retry.TryCommit(out failure), Is.True);
-        Assert.That(prepared.TryCommit(out failure), Is.True);
-        Assert.That(logger.FullLog.Split(new[] { "DIA 15" }, System.StringSplitOptions.None).Length, Is.EqualTo(2));
+        Assert.That(prepared.TryCommit(out failure), Is.False);
+        Assert.That(failure, Is.EqualTo(TimelineFailure.ContinuationFailed));
+
+        // A lost response after the successful commit is resolved from the owner receipt,
+        // then a fresh exact prepare yields replay without a second output.
         Assert.That(logger.TryResolveBeginDayReceipt(manifest, step, out _, out failure), Is.True);
+        Assert.That(logger.TryPrepareBeginDayStep(manifest, step, out IBoundaryContinuationStepCommit replay, out failure), Is.True);
+        Assert.That(replay.TryCommit(out failure), Is.True);
+        Assert.That(logger.FullLog.Split(new[] { "DIA 15" }, System.StringSplitOptions.None).Length, Is.EqualTo(2));
     }
 
     private static BoundaryContinuationManifest CreateManifest(
