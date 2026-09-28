@@ -16,7 +16,7 @@ P9 canonical closure `82396ae7ffaf407fda278928da456b06dc5394d`, P9-A code promot
 promotion-record State `14a2e8ee01e49f1ffdcecf8fd64d274c728ead44`, P9-B canonical integration
 `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf` (implementation tip
 `00395ef80cfa2364d34ed2170e0735d3a4b1513d`), P11 code promotion
-`0803670cfa2c39163b54ff46a21daa06df5a16f6` / closure State
+`0cd4281804ecc6a2d110352d1a238959e93867f0` / closure State
 `308e24d0744112e8f2b741521b8b3e4acb51ebbf`, and architecture baseline
 `c285466c355103d3637ac165246591b72eb7bda0`. P8's `77f3e1a`→`470667d`
 advance is State-only. Both alignment records remain current.
@@ -61,7 +61,7 @@ terminal and may be captured; `Pending` (including deferred choices) and
 profile cannot silently drop causal input state while claiming a complete
 continuation.
 
-P18, P19 and P20 are conditional extensions to the state inventory only if a future explicitly supported profile contains their temporal, module, or shared-activity state. The base daily profile has no blanket dependency on those phases. P18-A/B/C are promoted, but P18-D remains blocked and P18-A is not integrated into the legacy `SimulationRuntime.AdvanceDay` path. For a future profile that explicitly composes the accepted P18-A continuation extension contract `2175bf2`, preserve its frozen activation manifest, distinct `ContinuationId` and step identities, descriptor order/version, committed receipts and next unresolved position, and completion/barrier state alongside boundary identity `(worldId, profileId, absoluteDay)`, tick quantum/version, effective `MaxDispatchesPerInstant` or equivalent dispatch limit, work identity `(ownerId, workId, revision, occurrence)`, exact logical instant, causal wave and same-instant order, pending boundary/work, persisted occurrence/sequence, and owner idempotency/effect state. Preserve sealed external inputs with target `LogicalTick`, accepted sequence/order, and boundary state. Include P18-B activity lifecycle/revision/receipts and participant commitments/availability plus P18-C PersonId-keyed decision/attempt state when used by its consumer. The P18-A implementation candidate/acceptance record `9de70ae` is not evidence of delivered or promoted capability. A date is not an intraday ordering contract. Extension-owned state requires applicable P19 lifecycle/state compatibility contracts. P20 remains conditional: a profile that includes it must preserve stable activity identity separately from definition and one-or-more participants; the reviewed two-Person fixture does not define universal cardinality or role policy. These additions do not justify freezing this proposal's internal time field to a day-only scalar.
+P18, P19 and P20 are conditional extensions to the state inventory only if a future explicitly supported profile contains their temporal, module, or shared-activity state. The base daily profile has no blanket dependency on those phases. P18-A/B/C and the additive P18-A continuation extension are promoted, and P18 D1/D2 prerequisites are promoted at canonical code tip `9e790c5`; the P18 State text remains stale about D1/D2. P18-D consumer work is incomplete on reviewed but unpromoted candidate `a9428a3`. P18-A is not integrated into the legacy `SimulationRuntime.AdvanceDay` path. For a future profile that explicitly composes the promoted P18-A continuation extension contract `2175bf2`, preserve its frozen activation manifest, distinct `ContinuationId` and step identities, descriptor order/version, committed receipts and next unresolved position, and completion/barrier state alongside boundary identity `(worldId, profileId, absoluteDay)`, tick quantum/version, effective `MaxDispatchesPerInstant` or equivalent dispatch limit, work identity `(ownerId, workId, revision, occurrence)`, exact logical instant, causal wave and same-instant order, pending boundary/work, persisted occurrence/sequence, and owner idempotency/effect state. Preserve sealed external inputs with target `LogicalTick`, accepted sequence/order, and boundary state. Include P18-B activity lifecycle/revision/receipts and participant commitments/availability plus P18-C PersonId-keyed decision/attempt state when used by its consumer. P18-A acceptance `9de70ae` and promoted implementation `1dd0479` are the capability evidence. A date is not an intraday ordering contract. Extension-owned state requires applicable P19 lifecycle/state compatibility contracts. P20 remains conditional: a profile that includes it must preserve stable activity identity separately from definition and one-or-more participants; the reviewed two-Person fixture does not define universal cardinality or role policy. These additions do not justify freezing this proposal's internal time field to a day-only scalar.
 
 The current profile excludes P9/P10 generated-world content and P20 activity
 instances. It includes the selected P9-B authored-geography profile identity for
@@ -241,18 +241,16 @@ review verdict. The current-base dependency check uses P8
 canonical State `470667d`, P9 canonical closure `82396ae`, P9-A code promotion
 `43f08b3` and P9-B promotion-record State `14a2e8e`, P9-B code integration
 `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf`
-(implementation tip `00395ef80cfa2364d34ed2170e0735d3a4b1513d`), P11 code promotion `0803670` and
-closure State `308e24d`, current P18 canonical State tip
-`ba8076c3bc2c8c354a8755e6efaca30bfeab7bf7` (P18-A/B/C promoted by code
-extension `1dd0479`;
-P18-D implementation blocked), accepted P18-A continuation extension contract
-`2175bf2` (the implementation candidate/acceptance record `9de70ae` is not
-delivered/promoted capability), P14 historical promotion State `f8a61fe` and
+(implementation tip `00395ef80cfa2364d34ed2170e0735d3a4b1513d`), P11 code promotion `0cd4281` and
+closure State `308e24d`, current P18 canonical code tip
+`9e790c59e14ca7f7ed195c0e6267e10f3cd039d7` (P18-A/B/C and the P18-A
+continuation extension are promoted; P18 D1/D2 prerequisites are also promoted,
+although State wording is stale; P18-D consumer is incomplete on reviewed but
+unpromoted candidate `a9428a3`), accepted P18-A continuation extension contract
+`2175bf2` (acceptance `9de70ae`, implementation `1dd0479`), P14 historical promotion State `f8a61fe` and
 current docs-only canonical State/Brief `4caecbb`,
-P20 Entry Architecture `2f9c93b`, Technical Design `6a0d164`, and proposed
-P20-A proposed checkpoint `2a03eda` (the user accepted its bounded scope on
-2026-09-27; this accepts scope only, delivers no P20 capability, and implies
-no P12 dependency),
+P20 canonical/State `7a81cc0` and promoted P20-A code `22df7b3` (P20 remains
+outside this profile and creates no P12 dependency),
 P10-A's approved bounded P8-C LocationId-neutral seam with design/checkpoint
 review PASS at `345dcbc` and `READY_FOR_IMPLEMENTATION` status; the P10 runtime
 is promoted at code `9501bf0` / State `9e79b58` / current canonical State/Brief

@@ -11,14 +11,15 @@ scope or authorize its final profile integration; P12-A remains
 profile inventory are complete, followed by its separate implementation
 authorization. No capability is delivered by this record.
 
-**Evidence baseline:** owner inventory candidate
-`e995e2ae4c10bac1d30d1d158c75216f73842480`; inventory references the
-authoritative architecture `c285466`, P8 State `470667d`, P9 closure
-`82396ae` and P9-B implementation integration `d9a62d7`, P11 closure
-`308e24d`, P14 State `4caecbb`, P18 canonical/State `ba8076c`, and P20 State
-`7a81cc0`, plus both current architecture alignment records. Revalidate these
-references and the actual canonical runtime composition before any checkpoint
-implementation is scheduled.
+**Evidence baseline:** refreshed owner inventory candidate `73cf6c2`; it
+references architecture/multi-participant alignment `c285466`, intraday
+alignment `4b6dd1d`, P8 State `470667d`, P9 closure `82396ae` and P9-B code
+integration `d9a62d7`, P11 closure `308e24d` / code `0cd4281`, P14 State
+`4caecbb`, P18 canonical code `9e790c5`, and P20 State `7a81cc0`. P18's
+State text at `9e790c5` is stale about D1/D2, whose code is promoted there;
+the P18-D consumer is incomplete on reviewed but unpromoted candidate
+`a9428a3`. Revalidate the actual canonical runtime composition before any
+checkpoint claims P12-A implementation readiness.
 
 **Current evidence:** the inventory demonstrates no included owner with a
 complete exact immutable export and staged hydration path. The user has

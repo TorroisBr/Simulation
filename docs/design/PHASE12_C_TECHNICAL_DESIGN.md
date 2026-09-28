@@ -12,16 +12,23 @@ P8 `470667d37863384edadb3d93ef64d8004aff46a3`; P9 State/closure
 `82396ae7ffaf407fda278928da456b06dc5394d4` and P9-B code integration
 `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf`; P11 State
 `308e24d0744112e8f2b741521b8b3e4acb51ebbf` and actual code promotion
-`0803670cfa2c39163b54ff46a21daa06df5a16f6`; P18 State/canonical
-`ba8076c3bc2c8c354a8755e6efaca30bfeab7bf7`; and the intraday/extensibility
-and multi-participant activity alignment records. The proposed P9-B/P11 additive
+`0cd4281804ecc6a2d110352d1a238959e93867f0`; P18 canonical code
+`9e790c59e14ca7f7ed195c0e6267e10f3cd039d7` (the State at that tip retains
+stale wording that D1/D2 are missing, although the promoted code contains
+them); intraday/extensibility alignment `4b6dd1d38cffeaf3cc1ac3effea0f8ede8771194`;
+and multi-participant activity alignment `c285466c355103d3637ac165246591b72eb7bda0`.
+The proposed P9-B/P11 additive
 composition is candidate `af656e7710fce0ba171fae1d6684331d2dc0b743`, not
 canonical. Its independent code review passed. The refreshed P12 owner/profile
 inventory `ba6f79fb87e851316be84d4f2a89d94186b8f802` completes a local audit of
 that exact candidate's selected composition and configured providers, and
 records its selected-profile validation results. The audit did not fetch
 remote refs, and this candidate is still unpromoted; it is candidate-based
-composition evidence, not canonical live-composition evidence for P12-A.
+composition evidence, not canonical live-composition evidence for P12-A. A
+refreshed owner inventory at `73cf6c2` checks the current architecture,
+alignment, and canonical refs, corrects the P11/P18 status, and preserves the
+same finding: no complete live owner/export/hydration census exists, so P12-A
+remains `WAIT_DEPENDENCY`.
 The read-only P12-C RNG consumer census is also against candidate `af656e7`;
 its exact findings are recorded in owner-inventory follow-up
 `99739fd0d190cd61acda8d3c91b25acab7405379` and below. Re-audit when the

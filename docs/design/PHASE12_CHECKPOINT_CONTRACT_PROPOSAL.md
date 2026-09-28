@@ -14,12 +14,13 @@ inventory dependencies.
 This proposal changes no canonical capability and makes no claim that capture,
 hydration, or save/load parity currently exists.
 
-**Current-base refresh:** after merging P18 canonical `ba8076c` into this
-documentation candidate, an independent scoped review found the daily profile
-still compatible. The P18 source tree is present in this proposal branch only
-as review context; this branch has no executable P11 ancestry and is not an
-integrated runtime composition. The current P11 capability is checked by its
-separate canonical ref. P12-A remains `WAIT_DEPENDENCY` for implementation.
+**Current-base refresh:** after the 2026-09-28 remote refresh, P18 canonical
+code tip `9e790c5` and the current P11 canonical refs were rechecked. The
+P18 source tree is present in this proposal branch only as review context;
+this branch has no executable P11 ancestry and is not an integrated runtime
+composition. The current P11 capability is checked by its separate canonical
+ref. This documentation-only reference refresh records no new independent
+review verdict. P12-A remains `WAIT_DEPENDENCY` for implementation.
 
 **Historical targeted revalidation:** the earlier review used P8 canonical
 `77f3e1a47a1e007492a794ea777d681a21a36d09` and predates the current P9
@@ -44,7 +45,10 @@ pending commands, P19 modules, or P20 shared activities.
 P10-A is now promoted, but this selected profile does not compose its Ruin or
 LocalTopology facts. P18-A/B/C are promoted, but the selected legacy daily
 bootstrap does not compose the P18 timeline, activity lifecycle, or availability
-decision services and claims no intraday state.
+decision services and claims no intraday state. P18 D1/D2 prerequisites are
+promoted at `9e790c5`; the State text at that tip is stale about those
+prerequisites. The P18-D consumer candidate `a9428a3` is reviewed but
+unpromoted and incomplete, so no P18 runtime state is part of this profile.
 
 **Revalidated references:** P8 State `470667d37863384edadb3d93ef64d8004aff46a3`;
 architecture `c285466c355103d3637ac165246591b72eb7bda0`; P9-A code promotion
@@ -52,18 +56,18 @@ architecture `c285466c355103d3637ac165246591b72eb7bda0`; P9-A code promotion
 current P9-B promotion-record State/status `14a2e8e`; P9-B code integration
 `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf` (implementation tip
 `00395ef80cfa2364d34ed2170e0735d3a4b1513d`); P11 code promotion
-`0803670cfa2c39163b54ff46a21daa06df5a16f6` /
+`0cd4281804ecc6a2d110352d1a238959e93867f0` /
 current canonical closure State `308e24d0744112e8f2b741521b8b3e4acb51ebbf`;
-P18 canonical/current State `ba8076c3bc2c8c354a8755e6efaca30bfeab7bf7`
-(P18-A/B/C promoted; P18-D implementation blocked); P14 current canonical
+P18 canonical code `9e790c59e14ca7f7ed195c0e6267e10f3cd039d7` (D1/D2 code
+promoted; canonical State wording is stale; P18-D consumer remains
+incomplete); P14 current canonical
 State/Brief `4caecbb` (docs-only update) and historical promotion State
 `f8a61fe9634ba9ab56ee31d50b57b45fef292a6f`; P14-A code promotion
 `c44904bb4b0a066eced1d7e8a773b7dc1eea76c0` / State
 `f8a61fe9634ba9ab56ee31d50b57b45fef292a6f`;
-P20 Entry Architecture `2f9c93b`, Technical Design `6a0d164`, and proposed
-P20-A checkpoint refresh `2a03edadcb411c7ca7aa2d0c67ee8d36f972779e`
-(design and proposal reviewed; checkpoint
-acceptance/implementation remain pending). Its two-Person fixture is bounded
+P20 canonical/State `7a81cc0ecbc511dd36c248ec62c7b20f7e477f53` and P20-A code
+`22df7b307528e705e6e84d1d8d54852a17cfc848` (promoted; shared activities are
+not composed by this profile). Its two-Person fixture is bounded
 proof evidence, not universal participant cardinality or a P12 dependency.
 Both architecture alignment records remain current. P10-A's user-approved
 Ruin/LocalTopology profile was promoted at code candidate `9501bf0`; canonical
@@ -302,9 +306,11 @@ omits causal fields.
   do not substitute for P8 identity. P8-E is not a blanket continuation
   prerequisite. P9-B is on current P9 canonical at `d9a62d7`; this P12
   proposal does not establish P12 export/hydration coverage or checkpoint gates.
-- **P18:** P18 canonical/State is `ba8076c`; the selected daily profile does
+- **P18:** P18 canonical code is `9e790c5`; the selected daily profile does
   not compose its timeline, activity lifecycle, availability decisions, or
-  temporal state, and does not claim intraday continuation. P18 is present in
+  temporal state, and does not claim intraday continuation. D1/D2 are promoted;
+  the State text is stale and P18-D consumer candidate `a9428a3` is still
+  unpromoted and incomplete. P18 is present in
   this docs-only refresh branch as review context, not integrated runtime code.
   If a future supported profile composes it,
   preserve `(worldId, profileId, absoluteDay)` boundary identity, tick
@@ -316,7 +322,8 @@ omits causal fields.
   boundary state. Include P18-B ActivityInstanceId/lifecycle
   revision/receipts and participant commitments/availability, plus P18-C
   PersonId-keyed decision/attempt state only where composed. P18-A/B/C are
-  promoted; P18-D remains blocked and the legacy daily path remains authoritative.
+  promoted; full P18-D remains incomplete and the legacy daily path remains
+  authoritative.
 - **P20:** shared activities are outside this profile. Any later profile that
   includes them must preserve stable `ActivityInstanceId` separately from its
   definition and participants (using `PersonId` for Person participants without
@@ -384,13 +391,13 @@ profile contract.
   `43f08b3`, P9-B promotion-record State/status `14a2e8e`, P9-B canonical
   integration `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf` (implementation tip
   `00395ef80cfa2364d34ed2170e0735d3a4b1513d`),
-  P11 code promotion `0803670cfa2c39163b54ff46a21daa06df5a16f6` and canonical closure State
-  `308e24d0744112e8f2b741521b8b3e4acb51ebbf`, current P18 canonical/State
-  `ba8076c3bc2c8c354a8755e6efaca30bfeab7bf7`, P14 current canonical
+  P11 code promotion `0cd4281804ecc6a2d110352d1a238959e93867f0` and canonical closure State
+  `308e24d0744112e8f2b741521b8b3e4acb51ebbf`, current P18 canonical code
+  `9e790c59e14ca7f7ed195c0e6267e10f3cd039d7`, P14 current canonical
   State/Brief `4caecbb` (docs-only), historical promotion State `f8a61fe`
   and P14-A code promotion `c44904bb4b0a066eced1d7e8a773b7dc1eea76c0`, P20 Entry Architecture
-  `2f9c93b`, Technical Design `6a0d164`, and refreshed proposed P20-A checkpoint
-  `2a03edadcb411c7ca7aa2d0c67ee8d36f972779e`, P10-A promoted code
+  `7a81cc0ecbc511dd36c248ec62c7b20f7e477f53` / P20-A code
+  `22df7b307528e705e6e84d1d8d54852a17cfc848`, P10-A promoted code
   `9501bf076d506fb64d6ee3e6d178574fff36e153` / State `9e79b58`, architecture
   `c285466`, `docs/architecture/INTRADAY_EXTENSIBILITY_ALIGNMENT.md`, and
   `docs/architecture/MULTIPARTICIPANT_ACTIVITY_ALIGNMENT.md`.
