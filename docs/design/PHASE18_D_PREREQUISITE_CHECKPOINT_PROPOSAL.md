@@ -1,12 +1,12 @@
 # P18-D Prerequisite Checkpoint Proposal
 
-**Status:** proposed scope only; neither checkpoint is accepted, implementation-ready, or READY. This proposal adds no P18-D consumer behavior and does not change the canonical Phase 18 State or Brief.
+**Status:** P18-D1 and P18-D2 scopes accepted by the user on 2026-09-27 after exact-tip independent technical review PASS at `c7201446fe1dba25fa813f71def4091b5ff03d6e`. They are now accepted prerequisite checkpoints and implementation-ready against this bounded technical contract. Implementation has not begun. Acceptance and readiness do not promote code or change canonical State; the Phase 18 Brief in this design branch records their accepted IDs.
 
 **Base:** P18 canonical `ba8076c3bc2c8c354a8755e6efaca30bfeab7bf7`, including the promoted P18-D technical design. The P18-D consumer integration remains downstream of both prerequisite capabilities.
 
 **Purpose:** split the two concrete P18-D implementation blockers identified by the canonical design into the smallest independently reviewable capabilities. Their technical ownership is independent, so implementation may proceed in separate isolated worktrees after each scope is accepted and independently reviewed. Integration and validation of the combined P18-D consumer remain serial and depend on both. No overlapping writer may own `SimulationRuntime.cs` or the economy/store files concurrently.
 
-## Economy market-sale operation receipt and prepared install
+## P18-D1 — Economy market-sale operation receipt and prepared install
 
 **Scope:** add a bounded, keyed owner operation to `EconomyTransactionService` for the accepted P11 Local SellGoods open-market path. P11's actor-choice runtime rejects a requested action whose `TargetNpc` is non-null, so an accepted actor-choice sale cannot enter MerchantSystem's NPC-to-NPC branch. This checkpoint therefore covers the existing market sale path only; it does not make autonomous SellGoods or NPC-to-NPC trade idempotent.
 
@@ -45,7 +45,7 @@ Preserve and run the existing `EconomyTransactionTests`, `MoneyAccountTests`, `M
 
 **Closure criteria:** exact keyed replay and collision semantics pass; every participating authority has complete revision/prepared-install ownership with no mutable collection bypass; active merchant plans are excluded by the accepted actor-choice semantic check and receipt replay cannot repeat merchant post-sale bookkeeping; pre-install failures leave all authorities unchanged; install contains no fallible or allocating work after it begins; receipt/result/snapshot is retained for the owning runtime lifetime; existing unkeyed sale behavior and regression suites pass; independent review validates the base, full diff, scope, mutation ownership, and tests. Closure delivers only the capability and does not claim P18-D consumer readiness.
 
-## Per-runtime non-reentrant serialized advance window
+## P18-D2 — Per-runtime non-reentrant serialized advance window
 
 **Scope:** add a per-instance, non-reentrant ownership window to `SimulationRuntime` spanning one complete chronological advance operation: timeline continuation, every due boundary subphase encountered, all same-instant due work included by the call, and the post-success P18-C handoff. The window prevents a second advance or reentrant composition entry on that same runtime while the first operation is active. It must release on every success, typed failure, and thrown exception path.
 
@@ -66,7 +66,7 @@ Preserve current `SimulationRuntimeOrchestrationTests` and relevant `LogicalTime
 
 ## Readiness and exclusions
 
-Both checkpoint scopes remain **proposed**, not accepted, not READY, and not implementation-authorized. Under the Execution Model, explicit scope acceptance and independent technical review precede implementation readiness; this proposal does not create that readiness or approve canonical promotion. P18-D consumer integration remains downstream of both capabilities and its other design requirements.
+Both accepted prerequisite checkpoints remain unimplemented and not promoted. P18-D consumer integration remains downstream of both capabilities and its other design requirements. The accepted scopes and reviewed technical boundaries do not approve canonical promotion.
 
 Excluded from both scopes: NPC-to-NPC/autonomous trade receipts; other economy operation receipt migrations; a generic transaction or lock framework; cross-runtime/thread safety; P14 material-flow or temporal adapters; P20 activity behavior; P19 public extension/loader work; persistence, save/fork/restart/crash recovery; and concrete new gameplay.
 
