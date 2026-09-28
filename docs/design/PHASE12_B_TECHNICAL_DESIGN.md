@@ -60,12 +60,13 @@ P9-B/P11 combined profile.
 reports that P9-B authored-geography code `00395ef` runs the P9 genesis path,
 while P11 code `0cd4281` composes `ActorChoiceStore` without P9 genesis; neither
 is an ancestor of the other, and their common base is P8 canonical `470667d`.
-An additive application-level composition candidate is being validated to
-combine these two existing capabilities as the normal accepted P12 profile.
-Until that candidate and its bootstrap tests pass, no branch is evidence of a
-live combined composition and the manifest's exact required provider/section
-set cannot be finalized. This design treats the composition candidate as a
-hard dependency, not as an already delivered or promoted runtime.
+An additive application-level composition candidate combines these two
+existing capabilities as the normal accepted P12 profile. Candidate
+af656e7710fce0ba171fae1d6684331d2dc0b743 is validated but unpromoted. Its
+bootstrap evidence permits exact-candidate revalidation and profile-inventory
+work; it is not canonical live-composition evidence. The manifest's exact
+required provider/section set cannot be finalized until the composition is
+promoted and the live owner census is refreshed.
 
 The accepted P12-A profile remains unchanged. Do not conditionally accept
 either half as `UnityBootstrap-Daily-v1`, synthesize an ActorChoiceStore, omit
@@ -272,8 +273,9 @@ reads do not invalidate a token.
 
 P18-D2 technical design review passed at `6f82bf4`; its implementation
 `ea7b3e7` and the economy receipt/prepared-install prerequisite are promoted
-at P18 canonical code tip `9e790c5`. P18-D consumer integration is active on
-the unpromoted feature candidate `a9428a3` and currently owns the shared
+at P18 canonical code tip `9e790c5`, although the Phase 18 State text there
+still has stale pending-gate wording. P18-D consumer integration is active on
+the unpromoted feature candidate `c199662` and currently owns the shared
 runtime hotspot. D2's scope is the per-runtime non-reentrant
 lease around the currently composed legacy `TryAdvanceDay` and
 `TryAdvanceDays` APIs and the narrow future owner seam. It does not compose the
@@ -302,12 +304,13 @@ Therefore:
   between daily advancement and a boundary callback that forms part of the
   admitted daily step.
 
-P18-D2's lease currently protects only the legacy calls. If P12-B is integrated later
-with a chronological P18 runtime, P18-D must extend its lease continuously
-through the outer timeline advance, continuation barriers, all due boundary
-subphases/work, and successful P18-C handoff; P12-B does not add that path.
-This is a hotspot serialization/implementation-order constraint. It does not
-create a new semantic dependency from P12 to P18 or claim P18-D2 is promoted.
+P18-D2's promoted lease currently protects the legacy advance calls. P18-D's
+active consumer must extend exclusive ownership continuously through the outer
+timeline advance, continuation barriers, all due boundary subphases/work, and
+successful P18-C handoff before handing the runtime hotspot to P12. P12-B does
+not add that chronological path. This is a hotspot
+serialization/implementation-order constraint, not a new semantic dependency
+from P12 to P18.
 
 ## 6. Files, ownership, and integration order
 
@@ -335,15 +338,18 @@ create a new semantic dependency from P12 to P18 or claim P18-D2 is promoted.
 
 Integration sequence:
 
-1. Validate the additive P9-B/P11 composition candidate (`00395ef` plus
-   `0cd4281`, common P8 base `470667d`) and its bootstrap tests. Then refresh
-   the live read-only composition inventory against that exact candidate tip.
-   Without a passed candidate and inventory, the admission manifest cannot be
-   finalized and P12-B implementation is blocked.
+1. The additive P9-B/P11 composition candidate (`00395ef` plus `0cd4281`,
+   common P8 base `470667d`) is validated at `af656e7`, but unpromoted.
+   Resolve its canonical promotion gate, then refresh the live read-only
+   composition inventory against the promoted source. Inventory `012e04b`
+   remains a source/API gap map and does not supply a live owner revision
+   census. Until promotion and a complete census, the admission manifest
+   cannot be finalized and P12-B runtime integration is blocked.
 2. P18-D2 design and implementation are promoted at `6f82bf4` / `9e790c5`.
-   P18-D consumer integration currently owns the runtime hotspot; require its
-   candidate validation and explicit owner handoff before opening the P12-B
-   runtime owner window. Revalidate P12-B seams against the promoted D2 API.
+   P18-D consumer candidate `c199662` remains incomplete and owns the runtime
+   hotspot; require the completed integration, validation, and explicit owner
+   handoff before opening the P12-B runtime owner window. Revalidate P12-B
+   seams against the promoted D2 API.
 3. Implement immutable admission values/source and rejection behavior without
    serializing owner state. Implement the runtime boundary/token hook using
    the single D2 lease contract. Instrument mutation paths only after the
@@ -466,16 +472,15 @@ exported/hydrated under P12-C. Legacy spatial/site state belongs to P12-D.
 This design is bounded to accepted P12-B scope, but P12-B is **not**
 `READY_FOR_IMPLEMENTATION` on this evidence:
 
-1. Validate the additive P9-B/P11 composition candidate and its bootstrap
-   tests; then refresh the live profile/provider/owner inventory against the
-   exact passing tip. Until then this design does not identify an already-live
-   combined runtime.
-2. P18-D2 technical review passed at `6f82bf4` and implementation is
-   underway. Its accepted scope guards only the currently composed legacy
-   `TryAdvanceDay`/`TryAdvanceDays` calls. Require its candidate validation,
-   canonical promotion and explicit hotspot handoff before P12-B touches
-   `SimulationRuntime`; P18-D still owns the future chronological
-   continuation/subphase/handoff window.
+1. The additive P9-B/P11 composition candidate is validated at `af656e7` but
+   remains unpromoted. After promotion, refresh the live
+   profile/provider/owner inventory against canonical composition. Inventory
+   `012e04b` does not demonstrate the live owner revision census.
+2. P18-D2 is already validated and canonical at `9e790c5`; it guards the
+   currently composed legacy `TryAdvanceDay`/`TryAdvanceDays` calls. P18-D
+   consumer work still owns the future chronological continuation/subphase/
+   handoff window. Require explicit hotspot handoff before P12-B touches
+   `SimulationRuntime`.
 3. Demonstrate the complete versioned owner-section census and
    mutation-notification inventory. P12-B's eligibility kernel must fail
    closed until P12-C/D/E/F owners register their required adapters; P12-G
