@@ -65,7 +65,7 @@ The subphase barrier blocks ordinary same-instant due work, successful advanceme
 
 **Promoted prerequisite — additive P18-A contract/API:** the accepted extension is promoted at `1dd0479`. P18-D consumes its returned-facts/provisional-sequence facility and blocking daily subphase barrier. Boundary preparation freezes the exact manifest against the pre-effect snapshot and never regenerates it from partially mutated world state.
 
-The extension lets boundary preparation return a typed barrier fact and ask the timeline to validate/reserve provisional causal sequence identities without publishing them. Activation commit atomically stores the consumed A occurrence, immutable manifest, and those exact provisional descriptors. The timeline publishes the returned facts only after activation commit, with the reserved identities and idempotent publication; no owner callback may reenter timeline publication. The returned fact names a separate stable barrier identity derived injectively from `(worldId, profileId, absoluteDay)` and is placed in an explicit boundary-subphase dispatch class. That class is drained before ordinary same-instant due work; it is not ordinary wave-zero work and does not depend on generated later waves preempting it. The timeline stays at `t` while the barrier is incomplete. Boundary activation is already consumed and is never left pending for the multi-owner subphase. The barrier completion receipt is separate from the A occurrence. Stable `stepId` values use semantic step names and stable domain IDs (for example `economy-production:<CityId>` and `merchant-trade-state:<PersonId>`); list ordinals express order only and are not identity. Each row below is included only if its owner exposes the atomic step seam; otherwise it stays in legacy profile. A narrower intraday composition that omits existing daily effects is unsupported until required product approval is recorded. No world-wide rollback or generic transaction framework is added.
+The extension lets boundary preparation return a typed barrier fact and ask the timeline to validate/reserve provisional causal sequence identities without publishing them. Activation commit atomically stores the consumed A occurrence, immutable manifest, and those exact provisional descriptors. The timeline publishes the returned facts only after activation commit, with the reserved identities and idempotent publication; no owner callback may reenter timeline publication. The returned fact names a separate stable barrier identity derived injectively from `(worldId, profileId, absoluteDay)` and is placed in an explicit boundary-subphase dispatch class. That class is drained before ordinary same-instant due work; it is not ordinary wave-zero work and does not depend on generated later waves preempting it. The timeline stays at `t` while the barrier is incomplete. Boundary activation is already consumed and is never left pending for the multi-owner subphase. The barrier completion receipt is separate from the A occurrence. Stable `stepId` values use semantic step names and stable runtime/domain IDs (for example `economy-production:<CityRuntimeId>` and `merchant-trade-state:<NpcRuntimeId>`); carry a backing `PersonId` in the descriptor when present. List ordinals express order only and are not identity. Each row below is included only if its owner exposes the atomic step seam; otherwise it stays in legacy profile. A narrower intraday composition that omits existing daily effects is unsupported until required product approval is recorded. No world-wide rollback or generic transaction framework is added.
 
 | Existing `AdvanceDayAfterClockAdvance` operation, in order | Intraday classification / rule |
 |---|---|
@@ -136,6 +136,59 @@ retaining a distinct manifest identity. Receipt identity is
 subphase, configuration, content, and all step fields. This is a sequential
 compatibility rule for the accepted daily manifest, not a new gameplay or
 general concurrency contract.
+
+### Daily-owner target identity and temporal cardinality
+
+The frozen manifest records immutable operation identity, target identity/order,
+effective configuration/content identity, and the exact owner contract version.
+It does not freeze mutable values that earlier declared boundary steps may
+change; each owner captures those values in its own preparation after the
+predecessor commits, then revalidates immediately before installation.
+
+Economy work remains three distinct ordered operations per city runtime:
+production for each city in city-list order, then for each city in that same
+order its configured consumption followed by price refresh. Use stable
+semantic step names with the `CityRuntimeId`; a `CityId` or list ordinal
+alone is not an operation identity.
+Freeze the configured row sequence and its exact item semantic IDs, quantities,
+and relevant policy/version inputs, preserving duplicate rows and order.
+Row ordinals express order only. Because the current authored production and
+consumption rows have no inspected stable row IDs, each city pass must install
+as one owner batch with one occurrence receipt rather than assigning identity
+to a row ordinal. Consumption keeps the existing free/paid transaction
+semantics and remains separate from P14 material flow.
+
+Demography remains one P18-D owner due-work fact, in legacy order:
+natural-mortality evaluation and its Person/NPC/residence-population lifecycle
+effects, each city's aggregate transition, then report completion/assignment.
+Freeze the ordered mortality `PersonId` targets with applicable materialization
+identities/cardinality and the `CityRuntimeId` aggregate targets. Do not freeze
+mutable mortality results or the aggregate represented-resident floor before
+mortality: the current operation recomputes that floor after natural deaths.
+The demographic owner prepares each internal operation after its declared
+predecessor effects, records enough owner-local progress to reconstruct the
+same report and skip committed effects, and does not delegate cross-authority
+mutation sequencing to the P18-D coordinator.
+
+Local observation descriptors preserve the exact NPC roster order,
+null/repeated slots, and cardinality used by the existing loop. A
+Person-backed actor carries both `PersonId` and its `NpcRuntimeId`; an
+unbacked actor retains `NpcRuntimeId`. The owner captures the actor's current
+location and ordered market-item/liquidity values only when preparing this
+step after earlier boundary effects, then installs that observation batch with
+its receipt. One actor-owned operation covers each target's exact multiplicity
+in the frozen roster and atomically installs its affected spatial and
+commercial knowledge; otherwise keep the operation outside intraday composition.
+
+Commercial sharing preserves the frozen eligible merchant membership,
+location-group order, and deterministic rotation/pairing, including duplicate
+membership cardinality. The owner captures each sender's shareable observations
+after the preceding local-observation steps commit. Each directed transfer is a
+recipient-owned operation whose receipt identifies the boundary occurrence,
+sender and receiver identities, and the frozen pairing/source fingerprint;
+exact duplicate directed pairs are applied in their frozen multiplicity/order
+within a recipient batch so no ordinal becomes operation identity.
+
 
 ## 5. Current-truth execution, outcome, and failure atomicity
 
