@@ -24,8 +24,9 @@ continuation extension, and the P18-D sale-receipt/runtime-lease prerequisites
 are promoted; the canonical State header retains stale pre-promotion blocker
 wording). P18-D's approved technical design is candidate
 `9ed6d90455cc793244ee7207adb62960e45a9972`; the current pushed integration
-candidate `04abdcb` adds the resumable boundary coordinator and PlaceContent/
-logger adapters, but still has no chronological `SimulationRuntime`
+candidate `6fcbfab` adds the resumable boundary coordinator and receipt-backed
+PlaceContent, logger, Justice, Crime, merchant-plan, and City economy adapters,
+but still has no chronological `SimulationRuntime`
 composition or complete daily profile. P18-D remains in progress; P12-A does
 not compose intraday state. P20 canonical/State
 `7a81cc0ecbc511dd36c248ec62c7b20f7e477f53` (P20-A promoted, code
@@ -44,7 +45,7 @@ deferred) and `ConsumedAwaitingTerminalAttempt` state. `Rejected`,
 allowed only at a later successful daily boundary while the runtime is healthy.
 The P12 candidate must include the promoted P11 runtime (or prove equivalent
 composition) before claiming this coverage. P18-A/B/C and the additive P18-A
-continuation extension are promoted at current P18 canonical `ba8076c`; the
+continuation extension are promoted at current P18 canonical `9e790c5`; the
 extension was accepted under contract `2175bf2` (acceptance record `9de70ae`)
 and implemented at integration `1dd0479`. The selected legacy
 `TesteSimulacao` profile still does not compose the P18 timeline, activity
@@ -118,8 +119,9 @@ P18 intraday state, P19 module state, P20 shared activities, P13 historical
 reconstruction/fork guarantees, and generated P9/P10 content remain outside
 P12-A. P18-A/B/C, the additive P18-A continuation extension, and P18-D
 receipt/lease prerequisites are promoted at current P18 canonical code
-`9e790c5`. P18-D integration candidate `04abdcb` adds the resumable boundary
-coordinator and PlaceContent/logger adapters; it has not composed the
+`9e790c5`. P18-D integration candidate `6fcbfab` adds the resumable boundary
+coordinator and receipt-backed PlaceContent, logger, Justice, Crime,
+merchant-plan, and City economy adapters; it has not composed the
 chronological runtime path or completed the daily profile. The selected
 bootstrap does not compose the P18 timeline, activity/availability runtime,
 continuation extension, or intraday state; no P18 state is claimed. P20-A is promoted at
