@@ -24,6 +24,15 @@ public class MarketItemRuntime
         UpdatePrice();
     }
 
+    internal MarketItemRuntime(MarketItemRuntime source)
+    {
+        if (source == null) throw new ArgumentNullException(nameof(source));
+        item = source.item;
+        amount = source.amount;
+        desiredAmount = source.desiredAmount;
+        currentPrice = source.currentPrice;
+    }
+
     internal bool AddAmount(int amountToAdd)
     {
         if (amountToAdd <= 0)
@@ -275,7 +284,7 @@ public class MarketRuntime
                 replacement.Add(new MarketItemRuntime(item, existing.Amount + delta, existing.DesiredAmount));
                 continue;
             }
-            replacement.Add(new MarketItemRuntime(existing.Item, existing.Amount, existing.DesiredAmount));
+            replacement.Add(new MarketItemRuntime(existing));
         }
         if (!found) replacement.Add(new MarketItemRuntime(item, delta, desiredAmount));
         return new PreparedMarketState(replacement);

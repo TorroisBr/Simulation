@@ -161,6 +161,30 @@ public sealed class EconomyTransactionTests
     }
 
     [Test]
+    public void KeyedMarketSale_PreservesUntouchedCachedPriceUntilPriceRefresh()
+    {
+        ItemData soldItem = SimulationTestFactory.CreateItem("cached-price-sold-item", 10f);
+        ItemData untouchedItem = SimulationTestFactory.CreateItem("cached-price-untouched-item", 10f);
+        MarketRuntime market = new MarketRuntime(new List<MarketItemConfig>
+        {
+            SimulationTestFactory.CreateMarketItem(soldItem, 5, 5),
+            SimulationTestFactory.CreateMarketItem(untouchedItem, 10, 10)
+        });
+        NpcRuntime seller = CreateNpc("cached-price-seller", 0f);
+        seller.Inventory.AddItem(soldItem, 1);
+        float cachedPrice = market.GetPrice(untouchedItem);
+        untouchedItem.basePrice = 50f;
+
+        KeyedSaleReceipt receipt = new EconomyTransactionService().TryExecuteKeyedMarketSale(
+            "cached-price-proposal", "cached-price-fp", "input", "request", "person", "sell", 1,
+            "profile", "tick", "site", seller, market, soldItem, 1);
+
+        Assert.That(receipt.Outcome, Is.EqualTo(KeyedSaleOutcome.Committed));
+        Assert.That(market.GetPrice(untouchedItem), Is.EqualTo(cachedPrice));
+        Assert.That(market.GetPrice(soldItem), Is.Not.EqualTo(0f));
+    }
+
+    [Test]
     public void KeyedMarketSale_PreflightRevisionExhaustionLeavesAllOwnersUnchangedAndCanRetry()
     {
         ItemData item = SimulationTestFactory.CreateItem("preflight-item", 10f);
