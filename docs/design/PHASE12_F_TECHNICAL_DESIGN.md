@@ -13,15 +13,15 @@ P12-D factual roots, and P12-E selected core/daily owners are prerequisites to
 F. Their designs are inputs, not evidence that their capabilities have been
 implemented or promoted.
 
-**Related reviewed design inputs:** P12-B design/inventory reconciliation
-`45e6be83fc40a1b78908aa79500e46e64532ac4b`; P12-C corrected design
-`ceb37049ddbe54602063ba92a92cceafdce50096` (independent review PASS); P12-D
-`796eadc1a0bd6b44b646f27f5eeb63de71f6b14`; and P12-E
-`51718c7bd38e9582433d1fa38ff4011ef9cf20c5`. P12-B/C/D/E design review
-passes do not substitute for delivery of those capabilities. The design also
-applies the current intraday/extensibility and multi-participant alignment records:
-P18/P19/P20 constraints remain explicit while their state is excluded from
-this daily profile.
+**Current evidence refresh (2026-09-28):** P12 owner inventory
+`012e04b2c97e219134590da610c5ef3b8a3092d8` is reviewed as a source/API gap
+map, not a live owner-revision census. P12-B reference refresh `d0761ce` is
+pending exact-tip review. P12-C refreshed design `a2ac5d2` passed independent
+review; P12-D `dd81634` and P12-E `ca8e968` evidence refreshes also passed.
+These documentation updates do not deliver owner export/hydration or alter
+checkpoint dependencies. They apply the current intraday/extensibility and
+multi-participant alignment records: P18/P19/P20 constraints remain explicit
+while their state is excluded from this daily profile.
 
 ## 1. Boundary
 
