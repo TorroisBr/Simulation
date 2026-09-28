@@ -152,6 +152,24 @@ legacy spatial runtime state.
   current action/behavior and hidden-day state, inventory and money account,
   plan/commitment fields, and definition identity. Roster order is preserved
   only where the existing owner uses it as a semantic tie-break.
+- Legacy authored spatial and exploration truth used by the selected
+  bootstrap: `SpatialNetworkRuntime` locations/routes, `ExplorableSiteStore`
+  site identity and state, site/exploration facts, supported legacy City/Site
+  anchors, and the existing legacy position/location links that connect NPCs,
+  Cities, routes, and sites. Export each fact from its current domain owner;
+  preserve exact typed IDs, route/site/location endpoints, reciprocal links,
+  relation cardinality, owner revisions and any state that affects later
+  exploration or travel. Hydration restores the recorded links and progress;
+  it must not rediscover routes, regenerate sites, re-anchor entities, or
+  infer a replacement location from P8 geography.
+- These are the profile's existing legacy spatial/site authorities, not the
+  P8-owned spatial extension. Keep their identities and link semantics
+  distinct from P8-A `HexId`, `LocationId`, and scale provenance. P8-A
+  geography is covered by the identity/genesis checkpoint above; legacy
+  routes/locations/sites remain covered here even though P8-B through P8-E
+  authorities are excluded. In particular, these legacy City/Site anchors
+  and position links are not the P8-C anchor/`PersonSpatialPositionStore`
+  facts, and legacy routes are not P8-B passage or P8-D route-plan facts.
 - Population aggregates, `PersonStore`, genealogy, residence/lifecycle and
   materialization relationships as reachable in the live profile composition.
   Keep Person identity and NPC runtime identity separate: NPC-only rows stay
@@ -160,16 +178,29 @@ legacy spatial runtime state.
   from calendar/configuration rather than serializing mutable age.
 - Owner factories restore roots before references; cross-check account,
   inventory, City/market, NPC/Person, residence, parentage, aggregate and
-  materialization bindings. Cover both initially empty and evolved/populated
-  states; initial asset counts are not maximum cardinalities.
+  materialization bindings, plus legacy City/Site anchor and
+  location/route/site/NPC links. Cover both initially empty and
+  evolved/populated states; initial asset counts are not maximum
+  cardinalities.
+- Reconstruction tests round-trip empty and populated legacy network and
+  exploration state, including stable route/site/location identities,
+  endpoints, supported anchor and position-link cardinality, reciprocal
+  bindings, exploration progress, and active references. Vary or remove a
+  required endpoint/anchor, duplicate a stable identity, or create a dangling
+  link and prove staged hydration rejects before publication. Compare the
+  restored owner truth and supported relationships after identical subsequent
+  daily inputs; diagnostics alone are not reconstruction evidence.
 
 **Likely areas to inventory/own:** `CityRuntime`, `MarketRuntime`,
 `MarketItemRuntime`, economy/account and inventory owners; `NpcRuntime` and
-NPC/action state owners; `SettlementPopulation*`, `PersonStore`,
-`GenealogyStore`, residence/lifecycle/materialization authorities. Shared
-`PersonStore`/population owners require one explicitly coordinated ownership
-window. The current composition inventory must identify precise implementations
-and providers before any per-class implementation plan is approved.
+NPC/action state owners; `SpatialNetworkRuntime`, `ExplorableSiteStore` and
+the current legacy City/Site anchor and position/link owners;
+`SettlementPopulation*`, `PersonStore`, `GenealogyStore`,
+residence/lifecycle/materialization authorities. Shared `PersonStore`,
+population and spatial/site ownership require explicitly coordinated
+ownership windows. The current composition inventory must identify precise
+implementations and providers before any per-class implementation plan is
+approved.
 
 ### Profile-selected core and official daily-domain owners
 
@@ -294,9 +325,15 @@ This decomposition preserves the accepted profile boundary. It does not add
 product scope. The following remain excluded and must be empty/not composed or
 cause profile admission to reject:
 
-- Populated P8-B through P8-E passage, presence anchors, Person positions,
-  spatial Knowledge/route plans, or travel authorities; only the selected
-  P8-A Hex, anchored Location, and scale facts are included.
+- Any populated canonical P8-B, P8-C, P8-D, or P8-E authority state, including
+  passage, canonical presence anchors, Person spatial positions, spatial
+  Knowledge/route plans, and P8-E travel authorities; only the selected P8-A
+  Hex, anchored Location, and scale facts are included. This exclusion
+  does not remove the existing legacy `SpatialNetworkRuntime`
+  locations/routes, `ExplorableSiteStore` truth, supported legacy City/Site
+  anchors, or legacy position links explicitly included in the factual-root
+  checkpoint. Legacy locations and routes are not substitutes for P8-A
+  identities, and P8-A geography does not replace legacy link state.
 - Generated P9/P10 worlds or generated content; only selected P9-B authored
   bootstrap provenance and its exact selected P8-A output are retained.
 - P10 Ruin/LocalTopology output (not composed by this profile).
