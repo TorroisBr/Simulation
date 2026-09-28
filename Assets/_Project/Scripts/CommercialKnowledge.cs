@@ -176,14 +176,250 @@ public sealed class CommercialLiquidityObservation
     }
 }
 
+/// <summary>Immutable value copy used by one retained commercial-sharing phase snapshot.</summary>
+[Serializable]
+public sealed class CommercialKnowledgeShareValue
+{
+    public bool IsMarketObservation { get; }
+    public string LocationRuntimeId { get; }
+    public string ItemDefinitionId { get; }
+    public ItemData ItemDefinition { get; }
+    public float ObservedPrice { get; }
+    public int ObservedStock { get; }
+    public MarketLiquidityMode LiquidityMode { get; }
+    public float ObservedPurchasingPower { get; }
+    public long ObservedDay { get; }
+    public long SourceReceivedDay { get; }
+    public CommercialKnowledgeSource Source { get; }
+    public string SourceRuntimeId { get; }
+    public string SortKey => IsMarketObservation ? "item:" + ItemDefinitionId : "liquidity";
+
+    private CommercialKnowledgeShareValue(string locationRuntimeId, string itemDefinitionId,
+        ItemData itemDefinition, float observedPrice, int observedStock, MarketLiquidityMode liquidityMode,
+        float observedPurchasingPower, long observedDay, long sourceReceivedDay,
+        CommercialKnowledgeSource source, string sourceRuntimeId, bool isMarketObservation)
+    {
+        IsMarketObservation = isMarketObservation;
+        LocationRuntimeId = locationRuntimeId;
+        ItemDefinitionId = itemDefinitionId;
+        ItemDefinition = itemDefinition;
+        ObservedPrice = observedPrice;
+        ObservedStock = observedStock;
+        LiquidityMode = liquidityMode;
+        ObservedPurchasingPower = observedPurchasingPower;
+        ObservedDay = observedDay;
+        SourceReceivedDay = sourceReceivedDay;
+        Source = source;
+        SourceRuntimeId = sourceRuntimeId;
+    }
+
+    public static CommercialKnowledgeShareValue Capture(CommercialMarketObservation observation)
+    {
+        if (observation == null || observation.ItemDefinition == null
+            || observation.ItemDefinition.DefinitionId != observation.ItemDefinitionId)
+            throw new ArgumentException("A market share snapshot requires a stable item definition.", nameof(observation));
+        return new CommercialKnowledgeShareValue(observation.LocationRuntimeId, observation.ItemDefinitionId,
+            observation.ItemDefinition, observation.ObservedPrice, observation.ObservedStock,
+            MarketLiquidityMode.Open, 0f, observation.ObservedDay, observation.ReceivedDay,
+            observation.Source, observation.SourceRuntimeId, true);
+    }
+
+    public static CommercialKnowledgeShareValue Capture(CommercialLiquidityObservation observation)
+    {
+        if (observation == null) throw new ArgumentNullException(nameof(observation));
+        return new CommercialKnowledgeShareValue(observation.LocationRuntimeId, null, null, 0f, 0,
+            observation.LiquidityMode, observation.ObservedPurchasingPower, observation.ObservedDay,
+            observation.ReceivedDay, observation.Source, observation.SourceRuntimeId, false);
+    }
+
+    internal bool TryCreateShared(string senderRuntimeId, long receivedDay,
+        out CommercialMarketObservation market, out CommercialLiquidityObservation liquidity)
+    {
+        market = null;
+        liquidity = null;
+        try
+        {
+            if (IsMarketObservation)
+            {
+                if (ItemDefinition == null || ItemDefinition.DefinitionId != ItemDefinitionId) return false;
+                market = new CommercialMarketObservation(LocationRuntimeId, ItemDefinition, ObservedPrice,
+                    ObservedStock, ObservedDay, receivedDay, CommercialKnowledgeSource.SharedByNpc,
+                    senderRuntimeId);
+            }
+            else
+            {
+                liquidity = new CommercialLiquidityObservation(LocationRuntimeId, LiquidityMode,
+                    ObservedPurchasingPower, ObservedDay, receivedDay,
+                    CommercialKnowledgeSource.SharedByNpc, senderRuntimeId);
+            }
+            return true;
+        }
+        catch (ArgumentException)
+        {
+            market = null;
+            liquidity = null;
+            return false;
+        }
+    }
+
+    internal string StableFingerprint => SpatialStableKey.Encode(
+        IsMarketObservation ? "market" : "liquidity", LocationRuntimeId, ItemDefinitionId,
+        ObservedPrice.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
+        ObservedStock.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        ((int)LiquidityMode).ToString(System.Globalization.CultureInfo.InvariantCulture),
+        ObservedPurchasingPower.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
+        ObservedDay.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        SourceReceivedDay.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        ((int)Source).ToString(System.Globalization.CultureInfo.InvariantCulture), SourceRuntimeId);
+}
+
+/// <summary>One frozen sender-to-receiver operation owned by a recipient knowledge projection.</summary>
+public sealed class CommercialKnowledgeShareBatch
+{
+    private readonly IReadOnlyList<CommercialKnowledgeShareValue> values;
+    public string BoundaryOccurrenceId { get; }
+    public string SenderRuntimeId { get; }
+    public string SenderPersonId { get; }
+    public string ReceiverRuntimeId { get; }
+    public string ReceiverPersonId { get; }
+    public string SourceSnapshotFingerprint { get; }
+    public long ReceivedDay { get; }
+    public int MaxSuccessfulUpdates { get; }
+    public IReadOnlyList<CommercialKnowledgeShareValue> Values => values;
+    public string OperationIdentity => SpatialStableKey.Encode(
+        "commercial-sharing-edge/v1", BoundaryOccurrenceId, SenderRuntimeId, ReceiverRuntimeId);
+
+    public CommercialKnowledgeShareBatch(string boundaryOccurrenceId, string senderRuntimeId,
+        string senderPersonId, string receiverRuntimeId, string receiverPersonId,
+        string sourceSnapshotFingerprint, long receivedDay, int maxSuccessfulUpdates,
+        IReadOnlyList<CommercialKnowledgeShareValue> values)
+    {
+        if (string.IsNullOrWhiteSpace(boundaryOccurrenceId) || string.IsNullOrWhiteSpace(senderRuntimeId)
+            || string.IsNullOrWhiteSpace(receiverRuntimeId) || senderRuntimeId == receiverRuntimeId
+            || string.IsNullOrWhiteSpace(sourceSnapshotFingerprint) || receivedDay < 0L
+            || maxSuccessfulUpdates <= 0 || values == null)
+            throw new ArgumentException("Commercial sharing batch identity and bounds are required.");
+        BoundaryOccurrenceId = boundaryOccurrenceId;
+        SenderRuntimeId = senderRuntimeId;
+        SenderPersonId = senderPersonId ?? string.Empty;
+        ReceiverRuntimeId = receiverRuntimeId;
+        ReceiverPersonId = receiverPersonId ?? string.Empty;
+        SourceSnapshotFingerprint = sourceSnapshotFingerprint;
+        ReceivedDay = receivedDay;
+        MaxSuccessfulUpdates = maxSuccessfulUpdates;
+        List<CommercialKnowledgeShareValue> copy = new List<CommercialKnowledgeShareValue>(values.Count);
+        foreach (CommercialKnowledgeShareValue value in values)
+            copy.Add(value ?? throw new ArgumentException("Commercial sharing values cannot be null.", nameof(values)));
+        this.values = copy.AsReadOnly();
+    }
+
+    internal string Fingerprint
+    {
+        get
+        {
+            List<string> fields = new List<string>
+            {
+                OperationIdentity, SenderPersonId, ReceiverPersonId, SourceSnapshotFingerprint,
+                ReceivedDay.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                MaxSuccessfulUpdates.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                values.Count.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            };
+            foreach (CommercialKnowledgeShareValue value in values) fields.Add(value.StableFingerprint);
+            return SpatialStableKey.Encode(fields.ToArray());
+        }
+    }
+}
+
+[Serializable]
+public sealed class CommercialKnowledgeShareReceipt
+{
+    [SerializeField] private string operationIdentity;
+    [SerializeField] private string fingerprint;
+    [SerializeField] private string boundaryOccurrenceId;
+    [SerializeField] private string senderRuntimeId;
+    [SerializeField] private string senderPersonId;
+    [SerializeField] private string receiverRuntimeId;
+    [SerializeField] private string receiverPersonId;
+    [SerializeField] private string sourceSnapshotFingerprint;
+    [SerializeField] private int appliedObservationCount;
+
+    public string OperationIdentity => operationIdentity;
+    public string Fingerprint => fingerprint;
+    public string BoundaryOccurrenceId => boundaryOccurrenceId;
+    public string SenderRuntimeId => senderRuntimeId;
+    public string SenderPersonId => senderPersonId;
+    public string ReceiverRuntimeId => receiverRuntimeId;
+    public string ReceiverPersonId => receiverPersonId;
+    public string SourceSnapshotFingerprint => sourceSnapshotFingerprint;
+    public int AppliedObservationCount => appliedObservationCount;
+
+    internal CommercialKnowledgeShareReceipt(CommercialKnowledgeShareBatch batch, string fingerprint,
+        int appliedObservationCount)
+    {
+        operationIdentity = batch.OperationIdentity;
+        this.fingerprint = fingerprint;
+        boundaryOccurrenceId = batch.BoundaryOccurrenceId;
+        senderRuntimeId = batch.SenderRuntimeId;
+        senderPersonId = batch.SenderPersonId;
+        receiverRuntimeId = batch.ReceiverRuntimeId;
+        receiverPersonId = batch.ReceiverPersonId;
+        sourceSnapshotFingerprint = batch.SourceSnapshotFingerprint;
+        this.appliedObservationCount = appliedObservationCount;
+    }
+}
+
+/// <summary>Prepared recipient-owned batch. Knowledge and its edge receipt install together.</summary>
+public sealed class CommercialKnowledgeShareBatchCommit
+{
+    private readonly CommercialKnowledgeRuntime owner;
+    private readonly long expectedRevision;
+    private readonly bool replay;
+    private readonly List<CommercialMarketObservation> nextMarketObservations;
+    private readonly List<CommercialLiquidityObservation> nextLiquidityObservations;
+    private readonly List<CommercialKnowledgeShareReceipt> nextReceipts;
+    private readonly CommercialKnowledgeShareReceipt receipt;
+
+    internal CommercialKnowledgeShareBatchCommit(CommercialKnowledgeRuntime owner, long expectedRevision,
+        bool replay, List<CommercialMarketObservation> nextMarketObservations,
+        List<CommercialLiquidityObservation> nextLiquidityObservations,
+        List<CommercialKnowledgeShareReceipt> nextReceipts, CommercialKnowledgeShareReceipt receipt)
+    {
+        this.owner = owner;
+        this.expectedRevision = expectedRevision;
+        this.replay = replay;
+        this.nextMarketObservations = nextMarketObservations;
+        this.nextLiquidityObservations = nextLiquidityObservations;
+        this.nextReceipts = nextReceipts;
+        this.receipt = receipt;
+    }
+
+    public CommercialKnowledgeShareReceipt Receipt => receipt;
+    public bool TryCommit(out CommercialKnowledgeShareReceipt committed)
+    {
+        committed = null;
+        if (owner == null || !owner.TryCommitShareBatch(this, out committed)) return false;
+        return true;
+    }
+
+    internal long ExpectedRevision => expectedRevision;
+    internal bool IsReplay => replay;
+    internal List<CommercialMarketObservation> NextMarketObservations => nextMarketObservations;
+    internal List<CommercialLiquidityObservation> NextLiquidityObservations => nextLiquidityObservations;
+    internal List<CommercialKnowledgeShareReceipt> NextReceipts => nextReceipts;
+}
+
 [Serializable]
 public sealed class CommercialKnowledgeRuntime
 {
     [SerializeField] private List<CommercialMarketObservation> observations = new List<CommercialMarketObservation>();
     [SerializeField] private List<CommercialLiquidityObservation> liquidityObservations = new List<CommercialLiquidityObservation>();
+    [SerializeField] private List<CommercialKnowledgeShareReceipt> shareReceipts = new List<CommercialKnowledgeShareReceipt>();
+    [SerializeField] private long revision;
 
     public IReadOnlyList<CommercialMarketObservation> Observations => ObservationList;
     public IReadOnlyList<CommercialLiquidityObservation> LiquidityObservations => LiquidityObservationList;
+    public long Revision => revision;
+    private List<CommercialKnowledgeShareReceipt> ShareReceipts => shareReceipts ?? (shareReceipts = new List<CommercialKnowledgeShareReceipt>());
 
     private List<CommercialMarketObservation> ObservationList => observations ?? (observations = new List<CommercialMarketObservation>());
     private List<CommercialLiquidityObservation> LiquidityObservationList => liquidityObservations ?? (liquidityObservations = new List<CommercialLiquidityObservation>());
@@ -199,7 +435,9 @@ public sealed class CommercialKnowledgeRuntime
 
         if (existingIndex < 0)
         {
+            if (revision == long.MaxValue) return false;
             ObservationList.Add(observation);
+            revision++;
             return true;
         }
 
@@ -210,7 +448,9 @@ public sealed class CommercialKnowledgeRuntime
             return false;
         }
 
+        if (revision == long.MaxValue) return false;
         ObservationList[existingIndex] = observation;
+        revision++;
         return true;
     }
 
@@ -250,7 +490,9 @@ public sealed class CommercialKnowledgeRuntime
 
         if (existingIndex < 0)
         {
+            if (revision == long.MaxValue) return false;
             LiquidityObservationList.Add(observation);
+            revision++;
             return true;
         }
 
@@ -259,7 +501,9 @@ public sealed class CommercialKnowledgeRuntime
             return false;
         }
 
+        if (revision == long.MaxValue) return false;
         LiquidityObservationList[existingIndex] = observation;
+        revision++;
         return true;
     }
 
@@ -288,16 +532,122 @@ public sealed class CommercialKnowledgeRuntime
         return false;
     }
 
+    public bool TryGetShareReceipt(string operationIdentity, out CommercialKnowledgeShareReceipt receipt)
+    {
+        receipt = null;
+        if (string.IsNullOrWhiteSpace(operationIdentity)) return false;
+        foreach (CommercialKnowledgeShareReceipt candidate in ShareReceipts)
+        {
+            if (candidate == null || candidate.OperationIdentity != operationIdentity) continue;
+            receipt = candidate;
+            return true;
+        }
+        return false;
+    }
+
+    public bool TryPrepareShareBatch(CommercialKnowledgeShareBatch batch,
+        out CommercialKnowledgeShareBatchCommit prepared)
+    {
+        prepared = null;
+        if (batch == null) return false;
+        string fingerprint = batch.Fingerprint;
+        if (TryGetShareReceipt(batch.OperationIdentity, out CommercialKnowledgeShareReceipt existing))
+        {
+            if (!string.Equals(existing.Fingerprint, fingerprint, StringComparison.Ordinal)) return false;
+            prepared = new CommercialKnowledgeShareBatchCommit(this, revision, true,
+                null, null, null, existing);
+            return true;
+        }
+        if (revision == long.MaxValue) return false;
+
+        List<CommercialMarketObservation> nextMarkets = new List<CommercialMarketObservation>(ObservationList);
+        List<CommercialLiquidityObservation> nextLiquidity = new List<CommercialLiquidityObservation>(LiquidityObservationList);
+        int applied = 0;
+        foreach (CommercialKnowledgeShareValue value in batch.Values)
+        {
+            if (!value.TryCreateShared(batch.SenderRuntimeId, batch.ReceivedDay,
+                    out CommercialMarketObservation market, out CommercialLiquidityObservation liquidity)) return false;
+            if (market != null)
+            {
+                int index = FindObservationIndex(nextMarkets, market.LocationRuntimeId, market.ItemDefinitionId);
+                if (index < 0)
+                {
+                    nextMarkets.Add(market);
+                    applied++;
+                }
+                else if (ShouldReplace(nextMarkets[index], market))
+                {
+                    nextMarkets[index] = market;
+                    applied++;
+                }
+            }
+            else
+            {
+                int index = FindLiquidityObservationIndex(nextLiquidity, liquidity.LocationRuntimeId);
+                if (index < 0)
+                {
+                    nextLiquidity.Add(liquidity);
+                    applied++;
+                }
+                else if (ShouldReplace(nextLiquidity[index], liquidity))
+                {
+                    nextLiquidity[index] = liquidity;
+                    applied++;
+                }
+            }
+            if (applied >= batch.MaxSuccessfulUpdates) break;
+        }
+
+        CommercialKnowledgeShareReceipt receipt = new CommercialKnowledgeShareReceipt(batch, fingerprint, applied);
+        List<CommercialKnowledgeShareReceipt> nextReceipts = new List<CommercialKnowledgeShareReceipt>(ShareReceipts)
+        { receipt };
+        prepared = new CommercialKnowledgeShareBatchCommit(this, revision, false,
+            nextMarkets, nextLiquidity, nextReceipts, receipt);
+        return true;
+    }
+
+    internal bool TryCommitShareBatch(CommercialKnowledgeShareBatchCommit commit,
+        out CommercialKnowledgeShareReceipt receipt)
+    {
+        receipt = null;
+        if (commit == null) return false;
+        if (commit.IsReplay)
+        {
+            if (TryGetShareReceipt(commit.Receipt.OperationIdentity, out CommercialKnowledgeShareReceipt existing)
+                && existing.Fingerprint == commit.Receipt.Fingerprint)
+            {
+                receipt = existing;
+                return true;
+            }
+            return false;
+        }
+        if (revision != commit.ExpectedRevision || revision == long.MaxValue
+            || commit.NextMarketObservations == null || commit.NextLiquidityObservations == null
+            || commit.NextReceipts == null || TryGetShareReceipt(commit.Receipt.OperationIdentity, out _)) return false;
+        observations = commit.NextMarketObservations;
+        liquidityObservations = commit.NextLiquidityObservations;
+        shareReceipts = commit.NextReceipts;
+        revision++;
+        receipt = commit.Receipt;
+        return true;
+    }
+
     private int FindObservationIndex(string locationRuntimeId, string itemDefinitionId)
+    {
+        return FindObservationIndex(ObservationList, locationRuntimeId, itemDefinitionId);
+    }
+
+    private static int FindObservationIndex(IReadOnlyList<CommercialMarketObservation> source,
+        string locationRuntimeId, string itemDefinitionId)
     {
         if (string.IsNullOrWhiteSpace(locationRuntimeId) == true || string.IsNullOrWhiteSpace(itemDefinitionId) == true)
         {
             return -1;
         }
 
-        for (int i = 0; i < ObservationList.Count; i++)
+        for (int i = 0; i < source.Count; i++)
         {
-            CommercialMarketObservation candidate = ObservationList[i];
+            CommercialMarketObservation candidate = source[i];
 
             if (candidate != null
                 && string.Equals(candidate.LocationRuntimeId, locationRuntimeId, StringComparison.Ordinal) == true
@@ -312,14 +662,20 @@ public sealed class CommercialKnowledgeRuntime
 
     private int FindLiquidityObservationIndex(string locationRuntimeId)
     {
+        return FindLiquidityObservationIndex(LiquidityObservationList, locationRuntimeId);
+    }
+
+    private static int FindLiquidityObservationIndex(IReadOnlyList<CommercialLiquidityObservation> source,
+        string locationRuntimeId)
+    {
         if (string.IsNullOrWhiteSpace(locationRuntimeId) == true)
         {
             return -1;
         }
 
-        for (int i = 0; i < LiquidityObservationList.Count; i++)
+        for (int i = 0; i < source.Count; i++)
         {
-            CommercialLiquidityObservation candidate = LiquidityObservationList[i];
+            CommercialLiquidityObservation candidate = source[i];
 
             if (candidate != null
                 && string.Equals(candidate.LocationRuntimeId, locationRuntimeId, StringComparison.Ordinal) == true)

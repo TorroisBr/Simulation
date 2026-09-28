@@ -108,6 +108,51 @@ public sealed class CommercialKnowledgeTests
     }
 
     [Test]
+    public void ShareBatch_ReceiptReplaysWithoutReapplyingAndRevisionConflictIsAtomic()
+    {
+        ItemData item = SimulationTestFactory.CreateItem("item-share-receipt");
+        CommercialKnowledgeRuntime source = new CommercialKnowledgeRuntime();
+        source.RecordObservation(SimulationTestFactory.CreateObservation("location-a", item, 20f, 4, 2, 2));
+        CommercialKnowledgeShareValue value = CommercialKnowledgeShareValue.Capture(source.Observations[0]);
+        CommercialKnowledgeShareBatch batch = new CommercialKnowledgeShareBatch("boundary", "sender", "person-s",
+            "receiver", "person-r", "snapshot", 3L, 1, new[] { value });
+        CommercialKnowledgeRuntime receiver = new CommercialKnowledgeRuntime();
+        Assert.That(receiver.TryPrepareShareBatch(batch, out CommercialKnowledgeShareBatchCommit stale), Is.True);
+        Assert.That(receiver.RecordObservation(SimulationTestFactory.CreateObservation("location-b", item, 10f, 1, 1, 1)), Is.True);
+        long afterLocalObservation = receiver.Revision;
+        Assert.That(stale.TryCommit(out _), Is.False);
+        Assert.That(receiver.Revision, Is.EqualTo(afterLocalObservation));
+        Assert.That(receiver.TryGetObservation("location-a", item.DefinitionId, out _), Is.False);
+
+        Assert.That(receiver.TryPrepareShareBatch(batch, out CommercialKnowledgeShareBatchCommit first), Is.True);
+        Assert.That(first.TryCommit(out CommercialKnowledgeShareReceipt committed), Is.True);
+        long afterCommit = receiver.Revision;
+        Assert.That(receiver.TryPrepareShareBatch(batch, out CommercialKnowledgeShareBatchCommit replay), Is.True);
+        Assert.That(replay.TryCommit(out CommercialKnowledgeShareReceipt replayed), Is.True);
+        Assert.That(replayed, Is.SameAs(committed));
+        Assert.That(receiver.Revision, Is.EqualTo(afterCommit));
+        Assert.That(committed.AppliedObservationCount, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void ShareBatch_RejectsConflictingReplayForSameEdgeIdentity()
+    {
+        ItemData item = SimulationTestFactory.CreateItem("item-share-conflict");
+        CommercialKnowledgeRuntime sender = new CommercialKnowledgeRuntime();
+        sender.RecordObservation(SimulationTestFactory.CreateObservation("location-a", item, 20f, 4, 2, 2));
+        CommercialKnowledgeShareValue firstValue = CommercialKnowledgeShareValue.Capture(sender.Observations[0]);
+        CommercialKnowledgeShareBatch first = new CommercialKnowledgeShareBatch("boundary", "sender", "person-s",
+            "receiver", "person-r", "snapshot-one", 3L, 1, new[] { firstValue });
+        CommercialKnowledgeRuntime receiver = new CommercialKnowledgeRuntime();
+        Assert.That(receiver.TryPrepareShareBatch(first, out CommercialKnowledgeShareBatchCommit commit), Is.True);
+        Assert.That(commit.TryCommit(out _), Is.True);
+
+        CommercialKnowledgeShareBatch conflict = new CommercialKnowledgeShareBatch("boundary", "sender", "person-s",
+            "receiver", "person-r", "snapshot-two", 3L, 1, new[] { firstValue });
+        Assert.That(receiver.TryPrepareShareBatch(conflict, out _), Is.False);
+    }
+
+    [Test]
     public void SharedObservation_RequiresSourceRuntimeId()
     {
         ItemData item = SimulationTestFactory.CreateItem("item-wine");

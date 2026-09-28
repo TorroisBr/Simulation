@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 
 public sealed class CommercialKnowledgeSharingSystem : IAuthoritativeMutationGuardBindable
 {
@@ -7,6 +8,8 @@ public sealed class CommercialKnowledgeSharingSystem : IAuthoritativeMutationGua
     private readonly int maxSharedObservationsPerInteraction;
     private readonly CommercialKnowledgePolicy knowledgePolicy;
     private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
+    private readonly Dictionary<string, CommercialSharingPhaseSnapshot> retainedPhaseSnapshots =
+        new Dictionary<string, CommercialSharingPhaseSnapshot>(StringComparer.Ordinal);
 
     public CommercialKnowledgeSharingSystem(
         SimulationTime simulationTime,
@@ -72,6 +75,144 @@ public sealed class CommercialKnowledgeSharingSystem : IAuthoritativeMutationGua
 
             groupStart = groupEnd;
         }
+    }
+
+    internal bool TryPreparePhaseSnapshot(BoundaryContinuationManifest manifest,
+        string planFingerprint, IReadOnlyList<NpcRuntime> frozenMerchants,
+        out CommercialSharingPhaseSnapshotCommit prepared)
+    {
+        prepared = null;
+        if (manifest == null || string.IsNullOrWhiteSpace(planFingerprint) || frozenMerchants == null
+            || !mutationGuardBinding.CanMutate) return false;
+
+        if (retainedPhaseSnapshots.TryGetValue(manifest.BoundaryOccurrenceId,
+            out CommercialSharingPhaseSnapshot existing))
+        {
+            if (existing.PlanFingerprint != planFingerprint) return false;
+            prepared = new CommercialSharingPhaseSnapshotCommit(this, existing, true);
+            return true;
+        }
+
+        List<CommercialSharingSenderSnapshot> senders = new List<CommercialSharingSenderSnapshot>(frozenMerchants.Count);
+        HashSet<string> senderIds = new HashSet<string>(StringComparer.Ordinal);
+        List<string> fingerprintParts = new List<string>
+        {
+            manifest.BoundaryOccurrenceId,
+            planFingerprint,
+            manifest.ConfigurationIdentity,
+            manifest.ContentIdentity,
+            knowledgePolicy.FreshForDays.ToString(CultureInfo.InvariantCulture),
+            knowledgePolicy.MaxUsefulAgeDays.ToString(CultureInfo.InvariantCulture),
+            maxSharedObservationsPerInteraction.ToString(CultureInfo.InvariantCulture),
+            frozenMerchants.Count.ToString(CultureInfo.InvariantCulture)
+        };
+
+        foreach (NpcRuntime merchant in frozenMerchants)
+        {
+            if (merchant == null || string.IsNullOrWhiteSpace(merchant.RuntimeId)
+                || !senderIds.Add(merchant.RuntimeId)) return false;
+            List<CommercialKnowledgeShareValue> values = CaptureShareValues(merchant.CommercialKnowledge,
+                manifest.AbsoluteDay);
+            senders.Add(new CommercialSharingSenderSnapshot(merchant.RuntimeId,
+                merchant.PersonId?.Value ?? string.Empty, merchant.CommercialKnowledge.Revision,
+                values.AsReadOnly()));
+            fingerprintParts.Add(merchant.RuntimeId);
+            fingerprintParts.Add(merchant.PersonId?.Value ?? string.Empty);
+            fingerprintParts.Add(merchant.CommercialKnowledge.Revision.ToString(CultureInfo.InvariantCulture));
+            fingerprintParts.Add(values.Count.ToString(CultureInfo.InvariantCulture));
+            foreach (CommercialKnowledgeShareValue value in values)
+                fingerprintParts.Add(value.StableFingerprint);
+        }
+
+        string snapshotFingerprint = SpatialStableKey.Encode(fingerprintParts.ToArray());
+        CommercialSharingPhaseSnapshot candidate = new CommercialSharingPhaseSnapshot(
+            manifest.BoundaryOccurrenceId, planFingerprint, snapshotFingerprint,
+            manifest.AbsoluteDay, senders.AsReadOnly());
+        prepared = new CommercialSharingPhaseSnapshotCommit(this, candidate, false);
+        return true;
+    }
+
+    internal bool TryResolvePhaseSnapshot(string boundaryOccurrenceId, string planFingerprint,
+        out CommercialSharingPhaseSnapshot snapshot)
+    {
+        snapshot = null;
+        return !string.IsNullOrWhiteSpace(boundaryOccurrenceId)
+            && !string.IsNullOrWhiteSpace(planFingerprint)
+            && retainedPhaseSnapshots.TryGetValue(boundaryOccurrenceId, out snapshot)
+            && snapshot.PlanFingerprint == planFingerprint;
+    }
+
+    internal bool TryCommitPhaseSnapshot(CommercialSharingPhaseSnapshotCommit commit,
+        out CommercialSharingPhaseSnapshot snapshot)
+    {
+        snapshot = null;
+        if (commit == null || !mutationGuardBinding.CanMutate) return false;
+        if (commit.IsReplay)
+        {
+            return retainedPhaseSnapshots.TryGetValue(commit.Snapshot.BoundaryOccurrenceId,
+                out snapshot) && snapshot.PlanFingerprint == commit.Snapshot.PlanFingerprint
+                && snapshot.Fingerprint == commit.Snapshot.Fingerprint;
+        }
+        if (retainedPhaseSnapshots.TryGetValue(commit.Snapshot.BoundaryOccurrenceId,
+                out CommercialSharingPhaseSnapshot existing))
+        {
+            if (existing.PlanFingerprint != commit.Snapshot.PlanFingerprint
+                || existing.Fingerprint != commit.Snapshot.Fingerprint) return false;
+            snapshot = existing;
+            return true;
+        }
+        retainedPhaseSnapshots.Add(commit.Snapshot.BoundaryOccurrenceId, commit.Snapshot);
+        snapshot = commit.Snapshot;
+        return true;
+    }
+
+    internal string CreatePlanFingerprint(BoundaryContinuationManifest manifest,
+        BoundaryContinuationStep snapshotStep)
+    {
+        if (manifest == null || snapshotStep == null) return null;
+        return SpatialStableKey.Encode(manifest.BoundaryOccurrenceId, manifest.ProfileId,
+            manifest.ConfigurationIdentity, manifest.ContentIdentity, snapshotStep.StepId,
+            snapshotStep.OwnerId, snapshotStep.OperationKind, snapshotStep.OperationVersion,
+            snapshotStep.OwnerRevision, snapshotStep.Payload);
+    }
+
+    internal int MaxSuccessfulUpdates => maxSharedObservationsPerInteraction;
+
+    private List<CommercialKnowledgeShareValue> CaptureShareValues(CommercialKnowledgeRuntime knowledge,
+        long absoluteDay)
+    {
+        List<CommercialKnowledgeShareValue> values = new List<CommercialKnowledgeShareValue>();
+        foreach (CommercialMarketObservation observation in knowledge.Observations)
+        {
+            if (observation == null || observation.ItemDefinition == null
+                || observation.ItemDefinition.DefinitionId != observation.ItemDefinitionId
+                || knowledgePolicy.GetFreshness(observation, absoluteDay) <= 0f
+                || observation.Source == CommercialKnowledgeSource.SharedByNpc
+                    && observation.ReceivedDay >= absoluteDay) continue;
+            values.Add(CommercialKnowledgeShareValue.Capture(observation));
+        }
+        foreach (CommercialLiquidityObservation observation in knowledge.LiquidityObservations)
+        {
+            if (observation == null || knowledgePolicy.GetFreshness(observation, absoluteDay) <= 0f
+                || observation.Source == CommercialKnowledgeSource.SharedByNpc
+                    && observation.ReceivedDay >= absoluteDay) continue;
+            values.Add(CommercialKnowledgeShareValue.Capture(observation));
+        }
+        values.Sort(CompareShareValues);
+        return values;
+    }
+
+    private static int CompareShareValues(CommercialKnowledgeShareValue left,
+        CommercialKnowledgeShareValue right)
+    {
+        int dayComparison = right.ObservedDay.CompareTo(left.ObservedDay);
+        if (dayComparison != 0) return dayComparison;
+        int sourceComparison = CommercialKnowledgeRuntime.GetSourcePriority(right.Source)
+            .CompareTo(CommercialKnowledgeRuntime.GetSourcePriority(left.Source));
+        if (sourceComparison != 0) return sourceComparison;
+        int locationComparison = string.CompareOrdinal(left.LocationRuntimeId, right.LocationRuntimeId);
+        return locationComparison != 0 ? locationComparison
+            : string.CompareOrdinal(left.SortKey, right.SortKey);
     }
 
     internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard)
@@ -258,4 +399,63 @@ public sealed class CommercialKnowledgeSharingSystem : IAuthoritativeMutationGua
             LiquidityObservation = observation;
         }
     }
+}
+
+internal sealed class CommercialSharingSenderSnapshot
+{
+    public string SenderRuntimeId { get; }
+    public string SenderPersonId { get; }
+    public long SourceRevision { get; }
+    public IReadOnlyList<CommercialKnowledgeShareValue> Values { get; }
+
+    public CommercialSharingSenderSnapshot(string senderRuntimeId, string senderPersonId,
+        long sourceRevision, IReadOnlyList<CommercialKnowledgeShareValue> values)
+    {
+        SenderRuntimeId = senderRuntimeId;
+        SenderPersonId = senderPersonId;
+        SourceRevision = sourceRevision;
+        Values = values;
+    }
+}
+
+internal sealed class CommercialSharingPhaseSnapshot
+{
+    private readonly Dictionary<string, CommercialSharingSenderSnapshot> bySender;
+    public string BoundaryOccurrenceId { get; }
+    public string PlanFingerprint { get; }
+    public string Fingerprint { get; }
+    public long AbsoluteDay { get; }
+
+    public CommercialSharingPhaseSnapshot(string boundaryOccurrenceId, string planFingerprint,
+        string fingerprint, long absoluteDay, IReadOnlyList<CommercialSharingSenderSnapshot> senders)
+    {
+        BoundaryOccurrenceId = boundaryOccurrenceId;
+        PlanFingerprint = planFingerprint;
+        Fingerprint = fingerprint;
+        AbsoluteDay = absoluteDay;
+        bySender = new Dictionary<string, CommercialSharingSenderSnapshot>(StringComparer.Ordinal);
+        foreach (CommercialSharingSenderSnapshot sender in senders)
+            bySender.Add(sender.SenderRuntimeId, sender);
+    }
+
+    public bool TryGetSender(string senderRuntimeId, out CommercialSharingSenderSnapshot snapshot) =>
+        bySender.TryGetValue(senderRuntimeId, out snapshot);
+}
+
+internal sealed class CommercialSharingPhaseSnapshotCommit
+{
+    private readonly CommercialKnowledgeSharingSystem owner;
+    public CommercialSharingPhaseSnapshot Snapshot { get; }
+    public bool IsReplay { get; }
+
+    public CommercialSharingPhaseSnapshotCommit(CommercialKnowledgeSharingSystem owner,
+        CommercialSharingPhaseSnapshot snapshot, bool replay)
+    {
+        this.owner = owner;
+        Snapshot = snapshot;
+        IsReplay = replay;
+    }
+
+    public bool TryCommit(out CommercialSharingPhaseSnapshot committed) =>
+        owner.TryCommitPhaseSnapshot(this, out committed);
 }

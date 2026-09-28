@@ -113,6 +113,54 @@ public sealed class CommercialKnowledgeSharingTests
     }
 
     [Test]
+    public void BoundaryProvider_RetainsSnapshotCapturedAfterPriorObservationAndUsesFrozenPairing()
+    {
+        ItemData item = SimulationTestFactory.CreateItem("item-frozen-share");
+        CityRuntime city = SimulationTestFactory.CreateCity("city-frozen", "location-frozen");
+        NpcRuntime first = new NpcRuntime("npc-a", SimulationTestFactory.CreateNpc("first", NpcJobType.Merchant), city, 100f);
+        NpcRuntime second = new NpcRuntime("npc-b", SimulationTestFactory.CreateNpc("second", NpcJobType.Merchant), city, 100f);
+        Dictionary<string, NpcRuntime> actors = new Dictionary<string, NpcRuntime>
+        {
+            [first.RuntimeId] = first,
+            [second.RuntimeId] = second
+        };
+        CommercialKnowledgeSharingSystem sharing = new CommercialKnowledgeSharingSystem(
+            new SimulationTime(3L), new EffectiveCommercialKnowledgeConfiguration());
+        CommercialKnowledgeSharingDailyBoundaryStepProvider provider =
+            new CommercialKnowledgeSharingDailyBoundaryStepProvider(() => new[] { first, second },
+                id => actors.TryGetValue(id, out NpcRuntime npc) ? npc : null, sharing);
+        DailyBoundaryOperation operation = new DailyBoundaryOperation("world", "profile", 3L);
+
+        Assert.That(provider.TryCreateSteps(operation, 0, out IReadOnlyList<BoundaryContinuationStep> steps, out _), Is.True);
+        Assert.That(steps.Count, Is.EqualTo(3));
+        Assert.That(steps[0].OperationKind, Is.EqualTo("commercial-sharing.snapshot"));
+        Assert.That(steps[1].StepId, Is.EqualTo("commercial-share-edge:0"));
+
+        // This is the prior local-observation step in the boundary sequence.
+        first.CommercialKnowledge.RecordObservation(SimulationTestFactory.CreateObservation(
+            city.Location.RuntimeId, item, 51f, 9, 2, 2));
+        BoundaryContinuationManifest manifest = new BoundaryContinuationManifest(operation,
+            "test", "1", "config", steps, "content");
+        Assert.That(provider.TryPrepareStep(manifest, steps[0], out IBoundaryContinuationStepCommit snapshot, out _), Is.True);
+        Assert.That(snapshot.TryCommit(out _), Is.True);
+
+        // Later source changes cannot alter this boundary's retained phase snapshot.
+        first.CommercialKnowledge.RecordObservation(SimulationTestFactory.CreateObservation(
+            city.Location.RuntimeId, item, 88f, 3, 3, 3));
+        foreach (BoundaryContinuationStep edge in new[] { steps[1], steps[2] })
+        {
+            Assert.That(provider.TryPrepareStep(manifest, edge, out IBoundaryContinuationStepCommit prepared, out _), Is.True);
+            Assert.That(prepared.TryCommit(out _), Is.True);
+        }
+
+        Assert.That(second.CommercialKnowledge.TryGetObservation(city.Location.RuntimeId,
+            item.DefinitionId, out CommercialMarketObservation received), Is.True);
+        Assert.That(received.ObservedPrice, Is.EqualTo(51f));
+        Assert.That(received.ReceivedDay, Is.EqualTo(3L));
+        Assert.That(received.SourceRuntimeId, Is.EqualTo(first.RuntimeId));
+    }
+
+    [Test]
     public void Sharing_RequiresSameCityAndStationaryMerchants()
     {
         ItemData item = SimulationTestFactory.CreateItem("item-wine");
