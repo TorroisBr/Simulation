@@ -8,8 +8,8 @@ separately gated.
 **Design base:** P12-F branch tip `c0849df782fe8a100af7d01083dd08d2a6deb670`.
 This proposal consumes the accepted P12 capability decomposition and bounded
 `UnityBootstrap-Daily-v1` P12-A contract. Its owner-contract inputs are P12-B
-`4c384ab`, P12-C corrected candidate `6a33419` (fresh exact-tip review still
-pending), P12-D `796eadc`, P12-E `51718c7`, and P12-F `f2ef496` (exact-tip
+`4c384ab`, P12-C corrected candidate `6a33419` (exact-tip independent review
+passed), P12-D `796eadc`, P12-E `51718c7`, and P12-F `f2ef496` (exact-tip
 independent re-review passed). These are design artifacts, not proof that the
 corresponding capabilities have been delivered. Revalidate hashes and owner
 interfaces before implementation.
@@ -60,8 +60,8 @@ source, cardinality, and one of these composition states:
 | State | G behavior |
 |---|---|
 | Required | Section must be present with its exact schema and owner identity. Zero records are valid only when represented as an explicit empty section. |
-| Explicitly empty | Section must be present as empty and its owner must report zero cardinality. A nonempty section rejects. |
-| Excluded | Section is declared unsupported for this profile. Its presence, composed service, or populated owner rejects; G never drops it. |
+| Explicitly empty | Section must be represented as empty in the profile contract, and every composed owner covered by that section must report an authoritative zero cardinality. A nonempty or unverified owner rejects. |
+| Excluded | No serialized payload/section for this state is admitted. A composed owner that B and the profile matrix allow may exist only when the live inventory authoritatively proves exact zero cardinality; populated or unverified state rejects. G never drops state. |
 | Conditional | B's current provider/composition inventory resolves it to required, explicitly empty, or excluded before allocation. Unresolved conditional coverage rejects admission. |
 
 For this profile, the required set is exactly the reviewed B-F owner set:
@@ -82,19 +82,24 @@ The profile requires P8-B passage, P8-C canonical anchors/Person positions,
 P8-D route Knowledge/plans, and P8-E travel sections to be explicitly empty;
 the selected P8-A cardinality remains exact. The P10 LocalTopology store is
 explicitly empty and rejects populated facts. P14-A material-flow state is
-excluded. External `WorldCommand` service/queue composition is excluded and
-rejects. P18 timeline/work/availability/continuation state, P19 module/loader
-state, P20 shared activities, P13 reconstruction/fork state,
-`PlaceContentStore`, and unsupported providers are excluded and reject if
-present or populated. The exact empty/excluded matrix must be refreshed from
-the live owner inventory before implementation; the examples here do not
-substitute for that evidence.
+excluded. P18 timeline/work/availability/continuation state, P19 module/loader
+state, P20 shared activities, P13 reconstruction/fork state, and
+`PlaceContentStore` have no serialized payload in this profile; any composed
+owner allowed by B/profile policy must be proven empty by the live inventory,
+while populated or unverified state rejects. External `WorldCommand`
+service/queue composition and unsupported/injected providers are prohibited
+compositions and reject immediately, independent of cardinality. The exact
+empty/excluded/prohibited matrix must be refreshed from the live owner
+inventory before implementation; these examples do not substitute for that
+evidence.
 
 Every section must include explicit owner identity, schema/version, revision,
 and cardinality, including zero. Unknown, omitted, duplicate, or mismatched
 owner declarations are not interpreted as empty. Required and explicitly
-empty sections cannot be synthesized from defaults. No section may be silently
-discarded because the current bootstrap happens not to populate it.
+empty sections cannot be synthesized from defaults. A known-empty composed
+owner is not itself incompatible when B and the profile matrix permit it, but
+G still emits no excluded-state payload. No section may be silently discarded
+because the current bootstrap happens not to populate it.
 
 ## 3. Staged composition protocol
 
@@ -175,10 +180,12 @@ invariants:
   participant cardinality; the P20 two-Person proving fixture is not a global
   cardinality constraint. P20 activity facts remain excluded from this daily
   profile.
-* Required owners must be present. Explicitly empty sections must be zero;
-  excluded sections/services must be absent and empty. Conditional owners must
-  have been resolved by a current composition inventory. Missing evidence is
-  an admission failure, never proof of emptiness.
+* Required owners must be present. Explicitly empty owners must report zero;
+  excluded state has no serialized payload and any permitted composed owner
+  must report authoritative zero cardinality. Prohibited compositions reject
+  regardless of reported cardinality. Conditional owners must be resolved by
+  a current composition inventory. Missing evidence is an admission failure,
+  never proof of emptiness.
 * P8-A has exactly one Hex, one anchored Location and one scale context for
   the selected P9-B profile. P9 outputs/manifests are retained historical
   facts; generation is not rerun. Validate selected P8/P9 lineage and owner
@@ -270,15 +277,16 @@ or P12-A readiness is claimed by this proposal.
 ## 7. Dependencies, implementation gate, and exclusions
 
 P12-G implementation depends on exact reviewed B-F export/staged-hydration
-contracts and their delivered capabilities, a refreshed live `UnityBootstrap-Daily-v1`
-owner/provider inventory proving the included owner set complete, and stable
+contracts and their delivered capabilities, a refreshed live
+`UnityBootstrap-Daily-v1` owner/provider inventory proving the included owner
+set complete, and stable
 cross-owner interfaces for the single CityRuntime and NpcRuntime projections.
 The inventory must show each required/empty/excluded/conditional owner,
 revision/cardinality source, supported mutation path and publication owner.
-P12-C exact-tip design review is pending at this proposal's design baseline;
-that review and any interface changes must be incorporated before relying on
-C's contract. Designs alone do not satisfy capability dependencies. G may
-not treat unknown or absent owner coverage as an empty section.
+P12-C corrected design `6a33419` passed exact-tip review; incorporate that
+reviewed contract and any later interface changes before implementation.
+Designs alone do not satisfy capability dependencies. G may not treat unknown
+or absent owner coverage as an empty section.
 
 Even after G and B-F capability delivery, P12-A remains `WAIT_DEPENDENCY`
 until the complete included owner export/hydration set is demonstrably
