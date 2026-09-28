@@ -268,6 +268,27 @@ public sealed class EconomyTransactionTests
     }
 
     [Test]
+    public void KeyedMarketSale_SnapshotUsesNormalizedPriceForCounterpartyAffordability()
+    {
+        ItemData item = SimulationTestFactory.CreateItem("normalized-snapshot-price-item", 0.01f);
+        CityRuntime city = SimulationTestFactory.CreateAccountBackedCity(
+            "normalized-snapshot-price-city", "normalized-snapshot-price-location", 0.007f,
+            SimulationTestFactory.CreateMarketItem(item, 20, 10));
+        NpcRuntime seller = CreateNpc("normalized-snapshot-price-seller", 0f, city);
+        seller.Inventory.AddItem(item, 1);
+        Assert.That(city.Market.GetPrice(item), Is.EqualTo(0.005f).Within(0.00001f));
+
+        KeyedSaleReceipt receipt = new EconomyTransactionService().TryExecuteKeyedMarketSale(
+            "normalized-price-proposal", "normalized-price-fp", "input", "request", "person", "sell", 1,
+            "profile", "tick", "site", seller, city.Market, item, 1);
+
+        Assert.That(receipt.Outcome, Is.EqualTo(KeyedSaleOutcome.TerminalRejection));
+        Assert.That(receipt.Result.FailureReason, Is.EqualTo(EconomyTransactionFailureReason.InsufficientCounterpartyFunds));
+        Assert.That(receipt.Snapshot.EffectiveQuantity, Is.Zero);
+        Assert.That(receipt.Snapshot.CounterpartyCouldPay, Is.False);
+    }
+
+    [Test]
     public void KeyedMarketSale_UnresolvedReceiptReplaysWithoutRetry()
     {
         ItemData item = SimulationTestFactory.CreateItem("unresolved-item", 10f);
