@@ -83,18 +83,30 @@ cross-checks their runtime IDs against the restored registry and allocator.
 
 ### 2.2 Shared simulation record sequence
 
-`SimulationRecordSequence` is shared by the configured recorders that use it;
-it is not a sequence per event store or per decision store. Its immutable
-section captures the exact next sequence value. A private staged factory
-restores it without allocating a record.
+The candidate source audit found exactly two current consumers of
+`SimulationRecordSequence`: `NpcDecisionRecorder` → `NpcDecisionStore` and
+`DomainEventRecorder` → `DomainEventStore`. No other selected current owner
+consumes this sequencer. Capture its exact next/high-water value once in one
+immutable section; a private staged factory restores it without allocating a
+record.
 
-Reject non-positive or exhausted/overflowing values, duplicate record
-sequences, non-positive stored sequence values, and a next value that is not
-strictly greater than every sequence owned by the P12-D/E/F record sections
-that share this sequencer. Validation is against those actual owner exports,
-not `History`, diagnostics, or a guessed maximum from one store. If live
-inventory finds another sequencer in the selected runtime, it requires a
-separate typed section and cannot be folded into this counter.
+Decision/event records, `HistoryStore` rows (a subset projection), and
+`NpcChronicle` (derived read-model output) are logs/read models, not causal
+continuation state in this profile. They are intentionally omitted from B–F
+even if nonempty. Consequently, do not compare the restored next value against
+omitted decision/event/history rows. Validate that the captured next value is
+positive and not exhausted/overflowing. It must also be greater than the
+maximum sequence in any record section actually included by B–F; validate such
+included sequence values as positive and unique. If a future included record
+owner consumes this sequencer, add its retained records to that validation and
+require every sequence to be unique, positive, and below the captured next
+value.
+
+Opaque causal references do not turn omitted rows into required targets:
+active `OriginDecisionId` values and P11 `ActorChoice` `DecisionRecordId`
+strings are preserved as opaque owner values by their owning P12 sections.
+They are not foreign keys into omitted `NpcDecisionStore` rows; P12-F owns
+their capture semantics and must not require reconstructing that decision log.
 
 ### 2.3 Selected P9-B genesis manifest and lineage
 
@@ -249,9 +261,10 @@ duplicate identities, invalid counters, broken references, unexpected
 cardinality, or unsupported causal random state return typed failures.
 
 Staged constructors validate all local invariants before producing a candidate.
-Cross-owner invariants (global identity uniqueness, shared sequence maxima,
-P9 output-to-P8 facts, provider-to-stream ownership) are returned as
-validation evidence for P12-G. On any failure, discard the private candidate;
+Cross-owner invariants (global identity uniqueness, sequence bounds across
+record sections actually included by B–F, P9 output-to-P8 facts, and
+provider-to-stream ownership) are returned as validation evidence for P12-G.
+On any failure, discard the private candidate;
 the active runtime, its counters, stores, and random streams remain untouched.
 Do not advance counters to “repair” malformed input, regenerate provenance,
 or silently drop unknown sections.
@@ -264,9 +277,13 @@ Focused owner tests should cover:
   advanced, and gapped high-water values, followed by identical next allocated
   IDs; zero/negative/exhausted values, unknown/missing families, and duplicate
   IDs reject without mutation;
-- exact `SimulationRecordSequence` continuation after mixed decision/event
-  records, strict next-after-restored-maximum ordering across every sharing
-  owner, and malformed/duplicate/exhausted sequence rejection;
+- exact `SimulationRecordSequence` next/high-water capture after mixed
+  decision/event recorder activity, followed by the same next allocated value
+  after staged restoration; decision/event/history rows remain omitted even
+  when nonempty, so they do not participate in continuation-sequence maxima;
+- reject a zero, negative, exhausted, or overflowing next value; if any
+  B–F record section is included in a later compatible profile, verify its
+  sequence values are positive, unique, and below the restored next value;
 - P9 manifest round-trip retaining stage order, dependency lineage, authored
   input/output and provenance, seed/config/calendar references, fingerprint,
   schema and first boundary, while proving no genesis stage executes during
@@ -298,7 +315,7 @@ no test claim and contains no code change.
 | Surface | Owner / risk | Design constraint or unresolved evidence |
 |---|---|---|
 | `RuntimeIdentity.cs` | `RuntimeIdAllocator` counters are private; `RuntimeIdentityRegistry` validates uniqueness across runtime types. | Add owner snapshot/private construction seam; keep registries/derived indexes rebuildable and separate from IDs. |
-| `DecisionRecords.cs`, `DomainEvents.cs`, `TesteSimulacao.cs` | One `SimulationRecordSequence` is injected into decision and domain-event recorders in the selected bootstrap. | Census every owner sharing it; export its exact next value once, not independently per recorder. |
+| `DecisionRecords.cs`, `DomainEvents.cs`, `TesteSimulacao.cs` | The selected sequence is consumed only by `NpcDecisionRecorder`/`NpcDecisionStore` and `DomainEventRecorder`/`DomainEventStore`; `HistoryStore` is a subset projection and `NpcChronicle` is derived. These rows are intentionally omitted as noncausal logs/read models, but active origin/decision-reference strings remain opaque owner values. | Export the exact next/high-water value once. Do not compare with omitted rows; validate only positive unique sequence values in any record sections actually included by B–F, below `next`. Re-audit if a future included owner consumes this sequence. |
 | `DeterministicRandom.cs` and selected consumers | Read-only candidate census establishes shared seed-0 provider, three pure keyed draw consumers and an explicitly empty mutable-stream section for `af656e7`. | Preserve algorithm/build compatibility and exact key inputs; reject unknown providers or any newly composed mutable cursor until explicitly covered. Re-audit when composition/defaults change. |
 | P9 genesis pipeline/manifest | P9 pipeline creates and publishes the selected authored manifest/outputs. | Preserve generated output as history; never rerun genesis on hydration. |
 | P8 `SpatialAuthorityStore` | Owns typed Hex/Location truth and authored geography provenance. | Capture exactly the accepted P8-A facts; never infer these from legacy spatial objects. |
