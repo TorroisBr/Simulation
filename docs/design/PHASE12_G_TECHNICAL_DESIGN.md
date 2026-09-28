@@ -10,16 +10,16 @@ separately gated.
 which the original G proposal was authored; it is not the current governing
 input set.
 
-**Current governing inputs:** accepted decomposition and owner inventory/B
-design `45e6be83fc40a1b78908aa79500e46e64532ac4b`; P12-C corrected design
-`ceb37049ddbe54602063ba92a92cceafdce50096`; P12-D design
-`796eadc1a0bd6b44b646f27f5eeb63de71f6b14`; P12-E design
-`51718c7bd38e9582433d1fa38ff4011ef9cf20c5`; and current P12-F design
-`cfb5c2431cf167439bc7aeca26011fcb60ed3979`. Review evidence for these inputs
-and this proposal is tracked in the independent checkpoint/review records, not
-inferred from this traceability ledger. These are design artifacts, not proof
-that the corresponding capabilities have been delivered; revalidate hashes and
-owner interfaces before implementation.
+**Current governing inputs (2026-09-28):** accepted decomposition at
+`7585863`; owner inventory `012e04b` (reviewed evidence map, not live census);
+P12-B current-evidence design refresh `d0761ce` (exact review pending); P12-C
+refreshed design `a2ac5d2` (independent review PASS); P12-D `dd81634` and
+P12-E `ca8e968` (evidence-reference reviews PASS); and P12-F evidence refresh
+`ab0393b` (exact review pending). Review evidence for these inputs and this
+proposal is tracked in independent checkpoint/review records, not inferred
+from this traceability ledger. These are design artifacts, not proof that the
+corresponding capabilities have been delivered; revalidate hashes and owner
+interfaces before implementation.
 
 The accepted architecture baseline is `c285466`; current intraday/extensibility
 and multi-participant alignment records remain constraints. The selected daily
@@ -315,7 +315,7 @@ set complete, and stable
 cross-owner interfaces for the single CityRuntime and NpcRuntime projections.
 The inventory must show each required/empty/excluded/conditional owner,
 revision/cardinality source, supported mutation path and publication owner.
-P12-C corrected design `ceb37049ddbe54602063ba92a92cceafdce50096` passed exact-tip review; incorporate that
+P12-C refreshed design `a2ac5d2` passed exact-tip review; incorporate that
 reviewed contract and any later interface changes before implementation.
 Designs alone do not satisfy capability dependencies. G may not treat unknown
 or absent owner coverage as an empty section.
