@@ -193,13 +193,20 @@ public class InventoryRuntime
     internal PreparedInventoryState PrepareReplacement(ItemData item, int removed, float addCost, bool add, int added)
     {
         List<InventoryItemRuntime> replacement = new List<InventoryItemRuntime>((items ?? (items = new List<InventoryItemRuntime>())).Count + (add ? 1 : 0));
+        bool found = false;
         foreach (InventoryItemRuntime existing in items)
         {
-            if (existing == null || existing.Item != item)
+            if (existing == null)
             {
-                if (existing != null) replacement.Add(new InventoryItemRuntime(existing.Item, existing.Amount, existing.AverageUnitCost));
+                replacement.Add(null);
                 continue;
             }
+            if (found || existing.Item != item)
+            {
+                replacement.Add(new InventoryItemRuntime(existing.Item, existing.Amount, existing.AverageUnitCost));
+                continue;
+            }
+            found = true;
             int next = existing.Amount - removed + added;
             if (next > 0)
             {
@@ -207,7 +214,7 @@ public class InventoryRuntime
                 replacement.Add(new InventoryItemRuntime(item, next, cost));
             }
         }
-        if (add && !replacement.Exists(x => x.Item == item)) replacement.Add(new InventoryItemRuntime(item, added, addCost));
+        if (add && !found) replacement.Add(new InventoryItemRuntime(item, added, addCost));
         return new PreparedInventoryState(replacement);
     }
 

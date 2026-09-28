@@ -1,4 +1,7 @@
 using NUnit.Framework;
+using System;
+using System.Collections.Generic;
+using System.Reflection;
 using UnityEngine;
 
 public sealed class EconomyTransactionTests
@@ -42,8 +45,49 @@ public sealed class EconomyTransactionTests
         seller.Inventory.AddItem(item, 1, 5f);
         KeyedSaleReceipt replay = service.TryExecuteKeyedMarketSale("proposal-1", "fingerprint-1", "input-1", "request-1", "person-1", "sell", 1, "profile", "tick-1", "site-1", seller, city.Market, item, 2);
         Assert.That(replay, Is.SameAs(first));
+        Assert.That(service.FindKeyedSaleReceipt("proposal-1", "fingerprint-1", "input-1", "request-1", "person-1", "sell", 1, "profile", "tick-1", "site-1", seller, city.Market, item, 2), Is.SameAs(first));
+        Assert.That(service.FindKeyedSaleReceipt("proposal-1", "fingerprint-1", "input-1", "request-1", "person-1", "sell", 1, "profile", "tick-1", "site-1", seller, city.Market, item, 1).Outcome, Is.EqualTo(KeyedSaleOutcome.FingerprintCollision));
         Assert.That(seller.Inventory.GetAmount(item), Is.EqualTo(2));
-        Assert.That(service.FindKeyedSaleReceipt("proposal-1", "other-fingerprint").Outcome, Is.EqualTo(KeyedSaleOutcome.FingerprintCollision));
+        KeyedSaleReceipt collision = service.TryExecuteKeyedMarketSale("proposal-1", "fingerprint-1", "input-1", "request-1", "person-1", "sell", 1, "profile", "tick-1", "site-1", seller, city.Market, item, 1);
+        Assert.That(collision.Outcome, Is.EqualTo(KeyedSaleOutcome.FingerprintCollision));
+        Assert.That(first.Snapshot.SellerInventory, Is.EqualTo(3));
+        Assert.That(first.Snapshot.MarketStock, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void KeyedMarketSale_CanonicalFingerprintCoversEverySaleDefiningArgument()
+    {
+        ItemData item = SimulationTestFactory.CreateItem("fingerprint-item", 10f);
+        ItemData otherItem = SimulationTestFactory.CreateItem("fingerprint-other-item", 10f);
+        CityRuntime city = SimulationTestFactory.CreateCity("fingerprint-city", "fingerprint-location");
+        CityRuntime otherCity = SimulationTestFactory.CreateCity("fingerprint-other-city", "fingerprint-other-location");
+        NpcRuntime seller = CreateNpc("fingerprint-seller", 0f, city);
+        NpcRuntime otherSeller = CreateNpc("fingerprint-other-seller", 0f, otherCity);
+        seller.Inventory.AddItem(item, 3);
+        otherSeller.Inventory.AddItem(otherItem, 3);
+        EconomyTransactionService service = new EconomyTransactionService();
+        KeyedSaleReceipt first = service.TryExecuteKeyedMarketSale("fingerprint-proposal", "same-caller-fp", "input", "request", "person", "sell", 1, "profile", "tick", "site", seller, city.Market, item, 1);
+        Assert.That(first.Outcome, Is.EqualTo(KeyedSaleOutcome.Committed));
+
+        Func<KeyedSaleReceipt>[] changed =
+        {
+            () => service.TryExecuteKeyedMarketSale("fingerprint-proposal", "same-caller-fp", "other-input", "request", "person", "sell", 1, "profile", "tick", "site", seller, city.Market, item, 1),
+            () => service.TryExecuteKeyedMarketSale("fingerprint-proposal", "same-caller-fp", "input", "other-request", "person", "sell", 1, "profile", "tick", "site", seller, city.Market, item, 1),
+            () => service.TryExecuteKeyedMarketSale("fingerprint-proposal", "same-caller-fp", "input", "request", "other-person", "sell", 1, "profile", "tick", "site", seller, city.Market, item, 1),
+            () => service.TryExecuteKeyedMarketSale("fingerprint-proposal", "same-caller-fp", "input", "request", "person", "other-action", 1, "profile", "tick", "site", seller, city.Market, item, 1),
+            () => service.TryExecuteKeyedMarketSale("fingerprint-proposal", "same-caller-fp", "input", "request", "person", "sell", 2, "profile", "tick", "site", seller, city.Market, item, 1),
+            () => service.TryExecuteKeyedMarketSale("fingerprint-proposal", "same-caller-fp", "input", "request", "person", "sell", 1, "other-profile", "tick", "site", seller, city.Market, item, 1),
+            () => service.TryExecuteKeyedMarketSale("fingerprint-proposal", "same-caller-fp", "input", "request", "person", "sell", 1, "profile", "other-tick", "site", seller, city.Market, item, 1),
+            () => service.TryExecuteKeyedMarketSale("fingerprint-proposal", "same-caller-fp", "input", "request", "person", "sell", 1, "profile", "tick", "other-site", seller, city.Market, item, 1),
+            () => service.TryExecuteKeyedMarketSale("fingerprint-proposal", "same-caller-fp", "input", "request", "person", "sell", 1, "profile", "tick", "site", otherSeller, city.Market, item, 1),
+            () => service.TryExecuteKeyedMarketSale("fingerprint-proposal", "same-caller-fp", "input", "request", "person", "sell", 1, "profile", "tick", "site", seller, otherCity.Market, item, 1),
+            () => service.TryExecuteKeyedMarketSale("fingerprint-proposal", "same-caller-fp", "input", "request", "person", "sell", 1, "profile", "tick", "site", seller, city.Market, otherItem, 1),
+            () => service.TryExecuteKeyedMarketSale("fingerprint-proposal", "same-caller-fp", "input", "request", "person", "sell", 1, "profile", "tick", "site", seller, city.Market, item, 2)
+        };
+        foreach (Func<KeyedSaleReceipt> retry in changed)
+            Assert.That(retry().Outcome, Is.EqualTo(KeyedSaleOutcome.FingerprintCollision));
+        Assert.That(seller.Inventory.GetAmount(item), Is.EqualTo(2));
+        Assert.That(otherSeller.Inventory.GetAmount(otherItem), Is.EqualTo(3));
     }
 
     [Test]
@@ -62,7 +106,8 @@ public sealed class EconomyTransactionTests
         seller.Inventory.AddItem(item, 1);
         Assert.That(seller.MoneyAccount.Revision, Is.EqualTo(moneyRevision + 1));
         Assert.That(seller.Inventory.Revision, Is.EqualTo(inventoryRevision + 1));
-        KeyedSaleReceipt replay = service.TryExecuteKeyedMarketSale("proposal-reject", "fp", "input", "request", "person", "sell", 1, "profile", "tick", "site", seller, city.Market, item, 1);
+        KeyedSaleReceipt retry = service.TryExecuteKeyedMarketSale("proposal-reject", "fp", "input", "request", "person", "sell", 1, "profile", "tick", "site", seller, city.Market, item, 1);
+        KeyedSaleReceipt replay = retry;
         Assert.That(replay, Is.SameAs(first));
         Assert.That(replay.Result.FailureReason, Is.EqualTo(EconomyTransactionFailureReason.InsufficientInventory));
     }
@@ -91,6 +136,140 @@ public sealed class EconomyTransactionTests
         Assert.That(seller.Inventory.Revision, Is.EqualTo(inventoryRevision + 1));
         Assert.That(seller.MoneyAccount.Revision, Is.EqualTo(sellerMoneyRevision + 1));
         Assert.That(city.Market.Counterparty.MoneyAccount.Revision, Is.EqualTo(counterpartyMoneyRevision + 1));
+    }
+
+    [Test]
+    public void KeyedMarketSale_PreservesFirstMatchingDuplicateMarketRowSemantics()
+    {
+        ItemData item = SimulationTestFactory.CreateItem("duplicate-row-item", 10f);
+        MarketRuntime market = new MarketRuntime(new List<MarketItemConfig>
+        {
+            SimulationTestFactory.CreateMarketItem(item, 5, 5),
+            SimulationTestFactory.CreateMarketItem(item, 8, 8)
+        });
+        NpcRuntime seller = CreateNpc("duplicate-row-seller", 0f);
+        seller.Inventory.AddItem(item, 2);
+
+        KeyedSaleReceipt receipt = new EconomyTransactionService().TryExecuteKeyedMarketSale(
+            "duplicate-proposal", "duplicate-fp", "input", "request", "person", "sell", 1,
+            "profile", "tick", "site", seller, market, item, 2);
+
+        Assert.That(receipt.Outcome, Is.EqualTo(KeyedSaleOutcome.Committed));
+        Assert.That(market.Items[0].Amount, Is.EqualTo(7));
+        Assert.That(market.Items[1].Amount, Is.EqualTo(8));
+        Assert.That(market.GetAmount(item), Is.EqualTo(7));
+    }
+
+    [Test]
+    public void KeyedMarketSale_PreflightRevisionExhaustionLeavesAllOwnersUnchangedAndCanRetry()
+    {
+        ItemData item = SimulationTestFactory.CreateItem("preflight-item", 10f);
+        CityRuntime city = SimulationTestFactory.CreateCity("preflight-city", "preflight-location");
+        NpcRuntime seller = CreateNpc("preflight-seller", 0f, city);
+        seller.Inventory.AddItem(item, 2, 2f);
+        EconomyTransactionService service = new EconomyTransactionService();
+        long originalSellerRevision = seller.MoneyAccount.Revision;
+        SetRevision(seller.MoneyAccount, long.MaxValue);
+        float money = seller.Money;
+        int inventory = seller.Inventory.GetAmount(item);
+        int stock = city.Market.GetAmount(item);
+
+        KeyedSaleReceipt rejected = service.TryExecuteKeyedMarketSale("preflight-proposal", "preflight-fp", "input", "request", "person", "sell", 1, "profile", "tick", "site", seller, city.Market, item, 1);
+
+        Assert.That(rejected.Outcome, Is.EqualTo(KeyedSaleOutcome.ProvenNoInstall));
+        Assert.That(rejected.Result.Success, Is.False);
+        Assert.That(rejected.Result.FailureReason, Is.EqualTo(EconomyTransactionFailureReason.TransactionCommitFailed));
+        Assert.That(seller.Money, Is.EqualTo(money));
+        Assert.That(seller.Inventory.GetAmount(item), Is.EqualTo(inventory));
+        Assert.That(city.Market.GetAmount(item), Is.EqualTo(stock));
+        SetRevision(seller.MoneyAccount, originalSellerRevision);
+        KeyedSaleReceipt retried = service.TryExecuteKeyedMarketSale("preflight-proposal", "preflight-fp", "input", "request", "person", "sell", 1, "profile", "tick", "site", seller, city.Market, item, 1);
+        Assert.That(retried.Outcome, Is.EqualTo(KeyedSaleOutcome.Committed));
+    }
+
+    [Test]
+    public void KeyedMarketSale_EachParticipatingAuthorityRevisionInvalidatesPreflight()
+    {
+        string[] owners = { "inventory", "market", "seller-money", "counterparty-money" };
+        foreach (string owner in owners)
+        {
+            ItemData item = SimulationTestFactory.CreateItem("revision-race-item-" + owner, 10f);
+            CityRuntime city = owner == "counterparty-money"
+                ? CreateAccountBackedCity("revision-race-city-" + owner, item, 4, 50f)
+                : SimulationTestFactory.CreateCity("revision-race-city-" + owner, "revision-race-location-" + owner);
+            NpcRuntime seller = CreateNpc("revision-race-seller-" + owner, 1f, city);
+            seller.Inventory.AddItem(item, 2);
+            object revisionOwner = owner == "inventory" ? (object)seller.Inventory
+                : owner == "market" ? city.Market
+                : owner == "counterparty-money" ? city.Market.Counterparty.MoneyAccount
+                : seller.MoneyAccount;
+            SetRevision(revisionOwner, long.MaxValue);
+            float sellerMoney = seller.Money;
+            float counterpartyMoney = city.Market.Counterparty.MoneyAccount != null ? city.Market.Counterparty.MoneyAccount.Balance : 0f;
+            int inventory = seller.Inventory.GetAmount(item);
+            int stock = city.Market.GetAmount(item);
+
+            KeyedSaleReceipt receipt = new EconomyTransactionService().TryExecuteKeyedMarketSale(
+                "revision-race-proposal-" + owner, "fp", "input", "request", "person", "sell", 1,
+                "profile", "tick", "site", seller, city.Market, item, 1);
+
+            Assert.That(receipt.Outcome, Is.EqualTo(KeyedSaleOutcome.ProvenNoInstall), owner);
+            Assert.That(seller.Money, Is.EqualTo(sellerMoney), owner);
+            Assert.That(seller.Inventory.GetAmount(item), Is.EqualTo(inventory), owner);
+            Assert.That(city.Market.GetAmount(item), Is.EqualTo(stock), owner);
+            if (city.Market.Counterparty.MoneyAccount != null)
+                Assert.That(city.Market.Counterparty.MoneyAccount.Balance, Is.EqualTo(counterpartyMoney), owner);
+        }
+    }
+
+    [Test]
+    public void KeyedMarketSale_AccountCapacityOverflowRejectsBeforeAnyInstall()
+    {
+        ItemData item = SimulationTestFactory.CreateItem("keyed-overflow-item", 10f);
+        CityRuntime city = CreateAccountBackedCity("keyed-overflow-city", item, int.MaxValue, 100f);
+        NpcRuntime seller = CreateNpc("keyed-overflow-seller", 0f, city);
+        seller.Inventory.AddItem(item, 1);
+        float balance = seller.Money;
+        int inventory = seller.Inventory.GetAmount(item);
+        int stock = city.Market.GetAmount(item);
+
+        KeyedSaleReceipt receipt = new EconomyTransactionService().TryExecuteKeyedMarketSale("overflow-proposal", "overflow-fp", "input", "request", "person", "sell", 1, "profile", "tick", "site", seller, city.Market, item, 1);
+
+        Assert.That(receipt.Outcome, Is.EqualTo(KeyedSaleOutcome.TerminalRejection));
+        Assert.That(receipt.Result.FailureReason, Is.EqualTo(EconomyTransactionFailureReason.MarketCapacity));
+        Assert.That(seller.Money, Is.EqualTo(balance));
+        Assert.That(seller.Inventory.GetAmount(item), Is.EqualTo(inventory));
+        Assert.That(city.Market.GetAmount(item), Is.EqualTo(stock));
+        Assert.That(city.Market.Counterparty.MoneyAccount.Balance, Is.EqualTo(100f));
+    }
+
+    [Test]
+    public void KeyedMarketSale_UnresolvedReceiptReplaysWithoutRetry()
+    {
+        ItemData item = SimulationTestFactory.CreateItem("unresolved-item", 10f);
+        CityRuntime city = SimulationTestFactory.CreateCity("unresolved-city", "unresolved-location");
+        NpcRuntime seller = CreateNpc("unresolved-seller", 0f, city);
+        seller.Inventory.AddItem(item, 1);
+        EconomyTransactionService service = new EconomyTransactionService();
+        SetRevision(seller.MoneyAccount, long.MaxValue);
+        KeyedSaleReceipt provenNoInstall = service.TryExecuteKeyedMarketSale("unresolved-proposal", "unresolved-fp", "input", "request", "person", "sell", 1, "profile", "tick", "site", seller, city.Market, item, 1);
+        Assert.That(provenNoInstall.Outcome, Is.EqualTo(KeyedSaleOutcome.ProvenNoInstall));
+        FieldInfo tableField = typeof(EconomyTransactionService).GetField("keyedSaleReceipts", BindingFlags.Instance | BindingFlags.NonPublic);
+        List<KeyedSaleReceipt> receipts = (List<KeyedSaleReceipt>)tableField.GetValue(service);
+        MethodInfo unresolvedFactory = typeof(KeyedSaleReceipt).GetMethod("Unresolved", BindingFlags.Static | BindingFlags.NonPublic);
+        KeyedSaleReceipt unresolved = (KeyedSaleReceipt)unresolvedFactory.Invoke(null, new object[] { provenNoInstall.ProposalId, provenNoInstall.Fingerprint, "unresolved-fp", provenNoInstall.Snapshot, provenNoInstall.Result });
+        receipts[0] = unresolved;
+        float moneyAfterPartialEffect = seller.Money;
+        int inventoryAfterPartialEffect = seller.Inventory.GetAmount(item);
+        int stockAfterPartialEffect = city.Market.GetAmount(item);
+
+        KeyedSaleReceipt replay = service.TryExecuteKeyedMarketSale("unresolved-proposal", "unresolved-fp", "input", "request", "person", "sell", 1, "profile", "tick", "site", seller, city.Market, item, 1);
+
+        Assert.That(replay, Is.SameAs(unresolved));
+        Assert.That(replay.Outcome, Is.EqualTo(KeyedSaleOutcome.Unresolved));
+        Assert.That(seller.Money, Is.EqualTo(moneyAfterPartialEffect));
+        Assert.That(seller.Inventory.GetAmount(item), Is.EqualTo(inventoryAfterPartialEffect));
+        Assert.That(city.Market.GetAmount(item), Is.EqualTo(stockAfterPartialEffect));
     }
 
     [Test]
@@ -674,6 +853,13 @@ public sealed class EconomyTransactionTests
     private static NpcRuntime CreateNpc(string id, float money, CityRuntime city = null)
     {
         return new NpcRuntime(id, SimulationTestFactory.CreateNpc(id), city, money);
+    }
+
+    private static void SetRevision(object owner, long value)
+    {
+        FieldInfo revision = owner.GetType().GetField("revision", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(revision, Is.Not.Null, owner.GetType().Name);
+        revision.SetValue(owner, value);
     }
 
     private static CityRuntime CreateAccountBackedCity(string runtimeId, ItemData item, int initialStock, float settlementBalance)
