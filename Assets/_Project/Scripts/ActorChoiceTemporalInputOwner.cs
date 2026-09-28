@@ -12,7 +12,7 @@ public sealed class ActorChoiceTemporalCommand
     public WorldCommandAuthorityMode Authority { get; }
 
     public ActorChoiceTemporalCommand(string worldCommandId, PersonId actor, string actionDefinitionId,
-        WorldCommandOrigin origin = WorldCommandOrigin.System,
+        WorldCommandOrigin origin = WorldCommandOrigin.LocalPlayer,
         WorldCommandAuthorityMode authority = WorldCommandAuthorityMode.Request)
     {
         if (string.IsNullOrWhiteSpace(worldCommandId)) throw new ArgumentException("World command identity is required.", nameof(worldCommandId));
@@ -53,8 +53,10 @@ public sealed class ActorChoiceTemporalCommand
             || index != encoded.Length
             || !int.TryParse(originValue, NumberStyles.None, CultureInfo.InvariantCulture, out int originNumber)
             || !Enum.IsDefined(typeof(WorldCommandOrigin), originNumber)
+            || (WorldCommandOrigin)originNumber != WorldCommandOrigin.LocalPlayer
             || !int.TryParse(authorityValue, NumberStyles.None, CultureInfo.InvariantCulture, out int authorityNumber)
-            || !Enum.IsDefined(typeof(WorldCommandAuthorityMode), authorityNumber)) return false;
+            || !Enum.IsDefined(typeof(WorldCommandAuthorityMode), authorityNumber)
+            || (WorldCommandAuthorityMode)authorityNumber != WorldCommandAuthorityMode.Request) return false;
 
         try
         {

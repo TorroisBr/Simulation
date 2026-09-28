@@ -9,7 +9,7 @@ public sealed class ActorChoiceTemporalInputOwnerTests
         ActorChoiceTemporalInputOwner owner = new ActorChoiceTemporalInputOwner(store, "intraday-sellgoods-v1");
         ActorChoiceTemporalCommand command = new ActorChoiceTemporalCommand(
             "world-command-α:1", new PersonId("person:merchant"), "sell-goods/v1",
-            WorldCommandOrigin.System, WorldCommandAuthorityMode.Request);
+            WorldCommandOrigin.LocalPlayer, WorldCommandAuthorityMode.Request);
         TimelineInputReference accepted = new TimelineInputReference(41, "input:41",
             ActorChoiceTemporalInputOwner.CommandKind, command.Encode(), new LogicalTick(123456));
 
@@ -24,7 +24,7 @@ public sealed class ActorChoiceTemporalInputOwnerTests
         Assert.That(captured.WorldCommandId, Is.EqualTo("world-command-α:1"));
         Assert.That(captured.PersonId.Value, Is.EqualTo("person:merchant"));
         Assert.That(captured.ActionDefinitionId, Is.EqualTo("sell-goods/v1"));
-        Assert.That(captured.Origin, Is.EqualTo(WorldCommandOrigin.System));
+        Assert.That(captured.Origin, Is.EqualTo(WorldCommandOrigin.LocalPlayer));
         Assert.That(captured.Authority, Is.EqualTo(WorldCommandAuthorityMode.Request));
         Assert.That(captured.TemporalCapture.ProfileId, Is.EqualTo("intraday-sellgoods-v1"));
         Assert.That(captured.TemporalCapture.TargetInstant, Is.EqualTo(new LogicalTick(123456)));
@@ -64,6 +64,30 @@ public sealed class ActorChoiceTemporalInputOwnerTests
         Assert.That(unknownFailure, Is.EqualTo(TimelineFailure.UnknownWorkKind));
         Assert.That(owner.TryPrepare(malformed, out _, out TimelineFailure malformedFailure), Is.False);
         Assert.That(malformedFailure, Is.EqualTo(TimelineFailure.UnknownWorkKind));
+        Assert.That(store.Count, Is.Zero);
+    }
+
+    [Test]
+    public void UnsupportedP11OriginOrAuthorityIsNotCommitted()
+    {
+        ActorChoiceStore store = new ActorChoiceStore(new PersonStore());
+        ActorChoiceTemporalInputOwner owner = new ActorChoiceTemporalInputOwner(store, "intraday-sellgoods-v1");
+        ActorChoiceTemporalCommand system = new ActorChoiceTemporalCommand(
+            "world-command-system", new PersonId("merchant"), "sell-goods/v1",
+            WorldCommandOrigin.System, WorldCommandAuthorityMode.Request);
+        ActorChoiceTemporalCommand suggest = new ActorChoiceTemporalCommand(
+            "world-command-suggest", new PersonId("merchant"), "sell-goods/v1",
+            WorldCommandOrigin.LocalPlayer, WorldCommandAuthorityMode.Suggest);
+
+        TimelineInputReference wrongOrigin = new TimelineInputReference(3, "input-3",
+            ActorChoiceTemporalInputOwner.CommandKind, system.Encode(), new LogicalTick(3));
+        TimelineInputReference wrongAuthority = new TimelineInputReference(4, "input-4",
+            ActorChoiceTemporalInputOwner.CommandKind, suggest.Encode(), new LogicalTick(4));
+
+        Assert.That(owner.TryPrepare(wrongOrigin, out _, out TimelineFailure originFailure), Is.False);
+        Assert.That(originFailure, Is.EqualTo(TimelineFailure.UnknownWorkKind));
+        Assert.That(owner.TryPrepare(wrongAuthority, out _, out TimelineFailure authorityFailure), Is.False);
+        Assert.That(authorityFailure, Is.EqualTo(TimelineFailure.UnknownWorkKind));
         Assert.That(store.Count, Is.Zero);
     }
 }
