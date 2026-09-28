@@ -21,9 +21,13 @@ references and the actual canonical runtime composition before any checkpoint
 implementation is scheduled.
 
 **Current evidence:** the inventory demonstrates no included owner with a
-complete exact immutable export and staged hydration path. No proposed
-capability checkpoint below currently meets its gates. `P12-A` remains
-`WAIT_DEPENDENCY`; accepted scope is not implementation authorization.
+complete exact immutable export and staged hydration path. The user has
+accepted P12-B through P12-G and authorized implementation of those
+prerequisite capabilities. Each still requires its bounded technical design
+and independent review before implementation. No capability is delivered by
+this proposal, and `P12-A` remains `WAIT_DEPENDENCY` pending complete owner
+coverage, live-profile inventory, and its separate implementation
+authorization.
 
 ## Boundary and decomposition rule
 
@@ -363,10 +367,11 @@ must consider evolved state for every included authority.
 The latest evidence says no profile-included group has demonstrated the
 required exact immutable export plus staged hydration. The accepted P12-A
 contract itself names no implementation checkpoint IDs for its descriptive
-closure sequence. The temporary labels in this proposal therefore require
-explicit checkpoint-scope acceptance before they become implementation
-contracts. That acceptance is distinct from the already recorded P12-A scope
-acceptance.
+closure sequence; P12-B through P12-G provide the accepted prerequisite
+decomposition. Their scope and prerequisite implementation authorization are
+recorded above. Each capability still requires a bounded technical contract
+and independent review. This does not authorize final P12-A profile
+integration.
 
 After accepted capability scopes, continue design/review and owner inventory
 work as allowed by the Execution Model. Do not schedule P12-A implementation

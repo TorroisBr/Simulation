@@ -1,6 +1,6 @@
 # Phase 12 — Technical Design Proposal: Daily Continuation
 
-**Status:** Candidate technical design for proposed checkpoint `P12-A — UnityBootstrap Daily Continuation v1`, based on the bounded `UnityBootstrap-Daily-v1` profile. The profile covers the SampleScene-selected `Simulation-GeneralTest.asset` through the validated `TesteSimulacao.InitializeSimulation` bootstrap, exact compatible build/runtime and current-host numeric profile, and completed-day capture boundaries. The selected asset enables P9-B authored geography. P9 canonical closure is `82396ae7ffaf407fda278928da456b06dc5394d`; P9-B code integration is `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf` (implementation `00395ef80cfa2364d34ed2170e0735d3a4b1513d`), with promotion State/status record `14a2e8ee01e49f1ffdcecf8fd64d274c728ead44`. P9-A-only configurations are incompatible with this profile and require separate profile identity/admission if retained. This proposal is not an accepted checkpoint contract, implementation authorization, Phase State delivery, or proof that save/load exists. Independent full-design/current-base review passed at `9fde12a`; the later current-base refresh review passed at `d1a8414` for the refreshed P9/P10/P20/alignment references and their consistency with the bounded profile. That scoped refresh review is not a new full-design review, and neither review accepts P12-A or demonstrates owner export/hydration coverage.
+**Status:** Technical design for the user-accepted scope of checkpoint `P12-A — UnityBootstrap Daily Continuation v1`, based on the bounded `UnityBootstrap-Daily-v1` profile. The profile covers the SampleScene-selected `Simulation-GeneralTest.asset` through the validated `TesteSimulacao.InitializeSimulation` bootstrap, exact compatible build/runtime and current-host numeric profile, and completed-day capture boundaries. The selected asset enables P9-B authored geography. P9 canonical closure is `82396ae7ffaf407fda278928da456b06dc5394d`; P9-B code integration is `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf` (implementation `00395ef80cfa2364d34ed2170e0735d3a4b1513d`), with promotion State/status record `14a2e8ee01e49f1ffdcecf8fd64d274c728ead44`. P9-A-only configurations are incompatible with this profile and require separate profile identity/admission if retained. Scope acceptance does not authorize implementation or establish Phase State delivery, owner export/hydration, or save/load. Independent full-design/current-base review passed at `9fde12a`; the later current-base refresh review passed at `d1a8414` for the refreshed P9/P10/P20/alignment references and their consistency with the bounded profile. That scoped refresh review is not a new full-design review, and neither review demonstrates owner export/hydration coverage.
 **Historical independent technical design review:** PASS at content commit
 `8577ba589a0f9b40738fcf8738eee9589563d7b8`. The later lifecycle seam must
 invalidate capture eligibility on every supported authoritative write path.
@@ -16,7 +16,7 @@ P9 canonical closure `82396ae7ffaf407fda278928da456b06dc5394d`, P9-A code promot
 promotion-record State `14a2e8ee01e49f1ffdcecf8fd64d274c728ead44`, P9-B canonical integration
 `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf` (implementation tip
 `00395ef80cfa2364d34ed2170e0735d3a4b1513d`), P11 code promotion
-`0cd4281804ecc6a2d110352d1a238959e93867f0` / closure State
+`0803670cfa2c39163b54ff46a21daa06df5a16f6` / closure State
 `308e24d0744112e8f2b741521b8b3e4acb51ebbf`, and architecture baseline
 `c285466c355103d3637ac165246591b72eb7bda0`. P8's `77f3e1a`→`470667d`
 advance is State-only. Both alignment records remain current.
@@ -241,9 +241,9 @@ review verdict. The current-base dependency check uses P8
 canonical State `470667d`, P9 canonical closure `82396ae`, P9-A code promotion
 `43f08b3` and P9-B promotion-record State `14a2e8e`, P9-B code integration
 `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf`
-(implementation tip `00395ef80cfa2364d34ed2170e0735d3a4b1513d`), P11 code promotion `0cd4281` and
+(implementation tip `00395ef80cfa2364d34ed2170e0735d3a4b1513d`), P11 code promotion `0803670` and
 closure State `308e24d`, current P18 canonical State tip
-`eabc1c24a0ba8951ded87280472cc7137e741434` (P18-A/B/C promoted by code
+`ba8076c3bc2c8c354a8755e6efaca30bfeab7bf7` (P18-A/B/C promoted by code
 extension `1dd0479`;
 P18-D implementation blocked), accepted P18-A continuation extension contract
 `2175bf2` (the implementation candidate/acceptance record `9de70ae` is not

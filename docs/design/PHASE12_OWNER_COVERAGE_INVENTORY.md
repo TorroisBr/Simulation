@@ -13,7 +13,8 @@ closure `82396ae7ffaf407fda278928da456b06dc5394d4` (P9-B code integration
 `252ad6b9a507f1c001c05a1e19c2546ebd0707a2` (P10-A code
 `9501bf076d506fb64d6ee3e6d178574fff36e153`, State record
 `9e79b58397dc9a89ddcc562be139b79987cb55b9`); P11 canonical closure
-`308e24d0744112e8f2b741521b8b3e4acb51ebbf` (code `0cd4281804ecc6a2d110352d1a238959e93867f0`);
+`308e24d0744112e8f2b741521b8b3e4acb51ebbf` (code promotion
+`0803670cfa2c39163b54ff46a21daa06df5a16f6`);
 P14 historical promotion State `f8a61fe9634ba9ab56ee31d50b57b45fef292a6f`
 (P14-A code `c44904bb4b0a066eced1d7e8a773b7dc1eea76c0`); current P14
 canonical State/Brief `4caecbbfb0464c965811402b3c11d8717605114a` is a docs-only

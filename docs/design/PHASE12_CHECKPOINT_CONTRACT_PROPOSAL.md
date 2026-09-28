@@ -14,7 +14,7 @@ inventory dependencies.
 This proposal changes no canonical capability and makes no claim that capture,
 hydration, or save/load parity currently exists.
 
-**Current-base refresh:** after merging P18 canonical `99cac77` into this
+**Current-base refresh:** after merging P18 canonical `ba8076c` into this
 documentation candidate, an independent scoped review found the daily profile
 still compatible. The P18 source tree is present in this proposal branch only
 as review context; this branch has no executable P11 ancestry and is not an
@@ -51,9 +51,10 @@ architecture `c285466c355103d3637ac165246591b72eb7bda0`; P9-A code promotion
 `43f08b3` / P9 canonical closure `82396ae7ffaf407fda278928da456b06dc5394d` /
 current P9-B promotion-record State/status `14a2e8e`; P9-B code integration
 `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf` (implementation tip
-`00395ef80cfa2364d34ed2170e0735d3a4b1513d`); P11 code promotion `0cd4281` /
+`00395ef80cfa2364d34ed2170e0735d3a4b1513d`); P11 code promotion
+`0803670cfa2c39163b54ff46a21daa06df5a16f6` /
 current canonical closure State `308e24d0744112e8f2b741521b8b3e4acb51ebbf`;
-P18 canonical/current State `99cac77f7d66e8eb61fe68efb6959a4a5b7029ca`
+P18 canonical/current State `ba8076c3bc2c8c354a8755e6efaca30bfeab7bf7`
 (P18-A/B/C promoted; P18-D implementation blocked); P14 current canonical
 State/Brief `4caecbb` (docs-only update) and historical promotion State
 `f8a61fe9634ba9ab56ee31d50b57b45fef292a6f`; P14-A code promotion
@@ -301,7 +302,7 @@ omits causal fields.
   do not substitute for P8 identity. P8-E is not a blanket continuation
   prerequisite. P9-B is on current P9 canonical at `d9a62d7`; this P12
   proposal does not establish P12 export/hydration coverage or checkpoint gates.
-- **P18:** P18 canonical/State is `99cac77`; the selected daily profile does
+- **P18:** P18 canonical/State is `ba8076c`; the selected daily profile does
   not compose its timeline, activity lifecycle, availability decisions, or
   temporal state, and does not claim intraday continuation. P18 is present in
   this docs-only refresh branch as review context, not integrated runtime code.
@@ -383,9 +384,9 @@ profile contract.
   `43f08b3`, P9-B promotion-record State/status `14a2e8e`, P9-B canonical
   integration `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf` (implementation tip
   `00395ef80cfa2364d34ed2170e0735d3a4b1513d`),
-  P11 promotion `0cd4281` and canonical closure State
+  P11 code promotion `0803670cfa2c39163b54ff46a21daa06df5a16f6` and canonical closure State
   `308e24d0744112e8f2b741521b8b3e4acb51ebbf`, current P18 canonical/State
-  `99cac77f7d66e8eb61fe68efb6959a4a5b7029ca`, P14 current canonical
+  `ba8076c3bc2c8c354a8755e6efaca30bfeab7bf7`, P14 current canonical
   State/Brief `4caecbb` (docs-only), historical promotion State `f8a61fe`
   and P14-A code promotion `c44904bb4b0a066eced1d7e8a773b7dc1eea76c0`, P20 Entry Architecture
   `2f9c93b`, Technical Design `6a0d164`, and refreshed proposed P20-A checkpoint
