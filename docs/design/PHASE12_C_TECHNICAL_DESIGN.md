@@ -13,30 +13,46 @@ P8 `470667d37863384edadb3d93ef64d8004aff46a3`; P9 State/closure
 `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf`; P11 State
 `308e24d0744112e8f2b741521b8b3e4acb51ebbf` and actual code promotion
 `0cd4281804ecc6a2d110352d1a238959e93867f0`; P18 canonical code
-`9e790c59e14ca7f7ed195c0e6267e10f3cd039d7` (the State at that tip retains
-stale wording that D1/D2 are missing, although the promoted code contains
-them); intraday/extensibility alignment `4b6dd1d38cffeaf3cc1ac3effea0f8ede8771194`;
-and multi-participant activity alignment `c285466c355103d3637ac165246591b72eb7bda0`.
+`9e790c59e14ca7f7ed195c0e6267e10f3cd039d7` (its opening summary records
+D1/D2 promoted and P18-D ready for implementation; a later historical section
+retains stale pre-promotion wording, and the docs-only correction candidate
+`6f98e0943782efdf11e4ba1e3a5701aba421f0df` is unpromoted). The latest
+P18-D candidate cited by the current owner inventory is unpromoted
+`5d7eb2687c3866fb2399faf8b366a299484d8dd4` (code integration
+`3d9c0ea508e542e8a7e92a4982fbec3e29560e81`): it includes a reviewed
+CommercialKnowledge sharing receipt/prepared-install owner, but does not
+compose the full P18-D consumer into `SimulationRuntime` or establish P18
+state in the selected P12 profile. The P12-B design refresh is
+`ef8c72cd388445e25ce9360bb1e689fc0a07c639`; it revalidates the B contract
+against the partial owner inventory but does not deliver admission/capture
+implementation. Intraday/extensibility alignment
+`4b6dd1d38cffeaf3cc1ac3effea0f8ede8771194`; and multi-participant activity
+alignment `c285466c355103d3637ac165246591b72eb7bda0`.
 The proposed P9-B/P11 additive composition is candidate
 `af656e7710fce0ba171fae1d6684331d2dc0b743`, not a promoted combined
-application profile. Its independent code review passed. The earlier P12
-owner/profile inventory `ba6f79fb87e851316be84d4f2a89d94186b8f802` completed a
-local audit of its selected composition and configured providers, without
-fetching remote refs. The later current-composition refresh `5b6fe2b` fetched
-refs and verified the candidate's P11 and P9 merge parents against current
-canonical State tips `308e24d` and `82396ae`. The selected-profile test checks
-P9-B geography and a non-null P11 `ActorChoiceStore` on the same published
-runtime. This establishes exact-current-input candidate evidence, not a
-promoted combined runtime or P12-A readiness. No complete live owner export/
-hydration census exists, so P12-A remains `WAIT_DEPENDENCY`.
+application profile. Its independent code review passed. The reviewed owner
+inventory candidate `d01cd6225ff98a9952b466f7f045ec871b9e3ecc` revalidates its
+cited P9/P11/P18 refs and records the selected candidate composition/provider
+evidence. Its P12-B entrypoint/mutation-invalidation census is explicitly
+partial; it is not a complete live owner/revision census or committed-mutation
+proof. The P9-B/P11 candidate remains unpromoted, so this is candidate-based
+composition evidence, not canonical live-composition evidence for P12-A. The
+refreshed P12-B design `ef8c72c` remains a design only; P12-B
+admission/capture implementation and complete owner coverage are still
+dependencies. No complete live owner export/hydration census exists, so P12-A
+remains `WAIT_DEPENDENCY`.
 The read-only P12-C RNG consumer census is also against candidate `af656e7`;
 its exact findings are recorded in owner-inventory follow-up
-`99739fd0d190cd61acda8d3c91b25acab7405379` and the refreshed owner inventory
-candidate `5b6fe2b`. Re-audit when the selected composition or profile changes.
+`99739fd0d190cd61acda8d3c91b25acab7405379` and carried forward in reviewed
+inventory candidate `d01cd62`. Re-audit when the selected composition or
+profile changes.
 
 P12-C is accepted as prerequisite capability work under the P12 Brief and
 capability decomposition. Its dependency is the reviewed P12-B profile
-admission/completed-boundary contract. The accepted profile remains
+admission/completed-boundary contract, refreshed at `ef8c72c` against
+inventory `d01cd62`. That refresh is documentation evidence only; P12-C
+implementation remains blocked until P12-B admission/capture is delivered and
+the exact included-owner census is complete. The accepted profile remains
 `UnityBootstrap-Daily-v1`. This design specifies private staging of identity,
 P9/P8 provenance, and verified deterministic roots only; it is not a save
 envelope, public serializer, restore coordinator, or profile integration.
@@ -177,7 +193,8 @@ sections under P12-B admission and are not invented as P12-C data.
 
 ## 3. Deterministic random roots: audited candidate contract
 
-The read-only RNG consumer census at `99739fd` for candidate `af656e7` found
+The read-only RNG consumer census at `99739fd` for candidate `af656e7`, carried
+forward by reviewed inventory `d01cd62`, found
 one shared `DeterministicRandomSource` constructed with seed `0` and injected
 into `SimulationRuntime`, `CrimeSystem`, and `NpcDecisionSystem`. In this
 selected composition, active authoritative draws use pure keyed
@@ -221,21 +238,20 @@ canonical P12-A composition or final profile readiness.
 
 P9-B bootstrap and P11 ActorChoice were historically separate code lines. The
 additive candidate `af656e7710fce0ba171fae1d6684331d2dc0b743` has independent
-code review. Refreshed inventory `5b6fe2b` verifies that its first parent is
-current P11 canonical State `308e24d` and its second parent is current P9
-canonical closure `82396ae`, and records the selected-profile test that checks
-both P9-B geography and the P11 store on the same published runtime. The
-combined application candidate remains unpromoted. The earlier composition
-validation record is bootstrap 14/14, ActorChoice 24/24, Spatial 99/99, ALL
-EditMode 1742/1742, official Smoke 5/5, and `git diff --check`; only the final
-Smoke XML remains available as a retained result artifact. These results
-validate candidate composition behavior, not P12 owner exports, hydration, or
-profile readiness. The read-only RNG census described in Section 3 completes
-candidate-level provider and draw-state mapping; it does not make candidate
-`af656e7` a promoted combined runtime. P12-C design and eventual implementation
-must use the exact audited composition context, not P9-B or P11 in isolation.
-The missing promoted combined profile and owner export/hydration remain separate
-P12-A blockers.
+code review. Reviewed inventory `d01cd62` revalidates its cited P9/P11
+canonical refs and records the selected-profile test that checks both P9-B
+geography and the P11 store on the same published runtime. It carries the
+candidate validation results: bootstrap 14/14, ActorChoice 24/24, Spatial
+99/99, ALL EditMode 1742/1742, official Smoke 5/5, and `git diff --check`
+passing; only the final Smoke XML remains available as a retained result
+artifact. These results validate composition behavior, not P12 owner exports,
+hydration, or profile readiness. The read-only RNG census described in
+Section 3 completes candidate-level provider and draw-state mapping; it does
+not make candidate `af656e7` canonical. The inventory's P12-B
+entrypoint/mutation-invalidation pass is partial and does not prove a complete
+live owner census. P12-C design and eventual implementation must use the exact
+audited composition context, not P9-B or P11 in isolation. Current canonical
+live-composition evidence remains a separate P12-A blocker.
 
 Dependency order within P12-C:
 
@@ -328,14 +344,17 @@ no test claim and contains no code change.
 | `DeterministicRandom.cs` and selected consumers | Read-only candidate census establishes shared seed-0 provider, three pure keyed draw consumers and an explicitly empty mutable-stream section for `af656e7`. | Preserve algorithm/build compatibility and exact key inputs; reject unknown providers or any newly composed mutable cursor until explicitly covered. Re-audit when composition/defaults change. |
 | P9 genesis pipeline/manifest | P9 pipeline creates and publishes the selected authored manifest/outputs. | Preserve generated output as history; never rerun genesis on hydration. |
 | P8 `SpatialAuthorityStore` | Owns typed Hex/Location truth and authored geography provenance. | Capture exactly the accepted P8-A facts; never infer these from legacy spatial objects. |
-| P12-B / composition manifest | Owns profile compatibility and section census. Current inventory candidate `5b6fe2b` verifies the exact P9-B/P11 merge parents against current canonical State refs and audits the selected provider graph; the combined application composition remains unpromoted. | **Blocker:** apply the accepted/reviewed P12-B contract and obtain a promoted/validated live-profile composition plus final profile-specific section census before P12-A; the candidate audit alone does not establish P12-A readiness. |
+| P12-B / composition manifest | Owns profile compatibility and section census. Refreshed design `ef8c72c` retains the accepted fail-closed contract; reviewed inventory `d01cd62` revalidates cited refs and provides only a partial entrypoint/mutation-invalidation map. The combined P9-B/P11 application composition remains unpromoted. | **Blocker:** deliver P12-B admission/capture implementation and complete live owner/revision plus committed-mutation evidence; then obtain promoted/validated live-profile composition and final profile-specific census before P12-A. Neither the design refresh nor candidate inventory establishes P12-C implementation readiness or P12-A readiness. |
 | P12-G | Owns whole-graph validation and publication. | P12-C stages remain private; no active-runtime mutation/publication. |
 
 This design makes no P12-C implementation-readiness claim. The accepted and
 reviewed P12-B profile-admission/completed-boundary capability remains a
 prerequisite dependency and must be delivered before dependent P12-C
-implementation can integrate against its contract. The candidate RNG census
-closes the prior mutable-stream inventory question only for `af656e7`.
+implementation can integrate against its contract. The evidence refresh at
+`ef8c72c` is documentation-only, and inventory `d01cd62` leaves the complete
+live owner/mutation census outstanding. P12-C implementation remains blocked
+on delivered B admission/capture. The candidate RNG census closes the prior
+mutable-stream inventory question only for `af656e7`.
 Canonical live-composition evidence and P12-A's separate implementation
 authorization remain outstanding; neither follows from this candidate audit.
 The accepted P12-B through P12-G scopes authorize prerequisite capability
