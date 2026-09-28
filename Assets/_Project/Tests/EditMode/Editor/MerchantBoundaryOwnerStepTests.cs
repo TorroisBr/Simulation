@@ -73,6 +73,40 @@ public sealed class MerchantBoundaryOwnerStepTests
     }
 
     [Test]
+    public void PlanUrgencyStep_RejectsInPlaceReplacementWithSameTargetAndPendingCount()
+    {
+        ThreeCityFixture world = new ThreeCityFixture();
+        ItemData originalItem = SimulationTestFactory.CreateItem("merchant-plan-original-item");
+        ItemData replacementItem = SimulationTestFactory.CreateItem("merchant-plan-replacement-item");
+        NpcRuntime merchant = new NpcRuntime("merchant-plan-replacement-npc",
+            SimulationTestFactory.CreateNpc("merchant-plan-replacement", NpcJobType.Merchant, MerchantBehavior.Traveling),
+            world.A, 0f);
+        Assert.That(merchant.TryAssignPersonId(new PersonId("person.merchant-plan-replacement")), Is.True);
+        merchant.SetMerchantTradePlan(originalItem, world.A, world.B, 4, 2f, "decision.original");
+
+        MerchantSystem system = SimulationTestFactory.CreateMerchantSystem(null, new SimulationTime(1));
+        DailyBoundaryOperation operation = new DailyBoundaryOperation("world-plan-replacement", "intraday-v1", 1L);
+        Assert.That(system.TryCreatePlanUrgencyStep(operation, new[] { merchant }, 0,
+            out BoundaryContinuationStep step, out _), Is.True);
+        BoundaryContinuationManifest manifest = new BoundaryContinuationManifest(
+            operation, "daily", "1", "merchant-enabled", new[] { step });
+        Assert.That(system.TryPreparePlanUrgencyStep(manifest, step, new[] { merchant },
+            out IBoundaryContinuationStepCommit prepared, out _), Is.True);
+
+        // Set replaces the active plan in place while preserving the target and pending count.
+        merchant.SetMerchantTradePlan(replacementItem, world.A, world.B, 7, 3f, "decision.replacement");
+        Assert.That(merchant.MerchantTradePlan.TargetCity, Is.SameAs(world.B));
+        Assert.That(merchant.MerchantTradePlan.PendingTravelDays, Is.EqualTo(0));
+        Assert.That(merchant.MerchantTradePlan.IsActive, Is.True);
+
+        Assert.That(prepared.TryCommit(out TimelineFailure failure), Is.False);
+        Assert.That(failure, Is.EqualTo(TimelineFailure.ContinuationFailed));
+        Assert.That(merchant.MerchantTradePlan.Item, Is.SameAs(replacementItem));
+        Assert.That(merchant.MerchantTradePlan.RemainingAmount, Is.EqualTo(7));
+        Assert.That(merchant.MerchantTradePlan.PendingTravelDays, Is.EqualTo(0));
+    }
+
+    [Test]
     public void PlanUrgencyDescriptor_FreezesRosterOrderAndStablePersonIdentity()
     {
         ThreeCityFixture world = new ThreeCityFixture();

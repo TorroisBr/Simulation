@@ -1755,7 +1755,13 @@ public class MerchantSystem : INpcActionProvider, IAuthoritativeMutationGuardBin
             if (npc == null || npc.PersonId == null || string.IsNullOrWhiteSpace(npc.RuntimeId)) return false;
             MerchantTradePlanRuntime plan = npc.MerchantTradePlan;
             CityRuntime currentCity = npc.CurrentCity;
+            ItemData planItem = plan.Item;
+            CityRuntime planOriginCity = plan.OriginCity;
             CityRuntime targetCity = plan.TargetCity;
+            int plannedAmount = plan.PlannedAmount;
+            int remainingAmount = plan.RemainingAmount;
+            float purchasePricePerItem = plan.PurchasePricePerItem;
+            int waitDaysAtDestination = plan.WaitDaysAtDestination;
             bool advances = npc.IsAlive && !npc.IsTraveling && currentCity != null
                 && plan.IsActive && targetCity != null && !ReferenceEquals(targetCity, currentCity);
             int pendingDays = plan.PendingTravelDays;
@@ -1763,7 +1769,9 @@ public class MerchantSystem : INpcActionProvider, IAuthoritativeMutationGuardBin
             snapshot.Add(new MerchantPlanUrgencyEntry(
                 npc, npc.RuntimeId, npc.PersonId.Value, npc.IsAlive, npc.IsTraveling,
                 currentCity, currentCity?.RuntimeId, plan, plan.IsActive,
-                targetCity, targetCity?.RuntimeId, pendingDays, advances));
+                planItem, planOriginCity, targetCity, targetCity?.RuntimeId,
+                plannedAmount, remainingAmount, purchasePricePerItem, waitDaysAtDestination,
+                pendingDays, plan.OriginDecisionId, advances));
         }
         return true;
     }
@@ -1783,8 +1791,15 @@ public class MerchantSystem : INpcActionProvider, IAuthoritativeMutationGuardBin
                 || left.IsAlive != right.IsAlive || left.IsTraveling != right.IsTraveling
                 || !ReferenceEquals(left.CurrentCity, right.CurrentCity) || left.CurrentCityId != right.CurrentCityId
                 || !ReferenceEquals(left.Plan, right.Plan) || left.PlanActive != right.PlanActive
+                || !ReferenceEquals(left.PlanItem, right.PlanItem)
+                || !ReferenceEquals(left.PlanOriginCity, right.PlanOriginCity)
                 || !ReferenceEquals(left.TargetCity, right.TargetCity) || left.TargetCityId != right.TargetCityId
-                || left.PendingTravelDays != right.PendingTravelDays || left.Advances != right.Advances)
+                || left.PlannedAmount != right.PlannedAmount || left.RemainingAmount != right.RemainingAmount
+                || !left.PurchasePricePerItem.Equals(right.PurchasePricePerItem)
+                || left.WaitDaysAtDestination != right.WaitDaysAtDestination
+                || left.PendingTravelDays != right.PendingTravelDays
+                || !string.Equals(left.OriginDecisionId, right.OriginDecisionId, StringComparison.Ordinal)
+                || left.Advances != right.Advances)
                 return false;
         }
         return true;
@@ -1830,19 +1845,30 @@ public class MerchantSystem : INpcActionProvider, IAuthoritativeMutationGuardBin
         public string CurrentCityId { get; }
         public MerchantTradePlanRuntime Plan { get; }
         public bool PlanActive { get; }
+        public ItemData PlanItem { get; }
+        public CityRuntime PlanOriginCity { get; }
         public CityRuntime TargetCity { get; }
         public string TargetCityId { get; }
+        public int PlannedAmount { get; }
+        public int RemainingAmount { get; }
+        public float PurchasePricePerItem { get; }
+        public int WaitDaysAtDestination { get; }
         public int PendingTravelDays { get; }
+        public string OriginDecisionId { get; }
         public bool Advances { get; }
 
         public MerchantPlanUrgencyEntry(NpcRuntime npc, string runtimeId, string personId, bool isAlive,
             bool isTraveling, CityRuntime currentCity, string currentCityId, MerchantTradePlanRuntime plan,
-            bool planActive, CityRuntime targetCity, string targetCityId, int pendingTravelDays, bool advances)
+            bool planActive, ItemData planItem, CityRuntime planOriginCity, CityRuntime targetCity,
+            string targetCityId, int plannedAmount, int remainingAmount, float purchasePricePerItem,
+            int waitDaysAtDestination, int pendingTravelDays, string originDecisionId, bool advances)
         {
             Npc = npc; RuntimeId = runtimeId; PersonId = personId; IsAlive = isAlive; IsTraveling = isTraveling;
             CurrentCity = currentCity; CurrentCityId = currentCityId; Plan = plan; PlanActive = planActive;
-            TargetCity = targetCity; TargetCityId = targetCityId; PendingTravelDays = pendingTravelDays;
-            Advances = advances;
+            PlanItem = planItem; PlanOriginCity = planOriginCity; TargetCity = targetCity; TargetCityId = targetCityId;
+            PlannedAmount = plannedAmount; RemainingAmount = remainingAmount;
+            PurchasePricePerItem = purchasePricePerItem; WaitDaysAtDestination = waitDaysAtDestination;
+            PendingTravelDays = pendingTravelDays; OriginDecisionId = originDecisionId; Advances = advances;
         }
     }
 
