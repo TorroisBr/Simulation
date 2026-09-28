@@ -315,7 +315,7 @@ set complete, and stable
 cross-owner interfaces for the single CityRuntime and NpcRuntime projections.
 The inventory must show each required/empty/excluded/conditional owner,
 revision/cardinality source, supported mutation path and publication owner.
-P12-C corrected design `6a33419` passed exact-tip review; incorporate that
+P12-C corrected design `ceb37049ddbe54602063ba92a92cceafdce50096` passed exact-tip review; incorporate that
 reviewed contract and any later interface changes before implementation.
 Designs alone do not satisfy capability dependencies. G may not treat unknown
 or absent owner coverage as an empty section.
