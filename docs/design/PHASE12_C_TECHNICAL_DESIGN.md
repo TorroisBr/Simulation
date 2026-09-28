@@ -17,22 +17,22 @@ P8 `470667d37863384edadb3d93ef64d8004aff46a3`; P9 State/closure
 stale wording that D1/D2 are missing, although the promoted code contains
 them); intraday/extensibility alignment `4b6dd1d38cffeaf3cc1ac3effea0f8ede8771194`;
 and multi-participant activity alignment `c285466c355103d3637ac165246591b72eb7bda0`.
-The proposed P9-B/P11 additive
-composition is candidate `af656e7710fce0ba171fae1d6684331d2dc0b743`, not
-canonical. Its independent code review passed. The refreshed P12 owner/profile
-inventory `ba6f79fb87e851316be84d4f2a89d94186b8f802` completes a local audit of
-that exact candidate's selected composition and configured providers, and
-records its selected-profile validation results. The audit did not fetch
-remote refs, and this candidate is still unpromoted; it is candidate-based
-composition evidence, not canonical live-composition evidence for P12-A. A
-refreshed owner inventory at `73cf6c2` checks the current architecture,
-alignment, and canonical refs, corrects the P11/P18 status, and preserves the
-same finding: no complete live owner/export/hydration census exists, so P12-A
-remains `WAIT_DEPENDENCY`.
+The proposed P9-B/P11 additive composition is candidate
+`af656e7710fce0ba171fae1d6684331d2dc0b743`, not a promoted combined
+application profile. Its independent code review passed. The earlier P12
+owner/profile inventory `ba6f79fb87e851316be84d4f2a89d94186b8f802` completed a
+local audit of its selected composition and configured providers, without
+fetching remote refs. The later current-composition refresh `5b6fe2b` fetched
+refs and verified the candidate's P11 and P9 merge parents against current
+canonical State tips `308e24d` and `82396ae`. The selected-profile test checks
+P9-B geography and a non-null P11 `ActorChoiceStore` on the same published
+runtime. This establishes exact-current-input candidate evidence, not a
+promoted combined runtime or P12-A readiness. No complete live owner export/
+hydration census exists, so P12-A remains `WAIT_DEPENDENCY`.
 The read-only P12-C RNG consumer census is also against candidate `af656e7`;
 its exact findings are recorded in owner-inventory follow-up
-`99739fd0d190cd61acda8d3c91b25acab7405379` and below. Re-audit when the
-selected composition or profile changes.
+`99739fd0d190cd61acda8d3c91b25acab7405379` and the refreshed owner inventory
+candidate `5b6fe2b`. Re-audit when the selected composition or profile changes.
 
 P12-C is accepted as prerequisite capability work under the P12 Brief and
 capability decomposition. Its dependency is the reviewed P12-B profile
@@ -221,19 +221,21 @@ canonical P12-A composition or final profile readiness.
 
 P9-B bootstrap and P11 ActorChoice were historically separate code lines. The
 additive candidate `af656e7710fce0ba171fae1d6684331d2dc0b743` has independent
-code review, and refreshed inventory `ba6f79fb87e851316be84d4f2a89d94186b8f802`
-audits its exact merged composition and selected provider graph. The inventory
-records bootstrap 14/14, ActorChoice 24/24, Spatial 99/99, ALL EditMode
-1742/1742, official Smoke 5/5, and `git diff --check` passing on the exact
-candidate; only the final Smoke XML remains available as a retained result
-artifact. These results validate composition behavior, not P12 owner exports,
-hydration, or profile readiness. The read-only RNG census described in
-Section 3 completes candidate-level provider and draw-state mapping; it does
-not make candidate `af656e7` canonical. No remote fetch was performed for the
-inventory, and the composition candidate is not promoted. P12-C design and
-eventual implementation must use the exact audited composition context, not
-P9-B or P11 in isolation. Current canonical live-composition evidence remains
-a separate P12-A blocker.
+code review. Refreshed inventory `5b6fe2b` verifies that its first parent is
+current P11 canonical State `308e24d` and its second parent is current P9
+canonical closure `82396ae`, and records the selected-profile test that checks
+both P9-B geography and the P11 store on the same published runtime. The
+combined application candidate remains unpromoted. The earlier composition
+validation record is bootstrap 14/14, ActorChoice 24/24, Spatial 99/99, ALL
+EditMode 1742/1742, official Smoke 5/5, and `git diff --check`; only the final
+Smoke XML remains available as a retained result artifact. These results
+validate candidate composition behavior, not P12 owner exports, hydration, or
+profile readiness. The read-only RNG census described in Section 3 completes
+candidate-level provider and draw-state mapping; it does not make candidate
+`af656e7` a promoted combined runtime. P12-C design and eventual implementation
+must use the exact audited composition context, not P9-B or P11 in isolation.
+The missing promoted combined profile and owner export/hydration remain separate
+P12-A blockers.
 
 Dependency order within P12-C:
 
@@ -326,7 +328,7 @@ no test claim and contains no code change.
 | `DeterministicRandom.cs` and selected consumers | Read-only candidate census establishes shared seed-0 provider, three pure keyed draw consumers and an explicitly empty mutable-stream section for `af656e7`. | Preserve algorithm/build compatibility and exact key inputs; reject unknown providers or any newly composed mutable cursor until explicitly covered. Re-audit when composition/defaults change. |
 | P9 genesis pipeline/manifest | P9 pipeline creates and publishes the selected authored manifest/outputs. | Preserve generated output as history; never rerun genesis on hydration. |
 | P8 `SpatialAuthorityStore` | Owns typed Hex/Location truth and authored geography provenance. | Capture exactly the accepted P8-A facts; never infer these from legacy spatial objects. |
-| P12-B / composition manifest | Owns profile compatibility and section census. Candidate inventory `ba6f79f` audits the exact P9-B/P11 merge and its selected provider graph, but that composition remains unpromoted and remote refs were not fetched. | **Blocker:** apply the accepted/reviewed P12-B contract and obtain current canonical live-composition evidence plus final profile-specific section census before P12-A; this candidate audit alone does not establish canonical P12-A readiness. |
+| P12-B / composition manifest | Owns profile compatibility and section census. Current inventory candidate `5b6fe2b` verifies the exact P9-B/P11 merge parents against current canonical State refs and audits the selected provider graph; the combined application composition remains unpromoted. | **Blocker:** apply the accepted/reviewed P12-B contract and obtain a promoted/validated live-profile composition plus final profile-specific section census before P12-A; the candidate audit alone does not establish P12-A readiness. |
 | P12-G | Owns whole-graph validation and publication. | P12-C stages remain private; no active-runtime mutation/publication. |
 
 This design makes no P12-C implementation-readiness claim. The accepted and
