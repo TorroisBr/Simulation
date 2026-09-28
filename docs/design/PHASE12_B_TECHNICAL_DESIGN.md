@@ -124,26 +124,38 @@ Required manifest inputs:
   admission evidence, without exporting or regenerating its facts in P12-B.
 - Versioned live section-census evidence supplied by each actual owner:
   stable section/owner contract identity, schema/version, runtime owner
-  instance identity, required/explicit-empty/excluded role, exact current
-  cardinality including an explicit zero, and that owner's current mutation
-  revision. This is admission/emptiness evidence, not exact owner export or
-  hydration.
+  instance identity, a `Required`, `ExplicitlyEmpty`, `Excluded`, or
+  `OmittedNonCausalReadModel` role, exact current cardinality, and that
+  owner's current revision. `ExplicitlyEmpty` and `Excluded` require zero;
+  known/versioned omitted read models may have nonzero rows. This is
+  admission/classification evidence, not exact owner export or hydration.
 - A current composition contract revision so a changed bootstrap/provider
   graph cannot be treated as the old profile by matching the asset alone.
 
 The bootstrap/composition owner supplies the provider graph. Each actual
 domain owner supplies the versioned live section census from its own authority;
 the coordinator seals both into an immutable manifest and boundary witness.
-Every section is declared `Required`, `ExplicitlyEmpty`, or `Excluded`. For an
-excluded section, the owning store must report a known exact cardinality of
-zero at the admitted boundary. A missing section/owner report, unknown owner
-revision, unknown cardinality, or unsupported census version fails closed.
+Every section is declared `Required`, `ExplicitlyEmpty`, `Excluded`, or
+`OmittedNonCausalReadModel`. For an excluded section, the owning store must
+report a known exact cardinality of zero at the admitted boundary; populated
+excluded authoritative world truth rejects admission. An omitted noncausal
+read model must be a known, versioned part of the selected composition and
+report its current cardinality/revision, but may contain rows and does not
+become a serialized owner section or hydration requirement. Its changes do
+not advance the world-truth mutation epoch or count toward continuation-owner
+completeness. The separately captured `SimulationRecordSequence` remains a
+P12-C causal root; omitting old read-model rows does not omit that next value.
+A missing section/owner report, unknown owner revision, unknown cardinality,
+or unsupported census version fails closed.
 At each candidate boundary, owners provide a fresh census or an owner-issued
 unchanged-revision witness; the coordinator rechecks the same evidence after
-the later P12-G collector runs. A changed revision, increased excluded count,
-or absent report rejects and discards that capture candidate. These census
-records do not contain owner truth and cannot stand in for P12-C through
-P12-F export/hydration.
+the later P12-G collector runs. A changed required/excluded revision,
+increased excluded count, or absent report rejects and discards that capture
+candidate. An `OmittedNonCausalReadModel` revision is reported for composition
+evidence but does not invalidate world-truth eligibility solely because its
+rows changed; the shared operation scope and P12-C sequence-root stability
+still apply. These census records do not contain owner truth and cannot stand
+in for P12-C through P12-F export/hydration.
 
 The profile-admission service compares the values against the accepted profile
 contract; it must not discover providers by reflection, guess from asset
@@ -164,6 +176,32 @@ absent or admission rejects. This evidence is only a fail-closed census;
 P12-G still validates complete owner truth and the staged graph. Generated-
 world content, P13 reconstruction/fork guarantees, and cross-host/migration
 behavior stay outside the manifest contract.
+
+### Omitted noncausal read models
+
+The selected bootstrap constructs `NpcDecisionStore`, `DomainEventStore`,
+`HistoryStore`, and `NpcChronicleService` in `TesteSimulacao.InitializeSimulation`.
+Source audit of `DecisionRecords.cs`, `DomainEvents.cs`, `NpcChronicle.cs`,
+`WorldObserverReadModel.cs`, and `CoreWorldCommandHandlers.cs` classifies the
+decision/event rows as reporting/read-model records for Chronicle, observer
+feeds, and command results; they are not future-decision inputs or authoritative
+world truth. `HistoryPolicy` selects a subset of `DomainEventStore.Record`
+outputs into `HistoryStore`, so History is not a second owner. `NpcChronicle`
+is a derived query over decision and domain-event records. Census the known
+and versioned `NpcDecisionStore` and `DomainEventStore` owners as
+`OmittedNonCausalReadModel`: record current cardinality/revision, permit
+nonzero rows, and omit their rows from serialized owner sections and hydration.
+Report `HistoryStore` only as the policy-selected subset of the DomainEventStore
+read model, not as another owner; `NpcChronicleService` has no independent
+owner census because it is a derived view. These row changes do not advance the
+world-truth mutation epoch or count toward continuation-owner completeness;
+the shared `SimulationRecordSequence` remains captured separately by P12-C.
+This makes no historical, Chronicle, activity-feed, or UI-feed parity promise.
+
+This classification is narrow. Populated excluded authoritative state in
+P8-B through P8-E, P10, P14, P18, P19, or P20 still rejects admission. External
+`WorldCommand` service/queue composition and unknown or injected providers
+remain independently prohibited.
 
 ### Proposed narrow API seam
 
@@ -399,6 +437,15 @@ The tests below are implementation requirements, not executed results.
   a known-empty default service is not itself a rejection. Reject an ambiguous
   or incomplete owner/provider inventory rather than admitting a partial
   profile.
+- Admit known/versioned `NpcDecisionStore` and `DomainEventStore` census entries
+  as `OmittedNonCausalReadModel` when their exact counts are nonzero; verify
+  their rows are absent from serialized owner sections and no historical or
+  Chronicle parity is asserted. Report `HistoryStore` as the policy-selected
+  DomainEventStore subset, not a second owner, and `NpcChronicleService` as a
+  derived view, not a census owner. Confirm read-model row changes do not alter
+  truth mutation epoch or continuation-owner completeness, while
+  `SimulationRecordSequence` remains independently captured by P12-C. Populated
+  excluded authoritative truth must still reject.
 - Test that a runtime whose actual composition/provider graph is incomplete,
   unsupported, or inconsistent with its admission evidence returns
   `UnsupportedOrUnverifiedComposition`. Do not treat candidate `af656e7` or

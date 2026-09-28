@@ -78,6 +78,39 @@ those records do not substitute for their owning world-truth stores. This
 evidence bounds the profile's real composition; it does not demonstrate export
 or staged hydration for any of these owners.
 
+### Omitted noncausal read-model census classification
+
+The selected `NpcDecisionStore`, `DomainEventStore`, `HistoryStore`, and
+`NpcChronicleService` are classified as `OmittedNonCausalReadModel`, not as
+serialized owner sections. Source evidence: `NpcDecisionStore` in
+`DecisionRecords.cs` records and indexes decision records; `DomainEventStore`
+in `DomainEvents.cs` records events and supplies participant queries;
+`HistoryPolicy` selects some `DomainEventStore.Record` outputs for the
+`HistoryStore` subset; and `NpcChronicleService` in `NpcChronicle.cs` derives
+Chronicle entries by querying the decision and event stores. The source audit
+also found event reads for observer feeds in `WorldObserverReadModel.cs` and
+command-result reporting in `CoreWorldCommandHandlers.cs`. These records are
+not future-decision inputs or authoritative world truth. History is a subset
+of DomainEventStore output, not a separate owner; Chronicle is a derived query.
+
+The census role requires the known/versioned `NpcDecisionStore` and
+`DomainEventStore` read-model owners to report current cardinality and revision,
+but permits nonzero rows. `HistoryStore` is reported only as the
+`HistoryPolicy`-selected subset of `DomainEventStore`, not as a separate owner;
+`NpcChronicleService` is a derived view with no independent owner census. No
+exact live boundary counts have yet been demonstrated through a P12
+owner-census API. These rows are omitted from serialized owner
+sections/hydration and do not advance the world-truth mutation epoch or count
+toward continuation-owner completeness. The shared `SimulationRecordSequence`
+remains a separate P12-C causal root and must retain its exact next value. This
+does not promise historical, Chronicle, activity-feed, or UI-feed parity.
+
+This classification does not relax profile exclusions: populated P8-B through
+P8-E, P10, P14, P18, P19, or P20 authoritative state still rejects admission.
+External `WorldCommand` service/queue composition and unknown or injected
+providers remain independently prohibited. The classification is not a P12-A
+readiness claim.
+
 ### Exact P9-B/P11 composition audit — 2026-09-27
 
 The additive integration candidate `af656e7710fce0ba171fae1d6684331d2dc0b743`
