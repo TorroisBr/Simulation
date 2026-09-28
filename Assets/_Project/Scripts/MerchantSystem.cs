@@ -1,9 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using UnityEngine;
 
 public class MerchantSystem : INpcActionProvider, IAuthoritativeMutationGuardBindable
 {
+    private const int LocalMarketSellGoodsActionVersion = 1;
+
     private readonly EffectiveMerchantTradeConfiguration tradeConfiguration;
     private readonly TravelSystem travelSystem;
     private readonly SimulationTime simulationTime;
@@ -335,6 +338,75 @@ public class MerchantSystem : INpcActionProvider, IAuthoritativeMutationGuardBin
         }
 
         return NpcActionResult.Failed();
+    }
+
+    /// <summary>
+    /// Executes the already-resolved local-market SellGoods proposal through
+    /// the runtime-scoped keyed economy receipt owner. The caller owns P11/P18-C
+    /// validation, proposal retention, and terminal reconciliation.
+    /// </summary>
+    public bool TryExecuteKeyedLocalMarketSale(
+        NpcRuntime seller,
+        PersonId actorPersonId,
+        NpcActionRuntime actionRuntime,
+        string proposalId,
+        string fingerprint,
+        string actorChoiceInputId,
+        string requestId,
+        string profileId,
+        LogicalTick logicalTick,
+        out KeyedSaleReceipt receipt)
+    {
+        receipt = null;
+        if (!mutationGuardBinding.CanMutate
+            || seller == null
+            || actorPersonId == null
+            || seller.PersonId != null && seller.PersonId != actorPersonId
+            || actionRuntime == null
+            || actionRuntime.Action == null
+            || actionRuntime.Action.actionType != NpcActionType.SellGoods
+            || actionRuntime.TargetNpc != null
+            || actionRuntime.TargetItem == null
+            || actionRuntime.Amount <= 0
+            || actionRuntime.TargetCity == null
+            || !ReferenceEquals(actionRuntime.TargetCity, seller.CurrentCity)
+            || seller.MerchantTradePlan.IsActive
+            || !tradeConfiguration.Enabled
+            || string.IsNullOrWhiteSpace(proposalId)
+            || string.IsNullOrWhiteSpace(fingerprint)
+            || string.IsNullOrWhiteSpace(actorChoiceInputId)
+            || string.IsNullOrWhiteSpace(requestId)
+            || string.IsNullOrWhiteSpace(profileId))
+        {
+            return false;
+        }
+
+        CityRuntime marketCity = actionRuntime.TargetCity;
+        MarketRuntime market = marketCity.Market;
+        string marketSiteId = marketCity.Location != null
+            ? marketCity.Location.RuntimeId
+            : marketCity.RuntimeId;
+        if (market == null || string.IsNullOrWhiteSpace(marketSiteId))
+        {
+            return false;
+        }
+
+        receipt = transactionService.TryExecuteKeyedMarketSale(
+            proposalId,
+            fingerprint,
+            actorChoiceInputId,
+            requestId,
+            actorPersonId.Value,
+            actionRuntime.Action.DefinitionId,
+            LocalMarketSellGoodsActionVersion,
+            profileId,
+            logicalTick.Value.ToString(CultureInfo.InvariantCulture),
+            marketSiteId,
+            seller,
+            market,
+            actionRuntime.TargetItem,
+            actionRuntime.Amount);
+        return receipt != null;
     }
 
     internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard)
