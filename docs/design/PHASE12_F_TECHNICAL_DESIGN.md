@@ -13,13 +13,20 @@ P12-D factual roots, and P12-E selected core/daily owners are prerequisites to
 F. Their designs are inputs, not evidence that their capabilities have been
 implemented or promoted.
 
-**Related reviewed design inputs:** P12-B design/inventory reconciliation
-`45e6be83fc40a1b78908aa79500e46e64532ac4b`; P12-C corrected design
-`ceb37049ddbe54602063ba92a92cceafdce50096` (independent review PASS); P12-D
-`796eadc1a0bd6b44b646f27f5eeb63de71f6b14`; and P12-E
-`51718c7bd38e9582433d1fa38ff4011ef9cf20c5`. P12-B/C/D/E design review
-passes do not substitute for delivery of those capabilities. The design also
-applies the current intraday/extensibility and multi-participant alignment records:
+**Latest related design candidates after remote refresh (2026-09-28):**
+P12-B design/reference correction `a490738afffdd70052a3bf63e3866d8698d8e15a`
+and owner-evidence refresh `d0761ce0b5da7df6e998db24128bdedb871a0ac3`;
+P12-C design/reference correction `a490738afffdd70052a3bf63e3866d8698d8e15a`;
+P12-D design `dd81634b1a966f8253cd3dc5f70838e76254b751`; and P12-E design
+`ca8e968f37f3607ca79fcfe17ba44a09f0321475`. Earlier independent review
+passes are recorded at P12-B `45e6be83fc40a1b78908aa79500e46e64532ac4b`,
+P12-C `ceb37049ddbe54602063ba92a92cceafdce50096`, P12-D
+`796eadc1a0bd6b44b646f27f5eeb63de71f6b14`, and P12-E
+`51718c7bd38e9582433d1fa38ff4011ef9cf20c5`; those passes apply to their exact
+reviewed contents and do not automatically review the newer candidate tips.
+No B/C/D/E capability is thereby delivered or promoted. Their dependencies on
+F remain as specified below. The design also applies the current
+intraday/extensibility and multi-participant alignment records:
 P18/P19/P20 constraints remain explicit while their state is excluded from
 this daily profile.
 
@@ -64,6 +71,16 @@ the Knowledge-bearing fields in the shared `NpcRuntime` projection (spatial,
 commercial, and exploration observations where present). The refreshed
 inventory determines the exact owner set; do not infer completeness from one
 Knowledge store or a diagnostic snapshot.
+
+The legacy NPC-owned `SpatialKnowledgeRuntime` and
+`ExplorableSiteKnowledgeRuntime` values are included only when the admitted
+profile inventory proves they are composed. They are distinct from canonical
+P8-D `SpatialRouteKnowledgeStore` and `PersonRoutePlanStore` state, which this
+profile excludes. P8-B, P8-C, P8-D, and P8-E each require an explicit empty
+section; missing or unknown evidence is not empty, and populated state rejects
+the profile. In particular, do not place P8-D route observations/plans, P8-C
+`PersonSpatialPositionStore` facts, or P8-E position, transit, and civil-travel
+state in the legacy NPC Knowledge section.
 
 Each store-owned observation preserves its stable holder/subject identities,
 typed observed fact, source and provenance, observation/receipt boundary,
@@ -148,6 +165,13 @@ profile's actual composition and map each active commitment fact to exactly
 one existing owner. Include only proven-in-profile owner instances; do not
 create new stores or assume every listed service retains mutable continuation
 state.
+
+These are supported legacy commitment facts only when present in the selected
+profile inventory; they do not include or stand in for canonical P8-E position,
+transit, or civil-travel state. P8-D `SpatialRouteKnowledgeStore` and
+`PersonRoutePlanStore` remain excluded as well. The complete canonical P8-B,
+P8-C, P8-D, and P8-E sections require explicit empty evidence and reject
+populated or unverified state.
 
 For each included owner, export the exact stable IDs and owner revision,
 actor/party/member bindings, current lifecycle/progress, incurred or reserved
@@ -318,7 +342,13 @@ P12-F does not implement P12-A save/load integration, storage/envelope or
 migration format, P12-G graph publication/parity, external command queues,
 actor control grants/security, P18 intraday continuation, P19 loader/module
 state, P20 shared activities, P13 history/fork guarantees, P10 topology, P14
-material flow, new gameplay, or a new commitment/planning framework. The
-alignment constraints on extensibility and shared activity identity/cardinality
-remain review constraints without adding those deferred capabilities to this
-profile.
+material flow, canonical P8-B/C/D/E state, new gameplay, or a new
+commitment/planning framework. In particular, do not serialize canonical P8-D
+`SpatialRouteKnowledgeStore` or `PersonRoutePlanStore`, P8-C
+`PersonSpatialPositionStore`, or P8-E position/travel state, as a substitute
+for the explicitly supported legacy NPC Knowledge and commitment owners. P8-B,
+P8-C, P8-D, and P8-E remain explicit-empty sections, with populated state
+rejected. P18-D consumer work remains incomplete at pushed composition
+`6fcbfab`; it adds no temporal state to this profile. The alignment constraints
+on extensibility and shared activity identity/cardinality remain review
+constraints without adding those deferred capabilities to this profile.
