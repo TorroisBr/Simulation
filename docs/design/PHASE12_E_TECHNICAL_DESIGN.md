@@ -145,13 +145,13 @@ other continuation state must be explicit and owner-issued.
 
 Commercial Knowledge sharing is an E provider behavior, but the observations,
 holder/provenance/freshness/revision records it writes are Knowledge and
-belong to P12-F. If a sharing service retains behavior state that changes
-future execution independently of those Knowledge owners, inventory and
-capture that exact state in E; otherwise prove it is a stateless configured
-service. Active merchant plans, remaining plan work, and commitment progress
-belong to P12-F. If an E provider writes an existing `NpcRuntime` field, the
-single D/F `NpcRuntime` projection owns that value; E must not export or
-hydrate it again.
+belong to P12-F. E captures only the provider identity/configuration and any
+independent mutable state the exact owner audit proves it retains; it does not
+read, export, or hydrate F's Knowledge section. P12-G validates provider-to-
+Knowledge bindings after both packages are staged. Active merchant plans,
+remaining plan work, and commitment progress belong to P12-F. If an E provider
+writes an existing `NpcRuntime` field, the single D/F `NpcRuntime` projection
+owns that value; E must not export or hydrate it again.
 
 P12-E does not extend the P18-D keyed sale-receipt capability into a P12 save
 protocol, migrate NPC-to-NPC trade, or claim P18 temporal replay semantics.
@@ -244,15 +244,18 @@ the runtime hotspot. Snapshot operations should use owner atomic-copy methods
 or before/after revision equality under the approved completed-boundary
 protocol; if neither proves a coherent read, the owner remains unsupported.
 
-Reconstruction dependencies include the admitted effective configuration and
-provider manifest from P12-B; random provider/seed/stream roots from P12-C;
-shared causal sequence and stable typed IDs from P12-C; City identity,
-population, NPC/Person roots, and legacy spatial references from P12-D; and
-Knowledge/commitment sections from P12-F. E sections reference these values
-without recreating or duplicating their authority. Provider code/content,
-rules, and configuration must match the admitted profile. Unknown providers,
-unsupported schema/version, missing required definitions, unknown random
-state, or a populated excluded section rejects before publication.
+E's implementation dependencies are the admitted effective configuration and
+provider manifest from P12-B; random provider/seed/stream roots and shared
+causal sequence/stable typed IDs from P12-C; and City identity/population,
+NPC/Person roots, and legacy spatial references from P12-D. E validates its
+owner-local facts and references to those C/D roots. If an E fact has a
+cross-section relationship to a P12-F Knowledge or commitment fact, the E
+package reports the typed unresolved binding as validation evidence; it does
+not depend on, read, restore, or resolve F. P12-G resolves those bindings only
+after all B-F packages are staged. Provider code/content, rules, and
+configuration must match the admitted profile. Unknown providers, unsupported
+schema/version, missing required definitions, unknown random state, or a
+populated excluded section rejects before publication.
 
 ## 4. Empty, populated, and excluded sections
 
@@ -302,16 +305,20 @@ serializes those sections nor silently treats them as empty.
 4. Build a new private staging graph in dependency order: admit configuration
    and provider identities; instantiate owner shells from C roots; restore D
    factual roots; merge D/E City slices and build each CityRuntime once;
-   restore E market/account/economy and other E owner facts; then resolve
-   cross-owner references to D roots and F Knowledge/commitment values. The
-   concrete factory order must follow actual owner dependencies and not merely
-   this grouping order.
-5. Validate per-owner relations and the cross-section graph: global stable-ID
-   uniqueness; referenced Person/NPC/City/organization/property/force/source
-   existence; office/institution, property/estate, claim/recognition,
-   faction/affiliation/support, force/manpower/spatial, Conflict/War/Battle
-   bindings; owner revisions; shared sequence monotonicity; admitted providers
-   and random compatibility; and required exact empty sections. Preserve
+   restore E market/account/economy and other E owner facts; then resolve only
+   E references to already-staged C/D roots. Return typed unresolved binding
+   evidence for any relation to F. The concrete factory order must follow
+   actual E-to-C/D owner dependencies and not merely this grouping order.
+5. Validate E-local invariants and E-to-C/D references: owner identities and
+   revisions; City/market/account custody; referenced Person/NPC/City,
+   organization/property/force/source existence when those roots are in C/D;
+   office/institution, property/estate, claim/recognition,
+   faction/affiliation/support, force/manpower/spatial, and
+   Conflict/War/Battle owner relations. Record cross-section F bindings as
+   unresolved evidence for P12-G. P12-G alone validates global stable-ID
+   uniqueness and shared sequence monotonicity across all sections, resolves
+   D/E/F bindings, checks admitted providers/random compatibility and required
+   exact empty sections, and performs whole-graph validation. Preserve
    recorded terminal facts. Rebuild only indexes/caches explicitly defined as
    owner-derived; do not synthesize facts to repair a broken graph.
 6. Return typed validation evidence to P12-G. On any failure, discard the
