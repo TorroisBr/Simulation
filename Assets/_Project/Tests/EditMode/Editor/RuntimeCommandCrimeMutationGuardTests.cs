@@ -513,6 +513,17 @@ public sealed class CrimeHiddenStatusBoundaryOwnerTests
         Assert.That(crime.TryResolveAdvanceHiddenStatusesReceipt(
             shiftedManifest, shifted, out _, out TimelineFailure failure), Is.False);
         Assert.That(failure, Is.EqualTo(TimelineFailure.ContinuationFailed));
+
+        BoundaryContinuationManifest changedContentManifest = new BoundaryContinuationManifest(
+            operation,
+            "daily-boundary",
+            "v1",
+            "changed-configuration",
+            new List<BoundaryContinuationStep> { step },
+            "changed-content");
+        Assert.That(crime.TryResolveAdvanceHiddenStatusesReceipt(
+            changedContentManifest, step, out _, out failure), Is.False);
+        Assert.That(failure, Is.EqualTo(TimelineFailure.ContinuationFailed));
     }
 
     [Test]
