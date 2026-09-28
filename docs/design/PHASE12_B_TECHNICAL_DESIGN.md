@@ -62,7 +62,7 @@ of the other, and their common base is P8 canonical `470667d`. The additive
 application-level composition candidate
 `af656e7710fce0ba171fae1d6684331d2dc0b743` combines those capabilities and
 passed independent code review. The refreshed owner/profile inventory
-`ba6f79fb87e851316be84d4f2a89d94186b8f802` audited that exact candidate's
+`99739fd0d190cd61acda8d3c91b25acab7405379` audited that exact candidate's
 selected composition and configured providers. It records bootstrap 14/14,
 ActorChoice 24/24, Spatial 99/99, ALL EditMode 1742/1742, official Smoke 5/5,
 and `git diff --check` passing. Only the final Smoke XML remains as a retained
@@ -71,6 +71,16 @@ validation, not retained XML. No remote fetch was performed. Candidate
 `af656e7` remains unpromoted, so this is candidate-based composition/provider
 evidence, not evidence of the current canonical live composition. It does not
 complete owner export/hydration or establish P12-A/B readiness.
+
+That inventory also completes the RNG census for this validated candidate:
+one shared seed-0 `DeterministicRandomSource` is used by the runtime, crime,
+and NPC-decision paths; the selected keyed draws use index 0, and no mutable
+`DeterministicRandomStream` cursor is retained. Mutable cursor state is
+therefore explicitly empty for this candidate. This does not replace the
+effective seed/source and provider/algorithm/build compatibility evidence P12
+must admit, reconstructible ID/clock inputs to the keys, or a canonical-source
+revalidation after promotion. An injected/unknown provider or retained cursor
+still rejects the profile until audited.
 
 The accepted P12-A profile remains unchanged. Do not conditionally accept
 either half as `UnityBootstrap-Daily-v1`, synthesize an ActorChoiceStore, omit
@@ -343,7 +353,7 @@ create a new semantic dependency from P12 to P18 or claim P18-D2 is promoted.
 Integration sequence:
 
 1. Candidate `af656e7` and its selected provider graph have passed code review,
-   validation, and a local owner/profile audit recorded at `ba6f79f`. The
+   validation, and a local owner/profile audit recorded at `99739fd`. The
    candidate remains unpromoted, and no remote fetch was performed; obtain
    current canonical composition evidence and a final live profile/owner
    census before finalizing the admission manifest or claiming P12-B readiness.
@@ -474,7 +484,8 @@ This design is bounded to accepted P12-B scope, but P12-B is **not**
 `READY_FOR_IMPLEMENTATION` on this evidence:
 
 1. Candidate `af656e7` passed implementation review and validation, and its
-   exact provider graph was audited at `ba6f79f`; however, the candidate is
+   exact provider graph, including candidate-scoped RNG census, was audited at
+   `99739fd`; however, the candidate is
    unpromoted and the audit did not fetch remote refs. Current canonical
    composition evidence and a refreshed canonical live profile/owner census
    remain blockers. The candidate audit alone does not identify the current
@@ -486,13 +497,28 @@ This design is bounded to accepted P12-B scope, but P12-B is **not**
    the runtime; P18-D still owns the future chronological
    continuation/subphase/handoff window.
 3. Demonstrate the complete versioned owner-section census and
-   mutation-notification inventory. P12-B's eligibility kernel must fail
-   closed until P12-C/D/E/F owners register their required adapters; P12-G
-   provides whole-capture validation. If any supported included mutation can
-   bypass invalidation, eligibility cannot be claimed complete.
-4. Inventory the actual bootstrap thread and all supported active operation
-   entrypoints, then prove capture rejects a different thread or any
-   in-flight scope. D2's advance lease alone is not sufficient evidence.
+   mutation-notification inventory. The source census finds
+   `AuthoritativeMutationGuard` is only a `Healthy`/`Faulted` latch: it does
+   not provide mutation epochs or commit notifications. Supported mutation
+   surfaces include daily advance, action/actor choice, economy/trade,
+   crime/justice, Knowledge/directives, travel/expedition, spatial/site,
+   Person/population/residence, and the included political/military/conflict
+   stores. Some systems bind the health guard, while direct store APIs remain;
+   this is a bounded, non-exhaustive census, not evidence that every mutation
+   path has been enumerated. The minimum contract is to register every
+   included mutable owner/API, notify after committed owner revisions (or
+   invalidate before mutation and remain invalid after uncertain failure),
+   and fail closed for any uncovered owner. P12-B's eligibility kernel must
+   remain closed until P12-C/D/E/F owners register required adapters; P12-G
+   provides whole-capture validation.
+4. `TesteSimulacao.Start`/`InitializeSimulation` does not retain the bootstrap
+   owner thread, and the runtime has no owner-thread identity or general
+   active-operation registry. Bind the owner thread after bootstrap, inventory
+   supported entrypoints, and separately scope their active operations so
+   capture rejects a different thread or any in-flight scope. D2's advance
+   lease is not operation accounting and alone is insufficient; reuse it for
+   advance without releasing it before the successful-boundary callback. This
+   bounded contract is not a general thread-safety guarantee.
 
 P12-C through P12-G remain downstream. P12-A final profile integration remains
 `WAIT_DEPENDENCY`; accepted P12-A scope and P12-B technical design are not
