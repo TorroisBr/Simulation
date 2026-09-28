@@ -5,8 +5,22 @@ using UnityEngine;
 public sealed class MoneyAccountRuntime
 {
     [SerializeField] private float balance;
+    [NonSerialized] private long revision;
 
     public float Balance => balance;
+    public long Revision => revision;
+
+    internal bool CanInstall(long expectedRevision, float replacement)
+    {
+        return revision == expectedRevision && revision < long.MaxValue && IsValidNonNegativeFiniteAmount(replacement);
+    }
+
+    internal void InstallPrepared(long expectedRevision, float replacement)
+    {
+        // Caller preflights every participant before beginning a synchronous install.
+        balance = replacement;
+        revision = expectedRevision + 1;
+    }
 
     public MoneyAccountRuntime()
         : this(0f)
@@ -65,19 +79,20 @@ public sealed class MoneyAccountRuntime
 
     public bool TryCredit(float amount)
     {
-        if (CanCredit(amount) == false)
+        if (CanCredit(amount) == false || (amount > 0f && revision == long.MaxValue))
         {
             return false;
         }
 
         float nextBalance = balance + amount;
         balance = nextBalance;
+        if (amount > 0f) revision++;
         return true;
     }
 
     public bool TryDebit(float amount)
     {
-        if (CanDebit(amount) == false)
+        if (CanDebit(amount) == false || (amount > 0f && revision == long.MaxValue))
         {
             return false;
         }
@@ -90,6 +105,7 @@ public sealed class MoneyAccountRuntime
         }
 
         balance = nextBalance;
+        if (amount > 0f) revision++;
         return true;
     }
 
