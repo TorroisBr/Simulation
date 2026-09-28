@@ -1,9 +1,9 @@
 # P18-D — Commercial Knowledge Sharing Owner Execution Plan
 
-**Checkpoint:** P18-D — Bounded Consumer and Daily Compatibility Integration  
-**Canonical P18 base:** `9e790c59e14ca7f7ed195c0e6267e10f3cd039d7`  
-**Current composed P18-D candidate base:** `6fcbfab2f7ad4382051201e55c78fdf32a8dd820`  
-**Architecture and alignments:** architecture `c285466c355103d3637ac165246591b72eb7bda0`; intraday/extensibility `4b6dd1d`; multi-participant activity `c285466`.  
+**Checkpoint:** P18-D — Bounded Consumer and Daily Compatibility Integration
+**Canonical P18 base:** `9e790c59e14ca7f7ed195c0e6267e10f3cd039d7`
+**P18-D integration candidate before this owner merge:** `6fcbfab2f7ad4382051201e55c78fdf32a8dd820`
+**Architecture and alignments:** architecture `c285466c355103d3637ac165246591b72eb7bda0`; intraday/extensibility `4b6dd1d`; multi-participant activity `c285466`.
 **Reviewed semantic/technical authority:** `docs/design/PHASE18_D_TECHNICAL_DESIGN.md`, especially §4 “Daily-owner target identity and temporal cardinality”; its bounded P18-D design review passed at `9ed6d90`.
 **Execution-plan review:** independent review PASS on plan commit `2734924` against exact parent `6fcbfab`; the reviewer confirmed the post-observation all-sender snapshot step, recipient-owned edge receipts, and scope within accepted P18-D. No findings.
 
@@ -86,12 +86,13 @@ its existing role as manifest/cursor owner and never owns Knowledge effects.
 Focused checks cover ordered candidate application, market and liquidity
 replacement behavior, successful-update limit, no-op receipt, exact replay,
 conflicting identity reuse, invalid-batch atomicity, source immutability, and
-snapshot-plan replay after a recipient has already changed. Validate against
-the current integration tip before merging, then run the affected sharing and
-knowledge suites. The complete P18-D daily-loop integration still requires
-independent exact-tip review, required full EditMode/Smoke and `git diff
---check`; this slice alone does not claim chronological `SimulationRuntime`
-composition or profile readiness.
+snapshot-plan replay after a recipient has already changed. The owner was
+merged into integration candidate `3d9c0ea508e542e8a7e92a4982fbec3e29560e81`;
+the exact merged tree passed the `CommercialKnowledge` filter 29/29, and code
+integration review passed. The review found only trailing whitespace in this
+plan, now removed. The full P18-D integration still needs its final independent
+review, required full EditMode/Smoke, and `git diff --check`; this slice does not
+claim chronological `SimulationRuntime` composition or profile readiness.
 
 ## Exclusions
 
