@@ -22,6 +22,10 @@ that exact candidate's selected composition and configured providers, and
 records its selected-profile validation results. The audit did not fetch
 remote refs, and this candidate is still unpromoted; it is candidate-based
 composition evidence, not canonical live-composition evidence for P12-A.
+The read-only P12-C RNG consumer census is also against candidate `af656e7`;
+its exact findings are recorded in owner-inventory follow-up
+`99739fd0d190cd61acda8d3c91b25acab7405379` and below. Re-audit when the
+selected composition or profile changes.
 
 P12-C is accepted as prerequisite capability work under the P12 Brief and
 capability decomposition. Its dependency is the reviewed P12-B profile
@@ -152,52 +156,46 @@ null, malformed, unsupported, or dangling facts. The current selected profile
 does not include P8-B through P8-E; those remain explicit empty/excluded
 sections under P12-B admission and are not invented as P12-C data.
 
-## 3. Deterministic random roots: known contract and unresolved coverage
+## 3. Deterministic random roots: audited candidate contract
 
-The pinned built-in provider is `DeterministicRandomSource` under the accepted
-current-host profile. The source seed is already recorded by P9 genesis
-provenance and effective profile admission. `NextUnit(streamKey, drawIndex)` is
-a pure keyed draw for a fixed seed/key/index; that call has no mutable source
-cursor to serialize. By contrast, `CreateStream(streamKey)` returns a
-`DeterministicRandomStream` with mutable `DeterministicRandomState.DrawIndex`.
-Any retained stream cursor that can affect future supported execution is
-causal state and must be included with exact stream key and draw index.
+The read-only RNG consumer census at `99739fd` for candidate `af656e7` found
+one shared `DeterministicRandomSource` constructed with seed `0` and injected
+into `SimulationRuntime`, `CrimeSystem`, and `NpcDecisionSystem`. In this
+selected composition, active authoritative draws use pure keyed
+`NextUnit(key)` calls with the default draw index `0`; the exact keys are:
 
-The refreshed candidate inventory identifies the selected configured provider
-graph: legacy travel, travel-party, expedition, scheduled-directive, justice,
-and NPC-decision systems are composed; the selected effective configuration
-also enables merchant trade/commercial Knowledge sharing, crime infrastructure
-and its action provider, guard action provider, and CityRuntime economy work.
-Natural mortality and aggregate demography are disabled by the selected
-asset's default overrides. The fixed-seed toggle is false, so this bootstrap
-constructs `DeterministicRandomSource(0)`; the serialized seed field alone is
-not a representation of live stream cursors. This exact provider-composition
-audit improves the source basis but does not finish the P12-C RNG section: it
-has not proved the exhaustive set of mutable stream instances retained by
-those consumers, their lifetime/ownership, or whether any cursor remains
-causally live at an eligible completed-day boundary. The random API has no
-source-level registry that enumerates all live streams. Therefore this design
-does **not** declare seed-only capture sufficient, does not claim complete
-draw-state coverage, and does not authorize adding a speculative global
-random-stream registry.
+- NPC decision choice: `npc-decision|{RuntimeId}|{AbsoluteDay}`;
+- crime steal: `crime-steal|{RuntimeId}|{AbsoluteDay}`;
+- action success: `action-success|{actor}|{origin/action}|{action}|{CurrentDay}`.
+  Here `RuntimeId` is the selected NPC runtime identity; the action-success
+  components are the exact actor, origin/action, action and current-day key
+  values used by the existing call.
 
-Before implementation closes this section, the live owner inventory must map
-each actual random consumer in the validated profile to one of:
+For a fixed provider algorithm/build, seed, exact key and draw index, each
+draw is reproducible and has no mutable provider cursor. Those key inputs must
+remain available from the exact owner state: runtime identity, action/origin
+identity and simulation day. P12-C captures the provider identity/algorithm
+compatibility, build compatibility through the P12-B profile manifest, and
+seed source/value provenance (`default-zero`, value `0`) from the selected
+genesis/profile records. It does not replace the owner IDs, clock or action
+facts needed to reconstruct keys.
 
-1. a keyed draw whose full key and draw-index inputs are reconstructed from
-   other exact owner state at continuation;
-2. a retained mutable stream with an owner-issued export and private staged
-   hydrator for its `Seed`, `StreamKey`, and exact `DrawIndex`; or
-3. an owner section proven not composed or proven to retain no cursor across
-   an eligible boundary.
+The selected profile's mutable-stream section is explicitly empty: the audit
+found no composed or retained `DeterministicRandomStream`/`CreateStream`
+cursor. `SeededConflictRandomSource`, WorldObserver demo randomness, and
+battle-resolution random sources are not selected profile providers. The
+demographic hash providers are disabled under the current selected defaults;
+re-audit if effective policy/profile changes. This finding is scoped to the
+audited candidate, not a guarantee for other builds or future compositions.
 
-The mapping must be exhaustive and tested at owner boundaries. Unknown
-consumer, custom provider, missing stream owner, duplicate/conflicting stream
-identity, negative draw index, or a cursor that cannot be restored to the same
-next draw rejects P12-C/profile admission. P12-C may implement seed/provider
-identity and verified stream owners after the exact inventory is complete;
-until then, deterministic-root coverage is a hard readiness blocker. This is
-an evidence gap, not a product or architecture choice.
+Admission/export must reject an unknown or injected random provider, a
+provider algorithm/build identity mismatch, or any newly composed mutable
+stream/cursor until that state has an owner-issued value section, staged
+hydrator and continuation test. Do not silently accept a non-empty mutable
+stream section or infer compatibility from the seed alone. No global random
+stream registry is proposed. The exact candidate census closes the previous
+unknown-stream-inventory design blocker for `af656e7`; it does not establish
+canonical P12-A composition or final profile readiness.
 
 ## 4. Composition and dependency order
 
@@ -209,11 +207,13 @@ records bootstrap 14/14, ActorChoice 24/24, Spatial 99/99, ALL EditMode
 1742/1742, official Smoke 5/5, and `git diff --check` passing on the exact
 candidate; only the final Smoke XML remains available as a retained result
 artifact. These results validate composition behavior, not P12 owner exports,
-hydration, random draw-state coverage, or profile readiness. No remote fetch
-was performed for the inventory, and the composition candidate is not
-promoted. P12-C implementation must target the exact composition only after
-the applicable current-source evidence is refreshed; it must not treat
-P9-B or P11 in isolation as the supported runtime.
+hydration, or profile readiness. The read-only RNG census described in
+Section 3 completes candidate-level provider and draw-state mapping; it does
+not make candidate `af656e7` canonical. No remote fetch was performed for the
+inventory, and the composition candidate is not promoted. P12-C design and
+eventual implementation must use the exact audited composition context, not
+P9-B or P11 in isolation. Current canonical live-composition evidence remains
+a separate P12-A blocker.
 
 Dependency order within P12-C:
 
@@ -224,8 +224,10 @@ Dependency order within P12-C:
 3. Export genesis manifest/lineage and P8-A facts from their owners; validate
    the profile references, exact cardinalities, and cross-section identity
    consistency.
-4. Export each deterministic root/cursor from its verified consumer owner and
-   prove exact next-draw equivalence. If inventory is incomplete, reject this
+4. Export the pinned provider/algorithm identity and seed provenance; verify
+   the empty mutable-stream section against the admitted provider composition.
+   Reconstruct every keyed draw from the exact owner IDs/action facts and clock
+   value. If an unknown provider or mutable stream is present, reject this
    profile candidate rather than publish a partial section set.
 5. Construct each private staged owner candidate in dependency order without
    binding it to the active runtime. Return typed validation results for P12-G
@@ -271,9 +273,16 @@ Focused owner tests should cover:
 - P8-A one-Hex/one-Location/one-scale export and round-trip, anchor and terrain
   revision checks, exact cardinality, plus missing/extra/duplicate/malformed
   rejection;
-- each mapped RNG consumer's same-next-draw continuation and query/preview
-  non-consumption, with every retained stream covered; provider/consumer
-  inventory mismatch and unknown mutable cursor reject;
+- each selected keyed RNG call returns the same next result after continuation
+  from the same seed, exact owner IDs/action facts, day and algorithm/build;
+  assert the default draw index is zero and the key is byte-for-byte the
+  documented value;
+- verify the selected profile's mutable-stream section remains explicitly
+  empty and no `CreateStream` cursor is composed; admission rejects if a
+  mutable stream or unknown/injected provider becomes composed until an exact
+  owner export/hydrator and test are added;
+- verify diagnostics and query/preview do not introduce or consume an
+  authoritative mutable stream in the selected composition;
 - cross-section corruption cases for duplicated IDs, sequence ordering,
   provenance/output mismatch, and unknown schema, asserting active source
   objects remain byte/value unchanged on failure.
@@ -289,20 +298,21 @@ no test claim and contains no code change.
 |---|---|---|
 | `RuntimeIdentity.cs` | `RuntimeIdAllocator` counters are private; `RuntimeIdentityRegistry` validates uniqueness across runtime types. | Add owner snapshot/private construction seam; keep registries/derived indexes rebuildable and separate from IDs. |
 | `DecisionRecords.cs`, `DomainEvents.cs`, `TesteSimulacao.cs` | One `SimulationRecordSequence` is injected into decision and domain-event recorders in the selected bootstrap. | Census every owner sharing it; export its exact next value once, not independently per recorder. |
-| `DeterministicRandom.cs` and injected systems | Inventory `ba6f79f` establishes the selected provider graph and seed construction for candidate `af656e7`; retained mutable stream/cursor ownership remains unproven. | **Blocker:** exhaustive live-cursor/draw-state census and exact next-draw restoration contract. Do not infer seed-only sufficiency. |
+| `DeterministicRandom.cs` and selected consumers | Read-only candidate census establishes shared seed-0 provider, three pure keyed draw consumers and an explicitly empty mutable-stream section for `af656e7`. | Preserve algorithm/build compatibility and exact key inputs; reject unknown providers or any newly composed mutable cursor until explicitly covered. Re-audit when composition/defaults change. |
 | P9 genesis pipeline/manifest | P9 pipeline creates and publishes the selected authored manifest/outputs. | Preserve generated output as history; never rerun genesis on hydration. |
 | P8 `SpatialAuthorityStore` | Owns typed Hex/Location truth and authored geography provenance. | Capture exactly the accepted P8-A facts; never infer these from legacy spatial objects. |
 | P12-B / composition manifest | Owns profile compatibility and section census. Candidate inventory `ba6f79f` audits the exact P9-B/P11 merge and its selected provider graph, but that composition remains unpromoted and remote refs were not fetched. | **Blocker:** apply the accepted/reviewed P12-B contract and obtain current canonical live-composition evidence plus final profile-specific section census before P12-A; this candidate audit alone does not establish canonical P12-A readiness. |
 | P12-G | Owns whole-graph validation and publication. | P12-C stages remain private; no active-runtime mutation/publication. |
 
-No P12-C implementation starts until this design passes independent review,
-the accepted/reviewed P12-B dependency contract is applied to the exact
-supported source, and the deterministic-root coverage blocker is resolved.
-Candidate composition/provider auditing is complete at `ba6f79f`, but
-canonical live-composition evidence and P12-A's separate implementation
-authorization remain outstanding. The accepted P12-B through P12-G scopes
-authorize prerequisite capability work; they do not waive this checkpoint's
-evidence requirements or P12-A's separate implementation gate.
+This design makes no P12-C implementation-readiness claim. The accepted and
+reviewed P12-B profile-admission/completed-boundary capability remains a
+prerequisite dependency and must be delivered before dependent P12-C
+implementation can integrate against its contract. The candidate RNG census
+closes the prior mutable-stream inventory question only for `af656e7`.
+Canonical live-composition evidence and P12-A's separate implementation
+authorization remain outstanding; neither follows from this candidate audit.
+The accepted P12-B through P12-G scopes authorize prerequisite capability
+work but do not waive these dependencies or P12-A's separate gate.
 
 ## 8. Explicit exclusions
 
