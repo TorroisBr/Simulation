@@ -78,6 +78,95 @@ those records do not substitute for their owning world-truth stores. This
 evidence bounds the profile's real composition; it does not demonstrate export
 or staged hydration for any of these owners.
 
+### Exact P9-B/P11 composition audit — 2026-09-27
+
+The additive integration candidate `af656e7710fce0ba171fae1d6684331d2dc0b743`
+was inspected locally as a two-parent merge: first parent P11 canonical
+`308e24d0744112e8f2b741521b8b3e4acb51ebbf`, second parent P9 canonical
+`82396ae7ffaf407fda278928da456b06dc5394d4`, with common base
+`470667d37863384edadb3d93ef64d8004aff46a3`. It is a validated composition
+candidate, not a canonical promotion; no remote fetch was performed for this
+audit. The selected `SampleScene.unity` MonoBehaviour references the asset with
+GUID `ba87bf49ee034da6bda3daeef8e40c3f`,
+`Simulation-GeneralTest.asset`. `TesteSimulacao.InitializeSimulation` runs the
+declared P9 genesis stages, validates the candidate composition, then publishes
+one `SimulationBootstrapComposition` whose `Runtime` is the P11-based
+`SimulationRuntime`. The selected-profile test checks both the P9-B geography
+and the P11 store on that published runtime.
+
+The GeneralTest module list resolves to Economy, Merchant, GuardCrime, and
+Crime. `TesteSimulacao` resolves `EffectiveSimulationConfiguration` from those
+content overrides; effective values, not the module-list compatibility view,
+define providers. `RebuildSystems` always composes legacy travel, travel-party,
+expedition, scheduled-directive, justice, and NPC-decision systems. With this
+profile it additionally composes merchant trade and commercial Knowledge
+sharing, crime infrastructure and its enabled action provider, and the guard
+action provider. City production, free-population consumption and market-price
+updates run through `CityRuntime` when effective Economy is enabled. Natural
+mortality and aggregate demography are disabled by the selected asset's default
+overrides; no sample provider is injected. The fixed-seed toggle is false, so
+the current bootstrap constructs `DeterministicRandomSource(0)`; the serialized
+`simulationSeed` value alone is not the live stream state. Capture still needs
+the provider identity and the actual continuation-relevant stream/draw state.
+
+| Accepted P12 checkpoint | Exact live owners/sections for this composition | Current boundary and implementation gap |
+|---|---|---|
+| **B — admission and completed boundary** | `SimulationBootstrapComposition`/`SimulationGenesisManifest`; selected config and effective provider graph; `SimulationTime`, `SimulationCalendar`, `SimulationRuntime` mutation health and successful advance boundary. | The genesis manifest/fingerprint is not a P12 envelope or boundary token. The runtime's current mutation guard and daily calls do not provide a complete profile census, mutation epoch, thread/operation lease, or capture eligibility protocol. |
+| **C — identity, genesis, random roots** | `RuntimeIdAllocator`, `RuntimeIdentityRegistry`, `SimulationRecordSequence`; `DeterministicRandomSource`; P9-A/P9-B manifest, stage lineage, authored inputs/outputs and provenance; `SpatialAuthorityStore` P8-A Hex, anchored Location and scale. | Allocator, registry, sequence and random source are bootstrap/runtime-owned; no exact immutable export or staged restore path was found. Preserve seed source/value plus live RNG state, never rerun genesis. P8-A cardinality is exactly one Hex/one anchored Location/one scale context. |
+| **D — factual roots and Person/population relations** | The two `CityRuntime` identities, selected definition/reference links and population aggregates; configured NPC roster/`NpcRuntime` identities and the core actor facts assigned to D (life/condition, base status, current location, inventory and money); `PersonStore`, `GenealogyStore`, and legacy `SpatialNetworkRuntime` locations/routes, `ExplorableSiteStore`, and legacy City/Site links. | The 10 configured NPC rows start NPC-only; runtime-created Person and genealogy authorities start empty. Keep `NpcRuntimeId` distinct from `PersonId`. D and E/F must not independently serialize overlapping fields: CityRuntime and NpcRuntime adapter boundaries are called out below. Initial empty site/warrant/directive lists do not bound later supported state. |
+| **E — core and selected daily-domain owners** | City-owned daily economy sections from the same two `CityRuntime` roots: market/custody, stocks and balances, production inputs/results, free-population consumption, and mutable price/owner revisions read by later execution. Also provider-owned `MerchantSystem`/commercial sharing state, `JusticeSystem`, `CrimeSystem`, `CrimeSocialAppraisalWorldState`, enabled crime/guard providers, and every instantiated core `InstitutionStore`, `OfficeStore`, property/estate, claim/recognition, faction/support/Knowledge/decision, armed-force/manpower/position, Conflict, War, and Battle authority. `LocalTopologyStore` is instantiated empty and is an explicit empty/reject-if-populated section. | `CityRuntime` is one concrete owner spanning D roots/population and E economy; one owner adapter must take a single consistent snapshot and emit separate semantic sections under the same revision, and staged hydration must reconstruct the owner once from both sections. Runtime core authorities are constructed even when empty; every supported populated authority needs its own export/hydrator, revision and relation checks. P10 Ruin/LocalTopology facts are excluded. |
+| **F — Knowledge, directives, P11 choices and commitments** | NPC spatial/commercial/exploration Knowledge; `ScheduledDirectiveStore`; P11 `ActorChoiceStore`; `TravelPartyStore`, `ExpeditionStore`, active travel/expedition progress, and `NpcRuntime` current action and merchant-plan commitments. | `NpcRuntime` is one concrete owner spanning D actor identity/factual state, E-provider-written outcomes, and F Knowledge/commitment fields. Use one owner snapshot/revision and one staged `NpcRuntime` hydrator; assign each value to one semantic section and merge those sections before hydration, with no duplicate field export/write. E captures distinct provider-owned stores; when an E provider writes an NpcRuntime field, the NpcRuntime section carries that value. `MerchantSystem` provides E behavior while its active plan is F owner state. `ActorChoiceStore` is present by P11's default `SimulationRuntime` constructor path, but no external `WorldCommand` service/queue is composed. Preserve full terminal history, duplicate-ID history and sequence; pending/deferred or consumed-awaiting-terminal entries reject capture. No Knowledge or active commitment has complete export/hydration. |
+| **G — staging, graph validation, publication and parity** | The entire B–F section set and exact composition; fresh runtime graph, owner validators, mutation guard, indexes, and one bootstrap/session publication point. | `TesteSimulacao` publishes genesis once but has no private P12 restore stage, complete cross-owner validator, atomic replacement protocol, or continuation-parity suite. Existing diagnostic snapshots, cloning and transaction rollback are not substitutes. |
+
+The following authorities are composed empty or excluded and must remain
+explicitly represented/checked according to the accepted profile. The
+`SpatialAuthorityStore` has only the selected P8-A geography; its P8-B passage
+child, P8-C canonical City/Site anchors and Person positions, P8-D route
+Knowledge/plans, and P8-E travel authorities remain empty. Existing legacy
+`SpatialNetworkRuntime` routes and legacy travel/party/expedition state are
+included under D/F and do not stand in for P8 authorities. `LocalTopologyStore`
+is created empty by `SimulationRuntime`; the P10 Ruin/LocalTopology output is
+not composed and populated P10 facts must not slip into this profile. GeneralTest
+has no P14-A exogenous material-source configuration; legacy City production
+and ordinary market stock remain included D/E. The selected bootstrap does not
+compose P18 timeline/activity/availability/continuation state, P19 module or
+loader state, P20 shared activities, P13 reconstruction/fork state,
+`PlaceContentStore`, `AdventureExpeditionAutonomySystem`, or an external P11
+WorldCommand queue. Excluded populated state must reject admission rather than
+be silently omitted.
+
+Some owners bind to `AuthoritativeMutationGuard`, but this does not establish
+that every direct owner mutator routes through that guard or through one
+serializer-facing API. `SimulationRuntime.TryAdvanceDay` and
+`TryAdvanceDays` enter `AdvanceDayAfterClockAdvance`, which advances time,
+demography, directives, `CityRuntime.SimulateProductionDay`,
+`SimulateConsumptionDay` and `UpdateMarketPrices`, Knowledge, NPC action
+providers through `TryExecuteCurrentAction`, justice/crime, merchant plans,
+and legacy travel/expeditions. Scheduled directives enter through
+`ScheduledDirectiveSystem`; actor-choice processing reads `ActorChoiceStore`,
+while its internal runtime capture path is `TryCaptureActorChoiceInput`.
+Supported direct owner APIs and transactional actions can also mutate
+City/NPC, Knowledge, spatial, political, force/conflict and commitment owners
+between days. Therefore P12-B cannot rely on `TryAdvanceDay` alone for
+invalidation. It needs a complete owner-operation census and mutation
+notification across those direct paths. Shared code
+hotspots are `SimulationRuntime.cs` (daily loop, owner composition and runtime
+stores), `TesteSimulacao.cs` (bootstrap/provider wiring and publication),
+`RuntimeIdentity.cs`/random source (C roots), and the domain store/system files
+owned by D–F. Any implementation wave touching `SimulationRuntime.cs` or the
+daily loop must be serialized against P18-D's ownership work; D and E can only
+parallelize with isolated owner/file boundaries, and F depends on their stable
+sections.
+
+**Candidate validation evidence:** the integration implementer reports, on
+exact candidate `af656e7`, bootstrap 14/14, ActorChoice 24/24, Spatial 99/99,
+ALL EditMode 1742/1742, official Smoke 5/5, and staged/unstaged
+`git diff --check` passed. The retained result artifact available for this
+inventory is the final Smoke XML (5/5); the other Unity result XML files were
+rotated/removed by the harness. These results validate composition behavior,
+not P12 export, hydration, owner census, or readiness. Remote fetch and
+canonical promotion remain unverified; keep P12-A at `WAIT_DEPENDENCY`.
+
 | Included authority group | Exact immutable export | Staged hydration | Concrete gap blocking P12-A |
 |---|---|---|---|
 | Profile/build/content/provider identity; effective configuration, calendar, completed-day boundary and capture eligibility | No | No | No versioned P12 envelope/admission manifest or successful-advance token binds the runtime, configuration, content/providers and exact quiescent boundary. `SimulationBootstrapComposition` and runtime wiring describe construction, not a sealed continuation capture. |
