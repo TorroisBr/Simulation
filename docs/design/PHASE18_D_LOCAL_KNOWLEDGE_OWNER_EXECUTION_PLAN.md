@@ -3,7 +3,8 @@
 **Checkpoint:** P18-D — Bounded Consumer and Daily Compatibility Integration
 **Canonical P18 base:** `9e790c59e14ca7f7ed195c0e6267e10f3cd039d7`
 **Consumer integration before this owner:** `5d7eb2687c3866fb2399faf8b366a299484d8dd4`
-**Implementation candidate:** `codex/phase18/P18DLocalKnowledgeObservation` at `15b201a`
+**Initial implementation candidate:** `codex/phase18/P18DLocalKnowledgeObservation` at `15b201a`
+**Exact-tip hardening candidate:** `codex/phase18/P18DLocalKnowledgeObservation` at `30b73575cfd84f3d4aef1e49d9c1fccfa8efb511`, based on `ea05af4181ef7ff7879f356d4eaa78070ff0c6f5`
 **Architecture/alignment baseline:** architecture `c285466`; intraday/extensibility `4b6dd1d`; multi-participant activity `c285466`.
 
 ## Objective and contract
@@ -58,10 +59,22 @@ The exact code tree at `15b201a` passed:
 at `15b201a` against its exact parent `5d7eb26`. The reviewer confirmed the
 actor-owned combined spatial/commercial prepared install, current-truth
 revalidation, receipt replay, optional `PersonId`, stable runtime identity,
-frozen roster order, and preserved legacy observation ordering. The review
-found two non-blocking hardening opportunities for later integration review:
-check that a supplied step is the exact manifest entry at its ordinal, and
-consider idempotent results for repeated `TryCommit` calls on the same prepared
-object. The normal continuation path already replays through the stored
-receipt. These focused results do not replace the full integration EditMode,
-official Smoke, and complete P18-D review gates.
+frozen roster order, and preserved legacy observation ordering. That review
+identified two non-blocking hardening opportunities; both were implemented in
+`30b7357`: preparation now requires the exact active frozen manifest descriptor
+at its ordinal, and a repeated `TryCommit` on a prepared object with a matching
+retained receipt returns success without reinstalling either child knowledge
+state.
+
+The exact code tip `30b73575cfd84f3d4aef1e49d9c1fccfa8efb511` passed
+independent exact-tip re-review against parent `ea05af4181ef7ff7879f356d4eaa78070ff0c6f5`.
+Focused validation on that code tip passed:
+
+| Suite | Result | XML | Log |
+|---|---:|---|---|
+| `P18DLocalKnowledgeObservationTests` | 4/4 | `Temp/ValidationResults/EditMode-20260928-232706-a0987a76152d40409da04faf3b210358.xml` | `Temp/ValidationResults/EditMode-20260928-232706-a0987a76152d40409da04faf3b210358.log` |
+| `P18DDailyBoundaryStepProviderTests` | 6/6 | `Temp/ValidationResults/EditMode-20260928-232013-e30fe171f9f544e2b44d175519595f00.xml` | `Temp/ValidationResults/EditMode-20260928-232013-e30fe171f9f544e2b44d175519595f00.log` |
+
+`git diff --check` passed for the hardening change. These focused results do
+not replace the full integration EditMode, official Smoke, and complete P18-D
+review gates.
