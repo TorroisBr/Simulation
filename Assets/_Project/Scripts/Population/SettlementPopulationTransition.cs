@@ -14,7 +14,8 @@ public enum PopulationTransitionFailure
     InvalidTransition = 6,
     RevisionOverflow = 7,
     RuntimeFaulted = 8,
-    RuntimeOwnershipMismatch = 9
+    RuntimeOwnershipMismatch = 9,
+    OperationIdentityConflict = 10
 }
 
 /// <summary>

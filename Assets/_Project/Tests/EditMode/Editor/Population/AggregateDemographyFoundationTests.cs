@@ -366,6 +366,81 @@ public sealed class AggregateDemographyFoundationTests
     }
 
     [Test]
+    public void ReceiptBackedCityTransitionReplaysExactProposalWithoutAnotherInstall()
+    {
+        SettlementPopulationRuntime population = CreatePopulation(10);
+        RecordingProvider provider = new RecordingProvider(new AggregateDemographyChange(2, 1));
+        Assert.That(AggregateDemographySystem.TryPropose(
+            population,
+            2,
+            provider,
+            7L,
+            out AggregateDemographyTransition transition,
+            out AggregateDemographyFailure proposalFailure), Is.True, proposalFailure.ToString());
+        const string operationIdentity = "demography-occurrence/city-a";
+
+        Assert.That(TryApplyWithReceipt(
+            population,
+            2,
+            transition,
+            operationIdentity,
+            out bool newlyApplied,
+            out AggregateDemographyFailure applyFailure), Is.True, applyFailure.ToString());
+        Assert.That(newlyApplied, Is.True);
+        Assert.That(population.CurrentPopulation, Is.EqualTo(11));
+        Assert.That(population.Revision, Is.EqualTo(1L));
+        Assert.That(provider.CallCount, Is.EqualTo(1));
+
+        Assert.That(TryApplyWithReceipt(
+            population,
+            2,
+            transition,
+            operationIdentity,
+            out newlyApplied,
+            out applyFailure), Is.True, applyFailure.ToString());
+        Assert.That(newlyApplied, Is.False);
+        Assert.That(population.CurrentPopulation, Is.EqualTo(11));
+        Assert.That(population.Revision, Is.EqualTo(1L));
+        Assert.That(provider.CallCount, Is.EqualTo(1));
+
+        Assert.That(TryApplyWithReceipt(
+            population,
+            3,
+            transition,
+            operationIdentity,
+            out newlyApplied,
+            out applyFailure), Is.False);
+        Assert.That(applyFailure, Is.EqualTo(AggregateDemographyFailure.StaleState));
+        Assert.That(population.CurrentPopulation, Is.EqualTo(11));
+        Assert.That(population.Revision, Is.EqualTo(1L));
+    }
+
+    [Test]
+    public void ReceiptIdentityCannotBeReusedForDifferentCityTransition()
+    {
+        SettlementPopulationRuntime population = CreatePopulation(10);
+        AggregateDemographyTransition first = Propose(
+            population, 2, new AggregateDemographyChange(1, 0));
+        AggregateDemographyTransition conflicting = Propose(
+            CreatePopulation(10), 2, new AggregateDemographyChange(0, 1));
+        const string operationIdentity = "demography-occurrence/city-conflict";
+
+        Assert.That(TryApplyWithReceipt(
+            population, 2, first, operationIdentity, out _, out _), Is.True);
+        Assert.That(TryApplyWithReceipt(
+            population,
+            2,
+            conflicting,
+            operationIdentity,
+            out _,
+            out AggregateDemographyFailure failure), Is.False);
+
+        Assert.That(failure, Is.EqualTo(AggregateDemographyFailure.OperationIdentityConflict));
+        Assert.That(population.CurrentPopulation, Is.EqualTo(11));
+        Assert.That(population.Revision, Is.EqualTo(1L));
+    }
+
+    [Test]
     public void RevisionOverflowIsRejectedWithoutMutation()
     {
         SettlementPopulationRuntime population = CreatePopulation(10);
@@ -482,6 +557,32 @@ public sealed class AggregateDemographyFoundationTests
         }
 
         return Array.Empty<Type>();
+    }
+
+    private static bool TryApplyWithReceipt(
+        SettlementPopulationRuntime population,
+        int representedResidentFloor,
+        AggregateDemographyTransition transition,
+        string operationIdentity,
+        out bool newlyApplied,
+        out AggregateDemographyFailure failure)
+    {
+        MethodInfo method = typeof(AggregateDemographySystem).GetMethod(
+            "TryApplyWithReceipt", BindingFlags.Static | BindingFlags.NonPublic);
+        Assert.That(method, Is.Not.Null);
+        object[] arguments =
+        {
+            population,
+            representedResidentFloor,
+            transition,
+            operationIdentity,
+            false,
+            AggregateDemographyFailure.None
+        };
+        bool applied = (bool)method.Invoke(null, arguments);
+        newlyApplied = (bool)arguments[4];
+        failure = (AggregateDemographyFailure)arguments[5];
+        return applied;
     }
 
     private static void SetPrivateField(object instance, string fieldName, object value)
