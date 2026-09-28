@@ -240,8 +240,11 @@ D/E revision. Capture must be rejected while the runtime is in an active
 advance/operation scope or if an owner changes during snapshot. This section
 does not create a second lock, thread-safety promise, or capture lifecycle;
 P12-B owns eligibility and the promoted P18-D2 lease/handoff contract governs
-the runtime hotspot. The active P18-D consumer integration retains the current
-`SimulationRuntime` editing window until an explicit handoff. Snapshot operations should use owner atomic-copy methods
+the runtime hotspot. P18-D consumer composition `6fcbfab` is pushed but remains
+incomplete and unpromoted; it is composition-review context only and does not
+make P18 state part of this selected daily profile. The active P18-D consumer
+integration retains the current `SimulationRuntime` editing window until an
+explicit handoff. Snapshot operations should use owner atomic-copy methods
 or before/after revision equality under the approved completed-boundary
 protocol; if neither proves a coherent read, the owner remains unsupported.
 
