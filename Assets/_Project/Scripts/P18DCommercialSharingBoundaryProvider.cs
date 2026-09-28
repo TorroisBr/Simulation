@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
+using System.Text;
 using UnityEngine;
 
 /// <summary>
@@ -18,6 +18,8 @@ public sealed class CommercialKnowledgeSharingDailyBoundaryStepProvider : IP18DD
     private readonly Func<IReadOnlyList<NpcRuntime>> roster;
     private readonly Func<string, NpcRuntime> resolveActor;
     private readonly CommercialKnowledgeSharingSystem owner;
+    private readonly Dictionary<string, ActivationEvidence> activations =
+        new Dictionary<string, ActivationEvidence>(StringComparer.Ordinal);
 
     public CommercialKnowledgeSharingDailyBoundaryStepProvider(
         Func<IReadOnlyList<NpcRuntime>> roster,
@@ -40,9 +42,16 @@ public sealed class CommercialKnowledgeSharingDailyBoundaryStepProvider : IP18DD
 
         List<NpcRuntime> merchants = new List<NpcRuntime>();
         HashSet<string> rosterIds = new HashSet<string>(StringComparer.Ordinal);
+        List<RosterMember> frozenRoster = new List<RosterMember>(current.Count);
+        Dictionary<string, CityBinding> frozenCities = new Dictionary<string, CityBinding>(StringComparer.Ordinal);
         foreach (NpcRuntime npc in current)
         {
             if (npc == null || string.IsNullOrWhiteSpace(npc.RuntimeId) || !rosterIds.Add(npc.RuntimeId)) return false;
+            frozenRoster.Add(new RosterMember
+            {
+                runtimeId = npc.RuntimeId,
+                personId = npc.PersonId?.Value ?? string.Empty
+            });
             if (IsEligibleMerchant(npc)) merchants.Add(npc);
         }
         merchants.Sort(CompareMerchants);
@@ -60,6 +69,7 @@ public sealed class CommercialKnowledgeSharingDailyBoundaryStepProvider : IP18DD
                 cityRuntimeId = city.RuntimeId,
                 locationRuntimeId = city.Location.RuntimeId
             });
+            frozenCities.Add(merchant.RuntimeId, new CityBinding(city, city.Location));
         }
 
         List<Edge> edges = new List<Edge>();
@@ -82,17 +92,26 @@ public sealed class CommercialKnowledgeSharingDailyBoundaryStepProvider : IP18DD
         }
 
         if (edges.Count > int.MaxValue - firstOrdinal - 1) return false;
-        Plan plan = new Plan { participants = participants.ToArray(), edges = edges.ToArray() };
+        Plan plan = new Plan { runtimeRoster = frozenRoster.ToArray(), participants = participants.ToArray(), edges = edges.ToArray() };
+        string frozenPayload = JsonUtility.ToJson(plan);
+        if (activations.TryGetValue(operation.OccurrenceId, out ActivationEvidence prior))
+        {
+            if (prior.Payload != frozenPayload || !SameCityBindings(prior.CityByNpc, frozenCities)) return false;
+        }
+        else
+        {
+            activations.Add(operation.OccurrenceId, new ActivationEvidence(frozenPayload, frozenCities));
+        }
         List<BoundaryContinuationStep> created = new List<BoundaryContinuationStep>(edges.Count + 1)
         {
             new BoundaryContinuationStep(firstOrdinal, SnapshotStepId, OwnerId, SnapshotKind,
-                Version, string.Empty, JsonUtility.ToJson(plan))
+                Version, string.Empty, frozenPayload)
         };
         for (int i = 0; i < edges.Count; i++)
         {
             Edge edge = edges[i];
             created.Add(new BoundaryContinuationStep(firstOrdinal + i + 1,
-                "commercial-share-edge:" + i.ToString(CultureInfo.InvariantCulture), OwnerId,
+                GetEdgeStepId(edge.senderRuntimeId, edge.receiverRuntimeId), OwnerId,
                 EdgeKind, Version, string.Empty, JsonUtility.ToJson(edge)));
         }
         steps = created.AsReadOnly();
@@ -115,12 +134,14 @@ public sealed class CommercialKnowledgeSharingDailyBoundaryStepProvider : IP18DD
         if (step.StepId == SnapshotStepId)
         {
             if (step.OperationKind != SnapshotKind || !TryRead(step.Payload, out Plan plan)
-                || plan.participants == null || plan.edges == null) return false;
+                || plan.runtimeRoster == null || plan.participants == null || plan.edges == null
+                || !activations.TryGetValue(manifest.BoundaryOccurrenceId, out ActivationEvidence activation)
+                || activation.Payload != step.Payload || !ValidateRosterEvidence(plan)) return false;
             List<NpcRuntime> frozenMerchants = new List<NpcRuntime>(plan.participants.Length);
             HashSet<string> unique = new HashSet<string>(StringComparer.Ordinal);
             foreach (Participant participant in plan.participants)
             {
-                NpcRuntime merchant = ResolveParticipant(participant);
+                NpcRuntime merchant = ResolveParticipant(activation, participant);
                 if (merchant == null || !unique.Add(merchant.RuntimeId)) return false;
                 frozenMerchants.Add(merchant);
             }
@@ -134,15 +155,15 @@ public sealed class CommercialKnowledgeSharingDailyBoundaryStepProvider : IP18DD
 
         if (step.OperationKind != EdgeKind || !TryRead(step.Payload, out Edge edge)
             || string.IsNullOrWhiteSpace(edge.senderRuntimeId) || string.IsNullOrWhiteSpace(edge.receiverRuntimeId)) return false;
+        if (!string.Equals(step.StepId, GetEdgeStepId(edge.senderRuntimeId, edge.receiverRuntimeId), StringComparison.Ordinal)) return false;
         BoundaryContinuationStep snapshotStep = null;
         foreach (BoundaryContinuationStep candidate in manifest.Steps)
             if (candidate.StepId == SnapshotStepId) { snapshotStep = candidate; break; }
         if (snapshotStep == null || snapshotStep.Ordinal >= step.Ordinal
             || !TryRead(snapshotStep.Payload, out Plan frozenPlan)) return false;
-        if (!TryParseEdgeOrdinal(step.StepId, out int edgeOrdinal)
-            || frozenPlan.edges == null || edgeOrdinal < 0 || edgeOrdinal >= frozenPlan.edges.Length
+        int edgeOrdinal = step.Ordinal - snapshotStep.Ordinal - 1;
+        if (frozenPlan.edges == null || edgeOrdinal < 0 || edgeOrdinal >= frozenPlan.edges.Length
             || frozenPlan.edges[edgeOrdinal] == null
-            || step.Ordinal != snapshotStep.Ordinal + edgeOrdinal + 1
             || !string.Equals(frozenPlan.edges[edgeOrdinal].senderRuntimeId, edge.senderRuntimeId, StringComparison.Ordinal)
             || !string.Equals(frozenPlan.edges[edgeOrdinal].receiverRuntimeId, edge.receiverRuntimeId, StringComparison.Ordinal)) return false;
         string fingerprint = owner.CreatePlanFingerprint(manifest, snapshotStep);
@@ -152,8 +173,10 @@ public sealed class CommercialKnowledgeSharingDailyBoundaryStepProvider : IP18DD
 
         Participant senderParticipant = FindParticipant(frozenPlan, edge.senderRuntimeId);
         Participant receiverParticipant = FindParticipant(frozenPlan, edge.receiverRuntimeId);
-        NpcRuntime senderNpc = ResolveParticipant(senderParticipant);
-        NpcRuntime receiverNpc = ResolveParticipant(receiverParticipant);
+        if (!activations.TryGetValue(manifest.BoundaryOccurrenceId, out ActivationEvidence edgeActivation)
+            || edgeActivation.Payload != snapshotStep.Payload) return false;
+        NpcRuntime senderNpc = ResolveParticipant(edgeActivation, senderParticipant);
+        NpcRuntime receiverNpc = ResolveParticipant(edgeActivation, receiverParticipant);
         if (senderNpc == null || receiverNpc == null || senderNpc.RuntimeId == receiverNpc.RuntimeId
             || !string.Equals(sender.SenderPersonId, senderParticipant.personId ?? string.Empty, StringComparison.Ordinal)) return false;
         CommercialKnowledgeShareBatch batch;
@@ -172,14 +195,29 @@ public sealed class CommercialKnowledgeSharingDailyBoundaryStepProvider : IP18DD
         return true;
     }
 
-    private NpcRuntime ResolveParticipant(Participant participant)
+    private NpcRuntime ResolveParticipant(ActivationEvidence activation, Participant participant)
     {
-        if (participant == null || string.IsNullOrWhiteSpace(participant.runtimeId)) return null;
+        if (activation == null || participant == null || string.IsNullOrWhiteSpace(participant.runtimeId)
+            || !activation.CityByNpc.TryGetValue(participant.runtimeId, out CityBinding frozenCity)) return null;
         NpcRuntime npc = resolveActor(participant.runtimeId);
         if (npc == null || npc.RuntimeId != participant.runtimeId
             || !string.Equals(npc.PersonId?.Value ?? string.Empty, participant.personId ?? string.Empty, StringComparison.Ordinal)
-            ) return null;
+            || !ReferenceEquals(npc.CurrentCity, frozenCity.City)
+            || npc.CurrentCity == null || npc.CurrentCity.RuntimeId != participant.cityRuntimeId
+            || !ReferenceEquals(npc.CurrentCity.Location, frozenCity.Location)
+            || npc.CurrentCity.Location == null || npc.CurrentCity.Location.RuntimeId != participant.locationRuntimeId) return null;
         return npc;
+    }
+
+    private static bool SameCityBindings(IReadOnlyDictionary<string, CityBinding> left,
+        IReadOnlyDictionary<string, CityBinding> right)
+    {
+        if (left.Count != right.Count) return false;
+        foreach (KeyValuePair<string, CityBinding> entry in left)
+            if (!right.TryGetValue(entry.Key, out CityBinding city)
+                || !ReferenceEquals(entry.Value.City, city.City)
+                || !ReferenceEquals(entry.Value.Location, city.Location)) return false;
+        return true;
     }
 
     private static Participant FindParticipant(Plan plan, string runtimeId)
@@ -188,6 +226,24 @@ public sealed class CommercialKnowledgeSharingDailyBoundaryStepProvider : IP18DD
         foreach (Participant participant in plan.participants)
             if (participant != null && participant.runtimeId == runtimeId) return participant;
         return null;
+    }
+
+    private static bool ValidateRosterEvidence(Plan plan)
+    {
+        HashSet<string> ids = new HashSet<string>(StringComparer.Ordinal);
+        foreach (RosterMember member in plan.runtimeRoster)
+            if (member == null || string.IsNullOrWhiteSpace(member.runtimeId) || !ids.Add(member.runtimeId)) return false;
+        foreach (Participant participant in plan.participants)
+        {
+            if (participant == null || !ids.Contains(participant.runtimeId)) return false;
+            bool matchingMember = false;
+            foreach (RosterMember member in plan.runtimeRoster)
+                if (member.runtimeId == participant.runtimeId
+                    && string.Equals(member.personId ?? string.Empty, participant.personId ?? string.Empty, StringComparison.Ordinal))
+                { matchingMember = true; break; }
+            if (!matchingMember) return false;
+        }
+        return true;
     }
 
     private static bool IsEligibleMerchant(NpcRuntime npc) => npc != null && npc.IsAlive
@@ -209,16 +265,17 @@ public sealed class CommercialKnowledgeSharingDailyBoundaryStepProvider : IP18DD
         catch (ArgumentException) { return false; }
     }
 
-    private static bool TryParseEdgeOrdinal(string stepId, out int ordinal)
-    {
-        ordinal = -1;
-        const string prefix = "commercial-share-edge:";
-        return stepId != null && stepId.StartsWith(prefix, StringComparison.Ordinal)
-            && int.TryParse(stepId.Substring(prefix.Length), NumberStyles.None,
-                CultureInfo.InvariantCulture, out ordinal) && ordinal >= 0;
-    }
+    private static string GetEdgeStepId(string senderRuntimeId, string receiverRuntimeId) =>
+        "commercial-share-edge:" + Convert.ToBase64String(Encoding.UTF8.GetBytes(
+            SpatialStableKey.Encode("edge/v1", senderRuntimeId, receiverRuntimeId)));
 
-    [Serializable] private sealed class Plan { public Participant[] participants; public Edge[] edges; }
+    [Serializable] private sealed class Plan
+    {
+        public RosterMember[] runtimeRoster;
+        public Participant[] participants;
+        public Edge[] edges;
+    }
+    [Serializable] private sealed class RosterMember { public string runtimeId; public string personId; }
     [Serializable] private sealed class Participant
     {
         public string runtimeId;
@@ -227,6 +284,28 @@ public sealed class CommercialKnowledgeSharingDailyBoundaryStepProvider : IP18DD
         public string locationRuntimeId;
     }
     [Serializable] private sealed class Edge { public string senderRuntimeId; public string receiverRuntimeId; }
+
+    private sealed class ActivationEvidence
+    {
+        public string Payload { get; }
+        public IReadOnlyDictionary<string, CityBinding> CityByNpc { get; }
+        public ActivationEvidence(string payload, IReadOnlyDictionary<string, CityBinding> cityByNpc)
+        {
+            Payload = payload;
+            CityByNpc = new Dictionary<string, CityBinding>(cityByNpc, StringComparer.Ordinal);
+        }
+    }
+
+    private sealed class CityBinding
+    {
+        public CityRuntime City { get; }
+        public SpatialLocationRuntime Location { get; }
+        public CityBinding(CityRuntime city, SpatialLocationRuntime location)
+        {
+            City = city;
+            Location = location;
+        }
+    }
 
     private sealed class PhaseSnapshotCommit : IBoundaryContinuationStepCommit
     {

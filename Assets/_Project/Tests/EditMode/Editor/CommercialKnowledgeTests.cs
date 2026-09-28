@@ -153,6 +153,90 @@ public sealed class CommercialKnowledgeTests
     }
 
     [Test]
+    public void ShareBatch_InvalidValueLeavesRecipientAndSourceOwnersUnchanged()
+    {
+        ItemData item = SimulationTestFactory.CreateItem("item-share-invalid");
+        CommercialKnowledgeRuntime source = new CommercialKnowledgeRuntime();
+        CommercialMarketObservation sourceObservation = SimulationTestFactory.CreateObservation(
+            "location-a", item, 20f, 4, 2, 2);
+        source.RecordObservation(sourceObservation);
+        long sourceRevision = source.Revision;
+        CommercialKnowledgeShareValue value = CommercialKnowledgeShareValue.Capture(sourceObservation);
+        CommercialKnowledgeShareBatch batch = new CommercialKnowledgeShareBatch("boundary", "sender", "person-s",
+            "receiver", "person-r", "snapshot", 3L, 1, new[] { value });
+        CommercialKnowledgeRuntime receiver = new CommercialKnowledgeRuntime();
+        item.id = "item-mutated-after-capture";
+
+        Assert.That(receiver.TryPrepareShareBatch(batch, out _), Is.False);
+        Assert.That(receiver.Observations, Is.Empty);
+        Assert.That(receiver.Revision, Is.Zero);
+        Assert.That(receiver.TryGetShareReceipt(batch.OperationIdentity, out _), Is.False);
+        Assert.That(source.Revision, Is.EqualTo(sourceRevision));
+        Assert.That(source.Observations, Has.Count.EqualTo(1));
+        Assert.That(source.Observations[0], Is.SameAs(sourceObservation));
+        Assert.That(sourceObservation.ObservedPrice, Is.EqualTo(20f));
+        Assert.That(value.ItemDefinitionId, Is.EqualTo("item-share-invalid"));
+    }
+
+    [Test]
+    public void ShareBatch_NoOpEdgeStillRetainsReplayableReceipt()
+    {
+        CommercialKnowledgeShareBatch noOp = new CommercialKnowledgeShareBatch("boundary-noop", "sender", "person-s",
+            "receiver", "person-r", "empty-snapshot", 3L, 2, System.Array.Empty<CommercialKnowledgeShareValue>());
+        CommercialKnowledgeRuntime receiver = new CommercialKnowledgeRuntime();
+        Assert.That(receiver.TryPrepareShareBatch(noOp, out CommercialKnowledgeShareBatchCommit prepared), Is.True);
+        Assert.That(prepared.TryCommit(out CommercialKnowledgeShareReceipt committed), Is.True);
+        Assert.That(committed.AppliedObservationCount, Is.Zero);
+        long afterReceipt = receiver.Revision;
+
+        ItemData localItem = SimulationTestFactory.CreateItem("item-local-after-noop");
+        receiver.RecordObservation(SimulationTestFactory.CreateObservation("location-local", localItem, 5f, 1, 3, 3));
+        long afterLocalChange = receiver.Revision;
+        Assert.That(receiver.TryPrepareShareBatch(noOp, out CommercialKnowledgeShareBatchCommit replay), Is.True);
+        Assert.That(replay.TryCommit(out CommercialKnowledgeShareReceipt replayed), Is.True);
+        Assert.That(replayed, Is.SameAs(committed));
+        Assert.That(receiver.Revision, Is.EqualTo(afterLocalChange));
+        Assert.That(afterLocalChange, Is.GreaterThan(afterReceipt));
+    }
+
+    [Test]
+    public void ShareBatch_CountsOnlySuccessfulUpdatesAndPreservesFrozenSourceOrder()
+    {
+        ItemData newest = SimulationTestFactory.CreateItem("item-newest");
+        ItemData second = SimulationTestFactory.CreateItem("item-second");
+        ItemData third = SimulationTestFactory.CreateItem("item-third");
+        CommercialKnowledgeRuntime source = new CommercialKnowledgeRuntime();
+        CommercialMarketObservation sourceNewest = SimulationTestFactory.CreateObservation("location-a", newest, 30f, 3, 3, 3);
+        CommercialMarketObservation sourceSecond = SimulationTestFactory.CreateObservation("location-b", second, 20f, 2, 2, 2);
+        CommercialMarketObservation sourceThird = SimulationTestFactory.CreateObservation("location-c", third, 10f, 1, 1, 1);
+        source.RecordObservation(sourceNewest);
+        source.RecordObservation(sourceSecond);
+        source.RecordObservation(sourceThird);
+        long sourceRevision = source.Revision;
+        CommercialKnowledgeShareBatch batch = new CommercialKnowledgeShareBatch("boundary-order", "sender", "person-s",
+            "receiver", "person-r", "snapshot-order", 4L, 1, new[]
+            {
+                CommercialKnowledgeShareValue.Capture(sourceNewest),
+                CommercialKnowledgeShareValue.Capture(sourceSecond),
+                CommercialKnowledgeShareValue.Capture(sourceThird)
+            });
+        CommercialKnowledgeRuntime receiver = new CommercialKnowledgeRuntime();
+        receiver.RecordObservation(SimulationTestFactory.CreateObservation("location-a", newest, 99f, 9, 4, 4));
+
+        Assert.That(receiver.TryPrepareShareBatch(batch, out CommercialKnowledgeShareBatchCommit prepared), Is.True);
+        Assert.That(prepared.TryCommit(out CommercialKnowledgeShareReceipt receipt), Is.True);
+        Assert.That(receipt.AppliedObservationCount, Is.EqualTo(1));
+        Assert.That(receiver.TryGetObservation("location-b", second.DefinitionId, out CommercialMarketObservation applied), Is.True);
+        Assert.That(applied.ObservedPrice, Is.EqualTo(20f));
+        Assert.That(receiver.TryGetObservation("location-c", third.DefinitionId, out _), Is.False);
+        Assert.That(receiver.TryGetObservation("location-a", newest.DefinitionId, out CommercialMarketObservation retained), Is.True);
+        Assert.That(retained.ObservedPrice, Is.EqualTo(99f));
+        Assert.That(source.Revision, Is.EqualTo(sourceRevision));
+        Assert.That(source.Observations[0], Is.SameAs(sourceNewest));
+        Assert.That(sourceNewest.Source, Is.EqualTo(CommercialKnowledgeSource.DirectObservation));
+    }
+
+    [Test]
     public void SharedObservation_RequiresSourceRuntimeId()
     {
         ItemData item = SimulationTestFactory.CreateItem("item-wine");
