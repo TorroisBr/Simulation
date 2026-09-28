@@ -14,28 +14,38 @@ the P10 State and Brief, without changing P10 capability or dependencies;
 P10-A remains a bounded promoted capability, not universal Ruin/topology
 support. The current P12 candidate tip is `fb4da0b`, which records accepted
 P12-A scope only and retains `WAIT_DEPENDENCY` with no implementation
-authorization. The distinct owner-inventory evidence commit `bd15b92` reports
-no profile-included owner group with demonstrated complete exact immutable
-export plus staged hydration; it is not the scope-acceptance record. P14
-canonical is `4caecbb`. P18 canonical is `85f1f21da0a8a438edfd80c90053ce333223154c`. The P18 State diff from `b390262` records
-P20-A promotion and the P18-D design refresh/revalidation; it changes status
-and review evidence only, with no P18 semantic or capability changes. Classify
-this P18 advance as `UPSTREAM_IRRELEVANT` to P13 semantics. P18-A's additive
-extension and P18-C's external-input/deferral adapter are promoted. The adapter
-does not establish a P18-D live consumer migration. P18-D remains
-implementation-blocked on the economy owner's operation-receipt contract and a
-serialized `SimulationRuntime` ownership window; P14 remains excluded without a
-reviewed temporal owner adapter. P20-A is promoted at `1dcf67a`, with its
-promotion recorded in P20 State `7a81cc0`. Architecture baseline `c285466` and
-both alignment records remain active constraints. Targeted identity/cardinality
-revalidation against both alignments, current P18 State, the P20 Brief/State,
-and P12/P13 Briefs passes: `ActivityInstanceId` is distinct from activity
-definition identity and every participant `PersonId`; P20's two-Person example
-is fixture-only; cardinality remains one-or-more/general. P20 is conditional
-only for histories that actually include supported shared activities. This
-status refresh does not accept the proposal, create checkpoint IDs, authorize
-implementation, alter product scope, narrow P13's boundary guarantee, or
-satisfy its P12 hard edge.
+authorization. The latest owner-inventory evidence candidate is `e995e2a`;
+it reports no profile-included owner group with demonstrated complete exact
+immutable export plus staged hydration, and confirms that the selected daily
+bootstrap does not compose P18 or P20 state. This is inventory evidence, not
+the P12-A scope-acceptance record or a continuation capability. P14 canonical
+is `4caecbb`. P18 canonical is
+`ba8076c3bc2c8c354a8755e6efaca30bfeab7bf7`; its promoted State records the
+P18-D design candidate `9ed6d90` as independently reviewed. This docs-only
+advance does not add an implemented capability or change P13's conditional
+dependency structure. Its P18-D design review does clarify the conditional
+causal-state inventory for histories that later include the selected consumer.
+P18-A's additive extension and P18-C's external-input/
+deferral adapter are promoted. The adapter does not establish a P18-D live
+consumer migration. P18-D remains implementation-blocked on the economy
+owner's operation-receipt/prepared-install capability and a serialized
+`SimulationRuntime` ownership window; P14 remains excluded without a reviewed
+temporal owner adapter. The reviewed P18-D design scopes its operation receipt
+to the current `SimulationRuntime` lifetime and makes no restart, save, crash-
+recovery, or durable-idempotency claim. If a later supported intraday save or
+fork includes this consumer, its causal operation/receipt state must be added
+to the relevant P12/P13 profile and recovered at the actual boundary. P20-A is
+promoted at `1dcf67a`, with its promotion recorded in P20 State `7a81cc0`.
+Architecture baseline `c285466` and both alignment records remain active
+constraints. Targeted identity/cardinality revalidation against both
+alignments, current P18 State/design, the P20 Brief/State, and P12/P13 Briefs
+passes: `ActivityInstanceId` is distinct from activity definition identity and
+every participant `PersonId`; P20's two-Person example is fixture-only;
+cardinality remains one-or-more/general. P20 is conditional only for histories
+that actually include supported shared activities. This status refresh does
+not accept the proposal, create checkpoint IDs, authorize implementation,
+alter product scope, narrow P13's boundary guarantee, or satisfy its P12 hard
+edge.
 
 ## 1. Purpose and guarantee
 
@@ -126,7 +136,7 @@ which boundaries the product supports.
 
 P12-A scope was accepted at `codex/phase12/ContinuationDesignP9BRevalidation`
 tip `4a1d364`, but that is scope acceptance only. The latest owner-inventory
-refresh candidate `bd15b92` still reports no profile-included owner
+refresh candidate `e995e2a` still reports no profile-included owner
 group with demonstrated complete exact immutable export plus staged
 hydration. It identifies missing envelope/admission, identity allocator
 restoration, owner DTOs and hydrators, causal inputs/commitments,
@@ -180,8 +190,15 @@ account for:
 - deterministic execution context and random state/context only where consumed;
 - temporal time/calendar, pending owner work, activity lifecycle and causal
   ordering where the history actually used P18. At current P18 canonical
-  `85f1f21`, the promoted implementation includes the P18-A extension (`1dd0479`)
-  and P18-C external-input/deferral adapter (`a535441`). For any supported P18 history,
+  `ba8076c`, the promoted implementation includes the P18-A extension (`1dd0479`)
+  and P18-C external-input/deferral adapter (`a535441`). P18-D's reviewed
+  design (`9ed6d90`) specifies a sale-operation receipt retained for the
+  current `SimulationRuntime` lifetime only; it makes no restart, save, crash-
+  recovery, or durable-idempotency claim. Any later supported intraday save or
+  fork that includes this consumer must capture and restore this causal receipt
+  state through its owning contract under P12/P13 design. This conditional
+  requirement does not make P18-D a blanket P13 dependency. For any supported
+  P18 history,
   preserve the world/profile/absolute-day boundary identity, exact logical
   instant and tick/version, frozen activation manifest and cursor, stable
   continuation identity bound to the boundary occurrence and subphase kind and
@@ -309,8 +326,10 @@ These are planning/design candidates, not promoted capability evidence:
 - P12 accepted-scope candidate `codex/phase12/ContinuationDesignP9BRevalidation`
   at `fb4da0b` (scope acceptance record `4a1d364`): P12-A remains
   `WAIT_DEPENDENCY` and has no implementation authorization. The separate
-  owner-inventory evidence commit `bd15b92` reports current export/hydration
-  gaps; it is not the scope acceptance or a completed continuation capability.
+  owner-inventory evidence candidate `e995e2a` reports current
+  export/hydration gaps; it is not the scope acceptance or a completed
+  continuation capability. The P12 inventory confirms the selected daily
+  profile excludes P18/P20 state and remains `WAIT_DEPENDENCY`.
 
 The implementation dependency graph must be refreshed against canonical
 Phase 12/18/19/20 States and code before scheduling. This proposal creates no
