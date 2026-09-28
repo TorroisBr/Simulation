@@ -135,6 +135,30 @@ public sealed class CityDailyEconomyContinuationTests
         Assert.That(city.Market.Revision, Is.EqualTo(long.MaxValue));
     }
 
+    [Test]
+    public void PopulationChangeAfterPreparationRejectsConsumptionBeforeMarketOrAccountInstall()
+    {
+        ItemData item = SimulationTestFactory.CreateItem("daily-population-stale");
+        CityData data = SimulationTestFactory.CreateCityData("daily-population-stale-city");
+        data.initialPopulation = 1000;
+        data.marketLiquidity = new MarketLiquidityConfig { liquidityMode = MarketLiquidityMode.AccountBacked, initialPurchasingPower = 0f };
+        data.populationConsumption = new PopulationConsumptionConfig { paymentMode = ConsumptionPaymentMode.AccountBacked, initialPurchasingPower = 50f };
+        data.marketItems.Add(new MarketItemConfig { item = item, initialAmount = 5, desiredAmount = 5, consumptionPer1000Population = 2f });
+        CityRuntime city = new CityRuntime("city-daily-population-stale", data, new SpatialLocationRuntime("daily-population-stale-location"));
+        BoundaryContinuationManifest manifest = CreateManifest(city, CityDailyEconomyStepKind.Consumption);
+        IBoundaryContinuationStepCommit prepared = Prepare(city, manifest);
+
+        Assert.That(SettlementPopulationSystem.TryPropose(city.Population, new PopulationChangeSet(100, 0, 0, 0),
+            out SettlementPopulationTransition transition, out _), Is.True);
+        Assert.That(SettlementPopulationSystem.TryApply(city.Population, transition, out _), Is.True);
+        Assert.That(prepared.TryCommit(out _), Is.False);
+
+        Assert.That(city.Market.GetAmount(item), Is.EqualTo(5));
+        Assert.That(city.Market.Revision, Is.Zero);
+        Assert.That(city.PopulationEconomy.MoneyAccount.Balance, Is.EqualTo(50f));
+        Assert.That(city.MarketCounterparty.MoneyAccount.Balance, Is.Zero);
+    }
+
     private static BoundaryContinuationManifest CreateManifest(CityRuntime city, CityDailyEconomyStepKind kind)
     {
         DailyBoundaryOperation operation = new DailyBoundaryOperation("world", "profile", 1);

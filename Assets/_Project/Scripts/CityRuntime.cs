@@ -117,7 +117,7 @@ public class CityRuntime
             if (previous.Fingerprint != fingerprint) return false;
             prepared = new CityDailyEconomyCommit(this, previous, null, 0, 0,
                 null, 0, 0, 0f, null, 0, 0, 0f, null, dailyEconomyReceiptRevision, true,
-                step.OwnerRevision, fingerprint);
+                step.OwnerRevision, -1L, -1, fingerprint);
             failure = TimelineFailure.None;
             return true;
         }
@@ -127,6 +127,8 @@ public class CityRuntime
         PreparedMarketState marketState = Market.CreatePreparedSnapshot();
         long marketIncrements = 0;
         CityDailyEconomyStepKind kind = GetDailyEconomyStepKind(step.StepId);
+        int preparedPopulation = kind == CityDailyEconomyStepKind.Consumption ? Population.CurrentPopulation : -1;
+        long preparedPopulationRevision = kind == CityDailyEconomyStepKind.Consumption ? Population.Revision : -1L;
         bool paidConsumption = kind == CityDailyEconomyStepKind.Consumption
             && PopulationEconomy.PaymentMode == ConsumptionPaymentMode.AccountBacked;
         MoneyAccountRuntime populationAccount = paidConsumption ? PopulationEconomy.MoneyAccount : null;
@@ -156,7 +158,7 @@ public class CityRuntime
             foreach (MarketItemConfig row in cityData != null ? cityData.marketItems ?? new List<MarketItemConfig>() : new List<MarketItemConfig>())
             {
                 if (row?.item == null || row.consumptionPer1000Population <= 0f) continue;
-                int desired = Mathf.RoundToInt(CurrentPopulation / 1000f * row.consumptionPer1000Population);
+                int desired = Mathf.RoundToInt(preparedPopulation / 1000f * row.consumptionPer1000Population);
                 int consumed = 0;
                 float unitPrice = 0f, paid = 0f;
                 MarketItemRuntime item = FindPreparedItem(marketState, row.item);
@@ -229,7 +231,8 @@ public class CityRuntime
         prepared = new CityDailyEconomyCommit(this, receipt, marketState, marketRevision, marketIncrements,
             populationAccount, populationRevision, populationIncrements, populationBalance,
             settlementAccount, settlementRevision, settlementIncrements, settlementBalance,
-            nextReceipts, dailyEconomyReceiptRevision, false, step.OwnerRevision, fingerprint);
+            nextReceipts, dailyEconomyReceiptRevision, false, step.OwnerRevision,
+            preparedPopulationRevision, preparedPopulation, fingerprint);
         failure = TimelineFailure.None;
         return true;
     }
@@ -265,6 +268,9 @@ public class CityRuntime
         }
         if (dailyEconomyReceiptRevision != commit.ExpectedReceiptRevision || dailyEconomyReceiptRevision == long.MaxValue
             || commit.ExpectedOwnerRevision != SpatialStableKey.Encode(RuntimeId, CaptureDailyEconomyConfiguration())
+            || (commit.ExpectedPopulationRevision >= 0L
+                && (Population.Revision != commit.ExpectedPopulationRevision
+                    || Population.CurrentPopulation != commit.ExpectedPopulation))
             || dailyEconomyReceipts == null || dailyEconomyReceipts.ContainsKey(commit.Receipt.Identity)
             || !Market.CanInstall(commit.MarketRevision, commit.MarketIncrements)
             || (commit.PopulationAccount != null && !commit.PopulationAccount.CanInstall(commit.PopulationRevision, commit.PopulationIncrements, commit.PopulationBalance))
@@ -632,6 +638,8 @@ internal sealed class CityDailyEconomyCommit : IBoundaryContinuationStepCommit
     internal readonly long ExpectedReceiptRevision;
     internal readonly bool Replay;
     internal readonly string ExpectedOwnerRevision;
+    internal readonly long ExpectedPopulationRevision;
+    internal readonly int ExpectedPopulation;
     internal readonly string Fingerprint;
     internal bool Completed;
     public IReadOnlyList<DueWorkReference> RetainedTimelineFacts => Array.Empty<DueWorkReference>();
@@ -641,14 +649,15 @@ internal sealed class CityDailyEconomyCommit : IBoundaryContinuationStepCommit
         MoneyAccountRuntime populationAccount, long populationRevision, long populationIncrements, float populationBalance,
         MoneyAccountRuntime settlementAccount, long settlementRevision, long settlementIncrements, float settlementBalance,
         Dictionary<string, CityDailyEconomyReceipt> nextReceipts, long expectedReceiptRevision, bool replay,
-        string expectedOwnerRevision, string fingerprint)
+        string expectedOwnerRevision, long expectedPopulationRevision, int expectedPopulation, string fingerprint)
     {
         this.owner = owner; Receipt = receipt; MarketState = marketState; MarketRevision = marketRevision;
         MarketIncrements = marketIncrements; PopulationAccount = populationAccount; PopulationRevision = populationRevision;
         PopulationIncrements = populationIncrements; PopulationBalance = populationBalance; SettlementAccount = settlementAccount;
         SettlementRevision = settlementRevision; SettlementIncrements = settlementIncrements; SettlementBalance = settlementBalance;
         NextReceipts = nextReceipts; ExpectedReceiptRevision = expectedReceiptRevision; Replay = replay;
-        ExpectedOwnerRevision = expectedOwnerRevision; Fingerprint = fingerprint;
+        ExpectedOwnerRevision = expectedOwnerRevision; ExpectedPopulationRevision = expectedPopulationRevision;
+        ExpectedPopulation = expectedPopulation; Fingerprint = fingerprint;
     }
     public bool TryCommit(out TimelineFailure failure)
     {
