@@ -304,13 +304,20 @@ public sealed class EconomyTransactionService
         float observedCounterpartyBalance = counterpartyAccount != null ? counterpartyAccount.Balance : 0f;
         EconomyTransactionResult result = ValidateSale(seller, market, item, requestedQuantity, mode);
         int snapshotQuantity = result.Success ? result.Quantity : Mathf.Min(Mathf.Max(0, requestedQuantity), observedInventory);
+        float normalizedSalePrice = IsValidNonNegativeFiniteAmount(observedPrice) ? Mathf.Max(0.01f, observedPrice) : observedPrice;
+        if (!result.Success && mode == MarketLiquidityMode.AccountBacked && counterpartyAccount != null
+            && IsValidNonNegativeFiniteAmount(normalizedSalePrice))
+        {
+            snapshotQuantity = Mathf.Min(snapshotQuantity, GetAffordableQuantity(observedCounterpartyBalance, normalizedSalePrice));
+        }
+        float snapshotTotal = normalizedSalePrice * snapshotQuantity;
         KeyedSaleSnapshot snapshot = new KeyedSaleSnapshot(actorChoiceInputId, requestId, actorPersonId, proposalId,
             actionSemanticId, actionVersion, profileId, logicalTick, marketSiteId,
             market != null ? market.StockOwnerRuntimeId : null, item != null ? item.DefinitionId : null,
             mode, observedPrice, observedStock, observedInventory, observedSellerBalance, observedCounterpartyBalance,
             requestedQuantity, snapshotQuantity, seller != null && seller.IsAlive,
-            sellerAccount != null && sellerAccount.CanCredit(observedPrice * snapshotQuantity),
-            mode == MarketLiquidityMode.AccountBacked && counterpartyAccount != null && counterpartyAccount.CanDebit(observedPrice * snapshotQuantity),
+            snapshotQuantity > 0 && sellerAccount != null && sellerAccount.CanCredit(snapshotTotal),
+            snapshotQuantity > 0 && mode == MarketLiquidityMode.AccountBacked && counterpartyAccount != null && counterpartyAccount.CanDebit(snapshotTotal),
             snapshotQuantity > 0 && market != null && item != null && market.CanAddStock(item, snapshotQuantity),
             invRev, marketRev, sellerMoneyRev, counterpartyMoneyRev);
         if (!result.Success)
