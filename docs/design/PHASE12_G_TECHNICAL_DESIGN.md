@@ -10,21 +10,16 @@ separately gated.
 which the original G proposal was authored; it is not the current governing
 input set.
 
-**Current governing reviewed inputs:** accepted decomposition and owner
-inventory/B design `45e6be83fc40a1b78908aa79500e46e64532ac4b`; P12-C corrected
-design `ceb37049ddbe54602063ba92a92cceafdce50096` (exact-tip review PASS);
-P12-D design `796eadc1a0bd6b44b646f27f5eeb63de71f6b14`; P12-E design
-`51718c7bd38e9582433d1fa38ff4011ef9cf20c5`; and P12-F semantic contract
-content at `c8` (review PASS), with refreshed metadata-reference candidate
-`dc2e63d3c19a597a4d811875c6cb6866912ce934` (exact-tip metadata re-review
-pending). D/E review results apply to their identified design tips; revalidate
-hashes and owner interfaces before implementation. These are design artifacts,
-not proof that the corresponding capabilities have been delivered.
-
-**P12-G review status:** the prior `b5d9c1b` proposal passed exact review;
-semantic changes at `5a5f417` remain pending fresh exact-tip review. This
-traceability refresh does not change those semantic-review requirements or
-implementation readiness.
+**Current governing inputs:** accepted decomposition and owner inventory/B
+design `45e6be83fc40a1b78908aa79500e46e64532ac4b`; P12-C corrected design
+`ceb37049ddbe54602063ba92a92cceafdce50096`; P12-D design
+`796eadc1a0bd6b44b646f27f5eeb63de71f6b14`; P12-E design
+`51718c7bd38e9582433d1fa38ff4011ef9cf20c5`; and current P12-F design
+`cfb5c2431cf167439bc7aeca26011fcb60ed3979`. Review evidence for these inputs
+and this proposal is tracked in the independent checkpoint/review records, not
+inferred from this traceability ledger. These are design artifacts, not proof
+that the corresponding capabilities have been delivered; revalidate hashes and
+owner interfaces before implementation.
 
 The accepted architecture baseline is `c285466`; current intraday/extensibility
 and multi-participant alignment records remain constraints. The selected daily
