@@ -584,9 +584,7 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
             }
 
             string runtimeId = npc.RuntimeId;
-            if (string.IsNullOrWhiteSpace(runtimeId)
-                || (runtimeIds.TryGetValue(runtimeId, out NpcRuntime registered)
-                    && !ReferenceEquals(registered, npc)))
+            if (!TryRegisterAdvanceSentencesNpcRuntime(runtimeIds, npc))
             {
                 return false;
             }
@@ -618,6 +616,12 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
             WantedRecordRuntime warrant = sentence.Warrant;
             NpcRuntime warrantTarget = warrant?.Target;
             CityRuntime warrantCity = warrant?.City;
+            if (!TryRegisterAdvanceSentencesNpcRuntime(runtimeIds, target)
+                || !TryRegisterAdvanceSentencesNpcRuntime(runtimeIds, warrantTarget))
+            {
+                return false;
+            }
+
             string targetRuntimeId = target?.RuntimeId ?? string.Empty;
             string targetPersonId = target?.PersonId?.Value ?? string.Empty;
             string cityRuntimeId = city?.RuntimeId ?? string.Empty;
@@ -657,6 +661,11 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
 
             NpcRuntime target = record.Target;
             CityRuntime city = record.City;
+            if (!TryRegisterAdvanceSentencesNpcRuntime(runtimeIds, target))
+            {
+                return false;
+            }
+
             string targetRuntimeId = target?.RuntimeId ?? string.Empty;
             string targetPersonId = target?.PersonId?.Value ?? string.Empty;
             string cityRuntimeId = city?.RuntimeId ?? string.Empty;
@@ -710,6 +719,27 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
     {
         parts.Add(runtimeId ?? string.Empty);
         parts.Add(personId ?? string.Empty);
+    }
+
+    private static bool TryRegisterAdvanceSentencesNpcRuntime(
+        Dictionary<string, NpcRuntime> runtimeIds,
+        NpcRuntime npc)
+    {
+        if (npc == null)
+        {
+            return true;
+        }
+
+        string runtimeId = npc.RuntimeId;
+        if (string.IsNullOrWhiteSpace(runtimeId)
+            || (runtimeIds.TryGetValue(runtimeId, out NpcRuntime registered)
+                && !ReferenceEquals(registered, npc)))
+        {
+            return false;
+        }
+
+        runtimeIds[runtimeId] = npc;
+        return true;
     }
 
     private static string GetAdvanceSentencesStatusIdentity(NpcStatusData status) =>
@@ -1154,16 +1184,7 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
     public void AdvanceSentences(List<NpcRuntime> npcRuntimeList)
     {
         ThrowIfFaulted();
-
-        int capacity = prisonSentences.Count;
-        if (npcRuntimeList != null && capacity <= int.MaxValue - npcRuntimeList.Count)
-        {
-            capacity += npcRuntimeList.Count;
-        }
-
-        List<JusticeAdvanceSentencesLogNotice> notices = new List<JusticeAdvanceSentencesLogNotice>(capacity);
-        ApplyAdvanceSentences(npcRuntimeList, notices);
-        EmitAdvanceSentencesLogNotices(notices);
+        ApplyAdvanceSentences(npcRuntimeList, null);
     }
 
     private void ApplyAdvanceSentences(
@@ -1184,9 +1205,16 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
             {
                 ReleasePrisoner(sentence.Target);
                 prisonSentences.RemoveAt(i);
-                notices.Add(new JusticeAdvanceSentencesLogNotice(
-                    false,
-                    $"{sentence.Target.NpcName} foi libertado porque seu mandado nao esta mais ativo."));
+                string inactiveWarrantNotice =
+                    $"{sentence.Target.NpcName} foi libertado porque seu mandado nao esta mais ativo.";
+                if (notices == null)
+                {
+                    logger.Log(SimulationLogCategory.Justice, inactiveWarrantNotice);
+                }
+                else
+                {
+                    notices.Add(new JusticeAdvanceSentencesLogNotice(false, inactiveWarrantNotice));
+                }
                 continue;
             }
 
@@ -1207,9 +1235,16 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
             ResolveWarrant(sentence.Warrant);
             ReleasePrisoner(sentence.Target);
             prisonSentences.RemoveAt(i);
-            notices.Add(new JusticeAdvanceSentencesLogNotice(
-                false,
-                $"{sentence.Target.NpcName} cumpriu sua pena em {sentence.City.CityName} e foi libertado."));
+            string expiredSentenceNotice =
+                $"{sentence.Target.NpcName} cumpriu sua pena em {sentence.City.CityName} e foi libertado.";
+            if (notices == null)
+            {
+                logger.Log(SimulationLogCategory.Justice, expiredSentenceNotice);
+            }
+            else
+            {
+                notices.Add(new JusticeAdvanceSentencesLogNotice(false, expiredSentenceNotice));
+            }
         }
 
         ReleasePrisonersWithoutActiveSentence(npcRuntimeList, notices);
@@ -1546,9 +1581,15 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
             }
 
             ReleasePrisoner(npcRuntime);
-            notices.Add(new JusticeAdvanceSentencesLogNotice(
-                true,
-                $"{npcRuntime.NpcName} estava preso sem sentenca ativa e foi libertado."));
+            string orphanReleaseNotice = $"{npcRuntime.NpcName} estava preso sem sentenca ativa e foi libertado.";
+            if (notices == null)
+            {
+                logger.LogWarning(orphanReleaseNotice);
+            }
+            else
+            {
+                notices.Add(new JusticeAdvanceSentencesLogNotice(true, orphanReleaseNotice));
+            }
         }
     }
 
