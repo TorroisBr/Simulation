@@ -433,3 +433,168 @@ public sealed class JusticeBeginDayBoundaryOwnerTests
             "content");
     }
 }
+
+public sealed class CrimeHiddenStatusBoundaryOwnerTests
+{
+    [SetUp]
+    public void SetUp()
+    {
+        SimulationTestFactory.CleanupDefinitions();
+    }
+
+    [TearDown]
+    public void TearDown()
+    {
+        SimulationTestFactory.CleanupDefinitions();
+    }
+
+    [Test]
+    public void HiddenStatusBoundaryStepCommitsReceiptAndExactReplayDoesNotReapply()
+    {
+        NpcStatusData hidden = SimulationTestFactory.CreateStatus("crime-boundary-hidden");
+        CrimeSystem crime = new CrimeSystem(null, null, hidden);
+        NpcRuntime npc = CreateActor("crime-boundary-replay");
+        npc.HideForDays(1);
+        npc.AddStatus(hidden);
+        List<NpcRuntime> roster = new List<NpcRuntime> { npc };
+        DailyBoundaryOperation operation = new DailyBoundaryOperation("world", "intraday", 1L);
+
+        Assert.That(crime.TryCreateAdvanceHiddenStatusesStep(
+            operation, roster, 0, out BoundaryContinuationStep step, out TimelineFailure failure), Is.True);
+        BoundaryContinuationManifest manifest = CreateManifest(operation, step);
+        Assert.That(crime.TryPrepareAdvanceHiddenStatusesStep(
+            manifest, step, roster, out IBoundaryContinuationStepCommit prepared, out failure), Is.True);
+        Assert.That(prepared.RetainedTimelineFacts, Is.Empty);
+        Assert.That(prepared.RetainedSourceSignals, Is.Empty);
+        Assert.That(prepared.TryCommit(out failure), Is.True);
+        Assert.That(npc.HiddenDaysRemaining, Is.EqualTo(1));
+        Assert.That(CountStatusReference(npc, hidden), Is.EqualTo(1));
+        Assert.That(crime.TryResolveAdvanceHiddenStatusesReceipt(
+            manifest, step, out CrimeHiddenStatusReceipt receipt, out failure), Is.True);
+        Assert.That(receipt.OwnerRevisionBefore, Is.Zero);
+        Assert.That(receipt.OwnerRevisionAfter, Is.EqualTo(1L));
+
+        npc.HideForDays(4);
+        int currentDays = npc.HiddenDaysRemaining;
+        Assert.That(crime.TryPrepareAdvanceHiddenStatusesStep(
+            manifest, step, roster, out IBoundaryContinuationStepCommit replay, out failure), Is.True);
+        Assert.That(replay.TryCommit(out failure), Is.True);
+        Assert.That(npc.HiddenDaysRemaining, Is.EqualTo(currentDays));
+        Assert.That(CountStatusReference(npc, hidden), Is.EqualTo(1));
+    }
+
+    [Test]
+    public void HiddenStatusBoundaryStepRejectsChangedOrderCardinalityAndMarkerSnapshot()
+    {
+        NpcStatusData hidden = SimulationTestFactory.CreateStatus("crime-boundary-stale-hidden");
+        CrimeSystem crime = new CrimeSystem(null, null, hidden);
+        NpcRuntime first = CreateActor("crime-boundary-stale-first");
+        NpcRuntime second = CreateActor("crime-boundary-stale-second");
+        first.HideForDays(2);
+        second.HideForDays(2);
+        List<NpcRuntime> roster = new List<NpcRuntime> { first, second };
+
+        DailyBoundaryOperation orderOperation = new DailyBoundaryOperation("world", "intraday", 1L);
+        Assert.That(crime.TryCreateAdvanceHiddenStatusesStep(
+            orderOperation, roster, 0, out BoundaryContinuationStep orderStep, out _), Is.True);
+        BoundaryContinuationManifest orderManifest = CreateManifest(orderOperation, orderStep);
+        Assert.That(crime.TryPrepareAdvanceHiddenStatusesStep(
+            orderManifest, orderStep, roster, out IBoundaryContinuationStepCommit orderPrepared, out _), Is.True);
+        roster.Reverse();
+        Assert.That(orderPrepared.TryCommit(out TimelineFailure orderFailure), Is.False);
+        Assert.That(orderFailure, Is.EqualTo(TimelineFailure.ContinuationFailed));
+        Assert.That(first.HiddenDaysRemaining, Is.EqualTo(3));
+        Assert.That(second.HiddenDaysRemaining, Is.EqualTo(3));
+
+        DailyBoundaryOperation cardinalityOperation = new DailyBoundaryOperation("world", "intraday", 2L);
+        Assert.That(crime.TryCreateAdvanceHiddenStatusesStep(
+            cardinalityOperation, roster, 0, out BoundaryContinuationStep cardinalityStep, out _), Is.True);
+        BoundaryContinuationManifest cardinalityManifest = CreateManifest(cardinalityOperation, cardinalityStep);
+        Assert.That(crime.TryPrepareAdvanceHiddenStatusesStep(
+            cardinalityManifest, cardinalityStep, roster, out IBoundaryContinuationStepCommit cardinalityPrepared, out _), Is.True);
+        roster.RemoveAt(1);
+        Assert.That(cardinalityPrepared.TryCommit(out TimelineFailure cardinalityFailure), Is.False);
+        Assert.That(cardinalityFailure, Is.EqualTo(TimelineFailure.ContinuationFailed));
+        Assert.That(first.HiddenDaysRemaining, Is.EqualTo(3));
+        Assert.That(second.HiddenDaysRemaining, Is.EqualTo(3));
+
+        DailyBoundaryOperation markerOperation = new DailyBoundaryOperation("world", "intraday", 3L);
+        Assert.That(crime.TryCreateAdvanceHiddenStatusesStep(
+            markerOperation, roster, 0, out BoundaryContinuationStep markerStep, out _), Is.True);
+        BoundaryContinuationManifest markerManifest = CreateManifest(markerOperation, markerStep);
+        Assert.That(crime.TryPrepareAdvanceHiddenStatusesStep(
+            markerManifest, markerStep, roster, out IBoundaryContinuationStepCommit markerPrepared, out _), Is.True);
+        second.CurrentStatus.Add(hidden);
+        Assert.That(markerPrepared.TryCommit(out TimelineFailure markerFailure), Is.False);
+        Assert.That(markerFailure, Is.EqualTo(TimelineFailure.ContinuationFailed));
+        Assert.That(first.HiddenDaysRemaining, Is.EqualTo(3));
+        Assert.That(CountStatusReference(second, hidden), Is.EqualTo(1));
+    }
+
+    [Test]
+    public void HiddenStatusBoundaryStepPreservesRepeatedRosterOccurrencesAndSingleMarkerRemoval()
+    {
+        NpcStatusData hidden = SimulationTestFactory.CreateStatus("crime-boundary-duplicate-hidden");
+        CrimeSystem crime = new CrimeSystem(null, null, hidden);
+        NpcRuntime hiddenNpc = CreateActor("crime-boundary-duplicate-roster");
+        hiddenNpc.HideForDays(1);
+        hiddenNpc.AddStatus(hidden);
+        List<NpcRuntime> repeatedRoster = new List<NpcRuntime> { hiddenNpc, hiddenNpc };
+        DailyBoundaryOperation operation = new DailyBoundaryOperation("world", "intraday", 1L);
+
+        Assert.That(crime.TryCreateAdvanceHiddenStatusesStep(
+            operation, repeatedRoster, 0, out BoundaryContinuationStep step, out _), Is.True);
+        BoundaryContinuationManifest manifest = CreateManifest(operation, step);
+        Assert.That(crime.TryPrepareAdvanceHiddenStatusesStep(
+            manifest, step, repeatedRoster, out IBoundaryContinuationStepCommit prepared, out _), Is.True);
+        Assert.That(prepared.TryCommit(out TimelineFailure failure), Is.True);
+        Assert.That(failure, Is.EqualTo(TimelineFailure.None));
+        Assert.That(hiddenNpc.HiddenDaysRemaining, Is.Zero);
+        Assert.That(CountStatusReference(hiddenNpc, hidden), Is.Zero);
+
+        NpcRuntime visibleNpc = CreateActor("crime-boundary-duplicate-marker");
+        visibleNpc.CurrentStatus.Add(hidden);
+        visibleNpc.CurrentStatus.Add(hidden);
+        List<NpcRuntime> visibleRoster = new List<NpcRuntime> { visibleNpc };
+        DailyBoundaryOperation nextOperation = new DailyBoundaryOperation("world", "intraday", 2L);
+        Assert.That(crime.TryCreateAdvanceHiddenStatusesStep(
+            nextOperation, visibleRoster, 0, out BoundaryContinuationStep nextStep, out _), Is.True);
+        BoundaryContinuationManifest nextManifest = CreateManifest(nextOperation, nextStep);
+        Assert.That(crime.TryPrepareAdvanceHiddenStatusesStep(
+            nextManifest, nextStep, visibleRoster, out IBoundaryContinuationStepCommit nextPrepared, out _), Is.True);
+        Assert.That(nextPrepared.TryCommit(out failure), Is.True);
+        Assert.That(CountStatusReference(visibleNpc, hidden), Is.EqualTo(1));
+    }
+
+    private static NpcRuntime CreateActor(string identity)
+    {
+        return new NpcRuntime(identity, SimulationTestFactory.CreateNpc(identity + "-definition"));
+    }
+
+    private static int CountStatusReference(NpcRuntime npc, NpcStatusData status)
+    {
+        int count = 0;
+        foreach (NpcStatusData candidate in npc.CurrentStatus)
+        {
+            if (ReferenceEquals(candidate, status))
+            {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+    private static BoundaryContinuationManifest CreateManifest(
+        DailyBoundaryOperation operation,
+        BoundaryContinuationStep step)
+    {
+        return new BoundaryContinuationManifest(
+            operation,
+            "daily-boundary",
+            "v1",
+            "configuration",
+            new List<BoundaryContinuationStep> { step },
+            "content");
+    }
+}
