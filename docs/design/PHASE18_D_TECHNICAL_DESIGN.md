@@ -172,14 +172,15 @@ mutation sequencing to the P18-D coordinator.
 
 Local observation descriptors preserve the effective runtime roster: registration rejects null entries and duplicate `NpcRuntimeId` values, and the runtime sorts accepted entries by runtime ID before the daily loop. Freeze that sorted unique target order and cardinality. A Person-backed actor carries both `PersonId` and its `NpcRuntimeId`; an unbacked actor retains `NpcRuntimeId`. The owner captures current truth only when preparing this step after earlier boundary effects. Preserve both ordered discoveries: `NpcRuntime.CurrentLocation` for each eligible actor, then `CurrentCity.Location` for eligible merchants inside `MerchantSystem.ObserveCurrentMarket`, followed by that market's ordered item and liquidity observations. Even if the location IDs are equal, retain both calls in legacy order. One actor-owned operation atomically installs the affected spatial and commercial knowledge together with its receipt; otherwise keep the operation outside intraday composition.
 
-Commercial sharing preserves the frozen eligible merchant membership,
-location-group order, and deterministic rotation/pairing, including duplicate
-membership cardinality. The owner captures each sender's shareable observations
-after the preceding local-observation steps commit. Each directed transfer is a
-recipient-owned operation whose receipt identifies the boundary occurrence,
-sender and receiver identities, and the frozen pairing/source fingerprint;
-exact duplicate directed pairs are applied in their frozen multiplicity/order
-within a recipient batch so no ordinal becomes operation identity.
+Commercial sharing freezes the eligible merchant membership from the
+runtime's unique sorted roster, followed by its location-group order and
+deterministic rotation/pairing. The owner captures each sender's shareable
+observations after the preceding local-observation steps commit. Each directed
+transfer is a recipient-owned operation whose receipt identifies the boundary
+occurrence, sender and receiver `NpcRuntimeId` values (with backing `PersonId`
+values where present), and the frozen pairing/source fingerprint. Preserve the
+pairing and direction order; list ordinals express order but are not operation
+identity.
 
 
 ## 5. Current-truth execution, outcome, and failure atomicity
