@@ -21,18 +21,23 @@ closure `82396ae7ffaf407fda278928da456b06dc5394d4` (P9-B code integration
 P14 historical promotion State `f8a61fe9634ba9ab56ee31d50b57b45fef292a6f`
 (P14-A code `c44904bb4b0a066eced1d7e8a773b7dc1eea76c0`); current P14
 canonical State/Brief `4caecbbfb0464c965811402b3c11d8717605114a` is a docs-only
-update; P18 canonical code tip `9e790c59e14ca7f7ed195c0e6267e10f3cd039d7`.
-Its canonical State text at that tip is stale and still records the two P18-D
-prerequisites as missing, although code at `9e790c5` includes both the
-economy sale receipt/prepared-install capability and the legacy per-runtime
-advance lease. The reviewed P18-D technical design now permits consumer
-implementation; the pushed `707ef8a` candidate contains the P11 temporal-input
-owner, bridge, and timeline-yield component (`828bfa9`). The current pushed
-P18-D feature candidate is `a9428a3221876e6b9dccec7a17a6d205896fef15`;
-independent exact-tip review passed. It adds the PlaceContent atomic day-step
-owner to that integration work. These remain unpromoted components, not a
-complete runtime consumer or daily-profile adapter. P18-D is therefore not delivered; this
-does not establish a P18-integrated P12 profile. P20 canonical/State
+update; P18 canonical code tip `9e790c59e14ca7f7ed195c0e6267e10f3cd039d7`
+promotes the economy sale-owner receipt/prepared-install capability and the
+per-runtime serialized advance lease. The canonical State at `9e790c5` retains
+stale pre-promotion blocker wording; a docs-only State correction candidate
+`6f98e0943782efdf11e4ba1e3a5701aba421f0df` records the current status but is
+not promoted. The approved P18-D technical design is not full-consumer
+readiness. The current pushed P18-D candidate is
+`5d7eb2687c3866fb2399faf8b366a299484d8dd4` (code integration
+`3d9c0ea508e542e8a7e92a4982fbec3e29560e81`), which adds the reviewed
+CommercialKnowledge sharing receipt/prepared-install owner to the earlier
+integration based at `6fcbfab`. Its focused `CommercialKnowledge` filter passed
+29/29 and exact integration review passed after the docs-only whitespace fix.
+It still does not wire the full chronological P18-D consumer into
+`SimulationRuntime`, provide final runtime ordering/handoff, or complete an
+intraday/daily profile adapter. P18-D remains in progress and unpromoted; this
+candidate does not establish P18 state in the selected P12 profile. P20
+canonical/State
 `7a81cc0ecbc511dd36c248ec62c7b20f7e477f53` (P20-A promoted, code
 `22df7b307528e705e6e84d1d8d54852a17cfc848`); and the current architecture
 alignments.
@@ -57,13 +62,13 @@ deferred) and `ConsumedAwaitingTerminalAttempt` state. `Rejected`,
 allowed only at a later successful daily boundary while the runtime is healthy.
 The exact candidate `af656e7` contains P11 composition, but remains unpromoted;
 canonical combined composition must be revalidated before this becomes live
-profile evidence. P18-A/B/C and the additive P18-A continuation extension are present in the
-checked P18 code lineage; the
-extension was accepted under contract `2175bf2` (acceptance record `9de70ae`)
-and promoted at integration `1dd0479`. The selected legacy
-`TesteSimulacao` profile still does not compose the P18 timeline, activity
-lifecycle, availability-decision services, or continuation extension. Their
-promoted code does not make that state part of this profile.
+profile evidence. P18-A/B/C and the additive P18-A continuation extension are
+promoted at P18 canonical `9e790c5`; the extension was accepted under contract
+`2175bf2` (acceptance record `9de70ae`) and promoted at integration `1dd0479`.
+The P18-D candidate and its commercial-sharing receipt are not composed by the
+selected legacy `TesteSimulacao` profile, which still does not compose the P18
+timeline, activity lifecycle, availability-decision services, or continuation
+extension. Their promoted code does not make that state part of this profile.
 
 This is a read-only gap inventory from the current runtime composition and
 owner APIs. **No profile-included group currently has a demonstrated complete,
@@ -209,7 +214,8 @@ the consequences for continuation invalidation and export. It is not a live
 owner census or proof of complete revisions: no P12 owner census/revision
 providers, mutation epochs, operation scopes, exact exports, or hydration were
 implemented by this audit. Refresh it against the actual canonical composition
-after P9-B/P11 composition promotion and before claiming P12-B readiness.
+after the combined P9-B/P11 application composition is promoted and before
+claiming P12-B readiness.
 
 | Owner group | Supported public mutation examples and owner guards | Revision evidence | Live API exposure; continuation consequence |
 |---|---|---|---|
@@ -232,13 +238,59 @@ operation scopes, exports, or hydration. Keep `NpcDecisionStore` and
 is a derived view. These are not authoritative mutation owners; retain the
 shared `SimulationRecordSequence` separately as a causal scalar.
 
-P12-B remains blocked by the unpromoted P9-B/P11 composition candidate and
-missing live owner census/revision proofs. The P18-D2 per-runtime advance
-lease is already promoted at P18 canonical `9e790c5`; it is not a pending
-canonical gate. P18-D consumer work still owns the `SimulationRuntime` source
-hotspot, so any P12-B implementation touching it must wait for an explicit
-handoff. These gates are independent from the completed candidate-source
-method census.
+### P12-B entrypoint and mutation-invalidation census — partial (2026-09-28)
+
+This source pass inspects the selected bootstrap candidate `af656e7`, P18
+canonical `9e790c5`, and pushed P18-D candidate `5d7eb268` / code integration
+`3d9c0ea`. The combined P9-B/P11 application composition remains validated but
+unpromoted, so this is a source/API map, not a complete live owner census.
+
+| Entry surface | Synchronous path and owner reach | Current evidence and remaining gap |
+|---|---|---|
+| Selected SampleScene bootstrap | `TesteSimulacao.Start` → private `InitializeSimulation` → P9 genesis stages and composition publication. The scene selects `Simulation-GeneralTest.asset`. | Bootstrap is synchronous on Unity's lifecycle thread, but it records/verifies no owner-thread identity or active bootstrap operation scope. No task/thread/coroutine is used by this selected path. |
+| Selected day input | `TesteSimulacao.Update` handles Space → private `Simulate` → repeated `SimulationRuntime.AdvanceDay` calls. | P18 canonical `SimulationRuntime` has a serialized advance lease for its guarded `AdvanceDay`/`AdvanceDays` entrypoints. That lease does not cover direct owner writes, bootstrap, or all command/transaction scopes. P18-D owns extending the serialized window through chronological timeline/continuation work and P18-C handoff; P12-B must wait for an explicit hotspot handoff. |
+| Other bootstrap-facing commands | `TesteSimulacao.TryStartTravelParty` and `TryStartExpedition` synchronously enter the published runtime/system. `Runtime`/`Bootstrap` properties expose the runtime, stores, and systems to same-process callers. | No shared operation-scope registry wraps these entrypoints or all direct owner APIs. The selected scene has no external `WorldCommand` queue. `WorldObserverTimeController.AdvanceOneDay` exists but is not bound into this SampleScene; revisit it only if included in a supported profile. |
+| Included mutable truth | Runtime façade and exposed owners cover City/market/account, NPC/Person/population, legacy spatial/site, selected economy/merchant/Justice/Crime/Knowledge, P11 ActorChoice, and other profile-supported authorities listed above. Public operations include lifecycle/materialization/population, genealogy, route/observation/plan, travel/expedition, trade, and daily-economy paths. | A method-to-owner-to-committed-write map remains required. Classify proposals/queries by actual commit; guard bindings alone do not prove a committed write was counted or invalidated. Direct owner APIs and live mutable references can bypass runtime wrappers. |
+| Excluded or conditional authorities | Runtime surfaces can expose P8-B..E, P10 LocalTopology, P14 material flow, P18 temporal, P19 extension, P20 activity, and other conditional authorities. | These remain outside this profile. Each corresponding provider/store must report known explicit-empty or not-composed state at admission; populated or unverified state must reject. Initial-scene emptiness is not evidence for evolved runtime state. |
+
+**Revision, receipt, export, and hydration evidence:**
+`AuthoritativeMutationGuard` is a Healthy/Faulted latch with one-way binding; it
+has no mutation epoch, owner-thread check, or active-operation count. Individual
+owners expose nonuniform witnesses, including revisions on Market, Inventory,
+MoneyAccount, SettlementPopulation, selected spatial/Knowledge/political/
+property/force/conflict owners, and operation-specific receipts. `CityRuntime`
+has a private daily-economy receipt revision, not a revision for all City
+truth. `NpcRuntime` and `PersonStore` have no general mutation revision.
+`SimulationRuntime.PoliticalWorldRevision` covers only its political subset.
+Identity allocators, record sequences, and diagnostic revisions are not global
+mutation invalidation.
+
+The P18-D candidate adds a `CommercialKnowledgeRuntime` revision and an
+idempotent recipient-owned commercial-sharing receipt, with a retained daily
+source snapshot. These are candidate-only operation witnesses, not canonical
+P12 profile capabilities or a profile-wide owner epoch. The candidate does not
+wire full chronological P18-D daily composition into `SimulationRuntime`.
+Neither the candidate receipts nor existing P12 construction/clone/rollback
+helpers provide exact immutable owner export or staged hydration. No included
+P12 authority has demonstrated both capabilities.
+
+**Remaining census gap:** for every supported synchronous caller, map each
+owner to exact committed writes, available before/after revisions or receipts,
+and any write that bypasses them. Add explicit owner-thread capture, coverage
+for every in-flight operation, and unknown/missing-owner rejection. Complete
+this matrix against a promoted combined bootstrap/provider graph and revalidate
+after P18-D releases its exclusive runtime/day-loop window. This partial pass
+does not establish P12-B implementation readiness, P12-A readiness,
+implementation authorization, or canonical promotion.
+
+P12-B remains not implementation-ready: P9-B and P11 are individually
+canonical, but their combined application composition `af656e7` is still an
+unpromoted candidate, and the live profile/provider inventory must be validated
+against the exact promoted composition. Complete live owner-census/revision
+proofs are also missing. P18-D2's per-runtime advance lease is promoted at P18
+canonical `9e790c5`; P18-D consumer code remains unpromoted and owns the
+`SimulationRuntime` source hotspot until explicit handoff. The lease does not
+replace P12-B's missing operation scopes or mutation invalidation.
 
 `SimulationRuntime.TryAdvanceDay` and
 `TryAdvanceDays` enter `AdvanceDayAfterClockAdvance`, which advances time,
@@ -306,13 +358,14 @@ exogenous local material source; their existing `productionConfigs` are the
 legacy economy producer and do not make P14-A material-flow state present.
 P18 intraday state, P19 module state, P20 shared activities, P13 historical
 reconstruction/fork guarantees, and generated P9/P10 content remain outside
-P12-A. P18-A/B/C and the additive P18-A continuation extension are present in
-the checked P18 code lineage. The P18-D prerequisite code is also present at
-`9e790c5`, while the canonical State still contains the older pending-gate
-wording. P18-D consumer work has an unpromoted bridge/timeline-yield and
-PlaceContent owner-step candidate (`a9428a3`), with exact-tip review passed;
-the `SimulationRuntime` consumer and the remaining required daily-boundary
-owner seams remain undelivered. The selected bootstrap does
+P12-A. P18-A/B/C, the additive P18-A continuation extension, the sale-owner
+receipt/prepared-install, and the per-runtime serialized advance lease are
+promoted at P18 canonical `9e790c5`. Its State-only correction candidate
+`6f98e09` is not promoted. The current P18-D candidate is `5d7eb268` (code
+integration `3d9c0ea`), including the CommercialKnowledge sharing receipt;
+it remains unpromoted and does not wire the full chronological consumer into
+`SimulationRuntime`. The P18-D consumer, remaining owner seams, and runtime
+ordering/handoff remain incomplete. The selected bootstrap does
 not compose the P18 timeline, activity/availability runtime, continuation
 extension, or intraday state; no P18 state is claimed. P20-A is promoted at
 current P20 canonical/State `7a81cc0`,
