@@ -410,6 +410,12 @@ public sealed class SimulationTimeline
         instant = default(LogicalTick);
         if (sealedTarget.Value < now) { failure = TimelineFailure.TargetBeforeNow; return false; }
         if (sealedThrough < sealedTarget.Value) { failure = TimelineFailure.InputNotSealed; return false; }
+        if (pendingContinuationId != null || successfulAdvanceAwaitingHandoff)
+        {
+            instant = new LogicalTick(now);
+            failure = TimelineFailure.None;
+            return true;
+        }
 
         try
         {

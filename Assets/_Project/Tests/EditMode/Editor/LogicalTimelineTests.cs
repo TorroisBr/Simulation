@@ -874,6 +874,41 @@ public sealed class LogicalTimelineTests
     }
 
     [Test]
+    public void NextCausalInstantYieldsCurrentForRestoredContinuationAndPendingHandoff()
+    {
+        ResumableBoundaryOwner continuationOwner = new ResumableBoundaryOwner
+        { FailStepId = Step(0, "person|pending").StepId };
+        continuationOwner.SelectedSteps = new[] { Step(0, "person|pending") };
+        SimulationTimeline original = ResumableTimeline(continuationOwner, new DueOwner());
+        LogicalTick boundary = new LogicalTick(LogicalTick.TicksPerDay);
+        Assert.That(original.TryAdvanceTo(boundary, out TimelineFailure failure), Is.False);
+        Assert.That(failure, Is.EqualTo(TimelineFailure.ContinuationFailed));
+
+        DueOwner emptyDue = new DueOwner();
+        SimulationTimeline restored = new SimulationTimeline(Calendar(), boundary, emptyDue,
+            boundaryOwner: continuationOwner, worldId: "world|one", profileId: "profile:one",
+            pendingContinuationId: original.PendingContinuationId);
+        continuationOwner.Timeline = restored;
+        Assert.That(restored.TrySealInputsThrough(new LogicalTick(boundary.Value + 10), out _), Is.True);
+        Assert.That(restored.TryGetNextCausalInstant(new LogicalTick(boundary.Value + 10), out LogicalTick next, out failure), Is.True, failure.ToString());
+        Assert.That(next, Is.EqualTo(boundary));
+        Assert.That(restored.PendingContinuationId, Is.EqualTo(original.PendingContinuationId));
+        Assert.That(restored.PreviewInputs(boundary).Count, Is.Zero);
+        Assert.That(restored.PreviewDueWork(boundary).Count, Is.Zero);
+
+        ResumableBoundaryOwner handoffOwner = new ResumableBoundaryOwner();
+        handoffOwner.SelectedSteps = new[] { Step(0, "person|handoff") };
+        SimulationTimeline handoff = ResumableTimeline(handoffOwner, new DueOwner());
+        Assert.That(handoff.TryAdvanceTo(boundary, out failure), Is.True, failure.ToString());
+        Assert.That(handoff.SuccessfulAdvanceAwaitingHandoff, Is.True);
+        Assert.That(handoff.TrySealInputsThrough(new LogicalTick(boundary.Value + 10), out _), Is.True);
+        Assert.That(handoff.TryGetNextCausalInstant(new LogicalTick(boundary.Value + 10), out next, out failure), Is.True, failure.ToString());
+        Assert.That(next, Is.EqualTo(boundary));
+        Assert.That(handoff.SuccessfulAdvanceAwaitingHandoff, Is.True);
+        Assert.That(handoff.PendingSignalHandoffIds, Has.Count.EqualTo(1));
+    }
+
+    [Test]
     public void ReentrantAdvanceIsRejectedAndLegacyDailyRuntimeIsNotModifiedByThisCandidate()
     {
         DueOwner owner = new DueOwner();
