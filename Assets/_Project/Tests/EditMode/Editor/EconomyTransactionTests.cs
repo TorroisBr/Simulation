@@ -43,19 +43,26 @@ public sealed class EconomyTransactionTests
         Assert.That(seller.Money, Is.EqualTo(first.Result.TotalPrice));
 
         seller.Inventory.AddItem(item, 1, 5f);
-        KeyedSaleReceipt replay = service.TryExecuteKeyedMarketSale("proposal-1", "fingerprint-1", "input-1", "request-1", "person-1", "sell", 1, "profile", "tick-1", "site-1", seller, city.Market, item, 2);
+        CityRuntime movedToCity = SimulationTestFactory.CreateCity("keyed-sale-moved-city", "keyed-sale-moved-location");
+        NpcRuntime rematerializedSeller = CreateNpc("keyed-sale-rematerialized-seller", 0f, movedToCity);
+        KeyedSaleReceipt replay = service.TryExecuteKeyedMarketSale("proposal-1", "fingerprint-1", "input-1", "request-1", "person-1", "sell", 1, "profile", "tick-1", "site-1", rematerializedSeller, city.Market, item, 2);
         Assert.That(replay, Is.SameAs(first));
         Assert.That(service.FindKeyedSaleReceipt("proposal-1", "fingerprint-1", "input-1", "request-1", "person-1", "sell", 1, "profile", "tick-1", "site-1", seller, city.Market, item, 2), Is.SameAs(first));
+        Assert.That(service.FindKeyedSaleReceipt("proposal-1", "fingerprint-1", "input-1", "request-1", "person-1", "sell", 1, "profile", "tick-1", "site-1", null, null, item, 2), Is.SameAs(first));
+        Assert.That(service.FindKeyedSaleReceipt("proposal-1", "fingerprint-1", "input-1", "request-1", "person-1", "sell", 1, "profile", "tick-1", "site-1", item.DefinitionId, 2), Is.SameAs(first));
         Assert.That(service.FindKeyedSaleReceipt("proposal-1", "fingerprint-1", "input-1", "request-1", "person-1", "sell", 1, "profile", "tick-1", "site-1", seller, city.Market, item, 1).Outcome, Is.EqualTo(KeyedSaleOutcome.FingerprintCollision));
         Assert.That(seller.Inventory.GetAmount(item), Is.EqualTo(2));
+        Assert.That(rematerializedSeller.Inventory.GetAmount(item), Is.EqualTo(0));
         KeyedSaleReceipt collision = service.TryExecuteKeyedMarketSale("proposal-1", "fingerprint-1", "input-1", "request-1", "person-1", "sell", 1, "profile", "tick-1", "site-1", seller, city.Market, item, 1);
         Assert.That(collision.Outcome, Is.EqualTo(KeyedSaleOutcome.FingerprintCollision));
         Assert.That(first.Snapshot.SellerInventory, Is.EqualTo(3));
         Assert.That(first.Snapshot.MarketStock, Is.EqualTo(0));
+        Assert.That(first.Snapshot.SellerRuntimeId, Is.EqualTo(seller.RuntimeId));
+        Assert.That(first.Snapshot.SellerCityRuntimeId, Is.EqualTo(city.RuntimeId));
     }
 
     [Test]
-    public void KeyedMarketSale_CanonicalFingerprintCoversEverySaleDefiningArgument()
+    public void KeyedMarketSale_CanonicalFingerprintCoversEveryImmutableRequestArgument()
     {
         ItemData item = SimulationTestFactory.CreateItem("fingerprint-item", 10f);
         ItemData otherItem = SimulationTestFactory.CreateItem("fingerprint-other-item", 10f);
@@ -79,13 +86,12 @@ public sealed class EconomyTransactionTests
             () => service.TryExecuteKeyedMarketSale("fingerprint-proposal", "same-caller-fp", "input", "request", "person", "sell", 1, "other-profile", "tick", "site", seller, city.Market, item, 1),
             () => service.TryExecuteKeyedMarketSale("fingerprint-proposal", "same-caller-fp", "input", "request", "person", "sell", 1, "profile", "other-tick", "site", seller, city.Market, item, 1),
             () => service.TryExecuteKeyedMarketSale("fingerprint-proposal", "same-caller-fp", "input", "request", "person", "sell", 1, "profile", "tick", "other-site", seller, city.Market, item, 1),
-            () => service.TryExecuteKeyedMarketSale("fingerprint-proposal", "same-caller-fp", "input", "request", "person", "sell", 1, "profile", "tick", "site", otherSeller, city.Market, item, 1),
-            () => service.TryExecuteKeyedMarketSale("fingerprint-proposal", "same-caller-fp", "input", "request", "person", "sell", 1, "profile", "tick", "site", seller, otherCity.Market, item, 1),
             () => service.TryExecuteKeyedMarketSale("fingerprint-proposal", "same-caller-fp", "input", "request", "person", "sell", 1, "profile", "tick", "site", seller, city.Market, otherItem, 1),
             () => service.TryExecuteKeyedMarketSale("fingerprint-proposal", "same-caller-fp", "input", "request", "person", "sell", 1, "profile", "tick", "site", seller, city.Market, item, 2)
         };
         foreach (Func<KeyedSaleReceipt> retry in changed)
             Assert.That(retry().Outcome, Is.EqualTo(KeyedSaleOutcome.FingerprintCollision));
+        Assert.That(service.TryExecuteKeyedMarketSale("fingerprint-proposal", "same-caller-fp", "input", "request", "person", "sell", 1, "profile", "tick", "site", otherSeller, otherCity.Market, item, 1), Is.SameAs(first));
         Assert.That(seller.Inventory.GetAmount(item), Is.EqualTo(2));
         Assert.That(otherSeller.Inventory.GetAmount(otherItem), Is.EqualTo(3));
     }

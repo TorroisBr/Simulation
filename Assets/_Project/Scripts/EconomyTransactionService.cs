@@ -231,6 +231,8 @@ public sealed class KeyedSaleSnapshot
     public float CounterpartyBalance { get; }
     public int RequestedQuantity { get; }
     public int EffectiveQuantity { get; }
+    public string SellerRuntimeId { get; }
+    public string SellerCityRuntimeId { get; }
     public bool SellerWasAlive { get; }
     public bool SellerCouldReceive { get; }
     public bool CounterpartyCouldPay { get; }
@@ -239,8 +241,8 @@ public sealed class KeyedSaleSnapshot
     public long MarketRevision { get; }
     public long SellerMoneyRevision { get; }
     public long CounterpartyMoneyRevision { get; }
-    internal KeyedSaleSnapshot(string input, string request, string actor, string proposal, string action, int version, string profile, string tick, string site, string counterparty, string item, MarketLiquidityMode mode, float price, int stock, int inventory, float sellerBalance, float counterpartyBalance, int requested, int effective, bool alive, bool canReceive, bool counterpartyCanPay, bool marketCanAccept, long inventoryRevision, long marketRevision, long sellerMoneyRevision, long counterpartyMoneyRevision)
-    { ActorChoiceInputId=input; RequestId=request; ActorPersonId=actor; ProposalId=proposal; ActionSemanticId=action; ActionVersion=version; ProfileId=profile; LogicalTick=tick; MarketSiteId=site; CounterpartyId=counterparty; ItemDefinitionId=item; LiquidityMode=mode; UnitPrice=price; MarketStock=stock; SellerInventory=inventory; SellerBalance=sellerBalance; CounterpartyBalance=counterpartyBalance; RequestedQuantity=requested; EffectiveQuantity=effective; SellerWasAlive=alive; SellerCouldReceive=canReceive; CounterpartyCouldPay=counterpartyCanPay; MarketCouldAcceptStock=marketCanAccept; InventoryRevision=inventoryRevision; MarketRevision=marketRevision; SellerMoneyRevision=sellerMoneyRevision; CounterpartyMoneyRevision=counterpartyMoneyRevision; }
+    internal KeyedSaleSnapshot(string input, string request, string actor, string proposal, string action, int version, string profile, string tick, string site, string sellerRuntime, string sellerCityRuntime, string counterparty, string item, MarketLiquidityMode mode, float price, int stock, int inventory, float sellerBalance, float counterpartyBalance, int requested, int effective, bool alive, bool canReceive, bool counterpartyCanPay, bool marketCanAccept, long inventoryRevision, long marketRevision, long sellerMoneyRevision, long counterpartyMoneyRevision)
+    { ActorChoiceInputId=input; RequestId=request; ActorPersonId=actor; ProposalId=proposal; ActionSemanticId=action; ActionVersion=version; ProfileId=profile; LogicalTick=tick; MarketSiteId=site; SellerRuntimeId=sellerRuntime; SellerCityRuntimeId=sellerCityRuntime; CounterpartyId=counterparty; ItemDefinitionId=item; LiquidityMode=mode; UnitPrice=price; MarketStock=stock; SellerInventory=inventory; SellerBalance=sellerBalance; CounterpartyBalance=counterpartyBalance; RequestedQuantity=requested; EffectiveQuantity=effective; SellerWasAlive=alive; SellerCouldReceive=canReceive; CounterpartyCouldPay=counterpartyCanPay; MarketCouldAcceptStock=marketCanAccept; InventoryRevision=inventoryRevision; MarketRevision=marketRevision; SellerMoneyRevision=sellerMoneyRevision; CounterpartyMoneyRevision=counterpartyMoneyRevision; }
 }
 
 public sealed class KeyedSaleReceipt
@@ -273,12 +275,9 @@ public sealed class EconomyTransactionService
         if (string.IsNullOrWhiteSpace(proposalId) || string.IsNullOrWhiteSpace(fingerprint))
             return KeyedSaleReceipt.Rejected(proposalId, fingerprint, null, EconomyTransactionFailureReason.InvalidInput);
 
-        MarketLiquidityMode mode = market != null ? market.Counterparty.LiquidityMode : MarketLiquidityMode.Open;
-        string canonicalFingerprint = CreateCanonicalFingerprint(fingerprint, actorChoiceInputId, requestId,
-            actorPersonId, seller != null && seller.PersonId != null ? seller.PersonId.ToString() : null,
-            proposalId, actionSemanticId, actionVersion, profileId, logicalTick, marketSiteId,
-            seller != null ? seller.RuntimeId : null, seller != null && seller.CurrentCity != null ? seller.CurrentCity.RuntimeId : null,
-            market != null ? market.StockOwnerRuntimeId : null, mode,
+        string canonicalFingerprint = CreateRequestFingerprint(
+            proposalId, fingerprint, actorChoiceInputId, requestId, actorPersonId,
+            actionSemanticId, actionVersion, profileId, logicalTick, marketSiteId,
             item != null ? item.DefinitionId : null, requestedQuantity);
 
         for (int i = 0; i < keyedSaleReceipts.Count; i++)
@@ -291,6 +290,7 @@ public sealed class EconomyTransactionService
             break;
         }
 
+        MarketLiquidityMode mode = market != null ? market.Counterparty.LiquidityMode : MarketLiquidityMode.Open;
         MoneyAccountRuntime sellerAccount = seller != null ? seller.MoneyAccount : null;
         MoneyAccountRuntime counterpartyAccount = market != null && mode == MarketLiquidityMode.AccountBacked ? market.Counterparty.MoneyAccount : null;
         long invRev = seller != null ? seller.Inventory.Revision : -1;
@@ -313,6 +313,8 @@ public sealed class EconomyTransactionService
         float snapshotTotal = normalizedSalePrice * snapshotQuantity;
         KeyedSaleSnapshot snapshot = new KeyedSaleSnapshot(actorChoiceInputId, requestId, actorPersonId, proposalId,
             actionSemanticId, actionVersion, profileId, logicalTick, marketSiteId,
+            seller != null ? seller.RuntimeId : null,
+            seller != null && seller.CurrentCity != null ? seller.CurrentCity.RuntimeId : null,
             market != null ? market.StockOwnerRuntimeId : null, item != null ? item.DefinitionId : null,
             mode, observedPrice, observedStock, observedInventory, observedSellerBalance, observedCounterpartyBalance,
             requestedQuantity, snapshotQuantity, seller != null && seller.IsAlive,
@@ -381,14 +383,27 @@ public sealed class EconomyTransactionService
         string logicalTick, string marketSiteId, NpcRuntime seller, MarketRuntime market,
         ItemData item, int requestedQuantity)
     {
-        if (string.IsNullOrWhiteSpace(proposalId) || string.IsNullOrWhiteSpace(fingerprint)) return null;
-        MarketLiquidityMode mode = market != null ? market.Counterparty.LiquidityMode : MarketLiquidityMode.Open;
-        string canonicalFingerprint = CreateCanonicalFingerprint(fingerprint, actorChoiceInputId, requestId,
-            actorPersonId, seller != null && seller.PersonId != null ? seller.PersonId.ToString() : null,
-            proposalId, actionSemanticId, actionVersion, profileId, logicalTick, marketSiteId,
-            seller != null ? seller.RuntimeId : null, seller != null && seller.CurrentCity != null ? seller.CurrentCity.RuntimeId : null,
-            market != null ? market.StockOwnerRuntimeId : null, mode,
+        return FindKeyedSaleReceipt(
+            proposalId, fingerprint, actorChoiceInputId, requestId, actorPersonId,
+            actionSemanticId, actionVersion, profileId, logicalTick, marketSiteId,
             item != null ? item.DefinitionId : null, requestedQuantity);
+    }
+
+    /// <summary>
+    /// Looks up a receipt using only immutable request correlation. Execution-time
+    /// owner state such as actor materialization/location and current market mapping
+    /// belongs in the original receipt snapshot, not in replay identity.
+    /// </summary>
+    public KeyedSaleReceipt FindKeyedSaleReceipt(
+        string proposalId, string fingerprint, string actorChoiceInputId, string requestId,
+        string actorPersonId, string actionSemanticId, int actionVersion, string profileId,
+        string logicalTick, string marketSiteId, string itemDefinitionId, int requestedQuantity)
+    {
+        if (string.IsNullOrWhiteSpace(proposalId) || string.IsNullOrWhiteSpace(fingerprint)) return null;
+        string canonicalFingerprint = CreateRequestFingerprint(
+            proposalId, fingerprint, actorChoiceInputId, requestId, actorPersonId,
+            actionSemanticId, actionVersion, profileId, logicalTick, marketSiteId,
+            itemDefinitionId, requestedQuantity);
         for (int i = 0; i < keyedSaleReceipts.Count; i++)
         {
             KeyedSaleReceipt receipt = keyedSaleReceipts[i];
@@ -398,6 +413,21 @@ public sealed class EconomyTransactionService
                 : KeyedSaleReceipt.Collision(proposalId, canonicalFingerprint, fingerprint);
         }
         return null;
+    }
+
+    private static string CreateRequestFingerprint(
+        string proposalId, string callerFingerprint, string actorChoiceInputId,
+        string requestId, string actorPersonId, string actionSemanticId,
+        int actionVersion, string profileId, string logicalTick, string marketSiteId,
+        string itemDefinitionId, int requestedQuantity)
+    {
+        // Mutable execution-time truth belongs in KeyedSaleSnapshot. This key is
+        // causal request identity and must survive actor rematerialization, movement,
+        // and changes to market state after a committed operation.
+        return CreateCanonicalFingerprint(
+            proposalId, callerFingerprint, actorChoiceInputId, requestId, actorPersonId,
+            actionSemanticId, actionVersion, profileId, logicalTick, marketSiteId,
+            itemDefinitionId, requestedQuantity);
     }
 
     private static string CreateCanonicalFingerprint(params object[] values)

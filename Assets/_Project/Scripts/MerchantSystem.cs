@@ -399,9 +399,7 @@ public class MerchantSystem : INpcActionProvider, IAuthoritativeMutationGuardBin
             profileId,
             logicalTickValue,
             marketSiteId,
-            seller,
-            market,
-            actionRuntime.TargetItem,
+            actionRuntime.TargetItem.DefinitionId,
             actionRuntime.Amount);
         if (prior != null && prior.Outcome != KeyedSaleOutcome.ProvenNoInstall)
         {
