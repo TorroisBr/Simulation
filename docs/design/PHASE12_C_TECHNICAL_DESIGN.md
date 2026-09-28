@@ -166,10 +166,11 @@ selected composition, active authoritative draws use pure keyed
 
 - NPC decision choice: `npc-decision|{RuntimeId}|{AbsoluteDay}`;
 - crime steal: `crime-steal|{RuntimeId}|{AbsoluteDay}`;
-- action success: `action-success|{actor}|{origin/action}|{action}|{CurrentDay}`.
-  Here `RuntimeId` is the selected NPC runtime identity; the action-success
-  components are the exact actor, origin/action, action and current-day key
-  values used by the existing call.
+- action success: `action-success|{actorKey}|{decisionKey}|{actionKey}|{CurrentDay}`,
+  where `actorKey = npcRuntime.RuntimeId ?? "unknown-actor"`,
+  `decisionKey = actionRuntime?.OriginDecisionId ?? actionRuntime?.Action?.DefinitionId ?? "unbound"`,
+  and `actionKey = action?.DefinitionId ?? action?.actionType.ToString() ?? "unknown"`.
+  This matches the existing `SimulationRuntime` key construction exactly.
 
 For a fixed provider algorithm/build, seed, exact key and draw index, each
 draw is reproducible and has no mutable provider cursor. Those key inputs must
