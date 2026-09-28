@@ -7,7 +7,8 @@ public enum SimulationRuntimeAdvanceFailure
     None = 0,
     RuntimeFaulted = 1,
     InvalidDayCount = 2,
-    AbsoluteDayOverflow = 3
+    AbsoluteDayOverflow = 3,
+    AdvanceAlreadyInProgress = 4
 }
 
 /// <summary>Adapts the spatial authority's passage child to the P8-C transit resolver seam.</summary>
@@ -67,6 +68,7 @@ public sealed class SimulationRuntimeSpatialInvariantReport
 public sealed class SimulationRuntime
 {
     private readonly AuthoritativeMutationGuard mutationGuard = new AuthoritativeMutationGuard();
+    private bool advanceLeaseHeld;
     private readonly SimulationTime simulationTime;
     private readonly List<CityRuntime> cities;
     private readonly List<NpcRuntime> npcRuntimes;
@@ -2515,6 +2517,21 @@ public sealed class SimulationRuntime
     public bool TryAdvanceDay(out SimulationRuntimeAdvanceFailure failure)
     {
         failure = SimulationRuntimeAdvanceFailure.None;
+        if (TryAcquireAdvanceLease(out AdvanceLease lease) == false)
+        {
+            failure = SimulationRuntimeAdvanceFailure.AdvanceAlreadyInProgress;
+            return false;
+        }
+
+        using (lease)
+        {
+            return TryAdvanceDayCore(out failure);
+        }
+    }
+
+    private bool TryAdvanceDayCore(out SimulationRuntimeAdvanceFailure failure)
+    {
+        failure = SimulationRuntimeAdvanceFailure.None;
         if (mutationGuard.CanMutate == false)
         {
             failure = SimulationRuntimeAdvanceFailure.RuntimeFaulted;
@@ -2531,6 +2548,45 @@ public sealed class SimulationRuntime
 
         AdvanceDayAfterClockAdvance();
         return true;
+    }
+
+    /// <summary>
+    /// Acquires this runtime's single-writer advance lease for a larger composed
+    /// chronological operation. This is reentrancy protection, not a thread lock.
+    /// </summary>
+    internal bool TryAcquireAdvanceLease(out AdvanceLease lease)
+    {
+        lease = null;
+        if (advanceLeaseHeld)
+        {
+            return false;
+        }
+
+        lease = new AdvanceLease(this);
+        advanceLeaseHeld = true;
+        return true;
+    }
+
+    private void ReleaseAdvanceLease()
+    {
+        advanceLeaseHeld = false;
+    }
+
+    internal sealed class AdvanceLease : IDisposable
+    {
+        private SimulationRuntime owner;
+
+        internal AdvanceLease(SimulationRuntime owner)
+        {
+            this.owner = owner;
+        }
+
+        public void Dispose()
+        {
+            SimulationRuntime currentOwner = owner;
+            owner = null;
+            currentOwner?.ReleaseAdvanceLease();
+        }
     }
 
     private void AdvanceDayAfterClockAdvance()
@@ -2704,9 +2760,17 @@ public sealed class SimulationRuntime
     private static InvalidOperationException CreateAdvanceFailureException(
         SimulationRuntimeAdvanceFailure failure)
     {
-        return failure == SimulationRuntimeAdvanceFailure.AbsoluteDayOverflow
-            ? new InvalidOperationException("SimulationTime cannot advance beyond the maximum AbsoluteDay.")
-            : new InvalidOperationException("A faulted SimulationRuntime cannot advance its world.");
+        if (failure == SimulationRuntimeAdvanceFailure.AbsoluteDayOverflow)
+        {
+            return new InvalidOperationException("SimulationTime cannot advance beyond the maximum AbsoluteDay.");
+        }
+
+        if (failure == SimulationRuntimeAdvanceFailure.AdvanceAlreadyInProgress)
+        {
+            return new InvalidOperationException("A SimulationRuntime advance is already in progress.");
+        }
+
+        return new InvalidOperationException("A faulted SimulationRuntime cannot advance its world.");
     }
 
     internal bool TryCaptureActorChoiceInput(
@@ -4079,20 +4143,29 @@ public sealed class SimulationRuntime
             return true;
         }
 
-        if (mutationGuard.CanMutate == false)
+        if (TryAcquireAdvanceLease(out AdvanceLease lease) == false)
         {
-            failure = SimulationRuntimeAdvanceFailure.RuntimeFaulted;
+            failure = SimulationRuntimeAdvanceFailure.AdvanceAlreadyInProgress;
             return false;
         }
 
-        for (int i = 0; i < dayCount; i++)
+        using (lease)
         {
-            if (TryAdvanceDay(out failure) == false)
+            if (mutationGuard.CanMutate == false)
             {
+                failure = SimulationRuntimeAdvanceFailure.RuntimeFaulted;
                 return false;
             }
 
-            daysAdvanced++;
+            for (int i = 0; i < dayCount; i++)
+            {
+                if (TryAdvanceDayCore(out failure) == false)
+                {
+                    return false;
+                }
+
+                daysAdvanced++;
+            }
         }
 
         return true;
