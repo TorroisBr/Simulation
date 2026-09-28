@@ -482,7 +482,15 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
             return false;
         }
 
-        ApplyAdvanceSentences(npcRuntimeList, notices);
+        if (!TryCaptureAdvanceSentencesLogCandidates(
+            currentSnapshot,
+            out List<JusticeAdvanceSentencesSentenceLogCandidates> sentenceLogCandidates,
+            out List<JusticeAdvanceSentencesLogNotice> rosterLogCandidates))
+        {
+            return false;
+        }
+
+        ApplyAdvanceSentences(npcRuntimeList, notices, sentenceLogCandidates, rosterLogCandidates);
         advanceSentencesStepRevision = receipt.OwnerRevisionAfter;
         advanceSentencesStepReceipts = nextReceipts;
         failure = TimelineFailure.None;
@@ -810,6 +818,59 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
         }
 
         capacity = snapshot.Sentences.Count + snapshot.Roster.Count;
+        return true;
+    }
+
+    private static bool TryCaptureAdvanceSentencesLogCandidates(
+        JusticeAdvanceSentencesSnapshot snapshot,
+        out List<JusticeAdvanceSentencesSentenceLogCandidates> sentenceCandidates,
+        out List<JusticeAdvanceSentencesLogNotice> rosterCandidates)
+    {
+        sentenceCandidates = null;
+        rosterCandidates = null;
+        if (snapshot == null)
+        {
+            return false;
+        }
+
+        sentenceCandidates = new List<JusticeAdvanceSentencesSentenceLogCandidates>(snapshot.Sentences.Count);
+        foreach (JusticeAdvanceSentencesSentenceSnapshot sentence in snapshot.Sentences)
+        {
+            if (sentence == null || sentence.Sentence == null || sentence.Target == null)
+            {
+                sentenceCandidates.Add(null);
+                continue;
+            }
+
+            if (sentence.WarrantActive && sentence.TargetArrestedStatusCount > 0
+                && sentence.RemainingDays <= 1 && sentence.City == null)
+            {
+                // Legacy expiry diagnostics require the sentence city. Reject the malformed
+                // owner state before the first mutation instead of failing midway through commit.
+                return false;
+            }
+
+            sentenceCandidates.Add(new JusticeAdvanceSentencesSentenceLogCandidates(
+                new JusticeAdvanceSentencesLogNotice(
+                    false,
+                    $"{sentence.Target.NpcName} foi libertado porque seu mandado nao esta mais ativo."),
+                new JusticeAdvanceSentencesLogNotice(
+                    false,
+                    sentence.City == null
+                        ? string.Empty
+                        : $"{sentence.Target.NpcName} cumpriu sua pena em {sentence.City.CityName} e foi libertado.")));
+        }
+
+        rosterCandidates = new List<JusticeAdvanceSentencesLogNotice>(snapshot.Roster.Count);
+        foreach (JusticeAdvanceSentencesRosterSnapshot actor in snapshot.Roster)
+        {
+            rosterCandidates.Add(actor?.Npc == null
+                ? null
+                : new JusticeAdvanceSentencesLogNotice(
+                    true,
+                    $"{actor.Npc.NpcName} estava preso sem sentenca ativa e foi libertado."));
+        }
+
         return true;
     }
 
@@ -1184,12 +1245,14 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
     public void AdvanceSentences(List<NpcRuntime> npcRuntimeList)
     {
         ThrowIfFaulted();
-        ApplyAdvanceSentences(npcRuntimeList, null);
+        ApplyAdvanceSentences(npcRuntimeList, null, null, null);
     }
 
     private void ApplyAdvanceSentences(
         List<NpcRuntime> npcRuntimeList,
-        List<JusticeAdvanceSentencesLogNotice> notices)
+        List<JusticeAdvanceSentencesLogNotice> notices,
+        IReadOnlyList<JusticeAdvanceSentencesSentenceLogCandidates> sentenceLogCandidates,
+        IReadOnlyList<JusticeAdvanceSentencesLogNotice> rosterLogCandidates)
     {
         for (int i = prisonSentences.Count - 1; i >= 0; i--)
         {
@@ -1205,15 +1268,14 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
             {
                 ReleasePrisoner(sentence.Target);
                 prisonSentences.RemoveAt(i);
-                string inactiveWarrantNotice =
-                    $"{sentence.Target.NpcName} foi libertado porque seu mandado nao esta mais ativo.";
                 if (notices == null)
                 {
-                    logger.Log(SimulationLogCategory.Justice, inactiveWarrantNotice);
+                    logger.Log(SimulationLogCategory.Justice,
+                        $"{sentence.Target.NpcName} foi libertado porque seu mandado nao esta mais ativo.");
                 }
                 else
                 {
-                    notices.Add(new JusticeAdvanceSentencesLogNotice(false, inactiveWarrantNotice));
+                    notices.Add(sentenceLogCandidates[i].InactiveWarrantNotice);
                 }
                 continue;
             }
@@ -1235,19 +1297,18 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
             ResolveWarrant(sentence.Warrant);
             ReleasePrisoner(sentence.Target);
             prisonSentences.RemoveAt(i);
-            string expiredSentenceNotice =
-                $"{sentence.Target.NpcName} cumpriu sua pena em {sentence.City.CityName} e foi libertado.";
             if (notices == null)
             {
-                logger.Log(SimulationLogCategory.Justice, expiredSentenceNotice);
+                logger.Log(SimulationLogCategory.Justice,
+                    $"{sentence.Target.NpcName} cumpriu sua pena em {sentence.City.CityName} e foi libertado.");
             }
             else
             {
-                notices.Add(new JusticeAdvanceSentencesLogNotice(false, expiredSentenceNotice));
+                notices.Add(sentenceLogCandidates[i].ExpiredSentenceNotice);
             }
         }
 
-        ReleasePrisonersWithoutActiveSentence(npcRuntimeList, notices);
+        ReleasePrisonersWithoutActiveSentence(npcRuntimeList, notices, rosterLogCandidates);
         SyncWantedStatuses(npcRuntimeList);
     }
 
@@ -1566,29 +1627,30 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
 
     private void ReleasePrisonersWithoutActiveSentence(
         List<NpcRuntime> npcRuntimeList,
-        List<JusticeAdvanceSentencesLogNotice> notices)
+        List<JusticeAdvanceSentencesLogNotice> notices,
+        IReadOnlyList<JusticeAdvanceSentencesLogNotice> rosterLogCandidates)
     {
         if (npcRuntimeList == null)
         {
             return;
         }
 
-        foreach (NpcRuntime npcRuntime in npcRuntimeList)
+        for (int i = 0; i < npcRuntimeList.Count; i++)
         {
+            NpcRuntime npcRuntime = npcRuntimeList[i];
             if (npcRuntime == null || IsArrested(npcRuntime) == false || GetActiveSentence(npcRuntime) != null)
             {
                 continue;
             }
 
             ReleasePrisoner(npcRuntime);
-            string orphanReleaseNotice = $"{npcRuntime.NpcName} estava preso sem sentenca ativa e foi libertado.";
             if (notices == null)
             {
-                logger.LogWarning(orphanReleaseNotice);
+                logger.LogWarning($"{npcRuntime.NpcName} estava preso sem sentenca ativa e foi libertado.");
             }
             else
             {
-                notices.Add(new JusticeAdvanceSentencesLogNotice(true, orphanReleaseNotice));
+                notices.Add(rosterLogCandidates[i]);
             }
         }
     }
@@ -1882,6 +1944,20 @@ internal sealed class JusticeAdvanceSentencesLogNotice
     {
         IsWarning = isWarning;
         Message = message ?? string.Empty;
+    }
+}
+
+internal sealed class JusticeAdvanceSentencesSentenceLogCandidates
+{
+    public JusticeAdvanceSentencesLogNotice InactiveWarrantNotice { get; }
+    public JusticeAdvanceSentencesLogNotice ExpiredSentenceNotice { get; }
+
+    public JusticeAdvanceSentencesSentenceLogCandidates(
+        JusticeAdvanceSentencesLogNotice inactiveWarrantNotice,
+        JusticeAdvanceSentencesLogNotice expiredSentenceNotice)
+    {
+        InactiveWarrantNotice = inactiveWarrantNotice;
+        ExpiredSentenceNotice = expiredSentenceNotice;
     }
 }
 

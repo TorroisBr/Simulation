@@ -606,6 +606,41 @@ public sealed class JusticeAdvanceSentencesBoundaryOwnerTests
     }
 
     [Test]
+    public void SentenceStepRejectsMissingExpiryCityBeforeApplyingEffects()
+    {
+        JusticeSystem justice = CreateJustice(out CityRuntime city);
+        NpcRuntime guard = CreateActor("justice-advance-missing-city-guard");
+        NpcRuntime target = CreateActor("justice-advance-missing-city-target");
+        WantedRecordRuntime warrant = justice.CreateOrIncreaseWarrant(target, city, 12f, 1);
+        Assert.That(justice.Arrest(guard, target, city), Is.True);
+
+        List<PrisonSentenceRuntime> sentences = (List<PrisonSentenceRuntime>)typeof(JusticeSystem)
+            .GetField("prisonSentences", BindingFlags.Instance | BindingFlags.NonPublic)
+            .GetValue(justice);
+        Assert.That(sentences, Has.Count.EqualTo(1));
+        typeof(PrisonSentenceRuntime)
+            .GetField("city", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(sentences[0], null);
+
+        List<NpcRuntime> roster = new List<NpcRuntime> { target };
+        DailyBoundaryOperation operation = new DailyBoundaryOperation("world", "intraday", 9L);
+        Assert.That(justice.TryCreateAdvanceSentencesStep(
+            operation, roster, 0, out BoundaryContinuationStep step, out TimelineFailure failure), Is.True);
+        BoundaryContinuationManifest manifest = CreateManifest(operation, step);
+        Assert.That(justice.TryPrepareAdvanceSentencesStep(
+            manifest, step, roster, out IBoundaryContinuationStepCommit prepared, out failure), Is.True);
+
+        Assert.That(prepared.TryCommit(out failure), Is.False);
+        Assert.That(failure, Is.EqualTo(TimelineFailure.ContinuationFailed));
+        Assert.That(warrant.IsActive, Is.True);
+        Assert.That(justice.IsArrested(target), Is.True);
+        Assert.That((int)typeof(PrisonSentenceRuntime)
+            .GetField("remainingDays", BindingFlags.Instance | BindingFlags.NonPublic)
+            .GetValue(sentences[0]), Is.EqualTo(1));
+        Assert.That(justice.TryResolveAdvanceSentencesReceipt(manifest, step, out _, out _), Is.False);
+    }
+
+    [Test]
     public void SentenceStepCapturesCrimeHiddenStateAfterItsPredecessor()
     {
         NpcStatusData free = SimulationTestFactory.CreateStatus("justice-advance-hidden-free");
