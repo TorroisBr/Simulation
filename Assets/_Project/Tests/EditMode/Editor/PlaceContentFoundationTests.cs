@@ -287,6 +287,126 @@ public sealed class PlaceContentFoundationTests
     }
 
     [Test]
+    public void PreparedDayAdvanceCommitsAgingAndOccurrenceReceiptTogether()
+    {
+        CityRuntime city = SimulationTestFactory.CreateCity("prepared-aging", "prepared-aging-location");
+        ItemData transientItem = SimulationTestFactory.CreateItem("prepared-transient");
+        ItemData perishableItem = SimulationTestFactory.CreateItem("prepared-perishable");
+        ItemData durableItem = SimulationTestFactory.CreateItem("prepared-durable");
+        PlaceContentStore store = new PlaceContentStore();
+        Assert.That(store.TryAddStack(city, transientItem, 2, PlaceContentPersistencePolicy.Transient, out _), Is.True);
+        Assert.That(store.TryAddStack(city, perishableItem, 10, PlaceContentPersistencePolicy.Perishable, out _, 3), Is.True);
+        Assert.That(store.TryAddStack(city, durableItem, 5, PlaceContentPersistencePolicy.Durable, out _), Is.True);
+
+        BoundaryContinuationManifest manifest = CreateDayAdvanceManifest(store, 1, out BoundaryContinuationStep step);
+        Assert.That(store.TryPrepareDayAdvanceStep(manifest, step, out IBoundaryContinuationStepCommit prepared,
+            out TimelineFailure prepareFailure), Is.True, prepareFailure.ToString());
+        Assert.That(prepared.RetainedTimelineFacts, Is.Empty);
+        Assert.That(prepared.RetainedSourceSignals, Is.Empty);
+        Assert.That(prepared.TryCommit(out TimelineFailure commitFailure), Is.True, commitFailure.ToString());
+
+        PlaceContentRuntime content = store.GetOrCreate(city);
+        Assert.That(content.GetStack(transientItem), Is.Null);
+        Assert.That(content.GetAmount(perishableItem), Is.EqualTo(7));
+        Assert.That(content.GetAmount(durableItem), Is.EqualTo(5));
+        Assert.That(store.TryResolveDayAdvanceReceipt(manifest, step, out PlaceContentDayAdvanceReceipt receipt,
+            out TimelineFailure receiptFailure), Is.True, receiptFailure.ToString());
+        Assert.That(receipt.ExecutionStepIdentity, Is.EqualTo(manifest.GetExecutionStepIdentity(step)));
+        Assert.That(receipt.OwnerRevisionBefore, Is.EqualTo(0));
+        Assert.That(receipt.OwnerRevisionAfter, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void ReplayingPreparedDayAdvanceReturnsReceiptWithoutAgingTwice()
+    {
+        CityRuntime city = SimulationTestFactory.CreateCity("replay-aging", "replay-aging-location");
+        ItemData fruit = SimulationTestFactory.CreateItem("replay-fruit");
+        PlaceContentStore store = new PlaceContentStore();
+        Assert.That(store.TryAddStack(city, fruit, 10, PlaceContentPersistencePolicy.Perishable, out _, 2), Is.True);
+        BoundaryContinuationManifest manifest = CreateDayAdvanceManifest(store, 1, out BoundaryContinuationStep step);
+
+        Assert.That(store.TryPrepareDayAdvanceStep(manifest, step, out IBoundaryContinuationStepCommit first,
+            out TimelineFailure firstFailure), Is.True, firstFailure.ToString());
+        Assert.That(first.TryCommit(out TimelineFailure firstCommitFailure), Is.True, firstCommitFailure.ToString());
+        Assert.That(store.GetOrCreate(city).GetAmount(fruit), Is.EqualTo(8));
+
+        Assert.That(store.TryPrepareDayAdvanceStep(manifest, step, out IBoundaryContinuationStepCommit replay,
+            out TimelineFailure replayFailure), Is.True, replayFailure.ToString());
+        Assert.That(replay.TryCommit(out TimelineFailure replayCommitFailure), Is.True, replayCommitFailure.ToString());
+        Assert.That(store.GetOrCreate(city).GetAmount(fruit), Is.EqualTo(8));
+        Assert.That(store.DayAdvanceRevision, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void PreparedDayAdvanceRejectsChangedOwnerStateBeforeAnyInstall()
+    {
+        CityRuntime city = SimulationTestFactory.CreateCity("stale-aging", "stale-aging-location");
+        ItemData firstItem = SimulationTestFactory.CreateItem("stale-first");
+        ItemData secondItem = SimulationTestFactory.CreateItem("stale-second");
+        PlaceContentStore store = new PlaceContentStore();
+        Assert.That(store.TryAddStack(city, firstItem, 10, PlaceContentPersistencePolicy.Perishable, out _, 2), Is.True);
+        Assert.That(store.TryAddStack(city, secondItem, 8, PlaceContentPersistencePolicy.Perishable, out PlaceContentStackRuntime secondStack, 1), Is.True);
+        BoundaryContinuationManifest manifest = CreateDayAdvanceManifest(store, 1, out BoundaryContinuationStep step);
+        Assert.That(store.TryPrepareDayAdvanceStep(manifest, step, out IBoundaryContinuationStepCommit prepared,
+            out TimelineFailure prepareFailure), Is.True, prepareFailure.ToString());
+
+        Assert.That(secondStack.TryAdd(1), Is.True);
+        Assert.That(prepared.TryCommit(out TimelineFailure commitFailure), Is.False);
+        Assert.That(commitFailure, Is.EqualTo(TimelineFailure.ContinuationFailed));
+        Assert.That(store.GetOrCreate(city).GetAmount(firstItem), Is.EqualTo(10));
+        Assert.That(store.GetOrCreate(city).GetAmount(secondItem), Is.EqualTo(9));
+        Assert.That(store.DayAdvanceRevision, Is.EqualTo(0));
+        Assert.That(store.TryResolveDayAdvanceReceipt(manifest, step, out _, out TimelineFailure receiptFailure), Is.False);
+        Assert.That(receiptFailure, Is.EqualTo(TimelineFailure.None));
+    }
+
+    [Test]
+    public void PreparedDayAdvanceRejectsNewStackAfterFrozenSnapshot()
+    {
+        CityRuntime city = SimulationTestFactory.CreateCity("stale-membership", "stale-membership-location");
+        ItemData perishable = SimulationTestFactory.CreateItem("stale-membership-perishable");
+        ItemData added = SimulationTestFactory.CreateItem("stale-membership-added");
+        PlaceContentStore store = new PlaceContentStore();
+        Assert.That(store.TryAddStack(city, perishable, 6, PlaceContentPersistencePolicy.Perishable, out _, 2), Is.True);
+        BoundaryContinuationManifest manifest = CreateDayAdvanceManifest(store, 1, out BoundaryContinuationStep step);
+        Assert.That(store.TryPrepareDayAdvanceStep(manifest, step, out IBoundaryContinuationStepCommit prepared,
+            out TimelineFailure prepareFailure), Is.True, prepareFailure.ToString());
+
+        Assert.That(store.TryAddStack(city, added, 3, PlaceContentPersistencePolicy.Durable, out _), Is.True);
+        Assert.That(prepared.TryCommit(out TimelineFailure commitFailure), Is.False);
+        Assert.That(commitFailure, Is.EqualTo(TimelineFailure.ContinuationFailed));
+        Assert.That(store.GetOrCreate(city).GetAmount(perishable), Is.EqualTo(6));
+        Assert.That(store.GetOrCreate(city).GetAmount(added), Is.EqualTo(3));
+        Assert.That(store.DayAdvanceRevision, Is.EqualTo(0));
+        Assert.That(store.TryResolveDayAdvanceReceipt(manifest, step, out _, out TimelineFailure receiptFailure), Is.False);
+        Assert.That(receiptFailure, Is.EqualTo(TimelineFailure.None));
+    }
+
+    [Test]
+    public void ReusingBoundaryStepIdentityWithDifferentFrozenContentFailsClosed()
+    {
+        CityRuntime city = SimulationTestFactory.CreateCity("collision-aging", "collision-aging-location");
+        ItemData fruit = SimulationTestFactory.CreateItem("collision-fruit");
+        ItemData extra = SimulationTestFactory.CreateItem("collision-extra");
+        PlaceContentStore store = new PlaceContentStore();
+        Assert.That(store.TryAddStack(city, fruit, 10, PlaceContentPersistencePolicy.Perishable, out _, 1), Is.True);
+        BoundaryContinuationManifest firstManifest = CreateDayAdvanceManifest(store, 1, out BoundaryContinuationStep firstStep);
+        Assert.That(store.TryPrepareDayAdvanceStep(firstManifest, firstStep, out IBoundaryContinuationStepCommit prepared,
+            out TimelineFailure prepareFailure), Is.True, prepareFailure.ToString());
+        Assert.That(prepared.TryCommit(out TimelineFailure commitFailure), Is.True, commitFailure.ToString());
+
+        Assert.That(store.TryAddStack(city, extra, 3, PlaceContentPersistencePolicy.Durable, out _), Is.True);
+        BoundaryContinuationManifest changedManifest = CreateDayAdvanceManifest(store, 1, out BoundaryContinuationStep changedStep);
+        Assert.That(changedManifest.ContinuationId, Is.EqualTo(firstManifest.ContinuationId));
+        Assert.That(changedStep.StepId, Is.EqualTo(firstStep.StepId));
+        Assert.That(store.TryPrepareDayAdvanceStep(changedManifest, changedStep, out _, out TimelineFailure collision), Is.False);
+        Assert.That(collision, Is.EqualTo(TimelineFailure.ContinuationFailed));
+        Assert.That(store.GetOrCreate(city).GetAmount(fruit), Is.EqualTo(9));
+        Assert.That(store.GetOrCreate(city).GetAmount(extra), Is.EqualTo(3));
+        Assert.That(store.DayAdvanceRevision, Is.EqualTo(1));
+    }
+
+    [Test]
     public void NotableContentDoesNotDisappearThroughGenericDecay()
     {
         CityRuntime city = SimulationTestFactory.CreateCity("notable-decay", "notable-decay-location");
@@ -349,6 +469,23 @@ public sealed class PlaceContentFoundationTests
     private static PlaceContentStore CreateNotableStore()
     {
         return new PlaceContentStore(new RuntimeIdAllocator(), new RuntimeIdentityRegistry());
+    }
+
+    private static BoundaryContinuationManifest CreateDayAdvanceManifest(
+        PlaceContentStore store,
+        long day,
+        out BoundaryContinuationStep step)
+    {
+        DailyBoundaryOperation operation = new DailyBoundaryOperation("test-world", "test-profile", day);
+        Assert.That(store.TryCreateDayAdvanceStep(operation, 0, out step, out TimelineFailure failure),
+            Is.True, failure.ToString());
+        return new BoundaryContinuationManifest(
+            operation,
+            "daily-domain",
+            "1",
+            "test-config",
+            new[] { step },
+            "test-content");
     }
 
     private sealed class FixedCapabilityModel : ICapabilityModel

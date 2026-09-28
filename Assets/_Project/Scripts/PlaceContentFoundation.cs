@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 
 public enum PlaceContentOwnerKind
 {
@@ -852,6 +853,12 @@ public sealed class PlaceContentRuntime
 
 public sealed class PlaceContentStore : IAuthoritativeMutationGuardBindable
 {
+    public const string DayAdvanceStepId = "place-content-aging";
+    public const string DayAdvanceOwnerId = "place-content-store";
+    public const string DayAdvanceOperationKind = "place-content.advance-day";
+    public const string DayAdvanceOperationVersion = "1";
+    private const string DayAdvanceSnapshotVersion = "place-content-day-advance-v1";
+
     private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
     private readonly RuntimeIdAllocator notableItemIdAllocator;
     private readonly RuntimeIdentityRegistry identityRegistry;
@@ -863,9 +870,13 @@ public sealed class PlaceContentStore : IAuthoritativeMutationGuardBindable
         new Dictionary<string, NotableItemRuntime>(StringComparer.Ordinal);
     private readonly IReadOnlyList<PlaceContentRuntime> readOnlyPlaces;
     private readonly IReadOnlyList<NotableItemRuntime> readOnlyNotableItems;
+    private Dictionary<string, PlaceContentDayAdvanceReceipt> dayAdvanceReceipts =
+        new Dictionary<string, PlaceContentDayAdvanceReceipt>(StringComparer.Ordinal);
+    private long dayAdvanceRevision;
 
     public IReadOnlyList<PlaceContentRuntime> Places => readOnlyPlaces;
     public IReadOnlyList<NotableItemRuntime> NotableItems => readOnlyNotableItems;
+    public long DayAdvanceRevision => dayAdvanceRevision;
 
     public PlaceContentStore()
         : this(null, null)
@@ -1699,6 +1710,383 @@ public sealed class PlaceContentStore : IAuthoritativeMutationGuardBindable
         }
     }
 
+    /// <summary>
+    /// Captures the content-owner step descriptor before a P18-A boundary is activated.
+    /// The owner revision is a stable encoding of the exact stacked-content snapshot.
+    /// </summary>
+    public bool TryCreateDayAdvanceStep(
+        DailyBoundaryOperation operation,
+        int ordinal,
+        out BoundaryContinuationStep step,
+        out TimelineFailure failure)
+    {
+        step = null;
+        failure = TimelineFailure.ContinuationFailed;
+        if (operation == null || ordinal < 0 || !mutationGuardBinding.CanMutate || dayAdvanceRevision == long.MaxValue)
+        {
+            return false;
+        }
+
+        if (!TryCaptureDayAdvanceOwnerRevision(
+            out _,
+            out string ownerRevision))
+        {
+            return false;
+        }
+
+        step = new BoundaryContinuationStep(
+            ordinal,
+            DayAdvanceStepId,
+            DayAdvanceOwnerId,
+            DayAdvanceOperationKind,
+            DayAdvanceOperationVersion,
+            ownerRevision,
+            string.Empty);
+        failure = TimelineFailure.None;
+        return true;
+    }
+
+    /// <summary>Resolves the owner receipt for an exact frozen boundary step without reading live stacks.</summary>
+    public bool TryResolveDayAdvanceReceipt(
+        BoundaryContinuationManifest manifest,
+        BoundaryContinuationStep step,
+        out PlaceContentDayAdvanceReceipt receipt,
+        out TimelineFailure failure)
+    {
+        receipt = null;
+        if (!TryGetDayAdvanceIdentity(manifest, step, out string identity, out string fingerprint))
+        {
+            failure = TimelineFailure.ContinuationFailed;
+            return false;
+        }
+
+        if (dayAdvanceReceipts == null)
+        {
+            dayAdvanceReceipts = new Dictionary<string, PlaceContentDayAdvanceReceipt>(StringComparer.Ordinal);
+        }
+
+        if (!dayAdvanceReceipts.TryGetValue(identity, out PlaceContentDayAdvanceReceipt existing))
+        {
+            failure = TimelineFailure.None;
+            return false;
+        }
+
+        if (!string.Equals(existing.DescriptorFingerprint, fingerprint, StringComparison.Ordinal))
+        {
+            failure = TimelineFailure.ContinuationFailed;
+            return false;
+        }
+
+        receipt = existing;
+        failure = TimelineFailure.None;
+        return true;
+    }
+
+    /// <summary>Stages one day of content aging and its owner-local occurrence receipt atomically.</summary>
+    public bool TryPrepareDayAdvanceStep(
+        BoundaryContinuationManifest manifest,
+        BoundaryContinuationStep step,
+        out IBoundaryContinuationStepCommit prepared,
+        out TimelineFailure failure)
+    {
+        prepared = null;
+        if (!TryGetDayAdvanceIdentity(manifest, step, out string identity, out string fingerprint))
+        {
+            failure = TimelineFailure.ContinuationFailed;
+            return false;
+        }
+
+        if (dayAdvanceReceipts == null)
+        {
+            dayAdvanceReceipts = new Dictionary<string, PlaceContentDayAdvanceReceipt>(StringComparer.Ordinal);
+        }
+
+        if (dayAdvanceReceipts.TryGetValue(identity, out PlaceContentDayAdvanceReceipt existing))
+        {
+            if (!string.Equals(existing.DescriptorFingerprint, fingerprint, StringComparison.Ordinal))
+            {
+                failure = TimelineFailure.ContinuationFailed;
+                return false;
+            }
+
+            prepared = new PlaceContentDayAdvanceCommit(this, existing, null, null, null, true, fingerprint,
+                step.OwnerRevision, dayAdvanceRevision, dayAdvanceReceipts);
+            failure = TimelineFailure.None;
+            return true;
+        }
+
+        if (!mutationGuardBinding.CanMutate || dayAdvanceRevision == long.MaxValue
+            || !string.IsNullOrEmpty(step.Payload)
+            || !TryCaptureDayAdvanceOwnerRevision(
+                out List<PlaceContentDayAdvanceStackSnapshot> current,
+                out string currentOwnerRevision)
+            || !string.Equals(step.OwnerRevision, currentOwnerRevision, StringComparison.Ordinal))
+        {
+            failure = TimelineFailure.ContinuationFailed;
+            return false;
+        }
+
+        List<PlaceContentDayAdvanceInventoryInstall> installs = new List<PlaceContentDayAdvanceInventoryInstall>();
+        List<PlaceContentDayAdvanceStackRemoval> removals = new List<PlaceContentDayAdvanceStackRemoval>();
+        for (int i = 0; i < current.Count; i++)
+        {
+            PlaceContentDayAdvanceStackSnapshot snapshot = current[i];
+            PlaceContentStackRuntime stack = snapshot.Stack;
+            int amountToRemove = CalculateDayAdvanceRemoval(snapshot);
+            if (amountToRemove > 0)
+            {
+                if (!stack.Inventory.CanInstall(snapshot.InventoryRevision))
+                {
+                    failure = TimelineFailure.ContinuationFailed;
+                    return false;
+                }
+
+                installs.Add(new PlaceContentDayAdvanceInventoryInstall(
+                    stack.Inventory,
+                    snapshot.InventoryRevision,
+                    stack.Inventory.PrepareReplacement(stack.Item, amountToRemove, 0f, false, 0)));
+            }
+
+            if (snapshot.Amount - amountToRemove <= 0)
+            {
+                removals.Add(new PlaceContentDayAdvanceStackRemoval(snapshot.Content, stack));
+            }
+        }
+
+        PlaceContentDayAdvanceReceipt receipt = new PlaceContentDayAdvanceReceipt(
+            identity,
+            fingerprint,
+            dayAdvanceRevision,
+            dayAdvanceRevision + 1);
+        dayAdvanceReceipts.EnsureCapacity(dayAdvanceReceipts.Count + 1);
+        prepared = new PlaceContentDayAdvanceCommit(
+            this,
+            receipt,
+            installs,
+            removals,
+            current,
+            false,
+            fingerprint,
+            step.OwnerRevision,
+            dayAdvanceRevision,
+            dayAdvanceReceipts);
+        failure = TimelineFailure.None;
+        return true;
+    }
+
+    private bool TryCaptureDayAdvanceSnapshot(out List<PlaceContentDayAdvanceStackSnapshot> snapshots)
+    {
+        snapshots = new List<PlaceContentDayAdvanceStackSnapshot>();
+        foreach (PlaceContentRuntime content in places)
+        {
+            if (content == null || content.Owner == null || string.IsNullOrWhiteSpace(content.Owner.StableKey))
+            {
+                return false;
+            }
+
+            foreach (PlaceContentStackRuntime stack in content.StackedContent)
+            {
+                if (stack == null || stack.Item == null || string.IsNullOrWhiteSpace(stack.ItemDefinitionId)
+                    || !Enum.IsDefined(typeof(PlaceContentPersistencePolicy), stack.PersistencePolicy)
+                    || stack.PersistencePolicy == PlaceContentPersistencePolicy.Notable || stack.DecayPerDay < 0)
+                {
+                    return false;
+                }
+
+                snapshots.Add(new PlaceContentDayAdvanceStackSnapshot(
+                    content,
+                    stack,
+                    content.Owner.StableKey,
+                    stack.ItemDefinitionId,
+                    stack.Amount,
+                    stack.PersistencePolicy,
+                    stack.DecayPerDay,
+                    stack.Inventory.Revision));
+            }
+        }
+
+        snapshots.Sort(PlaceContentDayAdvanceStackSnapshot.Compare);
+        return true;
+    }
+
+    private bool TryCaptureDayAdvanceOwnerRevision(
+        out List<PlaceContentDayAdvanceStackSnapshot> snapshots,
+        out string ownerRevision)
+    {
+        ownerRevision = null;
+        if (!TryCaptureDayAdvanceSnapshot(out snapshots)) return false;
+        List<string> parts = new List<string>(3 + snapshots.Count * 6)
+        {
+            DayAdvanceSnapshotVersion,
+            dayAdvanceRevision.ToString(CultureInfo.InvariantCulture),
+            snapshots.Count.ToString(CultureInfo.InvariantCulture)
+        };
+        foreach (PlaceContentDayAdvanceStackSnapshot stack in snapshots)
+        {
+            parts.Add(stack.OwnerStableKey);
+            parts.Add(stack.ItemDefinitionId);
+            parts.Add(stack.Amount.ToString(CultureInfo.InvariantCulture));
+            parts.Add(((int)stack.PersistencePolicy).ToString(CultureInfo.InvariantCulture));
+            parts.Add(stack.DecayPerDay.ToString(CultureInfo.InvariantCulture));
+            parts.Add(stack.InventoryRevision.ToString(CultureInfo.InvariantCulture));
+        }
+
+        ownerRevision = SpatialStableKey.Encode(parts.ToArray());
+        return true;
+    }
+
+    private bool TryGetDayAdvanceIdentity(
+        BoundaryContinuationManifest manifest,
+        BoundaryContinuationStep step,
+        out string identity,
+        out string fingerprint)
+    {
+        identity = null;
+        fingerprint = null;
+        if (manifest == null || step == null || step.Ordinal >= manifest.Steps.Count
+            || !ReferenceEquals(manifest.Steps[step.Ordinal], step)
+            || step.StepId != DayAdvanceStepId || step.OwnerId != DayAdvanceOwnerId
+            || step.OperationKind != DayAdvanceOperationKind || step.OperationVersion != DayAdvanceOperationVersion
+            || step.Disposition != "included")
+        {
+            return false;
+        }
+
+        string expectedBoundaryOccurrenceId = SpatialStableKey.Encode(
+            manifest.WorldId,
+            manifest.ProfileId,
+            manifest.AbsoluteDay.ToString(CultureInfo.InvariantCulture));
+        if (!string.Equals(manifest.BoundaryOccurrenceId, expectedBoundaryOccurrenceId, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        identity = manifest.GetExecutionStepIdentity(step);
+        fingerprint = SpatialStableKey.Encode(
+            manifest.BoundaryOccurrenceId,
+            manifest.ContinuationId,
+            step.Ordinal.ToString(CultureInfo.InvariantCulture),
+            step.StepId,
+            step.OwnerId,
+            step.OperationKind,
+            step.OperationVersion,
+            step.OwnerRevision,
+            step.Payload,
+            step.PersonId,
+            step.Disposition);
+        return true;
+    }
+
+    private static int CalculateDayAdvanceRemoval(PlaceContentDayAdvanceStackSnapshot snapshot)
+    {
+        if (snapshot.Amount <= 0) return 0;
+        if (snapshot.PersistencePolicy == PlaceContentPersistencePolicy.Transient) return snapshot.Amount;
+        if (snapshot.PersistencePolicy != PlaceContentPersistencePolicy.Perishable) return 0;
+        return Math.Min(snapshot.Amount, snapshot.DecayPerDay);
+    }
+
+    private static bool ContainsStackReference(
+        IReadOnlyList<PlaceContentStackRuntime> stacks,
+        PlaceContentStackRuntime target)
+    {
+        if (stacks == null || target == null) return false;
+        foreach (PlaceContentStackRuntime stack in stacks)
+        {
+            if (ReferenceEquals(stack, target)) return true;
+        }
+
+        return false;
+    }
+
+    internal bool TryCommitDayAdvance(
+        PlaceContentDayAdvanceReceipt receipt,
+        IReadOnlyList<PlaceContentDayAdvanceInventoryInstall> installs,
+        IReadOnlyList<PlaceContentDayAdvanceStackRemoval> removals,
+        IReadOnlyList<PlaceContentDayAdvanceStackSnapshot> expectedStacks,
+        bool replay,
+        string fingerprint,
+        string expectedOwnerRevision,
+        long expectedDayAdvanceRevision,
+        Dictionary<string, PlaceContentDayAdvanceReceipt> expectedReceipts,
+        out TimelineFailure failure)
+    {
+        failure = TimelineFailure.ContinuationFailed;
+        if (receipt == null)
+        {
+            return false;
+        }
+
+        if (replay)
+        {
+            // A matching receipt already exists. This is an idempotent no-op replay.
+            if (dayAdvanceReceipts != null
+                && dayAdvanceReceipts.TryGetValue(receipt.ExecutionStepIdentity, out PlaceContentDayAdvanceReceipt existing)
+                && ReferenceEquals(existing, receipt)
+                && string.Equals(existing.DescriptorFingerprint, fingerprint, StringComparison.Ordinal))
+            {
+                failure = TimelineFailure.None;
+                return true;
+            }
+
+            return false;
+        }
+
+        if (!mutationGuardBinding.CanMutate || dayAdvanceRevision != expectedDayAdvanceRevision
+            || !ReferenceEquals(dayAdvanceReceipts, expectedReceipts)
+            || dayAdvanceReceipts.ContainsKey(receipt.ExecutionStepIdentity)
+            || dayAdvanceRevision == long.MaxValue
+            || receipt.OwnerRevisionBefore != dayAdvanceRevision
+            || receipt.OwnerRevisionAfter != dayAdvanceRevision + 1
+            || !string.Equals(receipt.DescriptorFingerprint, fingerprint, StringComparison.Ordinal)
+            || !TryCaptureDayAdvanceOwnerRevision(out _, out string currentOwnerRevision)
+            || !string.Equals(currentOwnerRevision, expectedOwnerRevision, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        foreach (PlaceContentDayAdvanceInventoryInstall install in installs)
+        {
+            if (install?.Inventory == null || !install.Inventory.CanInstall(install.ExpectedRevision))
+            {
+                return false;
+            }
+        }
+
+        foreach (PlaceContentDayAdvanceStackSnapshot snapshot in expectedStacks)
+        {
+            if (snapshot?.Content == null || snapshot.Stack == null
+                || snapshot.Stack.Inventory.Revision != snapshot.InventoryRevision
+                || !ContainsStackReference(snapshot.Content.StackedContent, snapshot.Stack))
+            {
+                return false;
+            }
+        }
+
+        foreach (PlaceContentDayAdvanceStackRemoval removal in removals)
+        {
+            if (removal?.Content == null || removal.Stack == null
+                || !ContainsStackReference(removal.Content.StackedContent, removal.Stack))
+            {
+                return false;
+            }
+        }
+
+        foreach (PlaceContentDayAdvanceInventoryInstall install in installs)
+        {
+            install.Inventory.InstallPrepared(install.ExpectedRevision, install.Replacement);
+        }
+
+        foreach (PlaceContentDayAdvanceStackRemoval removal in removals)
+        {
+            removal.Content.RemoveStack(removal.Stack);
+        }
+
+        dayAdvanceRevision++;
+        dayAdvanceReceipts.Add(receipt.ExecutionStepIdentity, receipt);
+        failure = TimelineFailure.None;
+        return true;
+    }
+
     private bool TryValidateNpcIdentity(NpcRuntime npc, out string diagnostic)
     {
         diagnostic = null;
@@ -1773,4 +2161,165 @@ public sealed class PlaceContentStore : IAuthoritativeMutationGuardBindable
     internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard) => mutationGuardBinding.TryBindTo(guard);
     bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard) => CanBindMutationGuard(guard);
     bool IAuthoritativeMutationGuardBindable.TryBindMutationGuard(AuthoritativeMutationGuard guard) => TryBindMutationGuard(guard);
+}
+
+[Serializable]
+public sealed class PlaceContentDayAdvanceReceipt
+{
+    public string ExecutionStepIdentity { get; }
+    public long OwnerRevisionBefore { get; }
+    public long OwnerRevisionAfter { get; }
+    internal string DescriptorFingerprint { get; }
+
+    internal PlaceContentDayAdvanceReceipt(
+        string executionStepIdentity,
+        string descriptorFingerprint,
+        long ownerRevisionBefore,
+        long ownerRevisionAfter)
+    {
+        ExecutionStepIdentity = executionStepIdentity ?? throw new ArgumentNullException(nameof(executionStepIdentity));
+        DescriptorFingerprint = descriptorFingerprint ?? throw new ArgumentNullException(nameof(descriptorFingerprint));
+        OwnerRevisionBefore = ownerRevisionBefore;
+        OwnerRevisionAfter = ownerRevisionAfter;
+    }
+}
+
+internal sealed class PlaceContentDayAdvanceStackSnapshot
+{
+    public PlaceContentRuntime Content { get; }
+    public PlaceContentStackRuntime Stack { get; }
+    public string OwnerStableKey { get; }
+    public string ItemDefinitionId { get; }
+    public int Amount { get; }
+    public PlaceContentPersistencePolicy PersistencePolicy { get; }
+    public int DecayPerDay { get; }
+    public long InventoryRevision { get; }
+
+    public PlaceContentDayAdvanceStackSnapshot(
+        PlaceContentRuntime content,
+        PlaceContentStackRuntime stack,
+        string ownerStableKey,
+        string itemDefinitionId,
+        int amount,
+        PlaceContentPersistencePolicy persistencePolicy,
+        int decayPerDay,
+        long inventoryRevision)
+    {
+        Content = content;
+        Stack = stack;
+        OwnerStableKey = ownerStableKey;
+        ItemDefinitionId = itemDefinitionId;
+        Amount = amount;
+        PersistencePolicy = persistencePolicy;
+        DecayPerDay = decayPerDay;
+        InventoryRevision = inventoryRevision;
+    }
+
+    public static int Compare(PlaceContentDayAdvanceStackSnapshot left, PlaceContentDayAdvanceStackSnapshot right)
+    {
+        int value = string.CompareOrdinal(left.OwnerStableKey, right.OwnerStableKey);
+        if (value != 0) return value;
+        value = string.CompareOrdinal(left.ItemDefinitionId, right.ItemDefinitionId);
+        if (value != 0) return value;
+        value = ((int)left.PersistencePolicy).CompareTo((int)right.PersistencePolicy);
+        if (value != 0) return value;
+        value = left.DecayPerDay.CompareTo(right.DecayPerDay);
+        if (value != 0) return value;
+        value = left.Amount.CompareTo(right.Amount);
+        return value != 0 ? value : left.InventoryRevision.CompareTo(right.InventoryRevision);
+    }
+}
+
+internal sealed class PlaceContentDayAdvanceInventoryInstall
+{
+    public InventoryRuntime Inventory { get; }
+    public long ExpectedRevision { get; }
+    public PreparedInventoryState Replacement { get; }
+
+    public PlaceContentDayAdvanceInventoryInstall(
+        InventoryRuntime inventory,
+        long expectedRevision,
+        PreparedInventoryState replacement)
+    {
+        Inventory = inventory;
+        ExpectedRevision = expectedRevision;
+        Replacement = replacement;
+    }
+}
+
+internal sealed class PlaceContentDayAdvanceStackRemoval
+{
+    public PlaceContentRuntime Content { get; }
+    public PlaceContentStackRuntime Stack { get; }
+
+    public PlaceContentDayAdvanceStackRemoval(PlaceContentRuntime content, PlaceContentStackRuntime stack)
+    {
+        Content = content;
+        Stack = stack;
+    }
+}
+
+internal sealed class PlaceContentDayAdvanceCommit : IBoundaryContinuationStepCommit
+{
+    private readonly PlaceContentStore owner;
+    private readonly PlaceContentDayAdvanceReceipt receipt;
+    private readonly IReadOnlyList<PlaceContentDayAdvanceInventoryInstall> installs;
+    private readonly IReadOnlyList<PlaceContentDayAdvanceStackRemoval> removals;
+    private readonly IReadOnlyList<PlaceContentDayAdvanceStackSnapshot> expectedStacks;
+    private readonly bool replay;
+    private readonly string fingerprint;
+    private readonly string expectedOwnerRevision;
+    private readonly long expectedDayAdvanceRevision;
+    private readonly Dictionary<string, PlaceContentDayAdvanceReceipt> expectedReceipts;
+    private bool completed;
+
+    public IReadOnlyList<DueWorkReference> RetainedTimelineFacts => Array.Empty<DueWorkReference>();
+    public IReadOnlyList<string> RetainedSourceSignals => Array.Empty<string>();
+    public PlaceContentDayAdvanceReceipt Receipt => receipt;
+
+    public PlaceContentDayAdvanceCommit(
+        PlaceContentStore owner,
+        PlaceContentDayAdvanceReceipt receipt,
+        IReadOnlyList<PlaceContentDayAdvanceInventoryInstall> installs,
+        IReadOnlyList<PlaceContentDayAdvanceStackRemoval> removals,
+        IReadOnlyList<PlaceContentDayAdvanceStackSnapshot> expectedStacks,
+        bool replay,
+        string fingerprint,
+        string expectedOwnerRevision,
+        long expectedDayAdvanceRevision,
+        Dictionary<string, PlaceContentDayAdvanceReceipt> expectedReceipts)
+    {
+        this.owner = owner ?? throw new ArgumentNullException(nameof(owner));
+        this.receipt = receipt ?? throw new ArgumentNullException(nameof(receipt));
+        this.installs = installs ?? Array.Empty<PlaceContentDayAdvanceInventoryInstall>();
+        this.removals = removals ?? Array.Empty<PlaceContentDayAdvanceStackRemoval>();
+        this.expectedStacks = expectedStacks ?? Array.Empty<PlaceContentDayAdvanceStackSnapshot>();
+        this.replay = replay;
+        this.fingerprint = fingerprint;
+        this.expectedOwnerRevision = expectedOwnerRevision;
+        this.expectedDayAdvanceRevision = expectedDayAdvanceRevision;
+        this.expectedReceipts = expectedReceipts;
+    }
+
+    public bool TryCommit(out TimelineFailure failure)
+    {
+        if (completed)
+        {
+            failure = TimelineFailure.None;
+            return true;
+        }
+
+        completed = owner.TryCommitDayAdvance(
+            receipt,
+            installs,
+            removals,
+            expectedStacks,
+            replay,
+            fingerprint,
+            expectedOwnerRevision,
+            expectedDayAdvanceRevision,
+            expectedReceipts,
+            out failure);
+        return completed;
+    }
 }
