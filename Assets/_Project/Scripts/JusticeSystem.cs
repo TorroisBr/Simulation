@@ -177,9 +177,8 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
             return false;
         }
 
-        string executionStepIdentity = manifest.GetExecutionStepIdentity(step);
         JusticeBeginDayReceipt receipt = new JusticeBeginDayReceipt(
-            executionStepIdentity,
+            identity,
             fingerprint,
             beginDayStepRevision,
             beginDayStepRevision + 1L);
@@ -335,7 +334,7 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
             return false;
         }
 
-        identity = manifest.GetExecutionStepIdentity(step);
+        identity = SpatialStableKey.Encode(manifest.BoundaryOccurrenceId, step.StepId);
         fingerprint = SpatialStableKey.Encode(
             manifest.BoundaryOccurrenceId,
             manifest.ContinuationId,

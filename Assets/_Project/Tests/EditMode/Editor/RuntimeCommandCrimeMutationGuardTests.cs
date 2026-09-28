@@ -406,6 +406,42 @@ public sealed class JusticeBeginDayBoundaryOwnerTests
         Assert.That(conflictFailure, Is.EqualTo(TimelineFailure.ContinuationFailed));
     }
 
+    [Test]
+    public void BeginDayReceiptUsesSemanticStepIdentityAndRejectsOrdinalDrift()
+    {
+        JusticeSystem justice = CreateJustice(out CityRuntime city);
+        NpcRuntime guard = CreateActor("justice-identity-guard");
+        NpcRuntime target = CreateActor("justice-identity-target");
+        justice.CreateOrIncreaseWarrant(target, city, 12f, 4);
+        Assert.That(justice.Arrest(guard, target, city), Is.True);
+
+        DailyBoundaryOperation operation = new DailyBoundaryOperation("world", "profile", 3L);
+        Assert.That(justice.TryCreateBeginDayStep(operation, 0, out BoundaryContinuationStep step, out _), Is.True);
+        BoundaryContinuationManifest manifest = CreateManifest(operation, step);
+        Assert.That(justice.TryPrepareBeginDayStep(manifest, step, out IBoundaryContinuationStepCommit prepared, out _), Is.True);
+        Assert.That(prepared.TryCommit(out _), Is.True);
+        Assert.That(justice.TryResolveBeginDayReceipt(
+            manifest, step, out JusticeBeginDayReceipt receipt, out TimelineFailure failure), Is.True);
+        Assert.That(receipt.ExecutionStepIdentity, Is.Not.EqualTo(manifest.GetExecutionStepIdentity(step)));
+
+        BoundaryContinuationStep preceding = new BoundaryContinuationStep(
+            0, "preceding-step", "test-owner", "test.operation", "1", "test-revision", string.Empty);
+        BoundaryContinuationStep shifted = new BoundaryContinuationStep(
+            1, step.StepId, step.OwnerId, step.OperationKind, step.OperationVersion,
+            step.OwnerRevision, step.Payload, step.PersonId, step.Disposition);
+        BoundaryContinuationManifest shiftedManifest = new BoundaryContinuationManifest(
+            operation,
+            "daily-boundary",
+            "v1",
+            "configuration",
+            new List<BoundaryContinuationStep> { preceding, shifted },
+            "content");
+
+        Assert.That(justice.TryResolveBeginDayReceipt(
+            shiftedManifest, shifted, out _, out failure), Is.False);
+        Assert.That(failure, Is.EqualTo(TimelineFailure.ContinuationFailed));
+    }
+
     private static JusticeSystem CreateJustice(out CityRuntime city)
     {
         NpcStatusData free = SimulationTestFactory.CreateStatus("justice-step-free");
