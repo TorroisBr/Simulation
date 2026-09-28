@@ -84,6 +84,47 @@ those records do not substitute for their owning world-truth stores. This
 evidence bounds the profile's real composition; it does not demonstrate export
 or staged hydration for any of these owners.
 
+### P12-B entrypoint and mutation-invalidation census — partial (2026-09-28)
+
+This source pass is against the selected bootstrap candidate `af656e7`, which
+remains unpromoted, and current P18 canonical `9e790c5` / P18-D integration
+`6fcbfab`. It maps known synchronous surfaces; it is not an exhaustive live
+owner census because the promoted combined profile and all supported callers
+have not been established.
+
+| Entry surface | Synchronous path and owner reach | Thread/operation evidence and gap |
+|---|---|---|
+| Selected SampleScene bootstrap | `TesteSimulacao.Start` → private `InitializeSimulation` → synchronous `SimulationGenesisPipeline.ExecuteStages` and composition publication. The scene binds `TesteSimulacao` to `Simulation-GeneralTest.asset`. | Unity lifecycle supplies the expected main-thread entry, but this code does not capture/verify a thread identity or register bootstrap as an active operation. No task/thread/coroutine is used in this bootstrap path. |
+| Selected day input | `TesteSimulacao.Update` handles Space → private `Simulate` → repeated `SimulationRuntime.AdvanceDay` calls. Each call synchronously executes the current daily core. | `SimulationRuntime`'s advance lease excludes reentrant advance calls only. P18-D exclusively owns extending the lease/`SimulationRuntime` path through timeline, continuation, subphases and successful P18-C handoff; P12 must wait for explicit handoff. |
+| Other bootstrap-facing commands | `TesteSimulacao.TryStartTravelParty` and `TryStartExpedition` synchronously enter the published runtime/system. The `Runtime`/`Bootstrap` properties also expose the runtime and stores/systems to same-process callers. | No common operation-scope registry wraps these calls or direct owner APIs. The selected scene has no external `WorldCommand` queue. `WorldObserverTimeController.AdvanceOneDay` is another callable advance path, but its component is absent from this SampleScene; revisit only if it is bound into a supported profile. |
+| Included mutable truth | Public runtime façade methods include roster/person registration and lifecycle, materialization, population transitions, genealogy, legacy route/observation/plan and travel/expedition operations; direct store references expose further mutations. The owner groups are the included City/market/account, NPC/Person/population, legacy spatial/site, selected economy/merchant/Justice/Crime/Knowledge, P11 ActorChoice, and other profile-supported authorities listed above. | A method-to-owner-to-committed-write map is still required. Per-method proposals/queries must be classified by actual commit behavior; guard bindings are not evidence that a write was counted or invalidated. |
+| Excluded or conditional authorities | Runtime surfaces also expose P8-B..E, P10 LocalTopology, P14 material-flow, P18 temporal, P19 extension, P20 activity, and other conditional authorities. | These remain outside this profile. The inventory must identify each corresponding store/provider, prove explicit empty/not-composed state at admission, and reject populated or unverified state; do not infer emptiness from the initial scene alone. |
+
+**Revision and receipt evidence already present:** `AuthoritativeMutationGuard`
+(`AuthoritativeMutationGuard.cs`) exposes only Healthy/Faulted health and a
+one-way binding; it has no mutation epoch, owner-thread check, or active-operation
+count. Individual owners provide useful but nonuniform witnesses: Market,
+Inventory, MoneyAccount and SettlementPopulation revisions; revisions on some
+spatial, knowledge, political, property, force and conflict stores; and
+operation-specific receipt/revision pairs. `CityRuntime` currently has a
+private daily-economy receipt revision, not a revision for all City truth.
+`NpcRuntime` and `PersonStore` expose no general mutation revision. P18-D's
+receipt-backed PlaceContent, logger, Justice, Crime, merchant-plan and City
+economy steps validate only their own operation snapshots/revisions; they do
+not form a profile-wide owner epoch or cover direct mutations in those owners.
+`SimulationRuntime.PoliticalWorldRevision` covers only its political subset.
+Identity allocators, record sequence counters, and diagnostics revisions are not
+a substitute for mutation invalidation.
+
+**Remaining evidence gap:** for every supported synchronous caller, enumerate
+its owner(s), exact committed write(s), available pre/post revision or receipt,
+and whether a commit can bypass that witness. Add explicit owner-thread capture,
+all in-flight operation coverage, and unknown/missing-owner rejection evidence
+to the eventual B implementation contract. Complete this matrix against the
+promoted combined bootstrap/provider graph and revalidate after P18-D releases
+its exclusive runtime/day-loop window. Until then this is partial inventory
+evidence only: it does not establish P12-B implementation readiness, P12-A
+readiness, implementation authorization, or canonical promotion.
 | Included authority group | Exact immutable export | Staged hydration | Concrete gap blocking P12-A |
 |---|---|---|---|
 | Profile/build/content/provider identity; effective configuration, calendar, completed-day boundary and capture eligibility | No | No | No versioned P12 envelope/admission manifest or successful-advance token binds the runtime, configuration, content/providers and exact quiescent boundary. `SimulationBootstrapComposition` and runtime wiring describe construction, not a sealed continuation capture. |
