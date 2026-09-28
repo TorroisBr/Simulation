@@ -347,16 +347,15 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
             return false;
         }
 
-        string executionStepIdentity = manifest.GetExecutionStepIdentity(step);
         CrimeHiddenStatusReceipt receipt = new CrimeHiddenStatusReceipt(
-            executionStepIdentity,
+            identity,
             fingerprint,
             hiddenStatusStepRevision,
             hiddenStatusStepRevision + 1L);
         Dictionary<string, CrimeHiddenStatusReceipt> nextReceipts =
             new Dictionary<string, CrimeHiddenStatusReceipt>(hiddenStatusStepReceipts, StringComparer.Ordinal)
             {
-                [executionStepIdentity] = receipt
+                [identity] = receipt
             };
         List<string> expiryNotices = CaptureHiddenStatusExpiryNotices(snapshots);
 
@@ -511,7 +510,7 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
             NpcRuntime npcRuntime = npcRuntimeList[i];
             if (npcRuntime == null)
             {
-                snapshots.Add(new CrimeHiddenStatusSnapshotEntry(null, string.Empty, 0, 0));
+                snapshots.Add(new CrimeHiddenStatusSnapshotEntry(null, string.Empty, string.Empty, 0, 0));
                 revisionParts.Add(SpatialStableKey.Encode(i.ToString(CultureInfo.InvariantCulture), "null-slot"));
                 continue;
             }
@@ -525,12 +524,17 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
             }
 
             runtimeIds[runtimeId] = npcRuntime;
+            // PersonId is the materialization-independent identity when present; RuntimeId remains
+            // the stable fallback for legacy roster entries that are not Person-backed.
+            string personId = npcRuntime.PersonId?.Value ?? string.Empty;
             int markerCount = CountHiddenStatusMarkers(npcRuntime);
             int hiddenDaysRemaining = npcRuntime.HiddenDaysRemaining;
-            snapshots.Add(new CrimeHiddenStatusSnapshotEntry(npcRuntime, runtimeId, hiddenDaysRemaining, markerCount));
+            snapshots.Add(new CrimeHiddenStatusSnapshotEntry(
+                npcRuntime, runtimeId, personId, hiddenDaysRemaining, markerCount));
             revisionParts.Add(SpatialStableKey.Encode(
                 i.ToString(CultureInfo.InvariantCulture),
                 runtimeId,
+                personId,
                 hiddenDaysRemaining.ToString(CultureInfo.InvariantCulture),
                 markerCount.ToString(CultureInfo.InvariantCulture)));
         }
@@ -614,7 +618,9 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
             return false;
         }
 
-        identity = manifest.GetExecutionStepIdentity(step);
+        // The owner fact is keyed by the stable boundary occurrence and semantic step ID.
+        // Ordinal participates in the frozen descriptor fingerprint, but is only execution order.
+        identity = SpatialStableKey.Encode(manifest.BoundaryOccurrenceId, step.StepId);
         fingerprint = SpatialStableKey.Encode(
             manifest.BoundaryOccurrenceId,
             manifest.ContinuationId,
@@ -646,6 +652,7 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
             if (left == null || right == null
                 || !ReferenceEquals(left.Npc, right.Npc)
                 || !string.Equals(left.RuntimeId, right.RuntimeId, StringComparison.Ordinal)
+                || !string.Equals(left.PersonId, right.PersonId, StringComparison.Ordinal)
                 || left.HiddenDaysRemaining != right.HiddenDaysRemaining
                 || left.HiddenStatusCount != right.HiddenStatusCount)
             {
@@ -1131,17 +1138,20 @@ internal sealed class CrimeHiddenStatusSnapshotEntry
 {
     public NpcRuntime Npc { get; }
     public string RuntimeId { get; }
+    public string PersonId { get; }
     public int HiddenDaysRemaining { get; }
     public int HiddenStatusCount { get; }
 
     public CrimeHiddenStatusSnapshotEntry(
         NpcRuntime npc,
         string runtimeId,
+        string personId,
         int hiddenDaysRemaining,
         int hiddenStatusCount)
     {
         Npc = npc;
         RuntimeId = runtimeId ?? string.Empty;
+        PersonId = personId ?? string.Empty;
         HiddenDaysRemaining = hiddenDaysRemaining;
         HiddenStatusCount = hiddenStatusCount;
     }

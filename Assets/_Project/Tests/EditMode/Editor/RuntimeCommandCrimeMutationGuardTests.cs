@@ -471,6 +471,7 @@ public sealed class CrimeHiddenStatusBoundaryOwnerTests
         Assert.That(CountStatusReference(npc, hidden), Is.EqualTo(1));
         Assert.That(crime.TryResolveAdvanceHiddenStatusesReceipt(
             manifest, step, out CrimeHiddenStatusReceipt receipt, out failure), Is.True);
+        Assert.That(receipt.ExecutionStepIdentity, Is.Not.EqualTo(manifest.GetExecutionStepIdentity(step)));
         Assert.That(receipt.OwnerRevisionBefore, Is.Zero);
         Assert.That(receipt.OwnerRevisionAfter, Is.EqualTo(1L));
 
@@ -481,6 +482,37 @@ public sealed class CrimeHiddenStatusBoundaryOwnerTests
         Assert.That(replay.TryCommit(out failure), Is.True);
         Assert.That(npc.HiddenDaysRemaining, Is.EqualTo(currentDays));
         Assert.That(CountStatusReference(npc, hidden), Is.EqualTo(1));
+    }
+
+    [Test]
+    public void ReceiptIdentityExcludesStepOrdinalWhileDescriptorRejectsManifestDrift()
+    {
+        NpcStatusData hidden = SimulationTestFactory.CreateStatus("crime-boundary-identity-hidden");
+        CrimeSystem crime = new CrimeSystem(null, null, hidden);
+        NpcRuntime npc = CreateActor("crime-boundary-identity");
+        npc.HideForDays(1);
+        npc.AddStatus(hidden);
+        List<NpcRuntime> roster = new List<NpcRuntime> { npc };
+        DailyBoundaryOperation operation = new DailyBoundaryOperation("world", "intraday", 1L);
+        Assert.That(crime.TryCreateAdvanceHiddenStatusesStep(
+            operation, roster, 0, out BoundaryContinuationStep step, out _), Is.True);
+        BoundaryContinuationManifest manifest = CreateManifest(operation, step);
+        Assert.That(crime.TryPrepareAdvanceHiddenStatusesStep(
+            manifest, step, roster, out IBoundaryContinuationStepCommit prepared, out _), Is.True);
+        Assert.That(prepared.TryCommit(out _), Is.True);
+
+        BoundaryContinuationStep preceding = new BoundaryContinuationStep(
+            0, "preceding-step", "test-owner", "test.operation", "1", "test-revision", string.Empty);
+        BoundaryContinuationStep shifted = new BoundaryContinuationStep(
+            1, step.StepId, step.OwnerId, step.OperationKind, step.OperationVersion,
+            step.OwnerRevision, step.Payload, step.PersonId, step.Disposition);
+        BoundaryContinuationManifest shiftedManifest = CreateManifest(
+            operation,
+            new List<BoundaryContinuationStep> { preceding, shifted });
+
+        Assert.That(crime.TryResolveAdvanceHiddenStatusesReceipt(
+            shiftedManifest, shifted, out _, out TimelineFailure failure), Is.False);
+        Assert.That(failure, Is.EqualTo(TimelineFailure.ContinuationFailed));
     }
 
     [Test]
@@ -589,12 +621,19 @@ public sealed class CrimeHiddenStatusBoundaryOwnerTests
         DailyBoundaryOperation operation,
         BoundaryContinuationStep step)
     {
+        return CreateManifest(operation, new List<BoundaryContinuationStep> { step });
+    }
+
+    private static BoundaryContinuationManifest CreateManifest(
+        DailyBoundaryOperation operation,
+        IReadOnlyList<BoundaryContinuationStep> steps)
+    {
         return new BoundaryContinuationManifest(
             operation,
             "daily-boundary",
             "v1",
             "configuration",
-            new List<BoundaryContinuationStep> { step },
+            steps,
             "content");
     }
 }
