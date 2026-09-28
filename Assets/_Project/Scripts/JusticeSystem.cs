@@ -338,6 +338,10 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
         fingerprint = SpatialStableKey.Encode(
             manifest.BoundaryOccurrenceId,
             manifest.ContinuationId,
+            manifest.SubphaseKind,
+            manifest.SubphaseVersion,
+            manifest.ConfigurationIdentity,
+            manifest.ContentIdentity,
             step.Ordinal.ToString(CultureInfo.InvariantCulture),
             step.StepId,
             step.OwnerId,

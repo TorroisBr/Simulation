@@ -440,6 +440,17 @@ public sealed class JusticeBeginDayBoundaryOwnerTests
         Assert.That(justice.TryResolveBeginDayReceipt(
             shiftedManifest, shifted, out _, out failure), Is.False);
         Assert.That(failure, Is.EqualTo(TimelineFailure.ContinuationFailed));
+
+        BoundaryContinuationManifest changedConfigurationManifest = new BoundaryContinuationManifest(
+            operation,
+            "daily-boundary",
+            "v1",
+            "changed-configuration",
+            new List<BoundaryContinuationStep> { step },
+            "content");
+        Assert.That(justice.TryResolveBeginDayReceipt(
+            changedConfigurationManifest, step, out _, out failure), Is.False);
+        Assert.That(failure, Is.EqualTo(TimelineFailure.ContinuationFailed));
     }
 
     private static JusticeSystem CreateJustice(out CityRuntime city)
