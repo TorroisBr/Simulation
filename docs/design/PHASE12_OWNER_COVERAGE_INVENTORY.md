@@ -14,7 +14,7 @@ closure `82396ae7ffaf407fda278928da456b06dc5394d4` (P9-B code integration
 `9501bf076d506fb64d6ee3e6d178574fff36e153`, State record
 `9e79b58397dc9a89ddcc562be139b79987cb55b9`); P11 canonical closure
 `308e24d0744112e8f2b741521b8b3e4acb51ebbf` (code promotion
-`0803670cfa2c39163b54ff46a21daa06df5a16f6`);
+`0cd4281804ecc6a2d110352d1a238959e93867f0`);
 P14 historical promotion State `f8a61fe9634ba9ab56ee31d50b57b45fef292a6f`
 (P14-A code `c44904bb4b0a066eced1d7e8a773b7dc1eea76c0`); current P14
 canonical State/Brief `4caecbbfb0464c965811402b3c11d8717605114a` is a docs-only
@@ -78,22 +78,27 @@ those records do not substitute for their owning world-truth stores. This
 evidence bounds the profile's real composition; it does not demonstrate export
 or staged hydration for any of these owners.
 
-### Exact P9-B/P11 composition audit — 2026-09-27
+### Exact P9-B/P11 composition audit — refreshed 2026-09-28
 
 The additive integration candidate `af656e7710fce0ba171fae1d6684331d2dc0b743`
-was inspected locally as a two-parent merge: first parent P11 canonical
-`308e24d0744112e8f2b741521b8b3e4acb51ebbf`, second parent P9 canonical
-`82396ae7ffaf407fda278928da456b06dc5394d4`, with common base
-`470667d37863384edadb3d93ef64d8004aff46a3`. It is a validated composition
-candidate, not a canonical promotion; no remote fetch was performed for this
-audit. The selected `SampleScene.unity` MonoBehaviour references the asset with
-GUID `ba87bf49ee034da6bda3daeef8e40c3f`,
-`Simulation-GeneralTest.asset`. `TesteSimulacao.InitializeSimulation` runs the
-declared P9 genesis stages, validates the candidate composition, then publishes
-one `SimulationBootstrapComposition` whose `Runtime` is the P11-based
-`SimulationRuntime`. The selected-profile test checks both the P9-B geography
-and the P11 store on that published runtime.
-
+is a two-parent merge whose first parent is current P11 canonical State
+`308e24d0744112e8f2b741521b8b3e4acb51ebbf` and whose second parent is current
+P9 canonical closure `82396ae7ffaf407fda278928da456b06dc5394d4`; its common
+base is P8 canonical `470667d37863384edadb3d93ef64d8004aff46a3`. The remote
+refs were fetched during this refresh, and both parent SHAs match the current
+canonical refs. The P9 and P11 inputs are therefore current canonical source;
+the combined application-level bootstrap at `af656e7` remains an unpromoted
+integration candidate and is not asserted as the promoted production
+composition. The selected `SampleScene.unity` MonoBehaviour references
+`Simulation-GeneralTest.asset` (GUID `ba87bf49ee034da6bda3daeef8e40c3f`). In
+that candidate, `TesteSimulacao.InitializeSimulation` runs the declared P9
+genesis stages, validates the composition, then publishes one
+`SimulationBootstrapComposition` whose `Runtime` is the P11-based
+`SimulationRuntime`. The test
+`SimulationBootstrapCompositionTests.SelectedSampleSceneProfileBootstrapsItsAuthoredP8GeographyBeforeDayOne`
+checks both P9-B geography and a non-null P11 `ActorChoiceStore` on that same
+published runtime. This is composition evidence only; it does not establish
+P12 export/hydration or promote the combined application composition.
 The GeneralTest module list resolves to Economy, Merchant, GuardCrime, and
 Crime. `TesteSimulacao` resolves `EffectiveSimulationConfiguration` from those
 content overrides; effective values, not the module-list compatibility view,
@@ -119,8 +124,7 @@ empty. An unknown or injected provider, or any retained mutable cursor, rejects
 this profile until re-audited. Conflict, battle and demo stream providers are
 not selected and remain excluded. Hash-based demographic providers are disabled
 by the selected defaults; re-audit them if the profile/effective configuration
-changes. This census characterizes the validated candidate, not canonical or
-promoted P9-B/P11 composition.
+changes. This census describes the exact-current-input integration candidate, not a promoted combined application composition. The individual P9/P11 source tips are canonical; the candidate is not.
 
 | Accepted P12 checkpoint | Exact live owners/sections for this composition | Current boundary and implementation gap |
 |---|---|---|
@@ -178,8 +182,7 @@ ALL EditMode 1742/1742, official Smoke 5/5, and staged/unstaged
 inventory is the final Smoke XML (5/5); the other Unity result XML files were
 rotated/removed by the harness. These results validate composition behavior,
 not P12 export, hydration, owner census, or readiness.
-The original 2026-09-27 audit did not fetch remote refs; the 2026-09-28
-refresh fetched them and confirmed `af656e7` remains unpromoted. Keep P12-A
+The original 2026-09-27 audit did not fetch remote refs; the 2026-09-28 refresh fetched them, verified both merge parents against current P9/P11 canonical refs, and confirmed `af656e7` remains an unpromoted combined composition candidate. Keep P12-A
 at `WAIT_DEPENDENCY`.
 
 | Included authority group | Exact immutable export | Staged hydration | Concrete gap blocking P12-A |
@@ -217,21 +220,7 @@ legacy economy producer and do not make P14-A material-flow state present.
 P18 intraday state, P19 module state, P20 shared activities, P13 historical
 reconstruction/fork guarantees, and generated P9/P10 content remain outside
 P12-A. P18-A/B/C and the additive P18-A continuation extension are promoted
-at current P18 canonical `9e790c5`. P18-D's reviewed technical design
-`9ed6d90` is implementation-ready after promotion of its sale receipt and
-serialized advance-lease prerequisites. On the 2026-09-28 refresh, P18-D
-integration candidate `26e371a` is retained on its feature branch; it includes
-the independently reviewed economy-owner step `bc5c9b7` and the corrected
-roster/sharing contract, but remains incomplete, unvalidated as an integration,
-and unpromoted. Justice, logger, and merchant owner steps remain separate
-in-progress branches; timeline composition into `SimulationRuntime` and the
-complete daily-owner inventory are still outstanding. This candidate does not
-establish P18-D delivery. The selected bootstrap does
-not compose the P18 timeline, activity/availability runtime, continuation
-extension, or intraday state; no P18 state is claimed. P20-A is promoted at
-current P20 canonical/State `7a81cc0`,
-but shared activities are not composed by this profile and no P20 state is
-claimed.
+at current P18 canonical `9e790c5`. P18-D's reviewed technical design `9ed6d90` is implementation-ready after promotion of its sale receipt and serialized advance-lease prerequisites. P18-D consumer implementation remains incomplete and unpromoted. The selected bootstrap does not compose the P18 timeline, activity/availability runtime, continuation extension, or intraday state; no P18 state is claimed for this profile. P20-A is promoted at current P20 canonical/State `7a81cc0`, but shared activities are not composed by this profile and no P20 state is claimed.
 
 This inventory records implementation evidence and gaps only. It is not P12-A
 scope acceptance (recorded separately), implementation authorization, proof of

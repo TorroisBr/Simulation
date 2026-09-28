@@ -16,14 +16,13 @@ P9 `82396ae7ffaf407fda278928da456b06dc5394d4` (P9-B code integration
 `4caecbbfb0464c965811402b3c11d8717605114a`; P18 at that review
 `ba8076c3bc2c8c354a8755e6efaca30bfeab7bf7`; P20
 `7a81cc0ecbc511dd36c248ec62c7b20f7e477f53`; and both architecture
-alignment records. At the 2026-09-28 refresh, remote refs were fetched; P18
-canonical is `9e790c59e14ca7f7ed195c0e6267e10f3cd039d7`, with both P18-D
-prerequisites promoted. The current P18-D integration candidate is
-`26e371a` on `codex/phase18/P18DSellGoodsIntegration`; it includes the
-independently reviewed economy-owner step at `bc5c9b7`, but remains incomplete,
-unvalidated as an integration, and unpromoted. It does not yet compose the
-timeline into `SimulationRuntime`. The P12 planning base is `36618a8`; P12-A remains
-`WAIT_DEPENDENCY` and P12-C through P12-G remain downstream.
+alignment records. At the 2026-09-28 refresh, current P18 canonical is
+`9e790c59e14ca7f7ed195c0e6267e10f3cd039d7`, with both P18-D prerequisites
+promoted. The P18-D consumer implementation owns the exclusive
+`SimulationRuntime` work window and remains incomplete/unpromoted; it has not
+yet delivered full chronological runtime composition and post-success P18-C
+handoff. The planning base remains `36618a8`; P12-A remains
+`WAIT_DEPENDENCY`, and P12-C through P12-G remain downstream.
 
 ## 1. Purpose and boundary
 
@@ -57,25 +56,24 @@ random provider, runtime-ID allocator and record sequence, stores/recorders,
 legacy spatial network, Cities, sites/routes and NPCs, then builds the
 configuration-selected systems, bootstraps initial Knowledge/justice state,
 and constructs `SimulationRuntime`. These source facts identify where P12-B
-must obtain composition evidence; they do not by themselves prove an accepted
-P9-B/P11 combined profile.
+must obtain composition evidence; they do not by themselves prove a promoted,
+combined P9-B/P11 application profile.
 
-**Completed candidate audit, not canonical live evidence:** P9-B
-authored-geography code `00395ef` runs the P9 genesis path, while P11 code
-`0803670` composes `ActorChoiceStore` without P9 genesis; neither is an ancestor
-of the other, and their common base is P8 canonical `470667d`. The additive
-application-level composition candidate
-`af656e7710fce0ba171fae1d6684331d2dc0b743` combines those capabilities and
-passed independent code review. The refreshed owner/profile inventory
-`99739fd0d190cd61acda8d3c91b25acab7405379` audited that exact candidate's
-selected composition and configured providers. It records bootstrap 14/14,
-ActorChoice 24/24, Spatial 99/99, ALL EditMode 1742/1742, official Smoke 5/5,
-and `git diff --check` passing. Only the final Smoke XML remains as a retained
-result artifact; the other results are recorded in the inventory as reported
-validation, not retained XML. No remote fetch was performed. Candidate
-`af656e7` remains unpromoted, so this is candidate-based composition/provider
-evidence, not evidence of the current canonical live composition. It does not
-complete owner export/hydration or establish P12-A/B readiness.
+**Exact-current-input composition candidate, not a promoted combined profile:**
+P9-B authored-geography implementation `00395ef` and P11 Actor Choice code
+`0cd4281` are included in the additive application candidate
+`af656e7710fce0ba171fae1d6684331d2dc0b743`. Its first parent is current P11
+canonical State `308e24d0744112e8f2b741521b8b3e4acb51ebbf`; its second parent is
+current P9 canonical closure `82396ae7ffaf407fda278928da456b06dc5394d4`,
+with common base P8 canonical `470667d`. The 2026-09-28 fetch verified those
+parent SHAs against the current refs. The composition candidate's selected-
+profile test verifies P9-B authored geography and a non-null P11
+`ActorChoiceStore` on the same published runtime. The component inputs are
+current canonical; the combined application candidate remains unpromoted and
+is not claimed as the production live composition. Its selected provider graph
+and RNG census remain useful exact-input evidence, but do not complete owner
+export/hydration or establish P12-A/B readiness. Candidate-reported validation
+is recorded in the owner inventory; only its Smoke XML is retained there.
 
 That inventory also completes the RNG census for this validated candidate:
 one shared seed-0 `DeterministicRandomSource` is used by the runtime, crime,
@@ -90,9 +88,9 @@ still rejects the profile until audited.
 The accepted P12-A profile remains unchanged. Do not conditionally accept
 either half as `UnityBootstrap-Daily-v1`, synthesize an ActorChoiceStore, omit
 P9-B provenance, or add an external `WorldCommand` queue. The candidate audit
-records that ActorChoiceStore is composed in `af656e7`; after canonical
-promotion, refresh the live composition/provider inventory against the exact
-canonical source and record the current owner census. P12-A's P11 causal-state
+records that ActorChoiceStore is composed in `af656e7`; before treating the
+combined application profile as live, establish that composition canonically
+and refresh its provider inventory against the exact source. P12-A's P11 causal-state
 rule applies where that selected runtime composes ActorChoiceStore; external
 queue composition remains excluded. Admission must reject when the actual
 runtime does not match a validated, supported composition and complete owner
@@ -292,17 +290,12 @@ reads do not invalidate a token.
 ## 5. P18-D2 shared `SimulationRuntime` hotspot
 
 P18-D2 technical design review passed at `6f82bf4`; the lease prerequisite is
-promoted at P18 canonical `9e790c5`. P18-D integration candidate `26e371a` is
-retained on its feature branch and remains incomplete/unpromoted. The exclusive
-`SimulationRuntime` hotspot is currently owned by that P18-D consumer track,
-so it has not been handed off to P12. The lease scope is the per-runtime non-reentrant
-lease around the currently composed legacy `TryAdvanceDay` and
-`TryAdvanceDays` APIs and the narrow future owner seam. It does not compose the
-P18 timeline, boundary chronology, subphases, or successful P18-C handoff;
-those remain P18-D consumer integration obligations. The lease is not a general
-thread-safety guarantee. The P18-D consumer candidate currently owns the
-exclusive `SimulationRuntime.cs` editing window and must preserve the promoted
-advance lease.
+promoted at P18 canonical `9e790c5`. The P18-D consumer track owns the exclusive
+`SimulationRuntime` hotspot and remains incomplete/unpromoted. Its current
+implementation does not yet compose the P18 timeline, boundary chronology,
+subphases, or successful P18-C handoff. The lease protects the currently
+composed legacy `TryAdvanceDay` and `TryAdvanceDays` APIs and must extend through
+the eventual full consumer path. It is not a general thread-safety guarantee.
 
 Therefore:
 
@@ -350,29 +343,28 @@ work is complete.
   error, order and `TryAdvanceDays` behavior.
 - Existing included mutation owners: integrate notifications after successful
   authoritative commits. The exact owner/file list is blocked on validation
-  of the current canonical P9-B/P11 composition and a refreshed live
+  of the promoted combined P9-B/P11 profile composition and a refreshed live
   profile/provider inventory; do not infer a complete list from guard
-  bindings alone. The `af656e7` candidate audit is useful composition evidence,
-  but its unpromoted status means current canonical composition and owner
-  census remain blockers.
+  bindings alone. The `af656e7` candidate's P9/P11 parents match current
+  canonical State tips, but its unpromoted application composition does not
+  establish the supported live profile or complete owner census.
 - Focused EditMode tests beside bootstrap/profile admission and runtime
   orchestration tests; no diagnostics snapshot becomes a save contract.
 
 Integration sequence:
 
-1. Candidate `af656e7` and its selected provider graph have passed code review,
+1. Candidate `af656e7` and its selected provider graph passed code review,
    validation, and a local owner/profile audit recorded at `99739fd`. The
-candidate remains unpromoted; its original audit did not fetch remote refs.
-   The 2026-09-28 refresh fetched current refs but does not promote that
-   candidate. Obtain final live profile/owner census evidence before finalizing
-   the admission manifest or claiming P12-B readiness.
+   2026-09-28 refresh verified its P9/P11 merge parents against the current
+   canonical State tips. The combined application composition remains
+   unpromoted; obtain final live profile/owner census evidence before
+   finalizing the admission manifest or claiming P12-B readiness.
 2. P18-D sale receipt/prepared-install and serialized advance-lease
-   prerequisites are promoted at P18 canonical `9e790c5`. Consumer candidate
-   `26e371a` remains incomplete and unpromoted and currently owns the exclusive
-   `SimulationRuntime` window. Require the completed consumer's independent
-   review, validation, canonical promotion, and explicit hotspot handoff before
-   P12-B edits that runtime; then revalidate P12-B seams against the promoted
-   API.
+   prerequisites are promoted at P18 canonical `9e790c5`. The P18-D consumer
+   remains incomplete/unpromoted and owns the exclusive `SimulationRuntime`
+   window. Require the completed consumer's independent review, validation,
+   canonical promotion, and explicit hotspot handoff before P12-B edits that
+   runtime; then revalidate P12-B seams against the promoted API.
 3. Implement immutable admission values/source and rejection behavior without
    serializing owner state. Implement the runtime boundary/token hook using
    the single D2 lease contract. Instrument mutation paths only after the
@@ -496,15 +488,15 @@ This design is bounded to accepted P12-B scope, but P12-B is **not**
 
 1. Candidate `af656e7` passed implementation review and validation, and its
    exact provider graph, including candidate-scoped RNG census, was audited at
-   `99739fd`; however, the candidate is
-   unpromoted and the audit did not fetch remote refs. Current canonical
-   composition evidence and a refreshed canonical live profile/owner census
-   remain blockers. The candidate audit alone does not identify the current
-   canonical combined runtime.
+   `99739fd`. The 2026-09-28 refresh verified its P9/P11 merge parents against
+   current canonical State tips. The combined application composition remains
+   unpromoted, so a refreshed live profile/provider inventory is still required
+   before treating it as the supported production profile. Owner
+   export/hydration also remains outstanding.
 2. P18-D2's accepted lease is promoted at P18 canonical `9e790c5` and guards
    the currently composed legacy `TryAdvanceDay`/`TryAdvanceDays` calls.
-   Candidate `26e371a` is still incomplete/unpromoted, and its P18-D consumer
-   implementation owns the current `SimulationRuntime` window. Completion,
+   The P18-D consumer remains incomplete/unpromoted and owns the current
+   `SimulationRuntime` window. Completion,
    independent review/validation, canonical promotion, and explicit hotspot
    handoff remain required before P12-B edits that runtime; P18-D continues to
    own the chronological continuation/subphase/handoff window.
