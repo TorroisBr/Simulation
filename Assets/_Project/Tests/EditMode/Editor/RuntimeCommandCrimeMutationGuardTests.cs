@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
@@ -302,5 +303,133 @@ public sealed class RuntimeGuardSystemEntryPointTests
             CallCount++;
             return NpcActionResult.Succeeded();
         }
+    }
+}
+
+public sealed class JusticeBeginDayBoundaryOwnerTests
+{
+    [SetUp]
+    public void SetUp()
+    {
+        SimulationTestFactory.CleanupDefinitions();
+    }
+
+    [TearDown]
+    public void TearDown()
+    {
+        SimulationTestFactory.CleanupDefinitions();
+    }
+
+    [Test]
+    public void BeginDayBoundaryStepCommitsClearAndReceiptWithExactReplay()
+    {
+        JusticeSystem justice = CreateJustice(out CityRuntime city);
+        NpcRuntime guard = CreateActor("justice-step-guard");
+        NpcRuntime target = CreateActor("justice-step-target");
+        justice.CreateOrIncreaseWarrant(target, city, 12f, 4);
+        Assert.That(justice.Arrest(guard, target, city), Is.True);
+        Assert.That(justice.WasArrestedToday(target), Is.True);
+
+        DailyBoundaryOperation operation = new DailyBoundaryOperation("world", "profile", 1L);
+        Assert.That(justice.TryCreateBeginDayStep(operation, 0, out BoundaryContinuationStep step, out TimelineFailure failure), Is.True);
+        Assert.That(failure, Is.EqualTo(TimelineFailure.None));
+        BoundaryContinuationManifest manifest = CreateManifest(operation, step);
+
+        Assert.That(justice.TryPrepareBeginDayStep(manifest, step, out IBoundaryContinuationStepCommit prepared, out failure), Is.True);
+        Assert.That(prepared.RetainedTimelineFacts, Is.Empty);
+        Assert.That(prepared.RetainedSourceSignals, Is.Empty);
+        Assert.That(prepared.TryCommit(out failure), Is.True);
+        Assert.That(failure, Is.EqualTo(TimelineFailure.None));
+        Assert.That(justice.WasArrestedToday(target), Is.False);
+        Assert.That(justice.TryResolveBeginDayReceipt(manifest, step, out JusticeBeginDayReceipt receipt, out failure), Is.True);
+        Assert.That(receipt.OwnerRevisionBefore, Is.Zero);
+        Assert.That(receipt.OwnerRevisionAfter, Is.EqualTo(1L));
+
+        Assert.That(justice.TryPrepareBeginDayStep(manifest, step, out IBoundaryContinuationStepCommit replay, out failure), Is.True);
+        Assert.That(replay.TryCommit(out failure), Is.True);
+        Assert.That(justice.WasArrestedToday(target), Is.False);
+    }
+
+    [Test]
+    public void ExactReplayDoesNotClearArrestMadeAfterOriginalCommit()
+    {
+        JusticeSystem justice = CreateJustice(out CityRuntime city);
+        NpcRuntime firstGuard = CreateActor("justice-replay-first-guard");
+        NpcRuntime firstTarget = CreateActor("justice-replay-first-target");
+        justice.CreateOrIncreaseWarrant(firstTarget, city, 12f, 4);
+        Assert.That(justice.Arrest(firstGuard, firstTarget, city), Is.True);
+
+        DailyBoundaryOperation operation = new DailyBoundaryOperation("world", "profile", 1L);
+        Assert.That(justice.TryCreateBeginDayStep(operation, 0, out BoundaryContinuationStep step, out _), Is.True);
+        BoundaryContinuationManifest manifest = CreateManifest(operation, step);
+        Assert.That(justice.TryPrepareBeginDayStep(manifest, step, out IBoundaryContinuationStepCommit firstCommit, out _), Is.True);
+        Assert.That(firstCommit.TryCommit(out _), Is.True);
+
+        NpcRuntime secondGuard = CreateActor("justice-replay-second-guard");
+        NpcRuntime secondTarget = CreateActor("justice-replay-second-target");
+        justice.CreateOrIncreaseWarrant(secondTarget, city, 10f, 3);
+        Assert.That(justice.Arrest(secondGuard, secondTarget, city), Is.True);
+
+        Assert.That(justice.TryPrepareBeginDayStep(manifest, step, out IBoundaryContinuationStepCommit replay, out _), Is.True);
+        Assert.That(replay.TryCommit(out _), Is.True);
+        Assert.That(justice.WasArrestedToday(secondTarget), Is.True);
+    }
+
+    [Test]
+    public void BeginDayBoundaryStepRejectsChangedDescriptorAndStaleOwnerSnapshot()
+    {
+        JusticeSystem justice = CreateJustice(out CityRuntime city);
+        NpcRuntime guard = CreateActor("justice-stale-guard");
+        NpcRuntime target = CreateActor("justice-stale-target");
+        justice.CreateOrIncreaseWarrant(target, city, 12f, 4);
+        Assert.That(justice.Arrest(guard, target, city), Is.True);
+
+        DailyBoundaryOperation operation = new DailyBoundaryOperation("world", "profile", 2L);
+        Assert.That(justice.TryCreateBeginDayStep(operation, 0, out BoundaryContinuationStep step, out _), Is.True);
+        BoundaryContinuationManifest manifest = CreateManifest(operation, step);
+        Assert.That(justice.TryPrepareBeginDayStep(manifest, step, out IBoundaryContinuationStepCommit prepared, out _), Is.True);
+
+        justice.BeginDay();
+        Assert.That(prepared.TryCommit(out TimelineFailure staleFailure), Is.False);
+        Assert.That(staleFailure, Is.EqualTo(TimelineFailure.ContinuationFailed));
+
+        BoundaryContinuationStep changedStep = new BoundaryContinuationStep(
+            0,
+            step.StepId,
+            step.OwnerId,
+            step.OperationKind,
+            step.OperationVersion,
+            step.OwnerRevision + "changed",
+            step.Payload);
+        BoundaryContinuationManifest changedManifest = CreateManifest(operation, changedStep);
+        Assert.That(justice.TryPrepareBeginDayStep(changedManifest, changedStep, out _, out TimelineFailure conflictFailure), Is.False);
+        Assert.That(conflictFailure, Is.EqualTo(TimelineFailure.ContinuationFailed));
+    }
+
+    private static JusticeSystem CreateJustice(out CityRuntime city)
+    {
+        NpcStatusData free = SimulationTestFactory.CreateStatus("justice-step-free");
+        NpcStatusData wanted = SimulationTestFactory.CreateStatus("justice-step-wanted");
+        NpcStatusData arrested = SimulationTestFactory.CreateStatus("justice-step-arrested");
+        city = SimulationTestFactory.CreateCity("justice-step-city", "justice-step-location");
+        return new JusticeSystem(free, wanted, arrested, null);
+    }
+
+    private static NpcRuntime CreateActor(string identity)
+    {
+        return new NpcRuntime(identity, SimulationTestFactory.CreateNpc(identity + "-definition"));
+    }
+
+    private static BoundaryContinuationManifest CreateManifest(
+        DailyBoundaryOperation operation,
+        BoundaryContinuationStep step)
+    {
+        return new BoundaryContinuationManifest(
+            operation,
+            "daily-boundary",
+            "v1",
+            "configuration",
+            new List<BoundaryContinuationStep> { step },
+            "content");
     }
 }
