@@ -1,6 +1,14 @@
 # P12-D — Technical Design: Bootstrap Factual Roots and Person/Population Relations
 
-**Status:** Technical-design candidate for the accepted P12-D capability boundary. This document defines owner export and staged hydration only; it is not a delivered capability, an implementation-readiness claim, or P12-A profile integration. Its current evidence baseline is the refreshed owner inventory `73cf6c2`; this reference-only revalidation preserves the earlier bounded D contract. The updated candidate requires independent exact-content review. P12-D implementation remains blocked on P12-B and P12-C delivery and their compatible owner-capture/identity seams. P12-A remains `WAIT_DEPENDENCY` and separately gated.
+**Status:** Technical-design candidate for the accepted P12-D capability boundary. This document defines owner export and staged hydration only; it is not a delivered capability, an implementation-readiness claim, or P12-A profile integration. Its current evidence baseline is the reviewed owner inventory `d01cd6225ff98a9952b466f7f045ec871b9e3ecc`; this reference-only revalidation preserves the earlier bounded D contract. The updated candidate requires independent exact-content review. P12-D implementation remains blocked on P12-B and P12-C delivery and their compatible owner-capture/identity seams. P12-A remains `WAIT_DEPENDENCY` and separately gated.
+
+## Current-base evidence revalidation
+
+The inventory `d01cd62` revalidates architecture `c285466c355103d3637ac165246591b72eb7bda0`, intraday/extensibility alignment `4b6dd1d38cffeaf3cc1ac3effea0f8ede8771194`, and multi-participant alignment incorporated at `c285466c355103d3637ac165246591b72eb7bda0`. Its checked canonical evidence includes P8 `470667d`, P9 closure `82396ae`, P10 `252ad6b`, P11 closure `308e24d`, P14 `4caecbb`, P18 `9e790c5`, and P20 `7a81cc0`. The inventory remains a partial owner/API and selected-composition audit: it does not demonstrate complete immutable exports, staged hydration, revision coverage, or committed-mutation invalidation for this profile.
+
+The accepted `UnityBootstrap-Daily-v1` boundary is unchanged. P12-B refresh `ef8c72c` and P12-C design candidate `edc5157` are documentation-only; neither delivers the admission/capture or identity/root capability D consumes. P12-A remains `WAIT_DEPENDENCY` and separately gated.
+
+P18 canonical `9e790c5` contains the approved D1/D2 prerequisites. The full P18-D consumer remains unpromoted: integration candidate `5d7eb2687c3866fb2399faf8b366a299484d8dd4` includes the reviewed commercial-sharing receipt owner but does not complete the chronological `SimulationRuntime` consumer. The newer local-knowledge owner hardening is separately recorded on candidate `43363ddde2e8c9ed48ef9e220e2b49fa4cbf3c47` and is not integrated into that consumer or canonical. The selected P12 daily profile does not compose P18 state; this D refresh adds no temporal owner scope.
 
 ## 1. Purpose and boundary
 
