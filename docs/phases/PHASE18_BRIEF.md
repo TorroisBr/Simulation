@@ -59,15 +59,18 @@ constraint now, not a requirement to implement participant roles or recruitment.
 | P18-B — Activity Lifecycle | Domain-owned duration, start/completion, commitment and availability; supported cancellation/interruption semantics; no duplicate pending authority. | P18-A stable contract for design; promoted capability for integration. |
 | P18-C — Availability-driven Actor Decisions | Re-evaluation on relevant availability/condition/input boundaries, Knowledge-bounded decision and factual execution checks, instantaneous actions without infinite loops. | P18-A/B contracts and relevant promoted capabilities; current decision/action authority. |
 | P18-D1 — Economy Market-Sale Receipt and Prepared Install | Stable proposal-ID receipt and prepared-install capability for the accepted P11 Local SellGoods open-market actor-choice path, including replay-first reconciliation and current-truth snapshot. | Accepted scope and exact-tip technical review; P11 actor-choice and promoted P18-C proposal identity; P8-E prepared-commit precedent. This capability does not itself deliver P18-D consumer integration. |
-| P18-D2 — Serialized SimulationRuntime Advance Window | Per-runtime non-reentrant ownership window across the outer chronological advance, due boundary subphases/work, and successful P18-C handoff. | Accepted scope and exact-tip technical review; promoted P18-A continuation/subphase and P18-C handoff contracts. This capability does not itself deliver P18-D consumer integration. |
+| P18-D2 — Serialized SimulationRuntime Advance Window | Per-runtime non-reentrant lease guarding the currently composed daily advance APIs and exposing the narrow owner seam for future P18-D composition. | Accepted scope; P18-A/B/C contracts; current `SimulationRuntime` daily APIs; bounded design revalidation and independent review. This capability does not compose the timeline or deliver full P18-D window coverage. |
 | P18-D — Bounded Consumer and Daily Compatibility Integration | Selected existing actor-input/travel and daily processes advance chronologically with one authority; legacy profile boundaries explicit. | P18-A/B/C; P18-D1 and P18-D2 promoted capabilities; only the actual P8-E/P11 or other consumer capabilities selected in reviewed scope. |
 
 A → B → C → D is the core integration path. A's daily compatibility design
 must account for existing `AdvanceDay` from entry; D performs the selected
-consumer migration. Technical designs may proceed on accepted contracts, but
-code integrations wait for promoted capabilities. Interruption is required
-only where the selected existing consumer supports it; no universal rollback
-or universal activity superclass is prescribed.
+consumer migration. P18-D1 and P18-D2 are prerequisite capabilities for D.
+D2 provides the per-runtime lease only; P18-D must hold that same lease across
+the full composed timeline continuation, due subphases/work, and successful
+P18-C handoff. Technical designs may proceed on accepted contracts, but code
+integrations wait for promoted capabilities. Interruption is required only
+where the selected existing consumer supports it; no universal rollback or
+universal activity superclass is prescribed.
 
 The P18-A extension publishes complete returned timeline facts after its
 continuation completes but before ordinary work at that instant; P18-C source
