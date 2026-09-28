@@ -54,6 +54,14 @@ The exact code tree at `15b201a` passed:
 | `CoreRuntimeTests` | 11/11 | `EditMode-20260928-225739-a0177c3549634409a2668477a92c03b2.xml` |
 | `P18DDailyBoundaryStepProviderTests` | 6/6 | `EditMode-20260928-225754-9627bad07b4c4550ba0c4336f616f126.xml` |
 
-`git diff --check` passed. Independent exact-tip implementation review is
-pending. These focused results do not replace the full integration EditMode,
+`git diff --check` passed. Independent exact-tip implementation review passed
+at `15b201a` against its exact parent `5d7eb26`. The reviewer confirmed the
+actor-owned combined spatial/commercial prepared install, current-truth
+revalidation, receipt replay, optional `PersonId`, stable runtime identity,
+frozen roster order, and preserved legacy observation ordering. The review
+found two non-blocking hardening opportunities for later integration review:
+check that a supplied step is the exact manifest entry at its ordinal, and
+consider idempotent results for repeated `TryCommit` calls on the same prepared
+object. The normal continuation path already replays through the stored
+receipt. These focused results do not replace the full integration EditMode,
 official Smoke, and complete P18-D review gates.
