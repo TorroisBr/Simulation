@@ -775,6 +775,148 @@ public sealed class JusticeAdvanceSentencesBoundaryOwnerTests
     }
 }
 
+public sealed class JusticeSyncWantedStatusesBoundaryOwnerTests
+{
+    [SetUp]
+    public void SetUp() => SimulationTestFactory.CleanupDefinitions();
+
+    [TearDown]
+    public void TearDown() => SimulationTestFactory.CleanupDefinitions();
+
+    [Test]
+    public void SeparateWantedPassObservesSentencePredecessorAndExactReplayDoesNotRepeatEffects()
+    {
+        NpcStatusData free = SimulationTestFactory.CreateStatus("justice-sync-free");
+        NpcStatusData wanted = SimulationTestFactory.CreateStatus("justice-sync-wanted");
+        NpcStatusData arrested = SimulationTestFactory.CreateStatus("justice-sync-arrested");
+        CityRuntime city = SimulationTestFactory.CreateCity("justice-sync-city", "justice-sync-location");
+        JusticeSystem justice = new JusticeSystem(free, wanted, arrested, null);
+        NpcRuntime guard = CreateActor("justice-sync-guard");
+        NpcRuntime target = CreateActor("justice-sync-target");
+        WantedRecordRuntime record = justice.CreateOrIncreaseWarrant(target, city, 5f, 1);
+        Assert.That(justice.Arrest(guard, target, city), Is.True);
+        for (int i = 0; i < 8; i++) target.CurrentStatus.Add(wanted);
+        List<NpcRuntime> roster = new List<NpcRuntime> { target, null, target };
+        DailyBoundaryOperation operation = new DailyBoundaryOperation("world", "intraday", 31L);
+        Assert.That(justice.TryCreateAdvanceSentencesStep(operation, roster, 0, out BoundaryContinuationStep sentenceStep, out _), Is.True);
+        Assert.That(justice.TryCreateSyncWantedStatusesStep(operation, roster, 1, out BoundaryContinuationStep syncStep, out _), Is.True);
+        BoundaryContinuationManifest manifest = CreateManifest(operation, sentenceStep, syncStep);
+
+        Assert.That(justice.TryPrepareAdvanceSentencesStep(manifest, sentenceStep, roster, out IBoundaryContinuationStepCommit sentence, out _), Is.True);
+        Assert.That(sentence.TryCommit(out _), Is.True);
+        Assert.That(record.IsActive, Is.False);
+        int afterEmbeddedPasses = CountStatusReference(target, wanted);
+        Assert.That(afterEmbeddedPasses, Is.GreaterThan(0));
+
+        Assert.That(justice.TryPrepareSyncWantedStatusesStep(manifest, syncStep, roster, out IBoundaryContinuationStepCommit prepared, out TimelineFailure failure), Is.True);
+        Assert.That(prepared.RetainedTimelineFacts, Is.Empty);
+        Assert.That(prepared.RetainedSourceSignals, Is.Empty);
+        Assert.That(prepared.TryCommit(out failure), Is.True);
+        Assert.That(failure, Is.EqualTo(TimelineFailure.None));
+        Assert.That(CountStatusReference(target, wanted), Is.EqualTo(afterEmbeddedPasses - 2));
+        Assert.That(justice.TryResolveSyncWantedStatusesReceipt(manifest, syncStep, out JusticeSyncWantedStatusesReceipt receipt, out failure), Is.True);
+        Assert.That(receipt.OwnerRevisionAfter, Is.EqualTo(receipt.OwnerRevisionBefore + 1));
+
+        target.CurrentStatus.Add(wanted);
+        Assert.That(justice.TryPrepareSyncWantedStatusesStep(manifest, syncStep, roster, out IBoundaryContinuationStepCommit replay, out failure), Is.True);
+        Assert.That(replay.TryCommit(out failure), Is.True);
+        Assert.That(CountStatusReference(target, wanted), Is.EqualTo(1));
+    }
+
+    [Test]
+    public void TopologyFingerprintRejectsOrdinalConfigurationAndRosterCardinalityDrift()
+    {
+        JusticeSystem justice = CreateJustice(out _);
+        NpcRuntime target = CreateActor("justice-sync-topology-target");
+        List<NpcRuntime> roster = new List<NpcRuntime> { target, null, target };
+        DailyBoundaryOperation operation = new DailyBoundaryOperation("world", "intraday", 32L);
+        Assert.That(justice.TryCreateSyncWantedStatusesStep(operation, roster, 0, out BoundaryContinuationStep step, out _), Is.True);
+        BoundaryContinuationManifest manifest = CreateManifest(operation, step);
+
+        roster.RemoveAt(1);
+        Assert.That(justice.TryPrepareSyncWantedStatusesStep(manifest, step, roster, out _, out TimelineFailure failure), Is.False);
+        Assert.That(failure, Is.EqualTo(TimelineFailure.ContinuationFailed));
+        roster.Insert(1, null);
+
+        Assert.That(justice.TryPrepareSyncWantedStatusesStep(manifest, step, roster, out IBoundaryContinuationStepCommit prepared, out failure), Is.True);
+        Assert.That(prepared.TryCommit(out failure), Is.True);
+
+        BoundaryContinuationStep preceding = new BoundaryContinuationStep(0, "preceding", "test", "test", "1", "r", string.Empty);
+        BoundaryContinuationStep shifted = new BoundaryContinuationStep(1, step.StepId, step.OwnerId, step.OperationKind,
+            step.OperationVersion, step.OwnerRevision, step.Payload, step.PersonId, step.Disposition);
+        BoundaryContinuationManifest shiftedManifest = CreateManifest(operation, preceding, shifted);
+        Assert.That(justice.TryResolveSyncWantedStatusesReceipt(shiftedManifest, shifted, out _, out failure), Is.False);
+        Assert.That(failure, Is.EqualTo(TimelineFailure.ContinuationFailed));
+
+        BoundaryContinuationManifest changedConfiguration = new BoundaryContinuationManifest(
+            operation, "daily-boundary", "v1", "changed", new List<BoundaryContinuationStep> { step }, "content");
+        Assert.That(justice.TryResolveSyncWantedStatusesReceipt(changedConfiguration, step, out _, out failure), Is.False);
+        Assert.That(failure, Is.EqualTo(TimelineFailure.ContinuationFailed));
+
+        DailyBoundaryOperation recordOperation = new DailyBoundaryOperation("world", "intraday", 34L);
+        Assert.That(justice.TryCreateSyncWantedStatusesStep(recordOperation, roster, 0, out BoundaryContinuationStep recordStep, out _), Is.True);
+        BoundaryContinuationManifest recordManifest = CreateManifest(recordOperation, recordStep);
+        justice.CreateOrIncreaseWarrant(CreateActor("justice-sync-new-record-target"),
+            SimulationTestFactory.CreateCity("justice-sync-new-record-city", "justice-sync-new-record-location"), 3f, 2);
+        Assert.That(justice.TryPrepareSyncWantedStatusesStep(recordManifest, recordStep, roster, out _, out failure), Is.False);
+        Assert.That(failure, Is.EqualTo(TimelineFailure.ContinuationFailed));
+    }
+
+    [Test]
+    public void MutableWantedAndMarkerValuesAreCapturedAfterPredecessorEffects()
+    {
+        NpcStatusData free = SimulationTestFactory.CreateStatus("justice-sync-late-free");
+        NpcStatusData wanted = SimulationTestFactory.CreateStatus("justice-sync-late-wanted");
+        NpcStatusData arrested = SimulationTestFactory.CreateStatus("justice-sync-late-arrested");
+        CityRuntime city = SimulationTestFactory.CreateCity("justice-sync-late-city", "justice-sync-late-location");
+        JusticeSystem justice = new JusticeSystem(free, wanted, arrested, null);
+        NpcRuntime guard = CreateActor("justice-sync-late-guard");
+        NpcRuntime target = CreateActor("justice-sync-late-target");
+        justice.CreateOrIncreaseWarrant(target, city, 4f, 1);
+        Assert.That(justice.Arrest(guard, target, city), Is.True);
+        target.CurrentStatus.Add(wanted);
+        List<NpcRuntime> roster = new List<NpcRuntime> { target };
+        DailyBoundaryOperation operation = new DailyBoundaryOperation("world", "intraday", 33L);
+        Assert.That(justice.TryCreateAdvanceSentencesStep(operation, roster, 0, out BoundaryContinuationStep sentenceStep, out _), Is.True);
+        Assert.That(justice.TryCreateSyncWantedStatusesStep(operation, roster, 1, out BoundaryContinuationStep syncStep, out _), Is.True);
+        BoundaryContinuationManifest manifest = CreateManifest(operation, sentenceStep, syncStep);
+
+        Assert.That(justice.TryPrepareAdvanceSentencesStep(manifest, sentenceStep, roster, out IBoundaryContinuationStepCommit sentence, out _), Is.True);
+        Assert.That(sentence.TryCommit(out _), Is.True);
+        Assert.That(justice.TryPrepareSyncWantedStatusesStep(manifest, syncStep, roster, out IBoundaryContinuationStepCommit prepared, out TimelineFailure failure), Is.True);
+        Assert.That(prepared.TryCommit(out failure), Is.True);
+        Assert.That(CountStatusReference(target, wanted), Is.EqualTo(0));
+    }
+
+    private static JusticeSystem CreateJustice(out CityRuntime city)
+    {
+        city = SimulationTestFactory.CreateCity("justice-sync-helper-city", "justice-sync-helper-location");
+        return new JusticeSystem(
+            SimulationTestFactory.CreateStatus("justice-sync-helper-free"),
+            SimulationTestFactory.CreateStatus("justice-sync-helper-wanted"),
+            SimulationTestFactory.CreateStatus("justice-sync-helper-arrested"), null);
+    }
+
+    private static NpcRuntime CreateActor(string identity) =>
+        new NpcRuntime(identity, SimulationTestFactory.CreateNpc(identity + "-definition"));
+
+    private static int CountStatusReference(NpcRuntime npc, NpcStatusData status)
+    {
+        int count = 0;
+        foreach (NpcStatusData candidate in npc.CurrentStatus)
+        {
+            if (ReferenceEquals(candidate, status)) count++;
+        }
+        return count;
+    }
+
+    private static BoundaryContinuationManifest CreateManifest(
+        DailyBoundaryOperation operation,
+        params BoundaryContinuationStep[] steps) =>
+        new BoundaryContinuationManifest(operation, "daily-boundary", "v1", "configuration",
+            new List<BoundaryContinuationStep>(steps), "content");
+}
+
 public sealed class CrimeHiddenStatusBoundaryOwnerTests
 {
     [SetUp]

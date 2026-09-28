@@ -15,6 +15,11 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
     private const string AdvanceSentencesOperationKind = "justice.advance-sentences";
     private const string AdvanceSentencesOperationVersion = "1";
     private const string AdvanceSentencesSnapshotVersion = "justice-advance-sentences-owner-v1";
+    private const string SyncWantedStatusesStepId = "justice-sync-wanted-statuses";
+    private const string SyncWantedStatusesOwnerId = "justice";
+    private const string SyncWantedStatusesOperationKind = "justice.sync-wanted-statuses";
+    private const string SyncWantedStatusesOperationVersion = "1";
+    private const string SyncWantedStatusesSnapshotVersion = "justice-sync-wanted-statuses-owner-v1";
     private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
     private readonly List<WantedRecordRuntime> wantedRecords = new List<WantedRecordRuntime>();
     private readonly List<PrisonSentenceRuntime> prisonSentences = new List<PrisonSentenceRuntime>();
@@ -24,6 +29,9 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
     private Dictionary<string, JusticeAdvanceSentencesReceipt> advanceSentencesStepReceipts =
         new Dictionary<string, JusticeAdvanceSentencesReceipt>(StringComparer.Ordinal);
     private long advanceSentencesStepRevision;
+    private Dictionary<string, JusticeSyncWantedStatusesReceipt> syncWantedStatusesStepReceipts =
+        new Dictionary<string, JusticeSyncWantedStatusesReceipt>(StringComparer.Ordinal);
+    private long syncWantedStatusesStepRevision;
     private readonly NpcStatusData freeStatus;
     private readonly NpcStatusData wantedStatus;
     private readonly NpcStatusData arrestedStatus;
@@ -368,6 +376,206 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
         return true;
     }
 
+    /// <summary>Captures the topology for the distinct legacy wanted-status roster pass.</summary>
+    public bool TryCreateSyncWantedStatusesStep(
+        DailyBoundaryOperation operation,
+        List<NpcRuntime> npcRuntimeList,
+        int ordinal,
+        out BoundaryContinuationStep step,
+        out TimelineFailure failure)
+    {
+        step = null;
+        failure = TimelineFailure.ContinuationFailed;
+        if (operation == null || ordinal < 0
+            || !TryCaptureSyncWantedStatusesSnapshot(npcRuntimeList,
+                out _, out string ownerRevision, includeMutableValues: false))
+        {
+            return false;
+        }
+
+        step = new BoundaryContinuationStep(
+            ordinal,
+            SyncWantedStatusesStepId,
+            SyncWantedStatusesOwnerId,
+            SyncWantedStatusesOperationKind,
+            SyncWantedStatusesOperationVersion,
+            ownerRevision,
+            string.Empty);
+        failure = TimelineFailure.None;
+        return true;
+    }
+
+    /// <summary>Looks up an exact later wanted-status pass receipt.</summary>
+    public bool TryResolveSyncWantedStatusesReceipt(
+        BoundaryContinuationManifest manifest,
+        BoundaryContinuationStep step,
+        out JusticeSyncWantedStatusesReceipt receipt,
+        out TimelineFailure failure)
+    {
+        receipt = null;
+        if (!TryGetSyncWantedStatusesIdentity(manifest, step, out string identity, out string fingerprint))
+        {
+            failure = TimelineFailure.ContinuationFailed;
+            return false;
+        }
+
+        if (syncWantedStatusesStepReceipts == null)
+        {
+            syncWantedStatusesStepReceipts = new Dictionary<string, JusticeSyncWantedStatusesReceipt>(StringComparer.Ordinal);
+        }
+
+        if (!syncWantedStatusesStepReceipts.TryGetValue(identity, out JusticeSyncWantedStatusesReceipt existing))
+        {
+            failure = TimelineFailure.None;
+            return false;
+        }
+
+        if (!string.Equals(existing.DescriptorFingerprint, fingerprint, StringComparison.Ordinal))
+        {
+            failure = TimelineFailure.ContinuationFailed;
+            return false;
+        }
+
+        receipt = existing;
+        failure = TimelineFailure.None;
+        return true;
+    }
+
+    /// <summary>Stages the separate wanted-status pass using live values after predecessor effects.</summary>
+    public bool TryPrepareSyncWantedStatusesStep(
+        BoundaryContinuationManifest manifest,
+        BoundaryContinuationStep step,
+        List<NpcRuntime> npcRuntimeList,
+        out IBoundaryContinuationStepCommit prepared,
+        out TimelineFailure failure)
+    {
+        prepared = null;
+        if (!TryGetSyncWantedStatusesIdentity(manifest, step, out string identity, out string fingerprint))
+        {
+            failure = TimelineFailure.ContinuationFailed;
+            return false;
+        }
+
+        if (syncWantedStatusesStepReceipts == null)
+        {
+            syncWantedStatusesStepReceipts = new Dictionary<string, JusticeSyncWantedStatusesReceipt>(StringComparer.Ordinal);
+        }
+
+        if (syncWantedStatusesStepReceipts.TryGetValue(identity, out JusticeSyncWantedStatusesReceipt existing))
+        {
+            if (!string.Equals(existing.DescriptorFingerprint, fingerprint, StringComparison.Ordinal))
+            {
+                failure = TimelineFailure.ContinuationFailed;
+                return false;
+            }
+
+            prepared = new JusticeSyncWantedStatusesCommit(
+                this, existing, npcRuntimeList, null, true, fingerprint, step.OwnerRevision,
+                syncWantedStatusesStepRevision, syncWantedStatusesStepReceipts, syncWantedStatusesStepReceipts);
+            failure = TimelineFailure.None;
+            return true;
+        }
+
+        if (!mutationGuardBinding.CanMutate || syncWantedStatusesStepRevision == long.MaxValue
+            || !string.IsNullOrEmpty(step.Payload) || !string.IsNullOrEmpty(step.PersonId)
+            || !TryCaptureSyncWantedStatusesSnapshot(npcRuntimeList,
+                out JusticeSyncWantedStatusesSnapshot snapshot,
+                out string currentOwnerRevision, includeMutableValues: true)
+            || !string.Equals(currentOwnerRevision, step.OwnerRevision, StringComparison.Ordinal)
+            || !TryReserveSyncWantedStatusCapacity(snapshot))
+        {
+            failure = TimelineFailure.ContinuationFailed;
+            return false;
+        }
+
+        JusticeSyncWantedStatusesReceipt receipt = new JusticeSyncWantedStatusesReceipt(
+            identity, fingerprint, syncWantedStatusesStepRevision, syncWantedStatusesStepRevision + 1L);
+        Dictionary<string, JusticeSyncWantedStatusesReceipt> nextReceipts =
+            new Dictionary<string, JusticeSyncWantedStatusesReceipt>(syncWantedStatusesStepReceipts, StringComparer.Ordinal)
+            {
+                [identity] = receipt
+            };
+        prepared = new JusticeSyncWantedStatusesCommit(
+            this, receipt, npcRuntimeList, snapshot, false, fingerprint, step.OwnerRevision,
+            syncWantedStatusesStepRevision, syncWantedStatusesStepReceipts, nextReceipts);
+        failure = TimelineFailure.None;
+        return true;
+    }
+
+    internal bool TryCommitSyncWantedStatusesStep(
+        JusticeSyncWantedStatusesReceipt receipt,
+        List<NpcRuntime> npcRuntimeList,
+        JusticeSyncWantedStatusesSnapshot expectedSnapshot,
+        bool replay,
+        string fingerprint,
+        string expectedOwnerRevision,
+        long expectedRevision,
+        Dictionary<string, JusticeSyncWantedStatusesReceipt> expectedReceipts,
+        Dictionary<string, JusticeSyncWantedStatusesReceipt> nextReceipts,
+        out TimelineFailure failure)
+    {
+        failure = TimelineFailure.ContinuationFailed;
+        if (receipt == null)
+        {
+            return false;
+        }
+
+        if (replay)
+        {
+            if (syncWantedStatusesStepReceipts != null
+                && syncWantedStatusesStepReceipts.TryGetValue(receipt.ExecutionStepIdentity, out JusticeSyncWantedStatusesReceipt existing)
+                && ReferenceEquals(existing, receipt)
+                && string.Equals(existing.DescriptorFingerprint, fingerprint, StringComparison.Ordinal))
+            {
+                failure = TimelineFailure.None;
+                return true;
+            }
+
+            return false;
+        }
+
+        if (npcRuntimeList == null || expectedSnapshot == null || !mutationGuardBinding.CanMutate
+            || syncWantedStatusesStepRevision != expectedRevision
+            || !ReferenceEquals(syncWantedStatusesStepReceipts, expectedReceipts)
+            || nextReceipts == null || !nextReceipts.ContainsKey(receipt.ExecutionStepIdentity)
+            || syncWantedStatusesStepReceipts.ContainsKey(receipt.ExecutionStepIdentity)
+            || syncWantedStatusesStepRevision == long.MaxValue
+            || receipt.OwnerRevisionBefore != syncWantedStatusesStepRevision
+            || receipt.OwnerRevisionAfter != syncWantedStatusesStepRevision + 1L
+            || !string.Equals(receipt.DescriptorFingerprint, fingerprint, StringComparison.Ordinal)
+            || !TryCaptureSyncWantedStatusesSnapshot(npcRuntimeList,
+                out JusticeSyncWantedStatusesSnapshot currentSnapshot,
+                out string currentOwnerRevision, includeMutableValues: true)
+            || !string.Equals(currentOwnerRevision, expectedOwnerRevision, StringComparison.Ordinal)
+            || !SameSyncWantedStatusesSnapshot(expectedSnapshot, currentSnapshot)
+            || !TryReserveSyncWantedStatusCapacity(currentSnapshot))
+        {
+            return false;
+        }
+
+        foreach (JusticeSyncWantedRosterSnapshot entry in currentSnapshot.Roster)
+        {
+            if (entry.Npc == null || wantedStatus == null)
+            {
+                continue;
+            }
+
+            if (entry.HasActiveWarrant)
+            {
+                entry.Npc.AddStatus(wantedStatus);
+            }
+            else
+            {
+                entry.Npc.RemoveStatus(wantedStatus);
+            }
+        }
+
+        syncWantedStatusesStepRevision = receipt.OwnerRevisionAfter;
+        syncWantedStatusesStepReceipts = nextReceipts;
+        failure = TimelineFailure.None;
+        return true;
+    }
+
     internal bool TryCommitBeginDayStep(
         JusticeBeginDayReceipt receipt,
         IReadOnlyList<JusticeBeginDaySentenceSnapshot> expectedSentences,
@@ -497,6 +705,210 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
 
         // Diagnostics follow the durable owner receipt so an uncertain caller retry cannot replay effects.
         EmitAdvanceSentencesLogNotices(notices);
+        return true;
+    }
+
+    private bool TryCaptureSyncWantedStatusesSnapshot(
+        List<NpcRuntime> npcRuntimeList,
+        out JusticeSyncWantedStatusesSnapshot snapshot,
+        out string ownerRevision,
+        bool includeMutableValues)
+    {
+        snapshot = null;
+        ownerRevision = null;
+        if (npcRuntimeList == null || !mutationGuardBinding.CanMutate || syncWantedStatusesStepRevision == long.MaxValue)
+        {
+            return false;
+        }
+
+        List<JusticeSyncWantedRosterSnapshot> roster = new List<JusticeSyncWantedRosterSnapshot>(npcRuntimeList.Count);
+        List<JusticeSyncWantedRecordSnapshot> records = new List<JusticeSyncWantedRecordSnapshot>(wantedRecords.Count);
+        List<string> parts = new List<string>(4 + npcRuntimeList.Count * 4 + wantedRecords.Count * 4)
+        {
+            SyncWantedStatusesSnapshotVersion,
+            SyncWantedStatusesOperationVersion,
+            syncWantedStatusesStepRevision.ToString(CultureInfo.InvariantCulture),
+            WantedStatusIdentity,
+            npcRuntimeList.Count.ToString(CultureInfo.InvariantCulture)
+        };
+        Dictionary<string, NpcRuntime> runtimeIds = new Dictionary<string, NpcRuntime>(StringComparer.Ordinal);
+
+        for (int i = 0; i < npcRuntimeList.Count; i++)
+        {
+            NpcRuntime npc = npcRuntimeList[i];
+            parts.Add("roster");
+            parts.Add(i.ToString(CultureInfo.InvariantCulture));
+            if (npc == null)
+            {
+                roster.Add(new JusticeSyncWantedRosterSnapshot(null, string.Empty, string.Empty, false, 0));
+                parts.Add("null-slot");
+                continue;
+            }
+
+            string runtimeId = npc.RuntimeId;
+            if (!TryRegisterAdvanceSentencesNpcRuntime(runtimeIds, npc))
+            {
+                return false;
+            }
+
+            string personId = npc.PersonId?.Value ?? string.Empty;
+            roster.Add(new JusticeSyncWantedRosterSnapshot(
+                npc, runtimeId, personId,
+                includeMutableValues && HasAnyActiveWarrant(npc),
+                includeMutableValues ? CountAdvanceSentencesStatus(npc, wantedStatus) : 0));
+            parts.Add(runtimeId);
+            parts.Add(personId);
+        }
+
+        parts.Add(wantedRecords.Count.ToString(CultureInfo.InvariantCulture));
+        for (int i = 0; i < wantedRecords.Count; i++)
+        {
+            WantedRecordRuntime record = wantedRecords[i];
+            parts.Add("wanted-record");
+            parts.Add(i.ToString(CultureInfo.InvariantCulture));
+            if (record == null)
+            {
+                records.Add(new JusticeSyncWantedRecordSnapshot(null, null, string.Empty, string.Empty, false));
+                parts.Add("null-slot");
+                continue;
+            }
+
+            NpcRuntime target = record.Target;
+            if (!TryRegisterAdvanceSentencesNpcRuntime(runtimeIds, target))
+            {
+                return false;
+            }
+
+            string runtimeId = target?.RuntimeId ?? string.Empty;
+            string personId = target?.PersonId?.Value ?? string.Empty;
+            records.Add(new JusticeSyncWantedRecordSnapshot(
+                record, target, runtimeId, personId, includeMutableValues && record.IsActive));
+            parts.Add(runtimeId);
+            parts.Add(personId);
+        }
+
+        ownerRevision = SpatialStableKey.Encode(parts.ToArray());
+        snapshot = new JusticeSyncWantedStatusesSnapshot(roster, records);
+        return true;
+    }
+
+    private bool TryReserveSyncWantedStatusCapacity(JusticeSyncWantedStatusesSnapshot snapshot)
+    {
+        if (snapshot == null || wantedStatus == null)
+        {
+            return snapshot != null;
+        }
+
+        Dictionary<NpcRuntime, int> additions = new Dictionary<NpcRuntime, int>();
+        foreach (JusticeSyncWantedRosterSnapshot entry in snapshot.Roster)
+        {
+            if (entry?.Npc == null || !entry.HasActiveWarrant)
+            {
+                continue;
+            }
+
+            additions.TryGetValue(entry.Npc, out int count);
+            if (count == int.MaxValue)
+            {
+                return false;
+            }
+            additions[entry.Npc] = count + 1;
+        }
+
+        foreach (KeyValuePair<NpcRuntime, int> item in additions)
+        {
+            List<NpcStatusData> statuses = item.Key.CurrentStatus;
+            if (item.Value > int.MaxValue - statuses.Count)
+            {
+                return false;
+            }
+
+            int capacity = statuses.Count + item.Value;
+            if (statuses.Capacity < capacity)
+            {
+                statuses.Capacity = capacity;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool SameSyncWantedStatusesSnapshot(
+        JusticeSyncWantedStatusesSnapshot expected,
+        JusticeSyncWantedStatusesSnapshot actual)
+    {
+        if (expected == null || actual == null
+            || expected.Roster.Count != actual.Roster.Count
+            || expected.Records.Count != actual.Records.Count)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < expected.Roster.Count; i++)
+        {
+            JusticeSyncWantedRosterSnapshot left = expected.Roster[i];
+            JusticeSyncWantedRosterSnapshot right = actual.Roster[i];
+            if (left == null || right == null
+                || !ReferenceEquals(left.Npc, right.Npc)
+                || !string.Equals(left.RuntimeId, right.RuntimeId, StringComparison.Ordinal)
+                || !string.Equals(left.PersonId, right.PersonId, StringComparison.Ordinal)
+                || left.HasActiveWarrant != right.HasActiveWarrant
+                || left.WantedMarkerCount != right.WantedMarkerCount)
+            {
+                return false;
+            }
+        }
+
+        for (int i = 0; i < expected.Records.Count; i++)
+        {
+            JusticeSyncWantedRecordSnapshot left = expected.Records[i];
+            JusticeSyncWantedRecordSnapshot right = actual.Records[i];
+            if (left == null || right == null
+                || !ReferenceEquals(left.Record, right.Record)
+                || !ReferenceEquals(left.Target, right.Target)
+                || !string.Equals(left.TargetRuntimeId, right.TargetRuntimeId, StringComparison.Ordinal)
+                || !string.Equals(left.TargetPersonId, right.TargetPersonId, StringComparison.Ordinal)
+                || left.IsActive != right.IsActive)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private bool TryGetSyncWantedStatusesIdentity(
+        BoundaryContinuationManifest manifest,
+        BoundaryContinuationStep step,
+        out string identity,
+        out string fingerprint)
+    {
+        identity = null;
+        fingerprint = null;
+        if (manifest == null || step == null || step.Ordinal >= manifest.Steps.Count
+            || !ReferenceEquals(manifest.Steps[step.Ordinal], step)
+            || step.StepId != SyncWantedStatusesStepId || step.OwnerId != SyncWantedStatusesOwnerId
+            || step.OperationKind != SyncWantedStatusesOperationKind
+            || step.OperationVersion != SyncWantedStatusesOperationVersion
+            || step.Disposition != "included")
+        {
+            return false;
+        }
+
+        string expectedBoundaryOccurrenceId = SpatialStableKey.Encode(
+            manifest.WorldId, manifest.ProfileId, manifest.AbsoluteDay.ToString(CultureInfo.InvariantCulture));
+        if (!string.Equals(manifest.BoundaryOccurrenceId, expectedBoundaryOccurrenceId, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        identity = SpatialStableKey.Encode(manifest.BoundaryOccurrenceId, step.StepId);
+        fingerprint = SpatialStableKey.Encode(
+            manifest.BoundaryOccurrenceId, manifest.ContinuationId, manifest.SubphaseKind,
+            manifest.SubphaseVersion, manifest.ConfigurationIdentity, manifest.ContentIdentity,
+            step.Ordinal.ToString(CultureInfo.InvariantCulture), step.StepId, step.OwnerId,
+            step.OperationKind, step.OperationVersion, step.OwnerRevision, step.Payload,
+            step.PersonId, step.Disposition);
         return true;
     }
 
@@ -1773,6 +2185,136 @@ internal sealed class JusticeBeginDayCommit : IBoundaryContinuationStepCommit
             expectedReceipts,
             nextReceipts,
             out failure);
+        return completed;
+    }
+}
+
+[Serializable]
+public sealed class JusticeSyncWantedStatusesReceipt
+{
+    public string ExecutionStepIdentity { get; }
+    public long OwnerRevisionBefore { get; }
+    public long OwnerRevisionAfter { get; }
+    internal string DescriptorFingerprint { get; }
+
+    internal JusticeSyncWantedStatusesReceipt(
+        string executionStepIdentity,
+        string descriptorFingerprint,
+        long ownerRevisionBefore,
+        long ownerRevisionAfter)
+    {
+        ExecutionStepIdentity = executionStepIdentity ?? throw new ArgumentNullException(nameof(executionStepIdentity));
+        DescriptorFingerprint = descriptorFingerprint ?? throw new ArgumentNullException(nameof(descriptorFingerprint));
+        OwnerRevisionBefore = ownerRevisionBefore;
+        OwnerRevisionAfter = ownerRevisionAfter;
+    }
+}
+
+internal sealed class JusticeSyncWantedStatusesSnapshot
+{
+    public IReadOnlyList<JusticeSyncWantedRosterSnapshot> Roster { get; }
+    public IReadOnlyList<JusticeSyncWantedRecordSnapshot> Records { get; }
+
+    public JusticeSyncWantedStatusesSnapshot(
+        IReadOnlyList<JusticeSyncWantedRosterSnapshot> roster,
+        IReadOnlyList<JusticeSyncWantedRecordSnapshot> records)
+    {
+        Roster = roster ?? Array.Empty<JusticeSyncWantedRosterSnapshot>();
+        Records = records ?? Array.Empty<JusticeSyncWantedRecordSnapshot>();
+    }
+}
+
+internal sealed class JusticeSyncWantedRosterSnapshot
+{
+    public NpcRuntime Npc { get; }
+    public string RuntimeId { get; }
+    public string PersonId { get; }
+    public bool HasActiveWarrant { get; }
+    public int WantedMarkerCount { get; }
+
+    public JusticeSyncWantedRosterSnapshot(
+        NpcRuntime npc, string runtimeId, string personId, bool hasActiveWarrant, int wantedMarkerCount)
+    {
+        Npc = npc;
+        RuntimeId = runtimeId ?? string.Empty;
+        PersonId = personId ?? string.Empty;
+        HasActiveWarrant = hasActiveWarrant;
+        WantedMarkerCount = wantedMarkerCount;
+    }
+}
+
+internal sealed class JusticeSyncWantedRecordSnapshot
+{
+    public WantedRecordRuntime Record { get; }
+    public NpcRuntime Target { get; }
+    public string TargetRuntimeId { get; }
+    public string TargetPersonId { get; }
+    public bool IsActive { get; }
+
+    public JusticeSyncWantedRecordSnapshot(
+        WantedRecordRuntime record, NpcRuntime target, string targetRuntimeId, string targetPersonId, bool isActive)
+    {
+        Record = record;
+        Target = target;
+        TargetRuntimeId = targetRuntimeId ?? string.Empty;
+        TargetPersonId = targetPersonId ?? string.Empty;
+        IsActive = isActive;
+    }
+}
+
+internal sealed class JusticeSyncWantedStatusesCommit : IBoundaryContinuationStepCommit
+{
+    private readonly JusticeSystem owner;
+    private readonly JusticeSyncWantedStatusesReceipt receipt;
+    private readonly List<NpcRuntime> npcRuntimeList;
+    private readonly JusticeSyncWantedStatusesSnapshot snapshot;
+    private readonly bool replay;
+    private readonly string fingerprint;
+    private readonly string expectedOwnerRevision;
+    private readonly long expectedRevision;
+    private readonly Dictionary<string, JusticeSyncWantedStatusesReceipt> expectedReceipts;
+    private readonly Dictionary<string, JusticeSyncWantedStatusesReceipt> nextReceipts;
+    private bool completed;
+
+    public IReadOnlyList<DueWorkReference> RetainedTimelineFacts => Array.Empty<DueWorkReference>();
+    public IReadOnlyList<string> RetainedSourceSignals => Array.Empty<string>();
+    public JusticeSyncWantedStatusesReceipt Receipt => receipt;
+
+    public JusticeSyncWantedStatusesCommit(
+        JusticeSystem owner,
+        JusticeSyncWantedStatusesReceipt receipt,
+        List<NpcRuntime> npcRuntimeList,
+        JusticeSyncWantedStatusesSnapshot snapshot,
+        bool replay,
+        string fingerprint,
+        string expectedOwnerRevision,
+        long expectedRevision,
+        Dictionary<string, JusticeSyncWantedStatusesReceipt> expectedReceipts,
+        Dictionary<string, JusticeSyncWantedStatusesReceipt> nextReceipts)
+    {
+        this.owner = owner ?? throw new ArgumentNullException(nameof(owner));
+        this.receipt = receipt ?? throw new ArgumentNullException(nameof(receipt));
+        this.npcRuntimeList = npcRuntimeList;
+        this.snapshot = snapshot;
+        this.replay = replay;
+        this.fingerprint = fingerprint ?? string.Empty;
+        this.expectedOwnerRevision = expectedOwnerRevision ?? string.Empty;
+        this.expectedRevision = expectedRevision;
+        this.expectedReceipts = expectedReceipts;
+        this.nextReceipts = nextReceipts;
+    }
+
+    public bool TryCommit(out TimelineFailure failure)
+    {
+        if (completed)
+        {
+            failure = TimelineFailure.None;
+            return true;
+        }
+
+        completed = owner.TryCommitSyncWantedStatusesStep(
+            receipt, npcRuntimeList, snapshot, replay, fingerprint, expectedOwnerRevision,
+            expectedRevision, expectedReceipts, nextReceipts, out failure);
         return completed;
     }
 }
