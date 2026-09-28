@@ -161,6 +161,56 @@ public sealed class P18DDailyBoundaryStepProviderTests
         Assert.That(merchant.TryResolvePlanUrgencyReceipt(merchantManifest, merchantStep, out _, out failure), Is.True);
     }
 
+    [Test]
+    public void CityEconomyProviderFreezesCityOrderAndUsesProductionThenPerCityConsumptionAndPrice()
+    {
+        CityRuntime first = SimulationTestFactory.CreateCity("p18d-economy-first", "p18d-economy-location-first");
+        CityRuntime second = SimulationTestFactory.CreateCity("p18d-economy-second", "p18d-economy-location-second");
+        List<CityRuntime> liveCities = new List<CityRuntime> { first, second };
+        CityEconomyDailyBoundaryStepProvider provider =
+            new CityEconomyDailyBoundaryStepProvider(() => liveCities);
+        DailyBoundaryOperation operation = new DailyBoundaryOperation("world", "intraday", 20L);
+
+        Assert.That(provider.TryCreateSteps(operation, 0,
+            out IReadOnlyList<BoundaryContinuationStep> steps, out TimelineFailure failure), Is.True);
+        Assert.That(failure, Is.EqualTo(TimelineFailure.None));
+        Assert.That(steps.Count, Is.EqualTo(6));
+        Assert.That(steps[0].StepId, Is.EqualTo(CityStepId(CityDailyEconomyStepKind.Production, first)));
+        Assert.That(steps[1].StepId, Is.EqualTo(CityStepId(CityDailyEconomyStepKind.Production, second)));
+        Assert.That(steps[2].StepId, Is.EqualTo(CityStepId(CityDailyEconomyStepKind.Consumption, first)));
+        Assert.That(steps[3].StepId, Is.EqualTo(CityStepId(CityDailyEconomyStepKind.PriceRefresh, first)));
+        Assert.That(steps[4].StepId, Is.EqualTo(CityStepId(CityDailyEconomyStepKind.Consumption, second)));
+        Assert.That(steps[5].StepId, Is.EqualTo(CityStepId(CityDailyEconomyStepKind.PriceRefresh, second)));
+        Assert.That(steps[0].OwnerId, Is.EqualTo(first.RuntimeId));
+        Assert.That(steps[1].OwnerId, Is.EqualTo(second.RuntimeId));
+
+        BoundaryContinuationManifest manifest = new BoundaryContinuationManifest(
+            operation, "daily-boundary", "1", "economy-enabled", steps);
+        liveCities.RemoveAt(1);
+        Assert.That(provider.TryPrepareStep(manifest, steps[1],
+            out IBoundaryContinuationStepCommit prepared, out failure), Is.True);
+        Assert.That(failure, Is.EqualTo(TimelineFailure.None));
+        Assert.That(prepared.TryCommit(out failure), Is.True);
+        Assert.That(second.TryResolveDailyEconomyReceipt(manifest, steps[1],
+            out CityDailyEconomyReceipt receipt, out failure), Is.True);
+        Assert.That(receipt.ProductionResults, Is.Empty);
+    }
+
+    [Test]
+    public void CityEconomyProviderRejectsAmbiguousRuntimeIdentityInsteadOfFiltering()
+    {
+        CityRuntime first = SimulationTestFactory.CreateCity("p18d-economy-duplicate", "p18d-economy-location-a");
+        CityRuntime second = SimulationTestFactory.CreateCity("p18d-economy-duplicate", "p18d-economy-location-b");
+        CityEconomyDailyBoundaryStepProvider provider = new CityEconomyDailyBoundaryStepProvider(
+            () => new[] { first, second });
+        DailyBoundaryOperation operation = new DailyBoundaryOperation("world", "intraday", 21L);
+
+        Assert.That(provider.TryCreateSteps(operation, 0, out IReadOnlyList<BoundaryContinuationStep> steps,
+            out TimelineFailure failure), Is.False);
+        Assert.That(steps, Is.Null);
+        Assert.That(failure, Is.EqualTo(TimelineFailure.ContinuationFailed));
+    }
+
     private static JusticeSystem CreateJustice()
     {
         return new JusticeSystem(
@@ -169,6 +219,9 @@ public sealed class P18DDailyBoundaryStepProviderTests
             SimulationTestFactory.CreateStatus("p18d-provider-arrested"),
             SimulationTestFactory.CreateStatus("p18d-provider-justice-hidden"));
     }
+
+    private static string CityStepId(CityDailyEconomyStepKind kind, CityRuntime city) =>
+        "city-economy-" + kind.ToString().ToLowerInvariant() + ":" + city.RuntimeId;
 
     private static void AssertStep(IP18DDailyBoundaryStepProvider provider,
         DailyBoundaryOperation operation, int ordinal, string stepId)
