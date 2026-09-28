@@ -181,9 +181,44 @@ loader state, P20 shared activities, P13 reconstruction/fork state,
 WorldCommand queue. Excluded populated state must reject admission rather than
 be silently omitted.
 
-Some owners bind to `AuthoritativeMutationGuard`, but this does not establish
-that every direct owner mutator routes through that guard or through one
-serializer-facing API. `SimulationRuntime.TryAdvanceDay` and
+## Exhaustive candidate-source mutation census — `af656e7`
+
+The source-method census below is exhaustive for the candidate code snapshot
+`af656e7710fce0ba171fae1d6684331d2dc0b743`. It classifies supported public
+mutation surfaces, available guard/revision evidence, live mutable APIs, and
+the consequences for continuation invalidation and export. It is not a live
+owner census or proof of complete revisions: no P12 owner census/revision
+providers, mutation epochs, operation scopes, exact exports, or hydration were
+implemented by this audit. Refresh it against the actual canonical composition
+after P9-B/P11 composition promotion and before claiming P12-B readiness.
+
+| Owner group | Supported public mutation examples and owner guards | Revision evidence | Live API exposure; continuation consequence |
+|---|---|---|---|
+| **B — Runtime/admission** | `SimulationRuntime.TryAdvanceDay`/`TryAdvanceDays`, direct `SimulationTime.AdvanceDay`, and runtime registration/transition entrypoints are public mutation surfaces. Runtime-bound authorities may bind `AuthoritativeMutationGuard`. | The guard is a `Healthy`/`Faulted` latch, not a world revision, epoch, serial-operation tracker, or commit-notification source. Direct `SimulationTime.AdvanceDay` can advance the clock without the complete daily loop. No global mutation epoch or general active-operation registry exists. | `SimulationRuntime` exposes `PersonStore`, `ActorChoiceStore`, and services/stores. Runtime/day-loop success alone cannot prove that the full boundary is current or quiescent. P12-B needs explicit owner thread and operation scopes plus invalidation from every included committed mutation. |
+| **C — Identity, RNG, sequence** | `RuntimeIdAllocator.AllocateNpcId`/other allocation methods, `RuntimeIdentityRegistry`, `SimulationRecordSequence`, and the shared deterministic random provider are causal roots; preserve the exact allocator/high-water, identity, record-sequence, and random-provider state required by this profile. | The source census found no complete continuation revision/export path for allocator, registry, record sequence, or random source. The candidate RNG draw/provider audit remains candidate-scoped and does not create a mutation epoch. | Runtime-owned providers/roots are reachable through composition. Capture exact owner state and provider compatibility; reconstruct keyed draws from their saved IDs/clock only as specified in the candidate RNG census. The shared record sequence remains causal even though decision/event read-model rows are omitted. |
+| **D — Roots, demography, spatial** | Examples include `SimulationRuntime.TryRegisterPerson`, `TryApplyPersonDeath`, `TryMaterializePerson`, `TryApplyImmigration`, population transitions, genealogy changes, NPC register/unregister/materialization, and spatial/site operations. `SettlementPopulationRuntime` has a per-settlement revision; C spatial and Person spatial-position stores also expose revisions. | `PersonStore`/`PersonRuntime`, genealogy, explorable-site store, legacy `SpatialNetworkRuntime`, and NPC roster/materialization lack complete revisions. Population revision does not cover residence, death, or materialization changes to Person/NPC facts; spatial revisions are limited to their respective stores. | `CityRuntime` and `NpcRuntime` are live mutable roots, including mutable `ImportantNpcs` and `CurrentStatus` collections. Public owner methods and live objects can change facts between daily calls. Export must capture all D-owned facts and relations from exact owners; invalidate for mutations outside population revision as well. |
+| **E — City/domain/political/military** | City economy and account/inventory/market operations; crime, justice, outcome, trade and commercial Knowledge operations; political methods including `TryApplyPoliticalClaimRecognition`, `TryApplyPropertyTransfer`, and `TryApplyOfficeSuccession`; force, spatial-force, conflict, war and battle transitions. Some stores bind the health guard and some expose guarded methods. Battle outcome application has staged validation. | `MoneyAccount`, `Inventory`, `Market`, and `CityRuntime` have no general revisions. Crime/justice/outcome and NPC commercial/spatial Knowledge, directive, travel, and expedition owners also lack complete revisions. Political and military transition stores have selective revisions, not universal coverage; `PoliticalWorldRevision` is partial. | Mutable NPC data and subowner references, plus exposed property/estate, `ArmedForce`, conflict/war/battle stores, allow mutation through APIs that bypass `SimulationRuntime` wrappers; some paths also bypass wrapper day validation/world-revision pathways. Export and invalidation must be owner-authoritative and cover direct APIs, not just runtime wrappers. |
+| **F — Knowledge, directives, ActorChoice, commitments** | `TryRecordSpatialObservations`, `TryAcceptSpatialRoutePlan`, `TryStartTravelParty`, scheduled-directive operations, and ActorChoice lifecycle operations are representative supported direct paths. ActorChoice preserves ordered disposition/sequence history. | ActorChoice has no global-world revision. ScheduledDirective, TravelParty, Expedition, and NPC commitment/Knowledge state lack complete owner revisions. | Stores and NPC/subowner references remain directly mutable. Preserve the complete ActorChoice history and next sequence; capture current directive/Knowledge/commitment owners once, with invalidation for their direct mutation APIs. Pending/deferred or consumed-awaiting-terminal ActorChoice entries remain ineligible under the accepted boundary rule. |
+
+`SimulationRuntime` executes the daily path across time, demography, directives,
+City economy, Knowledge, NPC actions, justice/crime, merchant plans, and legacy
+travel/expeditions. Scheduled directives enter through
+`ScheduledDirectiveSystem`; ActorChoice processing reads `ActorChoiceStore` and
+its runtime input-capture path is `TryCaptureActorChoiceInput`. This path list
+does not replace the exhaustive source-method census above. The census is
+source evidence only: it does not implement owner revisions, mutation epochs,
+operation scopes, exports, or hydration. Keep `NpcDecisionStore` and
+`DomainEventStore` as known/versioned `OmittedNonCausalReadModel` entries;
+`HistoryStore` is only their policy-selected subset and `NpcChronicleService`
+is a derived view. These are not authoritative mutation owners; retain the
+shared `SimulationRecordSequence` separately as a causal scalar.
+
+P12-B remains blocked by the unpromoted P9-B/P11 composition candidate, the
+unresolved P18-D runtime ownership-window canonical gate, and missing live
+owner census/revision proofs. These are independent from the completed
+candidate-source method census.
+
+`SimulationRuntime.TryAdvanceDay` and
 `TryAdvanceDays` enter `AdvanceDayAfterClockAdvance`, which advances time,
 demography, directives, `CityRuntime.SimulateProductionDay`,
 `SimulateConsumptionDay` and `UpdateMarketPrices`, Knowledge, NPC action
@@ -194,8 +229,9 @@ while its internal runtime capture path is `TryCaptureActorChoiceInput`.
 Supported direct owner APIs and transactional actions can also mutate
 City/NPC, Knowledge, spatial, political, force/conflict and commitment owners
 between days. Therefore P12-B cannot rely on `TryAdvanceDay` alone for
-invalidation. It needs a complete owner-operation census and mutation
-notification across those direct paths. Shared code
+invalidation. The candidate source-method census is complete, but live owner
+census/revision providers and mutation notification across those direct paths
+are still missing. Shared code
 hotspots are `SimulationRuntime.cs` (daily loop, owner composition and runtime
 stores), `TesteSimulacao.cs` (bootstrap/provider wiring and publication),
 `RuntimeIdentity.cs`/random source (C roots), and the domain store/system files
@@ -272,6 +308,18 @@ implementation authorization remains an independent gate.
 clone and transactional restore helpers were classified by their actual
 runtime/rollback contract; none was treated as a P12 serializer or staged
 hydrator.
+
+Mutation census references include `SimulationRuntime.cs` and
+`SimulationTime.cs`; `CityRuntime.cs`/`NpcRuntime.cs` and
+`RuntimeIdentity.cs`; `Population/SettlementPopulationRuntime.cs`,
+`Population/SettlementPopulationMembershipSystem.cs`,
+`Population/NpcResidenceMigrationSystem.cs`, and
+`Population/NpcPopulationLifecycleSystem.cs`; spatial owner/store files;
+`ActorChoiceStore.cs`; directive/travel/expedition owners; and the political,
+property/estate, armed-force, conflict, war, battle, economy, crime, and justice
+owner/store implementations. The exact references and classifications are for
+candidate snapshot `af656e7710fce0ba171fae1d6684331d2dc0b743` and must be
+refreshed against the promoted canonical composition.
 
 P9's current extensibility constraints still apply to this inventory: preserve
 stable stage/contributor identity and compatible version, declared inputs and

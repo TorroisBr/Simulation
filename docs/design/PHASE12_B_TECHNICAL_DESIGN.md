@@ -307,6 +307,25 @@ thread-safe. Off-thread work is outside the profile and cannot be accepted.
 If the supported command/transaction entrypoints cannot all be identified or
 wrapped, capture eligibility fails closed.
 
+The exhaustive source-method census for candidate snapshot
+`af656e7710fce0ba171fae1d6684331d2dc0b743` is recorded in
+`PHASE12_OWNER_COVERAGE_INVENTORY.md`. It confirms that public
+`SimulationTime.AdvanceDay` can bypass the full daily loop; `SimulationRuntime`
+exposes stores/services and live City/NPC collections; population and selected
+spatial stores have limited revisions, while Person, genealogy, site, legacy
+spatial, NPC roster/materialization, economy, crime/justice/outcome, Knowledge,
+directive, travel/expedition and commitment owners have missing or incomplete
+revisions. Political/force/conflict/war/battle stores expose selective
+revisions and direct APIs that do not all pass through runtime wrappers;
+`PoliticalWorldRevision` is partial. The health guard therefore cannot supply
+a mutation epoch or establish complete owner coverage. This source-method
+census is complete for the candidate snapshot, but it is not a live owner
+census/revision proof and does not implement owner revisions, mutation epochs,
+operation scopes, exports, or hydration. Refresh it against canonical actual
+composition after P9-B/P11 composition promotion. Preserve decision/event and
+History/Chronicle exclusions as `OmittedNonCausalReadModel`; the shared
+`SimulationRecordSequence` remains a separately captured causal scalar.
+
 Do not overload `AuthoritativeMutationGuard` health state to mean capture
 eligibility. Use a separate eligibility epoch/coordinator. B's reviewed API
 contract establishes an expected owner-section set from the live inventory,
@@ -543,21 +562,23 @@ This design is bounded to accepted P12-B scope, but P12-B is **not**
    `SimulationRuntime` hotspot handoff remain required before P12-B touches
    the runtime; P18-D still owns the future chronological
    continuation/subphase/handoff window.
-3. Demonstrate the complete versioned owner-section census and
-   mutation-notification inventory. The source census finds
+3. The exhaustive source-method census for candidate snapshot `af656e7` is
+   complete and recorded in the owner inventory. It finds
    `AuthoritativeMutationGuard` is only a `Healthy`/`Faulted` latch: it does
-   not provide mutation epochs or commit notifications. Supported mutation
-   surfaces include daily advance, action/actor choice, economy/trade,
-   crime/justice, Knowledge/directives, travel/expedition, spatial/site,
-   Person/population/residence, and the included political/military/conflict
-   stores. Some systems bind the health guard, while direct store APIs remain;
-   this is a bounded, non-exhaustive census, not evidence that every mutation
-   path has been enumerated. The minimum contract is to register every
-   included mutable owner/API, notify after committed owner revisions (or
-   invalidate before mutation and remain invalid after uncertain failure),
-   and fail closed for any uncovered owner. P12-B's eligibility kernel must
-   remain closed until P12-C/D/E/F owners register required adapters; P12-G
-   provides whole-capture validation.
+   not provide mutation epochs or commit notifications. Direct
+   `SimulationTime.AdvanceDay`, exposed stores/services and mutable City/NPC
+   state, partial owner revisions, and direct political/military/domain store
+   methods prevent the runtime wrapper surface from serving as a complete
+   invalidation boundary. Still missing are live canonical owner census and
+   revision proofs plus mutation-notification coverage for every included
+   owner/API. Register each actual owner, notify after committed owner
+   revisions (or invalidate before mutation and remain invalid after uncertain
+   failure), and fail closed for uncovered owners. P12-B's eligibility kernel
+   must remain closed until P12-C/D/E/F owners register required adapters;
+   P12-G provides whole-capture validation. Refresh the source census against
+   canonical actual composition after P9-B/P11 composition promotion; the
+   candidate audit implements no revisions, epochs, operation scopes, exports,
+   or hydration.
 4. `TesteSimulacao.Start`/`InitializeSimulation` does not retain the bootstrap
    owner thread, and the runtime has no owner-thread identity or general
    active-operation registry. Bind the owner thread after bootstrap, inventory
