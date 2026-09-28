@@ -170,11 +170,12 @@ predecessor effects, records enough owner-local progress to reconstruct the
 same report and skip committed effects, and does not delegate cross-authority
 mutation sequencing to the P18-D coordinator.
 
-Local observation descriptors preserve the effective runtime roster: registration rejects null entries and duplicate `NpcRuntimeId` values, and the runtime sorts accepted entries by runtime ID before the daily loop. Freeze that sorted unique target order and cardinality. A Person-backed actor carries both `PersonId` and its `NpcRuntimeId`; an unbacked actor retains `NpcRuntimeId`. The owner captures current truth only when preparing this step after earlier boundary effects. Preserve both ordered discoveries: `NpcRuntime.CurrentLocation` for each eligible actor, then `CurrentCity.Location` for eligible merchants inside `MerchantSystem.ObserveCurrentMarket`, followed by that market's ordered item and liquidity observations. Even if the location IDs are equal, retain both calls in legacy order. One actor-owned operation atomically installs the affected spatial and commercial knowledge together with its receipt; otherwise keep the operation outside intraday composition.
+Local observation descriptors preserve the effective runtime roster. `SimulationRuntime` sorts the constructor roster by `NpcRuntimeId` once; later successful `TryRegisterNpc` calls append, and `TryUnregisterNpc` removes without re-sorting. At boundary activation, freeze the exact current runtime-list membership and order (the registry rejects null entries and duplicate `NpcRuntimeId` values). Preserve that order for local observation; use `NpcRuntimeId` plus `PersonId` when present as target identity, with ordinals expressing order only. The owner captures current truth only when preparing this step after earlier boundary effects. Preserve both ordered discoveries: `NpcRuntime.CurrentLocation` for each eligible actor, then `CurrentCity.Location` for eligible merchants inside `MerchantSystem.ObserveCurrentMarket`, followed by that market's ordered item and liquidity observations. Even if the location IDs are equal, retain both calls in legacy order. One actor-owned operation atomically installs the affected spatial and commercial knowledge together with its receipt; otherwise keep the operation outside intraday composition.
 
-Commercial sharing freezes the eligible merchant membership from the
-runtime's unique sorted roster, followed by its location-group order and
-deterministic rotation/pairing. The owner captures each sender's shareable
+Commercial sharing freezes the eligible merchant membership from the current
+runtime roster, then preserves the existing `CompareMerchants` order (current
+location runtime ID followed by `NpcRuntimeId`), location-group order, and
+deterministic day rotation/pairing. The owner captures each sender's shareable
 observations after the preceding local-observation steps commit. Each directed
 transfer is a recipient-owned operation whose receipt identifies the boundary
 occurrence, sender and receiver `NpcRuntimeId` values (with backing `PersonId`
