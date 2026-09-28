@@ -27,9 +27,11 @@ prerequisites as missing, although code at `9e790c5` includes both the
 economy sale receipt/prepared-install capability and the legacy per-runtime
 advance lease. The reviewed P18-D technical design now permits consumer
 implementation; the pushed `707ef8a` candidate contains the P11 temporal-input
-owner, bridge, and timeline-yield component (`828bfa9`). These remain
-unpromoted components, not a complete runtime consumer or daily-profile
-adapter. P18-D is therefore not delivered; this
+owner, bridge, and timeline-yield component (`828bfa9`). The current pushed
+P18-D feature candidate is `a9428a3221876e6b9dccec7a17a6d205896fef15`;
+independent exact-tip review passed. It adds the PlaceContent atomic day-step
+owner to that integration work. These remain unpromoted components, not a
+complete runtime consumer or daily-profile adapter. P18-D is therefore not delivered; this
 does not establish a P18-integrated P12 profile. P20 canonical/State
 `7a81cc0ecbc511dd36c248ec62c7b20f7e477f53` (P20-A promoted, code
 `22df7b307528e705e6e84d1d8d54852a17cfc848`); and the current architecture
@@ -307,9 +309,10 @@ reconstruction/fork guarantees, and generated P9/P10 content remain outside
 P12-A. P18-A/B/C and the additive P18-A continuation extension are present in
 the checked P18 code lineage. The P18-D prerequisite code is also present at
 `9e790c5`, while the canonical State still contains the older pending-gate
-wording. P18-D consumer work has only an unpromoted bridge/timeline-yield
-component candidate (`707ef8a`); the `SimulationRuntime` consumer and the
-approved daily-boundary owner seams remain undelivered. The selected bootstrap does
+wording. P18-D consumer work has an unpromoted bridge/timeline-yield and
+PlaceContent owner-step candidate (`a9428a3`), with exact-tip review passed;
+the `SimulationRuntime` consumer and the remaining required daily-boundary
+owner seams remain undelivered. The selected bootstrap does
 not compose the P18 timeline, activity/availability runtime, continuation
 extension, or intraday state; no P18 state is claimed. P20-A is promoted at
 current P20 canonical/State `7a81cc0`,
