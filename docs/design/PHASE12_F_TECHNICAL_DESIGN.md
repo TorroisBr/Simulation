@@ -1,10 +1,10 @@
 # P12-F — Knowledge, Directives, Actor Choices, and Active Commitments
 
-**Status:** Documentation-only design exact-tip review PASS at
-`c8d3569bf1190c926f04dc48c1f37915a8af9597`. This design does not deliver a
-capability, owner export, or staged hydration and establishes no implementation
-readiness. P12-A remains `WAIT_DEPENDENCY`; its separate profile
-implementation authorization remains outstanding.
+**Status:** Documentation-only technical proposal. This design does not
+deliver a capability, owner export, or staged hydration and establishes no
+implementation readiness. P12-A remains `WAIT_DEPENDENCY`; its separate
+profile implementation authorization remains outstanding. Review evidence is
+tracked outside this design file.
 
 **Design base:** P12 planning commit `4c384ab916b44e4df8eb576fb98a88c3fac526b2`.
 The proposal follows the accepted P12-B–G decomposition and P12-A
