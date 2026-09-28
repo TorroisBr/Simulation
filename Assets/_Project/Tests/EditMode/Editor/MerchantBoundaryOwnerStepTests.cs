@@ -17,7 +17,7 @@ public sealed class MerchantBoundaryOwnerStepTests
         NpcRuntime merchant = new NpcRuntime("merchant-urgency-npc",
             SimulationTestFactory.CreateNpc("merchant-urgency", NpcJobType.Merchant, MerchantBehavior.Traveling),
             world.A, 0f);
-        Assert.That(merchant.TryAssignPersonId(new PersonId("person.merchant-urgency")), Is.True);
+        BindPersonToNpc(merchant, "person.merchant-urgency");
         merchant.SetMerchantTradePlan(item, world.A, world.B, 4, 2f);
 
         MerchantSystem system = SimulationTestFactory.CreateMerchantSystem(null, new SimulationTime(1));
@@ -54,7 +54,7 @@ public sealed class MerchantBoundaryOwnerStepTests
         NpcRuntime merchant = new NpcRuntime("merchant-urgency-race-npc",
             SimulationTestFactory.CreateNpc("merchant-urgency-race", NpcJobType.Merchant, MerchantBehavior.Traveling),
             world.A, 0f);
-        Assert.That(merchant.TryAssignPersonId(new PersonId("person.merchant-urgency-race")), Is.True);
+        BindPersonToNpc(merchant, "person.merchant-urgency-race");
         merchant.SetMerchantTradePlan(item, world.A, world.B, 4, 2f);
 
         MerchantSystem system = SimulationTestFactory.CreateMerchantSystem(null, new SimulationTime(1));
@@ -81,7 +81,7 @@ public sealed class MerchantBoundaryOwnerStepTests
         NpcRuntime merchant = new NpcRuntime("merchant-plan-replacement-npc",
             SimulationTestFactory.CreateNpc("merchant-plan-replacement", NpcJobType.Merchant, MerchantBehavior.Traveling),
             world.A, 0f);
-        Assert.That(merchant.TryAssignPersonId(new PersonId("person.merchant-plan-replacement")), Is.True);
+        BindPersonToNpc(merchant, "person.merchant-plan-replacement");
         merchant.SetMerchantTradePlan(originalItem, world.A, world.B, 4, 2f, "decision.original");
 
         MerchantSystem system = SimulationTestFactory.CreateMerchantSystem(null, new SimulationTime(1));
@@ -114,7 +114,7 @@ public sealed class MerchantBoundaryOwnerStepTests
         NpcRuntime merchant = new NpcRuntime("merchant-plan-redirect-npc",
             SimulationTestFactory.CreateNpc("merchant-plan-redirect", NpcJobType.Merchant, MerchantBehavior.Traveling),
             world.A, 0f);
-        Assert.That(merchant.TryAssignPersonId(new PersonId("person.merchant-plan-redirect")), Is.True);
+        BindPersonToNpc(merchant, "person.merchant-plan-redirect");
         merchant.SetMerchantTradePlan(item, world.A, world.B, 4, 2f, "decision.original");
 
         MerchantSystem system = SimulationTestFactory.CreateMerchantSystem(null, new SimulationTime(1));
@@ -156,7 +156,17 @@ public sealed class MerchantBoundaryOwnerStepTests
     {
         NpcRuntime merchant = new NpcRuntime(runtimeId,
             SimulationTestFactory.CreateNpc(runtimeId, NpcJobType.Merchant, MerchantBehavior.Traveling), city, 0f);
-        Assert.That(merchant.TryAssignPersonId(new PersonId(personId)), Is.True);
+        BindPersonToNpc(merchant, personId);
         return merchant;
+    }
+
+    private static void BindPersonToNpc(NpcRuntime npc, string personIdValue)
+    {
+        PersonId personId = new PersonId(personIdValue);
+        SimulationRuntime world = new SimulationRuntime(new SimulationTime(), null, new[] { npc });
+        Assert.That(world.TryRegisterPerson(new PersonRuntime(personId), out PersonStoreFailure registrationFailure),
+            Is.True, registrationFailure.ToString());
+        Assert.That(world.TryBindExistingNpcToPerson(personId, npc.RuntimeId,
+            out PersonMaterializationFailure bindingFailure), Is.True, bindingFailure.ToString());
     }
 }
