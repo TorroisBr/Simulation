@@ -307,6 +307,7 @@ public sealed class ActorChoiceTemporalDecisionBridge
                 if (!result.TryGetValue(receipt.InputId, out RequestHistory history))
                     result.Add(receipt.InputId, history = new RequestHistory());
                 history.OriginatingSequence = receipt.BoundarySequence;
+                history.OriginatingRequest = receipt;
                 history.CurrentRequest = receipt;
                 history.LastDisposition = null;
             }
@@ -326,12 +327,27 @@ public sealed class ActorChoiceTemporalDecisionBridge
         return result;
     }
 
-    private static bool TryCreateAdmittedRequest(ActorChoiceInput input, RequestHistory history,
+    private bool TryCreateAdmittedRequest(ActorChoiceInput input, RequestHistory history,
         out ActorChoiceTemporalDecisionRequest admitted)
     {
         admitted = null;
-        if (input?.PersonId == null || history?.CurrentRequest == null || history.OriginatingSequence <= 0L) return false;
+        if (input?.PersonId == null || input.TemporalCapture == null || history?.CurrentRequest == null
+            || history.OriginatingRequest == null || history.OriginatingSequence <= 0L
+            || !string.Equals(input.TemporalCapture.ProfileId, profileId, StringComparison.Ordinal)) return false;
+        ActorDecisionRequestReceipt origin = history.OriginatingRequest;
+        if (origin.Kind != ActorDecisionRequestReceiptKind.RequestBound
+            || origin.InputId != input.InputId.Value || !origin.Actor.Equals(input.PersonId)
+            || origin.Instant != input.TemporalCapture.TargetInstant
+            || origin.BoundaryId != input.InputId.Value || origin.BoundaryRevision != 0L
+            || origin.SourceSequence != input.InputSequence || origin.ProfileId != profileId
+            || origin.Outcome != input.TemporalCapture.AcceptedInput.InputId
+            || origin.BoundarySequence != history.OriginatingSequence) return false;
         ActorDecisionRequestReceipt receipt = history.CurrentRequest;
+        if (receipt.InputId != input.InputId.Value || !receipt.Actor.Equals(input.PersonId)
+            || receipt.BoundarySequence < history.OriginatingSequence
+            || receipt.Instant.Value < input.TemporalCapture.TargetInstant.Value
+            || (receipt.Kind != ActorDecisionRequestReceiptKind.RequestBound
+                && receipt.Kind != ActorDecisionRequestReceiptKind.TriggerObserved)) return false;
         ActorDecisionRequest request;
         try { request = new ActorDecisionRequest(receipt.Actor, receipt.Instant, receipt.BoundaryId,
             receipt.BoundarySequence, receipt.BoundaryRevision); }
@@ -366,6 +382,7 @@ public sealed class ActorChoiceTemporalDecisionBridge
     private sealed class RequestHistory
     {
         public long OriginatingSequence;
+        public ActorDecisionRequestReceipt OriginatingRequest;
         public ActorDecisionRequestReceipt CurrentRequest;
         public ActorDecisionRequestReceipt LastDisposition;
     }
