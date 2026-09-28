@@ -1,10 +1,15 @@
-# P12-A capability checkpoint decomposition — proposal only
+# P12-B–P12-G capability checkpoint decomposition
 
-**Status:** Proposed dependency decomposition for the already accepted
-`P12-A — UnityBootstrap-Daily-v1` scope. These labels are temporary
-descriptors, not checkpoint IDs or accepted scopes. This document does not
-amend the P12-A scope record, authorize implementation, or establish that any
-capability exists.
+**Status:** The six capability scopes below were accepted by the user on
+2026-09-27 after exact-tip independent review PASS at
+`7585863ca12f185f702ec0e7854d10ee8d712f64`. Their accepted checkpoint IDs are
+P12-B through P12-G. The user authorized implementation of these prerequisite
+capabilities only. Per-checkpoint technical readiness and review still govern
+when each implementation starts. This does not amend the accepted P12-A profile
+scope or authorize its final profile integration; P12-A remains
+`WAIT_DEPENDENCY` until included-owner export/staged hydration and the live
+profile inventory are complete, followed by its separate implementation
+authorization. No capability is delivered by this record.
 
 **Evidence baseline:** owner inventory candidate
 `e995e2ae4c10bac1d30d1d158c75216f73842480`; inventory references the
@@ -70,7 +75,7 @@ included owner section and the live profile inventory.
 
 ## Proposed capability checkpoints
 
-### Profile admission and completed-boundary lifecycle
+### P12-B — Profile admission and completed-boundary lifecycle
 
 **Purpose and dependencies:** Establish the exact supported composition and
 the only permitted daily capture point. This is the prerequisite for every
@@ -103,7 +108,7 @@ mutation lifecycle, effective configuration/calendar resolution, and the
 future P12 envelope/admission coordinator. Shared `SimulationRuntime` and
 daily-loop ownership must be explicit.
 
-### Identity, genesis, and deterministic roots
+### P12-C — Identity, genesis provenance, and deterministic roots
 
 **Dependencies:** Profile admission/lifecycle contract.
 
@@ -138,7 +143,7 @@ consumers, P9 genesis/profile manifest handoff, P8-A `SpatialAuthorityStore`,
 and the selected bootstrap profile manifest. Do not infer P8 identity from
 legacy spatial runtime state.
 
-### Bootstrap factual roots and Person/population relations
+### P12-D — Bootstrap factual roots and Person/population relations
 
 **Dependencies:** Profile admission and identity/genesis/deterministic roots.
 
@@ -202,7 +207,7 @@ ownership windows. The current composition inventory must identify precise
 implementations and providers before any per-class implementation plan is
 approved.
 
-### Profile-selected core and official daily-domain owners
+### P12-E — Profile-selected core and official daily-domain owners
 
 **Dependencies:** Profile admission and identity/genesis/deterministic roots;
 root truth from the preceding group where referenced entities/accounts are
@@ -241,7 +246,7 @@ appraisal and guard providers. Use domain-owner subgroups only as isolated
 implementation tasks under this one profile coverage checkpoint; a catalog of
 providers or files is not completion.
 
-### Knowledge, directives, P11 choices, and active commitments
+### P12-F — Knowledge, directives, P11 choices, and active commitments
 
 **Dependencies:** identity/genesis roots, factual roots, and all required core
 and official owner sections. These facts refer to those roots and cannot be
@@ -275,7 +280,7 @@ merchant commitment owners and their current reciprocal references. The
 current live composition determines which conditional commitments/providers
 are in fact included.
 
-### Staged restore, graph validation, atomic publication, and parity
+### P12-G — Staged restore, whole-graph validation, atomic publication, and parity
 
 **Dependencies:** Every preceding profile, identity, root, domain, Knowledge,
 directive, and commitment section has an exact reviewed export/hydrator, plus

@@ -6,7 +6,16 @@
 
 For supported compatible versions/profiles, continuing from boundary T and saving at T, loading, then continuing with the same inputs produce the same future authoritative results. Save is not replay or selective History.
 
-**Checkpoint:** P12-A — `UnityBootstrap-Daily-v1` (scope accepted; contract at `../design/PHASE12_CHECKPOINT_CONTRACT_PROPOSAL.md`). Acceptance records this bounded scope only. It is not implementation authorization, delivery, or canonical promotion.
+**Accepted checkpoints:** P12-A — `UnityBootstrap-Daily-v1` remains the bounded profile integration scope. P12-B through P12-G are its accepted prerequisite capability checkpoints, recorded in `../design/PHASE12_CAPABILITY_CHECKPOINT_DECOMPOSITION.md`; their scopes and prerequisite implementation authorization were accepted on 2026-09-27 after exact-tip independent review. This authorizes only prerequisite capability work. P12-A remains `WAIT_DEPENDENCY` until all included owners have exact export/staged hydration, the live profile inventory is validated, and its separate implementation authorization is recorded. Acceptance is not delivery or canonical promotion.
+
+| ID | Closure boundary | Dependencies |
+|---|---|---|
+| P12-B — Profile admission and completed-boundary lifecycle | Exact profile/provider admission and capture eligibility only at a successful completed daily boundary. | Accepted P12-A profile semantics; bounded technical design and independent review. |
+| P12-C — Identity, genesis provenance, and deterministic roots | Exact typed allocators/sequences, selected P9-B provenance, P8-A facts, and continuation-relevant deterministic-random roots. | P12-B. |
+| P12-D — Bootstrap factual roots and Person/population relations | Exact export and staged hydration for bootstrap factual authorities, including existing legacy spatial/site/exploration links and Person/population relations. | P12-B and P12-C. |
+| P12-E — Profile-selected core and official daily-domain owners | Exact export and staged hydration for the core and configured official daily authorities in the accepted profile. | P12-B and P12-C; referenced roots from P12-D where needed. May be developed alongside P12-D only with isolated ownership and planned integration. |
+| P12-F — Knowledge, directives, P11 choices, and active commitments | Exact causal Knowledge, directive, terminal actor-choice, and active commitment state for the accepted profile. | P12-C, P12-D, and P12-E. |
+| P12-G — Staged restore, whole-graph validation, atomic publication, and parity | Private staged hydration, complete graph validation, one publication boundary, and continuation parity/rejection evidence. | P12-B through P12-F and a validated live profile inventory. |
 
 ## Dependencies and gates
 
