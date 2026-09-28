@@ -1,6 +1,6 @@
 # Phase 18 State — Intraday Temporal Execution v1
 
-**Status:** PHASE 18 IN PROGRESS — P18-A/B/C promoted, including the additive extension at `1dd0479` and the external-input/deferral adapter at integration tip `b75c5b8` (code `a535441`); P20-A is promoted (code `22df7b3`, P20 State tip `7a81cc0`). P18-D consumes the promoted P11 temporal capture contract; its current-base design refresh has not yet had exact-tip independent revalidation, and implementation remains blocked on the economy operation-receipt contract and serialized `SimulationRuntime` window
+**Status:** PHASE 18 IN PROGRESS — P18-A/B/C promoted, including the additive extension at `1dd0479` and the external-input/deferral adapter at integration tip `b75c5b8` (code `a535441`); P20-A is promoted (code `22df7b3`, P20 State tip `7a81cc0`). P18-D consumes the promoted P11 temporal capture contract; its current-base design refresh passed exact-tip independent revalidation at candidate tip `89efa8b`, while implementation remains blocked on the economy operation-receipt contract and serialized `SimulationRuntime` window
 
 **Current canonical base:** `codex/phase8/canonical` at `470667d37863384edadb3d93ef64d8004aff46a3`
 
