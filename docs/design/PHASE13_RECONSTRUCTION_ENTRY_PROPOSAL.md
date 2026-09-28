@@ -17,7 +17,10 @@ P12-A scope only and retains `WAIT_DEPENDENCY` with no implementation
 authorization. The distinct owner-inventory evidence commit `bd15b92` reports
 no profile-included owner group with demonstrated complete exact immutable
 export plus staged hydration; it is not the scope-acceptance record. P14
-canonical is `4caecbb`. P18 canonical is `b3902623f0ab34ce1a96ffd3674c0a1236160d11`; P18-A's additive
+canonical is `4caecbb`. P18 canonical is `85f1f21da0a8a438edfd80c90053ce333223154c`. The P18 State diff from `b390262` records
+P20-A promotion and the P18-D design refresh/revalidation; it changes status
+and review evidence only, with no P18 semantic or capability changes. Classify
+this P18 advance as `UPSTREAM_IRRELEVANT` to P13 semantics. P18-A's additive
 extension and P18-C's external-input/deferral adapter are promoted. The adapter
 does not establish a P18-D live consumer migration. P18-D remains
 implementation-blocked on the economy owner's operation-receipt contract and a
@@ -177,7 +180,7 @@ account for:
 - deterministic execution context and random state/context only where consumed;
 - temporal time/calendar, pending owner work, activity lifecycle and causal
   ordering where the history actually used P18. At current P18 canonical
-  `b390262`, the promoted implementation includes the P18-A extension (`1dd0479`)
+  `85f1f21`, the promoted implementation includes the P18-A extension (`1dd0479`)
   and P18-C external-input/deferral adapter (`a535441`). For any supported P18 history,
   preserve the world/profile/absolute-day boundary identity, exact logical
   instant and tick/version, frozen activation manifest and cursor, stable
