@@ -404,6 +404,26 @@ public sealed class SimulationTimeline
     public LogicalTick? InputsSealedThrough => sealedThrough < 0L ? (LogicalTick?)null : new LogicalTick(sealedThrough);
     public SimulationDate GetCalendarProjection(LogicalTick instant) => instant.ToDate(calendar);
 
+    /// <summary>Returns the next chronological instant through a sealed target without dispatching or changing timeline state.</summary>
+    public bool TryGetNextCausalInstant(LogicalTick sealedTarget, out LogicalTick instant, out TimelineFailure failure)
+    {
+        instant = default(LogicalTick);
+        if (sealedTarget.Value < now) { failure = TimelineFailure.TargetBeforeNow; return false; }
+        if (sealedThrough < sealedTarget.Value) { failure = TimelineFailure.InputNotSealed; return false; }
+
+        try
+        {
+            long nextBoundary = boundaryOwner == null ? long.MaxValue
+                : pendingBoundaryDay >= 0L ? now : NextBoundaryAfter(now);
+            long nextWork = agenda.Count == 0 ? long.MaxValue : FirstKey(agenda);
+            long nextInput = inputs.Count == 0 ? long.MaxValue : FirstKey(inputs);
+            instant = new LogicalTick(Math.Min(sealedTarget.Value, Math.Min(nextBoundary, Math.Min(nextWork, nextInput))));
+        }
+        catch (OverflowException) { failure = TimelineFailure.Overflow; return false; }
+        failure = TimelineFailure.None;
+        return true;
+    }
+
     public bool TryAcceptInput(TimelineInputReference input, out TimelineFailure failure)
     {
         if (input == null) throw new ArgumentNullException(nameof(input));

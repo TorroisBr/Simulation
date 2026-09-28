@@ -799,6 +799,81 @@ public sealed class LogicalTimelineTests
     }
 
     [Test]
+    public void NextCausalInstantChoosesEarliestInputWorkBoundaryOrTarget()
+    {
+        InputOwner input = new InputOwner();
+        DueOwner due = new DueOwner();
+        SimulationTimeline timeline = new SimulationTimeline(Calendar(), new LogicalTick(0), due, input);
+        due.Timeline = timeline;
+        due.Current.Add("work");
+        Assert.That(timeline.TryIndexOwnerFact(Work("owner", "work", "instance", 0, 30), out _), Is.True);
+        Assert.That(timeline.TryAcceptInput(new TimelineInputReference(0, "input", "Action", "x", new LogicalTick(20)), out _), Is.True);
+        Assert.That(timeline.TrySealInputsThrough(new LogicalTick(100), out _), Is.True);
+        Assert.That(timeline.TryGetNextCausalInstant(new LogicalTick(100), out LogicalTick next, out TimelineFailure failure), Is.True, failure.ToString());
+        Assert.That(next.Value, Is.EqualTo(20));
+
+        InputOwner workInput = new InputOwner();
+        DueOwner workOwner = new DueOwner(); workOwner.Current.Add("work");
+        SimulationTimeline workTimeline = new SimulationTimeline(Calendar(), new LogicalTick(0), workOwner, workInput);
+        Assert.That(workTimeline.TryIndexOwnerFact(Work("owner", "work", "instance", 0, 30), out _), Is.True);
+        Assert.That(workTimeline.TryAcceptInput(new TimelineInputReference(0, "later", "Action", "x", new LogicalTick(40)), out _), Is.True);
+        Assert.That(workTimeline.TrySealInputsThrough(new LogicalTick(100), out _), Is.True);
+        Assert.That(workTimeline.TryGetNextCausalInstant(new LogicalTick(100), out next, out failure), Is.True, failure.ToString());
+        Assert.That(next.Value, Is.EqualTo(30));
+
+        AtomicBoundaryOwner boundaryOwner = new AtomicBoundaryOwner();
+        LogicalTick boundary = new LogicalTick(LogicalTick.TicksPerDay);
+        SimulationTimeline boundaryTimeline = new SimulationTimeline(Calendar(), new LogicalTick(1),
+            boundaryOwner: boundaryOwner, worldId: "world", profileId: "profile");
+        Assert.That(boundaryTimeline.TrySealInputsThrough(new LogicalTick(boundary.Value + 10), out _), Is.True);
+        Assert.That(boundaryTimeline.TryGetNextCausalInstant(new LogicalTick(boundary.Value + 10), out next, out failure), Is.True, failure.ToString());
+        Assert.That(next, Is.EqualTo(boundary));
+
+        Assert.That(boundaryTimeline.TryGetNextCausalInstant(new LogicalTick(boundary.Value + 10), out next, out failure), Is.True, failure.ToString());
+        Assert.That(boundaryTimeline.CurrentInstant.Value, Is.EqualTo(1));
+        Assert.That(boundaryTimeline.CausalSequence, Is.Zero);
+        Assert.That(boundaryTimeline.PendingBoundaryDay, Is.Null);
+        Assert.That(boundaryOwner.CommittedIds, Is.Empty);
+        Assert.That(timeline.TryGetNextCausalInstant(new LogicalTick(101), out _, out failure), Is.False);
+        Assert.That(failure, Is.EqualTo(TimelineFailure.InputNotSealed));
+        SimulationTimeline advanced = new SimulationTimeline(Calendar(), new LogicalTick(5));
+        Assert.That(advanced.TrySealInputsThrough(new LogicalTick(10), out _), Is.True);
+        Assert.That(advanced.TryGetNextCausalInstant(new LogicalTick(4), out _, out failure), Is.False);
+        Assert.That(failure, Is.EqualTo(TimelineFailure.TargetBeforeNow));
+    }
+
+    [Test]
+    public void NextCausalInstantRetainsPendingBoundaryAndDoesNotChangeSameTickOrdering()
+    {
+        AtomicBoundaryOwner boundaryOwner = new AtomicBoundaryOwner();
+        LogicalTick boundary = new LogicalTick(LogicalTick.TicksPerDay);
+        SimulationTimeline pending = new SimulationTimeline(Calendar(), boundary,
+            boundaryOwner: boundaryOwner, worldId: "world", profileId: "profile", pendingBoundaryDay: 1);
+        Assert.That(pending.TrySealInputsThrough(new LogicalTick(boundary.Value + 5), out _), Is.True);
+        Assert.That(pending.TryGetNextCausalInstant(new LogicalTick(boundary.Value + 5), out LogicalTick next, out TimelineFailure failure), Is.True, failure.ToString());
+        Assert.That(next, Is.EqualTo(boundary));
+        Assert.That(pending.PendingBoundaryDay, Is.EqualTo(1L));
+        Assert.That(boundaryOwner.CommittedIds, Is.Empty);
+
+        List<string> order = new List<string>();
+        InputOwner inputOwner = new InputOwner { OnApplied = id => order.Add("input:" + id) };
+        DueOwner dueOwner = new DueOwner { OnCommitted = id => order.Add("work:" + id) };
+        dueOwner.Current.Add("same-tick");
+        SimulationTimeline sameTick = new SimulationTimeline(Calendar(), new LogicalTick(1), dueOwner, inputOwner,
+            boundaryOwner, "world", "profile");
+        dueOwner.Timeline = sameTick;
+        Assert.That(sameTick.TryIndexOwnerFact(Work("owner", "same-tick", "instance", 0, boundary.Value), out _), Is.True);
+        Assert.That(sameTick.TryAcceptInput(new TimelineInputReference(0, "same-tick", "Action", "x", boundary), out _), Is.True);
+        Assert.That(sameTick.TrySealInputsThrough(boundary, out _), Is.True);
+        Assert.That(sameTick.TryGetNextCausalInstant(boundary, out next, out failure), Is.True, failure.ToString());
+        Assert.That(next, Is.EqualTo(boundary));
+        Assert.That(sameTick.TryAdvanceTo(boundary, out failure), Is.True, failure.ToString());
+        CollectionAssert.AreEqual(new[] { "input:same-tick", "work:same-tick" }, order);
+        Assert.That(boundaryOwner.Attempts, Has.Count.EqualTo(1));
+        Assert.That(boundaryOwner.Effects, Is.EqualTo(new[] { "effect:1" }));
+    }
+
+    [Test]
     public void ReentrantAdvanceIsRejectedAndLegacyDailyRuntimeIsNotModifiedByThisCandidate()
     {
         DueOwner owner = new DueOwner();
