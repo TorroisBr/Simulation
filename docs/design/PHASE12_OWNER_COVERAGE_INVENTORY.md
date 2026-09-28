@@ -177,8 +177,10 @@ ALL EditMode 1742/1742, official Smoke 5/5, and staged/unstaged
 `git diff --check` passed. The retained result artifact available for this
 inventory is the final Smoke XML (5/5); the other Unity result XML files were
 rotated/removed by the harness. These results validate composition behavior,
-not P12 export, hydration, owner census, or readiness. Remote fetch and
-canonical promotion remain unverified; keep P12-A at `WAIT_DEPENDENCY`.
+not P12 export, hydration, owner census, or readiness.
+The original 2026-09-27 audit did not fetch remote refs; the 2026-09-28
+refresh fetched them and confirmed `af656e7` remains unpromoted. Keep P12-A
+at `WAIT_DEPENDENCY`.
 
 | Included authority group | Exact immutable export | Staged hydration | Concrete gap blocking P12-A |
 |---|---|---|---|
