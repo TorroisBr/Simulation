@@ -14,12 +14,17 @@ inventory dependencies.
 This proposal changes no canonical capability and makes no claim that capture,
 hydration, or save/load parity currently exists.
 
-**Current-base refresh:** after merging P18 canonical `ba8076c` into this
-documentation candidate, an independent scoped review found the daily profile
-still compatible. The P18 source tree is present in this proposal branch only
-as review context; this branch has no executable P11 ancestry and is not an
-integrated runtime composition. The current P11 capability is checked by its
-separate canonical ref. P12-A remains `WAIT_DEPENDENCY` for implementation.
+**Current-base refresh:** the earlier scoped review used P18 canonical
+`ba8076c`. After refreshing remote refs on 2026-09-28, P18 canonical code is
+`9e790c5`; its State text is stale about the sale-receipt/prepared-install and
+serialized-runtime prerequisite promotions, which are present in code. P18-D
+consumer integration remains incomplete and unpromoted. This profile excludes
+P18 temporal state, so that code delta does not add a P18 dependency or change
+the accepted daily-profile boundary. The P18 source tree is present in this
+proposal branch only as review context; this branch has no executable P11
+ancestry and is not an integrated runtime composition. The current P11
+capability is checked by its separate canonical ref. P12-A remains
+`WAIT_DEPENDENCY` for implementation.
 
 **Historical targeted revalidation:** the earlier review used P8 canonical
 `77f3e1a47a1e007492a794ea777d681a21a36d09` and predates the current P9
@@ -52,19 +57,19 @@ architecture `c285466c355103d3637ac165246591b72eb7bda0`; P9-A code promotion
 current P9-B promotion-record State/status `14a2e8e`; P9-B code integration
 `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf` (implementation tip
 `00395ef80cfa2364d34ed2170e0735d3a4b1513d`); P11 code promotion
-`0803670cfa2c39163b54ff46a21daa06df5a16f6` /
+`0cd4281804ecc6a2d110352d1a238959e93867f0` /
 current canonical closure State `308e24d0744112e8f2b741521b8b3e4acb51ebbf`;
-P18 canonical/current State `ba8076c3bc2c8c354a8755e6efaca30bfeab7bf7`
-(P18-A/B/C promoted; P18-D implementation blocked); P14 current canonical
+P18 canonical code `9e790c59e14ca7f7ed195c0e6267e10f3cd039d7` (canonical
+State text at that tip is stale about the two promoted prerequisites; P18-D
+consumer integration remains incomplete); P14 current canonical
 State/Brief `4caecbb` (docs-only update) and historical promotion State
 `f8a61fe9634ba9ab56ee31d50b57b45fef292a6f`; P14-A code promotion
 `c44904bb4b0a066eced1d7e8a773b7dc1eea76c0` / State
 `f8a61fe9634ba9ab56ee31d50b57b45fef292a6f`;
-P20 Entry Architecture `2f9c93b`, Technical Design `6a0d164`, and proposed
-P20-A checkpoint refresh `2a03edadcb411c7ca7aa2d0c67ee8d36f972779e`
-(design and proposal reviewed; checkpoint
-acceptance/implementation remain pending). Its two-Person fixture is bounded
-proof evidence, not universal participant cardinality or a P12 dependency.
+P20 Entry Architecture `2f9c93b`, Technical Design `6a0d164`, P20-A code
+`22df7b3` and P20 canonical State `7a81cc0` (promoted at integration tip
+`1dcf67a`). Its two-Person fixture is bounded proof evidence, not universal
+participant cardinality or a P12 dependency.
 Both architecture alignment records remain current. P10-A's user-approved
 Ruin/LocalTopology profile was promoted at code candidate `9501bf0`; canonical
 State records it at `9e79b58`. The P9-B promotion record is current at
@@ -302,7 +307,7 @@ omits causal fields.
   do not substitute for P8 identity. P8-E is not a blanket continuation
   prerequisite. P9-B is on current P9 canonical at `d9a62d7`; this P12
   proposal does not establish P12 export/hydration coverage or checkpoint gates.
-- **P18:** P18 canonical/State is `ba8076c`; the selected daily profile does
+- **P18:** P18 canonical code is `9e790c5`; the selected daily profile does
   not compose its timeline, activity lifecycle, availability decisions, or
   temporal state, and does not claim intraday continuation. P18 is present in
   this docs-only refresh branch as review context, not integrated runtime code.
@@ -315,8 +320,10 @@ omits causal fields.
   external inputs with target `LogicalTick`, accepted sequence/order, and
   boundary state. Include P18-B ActivityInstanceId/lifecycle
   revision/receipts and participant commitments/availability, plus P18-C
-  PersonId-keyed decision/attempt state only where composed. P18-A/B/C are
-  promoted; P18-D remains blocked and the legacy daily path remains authoritative.
+  PersonId-keyed decision/attempt state only where composed. P18-A/B/C and the
+  additive P18-A continuation extension are promoted. P18-D has an unpromoted
+  bridge/timeline-yield component candidate but no completed runtime consumer
+  or daily-boundary adapter; the legacy daily path remains authoritative.
 - **P20:** shared activities are outside this profile. Any later profile that
   includes them must preserve stable `ActivityInstanceId` separately from its
   definition and participants (using `PersonId` for Person participants without
@@ -384,13 +391,14 @@ profile contract.
   `43f08b3`, P9-B promotion-record State/status `14a2e8e`, P9-B canonical
   integration `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf` (implementation tip
   `00395ef80cfa2364d34ed2170e0735d3a4b1513d`),
-  P11 code promotion `0803670cfa2c39163b54ff46a21daa06df5a16f6` and canonical closure State
+  P11 code promotion `0cd4281804ecc6a2d110352d1a238959e93867f0` and canonical closure State
   `308e24d0744112e8f2b741521b8b3e4acb51ebbf`, current P18 canonical/State
-  `ba8076c3bc2c8c354a8755e6efaca30bfeab7bf7`, P14 current canonical
+  `9e790c59e14ca7f7ed195c0e6267e10f3cd039d7` (P18 State text is stale for
+  the promoted prerequisites; D consumer remains incomplete), P14 current canonical
   State/Brief `4caecbb` (docs-only), historical promotion State `f8a61fe`
   and P14-A code promotion `c44904bb4b0a066eced1d7e8a773b7dc1eea76c0`, P20 Entry Architecture
-  `2f9c93b`, Technical Design `6a0d164`, and refreshed proposed P20-A checkpoint
-  `2a03edadcb411c7ca7aa2d0c67ee8d36f972779e`, P10-A promoted code
+  `2f9c93b`, Technical Design `6a0d164`, and promoted P20-A code `22df7b3` /
+  State `7a81cc0`, P10-A promoted code
   `9501bf076d506fb64d6ee3e6d178574fff36e153` / State `9e79b58`, architecture
   `c285466`, `docs/architecture/INTRADAY_EXTENSIBILITY_ALIGNMENT.md`, and
   `docs/architecture/MULTIPARTICIPANT_ACTIVITY_ALIGNMENT.md`.

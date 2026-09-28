@@ -15,7 +15,8 @@ authorization. No capability is delivered by this record.
 `e995e2ae4c10bac1d30d1d158c75216f73842480`; inventory references the
 authoritative architecture `c285466`, P8 State `470667d`, P9 closure
 `82396ae` and P9-B implementation integration `d9a62d7`, P11 closure
-`308e24d`, P14 State `4caecbb`, P18 canonical/State `ba8076c`, and P20 State
+`308e24d`, P14 State `4caecbb`, P18 canonical code `9e790c5` (the State text
+is stale for two already-present prerequisite capabilities), and P20 State
 `7a81cc0`, plus both current architecture alignment records. Revalidate these
 references and the actual canonical runtime composition before any checkpoint
 implementation is scheduled.

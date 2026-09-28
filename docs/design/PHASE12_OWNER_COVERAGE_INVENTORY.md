@@ -3,7 +3,8 @@
 **Profile:** `UnityBootstrap-Daily-v1` (the bounded SampleScene
 `Simulation-GeneralTest.asset` → `TesteSimulacao.InitializeSimulation` daily
 profile). **Reviewed source baseline:** this P12 revalidation candidate starts
-at `4a1d36407487e3d342785d4d895993044d610cf4`. Exact upstream tips checked:
+at `4a1d36407487e3d342785d4d895993044d610cf4`. Following `git fetch --all`
+on 2026-09-28, exact upstream tips checked:
 architecture `c285466c355103d3637ac165246591b72eb7bda0` and both alignment
 records: intraday `4b6dd1d38cffeaf3cc1ac3effea0f8ede8771194`, multi-participant
 `c285466c355103d3637ac165246591b72eb7bda0`; P8 State `470667d37863384edadb3d93ef64d8004aff46a3`; P9 canonical
@@ -15,14 +16,21 @@ closure `82396ae7ffaf407fda278928da456b06dc5394d4` (P9-B code integration
 `9501bf076d506fb64d6ee3e6d178574fff36e153`, State record
 `9e79b58397dc9a89ddcc562be139b79987cb55b9`); P11 canonical closure
 `308e24d0744112e8f2b741521b8b3e4acb51ebbf` (code promotion
+`0cd4281804ecc6a2d110352d1a238959e93867f0`, promotion State
 `0803670cfa2c39163b54ff46a21daa06df5a16f6`);
 P14 historical promotion State `f8a61fe9634ba9ab56ee31d50b57b45fef292a6f`
 (P14-A code `c44904bb4b0a066eced1d7e8a773b7dc1eea76c0`); current P14
 canonical State/Brief `4caecbbfb0464c965811402b3c11d8717605114a` is a docs-only
-update; P18 code tip `9e790c59e14ca7f7ed195c0e6267e10f3cd039d7` (P18 State text at
-that tip is lagging on P18-D2: `ea7b3e7` is an ancestor and its legacy
-per-runtime advance lease is in code; this does not establish full P18-D
-readiness); P20 canonical/State
+update; P18 canonical code tip `9e790c59e14ca7f7ed195c0e6267e10f3cd039d7`.
+Its canonical State text at that tip is stale and still records the two P18-D
+prerequisites as missing, although code at `9e790c5` includes both the
+economy sale receipt/prepared-install capability and the legacy per-runtime
+advance lease. The reviewed P18-D technical design now permits consumer
+implementation; the pushed `707ef8a` candidate contains the P11 temporal-input
+owner, bridge, and timeline-yield component (`828bfa9`). These remain
+unpromoted components, not a complete runtime consumer or daily-profile
+adapter. P18-D is therefore not delivered; this
+does not establish a P18-integrated P12 profile. P20 canonical/State
 `7a81cc0ecbc511dd36c248ec62c7b20f7e477f53` (P20-A promoted, code
 `22df7b307528e705e6e84d1d8d54852a17cfc848`); and the current architecture
 alignments.
@@ -50,7 +58,7 @@ canonical combined composition must be revalidated before this becomes live
 profile evidence. P18-A/B/C and the additive P18-A continuation extension are present in the
 checked P18 code lineage; the
 extension was accepted under contract `2175bf2` (acceptance record `9de70ae`)
-and implemented at integration `1dd0479`. The selected legacy
+and promoted at integration `1dd0479`. The selected legacy
 `TesteSimulacao` profile still does not compose the P18 timeline, activity
 lifecycle, availability-decision services, or continuation extension. Their
 promoted code does not make that state part of this profile.
@@ -222,10 +230,13 @@ operation scopes, exports, or hydration. Keep `NpcDecisionStore` and
 is a derived view. These are not authoritative mutation owners; retain the
 shared `SimulationRecordSequence` separately as a causal scalar.
 
-P12-B remains blocked by the unpromoted P9-B/P11 composition candidate, the
-unresolved P18-D runtime ownership-window canonical gate, and missing live
-owner census/revision proofs. These are independent from the completed
-candidate-source method census.
+P12-B remains blocked by the unpromoted P9-B/P11 composition candidate and
+missing live owner census/revision proofs. The P18-D2 per-runtime advance
+lease is already promoted at P18 canonical `9e790c5`; it is not a pending
+canonical gate. P18-D consumer work still owns the `SimulationRuntime` source
+hotspot, so any P12-B implementation touching it must wait for an explicit
+handoff. These gates are independent from the completed candidate-source
+method census.
 
 `SimulationRuntime.TryAdvanceDay` and
 `TryAdvanceDays` enter `AdvanceDayAfterClockAdvance`, which advances time,
@@ -255,8 +266,9 @@ ALL EditMode 1742/1742, official Smoke 5/5, and staged/unstaged
 `git diff --check` passed. The retained result artifact available for this
 inventory is the final Smoke XML (5/5); the other Unity result XML files were
 rotated/removed by the harness. These results validate composition behavior,
-not P12 export, hydration, owner census, or readiness. Remote fetch and
-canonical promotion remain unverified; keep P12-A at `WAIT_DEPENDENCY`.
+not P12 export, hydration, owner census, or readiness. Current remote refs were
+refreshed on 2026-09-28; `af656e7` remains unpromoted, so keep P12-A at
+`WAIT_DEPENDENCY`.
 
 | Included authority group | Exact immutable export | Staged hydration | Concrete gap blocking P12-A |
 |---|---|---|---|
@@ -293,11 +305,11 @@ legacy economy producer and do not make P14-A material-flow state present.
 P18 intraday state, P19 module state, P20 shared activities, P13 historical
 reconstruction/fork guarantees, and generated P9/P10 content remain outside
 P12-A. P18-A/B/C and the additive P18-A continuation extension are present in
-the checked P18 code lineage; the checked P18 State text is lagging on P18-D2.
-P18-D remains not implementation-ready pending the economy operation receipt
-and serialized chronological `SimulationRuntime` ownership window. The narrow
-P18-D2 legacy advance lease exists in checked code, but does not satisfy those
-full P18-D gates. The selected bootstrap does
+the checked P18 code lineage. The P18-D prerequisite code is also present at
+`9e790c5`, while the canonical State still contains the older pending-gate
+wording. P18-D consumer work has only an unpromoted bridge/timeline-yield
+component candidate (`707ef8a`); the `SimulationRuntime` consumer and the
+approved daily-boundary owner seams remain undelivered. The selected bootstrap does
 not compose the P18 timeline, activity/availability runtime, continuation
 extension, or intraday state; no P18 state is claimed. P20-A is promoted at
 current P20 canonical/State `7a81cc0`,
@@ -339,5 +351,5 @@ them. P19 loader/module-state support and explicit retrofit remain deferred and
 are not required for this official profile. P20 remains conditional: if a later
 profile includes shared activities, retain a stable `ActivityInstanceId`
 independent of `PersonId`, activity definition, and participant identity. The
-architecture's one-or-more cardinality applies; the proposed P20-A exactly-two
+architecture's one-or-more cardinality applies; the promoted P20-A exactly-two
 Person fixture is not a universal rule.

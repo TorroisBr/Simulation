@@ -10,23 +10,28 @@ P12-B implementation.
 
 **Current-base revalidation:** P18 code was checked at
 `9e790c59e14ca7f7ed195c0e6267e10f3cd039d7`; P18 State text at that tip still
-contains lagging P18-D2 pending-promotion wording. The code contains the
-per-runtime legacy advance lease from `ea7b3e7` (an ancestor of the checked
-tip). This does not establish P18-D completion/readiness. P9/P11 composition
+contains stale pending-promotion wording for both bounded P18-D prerequisites.
+The code at `9e790c5` contains the per-runtime legacy advance lease and the
+economy sale receipt/prepared-install capability. The reviewed P18-D consumer
+design is now implementation-ready, but the consumer is not complete: the
+unpromoted `707ef8a` candidate contains the P11 temporal-input owner, bridge,
+and timeline-yield component (`828bfa9`); runtime composition and the full
+day-boundary owner seams remain outstanding. This does
+not make the P12 daily profile depend on P18. P9/P11 composition
 was checked against validated but unpromoted two-parent candidate
 `af656e7710fce0ba171fae1d6684331d2dc0b743`; this is not canonical live
 composition evidence. The intraday alignment is `4b6dd1d38cffeaf3cc1ac3effea0f8ede8771194`; the
 multi-participant alignment is `c285466c355103d3637ac165246591b72eb7bda0`.
 Both were checked for temporal and participant identity boundaries. P12-A blockers remain in force.
 
-**Canonical references checked from available local refs (no remote fetch was
-performed):** architecture
+**Canonical references checked after refreshing all remotes on 2026-09-28:** architecture
 `c285466c355103d3637ac165246591b72eb7bda0`; P8 `470667d37863384edadb3d93ef64d8004aff46a3`;
 P9 `82396ae7ffaf407fda278928da456b06dc5394d4` (P9-B code integration
 `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf`); P11
-`308e24d0744112e8f2b741521b8b3e4acb51ebbf`; P14
-`4caecbbfb0464c965811402b3c11d8717605114a`; P18 code `9e790c59e14ca7f7ed195c0e6267e10f3cd039d7` (State wording at this tip
-is explicitly lagging for P18-D2); P20
+`308e24d0744112e8f2b741521b8b3e4acb51ebbf` (P11 code `0cd4281`); P14
+`4caecbbfb0464c965811402b3c11d8717605114a`; P18 code
+`9e790c59e14ca7f7ed195c0e6267e10f3cd039d7` (canonical State wording at
+this tip is stale for both prerequisite promotions); P20
 `7a81cc0ecbc511dd36c248ec62c7b20f7e477f53`; and both current architecture
 alignment records. The P12 planning base is `36618a8`; P12-A remains
 `WAIT_DEPENDENCY` and P12-C through P12-G remain downstream.
@@ -68,7 +73,7 @@ P9-B/P11 combined profile.
 
 **Completed candidate audit, not canonical live evidence:** P9-B
 authored-geography code `00395ef` runs the P9 genesis path, while P11 code
-`0803670` composes `ActorChoiceStore` without P9 genesis; neither is an ancestor
+`0cd4281` composes `ActorChoiceStore` without P9 genesis; neither is an ancestor
 of the other, and their common base is P8 canonical `470667d`. The additive
 application-level composition candidate
 `af656e7710fce0ba171fae1d6684331d2dc0b743` combines those capabilities and
@@ -355,9 +360,10 @@ reads do not invalidate a token.
 ## 5. P18-D2 shared `SimulationRuntime` hotspot
 
 P18-D2 technical design review passed at `6f82bf4`; implementation `ea7b3e7`
-is present in checked P18 code `9e790c5` (ancestor verified). The checked P18
-State text remains lagging and describes promotion as pending; this refresh
-distinguishes status wording from code evidence. The per-runtime non-reentrant
+and the economy receipt/prepared-install prerequisite are present in checked
+P18 code `9e790c5`. The checked P18 State text still describes these
+promotions as pending; this refresh distinguishes status wording from code
+evidence. The per-runtime non-reentrant
 lease around the currently composed legacy `TryAdvanceDay` and
 `TryAdvanceDays` APIs and the narrow future owner seam. It does not compose the
 P18 timeline, boundary chronology, subphases, or successful P18-C handoff;
@@ -419,16 +425,18 @@ create a new semantic dependency from P12 to P18 or claim full P18-D chronologic
 Integration sequence:
 
 1. Exact candidate `af656e7710fce0ba171fae1d6684331d2dc0b743` and its selected provider graph have passed code review,
-   validation, and a local owner/profile audit recorded at `99739fd`. The
-   candidate remains unpromoted, and no remote fetch was performed; obtain
-   current canonical composition evidence and a final live profile/owner
-   census before finalizing the admission manifest or claiming P12-B readiness.
-2. P18-D2 implementation `ea7b3e7` is present in checked P18 code
-   `9e790c59e14ca7f7ed195c0e6267e10f3cd039d7`; the P18 State wording is
-   lagging. Verify code ancestry and obtain explicit exclusive
-   `SimulationRuntime` hotspot handoff before P12-B touches the runtime. Then
-   revalidate P12-B seams against that API before opening the P12-B runtime
-   owner window.
+   validation, and a local owner/profile audit recorded at `99739fd`. After
+   refreshing remote refs on 2026-09-28, the candidate remains unpromoted and
+   the canonical P9/P11 code tips remain separate. Obtain current canonical
+   combined-composition evidence and a complete live profile/owner census
+   before finalizing the admission manifest or claiming P12-B readiness.
+2. The P18 sale receipt/prepared install and D2 legacy advance lease are both
+   present in checked P18 code `9e790c59e14ca7f7ed195c0e6267e10f3cd039d7`;
+   the P18 State wording is stale about these promotions. The unpromoted P18-D
+   bridge candidate `707ef8a` does not change P12's daily profile scope. Obtain
+   explicit exclusive `SimulationRuntime` hotspot handoff before P12-B touches
+   the runtime, then revalidate P12-B seams against that API before opening
+   the P12-B runtime owner window.
 3. Implement immutable admission values/source and rejection behavior without
    serializing owner state. Implement the runtime boundary/token hook using
    the single D2 lease contract. Instrument mutation paths only after the

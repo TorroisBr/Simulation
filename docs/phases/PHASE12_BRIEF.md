@@ -48,8 +48,12 @@ owner idempotency/effect state. Preserve sealed external inputs with target
 `LogicalTick`, accepted sequence/order, and boundary state. Include promoted P18-B activity instance,
 lifecycle/revision/receipt, participant commitments and availability facts, and
 P18-C PersonId-keyed decision/attempt state only when the selected consumer
-composes them. P18-A/B/C are promoted; P18-D is still blocked and legacy daily
-execution remains authoritative until a selected consumer migrates. A day value
+composes them. P18-A/B/C and the additive P18-A continuation extension are
+promoted. The P18-D receipt/prepared-install and legacy advance-lease
+prerequisites are promoted in code at `9e790c5`, although the canonical P18
+State still carries stale pending-prerequisite wording; the consumer runtime
+and daily-boundary adapter remain incomplete. Legacy daily execution remains
+authoritative until a selected consumer migrates. A day value
 alone cannot stand in for these facts, and the bounded daily profile does not
 depend on P18-D.
 
