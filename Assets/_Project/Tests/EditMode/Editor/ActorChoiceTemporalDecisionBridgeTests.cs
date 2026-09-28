@@ -99,6 +99,50 @@ public sealed class ActorChoiceTemporalDecisionBridgeTests
         Assert.That(observed.BoundarySequence, Is.Not.EqualTo(later.TemporalCapture.AcceptedInput.Sequence));
     }
 
+    [Test]
+    public void RejectsRequestBoundReceiptForDifferentActor()
+    {
+        ActorChoiceStore choices = new ActorChoiceStore(new PersonStore());
+        ActorChoiceInput input = Capture(choices, "mismatched-actor", new PersonId("person-a"), 4L, 5L);
+        ActorDecisionRequestState requests = new ActorDecisionRequestState();
+        Assert.That(requests.TryBindInput("wrong-actor", input.InputId.Value, new PersonId("person-b"),
+            input.TemporalCapture.TargetInstant, ProfileId, input.InputSequence,
+            input.TemporalCapture.AcceptedInput.InputId, 0L, out _), Is.True);
+        ActorChoiceTemporalDecisionBridge bridge = new ActorChoiceTemporalDecisionBridge(choices, requests, ProfileId);
+
+        Assert.That(bridge.AfterSuccessfulAdvance(input.TemporalCapture.TargetInstant,
+            out _, out string failure), Is.False);
+        Assert.That(failure, Is.EqualTo("P18-C request receipt did not reconstruct its exact request identity."));
+    }
+
+    [Test]
+    public void RejectsRequestBoundReceiptWithWrongProfileOrTargetInstant()
+    {
+        ActorChoiceStore choices = new ActorChoiceStore(new PersonStore());
+        ActorChoiceInput input = Capture(choices, "mismatched-profile", new PersonId("person-a"), 7L, 5L);
+        ActorDecisionRequestState requests = new ActorDecisionRequestState();
+        Assert.That(requests.TryBindInput("wrong-profile", input.InputId.Value, input.PersonId,
+            input.TemporalCapture.TargetInstant, "other-profile", input.InputSequence,
+            input.TemporalCapture.AcceptedInput.InputId, 0L, out _), Is.True);
+        ActorChoiceTemporalDecisionBridge bridge = new ActorChoiceTemporalDecisionBridge(choices, requests, ProfileId);
+
+        Assert.That(bridge.AfterSuccessfulAdvance(input.TemporalCapture.TargetInstant,
+            out _, out string failure), Is.False);
+        Assert.That(failure, Is.EqualTo("P18-C request receipt did not reconstruct its exact request identity."));
+
+        choices = new ActorChoiceStore(new PersonStore());
+        input = Capture(choices, "mismatched-instant", new PersonId("person-a"), 8L, 5L);
+        requests = new ActorDecisionRequestState();
+        Assert.That(requests.TryBindInput("wrong-instant", input.InputId.Value, input.PersonId,
+            new LogicalTick(6L), ProfileId, input.InputSequence,
+            input.TemporalCapture.AcceptedInput.InputId, 0L, out _), Is.True);
+        bridge = new ActorChoiceTemporalDecisionBridge(choices, requests, ProfileId);
+
+        Assert.That(bridge.AfterSuccessfulAdvance(new LogicalTick(6L),
+            out _, out failure), Is.False);
+        Assert.That(failure, Is.EqualTo("P18-C request receipt did not reconstruct its exact request identity."));
+    }
+
     private static ActorChoiceInput Capture(ActorChoiceStore store, string suffix, PersonId actor,
         long timelineSequence, long targetTick)
     {
