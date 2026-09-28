@@ -174,8 +174,10 @@ Local observation descriptors preserve the effective runtime roster. `Simulation
 
 Commercial sharing freezes the eligible merchant membership from the current
 runtime roster, then preserves the existing `CompareMerchants` order (current
-location runtime ID followed by `NpcRuntimeId`), location-group order, and
-deterministic day rotation/pairing. The owner captures each sender's shareable
+location runtime ID followed by `NpcRuntimeId`), groups contiguous merchants
+by `CurrentCity` object identity in that order, and applies the existing
+`AbsoluteDay % groupCount` rotation with wrapped adjacent pairs within each
+group. The owner captures each sender's shareable
 observations after the preceding local-observation steps commit. Each directed
 transfer is a recipient-owned operation whose receipt identifies the boundary
 occurrence, sender and receiver `NpcRuntimeId` values (with backing `PersonId`
