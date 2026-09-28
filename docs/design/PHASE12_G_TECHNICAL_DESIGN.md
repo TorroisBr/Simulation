@@ -11,11 +11,12 @@ which the original G proposal was authored; it is not the current governing
 input set.
 
 **Current governing inputs (2026-09-28):** accepted decomposition at
-`7585863`; owner inventory `012e04b` (reviewed evidence map, not live census);
-P12-B current-evidence design refresh `d0761ce` (exact review pending); P12-C
-refreshed design `a2ac5d2` (independent review PASS); P12-D `dd81634` and
-P12-E `ca8e968` (evidence-reference reviews PASS); and P12-F evidence refresh
-`ab0393b` (exact review pending). Review evidence for these inputs and this
+`7585863` with reference refresh `a2ac5d2`; owner inventory `012e04b`
+(reviewed evidence map, not live census); P12-B current-evidence design
+refresh `d0761ce` (independent review PASS); P12-C refreshed design `a2ac5d2`
+(independent review PASS); P12-D `dd81634` and P12-E `ca8e968`
+(evidence-reference reviews PASS); and P12-F evidence refresh `ab0393b`
+(independent review PASS). Review evidence for these inputs and this
 proposal is tracked in independent checkpoint/review records, not inferred
 from this traceability ledger. These are design artifacts, not proof that the
 corresponding capabilities have been delivered; revalidate hashes and owner
