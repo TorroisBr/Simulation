@@ -16,8 +16,12 @@ P8 `470667d37863384edadb3d93ef64d8004aff46a3`; P9 State/closure
 `ba8076c3bc2c8c354a8755e6efaca30bfeab7bf7`; and the intraday/extensibility
 and multi-participant activity alignment records. The proposed P9-B/P11 additive
 composition is candidate `af656e7710fce0ba171fae1d6684331d2dc0b743`, not
-canonical. Its independent code review passed, but the live owner/profile
-inventory refresh remains outstanding.
+canonical. Its independent code review passed. The refreshed P12 owner/profile
+inventory `ba6f79fb87e851316be84d4f2a89d94186b8f802` completes a local audit of
+that exact candidate's selected composition and configured providers, and
+records its selected-profile validation results. The audit did not fetch
+remote refs, and this candidate is still unpromoted; it is candidate-based
+composition evidence, not canonical live-composition evidence for P12-A.
 
 P12-C is accepted as prerequisite capability work under the P12 Brief and
 capability decomposition. Its dependency is the reviewed P12-B profile
@@ -159,14 +163,23 @@ cursor to serialize. By contrast, `CreateStream(streamKey)` returns a
 Any retained stream cursor that can affect future supported execution is
 causal state and must be included with exact stream key and draw index.
 
-The available source search found both keyed consumers and consumers that
-create mutable streams. It has not yet proved the exhaustive set of stream
-instances retained by every provider in the exact P9-B/P11 composition, their
-lifetime/ownership, or whether any are reachable at a supported completed-day
-capture boundary. The current random API has no source-level registry that can
-enumerate all live streams. Therefore this design does **not** declare
-seed-only capture sufficient, does not claim a complete stream inventory, and
-does not authorize adding a speculative global random-stream registry.
+The refreshed candidate inventory identifies the selected configured provider
+graph: legacy travel, travel-party, expedition, scheduled-directive, justice,
+and NPC-decision systems are composed; the selected effective configuration
+also enables merchant trade/commercial Knowledge sharing, crime infrastructure
+and its action provider, guard action provider, and CityRuntime economy work.
+Natural mortality and aggregate demography are disabled by the selected
+asset's default overrides. The fixed-seed toggle is false, so this bootstrap
+constructs `DeterministicRandomSource(0)`; the serialized seed field alone is
+not a representation of live stream cursors. This exact provider-composition
+audit improves the source basis but does not finish the P12-C RNG section: it
+has not proved the exhaustive set of mutable stream instances retained by
+those consumers, their lifetime/ownership, or whether any cursor remains
+causally live at an eligible completed-day boundary. The random API has no
+source-level registry that enumerates all live streams. Therefore this design
+does **not** declare seed-only capture sufficient, does not claim complete
+draw-state coverage, and does not authorize adding a speculative global
+random-stream registry.
 
 Before implementation closes this section, the live owner inventory must map
 each actual random consumer in the validated profile to one of:
@@ -188,14 +201,19 @@ an evidence gap, not a product or architecture choice.
 
 ## 4. Composition and dependency order
 
-The P12-B review identifies P9-B bootstrap and P11 ActorChoice composition as
-historically separate code lines. The additive candidate
-`af656e7710fce0ba171fae1d6684331d2dc0b743` is a plausible composition and has
-independent code review, but is not canonical, and the live profile/provider
-inventory refresh remains outstanding. P12-C implementation must use the
-eventual validated exact composition. It must not treat either P9-B or P11 in
-isolation, nor this unpromoted candidate, as proof that the supported runtime
-is complete.
+P9-B bootstrap and P11 ActorChoice were historically separate code lines. The
+additive candidate `af656e7710fce0ba171fae1d6684331d2dc0b743` has independent
+code review, and refreshed inventory `ba6f79fb87e851316be84d4f2a89d94186b8f802`
+audits its exact merged composition and selected provider graph. The inventory
+records bootstrap 14/14, ActorChoice 24/24, Spatial 99/99, ALL EditMode
+1742/1742, official Smoke 5/5, and `git diff --check` passing on the exact
+candidate; only the final Smoke XML remains available as a retained result
+artifact. These results validate composition behavior, not P12 owner exports,
+hydration, random draw-state coverage, or profile readiness. No remote fetch
+was performed for the inventory, and the composition candidate is not
+promoted. P12-C implementation must target the exact composition only after
+the applicable current-source evidence is refreshed; it must not treat
+P9-B or P11 in isolation as the supported runtime.
 
 Dependency order within P12-C:
 
@@ -271,18 +289,20 @@ no test claim and contains no code change.
 |---|---|---|
 | `RuntimeIdentity.cs` | `RuntimeIdAllocator` counters are private; `RuntimeIdentityRegistry` validates uniqueness across runtime types. | Add owner snapshot/private construction seam; keep registries/derived indexes rebuildable and separate from IDs. |
 | `DecisionRecords.cs`, `DomainEvents.cs`, `TesteSimulacao.cs` | One `SimulationRecordSequence` is injected into decision and domain-event recorders in the selected bootstrap. | Census every owner sharing it; export its exact next value once, not independently per recorder. |
-| `DeterministicRandom.cs` and injected systems | Pure keyed draws coexist with mutable streams; selected provider/consumer retention was not exhaustively mapped. | **Blocker:** complete exact-composition consumer and live-cursor census. Do not infer seed-only sufficiency. |
+| `DeterministicRandom.cs` and injected systems | Inventory `ba6f79f` establishes the selected provider graph and seed construction for candidate `af656e7`; retained mutable stream/cursor ownership remains unproven. | **Blocker:** exhaustive live-cursor/draw-state census and exact next-draw restoration contract. Do not infer seed-only sufficiency. |
 | P9 genesis pipeline/manifest | P9 pipeline creates and publishes the selected authored manifest/outputs. | Preserve generated output as history; never rerun genesis on hydration. |
 | P8 `SpatialAuthorityStore` | Owns typed Hex/Location truth and authored geography provenance. | Capture exactly the accepted P8-A facts; never infer these from legacy spatial objects. |
-| P12-B / composition manifest | Owns profile compatibility and section census; composition candidate remains unpromoted. | **Blocker:** complete live inventory on the validated exact P9-B/P11 composition and accepted P12-B contract. |
+| P12-B / composition manifest | Owns profile compatibility and section census. Candidate inventory `ba6f79f` audits the exact P9-B/P11 merge and its selected provider graph, but that composition remains unpromoted and remote refs were not fetched. | **Blocker:** apply the accepted/reviewed P12-B contract and obtain current canonical live-composition evidence plus final profile-specific section census before P12-A; this candidate audit alone does not establish canonical P12-A readiness. |
 | P12-G | Owns whole-graph validation and publication. | P12-C stages remain private; no active-runtime mutation/publication. |
 
 No P12-C implementation starts until this design passes independent review,
-the current P12-B contract/composition inventory confirms the exact owner set,
-and the deterministic-root coverage blocker is resolved. The accepted P12-B
-through P12-G scopes authorize prerequisite capability work, but do not waive
-this checkpoint's evidence requirements or P12-A's separate implementation
-gate.
+the accepted/reviewed P12-B dependency contract is applied to the exact
+supported source, and the deterministic-root coverage blocker is resolved.
+Candidate composition/provider auditing is complete at `ba6f79f`, but
+canonical live-composition evidence and P12-A's separate implementation
+authorization remain outstanding. The accepted P12-B through P12-G scopes
+authorize prerequisite capability work; they do not waive this checkpoint's
+evidence requirements or P12-A's separate implementation gate.
 
 ## 8. Explicit exclusions
 
