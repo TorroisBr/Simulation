@@ -62,6 +62,7 @@ source, cardinality, and one of these composition states:
 | Required | Section must be present with its exact schema and owner identity. Zero records are valid only when represented as an explicit empty section. |
 | Explicitly empty | Section must be represented as empty in the profile contract, and every composed owner covered by that section must report an authoritative zero cardinality. A nonempty or unverified owner rejects. |
 | Excluded | No serialized payload/section for this state is admitted. A composed owner that B and the profile matrix allow may exist only when the live inventory authoritatively proves exact zero cardinality; populated or unverified state rejects. G never drops state. |
+| `OmittedNonCausalReadModel` | The live census identifies a non-authoritative read-model owner whose rows are not continuation inputs or graph-reference targets. Its known populated rows may be omitted without serialization or hydration; absence of this payload does not imply the owner is empty. |
 | Conditional | B's current provider/composition inventory resolves it to required, explicitly empty, or excluded before allocation. Unresolved conditional coverage rejects admission. |
 
 For this profile, the required set is exactly the reviewed B-F owner set:
@@ -93,13 +94,26 @@ empty/excluded/prohibited matrix must be refreshed from the live owner
 inventory before implementation; these examples do not substitute for that
 evidence.
 
-Every section must include explicit owner identity, schema/version, revision,
-and cardinality, including zero. Unknown, omitted, duplicate, or mismatched
-owner declarations are not interpreted as empty. Required and explicitly
-empty sections cannot be synthesized from defaults. A known-empty composed
-owner is not itself incompatible when B and the profile matrix permit it, but
-G still emits no excluded-state payload. No section may be silently discarded
-because the current bootstrap happens not to populate it.
+The refreshed B owner census also classifies `NpcDecisionStore` and
+`DomainEventStore` rows as `OmittedNonCausalReadModel`: they may be populated
+at capture, but have no P12-G payload or staged hydration and are not foreign-
+key targets in the authoritative owner graph. `HistoryStore` is a subset of
+the event records; `NpcChronicle` is derived. Neither changes this omission
+rule. The live inventory must still identify these known owners and their
+classification; unknown owner coverage is not treated as an omitted read
+model. History retention, event replay, and UI-feed parity are outside this
+continuation contract.
+
+Every serialized owner section must include explicit owner identity,
+schema/version, revision, and cardinality, including zero. The admission
+census separately identifies every composed owner and its classification;
+`OmittedNonCausalReadModel` entries also report their observed cardinality,
+which may be nonzero, without becoming serialized sections. Unknown, omitted,
+duplicate, or mismatched owner declarations are not interpreted as empty.
+Required and explicitly empty sections cannot be synthesized from defaults. A
+known-empty composed owner is not itself incompatible when B and the profile
+matrix permit it, but G emits no excluded-state payload. No section may be
+silently discarded because the current bootstrap happens not to populate it.
 
 ## 3. Staged composition protocol
 
@@ -180,6 +194,11 @@ invariants:
   participant cardinality; the P20 two-Person proving fixture is not a global
   cardinality constraint. P20 activity facts remain excluded from this daily
   profile.
+* `ActorChoiceStore`'s `DecisionRecordId` and active
+  `OriginDecisionId` string values are preserved as opaque owner values. They
+  are not graph foreign keys: G does not require a matching
+  `NpcDecisionStore`/decision-history row, resolve them to a target, or reject
+  them because such a read-model row is omitted.
 * Required owners must be present. Explicitly empty owners must report zero;
   excluded state has no serialized payload and any permitted composed owner
   must report authoritative zero cardinality. Prohibited compositions reject
@@ -234,8 +253,9 @@ P12-G implementation evidence must demonstrate:
 1. **Section and compatibility matrix:** successful admission for the exact
    supported profile and explicit empty sections; rejection for each missing
    required owner, absent-as-empty substitution, unknown or duplicate section,
-   populated excluded authority, unresolved conditional owner, unsupported
-   build/numeric/content/provider/config/calendar/P9/P8 identity, invalid
+   populated or unverified excluded authority, unresolved conditional owner,
+   and the permitted presence of populated `OmittedNonCausalReadModel` rows
+   without payload; unsupported build/numeric/content/provider/config/calendar/P9/P8 identity, invalid
    digest, or incomplete live inventory. Admission rejection occurs before
    runtime-domain object allocation.
 2. **Ordered staged round trip:** empty and evolved/populated profile fixtures
@@ -257,14 +277,19 @@ P12-G implementation evidence must demonstrate:
    dispositions are retained; pending states reject. Directives and active
    commitments hydrate as data with no dispatch, retry, planning, charge,
    movement, consumption, or effect. Verify first subsequent normal domain
-   operation produces the same result as an uninterrupted runtime.
+   operation produces the same result as an uninterrupted runtime. Preserve
+   `DecisionRecordId` and `OriginDecisionId` strings opaquely without lookup
+   into omitted decision/history rows.
 6. **Continuation parity:** from the same successful daily boundary, run the
    uninterrupted and restored runtime with identical future inputs. Compare
    each included authoritative owner section, relations, commitments,
    allocator/sequence, random-dependent outcomes and owner revisions over
-   multiple subsequent boundaries. Diagnostic snapshots/digests are
-   supplemental comparators only after field coverage is mapped; they are not
-   export or hydration evidence.
+   multiple subsequent boundaries. Compare the included authoritative graph
+   and future authoritative results, not `NpcDecisionStore`, `DomainEventStore`,
+   `HistoryStore`, or `NpcChronicle` rows and not history/UI-feed parity.
+   Diagnostic snapshots/digests are supplemental comparators only after their
+   coverage of included truth is mapped; they are not export or hydration
+   evidence.
 7. **Regression gates:** run all domain suites affected by B-F/G, relevant
    Phase 5–8 regressions, ALL EditMode, complete official Smoke, and
    `git diff --check` before any implementation candidate promotion. Run
