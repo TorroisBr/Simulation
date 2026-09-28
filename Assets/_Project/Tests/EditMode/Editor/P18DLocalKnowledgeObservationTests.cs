@@ -49,9 +49,14 @@ public sealed class P18DLocalKnowledgeObservationTests
         Assert.That(observed.ObservedDay, Is.EqualTo(1L));
         float observedPrice = observed.ObservedPrice;
         long knowledgeRevision = merchant.CommercialKnowledge.Revision;
+        long spatialRevision = merchant.SpatialKnowledge.Revision;
 
         item.basePrice += 15f;
         city.UpdateMarketPrices();
+        Assert.That(prepared.TryCommit(out failure), Is.True, failure.ToString());
+        Assert.That(merchant.CommercialKnowledge.Revision, Is.EqualTo(knowledgeRevision));
+        Assert.That(merchant.SpatialKnowledge.Revision, Is.EqualTo(spatialRevision));
+
         Assert.That(provider.TryPrepareStep(manifest, steps[0],
             out IBoundaryContinuationStepCommit replay, out failure), Is.True);
         Assert.That(replay.TryCommit(out failure), Is.True, failure.ToString());
@@ -60,6 +65,36 @@ public sealed class P18DLocalKnowledgeObservationTests
         Assert.That(replayed.ObservedStock, Is.EqualTo(7));
         Assert.That(replayed.ObservedPrice, Is.EqualTo(observedPrice));
         Assert.That(merchant.CommercialKnowledge.Revision, Is.EqualTo(knowledgeRevision));
+        Assert.That(merchant.SpatialKnowledge.Revision, Is.EqualTo(spatialRevision));
+    }
+
+    [Test]
+    public void ActorStepRejectsSynthesizedDescriptorEvenWhenManifestContainsIt()
+    {
+        CityRuntime city = SimulationTestFactory.CreateCity("p18d-local-synthesized-city",
+            "p18d-local-synthesized-location");
+        NpcRuntime actor = new NpcRuntime("p18d-local-synthesized-actor",
+            SimulationTestFactory.CreateNpc("p18d-local-synthesized-actor"), city, 0f);
+        NpcLocalKnowledgeDailyBoundaryStepProvider provider =
+            new NpcLocalKnowledgeDailyBoundaryStepProvider(() => new[] { actor }, false);
+        DailyBoundaryOperation operation = new DailyBoundaryOperation("world", "intraday", 4L);
+
+        Assert.That(provider.TryCreateSteps(operation, 0,
+            out IReadOnlyList<BoundaryContinuationStep> frozenSteps, out TimelineFailure failure), Is.True);
+        BoundaryContinuationStep frozen = frozenSteps[0];
+        BoundaryContinuationStep synthesized = new BoundaryContinuationStep(
+            frozen.Ordinal, frozen.StepId, frozen.OwnerId, frozen.OperationKind,
+            frozen.OperationVersion, frozen.OwnerRevision, frozen.Payload,
+            frozen.PersonId, frozen.Disposition);
+        BoundaryContinuationManifest manifest = new BoundaryContinuationManifest(
+            operation, "daily-boundary", "1", "configuration", new[] { synthesized });
+
+        Assert.That(provider.TryPrepareStep(manifest, synthesized,
+            out IBoundaryContinuationStepCommit _, out failure), Is.False);
+        Assert.That(failure, Is.EqualTo(TimelineFailure.ContinuationFailed));
+        Assert.That(actor.SpatialKnowledge.Revision, Is.Zero);
+        Assert.That(actor.CommercialKnowledge.Revision, Is.Zero);
+        Assert.That(actor.SpatialKnowledge.KnowsLocation(city.Location.RuntimeId), Is.False);
     }
 
     [Test]

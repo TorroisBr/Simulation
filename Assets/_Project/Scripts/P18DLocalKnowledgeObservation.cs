@@ -88,6 +88,7 @@ public sealed class NpcLocalKnowledgeDailyBoundaryStepProvider : IP18DDailyBound
     {
         prepared = null;
         if (manifest == null || manifest.BoundaryOccurrenceId != activeOccurrenceId
+            || !IsExactManifestStep(manifest, step)
             || !OwnsStep(step) || !activeActors.TryGetValue(step.StepId, out NpcRuntime actor))
         {
             failure = TimelineFailure.ContinuationFailed;
@@ -106,6 +107,22 @@ public sealed class NpcLocalKnowledgeDailyBoundaryStepProvider : IP18DDailyBound
         return actor.LocalKnowledgeObservationRuntime.TryPrepareStep(
             actor, manifest, step, includeMerchantKnowledge,
             out prepared, out failure);
+    }
+
+    private bool IsExactManifestStep(BoundaryContinuationManifest manifest,
+        BoundaryContinuationStep step)
+    {
+        if (manifest == null || step == null || step.Ordinal < 0
+            || step.Ordinal >= manifest.Steps.Count
+            || !ReferenceEquals(manifest.Steps[step.Ordinal], step)
+            || activeSteps == null) return false;
+
+        for (int i = 0; i < activeSteps.Count; i++)
+        {
+            BoundaryContinuationStep frozen = activeSteps[i];
+            if (frozen.Ordinal == step.Ordinal) return ReferenceEquals(frozen, step);
+        }
+        return false;
     }
 
     private static string CreateStepId(string runtimeId) =>
@@ -162,6 +179,7 @@ public sealed class NpcLocalKnowledgeObservationRuntime
         prepared = null;
         failure = TimelineFailure.ContinuationFailed;
         if (actor == null || manifest == null || step == null
+            || !IsExactManifestStep(manifest, step)
             || actor.RuntimeId != step.OwnerId
             || step.OperationKind != OperationKind
             || step.OperationVersion != OperationVersion
@@ -204,6 +222,11 @@ public sealed class NpcLocalKnowledgeObservationRuntime
         return true;
     }
 
+    private static bool IsExactManifestStep(BoundaryContinuationManifest manifest,
+        BoundaryContinuationStep step) => manifest != null && step != null
+        && step.Ordinal >= 0 && step.Ordinal < manifest.Steps.Count
+        && ReferenceEquals(manifest.Steps[step.Ordinal], step);
+
     internal bool TryGetReceipt(string operationIdentity,
         out NpcLocalKnowledgeObservationReceipt receipt)
     {
@@ -223,18 +246,18 @@ public sealed class NpcLocalKnowledgeObservationRuntime
     {
         failure = TimelineFailure.ContinuationFailed;
         if (commit == null || commit.Owner != this) return false;
-        if (commit.IsReplay)
+        if (TryGetReceipt(commit.Receipt.OperationIdentity,
+                out NpcLocalKnowledgeObservationReceipt retained))
         {
-            if (TryGetReceipt(commit.Receipt.OperationIdentity,
-                    out NpcLocalKnowledgeObservationReceipt existing)
-                && existing.DescriptorFingerprint == commit.Receipt.DescriptorFingerprint
-                && existing.SnapshotFingerprint == commit.Receipt.SnapshotFingerprint)
+            if (retained.DescriptorFingerprint == commit.Receipt.DescriptorFingerprint
+                && retained.SnapshotFingerprint == commit.Receipt.SnapshotFingerprint)
             {
                 failure = TimelineFailure.None;
                 return true;
             }
             return false;
         }
+        if (commit.IsReplay) return false;
 
         NpcRuntime actor = commit.Actor;
         if (actor == null || revision != commit.ExpectedOwnerRevision
