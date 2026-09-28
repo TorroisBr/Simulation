@@ -1,9 +1,10 @@
 # P12-F — Knowledge, Directives, Actor Choices, and Active Commitments
 
-**Status:** Documentation-only technical proposal for independent exact-tip
-review. This file defines no implementation readiness and does not deliver
-owner export or staged hydration. P12-A remains `WAIT_DEPENDENCY`; its separate
-profile implementation authorization remains outstanding.
+**Status:** Documentation-only design exact-tip review PASS at
+`c8d3569bf1190c926f04dc48c1f37915a8af9597`. This design does not deliver a
+capability, owner export, or staged hydration and establishes no implementation
+readiness. P12-A remains `WAIT_DEPENDENCY`; its separate profile
+implementation authorization remains outstanding.
 
 **Design base:** P12 planning commit `4c384ab916b44e4df8eb576fb98a88c3fac526b2`.
 The proposal follows the accepted P12-B–G decomposition and P12-A
@@ -12,13 +13,13 @@ P12-D factual roots, and P12-E selected core/daily owners are prerequisites to
 F. Their designs are inputs, not evidence that their capabilities have been
 implemented or promoted.
 
-**Related reviewed design inputs:** P12-C refresh
-`f30a73fd7d88721dcb1774e8f6615d59fd70c671` (owner census
-`99739fd0d190cd61acda8d3c91b25acab7405379`; independent review pending at
-proposal time); P12-D `796eadc1a0bd6b44b646f27f5eeb63de71f6b14`; P12-E
-`51718c7bd38e9582433d1fa38ff4011ef9cf20c5`. P12-C/D/E design review passes
-do not substitute for delivery of those capabilities. The design also applies
-the current intraday/extensibility and multi-participant alignment records:
+**Related reviewed design inputs:** P12-B design/inventory reconciliation
+`45e6be83fc40a1b78908aa79500e46e64532ac4b`; P12-C corrected design
+`ceb37049ddbe54602063ba92a92cceafdce50096` (independent review PASS); P12-D
+`796eadc1a0bd6b44b646f27f5eeb63de71f6b14`; and P12-E
+`51718c7bd38e9582433d1fa38ff4011ef9cf20c5`. P12-B/C/D/E design review
+passes do not substitute for delivery of those capabilities. The design also
+applies the current intraday/extensibility and multi-participant alignment records:
 P18/P19/P20 constraints remain explicit while their state is excluded from
 this daily profile.
 
