@@ -516,6 +516,54 @@ public sealed class CrimeHiddenStatusBoundaryOwnerTests
     }
 
     [Test]
+    public void HiddenStatusSnapshotUsesPersonIdWhenPresentAndRuntimeIdFallbackWhenAbsent()
+    {
+        NpcStatusData hidden = SimulationTestFactory.CreateStatus("crime-boundary-person-hidden");
+        CrimeSystem crime = new CrimeSystem(null, null, hidden);
+        NpcRuntime npc = CreateActor("crime-boundary-person-fallback");
+        npc.HideForDays(1);
+        List<NpcRuntime> roster = new List<NpcRuntime> { npc };
+        DailyBoundaryOperation operation = new DailyBoundaryOperation("world", "intraday", 1L);
+        Assert.That(crime.TryCreateAdvanceHiddenStatusesStep(
+            operation, roster, 0, out BoundaryContinuationStep step, out _), Is.True);
+        BoundaryContinuationManifest manifest = CreateManifest(operation, step);
+        Assert.That(crime.TryPrepareAdvanceHiddenStatusesStep(
+            manifest, step, roster, out IBoundaryContinuationStepCommit prepared, out _), Is.True);
+
+        PersonId personId = new PersonId("crime-boundary-person");
+        MethodInfo assignPersonId = typeof(NpcRuntime).GetMethod("TryAssignPersonId", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(assignPersonId, Is.Not.Null);
+        Assert.That((bool)assignPersonId.Invoke(npc, new object[] { personId }), Is.True);
+
+        Assert.That(prepared.TryCommit(out TimelineFailure failure), Is.False);
+        Assert.That(failure, Is.EqualTo(TimelineFailure.ContinuationFailed));
+        Assert.That(npc.HiddenDaysRemaining, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void HiddenStatusBoundaryStepRejectsFaultedOwnerBeforeEffects()
+    {
+        NpcStatusData hidden = SimulationTestFactory.CreateStatus("crime-boundary-faulted-hidden");
+        CrimeSystem crime = new CrimeSystem(null, null, hidden);
+        NpcRuntime npc = CreateActor("crime-boundary-faulted");
+        npc.HideForDays(1);
+        List<NpcRuntime> roster = new List<NpcRuntime> { npc };
+        DailyBoundaryOperation operation = new DailyBoundaryOperation("world", "intraday", 1L);
+        Assert.That(crime.TryCreateAdvanceHiddenStatusesStep(
+            operation, roster, 0, out BoundaryContinuationStep step, out _), Is.True);
+        BoundaryContinuationManifest manifest = CreateManifest(operation, step);
+        object guard = CreateFaultedGuard();
+        MethodInfo bind = typeof(CrimeSystem).GetMethod("TryBindMutationGuard", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(bind, Is.Not.Null);
+        Assert.That((bool)bind.Invoke(crime, new[] { guard }), Is.True);
+
+        Assert.That(crime.TryPrepareAdvanceHiddenStatusesStep(
+            manifest, step, roster, out _, out TimelineFailure failure), Is.False);
+        Assert.That(failure, Is.EqualTo(TimelineFailure.ContinuationFailed));
+        Assert.That(npc.HiddenDaysRemaining, Is.EqualTo(2));
+    }
+
+    [Test]
     public void HiddenStatusBoundaryStepRejectsChangedOrderCardinalityAndMarkerSnapshot()
     {
         NpcStatusData hidden = SimulationTestFactory.CreateStatus("crime-boundary-stale-hidden");
@@ -567,7 +615,8 @@ public sealed class CrimeHiddenStatusBoundaryOwnerTests
     public void HiddenStatusBoundaryStepPreservesRepeatedRosterOccurrencesAndSingleMarkerRemoval()
     {
         NpcStatusData hidden = SimulationTestFactory.CreateStatus("crime-boundary-duplicate-hidden");
-        CrimeSystem crime = new CrimeSystem(null, null, hidden);
+        SimulationLogger logger = new SimulationLogger(null);
+        CrimeSystem crime = new CrimeSystem(null, null, hidden, logger: logger);
         NpcRuntime hiddenNpc = CreateActor("crime-boundary-duplicate-roster");
         hiddenNpc.HideForDays(1);
         hiddenNpc.AddStatus(hidden);
@@ -596,11 +645,27 @@ public sealed class CrimeHiddenStatusBoundaryOwnerTests
             nextManifest, nextStep, visibleRoster, out IBoundaryContinuationStepCommit nextPrepared, out _), Is.True);
         Assert.That(nextPrepared.TryCommit(out failure), Is.True);
         Assert.That(CountStatusReference(visibleNpc, hidden), Is.EqualTo(1));
+
+        string expiryNotice = hiddenNpc.NpcName + " nao esta mais escondido.";
+        StringAssert.Contains(expiryNotice, logger.FullLog);
+        Assert.That(logger.FullLog.IndexOf(expiryNotice, StringComparison.Ordinal),
+            Is.EqualTo(logger.FullLog.LastIndexOf(expiryNotice, StringComparison.Ordinal)));
     }
 
     private static NpcRuntime CreateActor(string identity)
     {
         return new NpcRuntime(identity, SimulationTestFactory.CreateNpc(identity + "-definition"));
+    }
+
+    private static object CreateFaultedGuard()
+    {
+        Type guardType = typeof(SimulationRuntime).Assembly.GetType("AuthoritativeMutationGuard", true);
+        object guard = Activator.CreateInstance(guardType, true);
+        Type reasonType = guardType.Assembly.GetType("AuthoritativeMutationFaultReason", true);
+        object reason = Enum.Parse(reasonType, "RollbackRestoreFailed");
+        guardType.GetMethod("MarkFaulted", BindingFlags.Instance | BindingFlags.NonPublic)
+            .Invoke(guard, new[] { reason });
+        return guard;
     }
 
     private static int CountStatusReference(NpcRuntime npc, NpcStatusData status)
