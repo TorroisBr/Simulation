@@ -18,8 +18,11 @@ P9 `82396ae7ffaf407fda278928da456b06dc5394d4` (P9-B code integration
 `7a81cc0ecbc511dd36c248ec62c7b20f7e477f53`; and both architecture
 alignment records. At the 2026-09-28 refresh, remote refs were fetched; P18
 canonical is `9e790c59e14ca7f7ed195c0e6267e10f3cd039d7`, with both P18-D
-prerequisites promoted. Consumer candidate `343bb9f` remains incomplete and
-unpromoted. The P12 planning base is `36618a8`; P12-A remains
+prerequisites promoted. The current P18-D integration candidate is
+`26e371a` on `codex/phase18/P18DSellGoodsIntegration`; it includes the
+independently reviewed economy-owner step at `bc5c9b7`, but remains incomplete,
+unvalidated as an integration, and unpromoted. It does not yet compose the
+timeline into `SimulationRuntime`. The P12 planning base is `36618a8`; P12-A remains
 `WAIT_DEPENDENCY` and P12-C through P12-G remain downstream.
 
 ## 1. Purpose and boundary
@@ -289,7 +292,7 @@ reads do not invalidate a token.
 ## 5. P18-D2 shared `SimulationRuntime` hotspot
 
 P18-D2 technical design review passed at `6f82bf4`; the lease prerequisite is
-promoted at P18 canonical `9e790c5`. P18-D consumer candidate `343bb9f` is
+promoted at P18 canonical `9e790c5`. P18-D integration candidate `26e371a` is
 retained on its feature branch and remains incomplete/unpromoted. The exclusive
 `SimulationRuntime` hotspot is currently owned by that P18-D consumer track,
 so it has not been handed off to P12. The lease scope is the per-runtime non-reentrant
@@ -365,7 +368,7 @@ candidate remains unpromoted; its original audit did not fetch remote refs.
    the admission manifest or claiming P12-B readiness.
 2. P18-D sale receipt/prepared-install and serialized advance-lease
    prerequisites are promoted at P18 canonical `9e790c5`. Consumer candidate
-   `343bb9f` remains incomplete and unpromoted and currently owns the exclusive
+   `26e371a` remains incomplete and unpromoted and currently owns the exclusive
    `SimulationRuntime` window. Require the completed consumer's independent
    review, validation, canonical promotion, and explicit hotspot handoff before
    P12-B edits that runtime; then revalidate P12-B seams against the promoted
@@ -500,7 +503,7 @@ This design is bounded to accepted P12-B scope, but P12-B is **not**
    canonical combined runtime.
 2. P18-D2's accepted lease is promoted at P18 canonical `9e790c5` and guards
    the currently composed legacy `TryAdvanceDay`/`TryAdvanceDays` calls.
-   Candidate `343bb9f` is still incomplete/unpromoted, and its P18-D consumer
+   Candidate `26e371a` is still incomplete/unpromoted, and its P18-D consumer
    implementation owns the current `SimulationRuntime` window. Completion,
    independent review/validation, canonical promotion, and explicit hotspot
    handoff remain required before P12-B edits that runtime; P18-D continues to

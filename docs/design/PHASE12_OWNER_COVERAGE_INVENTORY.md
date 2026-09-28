@@ -219,10 +219,13 @@ reconstruction/fork guarantees, and generated P9/P10 content remain outside
 P12-A. P18-A/B/C and the additive P18-A continuation extension are promoted
 at current P18 canonical `9e790c5`. P18-D's reviewed technical design
 `9ed6d90` is implementation-ready after promotion of its sale receipt and
-serialized advance-lease prerequisites. Candidate `343bb9f` is retained on
-its P18-D feature branch and is under implementation/review; it adds several
-owner seams but does not yet compose the timeline into `SimulationRuntime`
-or satisfy the daily-owner inventory. It is not promoted and does not
+serialized advance-lease prerequisites. On the 2026-09-28 refresh, P18-D
+integration candidate `26e371a` is retained on its feature branch; it includes
+the independently reviewed economy-owner step `bc5c9b7` and the corrected
+roster/sharing contract, but remains incomplete, unvalidated as an integration,
+and unpromoted. Justice, logger, and merchant owner steps remain separate
+in-progress branches; timeline composition into `SimulationRuntime` and the
+complete daily-owner inventory are still outstanding. This candidate does not
 establish P18-D delivery. The selected bootstrap does
 not compose the P18 timeline, activity/availability runtime, continuation
 extension, or intraday state; no P18 state is claimed. P20-A is promoted at
