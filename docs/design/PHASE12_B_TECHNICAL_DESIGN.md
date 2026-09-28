@@ -56,26 +56,26 @@ and constructs `SimulationRuntime`. These source facts identify where P12-B
 must obtain composition evidence; they do not by themselves prove an accepted
 P9-B/P11 combined profile.
 
-**Candidate prerequisite, not current live evidence:** the fresh source audit
-reports that P9-B authored-geography code `00395ef` runs the P9 genesis path,
-while P11 code `0cd4281` composes `ActorChoiceStore` without P9 genesis; neither
-is an ancestor of the other, and their common base is P8 canonical `470667d`.
-An additive application-level composition candidate is being validated to
-combine these two existing capabilities as the normal accepted P12 profile.
-Until that candidate and its bootstrap tests pass, no branch is evidence of a
-live combined composition and the manifest's exact required provider/section
-set cannot be finalized. This design treats the composition candidate as a
-hard dependency, not as an already delivered or promoted runtime.
+**Candidate prerequisite, not current canonical live evidence:** P9-B
+authored-geography code `00395ef` runs the P9 genesis path, while P11 code
+`0cd4281` composes `ActorChoiceStore` without P9 genesis; neither is an ancestor
+of the other, and their common base is P8 canonical `470667d`. The additive
+application-level composition candidate `af656e7` combines these existing
+capabilities and passed its bootstrap validation, but remains unpromoted. It
+therefore does not establish the canonical live combined composition or
+finalize the manifest's required provider/section set. This design retains the
+composition as a hard dependency, not as an already delivered or promoted
+runtime.
 
 The accepted P12-A profile remains unchanged. Do not conditionally accept
 either half as `UnityBootstrap-Daily-v1`, synthesize an ActorChoiceStore, omit
-P9-B provenance, or add an external `WorldCommand` queue. After candidate
-validation, refresh the live composition/provider inventory against the exact
-combined source and record whether the existing P11 store is composed. P12-A's
+P9-B provenance, or add an external `WorldCommand` queue. After promotion,
+refresh the live composition/provider inventory against the exact combined
+source and record whether the existing P11 store is composed. P12-A's
 P11 causal-state rule applies where that selected runtime composes
 ActorChoiceStore; external queue composition remains excluded. Admission must
-reject until the combined candidate is validated and its exact composition is
-known.
+reject until the combined candidate is promoted and its exact canonical
+composition is inventoried.
 
 ## 3. Admission manifest and owner boundary
 
@@ -273,8 +273,8 @@ reads do not invalidate a token.
 P18-D2 technical design review passed at `6f82bf4`; its implementation
 `ea7b3e7` and the economy receipt/prepared-install prerequisite are promoted
 at P18 canonical code tip `9e790c5`. P18-D consumer integration is active on
-the unpromoted feature candidate `a9428a3` and currently owns the shared
-runtime hotspot. D2's scope is the per-runtime non-reentrant
+the pushed but incomplete P18-D composition `6fcbfab` and currently owns the
+shared runtime hotspot. D2's scope is the per-runtime non-reentrant
 lease around the currently composed legacy `TryAdvanceDay` and
 `TryAdvanceDays` APIs and the narrow future owner seam. It does not compose the
 P18 timeline, boundary chronology, subphases, or successful P18-C handoff;
@@ -381,12 +381,13 @@ The tests below are implementation requirements, not executed results.
   a known-empty default service is not itself a rejection. Reject an ambiguous
   or incomplete owner/provider inventory rather than admitting a partial
   profile.
-- Explicitly test the known P9-B/P11 composition gap: until the additive
-  source candidate has passed its bootstrap tests and its exact provider graph
-  has been inventoried, incomplete variants return
+- Explicitly test the known P9-B/P11 composition gap: candidate `af656e7` has
+  passed bootstrap validation but remains unpromoted, so it is not canonical
+  live-composition evidence. Until a promoted combined source is inventoried,
+  incomplete or unverified variants return
   `UnsupportedOrUnverifiedComposition`. Do not create a test that silently
-  selects one half as the supported profile or treats the unvalidated merge as
-  current live composition.
+  selects one half as the supported profile or treats `af656e7` as current
+  canonical live composition.
 
 **Boundary and token tests:**
 

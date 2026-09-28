@@ -90,12 +90,13 @@ cross-checks their runtime IDs against the restored registry and allocator.
 
 ### 2.2 Shared simulation record sequence
 
-The candidate source audit found exactly two current consumers of
-`SimulationRecordSequence`: `NpcDecisionRecorder` → `NpcDecisionStore` and
-`DomainEventRecorder` → `DomainEventStore`. No other selected current owner
-consumes this sequencer. Capture its exact next/high-water value once in one
-immutable section; a private staged factory restores it without allocating a
-record.
+The candidate source audit found exactly two selected `SimulationRecordSequence`
+allocation sites: `NpcDecisionRecorder.RecordWithParticipants` and
+`DomainEventRecorder.Record`. Their resulting sequence values are stored in
+`NpcDecisionStore` and `DomainEventStore`. `TravelPartySystem` also retains a
+sequence reference but does not call `Allocate()` in this source snapshot.
+Capture the exact next/high-water value once in one immutable section; a
+private staged factory restores it without allocating a record.
 
 Decision/event records, `HistoryStore` rows (a subset projection), and
 `NpcChronicle` (derived read-model output) are logs/read models, not causal

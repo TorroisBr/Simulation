@@ -17,8 +17,8 @@ alignment `4b6dd1d`, P8 State `470667d`, P9 closure `82396ae` and P9-B code
 integration `d9a62d7`, P11 closure `308e24d` / code `0cd4281`, P14 State
 `4caecbb`, P18 canonical code `9e790c5`, and P20 State `7a81cc0`. P18's
 State text at `9e790c5` is stale about D1/D2, whose code is promoted there;
-the P18-D consumer is incomplete on reviewed but unpromoted candidate
-`a9428a3`. Revalidate the actual canonical runtime composition before any
+P18-D consumer work remains incomplete at pushed composition `6fcbfab`.
+Revalidate the actual canonical runtime composition before any
 checkpoint claims P12-A implementation readiness.
 
 **Current evidence:** the inventory demonstrates no included owner with a

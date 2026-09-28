@@ -47,8 +47,8 @@ LocalTopology facts. P18-A/B/C are promoted, but the selected legacy daily
 bootstrap does not compose the P18 timeline, activity lifecycle, or availability
 decision services and claims no intraday state. P18 D1/D2 prerequisites are
 promoted at `9e790c5`; the State text at that tip is stale about those
-prerequisites. The P18-D consumer candidate `a9428a3` is reviewed but
-unpromoted and incomplete, so no P18 runtime state is part of this profile.
+prerequisites. P18-D consumer work remains incomplete at pushed composition
+`6fcbfab`, so no P18 runtime state is part of this profile.
 
 **Revalidated references:** P8 State `470667d37863384edadb3d93ef64d8004aff46a3`;
 architecture `c285466c355103d3637ac165246591b72eb7bda0`; P9-A code promotion
@@ -309,8 +309,8 @@ omits causal fields.
 - **P18:** P18 canonical code is `9e790c5`; the selected daily profile does
   not compose its timeline, activity lifecycle, availability decisions, or
   temporal state, and does not claim intraday continuation. D1/D2 are promoted;
-  the State text is stale and P18-D consumer candidate `a9428a3` is still
-  unpromoted and incomplete. P18 is present in
+  the State text is stale and P18-D consumer work remains incomplete at pushed
+  composition `6fcbfab`. P18 is present in
   this docs-only refresh branch as review context, not integrated runtime code.
   If a future supported profile composes it,
   preserve `(worldId, profileId, absoluteDay)` boundary identity, tick
