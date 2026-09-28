@@ -196,8 +196,11 @@ dependency order:
 4. Stage `ScheduledDirectiveStore` records against the staged actors and
    admitted action definitions, without processing due directives.
 5. Stage terminal ActorChoice records after Person roots exist, validating
-   identity/history and shared causal sequence references without dispatching
-   a choice.
+   identity/history, strictly increasing input sequence values, contiguous
+   local disposition ordinals, and local lifecycle invariants without
+   dispatching a choice. Preserve optional `DecisionRecordId` strings as
+   opaque values; do not compare them with the shared C record counter or
+   require target decision rows.
 6. Stage each inventoried active commitment owner after its actor/party/
    expedition roots and any relevant D/E target roots exist. Validate local
    reciprocity now and return remaining cross-section bindings for G.
