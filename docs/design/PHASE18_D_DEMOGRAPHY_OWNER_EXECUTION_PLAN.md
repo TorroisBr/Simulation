@@ -1,6 +1,6 @@
 # P18-D Demography Owner Execution Plan
 
-**Status:** Bounded technical plan, ready for independent design review. No implementation or validation is claimed here.
+**Status:** Bounded technical plan independently reviewed; implementation and focused validation evidence are recorded below.
 
 **Architecture basis:** P18 canonical `9e790c59e14ca7f7ed195c0e6267e10f3cd039d7`, especially `docs/design/PHASE18_D_TECHNICAL_DESIGN.md` §4.1, and `docs/EXECUTION_MODEL.md`.
 
@@ -68,6 +68,23 @@ After independent design review and implementation, add/run focused EditMode cov
 
 Run the focused DailyDemography and relevant PersonNaturalMortality/Population suites plus `git diff --check` for the implementation. Broader P18 integration validation remains with the chronological integrator.
 
+## Implementation validation evidence
+
+The focused implementation validation on feature branch commit `172c4bea2a703d861ddd0cb9d1fbf8eec7f24857` passed six suites, **120/120 tests**. The XML paths below are relative to `C:\Users\Martins\Documents\GitHub\Simulation-phase5-orchestrator\.worktrees\orchestration-p18a-impl\`:
+
+| Suite | Result | XML artifact |
+| --- | ---: | --- |
+| `DailyDemographyBoundaryStepProviderTests` | 3/3 | `Temp/ValidationResults/EditMode-20260928-235036-ae8174b7b5014d10924ab24e643a90bc.xml` |
+| `PersonNaturalMortalityFoundationTests` | 15/15 | `Temp/ValidationResults/EditMode-20260928-235056-0352efde8abc49a2853a859d71144a2b.xml` |
+| `AggregateDemographyFoundationTests` | 25/25 | `Temp/ValidationResults/EditMode-20260928-235113-7490d4214b334e0699fe4cf411a79518.xml` |
+| `PopulationLifecycleTests` | 20/20 | `Temp/ValidationResults/EditMode-20260928-235140-0a38f0f01ae745d0bfc85c5bc68d160a.xml` |
+| `NpcResidenceMigrationTests` | 33/33 | `Temp/ValidationResults/EditMode-20260928-235208-5b7d45c2768d405aafa8f73c69ec39cd.xml` |
+| `ResidencyMembershipTests` | 24/24 | `Temp/ValidationResults/EditMode-20260928-235225-74750f57c6c346b7bbcb75024e6848aa.xml` |
+
+The retained-proposal interruption regression was added afterward and the focused owner suite was rerun: `DailyDemographyBoundaryStepProviderTests`, **4/4 passed**, including `RetainedAggregateProposalIsReusedAfterInstallInterruption`. Its exact XML artifact is `Temp/ValidationResults/EditMode-20260929-000437-8cf0e97e8fde4231a28287f1e75283e6.xml`. Before that run, C: reported 27,463,495,680 bytes free.
+
+The regression interrupts immediately after `PendingAggregate` retains the exact successful proposal and before population installation. Resuming the same manifest commits that proposal, leaves the stateful provider call count at one, increments City population/revision once, and reports the retained result. The interruption seam is private and compiled only under `UNITY_EDITOR`; it does not add runtime/player API surface.
+
 ## Readiness and approval boundary
 
-P18-D's architecture/checkpoint scope and technical design were accepted, and the canonical design at `9e790c5` explicitly requires owner-local progress/receipts for this one due-work fact. The owner-local receipt identities, preflight interfaces, retry cursors, and tests in this plan settle implementation mechanics within that accepted semantic contract. Under `docs/EXECUTION_MODEL.md`, independent review of this bounded technical plan is the remaining design-readiness gate; after it passes, the already accepted P18-D scope authorizes isolated implementation. No additional checkpoint acceptance is required. Canonical promotion and Phase closure remain separate gates.
+P18-D's architecture/checkpoint scope and technical design were accepted, and the canonical design at `9e790c5` explicitly requires owner-local progress/receipts for this one due-work fact. The owner-local receipt identities, preflight interfaces, retry cursors, and tests in this plan settle implementation mechanics within that accepted semantic contract. Independent review of the bounded technical plan passed at `4a6e929`; the already accepted P18-D scope authorized isolated implementation. No additional checkpoint acceptance is required. Canonical promotion and Phase closure remain separate gates.

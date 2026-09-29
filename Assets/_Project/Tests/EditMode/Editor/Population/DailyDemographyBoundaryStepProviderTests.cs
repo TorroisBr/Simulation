@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Reflection;
 using NUnit.Framework;
 
 public sealed class DailyDemographyBoundaryStepProviderTests
@@ -80,6 +82,62 @@ public sealed class DailyDemographyBoundaryStepProviderTests
         Assert.That(mortality.RequestedPersonIds, Has.Count.EqualTo(2));
         Assert.That(city.CurrentPopulation, Is.EqualTo(1));
         Assert.That(city.Population.Revision, Is.EqualTo(3L));
+    }
+
+    [Test]
+    public void RetainedAggregateProposalIsReusedAfterInstallInterruption()
+    {
+        CityRuntime city = CreateCity("retained-proposal-city", 10);
+        EffectiveSimulationConfiguration configuration = SimulationConfigurationResolver.ResolveOrThrow(
+            contentOverrides: new SimulationConfigurationOverrides(
+                naturalMortality: new NaturalMortalityConfigurationOverrides(enabled: false),
+                aggregateDemography: new AggregateDemographyConfigurationOverrides(
+                    enabled: true,
+                    annualBirthRate: 0d,
+                    annualDeathRate: 0d)));
+        SimulationRuntime world = new SimulationRuntime(
+            new SimulationTime(1L), new[] { city }, null,
+            configuration: configuration,
+            calendarDefinition: new CalendarDefinition(2, 1, 2));
+        RecordingAggregateProvider aggregate = new RecordingAggregateProvider(1, 0);
+        DailyDemographyBoundaryStepProvider provider = new DailyDemographyBoundaryStepProvider(
+            world, aggregateProvider: aggregate);
+        BoundaryContinuationManifest manifest = CreateManifest(provider,
+            new DailyBoundaryOperation("retained-proposal-world", "intraday-v1", 1L),
+            out BoundaryContinuationStep step);
+
+        object owner = GetPrivateField(provider, "owner");
+        bool interruptOnce = true;
+        SetPrivateField(owner, "interruptAggregateInstallForTest",
+            new Func<AggregateDemographyTransition, bool>(_ =>
+            {
+                if (!interruptOnce) return false;
+                interruptOnce = false;
+                return true;
+            }));
+
+        Assert.That(provider.TryPrepareStep(manifest, step,
+            out IBoundaryContinuationStepCommit prepared,
+            out TimelineFailure failure), Is.True, failure.ToString());
+        Assert.That(prepared.TryCommit(out failure), Is.False);
+        Assert.That(failure, Is.EqualTo(TimelineFailure.DispatchFailed));
+        Assert.That(aggregate.CallCount, Is.EqualTo(1));
+        Assert.That(city.CurrentPopulation, Is.EqualTo(10));
+        Assert.That(city.Population.Revision, Is.Zero);
+
+        Assert.That(provider.TryPrepareStep(manifest, step, out prepared, out failure),
+            Is.True, failure.ToString());
+        Assert.That(prepared.TryCommit(out failure), Is.True, failure.ToString());
+        Assert.That(provider.TryResolveReceipt(manifest, step,
+            out DailyDemographyBoundaryReceipt receipt,
+            out failure), Is.True, failure.ToString());
+
+        Assert.That(aggregate.CallCount, Is.EqualTo(1));
+        Assert.That(city.CurrentPopulation, Is.EqualTo(11));
+        Assert.That(city.Population.Revision, Is.EqualTo(1L));
+        Assert.That(receipt.Report.AggregateSettlementsProcessed, Is.EqualTo(1));
+        Assert.That(receipt.Report.AggregateBirthsApplied, Is.EqualTo(1));
+        Assert.That(receipt.Report.Diagnostics, Is.Empty);
     }
 
     [Test]
@@ -190,6 +248,22 @@ public sealed class DailyDemographyBoundaryStepProviderTests
         step = steps[0];
         return new BoundaryContinuationManifest(
             operation, "daily-boundary", "1", "configuration/v1", steps);
+    }
+
+    private static object GetPrivateField(object instance, string fieldName)
+    {
+        FieldInfo field = instance.GetType().GetField(
+            fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(field, Is.Not.Null, fieldName);
+        return field.GetValue(instance);
+    }
+
+    private static void SetPrivateField(object instance, string fieldName, object value)
+    {
+        FieldInfo field = instance.GetType().GetField(
+            fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(field, Is.Not.Null, fieldName);
+        field.SetValue(instance, value);
     }
 
     private sealed class RecordingMortalitySamples : IPersonNaturalMortalitySampleProvider

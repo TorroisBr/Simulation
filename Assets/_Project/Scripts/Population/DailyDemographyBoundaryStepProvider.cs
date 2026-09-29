@@ -89,6 +89,11 @@ public sealed class DailyDemographyBoundaryOwner
     private readonly SimulationRuntime world;
     private readonly IPersonNaturalMortalitySampleProvider mortalitySamples;
     private readonly IAggregateDemographyProvider aggregateProvider;
+#if UNITY_EDITOR
+    // Private editor-only seam used by the focused retry test to interrupt after
+    // proposal retention but before the aggregate owner receives the install call.
+    private Func<AggregateDemographyTransition, bool> interruptAggregateInstallForTest;
+#endif
     private Dictionary<string, DailyDemographyBoundaryReceipt> receipts =
         new Dictionary<string, DailyDemographyBoundaryReceipt>(StringComparer.Ordinal);
     private readonly Dictionary<string, OccurrenceState> inProgress =
@@ -480,6 +485,14 @@ public sealed class DailyDemographyBoundaryOwner
                     }
 
                     state.PendingAggregate = transition;
+#if UNITY_EDITOR
+                    if (interruptAggregateInstallForTest != null
+                        && interruptAggregateInstallForTest(transition))
+                    {
+                        failure = TimelineFailure.DispatchFailed;
+                        return false;
+                    }
+#endif
                     if (!CommitPendingAggregate(state, target, out failure)) return false;
                 }
                 catch (Exception exception)
