@@ -1,9 +1,15 @@
 # P12-B SimulationRecordSequence census implementation candidate
 
-**Status:** Implementation and required validation complete; exact-tip implementation review pending.
+**Status:** Reintegrated and validated on the refreshed canonical base; exact-tip integration review pending.
 
 **Canonical base:** `codex/phase12/canonical` at
-`1ada62b031e738e2bdd5d3d623e028a114961d6e`.
+`69f456d5e3c6d6f7e4b85b36e98968ced0549bf3`.
+
+**Integration:** The reviewed sequence design and implementation were
+reapplied after the RuntimeIdentity census promotion. The integrated selected
+profile now exposes both the eight RuntimeIdentity sections and the
+SimulationRecordSequence section. The conflict in their shared bootstrap test
+was resolved by preserving and asserting both providers.
 
 **Design:** `codex/phase12/P12BRecordSequenceWitnessDesign` at `c283ca6`;
 independent exact-tip design review passed. Durable record:
@@ -27,19 +33,20 @@ publishes only the provider interface.
 
 | Gate | Result | Evidence |
 |---|---:|---|
-| `CoreRuntimeTests` | 14/14 | `Temp/ValidationResults/EditMode-20260929-223310-b482e448f20d4d5a932806b6aba2acd9.xml` |
-| Selected authored bootstrap profile | 1/1 | `Temp/ValidationResults/EditMode-20260929-223329-ba4e855ec9d444468fa3b9ff35f59ddc.xml` |
-| ALL EditMode | 1960/1960 | `Temp/ValidationResults/EditMode-20260929-223552-50ba5db773d34fa7b854eab7fa187804.xml` |
-| Official complete Smoke filter | 5/5 | `Temp/ValidationResults/EditMode-20260929-223633-3efc7f2b919a4ebda891033ee691afc7.xml` |
-| `git diff --check` | PASS | Completed on the implementation tree |
+| `RuntimeIdentityCensusTests` | 6/6 | `Temp/ValidationResults/EditMode-20260929-224844-9dfeeb6d3aca461da7af0428370e74b3.xml` |
+| `CoreRuntimeTests` | 14/14 | `Temp/ValidationResults/EditMode-20260929-224904-d2b2a7fdab374fcea73a9aa8e3ae4c0f.xml` |
+| `SimulationBootstrapCompositionTests` | 14/14 | `Temp/ValidationResults/EditMode-20260929-224921-b992a56a5caa46f7ae51bf6453b6200f.xml` |
+| ALL EditMode | 1966/1966 | `Temp/ValidationResults/EditMode-20260929-225010-9912c0ea3d7547b68fd421d6582ec3b7.xml` |
+| Official complete Smoke filter | 5/5 | `Temp/ValidationResults/EditMode-20260929-225051-3b4899448e8e4d23a0ee881f916b8aa7.xml` |
+| `git diff --check` | PASS | Integrated implementation tree, after conflict resolution and evidence update |
 
-The focused tests verify consecutive sequence values, opaque stable owner
-identity, a real decision and event recorded through the two shared writers,
-consumption after failed event construction, exhaustion without revision
-movement, and the selected profile's day-zero cardinality 1/revision 0. The
-required full EditMode and official complete Smoke gates passed on this tree.
-The candidate still requires exact-tip independent implementation review and
-the durable review record before any canonical promotion request.
+The focused tests verify the sequence contract and the promoted
+RuntimeIdentity census in the same selected bootstrap composition. The
+sequence tests verify consecutive values across both writers, opaque stable
+identity, consumption after failed event construction, exhaustion without
+revision movement, and day-zero cardinality 1/revision 0. Full integration
+regression gates passed; exact-tip independent integration review remains
+required before any canonical promotion request.
 
 ## Limits retained
 

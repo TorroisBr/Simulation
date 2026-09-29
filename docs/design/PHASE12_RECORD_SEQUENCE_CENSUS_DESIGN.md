@@ -4,8 +4,10 @@
 
 **Design review:** Exact-tip PASS at `codex/phase12/P12BRecordSequenceWitnessDesign` tip `c283ca6`; durable review record is `codex/phase12/P12BRecordSequenceWitnessDesignReview` tip `e10ea4f`.
 
-**Canonical base:** `codex/phase12/canonical` at
-`1ada62b031e738e2bdd5d3d623e028a114961d6e`.
+**Original design-review base:** `codex/phase12/canonical` at
+`1ada62b031e738e2bdd5d3d623e028a114961d6e`. The implementation was
+reintegrated and revalidated after RuntimeIdentity promotion at canonical
+`69f456d5e3c6d6f7e4b85b36e98968ced0549bf3`.
 
 **Authority:** Accepted P12-B–P12-G capability decomposition,
 `docs/design/PHASE12_B_BLOCKER_RESOLUTION.md`, the current P12 Brief and
