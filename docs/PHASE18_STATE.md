@@ -1,6 +1,6 @@
 # Phase 18 State — Intraday Temporal Execution v1
 
-**Status:** PHASE 18 IN PROGRESS — P18-A/B/C promoted, including the additive extension at `1dd0479` and the external-input/deferral adapter at integration tip `b75c5b8` (code `a535441`); P20-A is promoted (code `22df7b3`, P20 State tip `7a81cc0`). P18-D consumes the promoted P11 temporal capture contract. Its exact technical design passed independent review; the sale-owner receipt/prepared-install and per-runtime serialized advance prerequisites were implemented, validated, and promoted at `9e790c59e14ca7f7ed195c0e6267e10f3cd039d7`. P18-D consumer code candidate `3ddf8476842ad24b9234ccaa65a530722ead8eb4` is pushed for independent exact-tip review. It composes the existing SellGoods action with intraday execution, accepts trusted WorldCommand choices at the current or next unsealed tick, and explicitly excludes P14 local material-flow cities pending a temporal owner adapter. Phase 18 remains open; this candidate is not promoted or closed.
+**Status:** PHASE 18 IN PROGRESS — P18-A/B/C promoted, including the additive extension at `1dd0479` and the external-input/deferral adapter at integration tip `b75c5b8` (code `a535441`); P20-A is promoted (code `22df7b3`, P20 State tip `7a81cc0`). P18-D consumes the promoted P11 temporal capture contract. Its exact technical design passed independent review; the sale-owner receipt/prepared-install and per-runtime serialized advance prerequisites were implemented, validated, and promoted at `9e790c59e14ca7f7ed195c0e6267e10f3cd039d7`. P18-D runtime code is `3ddf8476842ad24b9234ccaa65a530722ead8eb4`; test-only consumer replay correction `0887d18` is pushed and has focused, full EditMode, Smoke, LongRun, and diff-check evidence. Exact-tip independent review is pending. The candidate composes the existing SellGoods action with intraday execution, accepts trusted WorldCommand choices at the current or next unsealed tick, and explicitly excludes P14 local material-flow cities pending a temporal owner adapter. Phase 18 remains open; this candidate is not promoted or closed.
 
 **Canonical baselines:** P8 `codex/phase8/canonical` at `470667d37863384edadb3d93ef64d8004aff46a3`; P18 `codex/phase18/canonical` at `9e790c59e14ca7f7ed195c0e6267e10f3cd039d7`. The P18-D candidate also merges P14 `codex/phase14/canonical` at `4caecbbfb0464c965811402b3c11d8717605114a`.
 
@@ -50,9 +50,9 @@ documentation/design review; no new code or test result is claimed.
 | P18-C — External-Input/Deferral Adapter | PROMOTED at integration tip `b75c5b8` (code `a535441`) | Code integration `a535441` was assembled against P18 State tip `eabc1c2` (promoted extension code `1dd0479`) and promoted to `codex/phase18/canonical` at `b75c5b8`. Exact-tip independent implementation review passed. Temporal identity/cardinality, focused domain suites, ALL EditMode 1794/1794, complete Smoke 5/5, and diff-check passed. The promoted candidate State still carried stale pending-gate wording; this docs-only correction reconciles it. |
 | P18-D prerequisite — Economy sale receipt/prepared install | PROMOTED at `9e790c5` | Stable proposal/fingerprint identity, first-execution current-truth snapshot, committed replay, retry only after proven-no-install, expected-revision preflight, and owner-local prepared installation across inventory, market, and account state. Receipt retention is scoped to the current `SimulationRuntime` lifetime; no restart/save/crash-recovery guarantee is claimed. |
 | P18-D prerequisite — serialized runtime advance window | PROMOTED at `9e790c5` | A per-runtime, single-writer, non-reentrant lease covers `TryAdvanceDay` and the outer `TryAdvanceDays` call. It is not a general thread-safety promise. The P18-D consumer must keep its full chronological advance, boundary subphases, and successful post-advance P18-C handoff inside this lease. |
-| P18-D — Consumer Integration | IMPLEMENTED CANDIDATE — EXACT-TIP REVIEW PENDING | Technical design candidate `9ed6d90455cc793244ee7207adb62960e45a9972` passed independent exact-tip review against P18 canonical `85f1f21`, P14 State `4caecbb` / code `c44904b`, P20 State `7a81cc0` / P20-A integration `1dcf67a` (implementation `22df7b3`), P11 canonical `308e24d`, architecture `c285466`, intraday-extensibility alignment `4b6dd1d`, and multi-participant alignment `c285466`. Implementation began with `90e3359`, merged the current P14 canonical at `a2a8edd`, and added review corrections at `3ddf8476842ad24b9234ccaa65a530722ead8eb4`. It binds committed P11 receipts after successful advance, observes later triggers/deferrals, admits the exact allocated request, integrates Local SellGoods, and runs the selected daily owners chronologically under the promoted runtime lease while preserving P11 semantic validation. P14 local daily material-flow cities are rejected before any boundary mutation until a separately reviewed temporal owner adapter exists. Exact-tip independent review and validation are pending on this candidate; P14 remains excluded and no blanket P20/P19 dependency is implied. |
+| P18-D — Consumer Integration | IMPLEMENTED CANDIDATE — VALIDATION PASS; EXACT-TIP REVIEW PENDING | Technical design candidate `9ed6d90455cc793244ee7207adb62960e45a9972` passed independent exact-tip review against P18 canonical `85f1f21`, P14 State `4caecbb` / code `c44904b`, P20 State `7a81cc0` / P20-A integration `1dcf67a` (implementation `22df7b3`), P11 canonical `308e24d`, architecture `c285466`, intraday-extensibility alignment `4b6dd1d`, and multi-participant alignment `c285466`. Implementation began with `90e3359`, merged the current P14 canonical at `a2a8edd`, and added runtime corrections at `3ddf8476842ad24b9234ccaa65a530722ead8eb4`; test-only consumer replay correction is `0887d18`. It binds committed P11 receipts after successful advance, observes later triggers/deferrals, admits the exact allocated request, integrates Local SellGoods, and runs the selected daily owners chronologically under the promoted runtime lease while preserving P11 semantic validation. P14 local daily material-flow cities are rejected before any boundary mutation until a separately reviewed temporal owner adapter exists. The replacement replay regression now re-enters the P18-D consumer resume path after sale commit and plan activation, checking receipt identity, once-only bookkeeping, and P11/P18-C terminal reconciliation. Exact-tip implementation review is pending; P14 remains excluded and no blanket P20/P19 dependency is implied. |
 
-### P18-D consumer candidate validation — code `3ddf847`
+### P18-D runtime validation — code `3ddf847` (before consumer-replay review correction)
 
 The pushed feature branch `codex/phase18/P18DConsumerRuntime` is based on the
 P18-D consumer implementation `90e3359` and merges `codex/phase14/canonical`
@@ -61,9 +61,11 @@ trusted ActorActionChoice WorldCommand into the intraday timeline at the
 current instant if open, otherwise the earliest next unsealed tick. Its
 regression verifies the queued timeline input is committed to ActorChoice
 state only when its target instant advances. The same correction rejects a
-P14 local material-flow composition before any daily boundary mutation and
-tests committed keyed-sale replay after a plan is activated, confirming the
-original receipt and no repeated inventory, market, or account effects.
+P14 local material-flow composition before any daily boundary mutation. The
+initial replay regression exercised the MerchantSystem receipt owner directly;
+independent review correctly found that insufficient for the P18-D consumer
+obligation. The test-only follow-up below replaces that assertion with a
+consumer-resume regression.
 
 Validation on code `3ddf847` passed: P18DConsumerIntegration 9/9,
 LocalDailyMaterialFlow 13/13, ActorActionChoiceCommand 6/6,
@@ -90,8 +92,37 @@ tests.
 | Complete official Smoke | 5/5 | `EditMode-20260929-032223-12e9753102344e5caa1042fa04f14442.xml` |
 | SimulationRuntimeLongRun | 7/7 | `EditMode-20260929-032250-53d1fd2cf59f4c3e8110d6b77c7f050d.xml` |
 
-`git diff --check` passed. These results do not authorize canonical promotion
-or Phase 18 closure; exact-tip independent review is outstanding.
+`git diff --check` passed for runtime code `3ddf847`. These runtime and domain
+results remain applicable because `0887d18` changes only the test. They do not
+authorize canonical promotion or Phase 18 closure.
+
+### P18-D consumer replay review correction — `0887d18`
+
+The independent review of `3ddf847` identified that direct replay through
+`MerchantSystem.TryExecuteKeyedLocalMarketSale` did not test the consumer's
+resume or terminal-reconciliation path. Commit `0887d18` replaces that test
+with an intraday ActorChoice execution that commits a sale normally, then
+models interruption after the committed owner receipt and once-only
+consumer bookkeeping but before P11/P18-C terminal reconciliation. With an
+active merchant plan, it re-enters `TryResumeP18DActorChoice` and verifies the
+same receipt instance, no additional inventory/market/account changes, no
+duplicate trade log, and idempotent terminal records. This exercises the
+consumer within the current runtime lifetime; it makes no restart or durable
+crash-recovery claim.
+
+Exact candidate validation on `0887d18` passed P18DConsumerIntegration 9/9,
+ALL EditMode 1921/1921, complete official Smoke 5/5, and
+SimulationRuntimeLongRun 7/7. `git diff --check` passed.
+
+| Suite | Result | XML |
+|---|---:|---|
+| P18DConsumerIntegration | 9/9 | `EditMode-20260929-034122-810b5db82eb74bf7ba526ac1ac8c32e4.xml` |
+| ALL EditMode | 1921/1921 | `EditMode-20260929-034205-41ced890b52d42b79ffc642d3d91d3e3.xml` |
+| Complete official Smoke | 5/5 | `EditMode-20260929-034301-a13b2c0eba6646b8a46b483ba24af18c.xml` |
+| SimulationRuntimeLongRun | 7/7 | `EditMode-20260929-034339-8a23805770824ccc9e39ae49787dc7b5.xml` |
+
+These results do not authorize canonical promotion or Phase 18 closure.
+Independent exact-tip implementation review remains required.
 
 ### P18-D prerequisite integration — promoted `9e790c5`
 
