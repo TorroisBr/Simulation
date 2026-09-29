@@ -193,6 +193,7 @@ public class TesteSimulacao : MonoBehaviour
                         new SimulationGenesisManifest(simulationConfig, effectiveConfiguration, calendarDefinition, profileFingerprint, profileProvenanceRecords), simulationTime, calendarDefinition, spatialNetwork, domainEventStore,
                         historyStore, scheduledDirectiveStore, decisionStore, decisionRecorder, economyTransactionService, npcChronicleService,
                         npcChronicleFormatter, travelPartyStore, travelPartySystem, simulationRuntime,
+                        runtimeIdentityRegistry,
                         explorableSiteStore, expeditionStore, expeditionSystem);
                     break;
                 default:

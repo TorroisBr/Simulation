@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 /// <summary>Single public handoff for a fully constructed authored bootstrap.</summary>
 public sealed class SimulationBootstrapComposition
 {
@@ -20,6 +22,7 @@ public sealed class SimulationBootstrapComposition
         TravelPartyStore travelParties,
         TravelPartySystem groupTravel,
         SimulationRuntime runtime,
+        RuntimeIdentityRegistry runtimeIdentityRegistry,
         ExplorableSiteStore sites,
         ExpeditionStore expeditions,
         ExpeditionSystem expeditionSystem)
@@ -39,6 +42,7 @@ public sealed class SimulationBootstrapComposition
         TravelParties = travelParties;
         GroupTravel = groupTravel;
         Runtime = runtime;
+        RuntimeIdentityCensusProviders = RuntimeIdentityRegistryCensusProvider.CreateProviders(runtimeIdentityRegistry);
         ExplorableSites = sites;
         Expeditions = expeditions;
         ExpeditionSystem = expeditionSystem;
@@ -71,6 +75,8 @@ public sealed class SimulationBootstrapComposition
     public TravelPartyStore TravelParties { get; }
     public TravelPartySystem GroupTravel { get; }
     public SimulationRuntime Runtime { get; }
+    /// <summary>Fixed passive witnesses for the runtime's typed identity indexes.</summary>
+    public IReadOnlyList<IOwnerSectionCensusProvider> RuntimeIdentityCensusProviders { get; }
     /// <summary>The P8-owned spatial truth authority published with the genesis handoff.</summary>
     public SpatialAuthorityStore SpatialAuthority => Runtime.SpatialAuthorityStore;
     public ExplorableSiteStore ExplorableSites { get; }

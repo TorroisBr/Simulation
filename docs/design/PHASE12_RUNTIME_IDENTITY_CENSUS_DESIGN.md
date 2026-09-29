@@ -1,6 +1,8 @@
 # P12-B RuntimeIdentityRegistry census witness design
 
-**Status:** Submitted for independent technical review.
+**Status:** Design review passed; implementation is authorized within the accepted P12-B capability scope.
+
+**Design review:** Exact-tip review passed at `abf433f6767be39d0ddac5cf2b4c194ca0fa10a4`, against canonical base `1ada62b031e738e2bdd5d3d623e028a114961d6e`. Durable review record: `codex/phase12/P12BIdentityRegistryWitnessDesignReview` at `7f911ab`.
 
 **Canonical base:** `codex/phase12/canonical` at
 `1ada62b031e738e2bdd5d3d623e028a114961d6e` (including promoted P8-A

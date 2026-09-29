@@ -113,6 +113,9 @@ public sealed class RuntimeIdentityRegistry
     private readonly Dictionary<string, LocalTopologyConnectionRuntime> localConnectionsByRuntimeId = new Dictionary<string, LocalTopologyConnectionRuntime>(StringComparer.Ordinal);
     private readonly Dictionary<string, NotableItemRuntime> notableItemsByRuntimeId = new Dictionary<string, NotableItemRuntime>(StringComparer.Ordinal);
     private readonly SimulationLogger logger;
+    private long censusRevision;
+
+    internal long CensusRevision => censusRevision;
 
     public RuntimeIdentityRegistry(SimulationLogger logger = null)
     {
@@ -139,7 +142,13 @@ public sealed class RuntimeIdentityRegistry
             return false;
         }
 
+        if (CanAdvanceCensusRevision("NPC") == false)
+        {
+            return false;
+        }
+
         npcsByRuntimeId.Add(npcRuntime.RuntimeId, npcRuntime);
+        AdvanceCensusRevision();
         return true;
     }
 
@@ -163,7 +172,13 @@ public sealed class RuntimeIdentityRegistry
             return false;
         }
 
+        if (CanAdvanceCensusRevision("City") == false)
+        {
+            return false;
+        }
+
         citiesByRuntimeId.Add(cityRuntime.RuntimeId, cityRuntime);
+        AdvanceCensusRevision();
         return true;
     }
 
@@ -187,7 +202,13 @@ public sealed class RuntimeIdentityRegistry
             return false;
         }
 
+        if (CanAdvanceCensusRevision("Location") == false)
+        {
+            return false;
+        }
+
         locationsByRuntimeId.Add(location.RuntimeId, location);
+        AdvanceCensusRevision();
         return true;
     }
 
@@ -211,7 +232,13 @@ public sealed class RuntimeIdentityRegistry
             return false;
         }
 
+        if (CanAdvanceCensusRevision("Route") == false)
+        {
+            return false;
+        }
+
         routesByRuntimeId.Add(route.RuntimeId, route);
+        AdvanceCensusRevision();
         return true;
     }
 
@@ -235,7 +262,13 @@ public sealed class RuntimeIdentityRegistry
             return false;
         }
 
+        if (CanAdvanceCensusRevision("ExplorableSite") == false)
+        {
+            return false;
+        }
+
         explorableSitesByRuntimeId.Add(site.RuntimeId, site);
+        AdvanceCensusRevision();
         return true;
     }
 
@@ -259,7 +292,13 @@ public sealed class RuntimeIdentityRegistry
             return false;
         }
 
+        if (CanAdvanceCensusRevision("LocalPlace") == false)
+        {
+            return false;
+        }
+
         localPlacesByRuntimeId.Add(localPlace.RuntimeId, localPlace);
+        AdvanceCensusRevision();
         return true;
     }
 
@@ -283,7 +322,13 @@ public sealed class RuntimeIdentityRegistry
             return false;
         }
 
+        if (CanAdvanceCensusRevision("LocalConnection") == false)
+        {
+            return false;
+        }
+
         localConnectionsByRuntimeId.Add(localConnection.RuntimeId, localConnection);
+        AdvanceCensusRevision();
         return true;
     }
 
@@ -307,7 +352,13 @@ public sealed class RuntimeIdentityRegistry
             return false;
         }
 
+        if (CanAdvanceCensusRevision("NotableItem") == false)
+        {
+            return false;
+        }
+
         notableItemsByRuntimeId.Add(notableItem.RuntimeId, notableItem);
+        AdvanceCensusRevision();
         return true;
     }
 
@@ -380,6 +431,12 @@ public sealed class RuntimeIdentityRegistry
             }
         }
 
+        if (runtimeIds.Count > 0 && CanAdvanceCensusRevision("local topology batch") == false)
+        {
+            diagnostic = "Runtime identity census revision is exhausted.";
+            return false;
+        }
+
         foreach (LocalPlaceRuntime localPlace in localPlaces)
         {
             localPlacesByRuntimeId.Add(localPlace.RuntimeId, localPlace);
@@ -390,7 +447,44 @@ public sealed class RuntimeIdentityRegistry
             localConnectionsByRuntimeId.Add(localConnection.RuntimeId, localConnection);
         }
 
+        if (runtimeIds.Count > 0)
+        {
+            AdvanceCensusRevision();
+        }
+
         return true;
+    }
+
+    internal int GetCensusCardinality(RuntimeIdentityCensusIndex index)
+    {
+        switch (index)
+        {
+            case RuntimeIdentityCensusIndex.Npcs: return npcsByRuntimeId.Count;
+            case RuntimeIdentityCensusIndex.Cities: return citiesByRuntimeId.Count;
+            case RuntimeIdentityCensusIndex.Locations: return locationsByRuntimeId.Count;
+            case RuntimeIdentityCensusIndex.Routes: return routesByRuntimeId.Count;
+            case RuntimeIdentityCensusIndex.ExplorableSites: return explorableSitesByRuntimeId.Count;
+            case RuntimeIdentityCensusIndex.LocalPlaces: return localPlacesByRuntimeId.Count;
+            case RuntimeIdentityCensusIndex.LocalConnections: return localConnectionsByRuntimeId.Count;
+            case RuntimeIdentityCensusIndex.NotableItems: return notableItemsByRuntimeId.Count;
+            default: throw new ArgumentOutOfRangeException(nameof(index));
+        }
+    }
+
+    private bool CanAdvanceCensusRevision(string identityKind)
+    {
+        if (censusRevision < long.MaxValue)
+        {
+            return true;
+        }
+
+        logger.LogError($"Cannot register {identityKind} runtime identity: census revision is exhausted.");
+        return false;
+    }
+
+    private void AdvanceCensusRevision()
+    {
+        censusRevision++;
     }
 
     public bool TryGetNpc(string runtimeId, out NpcRuntime npcRuntime)
