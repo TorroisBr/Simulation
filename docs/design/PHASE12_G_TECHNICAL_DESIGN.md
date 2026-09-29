@@ -12,7 +12,7 @@ input set.
 
 **Current governing inputs (2026-09-29):** accepted decomposition at
 `7585863` with reference refresh `a2ac5d2`; current owner inventory
-`2a5e7071b68d653d7f6be4b3991e4147090d2750` (partial source/API evidence, not
+`16611d89be3e9b8deae595d61ea8f8870c88e5ff` (partial source/API evidence, not
 a live census); P12-B current-evidence revalidation
 `ef8c72cd388445e25ce9360bb1e689fc0a07c639` (design only; implementation remains
 blocked); P12-C identity/genesis design `edc51571559a9ba4b1a025963de2e25b23c66fd3`
@@ -28,14 +28,16 @@ These are design artifacts, not proof that the corresponding capabilities
 have been delivered; revalidate hashes and owner interfaces before
 implementation.
 
-The P18-D prerequisites are canonical at `9e790c5`. At this edit baseline,
-current State evidence candidate `c093665` records the consumer status, while
+The P18-D prerequisites are canonical at `9e790c5`. Current State evidence tip
+`f1cfed3` records the consumer status, while
 the optional-profile P18-D consumer runtime implementation `3ddf847` (based on
 P14 merge `a2a8edd`) composes chronological advance, successful P18-C handoff,
 and the bounded SellGoods consumer. It rejects P14-A local-material-flow
-Cities before mutation. Test-only follow-up `0887d18` refreshed passing
-validation. Independent exact-tip review, canonical promotion, and explicit
-`SimulationRuntime` hotspot handoff remain pending. This candidate does not
+Cities before mutation. Consumer replay regression `0887d18` has a
+comment-accuracy follow-up `6a4d971`; the corrected candidate passed fresh
+consumer, full EditMode, Smoke, and LongRun validation. Exact-tip review passed;
+canonical promotion and explicit `SimulationRuntime` hotspot handoff remain
+pending. This candidate does not
 include P18 temporal state in `UnityBootstrap-Daily-v1`, provide P12 owner
 export/staged hydration, or remove B's census/handoff gates.
 

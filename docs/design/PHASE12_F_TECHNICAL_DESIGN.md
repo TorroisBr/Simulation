@@ -16,7 +16,7 @@ implemented or promoted.
 **Current evidence revalidation (2026-09-29):** this F scope preserves the
 spatial-boundary correction at `d409549be5aee048ab8a90dc271af80288fa4e01`
 and is checked against the current owner/profile inventory
-`2a5e7071b68d653d7f6be4b3991e4147090d2750`, P12-B design/reference refresh
+`16611d89be3e9b8deae595d61ea8f8870c88e5ff`, P12-B design/reference refresh
 `ef8c72cd388445e25ce9360bb1e689fc0a07c639`, P12-C identity/genesis design
 `edc51571559a9ba4b1a025963de2e25b23c66fd3`, P12-D design
 `e8b83d75e34f8456555065e24bfe67bb30366baa`, and P12-E design
@@ -36,7 +36,7 @@ Earlier review hashes in the preceding F version apply only to their exact
 reviewed contents.
 
 **Current P18-D branch evidence (2026-09-29):** canonical prerequisites are
-promoted at `9e790c5`. The current owner inventory `2a5e707` records actor
+promoted at `9e790c5`. The current owner inventory `16611d8` records actor
 bridge source `4016a73` with execution record `924cfee9b41c77274141795f0f7ddcd117819f89`
 (exact-tip review PASS; focused 5/5) and merchant trade-state owner
 `b05feafd4f95b1a3a559e6d58de339334df57365` (independent exact-tip PASS;
@@ -50,10 +50,12 @@ integration. The optional-profile P18-D consumer candidate at runtime
 implementation `3ddf847` (based on P14 integration merge `a2a8edd`) now
 composes chronological advance, successful P18-C handoff, and the bounded
 SellGoods consumer. It rejects P14-A local-material-flow Cities before
-mutation. Test-only follow-up `0887d18` refreshed passing validation; current
-State evidence candidate is `c093665`. At this edit baseline, independent
-exact-tip review, canonical promotion, and explicit `SimulationRuntime`
-hotspot handoff remain pending. This candidate does not add P18 temporal state
+mutation. Test-only follow-up `0887d18` adds the consumer replay regression;
+comment-accuracy follow-up `6a4d971` has fresh validation and corrects the
+scenario wording. Current State evidence tip `f1cfed3` accurately describes
+post-terminal replay, and exact-tip P18 review passed. Canonical promotion and
+explicit `SimulationRuntime` hotspot handoff remain pending. This candidate
+does not add P18 temporal state
 to `UnityBootstrap-Daily-v1`, and does not establish P12 owner export or staged
 hydration.
 
@@ -385,10 +387,11 @@ P8-C, P8-D, and P8-E remain explicit-empty sections, with populated state
 rejected. The optional-profile P18-D consumer candidate `3ddf847`, based on
 P14 merge `a2a8edd`, composes chronological advance, successful P18-C handoff,
 and bounded SellGoods; its P14-A local-material-flow City exclusion occurs
-before mutation. It remains noncanonical at this edit baseline pending
-independent exact-tip review, promotion, and explicit runtime-hotspot handoff;
-test-only `0887d18` refreshed passing validation and State evidence candidate
-`c093665` records its status. Candidate composition neither changes the
+before mutation. It remains noncanonical pending canonical promotion and
+explicit runtime-hotspot handoff; the exact-tip implementation review of code
+`6a4d971` and State `f1cfed3` passed. Test-only `0887d18` adds the replay
+regression, with comment-only follow-up `6a4d971`; current State evidence tip
+`f1cfed3` records post-terminal replay and passing validation. Candidate composition neither changes the
 accepted `UnityBootstrap-Daily-v1` profile nor satisfies P12 owner export,
 staged hydration, or B's live census and handoff gates. It adds no P18 temporal
 state to this P12 daily profile.
