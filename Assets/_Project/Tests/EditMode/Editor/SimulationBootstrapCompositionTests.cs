@@ -244,6 +244,20 @@ public sealed class SimulationBootstrapCompositionTests
             Is.SameAs(recordSequenceCensus.OwnerInstanceIdentity));
         Assert.That(repeatedRecordSequenceCensus.Revision, Is.Zero);
 
+        OwnerSectionCensusWitness p11ActorChoices = simulation.Bootstrap.ActorChoiceInputCensusProvider.GetCurrentCensus();
+        OwnerSectionCensusWitness temporalActorChoices = simulation.Bootstrap.ActorChoiceTemporalCensusProvider.GetCurrentCensus();
+        Assert.That(p11ActorChoices.SectionId, Is.EqualTo(ActorChoiceP11CensusProvider.SectionId));
+        Assert.That(p11ActorChoices.SchemaVersion, Is.EqualTo(ActorChoiceP11CensusProvider.SchemaVersion));
+        Assert.That(p11ActorChoices.Cardinality, Is.Zero);
+        Assert.That(p11ActorChoices.Revision, Is.Zero);
+        Assert.That(temporalActorChoices.SectionId, Is.EqualTo(ActorChoiceTemporalCensusProvider.SectionId));
+        Assert.That(temporalActorChoices.SchemaVersion, Is.EqualTo(ActorChoiceTemporalCensusProvider.SchemaVersion));
+        Assert.That(temporalActorChoices.Cardinality, Is.Zero);
+        Assert.That(temporalActorChoices.Revision, Is.Zero);
+        Assert.That(temporalActorChoices.OwnerInstanceIdentity, Is.SameAs(p11ActorChoices.OwnerInstanceIdentity));
+        Assert.That(simulation.Bootstrap.ActorChoiceInputCensusProvider.GetCurrentCensus().OwnerInstanceIdentity,
+            Is.SameAs(p11ActorChoices.OwnerInstanceIdentity));
+
         SpatialAuthorityStore authority = simulation.Bootstrap.SpatialAuthority;
         SpatialHexCensusProvider hexCensusProvider = new SpatialHexCensusProvider(authority);
         OwnerSectionCensusWitness hexCensus = hexCensusProvider.GetCurrentCensus();

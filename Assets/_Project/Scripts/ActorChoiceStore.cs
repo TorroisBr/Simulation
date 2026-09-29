@@ -16,9 +16,41 @@ public sealed class ActorChoiceStore : IAuthoritativeMutationGuardBindable
     private readonly HashSet<string> worldCommandIds = new HashSet<string>(StringComparer.Ordinal);
     private readonly Dictionary<string, string> temporalInputByReference = new Dictionary<string, string>(StringComparer.Ordinal);
     private readonly HashSet<string> temporalOperationIds = new HashSet<string>(StringComparer.Ordinal);
+    private readonly object censusOwnerIdentity = new object();
     private long nextInputSequence = 1L;
+    private long censusRevision;
 
     internal PersonStore PersonStore => personStore;
+    internal object CensusOwnerIdentity => censusOwnerIdentity;
+    internal long CensusRevision => censusRevision;
+
+    internal int P11InputCount
+    {
+        get
+        {
+            int count = 0;
+            foreach (ActorChoiceInput input in inputs)
+            {
+                if (input.TemporalCapture == null) count++;
+            }
+
+            return count;
+        }
+    }
+
+    internal int TemporalInputCount
+    {
+        get
+        {
+            int count = 0;
+            foreach (ActorChoiceInput input in inputs)
+            {
+                if (input.TemporalCapture != null) count++;
+            }
+
+            return count;
+        }
+    }
 
     public ActorChoiceStore(PersonStore personStore)
     {
@@ -103,6 +135,8 @@ public sealed class ActorChoiceStore : IAuthoritativeMutationGuardBindable
             return false;
         }
 
+        if (!CanAdvanceCensusRevision(out failure)) return false;
+
         long inputSequence = nextInputSequence;
         ActorChoiceInputId inputId = new ActorChoiceInputId(
             "actor-choice-" + inputSequence.ToString("D6", CultureInfo.InvariantCulture));
@@ -122,6 +156,7 @@ public sealed class ActorChoiceStore : IAuthoritativeMutationGuardBindable
         indexByInputId.Add(inputId.Value, inputs.Count - 1);
         worldCommandIds.Add(worldCommandId);
         nextInputSequence++;
+        censusRevision++;
         input = captured.Copy();
         failure = ActorChoiceStoreFailureCode.None;
         return true;
@@ -154,6 +189,7 @@ public sealed class ActorChoiceStore : IAuthoritativeMutationGuardBindable
         }
         if (worldCommandIds.Contains(worldCommandId)) { failure = ActorChoiceStoreFailureCode.DuplicateWorldCommandId; return false; }
         if (nextInputSequence == long.MaxValue) { failure = ActorChoiceStoreFailureCode.SequenceExhausted; return false; }
+        if (!CanAdvanceCensusRevision(out failure)) return false;
         long sequence = nextInputSequence;
         ActorChoiceInputId id = new ActorChoiceInputId("actor-choice-" + sequence.ToString("D6", CultureInfo.InvariantCulture));
         ActorChoiceTemporalCapture capture = new ActorChoiceTemporalCapture(profileId, acceptedInput.TargetInstant, acceptedInput);
@@ -161,6 +197,7 @@ public sealed class ActorChoiceStore : IAuthoritativeMutationGuardBindable
             0L, ActorChoiceInputStatus.Pending, Array.Empty<ActorChoiceDisposition>(), capture, Array.Empty<ActorChoiceTemporalDisposition>());
         inputs.Add(captured); indexByInputId.Add(id.Value, inputs.Count - 1); worldCommandIds.Add(worldCommandId);
         temporalInputByReference.Add(referenceKey, id.Value); nextInputSequence++;
+        censusRevision++;
         input = captured.Copy(); failure = ActorChoiceStoreFailureCode.None; return true;
     }
 
@@ -223,11 +260,13 @@ public sealed class ActorChoiceStore : IAuthoritativeMutationGuardBindable
             || ((kind == ActorChoiceTemporalDispositionKind.AttemptReturned || kind == ActorChoiceTemporalDispositionKind.AttemptThrew)
                 && (!dispatched || current.Status != ActorChoiceInputStatus.ConsumedAwaitingTerminalAttempt)))
         { failure = ActorChoiceStoreFailureCode.InvalidLifecycleTransition; return false; }
+        if (!CanAdvanceCensusRevision(out failure)) return false;
         ActorChoiceInputStatus next = kind == ActorChoiceTemporalDispositionKind.DispatchStarted ? ActorChoiceInputStatus.ConsumedAwaitingTerminalAttempt
             : kind == ActorChoiceTemporalDispositionKind.Rejected ? ActorChoiceInputStatus.Rejected
             : kind == ActorChoiceTemporalDispositionKind.AttemptReturned ? ActorChoiceInputStatus.AttemptReturned : ActorChoiceInputStatus.AttemptThrew;
         var disposition = new ActorChoiceTemporalDisposition(current.TemporalDispositions.Count + 1L, kind, boundary, operationId, decisionId, reason, outcome, resultStatus);
         inputs[index] = current.WithTemporalDisposition(next, disposition); temporalOperationIds.Add(operationId);
+        censusRevision++;
         failure = ActorChoiceStoreFailureCode.None; return true;
     }
 
@@ -558,7 +597,8 @@ public sealed class ActorChoiceStore : IAuthoritativeMutationGuardBindable
 
         ActorChoiceStore copy = new ActorChoiceStore(targetPersonStore)
         {
-            nextInputSequence = nextInputSequence
+            nextInputSequence = nextInputSequence,
+            censusRevision = censusRevision
         };
         foreach (ActorChoiceInput input in inputs)
         {
@@ -648,9 +688,24 @@ public sealed class ActorChoiceStore : IAuthoritativeMutationGuardBindable
             return false;
         }
 
+        if (!CanAdvanceCensusRevision(out failure)) return false;
+
         string id = current.InputId.Value;
         int index = indexByInputId[id];
         inputs[index] = current.WithDisposition(nextStatus, disposition);
+        censusRevision++;
+        failure = ActorChoiceStoreFailureCode.None;
+        return true;
+    }
+
+    private bool CanAdvanceCensusRevision(out ActorChoiceStoreFailureCode failure)
+    {
+        if (censusRevision == long.MaxValue)
+        {
+            failure = ActorChoiceStoreFailureCode.RevisionExhausted;
+            return false;
+        }
+
         failure = ActorChoiceStoreFailureCode.None;
         return true;
     }

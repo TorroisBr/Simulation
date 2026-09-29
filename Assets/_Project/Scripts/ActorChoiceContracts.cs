@@ -89,7 +89,8 @@ public enum ActorChoiceStoreFailureCode
     InvalidBoundary,
     InvalidReason,
     SequenceExhausted,
-    CorrelationConflict
+    CorrelationConflict,
+    RevisionExhausted
 }
 
 public sealed class ActorChoiceTemporalBoundaryReference
