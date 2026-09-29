@@ -667,6 +667,8 @@ public sealed class NpcDecisionStore
 /// <summary>
 /// Ephemeral owner-issued cardinality evidence. This witness is not owner state
 /// export and its owner identity is valid only for the live runtime instance.
+/// Reading the owner is not synchronized; P12-B may consume this witness only
+/// on the bound simulation thread while the registered operation set is idle.
 /// </summary>
 public sealed class OwnerSectionCensusWitness
 {
@@ -697,7 +699,7 @@ public sealed class OwnerSectionCensusWitness
     public long Revision { get; }
 }
 
-public sealed class NpcDecisionRecorder
+public sealed class NpcDecisionRecorder : IOwnerSectionCensusProvider
 {
     public const string OccurrenceReceiptSectionId = "p12f.npc-decision-occurrence-receipts";
     public const int OccurrenceReceiptSectionSchemaVersion = 1;
@@ -738,6 +740,11 @@ public sealed class NpcDecisionRecorder
             occurrenceReceiptsOwnerIdentity,
             occurrenceReceipts.Count,
             occurrenceReceiptsRevision);
+    }
+
+    OwnerSectionCensusWitness IOwnerSectionCensusProvider.GetCurrentCensus()
+    {
+        return GetOccurrenceReceiptCensus();
     }
 
     public NpcDecisionRecord RecordChosenAction(NpcRuntime actor, NpcActionRuntime actionRuntime, NpcDecisionOrigin origin)

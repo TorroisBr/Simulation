@@ -374,12 +374,31 @@ identical. A zero count without a live owner and revision is not a witness.
 
 ## Readiness result
 
-The complete **static** source map is ready for independent review as a bounded
-P12-B technical evidence artifact. No implementation is claimed ready yet:
-the actual owner witness providers, commit notifications, owner-thread/scope
-capability, and runtime exact-zero tests do not exist. After the review, the
-next implementation decision is limited to the already accepted P12-B
-coordinator protocol and fail-closed registration seam; any owner mutation
-instrumentation must be integrated by its accepted C/D/E/F owner group. The
-live profile, P12-G and P12-A remain blocked until the required owner witness
-set is complete and demonstrated on the normal bootstrap.
+The complete **static** source map remains a bounded P12-B evidence artifact;
+it is not a live census or mutation-completeness proof. The owner-local
+`NpcDecisionRecorder.occurrenceReceipts` witness candidate on
+`codex/phase12/P12BOwnerReceiptCensus` at `2ef4a83` passed exact-tip review and
+focused bootstrap/receipt tests. That candidate proves one composed-empty
+section from its actual owner and covers successful, failed and replayed
+receipt attempts.
+
+The follow-on `codex/phase12/P12BCoordinatorProtocol` candidate adds a
+standalone, non-admitting protocol kernel for versioned section requirements,
+owner-backed providers, fail-closed coverage assessment, a one-way owner
+thread binding, committed-mutation epoch notifications, and accounting scopes
+for explicitly registered operations. Its focused suite exercises missing,
+duplicate, unexpected, wrong-schema and wrong-owner evidence; exact-zero roles;
+unnotified revision drift; commit notification; nested scopes; and off-thread
+rejection. The kernel is not connected to the selected bootstrap or runtime,
+does not issue tokens, and cannot assert that a caller's inventory is complete.
+Its setup and fixture results do not establish P12-B readiness.
+
+Owner-local adapters and commit notifications for C/D/E/F still require their
+documented dependency order and exact reviewed B API. The live profile still
+needs the complete actual owner/cardinality set, every supported committed
+write mapped to a notification or a closed boundary, and the exhaustive
+owner-thread/operation inventory. Do not edit `SimulationRuntime`,
+`SimulationTime`, or the P18 advance lease until those gates are satisfied.
+P12-G and P12-A remain blocked until the complete owner witness set is
+demonstrated on the normal bootstrap and all required downstream exports and
+hydrators exist.
