@@ -1,10 +1,14 @@
 # P12-B RuntimeIdentityRegistry census implementation candidate
 
-**Status:** Implementation complete; awaiting exact-tip independent review.
+**Status:** Independently reviewed and promoted to `codex/phase12/canonical`
+at `033854452c1167e053f57076803819ffe3a16840` on 2026-09-29.
 
 **Canonical base:** `codex/phase12/canonical` at `1ada62b031e738e2bdd5d3d623e028a114961d6e`.
 
 **Reviewed design:** `docs/design/PHASE12_RUNTIME_IDENTITY_CENSUS_DESIGN.md`, design tip `abf433f6767be39d0ddac5cf2b4c194ca0fa10a4`; independent design review passed and is recorded on `codex/phase12/P12BIdentityRegistryWitnessDesignReview` at `7f911ab`.
+
+**Implementation review:** Exact-tip PASS on this candidate; durable record is
+`codex/phase12/P12BRuntimeIdentityWitnessReviewRecord` at `c113f52`.
 
 ## Delivered boundary
 
