@@ -32,17 +32,18 @@ modify P8 owner semantics or `SimulationRuntime`.
 
 ## Validation evidence
 
-Validation ran against the implementation tree before its documentation-only
-candidate record was added; the executable source and tests are unchanged at
-the candidate tip.
+Validation was rerun after the implementation commit against the candidate's
+unchanged executable tree. Results are retained under
+`Library/ValidationResults/P12BP8C` in the candidate worktree so they remain
+available for independent inspection.
 
 | Gate | Result | Evidence |
 |---|---:|---|
-| `PersonSpatialPresenceTests` | 9/9 passed | `Temp/ValidationResults/EditMode-20260929-200819-cc84c5b90fe84089a9f81a631ba574b4.xml` |
-| `SimulationBootstrapCompositionTests` | 14/14 passed | `Temp/ValidationResults/EditMode-20260929-200845-d9633daa3db140baa6fd85ca5fff25d2.xml` |
-| ALL EditMode | 1953/1953 passed | `Temp/ValidationResults/EditMode-20260929-200923-5d8b2a91d61043ad9db6d53e6dcec1f1.xml` |
-| Official complete Smoke | 5/5 passed | `Temp/ValidationResults/EditMode-20260929-201008-ad5f682821c54a02a49ce85cf9873717.xml` |
-| `git diff --check` | passed | implementation commit `c4aaedf` |
+| `PersonSpatialPresenceTests` | 9/9 passed | `Library/ValidationResults/P12BP8C/EditMode-20260929-201724-8ef7886cd7394da9a0c42fb3f7cc744a.xml` |
+| `SimulationBootstrapCompositionTests` | 14/14 passed | `Library/ValidationResults/P12BP8C/EditMode-20260929-201743-3c9e7d263102414aa316964f48193e2a.xml` |
+| ALL EditMode | 1953/1953 passed | `Library/ValidationResults/P12BP8C/EditMode-20260929-201801-6c816402a8d847dab7fa10d4059d898a.xml` |
+| Official complete Smoke | 5/5 passed | `Library/ValidationResults/P12BP8C/EditMode-20260929-201928-17559bab94a641ec8acab3a545ccbc59.xml` |
+| `git diff --check` | passed | implementation commit `c4aaedf` and base-to-candidate diff |
 
 The tests establish these two owner-local witnesses only. P8-B/D sections,
 complete profile coverage, committed-write invalidation, owner-thread proof,
