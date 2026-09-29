@@ -176,10 +176,12 @@ legacy spatial runtime state.
   P8-owned spatial extension. Keep their identities and link semantics
   distinct from P8-A `HexId`, `LocationId`, and scale provenance. P8-A
   geography is covered by the identity/genesis checkpoint above; legacy
-  routes/locations/sites remain covered here even though P8-B through P8-E
-  authorities are excluded. In particular, these legacy City/Site anchors
-  and position links are not the P8-C anchor/`PersonSpatialPositionStore`
-  facts, and legacy routes are not P8-B passage or P8-D route-plan facts.
+  runtime-ID locations, routes, sites, and embedded City/NPC location links
+  remain covered here even though P8-B through P8-E authorities are excluded.
+  The P8-C stable City/Site-to-`LocationId` bridge is a separate fact owned by
+  `LegacySpatialAnchorBindingStore` (the class name is historical), alongside
+  the P8-C `PersonSpatialPositionStore`; do not double-export either as a D
+  legacy link. Legacy routes are not P8-B passage or P8-D route-plan facts.
 - Population aggregates, `PersonStore`, genealogy, residence/lifecycle and
   materialization relationships as reachable in the live profile composition.
   Keep Person identity and NPC runtime identity separate: NPC-only rows stay
@@ -188,8 +190,8 @@ legacy spatial runtime state.
   from calendar/configuration rather than serializing mutable age.
 - Owner factories restore roots before references; cross-check account,
   inventory, City/market, NPC/Person, residence, parentage, aggregate and
-  materialization bindings, plus legacy City/Site anchor and
-  location/route/site/NPC links. Cover both initially empty and
+  materialization bindings, plus legacy runtime-ID location/route/site/NPC
+  links. Cover both initially empty and
   evolved/populated states; initial asset counts are not maximum
   cardinalities.
 - Reconstruction tests round-trip empty and populated legacy network and
@@ -204,7 +206,8 @@ legacy spatial runtime state.
 **Likely areas to inventory/own:** `CityRuntime`, `MarketRuntime`,
 `MarketItemRuntime`, economy/account and inventory owners; `NpcRuntime` and
 NPC/action state owners; `SpatialNetworkRuntime`, `ExplorableSiteStore` and
-the current legacy City/Site anchor and position/link owners;
+the current legacy runtime-ID position/link owners. The P8-C stable
+City/Site anchor bridge remains a separate spatial authority;
 `SettlementPopulation*`, `PersonStore`, `GenealogyStore`,
 residence/lifecycle/materialization authorities. Shared `PersonStore`,
 population and spatial/site ownership require explicitly coordinated

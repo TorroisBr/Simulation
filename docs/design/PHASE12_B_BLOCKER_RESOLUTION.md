@@ -1,16 +1,27 @@
 # P12-B blocker resolution and dependency plan
 
-**Status:** Source/API evidence pass complete; no runtime census, owner
-invalidation capability, capture fence, or P12 readiness is claimed. This
-record decomposes the already accepted P12-B–P12-G scopes. It adds no
-checkpoint ID, product behavior, or implementation authorization.
+**Status:** Static owner/write-map pass complete, with a partial live
+day-zero census through the selected-profile bootstrap test. Complete owner
+coverage, committed-write invalidation, runtime capture fencing, and P12
+readiness are not claimed. This record decomposes the already accepted
+P12-B–P12-G scopes. It adds no checkpoint ID, product behavior, or
+implementation authorization.
 
-**Evidence baseline:** P12 canonical `04105d31e88fca97888dddb8e974236a7f4b6804`;
-the executable source tree is identical to validated composition `ec75e6a`.
-Four independent read-only source audits covered live composition and
-cardinality, C/D mutators, E/F mutators, and thread/quiescence/exact-zero
-paths. No files or tests were changed by those audits. The current checkout
-also has two unrelated untracked `.meta` files; they are outside this record.
+**Evidence baseline:** P12 canonical
+`04105d31e88fca97888dddb8e974236a7f4b6804`; the selected-profile source basis
+is validated composition `ec75e6a`. Independent read-only audits covered
+composition/cardinality, C/D mutators, E/F mutators, and
+thread/quiescence/exact-zero paths. On the `e1d947d` code candidate,
+`ContinuationCensusProtocolTests` passed 18/18, `EconomyTransactionTests`
+passed 45/45, and the selected-profile live bootstrap test passed 1/1. Their
+XML results are respectively
+`Temp/ValidationResults/EditMode-20260929-185655-26d236ff9f1e4026a2f50afe631ba117.xml`,
+`EditMode-20260929-184219-213abe140c7d4a5cbc004da037370fe3.xml`, and
+`EditMode-20260929-185153-b56ff944324d4e1683d6ecd53e5d633c.xml` in the
+Unity project. The profile test ran against the published live day-zero
+composition; its limited assertions are recorded below. No test establishes
+full owner coverage or owner-thread quiescence. Unity-generated settings and
+`.meta` changes in the checkout are outside this record.
 
 ## Evidence completed and evidence still missing
 
@@ -23,9 +34,9 @@ or that runtime capture is restricted to a quiescent owner thread.
 
 | Obligation | Source evidence now available | Capability/evidence still required |
 |---|---|---|
-| Live owner/cardinality census | The `Simulation-GeneralTest` composition path and its provider choices are mapped. Startup authors two Cities and ten NPC configuration rows; the selected runtime starts `PersonStore` empty. The census distinguishes causal owners, continuation commitments, conditionals, excluded state, and noncausal read models. | At a live boundary, each expected owner must report exact owner identity, section/schema version, cardinality, and owner revision from the actual published composition. Startup/configuration counts cannot stand in for evolved rosters or mutable owner contents. |
+| Live owner/cardinality census | The selected-profile test runs normal genesis against `Simulation-GeneralTest.asset` and inspects the published runtime before day one. It verifies City/NPC, population, market, inventory, and spatial-knowledge cardinalities; Person/Genealogy zero; P8-A geography; P8-B–D exact-zero owner counts/revisions; both receipt witnesses; and empty ActorChoice/directive/travel/expedition state. | This is still a partial live census: several directly observed collections have no owner revision/section-token API, and C roots plus some E/Justice owners are not published or censusable. Each included owner still needs exact identity, section/schema version, count, and revision in the actual capture provider. Source-derived counts cannot stand in for evolved state. |
 | Committed-write invalidation | Successful mutation entrypoints are mapped below, including owner-local revisions and public bypasses. Multi-owner transactions, rollback-only paths, queries, plans and proposals are distinguished. | A successful authoritative commit must notify the one P12-B epoch after the owning commit (or whole multi-owner commit). Failed preflight and full rollback do not notify; a successful compensating write does. Prove every included public path is covered or no longer supported outside an instrumented boundary. |
-| Owner-thread/quiescence | `Start → InitializeSimulation`, `Update → Simulate`, Space-day advancement, and wrapper travel/expedition calls are synchronous in the inspected source path. No explicit thread/task/coroutine launch was found. | Bind and verify the actual runtime owner thread; track bootstrap, outer advance and supported in-flight multi-owner operations; reject capture during any scope or from a different thread. Static absence of thread creation does not prove callers cannot invoke exposed APIs from another thread. |
+| Owner-thread/quiescence | Source audit finds synchronous `Start → InitializeSimulation` and `Update → Simulate` paths. The selected-profile EditMode test calls `Start()` directly and captures no `Update` frame or managed-thread identity. | Bind and verify the actual Unity runtime owner thread; track bootstrap, outer advance and supported in-flight multi-owner operations; reject capture during any scope or from a different thread. The direct EditMode bootstrap test and static absence of thread creation do not prove normal-frame affinity or exclude external callers. |
 | Runtime exact-zero witnesses | The profile has explicit exclusions and known conditional-empty sections. Composed-but-empty is distinct from not composed. | Obtain owner-backed exact-zero values at the same live boundary and revalidate them after collection. Do not infer zero from scene startup, a skipped consumer, or a missing runtime reference. |
 
 ## Selected-profile census targets
@@ -37,10 +48,49 @@ missing, duplicate, unsupported, or unversioned entries fail closed.
 | P12 owner group | Concrete selected-profile owners to witness | Important exactness / current gap |
 |---|---|---|
 | C — causal roots | `RuntimeIdAllocator` (14 per-kind counters), `RuntimeIdentityRegistry` (8 typed indexes), `SimulationRecordSequence`, concrete deterministic-random provider and use/stream state, P9-B genesis manifest/provenance, P8-A geography facts. | Allocator, registry, sequence and RNG lack complete census/export/hydration witnesses. P8-A has local revision/counts, but the composed spatial authority also owns P8-B–E child sections; their explicit empty state must be witnessed separately and cannot be inferred from P8-A’s positive cardinality. |
-| D — factual roots | Runtime City and NPC roster/composite state; each City’s Market, accounts, inventories and Population; Person/Genealogy/lifecycle owners; legacy `SpatialNetworkRuntime`, `ExplorableSiteStore`, and `LegacySpatialAnchorBindingStore`. | City/NPC have no composite revision. `Cities` and `ImportantNpcs` expose backing lists; legacy network exposes mutable collections. Person/lifecycle commits can span owners without a capture scope. Site identity is a root; exploration progress lives in expedition/Knowledge owners. |
+| D — factual roots | Runtime City and NPC roster/composite state; each City’s Market, accounts, inventories and Population; Person/Genealogy/lifecycle owners; legacy `SpatialNetworkRuntime`, `ExplorableSiteStore`, and their existing runtime-ID location/site links. | City/NPC have no composite revision. `Cities` and `ImportantNpcs` expose backing lists; legacy network exposes mutable collections. Person/lifecycle commits can span owners without a capture scope. Site identity is a root; exploration progress lives in expedition/Knowledge owners. |
 | E — official/core domains | Effective-config-selected City economy, transaction service and child accounts/inventories/markets; Merchant and Commercial Knowledge sharing; Justice/Crime/appraisal; composed political, institution, property/estate, armed-force/manpower/position, conflict/war/battle stores and enabled action providers. | Local guards/revisions are not a global invalidation epoch. Direct child or system mutators bypass coordinator-level evidence. Provider membership must follow resolved effective configuration, not the serialized module list. |
 | F — knowledge/commitments | Political/Crime and per-NPC exploration/adventure Knowledge; directives; default `ActorChoiceStore`; travel and party owners; `ExpeditionStore`/runtime/system. | Several per-NPC knowledge owners, directives, travel and expedition state lack complete revisions; expedition store exposes mutable runtime references. Actor-choice terminal history and sequence are causal continuation state. |
 | Census-only read models | `DomainEventStore` and `NpcDecisionStore` may be counted/versioned as known read models; History is a selected subset, Chronicle is a derived view. | They are not authoritative owner sections and do not invalidate the world-truth epoch. `SimulationRecordSequence` is a separate causal C root and must be retained exactly. |
+
+### Live selected-profile day-zero evidence
+
+`SimulationBootstrapCompositionTests.SelectedSampleSceneProfileBootstrapsItsAuthoredP8GeographyBeforeDayOne`
+passed 1/1 using the real
+`Assets/_Project/Data/Simulations/Simulation-GeneralTest.asset`. The test
+creates `TesteSimulacao`, calls `Start()`, and inspects the published
+`SimulationBootstrapComposition` before any day advance. It verifies:
+
+- P8-A runtime `SpatialAuthorityStore`: one Hex and one anchored Location,
+  with the selected profile's scale context and IDs.
+- The two City and ten NPC roots; 1,800 aggregate population; ten market
+  rows totaling 1,395 units; two NPC inventory rows totaling 8 units; and ten
+  per-NPC spatial-Knowledge owners totaling 20 location observations and 10
+  route observations, with revision 3 on each spatial-Knowledge owner.
+- Person and Genealogy cardinality zero. City/NPC roster and public collection
+  counts are real runtime reads, but do not have composite revision witnesses.
+- `NpcDecisionRecorder.occurrenceReceipts`: exact cardinality 0 and revision
+  0, with the same owner-instance identity on repeated reads.
+- `EconomyTransactionService.keyedSaleReceipts`: exact cardinality 0 and
+  revision 0, with the same owner-instance identity on repeated reads.
+- `ActorChoiceStore` is composed, current day is 0, and History is empty.
+- ActorChoice count, directives, travel parties, and expeditions are empty.
+  These direct collection/count reads do not all carry an owner revision.
+- P8-B passage options, barriers, option-state rows, barrier-state rows, and
+  crossings are zero; passage is stamped by parent spatial revision 1. P8-C
+  stable anchor bindings and Person positions are each `Count=0, Revision=0`.
+  P8-D route Knowledge and route plans are each zero at revision 0. The P8-E
+  coordinator is not a retained census section. P10 `LocalTopologyStore` is
+  not composed.
+
+This is a live published runtime composition, but the test manually invokes
+`Start()` in EditMode. It does not exercise Unity `Update`, capture a managed
+owner-thread identity, census all included owners, or establish quiescence.
+It is not an evolved-boundary census. The broader startup figures below
+remain source-derived expectations unless explicitly named above. The
+unpublished allocator/identity/record/RNG roots and unwitnessed E/Justice
+owners remain live census blockers; no reflection or “not called” inference
+is substituted for their owner exports.
 
 For exact-zero evidence, record these roles separately:
 
@@ -50,13 +100,17 @@ For exact-zero evidence, record these roles separately:
 - **Composed/known empty:** `EconomyTransactionService.keyedSaleReceipts` and
   `NpcDecisionRecorder.occurrenceReceipts` exist in reachable composed owners,
   while the selected legacy daily profile does not invoke their P18-D writers.
-  Their live counts must be witnessed as exactly zero and tied to owner
-  identity/revision.
-- **Composed/known empty:** P8-B passage, P8-C City/Site binding and Person
-  position, P8-D route Knowledge/plan, and P8-E travel-authority sections are
-  composed in the selected profile and explicitly empty. Each must provide a
-  live exact-zero witness; these sections are not absent merely because no
-  facts are present.
+  Both now expose owner-issued count/revision witnesses on this feature branch;
+  the selected-profile test observes exact zero for each. This closes only
+  these two conditional sections, not all exact-zero or invalidation coverage.
+- **Composed/known empty:** P8-B passage, P8-C City/Site-to-Location bindings
+  and Person positions, P8-D route Knowledge/plans, and the P8-E component
+  travel-authority sections are composed in the selected profile and
+  explicitly empty. The P8-C binding owner is the runtime-installed
+  `LegacySpatialAnchorBindingStore` (its historical class name does not make
+  these rows the separate legacy City/NPC runtime-ID links under D). Each
+  section must provide a live exact-zero witness; these sections are not
+  absent merely because no facts are present.
 - **Not composed:** P10's `LocalTopologyStore`/PlaceContent and autonomy
   services, P14-A local material flow, P18 temporal/intraday state, P19
   loader/module state, P20 activity state, and external WorldCommand
@@ -65,6 +119,86 @@ For exact-zero evidence, record these roles separately:
 - **Omitted read model:** events/decisions/history/chronicle are not causal
   truth sections. Count the selected stores only for census completeness;
   their row counts are not required to be zero.
+
+## Source-derived startup census (not an evolved-boundary witness)
+
+The following values are derived from the selected authored profile and its
+normal construction path. Other than the explicitly listed day-zero live
+checks above, these are startup expectations and API-coverage evidence, not a
+complete live P12 boundary census. Every adapter must read the installed
+runtime owner after clone/publication and report its exact current count and
+revision.
+
+- **C roots:** one `RuntimeIdAllocator` has 14 private next-value families.
+  After authored bootstrap, NPC/City/legacy Location/legacy Route next values
+  are respectively 11/3/3/3; the other ten families remain 1. The shared
+  `RuntimeIdentityRegistry` starts with 10 NPC, 2 City, 2 legacy Location and
+  2 legacy Route identities, plus zero Site/LocalPlace/LocalConnection/
+  NotableItem identities (16 total). One shared `SimulationRecordSequence`
+  remains at next=1 because initialization emits no events or decisions. The
+  selected profile uses one seed-zero deterministic provider through three
+  pure keyed call families at default draw index 0 and retains no mutable RNG
+  stream. P9-B provenance is one immutable manifest; P8-A installs one Hex,
+  one anchored Location and one separate scale context, with the cloned
+  runtime `SpatialAuthorityStore` at revision 1. Allocator, registry and
+  sequence do not yet expose exact owner-issued count/revision witnesses.
+  Preserve the separate P12-C candidate
+  `codex/phase12/P12CIdentityRuntimeSnapshot` at `531d835`: it contains
+  reusable allocator and record-sequence snapshot seams, but is based on a
+  stale sibling base and must be selectively reintegrated after B promotion.
+  Do not take its full `DecisionRecords.cs` diff, which removes the current
+  P18 receipt owner and P11 `ActorChoice` type; registry/RNG/genesis/P8-A
+  export and staged reconstruction evidence remain outstanding.
+- **D roots:** two City owners start with population aggregates 1,000 and 800
+  (each local population revision 0). Ten NPC runtimes start, five attached to
+  each City; the legacy spatial network starts with two City locations and two
+  directed routes. `PersonStore` and `GenealogyStore` start empty; the authored
+  NPCs have no `PersonId`. `ExplorableSiteStore` starts empty. These counts can
+  evolve, while the live City/NPC roots expose mutable relationships and lack
+  a composite revision; they must not be substituted by asset/configuration
+  counts at capture.
+  `SettlementPopulationRuntime` has its own count/revision but does not cover
+  Person, residence, genealogy, death or materialization edges; `PersonStore`
+  has no count/revision pair and `GenealogyStore` has count/records but no
+  revision. `SpatialNetworkRuntime` exposes mutable collection views without a
+  revision, and `ExplorableSiteStore` has no revision. Thus the derived startup
+  counts do not yet form owner-backed census sections.
+- **E owners:** the two `MarketRuntime` instances start with five item rows
+  each and 1,395 units total; ten NPC-owned accounts/inventories are composed,
+  with two authored NPC inventories containing four units each. Market and
+  inventory revisions exist, but no market-row or aggregate NPC-account/
+  inventory census was found. Several political stores expose local
+  Count/Revision (`PoliticalClaimStore`, `FactionStore`, `PoliticalSupportStore`,
+  `PoliticalKnowledgeStore`, `ArmedForceStore`); institution, office,
+  property/estate, political-decision, manpower/spatial-force, persistent
+  conflict/war/battle, and complete Justice/warrant sections lack sufficient
+  public count/revision witnesses. `CrimeSocialAppraisalWorldState` spans
+  multiple stores, so one substore count is not complete. Store defaults or
+  no authored row are genesis expectations, not substitutes for witnesses.
+- **F owners:** each of ten NPC-held `SpatialKnowledgeRuntime` owners starts
+  with two known legacy locations and one known route, and has an owner-local
+  `Revision`. `ActorChoiceStore` starts empty and exposes `Count`/inputs but
+  no revision; `ScheduledDirectiveStore`, `TravelPartyStore`, and
+  `ExpeditionStore` expose collections but no sufficient count/revision pair.
+  Commercial observations require per-NPC owner evidence because the merchant
+  bootstrap path is effective-config- and actor-dependent. P10 exploration
+  content/autonomy and P18-D temporal/local-observation owners are not composed
+  by this selected profile; do not label them empty stores.
+- **Conditional receipt owners:** this branch provides exact owner-issued
+  census witnesses for both `NpcDecisionRecorder.occurrenceReceipts` and
+  `EconomyTransactionService.keyedSaleReceipts`. The selected-profile test
+  confirms both at `Count=0, Revision=0` with stable owner identity. Their
+  commit hooks still are not connected to the shared P12-B invalidation epoch.
+- **P8-B–E sections:** installed passage options, barriers, option-state rows,
+  barrier-state rows and crossings each start at zero. P8-C's
+  `LegacySpatialAnchorBindingStore` and `PersonSpatialPositionStore` each
+  expose exact `Count=0, Revision=0`; P8-D route Knowledge exposes
+  `ObservationCount=0, Revision=0`, and route plans expose
+  `PlanCount=0`, `History.Count=0`, `Revision=0`. The passage child uses the
+  parent `SpatialAuthorityStore.Revision` as its invalidation stamp. P8-E's
+  coordinator has no retained state and is not a census section. These store
+  APIs are synchronous but unsynchronized; the values do not prove a
+  quiescent runtime read.
 
 ## Committed-write invalidation map
 
@@ -79,7 +213,8 @@ the P12-B invalidation epoch.
 | C roots | All `RuntimeIdAllocator.Allocate*` operations; `RuntimeIdentityRegistry.Register*` and local-topology batch registration; event/decision record allocation through `SimulationRecordSequence.Allocate`; any mutable RNG stream draw retained by the selected provider; P9 genesis publication; P8-A geography and any excluded child-store writes. | Private counters/indexes and record-sequence next value lack census/revision. Keyed RNG calls are pure for fixed seed/key/index, but the provider interface permits mutable streams; admission must bind concrete provider and use census. P8-A’s one revision spans P8-A and excluded children. |
 | D: roster and NPC/City | `TryRegisterNpc`/`TryUnregisterNpc`; City/NPC presence and travel/status/action/life/hidden/plan setters; `AddImportantNpc`/`RemoveImportantNpc`; City production/consumption/price update; direct Market/Inventory/MoneyAccount writes. | `Cities` returns its backing list; `ImportantNpcs` and NPC status/child runtime objects are mutable. City/NPC lack a composite witness; children have only local revisions. |
 | D: population/identity | Population transitions and paired migration; Person registration/binding/unbinding; genealogy add/remove; named birth; materialization/adoption; residence binding; immigration/emigration/resident death and Person death; NPC residence migration. | Birth/materialization/death/migration can expose an intermediate multi-owner graph before the final leg. Static public lifecycle entrypoints can bypass `SimulationRuntime` wrappers and partial political revision. Rollback is not a committed truth change if complete; failed restoration faults the runtime. |
-| D: legacy spatial/site | `SpatialNetworkRuntime.RegisterLocation`/`RegisterRoute`; `ExplorableSiteStore.Add`; `LegacySpatialAnchorBindingStore.TryBindCity`/`TryBindSite`/`TryBind`. | Network collections are mutable/downcastable and lack revision; site store lacks revision; anchor store has only its local revision. Exploration progress is covered under F, not site identity. |
+| P8-C: canonical spatial presence | `LegacySpatialAnchorBindingStore.TryBindCity`/`TryBindSite`/`TryBind`; `PersonSpatialPositionStore.TrySetAt`, `TryBeginTransit`, `TryAdvanceTransit`, `TryArrive`, and P8-E prepared installs. P8-E outer travel operations may change more than one section and notify once after complete installation. | Both stores expose owner-local count/revision but have no census registration or P12 epoch connection. The class name `LegacySpatialAnchorBindingStore` is historical: P8-C owns its stable City/Site-to-P8-A-Location bridge. |
+| D: legacy spatial/site | `SpatialNetworkRuntime.RegisterLocation`/`RegisterRoute`; `ExplorableSiteStore.Add`; embedded legacy City/NPC runtime-ID location/site links. | Network collections are mutable/downcastable and lack revision; site store lacks revision. These links are separate from P8-C's City/Site-to-`LocationId` bridge and Person positions. Exploration progress is covered under F, not site identity. |
 | E: economy/merchant | Successful `EconomyTransactionService.Try*` transfers, trades, purchases/sales, consumption, travel charges and successful compensation; child Money/Inventory/Market writes; legacy City daily economy; Merchant state/knowledge/effect commits; Commercial Knowledge observations/share commit. | Transaction service is not guard/epoch-bound; child APIs are directly callable. City has only a staged daily receipt. Merchant urgency receipt covers only its staged step. Commercial Knowledge can be mutated directly. |
 | E: justice/crime and core owners | Successful crime action/hidden-status effects; Justice warrant, arrest, sentence, escape, wanted-status and failed-escape transitions; crime outcome/Knowledge/appraisal commits; institution/office/tenure writes; force/manpower/position writes; conflict/war/battle registration, participant, start/end and final resolution; faction/claim/support/Political Knowledge/property/estate commits. | Guard binding and local revisions protect selected subsets only. Aggregate and cross-owner operations need one notification after successful installation; proposals/prepares/computes/queries do not notify. |
 | F: knowledge/directives/choice | Per-NPC Adventure/Exploration Knowledge observations; directive add and terminal processing-state transitions; every successful `ActorChoiceStore` capture/defer/reject/dispatch/returned/threw transition; travel start/advance; party add/complete/remove and travel; expedition add/remove/complete/start/progress/traversal/resource/opposition/return/reconciliation. | Direct per-NPC writes can bypass guard-bound systems; directives have no revision; travel/party lack a complete receipt; ExpeditionStore and `ExpeditionRuntime` expose mutable commitment state. |
@@ -131,9 +266,10 @@ field write.
   paired with the parent `SpatialAuthorityStore.Revision`, which advances for
   these commits. The selected profile starts all of these sections at zero;
   local-topology bindings are a separate P10 section.
-- P8-C legacy anchors and Person positions have owner-local `Count` and
-  `Revision` witnesses on `LegacySpatialAnchorBindingStore` and
-  `PersonSpatialPositionStore`. P8-D route Knowledge has
+- P8-C canonical City/Site-to-Location bindings and Person positions have
+  owner-local `Count` and `Revision` witnesses on the runtime-installed
+  `LegacySpatialAnchorBindingStore` and `PersonSpatialPositionStore`. P8-D
+  route Knowledge has
   `ObservationCount`/`Revision`; route plans/history have
   `PlanCount`/`Revision`. These four selected live stores start empty.
 - P8-E's travel transaction coordinator retains no section state. Census its
@@ -182,9 +318,9 @@ field write.
   materialization, death and migration need one operation scope spanning all
   legs and one invalidation after the committed install.
 - Legacy spatial/site roots: `SpatialNetworkRuntime.RegisterLocation` /
-  `RegisterRoute`; `ExplorableSiteStore.Add`; and
-  `LegacySpatialAnchorBindingStore.TryBindCity`, `TryBindSite`, and
-  `TryBind`.
+  `RegisterRoute`; `ExplorableSiteStore.Add`; and the existing embedded
+  legacy City/NPC location and site links. P8-C City/Site-to-Location bindings
+  and Person positions are tracked separately above.
 
 **P12-E core and official daily owners**
 
@@ -277,19 +413,26 @@ These are work packages inside accepted P12-B–G, not new checkpoint IDs.
 Every consumer uses one reviewed owner-witness and invalidation contract; do
 not add a second lease, global lock, or duplicate authoritative store.
 
-1. **B technical contract and source evidence — complete enough for review.**
-   The four audits now provide composition references, method-level
-   C/D/E/F write maps, synchronous entrypoint evidence, and zero-role
-   classification. Independent exact-tip review must confirm omissions and
-   the P18 lease seam before this contract is used to schedule code.
-2. **B coordinator protocol — next bounded design/implementation slice.**
-   Specify one versioned owner-section witness registration contract (owner
-   identity, role, schema, exact count, local revision/snapshot stamp), one
-   monotonically invalidating epoch, owner-thread binding, and operation-scope
-   accounting. Missing adapters or inconsistent witnesses return
-   `OwnerCoverageIncomplete`; no capture token is issued. Do not wire
-   `SimulationRuntime` or claim a live profile witness until the owner groups
-   below exist. One successful outer commit that changes several owner
+1. **B source map and live census evidence — substantially advanced, not
+   complete.** The audits provide the selected composition, method-level
+   C/D/E/F writer matrix, source-level thread/quiescence limits, and zero-role
+   classification. The selected-profile day-zero test now reads City/NPC,
+   population, market, inventory, per-NPC spatial-Knowledge, Person/Genealogy,
+   P8-B–D, receipt, directive, ActorChoice, travel and expedition values from
+   the published runtime. Hidden C roots and several E/Justice owners remain
+   without census APIs; direct collection counts without a revision are not
+   B witnesses. Independent exact-tip review must confirm the map omissions
+   before it can schedule owner instrumentation.
+2. **B coordinator protocol and conditional receipt witnesses — implemented
+   as a non-admitting feature candidate.** The protocol defines versioned
+   owner-section evidence (owner identity, role, schema, exact count, local
+   revision/snapshot stamp), one monotonically invalidating epoch,
+   owner-thread binding, and operation-scope accounting. Missing adapters or
+   inconsistent witnesses return `OwnerCoverageIncomplete`; no capture token
+   is issued. The receipt owners expose exact live evidence, but no profile
+   census is registered and runtime admission is not wired. Do not wire
+   `SimulationRuntime` or claim readiness until the remaining owner groups
+   below have reviewed witnesses. One successful outer commit that changes several owner
    sections validates and refreshes all changed witnesses before advancing
    the shared epoch exactly once; partial/duplicate/unknown notifications fault
    closed. Baseline assessment also validates the full section set before
@@ -327,34 +470,31 @@ work against the reviewed B contract. The fact that B’s first coordinator
 candidate fails closed before all owner adapters exist is intentional; it
 does not make owner groups ready on an unpromoted API.
 
-### First bounded owner-witness capability: one exact zero, off the runtime hotspot
+### Bounded owner-witness capabilities completed off the runtime hotspot
 
-The audits support one small owner-local witness implementation inside the
-accepted P12-B census scope without editing `SimulationRuntime`, its daily
-advance wrappers, `SimulationTime`, or the P18 lease seam:
+The accepted P12-B census work now has owner-issued witnesses for two
+conditional exact-zero sections, without editing `SimulationRuntime`, its
+daily advance wrappers, `SimulationTime`, or the P18 lease seam:
 
-1. In `DecisionRecords.cs`, add an owner-issued witness for
-   `NpcDecisionRecorder.occurrenceReceipts` containing section/schema
-   identity, concrete recorder-instance identity, exact count, and its local
-   revision. The selected profile starts with count/revision zero; the count
-   and revision change together only after a receipt is successfully
-   committed.
-2. Surface only a detached read-only witness through the published bootstrap
-   composition. Do not expose a new mutable recorder handle to callers, infer
-   zero from P18 omission, or use reflection as the census contract.
-3. Focused EditMode evidence covers the normal selected bootstrap reporting
-   count zero from one stable owner instance, an owner-local successful receipt
-   changing count and revision, and failed/duplicate attempts leaving them
-   unchanged. This is one owner witness only; it cannot certify the remaining
-   census or issue a P12 capture token.
+1. `NpcDecisionRecorder.occurrenceReceipts` reports section/schema identity,
+   concrete recorder-instance identity, exact count, and local revision. The
+   prior `codex/phase12/P12BOwnerReceiptCensus` candidate at `2ef4a83` passed
+   exact-tip review and successful, failed, and replayed receipt evidence.
+2. `EconomyTransactionService.keyedSaleReceipts` now reports the same fields
+   from its receipt owner. Every new ledger entry and replacement advances
+   revision; replay and fingerprint-collision reads do not. The selected
+   bootstrap publishes only this detached witness, not the service handle.
+3. The live selected-profile bootstrap test observes exact zero and stable
+   owner identity for both receipt sections. `EconomyTransactionTests` passes
+   45/45; the bootstrap test passes 1/1. These two sections do not certify the
+   rest of the census, connect commits to the shared P12-B epoch, or issue a
+   capture token.
 
-This slice owns `DecisionRecords.cs`,
-`SimulationBootstrapComposition.cs`/its narrow `TesteSimulacao` publication
-plumbing, and decision/bootstrap tests. It does not touch the P18-owned
-`SimulationRuntime` hotspot, City/NPC, Person/population, economy, core
-political/military, other Knowledge, directives, travel, or expedition owners.
-Its result is a composed-empty exact-zero witness for one known section, not a
-complete owner census or P12 readiness.
+This slice owns the two receipt owners and narrow bootstrap witness
+publication/tests. It does not touch the P18-owned `SimulationRuntime`
+hotspot, City/NPC, Person/population, core political/military, other Knowledge,
+directives, travel, or expedition owners. Its result is two composed-empty
+exact-zero witnesses, not complete P12-B readiness.
 
 The source audits also give the bounded design for later runtime proof:
 bind owner-thread identity at completed bootstrap, expose active-operation
@@ -399,12 +539,14 @@ identical. A zero count without a live owner and revision is not a witness.
 ## Readiness result
 
 The complete **static** source map remains a bounded P12-B evidence artifact;
-it is not a live census or mutation-completeness proof. The owner-local
-`NpcDecisionRecorder.occurrenceReceipts` witness candidate on
-`codex/phase12/P12BOwnerReceiptCensus` at `2ef4a83` passed exact-tip review and
-focused bootstrap/receipt tests. That candidate proves one composed-empty
-section from its actual owner and covers successful, failed and replayed
-receipt attempts.
+it is not a complete live census or mutation-completeness proof. The
+owner-local `NpcDecisionRecorder.occurrenceReceipts` witness candidate on
+`codex/phase12/P12BOwnerReceiptCensus` at `2ef4a83` passed exact-tip review.
+The current branch adds `EconomyTransactionService.keyedSaleReceipts`; its
+45 focused transaction tests and the 1-test selected-profile bootstrap run
+passed. The live run verifies both exact-zero receipt sections and P8-A
+cardinality on the published day-zero runtime, but it does not invoke a Unity
+`Update` frame or establish thread ownership/quiescence.
 
 The follow-on `codex/phase12/P12BCoordinatorProtocol` candidate adds a
 standalone, non-admitting protocol kernel for versioned section requirements,
