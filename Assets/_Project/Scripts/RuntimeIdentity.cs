@@ -4,6 +4,7 @@ using System.Globalization;
 
 public sealed class RuntimeIdAllocator
 {
+    private readonly object censusOwnerIdentity = new object();
     private long nextNpcSequence = 1;
     private long nextCitySequence = 1;
     private long nextLocationSequence = 1;
@@ -18,6 +19,30 @@ public sealed class RuntimeIdAllocator
     private long nextLocalPlaceSequence = 1;
     private long nextLocalConnectionSequence = 1;
     private long nextNotableItemSequence = 1;
+
+    internal object CensusOwnerIdentity => censusOwnerIdentity;
+
+    internal long GetCensusRevision(RuntimeIdAllocatorCensusCounter counter)
+    {
+        switch (counter)
+        {
+            case RuntimeIdAllocatorCensusCounter.Npcs: return nextNpcSequence - 1L;
+            case RuntimeIdAllocatorCensusCounter.Cities: return nextCitySequence - 1L;
+            case RuntimeIdAllocatorCensusCounter.Locations: return nextLocationSequence - 1L;
+            case RuntimeIdAllocatorCensusCounter.Routes: return nextRouteSequence - 1L;
+            case RuntimeIdAllocatorCensusCounter.Events: return nextEventSequence - 1L;
+            case RuntimeIdAllocatorCensusCounter.Directives: return nextDirectiveSequence - 1L;
+            case RuntimeIdAllocatorCensusCounter.Decisions: return nextDecisionSequence - 1L;
+            case RuntimeIdAllocatorCensusCounter.TravelParties: return nextTravelPartySequence - 1L;
+            case RuntimeIdAllocatorCensusCounter.Organizations: return nextOrganizationSequence - 1L;
+            case RuntimeIdAllocatorCensusCounter.ExplorableSites: return nextExplorableSiteSequence - 1L;
+            case RuntimeIdAllocatorCensusCounter.Expeditions: return nextExpeditionSequence - 1L;
+            case RuntimeIdAllocatorCensusCounter.LocalPlaces: return nextLocalPlaceSequence - 1L;
+            case RuntimeIdAllocatorCensusCounter.LocalConnections: return nextLocalConnectionSequence - 1L;
+            case RuntimeIdAllocatorCensusCounter.NotableItems: return nextNotableItemSequence - 1L;
+            default: throw new ArgumentOutOfRangeException(nameof(counter));
+        }
+    }
 
     public string AllocateNpcId()
     {

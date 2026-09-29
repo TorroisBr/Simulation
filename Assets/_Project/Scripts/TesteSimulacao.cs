@@ -194,6 +194,7 @@ public class TesteSimulacao : MonoBehaviour
                         historyStore, scheduledDirectiveStore, decisionStore, decisionRecorder, economyTransactionService, npcChronicleService,
                         npcChronicleFormatter, travelPartyStore, travelPartySystem, simulationRuntime,
                         runtimeIdentityRegistry,
+                        runtimeIdAllocator,
                         explorableSiteStore, expeditionStore, expeditionSystem);
                     break;
                 default:
