@@ -36,10 +36,10 @@ Cities before mutation. Consumer replay regression `0887d18` has a
 comment-accuracy follow-up `6a4d971`; the corrected candidate passed fresh
 consumer, full EditMode, Smoke, and LongRun validation. Exact-tip review passed
 and the consumer was promoted at `f1cfed3`; State-only child `2d314be` records
-the promotion and review. Explicit `SimulationRuntime` hotspot handoff remains
-pending. This promoted consumer does not
+the promotion and review. P18 State `a49de9d` closes the phase and records the
+effective `SimulationRuntime` hotspot handoff to P12-B. This promoted consumer does not
 include P18 temporal state in `UnityBootstrap-Daily-v1`, provide P12 owner
-export/staged hydration, or remove B's census/handoff gates.
+export/staged hydration, or remove B's census and mutation-invalidation gates.
 
 The accepted architecture baseline is `c285466`; current intraday/extensibility
 and multi-participant alignment records remain constraints. The selected daily
@@ -363,3 +363,12 @@ The profile is bounded to its accepted same-build daily boundary. Any future
 profile that includes P18/P19/P20 state requires its own reviewed owner
 inventory and compatibility contract while retaining the architecture's
 temporal, extensibility and participant identity/cardinality constraints.
+
+## Current dependency refresh — 2026-09-29
+
+P18 closed at canonical `a49de9d`; its P12-B `SimulationRuntime` hotspot
+handoff is now effective. The P9-B/P11 composition refresh at `29e597e` passed
+independent exact-tip revalidation after that promotion; the prior reviewed and
+validated executable tree is unchanged. Canonical composition promotion and
+the P12 live-profile, owner-coverage, mutation-invalidation, and prerequisite
+checkpoint deliveries remain outstanding. P12-A remains `WAIT_DEPENDENCY`.

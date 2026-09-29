@@ -38,13 +38,14 @@ Merchant 8/8 and local observation 6/6, with retained XMLs). They are separate
 candidates, not a completed chronological consumer. They were later integrated
 into the P18-D consumer candidate, whose code `6a4d971` passed exact-tip review
 and validation and was promoted at `f1cfed3`; P18 State child `2d314be` records
-that promotion. P18-D remains open, and the reviewed implementation excludes
-P14-A local-material-flow Cities pending a temporal owner adapter. None of this
-adds P18 temporal state to the selected P12 daily profile. P12-B remains blocked
-on the complete live owner/mutation census, committed-mutation invalidation,
-P12-B admission/eligibility validation, the unpromoted P9-B/P11 composition, and an
-explicit P18-D `SimulationRuntime` hotspot handoff. The promotion does not
-transfer that hotspot automatically.
+that promotion. P18 is closed within its bounded scope at canonical State
+`a49de9d`, and the `SimulationRuntime` hotspot is handed to P12-B. The reviewed
+implementation excludes P14-A local-material-flow Cities pending a temporal
+owner adapter. None of this adds P18 temporal state to the selected P12 daily
+profile. P12-B remains blocked on the complete live owner/mutation census,
+committed-mutation invalidation, P12-B admission/eligibility validation, and
+canonical promotion of the refreshed P9-B/P11 composition. The handoff clears
+only the runtime-ownership prerequisite.
 
 ## 1. Purpose and boundary
 
@@ -88,14 +89,15 @@ is an ancestor of the other, and their common base is P8 canonical `470667d`.
 An additive application-level composition candidate combines these two
 existing capabilities as the normal accepted P12 profile. Candidate
 `af656e7710fce0ba171fae1d6684331d2dc0b743` was validated as the initial
-composition. It has since been refreshed at integration tip
-`ec75e6a0912704446fe47f9d727b4656709d05ab`, merging P18 canonical State
-`2d314be` and P18-D consumer code `f1cfed3`. Bootstrap 14/14, ActorChoice
+composition. Its code-bearing refresh `ec75e6a0912704446fe47f9d727b4656709d05ab`
+merged P18 State `2d314be` and P18-D consumer code `f1cfed3`. Bootstrap 14/14, ActorChoice
 40/40, SpatialGeography 13/13, P18DConsumer 9/9, RuntimeOrchestration 12/12,
 ALL EditMode 1934/1934, Smoke 5/5, LongRun 7/7, Spatial 100/100, and
-ExplorableSite 46/46 passed on this exact tip. Independent review remains in
-progress; the refreshed candidate is not yet reviewed or promoted and is not
-canonical live-composition evidence. The owner inventory source/API map remains
+ExplorableSite 46/46 passed on this code tip. Following P18 promotion, the
+composition was refreshed to `29e597ef6bf0b761f74157c098866d9940bd2806`.
+Exact-tip revalidation passed because only `docs/PHASE18_STATE.md` changed.
+The candidate remains unpromoted and is not canonical live-composition
+evidence. The owner inventory source/API map remains
 partial; it does not supply the complete live owner census or
 mutation-invalidation proof. The manifest's exact required provider/section set
 cannot be finalized until the composition is promoted and the live owner
@@ -314,16 +316,17 @@ P18-D2 technical design review passed at `6f82bf4`; its implementation
 `ea7b3e7` and the economy receipt/prepared-install prerequisite are promoted
 at P18 canonical code tip `9e790c5`. P18 canonical has since advanced through
 the reviewed consumer implementation at `f1cfed3`; State child `2d314be`
-records that promotion. P18-D has not explicitly handed the `SimulationRuntime`
-hotspot to P12-B, so P12-B still must not edit that runtime source.
+records that promotion. P18 State `a49de9d` formally hands the
+`SimulationRuntime` hotspot to P12-B. P12-B still must not edit that runtime
+source until its own readiness gates pass.
 The 2026-09-28 inventory snapshot cited the pushed, unpromoted P18-D candidate
 `5d7eb2687c3866fb2399faf8b366a299484d8dd4` (code integration
 `3d9c0ea508e542e8a7e92a4982fbec3e29560e81`). Relative to `6fcbfab`, it adds
 the reviewed CommercialKnowledge sharing receipt/prepared-install owner and
 retained sharing snapshot. It still lacks the full `SimulationRuntime`
 chronological composition, completed daily profile, and explicit runtime
-hotspot handoff. The P18-D consumer is promoted, but remains the designated
-owner of the shared runtime hotspot until an explicit handoff is recorded.
+hotspot handoff. The P18-D consumer is promoted, and the subsequent P18 State
+promotion `a49de9d` completes the explicit hotspot handoff to P12-B.
 D2's scope is the per-runtime non-reentrant
 lease around the currently composed legacy `TryAdvanceDay` and
 `TryAdvanceDays` APIs and the narrow future owner seam. It does not compose the
@@ -334,7 +337,8 @@ thread-safety guarantee. The promoted D2 API owns the advance-lease seam; the
 P18-D integration retained the planned `SimulationRuntime.cs` editing window.
 The earlier snapshot `5d7eb268` had not composed the chronological path or
 handed that hotspot to P12. The later promoted consumer composes the reviewed
-chronological path, but still has not explicitly handed off the hotspot.
+chronological path; the separate P18 State promotion `a49de9d` hands the
+hotspot to P12-B.
 The promoted lease remains limited to its
 guarded advance entrypoints; it does not replace P12-B's missing operation
 scopes, mutation invalidation, or complete owner census.
@@ -343,13 +347,12 @@ Therefore:
 
 - P12-B design introduces no second lease, lock, universal busy framework, or
   P18 timeline composition.
-- Do not edit `SimulationRuntime.cs`, its public advance wrappers, or the
-  lease seam while P18-D retains the exclusive editing window. This P12 branch
-  is documentation-only and makes no code change.
-- Before P12-B implementation touches the runtime, P18-D must explicitly hand
-  over the exclusive runtime hotspot. Its bounded consumer was promoted at
-  `f1cfed3` and is recorded by State child `2d314be`. D2 passed
-  review/validation and is canonical from `9e790c5`;
+- This P12 branch is documentation-only and makes no code change. The P18
+  exclusive hotspot handoff is effective at `a49de9d`, but P12-B must wait for
+  its own readiness gates before editing `SimulationRuntime.cs`, its public
+  advance wrappers, or the lease seam.
+- P18-D's bounded consumer was promoted at `f1cfed3` and is recorded by State
+  child `2d314be`. D2 passed review/validation and is canonical from `9e790c5`;
   revalidate this design against that promoted API. P12-B then uses that same lease to ensure capture cannot
   observe an in-progress legacy advance; it must not nest or wrap the lease
   in a way that changes `TryAdvanceDays` behavior.
@@ -394,9 +397,9 @@ from P12 to P18.
 Integration sequence:
 
 1. The additive P9-B/P11 composition was initially integrated at `af656e7` and
-   refreshed at `ec75e6a` against P18 canonical State `2d314be`. Validation is
-   complete; exact-tip independent review remains in progress, and canonical
-   promotion is pending. After promotion, refresh the live read-only
+   code-validated/reviewed at `ec75e6a` against P18 State `2d314be`. Its
+   post-closure refresh at `29e597e` passed exact-tip independent revalidation;
+   canonical promotion is pending. After promotion, refresh the live read-only
    composition inventory against the promoted source. The reviewed inventory
    candidate `d01cd6225ff98a9952b466f7f045ec871b9e3ecc` adds a partial
    P12-B entrypoint/mutation-invalidation census, but does not supply a
@@ -410,9 +413,9 @@ Integration sequence:
    existing receipt-backed boundary adapters, but was incomplete and had not
    handed off the runtime hotspot. The completed bounded consumer is promoted
    at `f1cfed3`, and State child `2d314be` records the exact-tip review and
-   validation evidence. The explicit owner handoff is still required before
-   opening the P12-B runtime owner window. Revalidate P12-B seams against the
-   promoted D2 API and the handoff contract.
+   validation evidence. The explicit owner handoff is promoted at P18 State
+   `a49de9d`. Revalidate P12-B seams against the promoted D2 API and handoff
+   contract before opening the P12-B runtime owner window.
 3. Implement immutable admission values/source and rejection behavior without
    serializing owner state. Implement the runtime boundary/token hook using
    the single D2 lease contract. Instrument mutation paths only after the
@@ -535,10 +538,10 @@ exported/hydrated under P12-C. Legacy spatial/site state belongs to P12-D.
 This design is bounded to accepted P12-B scope, but P12-B is **not**
 `READY_FOR_IMPLEMENTATION` on this evidence:
 
-1. The additive P9-B/P11 composition candidate is refreshed at `ec75e6a` with
-   P18 canonical State `2d314be` merged. Its validation passed, independent
-   exact-tip review remains in progress, and it is not promoted. After
-   promotion, refresh the live
+1. The additive P9-B/P11 composition code tip `ec75e6a` passed its recorded
+   validation and implementation review. The post-P18-closure tip `29e597e`
+   passed independent exact-tip revalidation; the candidate is not promoted.
+   After promotion, refresh the live
    profile/provider/owner inventory against canonical composition. The
    reviewed inventory candidate `d01cd6225ff98a9952b466f7f045ec871b9e3ecc`
    provides a partial entrypoint/mutation map, not the complete live owner
@@ -547,8 +550,9 @@ This design is bounded to accepted P12-B scope, but P12-B is **not**
    `TryAdvanceDay`/`TryAdvanceDays` calls. The earlier P18-D integration
    snapshot `5d7eb268` / `3d9c0ea` was incomplete. The chronological consumer
    is now promoted at `f1cfed3`, and State child `2d314be` records its review
-   and validation. The explicit hotspot handoff remains outstanding; require
-   it before P12-B touches `SimulationRuntime`.
+   and validation. The explicit hotspot handoff is promoted at P18 State
+   `a49de9d`; P12-B must still satisfy its own readiness gates before touching
+   `SimulationRuntime`.
 3. Demonstrate the complete versioned owner-section census and
    mutation-notification inventory. P12-B's eligibility kernel must fail
    closed until P12-C/D/E/F owners register their required adapters; P12-G
@@ -562,3 +566,21 @@ P12-C through P12-G remain downstream. P12-A final profile integration remains
 `WAIT_DEPENDENCY`; accepted P12-A scope and P12-B technical design are not
 implementation authorization, delivery, canonical promotion, or proof of
 save/load.
+
+## Current dependency refresh — 2026-09-29
+
+P18 is formally closed at canonical `a49de9d` within its recorded scope, and
+the `SimulationRuntime` hotspot handoff to P12-B is effective. This clears the
+P18 ownership prerequisite; it does not authorize touching the hotspot before
+the P12-B admission, complete live owner/cardinality census, and
+committed-mutation invalidation gates pass.
+
+The P9-B/P11 composition refresh is exact tip
+`29e597ef6bf0b761f74157c098866d9940bd2806`. Relative to the reviewed and
+validated executable composition `ec75e6a`, only `docs/PHASE18_STATE.md`
+changed. Independent exact-tip revalidation passed and prior code validation
+remains applicable; canonical composition and live inventory revalidation
+remain outstanding. The closure-state correction `8ac2d78` included by that
+candidate is not itself promoted to P18 canonical; current P18 canonical stays
+at `a49de9d`. P12-B implementation remains blocked pending composition
+promotion and the separate census/invalidation proofs.

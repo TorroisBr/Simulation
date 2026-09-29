@@ -30,7 +30,7 @@ For supported compatible versions/profiles, continuing from boundary T and savin
 - **P12-A causal-input boundary:** the selected bootstrap has no external `WorldCommand` service/queue composition; adding it is unsupported and must reject profile admission. P11's current canonical `SimulationRuntime` still composes an `ActorChoiceStore` by default: preserve full records/dispositions, duplicate-command idempotency history and sequence; reject `Pending` (including deferred) and `ConsumedAwaitingTerminalAttempt` records. A thrown actor attempt rethrows from its `AdvanceDay`, so it is capturable only at a later successful daily boundary while the runtime remains healthy. The current SampleScene bootstrap creates legacy NPCs without `PersonId` and starts with an empty `PersonStore`; P11 choice execution applies only to Person-backed NPCs. The P9-B/P11 composition proves the choice store and continuation-state owner, not that SampleScene NPCs can execute SellGoods choices. Any future Person-backed actor capability is separate upstream scope; P9-B geography remains unchanged. This does not add a new security boundary; normal domain/action semantics remain authoritative.
 - **Replay/fork sensitivity:** all authoritative truth, plans, Knowledge, IDs/allocators, logical time/calendar, effective config/content and causal randomness needed to continue.
 - **Hotspots/parallelism:** `SimulationRuntime`, domain stores, command capture, diagnostics versus actual save state, composition/versioning; state inventory can start alongside P8/P9 work, integration is domain-gated.
-- **P12-A implementation gates:** implementation remains `WAIT_DEPENDENCY` until every included owner has exact export and staged hydration support validated for this profile, the live canonical composition and profile inventory are revalidated, and separate implementation authorization is complete. Scope acceptance is recorded above; no P12 implementation checkpoint has been delivered. P9-B code integration is on current P9 canonical at `d9a62d7` (closure `82396ae`) with promotion State/status tip `14a2e8e`. The additive P9-B/P11 composition was refreshed at `ec75e6a0912704446fe47f9d727b4656709d05ab` to merge P18 State `2d314be` and consumer code `f1cfed3`. The focused/full validation set passed; independent exact-tip review and canonical promotion remain pending. Preserve the selected P9-B geography profile identity/schema and fingerprint/provenance, seed/config/calendar, inherited P9-A stage identities, P9-B stage/dependencies, authored inputs/outputs and first boundary without rerunning genesis. P8-A's selected Hex, terrain/revision provenance, anchored Location and scale context are populated required state; P8-B through P8-E passage, City/Site presence anchors, Person positions, route Knowledge/plans, and travel remain empty for this profile. Unsupported or partially populated state must reject admission. P8-E is not a blanket daily-profile dependency. P14-A is promoted but not configured by the selected GeneralTest City assets; a future profile that composes its authored material flow must include its owner state or reject admission. Complete included-owner exact export and staged hydration coverage plus a live profile inventory are not yet demonstrated.
+- **P12-A implementation gates:** implementation remains `WAIT_DEPENDENCY` until every included owner has exact export and staged hydration support validated for this profile, the live canonical composition and profile inventory are revalidated, and separate implementation authorization is complete. Scope acceptance is recorded above; no P12 implementation checkpoint has been delivered. P9-B code integration is on current P9 canonical at `d9a62d7` (closure `82396ae`) with promotion State/status tip `14a2e8e`. The code-bearing additive P9-B/P11 composition `ec75e6a0912704446fe47f9d727b4656709d05ab` was validated and reviewed; its post-closure refresh `29e597ef6bf0b761f74157c098866d9940bd2806` passed exact-tip revalidation with no executable changes. Canonical composition promotion remains pending. Preserve the selected P9-B geography profile identity/schema and fingerprint/provenance, seed/config/calendar, inherited P9-A stage identities, P9-B stage/dependencies, authored inputs/outputs and first boundary without rerunning genesis. P8-A's selected Hex, terrain/revision provenance, anchored Location and scale context are populated required state; P8-B through P8-E passage, City/Site presence anchors, Person positions, route Knowledge/plans, and travel remain empty for this profile. Unsupported or partially populated state must reject admission. P8-E is not a blanket daily-profile dependency. P14-A is promoted but not configured by the selected GeneralTest City assets; a future profile that composes its authored material flow must include its owner state or reject admission. Complete included-owner exact export and staged hydration coverage plus a live profile inventory are not yet demonstrated.
 - **Read-only owner evidence:** [`../design/PHASE12_OWNER_COVERAGE_INVENTORY.md`](../design/PHASE12_OWNER_COVERAGE_INVENTORY.md) records per-authority export/hydration gaps. It is evidence only, not checkpoint acceptance or implementation authorization; P12-A remains `WAIT_DEPENDENCY`.
 - **Downstream unlocks:** continuation foundation for P13 historical reconstruction/fork.
 - **Deferred:** final storage format, migration matrix and replay algorithm until entry design.
@@ -48,13 +48,15 @@ owner idempotency/effect state. Preserve sealed external inputs with target
 `LogicalTick`, accepted sequence/order, and boundary state. Include promoted P18-B activity instance,
 lifecycle/revision/receipt, participant commitments and availability facts, and
 P18-C PersonId-keyed decision/attempt state only when the selected consumer
-composes them. P18-A/B/C and the reviewed P18-D consumer slice are promoted;
-P18-D remains open for broader selected-consumer work. The bounded
-`UnityBootstrap-Daily-v1` profile does not compose P18 temporal state, so its
-legacy daily execution remains authoritative. The P18-D `SimulationRuntime`
-hotspot has not yet been explicitly handed off to P12-B. A day value alone
-cannot stand in for these facts, and the bounded daily profile does not depend
-on P18-D.
+composes them. P18-A/B/C and the bounded P18-D consumer slice are promoted,
+and P18 is formally closed within its recorded scope at `a49de9d`. Broader
+consumers remain outside that scope. The `UnityBootstrap-Daily-v1` profile does
+not compose P18 temporal state, so its legacy daily execution remains
+authoritative. The P18-D `SimulationRuntime` hotspot has been handed off to
+P12-B, but this ownership handoff does not satisfy P12-B's composition,
+live-owner census, mutation invalidation, or readiness gates. A day value
+alone cannot stand in for these facts, and the bounded daily profile does not
+depend on P18-D.
 
 Include causally relevant generation stage/contributor identities, effective
 versions and outputs. Mod-owned state joins the inventory when supported;
@@ -77,3 +79,20 @@ its causal input, order, sequence and idempotency state. Never infer one
 Activity-to-one-actor cardinality or duplicate a shared instance into actor-owned
 truth. P20 remains conditional and outside this profile; its reviewed design is
 not an implementation capability or blanket P12 dependency.
+
+## Current dependency refresh — 2026-09-29
+
+P18 is formally closed within its recorded scope at canonical `a49de9d`, and
+the P18-to-P12-B `SimulationRuntime` hotspot handoff is effective. This
+resolves the P18 ownership prerequisite only; P12-B remains blocked on the
+current composition, complete live owner/cardinality census, committed-write
+invalidation proof, and its accepted admission/eligibility gates.
+
+The composition refresh is now `29e597ef6bf0b761f74157c098866d9940bd2806`.
+It preserves the validated executable tree from `ec75e6a` and changes only
+`docs/PHASE18_STATE.md` to carry the promoted closure/handoff state. Exact-tip
+independent revalidation passed; the older ec75-specific validation and code
+review remain applicable because no executable file changed. The current
+composition is not canonical. P12-A remains `WAIT_DEPENDENCY`; this record does
+not grant implementation authorization or claim owner export/hydration
+coverage.

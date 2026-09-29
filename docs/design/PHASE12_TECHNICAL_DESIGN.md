@@ -234,12 +234,13 @@ The technical choices above resolve the bounded design questions using reviewed 
 - P8 dependencies are state-specific, not a blanket A–E execution edge. The selected profile requires complete P8-A export/hydration for its one authored Hex, anchored Location and scale. P8-B/C/D/E sections remain explicitly empty and populated state rejects; legacy routes do not substitute for P8 identity. P8-E is not required merely for daily continuation.
 - P9-A's historical authored-genesis contract and the selected P9-B geography profile contract are distinct required compatibility evidence. The P9-B implementation at `00395ef80cfa2364d34ed2170e0735d3a4b1513d` is included on current `codex/phase9/canonical` at `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf`. P12 implementation remains blocked on complete included-owner export/hydration, the live profile inventory, and separate implementation authorization; accepted scope and contract review do not satisfy these gates. The bootstrap has no external WorldCommand service/queue composition. Where P11 ActorChoiceStore is composed, preserve complete terminal history/idempotency state and reject `Pending`/`ConsumedAwaitingTerminalAttempt` inputs.
 
-The additive P9-B/P11 composition was refreshed at exact integration tip
-`ec75e6a0912704446fe47f9d727b4656709d05ab` against P18 State `2d314be` and
-P18-D consumer code `f1cfed3`. Focused/full validation and broader Spatial/Site
-checks passed; independent exact-tip review remains in progress and canonical
-promotion is pending. This candidate does not establish P12-B's complete live
-owner census or mutation invalidation.
+The additive P9-B/P11 composition's code-bearing tip is
+`ec75e6a0912704446fe47f9d727b4656709d05ab`; its post-P18-closure refresh is
+`29e597ef6bf0b761f74157c098866d9940bd2806`. Focused/full validation and
+broader Spatial/Site checks passed on the unchanged code. Independent exact-tip
+revalidation of `29e597e` passed; canonical promotion remains pending. This
+candidate does not establish P12-B's complete live owner census or mutation
+invalidation.
 
 No genuinely unresolved product or canonical semantic decision is identified within the reviewed profile. Any request to expand compatibility guarantees or include an excluded state source requires a new scoped decision/design rather than an implicit change to this proposal.
 
@@ -254,9 +255,9 @@ canonical State `470667d`, P9 canonical closure `82396ae`, P9-A code promotion
 `43f08b3` and P9-B promotion-record State `14a2e8e`, P9-B code integration
 `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf`
 (implementation tip `00395ef80cfa2364d34ed2170e0735d3a4b1513d`), P11 code promotion `0803670` and
-closure State `308e24d`, current P18 canonical State child `2d314be`
-(bounded P18-D consumer code `f1cfed3` promoted; explicit `SimulationRuntime`
-hotspot handoff to P12-B remains pending), accepted P18-A continuation extension contract
+closure State `308e24d`, current P18 canonical State `a49de9d`
+(bounded P18-D consumer code `f1cfed3` promoted; the `SimulationRuntime`
+hotspot handoff to P12-B is effective), accepted P18-A continuation extension contract
 `2175bf2` (acceptance record `9de70ae`; its additive implementation was
 promoted at integration `1dd0479`), P14 historical promotion State `f8a61fe` and
 current docs-only canonical State/Brief `4caecbb`,
@@ -331,3 +332,19 @@ remaining capability/acceptance gates.
 - Refreshed `docs/design/PHASE12_ENTRY_ARCHITECTURE.md`, current `docs/PHASE8_STATE.md`, and formal `docs/PHASE5_STATE.md`, `docs/PHASE6_STATE.md`, and `docs/PHASE7_STATE.md` records.
 - `docs/architecture/INTRADAY_EXTENSIBILITY_ALIGNMENT.md` and `docs/architecture/MULTIPARTICIPANT_ACTIVITY_ALIGNMENT.md`.
 - `Assets/_Project/Scripts/TesteSimulacao.cs` (`InitializeSimulation`, `RebuildSystems`), `SimulationRuntime.cs` (`AdvanceDay` and composition), `SimulationModuleSet.cs`, and owner implementations for `SimulationTime`, `SimulationCalendar`, `EffectiveSimulationConfiguration`, runtime identities, random source, Person/population, city/market, travel parties, expeditions, directives, Knowledge, spatial and political/military stores.
+
+### Post-promotion dependency refresh — 2026-09-29
+
+P18 is formally closed within its recorded scope at `a49de9d`; the P18-to-P12-B
+`SimulationRuntime` hotspot handoff is promoted. The bounded daily profile still
+excludes P18 temporal state, P19 module state and P20 shared activities. This
+handoff clears only the ownership sequencing dependency.
+
+The P9-B/P11 composition candidate was refreshed to `29e597e` after P18
+promotion. Its only difference from the previously reviewed/validated
+`ec75e6a` executable composition is `docs/PHASE18_STATE.md`; independent
+exact-tip revalidation passed and prior code validation remains applicable.
+P12-B remains blocked pending canonical composition, plus complete profile
+owner/cardinality, committed-write invalidation, and capture-eligibility
+evidence. P12-A remains `WAIT_DEPENDENCY` and separately requires
+implementation authorization.

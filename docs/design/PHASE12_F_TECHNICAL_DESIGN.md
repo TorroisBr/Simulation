@@ -28,11 +28,11 @@ exact-content review, recorded separately in
 `3d5d7a8ce41f34d1fb55864897f9d508f50d8fcf`. The records limit their verdicts
 to the designs and explicitly claim no delivered or promoted capability or
 P12-A readiness. P12-B remains blocked on the complete live
-owner/mutation census, committed-mutation invalidation evidence, validation of
-the refreshed composition candidate `ec75e6a`, and explicit P18-D
-`SimulationRuntime` hotspot handoff. P18-D consumer `3ddf847` was promoted at
-`f1cfed3`; State child `2d314be` records the review and validation, but the
-handoff remains outstanding. C implementation waits on B delivery; D/E implementation
+owner/mutation census and committed-mutation invalidation evidence. The
+composition refresh at `29e597e` passed exact-tip revalidation after the
+`ec75e6a` code review/validation. P18-D consumer `3ddf847` was promoted at
+`f1cfed3`; State `a49de9d` records closure and the effective P12-B
+`SimulationRuntime` hotspot handoff. C implementation waits on B delivery; D/E implementation
 waits on the named owner roots and interfaces; F remains downstream of C/D/E.
 Earlier review hashes in the preceding F version apply only to their exact
 reviewed contents.
@@ -56,8 +56,8 @@ mutation. Test-only follow-up `0887d18` adds the consumer replay regression;
 comment-accuracy follow-up `6a4d971` has fresh validation and corrects the
 scenario wording. The exact-tip P18 review covered code `6a4d971` and State
 `254385e`; P18 State child `2d314be` records promotion and the PASS and
-accurately describes post-terminal replay. Explicit `SimulationRuntime`
-hotspot handoff remains pending. This promoted consumer
+accurately describes post-terminal replay. The P18 State promotion `a49de9d`
+completes the `SimulationRuntime` hotspot handoff. This promoted consumer
 does not add P18 temporal state
 to `UnityBootstrap-Daily-v1`, and does not establish P12 owner export or staged
 hydration.
@@ -394,11 +394,21 @@ before mutation. It is promoted at `f1cfed3`; exact-tip review of code
 `6a4d971` and State `254385e` passed, as recorded by State child `2d314be`.
 Test-only `0887d18` adds the replay regression, with comment-only follow-up
 `6a4d971`; the recorded evidence describes post-terminal replay and passing
-validation. Explicit runtime-hotspot handoff remains pending. The promoted
+validation. P18 State `a49de9d` records the effective runtime-hotspot handoff. The promoted
 consumer neither changes the
 accepted `UnityBootstrap-Daily-v1` profile nor satisfies P12 owner export,
-staged hydration, or B's live census and handoff gates. It adds no P18 temporal
+staged hydration, or B's live census and mutation-invalidation gates. It adds no P18 temporal
 state to this P12 daily profile.
 The alignment constraints on extensibility and shared-activity identity and
 cardinality remain review constraints without adding those deferred capabilities
 to this profile.
+
+## Current dependency refresh — 2026-09-29
+
+P18 closed at canonical `a49de9d` and formally handed the exclusive
+`SimulationRuntime` hotspot to P12-B. The accepted P12 profile still excludes
+P18 state. The refreshed P9-B/P11 composition at `29e597e` passed exact-tip
+revalidation against `a49de9d`; only its P18 State document differs from the
+previously reviewed/validated `ec75e6a` executable tree. The composition still
+requires canonical promotion, and this handoff/review does not establish P12-B
+readiness or remove its live census and mutation-invalidation gates.
