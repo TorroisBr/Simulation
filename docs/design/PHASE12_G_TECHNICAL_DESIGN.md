@@ -11,9 +11,11 @@ which the original G proposal was authored; it is not the current governing
 input set.
 
 **Current governing inputs (2026-09-29):** accepted decomposition at
-`7585863` with reference refresh `a2ac5d2`; current owner inventory
-`16611d89be3e9b8deae595d61ea8f8870c88e5ff` (partial source/API evidence, not
-a live census); P12-B current-evidence revalidation
+`7585863` with reference refresh `a2ac5d2`; owner-inventory snapshot at this
+proposal's P12 canonical base `4d2a9ad5c7f98a7805dede72f9722aec063231e8`
+(partial source/API evidence, not a live census; its P8-A scale ownership and
+current-canonical pointer are corrected in the accompanying documentation
+reconciliation); P12-B current-evidence revalidation
 `ef8c72cd388445e25ce9360bb1e689fc0a07c639` (design only; implementation remains
 blocked); P12-C identity/genesis design `edc51571559a9ba4b1a025963de2e25b23c66fd3`
 (exact-tip independent review PASS); P12-D `e8b83d75e34f8456555065e24bfe67bb30366baa`
