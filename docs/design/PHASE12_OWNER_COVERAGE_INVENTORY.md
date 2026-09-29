@@ -756,3 +756,59 @@ The audit closes neither the complete supported mutation census nor P12-B's
 owner-thread, quiescence, and eligibility requirements. It sharpens the
 accepted B/D/E/F capability work and keeps P12-B `WAIT_DEPENDENCY` until every
 included owner and successful mutation path has a validated witness.
+
+### P12-F commitment and Knowledge owner export/revision audit — 2026-09-29
+
+This bounded read-only source audit uses the same executable composition
+`ec75e6a` preserved by P12 canonical `36e3064`. It maps current P12-F owner
+APIs; it is not a complete all-owner census and does not clear the documented
+P12-C/D/E dependencies for P12-F.
+
+- **Knowledge:** `SpatialRouteKnowledgeStore` has checked global/per-actor
+  revisions and prepared installs, while `CommercialKnowledgeRuntime` has a
+  revision plus share-operation receipts, and `PoliticalKnowledgeStore` has a
+  revision/guard. These are not immutable value exports or staged hydrators.
+  `SpatialKnowledgeRuntime` has a revision for internal prepared writes, but
+  its read-only-typed `KnownLocationRuntimeIds` and `KnownRouteRuntimeIds`
+  expose backing lists that callers can cast and mutate without a revision;
+  its `long.MaxValue` write path can also succeed without incrementing the
+  revision. Other included NPC Knowledge owners—Explorable Site, Local
+  Topology, and Adventure Site Intel—have public observation writes without a
+  common revision/receipt contract. These are NPC-held Knowledge owners,
+  distinct from the absent P10 `LocalTopologyStore`. Read-only collection wrappers may also
+  expose live observation objects. Preserve all observation provenance and
+  freshness through detached owner values.
+- **Scheduled directives:** `ScheduledDirectiveStore.Add` is guarded but has no
+  store revision or export/restore API. Its `Directives` read-only wrapper and
+  `GetPendingForDay` return live directive objects; public
+  `MarkSucceeded`/`MarkFailed`/`MarkSkipped` mutate lifecycle facts outside a
+  store-level revision witness.
+- **Actor choices:** `ActorChoiceStore` guards its write/transition methods
+  and its read APIs return copies, but it has no owner revision or immutable
+  export/staged restore API. Its private next-input sequence, command-ID
+  history, temporal indexes and full terminal disposition history must be
+  captured together; its internal `Clone` is not an export/hydration contract.
+- **Travel parties:** `TravelPartyStore` guards Add/Complete/Remove and uses
+  read-only member snapshots, but has no store revision, receipt, export or
+  hydrator. Party progress/cost and reciprocal NPC-party state need one
+  consistent staged boundary.
+- **Expeditions:** `ExpeditionStore` has no guard/revision/export and returns
+  live `ExpeditionRuntime` instances through read-only-typed collection APIs.
+  Public expedition progress/lifecycle methods and mutable objective state can
+  therefore change a stored item without a store revision witness.
+- **NPC commitments:** `NpcRuntime` exposes live `CurrentActionRuntime` and
+  `MerchantTradePlan` objects with public setters and lifecycle/progress
+  methods. `NpcActionRuntime.CaptureOwnerState`/`InstallOwnerState` are
+  transaction helpers using object references, not immutable durable values.
+  These action/merchant-plan fields belong to the same whole-NPC snapshot and
+  revision as the P12-D/E/F NPC projections, not separate competing writers.
+
+For P12-F, guarded operations, clones, and read-only collection interfaces do
+not substitute for an immutable owner export plus private staged restoration.
+Close or deliberately circumscribe the listed mutable escape paths within the
+accepted profile, and make every supported successful write advance a witness
+that P12-B can observe. Preserve ActorChoice sequence/idempotency, directive
+lifecycle, Knowledge provenance/freshness, expedition progress, party
+commitments, and NPC action/trade-plan state. P12-F remains downstream of
+P12-C, P12-D, and P12-E;
+this audit is an owner-inventory advance only, not implementation readiness.
