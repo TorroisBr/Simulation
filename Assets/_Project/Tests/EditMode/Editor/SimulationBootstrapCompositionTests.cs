@@ -253,8 +253,28 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(authority.PassageAuthority.BarrierStates, Is.Empty);
         Assert.That(runtime.LegacySpatialAnchorBindingStore.Count, Is.Zero);
         Assert.That(runtime.LegacySpatialAnchorBindingStore.Revision, Is.Zero);
+        LegacySpatialAnchorBindingCensusProvider anchorBindingsProvider =
+            new LegacySpatialAnchorBindingCensusProvider(runtime.LegacySpatialAnchorBindingStore);
+        OwnerSectionCensusWitness anchorBindings = anchorBindingsProvider.GetCurrentCensus();
+        Assert.That(anchorBindings.SectionId, Is.EqualTo(LegacySpatialAnchorBindingCensusProvider.SectionId));
+        Assert.That(anchorBindings.SchemaVersion, Is.EqualTo(LegacySpatialAnchorBindingCensusProvider.SchemaVersion));
+        Assert.That(anchorBindings.OwnerInstanceIdentity, Is.SameAs(runtime.LegacySpatialAnchorBindingStore));
+        Assert.That(anchorBindings.Cardinality, Is.Zero);
+        Assert.That(anchorBindings.Revision, Is.Zero);
+        Assert.That(anchorBindingsProvider.GetCurrentCensus().OwnerInstanceIdentity,
+            Is.SameAs(anchorBindings.OwnerInstanceIdentity));
         Assert.That(runtime.PersonSpatialPositionStore.Count, Is.Zero);
         Assert.That(runtime.PersonSpatialPositionStore.Revision, Is.Zero);
+        PersonSpatialPositionCensusProvider personPositionsProvider =
+            new PersonSpatialPositionCensusProvider(runtime.PersonSpatialPositionStore);
+        OwnerSectionCensusWitness personPositions = personPositionsProvider.GetCurrentCensus();
+        Assert.That(personPositions.SectionId, Is.EqualTo(PersonSpatialPositionCensusProvider.SectionId));
+        Assert.That(personPositions.SchemaVersion, Is.EqualTo(PersonSpatialPositionCensusProvider.SchemaVersion));
+        Assert.That(personPositions.OwnerInstanceIdentity, Is.SameAs(runtime.PersonSpatialPositionStore));
+        Assert.That(personPositions.Cardinality, Is.Zero);
+        Assert.That(personPositions.Revision, Is.Zero);
+        Assert.That(personPositionsProvider.GetCurrentCensus().OwnerInstanceIdentity,
+            Is.SameAs(personPositions.OwnerInstanceIdentity));
         Assert.That(runtime.SpatialRouteKnowledgeStore.ObservationCount, Is.Zero);
         Assert.That(runtime.SpatialRouteKnowledgeStore.Revision, Is.Zero);
         Assert.That(runtime.PersonRoutePlanStore.PlanCount, Is.Zero);

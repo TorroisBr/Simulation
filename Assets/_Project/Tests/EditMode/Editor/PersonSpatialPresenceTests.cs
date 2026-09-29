@@ -22,6 +22,65 @@ public sealed class PersonSpatialPresenceTests
     }
 
     [Test]
+    public void P8CPassiveCensusProvidersTrackExactOwnerCountAndRevision()
+    {
+        SpatialAuthorityStore spatial = CreateGeography();
+        LegacySpatialAnchorBindingStore bindings = new LegacySpatialAnchorBindingStore(spatial);
+        LegacySpatialAnchorBindingCensusProvider bindingsProvider =
+            new LegacySpatialAnchorBindingCensusProvider(bindings);
+        OwnerSectionCensusWitness emptyBindings = bindingsProvider.GetCurrentCensus();
+        Assert.That(emptyBindings.SectionId, Is.EqualTo(LegacySpatialAnchorBindingCensusProvider.SectionId));
+        Assert.That(emptyBindings.SchemaVersion, Is.EqualTo(LegacySpatialAnchorBindingCensusProvider.SchemaVersion));
+        Assert.That(emptyBindings.OwnerInstanceIdentity, Is.SameAs(bindings));
+        Assert.That(emptyBindings.Cardinality, Is.Zero);
+        Assert.That(emptyBindings.Revision, Is.Zero);
+
+        Assert.That(bindings.TryBindCity("city.north", new LocationId("location.a"), out _), Is.True);
+        OwnerSectionCensusWitness boundCity = bindingsProvider.GetCurrentCensus();
+        Assert.That(boundCity.Cardinality, Is.EqualTo(1));
+        Assert.That(boundCity.Revision, Is.EqualTo(1));
+        Assert.That(bindings.TryBindCity("city.north", new LocationId("location.a"), out _), Is.True,
+            "An identical idempotent bind succeeds without changing the owner revision.");
+        Assert.That(bindingsProvider.GetCurrentCensus().Cardinality, Is.EqualTo(1));
+        Assert.That(bindingsProvider.GetCurrentCensus().Revision, Is.EqualTo(1));
+        Assert.That(bindings.TryBindSite("site.missing-location", new LocationId("location.missing"), out _), Is.False);
+        Assert.That(bindingsProvider.GetCurrentCensus().Cardinality, Is.EqualTo(1));
+        Assert.That(bindingsProvider.GetCurrentCensus().Revision, Is.EqualTo(1));
+
+        PersonStore people = new PersonStore();
+        PersonId personId = new PersonId("person.p8c-census");
+        Assert.That(people.TryRegister(new PersonRuntime(personId), out _), Is.True);
+        FakeTraversalResolver resolver = new FakeTraversalResolver();
+        PersonSpatialPositionStore positions = new PersonSpatialPositionStore(people, spatial, resolver);
+        PersonSpatialPositionCensusProvider positionsProvider = new PersonSpatialPositionCensusProvider(positions);
+        OwnerSectionCensusWitness emptyPositions = positionsProvider.GetCurrentCensus();
+        Assert.That(emptyPositions.SectionId, Is.EqualTo(PersonSpatialPositionCensusProvider.SectionId));
+        Assert.That(emptyPositions.SchemaVersion, Is.EqualTo(PersonSpatialPositionCensusProvider.SchemaVersion));
+        Assert.That(emptyPositions.OwnerInstanceIdentity, Is.SameAs(positions));
+        Assert.That(emptyPositions.Cardinality, Is.Zero);
+        Assert.That(emptyPositions.Revision, Is.Zero);
+        Assert.That(positions.TrySetAt(new PersonId("person.missing"),
+            StablePositionReference.ForHex(new HexId("hex.a")), out _), Is.False);
+        Assert.That(positionsProvider.GetCurrentCensus().Cardinality, Is.Zero);
+        Assert.That(positionsProvider.GetCurrentCensus().Revision, Is.Zero);
+
+        Assert.That(positions.TrySetAt(personId, StablePositionReference.ForHex(new HexId("hex.a")), out _), Is.True);
+        AssertPositionWitness(positionsProvider, positions, cardinality: 1, revision: 1);
+        HexBoundaryKey boundary = new HexBoundaryKey(new HexId("hex.a"), new HexId("hex.b"));
+        TraversalOptionRef option = TraversalOptionRef.ForWildernessRule("rule.p8c-census", "v1");
+        resolver.Allow(option, boundary);
+        Assert.That(positions.TryBeginTransit(personId, option, boundary,
+            new HexId("hex.a"), new HexId("hex.b"), out _), Is.True);
+        AssertPositionWitness(positionsProvider, positions, cardinality: 1, revision: 2);
+        Assert.That(positions.TryAdvanceTransit(personId, 0, out _), Is.False);
+        AssertPositionWitness(positionsProvider, positions, cardinality: 1, revision: 2);
+        Assert.That(positions.TryAdvanceTransit(personId, 1000, out _), Is.True);
+        AssertPositionWitness(positionsProvider, positions, cardinality: 1, revision: 3);
+        Assert.That(positions.TryArrive(personId, StablePositionReference.ForHex(new HexId("hex.b")), out _), Is.True);
+        AssertPositionWitness(positionsProvider, positions, cardinality: 1, revision: 4);
+    }
+
+    [Test]
     public void PersonIdentityOwnsAtAndInTransitAcrossRepresentationAndDeath()
     {
         SpatialAuthorityStore spatial = CreateGeography();
@@ -288,6 +347,18 @@ public sealed class PersonSpatialPresenceTests
         MethodInfo cloneMethod = typeof(PersonSpatialPositionStore).GetMethod("Clone", BindingFlags.Instance | BindingFlags.NonPublic);
         Assert.That(cloneMethod, Is.Not.Null);
         return (PersonSpatialPositionStore)cloneMethod.Invoke(source, new object[] { people, spatial, resolver });
+    }
+
+    private static void AssertPositionWitness(
+        PersonSpatialPositionCensusProvider provider,
+        PersonSpatialPositionStore owner,
+        int cardinality,
+        long revision)
+    {
+        OwnerSectionCensusWitness witness = provider.GetCurrentCensus();
+        Assert.That(witness.OwnerInstanceIdentity, Is.SameAs(owner));
+        Assert.That(witness.Cardinality, Is.EqualTo(cardinality));
+        Assert.That(witness.Revision, Is.EqualTo(revision));
     }
 
     private static SpatialAuthorityStore CreateGeography()
