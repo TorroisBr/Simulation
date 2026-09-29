@@ -50,7 +50,7 @@ documentation/design review; no new code or test result is claimed.
 | P18-C — External-Input/Deferral Adapter | PROMOTED at integration tip `b75c5b8` (code `a535441`) | Code integration `a535441` was assembled against P18 State tip `eabc1c2` (promoted extension code `1dd0479`) and promoted to `codex/phase18/canonical` at `b75c5b8`. Exact-tip independent implementation review passed. Temporal identity/cardinality, focused domain suites, ALL EditMode 1794/1794, complete Smoke 5/5, and diff-check passed. The promoted candidate State still carried stale pending-gate wording; this docs-only correction reconciles it. |
 | P18-D prerequisite — Economy sale receipt/prepared install | PROMOTED at `9e790c5` | Stable proposal/fingerprint identity, first-execution current-truth snapshot, committed replay, retry only after proven-no-install, expected-revision preflight, and owner-local prepared installation across inventory, market, and account state. Receipt retention is scoped to the current `SimulationRuntime` lifetime; no restart/save/crash-recovery guarantee is claimed. |
 | P18-D prerequisite — serialized runtime advance window | PROMOTED at `9e790c5` | A per-runtime, single-writer, non-reentrant lease covers `TryAdvanceDay` and the outer `TryAdvanceDays` call. It is not a general thread-safety promise. The P18-D consumer must keep its full chronological advance, boundary subphases, and successful post-advance P18-C handoff inside this lease. |
-| P18-D — Consumer Integration | IMPLEMENTED CANDIDATE — VALIDATION PASS; EXACT-TIP REVIEW PENDING | Technical design candidate `9ed6d90455cc793244ee7207adb62960e45a9972` passed independent exact-tip review against P18 canonical `85f1f21`, P14 State `4caecbb` / code `c44904b`, P20 State `7a81cc0` / P20-A integration `1dcf67a` (implementation `22df7b3`), P11 canonical `308e24d`, architecture `c285466`, intraday-extensibility alignment `4b6dd1d`, and multi-participant alignment `c285466`. Implementation began with `90e3359`, merged the current P14 canonical at `a2a8edd`, and added runtime corrections at `3ddf8476842ad24b9234ccaa65a530722ead8eb4`; test-only consumer replay correction is `0887d18`. It binds committed P11 receipts after successful advance, observes later triggers/deferrals, admits the exact allocated request, integrates Local SellGoods, and runs the selected daily owners chronologically under the promoted runtime lease while preserving P11 semantic validation. P14 local daily material-flow cities are rejected before any boundary mutation until a separately reviewed temporal owner adapter exists. The replacement replay regression now re-enters the P18-D consumer resume path after sale commit and plan activation, checking receipt identity, once-only bookkeeping, and P11/P18-C terminal reconciliation. Exact-tip implementation review is pending; P14 remains excluded and no blanket P20/P19 dependency is implied. |
+| P18-D — Consumer Integration | IMPLEMENTED CANDIDATE — VALIDATION PASS; EXACT-TIP REVIEW PENDING | Technical design candidate `9ed6d90455cc793244ee7207adb62960e45a9972` passed independent exact-tip review against P18 canonical `85f1f21`, P14 State `4caecbb` / code `c44904b`, P20 State `7a81cc0` / P20-A integration `1dcf67a` (implementation `22df7b3`), P11 canonical `308e24d`, architecture `c285466`, intraday-extensibility alignment `4b6dd1d`, and multi-participant alignment `c285466`. Implementation began with `90e3359`, merged the current P14 canonical at `a2a8edd`, and added runtime corrections at `3ddf8476842ad24b9234ccaa65a530722ead8eb4`; test-only consumer replay correction is `0887d18`, with review-accuracy comment correction `6a4d971`. It binds committed P11 receipts after successful advance, observes later triggers/deferrals, admits the exact allocated request, integrates Local SellGoods, and runs the selected daily owners chronologically under the promoted runtime lease while preserving P11 semantic validation. P14 local daily material-flow cities are rejected before any boundary mutation until a separately reviewed temporal owner adapter exists. The replacement replay regression completes the sale and normal P11/P18-C terminal reconciliation, activates a merchant plan, then rewinds only in-memory P18-D consumer execution flags and re-enters the resume path. Existing terminal records remain present. The test checks receipt identity, no repeated sale effects, and idempotent terminal reconciliation; it does not simulate a pre-terminal interruption or runtime restart. Exact-tip implementation review is pending; P14 remains excluded and no blanket P20/P19 dependency is implied. |
 
 ### P18-D runtime validation — code `3ddf847` (before consumer-replay review correction)
 
@@ -101,18 +101,38 @@ authorize canonical promotion or Phase 18 closure.
 The independent review of `3ddf847` identified that direct replay through
 `MerchantSystem.TryExecuteKeyedLocalMarketSale` did not test the consumer's
 resume or terminal-reconciliation path. Commit `0887d18` replaces that test
-with an intraday ActorChoice execution that commits a sale normally, then
-models interruption after the committed owner receipt and once-only
-consumer bookkeeping but before P11/P18-C terminal reconciliation. With an
-active merchant plan, it re-enters `TryResumeP18DActorChoice` and verifies the
-same receipt instance, no additional inventory/market/account changes, no
-duplicate trade log, and idempotent terminal records. This exercises the
-consumer within the current runtime lifetime; it makes no restart or durable
-crash-recovery claim.
+with an intraday ActorChoice execution that commits a sale and completes normal
+P11/P18-C terminal reconciliation. With an active merchant plan, the test then
+rewinds only the in-memory P18-D consumer execution flags and re-enters
+`TryResumeP18DActorChoice`; the committed owner receipt and first-pass terminal
+records remain present. It verifies the same receipt instance, no additional
+inventory/market/account changes, no duplicate trade log, and idempotent
+terminal reconciliation. This tests post-terminal consumer replay within the
+current runtime lifetime; it does not simulate a pre-terminal interruption or
+make a restart or durable crash-recovery claim.
 
 Exact candidate validation on `0887d18` passed P18DConsumerIntegration 9/9,
 ALL EditMode 1921/1921, complete official Smoke 5/5, and
 SimulationRuntimeLongRun 7/7. `git diff --check` passed.
+
+### P18-D replay wording correction — `6a4d971`
+
+The exact-tip review found that the test comment and State overstated the
+scenario as an interruption before terminal reconciliation. The test first
+completes the normal P11/P18-C terminal path, then rewinds only P18-D's
+in-memory execution flags. Commit `6a4d971` corrects the comment; the State now
+explicitly describes this as post-terminal consumer replay and makes no claim
+that the test covers a pre-terminal interruption or runtime restart. The
+correction does not change runtime behavior or test assertions.
+
+Validation on code/test tip `6a4d971` passed P18DConsumerIntegration 9/9
+(`EditMode-20260929-035716-18e523f59429490392524da2a891f26d.xml`), ALL EditMode
+1921/1921 (`EditMode-20260929-035741-71c67f1e10c646fd82c93fd9e794e23c.xml`),
+complete official Smoke 5/5
+(`EditMode-20260929-035819-f7ae6c34e5f84d1fa01f36b48662aa1b.xml`), and
+SimulationRuntimeLongRun 7/7
+(`EditMode-20260929-035844-680167d74dc446a79ec91df751bbc580.xml`).
+`git diff --check` passed. Exact-tip independent review is pending.
 
 | Suite | Result | XML |
 |---|---:|---|
