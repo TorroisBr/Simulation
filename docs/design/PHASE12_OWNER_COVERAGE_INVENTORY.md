@@ -137,8 +137,8 @@ exact-tip revalidation with only `docs/PHASE18_STATE.md` changed. The
 composition is now canonical. This inventory refresh records authored startup
 cardinalities and actual composed/empty/not-composed owners; the complete
 live/evolved-owner census and mutation mapping remain outstanding. This
-documentation follow-up has its own independent
-review in progress. The
+documentation follow-up is documentation-only; it adds no implementation
+readiness. The
 selected SampleScene bootstrap creates legacy NPCs without a
 `PersonId`, and its `PersonStore` starts empty. P11 choice execution applies to
 Person-backed NPCs, so the candidate proves `ActorChoiceStore` composition and
@@ -689,3 +689,70 @@ configurations, `TesteSimulacao` city/site/route/NPC creation paths, and the
 counts bound the initial fixture only. Runtime evolution, direct mutable
 references, and uneven owner revisions still require a complete live
 owner/cardinality and committed-write census before P12-B can become ready.
+
+### P12-B owner-window and composite-owner source revalidation — 2026-09-29
+
+This bounded read-only audit covers the selected profile's runtime fence and
+the shared City/NPC roots in executable code `ec75e6a` (preserved by P12
+canonical `36e3064`). It records source gaps, not a complete all-owner mutation
+census or implementation readiness.
+
+- **Advance lease and capture window:** `SimulationRuntime.AdvanceDay` /
+  `TryAdvanceDay` and `AdvanceDays` / `TryAdvanceDays` acquire
+  `advanceLeaseHeld` and release it through `AdvanceLease.Dispose` in
+  `SimulationRuntime.cs`. Optional P18 `TryAdvanceIntradayTo` uses the same
+  lease, but the selected P12 daily profile does not compose P18 timeline
+  state. The lease's unsynchronized `bool` prevents same-runtime reentrant
+  advances; it is not a thread lock, owner-thread identity, or global active-
+  operation scope.
+- **Direct clock and owner entrypoints:** `SimulationRuntime` publicly exposes
+  `SimulationTime` and owner stores. `SimulationTime.TryAdvanceDay` can advance
+  the clock directly in this legacy profile without the daily path or advance
+  lease. Person registration, ActorChoice capture/transitions, runtime person/
+  death/materialization/population methods, spatial observation/route-plan
+  mutations, and travel-party start are separate public entrypoints that do
+  not acquire the advance lease. `TesteSimulacao.TryStartExpedition` directly
+  calls the expedition system. No constructor/bootstrap code binds or checks a
+  thread identity; no API proves capture is free of all in-flight owner work.
+- **No global invalidation witness:** `AuthoritativeMutationGuard` and
+  `MutationGuardBinding` expose health/fault and one-way binding, not a
+  world-wide mutation epoch or committed-write notifications. Local locks and
+  transactions such as `BattleOutcomeApplication`'s per-application lease,
+  `PersonDeathLifecycle` receipts, and `SettlementPopulationRuntime` receipt
+  gates protect individual operations only. Existing per-owner revisions are
+  uneven and cannot prove complete capture invalidation or quiescence.
+- **City composite owner:** `CityRuntime` has no whole-City revision. Its
+  `ImportantNpcs` property exposes the backing mutable list; City membership
+  changes through `AddImportantNpc` / `RemoveImportantNpc` and NPC presence
+  changes through `NpcRuntime.SetCurrentPresence` update the projection without
+  a City witness. The list is a derived index of NPC presence and must be
+  rebuilt and validated after restore, not serialized as a second membership
+  truth. Population, Market, account and daily-economy receipt revisions cover
+  only their own facts. `TryCommitDailyEconomy` has an expected-state prepared
+  installation boundary, while legacy production, consumption, and price
+  refresh remain direct methods with only their relevant child witnesses.
+  P14 `lastMaterialFlow` is outside this accepted P12 profile and remains
+  excluded.
+- **NPC composite owner:** `NpcRuntime` has no whole-NPC revision and exposes
+  mutable `CurrentStatus`. Public state writers for action, injury/death,
+  presence/travel, party markers, hidden state, residence fallback, and
+  travel/merchant plans do not produce a composite witness. Inventory,
+  account, Market, Knowledge, and optional P18 local-observation/trade-state
+  revisions cover only those child facts; `NpcActionRuntime`,
+  `NpcTravelPlanRuntime`, and `MerchantTradePlanRuntime` remain mutable through
+  public NPC getters without a shared NPC stamp.
+- **Accepted owner seam:** P12-D/E City projections and P12-D/E/F NPC
+  projections must be derived from one detached snapshot per concrete runtime
+  owner, bound to one owner revision and capture token, then merged and hydrated
+  once. Preserve child revisions/receipts in their owning section, but do not
+  treat their tuple as a composite owner revision. Remove mutable collection
+  bypasses and route supported successful nested/direct writes through owner
+  invalidation; advance owner stamps only after complete transaction install.
+  Rebuild City membership from restored NPC presence and validate the
+  relationship rather than persisting duplicate truth. P18 temporal state and
+  P14 material flow remain excluded from `UnityBootstrap-Daily-v1`.
+
+The audit closes neither the complete supported mutation census nor P12-B's
+owner-thread, quiescence, and eligibility requirements. It sharpens the
+accepted B/D/E/F capability work and keeps P12-B `WAIT_DEPENDENCY` until every
+included owner and successful mutation path has a validated witness.

@@ -10,7 +10,7 @@ at State tip `8ac2d78`. The complete live owner/revision census,
 committed-mutation invalidation, owner-thread/quiescence, and admission-
 readiness evidence still block P12-B implementation.
 
-**Canonical references checked after remote refresh on 2026-09-28:** architecture
+**Historical canonical references checked after remote refresh on 2026-09-28:** architecture
 `c285466c355103d3637ac165246591b72eb7bda0`; P8 `470667d37863384edadb3d93ef64d8004aff46a3`;
 P9 `82396ae7ffaf407fda278928da456b06dc5394d4` (P9-B code integration
 `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf`); P11
@@ -590,3 +590,14 @@ remains blocked on the remaining live owner/revision census,
 committed-mutation invalidation, owner-thread, and quiescence proofs. The
 refreshed inventory documents authored startup cardinalities and known owner
 composition but does not substitute for those runtime proofs.
+
+Targeted source revalidation against the promoted code tree confirms the
+runtime advance lease only prevents reentrant day advances. It is an
+unsynchronized bool, does not establish Unity-thread affinity, and does not
+cover direct `SimulationTime.TryAdvanceDay` calls or public owner mutations.
+`SimulationRuntime` exposes mutable owners, but no world-wide mutation epoch,
+active-operation scope, or capture quiescence protocol exists. The concrete
+City/NPC revision gaps and the single-owner snapshot/hydration seam are
+recorded in the current owner inventory. These are required evidence and
+accepted owner-boundary work, not a new P12 scope or implementation-readiness
+claim.
