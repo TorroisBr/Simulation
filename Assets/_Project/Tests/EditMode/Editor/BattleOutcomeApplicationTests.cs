@@ -271,6 +271,9 @@ public sealed class BattleOutcomeApplicationTests
         Fixture fixture = CreateFixture(MultiSourceSeeds(), DeathRule(1L), recorder: new TestRecorder());
         string before = WorldStateCanonicalWriter.Write(Capture(fixture));
         RevisionCapture revisions = CaptureRevisions(fixture);
+        ContingentManpowerCensusProvider manpowerCensusProvider =
+            new ContingentManpowerCensusProvider(fixture.World.ContingentManpowerStateStore);
+        OwnerSectionCensusWitness manpowerCensusBefore = manpowerCensusProvider.GetCurrentCensus();
         SetFailureInjection(fixture, injection);
 
         BattleOutcomeApplicationResult result = fixture.World.BattleOutcomeApplicationService.Apply(fixture.BattleId);
@@ -279,6 +282,11 @@ public sealed class BattleOutcomeApplicationTests
         Assert.That(result.Failure.Code, Is.EqualTo(BattleOutcomeApplicationFailureCode.CommitFailedRolledBack));
         Assert.That(WorldStateCanonicalWriter.Write(Capture(fixture)), Is.EqualTo(before));
         AssertRevisions(fixture, revisions);
+        OwnerSectionCensusWitness manpowerCensusAfter = manpowerCensusProvider.GetCurrentCensus();
+        Assert.That(manpowerCensusAfter.OwnerInstanceIdentity, Is.SameAs(manpowerCensusBefore.OwnerInstanceIdentity));
+        Assert.That(manpowerCensusAfter.Cardinality, Is.EqualTo(manpowerCensusBefore.Cardinality));
+        Assert.That(manpowerCensusAfter.Revision, Is.EqualTo(manpowerCensusBefore.Revision),
+            "The passive witness reports the store revision restored by Battle rollback.");
         Assert.That(fixture.World.BattleStore.TryGet(fixture.BattleId, out PersistentBattleRecord battle), Is.True);
         Assert.That(battle.LifecycleState, Is.EqualTo(BattleLifecycleState.Active));
         Assert.That(battle.TerminalOutcome, Is.Null);

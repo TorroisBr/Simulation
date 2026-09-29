@@ -50,6 +50,8 @@ public sealed class SimulationBootstrapComposition
         RuntimeIdentityCensusProviders = RuntimeIdentityRegistryCensusProvider.CreateProviders(runtimeIdentityRegistry);
         RuntimeIdAllocatorCensusProviders = RuntimeIdAllocatorCensusProvider.CreateProviders(runtimeIdAllocator);
         ArmedForceStoreCensusProviders = ArmedForceStoreCensusProvider.CreateProviders(Runtime.ArmedForceStore);
+        ContingentManpowerCensusProvider = new ContingentManpowerCensusProvider(Runtime.ContingentManpowerStateStore);
+        ArmedForceSpatialCensusProvider = new ArmedForceSpatialCensusProvider(Runtime.ArmedForceSpatialStateStore);
         ExplorableSites = sites;
         Expeditions = expeditions;
         ExpeditionSystem = expeditionSystem;
@@ -94,6 +96,10 @@ public sealed class SimulationBootstrapComposition
     public IReadOnlyList<IOwnerSectionCensusProvider> RuntimeIdAllocatorCensusProviders { get; }
     /// <summary>Fixed passive witnesses for the runtime's armed-force owner sections.</summary>
     public IReadOnlyList<IOwnerSectionCensusProvider> ArmedForceStoreCensusProviders { get; }
+    /// <summary>Passive witness for the runtime's separate contingent-manpower state owner.</summary>
+    public IOwnerSectionCensusProvider ContingentManpowerCensusProvider { get; }
+    /// <summary>Passive witness for the runtime's separate armed-force position owner.</summary>
+    public IOwnerSectionCensusProvider ArmedForceSpatialCensusProvider { get; }
     /// <summary>The P8-owned spatial truth authority published with the genesis handoff.</summary>
     public SpatialAuthorityStore SpatialAuthority => Runtime.SpatialAuthorityStore;
     public ExplorableSiteStore ExplorableSites { get; }

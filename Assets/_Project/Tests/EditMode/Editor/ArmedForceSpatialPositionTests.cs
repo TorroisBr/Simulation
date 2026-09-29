@@ -58,6 +58,45 @@ public sealed class ArmedForceSpatialPositionTests
     }
 
     [Test]
+    public void CensusTracksPositionCardinalityAndRevisionWithInstalledStoreIdentity()
+    {
+        WorldParts parts = CreateWorld(false);
+        ArmedForceSpatialCensusProvider provider = new ArmedForceSpatialCensusProvider(parts.Spatial);
+        AssertPositionCensus(provider, parts.Spatial, 0, 0L);
+
+        Assert.That(parts.Spatial.TrySetPosition(
+            parts.ForceId,
+            SpatialReference.ForHex(new HexId("hex-a")),
+            out _), Is.True);
+        AssertPositionCensus(provider, parts.Spatial, 1, 1L);
+
+        Assert.That(parts.Spatial.TrySetPosition(
+            parts.ForceId,
+            SpatialReference.ForHex(new HexId("hex-a")),
+            out _), Is.True,
+            "Setting the current position is a no-op.");
+        AssertPositionCensus(provider, parts.Spatial, 1, 1L);
+
+        Assert.That(parts.Spatial.TrySetPosition(
+            parts.ForceId,
+            SpatialReference.ForHex(new HexId("hex-b")),
+            out _), Is.True);
+        AssertPositionCensus(provider, parts.Spatial, 1, 2L);
+
+        Assert.That(parts.Spatial.TrySetPosition(
+            parts.ForceId,
+            SpatialReference.ForHex(new HexId("missing")),
+            out _), Is.False,
+            "An unresolved position must not change the witness.");
+        AssertPositionCensus(provider, parts.Spatial, 1, 2L);
+
+        Assert.That(parts.Spatial.TryClearPosition(parts.ForceId, out _), Is.True);
+        AssertPositionCensus(provider, parts.Spatial, 0, 3L);
+        Assert.That(parts.Spatial.TryClearPosition(parts.ForceId, out _), Is.True);
+        AssertPositionCensus(provider, parts.Spatial, 0, 3L);
+    }
+
+    [Test]
     public void ParentAndChildPositionsAreIndependentOfHierarchyAndDetachment()
     {
         WorldParts parts = CreateWorld(true);
@@ -274,6 +313,20 @@ public sealed class ArmedForceSpatialPositionTests
         ArmedForceSpatialStateStore spatial = new ArmedForceSpatialStateStore(forces, authority, topology);
         return new WorldParts(forces, authority, topology, spatial, forceId, childId, city, SpatialReference.ForSubLocation(
             LocalTopologyOwnerKind.City, city.RuntimeId, place.RuntimeId));
+    }
+
+    private static void AssertPositionCensus(
+        ArmedForceSpatialCensusProvider provider,
+        ArmedForceSpatialStateStore owner,
+        int cardinality,
+        long revision)
+    {
+        OwnerSectionCensusWitness witness = provider.GetCurrentCensus();
+        Assert.That(witness.SectionId, Is.EqualTo(ArmedForceSpatialCensusProvider.SectionId));
+        Assert.That(witness.SchemaVersion, Is.EqualTo(ArmedForceSpatialCensusProvider.SchemaVersion));
+        Assert.That(witness.OwnerInstanceIdentity, Is.SameAs(owner));
+        Assert.That(witness.Cardinality, Is.EqualTo(cardinality));
+        Assert.That(witness.Revision, Is.EqualTo(revision));
     }
 
     private static SpatialAuthorityStore CreateAuthority(bool includeSecondLocation)

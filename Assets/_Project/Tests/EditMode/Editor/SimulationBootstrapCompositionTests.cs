@@ -337,6 +337,30 @@ public sealed class SimulationBootstrapCompositionTests
             Assert.That(repeatedArmedForceWitnesses[i].Revision, Is.Zero);
         }
 
+        OwnerSectionCensusWitness manpowerWitness = simulation.Bootstrap.ContingentManpowerCensusProvider.GetCurrentCensus();
+        Assert.That(manpowerWitness.SectionId, Is.EqualTo(ContingentManpowerCensusProvider.SectionId));
+        Assert.That(manpowerWitness.SchemaVersion, Is.EqualTo(ContingentManpowerCensusProvider.SchemaVersion));
+        Assert.That(manpowerWitness.OwnerInstanceIdentity, Is.SameAs(simulation.Runtime.ContingentManpowerStateStore));
+        Assert.That(manpowerWitness.Cardinality, Is.Zero);
+        Assert.That(manpowerWitness.Revision, Is.Zero);
+        OwnerSectionCensusWitness repeatedManpowerWitness =
+            simulation.Bootstrap.ContingentManpowerCensusProvider.GetCurrentCensus();
+        Assert.That(repeatedManpowerWitness.OwnerInstanceIdentity, Is.SameAs(manpowerWitness.OwnerInstanceIdentity));
+        Assert.That(repeatedManpowerWitness.Cardinality, Is.Zero);
+        Assert.That(repeatedManpowerWitness.Revision, Is.Zero);
+
+        OwnerSectionCensusWitness forcePositionWitness = simulation.Bootstrap.ArmedForceSpatialCensusProvider.GetCurrentCensus();
+        Assert.That(forcePositionWitness.SectionId, Is.EqualTo(ArmedForceSpatialCensusProvider.SectionId));
+        Assert.That(forcePositionWitness.SchemaVersion, Is.EqualTo(ArmedForceSpatialCensusProvider.SchemaVersion));
+        Assert.That(forcePositionWitness.OwnerInstanceIdentity, Is.SameAs(simulation.Runtime.ArmedForceSpatialStateStore));
+        Assert.That(forcePositionWitness.Cardinality, Is.Zero);
+        Assert.That(forcePositionWitness.Revision, Is.Zero);
+        OwnerSectionCensusWitness repeatedForcePositionWitness =
+            simulation.Bootstrap.ArmedForceSpatialCensusProvider.GetCurrentCensus();
+        Assert.That(repeatedForcePositionWitness.OwnerInstanceIdentity, Is.SameAs(forcePositionWitness.OwnerInstanceIdentity));
+        Assert.That(repeatedForcePositionWitness.Cardinality, Is.Zero);
+        Assert.That(repeatedForcePositionWitness.Revision, Is.Zero);
+
         SpatialAuthorityStore authority = simulation.Bootstrap.SpatialAuthority;
         SpatialHexCensusProvider hexCensusProvider = new SpatialHexCensusProvider(authority);
         OwnerSectionCensusWitness hexCensus = hexCensusProvider.GetCurrentCensus();
