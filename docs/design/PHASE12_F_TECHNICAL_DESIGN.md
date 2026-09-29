@@ -16,7 +16,7 @@ implemented or promoted.
 **Current evidence revalidation (2026-09-29):** this F scope preserves the
 spatial-boundary correction at `d409549be5aee048ab8a90dc271af80288fa4e01`
 and is checked against the current owner/profile inventory
-`190281b08af88c87bbd6cdf67ba3470055e1e608`, P12-B design/reference refresh
+`2a5e7071b68d653d7f6be4b3991e4147090d2750`, P12-B design/reference refresh
 `ef8c72cd388445e25ce9360bb1e689fc0a07c639`, P12-C identity/genesis design
 `edc51571559a9ba4b1a025963de2e25b23c66fd3`, P12-D design
 `e8b83d75e34f8456555065e24bfe67bb30366baa`, and P12-E design
@@ -36,7 +36,7 @@ Earlier review hashes in the preceding F version apply only to their exact
 reviewed contents.
 
 **Current P18-D branch evidence (2026-09-29):** canonical prerequisites are
-promoted at `9e790c5`. The current owner inventory `190281b` records actor
+promoted at `9e790c5`. The current owner inventory `2a5e707` records actor
 bridge source `4016a73` with execution record `924cfee9b41c77274141795f0f7ddcd117819f89`
 (exact-tip review PASS; focused 5/5) and merchant trade-state owner
 `b05feafd4f95b1a3a559e6d58de339334df57365` (independent exact-tip PASS;
@@ -46,8 +46,16 @@ observation composite contains an evolved actor bridge; the separate
 needs exact-tip integration review. The alternate bridge `10dcfda` is not the
 selected composite source. Demography owner `ddcac0b` has independent exact-tip
 review and focused owner validation, but remains an isolated candidate pending
-integration. These candidates are not a complete or canonical P18-D consumer
-and add no P18 temporal state to `UnityBootstrap-Daily-v1`.
+integration. The optional-profile P18-D consumer candidate at runtime
+implementation `3ddf847` (based on P14 integration merge `a2a8edd`) now
+composes chronological advance, successful P18-C handoff, and the bounded
+SellGoods consumer. It rejects P14-A local-material-flow Cities before
+mutation. Test-only follow-up `0887d18` refreshed passing validation; current
+State evidence candidate is `c093665`. At this edit baseline, independent
+exact-tip review, canonical promotion, and explicit `SimulationRuntime`
+hotspot handoff remain pending. This candidate does not add P18 temporal state
+to `UnityBootstrap-Daily-v1`, and does not establish P12 owner export or staged
+hydration.
 
 Revalidation uses architecture baseline `c285466c355103d3637ac165246591b72eb7bda0`,
 the intraday/extensibility alignment record `4b6dd1d38cffeaf3cc1ac3effea0f8ede8771194`,
@@ -374,13 +382,15 @@ commitment/planning framework. In particular, do not serialize canonical P8-D
 `PersonSpatialPositionStore`, or P8-E position/travel state, as a substitute
 for the explicitly supported legacy NPC Knowledge and commitment owners. P8-B,
 P8-C, P8-D, and P8-E remain explicit-empty sections, with populated state
-rejected. P18-D consumer composition remains incomplete: current noncanonical
-candidate evidence includes actor-choice bridge source `4016a73` with reviewed
-execution record `924cfee9b41c77274141795f0f7ddcd117819f89`, separately reviewed
-bridge `10dcfda`, local-knowledge/market-urgency composition `43363dd`,
-demography owner `ddcac0b`, and merchant trade-state owner
-`b05feafd4f95b1a3a559e6d58de339334df57365`. These separate reviewed owner
-steps do not form a promoted P18-D runtime composition and add no temporal
+rejected. The optional-profile P18-D consumer candidate `3ddf847`, based on
+P14 merge `a2a8edd`, composes chronological advance, successful P18-C handoff,
+and bounded SellGoods; its P14-A local-material-flow City exclusion occurs
+before mutation. It remains noncanonical at this edit baseline pending
+independent exact-tip review, promotion, and explicit runtime-hotspot handoff;
+test-only `0887d18` refreshed passing validation and State evidence candidate
+`c093665` records its status. Candidate composition neither changes the
+accepted `UnityBootstrap-Daily-v1` profile nor satisfies P12 owner export,
+staged hydration, or B's live census and handoff gates. It adds no P18 temporal
 state to this P12 daily profile.
 The alignment constraints on extensibility and shared-activity identity and
 cardinality remain review constraints without adding those deferred capabilities

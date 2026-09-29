@@ -12,7 +12,7 @@ input set.
 
 **Current governing inputs (2026-09-29):** accepted decomposition at
 `7585863` with reference refresh `a2ac5d2`; current owner inventory
-`d01cd6225ff98a9952b466f7f045ec871b9e3ecc` (partial source/API evidence, not
+`2a5e7071b68d653d7f6be4b3991e4147090d2750` (partial source/API evidence, not
 a live census); P12-B current-evidence revalidation
 `ef8c72cd388445e25ce9360bb1e689fc0a07c639` (design only; implementation remains
 blocked); P12-C identity/genesis design `edc51571559a9ba4b1a025963de2e25b23c66fd3`
@@ -28,17 +28,16 @@ These are design artifacts, not proof that the corresponding capabilities
 have been delivered; revalidate hashes and owner interfaces before
 implementation.
 
-The P18-D prerequisite code is canonical at `9e790c5`, but its State correction
-`6f98e0943782efdf11e4ba1e3a5701aba421f0df` remains unpromoted. Current separate
-P18-D owner candidates include SellGoods/local observation `43363dd`,
-demography `ddcac0b`, ActorChoice bridge source `4016a73` with execution
-record `924cfee9b41c77274141795f0f7ddcd117819f89` (exact-tip review PASS;
-focused 5/5), separately
-reviewed bridge candidate `10dcfda`, and merchant trade-state
-`b05feafd4f95b1a3a559e6d58de339334df57365` (independent exact-tip PASS;
-Merchant 8/8 and local observation 6/6 with retained XMLs). No candidate
-composes the full chronological runtime/handoff, and P18 temporal state remains
-excluded from the selected P12 profile.
+The P18-D prerequisites are canonical at `9e790c5`. At this edit baseline,
+current State evidence candidate `c093665` records the consumer status, while
+the optional-profile P18-D consumer runtime implementation `3ddf847` (based on
+P14 merge `a2a8edd`) composes chronological advance, successful P18-C handoff,
+and the bounded SellGoods consumer. It rejects P14-A local-material-flow
+Cities before mutation. Test-only follow-up `0887d18` refreshed passing
+validation. Independent exact-tip review, canonical promotion, and explicit
+`SimulationRuntime` hotspot handoff remain pending. This candidate does not
+include P18 temporal state in `UnityBootstrap-Daily-v1`, provide P12 owner
+export/staged hydration, or remove B's census/handoff gates.
 
 The accepted architecture baseline is `c285466`; current intraday/extensibility
 and multi-participant alignment records remain constraints. The selected daily
