@@ -251,6 +251,26 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(authority.PassageAuthority.Barriers, Is.Empty);
         Assert.That(authority.PassageAuthority.OptionStates, Is.Empty);
         Assert.That(authority.PassageAuthority.BarrierStates, Is.Empty);
+        SpatialPassageStateCensusProvider passageStateProvider =
+            new SpatialPassageStateCensusProvider(authority);
+        OwnerSectionCensusWitness passageState = passageStateProvider.GetCurrentCensus();
+        Assert.That(passageState.SectionId, Is.EqualTo(SpatialPassageStateCensusProvider.SectionId));
+        Assert.That(passageState.SchemaVersion, Is.EqualTo(SpatialPassageStateCensusProvider.SchemaVersion));
+        Assert.That(passageState.OwnerInstanceIdentity, Is.SameAs(authority.PassageAuthority));
+        Assert.That(passageState.Cardinality, Is.Zero);
+        Assert.That(passageState.Revision, Is.EqualTo(1));
+        Assert.That(passageStateProvider.GetCurrentCensus().OwnerInstanceIdentity,
+            Is.SameAs(passageState.OwnerInstanceIdentity));
+        SpatialCrossingCensusProvider crossingProvider = new SpatialCrossingCensusProvider(authority);
+        OwnerSectionCensusWitness crossings = crossingProvider.GetCurrentCensus();
+        Assert.That(crossings.SectionId, Is.EqualTo(SpatialCrossingCensusProvider.SectionId));
+        Assert.That(crossings.SchemaVersion, Is.EqualTo(SpatialCrossingCensusProvider.SchemaVersion));
+        Assert.That(crossings.OwnerInstanceIdentity, Is.SameAs(authority));
+        Assert.That(crossings.Cardinality, Is.Zero);
+        Assert.That(crossings.Revision, Is.EqualTo(1));
+        Assert.That(crossingProvider.GetCurrentCensus().OwnerInstanceIdentity,
+            Is.SameAs(crossings.OwnerInstanceIdentity));
+        Assert.That(authority.ValidateInvariants().IsValid, Is.True);
         Assert.That(runtime.LegacySpatialAnchorBindingStore.Count, Is.Zero);
         Assert.That(runtime.LegacySpatialAnchorBindingStore.Revision, Is.Zero);
         LegacySpatialAnchorBindingCensusProvider anchorBindingsProvider =

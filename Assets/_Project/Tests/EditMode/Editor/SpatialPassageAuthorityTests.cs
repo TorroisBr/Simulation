@@ -154,6 +154,100 @@ public sealed class SpatialPassageAuthorityTests
     }
 
     [Test]
+    public void P8BPassiveCensusProvidersTrackPassageMembershipCrossingsAndParentRevision()
+    {
+        SpatialAuthorityStore authority = CreateAdjacentGeography();
+        SpatialPassageStateCensusProvider passageProvider = new SpatialPassageStateCensusProvider(authority);
+        SpatialCrossingCensusProvider crossingProvider = new SpatialCrossingCensusProvider(authority);
+        SpatialPassageAuthority passageOwner = authority.PassageAuthority;
+        long revision = authority.Revision;
+
+        AssertP8BWitness(passageProvider, SpatialPassageStateCensusProvider.SectionId,
+            passageOwner, cardinality: 0, revision: revision);
+        AssertP8BWitness(crossingProvider, SpatialCrossingCensusProvider.SectionId,
+            authority, cardinality: 0, revision: revision);
+
+        HexBoundaryKey boundary = Boundary();
+        BarrierId barrierId = new BarrierId("barrier.p8b-census");
+        Assert.That(passageOwner.TryRegisterBarrier(
+            new BarrierRecord(barrierId, "content.p8b-barrier", "barrier-v1", new[] { boundary }),
+            BarrierCondition.Active, out SpatialAuthorityFailure failure), Is.True, failure.ToString());
+        revision++;
+        AssertP8BWitness(passageProvider, SpatialPassageStateCensusProvider.SectionId,
+            passageOwner, cardinality: 1, revision: revision);
+        AssertP8BWitness(crossingProvider, SpatialCrossingCensusProvider.SectionId,
+            authority, cardinality: 0, revision: revision);
+
+        TraversalOptionRef road = TraversalOptionRef.ForConnection(new ConnectionId("connection.p8b-census"));
+        PassageOptionRecord roadRecord = new PassageOptionRecord(
+            road, boundary, "content.p8b-road", "road-v1");
+        Assert.That(passageOwner.TryRegisterConnection(
+            roadRecord, PassageCondition.Available, out failure), Is.True, failure.ToString());
+        revision++;
+        AssertP8BWitness(passageProvider, SpatialPassageStateCensusProvider.SectionId,
+            passageOwner, cardinality: 2, revision: revision);
+        AssertP8BWitness(crossingProvider, SpatialCrossingCensusProvider.SectionId,
+            authority, cardinality: 0, revision: revision);
+
+        Assert.That(passageOwner.TryRegisterConnection(
+            roadRecord, PassageCondition.Available, out failure), Is.False);
+        AssertP8BWitness(passageProvider, SpatialPassageStateCensusProvider.SectionId,
+            passageOwner, cardinality: 2, revision: revision);
+        AssertP8BWitness(crossingProvider, SpatialCrossingCensusProvider.SectionId,
+            authority, cardinality: 0, revision: revision);
+
+        CrossingId crossingId = new CrossingId("crossing.p8b-census");
+        Assert.That(authority.TryRegisterCrossing(
+            new CrossingRecord(crossingId, boundary, new HexId("hex.a"),
+                "content.p8b-crossing", "crossing-v1", new[] { barrierId }), out failure),
+            Is.True, failure.ToString());
+        revision++;
+        AssertP8BWitness(passageProvider, SpatialPassageStateCensusProvider.SectionId,
+            passageOwner, cardinality: 2, revision: revision);
+        AssertP8BWitness(crossingProvider, SpatialCrossingCensusProvider.SectionId,
+            authority, cardinality: 1, revision: revision);
+        Assert.That(passageOwner.OptionStates.Any(state => state.Option.Equals(
+            TraversalOptionRef.ForCrossing(crossingId))), Is.True,
+            "Crossings are projected into option state but counted by their own section.");
+
+        Assert.That(passageOwner.TryChangePassageCondition(
+            boundary, road, PassageCondition.Closed, out failure), Is.True, failure.ToString());
+        revision++;
+        AssertP8BWitness(passageProvider, SpatialPassageStateCensusProvider.SectionId,
+            passageOwner, cardinality: 2, revision: revision);
+        AssertP8BWitness(crossingProvider, SpatialCrossingCensusProvider.SectionId,
+            authority, cardinality: 1, revision: revision);
+
+        Assert.That(passageOwner.TryChangeBarrierCondition(
+            barrierId, BarrierCondition.Removed, out failure), Is.True, failure.ToString());
+        revision++;
+        AssertP8BWitness(passageProvider, SpatialPassageStateCensusProvider.SectionId,
+            passageOwner, cardinality: 2, revision: revision);
+        AssertP8BWitness(crossingProvider, SpatialCrossingCensusProvider.SectionId,
+            authority, cardinality: 1, revision: revision);
+
+        Assert.That(passageOwner.TryChangePassageCondition(
+            boundary, TraversalOptionRef.ForCrossing(crossingId), PassageCondition.Closed, out failure),
+            Is.True, failure.ToString());
+        revision++;
+        AssertP8BWitness(passageProvider, SpatialPassageStateCensusProvider.SectionId,
+            passageOwner, cardinality: 2, revision: revision);
+        AssertP8BWitness(crossingProvider, SpatialCrossingCensusProvider.SectionId,
+            authority, cardinality: 1, revision: revision);
+
+        Assert.That(passageOwner.TryChangePassageCondition(
+            boundary, road, (PassageCondition)999, out failure), Is.False);
+        Assert.That(authority.TryRegisterCrossing(
+            new CrossingRecord(crossingId, boundary, new HexId("hex.a"),
+                "content.p8b-crossing", "crossing-v1", new[] { barrierId }), out failure), Is.False);
+        AssertP8BWitness(passageProvider, SpatialPassageStateCensusProvider.SectionId,
+            passageOwner, cardinality: 2, revision: revision);
+        AssertP8BWitness(crossingProvider, SpatialCrossingCensusProvider.SectionId,
+            authority, cardinality: 1, revision: revision);
+        Assert.That(authority.ValidateInvariants().IsValid, Is.True);
+    }
+
+    [Test]
     public void EvaluationUsesOrderedDirectionCurrentConditionsAndExplicitBarrierRelations()
     {
         SpatialAuthorityStore authority = CreateAdjacentGeography();
@@ -353,5 +447,21 @@ public sealed class SpatialPassageAuthorityTests
             new HexId(id),
             new HexCoordinate(q, r),
             new TerrainReference(new TerrainDefinitionId("terrain.test"), "terrain-v1"));
+    }
+
+    private static void AssertP8BWitness(
+        IOwnerSectionCensusProvider provider,
+        string sectionId,
+        object ownerIdentity,
+        int cardinality,
+        long revision)
+    {
+        OwnerSectionCensusWitness witness = provider.GetCurrentCensus();
+        Assert.That(witness.SectionId, Is.EqualTo(sectionId));
+        Assert.That(witness.SchemaVersion, Is.EqualTo(1));
+        Assert.That(witness.OwnerInstanceIdentity, Is.SameAs(ownerIdentity));
+        Assert.That(witness.Cardinality, Is.EqualTo(cardinality));
+        Assert.That(witness.Revision, Is.EqualTo(revision));
+        Assert.That(provider.GetCurrentCensus().OwnerInstanceIdentity, Is.SameAs(ownerIdentity));
     }
 }
