@@ -1,6 +1,7 @@
 # P12-B P8-D passive route-owner census candidate
 
-**Status:** Submitted for independent exact-tip implementation review.
+**Status:** Promoted to `codex/phase12/canonical` as a P12-B partial
+foundation; P12-B remains incomplete and P12-A remains `WAIT_DEPENDENCY`.
 
 **Branch:** `codex/phase12/P12BP8DZeroWitness`.
 
@@ -8,6 +9,15 @@
 `c7ff9fd9f4245c3f8968b9196a4c20de19dd0fb2`.
 
 **Code-bearing candidate tip:** `f0575ef43a77898aae8fb8565d4b709b850a46d8`.
+
+**Reviewed candidate tip:** `d92fdfb6b5ceb517c210be7cea5faab52ebb5641`;
+independent exact-tip implementation review passed. Durable review evidence
+is branch `codex/phase12/P12BP8DReviewRecord` at
+`934741142cd74e06d2c284af45a62a068fa3d9de`.
+
+**Promotion:** User-approved fast-forward from canonical
+`c7ff9fd9f4245c3f8968b9196a4c20de19dd0fb2` to candidate tip
+`d92fdfb6b5ceb517c210be7cea5faab52ebb5641`.
 
 **Technical design:** `codex/phase12/P12BP8DZeroWitnessDesign` at
 `9dd1e54dc0f600c641831a57791f2a02904a18c1`; independent exact-tip design
