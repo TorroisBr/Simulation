@@ -270,7 +270,12 @@ not add a second lease, global lock, or duplicate authoritative store.
    accounting. Missing adapters or inconsistent witnesses return
    `OwnerCoverageIncomplete`; no capture token is issued. Do not wire
    `SimulationRuntime` or claim a live profile witness until the owner groups
-   below exist. The canonical P18 advance lease remains the only advance lease.
+   below exist. One successful outer commit that changes several owner
+   sections validates and refreshes all changed witnesses before advancing
+   the shared epoch exactly once; partial/duplicate/unknown notifications fault
+   closed. Baseline assessment also validates the full section set before
+   publishing its new baselines. The canonical P18 advance lease remains the
+   only advance lease.
 3. **C owner witnesses/exports:** allocator/registry/record-sequence/RNG
    roots, P9-B genesis provenance, and exact P8-A facts. Capture exact
    identity/index state and provider-use state without rerunning genesis.

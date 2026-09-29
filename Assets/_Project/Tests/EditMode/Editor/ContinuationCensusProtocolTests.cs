@@ -5,6 +5,7 @@ using NUnit.Framework;
 public sealed class ContinuationCensusProtocolTests
 {
     private const string ReceiptSectionId = NpcDecisionRecorder.OccurrenceReceiptSectionId;
+    private const string SecondarySectionId = "p12.test.secondary-owner";
 
     [SetUp]
     public void SetUp() => SimulationTestFactory.CleanupDefinitions();
@@ -99,6 +100,35 @@ public sealed class ContinuationCensusProtocolTests
         Assert.That(epoch, Is.EqualTo(1L));
         Assert.That(protocol.TryAssessOwnerSectionInventory(out ContinuationCensusFailure current), Is.True,
             current.ToString());
+    }
+
+    [Test]
+    public void OneOuterCommitRefreshesEveryChangedOwnerAndAdvancesEpochOnce()
+    {
+        object firstOwner = new object();
+        object secondOwner = new object();
+        MutableWitnessProvider first = new MutableWitnessProvider(CreateWitness(
+            ReceiptSectionId, firstOwner, cardinality: 0, revision: 0));
+        MutableWitnessProvider second = new MutableWitnessProvider(CreateWitness(
+            SecondarySectionId, secondOwner, cardinality: 0, revision: 0));
+        ContinuationCensusProtocol protocol = CreateTwoSectionProtocol(first, second);
+        Assert.That(protocol.TryAssessOwnerSectionInventory(out _), Is.True);
+        Assert.That(protocol.TryEnterOperation("runtime.advance", out SimulationOperationScope scope, out _), Is.True);
+
+        first.Witness = CreateWitness(ReceiptSectionId, firstOwner, cardinality: 1, revision: 1);
+        second.Witness = CreateWitness(SecondarySectionId, secondOwner, cardinality: 2, revision: 1);
+        Assert.That(protocol.NotifyCommittedMutations(
+            new[] { ReceiptSectionId, SecondarySectionId }, out ContinuationCensusFailure notificationFailure), Is.True,
+            notificationFailure.ToString());
+        Assert.That(protocol.TryReadMutationEpoch(out long epoch, out _), Is.True);
+        Assert.That(epoch, Is.EqualTo(1L), "One outer commit changes multiple owners but advances one shared epoch.");
+        Assert.That(protocol.TryAssessOwnerSectionInventory(out ContinuationCensusFailure active), Is.False);
+        Assert.That(active, Is.EqualTo(ContinuationCensusFailure.OperationInProgress));
+
+        scope.Dispose();
+        Assert.That(protocol.TryAssessOwnerSectionInventory(out ContinuationCensusFailure refreshed), Is.True,
+            "Both changed section baselines must be refreshed by the one notification.");
+        Assert.That(refreshed, Is.EqualTo(ContinuationCensusFailure.None));
     }
 
     [Test]
@@ -334,6 +364,43 @@ public sealed class ContinuationCensusProtocolTests
         return protocol;
     }
 
+    private static ContinuationCensusProtocol CreateTwoSectionProtocol(
+        IOwnerSectionCensusProvider first,
+        IOwnerSectionCensusProvider second)
+    {
+        ContinuationCensusProtocol protocol = new ContinuationCensusProtocol();
+        Assert.That(protocol.RegisterExpectedSection(new OwnerSectionContract(
+            ReceiptSectionId, 1, OwnerSectionRole.Required), out _), Is.True);
+        Assert.That(protocol.RegisterExpectedSection(new OwnerSectionContract(
+            SecondarySectionId, 1, OwnerSectionRole.Required), out _), Is.True);
+        Assert.That(protocol.SealExpectedSectionInventory(out _), Is.True);
+        Assert.That(protocol.RegisterCensusProvider(ReceiptSectionId, first, out _), Is.True);
+        Assert.That(protocol.RegisterCensusProvider(SecondarySectionId, second, out _), Is.True);
+        Assert.That(protocol.SealCensusProviderInventory(out _), Is.True);
+        Assert.That(protocol.RegisterExpectedOperation("runtime.advance", out _), Is.True);
+        Assert.That(protocol.SealOperationInventory(out _), Is.True);
+        Assert.That(protocol.BindOwnerThread(out _), Is.True);
+        return protocol;
+    }
+
+    private static OwnerSectionCensusWitness CreateWitness(
+        string sectionId,
+        object ownerIdentity,
+        int cardinality,
+        long revision)
+    {
+        ConstructorInfo constructor = typeof(OwnerSectionCensusWitness).GetConstructor(
+            BindingFlags.Instance | BindingFlags.NonPublic,
+            binder: null,
+            types: new[] { typeof(string), typeof(int), typeof(object), typeof(int), typeof(long) },
+            modifiers: null);
+        Assert.That(constructor, Is.Not.Null);
+        return (OwnerSectionCensusWitness)constructor.Invoke(new object[]
+        {
+            sectionId, 1, ownerIdentity, cardinality, revision
+        });
+    }
+
     private static void RecordOccurrence(NpcDecisionRecorder recorder, string operationIdentity)
     {
         MethodInfo method = typeof(NpcDecisionRecorder).GetMethod(
@@ -371,6 +438,18 @@ public sealed class ContinuationCensusProtocolTests
         public OwnerSectionCensusWitness Witness { get; set; }
 
         public SnapshotProvider(OwnerSectionCensusWitness witness)
+        {
+            Witness = witness;
+        }
+
+        public OwnerSectionCensusWitness GetCurrentCensus() => Witness;
+    }
+
+    private sealed class MutableWitnessProvider : IOwnerSectionCensusProvider
+    {
+        public OwnerSectionCensusWitness Witness { get; set; }
+
+        public MutableWitnessProvider(OwnerSectionCensusWitness witness)
         {
             Witness = witness;
         }

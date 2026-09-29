@@ -47,8 +47,10 @@ public interface IOwnerSectionCensusProvider
 /// <summary>
 /// A non-admitting P12-B protocol kernel for owner-section census and operation
 /// accounting. It never issues a capture token and is not wired to a runtime.
-/// Its scopes account only for operation IDs explicitly registered by a caller;
-/// they are not locks and do not make owner stores thread-safe.
+/// Setup registration is serialized before binding; bound calls are serialized
+/// on the owner thread. The class is not generally thread-safe. Its scopes
+/// account only for caller-registered operation IDs; they are not locks and do
+/// not make owner stores thread-safe.
 /// </summary>
 public sealed class ContinuationCensusProtocol
 {
@@ -77,6 +79,18 @@ public sealed class ContinuationCensusProtocol
         {
             Contract = contract;
             Provider = provider;
+        }
+    }
+
+    private sealed class PendingSectionBaseline
+    {
+        public readonly RegisteredSection Section;
+        public readonly OwnerSectionCensusWitness Witness;
+
+        public PendingSectionBaseline(RegisteredSection section, OwnerSectionCensusWitness witness)
+        {
+            Section = section;
+            Witness = witness;
         }
     }
 
@@ -321,6 +335,7 @@ public sealed class ContinuationCensusProtocol
             return false;
         }
 
+        List<PendingSectionBaseline> observedSections = new List<PendingSectionBaseline>(expectedSections.Count);
         foreach (KeyValuePair<string, OwnerSectionContract> pair in expectedSections)
         {
             if (!registeredSections.TryGetValue(pair.Key, out RegisteredSection section))
@@ -329,12 +344,18 @@ public sealed class ContinuationCensusProtocol
                 return false;
             }
 
-            if (!TryReadAndValidate(section, allowRevisionAdvance: false, out _, out failure))
+            if (!TryReadAndValidate(section, allowRevisionAdvance: false,
+                    out OwnerSectionCensusWitness witness, out failure))
             {
                 Fault();
                 return false;
             }
+
+            observedSections.Add(new PendingSectionBaseline(section, witness));
         }
+
+        foreach (PendingSectionBaseline observed in observedSections)
+            SetBaseline(observed.Section, observed.Witness);
 
         failure = ContinuationCensusFailure.None;
         return true;
@@ -347,6 +368,19 @@ public sealed class ContinuationCensusProtocol
     /// </summary>
     public bool NotifyCommittedMutation(string sectionId, out ContinuationCensusFailure failure)
     {
+        return NotifyCommittedMutations(new[] { sectionId }, out failure);
+    }
+
+    /// <summary>
+    /// Records one successful outer commit that changed one or more owner
+    /// sections. All changed witnesses are validated before any baseline or
+    /// epoch is updated, so one logical commit advances the epoch exactly once.
+    /// A malformed or incomplete notification faults the protocol closed.
+    /// </summary>
+    public bool NotifyCommittedMutations(
+        IEnumerable<string> sectionIds,
+        out ContinuationCensusFailure failure)
+    {
         if (!TryRequireOwnerThread(out failure)) return false;
         if (mutationEpoch == long.MaxValue)
         {
@@ -355,31 +389,71 @@ public sealed class ContinuationCensusProtocol
             return false;
         }
 
+        if (sectionIds == null)
+        {
+            Fault();
+            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+            return false;
+        }
+
+        List<RegisteredSection> changedSections = new List<RegisteredSection>();
+        HashSet<string> changedSectionIds = new HashSet<string>(StringComparer.Ordinal);
+        try
+        {
+            foreach (string sectionId in sectionIds)
+            {
+                if (string.IsNullOrWhiteSpace(sectionId)
+                    || !changedSectionIds.Add(sectionId)
+                    || !registeredSections.TryGetValue(sectionId, out RegisteredSection section))
+                {
+                    Fault();
+                    failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+                    return false;
+                }
+
+                changedSections.Add(section);
+            }
+        }
+        catch
+        {
+            Fault();
+            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+            return false;
+        }
+
+        if (changedSections.Count == 0)
+        {
+            Fault();
+            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+            return false;
+        }
+
+        List<PendingSectionBaseline> observedSections = new List<PendingSectionBaseline>(changedSections.Count);
+        foreach (RegisteredSection section in changedSections)
+        {
+            bool hadBaseline = section.HasBaseline;
+            long priorRevision = section.LastRevision;
+            if (!TryReadAndValidate(section, allowRevisionAdvance: true,
+                    out OwnerSectionCensusWitness witness, out failure))
+            {
+                Fault();
+                return false;
+            }
+
+            if (hadBaseline && witness.Revision == priorRevision)
+            {
+                Fault();
+                failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+                return false;
+            }
+
+            observedSections.Add(new PendingSectionBaseline(section, witness));
+        }
+
+        foreach (PendingSectionBaseline observed in observedSections)
+            SetBaseline(observed.Section, observed.Witness);
+
         mutationEpoch++;
-        if (string.IsNullOrWhiteSpace(sectionId)
-            || !registeredSections.TryGetValue(sectionId, out RegisteredSection section))
-        {
-            Fault();
-            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
-            return false;
-        }
-
-        bool hadBaseline = section.HasBaseline;
-        long priorRevision = section.LastRevision;
-        if (!TryReadAndValidate(section, allowRevisionAdvance: true, out OwnerSectionCensusWitness witness, out failure))
-        {
-            Fault();
-            return false;
-        }
-
-        if (hadBaseline && witness.Revision == priorRevision)
-        {
-            Fault();
-            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
-            return false;
-        }
-
-        SetBaseline(section, witness);
         failure = ContinuationCensusFailure.None;
         return true;
     }
@@ -531,11 +605,6 @@ public sealed class ContinuationCensusProtocol
                 return false;
             }
         }
-        else
-        {
-            SetBaseline(section, witness);
-        }
-
         failure = ContinuationCensusFailure.None;
         return true;
     }
