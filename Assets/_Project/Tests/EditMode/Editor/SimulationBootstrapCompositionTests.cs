@@ -307,6 +307,36 @@ public sealed class SimulationBootstrapCompositionTests
             Assert.That(repeatedRuntimeIdAllocatorWitnesses[i].Revision, Is.EqualTo(expectedRuntimeIdAllocatorRevisions[i]));
         }
 
+        IReadOnlyList<IOwnerSectionCensusProvider> armedForceProviders = simulation.Bootstrap.ArmedForceStoreCensusProviders;
+        string[] armedForceSectionIds =
+        {
+            ArmedForceStoreCensusProvider.ForcesSectionId,
+            ArmedForceStoreCensusProvider.ContingentsSectionId,
+            ArmedForceStoreCensusProvider.RelevantPersonReferencesSectionId
+        };
+        Assert.That(armedForceProviders.Count, Is.EqualTo(armedForceSectionIds.Length));
+        object armedForceOwner = simulation.Runtime.ArmedForceStore;
+        for (int i = 0; i < armedForceProviders.Count; i++)
+        {
+            OwnerSectionCensusWitness witness = armedForceProviders[i].GetCurrentCensus();
+            Assert.That(witness.SectionId, Is.EqualTo(armedForceSectionIds[i]));
+            Assert.That(witness.SchemaVersion, Is.EqualTo(ArmedForceStoreCensusProvider.SchemaVersion));
+            Assert.That(witness.OwnerInstanceIdentity, Is.SameAs(armedForceOwner));
+            Assert.That(witness.Cardinality, Is.Zero,
+                "The selected daily profile composes the ArmedForceStore but leaves its three sections empty at day zero.");
+            Assert.That(witness.Revision, Is.Zero);
+        }
+
+        OwnerSectionCensusWitness[] repeatedArmedForceWitnesses = armedForceProviders
+            .Select(provider => provider.GetCurrentCensus())
+            .ToArray();
+        for (int i = 0; i < repeatedArmedForceWitnesses.Length; i++)
+        {
+            Assert.That(repeatedArmedForceWitnesses[i].OwnerInstanceIdentity, Is.SameAs(armedForceOwner));
+            Assert.That(repeatedArmedForceWitnesses[i].Cardinality, Is.Zero);
+            Assert.That(repeatedArmedForceWitnesses[i].Revision, Is.Zero);
+        }
+
         SpatialAuthorityStore authority = simulation.Bootstrap.SpatialAuthority;
         SpatialHexCensusProvider hexCensusProvider = new SpatialHexCensusProvider(authority);
         OwnerSectionCensusWitness hexCensus = hexCensusProvider.GetCurrentCensus();
