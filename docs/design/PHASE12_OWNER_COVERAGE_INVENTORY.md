@@ -665,6 +665,13 @@ distinct, `ActivityInstanceId` is separate from actor/person/participant
 identity, and activities have one-or-more participants. P19's loader/module
 work and P20 coordination remain deferred/conditional for this daily profile.
 
+The existing P12-C identity/sequence snapshot branch is preserved but is not
+current-base integrated: its allocator and `SimulationRecordSequence` snapshot
+seams are reusable, while its `DecisionRecords.cs` diff removes promoted P18-D
+recorder behavior. The exact revalidation and reintegration constraints are
+recorded in [`../PHASE12_P12C_CANDIDATE_REVALIDATION.md`](../PHASE12_P12C_CANDIDATE_REVALIDATION.md).
+P12-B remains its implementation/integration prerequisite.
+
 ### Exact authored startup roots — source census against canonical composition
 
 The following authored startup cardinalities were checked against code tip

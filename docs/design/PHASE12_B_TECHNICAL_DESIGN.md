@@ -4,9 +4,10 @@
 design is based on planning commit
 `36618a801607656e339110b683bc6a666a26aeeb`; this document defines a technical
 boundary within that scope. It does not deliver code, start P12-B
-implementation, or establish P12-A readiness. The selected composition is now
-canonical at P12 tip `36e3064`, and P18's runtime-hotspot handoff is effective
-at State tip `8ac2d78`. The complete live owner/revision census,
+implementation, or establish P12-A readiness. The selected composition is
+canonical at P12 tip `4d2a9ad`; its docs-only ancestry from `36e3064` preserves
+the validated executable tree at `ec75e6a`. P18's runtime-hotspot handoff is
+effective at State tip `8ac2d78`. The complete live owner/revision census,
 committed-mutation invalidation, owner-thread/quiescence, and admission-
 readiness evidence still block P12-B implementation.
 
@@ -100,11 +101,13 @@ ALL EditMode 1934/1934, Smoke 5/5, LongRun 7/7, Spatial 100/100, and
 ExplorableSite 46/46 passed on this code tip. Following P18 promotion, the
 composition was refreshed at `36e3064e8f60e9c7e8914a23c62d380b708da587` and
 promoted to P12 canonical. Exact-tip revalidation passed because only
-`docs/PHASE18_STATE.md` changed from validated code tip `ec75e6a`. The owner
-inventory source/API map remains partial; it does not supply the complete live
-owner census or mutation-invalidation proof. The manifest's exact required
-provider/section set cannot be finalized until the remaining live owner census
-and invalidation evidence are complete against this canonical composition.
+`docs/PHASE18_STATE.md` changed from validated code tip `ec75e6a`. P12
+canonical has since advanced docs-only to `4d2a9ad5c7f98a7805dede72f9722aec063231e8`;
+the committed executable `Assets` tree remains identical to `ec75e6a`. The
+updated owner inventory and B-F designs add source evidence but do not supply
+the complete live owner census or mutation-invalidation proof. The manifest's
+exact required provider/section set cannot be finalized until those remaining
+gates are evidenced against this canonical composition.
 
 The accepted P12-A profile remains unchanged. Do not conditionally accept
 either half as `UnityBootstrap-Daily-v1`, synthesize an ActorChoiceStore, omit
@@ -193,6 +196,15 @@ absent or admission rejects. This evidence is only a fail-closed census;
 P12-G still validates complete owner truth and the staged graph. Generated-
 world content, P13 reconstruction/fork guarantees, and cross-host/migration
 behavior stay outside the manifest contract.
+
+The selected bootstrap composes `NpcDecisionRecorder`, while the conditional
+`occurrenceReceipts` map is written only by the optional P18-D merchant
+consumer path. The `UnityBootstrap-Daily-v1` profile does not install that
+optional P18-D execution path;
+the owner inventory therefore classifies this map as composed but exact-empty.
+Admission requires a live zero witness and rejects populated or unverified
+receipt state. This recorder-owned idempotency section is distinct from
+`NpcDecisionStore` read-model rows.
 
 ### Proposed narrow API seam
 
