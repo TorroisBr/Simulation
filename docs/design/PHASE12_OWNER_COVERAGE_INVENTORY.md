@@ -797,11 +797,15 @@ P12-C/D/E dependencies for P12-F.
   Public expedition progress/lifecycle methods and mutable objective state can
   therefore change a stored item without a store revision witness.
 - **NPC commitments:** `NpcRuntime` exposes live `CurrentActionRuntime` and
-  `MerchantTradePlan` objects with public setters and lifecycle/progress
-  methods. `NpcActionRuntime.CaptureOwnerState`/`InstallOwnerState` are
-  transaction helpers using object references, not immutable durable values.
-  These action/merchant-plan fields belong to the same whole-NPC snapshot and
-  revision as the P12-D/E/F NPC projections, not separate competing writers.
+  `MerchantTradePlan` objects; `NpcActionRuntime` and the plan objects have
+  public mutators, while the NPC API can replace or clear action/plan state.
+  `NpcTravelPlanRuntime` and `MerchantTradePlanRuntime` each have internal
+  `CaptureOwnerState`/`InstallOwnerState` transaction helpers that retain
+  object references; they are not immutable durable exports. Mutable
+  `CurrentActionRuntime` is a separate action owner without an export/revision
+  contract. These action and plan fields belong to the same whole-NPC snapshot
+  and revision as the P12-D/E/F NPC projections, not separate competing
+  writers.
 
 For P12-F, guarded operations, clones, and read-only collection interfaces do
 not substitute for an immutable owner export plus private staged restoration.
