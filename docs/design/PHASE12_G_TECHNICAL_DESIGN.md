@@ -13,9 +13,10 @@ input set.
 **Current governing inputs (2026-09-29):** accepted decomposition at
 `7585863` with reference refresh `a2ac5d2`; owner-inventory snapshot at this
 proposal's P12 canonical base `4d2a9ad5c7f98a7805dede72f9722aec063231e8`
-(partial source/API evidence, not a live census; its P8-A scale ownership and
-current-canonical pointer are corrected in the accompanying documentation
-reconciliation); P12-B current-evidence revalidation
+(partial source/API evidence, not a live census; its P8-A scale ownership,
+current-canonical pointer, and conditional P18-D recorder-receipt census are
+corrected in the accompanying documentation reconciliation); P12-B
+current-evidence revalidation
 `ef8c72cd388445e25ce9360bb1e689fc0a07c639` (design only; implementation remains
 blocked); P12-C identity/genesis design `edc51571559a9ba4b1a025963de2e25b23c66fd3`
 (exact-tip independent review PASS); P12-D `e8b83d75e34f8456555065e24bfe67bb30366baa`
@@ -122,6 +123,14 @@ compositions and reject immediately, independent of cardinality. The exact
 empty/excluded/prohibited matrix must be refreshed from the live owner
 inventory before implementation; these examples do not substitute for that
 evidence.
+
+`NpcDecisionRecorder.occurrenceReceipts` is a conditional composed owner
+section: the selected bootstrap constructs the recorder, but its receipt writer
+is called only by the optional P18-D merchant consumer, which this profile does
+not compose. Require a live exact-zero witness and reject populated or
+unverified receipt state. This map is distinct from `NpcDecisionStore` rows,
+which are an omitted noncausal read model; if a later supported profile includes
+the P18-D consumer, re-inventory and export/hydrate the receipt map.
 
 The refreshed B owner census also classifies `NpcDecisionStore` and
 `DomainEventStore` rows as `OmittedNonCausalReadModel`: they may be populated

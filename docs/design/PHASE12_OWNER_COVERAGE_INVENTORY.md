@@ -457,6 +457,15 @@ populated, unknown, or unreadable state must reject. In particular:
   prove this receipt owner is exactly empty or reject it. The current list has
   no public complete receipt snapshot/admission witness; construction-time
   emptiness alone is not enough.
+- `NpcDecisionRecorder` is constructed by the selected bootstrap and owns the
+  private `occurrenceReceipts` map in `DecisionRecords.cs`. Its sole writer at
+  `ec75e6a` is `P18DMerchantTradeStateExecution.TryResumeP18DTradeStateWorkflow`;
+  `UnityBootstrap-Daily-v1` supplies no `P18DIntradayProfile`, so that consumer
+  cannot write the map in this profile. Classify it as a composed, conditional
+  exact-empty section and require a live zero witness; reject populated or
+  unverified state. This receipt map is distinct from the omitted
+  `NpcDecisionStore` read-model rows. If a later profile includes P18-D,
+  re-inventory and export/hydrate the recorder receipts.
 - P8-B..E, P10 LocalTopology, P14 local material flow, P18 temporal/P19
   extension/P20 activity state, P13 reconstruction/fork state, and other
   excluded conditional owners must each return exact-empty or not-composed
