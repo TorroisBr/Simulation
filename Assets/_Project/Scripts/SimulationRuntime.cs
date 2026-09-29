@@ -680,6 +680,16 @@ public sealed partial class SimulationRuntime
                 nameof(crimeSystem));
         }
         this.cities = resolvedCities;
+        List<CityRuntime> materialFlowCities = resolvedCities.FindAll(city => city != null && city.HasLocalDailyMaterialFlow);
+        if (materialFlowCities.Count > 1)
+            throw new LocalDailyMaterialFlowRejectedException("P14-A supports exactly one authored settlement per composed world.");
+        HashSet<string> settlementIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (CityRuntime city in materialFlowCities)
+        {
+            if (!settlementIds.Add(city.CityData.settlementSemanticId))
+                throw new LocalDailyMaterialFlowRejectedException("P14-A settlement semantic identities must be unique.");
+            city.ValidateLocalDailyMaterialFlowAnchor(this.legacySpatialAnchorBindingStore, this.spatialAuthorityStore);
+        }
         this.npcRuntimes = new List<NpcRuntime>();
         this.npcRuntimeSnapshot = this.npcRuntimes.AsReadOnly();
         this.npcRegistryById = new Dictionary<string, NpcRuntime>(StringComparer.Ordinal);
@@ -4278,7 +4288,13 @@ public sealed partial class SimulationRuntime
     {
         foreach (CityRuntime cityRuntime in cities)
         {
-            if (cityRuntime != null)
+            if (cityRuntime != null && cityRuntime.HasLocalDailyMaterialFlow)
+                cityRuntime.SimulateLocalDailyMaterialFlow(CurrentDay, calendar.SemanticVersion);
+        }
+
+        foreach (CityRuntime cityRuntime in cities)
+        {
+            if (cityRuntime != null && !cityRuntime.HasLocalDailyMaterialFlow)
             {
                 cityRuntime.SimulateProductionDay();
             }
@@ -4291,7 +4307,8 @@ public sealed partial class SimulationRuntime
                 continue;
             }
 
-            cityRuntime.SimulateConsumptionDay();
+            if (!cityRuntime.HasLocalDailyMaterialFlow)
+                cityRuntime.SimulateConsumptionDay();
             cityRuntime.UpdateMarketPrices();
         }
     }

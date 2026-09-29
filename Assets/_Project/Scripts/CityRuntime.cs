@@ -21,6 +21,7 @@ public class CityRuntime
     [NonSerialized] private long dailyEconomyReceiptRevision;
 
     private const string DailyEconomyVersion = "1";
+    [NonSerialized] private LocalDailyMaterialFlowResult lastMaterialFlow;
 
     public string RuntimeId => runtimeId;
     public CityData CityData => cityData;
@@ -79,6 +80,61 @@ public class CityRuntime
     }
     public List<NpcRuntime> ImportantNpcs => importantNpcs ?? (importantNpcs = new List<NpcRuntime>());
     public string CityName => cityData != null ? cityData.cityName : "Cidade desconhecida";
+    public bool HasLocalDailyMaterialFlow => cityData != null
+        && (!string.IsNullOrWhiteSpace(cityData.settlementSemanticId)
+            || !string.IsNullOrWhiteSpace(cityData.materialFlowLocationId)
+            || !string.IsNullOrWhiteSpace(cityData.marketStoreSemanticId)
+            || (cityData.productionConfigs != null && cityData.productionConfigs.Exists(source =>
+                source != null && !string.IsNullOrWhiteSpace(source.productionSourceId))));
+    public LocalDailyMaterialFlowResult LastMaterialFlow => lastMaterialFlow;
+
+    internal void ValidateLocalDailyMaterialFlowAnchor(LegacySpatialAnchorBindingStore bindings, SpatialAuthorityStore spatial)
+    {
+        if (!HasLocalDailyMaterialFlow) return;
+        if (string.IsNullOrWhiteSpace(cityData.settlementSemanticId)
+            || string.IsNullOrWhiteSpace(cityData.materialFlowLocationId)
+            || string.IsNullOrWhiteSpace(cityData.marketStoreSemanticId)
+            || cityData.productionConfigs == null || cityData.productionConfigs.Count != 1)
+            throw new LocalDailyMaterialFlowRejectedException("P14-A requires settlement, LocationId, market store, and exactly one authored source.");
+        CityProductionConfig source = cityData.productionConfigs[0];
+        if (source == null || source.item == null || string.IsNullOrWhiteSpace(source.item.DefinitionId)
+            || source.amountPerDay <= 0
+            || string.IsNullOrWhiteSpace(source.productionSourceId) || string.IsNullOrWhiteSpace(source.contentRevision))
+            throw new LocalDailyMaterialFlowRejectedException("P14-A source identity, item, positive quantity, and content revision are required.");
+        if (PopulationEconomy.PaymentMode != ConsumptionPaymentMode.Free
+            || cityData.marketItems == null || cityData.marketItems.Count != 1
+            || cityData.marketItems[0] == null || cityData.marketItems[0].item == null
+            || !string.Equals(cityData.marketItems[0].item.DefinitionId, source.item.DefinitionId, StringComparison.Ordinal))
+            throw new LocalDailyMaterialFlowRejectedException("P14-A requires exactly one market item row matching its source item and free population consumption.");
+        SpatialAnchorOwnerId owner = new SpatialAnchorOwnerId(SpatialAnchorOwnerKind.City, RuntimeId);
+        if (bindings == null || !bindings.TryGet(owner, out LocationId bound)
+            || !string.Equals(bound?.Value, cityData.materialFlowLocationId, StringComparison.Ordinal)
+            || spatial == null || !spatial.TryGet(bound, out _))
+            throw new LocalDailyMaterialFlowRejectedException("P14-A City anchor must resolve and match its authored stable LocationId.");
+    }
+
+    internal void SimulateLocalDailyMaterialFlow(long absoluteDay, string calendarVersion)
+    {
+        CityProductionConfig source = cityData.productionConfigs[0];
+        MarketItemConfig itemConfig = cityData.marketItems?.Find(candidate => candidate != null
+            && candidate.item != null && string.Equals(candidate.item.DefinitionId, source.item.DefinitionId, StringComparison.Ordinal));
+        if (itemConfig == null || PopulationEconomy.PaymentMode != ConsumptionPaymentMode.Free)
+            throw new LocalDailyMaterialFlowRejectedException("P14-A requires a market item and free population consumption for the source item.");
+
+        int opening = Market.GetAmount(source.item);
+        int applied = Market.AddStock(source.item, source.amountPerDay);
+        string rejection = applied == source.amountPerDay ? string.Empty : "AggregateStockOverflow";
+        int requested = Math.Max(0, Mathf.RoundToInt(Population.CurrentPopulation / 1000f * itemConfig.consumptionPer1000Population));
+        int actual = Market.RemoveStockUpTo(source.item, requested);
+        int closing = Market.GetAmount(source.item);
+        lastMaterialFlow = new LocalDailyMaterialFlowResult(cityData.settlementSemanticId, source.productionSourceId,
+            cityData.marketStoreSemanticId, cityData.materialFlowLocationId, source.item.DefinitionId,
+            source.contentRevision, "Economy.Enabled=true;PaymentMode=Free", "simulation-calendar", calendarVersion,
+            true, Population.CurrentPopulation, itemConfig.consumptionPer1000Population, absoluteDay, opening,
+            source.amountPerDay, applied, rejection, requested, actual, closing);
+        logger?.Log(SimulationLogCategory.EconomyProduction, $"{CityName} source {source.productionSourceId}: {applied}/{source.amountPerDay}");
+        if (actual > 0) logger?.Log(SimulationLogCategory.EconomyConsumption, $"{CityName} consumed {actual} {source.item.itemName}");
+    }
 
     /// <summary>Creates one of the three city-owned resumable daily economy steps.</summary>
     public bool TryCreateDailyEconomyStep(

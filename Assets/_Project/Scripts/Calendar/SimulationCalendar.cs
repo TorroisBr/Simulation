@@ -46,6 +46,18 @@ public sealed class SimulationCalendar
     }
 
     public int MonthsPerYear => monthsPerYear;
+    public string SemanticIdentity => "simulation-calendar";
+    public string SemanticVersion
+    {
+        get
+        {
+            string lengths = customMonthLengths == null ? "uniform:" + uniformDaysPerMonth
+                : "custom:" + string.Join(",", Array.ConvertAll(customMonthLengths, value => value.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+            return monthsPerYear.ToString(System.Globalization.CultureInfo.InvariantCulture) + "/"
+                + daysPerWeek.ToString(System.Globalization.CultureInfo.InvariantCulture) + "/"
+                + daysPerYear.ToString(System.Globalization.CultureInfo.InvariantCulture) + "/" + lengths;
+        }
+    }
     public int DaysPerWeek => daysPerWeek;
     public long DaysPerYear => daysPerYear;
     public bool UsesCustomMonthLengths => customMonthLengths != null;
