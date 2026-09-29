@@ -270,6 +270,16 @@ public sealed class ScheduledDirectiveSystem : IAuthoritativeMutationGuardBindab
     private readonly Dictionary<string, ScheduledDirective> directivesByActorForCurrentDay = new Dictionary<string, ScheduledDirective>(StringComparer.Ordinal);
     private long lastPreparedAbsoluteDay = -1L;
 
+    internal bool HasPendingDirectives
+    {
+        get
+        {
+            foreach (ScheduledDirective directive in directiveStore.Directives)
+                if (directive != null && directive.IsPending) return true;
+            return false;
+        }
+    }
+
     public ScheduledDirectiveSystem(
         ScheduledDirectiveStore directiveStore,
         RuntimeIdentityRegistry identityRegistry,

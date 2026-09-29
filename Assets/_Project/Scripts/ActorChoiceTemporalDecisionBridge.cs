@@ -26,6 +26,32 @@ public sealed class ActorChoiceTemporalDecisionRequest
     }
 }
 
+/// <summary>One committed activity-participant trigger supplied after timeline dispatch.</summary>
+public sealed class ActorChoiceTemporalTrigger
+{
+    public PersonId Actor { get; }
+    public string TriggerId { get; }
+    public string BoundaryId { get; }
+    public long BoundaryRevision { get; }
+    public long SourceSequence { get; }
+    public LogicalTick Instant { get; }
+
+    public ActorChoiceTemporalTrigger(PersonId actor, string triggerId, string boundaryId,
+        long boundaryRevision, long sourceSequence, LogicalTick instant)
+    {
+        Actor = actor ?? throw new ArgumentNullException(nameof(actor));
+        if (string.IsNullOrWhiteSpace(triggerId)) throw new ArgumentException("Trigger identity is required.", nameof(triggerId));
+        if (string.IsNullOrWhiteSpace(boundaryId)) throw new ArgumentException("Boundary identity is required.", nameof(boundaryId));
+        if (boundaryRevision < 0L) throw new ArgumentOutOfRangeException(nameof(boundaryRevision));
+        if (sourceSequence <= 0L) throw new ArgumentOutOfRangeException(nameof(sourceSequence));
+        TriggerId = triggerId;
+        BoundaryId = boundaryId;
+        BoundaryRevision = boundaryRevision;
+        SourceSequence = sourceSequence;
+        Instant = instant;
+    }
+}
+
 /// <summary>
 /// Binds committed temporal P11 inputs to P18-C request receipts and selects
 /// one due retained choice per actor after a successful outer timeline advance.
@@ -53,6 +79,13 @@ public sealed class ActorChoiceTemporalDecisionBridge
     /// handoff is reported instead of executing an input retroactively.
     /// </summary>
     public bool AfterSuccessfulAdvance(LogicalTick instant,
+        out IReadOnlyList<ActorChoiceTemporalDecisionRequest> admitted, out string failure)
+    {
+        return AfterSuccessfulAdvance(instant, Array.Empty<ActorChoiceTemporalTrigger>(), out admitted, out failure);
+    }
+
+    public bool AfterSuccessfulAdvance(LogicalTick instant,
+        IReadOnlyList<ActorChoiceTemporalTrigger> committedTriggers,
         out IReadOnlyList<ActorChoiceTemporalDecisionRequest> admitted, out string failure)
     {
         admitted = Array.Empty<ActorChoiceTemporalDecisionRequest>();
@@ -120,6 +153,36 @@ public sealed class ActorChoiceTemporalDecisionBridge
                 trigger.TemporalCapture.AcceptedInput.InputId, instant,
                 trigger.TemporalCapture.AcceptedInput.InputId, 0L,
                 trigger.TemporalCapture.AcceptedInput.Sequence, out _, out failure)) return false;
+        }
+
+        if (committedTriggers != null)
+        {
+            foreach (ActorChoiceTemporalTrigger trigger in committedTriggers
+                .Where(item => item != null)
+                .OrderBy(item => item.SourceSequence)
+                .ThenBy(item => item.Actor.Value, StringComparer.Ordinal)
+                .ThenBy(item => item.TriggerId, StringComparer.Ordinal))
+            {
+                if (trigger.Instant != instant)
+                {
+                    failure = "A committed activity trigger does not belong to the completed timeline instant.";
+                    return false;
+                }
+
+                histories = BuildHistories(requests.Snapshot());
+                bool hasOlderDeferredInput = pending.Any(input => input.PersonId.Equals(trigger.Actor)
+                    && input.TemporalCapture.TargetInstant.Value <= instant.Value
+                    && histories.TryGetValue(input.InputId.Value, out RequestHistory history)
+                    && history.CurrentRequest != null
+                    && history.LastDisposition != null
+                    && history.LastDisposition.Kind == ActorDecisionRequestReceiptKind.Deferred
+                    && history.LastDisposition.Instant.Value < instant.Value);
+                if (!hasOlderDeferredInput) continue;
+
+                if (!TryObserveMeaningfulTrigger(trigger.Actor, trigger.TriggerId,
+                    trigger.Instant, trigger.BoundaryId, trigger.BoundaryRevision,
+                    trigger.SourceSequence, out _, out failure)) return false;
+            }
         }
 
         foreach (ActorChoiceInput input in newlyCommitted.OrderBy(item => item.TemporalCapture.AcceptedInput.Sequence)

@@ -37,7 +37,9 @@ public enum TimelineFailure
     UnknownWorkKind = 4, StaleWork = 5, DispatchFailed = 6, InstantWorkLimitExceeded = 7,
     DailyBoundaryFailed = 8, InputNotSealed = 9, LateInput = 10,
     DuplicateInputSequence = 11, DuplicateWorkSequence = 12,
-    ContinuationPending = 13, ContinuationFailed = 14, PublicationFailed = 15
+    ContinuationPending = 13, ContinuationFailed = 14, PublicationFailed = 15,
+    UnsupportedProfile = 16, InvalidInput = 17, RuntimeFaulted = 18,
+    CompositionUnsupported = 19
 }
 
 /// <summary>Closed descriptor kinds currently understood by the timeline.</summary>

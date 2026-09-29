@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 
 /// <summary>
 /// Adapts the existing PlaceContentStore receipt-backed daily-aging operation
@@ -388,4 +389,155 @@ public sealed class CityEconomyDailyBoundaryStepProvider : IP18DDailyBoundarySte
 
     private static string GetStepId(CityDailyEconomyStepKind kind, string cityRuntimeId) =>
         "city-economy-" + kind.ToString().ToLowerInvariant() + ":" + cityRuntimeId;
+}
+
+/// <summary>
+/// Freezes the merchant trade-state cadence after commercial sharing. Every
+/// roster slot receives an explicit scheduled/skipped disposition; eligible
+/// merchant effects and receipts remain owned by MerchantSystem/NpcRuntime.
+/// </summary>
+public sealed class MerchantTradeStateDailyBoundaryStepProvider : IP18DDailyBoundaryStepProvider
+{
+    private const string OperationKind = "merchant.trade-state";
+    private const string OperationVersion = "1";
+    private readonly MerchantSystem owner;
+    private readonly Func<IReadOnlyList<NpcRuntime>> roster;
+    private string activeOccurrenceId;
+    private IReadOnlyList<BoundaryContinuationStep> activeSteps;
+    private Dictionary<string, NpcRuntime> activeActors =
+        new Dictionary<string, NpcRuntime>(StringComparer.Ordinal);
+
+    public MerchantTradeStateDailyBoundaryStepProvider(
+        MerchantSystem owner, Func<IReadOnlyList<NpcRuntime>> roster)
+    {
+        this.owner = owner ?? throw new ArgumentNullException(nameof(owner));
+        this.roster = roster ?? throw new ArgumentNullException(nameof(roster));
+    }
+
+    public bool TryCreateSteps(DailyBoundaryOperation operation, int firstOrdinal,
+        out IReadOnlyList<BoundaryContinuationStep> steps, out TimelineFailure failure)
+    {
+        steps = null;
+        failure = TimelineFailure.ContinuationFailed;
+        if (operation == null || firstOrdinal < 0) return false;
+        if (activeOccurrenceId == operation.OccurrenceId && activeSteps != null)
+        {
+            List<BoundaryContinuationStep> rebased = new List<BoundaryContinuationStep>(activeSteps.Count);
+            foreach (BoundaryContinuationStep item in activeSteps)
+                rebased.Add(new BoundaryContinuationStep(firstOrdinal + rebased.Count,
+                    item.StepId, item.OwnerId, item.OperationKind, item.OperationVersion,
+                    item.OwnerRevision, item.Payload, item.PersonId, item.Disposition));
+            activeSteps = rebased.AsReadOnly();
+            steps = activeSteps;
+            failure = TimelineFailure.None;
+            return true;
+        }
+
+        IReadOnlyList<NpcRuntime> current = roster();
+        if (current == null || current.Count > int.MaxValue - firstOrdinal) return false;
+        List<BoundaryContinuationStep> created = new List<BoundaryContinuationStep>(current.Count);
+        Dictionary<string, NpcRuntime> actors = new Dictionary<string, NpcRuntime>(StringComparer.Ordinal);
+        HashSet<string> runtimeIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (NpcRuntime actor in current)
+        {
+            if (actor == null || string.IsNullOrWhiteSpace(actor.RuntimeId)
+                || !runtimeIds.Add(actor.RuntimeId)) return false;
+            string stepId = "merchant-trade-state:" + actor.RuntimeId;
+            bool eligible = owner.IsP18DTradeStateEligible(actor);
+            created.Add(new BoundaryContinuationStep(
+                firstOrdinal + created.Count,
+                stepId,
+                actor.RuntimeId,
+                OperationKind,
+                OperationVersion,
+                actor.MerchantTradeStateRuntime.Revision.ToString(CultureInfo.InvariantCulture),
+                eligible ? "merchant-trade-state-v1" : string.Empty,
+                actor.PersonId != null ? actor.PersonId.Value : string.Empty,
+                eligible ? "included" : "skipped:merchant-trade-ineligible"));
+            actors.Add(stepId, actor);
+        }
+
+        activeOccurrenceId = operation.OccurrenceId;
+        activeSteps = created.AsReadOnly();
+        activeActors = actors;
+        steps = activeSteps;
+        failure = TimelineFailure.None;
+        return true;
+    }
+
+    public bool OwnsStep(BoundaryContinuationStep step) => step != null
+        && step.OperationKind == OperationKind
+        && step.OperationVersion == OperationVersion
+        && activeActors.TryGetValue(step.StepId, out NpcRuntime actor)
+        && actor.RuntimeId == step.OwnerId;
+
+    public bool TryPrepareStep(BoundaryContinuationManifest manifest,
+        BoundaryContinuationStep step, out IBoundaryContinuationStepCommit prepared,
+        out TimelineFailure failure)
+    {
+        prepared = null;
+        if (manifest == null || manifest.BoundaryOccurrenceId != activeOccurrenceId
+            || !OwnsStep(step) || step.Ordinal < 0
+            || step.Ordinal >= manifest.Steps.Count
+            || !ReferenceEquals(manifest.Steps[step.Ordinal], step)
+            || !activeActors.TryGetValue(step.StepId, out NpcRuntime actor))
+        {
+            failure = TimelineFailure.ContinuationFailed;
+            return false;
+        }
+
+        if (step.Disposition == "skipped:merchant-trade-ineligible")
+        {
+            prepared = SkippedCommit.Instance;
+            failure = TimelineFailure.None;
+            return true;
+        }
+        if (step.Disposition != "included" || step.Payload != "merchant-trade-state-v1")
+        {
+            failure = TimelineFailure.ContinuationFailed;
+            return false;
+        }
+        prepared = new MerchantTradeStateCommit(owner, actor, manifest, step);
+        failure = TimelineFailure.None;
+        return true;
+    }
+
+    private sealed class MerchantTradeStateCommit : IBoundaryContinuationStepCommit
+    {
+        private static readonly IReadOnlyList<DueWorkReference> NoFacts = Array.Empty<DueWorkReference>();
+        private static readonly IReadOnlyList<string> NoSignals = Array.Empty<string>();
+        private readonly MerchantSystem owner;
+        private readonly NpcRuntime actor;
+        private readonly BoundaryContinuationManifest manifest;
+        private readonly BoundaryContinuationStep step;
+
+        public IReadOnlyList<DueWorkReference> RetainedTimelineFacts => NoFacts;
+        public IReadOnlyList<string> RetainedSourceSignals => NoSignals;
+
+        public MerchantTradeStateCommit(MerchantSystem owner, NpcRuntime actor,
+            BoundaryContinuationManifest manifest, BoundaryContinuationStep step)
+        {
+            this.owner = owner;
+            this.actor = actor;
+            this.manifest = manifest;
+            this.step = step;
+        }
+
+        public bool TryCommit(out TimelineFailure failure) =>
+            owner.TryAdvanceNpcTradeStateOccurrence(actor, manifest, step,
+                out NpcMerchantTradeStateReceipt receipt, out failure)
+            && receipt != null;
+    }
+
+    private sealed class SkippedCommit : IBoundaryContinuationStepCommit
+    {
+        public static readonly SkippedCommit Instance = new SkippedCommit();
+        public IReadOnlyList<DueWorkReference> RetainedTimelineFacts => Array.Empty<DueWorkReference>();
+        public IReadOnlyList<string> RetainedSourceSignals => Array.Empty<string>();
+        public bool TryCommit(out TimelineFailure failure)
+        {
+            failure = TimelineFailure.None;
+            return true;
+        }
+    }
 }

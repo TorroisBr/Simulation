@@ -8,7 +8,8 @@ public enum SimulationRuntimeAdvanceFailure
     RuntimeFaulted = 1,
     InvalidDayCount = 2,
     AbsoluteDayOverflow = 3,
-    AdvanceAlreadyInProgress = 4
+    AdvanceAlreadyInProgress = 4,
+    TemporalAdvanceFailed = 5
 }
 
 /// <summary>Adapts the spatial authority's passage child to the P8-C transit resolver seam.</summary>
@@ -65,7 +66,7 @@ public sealed class SimulationRuntimeSpatialInvariantReport
     }
 }
 
-public sealed class SimulationRuntime
+public sealed partial class SimulationRuntime
 {
     private readonly AuthoritativeMutationGuard mutationGuard = new AuthoritativeMutationGuard();
     private bool advanceLeaseHeld;
@@ -140,7 +141,9 @@ public sealed class SimulationRuntime
     public AuthoritativeMutationHealth MutationHealth => mutationGuard.Health;
     public bool IsMutationFaulted => mutationGuard.Health == AuthoritativeMutationHealth.Faulted;
     public AuthoritativeMutationFaultReason MutationFaultReason => mutationGuard.FaultReason;
-    public long CurrentDay => simulationTime.AbsoluteDay;
+    public long CurrentDay => p18dTimeline != null
+        ? p18dTimeline.CurrentInstant.AbsoluteDay
+        : simulationTime.AbsoluteDay;
     public IReadOnlyList<CityRuntime> Cities => cities;
     public EffectiveSimulationConfiguration Configuration => configuration;
     public SimulationCalendar Calendar => calendar;
@@ -344,7 +347,8 @@ public sealed class SimulationRuntime
         PersonSpatialPositionStore personSpatialPositionStore = null,
         SpatialRouteKnowledgeStore spatialRouteKnowledgeStore = null,
         PersonRoutePlanStore personRoutePlanStore = null,
-        ActorChoiceStore actorChoiceStore = null)
+        ActorChoiceStore actorChoiceStore = null,
+        P18DIntradayProfile p18dIntradayProfile = null)
     {
         List<CityRuntime> resolvedCities = cities != null
             ? new List<CityRuntime>(cities)
@@ -765,6 +769,8 @@ public sealed class SimulationRuntime
             mutationGuard,
             battleResolvedEventRecorder);
         isComposingNpcRoster = false;
+
+        InitializeP18DIntradayProfile(p18dIntradayProfile);
 
     }
 
@@ -2525,6 +2531,22 @@ public sealed class SimulationRuntime
 
         using (lease)
         {
+            if (p18dTimeline != null)
+            {
+                LogicalTick target;
+                try
+                {
+                    target = p18dTimeline.CurrentInstant.NextDayBoundary;
+                }
+                catch (OverflowException)
+                {
+                    failure = SimulationRuntimeAdvanceFailure.AbsoluteDayOverflow;
+                    return false;
+                }
+
+                return TryAdvanceP18DIntradayToCore(target, out failure);
+            }
+
             return TryAdvanceDayCore(out failure);
         }
     }
@@ -2757,7 +2779,7 @@ public sealed class SimulationRuntime
         expeditionSystem?.ReconcileAfterTravel(arrivedNpcs);
     }
 
-    private static InvalidOperationException CreateAdvanceFailureException(
+    private InvalidOperationException CreateAdvanceFailureException(
         SimulationRuntimeAdvanceFailure failure)
     {
         if (failure == SimulationRuntimeAdvanceFailure.AbsoluteDayOverflow)
@@ -2768,6 +2790,12 @@ public sealed class SimulationRuntime
         if (failure == SimulationRuntimeAdvanceFailure.AdvanceAlreadyInProgress)
         {
             return new InvalidOperationException("A SimulationRuntime advance is already in progress.");
+        }
+
+        if (failure == SimulationRuntimeAdvanceFailure.TemporalAdvanceFailed)
+        {
+            return new InvalidOperationException(
+                "The P18-D intraday advance failed: " + p18dLastTimelineFailure + ".");
         }
 
         return new InvalidOperationException("A faulted SimulationRuntime cannot advance its world.");
@@ -4159,7 +4187,28 @@ public sealed class SimulationRuntime
 
             for (int i = 0; i < dayCount; i++)
             {
-                if (TryAdvanceDayCore(out failure) == false)
+                bool advanced;
+                if (p18dTimeline != null)
+                {
+                    LogicalTick target;
+                    try
+                    {
+                        target = p18dTimeline.CurrentInstant.NextDayBoundary;
+                    }
+                    catch (OverflowException)
+                    {
+                        failure = SimulationRuntimeAdvanceFailure.AbsoluteDayOverflow;
+                        return false;
+                    }
+
+                    advanced = TryAdvanceP18DIntradayToCore(target, out failure);
+                }
+                else
+                {
+                    advanced = TryAdvanceDayCore(out failure);
+                }
+
+                if (advanced == false)
                 {
                     return false;
                 }
