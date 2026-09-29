@@ -49,15 +49,30 @@ public sealed class ActorActionChoiceWorldCommandHandler : IWorldCommandHandler,
         }
 
         ActorActionChoiceWorldCommandPayload payload = (ActorActionChoiceWorldCommandPayload)command.Payload;
-        if (!worldRuntime.TryCaptureActorChoiceInput(
-                context.WorldCommandId,
-                payload.PersonId,
-                payload.ActionDefinitionId,
-                command.Origin,
-                command.Authority,
-                out ActorChoiceStoreFailureCode failure))
+        if (worldRuntime.UsesP18DIntradayProfile)
         {
-            return new WorldCommandHandlerResult(false, "Actor action choice could not be queued: " + failure + ".");
+            if (!worldRuntime.TryCaptureIntradayActorChoiceAtNextUnsealedInstant(
+                    context.WorldCommandId,
+                    payload.PersonId,
+                    payload.ActionDefinitionId,
+                    command.Origin,
+                    command.Authority,
+                    out TimelineFailure temporalFailure))
+            {
+                return new WorldCommandHandlerResult(false,
+                    "Actor action choice could not be queued: " + temporalFailure + ".");
+            }
+        }
+        else if (!worldRuntime.TryCaptureActorChoiceInput(
+                     context.WorldCommandId,
+                     payload.PersonId,
+                     payload.ActionDefinitionId,
+                     command.Origin,
+                     command.Authority,
+                     out ActorChoiceStoreFailureCode failure))
+        {
+            return new WorldCommandHandlerResult(false,
+                "Actor action choice could not be queued: " + failure + ".");
         }
 
         return new WorldCommandHandlerResult(true, "Actor action choice queued.");

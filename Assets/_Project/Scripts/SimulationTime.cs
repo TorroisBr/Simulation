@@ -4,7 +4,8 @@ public enum SimulationTimeAdvanceFailure
 {
     None = 0,
     RuntimeFaulted = 1,
-    AbsoluteDayOverflow = 2
+    AbsoluteDayOverflow = 2,
+    TimelineProjectionOwnsClock = 3
 }
 
 [Serializable]
@@ -12,8 +13,11 @@ public sealed class SimulationTime : IAuthoritativeMutationGuardBindable
 {
     private long absoluteDay;
     private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
+    [NonSerialized] private Func<long> absoluteDayProjection;
 
-    public long AbsoluteDay => absoluteDay;
+    public long AbsoluteDay => absoluteDayProjection != null
+        ? absoluteDayProjection()
+        : absoluteDay;
 
     public SimulationTime()
         : this(0L)
@@ -36,7 +40,9 @@ public sealed class SimulationTime : IAuthoritativeMutationGuardBindable
         {
             throw new InvalidOperationException(failure == SimulationTimeAdvanceFailure.RuntimeFaulted
                 ? "A faulted SimulationRuntime cannot advance its SimulationTime."
-                : "SimulationTime cannot advance beyond the maximum AbsoluteDay.");
+                : failure == SimulationTimeAdvanceFailure.TimelineProjectionOwnsClock
+                    ? "SimulationTime is projected from the SimulationTimeline and cannot advance independently."
+                    : "SimulationTime cannot advance beyond the maximum AbsoluteDay.");
         }
     }
 
@@ -48,6 +54,12 @@ public sealed class SimulationTime : IAuthoritativeMutationGuardBindable
             return false;
         }
 
+        if (absoluteDayProjection != null)
+        {
+            failure = SimulationTimeAdvanceFailure.TimelineProjectionOwnsClock;
+            return false;
+        }
+
         if (absoluteDay == long.MaxValue)
         {
             failure = SimulationTimeAdvanceFailure.AbsoluteDayOverflow;
@@ -56,6 +68,14 @@ public sealed class SimulationTime : IAuthoritativeMutationGuardBindable
 
         absoluteDay++;
         failure = SimulationTimeAdvanceFailure.None;
+        return true;
+    }
+
+    internal bool TryBindAbsoluteDayProjection(Func<long> projection)
+    {
+        if (projection == null || absoluteDayProjection != null || projection() != absoluteDay)
+            return false;
+        absoluteDayProjection = projection;
         return true;
     }
 

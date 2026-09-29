@@ -7,7 +7,9 @@ public enum SimulationRuntimeAdvanceFailure
     None = 0,
     RuntimeFaulted = 1,
     InvalidDayCount = 2,
-    AbsoluteDayOverflow = 3
+    AbsoluteDayOverflow = 3,
+    AdvanceAlreadyInProgress = 4,
+    TemporalAdvanceFailed = 5
 }
 
 /// <summary>Adapts the spatial authority's passage child to the P8-C transit resolver seam.</summary>
@@ -64,9 +66,10 @@ public sealed class SimulationRuntimeSpatialInvariantReport
     }
 }
 
-public sealed class SimulationRuntime
+public sealed partial class SimulationRuntime
 {
     private readonly AuthoritativeMutationGuard mutationGuard = new AuthoritativeMutationGuard();
+    private bool advanceLeaseHeld;
     private readonly SimulationTime simulationTime;
     private readonly List<CityRuntime> cities;
     private readonly List<NpcRuntime> npcRuntimes;
@@ -138,7 +141,9 @@ public sealed class SimulationRuntime
     public AuthoritativeMutationHealth MutationHealth => mutationGuard.Health;
     public bool IsMutationFaulted => mutationGuard.Health == AuthoritativeMutationHealth.Faulted;
     public AuthoritativeMutationFaultReason MutationFaultReason => mutationGuard.FaultReason;
-    public long CurrentDay => simulationTime.AbsoluteDay;
+    public long CurrentDay => p18dTimeline != null
+        ? p18dTimeline.CurrentInstant.AbsoluteDay
+        : simulationTime.AbsoluteDay;
     public IReadOnlyList<CityRuntime> Cities => cities;
     public EffectiveSimulationConfiguration Configuration => configuration;
     public SimulationCalendar Calendar => calendar;
@@ -342,7 +347,8 @@ public sealed class SimulationRuntime
         PersonSpatialPositionStore personSpatialPositionStore = null,
         SpatialRouteKnowledgeStore spatialRouteKnowledgeStore = null,
         PersonRoutePlanStore personRoutePlanStore = null,
-        ActorChoiceStore actorChoiceStore = null)
+        ActorChoiceStore actorChoiceStore = null,
+        P18DIntradayProfile p18dIntradayProfile = null)
     {
         List<CityRuntime> resolvedCities = cities != null
             ? new List<CityRuntime>(cities)
@@ -674,6 +680,16 @@ public sealed class SimulationRuntime
                 nameof(crimeSystem));
         }
         this.cities = resolvedCities;
+        List<CityRuntime> materialFlowCities = resolvedCities.FindAll(city => city != null && city.HasLocalDailyMaterialFlow);
+        if (materialFlowCities.Count > 1)
+            throw new LocalDailyMaterialFlowRejectedException("P14-A supports exactly one authored settlement per composed world.");
+        HashSet<string> settlementIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (CityRuntime city in materialFlowCities)
+        {
+            if (!settlementIds.Add(city.CityData.settlementSemanticId))
+                throw new LocalDailyMaterialFlowRejectedException("P14-A settlement semantic identities must be unique.");
+            city.ValidateLocalDailyMaterialFlowAnchor(this.legacySpatialAnchorBindingStore, this.spatialAuthorityStore);
+        }
         this.npcRuntimes = new List<NpcRuntime>();
         this.npcRuntimeSnapshot = this.npcRuntimes.AsReadOnly();
         this.npcRegistryById = new Dictionary<string, NpcRuntime>(StringComparer.Ordinal);
@@ -763,6 +779,8 @@ public sealed class SimulationRuntime
             mutationGuard,
             battleResolvedEventRecorder);
         isComposingNpcRoster = false;
+
+        InitializeP18DIntradayProfile(p18dIntradayProfile);
 
     }
 
@@ -2515,6 +2533,37 @@ public sealed class SimulationRuntime
     public bool TryAdvanceDay(out SimulationRuntimeAdvanceFailure failure)
     {
         failure = SimulationRuntimeAdvanceFailure.None;
+        if (TryAcquireAdvanceLease(out AdvanceLease lease) == false)
+        {
+            failure = SimulationRuntimeAdvanceFailure.AdvanceAlreadyInProgress;
+            return false;
+        }
+
+        using (lease)
+        {
+            if (p18dTimeline != null)
+            {
+                LogicalTick target;
+                try
+                {
+                    target = p18dTimeline.CurrentInstant.NextDayBoundary;
+                }
+                catch (OverflowException)
+                {
+                    failure = SimulationRuntimeAdvanceFailure.AbsoluteDayOverflow;
+                    return false;
+                }
+
+                return TryAdvanceP18DIntradayToCore(target, out failure);
+            }
+
+            return TryAdvanceDayCore(out failure);
+        }
+    }
+
+    private bool TryAdvanceDayCore(out SimulationRuntimeAdvanceFailure failure)
+    {
+        failure = SimulationRuntimeAdvanceFailure.None;
         if (mutationGuard.CanMutate == false)
         {
             failure = SimulationRuntimeAdvanceFailure.RuntimeFaulted;
@@ -2531,6 +2580,45 @@ public sealed class SimulationRuntime
 
         AdvanceDayAfterClockAdvance();
         return true;
+    }
+
+    /// <summary>
+    /// Acquires this runtime's single-writer advance lease for a larger composed
+    /// chronological operation. This is reentrancy protection, not a thread lock.
+    /// </summary>
+    internal bool TryAcquireAdvanceLease(out AdvanceLease lease)
+    {
+        lease = null;
+        if (advanceLeaseHeld)
+        {
+            return false;
+        }
+
+        lease = new AdvanceLease(this);
+        advanceLeaseHeld = true;
+        return true;
+    }
+
+    private void ReleaseAdvanceLease()
+    {
+        advanceLeaseHeld = false;
+    }
+
+    internal sealed class AdvanceLease : IDisposable
+    {
+        private SimulationRuntime owner;
+
+        internal AdvanceLease(SimulationRuntime owner)
+        {
+            this.owner = owner;
+        }
+
+        public void Dispose()
+        {
+            SimulationRuntime currentOwner = owner;
+            owner = null;
+            currentOwner?.ReleaseAdvanceLease();
+        }
     }
 
     private void AdvanceDayAfterClockAdvance()
@@ -2701,12 +2789,26 @@ public sealed class SimulationRuntime
         expeditionSystem?.ReconcileAfterTravel(arrivedNpcs);
     }
 
-    private static InvalidOperationException CreateAdvanceFailureException(
+    private InvalidOperationException CreateAdvanceFailureException(
         SimulationRuntimeAdvanceFailure failure)
     {
-        return failure == SimulationRuntimeAdvanceFailure.AbsoluteDayOverflow
-            ? new InvalidOperationException("SimulationTime cannot advance beyond the maximum AbsoluteDay.")
-            : new InvalidOperationException("A faulted SimulationRuntime cannot advance its world.");
+        if (failure == SimulationRuntimeAdvanceFailure.AbsoluteDayOverflow)
+        {
+            return new InvalidOperationException("SimulationTime cannot advance beyond the maximum AbsoluteDay.");
+        }
+
+        if (failure == SimulationRuntimeAdvanceFailure.AdvanceAlreadyInProgress)
+        {
+            return new InvalidOperationException("A SimulationRuntime advance is already in progress.");
+        }
+
+        if (failure == SimulationRuntimeAdvanceFailure.TemporalAdvanceFailed)
+        {
+            return new InvalidOperationException(
+                "The P18-D intraday advance failed: " + p18dLastTimelineFailure + ".");
+        }
+
+        return new InvalidOperationException("A faulted SimulationRuntime cannot advance its world.");
     }
 
     internal bool TryCaptureActorChoiceInput(
@@ -4079,20 +4181,50 @@ public sealed class SimulationRuntime
             return true;
         }
 
-        if (mutationGuard.CanMutate == false)
+        if (TryAcquireAdvanceLease(out AdvanceLease lease) == false)
         {
-            failure = SimulationRuntimeAdvanceFailure.RuntimeFaulted;
+            failure = SimulationRuntimeAdvanceFailure.AdvanceAlreadyInProgress;
             return false;
         }
 
-        for (int i = 0; i < dayCount; i++)
+        using (lease)
         {
-            if (TryAdvanceDay(out failure) == false)
+            if (mutationGuard.CanMutate == false)
             {
+                failure = SimulationRuntimeAdvanceFailure.RuntimeFaulted;
                 return false;
             }
 
-            daysAdvanced++;
+            for (int i = 0; i < dayCount; i++)
+            {
+                bool advanced;
+                if (p18dTimeline != null)
+                {
+                    LogicalTick target;
+                    try
+                    {
+                        target = p18dTimeline.CurrentInstant.NextDayBoundary;
+                    }
+                    catch (OverflowException)
+                    {
+                        failure = SimulationRuntimeAdvanceFailure.AbsoluteDayOverflow;
+                        return false;
+                    }
+
+                    advanced = TryAdvanceP18DIntradayToCore(target, out failure);
+                }
+                else
+                {
+                    advanced = TryAdvanceDayCore(out failure);
+                }
+
+                if (advanced == false)
+                {
+                    return false;
+                }
+
+                daysAdvanced++;
+            }
         }
 
         return true;
@@ -4156,7 +4288,13 @@ public sealed class SimulationRuntime
     {
         foreach (CityRuntime cityRuntime in cities)
         {
-            if (cityRuntime != null)
+            if (cityRuntime != null && cityRuntime.HasLocalDailyMaterialFlow)
+                cityRuntime.SimulateLocalDailyMaterialFlow(CurrentDay, calendar.SemanticVersion);
+        }
+
+        foreach (CityRuntime cityRuntime in cities)
+        {
+            if (cityRuntime != null && !cityRuntime.HasLocalDailyMaterialFlow)
             {
                 cityRuntime.SimulateProductionDay();
             }
@@ -4169,7 +4307,8 @@ public sealed class SimulationRuntime
                 continue;
             }
 
-            cityRuntime.SimulateConsumptionDay();
+            if (!cityRuntime.HasLocalDailyMaterialFlow)
+                cityRuntime.SimulateConsumptionDay();
             cityRuntime.UpdateMarketPrices();
         }
     }

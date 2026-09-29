@@ -1,4 +1,7 @@
 using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Runtime.CompilerServices;
 
 public enum PersonDeathLifecycleFailure
 {
@@ -17,7 +20,16 @@ public enum PersonDeathLifecycleFailure
     InvalidInjury = 12,
     InvalidDeathDay = 13,
     ResidenceSettlementMissing = 14,
-    RuntimeFaulted = 15
+    RuntimeFaulted = 15,
+    OperationAlreadyApplied = 16,
+    OperationIdentityConflict = 17
+}
+
+internal enum PersonDeathOperationReceiptResolution
+{
+    Missing = 0,
+    Matching = 1,
+    Conflicting = 2
 }
 
 /// <summary>
@@ -37,6 +49,7 @@ public sealed class PersonDeathTransition : IEquatable<PersonDeathTransition>
     public string ExpectedResidenceSettlementRuntimeId { get; }
     public long ExpectedResidencePopulationRevision { get; }
     public int ExpectedResidencePopulation { get; }
+    internal string OperationIdentity { get; }
     public bool ExpectsResident =>
         string.IsNullOrWhiteSpace(ExpectedResidenceSettlementRuntimeId) == false;
 
@@ -46,7 +59,8 @@ public sealed class PersonDeathTransition : IEquatable<PersonDeathTransition>
         string expectedMaterializedNpcRuntimeId,
         string expectedResidenceSettlementRuntimeId,
         long expectedResidencePopulationRevision,
-        int expectedResidencePopulation)
+        int expectedResidencePopulation,
+        string operationIdentity = null)
     {
         ExpectedPerson = expectedPerson;
         PersonId = expectedPerson?.PersonId;
@@ -55,6 +69,24 @@ public sealed class PersonDeathTransition : IEquatable<PersonDeathTransition>
         ExpectedResidenceSettlementRuntimeId = expectedResidenceSettlementRuntimeId;
         ExpectedResidencePopulationRevision = expectedResidencePopulationRevision;
         ExpectedResidencePopulation = expectedResidencePopulation;
+        OperationIdentity = operationIdentity ?? string.Empty;
+    }
+
+    internal PersonDeathTransition WithOperationIdentity(string operationIdentity)
+    {
+        if (string.IsNullOrWhiteSpace(operationIdentity))
+        {
+            throw new ArgumentException("A keyed death operation requires an identity.", nameof(operationIdentity));
+        }
+
+        return new PersonDeathTransition(
+            ExpectedPerson,
+            ExpectedAbsoluteDay,
+            ExpectedMaterializedNpcRuntimeId,
+            ExpectedResidenceSettlementRuntimeId,
+            ExpectedResidencePopulationRevision,
+            ExpectedResidencePopulation,
+            operationIdentity);
     }
 
     public bool Equals(PersonDeathTransition other)
@@ -71,7 +103,8 @@ public sealed class PersonDeathTransition : IEquatable<PersonDeathTransition>
                 other.ExpectedResidenceSettlementRuntimeId,
                 StringComparison.Ordinal)
             && ExpectedResidencePopulationRevision == other.ExpectedResidencePopulationRevision
-            && ExpectedResidencePopulation == other.ExpectedResidencePopulation;
+            && ExpectedResidencePopulation == other.ExpectedResidencePopulation
+            && string.Equals(OperationIdentity, other.OperationIdentity, StringComparison.Ordinal);
     }
 
     public override bool Equals(object obj)
@@ -91,6 +124,7 @@ public sealed class PersonDeathTransition : IEquatable<PersonDeathTransition>
                 ExpectedResidenceSettlementRuntimeId ?? string.Empty);
             hash = (hash * 397) ^ ExpectedResidencePopulationRevision.GetHashCode();
             hash = (hash * 397) ^ ExpectedResidencePopulation.GetHashCode();
+            hash = (hash * 397) ^ StringComparer.Ordinal.GetHashCode(OperationIdentity ?? string.Empty);
             return hash;
         }
     }
@@ -104,6 +138,39 @@ public sealed class PersonDeathTransition : IEquatable<PersonDeathTransition>
 /// </summary>
 public static class PersonDeathLifecycleSystem
 {
+    private static readonly ConditionalWeakTable<SimulationRuntime, DeathOperationReceiptStore> operationReceiptStores =
+        new ConditionalWeakTable<SimulationRuntime, DeathOperationReceiptStore>();
+
+    internal static PersonDeathOperationReceiptResolution ResolveOperationReceipt(
+        SimulationRuntime world,
+        PersonDeathTransition transition,
+        out PersonDeathLifecycleFailure failure)
+    {
+        failure = PersonDeathLifecycleFailure.None;
+        if (world == null || transition == null || string.IsNullOrWhiteSpace(transition.OperationIdentity))
+        {
+            return PersonDeathOperationReceiptResolution.Missing;
+        }
+
+        DeathOperationReceiptStore store = GetOperationReceiptStore(world);
+        lock (store.Gate)
+        {
+            if (!store.Receipts.TryGetValue(transition.OperationIdentity, out PersonDeathTransition existing))
+            {
+                return PersonDeathOperationReceiptResolution.Missing;
+            }
+
+            if (existing.Equals(transition)
+                && ReferenceEquals(existing.ExpectedPerson, transition.ExpectedPerson))
+            {
+                return PersonDeathOperationReceiptResolution.Matching;
+            }
+
+            failure = PersonDeathLifecycleFailure.OperationIdentityConflict;
+            return PersonDeathOperationReceiptResolution.Conflicting;
+        }
+    }
+
     public static bool TryProposeDeath(
         SimulationRuntime world,
         PersonId personId,
@@ -277,8 +344,35 @@ public static class PersonDeathLifecycleSystem
                 return false;
             }
 
-            if (settlement.Population.Revision != transition.ExpectedResidencePopulationRevision
-                || settlement.CurrentPopulation != transition.ExpectedResidencePopulation
+            bool populationEffectAlreadyApplied = false;
+            if (!string.IsNullOrWhiteSpace(transition.OperationIdentity))
+            {
+                string populationOperationIdentity = GetResidentPopulationOperationIdentity(transition);
+                string populationFingerprint = GetResidentPopulationFingerprint(transition);
+                PopulationOperationReceiptResolution populationReceipt =
+                    settlement.Population.ResolveOperationReceipt(
+                        populationOperationIdentity, populationFingerprint);
+                if (populationReceipt == PopulationOperationReceiptResolution.Conflicting)
+                {
+                    failure = PersonDeathLifecycleFailure.OperationIdentityConflict;
+                    return false;
+                }
+
+                populationEffectAlreadyApplied =
+                    populationReceipt == PopulationOperationReceiptResolution.Matching;
+            }
+
+            bool populationAtExpectedState =
+                settlement.Population.Revision == transition.ExpectedResidencePopulationRevision
+                && settlement.CurrentPopulation == transition.ExpectedResidencePopulation;
+            bool populationAtReceiptState = populationEffectAlreadyApplied
+                && transition.ExpectedResidencePopulationRevision < long.MaxValue
+                && settlement.Population.Revision == transition.ExpectedResidencePopulationRevision + 1L
+                && settlement.CurrentPopulation == transition.ExpectedResidencePopulation - 1;
+            bool validPopulationState = populationEffectAlreadyApplied
+                ? populationAtReceiptState
+                : populationAtExpectedState;
+            if (!validPopulationState
                 || transition.ExpectedResidencePopulation <= 0)
             {
                 failure = PersonDeathLifecycleFailure.StalePersonRegistration;
@@ -302,6 +396,42 @@ public static class PersonDeathLifecycleSystem
         bool applyConflictInjury,
         out PersonDeathLifecycleFailure failure)
     {
+        if (world != null && transition != null
+            && !string.IsNullOrWhiteSpace(transition.OperationIdentity))
+        {
+            DeathOperationReceiptStore store = GetOperationReceiptStore(world);
+            lock (store.Gate)
+            {
+                PersonDeathOperationReceiptResolution resolution = ResolveOperationReceiptLocked(
+                    store, transition, out failure);
+                if (resolution == PersonDeathOperationReceiptResolution.Matching)
+                {
+                    failure = PersonDeathLifecycleFailure.OperationAlreadyApplied;
+                    return false;
+                }
+
+                if (resolution == PersonDeathOperationReceiptResolution.Conflicting)
+                {
+                    return false;
+                }
+
+                return TryApplyDeathCore(
+                    world, transition, injurySeverity, applyConflictInjury, store, out failure);
+            }
+        }
+
+        return TryApplyDeathCore(
+            world, transition, injurySeverity, applyConflictInjury, null, out failure);
+    }
+
+    private static bool TryApplyDeathCore(
+        SimulationRuntime world,
+        PersonDeathTransition transition,
+        NpcInjurySeverity injurySeverity,
+        bool applyConflictInjury,
+        DeathOperationReceiptStore operationStore,
+        out PersonDeathLifecycleFailure failure)
+    {
         failure = PersonDeathLifecycleFailure.None;
         if (world != null && world.IsMutationFaulted)
         {
@@ -320,29 +450,81 @@ public static class PersonDeathLifecycleSystem
         }
 
         SettlementPopulationRuntime residentPopulation = null;
+        bool residentPopulationAlreadyApplied = false;
         if (transition.ExpectsResident)
         {
-            if (TryResolveSettlement(
+            if (!TryResolveSettlement(
                     world,
                     transition.ExpectedResidenceSettlementRuntimeId,
-                    out CityRuntime settlement) == false
-                || SettlementPopulationSystem.TryPropose(
-                    settlement.Population,
-                    new PopulationChangeSet(0, 1, 0, 0),
-                    out SettlementPopulationTransition aggregateTransition,
-                    out PopulationTransitionFailure aggregateFailure) == false
-                || aggregateTransition.ExpectedRevision != transition.ExpectedResidencePopulationRevision
-                || aggregateTransition.PopulationBefore != transition.ExpectedResidencePopulation
-                || SettlementPopulationSystem.TryApply(
-                    settlement.Population,
-                    aggregateTransition,
-                    out aggregateFailure) == false)
+                    out CityRuntime settlement))
             {
-                failure = PersonDeathLifecycleFailure.StalePersonRegistration;
+                failure = PersonDeathLifecycleFailure.ResidenceSettlementMissing;
                 return false;
             }
 
             residentPopulation = settlement.Population;
+            string populationOperationIdentity = null;
+            string populationFingerprint = null;
+            if (!string.IsNullOrWhiteSpace(transition.OperationIdentity))
+            {
+                populationOperationIdentity = GetResidentPopulationOperationIdentity(transition);
+                populationFingerprint = GetResidentPopulationFingerprint(transition);
+                PopulationOperationReceiptResolution populationReceipt =
+                    residentPopulation.ResolveOperationReceipt(
+                        populationOperationIdentity, populationFingerprint);
+                if (populationReceipt == PopulationOperationReceiptResolution.Conflicting)
+                {
+                    failure = PersonDeathLifecycleFailure.OperationIdentityConflict;
+                    return false;
+                }
+                residentPopulationAlreadyApplied =
+                    populationReceipt == PopulationOperationReceiptResolution.Matching;
+            }
+
+            if (!residentPopulationAlreadyApplied)
+            {
+                if (!SettlementPopulationSystem.TryPropose(
+                        residentPopulation,
+                        new PopulationChangeSet(0, 1, 0, 0),
+                        out SettlementPopulationTransition aggregateTransition,
+                        out PopulationTransitionFailure aggregateFailure)
+                    || aggregateTransition.ExpectedRevision != transition.ExpectedResidencePopulationRevision
+                    || aggregateTransition.PopulationBefore != transition.ExpectedResidencePopulation)
+                {
+                    failure = PersonDeathLifecycleFailure.StalePersonRegistration;
+                    return false;
+                }
+
+                bool applied;
+                if (populationOperationIdentity == null)
+                {
+                    applied = SettlementPopulationSystem.TryApply(
+                        residentPopulation, aggregateTransition, out aggregateFailure);
+                }
+                else
+                {
+                    applied = residentPopulation.TryApplyTransitionWithReceipt(
+                        populationOperationIdentity,
+                        populationFingerprint,
+                        aggregateTransition,
+                        out _,
+                        out aggregateFailure);
+                }
+                if (!applied)
+                {
+                    failure = aggregateFailure == PopulationTransitionFailure.OperationIdentityConflict
+                        ? PersonDeathLifecycleFailure.OperationIdentityConflict
+                        : PersonDeathLifecycleFailure.StalePersonRegistration;
+                    return false;
+                }
+            }
+        }
+
+        if (operationStore != null)
+        {
+            // The store lock hides this prepared receipt until the following
+            // preflighted no-fail Person/NPC/residence writes have completed.
+            operationStore.Receipts.Add(transition.OperationIdentity, transition);
         }
 
         // Every fallible check is complete before either representation mutates.
@@ -362,7 +544,51 @@ public static class PersonDeathLifecycleSystem
                 transition.ExpectedPerson.TrySetResidenceSettlementRuntimeId(null);
             }
         }
+
         return true;
+    }
+
+    private static PersonDeathOperationReceiptResolution ResolveOperationReceiptLocked(
+        DeathOperationReceiptStore store,
+        PersonDeathTransition transition,
+        out PersonDeathLifecycleFailure failure)
+    {
+        failure = PersonDeathLifecycleFailure.None;
+        if (!store.Receipts.TryGetValue(transition.OperationIdentity, out PersonDeathTransition existing))
+        {
+            return PersonDeathOperationReceiptResolution.Missing;
+        }
+
+        if (existing.Equals(transition)
+            && ReferenceEquals(existing.ExpectedPerson, transition.ExpectedPerson))
+        {
+            return PersonDeathOperationReceiptResolution.Matching;
+        }
+
+        failure = PersonDeathLifecycleFailure.OperationIdentityConflict;
+        return PersonDeathOperationReceiptResolution.Conflicting;
+    }
+
+    private static DeathOperationReceiptStore GetOperationReceiptStore(SimulationRuntime world) =>
+        operationReceiptStores.GetValue(world, _ => new DeathOperationReceiptStore());
+
+    private static string GetResidentPopulationOperationIdentity(PersonDeathTransition transition) =>
+        SpatialStableKey.Encode(transition.OperationIdentity, "resident-population-death-v1");
+
+    private static string GetResidentPopulationFingerprint(PersonDeathTransition transition) =>
+        SpatialStableKey.Encode(
+            "resident-population-death-v1",
+            transition.PersonId?.Value ?? string.Empty,
+            transition.DeathAbsoluteDay.ToString(CultureInfo.InvariantCulture),
+            transition.ExpectedResidenceSettlementRuntimeId ?? string.Empty,
+            transition.ExpectedResidencePopulationRevision.ToString(CultureInfo.InvariantCulture),
+            transition.ExpectedResidencePopulation.ToString(CultureInfo.InvariantCulture));
+
+    private sealed class DeathOperationReceiptStore
+    {
+        public readonly object Gate = new object();
+        public Dictionary<string, PersonDeathTransition> Receipts =
+            new Dictionary<string, PersonDeathTransition>(StringComparer.Ordinal);
     }
 
     private static bool TryResolveResidenceSnapshot(

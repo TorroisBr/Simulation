@@ -1,4 +1,5 @@
 using System;
+using System.Reflection;
 using NUnit.Framework;
 
 public sealed class PersonNaturalMortalityFoundationTests
@@ -168,6 +169,100 @@ public sealed class PersonNaturalMortalityFoundationTests
         Assert.That(transition.ExpectsResident, Is.True);
         Assert.That(person.DeathAbsoluteDay, Is.EqualTo(12L));
         Assert.That(person.ResidenceSettlementRuntimeId, Is.Null);
+        Assert.That(city.CurrentPopulation, Is.EqualTo(4));
+        Assert.That(city.Population.Revision, Is.EqualTo(1L));
+    }
+
+    [Test]
+    public void KeyedDeathReceiptPreventsDuplicateLifecycleAndWorldRevisionEffects()
+    {
+        SimulationRuntime world = CreateWorld(12L);
+        PersonRuntime first = Register(world, "receipt-death-first", 0L);
+        PersonRuntime second = Register(world, "receipt-death-second", 0L);
+        Assert.That(world.TryProposePersonDeath(
+            first.PersonId, out PersonDeathTransition proposed, out _), Is.True);
+        PersonDeathTransition keyed = WithOperationIdentity(proposed, "death-operation-first");
+        long revisionBefore = world.PoliticalWorldRevision;
+
+        Assert.That(world.TryApplyPersonDeath(keyed, out PersonDeathLifecycleFailure firstFailure),
+            Is.True, firstFailure.ToString());
+        long revisionAfterApply = world.PoliticalWorldRevision;
+        Assert.That(revisionAfterApply, Is.EqualTo(revisionBefore + 1L));
+        Assert.That(first.DeathAbsoluteDay, Is.EqualTo(12L));
+
+        Assert.That(world.TryApplyPersonDeath(keyed, out PersonDeathLifecycleFailure replayFailure), Is.False);
+        Assert.That(replayFailure, Is.EqualTo(PersonDeathLifecycleFailure.OperationAlreadyApplied));
+        Assert.That(world.PoliticalWorldRevision, Is.EqualTo(revisionAfterApply));
+        Assert.That(first.DeathAbsoluteDay, Is.EqualTo(12L));
+
+        Assert.That(world.TryProposePersonDeath(
+            second.PersonId, out PersonDeathTransition secondProposal, out _), Is.True);
+        PersonDeathTransition conflicting = WithOperationIdentity(secondProposal, "death-operation-first");
+        Assert.That(world.TryApplyPersonDeath(conflicting, out PersonDeathLifecycleFailure conflictFailure), Is.False);
+        Assert.That(conflictFailure, Is.EqualTo(PersonDeathLifecycleFailure.OperationIdentityConflict));
+        Assert.That(second.DeathAbsoluteDay, Is.Null);
+        Assert.That(world.PoliticalWorldRevision, Is.EqualTo(revisionAfterApply));
+    }
+
+    [Test]
+    public void KeyedResidentDeathResumesAfterPopulationReceiptBeforePersonAndNpcEffects()
+    {
+        CityData data = SimulationTestFactory.CreateCityData("receipt-resident-death-city-definition");
+        data.initialPopulation = 5;
+        CityRuntime city = new CityRuntime(
+            "receipt-resident-death-city",
+            data,
+            new SpatialLocationRuntime("receipt-resident-death-location"));
+        SimulationRuntime world = new SimulationRuntime(
+            new SimulationTime(12L), new[] { city }, null);
+        PersonRuntime person = Register(world, "receipt-resident-death-person", 0L);
+        Assert.That(world.TryBindExistingPersonResident(person.PersonId, city, out _), Is.True);
+        Assert.That(world.TryMaterializePerson(
+            person.PersonId,
+            SimulationTestFactory.CreateNpc("receipt-resident-death-definition"),
+            "receipt-resident-death-npc",
+            null,
+            0f,
+            out NpcRuntime npc,
+            out _), Is.True);
+        Assert.That(world.TryProposePersonDeath(
+            person.PersonId, out PersonDeathTransition proposed, out _), Is.True);
+        PersonDeathTransition keyed = WithOperationIdentity(proposed, "death-operation-resident");
+
+        Assert.That(SettlementPopulationSystem.TryPropose(
+            city.Population,
+            new PopulationChangeSet(0, 1, 0, 0),
+            out SettlementPopulationTransition residentDeathPopulation,
+            out PopulationTransitionFailure proposalFailure), Is.True, proposalFailure.ToString());
+        string populationOperationIdentity = InvokePrivateStringMethod(
+            typeof(PersonDeathLifecycleSystem), "GetResidentPopulationOperationIdentity", keyed);
+        string populationFingerprint = InvokePrivateStringMethod(
+            typeof(PersonDeathLifecycleSystem), "GetResidentPopulationFingerprint", keyed);
+        Assert.That(TryApplyPopulationTransitionWithReceipt(
+            city.Population,
+            populationOperationIdentity,
+            populationFingerprint,
+            residentDeathPopulation,
+            out bool populationApplied,
+            out string populationFailure), Is.True, populationFailure);
+        Assert.That(populationApplied, Is.True);
+        Assert.That(person.DeathAbsoluteDay, Is.Null);
+        Assert.That(npc.IsAlive, Is.True);
+        Assert.That(city.CurrentPopulation, Is.EqualTo(4));
+        Assert.That(city.Population.Revision, Is.EqualTo(1L));
+
+        Assert.That(PersonDeathLifecycleSystem.TryApplyDeath(
+            world, keyed, out PersonDeathLifecycleFailure applyFailure), Is.True, applyFailure.ToString());
+        Assert.That(person.DeathAbsoluteDay, Is.EqualTo(12L));
+        Assert.That(npc.IsDead, Is.True);
+        Assert.That(person.ResidenceSettlementRuntimeId, Is.Null);
+        Assert.That(city.CurrentPopulation, Is.EqualTo(4));
+        Assert.That(city.Population.Revision, Is.EqualTo(1L));
+        Assert.That(ResolvePersonDeathReceipt(world, keyed), Is.EqualTo("Matching"));
+
+        Assert.That(PersonDeathLifecycleSystem.TryApplyDeath(
+            world, keyed, out PersonDeathLifecycleFailure replayFailure), Is.False);
+        Assert.That(replayFailure, Is.EqualTo(PersonDeathLifecycleFailure.OperationAlreadyApplied));
         Assert.That(city.CurrentPopulation, Is.EqualTo(4));
         Assert.That(city.Population.Revision, Is.EqualTo(1L));
     }
@@ -419,5 +514,53 @@ public sealed class PersonNaturalMortalityFoundationTests
         PersonRuntime person = new PersonRuntime(new PersonId(personId), birthAbsoluteDay);
         Assert.That(world.TryRegisterPerson(person, out PersonStoreFailure failure), Is.True, failure.ToString());
         return person;
+    }
+
+    private static PersonDeathTransition WithOperationIdentity(
+        PersonDeathTransition transition,
+        string operationIdentity)
+    {
+        MethodInfo method = typeof(PersonDeathTransition).GetMethod(
+            "WithOperationIdentity", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(method, Is.Not.Null);
+        return (PersonDeathTransition)method.Invoke(transition, new object[] { operationIdentity });
+    }
+
+    private static string InvokePrivateStringMethod(Type ownerType, string methodName, params object[] arguments)
+    {
+        MethodInfo method = ownerType.GetMethod(
+            methodName, BindingFlags.Static | BindingFlags.NonPublic);
+        Assert.That(method, Is.Not.Null, methodName);
+        return (string)method.Invoke(null, arguments);
+    }
+
+    private static bool TryApplyPopulationTransitionWithReceipt(
+        SettlementPopulationRuntime population,
+        string operationIdentity,
+        string fingerprint,
+        SettlementPopulationTransition transition,
+        out bool newlyApplied,
+        out string failure)
+    {
+        MethodInfo method = typeof(SettlementPopulationRuntime).GetMethod(
+            "TryApplyTransitionWithReceipt", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(method, Is.Not.Null);
+        object[] arguments = { operationIdentity, fingerprint, transition, false, null };
+        bool applied = (bool)method.Invoke(population, arguments);
+        newlyApplied = (bool)arguments[3];
+        failure = arguments[4]?.ToString();
+        return applied;
+    }
+
+    private static string ResolvePersonDeathReceipt(
+        SimulationRuntime world,
+        PersonDeathTransition transition)
+    {
+        MethodInfo method = typeof(PersonDeathLifecycleSystem).GetMethod(
+            "ResolveOperationReceipt", BindingFlags.Static | BindingFlags.NonPublic);
+        Assert.That(method, Is.Not.Null);
+        object[] arguments = { world, transition, null };
+        object resolution = method.Invoke(null, arguments);
+        return resolution?.ToString();
     }
 }

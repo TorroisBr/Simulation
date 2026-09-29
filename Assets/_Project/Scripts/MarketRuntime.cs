@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using UnityEngine;
 
 [Serializable]
@@ -23,7 +24,16 @@ public class MarketItemRuntime
         UpdatePrice();
     }
 
-    public bool AddAmount(int amountToAdd)
+    internal MarketItemRuntime(MarketItemRuntime source)
+    {
+        if (source == null) throw new ArgumentNullException(nameof(source));
+        item = source.item;
+        amount = source.amount;
+        desiredAmount = source.desiredAmount;
+        currentPrice = source.currentPrice;
+    }
+
+    internal bool AddAmount(int amountToAdd)
     {
         if (amountToAdd <= 0)
         {
@@ -39,7 +49,7 @@ public class MarketItemRuntime
         return true;
     }
 
-    public bool RemoveAmount(int amountToRemove)
+    internal bool RemoveAmount(int amountToRemove)
     {
         if (amountToRemove <= 0 || amount < amountToRemove)
         {
@@ -50,7 +60,7 @@ public class MarketItemRuntime
         return true;
     }
 
-    public void UpdatePrice()
+    internal void UpdatePrice()
     {
         if (item == null)
         {
@@ -71,8 +81,11 @@ public class MarketRuntime
 {
     [SerializeField] private List<MarketItemRuntime> items = new List<MarketItemRuntime>();
     [NonSerialized] private MarketCounterpartyRuntime counterparty;
+    [NonSerialized] private ReadOnlyCollection<MarketItemRuntime> readOnlyItems;
+    [NonSerialized] private long revision;
 
-    public List<MarketItemRuntime> Items => items ?? (items = new List<MarketItemRuntime>());
+    public IReadOnlyList<MarketItemRuntime> Items => readOnlyItems ?? (readOnlyItems = (items ?? (items = new List<MarketItemRuntime>())).AsReadOnly());
+    public long Revision => revision;
     public MarketCounterpartyRuntime Counterparty => counterparty ?? (counterparty = MarketCounterpartyRuntime.CreateOpen());
     public string StockOwnerRuntimeId => Counterparty.CounterpartyRuntimeId;
 
@@ -104,24 +117,25 @@ public class MarketRuntime
                 continue;
             }
 
-            Items.Add(new MarketItemRuntime(config.item, config.initialAmount, config.desiredAmount));
+            EnsureItems().Add(new MarketItemRuntime(config.item, config.initialAmount, config.desiredAmount));
         }
     }
 
     public MarketItemRuntime GetItem(ItemData item)
     {
-        return Items.Find(x => x != null && x.Item == item);
+        MarketItemRuntime value = (items ?? (items = new List<MarketItemRuntime>())).Find(x => x != null && x.Item == item);
+        return value == null ? null : new MarketItemRuntime(value);
     }
 
     public int GetAmount(ItemData item)
     {
-        MarketItemRuntime marketItem = GetItem(item);
+        MarketItemRuntime marketItem = (items ?? (items = new List<MarketItemRuntime>())).Find(x => x != null && x.Item == item);
         return marketItem != null ? marketItem.Amount : 0;
     }
 
     public float GetPrice(ItemData item)
     {
-        MarketItemRuntime marketItem = GetItem(item);
+        MarketItemRuntime marketItem = (items ?? (items = new List<MarketItemRuntime>())).Find(x => x != null && x.Item == item);
 
         if (marketItem != null)
         {
@@ -145,7 +159,7 @@ public class MarketRuntime
 
     public int AddStock(ItemData item, int amount, int desiredAmount = 100)
     {
-        if (item == null || amount <= 0)
+        if (item == null || amount <= 0 || revision == long.MaxValue)
         {
             return 0;
         }
@@ -162,6 +176,7 @@ public class MarketRuntime
         }
 
         marketItem.UpdatePrice();
+        revision++;
         return amount;
     }
 
@@ -172,15 +187,15 @@ public class MarketRuntime
             return false;
         }
 
-        MarketItemRuntime marketItem = GetItem(item);
+        MarketItemRuntime marketItem = (items ?? (items = new List<MarketItemRuntime>())).Find(x => x != null && x.Item == item);
         return marketItem == null || marketItem.Amount <= int.MaxValue - amount;
     }
 
     public int RemoveStockUpTo(ItemData item, int amount)
     {
-        MarketItemRuntime marketItem = GetItem(item);
+        MarketItemRuntime marketItem = (items ?? (items = new List<MarketItemRuntime>())).Find(x => x != null && x.Item == item);
 
-        if (marketItem == null || amount <= 0)
+        if (marketItem == null || amount <= 0 || revision == long.MaxValue)
         {
             return 0;
         }
@@ -194,6 +209,7 @@ public class MarketRuntime
 
         marketItem.RemoveAmount(amountToRemove);
         marketItem.UpdatePrice();
+        revision++;
         return amountToRemove;
     }
 
@@ -219,18 +235,22 @@ public class MarketRuntime
 
     public void UpdatePrices()
     {
-        foreach (MarketItemRuntime item in Items)
+        bool changed = false;
+        foreach (MarketItemRuntime item in items ?? (items = new List<MarketItemRuntime>()))
         {
             if (item != null)
             {
+                float previous = item.CurrentPrice;
                 item.UpdatePrice();
+                changed |= previous != item.CurrentPrice;
             }
         }
+        if (changed && revision < long.MaxValue) revision++;
     }
 
     private MarketItemRuntime GetOrCreateItem(ItemData item, int desiredAmount)
     {
-        MarketItemRuntime marketItem = GetItem(item);
+        MarketItemRuntime marketItem = (items ?? (items = new List<MarketItemRuntime>())).Find(x => x != null && x.Item == item);
 
         if (marketItem != null)
         {
@@ -238,7 +258,68 @@ public class MarketRuntime
         }
 
         marketItem = new MarketItemRuntime(item, 0, Mathf.Max(1, desiredAmount));
-        Items.Add(marketItem);
+        EnsureItems().Add(marketItem);
         return marketItem;
     }
+
+    internal bool CanInstall(long expectedRevision) => revision == expectedRevision && revision < long.MaxValue;
+
+    internal bool CanInstall(long expectedRevision, long revisionIncrements) =>
+        revision == expectedRevision && revisionIncrements >= 0
+        && revisionIncrements <= long.MaxValue - expectedRevision;
+
+    internal void InstallPrepared(long expectedRevision, PreparedMarketState replacement)
+    {
+        items = replacement.Items;
+        readOnlyItems = replacement.ReadOnlyItems;
+        revision = expectedRevision + 1;
+    }
+
+    internal void InstallPrepared(long expectedRevision, long revisionIncrements, PreparedMarketState replacement)
+    {
+        items = replacement.Items;
+        readOnlyItems = replacement.ReadOnlyItems;
+        revision = expectedRevision + revisionIncrements;
+    }
+
+    internal PreparedMarketState CreatePreparedSnapshot()
+    {
+        List<MarketItemRuntime> replacement = new List<MarketItemRuntime>();
+        foreach (MarketItemRuntime item in items ?? (items = new List<MarketItemRuntime>()))
+            replacement.Add(item == null ? null : new MarketItemRuntime(item));
+        return new PreparedMarketState(replacement);
+    }
+
+    internal PreparedMarketState PrepareReplacement(ItemData item, int delta, int desiredAmount)
+    {
+        List<MarketItemRuntime> replacement = new List<MarketItemRuntime>((items ?? (items = new List<MarketItemRuntime>())).Count + 1);
+        bool found = false;
+        foreach (MarketItemRuntime existing in items)
+        {
+            if (existing == null) { replacement.Add(null); continue; }
+            if (!found && existing.Item == item)
+            {
+                found = true;
+                replacement.Add(new MarketItemRuntime(item, existing.Amount + delta, existing.DesiredAmount));
+                continue;
+            }
+            replacement.Add(new MarketItemRuntime(existing));
+        }
+        if (!found) replacement.Add(new MarketItemRuntime(item, delta, desiredAmount));
+        return new PreparedMarketState(replacement);
+    }
+
+    private List<MarketItemRuntime> EnsureItems()
+    {
+        if (items == null) items = new List<MarketItemRuntime>();
+        readOnlyItems = null;
+        return items;
+    }
+}
+
+internal sealed class PreparedMarketState
+{
+    internal readonly List<MarketItemRuntime> Items;
+    internal readonly ReadOnlyCollection<MarketItemRuntime> ReadOnlyItems;
+    internal PreparedMarketState(List<MarketItemRuntime> items) { Items = items; ReadOnlyItems = items.AsReadOnly(); }
 }

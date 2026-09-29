@@ -208,8 +208,281 @@ public sealed class EconomyTransactionResult
     }
 }
 
+public enum KeyedSaleOutcome { Committed, TerminalRejection, ProvenNoInstall, Unresolved, FingerprintCollision }
+
+public sealed class KeyedSaleSnapshot
+{
+    public string ActorChoiceInputId { get; }
+    public string RequestId { get; }
+    public string ActorPersonId { get; }
+    public string ProposalId { get; }
+    public string ActionSemanticId { get; }
+    public int ActionVersion { get; }
+    public string ProfileId { get; }
+    public string LogicalTick { get; }
+    public string MarketSiteId { get; }
+    public string CounterpartyId { get; }
+    public string ItemDefinitionId { get; }
+    public MarketLiquidityMode LiquidityMode { get; }
+    public float UnitPrice { get; }
+    public int MarketStock { get; }
+    public int SellerInventory { get; }
+    public float SellerBalance { get; }
+    public float CounterpartyBalance { get; }
+    public int RequestedQuantity { get; }
+    public int EffectiveQuantity { get; }
+    public string SellerRuntimeId { get; }
+    public string SellerCityRuntimeId { get; }
+    public bool SellerWasAlive { get; }
+    public bool SellerCouldReceive { get; }
+    public bool CounterpartyCouldPay { get; }
+    public bool MarketCouldAcceptStock { get; }
+    public long InventoryRevision { get; }
+    public long MarketRevision { get; }
+    public long SellerMoneyRevision { get; }
+    public long CounterpartyMoneyRevision { get; }
+    internal KeyedSaleSnapshot(string input, string request, string actor, string proposal, string action, int version, string profile, string tick, string site, string sellerRuntime, string sellerCityRuntime, string counterparty, string item, MarketLiquidityMode mode, float price, int stock, int inventory, float sellerBalance, float counterpartyBalance, int requested, int effective, bool alive, bool canReceive, bool counterpartyCanPay, bool marketCanAccept, long inventoryRevision, long marketRevision, long sellerMoneyRevision, long counterpartyMoneyRevision)
+    { ActorChoiceInputId=input; RequestId=request; ActorPersonId=actor; ProposalId=proposal; ActionSemanticId=action; ActionVersion=version; ProfileId=profile; LogicalTick=tick; MarketSiteId=site; SellerRuntimeId=sellerRuntime; SellerCityRuntimeId=sellerCityRuntime; CounterpartyId=counterparty; ItemDefinitionId=item; LiquidityMode=mode; UnitPrice=price; MarketStock=stock; SellerInventory=inventory; SellerBalance=sellerBalance; CounterpartyBalance=counterpartyBalance; RequestedQuantity=requested; EffectiveQuantity=effective; SellerWasAlive=alive; SellerCouldReceive=canReceive; CounterpartyCouldPay=counterpartyCanPay; MarketCouldAcceptStock=marketCanAccept; InventoryRevision=inventoryRevision; MarketRevision=marketRevision; SellerMoneyRevision=sellerMoneyRevision; CounterpartyMoneyRevision=counterpartyMoneyRevision; }
+}
+
+public sealed class KeyedSaleReceipt
+{
+    public string ProposalId { get; }
+    public string Fingerprint { get; }
+    internal string CallerFingerprint { get; }
+    public KeyedSaleOutcome Outcome { get; }
+    public KeyedSaleSnapshot Snapshot { get; }
+    public EconomyTransactionResult Result { get; }
+    private KeyedSaleReceipt(string id, string fingerprint, string callerFingerprint, KeyedSaleOutcome outcome, KeyedSaleSnapshot snapshot, EconomyTransactionResult result) { ProposalId=id; Fingerprint=fingerprint; CallerFingerprint=callerFingerprint; Outcome=outcome; Snapshot=snapshot; Result=result; }
+    internal static KeyedSaleReceipt Committed(string id,string fp,string callerFp,KeyedSaleSnapshot s,EconomyTransactionResult r) => new KeyedSaleReceipt(id,fp,callerFp,KeyedSaleOutcome.Committed,s,r);
+    internal static KeyedSaleReceipt Terminal(string id,string fp,string callerFp,KeyedSaleSnapshot s,EconomyTransactionResult r) => new KeyedSaleReceipt(id,fp,callerFp,KeyedSaleOutcome.TerminalRejection,s,r);
+    internal static KeyedSaleReceipt ProvenNoInstall(string id,string fp,string callerFp,KeyedSaleSnapshot s,EconomyTransactionResult r) => new KeyedSaleReceipt(id,fp,callerFp,KeyedSaleOutcome.ProvenNoInstall,s,r);
+    internal static KeyedSaleReceipt Unresolved(string id,string fp,string callerFp,KeyedSaleSnapshot s,EconomyTransactionResult r) => new KeyedSaleReceipt(id,fp,callerFp,KeyedSaleOutcome.Unresolved,s,r);
+    internal static KeyedSaleReceipt Rejected(string id,string fp,KeyedSaleSnapshot s,EconomyTransactionFailureReason reason) => Terminal(id,fp,fp,s,EconomyTransactionResult.CreateFailure(EconomyTransactionType.OpenMarketSale,MoneyEffect.ExplicitSource,reason));
+    internal static KeyedSaleReceipt Collision(string id,string fp,string callerFp = null) => new KeyedSaleReceipt(id,fp,callerFp,KeyedSaleOutcome.FingerprintCollision,null,EconomyTransactionResult.CreateFailure(EconomyTransactionType.OpenMarketSale,MoneyEffect.ExplicitSource,EconomyTransactionFailureReason.InvalidInput));
+}
+
 public sealed class EconomyTransactionService
 {
+    private readonly List<KeyedSaleReceipt> keyedSaleReceipts = new List<KeyedSaleReceipt>();
+
+    public KeyedSaleReceipt TryExecuteKeyedMarketSale(
+        string proposalId, string fingerprint, string actorChoiceInputId, string requestId,
+        string actorPersonId, string actionSemanticId, int actionVersion, string profileId,
+        string logicalTick, string marketSiteId, NpcRuntime seller, MarketRuntime market,
+        ItemData item, int requestedQuantity)
+    {
+        if (string.IsNullOrWhiteSpace(proposalId) || string.IsNullOrWhiteSpace(fingerprint))
+            return KeyedSaleReceipt.Rejected(proposalId, fingerprint, null, EconomyTransactionFailureReason.InvalidInput);
+
+        string canonicalFingerprint = CreateRequestFingerprint(
+            proposalId, fingerprint, actorChoiceInputId, requestId, actorPersonId,
+            actionSemanticId, actionVersion, profileId, logicalTick, marketSiteId,
+            item != null ? item.DefinitionId : null, requestedQuantity);
+
+        for (int i = 0; i < keyedSaleReceipts.Count; i++)
+        {
+            KeyedSaleReceipt prior = keyedSaleReceipts[i];
+            if (!string.Equals(prior.ProposalId, proposalId, StringComparison.Ordinal)) continue;
+            if (!string.Equals(prior.Fingerprint, canonicalFingerprint, StringComparison.Ordinal))
+                return KeyedSaleReceipt.Collision(proposalId, canonicalFingerprint, fingerprint);
+            if (prior.Outcome != KeyedSaleOutcome.ProvenNoInstall) return prior;
+            break;
+        }
+
+        MarketLiquidityMode mode = market != null ? market.Counterparty.LiquidityMode : MarketLiquidityMode.Open;
+        MoneyAccountRuntime sellerAccount = seller != null ? seller.MoneyAccount : null;
+        MoneyAccountRuntime counterpartyAccount = market != null && mode == MarketLiquidityMode.AccountBacked ? market.Counterparty.MoneyAccount : null;
+        long invRev = seller != null ? seller.Inventory.Revision : -1;
+        long marketRev = market != null ? market.Revision : -1;
+        long sellerMoneyRev = sellerAccount != null ? sellerAccount.Revision : -1;
+        long counterpartyMoneyRev = counterpartyAccount != null ? counterpartyAccount.Revision : -1;
+        float observedPrice = market != null && item != null ? market.GetPriceForSale(item) : 0f;
+        int observedStock = market != null && item != null ? market.GetAmount(item) : 0;
+        int observedInventory = seller != null && item != null ? seller.Inventory.GetAmount(item) : 0;
+        float observedSellerBalance = sellerAccount != null ? sellerAccount.Balance : 0f;
+        float observedCounterpartyBalance = counterpartyAccount != null ? counterpartyAccount.Balance : 0f;
+        EconomyTransactionResult result = ValidateSale(seller, market, item, requestedQuantity, mode);
+        int snapshotQuantity = result.Success ? result.Quantity : Mathf.Min(Mathf.Max(0, requestedQuantity), observedInventory);
+        float normalizedSalePrice = IsValidNonNegativeFiniteAmount(observedPrice) ? Mathf.Max(0.01f, observedPrice) : observedPrice;
+        if (!result.Success && mode == MarketLiquidityMode.AccountBacked && counterpartyAccount != null
+            && IsValidNonNegativeFiniteAmount(normalizedSalePrice))
+        {
+            snapshotQuantity = Mathf.Min(snapshotQuantity, GetAffordableQuantity(observedCounterpartyBalance, normalizedSalePrice));
+        }
+        float snapshotTotal = normalizedSalePrice * snapshotQuantity;
+        KeyedSaleSnapshot snapshot = new KeyedSaleSnapshot(actorChoiceInputId, requestId, actorPersonId, proposalId,
+            actionSemanticId, actionVersion, profileId, logicalTick, marketSiteId,
+            seller != null ? seller.RuntimeId : null,
+            seller != null && seller.CurrentCity != null ? seller.CurrentCity.RuntimeId : null,
+            market != null ? market.StockOwnerRuntimeId : null, item != null ? item.DefinitionId : null,
+            mode, observedPrice, observedStock, observedInventory, observedSellerBalance, observedCounterpartyBalance,
+            requestedQuantity, snapshotQuantity, seller != null && seller.IsAlive,
+            snapshotQuantity > 0 && sellerAccount != null && sellerAccount.CanCredit(snapshotTotal),
+            snapshotQuantity > 0 && mode == MarketLiquidityMode.AccountBacked && counterpartyAccount != null && counterpartyAccount.CanDebit(snapshotTotal),
+            snapshotQuantity > 0 && market != null && item != null && market.CanAddStock(item, snapshotQuantity),
+            invRev, marketRev, sellerMoneyRev, counterpartyMoneyRev);
+        if (!result.Success)
+        {
+            KeyedSaleReceipt rejected = KeyedSaleReceipt.Terminal(proposalId, canonicalFingerprint, fingerprint, snapshot, result);
+            StoreReceipt(rejected);
+            return rejected;
+        }
+
+        int quantity = result.Quantity;
+        float total = result.TotalPrice;
+        PreparedInventoryState inventoryReplacement = seller.Inventory.PrepareReplacement(item, quantity, 0f, false, 0);
+        PreparedMarketState marketReplacement = market.PrepareReplacement(item, quantity, 100);
+        float sellerBalanceReplacement = sellerAccount.Balance + total;
+        float counterpartyBalanceReplacement = counterpartyAccount != null ? counterpartyAccount.Balance - total : 0f;
+        KeyedSaleReceipt committed = KeyedSaleReceipt.Committed(proposalId, canonicalFingerprint, fingerprint, snapshot, result);
+        KeyedSaleReceipt unresolved = KeyedSaleReceipt.Unresolved(proposalId, canonicalFingerprint, fingerprint, snapshot, result);
+        if (keyedSaleReceipts.Capacity < keyedSaleReceipts.Count + 1) keyedSaleReceipts.Capacity = keyedSaleReceipts.Count + 1;
+        bool ready = seller.Inventory.CanInstall(invRev) && market.CanInstall(marketRev)
+            && sellerAccount.CanInstall(sellerMoneyRev, sellerBalanceReplacement)
+            && (counterpartyAccount == null || counterpartyAccount.CanInstall(counterpartyMoneyRev, counterpartyBalanceReplacement));
+        if (!ready)
+        {
+            EconomyTransactionResult notInstalled = EconomyTransactionResult.CreateFailure(
+                EconomyTransactionType.OpenMarketSale,
+                mode == MarketLiquidityMode.AccountBacked ? MoneyEffect.Transfer : MoneyEffect.ExplicitSource,
+                EconomyTransactionFailureReason.TransactionCommitFailed,
+                actorRuntimeId: seller.RuntimeId);
+            KeyedSaleReceipt stale = KeyedSaleReceipt.ProvenNoInstall(proposalId, canonicalFingerprint, fingerprint, snapshot, notInstalled);
+            StoreReceipt(stale);
+            return stale;
+        }
+
+        // All allocations, validation, and expected-revision checks precede the install boundary.
+        try
+        {
+            seller.Inventory.InstallPrepared(invRev, inventoryReplacement);
+            market.InstallPrepared(marketRev, marketReplacement);
+            sellerAccount.InstallPrepared(sellerMoneyRev, sellerBalanceReplacement);
+            if (counterpartyAccount != null) counterpartyAccount.InstallPrepared(counterpartyMoneyRev, counterpartyBalanceReplacement);
+        }
+        catch (Exception)
+        {
+            // Once the boundary is crossed, never guess which assignments took effect.
+            EconomyTransactionResult uncertain = EconomyTransactionResult.CreateFailure(
+                EconomyTransactionType.OpenMarketSale,
+                mode == MarketLiquidityMode.AccountBacked ? MoneyEffect.Transfer : MoneyEffect.ExplicitSource,
+                EconomyTransactionFailureReason.TransactionCommitFailed,
+                actorRuntimeId: seller.RuntimeId);
+            KeyedSaleReceipt unresolvedResult = KeyedSaleReceipt.Unresolved(proposalId, canonicalFingerprint, fingerprint, snapshot, uncertain);
+            StoreReceipt(unresolvedResult);
+            return unresolvedResult;
+        }
+        StoreReceipt(committed);
+        return committed;
+    }
+
+    public KeyedSaleReceipt FindKeyedSaleReceipt(
+        string proposalId, string fingerprint, string actorChoiceInputId, string requestId,
+        string actorPersonId, string actionSemanticId, int actionVersion, string profileId,
+        string logicalTick, string marketSiteId, NpcRuntime seller, MarketRuntime market,
+        ItemData item, int requestedQuantity)
+    {
+        return FindKeyedSaleReceipt(
+            proposalId, fingerprint, actorChoiceInputId, requestId, actorPersonId,
+            actionSemanticId, actionVersion, profileId, logicalTick, marketSiteId,
+            item != null ? item.DefinitionId : null, requestedQuantity);
+    }
+
+    /// <summary>
+    /// Looks up a receipt using only immutable request correlation. Execution-time
+    /// owner state such as actor materialization/location and current market mapping
+    /// belongs in the original receipt snapshot, not in replay identity.
+    /// </summary>
+    public KeyedSaleReceipt FindKeyedSaleReceipt(
+        string proposalId, string fingerprint, string actorChoiceInputId, string requestId,
+        string actorPersonId, string actionSemanticId, int actionVersion, string profileId,
+        string logicalTick, string marketSiteId, string itemDefinitionId, int requestedQuantity)
+    {
+        if (string.IsNullOrWhiteSpace(proposalId) || string.IsNullOrWhiteSpace(fingerprint)) return null;
+        string canonicalFingerprint = CreateRequestFingerprint(
+            proposalId, fingerprint, actorChoiceInputId, requestId, actorPersonId,
+            actionSemanticId, actionVersion, profileId, logicalTick, marketSiteId,
+            itemDefinitionId, requestedQuantity);
+        for (int i = 0; i < keyedSaleReceipts.Count; i++)
+        {
+            KeyedSaleReceipt receipt = keyedSaleReceipts[i];
+            if (!string.Equals(receipt.ProposalId, proposalId, StringComparison.Ordinal)) continue;
+            return string.Equals(receipt.Fingerprint, canonicalFingerprint, StringComparison.Ordinal)
+                ? receipt
+                : KeyedSaleReceipt.Collision(proposalId, canonicalFingerprint, fingerprint);
+        }
+        return null;
+    }
+
+    private static string CreateRequestFingerprint(
+        string proposalId, string callerFingerprint, string actorChoiceInputId,
+        string requestId, string actorPersonId, string actionSemanticId,
+        int actionVersion, string profileId, string logicalTick, string marketSiteId,
+        string itemDefinitionId, int requestedQuantity)
+    {
+        // Mutable execution-time truth belongs in KeyedSaleSnapshot. This key is
+        // causal request identity and must survive actor rematerialization, movement,
+        // and changes to market state after a committed operation.
+        return CreateCanonicalFingerprint(
+            proposalId, callerFingerprint, actorChoiceInputId, requestId, actorPersonId,
+            actionSemanticId, actionVersion, profileId, logicalTick, marketSiteId,
+            itemDefinitionId, requestedQuantity);
+    }
+
+    private static string CreateCanonicalFingerprint(params object[] values)
+    {
+        System.Text.StringBuilder builder = new System.Text.StringBuilder();
+        for (int i = 0; i < values.Length; i++)
+        {
+            string value = values[i] == null
+                ? null
+                : values[i] is IFormattable formattable
+                    ? formattable.ToString(null, System.Globalization.CultureInfo.InvariantCulture)
+                    : values[i].ToString();
+            if (value == null) builder.Append("-1:");
+            else builder.Append(value.Length.ToString(System.Globalization.CultureInfo.InvariantCulture)).Append(':').Append(value);
+            builder.Append('|');
+        }
+        return builder.ToString();
+    }
+
+    private void StoreReceipt(KeyedSaleReceipt receipt)
+    {
+        for (int i = 0; i < keyedSaleReceipts.Count; i++)
+            if (string.Equals(keyedSaleReceipts[i].ProposalId, receipt.ProposalId, StringComparison.Ordinal)) { keyedSaleReceipts[i] = receipt; return; }
+        if (keyedSaleReceipts.Capacity < keyedSaleReceipts.Count + 1) keyedSaleReceipts.Capacity = keyedSaleReceipts.Count + 1;
+        keyedSaleReceipts.Add(receipt);
+    }
+
+    private static EconomyTransactionResult ValidateSale(NpcRuntime npc, MarketRuntime market, ItemData item, int requested, MarketLiquidityMode mode)
+    {
+        // Reuse the established sale preconditions and calculations without applying its mutations.
+        if (npc == null || !npc.IsAlive || market == null || item == null)
+            return EconomyTransactionResult.CreateFailure(EconomyTransactionType.OpenMarketSale, mode == MarketLiquidityMode.AccountBacked ? MoneyEffect.Transfer : MoneyEffect.ExplicitSource, EconomyTransactionFailureReason.InvalidInput);
+        if (requested <= 0) return EconomyTransactionResult.CreateFailure(EconomyTransactionType.OpenMarketSale, MoneyEffect.ExplicitSource, EconomyTransactionFailureReason.InvalidQuantity);
+        int quantity = Mathf.Min(requested, npc.Inventory.GetAmount(item));
+        float price = market.GetPriceForSale(item);
+        if (quantity <= 0) return EconomyTransactionResult.CreateFailure(EconomyTransactionType.OpenMarketSale, MoneyEffect.ExplicitSource, EconomyTransactionFailureReason.InsufficientInventory);
+        if (float.IsNaN(price) || float.IsInfinity(price) || price < 0f) return EconomyTransactionResult.CreateFailure(EconomyTransactionType.OpenMarketSale, MoneyEffect.ExplicitSource, EconomyTransactionFailureReason.InvalidPrice);
+        price = Mathf.Max(.01f, price);
+        MarketCounterpartyRuntime cp = market.Counterparty;
+        if (mode == MarketLiquidityMode.AccountBacked)
+        {
+            if (cp.MoneyAccount == null) return EconomyTransactionResult.CreateFailure(EconomyTransactionType.OpenMarketSale, MoneyEffect.Transfer, EconomyTransactionFailureReason.InvalidInput);
+            quantity = Mathf.Min(quantity, GetAffordableQuantity(cp.MoneyAccount.Balance, price));
+            if (quantity <= 0) return EconomyTransactionResult.CreateFailure(EconomyTransactionType.OpenMarketSale, MoneyEffect.Transfer, EconomyTransactionFailureReason.InsufficientCounterpartyFunds);
+        }
+        float total = quantity * price;
+        if (float.IsNaN(total) || float.IsInfinity(total)) return EconomyTransactionResult.CreateFailure(EconomyTransactionType.OpenMarketSale, MoneyEffect.ExplicitSource, EconomyTransactionFailureReason.InvalidPrice);
+        if (mode == MarketLiquidityMode.AccountBacked && !cp.MoneyAccount.CanDebit(total)) return EconomyTransactionResult.CreateFailure(EconomyTransactionType.OpenMarketSale, MoneyEffect.Transfer, EconomyTransactionFailureReason.InsufficientCounterpartyFunds);
+        if (!npc.MoneyAccount.CanCredit(total)) return EconomyTransactionResult.CreateFailure(EconomyTransactionType.OpenMarketSale, mode == MarketLiquidityMode.AccountBacked ? MoneyEffect.Transfer : MoneyEffect.ExplicitSource, EconomyTransactionFailureReason.CreditRejected);
+        if (!market.CanAddStock(item, quantity)) return EconomyTransactionResult.CreateFailure(EconomyTransactionType.OpenMarketSale, MoneyEffect.ExplicitSource, EconomyTransactionFailureReason.MarketCapacity);
+        return EconomyTransactionResult.CreateSuccess(EconomyTransactionType.OpenMarketSale, mode == MarketLiquidityMode.AccountBacked ? MoneyEffect.Transfer : MoneyEffect.ExplicitSource, total, item.DefinitionId, requested, quantity, price, total,
+            sourceRuntimeId: mode == MarketLiquidityMode.AccountBacked ? cp.CounterpartyRuntimeId : null,
+            destinationRuntimeId: mode == MarketLiquidityMode.AccountBacked ? npc.RuntimeId : null,
+            actorRuntimeId: npc.RuntimeId, itemSourceRuntimeId: npc.RuntimeId, itemDestinationRuntimeId: cp.CounterpartyRuntimeId);
+    }
     public EconomyTransactionResult TryTransferMoney(
         MoneyAccountRuntime source,
         MoneyAccountRuntime destination,

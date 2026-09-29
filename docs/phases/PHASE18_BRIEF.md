@@ -1,8 +1,37 @@
 # Phase 18 — Intraday Temporal Execution v1
 
-**Authority:** planning scope under `../SIMULATION_ARCHITECTURE.md` §§11–12,
-91–92. **Readiness:** `READY_FOR_TECHNICAL_DESIGN` for P18-A; no implementation
-has started. Phase numbering preserves existing IDs, not execution order.
+**Authority:** planning scope under `../SIMULATION_ARCHITECTURE.md` §§11–12, 91–92. **Readiness:** P18-A/B/C core capabilities and the accepted additive A extension are promoted.
+The additive P18-A boundary/continuation contract was accepted at `2175bf2`; corrected implementation candidate `f1bfe818565c3fca81b373d1bc9a70a16f4eda10` passed exact-tip review and required validation and was promoted at integration tip `1dd0479`.
+The preserved P18-C external-input/deferral adapter code integration `a535441` was assembled against P18 canonical State tip `eabc1c2` / extension code tip `1dd0479`, passed post-extension exact-tip implementation review and focused/full validation, and was promoted at canonical integration tip `b75c5b8`. It includes the P11-owned `TryCaptureTemporal` operation, exact P18-A reference linkage, and typed temporal lifecycle dispositions; P18-D consumes this promoted API and preserves P11 semantic validation. P18-D composition work owns the bridge from committed P11 receipts to request-state binding after successful advance, later trigger/deferral observation, and exact request admission to execution; current P18-C `AfterSuccessfulAdvance` does not perform this input wiring. The economy-owner receipt/prepared-install capability and serialized `SimulationRuntime` advance lease are now promoted at P18 integration tip `9e790c5`, so the bounded P18-D consumer is ready for implementation. Phase numbering preserves existing IDs, not execution order.
+
+P18-D consumes the separately reviewed and already-promoted P18-C external-input/deferral adapter design at
+`../design/PHASE18_C_EXTERNAL_INPUT_ADAPTER_DESIGN.md`; no adapter design or promotion gate remains. Review passed at
+exact tip `358c65c85e1eafdd91ef4a6553ba3b0a8c4af249`;
+its implementation passed post-extension review and validation at code tip
+`a535441`, and the adapter was promoted at `b75c5b8`. The reviewed design specifies a P18-C
+request-state owner and typed P11-owned temporal capture record linked to
+P18-A's accepted input reference, plus a typed temporal transition stream
+while preserving legacy daily records/APIs; P18-C deferral leaves P11 Pending.
+Post-P9-B/P11 compatibility
+validation at `2d6b3ce` passed focused suites 14/13/24/6, ALL EditMode
+1742/1742 and official Smoke 5/5; this is upstream compatibility evidence,
+not adapter test evidence. The adapter's pre-extension focused/full results are
+historical only; its assembled post-extension tree passed focused and full
+validation and exact-tip independent review; the adapter was promoted at
+`b75c5b8`. P18-D consumes the already-promoted P11 temporal capture and
+disposition contract linked to P18-A; this is not an outstanding upstream
+gate. At the Brief's last pre-P18-D implementation update, P18-D remained
+blocked on the serialized `SimulationRuntime` ownership window and the existing
+economy owner's stable proposal-ID operation receipt. Those two bounded
+prerequisites were subsequently implemented and promoted together at
+`9e790c5`; the consumer integration may now proceed using them. The accepted
+P18-A extension is already promoted.
+The P18-D
+SellGoods consumer also requires a stable
+proposal-ID operation receipt from the existing economy owner, including an
+immutable request fingerprint and first-execution current-truth snapshot.
+Preserve trusted local-input scope, P11's retained-input authority and exact
+P18-C/P18-A causal identities; no second input queue or scheduler is allowed.
 
 ## Objective and closure
 
@@ -26,10 +55,10 @@ constraint now, not a requirement to implement participant roles or recruitment.
 
 | ID | Closure boundary | Dependencies |
 |---|---|---|
-| P18-A — Logical Timeline and Due-work Scheduler | Monotonic logical intraday time/calendar mapping; central deterministic due-work scheduling; pure queries; explicit same-instant/zero-duration/stale-work rules. | Canonical calendar, determinism, mutation/input contracts; bounded technical design and independent review. |
+| P18-A — Logical Timeline, Due-work Scheduler and Accepted Boundary Continuation Extension | Monotonic logical intraday time/calendar mapping; deterministic due-work scheduling; pure queries; explicit same-instant/zero-duration/stale-work rules; accepted additive atomic boundary activation, frozen manifest, distinct resumable continuation/step identities, barrier and returned-fact publication. | Canonical calendar, determinism, mutation/input contracts; bounded technical design and independent review. Extension contract `2175bf2` accepted; corrected implementation candidate `f1bfe818565c3fca81b373d1bc9a70a16f4eda10` passed exact-tip review and required validation and was promoted at integration tip `1dd0479`. |
 | P18-B — Activity Lifecycle | Domain-owned duration, start/completion, commitment and availability; supported cancellation/interruption semantics; no duplicate pending authority. | P18-A stable contract for design; promoted capability for integration. |
 | P18-C — Availability-driven Actor Decisions | Re-evaluation on relevant availability/condition/input boundaries, Knowledge-bounded decision and factual execution checks, instantaneous actions without infinite loops. | P18-A/B contracts and relevant promoted capabilities; current decision/action authority. |
-| P18-D — Bounded Consumer and Daily Compatibility Integration | Selected existing actor-input/travel and daily processes advance chronologically with one authority; legacy profile boundaries explicit. | P18-A/B/C; only the actual P8-E/P11 or other consumer capabilities selected in reviewed scope. |
+| P18-D — Bounded Consumer and Daily Compatibility Integration | Selected existing actor-input/travel and daily processes advance chronologically with one authority; legacy profile boundaries explicit. | P18-A/B/C; promoted sale-owner operation receipt/prepared install and per-runtime advance lease (`9e790c5`); only the actual P8-E/P11 or other consumer capabilities selected in reviewed scope. |
 
 A → B → C → D is the core integration path. A's daily compatibility design
 must account for existing `AdvanceDay` from entry; D performs the selected
@@ -37,6 +66,12 @@ consumer migration. Technical designs may proceed on accepted contracts, but
 code integrations wait for promoted capabilities. Interruption is required
 only where the selected existing consumer supports it; no universal rollback
 or universal activity superclass is prescribed.
+
+The P18-A extension publishes complete returned timeline facts after its
+continuation completes but before ordinary work at that instant; P18-C source
+signals remain withheld until the outer advance returns successfully. This
+separation is part of the accepted P18-A contract and does not itself deliver
+the P18-C external-input/deferral adapter.
 
 P20 layers multi-participant formation/execution on the relevant A/B/C capability.
 P18 does not depend on P20; P20 need not wait for every legacy consumer in D.

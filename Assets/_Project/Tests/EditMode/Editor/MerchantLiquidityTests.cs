@@ -102,6 +102,75 @@ public sealed class MerchantLiquidityTests
     }
 
     [Test]
+    public void KeyedLocalMarketSale_ReplaysTheOwnerReceiptWithoutApplyingTheSaleTwice()
+    {
+        Fixture fixture = new Fixture(100f);
+        NpcActionRuntime action = fixture.CreateSaleAction();
+        Assert.That(action, Is.Not.Null);
+        Assert.That(action.TargetNpc, Is.Null);
+        Assert.That(action.TargetCity, Is.SameAs(fixture.City));
+
+        Assert.That(fixture.System.TryExecuteKeyedLocalMarketSale(
+            fixture.Merchant,
+            new PersonId("person-local-sale-1"),
+            action,
+            "proposal-local-sale-1",
+            "fingerprint-local-sale-1",
+            "input-local-sale-1",
+            "request-local-sale-1",
+            "p18d-local-sellgoods-v1",
+            new LogicalTick(17L),
+            out KeyedSaleReceipt first), Is.True);
+        Assert.That(first, Is.Not.Null);
+        Assert.That(first.Outcome, Is.EqualTo(KeyedSaleOutcome.Committed));
+
+        fixture.Merchant.SetMerchantTradePlan(fixture.Item, fixture.City, fixture.City, 5, 1f);
+
+        int inventoryAfterFirst = fixture.Merchant.Inventory.GetAmount(fixture.Item);
+        int marketAfterFirst = fixture.City.Market.GetAmount(fixture.Item);
+        float moneyAfterFirst = fixture.Merchant.Money;
+
+        Assert.That(fixture.System.TryExecuteKeyedLocalMarketSale(
+            fixture.Merchant,
+            new PersonId("person-local-sale-1"),
+            action,
+            "proposal-local-sale-1",
+            "fingerprint-local-sale-1",
+            "input-local-sale-1",
+            "request-local-sale-1",
+            "p18d-local-sellgoods-v1",
+            new LogicalTick(17L),
+            out KeyedSaleReceipt replay), Is.True);
+        Assert.That(replay, Is.SameAs(first));
+        Assert.That(fixture.Merchant.Inventory.GetAmount(fixture.Item), Is.EqualTo(inventoryAfterFirst));
+        Assert.That(fixture.City.Market.GetAmount(fixture.Item), Is.EqualTo(marketAfterFirst));
+        Assert.That(fixture.Merchant.Money, Is.EqualTo(moneyAfterFirst));
+    }
+
+    [Test]
+    public void KeyedLocalMarketSale_RejectsAnActionOutsideTheBoundedLocalMarketContract()
+    {
+        Fixture fixture = new Fixture(100f);
+        fixture.Merchant.SetMerchantTradePlan(fixture.Item, fixture.City, fixture.City, 5, 1f);
+        NpcActionRuntime plannedAction = fixture.CreateSaleAction();
+
+        Assert.That(fixture.System.TryExecuteKeyedLocalMarketSale(
+            fixture.Merchant,
+            new PersonId("person-planned-sale"),
+            plannedAction,
+            "proposal-planned-sale",
+            "fingerprint-planned-sale",
+            "input-planned-sale",
+            "request-planned-sale",
+            "p18d-local-sellgoods-v1",
+            new LogicalTick(17L),
+            out KeyedSaleReceipt receipt), Is.False);
+        Assert.That(receipt, Is.Null);
+        Assert.That(fixture.Merchant.Inventory.GetAmount(fixture.Item), Is.EqualTo(5));
+        Assert.That(fixture.City.Market.GetAmount(fixture.Item), Is.EqualTo(10));
+    }
+
+    [Test]
     public void LocalNpcBuyerUsesNpcMoneyEvenWhenSettlementLiquidityIsKnownZero()
     {
         Fixture fixture = new Fixture(0f);

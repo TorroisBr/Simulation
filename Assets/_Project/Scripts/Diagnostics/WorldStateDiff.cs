@@ -1030,6 +1030,7 @@ public sealed class WorldStateDiff
                 CompareValue("City", identity, "MarketLiquidityMode", WorldStateCanonicalWriter.EnumValue(left.MarketLiquidityMode), WorldStateCanonicalWriter.EnumValue(right.MarketLiquidityMode), differences);
                 CompareValue("City", identity, "MarketBalance", WorldStateCanonicalWriter.FloatValue(left.MarketBalance), WorldStateCanonicalWriter.FloatValue(right.MarketBalance), differences);
                 CompareValue("City", identity, "ResidentNpcRuntimeIds", WorldStateCanonicalWriter.StringListValue(left.ResidentNpcRuntimeIds), WorldStateCanonicalWriter.StringListValue(right.ResidentNpcRuntimeIds), differences);
+                CompareLocalDailyMaterialFlow(identity, left.LastMaterialFlow, right.LastMaterialFlow, differences);
                 CompareEntities("CityStock", left.MarketStock, right.MarketStock, stock => stock.ItemDefinitionId,
                     (stockIdentity, stockLeft, stockRight) =>
                     {
@@ -1037,7 +1038,7 @@ public sealed class WorldStateDiff
                         CompareValue("CityStock", identity + "/item:" + stockIdentity, "DesiredAmount", WorldStateCanonicalWriter.IntValue(stockLeft.DesiredAmount), WorldStateCanonicalWriter.IntValue(stockRight.DesiredAmount), differences);
                         CompareValue("CityStock", identity + "/item:" + stockIdentity, "CurrentPrice", WorldStateCanonicalWriter.FloatValue(stockLeft.CurrentPrice), WorldStateCanonicalWriter.FloatValue(stockRight.CurrentPrice), differences);
                     }, differences, identity + "/item:");
-            }, differences);
+        }, differences);
 
         CompareEntities("Location", before.Spatial.Locations, after.Spatial.Locations, location => location.RuntimeId,
             (identity, left, right) => { }, differences);
@@ -1526,6 +1527,68 @@ public sealed class WorldStateDiff
         return string.Join(";", entries.ToArray());
     }
 
+    private static void CompareLocalDailyMaterialFlow(
+        string cityIdentity,
+        LocalDailyMaterialFlowResult before,
+        LocalDailyMaterialFlowResult after,
+        List<WorldStateDifference> differences)
+    {
+        string identity = after?.SettlementSemanticId ?? before?.SettlementSemanticId ?? cityIdentity;
+        CompareValue("LocalDailyMaterialFlow", identity, "Present",
+            WorldStateCanonicalWriter.BoolValue(before != null), WorldStateCanonicalWriter.BoolValue(after != null), differences);
+        CompareValue("LocalDailyMaterialFlow", identity, "SettlementSemanticId",
+            WorldStateCanonicalWriter.StringValue(before?.SettlementSemanticId),
+            WorldStateCanonicalWriter.StringValue(after?.SettlementSemanticId), differences);
+        CompareValue("LocalDailyMaterialFlow", identity, "ProductionSourceId",
+            WorldStateCanonicalWriter.StringValue(before?.ProductionSourceId), WorldStateCanonicalWriter.StringValue(after?.ProductionSourceId), differences);
+        CompareValue("LocalDailyMaterialFlow", identity, "MarketStoreSemanticId",
+            WorldStateCanonicalWriter.StringValue(before?.MarketStoreSemanticId), WorldStateCanonicalWriter.StringValue(after?.MarketStoreSemanticId), differences);
+        CompareValue("LocalDailyMaterialFlow", identity, "LocationId",
+            WorldStateCanonicalWriter.StringValue(before?.LocationId), WorldStateCanonicalWriter.StringValue(after?.LocationId), differences);
+        CompareValue("LocalDailyMaterialFlow", identity, "ItemDefinitionId",
+            WorldStateCanonicalWriter.StringValue(before?.ItemDefinitionId), WorldStateCanonicalWriter.StringValue(after?.ItemDefinitionId), differences);
+        CompareValue("LocalDailyMaterialFlow", identity, "ContentRevision",
+            WorldStateCanonicalWriter.StringValue(before?.ContentRevision), WorldStateCanonicalWriter.StringValue(after?.ContentRevision), differences);
+        CompareValue("LocalDailyMaterialFlow", identity, "EffectiveConfiguration",
+            WorldStateCanonicalWriter.StringValue(before?.EffectiveConfiguration), WorldStateCanonicalWriter.StringValue(after?.EffectiveConfiguration), differences);
+        CompareValue("LocalDailyMaterialFlow", identity, "CalendarIdentity",
+            WorldStateCanonicalWriter.StringValue(before?.CalendarIdentity), WorldStateCanonicalWriter.StringValue(after?.CalendarIdentity), differences);
+        CompareValue("LocalDailyMaterialFlow", identity, "CalendarVersion",
+            WorldStateCanonicalWriter.StringValue(before?.CalendarVersion), WorldStateCanonicalWriter.StringValue(after?.CalendarVersion), differences);
+        CompareValue("LocalDailyMaterialFlow", identity, "EconomyEnabled",
+            before == null ? null : WorldStateCanonicalWriter.BoolValue(before.EconomyEnabled),
+            after == null ? null : WorldStateCanonicalWriter.BoolValue(after.EconomyEnabled), differences);
+        CompareValue("LocalDailyMaterialFlow", identity, "PopulationCount",
+            before == null ? null : WorldStateCanonicalWriter.IntValue(before.PopulationCount),
+            after == null ? null : WorldStateCanonicalWriter.IntValue(after.PopulationCount), differences);
+        CompareValue("LocalDailyMaterialFlow", identity, "ConsumptionPer1000Population",
+            before == null ? null : WorldStateCanonicalWriter.FloatValue(before.ConsumptionPer1000Population),
+            after == null ? null : WorldStateCanonicalWriter.FloatValue(after.ConsumptionPer1000Population), differences);
+        CompareValue("LocalDailyMaterialFlow", identity, "AbsoluteDay",
+            before == null ? null : WorldStateCanonicalWriter.Int64Value(before.AbsoluteDay),
+            after == null ? null : WorldStateCanonicalWriter.Int64Value(after.AbsoluteDay), differences);
+        CompareValue("LocalDailyMaterialFlow", identity, "OpeningStock",
+            before == null ? null : WorldStateCanonicalWriter.IntValue(before.OpeningStock),
+            after == null ? null : WorldStateCanonicalWriter.IntValue(after.OpeningStock), differences);
+        CompareValue("LocalDailyMaterialFlow", identity, "ConfiguredSourceQuantity",
+            before == null ? null : WorldStateCanonicalWriter.IntValue(before.ConfiguredSourceQuantity),
+            after == null ? null : WorldStateCanonicalWriter.IntValue(after.ConfiguredSourceQuantity), differences);
+        CompareValue("LocalDailyMaterialFlow", identity, "AppliedSourceQuantity",
+            before == null ? null : WorldStateCanonicalWriter.IntValue(before.AppliedSourceQuantity),
+            after == null ? null : WorldStateCanonicalWriter.IntValue(after.AppliedSourceQuantity), differences);
+        CompareValue("LocalDailyMaterialFlow", identity, "SourceRejectionReason",
+            WorldStateCanonicalWriter.StringValue(before?.SourceRejectionReason), WorldStateCanonicalWriter.StringValue(after?.SourceRejectionReason), differences);
+        CompareValue("LocalDailyMaterialFlow", identity, "RequestedFreeConsumption",
+            before == null ? null : WorldStateCanonicalWriter.IntValue(before.RequestedFreeConsumption),
+            after == null ? null : WorldStateCanonicalWriter.IntValue(after.RequestedFreeConsumption), differences);
+        CompareValue("LocalDailyMaterialFlow", identity, "ActualFreeConsumption",
+            before == null ? null : WorldStateCanonicalWriter.IntValue(before.ActualFreeConsumption),
+            after == null ? null : WorldStateCanonicalWriter.IntValue(after.ActualFreeConsumption), differences);
+        CompareValue("LocalDailyMaterialFlow", identity, "ClosingStock",
+            before == null ? null : WorldStateCanonicalWriter.IntValue(before.ClosingStock),
+            after == null ? null : WorldStateCanonicalWriter.IntValue(after.ClosingStock), differences);
+    }
+
     private static void SortDifferences(List<WorldStateDifference> differences)
     {
         differences.Sort((left, right) =>
@@ -1573,6 +1636,7 @@ public sealed class WorldStateDiff
             case "Calendar": return 5;
             case "City": return 6;
             case "CityStock": return 7;
+            case "LocalDailyMaterialFlow": return 8;
             case "Location": return 8;
             case "Route": return 9;
             case "Site": return 10;

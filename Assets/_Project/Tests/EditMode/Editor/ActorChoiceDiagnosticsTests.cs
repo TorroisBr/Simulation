@@ -109,13 +109,14 @@ public sealed class ActorChoiceDiagnosticsTests
             {
                 typeof(ActorChoiceInputId), typeof(string), typeof(long), typeof(PersonId), typeof(string),
                 typeof(WorldCommandOrigin), typeof(WorldCommandAuthorityMode), typeof(long),
-                typeof(ActorChoiceInputStatus), typeof(IEnumerable<ActorChoiceDisposition>)
+                typeof(ActorChoiceInputStatus), typeof(IEnumerable<ActorChoiceDisposition>),
+                typeof(ActorChoiceTemporalCapture), typeof(IEnumerable<ActorChoiceTemporalDisposition>)
             }, null);
         ActorChoiceInput input = (ActorChoiceInput)constructor.Invoke(new object[]
         {
             new ActorChoiceInputId("choice-test"), "command-test", 1L, new PersonId("person-test"),
             "sell-goods", WorldCommandOrigin.System, WorldCommandAuthorityMode.Request, 0L,
-            status, dispositions
+            status, dispositions, null, null
         });
         return new WorldStateSnapshot(absoluteDay: 1L,
             actorChoices: new[] { new WorldStateActorChoiceSnapshot(input) });

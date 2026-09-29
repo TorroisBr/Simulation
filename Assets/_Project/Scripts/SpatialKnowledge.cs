@@ -8,10 +8,12 @@ public sealed class SpatialKnowledgeRuntime
     [SerializeField] private string ownerRuntimeId;
     [SerializeField] private List<string> knownLocationRuntimeIds = new List<string>();
     [SerializeField] private List<string> knownRouteRuntimeIds = new List<string>();
+    [SerializeField] private long revision;
 
     public string OwnerRuntimeId => ownerRuntimeId;
     public IReadOnlyList<string> KnownLocationRuntimeIds => KnownLocations;
     public IReadOnlyList<string> KnownRouteRuntimeIds => KnownRoutes;
+    public long Revision => revision;
 
     private List<string> KnownLocations => knownLocationRuntimeIds ?? (knownLocationRuntimeIds = new List<string>());
     private List<string> KnownRoutes => knownRouteRuntimeIds ?? (knownRouteRuntimeIds = new List<string>());
@@ -38,12 +40,49 @@ public sealed class SpatialKnowledgeRuntime
 
     public bool DiscoverLocation(string locationRuntimeId)
     {
-        return DiscoverId(KnownLocations, locationRuntimeId);
+        return DiscoverId(KnownLocations, locationRuntimeId, ref revision);
     }
 
     public bool DiscoverRoute(string routeRuntimeId)
     {
-        return DiscoverId(KnownRoutes, routeRuntimeId);
+        return DiscoverId(KnownRoutes, routeRuntimeId, ref revision);
+    }
+
+    internal bool TryPrepareDiscoverLocations(IReadOnlyList<string> locationRuntimeIds,
+        out SpatialKnowledgeDiscoveryInstall prepared)
+    {
+        prepared = null;
+        if (locationRuntimeIds == null) return false;
+
+        List<string> nextLocations = new List<string>(KnownLocations);
+        long nextRevision = revision;
+        foreach (string locationRuntimeId in locationRuntimeIds)
+        {
+            if (string.IsNullOrWhiteSpace(locationRuntimeId)
+                || ContainsId(nextLocations, locationRuntimeId)) continue;
+            if (nextRevision == long.MaxValue) return false;
+            nextLocations.Add(locationRuntimeId);
+            nextRevision++;
+        }
+
+        // Reserve capacity before the paired actor-local commit so installation
+        // only copies already prepared values into this existing list instance.
+        KnownLocations.Capacity = Math.Max(KnownLocations.Capacity, nextLocations.Count);
+        prepared = new SpatialKnowledgeDiscoveryInstall(this, revision, nextRevision,
+            new List<string>(KnownLocations), nextLocations);
+        return true;
+    }
+
+    internal bool CanInstall(SpatialKnowledgeDiscoveryInstall prepared) => prepared != null
+        && prepared.Owner == this
+        && prepared.ExpectedRevision == revision
+        && Matches(KnownLocations, prepared.ExpectedLocationIds);
+
+    internal void InstallPrepared(SpatialKnowledgeDiscoveryInstall prepared)
+    {
+        KnownLocations.Clear();
+        KnownLocations.AddRange(prepared.NextLocationIds);
+        revision = prepared.NextRevision;
     }
 
     private static bool ContainsId(List<string> ids, string runtimeId)
@@ -64,7 +103,7 @@ public sealed class SpatialKnowledgeRuntime
         return false;
     }
 
-    private static bool DiscoverId(List<string> ids, string runtimeId)
+    private static bool DiscoverId(List<string> ids, string runtimeId, ref long revision)
     {
         if (string.IsNullOrWhiteSpace(runtimeId) == true || ContainsId(ids, runtimeId) == true)
         {
@@ -72,6 +111,38 @@ public sealed class SpatialKnowledgeRuntime
         }
 
         ids.Add(runtimeId);
+        if (revision < long.MaxValue) revision++;
         return true;
     }
+
+    private static bool Matches(IReadOnlyList<string> left, IReadOnlyList<string> right)
+    {
+        if (left == null || right == null || left.Count != right.Count) return false;
+        for (int i = 0; i < left.Count; i++)
+            if (!string.Equals(left[i], right[i], StringComparison.Ordinal)) return false;
+        return true;
+    }
+}
+
+internal sealed class SpatialKnowledgeDiscoveryInstall
+{
+    internal SpatialKnowledgeRuntime Owner { get; }
+    internal long ExpectedRevision { get; }
+    internal long NextRevision { get; }
+    internal IReadOnlyList<string> ExpectedLocationIds { get; }
+    internal IReadOnlyList<string> NextLocationIds { get; }
+
+    internal SpatialKnowledgeDiscoveryInstall(SpatialKnowledgeRuntime owner,
+        long expectedRevision, long nextRevision,
+        IReadOnlyList<string> expectedLocationIds, IReadOnlyList<string> nextLocationIds)
+    {
+        Owner = owner;
+        ExpectedRevision = expectedRevision;
+        NextRevision = nextRevision;
+        ExpectedLocationIds = expectedLocationIds;
+        NextLocationIds = nextLocationIds;
+    }
+
+    internal bool CanInstall(SpatialKnowledgeRuntime owner) => owner != null
+        && owner.CanInstall(this);
 }

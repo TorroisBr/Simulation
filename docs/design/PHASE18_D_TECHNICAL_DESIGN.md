@@ -1,0 +1,255 @@
+# P18-D — Intraday SellGoods Actor Choice and Daily Compatibility Design
+
+**Candidate base:** refreshed against promoted P18 State `85f1f21` (P18-A returned-facts/subphase extension `1dd0479`; P18-C external-input/deferral adapter code `a535441`), P14 State `4caecbb` (P14-A code `c44904b`), P20 State `7a81cc0` (P20-A integration/code record `1dcf67a`; implementation code `22df7b3`), and P11 canonical `308e24d` (code `0cd4281`). Architecture baseline is `c285466`; intraday-extensibility alignment is `4b6dd1d`; multi-participant alignment is `c285466`. The earlier design at `aa5f182` passed review against older P18/P14 bases; that review does not validate this technical advance.
+
+**Status:** approved technical design; its two P18-D implementation prerequisites were promoted together at P18 canonical integration tip `9e790c5`, so the bounded consumer is READY FOR IMPLEMENTATION. Promoted P18-A `1dd0479` supplies returned-fact publication and the blocking continuation/subphase barrier. P18-C code `a535441` at P18 State `85f1f21` supplies P11 `TryCaptureTemporal`, exact P18-A reference linkage, typed temporal dispositions, and `ActorDecisionRequestState` primitives (`TryBindInput`/`TryObserveTrigger`). `ActorDecisionCoordinator.AfterSuccessfulAdvance` imports lifecycle receipts only, so the composition-owned bridge still must bind committed P11 receipts after successful advance, record later trigger/deferral receipts, and admit the exact allocated request into execution. Preserve P11 semantic validation. The promoted economy owner provides the operation receipt and atomic prepared-install path; the promoted per-runtime advance lease is the ownership seam for the full consumer path. P14-A remains excluded absent a separately reviewed temporal owner adapter. P20-A is promoted, but there is no blanket P20/P19 dependency.
+
+**Authority:** `docs/SIMULATION_ARCHITECTURE.md` §§2, 11–12, 91–92; `docs/ROADMAP.md`; `docs/EXECUTION_MODEL.md`; `docs/PHASE18_STATE.md`; `docs/phases/PHASE18_BRIEF.md`; `docs/phases/PHASE11_BRIEF.md`; `docs/design/PHASE18_A_TECHNICAL_DESIGN.md`; `docs/design/PHASE18_B_TECHNICAL_DESIGN.md`; `docs/design/PHASE18_C_TECHNICAL_DESIGN.md`; `docs/architecture/INTRADAY_EXTENSIBILITY_ALIGNMENT.md`; `docs/architecture/MULTIPARTICIPANT_ACTIVITY_ALIGNMENT.md`.
+
+## 1. Purpose and bounded consumer
+
+Integrate the existing trusted local P11 actor-choice input for the bounded `SellGoods` action with P18's logical timeline and P18-C's post-advance decision boundary. In an intraday profile, an input is retained and becomes a P18-C decision request at its exact logical instant. Input dispatch order and decision execution order are separate contracts. The actor's stable identity is `PersonId`; an activity instance, if a future action ever needs one, remains a separate identity. This action remains instantaneous and uses the current SellGoods provider and economy transaction path.
+
+`SimulationRuntime.AdvanceDay` / `TryAdvanceDay` become advance-to-next-day-boundary adapters only when the runtime uses the intraday profile. The adapter advances chronologically through due work and day boundaries; it does not jump the clock and catch up retroactively. Explicit legacy daily-profile behavior remains available and retains its existing day-turn ordering and historical input semantics.
+
+This is the narrowest P18-D consumer because P11's trusted typed input and SellGoods domain path are already promoted. P8-E travel is optional and separate; this design neither migrates travel nor makes P8-E a P18-D-wide dependency. P8-C local position eligibility already used by SellGoods remains current-truth input to the existing action path.
+
+## 2. Existing contract and adaptation
+
+P11 `ActorChoiceStore` retains a stable input ID, originating WorldCommand ID, monotonic input sequence, `PersonId`, action definition ID, command origin/authority, captured day, pending/terminal state, and ordered dispositions. A pending choice replaces that actor autonomous choice slot. Current P11 runtime validates the actor, local position/city and SellGoods eligibility, constructs the requested action, records an ActorChoice decision, executes through the ordinary action provider, and records returned/thrown terminal attempt status. P18-D preserves these current P11 semantic-validation checks. A failed/rejected/throwing actor choice has no same-turn autonomous fallback. These lifecycle and diagnostic properties remain in force.
+
+Keep the causal identities from promoted P18-C distinct from input identity. P18-A's `TimelineInputReference` identity/sequence dispatches an accepted envelope. P11's `ActorChoiceInputId` identifies the retained command. P18-C's `ActorDecisionRequest.Id` is separately derived from actor, logical instant, C `BoundarySequence`, stable `BoundaryId`, and `BoundaryRevision`; for the initial command-trigger request, `BoundaryId` identifies the exact ActorChoiceInputId and the request is bound back to it. C `BoundarySequence` is allocated/persisted by the C coordinator for external triggers and is not copied from P18-A input sequence. Preserve an immutable originating C request sequence alongside each deferred ActorChoice input as its FIFO selection key. A later meaningful trigger creates a new `ActorDecisionRequest.Id` from that trigger boundary and C sequence, then binds the selected retained input ID; it does not rewrite the original command, input sequence, target tick, or originating request sequence.
+
+The promoted P11/P18-C temporal capture contract carries an exact target `LogicalTick` (or equivalent immutable logical instant) into the timeline input reference for intraday-retained commands. P18-D consumes that contract. Daily-profile records continue to use their existing captured day and roster ordinal; they are not backfilled with a fabricated tick.
+
+- stable command/input ID and originating command ID;
+- stable actor `PersonId`;
+- semantic action definition ID/version and exact target logical instant; no `NpcRuntime`, `CityRuntime`, `MarketRuntime`, or `ScriptableObject` reference is causal authority;
+- trusted origin and authority values under the existing P11 local-input contract;
+- exact target `LogicalTick`, input sequence, and accepted/pending/dispatched/terminal disposition history.
+
+For intraday transitions, consume the promoted P11 temporal capture/disposition API, retaining exact `LogicalTick` and the P18-A accepted input reference/sequence while preserving existing captured-day and roster-ordinal fields for legacy daily records. The additive P11 contract leaves its typed command payload and daily APIs unchanged. The accepted command payload remains immutable; timeline sequence dispatches inputs and P18-C orders decisions independently. The retained P11 input is bound by exact ID to its P18-A reference; never select via `TryGetNextPendingForActor` or let a future-target input mask a due one. Keep trusted local-input scope and P11 as retained command/disposition owner.
+
+For compatibility, legacy P11 records continue to mean “apply at the actor's ordinary daily slot,” with captured-day/roster disposition history preserved. An intraday command must provide its exact logical instant; date-only capture is not silently assigned an arbitrary time. If a legacy pending record is explicitly carried into an intraday profile, an adapter must define a one-time migration boundary (the next eligible day-boundary decision slot) and preserve its original capture record; it must not invent a historical tick. This migration is not required to claim ordinary operation in either profile.
+
+## 3. Chronological ordering and C handoff
+
+Use the same `SimulationTimeline` composed with `ActivityLifecycleStore`; do not add a second scheduler. The existing P18-A order at one logical instant is authoritative:
+
+1. accepted external inputs at the instant, in stable P18-A input sequence;
+2. the idempotent daily-boundary operation, if this instant is a day boundary;
+3. ordinary due work, in P18-A causal ordering/waves, including activity starts/completions;
+4. at the post-advance decision boundary, the P18-D composition bridge admits the exact external-input requests bound in P18-C request state, while the coordinator separately drains lifecycle receipts; both use stable actor `PersonId` and request-sequence order. This is independent of P18-A input dispatch sequence.
+
+The P11 input owner commits accepted command retention and its exact timeline reference; it does not enqueue into P18-C or invoke decision logic from a timeline callback. After the outer advance succeeds through the instant, a P18-D composition-owned bridge reads committed P11 temporal receipts, verifies the matching P18-A accepted reference, and binds each exact `ActorChoiceInputId` into `ActorDecisionRequestState` with idempotent operation identity. `TryBindInput` allocates the C-owned `BoundarySequence` and `ActorDecisionRequest.Id`; the bridge preserves these values and admits that exact request/input pair to the decision executor. Current `ActorDecisionCoordinator.AfterSuccessfulAdvance` imports lifecycle receipts only and has no external-input ingress or request-admission method, so P18-D must supply this narrow adapter/admission seam rather than assume one exists. Do not rebind the same receipt, synthesize IDs, or call decision logic from timeline callbacks. P18-A input sequence remains dispatch-only; the request-state binding is durable/reconstructible.
+
+P18-C code `a535441` at `b75c5b8` provides the external-input request-state primitives; it does not wire these requests into `ActorDecisionCoordinator.AfterSuccessfulAdvance`, which imports lifecycle receipts only. P18-D owns the composition bridge: after successful outer advance, bind committed P11 temporal receipts to exact P18-A accepted references through `TryBindInput`; observe qualifying later trigger receipts through `TryObserveTrigger`; record same-boundary or temporary unavailability deferrals through `TryDefer`; and admit the exact request ID, input ID, actor, and C `BoundarySequence` from the committed request-state receipt to decision execution. Keep the P11 input pending on nonterminal deferral and preserve its semantic validation. The bridge must not allocate a parallel C sequence or assume an ingress API exists.
+
+At each actor decision boundary, select at most one due retained ActorChoice input for that actor: the one with the lowest originating P18-C `BoundarySequence` among inputs whose target tick is no later than the current tick. Query and transition that exact ActorChoiceInputId by ID; never use `TryGetNextPendingForActor`, since an earlier future-target input could mask a due one. Every other due ID remains pending with `Deferred/DecisionBoundaryAlreadyUsed` at the current tick. At the first later distinct meaningful boundary with tick strictly greater than the last attempt/defer tick, a fresh P18-C request can select the earliest still-pending due input. Qualifying later triggers are accepted input, changed availability/condition, committed disposition, or explicitly scheduled due work from P18-C; there is no polling or recursive same-instant retry. A future-target input is ineligible and cannot mask a due input. If the actor has a temporary P18-B availability commitment whose semantics support waiting, defer that exact input with the corresponding typed disposition and reconsider it only at a later relevant availability/condition boundary. The adapter must distinguish temporary waiting from permanent P11 eligibility failure: missing/dead/dormant actor, invalid action, or other existing terminal failures remain terminal and are not converted into retries. Preserve original target tick, input sequence, input-trigger C sequence, and dispositions; record the actual later tick. If no later meaningful trigger occurs, the input remains pending and observable, neither discarded nor silently retargeted. If two actors' same-instant sales compete for finite market stock or another shared resource, the first committed transaction under P18-C order changes current truth seen by the next actor; input sequence does not override that decision order. A terminal outcome is not collapsed into another retained command.
+
+If an input targets an instant before the requested advance target, it is dispatched at its own instant and its decision attempt occurs at that instant's completed causal boundary before advancing further. This requires a timeline advance driver that returns/yields at each next causal boundary for the C handoff, or an equivalent bounded post-boundary callback outside owner dispatch. It must not let `TryAdvanceTo(target)` run past a command decision boundary and then execute that command retroactively. The adapter's advancement loop is therefore: find/advance to next timeline boundary, run C handoff, continue toward requested target; inputs and due work at a timestamp are drained before its handoff. At a timestamp with several inputs, P18-A retains and dispatches each envelope by timeline input sequence, while P18-C makes at most one actor attempt using the lowest originating C `BoundarySequence` among that actor's due retained inputs. Other same-actor requests receive a retained deferral and become eligible only at a later meaningful boundary as specified above; they are not attempted at this timestamp. A selected attempt follows P11 one-shot semantics and has no autonomous fallback on rejection, failure, or throw. A command scheduled for a time already sealed/past is rejected at capture with a typed stale-boundary disposition; it is not moved forward silently.
+
+P18-C's post-advance scheduling rule continues to apply: work selected at `t` may not be backdated or published into the sealed prefix. A timed proposal's earliest start is strictly greater than `max(CurrentInstant, InputsSealedThrough)`. SellGoods remains immediate; its attempt executes after the handoff at `t`, under current domain validation. A failed timeline advance does not consume its not-yet-handed-off command request; committed inputs and due-work transitions remain recoverable, with timeline idempotency/retry semantics applied by their owner.
+
+## 4. Day-boundary adapter and exact profile compatibility
+
+Profile selection is explicit composition/configuration, not inferred from whether a timeline happens to exist.
+
+**Legacy daily profile:** preserve the current code path exactly: `TryAdvanceDay` first advances `SimulationTime` by one day, then calls `AdvanceDayAfterClockAdvance` in the order below. This path retains current guard/failure behavior, dates, roster order, P11 captured-day/roster-ordinal dispositions, and travel progression. No timeline boundary owner is composed for this profile, so it cannot also run the same daily pass. Existing saved daily worlds and fixtures remain here unless explicitly migrated.
+
+**Intraday profile:** `AdvanceDay` computes the first absolute day boundary strictly after the current `SimulationTimeline.CurrentInstant` with checked calendar/tick arithmetic, then uses the chronological advance driver. From a mid-day instant it advances only to that next boundary, not a 24-hour span from the current instant. From a boundary it targets the following boundary. `CurrentDay` is the timeline calendar projection; do not separately increment `SimulationTime`.
+
+At each crossed boundary, preserve the compatible ordering of current daily operations as the following classified inventory. P18-A's existing typed boundary identity `(worldId, profileId, absoluteDay)` is atomically activated exactly once: activation commits its consumed occurrence identity together with a frozen ordered manifest and the returned typed facts needed to start a separate daily subphase. That A occurrence is complete after activation; it is not left pending while domain steps commit. The distinct subphase has its own stable barrier identity and remains pending until every included step succeeds. Each step is a distinct owner-owned due-work fact with identity `(worldId, profileId, absoluteDay, stepId)`. The owner atomically commits the effect, step completion/idempotency receipt, and its source signals. A P18-D coordinator owns only the frozen manifest/order and cursor; it queries receipts, skips committed steps, and retries only the first uncommitted step. It never writes domain truth or combines owners in one transaction.
+
+The subphase barrier blocks ordinary same-instant due work, successful advancement past `t`, and P18-C handoff until all included steps are complete. Once the barrier completes, ordinary same-instant due work drains in normal P18-A order; C runs only after the outer chronological advance succeeds. Signals from committed steps are retained with owner receipts/subphase state across retry and outer-advance failure, then published/consumed by P18-C only after that successful outer advance. Timeline remains at `t` during a pending barrier or ordinary due work.
+
+**Promoted prerequisite — additive P18-A contract/API:** the accepted extension is promoted at `1dd0479`. P18-D consumes its returned-facts/provisional-sequence facility and blocking daily subphase barrier. Boundary preparation freezes the exact manifest against the pre-effect snapshot and never regenerates it from partially mutated world state.
+
+The extension lets boundary preparation return a typed barrier fact and ask the timeline to validate/reserve provisional causal sequence identities without publishing them. Activation commit atomically stores the consumed A occurrence, immutable manifest, and those exact provisional descriptors. The timeline publishes the returned facts only after activation commit, with the reserved identities and idempotent publication; no owner callback may reenter timeline publication. The returned fact names a separate stable barrier identity derived injectively from `(worldId, profileId, absoluteDay)` and is placed in an explicit boundary-subphase dispatch class. That class is drained before ordinary same-instant due work; it is not ordinary wave-zero work and does not depend on generated later waves preempting it. The timeline stays at `t` while the barrier is incomplete. Boundary activation is already consumed and is never left pending for the multi-owner subphase. The barrier completion receipt is separate from the A occurrence. Stable `stepId` values use semantic step names and stable runtime/domain IDs (for example `economy-production:<CityRuntimeId>` and `merchant-trade-state:<NpcRuntimeId>`); carry a backing `PersonId` in the descriptor when present. List ordinals express order only and are not identity. Each row below is included only if its owner exposes the atomic step seam; otherwise it stays in legacy profile. A narrower intraday composition that omits existing daily effects is unsupported until required product approval is recorded. No world-wide rollback or generic transaction framework is added.
+
+| Existing `AdvanceDayAfterClockAdvance` operation, in order | Intraday classification / rule |
+|---|---|
+| `placeContentStore.AdvanceDays(1)` | Owner due-work fact with its declared `stepId`, if composed. Include only when the content owner can atomically commit its day advance, consumed occurrence, and emitted signals; otherwise exclude from intraday composition. |
+| `logger.BeginDay(CurrentDay)` | Ordered diagnostic due-work fact if the logger exposes an idempotent owner-owned occurrence receipt; otherwise keep it in legacy profile only. Diagnostic output alone cannot serve as domain idempotency state. |
+| `DailyDemographicSystem.Advance(this, naturalMortalitySamples, aggregateDemographyProvider)` and report assignment | Include as one owner due-work fact only if the demographic owner can atomically commit all effects it owns, its consumed occurrence/report, and signals. If it spans independent stores without that seam, exclude it from intraday composition pending domain-owned atomic operations; do not wrap several authorities in a D coordinator. |
+| `BeginSimulationDay`: `justiceSystem.BeginDay()` | Separate justice-owner due-work fact, ordered after demographics; include only with atomic occurrence/effect/signal commit, else legacy-only. |
+| `crimeSystem.AdvanceHiddenStatuses(npcRuntimes)` | Separate crime-owner due-work fact after justice BeginDay; include only with its own atomic seam, else legacy-only. This is consequence/timer advancement, not new crime origination. |
+| `justiceSystem.AdvanceSentences(npcRuntimes)` then `justiceSystem.SyncWantedStatuses(npcRuntimes)` | Two justice-owner due-work facts, in this order after crime status expiry; each requires its own atomic consumed-occurrence/effect/signal seam, else legacy-only. |
+| `AdvanceMerchantPlanUrgency()` | Merchant-plan owner due-work fact after justice; include only with an atomic occurrence/effect/signal seam, else legacy-only. |
+| `scheduledDirectiveSystem.PrepareDay(CurrentDay)` | Deferred/excluded from intraday P18-D. Intraday profile composition requires the directive system disabled/absent or its pending queue empty; no directive may be silently skipped. |
+| `SimulateEconomyDay()` when `configuration.Economy.Enabled` | Owner due-work facts in existing order: production for each city in list order, followed by consumption and price update for each city in list order. Each fact belongs to that city's economy owner and requires atomic occurrence/effect/signal commit; absent that seam, the operation remains legacy-only. P14 material flow remains excluded despite P14-A promotion unless a reviewed temporal owner adapter supplies its own atomic seam and explicit causal placement; this design does not call or own P14-A. |
+| `RefreshLocalKnowledgeAndShare()` | Ordered owner due-work facts after economy: each eligible actor's local location discovery/merchant market observation, then commercial knowledge sharing. Each effect must be committed by its knowledge/merchant owner with its own occurrence receipt and signals; if the existing operation cannot be split across owner seams without cross-authority mutation, retain it only in legacy profile pending a reviewed domain-owned operation. |
+| `adventureExpeditionAutonomySystem.AdvanceActiveExpeditions()` | Deferred/excluded; keep in legacy profile until the expedition owner supplies an atomic due-work seam and the consumer receives a separate review. P8-E travel is not implied. |
+| Loop that starts autonomous expeditions for eligible NPCs | Deferred/excluded as a separate autonomous expedition consumer, not the P18-C SellGoods actor decision. P18-D excludes it; intraday composition requires the autonomy system disabled/absent. |
+| Per-NPC loop: null/dead/travel/expedition/reserved checks; `EvaluateStatus`; configured `merchantSystem.AdvanceNpcTradeState`; scheduled directive processing; `EvaluateAction` and `TryExecuteCurrentAction` | `EvaluateStatus` is currently empty and stays empty. Merchant trade-state advancement is an owner due-work fact, once for each eligible actor, before directive handling; include only with the merchant owner's atomic effect/occurrence/signal seam. Scheduled directives are deferred/excluded and require the directive system absent/empty. ActorChoice and autonomous `EvaluateAction`/execution move to P18-C and are never also run by this loop. Intraday composition requires no actor traveling, active expedition, or reserved expedition participant, since their legacy skip/command handling is not migrated here. |
+| `travelPartySystem.AdvanceParties()`, then `travelSystem.AdvanceTravels(npcRuntimes)` | Deferred/excluded; these P8 travel/party consumers remain explicit separate work. Intraday profile requires both owners absent/disabled and no active transit/party movement. |
+| For arrivals: `ObserveArrivedExplorableSites`, merchant `ObserveCurrentMarket`, then `expeditionSystem.ReconcileAfterTravel(arrivedNpcs)` | Deferred/excluded with travel advancement; cannot emit fabricated arrival observations. Intraday profile has no arrival set from this pass. A later travel migration must assign these operations their own exact timeline boundaries and ordering.
+
+The day-boundary owner emits any typed availability/condition receipts from included owner mutations only after each source mutation commits. P18-C actor requests run after all inputs, this boundary pass, and ordinary due work at that instant have been dispatched. They use current truth, and the legacy roster loop including its actor-choice/autonomous `TryExecuteCurrentAction` path is not called in the intraday profile. Each daily cadence runs once; decisions occur only at P18-C boundaries.
+
+**Failure and retry policy:** validate checked day/tick arithmetic, profile compatibility, and the declared owner contract before boundary activation. The activation snapshot is made after accepted inputs at `t` and before boundary effects. Freeze an immutable, deterministically ordered manifest containing the exact step descriptors; stable step IDs; owner IDs and compatible owner/content revisions; stable target identities and required value parameters; effective profile/configuration identity; the `PersonId` roster and its order inputs where a step depends on the roster; and a disposition for every conditional step (scheduled with its descriptor or explicitly skipped with a stable reason such as disabled configuration). Never rebuild or filter this manifest from partially mutated world state during retry. Owner execution still validates current truth and returns its domain-defined stale/rejected result where appropriate; it does not change which steps or targets the frozen manifest contains.
+
+The P18-A activation occurrence `(worldId, profileId, absoluteDay)` is consumed atomically with this manifest and the exact returned barrier-fact descriptor. A separate barrier identity tracks subphase completion. For each frozen step `(worldId, profileId, absoluteDay, stepId)`, the coordinator queries the declared owner's compatible-revision receipt. A committed receipt advances the cursor without reapplying effects. If absent, the coordinator invokes only that owner; the owner atomically commits the effect, step receipt, and source signals. If the response is uncertain, keep the barrier pending at `t`; retry resolves that exact receipt and either skips the committed step or retries that first uncommitted step. Preserve source signals in owner receipts and barrier aggregation across failures; do not publish/consume them as P18-C triggers until the outer chronological advance through `t` succeeds. A missing atomic or compatible-revision seam means that step is excluded from this intraday composition; its legacy operation remains in the legacy profile, or the narrower profile remains not ready pending explicit product approval for omitted behavior.
+
+After all included manifest entries have committed or their frozen conditional disposition has completed, atomically complete the separate barrier identity. Only then can P18-A drain ordinary same-instant due work. The P18-A activation identity remains consumed throughout and is never reopened or held pending for individual owner commits. If ordinary due work fails after barrier completion, P18-A keeps `now=t` and resumes that work on retry without repeating boundary activation or the daily subphase. P18-C receives no post-advance handoff and the timeline does not move beyond `t` until both the barrier and all due work at `t` succeed. The coordinator owns only the frozen manifest, progress cursor, and signal aggregation; domain owners remain sole authorities for daily truth and step receipts. No cross-owner transaction, world-wide rollback, or generic transaction framework is introduced.
+### Justice owner-step sequencing note
+
+The `justice.advance-sentences` entry preserves the complete existing
+`JusticeSystem.AdvanceSentences(roster)` operation: reverse sentence traversal,
+sentence decrement and expiry/release, release of arrested roster members
+without an active sentence, and the method's embedded first
+`SyncWantedStatuses(roster)` pass. The following `justice.sync-wanted-statuses`
+entry remains a distinct later step because it is an explicit second legacy
+pass; duplicate wanted markers make that pass observably different because
+`NpcRuntime.RemoveStatus` removes one occurrence at a time. Do not move the
+embedded pass out of sentence advancement or collapse the two receipts.
+
+The frozen roster descriptor preserves list order, null slots, repeated runtime
+references, and cardinality. Person-backed entries carry `PersonId` as well as
+`NpcRuntimeId`; unbacked entries retain `NpcRuntimeId`. The sentence-advance
+descriptor also freezes the ordered sentence and wanted-record target/city
+identities, null slots, and cardinality. The later wanted-status descriptor
+freezes the ordered roster and wanted-record target identities/cardinality.
+Mutable sentence counters, warrant activity, and status values are captured by
+`TryPrepare` after earlier manifest steps and revalidated immediately before
+commit; they are not incorrectly frozen to pre-subphase values. The operation
+emits no domain event or SellGoods eligibility signal; its existing log
+messages are diagnostics, not causal receipts. SellGoods has no current
+arrested, wanted, or hidden-state eligibility check.
+
+The ordered Crime step precedes sentence advancement and can decrement the
+hidden timer or remove the hidden marker on the same NPCs. Justice release also
+clears hidden state. Therefore a Justice descriptor must not freeze those
+Crime-owned hidden values into a mutable pre-subphase owner revision that would
+reject the declared predecessor's committed effects. Its compatible owner
+revision freezes the ordered roster identity/cardinality and the ordered
+sentence and wanted-record target/city identities, null slots, and
+cardinalities, together with the Justice operation version. It deliberately
+excludes mutable Justice and roster values that declared predecessor steps can
+change, including Crime-owned hidden values. `TryPrepare` captures the current
+Justice and roster values after those steps, and the prepared commit revalidates
+that exact snapshot before mutation. The later wanted-status step likewise
+freezes the ordered roster and wanted-record target identities/cardinality,
+then validates its live mutable snapshot after sentence advancement while
+retaining a distinct manifest identity. Receipt identity is
+`(BoundaryOccurrenceId, StepId)`; descriptor fingerprints retain ordinal,
+subphase, configuration, content, and all step fields. This is a sequential
+compatibility rule for the accepted daily manifest, not a new gameplay or
+general concurrency contract.
+
+### Daily-owner target identity and temporal cardinality
+
+The frozen manifest records immutable operation identity, target identity/order,
+effective configuration/content identity, and the exact owner contract version.
+It does not freeze mutable values that earlier declared boundary steps may
+change; each owner captures those values in its own preparation after the
+predecessor commits, then revalidates immediately before installation.
+
+Economy work remains three distinct ordered operations per city runtime:
+production for each city in city-list order, then for each city in that same
+order its configured consumption followed by price refresh. Use stable
+semantic step names with the `CityRuntimeId`; a `CityId` or list ordinal
+alone is not an operation identity.
+Freeze the configured row sequence and its exact item semantic IDs, quantities,
+and relevant policy/version inputs, preserving duplicate rows and order.
+Row ordinals express order only. Because the current authored production and
+consumption rows have no inspected stable row IDs, each city pass must install
+as one owner batch with one occurrence receipt rather than assigning identity
+to a row ordinal. Consumption keeps the existing free/paid transaction
+semantics and remains separate from P14 material flow.
+
+Demography remains one P18-D owner due-work fact, in legacy order:
+natural-mortality evaluation and its Person/NPC/residence-population lifecycle
+effects, each city's aggregate transition, then report completion/assignment.
+Freeze the ordered mortality `PersonId` targets with applicable materialization
+identities/cardinality and the `CityRuntimeId` aggregate targets. Do not freeze
+mutable mortality results or the aggregate represented-resident floor before
+mortality: the current operation recomputes that floor after natural deaths.
+The demographic owner prepares each internal operation after its declared
+predecessor effects, records enough owner-local progress to reconstruct the
+same report and skip committed effects, and does not delegate cross-authority
+mutation sequencing to the P18-D coordinator.
+
+Local observation descriptors preserve the effective runtime roster. `SimulationRuntime` sorts the constructor roster by `NpcRuntimeId` once; later successful `TryRegisterNpc` calls append, and `TryUnregisterNpc` removes without re-sorting. At boundary activation, freeze the exact current runtime-list membership and order (the registry rejects null entries and duplicate `NpcRuntimeId` values). Preserve that order for local observation; use `NpcRuntimeId` plus `PersonId` when present as target identity, with ordinals expressing order only. The owner captures current truth only when preparing this step after earlier boundary effects. Preserve both ordered discoveries: `NpcRuntime.CurrentLocation` for each eligible actor, then `CurrentCity.Location` for eligible merchants inside `MerchantSystem.ObserveCurrentMarket`, followed by that market's ordered item and liquidity observations. Even if the location IDs are equal, retain both calls in legacy order. One actor-owned operation atomically installs the affected spatial and commercial knowledge together with its receipt; otherwise keep the operation outside intraday composition.
+
+Commercial sharing freezes the eligible merchant membership from the current
+runtime roster, then preserves the existing `CompareMerchants` order (current
+location runtime ID followed by `NpcRuntimeId`), groups contiguous merchants
+by `CurrentCity` object identity in that order, and applies the existing
+`AbsoluteDay % groupCount` rotation with wrapped adjacent pairs within each
+group. The owner captures each sender's shareable
+observations after the preceding local-observation steps commit. Each directed
+transfer is a recipient-owned operation whose receipt identifies the boundary
+occurrence, sender and receiver `NpcRuntimeId` values (with backing `PersonId`
+values where present), and the frozen pairing/source fingerprint. Preserve the
+pairing and direction order; list ordinals express order but are not operation
+identity.
+
+
+## 5. Current-truth execution, outcome, and failure atomicity
+
+P11's decision proposal may use only the actor's permitted Knowledge and typed input. Its canonical command payload remains `PersonId` plus `ActionDefinitionId`. P18-C may retain a resolved proposal containing the item/amount/other action parameters returned by the existing `CreateRequestedAction` path, but those resolved values are proposal state, not new command fields. The execution adapter resolves the current materialized actor by `PersonId`, current action definition/version, item, location/city/market and applicable target through current owners at the requested logical instant. It rechecks alive/eligible state, local position and city-location consistency, enabled SellGoods configuration, merchant-plan restrictions, inventory/item availability and all existing provider/domain preconditions. Stale known facts or proposal values do not authorize a sale.
+
+Build an ephemeral runtime action from the P18-C proposal resolved values only after current validation, then pass it to the current `MerchantSystem` and `EconomyTransactionService` path. The economy owner must expose a stable operation receipt/lookup keyed by `ActorDecisionProposal.Id`, committed atomically with all sale effects. Its immutable request correlation/fingerprint includes the `ActorChoiceInputId`, P18-C `ActorDecisionRequest.Id`, actor `PersonId`, action semantic ID/version, profile and execution `LogicalTick`, resolved market/site and item semantic IDs, requested quantity, and every other transaction-defining parameter. On the first execution attempt reaching the owner, it snapshots current truth/revisions actually read (including market/site mapping, stock, price/value, actor inventory/balance, and applicable preconditions) and records that with the receipt and outcome. A committed replay returns the original receipt/outcome/snapshot without reapplying effects; same proposal ID with a different fingerprint is an invariant failure. Retry the same proposal only after the owner proves the previous attempt uncommitted. An unresolved result stays pending and blocks another effect attempt. Reconcile P11 terminal disposition and P18-C terminal state idempotently against the matching receipt. If the existing economy owner cannot provide this contract or distinguish proven-uncommitted from unresolved, retain the focused architecture-review blocker. Do not add a generic cross-domain transaction framework.
+
+### 5.1 Bounded economy receipt capability — delivered at `9e790c5`
+
+The following describes the pre-prerequisite implementation inspected during design. At that point, `EconomyTransactionService.TryExecuteMarketSale` committed money, inventory, and market stock sequentially, with fallible compensation and no operation receipt. That historical implementation did not meet the P18-D receipt contract. The bounded owner capability was subsequently implemented, independently reviewed, validated, and promoted at `9e790c5`.
+
+The promoted implementation uses owner-local prepared mutations for the exact participating authorities (seller/counterparty money account as applicable, seller inventory, and market stock). It reads current truth once, prepares without authoritative mutation, checks owner revisions and `CanInstall`, then installs the prepared effects and stores the immutable operation receipt/result/snapshot in the existing runtime-scoped owner. The operation ID/fingerprint is stable; equal-ID/equal-fingerprint replay returns the first result, conflicting reuse is rejected, and retry is limited to proven-no-install. It follows the bounded prepared-commit shape without adding a generic transaction framework or changing P14-A behavior.
+
+Receipt retention is scoped to this `SimulationRuntime` lifetime only; this design makes no restart, save, crash-recovery, or durable idempotency claim. Any later supported intraday save/fork must include this causal operation/receipt state under P12/P13 design, not by selecting the daily profile.
+
+The P18-D consumer must reuse this promoted owner capability; it must not create a second receipt authority.
+
+World truth mutation stays with existing economy/merchant authorities. P18-C decides when a retained actor request reaches the consumer, not whether its stale proposal succeeds. No input can force a market outcome or bypass present eligibility.
+
+## 6. Reconstruction and diagnostics inventory
+
+Any later continuation/fork claim covering this path must recover or deterministically rebuild:
+
+- profile ID, `SimulationTimeline.CurrentInstant`, calendar/config version, causal sequence, sealed input prefix, any pending timeline boundary-dispatch day, and deterministic agenda;
+- retained ActorChoice command ID, input ID, actor `PersonId`, semantic action/version, canonical PersonId-plus-ActionDefinitionId payload, origin/authority, exact logical instant, sequence, lifecycle/dispositions, any pending post-advance C request/cursor, and the exact retained P18-C proposal ID/content plus executor status when `UncommittedRetryable`;
+- originating ActorDecisionRequest.Id and immutable C BoundarySequence for each accepted command, distinct ActorDecisionRequest.Id/BoundarySequence for each later meaningful trigger, retained deferred-input eligibility/disposition state, one-attempt-per-actor-boundary identity and decision/random context;
+- P18-B activity IDs, participant commitments, lifecycle transition receipts and pending due-work identity needed for actor availability, without treating receipt history as current availability truth;
+- consumed P18-A activation identity; frozen manifest and exact returned barrier-fact/provisional sequence identities; separate pending/complete subphase barrier identity and cursor; each included owner's step occurrence identity, compatible revision and atomic completion/signal receipt; retained signal aggregation and publication/consumption marker until a successful outer advance; P14/P8-E or economy owner state only to the extent their own capabilities are in the selected world; and action transaction correlation/owner receipt needed to resolve uncertain sale commit before retry;
+- materialization-independent `PersonId` ownership and stable action/item semantic identity/version.
+
+Derived indexes, timeline agenda entries, and runtime object references are rebuildable and cannot be the sole record of accepted causality. Diagnostics and invariant snapshots must show retained input state alongside timeline reference/handoff state and must detect orphaned inputs, duplicate dispatch, nonmonotonic sequence, impossible terminal/dispatched transitions, lost or repeatedly selected deferred ActorChoice IDs, reused or conflated original-input ActorDecisionRequest.Id and later-trigger ActorDecisionRequest.Id, wrong-profile ticks, duplicate P18-A activation, returned-fact identity/sequence mismatch, manifest regeneration or drift on retry, completed barrier missing an included step receipt, cursor skipping an uncommitted step, ordinary work/P18-C dispatched before barrier completion, early/duplicate signal publication, and sale correlation without matching terminal disposition.
+
+No P19 loader/API, durable save implementation, replay system, travel migration, or universal daily-domain conversion is delivered by this design.
+
+## 7. Focused validation plan
+
+Required implementation suites should cover:
+
+- exact-tick capture and stable sequence ordering for two inputs at one instant; a command between due-work times is attempted at its own timestamp, not at the final target;
+- same-instant order: input commit/retention, one day-boundary pass, due work/start/completion, then P18-C post-advance handoff; receipts produced during timeline dispatch are not handled reentrantly;
+- the P18-D composition bridge ingests committed P11 receipts only after outer advance success; its C-owned `BoundarySequence` and `ActorDecisionRequest.Id` come from P18-C request-state binding and remain distinct from P18-A input sequence/ID; deterministic selection uses the lowest originating C sequence among due retained inputs per actor; unselected requests stay pending in P11 and receive C-owned deferral records; no second same-instant attempt; a later meaningful trigger is observed and the exact allocated request is admitted to execution; future-target inputs cannot mask due IDs; no input loss if no later trigger occurs; preserve ActorChoice precedence and terminal semantics.
+- stale/past/sealed input rejection, actor unavailable/dead/dormant or missing materialization disposition, stale action/item/configuration, moved location, unavailable goods, and current market/merchant plan constraints with no unauthorized or partial sale;
+- P18-C `UncommittedRetryable` and uncertain pre-commit failure retain the same request/proposal/input identity and do not rerun planning or terminalize; committed acceptance/rejection consumes once; P11 returned failure or throw is terminal only with its durable terminal disposition; uncertain sale commit resolves through stable owner idempotency receipt before retry, with unresolved uncertainty remaining pending;
+- before a new keyed sale attempt, an active P11 merchant plan rejects the fresh actor choice with no effects; after a no-plan sale commits, activating a plan and replaying the same proposal returns the original receipt before plan eligibility is rechecked, with no repeated `MerchantSystem` post-sale bookkeeping or economy mutation; a different fresh proposal while that plan is active rejects before effects. This replay-after-plan-activation check is a P18-D consumer integration obligation; D1 supplies only the owner receipt and does not implement or simulate the consumer path;
+- repeated `AdvanceDay` in each profile, mid-day-to-next-boundary advance by the remaining fraction of the day (not a full 24-hour span), multiple crossed boundaries, same-boundary idempotency, invalid manifest/profile rejection before effects, atomic A activation of consumed occurrence plus frozen manifest and provisional returned-fact identities, idempotent republishing of those identities after uncertain activation response, injected failure before/after each owner commit, receipt resolution that skips already-committed steps and retries only the first uncommitted step without regenerating the manifest, proof that A activation is consumed while the distinct barrier remains pending, ordinary same-instant due work and P18-C remain blocked until barrier completion, committed signals survive failed outer advances and are published/consumed only after successful advance, and proof that intraday actor action runs once through P18-C while each included daily cadence runs once;
+- daily-profile golden compatibility for existing actor-choice roster ordinal, disposition sequence, action ordering, daily system order and travel progression; no synthesized logical tick or changed history;
+- runtime composition isolation, repeated equivalent run determinism, and current diagnostics/invariant parity.
+
+Because this changes the daily loop and chronological behavior, run targeted P18 timeline/lifecycle/decision tests, P11 ActorChoice and ActorActionChoice command regressions, affected P14/economy and existing daily regression suites, ALL EditMode, complete official Smoke, and a justified long-run suite. Run `git diff --check` on the integration candidate. Promotion also needs independent review against the exact P18-C/P11/P14 base composition.
+
+## 8. Hotspots, ownership, and integration order
+
+P14-A is promoted. The earlier candidate inspection found no tracked edits in its active implementation worktrees. The `SimulationRuntime.cs` source hotspot is available for the P18-D consumer implementation; the promoted per-runtime advance lease at `9e790c5` rejects reentrant advance entry and spans the existing `TryAdvanceDay(s)` operation. Keep the full chronological advance, crossed boundary subphases, and successful post-advance P18-C handoff inside that lease. It is a per-runtime single-writer/non-reentrant execution contract, not a general thread-safety promise. `AuthoritativeMutationGuard` tracks mutation integrity/fault health and blocks mutation after a fault; it does not serialize or reject reentrant advance calls. `SimulationTimeline` has narrower advance/reentrancy protection that does not by itself cover the whole runtime composition or post-advance bridge.
+
+The implementation branch also coordinates on `ActorChoiceStore`/contracts and ActorChoice diagnostics, `LogicalTimeline`/input owner composition, P18-C decision coordinator, and `MerchantSystem`/economy transaction interfaces. Assign one writer per hotspot; keep nonoverlapping diagnostics/test work isolated only where it does not change shared contracts.
+
+Recommended sequence after prerequisites:
+
+1. Independent technical-design review passed for candidate `9ed6d90` against P18 State `85f1f21`, P14 State `4caecbb` / code `c44904b`, P20 State `7a81cc0` / P20-A integration `1dcf67a`, P11 canonical `308e24d`, promoted P18-C adapter `a535441`, architecture `c285466`, and both active alignments. The prerequisite integration at `9e790c5` was independently reviewed and validated against P18 canonical `ba8076c`.
+2. Consume the accepted and promoted P18-A API (`1dd0479`) for frozen-manifest activation, returned facts with provisional sequence identities, a distinct blocking boundary-subphase barrier, idempotent publication, and same-instant ordering ahead of ordinary due work; this is no longer an acceptance/promotion gate.
+3. For every intended daily step, identify its sole domain owner, stable `stepId`, compatible revision, atomic effect-plus-occurrence-receipt-plus-signal seam, and retry lookup. Exclude any unsupported owner step and keep the intraday profile not ready until a required product approval accepts that reduced composition.
+4. Reuse the promoted sale-owner operation receipt/prepared-install capability and per-runtime advance lease from `9e790c5`. Consume the promoted P11 `TryCaptureTemporal`/disposition contract linked to the accepted P18-A reference and preserve P11 semantic validation. Implement the P18-D bridge that binds committed receipts into request state after successful advance, observes later triggers/deferrals, and admits the exact allocated request to execution.
+5. Implement the intraday input envelope/retention projection and boundary-yielding advance driver against the promoted P18-A/C APIs; keep the existing P11 store as command/disposition owner.
+6. Implement profile-selected `AdvanceDay` adapter and split day-boundary cadence from actor decision traversal, with exact legacy daily path preserved.
+7. Integrate the already-promoted P18-C external-input/deferral adapter with the SellGoods action provider and current economy authority; add P18-D composition diagnostics/invariants and focused tests without reimplementing the adapter.
+8. Run independent architecture/diff review and required focused/full gates, then integrate serially. The promoted prerequisite state is recorded at `9e790c5`; after consumer promotion, update Phase 18 State with the delivered consumer behavior and validation. This design retains the technical boundary and current P18 State/Brief references.
+
+Excluded: broader SellGoods gameplay, new security/grant or anti-cheat mechanisms, P14 material-flow ownership (P14-A remains excluded absent a reviewed temporal owner adapter), Sleep/dreams/needs/jobs/theft/war/rituals, P8-E travel integration, P19 loading/API, save/replay, and universal daily-domain rewrite. P20 is not a prerequisite for this one-actor command; no shared activity behavior is introduced.

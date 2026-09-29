@@ -14,6 +14,8 @@ public sealed class ActorChoiceStore : IAuthoritativeMutationGuardBindable
     private readonly List<ActorChoiceInput> inputs = new List<ActorChoiceInput>();
     private readonly Dictionary<string, int> indexByInputId = new Dictionary<string, int>(StringComparer.Ordinal);
     private readonly HashSet<string> worldCommandIds = new HashSet<string>(StringComparer.Ordinal);
+    private readonly Dictionary<string, string> temporalInputByReference = new Dictionary<string, string>(StringComparer.Ordinal);
+    private readonly HashSet<string> temporalOperationIds = new HashSet<string>(StringComparer.Ordinal);
     private long nextInputSequence = 1L;
 
     internal PersonStore PersonStore => personStore;
@@ -124,6 +126,115 @@ public sealed class ActorChoiceStore : IAuthoritativeMutationGuardBindable
         failure = ActorChoiceStoreFailureCode.None;
         return true;
     }
+
+    /// <summary>Captures a P18-A accepted input as immutable temporal command facts.</summary>
+    public bool TryCaptureTemporal(string worldCommandId, PersonId personId, string actionDefinitionId,
+        WorldCommandOrigin origin, WorldCommandAuthorityMode authority, string profileId,
+        TimelineInputReference acceptedInput, out ActorChoiceInput input, out ActorChoiceStoreFailureCode failure)
+    {
+        input = null;
+        if (!mutationGuardBinding.CanMutate) { failure = ActorChoiceStoreFailureCode.RuntimeFaulted; return false; }
+        if (acceptedInput == null || string.IsNullOrWhiteSpace(profileId) || string.IsNullOrWhiteSpace(worldCommandId)
+            || personId == null || string.IsNullOrWhiteSpace(actionDefinitionId)
+            || !Enum.IsDefined(typeof(WorldCommandOrigin), origin) || !Enum.IsDefined(typeof(WorldCommandAuthorityMode), authority))
+        { failure = ActorChoiceStoreFailureCode.InvalidInput; return false; }
+        string referenceKey = TemporalReferenceKey(acceptedInput.InputId);
+        if (temporalInputByReference.TryGetValue(referenceKey, out string existingId))
+        {
+            if (TryGet(new ActorChoiceInputId(existingId), out ActorChoiceInput existing)
+                && existing.WorldCommandId == worldCommandId && existing.PersonId.Equals(personId)
+                && existing.ActionDefinitionId == actionDefinitionId && existing.Origin == origin && existing.Authority == authority
+                && existing.TemporalCapture.ProfileId == profileId
+                && existing.TemporalCapture.TargetInstant == acceptedInput.TargetInstant
+                && existing.TemporalCapture.AcceptedInput.Sequence == acceptedInput.Sequence
+                && existing.TemporalCapture.AcceptedInput.CommandKind == acceptedInput.CommandKind
+                && existing.TemporalCapture.AcceptedInput.CommandData == acceptedInput.CommandData)
+            { input = existing; failure = ActorChoiceStoreFailureCode.None; return true; }
+            failure = ActorChoiceStoreFailureCode.CorrelationConflict; return false;
+        }
+        if (worldCommandIds.Contains(worldCommandId)) { failure = ActorChoiceStoreFailureCode.DuplicateWorldCommandId; return false; }
+        if (nextInputSequence == long.MaxValue) { failure = ActorChoiceStoreFailureCode.SequenceExhausted; return false; }
+        long sequence = nextInputSequence;
+        ActorChoiceInputId id = new ActorChoiceInputId("actor-choice-" + sequence.ToString("D6", CultureInfo.InvariantCulture));
+        ActorChoiceTemporalCapture capture = new ActorChoiceTemporalCapture(profileId, acceptedInput.TargetInstant, acceptedInput);
+        ActorChoiceInput captured = new ActorChoiceInput(id, worldCommandId, sequence, personId, actionDefinitionId, origin, authority,
+            0L, ActorChoiceInputStatus.Pending, Array.Empty<ActorChoiceDisposition>(), capture, Array.Empty<ActorChoiceTemporalDisposition>());
+        inputs.Add(captured); indexByInputId.Add(id.Value, inputs.Count - 1); worldCommandIds.Add(worldCommandId);
+        temporalInputByReference.Add(referenceKey, id.Value); nextInputSequence++;
+        input = captured.Copy(); failure = ActorChoiceStoreFailureCode.None; return true;
+    }
+
+    public bool TryRecordTemporalDispatchStarted(ActorChoiceInputId inputId, ActorChoiceTemporalBoundaryReference boundary,
+        string operationId, string decisionRecordId, out ActorChoiceStoreFailureCode failure) =>
+        string.IsNullOrWhiteSpace(decisionRecordId)
+            ? FailTemporal(out failure)
+            : TryAppendTemporal(inputId, boundary, operationId, ActorChoiceTemporalDispositionKind.DispatchStarted,
+                decisionRecordId, null, null, null, out failure);
+
+    public bool TryRecordTemporalRejected(ActorChoiceInputId inputId, ActorChoiceTemporalBoundaryReference boundary,
+        string operationId, ActorChoiceFailure reason, out ActorChoiceStoreFailureCode failure) =>
+        !Enum.IsDefined(typeof(ActorChoiceFailure), reason)
+            ? FailTemporal(out failure)
+            : TryAppendTemporal(inputId, boundary, operationId, ActorChoiceTemporalDispositionKind.Rejected,
+                null, reason, null, null, out failure);
+
+    public bool TryRecordTemporalAttemptReturned(ActorChoiceInputId inputId, ActorChoiceTemporalBoundaryReference boundary,
+        string operationId, NpcActionResult result, out ActorChoiceStoreFailureCode failure)
+    {
+        NpcActionResultType? status = result == null ? (NpcActionResultType?)null : result.ResultType;
+        if (status.HasValue && !Enum.IsDefined(typeof(NpcActionResultType), status.Value)) return FailTemporal(out failure);
+        ActorChoiceAttemptOutcome? outcome = !status.HasValue ? ActorChoiceAttemptOutcome.ReturnedNoResult
+            : status.Value == NpcActionResultType.Success ? ActorChoiceAttemptOutcome.Succeeded : ActorChoiceAttemptOutcome.Failed;
+        return TryAppendTemporal(inputId, boundary, operationId, ActorChoiceTemporalDispositionKind.AttemptReturned,
+            null, null, outcome, status, out failure);
+    }
+
+    public bool TryRecordTemporalAttemptThrew(ActorChoiceInputId inputId, ActorChoiceTemporalBoundaryReference boundary,
+        string operationId, out ActorChoiceStoreFailureCode failure) =>
+        TryAppendTemporal(inputId, boundary, operationId, ActorChoiceTemporalDispositionKind.AttemptThrew,
+            null, null, ActorChoiceAttemptOutcome.Threw, null, out failure);
+
+    private bool TryAppendTemporal(ActorChoiceInputId inputId, ActorChoiceTemporalBoundaryReference boundary, string operationId,
+        ActorChoiceTemporalDispositionKind kind, string decisionId, ActorChoiceFailure? reason,
+        ActorChoiceAttemptOutcome? outcome, NpcActionResultType? resultStatus, out ActorChoiceStoreFailureCode failure)
+    {
+        if (!mutationGuardBinding.CanMutate) { failure = ActorChoiceStoreFailureCode.RuntimeFaulted; return false; }
+        if (inputId == null || !indexByInputId.TryGetValue(inputId.Value, out int index)) { failure = ActorChoiceStoreFailureCode.InputNotFound; return false; }
+        ActorChoiceInput current = inputs[index];
+        if (boundary == null || current.TemporalCapture == null || !string.Equals(current.TemporalCapture.ProfileId, boundary.ProfileId, StringComparison.Ordinal)
+            || boundary.Instant.Value < current.TemporalCapture.TargetInstant.Value
+            || string.IsNullOrWhiteSpace(operationId) || !Enum.IsDefined(typeof(ActorChoiceTemporalDispositionKind), kind))
+        { failure = ActorChoiceStoreFailureCode.CorrelationConflict; return false; }
+        if (temporalOperationIds.Contains(operationId))
+        {
+            foreach (ActorChoiceTemporalDisposition prior in current.TemporalDispositions)
+                if (prior.OperationId == operationId && prior.Kind == kind && prior.Boundary.SameAs(boundary)
+                    && prior.DecisionRecordId == decisionId && prior.Failure == reason && prior.AttemptOutcome == outcome
+                    && prior.ReturnedResultStatus == resultStatus) { failure = ActorChoiceStoreFailureCode.None; return true; }
+            failure = ActorChoiceStoreFailureCode.CorrelationConflict; return false;
+        }
+        if (current.TemporalDispositions.Count > 0 && boundary.Instant.Value < current.TemporalDispositions[current.TemporalDispositions.Count - 1].Boundary.Instant.Value)
+        { failure = ActorChoiceStoreFailureCode.InvalidLifecycleTransition; return false; }
+        bool dispatched = false, terminal = false;
+        foreach (ActorChoiceTemporalDisposition prior in current.TemporalDispositions)
+        { if (prior.Kind == ActorChoiceTemporalDispositionKind.DispatchStarted) dispatched = true; if (prior.Kind == ActorChoiceTemporalDispositionKind.Rejected || prior.Kind == ActorChoiceTemporalDispositionKind.AttemptReturned || prior.Kind == ActorChoiceTemporalDispositionKind.AttemptThrew) terminal = true; }
+        if (terminal || (kind == ActorChoiceTemporalDispositionKind.DispatchStarted && (dispatched || current.Status != ActorChoiceInputStatus.Pending))
+            || (kind == ActorChoiceTemporalDispositionKind.Rejected && (dispatched || current.Status != ActorChoiceInputStatus.Pending))
+            || ((kind == ActorChoiceTemporalDispositionKind.AttemptReturned || kind == ActorChoiceTemporalDispositionKind.AttemptThrew)
+                && (!dispatched || current.Status != ActorChoiceInputStatus.ConsumedAwaitingTerminalAttempt)))
+        { failure = ActorChoiceStoreFailureCode.InvalidLifecycleTransition; return false; }
+        ActorChoiceInputStatus next = kind == ActorChoiceTemporalDispositionKind.DispatchStarted ? ActorChoiceInputStatus.ConsumedAwaitingTerminalAttempt
+            : kind == ActorChoiceTemporalDispositionKind.Rejected ? ActorChoiceInputStatus.Rejected
+            : kind == ActorChoiceTemporalDispositionKind.AttemptReturned ? ActorChoiceInputStatus.AttemptReturned : ActorChoiceInputStatus.AttemptThrew;
+        var disposition = new ActorChoiceTemporalDisposition(current.TemporalDispositions.Count + 1L, kind, boundary, operationId, decisionId, reason, outcome, resultStatus);
+        inputs[index] = current.WithTemporalDisposition(next, disposition); temporalOperationIds.Add(operationId);
+        failure = ActorChoiceStoreFailureCode.None; return true;
+    }
+
+    private static bool FailTemporal(out ActorChoiceStoreFailureCode failure)
+    { failure = ActorChoiceStoreFailureCode.InvalidInput; return false; }
+
+    private static string TemporalReferenceKey(string inputId) => inputId;
 
     public bool TryGet(ActorChoiceInputId inputId, out ActorChoiceInput input)
     {
@@ -346,6 +457,8 @@ public sealed class ActorChoiceStore : IAuthoritativeMutationGuardBindable
         List<string> issues = new List<string>();
         HashSet<string> seenInputIds = new HashSet<string>(StringComparer.Ordinal);
         HashSet<string> seenCommandIds = new HashSet<string>(StringComparer.Ordinal);
+        HashSet<string> seenTemporalReferences = new HashSet<string>(StringComparer.Ordinal);
+        HashSet<string> seenTemporalOperations = new HashSet<string>(StringComparer.Ordinal);
         long previousSequence = 0L;
 
         for (int i = 0; i < inputs.Count; i++)
@@ -384,6 +497,20 @@ public sealed class ActorChoiceStore : IAuthoritativeMutationGuardBindable
             }
 
             ValidateInputLifecycle(input, issues);
+            ValidateTemporalLifecycle(input, issues);
+            if (input.TemporalCapture != null && input.TemporalCapture.AcceptedInput != null)
+            {
+                string temporalKey = TemporalReferenceKey(input.TemporalCapture.AcceptedInput.InputId);
+                if (!seenTemporalReferences.Add(temporalKey) || !temporalInputByReference.TryGetValue(temporalKey, out string linkedId) || linkedId != input.InputId.Value)
+                    issues.Add("Temporal P18-A accepted input reference is missing or multiply bound.");
+                foreach (ActorChoiceTemporalDisposition disposition in input.TemporalDispositions)
+                    if (disposition != null)
+                    {
+                        if (!seenTemporalOperations.Add(disposition.OperationId)) issues.Add("Temporal operation reference is duplicated.");
+                        if (disposition.Boundary == null || string.IsNullOrWhiteSpace(disposition.Boundary.SourceReceiptId))
+                            issues.Add("Temporal source receipt correlation is missing.");
+                    }
+            }
             if (input.InputId != null
                 && (!indexByInputId.TryGetValue(input.InputId.Value, out int indexedAt) || indexedAt != i))
             {
@@ -399,6 +526,10 @@ public sealed class ActorChoiceStore : IAuthoritativeMutationGuardBindable
         if (indexByInputId.Count != inputs.Count)
         {
             issues.Add("Actor choice identity index size does not match its receipts.");
+        }
+        if (seenTemporalReferences.Count != temporalInputByReference.Count || seenTemporalOperations.Count != temporalOperationIds.Count)
+        {
+            issues.Add("Temporal P11 correlation indexes do not match their authoritative records.");
         }
 
         if (seenCommandIds.Count != worldCommandIds.Count)
@@ -435,6 +566,9 @@ public sealed class ActorChoiceStore : IAuthoritativeMutationGuardBindable
             copy.indexByInputId.Add(clonedInput.InputId.Value, copy.inputs.Count);
             copy.inputs.Add(clonedInput);
             copy.worldCommandIds.Add(clonedInput.WorldCommandId);
+            if (clonedInput.TemporalCapture != null)
+                copy.temporalInputByReference.Add(TemporalReferenceKey(clonedInput.TemporalCapture.AcceptedInput.InputId), clonedInput.InputId.Value);
+            foreach (ActorChoiceTemporalDisposition disposition in clonedInput.TemporalDispositions) copy.temporalOperationIds.Add(disposition.OperationId);
         }
 
         if (targetMutationGuard != null && !copy.TryBindMutationGuard(targetMutationGuard))
@@ -472,6 +606,12 @@ public sealed class ActorChoiceStore : IAuthoritativeMutationGuardBindable
         }
 
         current = inputs[index];
+        if (current.TemporalCapture != null)
+        {
+            failure = ActorChoiceStoreFailureCode.InvalidLifecycleTransition;
+            current = null;
+            return false;
+        }
         if (absoluteDay < current.CapturedAbsoluteDay)
         {
             failure = ActorChoiceStoreFailureCode.InvalidLifecycleTransition;
@@ -522,6 +662,7 @@ public sealed class ActorChoiceStore : IAuthoritativeMutationGuardBindable
 
     private static void ValidateInputLifecycle(ActorChoiceInput input, List<string> issues)
     {
+        if (input.TemporalCapture != null) return;
         bool dispatchStarted = false;
         bool terminal = false;
         ActorChoiceInputStatus derivedStatus = ActorChoiceInputStatus.Pending;
@@ -661,6 +802,52 @@ public sealed class ActorChoiceStore : IAuthoritativeMutationGuardBindable
 
         return disposition.AttemptOutcome == ActorChoiceAttemptOutcome.ReturnedNoResult
             && disposition.ReturnedResultStatus.HasValue;
+    }
+
+    private static void ValidateTemporalLifecycle(ActorChoiceInput input, List<string> issues)
+    {
+        if (input.TemporalCapture == null)
+        {
+            if (input.TemporalDispositions.Count != 0) issues.Add("Legacy actor choice cannot have temporal dispositions.");
+            return;
+        }
+        if (input.Dispositions.Count != 0) issues.Add("Daily and temporal actor choice disposition streams cannot be mixed.");
+        if (input.TemporalCapture.AcceptedInput == null || input.TemporalCapture.TargetInstant != input.TemporalCapture.AcceptedInput.TargetInstant
+            || string.IsNullOrWhiteSpace(input.TemporalCapture.ProfileId)) issues.Add("Temporal capture correlation is invalid.");
+        long ordinal = 1L; long previousTick = -1L; bool dispatched = false; bool terminal = false;
+        ActorChoiceInputStatus status = ActorChoiceInputStatus.Pending;
+        foreach (ActorChoiceTemporalDisposition disposition in input.TemporalDispositions)
+        {
+            if (disposition == null) { issues.Add("Temporal disposition stream contains a null entry."); continue; }
+            if (disposition.TransitionOrdinal != ordinal++) issues.Add("Temporal disposition ordinals must be contiguous and positive.");
+            if (disposition.Boundary == null || disposition.Boundary.Instant.Value < previousTick
+                || disposition.Boundary.ProfileId != input.TemporalCapture.ProfileId) issues.Add("Temporal boundaries must be nondecreasing and retain the captured profile.");
+            if (disposition.Boundary != null) previousTick = disposition.Boundary.Instant.Value;
+            if (terminal) { issues.Add("Temporal disposition follows a terminal outcome."); continue; }
+            switch (disposition.Kind)
+            {
+                case ActorChoiceTemporalDispositionKind.DispatchStarted:
+                    if (dispatched || string.IsNullOrWhiteSpace(disposition.DecisionRecordId)
+                        || string.IsNullOrWhiteSpace(disposition.OperationId)) issues.Add("Temporal dispatch must be unique and correlated.");
+                    dispatched = true; status = ActorChoiceInputStatus.ConsumedAwaitingTerminalAttempt; break;
+                case ActorChoiceTemporalDispositionKind.Rejected:
+                    if (dispatched || !disposition.Failure.HasValue || !Enum.IsDefined(typeof(ActorChoiceFailure), disposition.Failure.Value))
+                        issues.Add("Temporal rejection must occur before dispatch with a valid failure.");
+                    status = ActorChoiceInputStatus.Rejected; terminal = true; break;
+                case ActorChoiceTemporalDispositionKind.AttemptReturned:
+                    if (!dispatched || !disposition.AttemptOutcome.HasValue
+                        || (disposition.AttemptOutcome == ActorChoiceAttemptOutcome.Succeeded && disposition.ReturnedResultStatus != NpcActionResultType.Success)
+                        || (disposition.AttemptOutcome == ActorChoiceAttemptOutcome.Failed && disposition.ReturnedResultStatus != NpcActionResultType.Failure)
+                        || (disposition.AttemptOutcome == ActorChoiceAttemptOutcome.ReturnedNoResult && disposition.ReturnedResultStatus.HasValue))
+                        issues.Add("Temporal returned attempt requires dispatch and a matching outcome.");
+                    status = ActorChoiceInputStatus.AttemptReturned; terminal = true; break;
+                case ActorChoiceTemporalDispositionKind.AttemptThrew:
+                    if (!dispatched || disposition.AttemptOutcome != ActorChoiceAttemptOutcome.Threw) issues.Add("Temporal thrown attempt requires dispatch.");
+                    status = ActorChoiceInputStatus.AttemptThrew; terminal = true; break;
+                default: issues.Add("Temporal disposition kind is invalid."); break;
+            }
+        }
+        if (input.Status != status) issues.Add("Actor choice status does not match temporal dispositions.");
     }
 
     internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard)

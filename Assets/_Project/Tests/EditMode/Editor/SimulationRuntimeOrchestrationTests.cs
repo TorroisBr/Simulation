@@ -466,6 +466,108 @@ public sealed class SimulationRuntimeOrchestrationTests
             fixture.Members);
     }
 
+    [Test]
+    public void TryAdvanceDays_HoldsOneLeaseAcrossDaysAndRejectsReentrantAdvances()
+    {
+        RecordFixture records = SimulationTestFactory.CreateRecordFixture();
+        NpcRuntime npc = new NpcRuntime("npc-reentrant", SimulationTestFactory.CreateNpc("reentrant"));
+        NpcActionData action = SimulationTestFactory.CreateAction("reentrant-action", NpcActionType.Normal);
+        action.actionType = NpcActionType.Travel;
+        action.baseUtility = 1f;
+        npc.NpcData.acoesPadrao.Add(new NPCDefaultAction { action = action, baseUtility = 1f });
+        SimulationRuntime runtime = null;
+        SimulationRuntime independentRuntime = new SimulationRuntime(new SimulationTime(0L), null, null, economyEnabled: false);
+        int rejected = 0;
+        ReentrantActionProvider provider = new ReentrantActionProvider((_, __, ___) =>
+        {
+            Assert.That(runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure failure), Is.False);
+            Assert.That(failure, Is.EqualTo(SimulationRuntimeAdvanceFailure.AdvanceAlreadyInProgress));
+            Assert.That(independentRuntime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure independentFailure), Is.True);
+            Assert.That(independentFailure, Is.EqualTo(SimulationRuntimeAdvanceFailure.None));
+            rejected++;
+        });
+        runtime = new SimulationRuntime(
+            records.Time,
+            null,
+            new[] { npc },
+            economyEnabled: false,
+            configuredActions: new[] { action },
+            npcDecisionSystem: new NpcDecisionSystem(new List<INpcActionProvider> { provider }));
+
+        Assert.That(runtime.TryAdvanceDays(2, out int daysAdvanced, out SimulationRuntimeAdvanceFailure outerFailure), Is.True);
+
+        Assert.That(outerFailure, Is.EqualTo(SimulationRuntimeAdvanceFailure.None));
+        Assert.That(daysAdvanced, Is.EqualTo(2));
+        Assert.That(runtime.CurrentDay, Is.EqualTo(2L));
+        Assert.That(rejected, Is.EqualTo(2));
+        Assert.That(independentRuntime.CurrentDay, Is.EqualTo(2L));
+        Assert.That(runtime.TryAdvanceDay(out _), Is.True, "lease is released after the outer operation");
+    }
+
+    [Test]
+    public void AdvanceLease_ReleasesAfterTypedFailureAndException()
+    {
+        NpcRuntime npc = new NpcRuntime("npc-throws", SimulationTestFactory.CreateNpc("throws"));
+        NpcActionData action = SimulationTestFactory.CreateAction("throwing-action", NpcActionType.Normal);
+        action.actionType = NpcActionType.Travel;
+        action.baseUtility = 1f;
+        npc.NpcData.acoesPadrao.Add(new NPCDefaultAction { action = action, baseUtility = 1f });
+        bool shouldThrow = true;
+        ReentrantActionProvider provider = new ReentrantActionProvider((_, __, ___) =>
+        {
+            if (shouldThrow)
+            {
+                throw new System.InvalidOperationException("expected test exception");
+            }
+        });
+        SimulationRuntime throwingRuntime = new SimulationRuntime(
+            new SimulationTime(0L),
+            null,
+            new[] { npc },
+            economyEnabled: false,
+            configuredActions: new[] { action },
+            npcDecisionSystem: new NpcDecisionSystem(new List<INpcActionProvider> { provider }));
+
+        Assert.Throws<System.InvalidOperationException>(() => throwingRuntime.TryAdvanceDay(out _));
+        shouldThrow = false;
+        Assert.That(throwingRuntime.TryAdvanceDay(out _), Is.True, "lease is released when a callback throws");
+
+        SimulationRuntime overflowRuntime = new SimulationRuntime(
+            new SimulationTime(long.MaxValue),
+            null,
+            null,
+            economyEnabled: false);
+        Assert.That(overflowRuntime.TryAdvanceDays(1, out int daysAdvanced, out SimulationRuntimeAdvanceFailure overflowFailure), Is.False);
+        Assert.That(daysAdvanced, Is.EqualTo(0));
+        Assert.That(overflowFailure, Is.EqualTo(SimulationRuntimeAdvanceFailure.AbsoluteDayOverflow));
+        Assert.That(overflowRuntime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure retryFailure), Is.False);
+        Assert.That(retryFailure, Is.EqualTo(SimulationRuntimeAdvanceFailure.AbsoluteDayOverflow),
+            "typed failure releases the lease rather than converting the retry into reentrancy rejection");
+    }
+
+    private sealed class ReentrantActionProvider : INpcActionProvider
+    {
+        private readonly System.Action<NpcRuntime, NpcActionData, float> callback;
+
+        public ReentrantActionProvider(System.Action<NpcRuntime, NpcActionData, float> callback)
+        {
+            this.callback = callback;
+        }
+
+        public bool HandlesAction(NpcActionData action) => true;
+
+        public NpcActionRuntime CreateAction(NpcRuntime npcRuntime, NpcActionData action, ref float utility)
+        {
+            callback?.Invoke(npcRuntime, action, utility);
+            return new NpcActionRuntime(action);
+        }
+
+        public NpcActionResult TryExecuteAction(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime)
+        {
+            return NpcActionResult.Succeeded();
+        }
+    }
+
     private static ActionExecutionContext CreateGroupTravelContext(TravelPartyFixture fixture)
     {
         return new ActionExecutionContext(

@@ -1,9 +1,16 @@
+using System;
 using System.Collections.Generic;
+using System.Globalization;
 using UnityEngine;
 
 public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutonomousNpcActionPolicy, IAuthoritativeMutationGuardBindable
 {
     private const float EscapeSuccessMultiplierPerFailure = 0.8f;
+    private const string HiddenStatusStepId = "crime-hidden-statuses";
+    private const string HiddenStatusOwnerId = "crime";
+    private const string HiddenStatusOperationKind = "crime.advance-hidden-statuses";
+    private const string HiddenStatusOperationVersion = "1";
+    private const string HiddenStatusSnapshotVersion = "crime-hidden-statuses-owner-v1";
     private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
     private readonly JusticeSystem justiceSystem;
     private readonly TravelSystem travelSystem;
@@ -12,6 +19,9 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
     private readonly EconomyTransactionService transactionService;
     private readonly EffectiveCrimeConfiguration configuration;
     private readonly IAuthoritativeRandomSource randomSource;
+    private Dictionary<string, CrimeHiddenStatusReceipt> hiddenStatusStepReceipts =
+        new Dictionary<string, CrimeHiddenStatusReceipt>(StringComparer.Ordinal);
+    private long hiddenStatusStepRevision;
     private SimulationTime simulationTime;
     private ITheftOutcomeSink theftOutcomeSink;
 
@@ -215,6 +225,446 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
                 logger.Log(SimulationLogCategory.Crime, $"{npcRuntime.NpcName} nao esta mais escondido.");
             }
         }
+    }
+
+    /// <summary>Captures the current crime-owned roster traversal as a frozen P18 boundary step.</summary>
+    public bool TryCreateAdvanceHiddenStatusesStep(
+        DailyBoundaryOperation operation,
+        List<NpcRuntime> npcRuntimeList,
+        int ordinal,
+        out BoundaryContinuationStep step,
+        out TimelineFailure failure)
+    {
+        step = null;
+        failure = TimelineFailure.ContinuationFailed;
+        if (operation == null || npcRuntimeList == null || ordinal < 0
+            || !mutationGuardBinding.CanMutate || hiddenStatusStepRevision == long.MaxValue
+            || !TryCaptureHiddenStatusSnapshot(npcRuntimeList, out _, out string ownerRevision))
+        {
+            return false;
+        }
+
+        step = new BoundaryContinuationStep(
+            ordinal,
+            HiddenStatusStepId,
+            HiddenStatusOwnerId,
+            HiddenStatusOperationKind,
+            HiddenStatusOperationVersion,
+            ownerRevision,
+            string.Empty);
+        failure = TimelineFailure.None;
+        return true;
+    }
+
+    /// <summary>Looks up an exact crime-owned occurrence receipt without reading the live roster.</summary>
+    public bool TryResolveAdvanceHiddenStatusesReceipt(
+        BoundaryContinuationManifest manifest,
+        BoundaryContinuationStep step,
+        out CrimeHiddenStatusReceipt receipt,
+        out TimelineFailure failure)
+    {
+        receipt = null;
+        if (!TryGetHiddenStatusIdentity(manifest, step, out string identity, out string fingerprint))
+        {
+            failure = TimelineFailure.ContinuationFailed;
+            return false;
+        }
+
+        if (hiddenStatusStepReceipts == null)
+        {
+            hiddenStatusStepReceipts = new Dictionary<string, CrimeHiddenStatusReceipt>(StringComparer.Ordinal);
+        }
+
+        if (!hiddenStatusStepReceipts.TryGetValue(identity, out CrimeHiddenStatusReceipt existing))
+        {
+            failure = TimelineFailure.None;
+            return false;
+        }
+
+        if (!string.Equals(existing.DescriptorFingerprint, fingerprint, StringComparison.Ordinal))
+        {
+            failure = TimelineFailure.ContinuationFailed;
+            return false;
+        }
+
+        receipt = existing;
+        failure = TimelineFailure.None;
+        return true;
+    }
+
+    /// <summary>Stages the legacy hidden-status traversal and its occurrence receipt as one owner commit.</summary>
+    public bool TryPrepareAdvanceHiddenStatusesStep(
+        BoundaryContinuationManifest manifest,
+        BoundaryContinuationStep step,
+        List<NpcRuntime> npcRuntimeList,
+        out IBoundaryContinuationStepCommit prepared,
+        out TimelineFailure failure)
+    {
+        prepared = null;
+        if (!TryGetHiddenStatusIdentity(manifest, step, out string identity, out string fingerprint))
+        {
+            failure = TimelineFailure.ContinuationFailed;
+            return false;
+        }
+
+        if (hiddenStatusStepReceipts == null)
+        {
+            hiddenStatusStepReceipts = new Dictionary<string, CrimeHiddenStatusReceipt>(StringComparer.Ordinal);
+        }
+
+        if (hiddenStatusStepReceipts.TryGetValue(identity, out CrimeHiddenStatusReceipt existing))
+        {
+            if (!string.Equals(existing.DescriptorFingerprint, fingerprint, StringComparison.Ordinal))
+            {
+                failure = TimelineFailure.ContinuationFailed;
+                return false;
+            }
+
+            prepared = new CrimeHiddenStatusCommit(
+                this,
+                existing,
+                null,
+                null,
+                true,
+                fingerprint,
+                step.OwnerRevision,
+                hiddenStatusStepRevision,
+                hiddenStatusStepReceipts,
+                hiddenStatusStepReceipts);
+            failure = TimelineFailure.None;
+            return true;
+        }
+
+        if (npcRuntimeList == null || !mutationGuardBinding.CanMutate
+            || hiddenStatusStepRevision == long.MaxValue
+            || !TryCaptureHiddenStatusSnapshot(
+                npcRuntimeList,
+                out List<CrimeHiddenStatusSnapshotEntry> snapshots,
+                out string currentOwnerRevision)
+            || !string.Equals(currentOwnerRevision, step.OwnerRevision, StringComparison.Ordinal))
+        {
+            failure = TimelineFailure.ContinuationFailed;
+            return false;
+        }
+
+        CrimeHiddenStatusReceipt receipt = new CrimeHiddenStatusReceipt(
+            identity,
+            fingerprint,
+            hiddenStatusStepRevision,
+            hiddenStatusStepRevision + 1L);
+        Dictionary<string, CrimeHiddenStatusReceipt> nextReceipts =
+            new Dictionary<string, CrimeHiddenStatusReceipt>(hiddenStatusStepReceipts, StringComparer.Ordinal)
+            {
+                [identity] = receipt
+            };
+        List<string> expiryNotices = CaptureHiddenStatusExpiryNotices(snapshots);
+
+        // AddStatus must not allocate after the first timer mutation. Capacity changes do not alter domain truth.
+        if (hiddenStatus != null)
+        {
+            HashSet<NpcRuntime> reserved = new HashSet<NpcRuntime>();
+            foreach (CrimeHiddenStatusSnapshotEntry snapshot in snapshots)
+            {
+                if (snapshot.Npc == null || snapshot.HiddenDaysRemaining <= 0
+                    || snapshot.HiddenStatusCount != 0 || !reserved.Add(snapshot.Npc))
+                {
+                    continue;
+                }
+
+                List<NpcStatusData> statuses = snapshot.Npc.CurrentStatus;
+                if (statuses.Capacity < statuses.Count + 1)
+                {
+                    statuses.Capacity = statuses.Count + 1;
+                }
+            }
+        }
+
+        prepared = new CrimeHiddenStatusCommit(
+            this,
+            receipt,
+            npcRuntimeList,
+            snapshots,
+            false,
+            fingerprint,
+            step.OwnerRevision,
+            hiddenStatusStepRevision,
+            hiddenStatusStepReceipts,
+            nextReceipts,
+            expiryNotices);
+        failure = TimelineFailure.None;
+        return true;
+    }
+
+    internal bool TryCommitAdvanceHiddenStatusesStep(
+        CrimeHiddenStatusReceipt receipt,
+        List<NpcRuntime> npcRuntimeList,
+        IReadOnlyList<CrimeHiddenStatusSnapshotEntry> expectedSnapshots,
+        IReadOnlyList<string> expiryNotices,
+        bool replay,
+        string fingerprint,
+        string expectedOwnerRevision,
+        long expectedRevision,
+        Dictionary<string, CrimeHiddenStatusReceipt> expectedReceipts,
+        Dictionary<string, CrimeHiddenStatusReceipt> nextReceipts,
+        out TimelineFailure failure)
+    {
+        failure = TimelineFailure.ContinuationFailed;
+        if (receipt == null)
+        {
+            return false;
+        }
+
+        if (replay)
+        {
+            if (hiddenStatusStepReceipts != null
+                && hiddenStatusStepReceipts.TryGetValue(receipt.ExecutionStepIdentity, out CrimeHiddenStatusReceipt existing)
+                && ReferenceEquals(existing, receipt)
+                && string.Equals(existing.DescriptorFingerprint, fingerprint, StringComparison.Ordinal))
+            {
+                failure = TimelineFailure.None;
+                return true;
+            }
+
+            return false;
+        }
+
+        if (npcRuntimeList == null || expectedSnapshots == null || expiryNotices == null
+            || !mutationGuardBinding.CanMutate || hiddenStatusStepRevision != expectedRevision
+            || !ReferenceEquals(hiddenStatusStepReceipts, expectedReceipts)
+            || nextReceipts == null || !nextReceipts.ContainsKey(receipt.ExecutionStepIdentity)
+            || hiddenStatusStepReceipts.ContainsKey(receipt.ExecutionStepIdentity)
+            || hiddenStatusStepRevision == long.MaxValue
+            || receipt.OwnerRevisionBefore != hiddenStatusStepRevision
+            || receipt.OwnerRevisionAfter != hiddenStatusStepRevision + 1L
+            || !string.Equals(receipt.DescriptorFingerprint, fingerprint, StringComparison.Ordinal)
+            || !TryCaptureHiddenStatusSnapshot(npcRuntimeList, out List<CrimeHiddenStatusSnapshotEntry> currentSnapshots,
+                out string currentOwnerRevision)
+            || !string.Equals(currentOwnerRevision, expectedOwnerRevision, StringComparison.Ordinal)
+            || !SameHiddenStatusSnapshot(expectedSnapshots, currentSnapshots))
+        {
+            return false;
+        }
+
+        foreach (CrimeHiddenStatusSnapshotEntry snapshot in expectedSnapshots)
+        {
+            NpcRuntime npcRuntime = snapshot.Npc;
+            if (npcRuntime == null)
+            {
+                continue;
+            }
+
+            if (npcRuntime.IsHidden == false)
+            {
+                npcRuntime.RemoveStatus(hiddenStatus);
+                continue;
+            }
+
+            if (hiddenStatus != null && npcRuntime.CurrentStatus.Contains(hiddenStatus) == false)
+            {
+                npcRuntime.AddStatus(hiddenStatus);
+            }
+
+            npcRuntime.AdvanceHiddenDay();
+            if (npcRuntime.IsHidden == false)
+            {
+                npcRuntime.RemoveStatus(hiddenStatus);
+            }
+        }
+
+        hiddenStatusStepRevision = receipt.OwnerRevisionAfter;
+        hiddenStatusStepReceipts = nextReceipts;
+        failure = TimelineFailure.None;
+
+        // Logs are diagnostics, not source signals or world truth. Emit them only after the receipt is durable.
+        foreach (string notice in expiryNotices)
+        {
+            logger.Log(SimulationLogCategory.Crime, notice);
+        }
+
+        return true;
+    }
+
+    private bool TryCaptureHiddenStatusSnapshot(
+        List<NpcRuntime> npcRuntimeList,
+        out List<CrimeHiddenStatusSnapshotEntry> snapshots,
+        out string ownerRevision)
+    {
+        snapshots = null;
+        ownerRevision = null;
+        if (npcRuntimeList == null || !mutationGuardBinding.CanMutate || hiddenStatusStepRevision == long.MaxValue)
+        {
+            return false;
+        }
+
+        snapshots = new List<CrimeHiddenStatusSnapshotEntry>(npcRuntimeList.Count);
+        List<string> revisionParts = new List<string>(3 + npcRuntimeList.Count)
+        {
+            HiddenStatusSnapshotVersion,
+            hiddenStatusStepRevision.ToString(CultureInfo.InvariantCulture),
+            npcRuntimeList.Count.ToString(CultureInfo.InvariantCulture),
+            hiddenStatus == null ? string.Empty : hiddenStatus.statusName
+        };
+        Dictionary<string, NpcRuntime> runtimeIds = new Dictionary<string, NpcRuntime>(StringComparer.Ordinal);
+        for (int i = 0; i < npcRuntimeList.Count; i++)
+        {
+            NpcRuntime npcRuntime = npcRuntimeList[i];
+            if (npcRuntime == null)
+            {
+                snapshots.Add(new CrimeHiddenStatusSnapshotEntry(null, string.Empty, string.Empty, 0, 0));
+                revisionParts.Add(SpatialStableKey.Encode(i.ToString(CultureInfo.InvariantCulture), "null-slot"));
+                continue;
+            }
+
+            string runtimeId = npcRuntime.RuntimeId;
+            if (string.IsNullOrWhiteSpace(runtimeId)
+                || (runtimeIds.TryGetValue(runtimeId, out NpcRuntime registered)
+                    && !ReferenceEquals(registered, npcRuntime)))
+            {
+                return false;
+            }
+
+            runtimeIds[runtimeId] = npcRuntime;
+            // PersonId is the materialization-independent identity when present; RuntimeId remains
+            // the stable fallback for legacy roster entries that are not Person-backed.
+            string personId = npcRuntime.PersonId?.Value ?? string.Empty;
+            int markerCount = CountHiddenStatusMarkers(npcRuntime);
+            int hiddenDaysRemaining = npcRuntime.HiddenDaysRemaining;
+            snapshots.Add(new CrimeHiddenStatusSnapshotEntry(
+                npcRuntime, runtimeId, personId, hiddenDaysRemaining, markerCount));
+            revisionParts.Add(SpatialStableKey.Encode(
+                i.ToString(CultureInfo.InvariantCulture),
+                runtimeId,
+                personId,
+                hiddenDaysRemaining.ToString(CultureInfo.InvariantCulture),
+                markerCount.ToString(CultureInfo.InvariantCulture)));
+        }
+
+        ownerRevision = SpatialStableKey.Encode(revisionParts.ToArray());
+        return true;
+    }
+
+    private int CountHiddenStatusMarkers(NpcRuntime npcRuntime)
+    {
+        int count = 0;
+        foreach (NpcStatusData status in npcRuntime.CurrentStatus)
+        {
+            if (ReferenceEquals(status, hiddenStatus))
+            {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+    private List<string> CaptureHiddenStatusExpiryNotices(IReadOnlyList<CrimeHiddenStatusSnapshotEntry> snapshots)
+    {
+        List<string> notices = new List<string>();
+        Dictionary<NpcRuntime, int> remainingByNpc = new Dictionary<NpcRuntime, int>();
+        foreach (CrimeHiddenStatusSnapshotEntry snapshot in snapshots)
+        {
+            NpcRuntime npcRuntime = snapshot.Npc;
+            if (npcRuntime == null)
+            {
+                continue;
+            }
+
+            if (!remainingByNpc.TryGetValue(npcRuntime, out int remaining))
+            {
+                remaining = snapshot.HiddenDaysRemaining;
+            }
+
+            if (remaining <= 0)
+            {
+                remainingByNpc[npcRuntime] = remaining;
+                continue;
+            }
+
+            remaining = Mathf.Max(0, remaining - 1);
+            remainingByNpc[npcRuntime] = remaining;
+            if (remaining <= 0)
+            {
+                notices.Add($"{npcRuntime.NpcName} nao esta mais escondido.");
+            }
+        }
+
+        return notices;
+    }
+
+    private bool TryGetHiddenStatusIdentity(
+        BoundaryContinuationManifest manifest,
+        BoundaryContinuationStep step,
+        out string identity,
+        out string fingerprint)
+    {
+        identity = null;
+        fingerprint = null;
+        if (manifest == null || step == null || step.Ordinal >= manifest.Steps.Count
+            || !ReferenceEquals(manifest.Steps[step.Ordinal], step)
+            || step.StepId != HiddenStatusStepId || step.OwnerId != HiddenStatusOwnerId
+            || step.OperationKind != HiddenStatusOperationKind
+            || step.OperationVersion != HiddenStatusOperationVersion
+            || step.Disposition != "included")
+        {
+            return false;
+        }
+
+        string expectedBoundaryOccurrenceId = SpatialStableKey.Encode(
+            manifest.WorldId,
+            manifest.ProfileId,
+            manifest.AbsoluteDay.ToString(CultureInfo.InvariantCulture));
+        if (!string.Equals(manifest.BoundaryOccurrenceId, expectedBoundaryOccurrenceId, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        // The owner fact is keyed by the stable boundary occurrence and semantic step ID.
+        // Ordinal participates in the frozen descriptor fingerprint, but is only execution order.
+        identity = SpatialStableKey.Encode(manifest.BoundaryOccurrenceId, step.StepId);
+        fingerprint = SpatialStableKey.Encode(
+            manifest.BoundaryOccurrenceId,
+            manifest.ContinuationId,
+            manifest.SubphaseKind,
+            manifest.SubphaseVersion,
+            manifest.ConfigurationIdentity,
+            manifest.ContentIdentity,
+            step.Ordinal.ToString(CultureInfo.InvariantCulture),
+            step.StepId,
+            step.OwnerId,
+            step.OperationKind,
+            step.OperationVersion,
+            step.OwnerRevision,
+            step.Payload,
+            step.PersonId,
+            step.Disposition);
+        return true;
+    }
+
+    private static bool SameHiddenStatusSnapshot(
+        IReadOnlyList<CrimeHiddenStatusSnapshotEntry> expected,
+        IReadOnlyList<CrimeHiddenStatusSnapshotEntry> actual)
+    {
+        if (expected == null || actual == null || expected.Count != actual.Count)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < expected.Count; i++)
+        {
+            CrimeHiddenStatusSnapshotEntry left = expected[i];
+            CrimeHiddenStatusSnapshotEntry right = actual[i];
+            if (left == null || right == null
+                || !ReferenceEquals(left.Npc, right.Npc)
+                || !string.Equals(left.RuntimeId, right.RuntimeId, StringComparison.Ordinal)
+                || !string.Equals(left.PersonId, right.PersonId, StringComparison.Ordinal)
+                || left.HiddenDaysRemaining != right.HiddenDaysRemaining
+                || left.HiddenStatusCount != right.HiddenStatusCount)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard)
@@ -665,5 +1115,117 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
             TravelCost = travelCost;
             Utility = utility;
         }
+    }
+}
+
+public sealed class CrimeHiddenStatusReceipt
+{
+    public string ExecutionStepIdentity { get; }
+    public string DescriptorFingerprint { get; }
+    public long OwnerRevisionBefore { get; }
+    public long OwnerRevisionAfter { get; }
+
+    internal CrimeHiddenStatusReceipt(
+        string executionStepIdentity,
+        string descriptorFingerprint,
+        long ownerRevisionBefore,
+        long ownerRevisionAfter)
+    {
+        ExecutionStepIdentity = executionStepIdentity ?? throw new ArgumentNullException(nameof(executionStepIdentity));
+        DescriptorFingerprint = descriptorFingerprint ?? throw new ArgumentNullException(nameof(descriptorFingerprint));
+        OwnerRevisionBefore = ownerRevisionBefore;
+        OwnerRevisionAfter = ownerRevisionAfter;
+    }
+}
+
+internal sealed class CrimeHiddenStatusSnapshotEntry
+{
+    public NpcRuntime Npc { get; }
+    public string RuntimeId { get; }
+    public string PersonId { get; }
+    public int HiddenDaysRemaining { get; }
+    public int HiddenStatusCount { get; }
+
+    public CrimeHiddenStatusSnapshotEntry(
+        NpcRuntime npc,
+        string runtimeId,
+        string personId,
+        int hiddenDaysRemaining,
+        int hiddenStatusCount)
+    {
+        Npc = npc;
+        RuntimeId = runtimeId ?? string.Empty;
+        PersonId = personId ?? string.Empty;
+        HiddenDaysRemaining = hiddenDaysRemaining;
+        HiddenStatusCount = hiddenStatusCount;
+    }
+}
+
+internal sealed class CrimeHiddenStatusCommit : IBoundaryContinuationStepCommit
+{
+    private readonly CrimeSystem owner;
+    private readonly CrimeHiddenStatusReceipt receipt;
+    private readonly List<NpcRuntime> npcRuntimeList;
+    private readonly IReadOnlyList<CrimeHiddenStatusSnapshotEntry> snapshots;
+    private readonly IReadOnlyList<string> expiryNotices;
+    private readonly bool replay;
+    private readonly string fingerprint;
+    private readonly string expectedOwnerRevision;
+    private readonly long expectedRevision;
+    private readonly Dictionary<string, CrimeHiddenStatusReceipt> expectedReceipts;
+    private readonly Dictionary<string, CrimeHiddenStatusReceipt> nextReceipts;
+    private bool completed;
+
+    public IReadOnlyList<DueWorkReference> RetainedTimelineFacts => Array.Empty<DueWorkReference>();
+    public IReadOnlyList<string> RetainedSourceSignals => Array.Empty<string>();
+    public CrimeHiddenStatusReceipt Receipt => receipt;
+
+    public CrimeHiddenStatusCommit(
+        CrimeSystem owner,
+        CrimeHiddenStatusReceipt receipt,
+        List<NpcRuntime> npcRuntimeList,
+        IReadOnlyList<CrimeHiddenStatusSnapshotEntry> snapshots,
+        bool replay,
+        string fingerprint,
+        string expectedOwnerRevision,
+        long expectedRevision,
+        Dictionary<string, CrimeHiddenStatusReceipt> expectedReceipts,
+        Dictionary<string, CrimeHiddenStatusReceipt> nextReceipts,
+        IReadOnlyList<string> expiryNotices = null)
+    {
+        this.owner = owner ?? throw new ArgumentNullException(nameof(owner));
+        this.receipt = receipt ?? throw new ArgumentNullException(nameof(receipt));
+        this.npcRuntimeList = npcRuntimeList;
+        this.snapshots = snapshots ?? Array.Empty<CrimeHiddenStatusSnapshotEntry>();
+        this.replay = replay;
+        this.fingerprint = fingerprint ?? string.Empty;
+        this.expectedOwnerRevision = expectedOwnerRevision ?? string.Empty;
+        this.expectedRevision = expectedRevision;
+        this.expectedReceipts = expectedReceipts;
+        this.nextReceipts = nextReceipts;
+        this.expiryNotices = expiryNotices ?? Array.Empty<string>();
+    }
+
+    public bool TryCommit(out TimelineFailure failure)
+    {
+        if (completed)
+        {
+            failure = TimelineFailure.None;
+            return true;
+        }
+
+        completed = owner.TryCommitAdvanceHiddenStatusesStep(
+            receipt,
+            npcRuntimeList,
+            snapshots,
+            expiryNotices,
+            replay,
+            fingerprint,
+            expectedOwnerRevision,
+            expectedRevision,
+            expectedReceipts,
+            nextReceipts,
+            out failure);
+        return completed;
     }
 }

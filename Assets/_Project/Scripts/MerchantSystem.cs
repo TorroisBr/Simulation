@@ -1,9 +1,17 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using UnityEngine;
 
-public class MerchantSystem : INpcActionProvider, IAuthoritativeMutationGuardBindable
+public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutationGuardBindable
 {
+    private const int LocalMarketSellGoodsActionVersion = 1;
+    private const string PlanUrgencyStepId = "merchant-plan-urgency";
+    private const string PlanUrgencyOwnerId = "merchant";
+    private const string PlanUrgencyOperationKind = "merchant.advance-plan-urgency";
+    private const string PlanUrgencyOperationVersion = "1";
+    private const string PlanUrgencySnapshotVersion = "merchant-plan-urgency-owner-v1";
+
     private readonly EffectiveMerchantTradeConfiguration tradeConfiguration;
     private readonly TravelSystem travelSystem;
     private readonly SimulationTime simulationTime;
@@ -12,6 +20,9 @@ public class MerchantSystem : INpcActionProvider, IAuthoritativeMutationGuardBin
     private readonly SimulationLogger logger;
     private readonly EconomyTransactionService transactionService;
     private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
+    private Dictionary<string, MerchantPlanUrgencyReceipt> planUrgencyStepReceipts =
+        new Dictionary<string, MerchantPlanUrgencyReceipt>(StringComparer.Ordinal);
+    private long planUrgencyStepRevision;
 
     public MerchantSystem(
         EffectiveMerchantTradeConfiguration tradeConfiguration,
@@ -108,6 +119,128 @@ public class MerchantSystem : INpcActionProvider, IAuthoritativeMutationGuardBin
         }
 
         plan.IncrementWaitDayAtDestination();
+    }
+
+    /// <summary>Creates the frozen roster descriptor for the legacy plan-urgency pass.</summary>
+    public bool TryCreatePlanUrgencyStep(
+        DailyBoundaryOperation operation,
+        IReadOnlyList<NpcRuntime> roster,
+        int ordinal,
+        out BoundaryContinuationStep step,
+        out TimelineFailure failure)
+    {
+        step = null;
+        failure = TimelineFailure.ContinuationFailed;
+        if (operation == null || roster == null || ordinal < 0 || planUrgencyStepRevision == long.MaxValue
+            || !TryEncodePlanUrgencyRoster(roster, out string rosterDescriptor))
+        {
+            return false;
+        }
+
+        // OwnerRevision is schema/revision identity only. Mutable eligibility and plan values
+        // are deliberately captured by TryPrepare after earlier boundary owners have committed.
+        string ownerRevision = SpatialStableKey.Encode(
+            PlanUrgencySnapshotVersion,
+            PlanUrgencyOperationVersion,
+            planUrgencyStepRevision.ToString(CultureInfo.InvariantCulture));
+        step = new BoundaryContinuationStep(
+            ordinal, PlanUrgencyStepId, PlanUrgencyOwnerId, PlanUrgencyOperationKind,
+            PlanUrgencyOperationVersion, ownerRevision, rosterDescriptor);
+        failure = TimelineFailure.None;
+        return true;
+    }
+
+    public bool TryResolvePlanUrgencyReceipt(
+        BoundaryContinuationManifest manifest,
+        BoundaryContinuationStep step,
+        out MerchantPlanUrgencyReceipt receipt,
+        out TimelineFailure failure)
+    {
+        receipt = null;
+        if (!TryGetPlanUrgencyIdentity(manifest, step, out string identity, out string fingerprint))
+        {
+            failure = TimelineFailure.ContinuationFailed;
+            return false;
+        }
+
+        planUrgencyStepReceipts ??= new Dictionary<string, MerchantPlanUrgencyReceipt>(StringComparer.Ordinal);
+        if (!planUrgencyStepReceipts.TryGetValue(identity, out MerchantPlanUrgencyReceipt existing))
+        {
+            failure = TimelineFailure.None;
+            return false;
+        }
+
+        if (!string.Equals(existing.DescriptorFingerprint, fingerprint, StringComparison.Ordinal))
+        {
+            failure = TimelineFailure.ContinuationFailed;
+            return false;
+        }
+
+        receipt = existing;
+        failure = TimelineFailure.None;
+        return true;
+    }
+
+    /// <summary>Prepares merchant-owned urgency mutations and their occurrence receipt as one commit.</summary>
+    public bool TryPreparePlanUrgencyStep(
+        BoundaryContinuationManifest manifest,
+        BoundaryContinuationStep step,
+        IReadOnlyList<NpcRuntime> roster,
+        out IBoundaryContinuationStepCommit prepared,
+        out TimelineFailure failure)
+    {
+        prepared = null;
+        if (!TryGetPlanUrgencyIdentity(manifest, step, out string identity, out string fingerprint))
+        {
+            failure = TimelineFailure.ContinuationFailed;
+            return false;
+        }
+
+        planUrgencyStepReceipts ??= new Dictionary<string, MerchantPlanUrgencyReceipt>(StringComparer.Ordinal);
+        if (planUrgencyStepReceipts.TryGetValue(identity, out MerchantPlanUrgencyReceipt existing))
+        {
+            if (!string.Equals(existing.DescriptorFingerprint, fingerprint, StringComparison.Ordinal))
+            {
+                failure = TimelineFailure.ContinuationFailed;
+                return false;
+            }
+
+            prepared = new MerchantPlanUrgencyCommit(this, existing, null, true, fingerprint,
+                CreatePlanUrgencyOwnerRevision(), planUrgencyStepRevision, planUrgencyStepReceipts);
+            failure = TimelineFailure.None;
+            return true;
+        }
+
+        if (!mutationGuardBinding.CanMutate || planUrgencyStepRevision == long.MaxValue
+            || roster == null || !TryEncodePlanUrgencyRoster(roster, out string currentRoster)
+            || !string.Equals(currentRoster, step.Payload, StringComparison.Ordinal)
+            || !TryCapturePlanUrgencySnapshot(roster, out List<MerchantPlanUrgencyEntry> snapshot)
+            || !string.Equals(CreatePlanUrgencyOwnerRevision(), step.OwnerRevision, StringComparison.Ordinal))
+        {
+            failure = TimelineFailure.ContinuationFailed;
+            return false;
+        }
+
+        foreach (MerchantPlanUrgencyEntry entry in snapshot)
+        {
+            if (entry.Advances && entry.PendingTravelDays == int.MaxValue)
+            {
+                failure = TimelineFailure.ContinuationFailed;
+                return false;
+            }
+        }
+
+        MerchantPlanUrgencyReceipt receipt = new MerchantPlanUrgencyReceipt(
+            identity, fingerprint, planUrgencyStepRevision, planUrgencyStepRevision + 1L);
+        Dictionary<string, MerchantPlanUrgencyReceipt> nextReceipts =
+            new Dictionary<string, MerchantPlanUrgencyReceipt>(planUrgencyStepReceipts, StringComparer.Ordinal)
+            {
+                [identity] = receipt
+            };
+        prepared = new MerchantPlanUrgencyCommit(this, receipt, snapshot, false, fingerprint,
+            step.OwnerRevision, planUrgencyStepRevision, planUrgencyStepReceipts, nextReceipts);
+        failure = TimelineFailure.None;
+        return true;
     }
 
     public void BootstrapInitialKnowledge(NpcRuntime npcRuntime)
@@ -335,6 +468,100 @@ public class MerchantSystem : INpcActionProvider, IAuthoritativeMutationGuardBin
         }
 
         return NpcActionResult.Failed();
+    }
+
+    /// <summary>
+    /// Executes the already-resolved local-market SellGoods proposal through
+    /// the runtime-scoped keyed economy receipt owner. The caller owns P11/P18-C
+    /// validation, proposal retention, and terminal reconciliation.
+    /// </summary>
+    public bool TryExecuteKeyedLocalMarketSale(
+        NpcRuntime seller,
+        PersonId actorPersonId,
+        NpcActionRuntime actionRuntime,
+        string proposalId,
+        string fingerprint,
+        string actorChoiceInputId,
+        string requestId,
+        string profileId,
+        LogicalTick logicalTick,
+        out KeyedSaleReceipt receipt)
+    {
+        receipt = null;
+        if (seller == null
+            || actorPersonId == null
+            || actionRuntime == null
+            || actionRuntime.Action == null
+            || actionRuntime.Action.actionType != NpcActionType.SellGoods
+            || actionRuntime.TargetNpc != null
+            || actionRuntime.TargetItem == null
+            || actionRuntime.Amount <= 0
+            || actionRuntime.TargetCity == null
+            || string.IsNullOrWhiteSpace(proposalId)
+            || string.IsNullOrWhiteSpace(fingerprint)
+            || string.IsNullOrWhiteSpace(actorChoiceInputId)
+            || string.IsNullOrWhiteSpace(requestId)
+            || string.IsNullOrWhiteSpace(profileId))
+        {
+            return false;
+        }
+
+        CityRuntime marketCity = actionRuntime.TargetCity;
+        MarketRuntime market = marketCity.Market;
+        string marketSiteId = marketCity.Location != null
+            ? marketCity.Location.RuntimeId
+            : marketCity.RuntimeId;
+        if (market == null || string.IsNullOrWhiteSpace(marketSiteId))
+        {
+            return false;
+        }
+
+        string logicalTickValue = logicalTick.Value.ToString(CultureInfo.InvariantCulture);
+        string actionSemanticId = actionRuntime.Action.DefinitionId;
+        KeyedSaleReceipt prior = transactionService.FindKeyedSaleReceipt(
+            proposalId,
+            fingerprint,
+            actorChoiceInputId,
+            requestId,
+            actorPersonId.Value,
+            actionSemanticId,
+            LocalMarketSellGoodsActionVersion,
+            profileId,
+            logicalTickValue,
+            marketSiteId,
+            actionRuntime.TargetItem.DefinitionId,
+            actionRuntime.Amount);
+        if (prior != null && prior.Outcome != KeyedSaleOutcome.ProvenNoInstall)
+        {
+            receipt = prior;
+            return true;
+        }
+
+        if (!mutationGuardBinding.CanMutate
+            || seller.PersonId != null && seller.PersonId != actorPersonId
+            || !ReferenceEquals(actionRuntime.TargetCity, seller.CurrentCity)
+            || seller.MerchantTradePlan.IsActive
+            || !tradeConfiguration.Enabled)
+        {
+            return false;
+        }
+
+        receipt = transactionService.TryExecuteKeyedMarketSale(
+            proposalId,
+            fingerprint,
+            actorChoiceInputId,
+            requestId,
+            actorPersonId.Value,
+            actionSemanticId,
+            LocalMarketSellGoodsActionVersion,
+            profileId,
+            logicalTickValue,
+            marketSiteId,
+            seller,
+            market,
+            actionRuntime.TargetItem,
+            actionRuntime.Amount);
+        return receipt != null;
     }
 
     internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard)
@@ -1496,7 +1723,233 @@ public class MerchantSystem : INpcActionProvider, IAuthoritativeMutationGuardBin
             && npcRuntime.NpcData.job.merchantBehavior == MerchantBehavior.Local;
     }
 
-    private class MerchantTradeOpportunity
+    private string CreatePlanUrgencyOwnerRevision() => SpatialStableKey.Encode(
+        PlanUrgencySnapshotVersion,
+        PlanUrgencyOperationVersion,
+        planUrgencyStepRevision.ToString(CultureInfo.InvariantCulture));
+
+    private static bool TryEncodePlanUrgencyRoster(IReadOnlyList<NpcRuntime> roster, out string descriptor)
+    {
+        descriptor = null;
+        if (roster == null) return false;
+        List<string> parts = new List<string>(roster.Count + 1) { "merchant-plan-urgency-roster-v1" };
+        foreach (NpcRuntime npc in roster)
+        {
+            if (npc == null || npc.PersonId == null || string.IsNullOrWhiteSpace(npc.RuntimeId)) return false;
+            parts.Add(npc.PersonId.Value);
+            parts.Add(npc.RuntimeId);
+        }
+        descriptor = SpatialStableKey.Encode(parts.ToArray());
+        return true;
+    }
+
+    private static bool TryCapturePlanUrgencySnapshot(
+        IReadOnlyList<NpcRuntime> roster,
+        out List<MerchantPlanUrgencyEntry> snapshot)
+    {
+        snapshot = null;
+        if (roster == null) return false;
+        snapshot = new List<MerchantPlanUrgencyEntry>(roster.Count);
+        foreach (NpcRuntime npc in roster)
+        {
+            if (npc == null || npc.PersonId == null || string.IsNullOrWhiteSpace(npc.RuntimeId)) return false;
+            MerchantTradePlanRuntime plan = npc.MerchantTradePlan;
+            CityRuntime currentCity = npc.CurrentCity;
+            ItemData planItem = plan.Item;
+            CityRuntime planOriginCity = plan.OriginCity;
+            CityRuntime targetCity = plan.TargetCity;
+            int plannedAmount = plan.PlannedAmount;
+            int remainingAmount = plan.RemainingAmount;
+            float purchasePricePerItem = plan.PurchasePricePerItem;
+            int waitDaysAtDestination = plan.WaitDaysAtDestination;
+            bool advances = npc.IsAlive && !npc.IsTraveling && currentCity != null
+                && plan.IsActive && targetCity != null && !ReferenceEquals(targetCity, currentCity);
+            int pendingDays = plan.PendingTravelDays;
+            if (advances && pendingDays == int.MaxValue) return false;
+            snapshot.Add(new MerchantPlanUrgencyEntry(
+                npc, npc.RuntimeId, npc.PersonId.Value, npc.IsAlive, npc.IsTraveling,
+                currentCity, currentCity?.RuntimeId, plan, plan.IsActive,
+                planItem, planOriginCity, targetCity, targetCity?.RuntimeId,
+                plannedAmount, remainingAmount, purchasePricePerItem, waitDaysAtDestination,
+                pendingDays, plan.OriginDecisionId, advances));
+        }
+        return true;
+    }
+
+    private static bool SamePlanUrgencySnapshot(
+        IReadOnlyList<MerchantPlanUrgencyEntry> expected,
+        IReadOnlyList<MerchantPlanUrgencyEntry> actual)
+    {
+        if (expected == null || actual == null || expected.Count != actual.Count) return false;
+        for (int i = 0; i < expected.Count; i++)
+        {
+            MerchantPlanUrgencyEntry left = expected[i];
+            MerchantPlanUrgencyEntry right = actual[i];
+            if (left == null || right == null
+                || !ReferenceEquals(left.Npc, right.Npc)
+                || left.RuntimeId != right.RuntimeId || left.PersonId != right.PersonId
+                || left.IsAlive != right.IsAlive || left.IsTraveling != right.IsTraveling
+                || !ReferenceEquals(left.CurrentCity, right.CurrentCity) || left.CurrentCityId != right.CurrentCityId
+                || !ReferenceEquals(left.Plan, right.Plan) || left.PlanActive != right.PlanActive
+                || !ReferenceEquals(left.PlanItem, right.PlanItem)
+                || !ReferenceEquals(left.PlanOriginCity, right.PlanOriginCity)
+                || !ReferenceEquals(left.TargetCity, right.TargetCity) || left.TargetCityId != right.TargetCityId
+                || left.PlannedAmount != right.PlannedAmount || left.RemainingAmount != right.RemainingAmount
+                || !left.PurchasePricePerItem.Equals(right.PurchasePricePerItem)
+                || left.WaitDaysAtDestination != right.WaitDaysAtDestination
+                || left.PendingTravelDays != right.PendingTravelDays
+                || !string.Equals(left.OriginDecisionId, right.OriginDecisionId, StringComparison.Ordinal)
+                || left.Advances != right.Advances)
+                return false;
+        }
+        return true;
+    }
+
+    private bool TryGetPlanUrgencyIdentity(
+        BoundaryContinuationManifest manifest,
+        BoundaryContinuationStep step,
+        out string identity,
+        out string fingerprint)
+    {
+        identity = null;
+        fingerprint = null;
+        if (manifest == null || step == null || step.Ordinal >= manifest.Steps.Count
+            || !ReferenceEquals(manifest.Steps[step.Ordinal], step)
+            || step.StepId != PlanUrgencyStepId || step.OwnerId != PlanUrgencyOwnerId
+            || step.OperationKind != PlanUrgencyOperationKind
+            || step.OperationVersion != PlanUrgencyOperationVersion || step.Disposition != "included")
+            return false;
+
+        string expectedOccurrence = SpatialStableKey.Encode(
+            manifest.WorldId, manifest.ProfileId, manifest.AbsoluteDay.ToString(CultureInfo.InvariantCulture));
+        if (!string.Equals(manifest.BoundaryOccurrenceId, expectedOccurrence, StringComparison.Ordinal)) return false;
+
+        identity = SpatialStableKey.Encode(manifest.BoundaryOccurrenceId, step.StepId);
+        fingerprint = SpatialStableKey.Encode(
+            manifest.BoundaryOccurrenceId, manifest.ContinuationId, manifest.SubphaseKind,
+            manifest.SubphaseVersion, manifest.ConfigurationIdentity, manifest.ContentIdentity,
+            step.Ordinal.ToString(CultureInfo.InvariantCulture), step.StepId, step.OwnerId,
+            step.OperationKind, step.OperationVersion, step.OwnerRevision, step.Payload,
+            step.PersonId, step.Disposition);
+        return true;
+    }
+
+    private sealed class MerchantPlanUrgencyEntry
+    {
+        public NpcRuntime Npc { get; }
+        public string RuntimeId { get; }
+        public string PersonId { get; }
+        public bool IsAlive { get; }
+        public bool IsTraveling { get; }
+        public CityRuntime CurrentCity { get; }
+        public string CurrentCityId { get; }
+        public MerchantTradePlanRuntime Plan { get; }
+        public bool PlanActive { get; }
+        public ItemData PlanItem { get; }
+        public CityRuntime PlanOriginCity { get; }
+        public CityRuntime TargetCity { get; }
+        public string TargetCityId { get; }
+        public int PlannedAmount { get; }
+        public int RemainingAmount { get; }
+        public float PurchasePricePerItem { get; }
+        public int WaitDaysAtDestination { get; }
+        public int PendingTravelDays { get; }
+        public string OriginDecisionId { get; }
+        public bool Advances { get; }
+
+        public MerchantPlanUrgencyEntry(NpcRuntime npc, string runtimeId, string personId, bool isAlive,
+            bool isTraveling, CityRuntime currentCity, string currentCityId, MerchantTradePlanRuntime plan,
+            bool planActive, ItemData planItem, CityRuntime planOriginCity, CityRuntime targetCity,
+            string targetCityId, int plannedAmount, int remainingAmount, float purchasePricePerItem,
+            int waitDaysAtDestination, int pendingTravelDays, string originDecisionId, bool advances)
+        {
+            Npc = npc; RuntimeId = runtimeId; PersonId = personId; IsAlive = isAlive; IsTraveling = isTraveling;
+            CurrentCity = currentCity; CurrentCityId = currentCityId; Plan = plan; PlanActive = planActive;
+            PlanItem = planItem; PlanOriginCity = planOriginCity; TargetCity = targetCity; TargetCityId = targetCityId;
+            PlannedAmount = plannedAmount; RemainingAmount = remainingAmount;
+            PurchasePricePerItem = purchasePricePerItem; WaitDaysAtDestination = waitDaysAtDestination;
+            PendingTravelDays = pendingTravelDays; OriginDecisionId = originDecisionId; Advances = advances;
+        }
+    }
+
+    private sealed class MerchantPlanUrgencyCommit : IBoundaryContinuationStepCommit
+    {
+        private readonly MerchantSystem owner;
+        private readonly MerchantPlanUrgencyReceipt receipt;
+        private readonly List<MerchantPlanUrgencyEntry> snapshot;
+        private readonly bool replay;
+        private readonly string fingerprint;
+        private readonly string expectedOwnerRevision;
+        private readonly long expectedRevision;
+        private readonly Dictionary<string, MerchantPlanUrgencyReceipt> expectedReceipts;
+        private readonly Dictionary<string, MerchantPlanUrgencyReceipt> nextReceipts;
+        private bool completed;
+
+        public IReadOnlyList<DueWorkReference> RetainedTimelineFacts => Array.Empty<DueWorkReference>();
+        public IReadOnlyList<string> RetainedSourceSignals => Array.Empty<string>();
+
+        public MerchantPlanUrgencyCommit(MerchantSystem owner, MerchantPlanUrgencyReceipt receipt,
+            List<MerchantPlanUrgencyEntry> snapshot, bool replay, string fingerprint,
+            string expectedOwnerRevision, long expectedRevision,
+            Dictionary<string, MerchantPlanUrgencyReceipt> expectedReceipts,
+            Dictionary<string, MerchantPlanUrgencyReceipt> nextReceipts = null)
+        {
+            this.owner = owner; this.receipt = receipt; this.snapshot = snapshot; this.replay = replay;
+            this.fingerprint = fingerprint; this.expectedOwnerRevision = expectedOwnerRevision;
+            this.expectedRevision = expectedRevision; this.expectedReceipts = expectedReceipts;
+            this.nextReceipts = nextReceipts ?? expectedReceipts;
+        }
+
+        public bool TryCommit(out TimelineFailure failure)
+        {
+            if (completed) { failure = TimelineFailure.None; return true; }
+            if (!owner.mutationGuardBinding.CanMutate || owner.planUrgencyStepRevision != expectedRevision
+                || !ReferenceEquals(owner.planUrgencyStepReceipts, expectedReceipts)
+                || !string.Equals(owner.CreatePlanUrgencyOwnerRevision(), expectedOwnerRevision, StringComparison.Ordinal))
+            {
+                failure = TimelineFailure.ContinuationFailed;
+                return false;
+            }
+            if (replay)
+            {
+                if (!owner.planUrgencyStepReceipts.TryGetValue(receipt.ExecutionStepIdentity, out MerchantPlanUrgencyReceipt current)
+                    || !ReferenceEquals(current, receipt) || current.DescriptorFingerprint != fingerprint)
+                {
+                    failure = TimelineFailure.ContinuationFailed;
+                    return false;
+                }
+                completed = true;
+                failure = TimelineFailure.None;
+                return true;
+            }
+
+            if (!TryCapturePlanUrgencySnapshotFromCommit(out List<MerchantPlanUrgencyEntry> currentSnapshot)
+                || !SamePlanUrgencySnapshot(snapshot, currentSnapshot))
+            {
+                failure = TimelineFailure.ContinuationFailed;
+                return false;
+            }
+            foreach (MerchantPlanUrgencyEntry entry in snapshot)
+                if (entry.Advances) entry.Plan.IncrementPendingTravelDay();
+
+            owner.planUrgencyStepReceipts = nextReceipts;
+            owner.planUrgencyStepRevision = receipt.OwnerRevisionAfter;
+            completed = true;
+            failure = TimelineFailure.None;
+            return true;
+        }
+
+        private bool TryCapturePlanUrgencySnapshotFromCommit(out List<MerchantPlanUrgencyEntry> current)
+        {
+            current = null;
+            if (snapshot == null) return false;
+            List<NpcRuntime> roster = new List<NpcRuntime>(snapshot.Count);
+            foreach (MerchantPlanUrgencyEntry entry in snapshot) roster.Add(entry.Npc);
+            return TryCapturePlanUrgencySnapshot(roster, out current);
+        }
+    }
+
+    internal class MerchantTradeOpportunity
     {
         public ItemData Item { get; }
         public NpcRuntime TargetNpc { get; }
@@ -1556,5 +2009,21 @@ public class MerchantSystem : INpcActionProvider, IAuthoritativeMutationGuardBin
             Score = score;
             Evidence = evidence;
         }
+    }
+}
+
+public sealed class MerchantPlanUrgencyReceipt
+{
+    public string ExecutionStepIdentity { get; }
+    public long OwnerRevisionBefore { get; }
+    public long OwnerRevisionAfter { get; }
+    internal string DescriptorFingerprint { get; }
+
+    internal MerchantPlanUrgencyReceipt(string identity, string fingerprint, long before, long after)
+    {
+        ExecutionStepIdentity = identity ?? throw new ArgumentNullException(nameof(identity));
+        DescriptorFingerprint = fingerprint ?? throw new ArgumentNullException(nameof(fingerprint));
+        OwnerRevisionBefore = before;
+        OwnerRevisionAfter = after;
     }
 }
