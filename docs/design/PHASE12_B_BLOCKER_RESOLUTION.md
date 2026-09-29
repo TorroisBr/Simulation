@@ -36,7 +36,7 @@ missing, duplicate, unsupported, or unversioned entries fail closed.
 
 | P12 owner group | Concrete selected-profile owners to witness | Important exactness / current gap |
 |---|---|---|
-| C — causal roots | `RuntimeIdAllocator` (14 per-kind counters), `RuntimeIdentityRegistry` (8 typed indexes), `SimulationRecordSequence`, concrete deterministic-random provider and use/stream state, P9-B genesis manifest/provenance, P8-A `SpatialAuthorityStore`. | Allocator, registry, sequence and RNG lack complete census/export/hydration witnesses. P8-A has local revision/counts, but its store also contains excluded crossing/topology/passage state; P8-A positive cardinality cannot prove those sections empty. |
+| C — causal roots | `RuntimeIdAllocator` (14 per-kind counters), `RuntimeIdentityRegistry` (8 typed indexes), `SimulationRecordSequence`, concrete deterministic-random provider and use/stream state, P9-B genesis manifest/provenance, P8-A geography facts. | Allocator, registry, sequence and RNG lack complete census/export/hydration witnesses. P8-A has local revision/counts, but the composed spatial authority also owns P8-B–E child sections; their explicit empty state must be witnessed separately and cannot be inferred from P8-A’s positive cardinality. |
 | D — factual roots | Runtime City and NPC roster/composite state; each City’s Market, accounts, inventories and Population; Person/Genealogy/lifecycle owners; legacy `SpatialNetworkRuntime`, `ExplorableSiteStore`, and `LegacySpatialAnchorBindingStore`. | City/NPC have no composite revision. `Cities` and `ImportantNpcs` expose backing lists; legacy network exposes mutable collections. Person/lifecycle commits can span owners without a capture scope. Site identity is a root; exploration progress lives in expedition/Knowledge owners. |
 | E — official/core domains | Effective-config-selected City economy, transaction service and child accounts/inventories/markets; Merchant and Commercial Knowledge sharing; Justice/Crime/appraisal; composed political, institution, property/estate, armed-force/manpower/position, conflict/war/battle stores and enabled action providers. | Local guards/revisions are not a global invalidation epoch. Direct child or system mutators bypass coordinator-level evidence. Provider membership must follow resolved effective configuration, not the serialized module list. |
 | F — knowledge/commitments | Political/Crime and per-NPC exploration/adventure Knowledge; directives; default `ActorChoiceStore`; travel and party owners; `ExpeditionStore`/runtime/system. | Several per-NPC knowledge owners, directives, travel and expedition state lack complete revisions; expedition store exposes mutable runtime references. Actor-choice terminal history and sequence are causal continuation state. |
@@ -52,11 +52,16 @@ For exact-zero evidence, record these roles separately:
   while the selected legacy daily profile does not invoke their P18-D writers.
   Their live counts must be witnessed as exactly zero and tied to owner
   identity/revision.
-- **Not composed:** P8-B..E LocalTopology/passage/route-plan extensions, P10,
-  P14-A local material flow, P18 temporal/intraday state, P19 loader/module
-  state, P20 activity state, and external WorldCommand service/queue are
-  excluded from this selected profile. Record the absent composition role;
-  do not invent a count for a nonexistent instance.
+- **Composed/known empty:** P8-B passage, P8-C City/Site binding and Person
+  position, P8-D route Knowledge/plan, and P8-E travel-authority sections are
+  composed in the selected profile and explicitly empty. Each must provide a
+  live exact-zero witness; these sections are not absent merely because no
+  facts are present.
+- **Not composed:** P10's `LocalTopologyStore`/PlaceContent and autonomy
+  services, P14-A local material flow, P18 temporal/intraday state, P19
+  loader/module state, P20 activity state, and external WorldCommand
+  service/queue are absent from this selected composition. Record the absent
+  composition role; do not invent a count for a nonexistent instance.
 - **Omitted read model:** events/decisions/history/chronicle are not causal
   truth sections. Count the selected stores only for census completeness;
   their row counts are not required to be zero.
@@ -108,6 +113,10 @@ field write.
   composed child passage writes `PassageAuthority.TryRegisterConnection`,
   `TryRegisterWildernessRule`, `TryRegisterBarrier`,
   `TryChangePassageCondition`, and `TryChangeBarrierCondition`.
+  P8-B–E passage/binding/position/Knowledge/plan/travel sections are composed
+  empty and need exact-zero witnesses independent of the required P8-A
+  geography counts. `LocalTopologyStore` is a separate absent P10 owner in
+  this profile.
 - Keyed deterministic `NextUnit` is pure for fixed seed/key/index in the
   selected provider; if any retained `DeterministicRandomStream` is created,
   `NextUnit` advances its private cursor and `CreateStream` must be reflected
