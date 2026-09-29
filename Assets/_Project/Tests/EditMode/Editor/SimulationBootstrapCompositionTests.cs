@@ -300,6 +300,27 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(runtime.PersonRoutePlanStore.PlanCount, Is.Zero);
         Assert.That(runtime.PersonRoutePlanStore.History, Is.Empty);
         Assert.That(runtime.PersonRoutePlanStore.Revision, Is.Zero);
+        SpatialRouteObservationCensusProvider routeObservationsProvider =
+            new SpatialRouteObservationCensusProvider(runtime.SpatialRouteKnowledgeStore);
+        OwnerSectionCensusWitness routeObservations = routeObservationsProvider.GetCurrentCensus();
+        Assert.That(routeObservations.SectionId, Is.EqualTo(SpatialRouteObservationCensusProvider.SectionId));
+        Assert.That(routeObservations.SchemaVersion, Is.EqualTo(SpatialRouteObservationCensusProvider.SchemaVersion));
+        Assert.That(routeObservations.OwnerInstanceIdentity, Is.SameAs(runtime.SpatialRouteKnowledgeStore));
+        Assert.That(routeObservations.Cardinality, Is.Zero);
+        Assert.That(routeObservations.Revision, Is.Zero);
+        Assert.That(routeObservationsProvider.GetCurrentCensus().OwnerInstanceIdentity,
+            Is.SameAs(routeObservations.OwnerInstanceIdentity));
+        PersonRoutePlanHistoryCensusProvider routePlanHistoryProvider =
+            new PersonRoutePlanHistoryCensusProvider(runtime.PersonRoutePlanStore);
+        OwnerSectionCensusWitness routePlanHistory = routePlanHistoryProvider.GetCurrentCensus();
+        Assert.That(routePlanHistory.SectionId, Is.EqualTo(PersonRoutePlanHistoryCensusProvider.SectionId));
+        Assert.That(routePlanHistory.SchemaVersion, Is.EqualTo(PersonRoutePlanHistoryCensusProvider.SchemaVersion));
+        Assert.That(routePlanHistory.OwnerInstanceIdentity, Is.SameAs(runtime.PersonRoutePlanStore));
+        Assert.That(routePlanHistory.Cardinality, Is.Zero);
+        Assert.That(routePlanHistory.Revision, Is.Zero);
+        Assert.That(runtime.PersonRoutePlanStore.PlanCount, Is.EqualTo(runtime.PersonRoutePlanStore.History.Count));
+        Assert.That(routePlanHistoryProvider.GetCurrentCensus().OwnerInstanceIdentity,
+            Is.SameAs(routePlanHistory.OwnerInstanceIdentity));
         Assert.That(simulation.CurrentDay, Is.Zero);
         Assert.That(simulation.History.HistoricalEvents, Is.Empty);
     }

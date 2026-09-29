@@ -60,6 +60,98 @@ public sealed class SpatialRoutePlanningTests
     }
 
     [Test]
+    public void P8DPassiveCensusProvidersTrackObservationReplayAndRetainedPlanHistory()
+    {
+        Fixture knowledgeFixture = CreateFixture("person.p8d-census-knowledge");
+        SpatialRouteObservationCensusProvider knowledgeProvider =
+            new SpatialRouteObservationCensusProvider(knowledgeFixture.Knowledge);
+        AssertP8DWitness(knowledgeProvider, SpatialRouteObservationCensusProvider.SectionId,
+            SpatialRouteObservationCensusProvider.SchemaVersion, knowledgeFixture.Knowledge,
+            cardinality: 0, revision: 0L);
+
+        SpatialRouteSegment knowledgeSegment = Segment("hex.a", "hex.b", "connection.p8d-census");
+        SpatialObservation observation = OptionObservation(knowledgeSegment,
+            SpatialRouteOptionBelief.KnownAvailable, "observer", "origin.p8d-census", 5L, 5L);
+        Assert.That(knowledgeFixture.Knowledge.TryRecordObservation(
+            knowledgeFixture.Actor, observation, 5L, out SpatialKnowledgeFailure knowledgeFailure),
+            Is.True, knowledgeFailure.ToString());
+        AssertP8DWitness(knowledgeProvider, SpatialRouteObservationCensusProvider.SectionId,
+            SpatialRouteObservationCensusProvider.SchemaVersion, knowledgeFixture.Knowledge,
+            cardinality: 1, revision: 1L);
+
+        SpatialObservation secondBatchObservation = OptionObservation(
+            Segment("hex.b", "hex.c", "connection.p8d-census-two"),
+            SpatialRouteOptionBelief.KnownAvailable, "observer", "origin.p8d-census-two", 5L, 5L);
+        SpatialObservation thirdBatchObservation = OptionObservation(
+            Segment("hex.c", "hex.d", "connection.p8d-census-three"),
+            SpatialRouteOptionBelief.KnownAvailable, "observer", "origin.p8d-census-three", 5L, 5L);
+        Assert.That(knowledgeFixture.Knowledge.TryRecordObservations(
+            knowledgeFixture.Actor, new[] { secondBatchObservation, thirdBatchObservation },
+            5L, out knowledgeFailure), Is.True, knowledgeFailure.ToString());
+        AssertP8DWitness(knowledgeProvider, SpatialRouteObservationCensusProvider.SectionId,
+            SpatialRouteObservationCensusProvider.SchemaVersion, knowledgeFixture.Knowledge,
+            cardinality: 3, revision: 2L);
+
+        Assert.That(knowledgeFixture.Knowledge.TryRecordObservation(
+            knowledgeFixture.Actor, observation, 5L, out knowledgeFailure), Is.True, knowledgeFailure.ToString());
+        AssertP8DWitness(knowledgeProvider, SpatialRouteObservationCensusProvider.SectionId,
+            SpatialRouteObservationCensusProvider.SchemaVersion, knowledgeFixture.Knowledge,
+            cardinality: 3, revision: 2L);
+
+        SpatialObservation conflict = OptionObservation(knowledgeSegment,
+            SpatialRouteOptionBelief.KnownUnavailable, "observer", "origin.p8d-census", 5L, 5L);
+        Assert.That(knowledgeFixture.Knowledge.TryRecordObservation(
+            knowledgeFixture.Actor, conflict, 5L, out knowledgeFailure), Is.False);
+        AssertP8DWitness(knowledgeProvider, SpatialRouteObservationCensusProvider.SectionId,
+            SpatialRouteObservationCensusProvider.SchemaVersion, knowledgeFixture.Knowledge,
+            cardinality: 3, revision: 2L);
+        Assert.That(knowledgeFixture.Knowledge.TryRecordObservation(
+            knowledgeFixture.Actor, null, 5L, out knowledgeFailure), Is.False);
+        AssertP8DWitness(knowledgeProvider, SpatialRouteObservationCensusProvider.SectionId,
+            SpatialRouteObservationCensusProvider.SchemaVersion, knowledgeFixture.Knowledge,
+            cardinality: 3, revision: 2L);
+
+        Fixture planFixture = CreateFixture("person.p8d-census-plans");
+        PersonRoutePlanHistoryCensusProvider planProvider =
+            new PersonRoutePlanHistoryCensusProvider(planFixture.Plans);
+        AssertP8DWitness(planProvider, PersonRoutePlanHistoryCensusProvider.SectionId,
+            PersonRoutePlanHistoryCensusProvider.SchemaVersion, planFixture.Plans,
+            cardinality: 0, revision: 0L);
+
+        SpatialRouteSegment planSegment = Segment("hex.a", "hex.b", "connection.p8d-plan-census");
+        Record(planFixture, OptionObservation(planSegment, SpatialRouteOptionBelief.KnownAvailable,
+            "map", "route.p8d-plan-census", 5L, 5L), 5L);
+        SpatialRoutePlanningRequest request = Request(planFixture.Actor, "hex.a", "hex.b", 5L);
+        SpatialRouteCandidate candidate = planFixture.Planner.BuildKnownCandidates(request).Candidates.Single();
+        Record(planFixture, EstimateObservation(candidate, MetricId, MetricUnit, 2m,
+            "estimate.p8d-plan-census", 5L), 5L);
+        SpatialRoutePlanningOutcome selected = planFixture.Planner.SelectKnownRoute(
+            request, Policy(false, 0L, true));
+        Assert.That(selected.IsSuccess, Is.True, selected.FailureMessage);
+
+        Assert.That(planFixture.Plans.TryAcceptPlan(selected, "decision.p8d-plan-one", 0L, 5L,
+            out PersonRoutePlanFailure planFailure), Is.True, planFailure.ToString());
+        AssertP8DWitness(planProvider, PersonRoutePlanHistoryCensusProvider.SectionId,
+            PersonRoutePlanHistoryCensusProvider.SchemaVersion, planFixture.Plans,
+            cardinality: 1, revision: 1L);
+
+        Assert.That(planFixture.Plans.TryAcceptPlan(selected, "decision.p8d-plan-stale", 0L, 5L,
+            out planFailure), Is.False);
+        AssertP8DWitness(planProvider, PersonRoutePlanHistoryCensusProvider.SectionId,
+            PersonRoutePlanHistoryCensusProvider.SchemaVersion, planFixture.Plans,
+            cardinality: 1, revision: 1L);
+
+        Assert.That(planFixture.Plans.TryAcceptPlan(selected, "decision.p8d-plan-two", 1L, 5L,
+            out planFailure), Is.True, planFailure.ToString());
+        Assert.That(planFixture.Plans.PlanCount, Is.EqualTo(planFixture.Plans.History.Count));
+        Assert.That(planFixture.Plans.Plans.Count, Is.EqualTo(1),
+            "Latest-per-actor plans are fewer than retained plan history after replacement.");
+        AssertP8DWitness(planProvider, PersonRoutePlanHistoryCensusProvider.SectionId,
+            PersonRoutePlanHistoryCensusProvider.SchemaVersion, planFixture.Plans,
+            cardinality: 2, revision: 2L);
+    }
+
+    [Test]
     public void KnownUnavailableBeliefExcludesFactuallyOpenOptionAndStaleFalseBeliefStaysKnowledgeOnly()
     {
         Fixture fixture = CreateFixture("person.false-belief");
@@ -389,12 +481,17 @@ public sealed class SpatialRoutePlanningTests
             spatialAuthorityStore: source.Spatial,
             personSpatialPositionStore: positions,
             spatialRouteKnowledgeStore: source.Knowledge);
+        PersonRoutePlanHistoryCensusProvider planProvider =
+            new PersonRoutePlanHistoryCensusProvider(runtime.PersonRoutePlanStore);
         SpatialRoutePlanningOutcome selected = runtime.SelectKnownSpatialRoute(source.Actor,
             StablePositionReference.ForHex(new HexId("hex.a")), StablePositionReference.ForHex(new HexId("hex.b")),
             Policy(false, 0L, true));
         Assert.That(selected.IsSuccess, Is.True, selected.FailureMessage);
         Assert.That(runtime.TryAcceptSpatialRoutePlan(selected, "decision.p8e-journey", 0L,
             out PersonRoutePlanFailure planFailure), Is.True, planFailure.ToString());
+        AssertP8DWitness(planProvider, PersonRoutePlanHistoryCensusProvider.SectionId,
+            PersonRoutePlanHistoryCensusProvider.SchemaVersion, runtime.PersonRoutePlanStore,
+            cardinality: 1, revision: 1L);
         Assert.That(runtime.PersonRoutePlanStore.TryGetCurrent(source.Actor, out PersonRoutePlan accepted), Is.True);
         Assert.That(accepted.Status, Is.EqualTo(PersonRoutePlanStatus.Accepted));
 
@@ -404,6 +501,9 @@ public sealed class SpatialRoutePlanningTests
         Assert.That(runtime.PersonRoutePlanStore.TryGetCurrent(source.Actor, out PersonRoutePlan active), Is.True);
         Assert.That(active.Status, Is.EqualTo(PersonRoutePlanStatus.Active));
         Assert.That(runtime.PersonRoutePlanStore.Revision, Is.EqualTo(2L));
+        AssertP8DWitness(planProvider, PersonRoutePlanHistoryCensusProvider.SectionId,
+            PersonRoutePlanHistoryCensusProvider.SchemaVersion, runtime.PersonRoutePlanStore,
+            cardinality: 1, revision: 2L);
         Assert.That(runtime.PersonSpatialPositionStore.TryGetPosition(source.Actor, out PersonSpatialPosition transit), Is.True);
         Assert.That(transit.IsInTransit, Is.True);
         long inTransitPositionRevision = runtime.PersonSpatialPositionStore.Revision;
@@ -427,6 +527,9 @@ public sealed class SpatialRoutePlanningTests
         Assert.That(completed.Status, Is.EqualTo(PersonRoutePlanStatus.Completed));
         Assert.That(runtime.PersonRoutePlanStore.Revision, Is.EqualTo(3L));
         Assert.That(runtime.PersonRoutePlanStore.PlanCount, Is.EqualTo(1));
+        AssertP8DWitness(planProvider, PersonRoutePlanHistoryCensusProvider.SectionId,
+            PersonRoutePlanHistoryCensusProvider.SchemaVersion, runtime.PersonRoutePlanStore,
+            cardinality: 1, revision: 3L);
 
         SpatialRoutePlanningOutcome stableReplan = runtime.SelectKnownSpatialRoute(source.Actor,
             StablePositionReference.ForHex(new HexId("hex.b")), StablePositionReference.ForHex(new HexId("hex.a")),
@@ -437,6 +540,11 @@ public sealed class SpatialRoutePlanningTests
         Assert.That(runtime.PersonRoutePlanStore.TryGetCurrent(source.Actor, out PersonRoutePlan replanned), Is.True);
         Assert.That(replanned.Status, Is.EqualTo(PersonRoutePlanStatus.Accepted));
         Assert.That(runtime.PersonRoutePlanStore.History[0].Status, Is.EqualTo(PersonRoutePlanStatus.Completed));
+        Assert.That(runtime.PersonRoutePlanStore.PlanCount, Is.EqualTo(2));
+        Assert.That(runtime.PersonRoutePlanStore.Plans.Count, Is.EqualTo(1));
+        AssertP8DWitness(planProvider, PersonRoutePlanHistoryCensusProvider.SectionId,
+            PersonRoutePlanHistoryCensusProvider.SchemaVersion, runtime.PersonRoutePlanStore,
+            cardinality: 2, revision: 4L);
         Assert.That(runtime.ValidateSpatialInvariants().IsValid, Is.True,
             string.Join("; ", runtime.ValidateSpatialInvariants().Violations));
 
@@ -756,6 +864,23 @@ public sealed class SpatialRoutePlanningTests
     private static void Record(Fixture fixture, SpatialObservation observation, long day)
     {
         Assert.That(fixture.Knowledge.TryRecordObservation(fixture.Actor, observation, day, out SpatialKnowledgeFailure failure), Is.True, failure.ToString());
+    }
+
+    private static void AssertP8DWitness(
+        IOwnerSectionCensusProvider provider,
+        string sectionId,
+        int schemaVersion,
+        object ownerIdentity,
+        int cardinality,
+        long revision)
+    {
+        OwnerSectionCensusWitness witness = provider.GetCurrentCensus();
+        Assert.That(witness.SectionId, Is.EqualTo(sectionId));
+        Assert.That(witness.SchemaVersion, Is.EqualTo(schemaVersion));
+        Assert.That(witness.OwnerInstanceIdentity, Is.SameAs(ownerIdentity));
+        Assert.That(witness.Cardinality, Is.EqualTo(cardinality));
+        Assert.That(witness.Revision, Is.EqualTo(revision));
+        Assert.That(provider.GetCurrentCensus().OwnerInstanceIdentity, Is.SameAs(ownerIdentity));
     }
 
     private static HexRecord GeographicHex(string id, int q, int r) => new HexRecord(new HexId(id), new HexCoordinate(q, r),
