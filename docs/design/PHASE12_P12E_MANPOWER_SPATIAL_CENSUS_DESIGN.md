@@ -1,8 +1,8 @@
 # P12-E Manpower and Armed-Force Position Census Design
 
-**Status:** Bounded passive-witness proposal; existing accepted P12-B/P12-E
-capability authorization applies. Independent design review required before
-implementation.
+**Status:** Design review PASS on exact proposal commit `c645446779b972becbd887ba0cf661106b575665`; the durable review is recorded in
+`PHASE12_P12E_MANPOWER_SPATIAL_CENSUS_DESIGN_REVIEW.md`. Existing accepted
+P12-B/P12-E capability authorization applies.
 
 **Integration anchor:** `codex/phase12/P12BCensusOwnerIntegration` at
 `cad27805f7f014ac753ebe6ecf34f3e322a90feb`, which descends from the reviewed
