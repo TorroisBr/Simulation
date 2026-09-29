@@ -259,6 +259,58 @@ public sealed class MerchantBoundaryOwnerStepTests
         Assert.That(logger.FullLog, Is.EqualTo(firstLog));
     }
 
+    [Test]
+    public void P18DTradeStateRedirectsWhenDecisionRecorderIsUnavailable()
+    {
+        ThreeCityFixture world = new ThreeCityFixture();
+        ItemData item = SimulationTestFactory.CreateItem("merchant-p18d-null-recorder-item", 10f);
+        world.A.Market.AddStock(item, 10, 20);
+        NpcRuntime merchant = CreateMerchant("merchant-p18d-null-recorder-npc",
+            "person.merchant-p18d-null-recorder", world.A);
+        merchant.AddMoney(100f);
+        merchant.Inventory.AddItem(item, 4, 1f);
+        merchant.SetMerchantTradePlan(item, world.A, world.A, 4, 100f);
+        merchant.MerchantTradePlan.IncrementWaitDayAtDestination();
+        merchant.SpatialKnowledge.DiscoverLocation(world.A.Location.RuntimeId);
+        merchant.SpatialKnowledge.DiscoverLocation(world.B.Location.RuntimeId);
+        merchant.SpatialKnowledge.DiscoverRoute(world.RouteAB.RuntimeId);
+        merchant.CommercialKnowledge.RecordObservation(SimulationTestFactory.CreateObservation(
+            world.B.Location.RuntimeId, item, 150f, 10, 6L, 6L));
+
+        SimulationTime time = new SimulationTime(6L);
+        SimulationLogger logger = new SimulationLogger(new SimulationLogSettings { trade = true });
+        MerchantSystem system = new MerchantSystem(
+            new EffectiveMerchantTradeConfiguration(enabled: true),
+            new EffectiveCommercialKnowledgeConfiguration(), world.CreateTravelSystem(time),
+            time, null, logger);
+        DailyBoundaryOperation operation = new DailyBoundaryOperation(
+            "merchant-p18d-null-recorder-world", "intraday", 6L);
+        BoundaryContinuationStep step = new BoundaryContinuationStep(0,
+            "merchant-trade-state:" + merchant.RuntimeId, merchant.RuntimeId,
+            "merchant.trade-state", "1", "frozen-roster-v1", "merchant-enabled",
+            merchant.PersonId.Value);
+        BoundaryContinuationManifest manifest = new BoundaryContinuationManifest(
+            operation, "daily-boundary", "1", "configuration/v1", new[] { step }, "content/v1");
+
+        Assert.That(system.TryAdvanceNpcTradeStateOccurrence(merchant, manifest, step,
+            out NpcMerchantTradeStateReceipt receipt, out TimelineFailure failure), Is.True,
+            failure.ToString());
+        Assert.That(receipt, Is.Not.Null);
+        Assert.That(merchant.MerchantTradePlan.TargetCity, Is.SameAs(world.B));
+        Assert.That(merchant.MerchantTradePlan.OriginDecisionId, Is.Null);
+        Assert.That(merchant.TravelPlan.TargetCity, Is.SameAs(world.B));
+        string firstLog = logger.FullLog;
+        Assert.That(firstLog, Does.Contain("mudou o destino"));
+
+        Assert.That(system.TryAdvanceNpcTradeStateOccurrence(merchant, manifest, step,
+            out NpcMerchantTradeStateReceipt replay, out failure), Is.True,
+            failure.ToString());
+        Assert.That(replay, Is.SameAs(receipt));
+        Assert.That(replay.OwnerRevisionBefore, Is.EqualTo(0L));
+        Assert.That(replay.OwnerRevisionAfter, Is.EqualTo(1L));
+        Assert.That(logger.FullLog, Is.EqualTo(firstLog));
+    }
+
     private static NpcRuntime CreateMerchant(string runtimeId, string personId, CityRuntime city)
     {
         NpcRuntime merchant = new NpcRuntime(runtimeId,

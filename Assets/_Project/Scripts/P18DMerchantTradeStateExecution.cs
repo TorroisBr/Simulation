@@ -162,6 +162,7 @@ public partial class MerchantSystem
         if (workflow.RedirectOpportunity != null)
         {
             MerchantTradeOpportunity opportunity = workflow.RedirectOpportunity;
+            string decisionId = null;
             string decisionOperationIdentity = SpatialStableKey.Encode(
                 workflow.OperationIdentity, "trade-redirect-decision");
             string decisionFingerprint = SpatialStableKey.Encode(
@@ -174,15 +175,17 @@ public partial class MerchantSystem
                         NpcDecisionType.TradeRedirect, NpcDecisionOrigin.Autonomous,
                         null, opportunity.TargetCity?.Location?.RuntimeId,
                         opportunity.Evidence, out NpcDecisionRecord decision)) return false;
-                if (decision != null)
-                {
-                    nextPlan = new MerchantTradePlanState(nextPlan.Item, nextPlan.OriginCity,
-                        opportunity.TargetCity, nextPlan.PlannedAmount,
-                        nextPlan.RawRemainingAmount, nextPlan.PurchasePricePerItem,
-                        nextPlan.WaitDaysAtDestination, nextPlan.PendingTravelDays,
-                        decision.DecisionId);
-                }
+                decisionId = decision?.DecisionId;
             }
+
+            // Redirecting the plan is merchant-domain behavior. Decision
+            // recording is optional, so a missing recorder leaves a null
+            // decision identity without suppressing the redirect itself.
+            nextPlan = new MerchantTradePlanState(nextPlan.Item, nextPlan.OriginCity,
+                opportunity.TargetCity, nextPlan.PlannedAmount,
+                nextPlan.RawRemainingAmount, nextPlan.PurchasePricePerItem,
+                nextPlan.WaitDaysAtDestination, nextPlan.PendingTravelDays,
+                decisionId);
 
             if (IsTravelingMerchant(workflow.Actor)
                 && opportunity.TargetCity != null
