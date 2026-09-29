@@ -10,17 +10,35 @@ separately gated.
 which the original G proposal was authored; it is not the current governing
 input set.
 
-**Current governing inputs (2026-09-28):** accepted decomposition at
-`7585863` with reference refresh `a2ac5d2`; owner inventory `012e04b`
-(reviewed evidence map, not live census); P12-B current-evidence design
-refresh `d0761ce` (independent review PASS); P12-C refreshed design `a2ac5d2`
-(independent review PASS); P12-D `dd81634` and P12-E `ca8e968`
-(evidence-reference reviews PASS); and P12-F evidence refresh `ab0393b`
-(independent review PASS). Review evidence for these inputs and this
-proposal is tracked in independent checkpoint/review records, not inferred
-from this traceability ledger. These are design artifacts, not proof that the
-corresponding capabilities have been delivered; revalidate hashes and owner
-interfaces before implementation.
+**Current governing inputs (2026-09-29):** accepted decomposition at
+`7585863` with reference refresh `a2ac5d2`; current owner inventory
+`d01cd6225ff98a9952b466f7f045ec871b9e3ecc` (partial source/API evidence, not
+a live census); P12-B current-evidence revalidation
+`ef8c72cd388445e25ce9360bb1e689fc0a07c639` (design only; implementation remains
+blocked); P12-C identity/genesis design `edc51571559a9ba4b1a025963de2e25b23c66fd3`
+(exact-tip independent review PASS); P12-D `e8b83d75e34f8456555065e24bfe67bb30366baa`
+and P12-E `104c21cbd53c7bba8855bcac076eddc84bab947e` (separate exact-content
+PASS records at `codex/phase12/P12DEIndependentReview`, commit
+`3d5d7a8ce41f34d1fb55864897f9d508f50d8fcf`); and P12-F current-inventory
+revalidation `2dcf4047619b047e93c837cc3c7d76f25974525a` (documentation only,
+with D/E review coverage limited to design contracts). Review evidence for
+these inputs and this proposal is tracked separately, not inferred from this
+traceability ledger.
+These are design artifacts, not proof that the corresponding capabilities
+have been delivered; revalidate hashes and owner interfaces before
+implementation.
+
+The P18-D prerequisite code is canonical at `9e790c5`, but its State correction
+`6f98e0943782efdf11e4ba1e3a5701aba421f0df` remains unpromoted. Current separate
+P18-D owner candidates include SellGoods/local observation `43363dd`,
+demography `ddcac0b`, ActorChoice bridge source `4016a73` with execution
+record `924cfee9b41c77274141795f0f7ddcd117819f89` (exact-tip review PASS;
+focused 5/5), separately
+reviewed bridge candidate `10dcfda`, and merchant trade-state
+`b05feafd4f95b1a3a559e6d58de339334df57365` (independent exact-tip PASS;
+Merchant 8/8 and local observation 6/6 with retained XMLs). No candidate
+composes the full chronological runtime/handoff, and P18 temporal state remains
+excluded from the selected P12 profile.
 
 The accepted architecture baseline is `c285466`; current intraday/extensibility
 and multi-participant alignment records remain constraints. The selected daily

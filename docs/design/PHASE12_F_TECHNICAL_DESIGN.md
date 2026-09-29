@@ -1,9 +1,10 @@
 # P12-F — Knowledge, Directives, Actor Choices, and Active Commitments
 
-**Status:** Documentation-only technical proposal for independent exact-tip
-review. This file defines no implementation readiness and does not deliver
-owner export or staged hydration. P12-A remains `WAIT_DEPENDENCY`; its separate
-profile implementation authorization remains outstanding.
+**Status:** Documentation-only technical proposal. This design does not
+deliver a capability, owner export, or staged hydration and establishes no
+implementation readiness. P12-A remains `WAIT_DEPENDENCY`; its separate
+profile implementation authorization remains outstanding. Review evidence is
+tracked outside this design file.
 
 **Design base:** P12 planning commit `4c384ab916b44e4df8eb576fb98a88c3fac526b2`.
 The proposal follows the accepted P12-B–G decomposition and P12-A
@@ -12,15 +13,46 @@ P12-D factual roots, and P12-E selected core/daily owners are prerequisites to
 F. Their designs are inputs, not evidence that their capabilities have been
 implemented or promoted.
 
-**Related reviewed design inputs:** P12-C refresh
-`f30a73fd7d88721dcb1774e8f6615d59fd70c671` (owner census
-`99739fd0d190cd61acda8d3c91b25acab7405379`; independent review pending at
-proposal time); P12-D `796eadc1a0bd6b44b646f27f5eeb63de71f6b14`; P12-E
-`51718c7bd38e9582433d1fa38ff4011ef9cf20c5`. P12-C/D/E design review passes
-do not substitute for delivery of those capabilities. The design also applies
-the current intraday/extensibility and multi-participant alignment records:
-P18/P19/P20 constraints remain explicit while their state is excluded from
-this daily profile.
+**Current evidence revalidation (2026-09-29):** this F scope preserves the
+spatial-boundary correction at `d409549be5aee048ab8a90dc271af80288fa4e01`
+and is checked against the current owner/profile inventory
+`d01cd6225ff98a9952b466f7f045ec871b9e3ecc`, P12-B design/reference refresh
+`ef8c72cd388445e25ce9360bb1e689fc0a07c639`, P12-C identity/genesis design
+`edc51571559a9ba4b1a025963de2e25b23c66fd3`, P12-D design
+`e8b83d75e34f8456555065e24bfe67bb30366baa`, and P12-E design
+`104c21cbd53c7bba8855bcac076eddc84bab947e`. P12-C passed exact-tip
+independent review at `edc5157`. P12-D `e8b83d75e34f8456555065e24bfe67bb30366baa`
+and P12-E `104c21cbd53c7bba8855bcac076eddc84bab947e` each passed independent
+exact-content review, recorded separately in
+`codex/phase12/P12DEIndependentReview` at
+`3d5d7a8ce41f34d1fb55864897f9d508f50d8fcf`. The records limit their verdicts
+to the designs and explicitly claim no delivered or promoted capability or
+P12-A readiness. P12-B remains blocked on the complete live
+owner/mutation census, committed-mutation invalidation evidence, composed
+runtime validation, and the P18-D capture/handoff evidence recorded in the
+inventory and B design. C implementation waits on B delivery; D/E implementation
+waits on the named owner roots and interfaces; F remains downstream of C/D/E.
+Earlier review hashes in the preceding F version apply only to their exact
+reviewed contents.
+
+**Current P18-D branch evidence (2026-09-29):** canonical prerequisites remain
+at `9e790c5`; isolated candidates are SellGoods/local observation `43363dd`,
+demography `ddcac0b`, actor-choice bridge source `4016a73` with execution
+record `924cfee9b41c77274141795f0f7ddcd117819f89` (exact-tip review PASS;
+focused 5/5), and separately
+reviewed bridge `10dcfda`; merchant trade-state
+`b05feafd4f95b1a3a559e6d58de339334df57365` has independent exact-tip PASS,
+Merchant 8/8, and local observation 6/6 with retained XMLs. The review found
+only a nonblocking diagnostic-message difference; owner results and effects
+are unchanged. None is a complete or canonical P18-D consumer,
+and none adds P18 temporal state to `UnityBootstrap-Daily-v1`.
+
+Revalidation uses architecture baseline `c285466c355103d3637ac165246591b72eb7bda0`,
+the intraday/extensibility alignment record `4b6dd1d38cffeaf3cc1ac3effea0f8ede8771194`,
+and the multi-participant activity alignment incorporated into the current
+architecture. The P12-A daily profile still excludes P18 temporal state, P19
+module state, and P20 shared activities; those identities/cardinality
+constraints remain explicit if a later supported profile includes them.
 
 ## 1. Boundary
 
@@ -64,6 +96,16 @@ commercial, and exploration observations where present). The refreshed
 inventory determines the exact owner set; do not infer completeness from one
 Knowledge store or a diagnostic snapshot.
 
+The legacy NPC-owned `SpatialKnowledgeRuntime` and
+`ExplorableSiteKnowledgeRuntime` values are included only when the admitted
+profile inventory proves they are composed. They are distinct from canonical
+P8-D `SpatialRouteKnowledgeStore` and `PersonRoutePlanStore` state, which this
+profile excludes. P8-B, P8-C, P8-D, and P8-E each require an explicit empty
+section; missing or unknown evidence is not empty, and populated state rejects
+the profile. In particular, do not place P8-D route observations/plans, P8-C
+`PersonSpatialPositionStore` facts, or P8-E position, transit, and civil-travel
+state in the legacy NPC Knowledge section.
+
 Each store-owned observation preserves its stable holder/subject identities,
 typed observed fact, source and provenance, observation/receipt boundary,
 freshness/staleness inputs, and owner-defined causal revision. NPC Knowledge
@@ -103,10 +145,15 @@ diagnostic projection. Each value includes the `ActorChoiceInputId`, original
 `WorldCommandId`, input sequence, `PersonId`, action definition, origin,
 authority mode, capture day, final status, and the ordered immutable
 disposition history with transition ordinal, day, actor-turn roster ordinal,
-decision-record correlation, deferral/failure reason, and attempt outcome or
-returned result status as applicable. Preserve the exact next input sequence
+optional opaque `DecisionRecordId` correlation, deferral/failure reason, and
+attempt outcome or returned result status as applicable. Preserve the exact next input sequence
 and the store's complete command-ID idempotency set (which must agree exactly
 with retained input history).
+
+`DecisionRecordId` is an optional retained correlation string, not a foreign
+key. Preserve its exact nullable value; do not require a matching
+`NpcDecisionStore` row or validate its existence during hydration. The
+ActorChoice owner permits null, and runtime does not resolve this value.
 
 Capturable states are the terminal `Rejected`, `AttemptReturned`, and
 `AttemptThrew` records, including their complete preceding dispositions. A
@@ -122,9 +169,11 @@ the exact next sequence without allocating a new input. It verifies unique
 input and command IDs, strictly increasing positive input sequences,
 next-sequence greater than all retained inputs, contiguous disposition
 ordinals, legal lifecycle transitions, nondecreasing causal boundaries,
-terminal-status consistency, and valid C/D identity references. Any
-`Pending`/in-flight record, inconsistent duplicate index, unsupported enum or
-broken correlation rejects the entire staged ActorChoice section. P11's
+terminal-status consistency, and valid C/D identity references for actual
+typed IDs such as `PersonId`. Optional opaque decision correlations are
+preserved as values and do not add a graph edge. Any `Pending`/in-flight
+record, inconsistent duplicate index, or unsupported enum rejects the entire
+staged ActorChoice section. P11's
 trusted normal game/UI input contract remains unchanged; F introduces no
 control grants, ownership checks, anti-cheat boundary, or adversarial-command
 model.
@@ -141,6 +190,13 @@ one existing owner. Include only proven-in-profile owner instances; do not
 create new stores or assume every listed service retains mutable continuation
 state.
 
+These are supported legacy commitment facts only when present in the selected
+profile inventory; they do not include or stand in for canonical P8-E position,
+transit, or civil-travel state. P8-D `SpatialRouteKnowledgeStore` and
+`PersonRoutePlanStore` remain excluded as well. The complete canonical P8-B,
+P8-C, P8-D, and P8-E sections require explicit empty evidence and reject
+populated or unverified state.
+
 For each included owner, export the exact stable IDs and owner revision,
 actor/party/member bindings, current lifecycle/progress, incurred or reserved
 cost facts owned there, target/site/market references, and reciprocal links
@@ -153,7 +209,9 @@ omitting it.
 Do not serialize derived plans as if they were domain authority. Include
 plan/commitment values only where their current owner retains them as causal
 state (including the F slice of `NpcRuntime`); reconstruct only indexes or
-service references expressly derived by that owner. Validate local identity,
+service references expressly derived by that owner. Preserve any optional
+`OriginDecisionId` as an exact nullable opaque correlation string; it is not a
+foreign key and does not require a corresponding decision row. Validate local identity,
 membership/cardinality, lifecycle and reciprocal references against C/D roots,
 and emit E-owned unresolved market/provider bindings for P12-G. Hydration
 restores the exact current commitment without choosing, replanning,
@@ -186,8 +244,11 @@ dependency order:
 4. Stage `ScheduledDirectiveStore` records against the staged actors and
    admitted action definitions, without processing due directives.
 5. Stage terminal ActorChoice records after Person roots exist, validating
-   identity/history and shared causal sequence references without dispatching
-   a choice.
+   identity/history, strictly increasing input sequence values, contiguous
+   local disposition ordinals, and local lifecycle invariants without
+   dispatching a choice. Preserve optional `DecisionRecordId` strings as
+   opaque values; do not compare them with the shared C record counter or
+   require target decision rows.
 6. Stage each inventoried active commitment owner after its actor/party/
    expedition roots and any relevant D/E target roots exist. Validate local
    reciprocity now and return remaining cross-section bindings for G.
@@ -200,6 +261,18 @@ dependency order:
 The concrete constructor order follows actual owner references, not this
 semantic list when an owner dependency requires a different sequence. No
 candidate is bound to the active mutation guard or published by F.
+
+### 3.1 Omitted noncausal read models
+
+`NpcDecisionStore` and `DomainEventStore` are classified as
+`OmittedNonCausalReadModel` for this profile: populated decision/event history
+is not included in continuation state. `HistoryStore` is a subset of
+event/history data and is omitted with it; `NpcChronicle` is derived. P12-F
+does not promise history or chronicle UI parity. These classifications do not
+remove causal state owned by F: ActorChoice terminal receipts and directive or
+commitment owner truth remain included according to their contracts. An
+optional opaque correlation string is preserved as-is and is not required to
+resolve into an omitted read-model row.
 
 ## 4. Rejection and no-replay rules
 
@@ -256,15 +329,22 @@ completion criterion, not P12-A readiness or Phase 12 closure.
 - ActorChoice: preserve each allowed terminal status and all disposition
   variants, exact order, command-ID history, next sequence, and identical
   duplicate-command handling after restore. Reject every in-flight state,
-  duplicate/missing IDs, gaps/invalid ordinals, illegal transitions, invalid
-  terminal state, sequence regression/overflow, and broken Person/decision
-  references without changing the source.
+  duplicate/missing IDs, non-increasing or nonpositive input sequences,
+  disposition transition ordinals that are not contiguous from one, illegal
+  transitions, invalid terminal state, a next input sequence that does not
+  exceed all retained inputs, overflow, and broken typed Person references
+  without changing the source. Opaque optional `DecisionRecordId` values,
+  including null and strings without a retained decision row, round-trip
+  exactly and do not create a relationship-validation failure. Input sequence
+  values must be strictly increasing and unique, but need not be gap-free.
 - Commitments: for each owner proven in the refreshed profile, empty and
   active fixtures round-trip stable identities, progress, costs and reciprocal
   links; next normal domain execution matches uninterrupted execution without
-  replayed planning or effects. Corrupt/dangling/duplicate/contradictory
-  references reject. Do not substitute P20 activity tests or infer universal
-  participant counts.
+  replayed planning or effects. Optional opaque `OriginDecisionId` values,
+  including null and strings without a retained decision row, round-trip
+  exactly without target-existence validation. Corrupt/dangling/duplicate/
+  contradictory typed references reject. Do not substitute P20 activity tests
+  or infer universal participant counts.
 - Shared NPC owner: D/E/F values are exported from one immutable snapshot and
   revision, merged once, and hydrated by one staged NpcRuntime factory;
   duplicated fields, mismatched snapshot IDs/revisions, or mutation during
@@ -286,7 +366,20 @@ P12-F does not implement P12-A save/load integration, storage/envelope or
 migration format, P12-G graph publication/parity, external command queues,
 actor control grants/security, P18 intraday continuation, P19 loader/module
 state, P20 shared activities, P13 history/fork guarantees, P10 topology, P14
-material flow, new gameplay, or a new commitment/planning framework. The
-alignment constraints on extensibility and shared activity identity/cardinality
-remain review constraints without adding those deferred capabilities to this
-profile.
+material flow, canonical P8-B/C/D/E state, new gameplay, or a new
+commitment/planning framework. In particular, do not serialize canonical P8-D
+`SpatialRouteKnowledgeStore` or `PersonRoutePlanStore`, P8-C
+`PersonSpatialPositionStore`, or P8-E position/travel state, as a substitute
+for the explicitly supported legacy NPC Knowledge and commitment owners. P8-B,
+P8-C, P8-D, and P8-E remain explicit-empty sections, with populated state
+rejected. P18-D consumer composition remains incomplete: current noncanonical
+candidate evidence includes actor-choice bridge source `4016a73` with reviewed
+execution record `924cfee9b41c77274141795f0f7ddcd117819f89`, separately reviewed
+bridge `10dcfda`, local-knowledge/market-urgency composition `43363dd`,
+demography owner `ddcac0b`, and merchant trade-state owner
+`b05feafd4f95b1a3a559e6d58de339334df57365`. These separate reviewed owner
+steps do not form a promoted P18-D runtime composition and add no temporal
+state to this P12 daily profile.
+The alignment constraints on extensibility and shared-activity identity and
+cardinality remain review constraints without adding those deferred capabilities
+to this profile.
