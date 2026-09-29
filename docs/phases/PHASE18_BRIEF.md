@@ -2,7 +2,7 @@
 
 **Authority:** planning scope under `../SIMULATION_ARCHITECTURE.md` §§11–12, 91–92. **Readiness:** P18-A/B/C core capabilities and the accepted additive A extension are promoted.
 The additive P18-A boundary/continuation contract was accepted at `2175bf2`; corrected implementation candidate `f1bfe818565c3fca81b373d1bc9a70a16f4eda10` passed exact-tip review and required validation and was promoted at integration tip `1dd0479`.
-The preserved P18-C external-input/deferral adapter code integration `a535441` was assembled against P18 canonical State tip `eabc1c2` / extension code tip `1dd0479`, passed post-extension exact-tip implementation review and focused/full validation, and was promoted at canonical integration tip `b75c5b8`. It includes the P11-owned `TryCaptureTemporal` operation, exact P18-A reference linkage, and typed temporal lifecycle dispositions; P18-D consumes this promoted API and preserves P11 semantic validation. P18-D composition work owns the bridge from committed P11 receipts to request-state binding after successful advance, later trigger/deferral observation, and exact request admission to execution; current P18-C `AfterSuccessfulAdvance` does not perform this input wiring. This is P18-D composition work, not a missing P18-C promotion. The only hard implementation blockers are the economy-owner operation receipt and serialized `SimulationRuntime` ownership window. Phase numbering preserves existing IDs, not execution order.
+The preserved P18-C external-input/deferral adapter code integration `a535441` was assembled against P18 canonical State tip `eabc1c2` / extension code tip `1dd0479`, passed post-extension exact-tip implementation review and focused/full validation, and was promoted at canonical integration tip `b75c5b8`. It includes the P11-owned `TryCaptureTemporal` operation, exact P18-A reference linkage, and typed temporal lifecycle dispositions; P18-D consumes this promoted API and preserves P11 semantic validation. P18-D composition work owns the bridge from committed P11 receipts to request-state binding after successful advance, later trigger/deferral observation, and exact request admission to execution; current P18-C `AfterSuccessfulAdvance` does not perform this input wiring. This is P18-D composition work, not a missing P18-C promotion. P18 canonical `9e790c5` now supplies the sale-owner keyed receipt/prepared-install capability and per-runtime advance lease. P18-D remains implementation-gated on integrating these existing capabilities into the chronological SellGoods consumer, completing the selected daily owner-step receipts and request-to-execution bridge, and validating the composed runtime. Phase numbering preserves existing IDs, not execution order.
 
 P18-D consumes the separately reviewed and already-promoted P18-C external-input/deferral adapter design at
 `../design/PHASE18_C_EXTERNAL_INPUT_ADAPTER_DESIGN.md`; no adapter design or promotion gate remains. Review passed at
@@ -20,16 +20,16 @@ historical only; its assembled post-extension tree passed focused and full
 validation and exact-tip independent review; the adapter was promoted at
 `b75c5b8`. P18-D consumes the already-promoted P11 temporal capture and
 disposition contract linked to P18-A; this is not an outstanding upstream
-gate. P18-D implementation remains blocked on the serialized
-`SimulationRuntime` ownership window and the existing economy owner's stable
-proposal-ID operation receipt with immutable correlation, first-execution
-current-truth snapshot, idempotent committed replay, and retry only after
-proven-uncommitted. If the economy owner cannot provide it, retain the focused
-architecture-review blocker. The accepted P18-A extension is already promoted.
-The P18-D
-SellGoods consumer also requires a stable
-proposal-ID operation receipt from the existing economy owner, including an
-immutable request fingerprint and first-execution current-truth snapshot.
+gate. P18-D consumes the promoted per-runtime `SimulationRuntime` advance
+lease and the economy owner's stable proposal-ID operation receipt with
+immutable correlation, first-execution current-truth snapshot, idempotent
+committed replay, and retry only after proven-uncommitted. These prerequisites
+are not missing and need no duplicate owner. The consumer must hold the same
+runtime lease across the complete chronology and successful P18-C handoff,
+then reconcile the sale receipt with the selected P11/P18-C request. Remaining
+readiness work is the exact daily owner-step manifest/receipts, SellGoods
+provider composition, bridge wiring, and integrated validation. The accepted
+P18-A extension is already promoted.
 Preserve trusted local-input scope, P11's retained-input authority and exact
 P18-C/P18-A causal identities; no second input queue or scheduler is allowed.
 
