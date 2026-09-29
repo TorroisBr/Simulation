@@ -60,6 +60,33 @@ source-method census below is a source/API map only: it is not a live
 owner-revision census, committed-mutation notification proof, or complete
 invalidation guarantee.
 
+### Current P18-source revalidation — 2026-09-28
+
+Revalidated this inventory against promoted P18 canonical code `9e790c5`
+(`9e790c59e14ca7f7ed195c0e6267e10f3cd039d7`) and the newer isolated P18-D
+records. The current P18-D design refresh `3cf89c0` passed independent review
+but remains unpromoted. The owner integration branch `89f5c55` combines the
+merchant and demography owners; its focused owner validation reports 93/93
+passing, but the branch also remains unpromoted. This is candidate evidence,
+not a live canonical owner census: no runtime composition of those owners, no
+explicit selected P12 profile, and no clock projection into the P18 temporal
+runtime exists yet. P18-D chronological ordering and P18-C handoff also remain
+incomplete. P12 profile inclusion and P12-A readiness therefore cannot be
+inferred from these owner candidates.
+
+The accepted `UnityBootstrap-Daily-v1` profile continues to exclude all P18
+temporal state, including timeline, activity lifecycle/availability,
+continuation extension, and intraday progress. P18 `SimulationTime` clock
+projection is an open compatibility seam for any later temporal consumer: its
+mapping from the daily profile's completed-day boundary has not been composed
+or validated. Record it as a dependency to resolve if a profile ever includes
+P18 time, not as new P12 temporal scope. Preserve the existing identity and
+cardinality contracts at that seam: `PersonId` remains distinct from
+`ActivityInstanceId`; an activity has one or more participants; and a shared
+`SourceReceiptId` may fan out to distinct operations with unique
+`OperationId`s. These constraints do not make activities or P18 temporal state
+part of this profile.
+
 This remains a documentation-only cross-branch inventory. The proposal branch
 does not inherit P11 executable code; P11 canonical was inspected separately
 for current composition facts. P11's canonical `SimulationRuntime` composes an
