@@ -42,6 +42,8 @@ public sealed class SimulationBootstrapComposition
         TravelParties = travelParties;
         GroupTravel = groupTravel;
         Runtime = runtime;
+        ActorChoiceInputCensusProvider = new ActorChoiceP11CensusProvider(Runtime.ActorChoiceStore);
+        ActorChoiceTemporalCensusProvider = new ActorChoiceTemporalCensusProvider(Runtime.ActorChoiceStore);
         RuntimeIdentityCensusProviders = RuntimeIdentityRegistryCensusProvider.CreateProviders(runtimeIdentityRegistry);
         ExplorableSites = sites;
         Expeditions = expeditions;
@@ -75,6 +77,10 @@ public sealed class SimulationBootstrapComposition
     public TravelPartyStore TravelParties { get; }
     public TravelPartySystem GroupTravel { get; }
     public SimulationRuntime Runtime { get; }
+    /// <summary>Passive witness for retained P11 actor-choice history.</summary>
+    public IOwnerSectionCensusProvider ActorChoiceInputCensusProvider { get; }
+    /// <summary>Passive exact-zero witness for excluded P18 temporal actor choices.</summary>
+    public IOwnerSectionCensusProvider ActorChoiceTemporalCensusProvider { get; }
     /// <summary>Fixed passive witnesses for the runtime's typed identity indexes.</summary>
     public IReadOnlyList<IOwnerSectionCensusProvider> RuntimeIdentityCensusProviders { get; }
     /// <summary>The P8-owned spatial truth authority published with the genesis handoff.</summary>
