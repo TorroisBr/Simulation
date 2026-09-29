@@ -29,7 +29,8 @@ have been delivered; revalidate hashes and owner interfaces before
 implementation.
 
 The P18-D prerequisites are canonical at `9e790c5`. Current State evidence tip
-`f1cfed3` records the consumer status, while
+`f1cfed3` records the consumer status and review result; exact-tip review covered
+candidate State `254385e`, while
 the optional-profile P18-D consumer runtime implementation `3ddf847` (based on
 P14 merge `a2a8edd`) composes chronological advance, successful P18-C handoff,
 and the bounded SellGoods consumer. It rejects P14-A local-material-flow

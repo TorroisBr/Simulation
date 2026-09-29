@@ -49,8 +49,8 @@ when an explicit intraday profile is selected. Runtime implementation remains
 `3ddf847`; test-only consumer replay regression is `0887d18`, with
 comment-accuracy follow-up `6a4d971` carrying fresh validation.
 The candidate is pushed but not canonical; it does not make P18 state part of
-this P12 profile. P18-D exact-tip implementation review of code `6a4d971` and
-State `f1cfed3` passed; P18-D remains open pending canonical promotion and
+this P12 profile. P18-D exact-tip implementation review covered code `6a4d971`
+and State `254385e`; State tip `f1cfed3` records the PASS. P18-D remains open pending canonical promotion and
 explicit runtime-hotspot handoff. Validation reruns are needed only if review
 requests fixes.
 P20

@@ -52,8 +52,9 @@ composes chronological advance, successful P18-C handoff, and the bounded
 SellGoods consumer. It rejects P14-A local-material-flow Cities before
 mutation. Test-only follow-up `0887d18` adds the consumer replay regression;
 comment-accuracy follow-up `6a4d971` has fresh validation and corrects the
-scenario wording. Current State evidence tip `f1cfed3` accurately describes
-post-terminal replay, and exact-tip P18 review passed. Canonical promotion and
+scenario wording. The exact-tip P18 review covered code `6a4d971` and State
+`254385e`; current State evidence tip `f1cfed3` records that PASS and accurately
+describes post-terminal replay. Canonical promotion and
 explicit `SimulationRuntime` hotspot handoff remain pending. This candidate
 does not add P18 temporal state
 to `UnityBootstrap-Daily-v1`, and does not establish P12 owner export or staged
@@ -388,8 +389,8 @@ rejected. The optional-profile P18-D consumer candidate `3ddf847`, based on
 P14 merge `a2a8edd`, composes chronological advance, successful P18-C handoff,
 and bounded SellGoods; its P14-A local-material-flow City exclusion occurs
 before mutation. It remains noncanonical pending canonical promotion and
-explicit runtime-hotspot handoff; the exact-tip implementation review of code
-`6a4d971` and State `f1cfed3` passed. Test-only `0887d18` adds the replay
+explicit runtime-hotspot handoff; exact-tip review of code `6a4d971` and State
+`254385e` passed, as recorded in State tip `f1cfed3`. Test-only `0887d18` adds the replay
 regression, with comment-only follow-up `6a4d971`; current State evidence tip
 `f1cfed3` records post-terminal replay and passing validation. Candidate composition neither changes the
 accepted `UnityBootstrap-Daily-v1` profile nor satisfies P12 owner export,
