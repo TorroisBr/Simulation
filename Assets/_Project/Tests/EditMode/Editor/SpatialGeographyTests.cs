@@ -74,6 +74,42 @@ public sealed class SpatialGeographyTests
     }
 
     [Test]
+    public void P8APassiveCensusProvidersReportSeparateCardinalitiesAndSharedRevision()
+    {
+        SpatialAuthorityStore store = new SpatialAuthorityStore();
+        SpatialHexCensusProvider hexProvider = new SpatialHexCensusProvider(store);
+        SpatialLocationCensusProvider locationProvider = new SpatialLocationCensusProvider(store);
+        SpatialScaleContextCensusProvider scaleProvider = new SpatialScaleContextCensusProvider(store);
+
+        AssertP8AWitness(hexProvider, SpatialHexCensusProvider.SectionId, store, 0, 0L);
+        AssertP8AWitness(locationProvider, SpatialLocationCensusProvider.SectionId, store, 0, 0L);
+        AssertP8AWitness(scaleProvider, SpatialScaleContextCensusProvider.SectionId, store, 0, 0L);
+
+        SpatialGeographyDefinition invalid = new SpatialGeographyDefinition(
+            CreateFixtureScale(false),
+            new[]
+            {
+                GeographicHex("hex.census-a", 0, 0, "terrain.fixture.plains"),
+                GeographicHex("hex.census-b", 0, 0, "terrain.fixture.forest")
+            },
+            new[] { new LocationRecord(new LocationId("location.census"), new HexId("hex.census-a")) });
+        Assert.That(store.TryComposeGeography(invalid, out SpatialAuthorityFailure invalidFailure), Is.False);
+        Assert.That(invalidFailure.Code, Is.EqualTo(SpatialAuthorityFailureCode.DuplicateHexCoordinate));
+        AssertP8AWitness(hexProvider, SpatialHexCensusProvider.SectionId, store, 0, 0L);
+        AssertP8AWitness(locationProvider, SpatialLocationCensusProvider.SectionId, store, 0, 0L);
+        AssertP8AWitness(scaleProvider, SpatialScaleContextCensusProvider.SectionId, store, 0, 0L);
+
+        SpatialGeographyDefinition valid = new SpatialGeographyDefinition(
+            CreateFixtureScale(false),
+            new[] { GeographicHex("hex.census", 0, 0, "terrain.fixture.plains") },
+            new[] { new LocationRecord(new LocationId("location.census"), new HexId("hex.census")) });
+        Assert.That(store.TryComposeGeography(valid, out SpatialAuthorityFailure validFailure), Is.True, validFailure.ToString());
+        AssertP8AWitness(hexProvider, SpatialHexCensusProvider.SectionId, store, 1, 1L);
+        AssertP8AWitness(locationProvider, SpatialLocationCensusProvider.SectionId, store, 1, 1L);
+        AssertP8AWitness(scaleProvider, SpatialScaleContextCensusProvider.SectionId, store, 1, 1L);
+    }
+
+    [Test]
     public void NeighborQueryUsesOnlyTheSixExistingAxialCellsAndReturnsCoordinateOrder()
     {
         SpatialAuthorityStore store = CreateAuthoredFixture(reverseRegistrationOrder: true);
@@ -430,6 +466,22 @@ public sealed class SpatialGeographyTests
         Assert.That(malformedReport.Issues, Has.Some.Matches<WorldStateInvariantIssue>(issue => issue.Code == "SpatialCoordinateConventionUnsupported"));
         Assert.That(malformedReport.Issues, Has.Some.Matches<WorldStateInvariantIssue>(issue => issue.Code == "SpatialCoordinateOrderUnsupported"));
         Assert.That(malformedReport.Issues, Has.Some.Matches<WorldStateInvariantIssue>(issue => issue.Code == "SpatialHexTerrainRevisionTokenMissing"));
+    }
+
+    private static void AssertP8AWitness(
+        IOwnerSectionCensusProvider provider,
+        string sectionId,
+        SpatialAuthorityStore owner,
+        int cardinality,
+        long revision)
+    {
+        OwnerSectionCensusWitness witness = provider.GetCurrentCensus();
+        Assert.That(witness.SectionId, Is.EqualTo(sectionId));
+        Assert.That(witness.SchemaVersion, Is.EqualTo(1));
+        Assert.That(witness.OwnerInstanceIdentity, Is.SameAs(owner));
+        Assert.That(witness.Cardinality, Is.EqualTo(cardinality));
+        Assert.That(witness.Revision, Is.EqualTo(revision));
+        Assert.That(provider.GetCurrentCensus().OwnerInstanceIdentity, Is.SameAs(owner));
     }
 
     private static SpatialAuthorityStore CreateAuthoredFixture(

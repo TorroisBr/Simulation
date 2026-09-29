@@ -191,6 +191,33 @@ public sealed class SimulationBootstrapCompositionTests
         simulation.Start();
 
         SpatialAuthorityStore authority = simulation.Bootstrap.SpatialAuthority;
+        SpatialHexCensusProvider hexCensusProvider = new SpatialHexCensusProvider(authority);
+        OwnerSectionCensusWitness hexCensus = hexCensusProvider.GetCurrentCensus();
+        Assert.That(hexCensus.SectionId, Is.EqualTo(SpatialHexCensusProvider.SectionId));
+        Assert.That(hexCensus.SchemaVersion, Is.EqualTo(SpatialHexCensusProvider.SchemaVersion));
+        Assert.That(hexCensus.OwnerInstanceIdentity, Is.SameAs(authority));
+        Assert.That(hexCensus.Cardinality, Is.EqualTo(1));
+        Assert.That(hexCensus.Revision, Is.EqualTo(1L));
+        Assert.That(hexCensusProvider.GetCurrentCensus().OwnerInstanceIdentity, Is.SameAs(authority));
+
+        SpatialLocationCensusProvider locationCensusProvider = new SpatialLocationCensusProvider(authority);
+        OwnerSectionCensusWitness locationCensus = locationCensusProvider.GetCurrentCensus();
+        Assert.That(locationCensus.SectionId, Is.EqualTo(SpatialLocationCensusProvider.SectionId));
+        Assert.That(locationCensus.SchemaVersion, Is.EqualTo(SpatialLocationCensusProvider.SchemaVersion));
+        Assert.That(locationCensus.OwnerInstanceIdentity, Is.SameAs(authority));
+        Assert.That(locationCensus.Cardinality, Is.EqualTo(1));
+        Assert.That(locationCensus.Revision, Is.EqualTo(1L));
+        Assert.That(locationCensusProvider.GetCurrentCensus().OwnerInstanceIdentity, Is.SameAs(authority));
+
+        SpatialScaleContextCensusProvider scaleCensusProvider = new SpatialScaleContextCensusProvider(authority);
+        OwnerSectionCensusWitness scaleCensus = scaleCensusProvider.GetCurrentCensus();
+        Assert.That(scaleCensus.SectionId, Is.EqualTo(SpatialScaleContextCensusProvider.SectionId));
+        Assert.That(scaleCensus.SchemaVersion, Is.EqualTo(SpatialScaleContextCensusProvider.SchemaVersion));
+        Assert.That(scaleCensus.OwnerInstanceIdentity, Is.SameAs(authority));
+        Assert.That(scaleCensus.Cardinality, Is.EqualTo(1));
+        Assert.That(scaleCensus.Revision, Is.EqualTo(1L));
+        Assert.That(scaleCensusProvider.GetCurrentCensus().OwnerInstanceIdentity, Is.SameAs(authority));
+
         Assert.That(simulation.Bootstrap.ProfileContractIdentity, Is.EqualTo(SimulationGenesisPipeline.GeographyProfileContractIdentity));
         OwnerSectionCensusWitness occurrenceReceipts = simulation.Bootstrap.GetNpcDecisionOccurrenceReceiptCensus();
         Assert.That(occurrenceReceipts.SectionId, Is.EqualTo(NpcDecisionRecorder.OccurrenceReceiptSectionId));
