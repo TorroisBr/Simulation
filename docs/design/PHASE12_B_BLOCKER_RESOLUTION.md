@@ -303,6 +303,55 @@ work against the reviewed B contract. The fact that B’s first coordinator
 candidate fails closed before all owner adapters exist is intentional; it
 does not make owner groups ready on an unpromoted API.
 
+### First bounded B implementation slice: runtime fence and one live zero
+
+The source evidence supports a narrowly useful first implementation within
+accepted P12-B. It does not require C/D/E/F owner serialization work and does
+not grant profile admission. The slice should:
+
+1. Bind the selected runtime to the current owner-thread identity immediately
+   before `TesteSimulacao` publishes the completed `SimulationBootstrapComposition`.
+   Queries used by the probe reject a different thread; standalone
+   `SimulationRuntime`/`SimulationTime` test fixtures keep their current
+   behavior until explicitly bound.
+2. Report whether the existing outer advance operation is active, using the
+   current `AdvanceLease` lifecycle in `SimulationRuntime`. Do not add or nest
+   another advance lock. Keep one `TryAdvanceDays` lease around the whole
+   multi-day call; the witness is false during every day/callback and restored
+   on success, returned failure, and exception.
+3. Close the direct-clock bypass for a runtime-bound `SimulationTime`:
+   external `TryAdvanceDay`/`AdvanceDay` calls cannot change a bound runtime’s
+   clock outside its existing runtime advance path. Preserve standalone clock
+   behavior and `SimulationRuntime`'s existing result/error behavior.
+4. Add an owner-issued count/revision witness to
+   `NpcDecisionRecorder.occurrenceReceipts`. Its selected-profile initial
+   count is exactly zero; count/revision advance together only when a receipt
+   is committed. Reach this witness through the runtime-owned recorder
+   reference; do not use reflection or infer the value from P18 being absent.
+5. Prove only these claims in focused EditMode tests: bound owner-thread
+   identity; idle/active/released advance scope including multi-day,
+   reentrant, failure, and exception cases; direct bound-clock rejection;
+   recorder exact-zero owner identity/revision; and explicit incomplete-owner
+   status when every other census adapter is still missing.
+
+This slice owns only `SimulationRuntime.cs`/its partials,
+`SimulationTime.cs`, the recorder witness in `DecisionRecords.cs`, the normal
+bootstrap publication seam in `TesteSimulacao.cs` or
+`SimulationBootstrapComposition.cs`, and focused tests beside runtime
+orchestration/decision recording. Keep City/NPC, Person/population, economic,
+political/military, Knowledge, directive, travel, and expedition invalidation
+out of this change; their accepted D/E/F adapters own those notifications.
+If the implementation cannot stop a supported direct mutation from silently
+changing eligibility, it must return incomplete and issue no capture token.
+
+The slice establishes actual owner-thread and advance-quiescence mechanics and
+one live zero witness only. It does not establish an all-owner manifest, a
+world mutation epoch, broad operation-scope coverage, a successful-boundary
+token, a save/load API, P12-B completion, P12-G readiness, or P12-A readiness.
+The reviewer must confirm the narrow direct-clock capability preserves P18's
+lease semantics and that the incomplete status cannot be mistaken for
+eligibility before implementation starts.
+
 ## Runtime proof requirements
 
 The current `SimulationRuntime.advanceLeaseHeld` is an unsynchronized
