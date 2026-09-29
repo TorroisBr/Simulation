@@ -11,10 +11,10 @@ itself canonical.
 P18-A (including the accepted boundary/continuation extension), P18-B, P18-C
 (including the external-input/deferral adapter), P18-D's bounded consumer, and
 the sale-owner receipt/prepared-install and serialized runtime-window
-prerequisites are promoted. The current Phase 18 scope has a proposed closure
-record below. **Formal status remains IN PROGRESS:** the closure proposal is
-pending independent closure review and the separate human closure approval.
-No closure is recorded by this candidate.
+prerequisites are promoted. **Current canonical status remains IN PROGRESS**
+at `2d314be` until this candidate is approved and promoted. The closure marker
+below records Phase 18 as **CLOSED / COMPLETED** upon that promotion; it does
+not claim that the candidate branch is already canonical.
 
 Current architecture/alignment constraints are `c285466` (canonical
 architecture), `4b6dd1d` (intraday/extensibility alignment), and `c285466`
@@ -24,12 +24,13 @@ semantic seams, distinct activity/actor/participant identity, and unconstrained
 participant cardinality. P18 work does not implement the deferred P19 public
 Mod API/loader or P20 coordination layer.
 
-### Proposed Phase 18 closure marker — pending review and approval
+### Phase 18 closure marker — candidate, effective upon promotion
 
-**Proposed verdict:** close Phase 18 within the bounded objective and promoted
-checkpoint scopes recorded here. This is a proposal only. The canonical Phase
-State remains **IN PROGRESS** until an independent closure review passes and
-the user separately approves formal closure.
+**Candidate State:** Phase 18 — **CLOSED / COMPLETED**, within the bounded
+objective and promoted checkpoint scopes recorded here. The candidate itself
+contains this formal closure marker. It takes effect only if this candidate is
+approved and promoted to `codex/phase18/canonical`; until then the current
+canonical Phase State remains **IN PROGRESS**.
 
 The mandatory P18-A/B/C/D checkpoints in the Phase 18 Brief are represented by
 promoted capabilities in the current canonical history. The P18-D consumer
@@ -52,10 +53,13 @@ unrecorded P18 requirements.
   covers a post-terminal replay in the same runtime after rewinding consumer
   execution flags; it does not prove pre-terminal interruption recovery,
   process/runtime restart durability, or save/crash recovery. Sale receipts
-  remain scoped to the current `SimulationRuntime` lifetime.
+  remain scoped to the current `SimulationRuntime` lifetime. These are recorded
+  limits of this slice, not additional mandatory P18 checkpoints under the
+  current Brief.
 - P14 local material-flow Cities remain excluded until their own temporal
-  owner adapter is designed, reviewed, and promoted. Full travel migration and
-  conversion of every legacy daily domain are not claimed.
+  owner adapter is designed, reviewed, and promoted. P8-E and full travel
+  migration remain separate/deferred work; conversion of every legacy daily
+  domain is not claimed.
 - No concrete Sleep, Dreams, robbery/gang, ritual, War, or MegaEventos gameplay
   is included. P18 does not deliver persistence, the P19 public extension
   API/loader, or P20 formation/participant coordination.
@@ -69,11 +73,18 @@ unrecorded P18 requirements.
   that hotspot. This is an administrative handoff, not P12-B implementation
   readiness. P12-B must not edit the hotspot until its independently recorded
   composition, complete owner-census, mutation-invalidation, and readiness
-  gates pass. This Phase 18 closure proposal does not assert P12 readiness.
+  gates pass. This Phase 18 closure marker does not assert P12 readiness.
 
-**Closure gate:** independent exact-candidate closure review and explicit human
-approval remain outstanding. After approval, a separate canonical State
-marker must record formal `COMPLETED` status and its closure evidence.
+The closure audit found all mandatory P18-A through P18-D checkpoints
+canonical, and no unresolved product or canonical-architecture decision.
+Items listed above are deferred or separately gated consumers, not missing P18
+requirements.
+
+**Formal closure gate:** promotion of this exact candidate is the user's formal
+approval of Phase 18 closure. Until that approval and promotion, current
+canonical remains **IN PROGRESS** at `2d314be`. On promotion, this candidate
+itself records **CLOSED / COMPLETED**; no later unreviewed State-marker commit
+is required.
 
 ## Historical status snapshot — superseded by the current status above
 
