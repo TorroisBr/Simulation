@@ -1,6 +1,7 @@
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
+using System.Reflection;
 
 public sealed class CoreRuntimeTests
 {
@@ -37,10 +38,75 @@ public sealed class CoreRuntimeTests
     public void RecordSequence_SharesOneMonotonicSequenceAcrossDecisionsAndEvents()
     {
         RecordFixture fixture = SimulationTestFactory.CreateRecordFixture();
+        SimulationRecordSequenceCensusProvider provider = new SimulationRecordSequenceCensusProvider(fixture.Sequence);
+        OwnerSectionCensusWitness initial = provider.GetCurrentCensus();
+
+        Assert.That(initial.SectionId, Is.EqualTo(SimulationRecordSequenceCensusProvider.SectionId));
+        Assert.That(initial.SchemaVersion, Is.EqualTo(SimulationRecordSequenceCensusProvider.SchemaVersion));
+        Assert.That(initial.OwnerInstanceIdentity, Is.Not.SameAs(fixture.Sequence));
+        Assert.That(initial.OwnerInstanceIdentity, Is.Not.InstanceOf<SimulationRecordSequence>());
+        Assert.That(initial.Cardinality, Is.EqualTo(1));
+        Assert.That(initial.Revision, Is.Zero);
 
         Assert.That(fixture.Sequence.Allocate(), Is.EqualTo(1L));
+        Assert.That(provider.GetCurrentCensus().Revision, Is.EqualTo(1L));
         Assert.That(fixture.Sequence.Allocate(), Is.EqualTo(2L));
+        Assert.That(provider.GetCurrentCensus().Revision, Is.EqualTo(2L));
         Assert.That(fixture.Sequence.Allocate(), Is.EqualTo(3L));
+        Assert.That(provider.GetCurrentCensus().Revision, Is.EqualTo(3L));
+        Assert.That(new SimulationRecordSequenceCensusProvider(fixture.Sequence)
+            .GetCurrentCensus().OwnerInstanceIdentity, Is.SameAs(initial.OwnerInstanceIdentity));
+    }
+
+    [Test]
+    public void DecisionAndEventRecordersShareTheWitnessedSequenceOwner()
+    {
+        RecordFixture fixture = SimulationTestFactory.CreateRecordFixture();
+        SimulationRecordSequenceCensusProvider provider = new SimulationRecordSequenceCensusProvider(fixture.Sequence);
+
+        NpcDecisionRecord decision = fixture.DecisionRecorder.Record(
+            "actor", NpcDecisionType.Action, NpcDecisionOrigin.Autonomous,
+            "action", null, null, null);
+        Assert.That(decision, Is.Not.Null);
+        Assert.That(decision.RecordSequence, Is.EqualTo(1L));
+        Assert.That(provider.GetCurrentCensus().Revision, Is.EqualTo(1L));
+
+        Assert.That(fixture.EventRecorder.Record((eventId, day, sequence) =>
+            new NpcArrivedEvent(eventId, day, sequence, "actor", "location")), Is.True);
+        Assert.That(fixture.Events.Events.Count, Is.EqualTo(1));
+        Assert.That(fixture.Events.Events[0].RecordSequence, Is.EqualTo(2L));
+        Assert.That(provider.GetCurrentCensus().Revision, Is.EqualTo(2L));
+    }
+
+    [Test]
+    public void FailedRecordConstructionStillAdvancesTheConsumedSequenceRevision()
+    {
+        RecordFixture fixture = SimulationTestFactory.CreateRecordFixture();
+        SimulationRecordSequenceCensusProvider provider = new SimulationRecordSequenceCensusProvider(fixture.Sequence);
+        LogAssert.Expect(LogType.Error, "Cannot create domain event: expected construction failure.");
+
+        Assert.That(fixture.EventRecorder.Record((eventId, day, sequence) =>
+            throw new System.ArgumentException("expected construction failure.")), Is.False);
+        Assert.That(provider.GetCurrentCensus().Cardinality, Is.EqualTo(1));
+        Assert.That(provider.GetCurrentCensus().Revision, Is.EqualTo(1L));
+        Assert.That(fixture.Events.Events, Is.Empty);
+    }
+
+    [Test]
+    public void SequenceExhaustionDoesNotAdvanceTheWitness()
+    {
+        SimulationRecordSequence sequence = new SimulationRecordSequence();
+        SimulationRecordSequenceCensusProvider provider = new SimulationRecordSequenceCensusProvider(sequence);
+        typeof(SimulationRecordSequence)
+            .GetField("nextSequence", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(sequence, long.MaxValue);
+        OwnerSectionCensusWitness exhausted = provider.GetCurrentCensus();
+
+        Assert.That(exhausted.Revision, Is.EqualTo(long.MaxValue - 1L));
+        Assert.Throws<System.InvalidOperationException>(() => sequence.Allocate());
+        Assert.That(provider.GetCurrentCensus().OwnerInstanceIdentity, Is.SameAs(exhausted.OwnerInstanceIdentity));
+        Assert.That(provider.GetCurrentCensus().Cardinality, Is.EqualTo(1));
+        Assert.That(provider.GetCurrentCensus().Revision, Is.EqualTo(long.MaxValue - 1L));
     }
 
     [Test]

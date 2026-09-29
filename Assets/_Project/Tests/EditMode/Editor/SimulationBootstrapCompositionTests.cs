@@ -232,6 +232,17 @@ public sealed class SimulationBootstrapCompositionTests
             Assert.That(repeatedIdentityWitnesses[i].Cardinality, Is.EqualTo(expectedRuntimeIdentityCardinalities[i]));
             Assert.That(repeatedIdentityWitnesses[i].Revision, Is.EqualTo(16L));
         }
+        OwnerSectionCensusWitness recordSequenceCensus =
+            simulation.Bootstrap.SimulationRecordSequenceCensusProvider.GetCurrentCensus();
+        Assert.That(recordSequenceCensus.SectionId, Is.EqualTo(SimulationRecordSequenceCensusProvider.SectionId));
+        Assert.That(recordSequenceCensus.SchemaVersion, Is.EqualTo(SimulationRecordSequenceCensusProvider.SchemaVersion));
+        Assert.That(recordSequenceCensus.Cardinality, Is.EqualTo(1));
+        Assert.That(recordSequenceCensus.Revision, Is.Zero);
+        OwnerSectionCensusWitness repeatedRecordSequenceCensus =
+            simulation.Bootstrap.SimulationRecordSequenceCensusProvider.GetCurrentCensus();
+        Assert.That(repeatedRecordSequenceCensus.OwnerInstanceIdentity,
+            Is.SameAs(recordSequenceCensus.OwnerInstanceIdentity));
+        Assert.That(repeatedRecordSequenceCensus.Revision, Is.Zero);
 
         SpatialAuthorityStore authority = simulation.Bootstrap.SpatialAuthority;
         SpatialHexCensusProvider hexCensusProvider = new SpatialHexCensusProvider(authority);

@@ -4,6 +4,10 @@ using System.Collections.Generic;
 public sealed class SimulationRecordSequence
 {
     private long nextSequence = 1L;
+    private readonly object censusOwnerIdentity = new object();
+
+    internal object CensusOwnerIdentity => censusOwnerIdentity;
+    internal long CensusRevision => nextSequence - 1L;
 
     public long Allocate()
     {
