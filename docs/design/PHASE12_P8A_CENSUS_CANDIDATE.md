@@ -11,7 +11,8 @@ P12-B remains incomplete and P12-A remains `WAIT_DEPENDENCY`.
 `0baba5cd1981950f9779f6e9772e41c88dc0cfbf`; independent exact-tip design
 review passed. The design record is `docs/design/PHASE12_P8A_CENSUS_DESIGN.md`.
 
-**Code-bearing commit:** `3bf0619` (`Add passive P8-A spatial census witnesses`).
+**Code-bearing candidate tip:** `9efba61` (provider/test commit `3bf0619`,
+followed by the shared-revision temporal test fix `9efba61`).
 
 ## Delivered boundary
 
@@ -37,7 +38,9 @@ checks stable owner identity across repeated reads. `SpatialGeographyTests`
 checks exact empty values, independent section cardinalities, shared revision,
 and that a rejected duplicate-coordinate composition leaves all witnesses at
 zero and revision zero before a valid composition advances each to one at
-revision one.
+revision one. A separate temporal case registers a barrier through the
+existing P8-B spatial authority: Hex/Location/scale counts remain 7/1/1 while
+all P8-A witnesses observe the shared parent revision advance from 1 to 2.
 
 Changed files:
 
@@ -45,16 +48,16 @@ Changed files:
 - `Assets/_Project/Tests/EditMode/Editor/SpatialGeographyTests.cs`
 - `Assets/_Project/Tests/EditMode/Editor/SimulationBootstrapCompositionTests.cs`
 
-## Validation on code-bearing commit `3bf0619`
+## Validation on code-bearing candidate tip `9efba61`
 
-- `SpatialGeographyTests`: 14/14 passed, XML
-  `Library/ValidationResults/P12BP8A/EditMode-20260929-213920-b4fa6edc3dfd44daa56228c8e3999aff.xml`.
+- `SpatialGeographyTests`: 15/15 passed, XML
+  `Library/ValidationResults/P12BP8A/EditMode-20260929-214450-da4a0929b7304664b12fc7ab23f1e6da.xml`.
 - `SimulationBootstrapCompositionTests`: 14/14 passed, XML
-  `Library/ValidationResults/P12BP8A/EditMode-20260929-213948-29ac4ebb522f45a88992a25162461fed.xml`.
-- ALL EditMode: 1956/1956 passed, XML
-  `Library/ValidationResults/P12BP8A/EditMode-20260929-214023-4033a54a4f144ed99ae23f68450fd7c0.xml`.
+  `Library/ValidationResults/P12BP8A/EditMode-20260929-214656-30967baf7f304c668db14f650f7dd451.xml`.
+- ALL EditMode: 1957/1957 passed, XML
+  `Library/ValidationResults/P12BP8A/EditMode-20260929-214515-de1df8d8d50544baa385ab67fe6cb25c.xml`.
 - Official complete Smoke filter: 5/5 passed, XML
-  `Library/ValidationResults/P12BP8A/EditMode-20260929-214104-748bd83286624783849045e9a6e7b2b2.xml`.
+  `Library/ValidationResults/P12BP8A/EditMode-20260929-214552-ab76f5a6ed3642a3bd86680f060a7a8d.xml`.
 - `git diff --check`: passed.
 
 The Unity XML and logs are retained in the candidate worktree and are not
