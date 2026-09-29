@@ -206,8 +206,9 @@ public sealed class P18DConsumerIntegrationTests
 
         fixture.Actor.SetMerchantTradePlan(fixture.Item, fixture.City, fixture.City, 5, 1f);
 
-        // Model an interruption after the owner receipt and once-only consumer bookkeeping
-        // are retained but before the P11/P18-C terminal reconciliation is recorded.
+        // Model consumer re-entry after the sale and its terminal records already completed.
+        // Rewinding only this execution state checks idempotent replay; it does not model a
+        // pre-terminal interruption or a runtime restart.
         SetExecutionProperty(execution, "Stage", "SaleCommitted");
         SetExecutionProperty(execution, "TerminalKind", "None");
         SetExecutionProperty(execution, "TerminalProposalId", null);
