@@ -3,9 +3,9 @@
 **Status:** PHASE 12 IN PROGRESS — P12-A WAIT_DEPENDENCY; P12-B INCOMPLETE
 (PARTIAL FOUNDATION PROMOTED).
 
-**Canonical P12 foundation:** `codex/phase12/canonical` at
-`9da25b47ab0bc0f6a1a10032dfceaad05f6316e6`; previous base
-`04105d31e88fca97888dddb8e974236a7f4b6804`.
+**Latest promoted P12-B code tip:** `codex/phase12/canonical` at
+`481358d1f8967d1c0199370601597c329fce69b2`; previous canonical tip
+`a43316858b7006c624ed1a950097210ae55e95f7`.
 
 **Architecture baseline:** `c285466c355103d3637ac165246591b72eb7bda0`, with
 the intraday/extensibility alignment at `4b6dd1d38cffeaf3cc1ac3effea0f8ede8771194`
@@ -21,7 +21,7 @@ P12-B–P12-G capability decomposition in
 | Checkpoint | Status | Current evidence and limits |
 |---|---|---|
 | P12-A — `UnityBootstrap-Daily-v1` profile integration | `WAIT_DEPENDENCY` | Scope accepted. No included-owner export plus staged-hydration coverage or validated complete live profile inventory exists yet. Its separate implementation authorization remains outstanding. |
-| P12-B — profile admission and completed-boundary lifecycle | `INCOMPLETE — PARTIAL FOUNDATION PROMOTED` | The reviewed non-admitting census kernel and exact receipt-owner witnesses were promoted at `9da25b47ab0bc0f6a1a10032dfceaad05f6316e6` from code-bearing candidate `a67beacf5aad9da11a070eae48a45fcd50ffb44b`. Static C/D/E/F writer map and partial selected-profile day-zero reads are recorded in `docs/design/PHASE12_B_BLOCKER_RESOLUTION.md`. The promoted work does not register a complete profile census, connect committed writes to the shared epoch, prove Unity owner-thread/quiescence, or issue a capture token. |
+| P12-B — profile admission and completed-boundary lifecycle | `INCOMPLETE — PARTIAL FOUNDATION PROMOTED` | The reviewed non-admitting census kernel and exact receipt-owner witnesses were promoted at `9da25b47ab0bc0f6a1a10032dfceaad05f6316e6`; passive P8-C City/Site binding and Person-position witnesses were promoted at `481358d1f8967d1c0199370601597c329fce69b2`. Static C/D/E/F writer map and partial selected-profile day-zero reads are recorded in `docs/design/PHASE12_B_BLOCKER_RESOLUTION.md`. Neither promotion registers a complete profile census, connects committed writes to the shared epoch, proves Unity owner-thread/quiescence, or issues a capture token. |
 | P12-C — identity, provenance, deterministic roots | `BLOCKED_ON_P12-B` | Preserve `codex/phase12/P12CIdentityRuntimeSnapshot` at `531d835` for selective reintegration only after B promotion and revalidation. It does not satisfy B or provide the remaining C root witnesses. |
 | P12-D — factual roots and Person/population relations | `BLOCKED_ON_P12-B_AND_C` | Owner inventory and accepted scope remain; no complete export/hydration capability is claimed. |
 | P12-E — core and official daily-domain owners | `BLOCKED_ON_P12-B_AND_C` | Owner inventory and accepted scope remain; effective-profile provider coverage and exact owner exports are incomplete. |
@@ -38,8 +38,7 @@ The candidate branch `codex/phase12/P12BCoordinatorReviewFix` was based on
 the previous canonical SHA `04105d31e88fca97888dddb8e974236a7f4b6804`.
 Its code-bearing tree was `a67beacf5aad9da11a070eae48a45fcd50ffb44b`; the
 reviewed promotion tip is `9da25b47ab0bc0f6a1a10032dfceaad05f6316e6`.
-Canonical promotion was approved and completed: local and remote
-`codex/phase12/canonical` now point to that tip. It includes:
+Canonical promotion was approved and completed at `9da25b47ab0bc0f6a1a10032dfceaad05f6316e6`. It includes:
 
 - a versioned owner-section census protocol with exact section role, owner
   identity, schema, cardinality, revision/snapshot stamp, fail-closed owner
@@ -67,6 +66,28 @@ and `git diff --check`. The tested code-bearing tree and promoted tip differ
 only by reviewed documentation commits. This is a reviewed, promoted
 non-admitting foundation, not a completed P12-B checkpoint.
 
+## Promoted P8-C passive census witnesses
+
+The P8-C passive witness candidate was based on canonical
+`a43316858b7006c624ed1a950097210ae55e95f7` and promoted to
+`codex/phase12/canonical` at `481358d1f8967d1c0199370601597c329fce69b2`.
+Independent exact-tip review passed. It adds schema-v1 owner witnesses for
+`p8c.city-site-location-bindings` and `p8c.person-positions`, using the
+published runtime's installed `LegacySpatialAnchorBindingStore` and
+`PersonSpatialPositionStore` references as identity and their exact local
+count/revision values.
+
+Focused `PersonSpatialPresenceTests` passed 9/9 and
+`SimulationBootstrapCompositionTests` passed 14/14. ALL EditMode passed
+1953/1953 and official complete Smoke passed 5/5. Result XMLs are recorded in
+`docs/design/PHASE12_P8C_CENSUS_CANDIDATE.md` and retained in the candidate
+worktree under `Library/ValidationResults/P12BP8C`.
+
+These unsynchronized providers remain passive. They are not registered in the
+incomplete profile census, do not connect writes to the shared mutation epoch,
+do not prove owner-thread/quiescence, and do not grant capture eligibility.
+P12-B remains incomplete and P12-A remains `WAIT_DEPENDENCY`.
+
 ## Remaining dependency-ordered P12-B blockers
 
 The static successful-writer inventory is recorded; proving every included
@@ -76,13 +97,9 @@ cardinality, owner-thread identity, or quiescence. P8-B/D, causal C roots,
 factual D, official E, and commitment F owners still need exact witness
 providers and supported-writer coverage.
 
-The next bounded owner-evidence slice is two passive P8-C adapters for the installed
-`LegacySpatialAnchorBindingStore` and `PersonSpatialPositionStore`. Their
-section/schema identities, count/revision semantics, focused test evidence,
-and explicit non-claims are recorded in
-`docs/design/PHASE12_B_BLOCKER_RESOLUTION.md`. These unsynchronized reads are
-not usable for capture until the owner-thread/quiescence proof is complete.
-This slice may provide exact owner-backed zero witnesses only; it does not
-register the providers in the incomplete profile protocol, connect mutation
-epochs, establish capture eligibility, or change P12-A readiness. Phase 12
-remains open and no P12-A implementation authorization is implied.
+P8-C's two owner witnesses are now promoted, reducing the live-evidence gap
+only for those composed-empty sections. P8-B passage/crossing and P8-D route
+sections, causal C roots, factual D, official E, and commitment F owners still
+need exact witness providers and supported-writer coverage. The remaining
+committed-write invalidation and owner-thread/quiescence blockers are unchanged.
+Phase 12 remains open and no P12-A implementation authorization is implied.
