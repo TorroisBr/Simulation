@@ -16,7 +16,8 @@ public enum AggregateDemographyFailure
     RevisionOverflow = 8,
     StaleState = 9,
     InvalidTransition = 10,
-    RuntimeFaulted = 11
+    RuntimeFaulted = 11,
+    OperationIdentityConflict = 12
 }
 
 /// <summary>

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 /// <summary>
 /// Mutable aggregate population state owned by a future settlement runtime.
@@ -7,9 +8,12 @@ using System;
 public sealed class SettlementPopulationRuntime : IAuthoritativeMutationGuardBindable
 {
     private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
+    private readonly object operationReceiptGate = new object();
     private readonly string settlementRuntimeId;
     private int currentPopulation;
     private long revision;
+    private Dictionary<string, PopulationOperationReceipt> operationReceipts =
+        new Dictionary<string, PopulationOperationReceipt>(StringComparer.Ordinal);
 
     public string SettlementRuntimeId => settlementRuntimeId;
     public int CurrentPopulation => currentPopulation;
@@ -24,8 +28,25 @@ public sealed class SettlementPopulationRuntime : IAuthoritativeMutationGuardBin
             return;
         }
 
-        currentPopulation = population;
-        revision = expectedRevision;
+        lock (operationReceiptGate)
+        {
+            List<string> discardedReceiptIds = new List<string>();
+            foreach (KeyValuePair<string, PopulationOperationReceipt> pair in operationReceipts)
+            {
+                if (pair.Value.Transition.ExpectedRevision >= expectedRevision)
+                {
+                    discardedReceiptIds.Add(pair.Key);
+                }
+            }
+
+            foreach (string operationIdentity in discardedReceiptIds)
+            {
+                operationReceipts.Remove(operationIdentity);
+            }
+
+            currentPopulation = population;
+            revision = expectedRevision;
+        }
     }
 
     public SettlementPopulationRuntime(string settlementRuntimeId, int currentPopulation)
@@ -53,8 +74,102 @@ public sealed class SettlementPopulationRuntime : IAuthoritativeMutationGuardBin
         SettlementPopulationTransition transition,
         out PopulationTransitionFailure failure)
     {
-        failure = PopulationTransitionFailure.None;
+        return TryApplyTransitionCore(transition, out failure);
+    }
 
+    internal bool TryApplyTransitionWithReceipt(
+        string operationIdentity,
+        string operationFingerprint,
+        SettlementPopulationTransition transition,
+        out bool newlyApplied,
+        out PopulationTransitionFailure failure)
+    {
+        newlyApplied = false;
+        failure = PopulationTransitionFailure.None;
+        if (string.IsNullOrWhiteSpace(operationIdentity)
+            || string.IsNullOrWhiteSpace(operationFingerprint)
+            || transition == null)
+        {
+            failure = PopulationTransitionFailure.InvalidTransition;
+            return false;
+        }
+
+        lock (operationReceiptGate)
+        {
+            PopulationOperationReceiptResolution resolution = ResolveOperationReceiptCore(
+                operationIdentity, operationFingerprint, transition);
+            if (resolution == PopulationOperationReceiptResolution.Matching)
+            {
+                return true;
+            }
+
+            if (resolution == PopulationOperationReceiptResolution.Conflicting)
+            {
+                failure = PopulationTransitionFailure.OperationIdentityConflict;
+                return false;
+            }
+
+            if (!CanApplyTransition(transition, out failure))
+            {
+                return false;
+            }
+
+            operationReceipts.Add(operationIdentity, new PopulationOperationReceipt(
+                operationFingerprint, transition));
+            currentPopulation = transition.PopulationAfter;
+            revision++;
+            newlyApplied = true;
+            return true;
+        }
+    }
+
+    internal PopulationOperationReceiptResolution ResolveOperationReceipt(
+        string operationIdentity,
+        string operationFingerprint,
+        SettlementPopulationTransition transition = null)
+    {
+        lock (operationReceiptGate)
+        {
+            return ResolveOperationReceiptCore(operationIdentity, operationFingerprint, transition);
+        }
+    }
+
+    private PopulationOperationReceiptResolution ResolveOperationReceiptCore(
+        string operationIdentity,
+        string operationFingerprint,
+        SettlementPopulationTransition transition)
+    {
+        if (string.IsNullOrWhiteSpace(operationIdentity)
+            || !operationReceipts.TryGetValue(operationIdentity, out PopulationOperationReceipt receipt))
+        {
+            return PopulationOperationReceiptResolution.Missing;
+        }
+
+        return string.Equals(receipt.Fingerprint, operationFingerprint, StringComparison.Ordinal)
+            && (transition == null || receipt.Transition.Equals(transition))
+            ? PopulationOperationReceiptResolution.Matching
+            : PopulationOperationReceiptResolution.Conflicting;
+    }
+
+    private bool TryApplyTransitionCore(
+        SettlementPopulationTransition transition,
+        out PopulationTransitionFailure failure)
+    {
+        if (!CanApplyTransition(transition, out failure))
+        {
+            return false;
+        }
+
+        currentPopulation = transition.PopulationAfter;
+        revision++;
+        return true;
+    }
+
+    private bool CanApplyTransition(
+        SettlementPopulationTransition transition,
+        out PopulationTransitionFailure failure)
+    {
+        failure = PopulationTransitionFailure.None;
         if (!mutationGuardBinding.CanMutate)
         {
             failure = PopulationTransitionFailure.RuntimeFaulted;
@@ -67,7 +182,7 @@ public sealed class SettlementPopulationRuntime : IAuthoritativeMutationGuardBin
             return false;
         }
 
-        if (string.Equals(SettlementRuntimeId, transition.SettlementRuntimeId, StringComparison.Ordinal) == false)
+        if (!string.Equals(SettlementRuntimeId, transition.SettlementRuntimeId, StringComparison.Ordinal))
         {
             failure = PopulationTransitionFailure.InvalidSettlement;
             return false;
@@ -83,10 +198,8 @@ public sealed class SettlementPopulationRuntime : IAuthoritativeMutationGuardBin
             + transition.Immigrations
             - transition.Deaths
             - transition.Emigrations;
-        if (transition.Births < 0
-            || transition.Deaths < 0
-            || transition.Immigrations < 0
-            || transition.Emigrations < 0
+        if (transition.Births < 0 || transition.Deaths < 0
+            || transition.Immigrations < 0 || transition.Emigrations < 0
             || transition.NetChange != expectedNetChange
             || (long)transition.PopulationBefore + transition.NetChange != transition.PopulationAfter)
         {
@@ -94,8 +207,7 @@ public sealed class SettlementPopulationRuntime : IAuthoritativeMutationGuardBin
             return false;
         }
 
-        if (revision != transition.ExpectedRevision
-            || currentPopulation != transition.PopulationBefore)
+        if (revision != transition.ExpectedRevision || currentPopulation != transition.PopulationBefore)
         {
             failure = PopulationTransitionFailure.StaleState;
             return false;
@@ -107,8 +219,6 @@ public sealed class SettlementPopulationRuntime : IAuthoritativeMutationGuardBin
             return false;
         }
 
-        currentPopulation = transition.PopulationAfter;
-        revision++;
         return true;
     }
 
@@ -236,4 +346,23 @@ public sealed class SettlementPopulationRuntime : IAuthoritativeMutationGuardBin
         failure = PopulationTransitionFailure.None;
         return true;
     }
+
+    private sealed class PopulationOperationReceipt
+    {
+        public readonly string Fingerprint;
+        public readonly SettlementPopulationTransition Transition;
+
+        public PopulationOperationReceipt(string fingerprint, SettlementPopulationTransition transition)
+        {
+            Fingerprint = fingerprint;
+            Transition = transition;
+        }
+    }
+}
+
+internal enum PopulationOperationReceiptResolution
+{
+    Missing = 0,
+    Matching = 1,
+    Conflicting = 2
 }

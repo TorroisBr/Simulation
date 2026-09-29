@@ -156,7 +156,77 @@ public static class AggregateDemographySystem
         AggregateDemographyTransition transition,
         out AggregateDemographyFailure failure)
     {
+        return TryApplyCore(population, representedResidentFloor, transition,
+            null, out _, out failure);
+    }
+
+    internal static bool TryApplyWithReceipt(
+        SettlementPopulationRuntime population,
+        int representedResidentFloor,
+        AggregateDemographyTransition transition,
+        string operationIdentity,
+        out bool newlyApplied,
+        out AggregateDemographyFailure failure)
+    {
+        if (string.IsNullOrWhiteSpace(operationIdentity))
+        {
+            newlyApplied = false;
+            failure = AggregateDemographyFailure.InvalidTransition;
+            return false;
+        }
+
+        return TryApplyCore(population, representedResidentFloor, transition,
+            operationIdentity, out newlyApplied, out failure);
+    }
+
+    private static bool TryApplyCore(
+        SettlementPopulationRuntime population,
+        int representedResidentFloor,
+        AggregateDemographyTransition transition,
+        string operationIdentity,
+        out bool newlyApplied,
+        out AggregateDemographyFailure failure)
+    {
+        newlyApplied = false;
         failure = AggregateDemographyFailure.None;
+
+        string operationFingerprint = null;
+        if (operationIdentity != null)
+        {
+            if (population == null || transition == null
+                || !string.Equals(population.SettlementRuntimeId,
+                    transition.SettlementRuntimeId, StringComparison.Ordinal))
+            {
+                failure = AggregateDemographyFailure.InvalidSettlement;
+                return false;
+            }
+
+            if (!IsValidTransitionShape(transition))
+            {
+                failure = AggregateDemographyFailure.InvalidTransition;
+                return false;
+            }
+
+            if (representedResidentFloor != transition.RepresentedResidentFloor)
+            {
+                failure = AggregateDemographyFailure.StaleState;
+                return false;
+            }
+
+            operationFingerprint = CreateOperationFingerprint(transition);
+            PopulationOperationReceiptResolution receiptResolution =
+                population.ResolveOperationReceipt(operationIdentity, operationFingerprint);
+            if (receiptResolution == PopulationOperationReceiptResolution.Matching)
+            {
+                return true;
+            }
+
+            if (receiptResolution == PopulationOperationReceiptResolution.Conflicting)
+            {
+                failure = AggregateDemographyFailure.OperationIdentityConflict;
+                return false;
+            }
+        }
 
         if (TryValidatePopulationAndFloor(population, representedResidentFloor, out failure) == false)
         {
@@ -226,16 +296,48 @@ public static class AggregateDemographySystem
             return false;
         }
 
-        if (SettlementPopulationSystem.TryApply(
+        bool applied;
+        bool populationApplied;
+        if (operationIdentity == null)
+        {
+            applied = SettlementPopulationSystem.TryApply(
                 population,
                 populationTransition,
-                out populationFailure) == false)
+                out populationFailure);
+            populationApplied = applied;
+        }
+        else
+        {
+            applied = population.TryApplyTransitionWithReceipt(
+                operationIdentity,
+                operationFingerprint,
+                populationTransition,
+                out populationApplied,
+                out populationFailure);
+        }
+
+        if (!applied)
         {
             failure = MapPopulationFailure(populationFailure);
             return false;
         }
 
+        newlyApplied = populationApplied;
         return true;
+    }
+
+    private static string CreateOperationFingerprint(AggregateDemographyTransition transition)
+    {
+        return SpatialStableKey.Encode(
+            "aggregate-demography-v1",
+            transition.SettlementRuntimeId,
+            transition.ExpectedPopulationRevision.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            transition.PopulationBefore.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            transition.RepresentedResidentFloor.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            transition.Births.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            transition.Deaths.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            transition.NetChange.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            transition.PopulationAfter.ToString(System.Globalization.CultureInfo.InvariantCulture));
     }
 
     private static bool TryValidatePopulationAndFloor(
@@ -297,6 +399,8 @@ public static class AggregateDemographySystem
                 return AggregateDemographyFailure.StaleState;
             case PopulationTransitionFailure.NegativeChange:
                 return AggregateDemographyFailure.NegativeChange;
+            case PopulationTransitionFailure.OperationIdentityConflict:
+                return AggregateDemographyFailure.OperationIdentityConflict;
             case PopulationTransitionFailure.InvalidSettlement:
                 return AggregateDemographyFailure.InvalidSettlement;
             case PopulationTransitionFailure.InvalidTransition:

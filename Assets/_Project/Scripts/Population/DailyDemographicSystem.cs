@@ -258,6 +258,27 @@ public sealed class DailyDemographyReport
     {
         diagnostics.Add(new DailyDemographyDiagnostic(severity, code, identity, message));
     }
+
+    internal DailyDemographyReport Copy()
+    {
+        DailyDemographyReport copy = new DailyDemographyReport(AbsoluteDay)
+        {
+            NamedPersonsEvaluated = NamedPersonsEvaluated,
+            NamedDeathsApplied = NamedDeathsApplied,
+            AggregateSettlementsProcessed = AggregateSettlementsProcessed,
+            AggregateBirthsApplied = AggregateBirthsApplied,
+            AggregateDeathsApplied = AggregateDeathsApplied
+        };
+        foreach (DailyDemographyDiagnostic diagnostic in diagnostics)
+        {
+            if (diagnostic != null)
+            {
+                copy.Add(diagnostic.Severity, diagnostic.Code, diagnostic.Identity, diagnostic.Message);
+            }
+        }
+
+        return copy;
+    }
 }
 
 /// <summary>
