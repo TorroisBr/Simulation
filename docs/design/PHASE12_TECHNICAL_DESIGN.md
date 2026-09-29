@@ -235,12 +235,12 @@ The technical choices above resolve the bounded design questions using reviewed 
 - P9-A's historical authored-genesis contract and the selected P9-B geography profile contract are distinct required compatibility evidence. The P9-B implementation at `00395ef80cfa2364d34ed2170e0735d3a4b1513d` is included on current `codex/phase9/canonical` at `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf`. P12 implementation remains blocked on complete included-owner export/hydration, the live profile inventory, and separate implementation authorization; accepted scope and contract review do not satisfy these gates. The bootstrap has no external WorldCommand service/queue composition. Where P11 ActorChoiceStore is composed, preserve complete terminal history/idempotency state and reject `Pending`/`ConsumedAwaitingTerminalAttempt` inputs.
 
 The additive P9-B/P11 composition's code-bearing tip is
-`ec75e6a0912704446fe47f9d727b4656709d05ab`; its post-P18-closure refresh is
-`29e597ef6bf0b761f74157c098866d9940bd2806`. Focused/full validation and
-broader Spatial/Site checks passed on the unchanged code. Independent exact-tip
-revalidation of `29e597e` passed; canonical promotion remains pending. This
-candidate does not establish P12-B's complete live owner census or mutation
-invalidation.
+`ec75e6a0912704446fe47f9d727b4656709d05ab`; its post-P18-closure refresh and
+P12 canonical tip is `36e3064e8f60e9c7e8914a23c62d380b708da587`. Focused/full
+validation and broader Spatial/Site checks passed on the unchanged code.
+Independent exact-tip revalidation of `36e3064` passed and it is promoted to
+P12 canonical. This composition does not establish P12-B's complete live
+owner census or mutation invalidation.
 
 No genuinely unresolved product or canonical semantic decision is identified within the reviewed profile. Any request to expand compatibility guarantees or include an excluded state source requires a new scoped decision/design rather than an implicit change to this proposal.
 
@@ -255,9 +255,10 @@ canonical State `470667d`, P9 canonical closure `82396ae`, P9-A code promotion
 `43f08b3` and P9-B promotion-record State `14a2e8e`, P9-B code integration
 `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf`
 (implementation tip `00395ef80cfa2364d34ed2170e0735d3a4b1513d`), P11 code promotion `0803670` and
-closure State `308e24d`, current P18 canonical State `a49de9d`
-(bounded P18-D consumer code `f1cfed3` promoted; the `SimulationRuntime`
-hotspot handoff to P12-B is effective), accepted P18-A continuation extension contract
+closure State `308e24d`, current P18 canonical State tip `8ac2d78`
+(formal closure marker `a49de9d`; bounded P18-D consumer code `f1cfed3`
+promoted; the `SimulationRuntime` hotspot handoff to P12-B is effective),
+accepted P18-A continuation extension contract
 `2175bf2` (acceptance record `9de70ae`; its additive implementation was
 promoted at integration `1dd0479`), P14 historical promotion State `f8a61fe` and
 current docs-only canonical State/Brief `4caecbb`,
@@ -335,16 +336,16 @@ remaining capability/acceptance gates.
 
 ### Post-promotion dependency refresh — 2026-09-29
 
-P18 is formally closed within its recorded scope at `a49de9d`; the P18-to-P12-B
-`SimulationRuntime` hotspot handoff is promoted. The bounded daily profile still
-excludes P18 temporal state, P19 module state and P20 shared activities. This
-handoff clears only the ownership sequencing dependency.
+P18 is formally closed within its recorded scope by marker `a49de9d`; current
+P18 canonical State tip is `8ac2d78`, and the P18-to-P12-B `SimulationRuntime`
+hotspot handoff is promoted. The bounded daily profile still excludes P18
+temporal state, P19 module state and P20 shared activities. This handoff clears
+only the ownership sequencing dependency.
 
-The P9-B/P11 composition candidate was refreshed to `29e597e` after P18
-promotion. Its only difference from the previously reviewed/validated
-`ec75e6a` executable composition is `docs/PHASE18_STATE.md`; independent
-exact-tip revalidation passed and prior code validation remains applicable.
-P12-B remains blocked pending canonical composition, plus complete profile
-owner/cardinality, committed-write invalidation, and capture-eligibility
-evidence. P12-A remains `WAIT_DEPENDENCY` and separately requires
-implementation authorization.
+The P9-B/P11 composition is promoted to P12 canonical at `36e3064`. Its only
+difference from the previously reviewed/validated `ec75e6a` executable
+composition is `docs/PHASE18_STATE.md`; independent exact-tip revalidation
+passed and prior code validation remains applicable. P12-B remains blocked
+pending a complete profile owner/cardinality census, committed-write
+invalidation, and capture-eligibility evidence. P12-A remains
+`WAIT_DEPENDENCY` and separately requires implementation authorization.

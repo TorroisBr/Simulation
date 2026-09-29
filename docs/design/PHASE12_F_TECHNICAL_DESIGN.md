@@ -29,9 +29,10 @@ exact-content review, recorded separately in
 to the designs and explicitly claim no delivered or promoted capability or
 P12-A readiness. P12-B remains blocked on the complete live
 owner/mutation census and committed-mutation invalidation evidence. The
-composition refresh at `29e597e` passed exact-tip revalidation after the
-`ec75e6a` code review/validation. P18-D consumer `3ddf847` was promoted at
-`f1cfed3`; State `a49de9d` records closure and the effective P12-B
+composition refresh and P12 canonical tip `36e3064` passed exact-tip
+revalidation after the `ec75e6a` code review/validation. P18-D consumer
+`3ddf847` was promoted at `f1cfed3`; closure marker `a49de9d` and current State
+tip `8ac2d78` record the closed phase and effective P12-B
 `SimulationRuntime` hotspot handoff. C implementation waits on B delivery; D/E implementation
 waits on the named owner roots and interfaces; F remains downstream of C/D/E.
 Earlier review hashes in the preceding F version apply only to their exact
@@ -405,10 +406,11 @@ to this profile.
 
 ## Current dependency refresh — 2026-09-29
 
-P18 closed at canonical `a49de9d` and formally handed the exclusive
-`SimulationRuntime` hotspot to P12-B. The accepted P12 profile still excludes
-P18 state. The refreshed P9-B/P11 composition at `29e597e` passed exact-tip
-revalidation against `a49de9d`; only its P18 State document differs from the
-previously reviewed/validated `ec75e6a` executable tree. The composition still
-requires canonical promotion, and this handoff/review does not establish P12-B
-readiness or remove its live census and mutation-invalidation gates.
+P18 is formally closed by marker `a49de9d`; current P18 canonical State tip is
+`8ac2d78`, and the exclusive `SimulationRuntime` hotspot handoff to P12-B is
+effective. The accepted P12 profile still excludes P18 temporal state. The
+refreshed P9-B/P11 composition is promoted to P12 canonical at `36e3064` and
+passed exact-tip revalidation; only its P18 State document differs from the
+previously reviewed/validated `ec75e6a` executable tree. This promotion does
+not establish P12-B readiness or remove its live census and
+mutation-invalidation gates.

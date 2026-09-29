@@ -4,9 +4,11 @@
 design is based on planning commit
 `36618a801607656e339110b683bc6a666a26aeeb`; this document defines a technical
 boundary within that scope. It does not deliver code, start P12-B
-implementation, or establish P12-A readiness. Its listed composition,
-serialized-runtime, and complete mutation-census dependencies still block
-P12-B implementation.
+implementation, or establish P12-A readiness. The selected composition is now
+canonical at P12 tip `36e3064`, and P18's runtime-hotspot handoff is effective
+at State tip `8ac2d78`. The complete live owner/revision census,
+committed-mutation invalidation, owner-thread/quiescence, and admission-
+readiness evidence still block P12-B implementation.
 
 **Canonical references checked after remote refresh on 2026-09-28:** architecture
 `c285466c355103d3637ac165246591b72eb7bda0`; P8 `470667d37863384edadb3d93ef64d8004aff46a3`;
@@ -38,13 +40,15 @@ Merchant 8/8 and local observation 6/6, with retained XMLs). They are separate
 candidates, not a completed chronological consumer. They were later integrated
 into the P18-D consumer candidate, whose code `6a4d971` passed exact-tip review
 and validation and was promoted at `f1cfed3`; P18 State child `2d314be` records
-that promotion. P18 is closed within its bounded scope at canonical State
-`a49de9d`, and the `SimulationRuntime` hotspot is handed to P12-B. The reviewed
+that promotion. P18 is formally closed within its bounded scope by marker
+`a49de9d`, recorded by current canonical State tip `8ac2d78`; the
+`SimulationRuntime` hotspot is handed to P12-B. The reviewed
 implementation excludes P14-A local-material-flow Cities pending a temporal
 owner adapter. None of this adds P18 temporal state to the selected P12 daily
 profile. P12-B remains blocked on the complete live owner/mutation census,
 committed-mutation invalidation, P12-B admission/eligibility validation, and
-canonical promotion of the refreshed P9-B/P11 composition. The handoff clears
+proof that every included owner reports successful committed mutations. The
+P9-B/P11 composition is already canonical at `36e3064`; the P18 handoff clears
 only the runtime-ownership prerequisite.
 
 ## 1. Purpose and boundary
@@ -64,7 +68,7 @@ publish a restored runtime. Those capabilities belong to P12-C through P12-G
 and the final P12-A integration. A P12-B admission result is not proof that
 every owner is covered.
 
-## 2. Current composition evidence and blocking mismatch
+## 2. Canonical composition evidence and blocking mismatch
 
 The selected Unity scene is `Assets/Scenes/SampleScene.unity`; its serialized
 `TesteSimulacao` reference selects `Simulation-GeneralTest.asset` (asset GUID
@@ -82,37 +86,36 @@ and constructs `SimulationRuntime`. These source facts identify where P12-B
 must obtain composition evidence; they do not by themselves prove an accepted
 P9-B/P11 combined profile.
 
-**Candidate prerequisite, not current live evidence:** the fresh source audit
+**Canonical composition, not a complete live census:** the source audit
 reports that P9-B authored-geography code `00395ef` runs the P9 genesis path,
 while P11 code `0cd4281` composes `ActorChoiceStore` without P9 genesis; neither
 is an ancestor of the other, and their common base is P8 canonical `470667d`.
-An additive application-level composition candidate combines these two
-existing capabilities as the normal accepted P12 profile. Candidate
+An additive application-level composition combines these two existing
+capabilities as the normal accepted P12 profile. The initial candidate
 `af656e7710fce0ba171fae1d6684331d2dc0b743` was validated as the initial
 composition. Its code-bearing refresh `ec75e6a0912704446fe47f9d727b4656709d05ab`
 merged P18 State `2d314be` and P18-D consumer code `f1cfed3`. Bootstrap 14/14, ActorChoice
 40/40, SpatialGeography 13/13, P18DConsumer 9/9, RuntimeOrchestration 12/12,
 ALL EditMode 1934/1934, Smoke 5/5, LongRun 7/7, Spatial 100/100, and
 ExplorableSite 46/46 passed on this code tip. Following P18 promotion, the
-composition was refreshed to `29e597ef6bf0b761f74157c098866d9940bd2806`.
-Exact-tip revalidation passed because only `docs/PHASE18_STATE.md` changed.
-The candidate remains unpromoted and is not canonical live-composition
-evidence. The owner inventory source/API map remains
-partial; it does not supply the complete live owner census or
-mutation-invalidation proof. The manifest's exact required provider/section set
-cannot be finalized until the composition is promoted and the live owner
-census is refreshed.
+composition was refreshed at `36e3064e8f60e9c7e8914a23c62d380b708da587` and
+promoted to P12 canonical. Exact-tip revalidation passed because only
+`docs/PHASE18_STATE.md` changed from validated code tip `ec75e6a`. The owner
+inventory source/API map remains partial; it does not supply the complete live
+owner census or mutation-invalidation proof. The manifest's exact required
+provider/section set cannot be finalized until the remaining live owner census
+and invalidation evidence are complete against this canonical composition.
 
 The accepted P12-A profile remains unchanged. Do not conditionally accept
 either half as `UnityBootstrap-Daily-v1`, synthesize an ActorChoiceStore, omit
-P9-B provenance, or add an external `WorldCommand` queue. After independent
-exact-tip review and canonical promotion, refresh the live composition/provider
-inventory against the exact combined source and record whether the existing
-P11 store is composed. P12-A's
+P9-B provenance, or add an external `WorldCommand` queue. The exact combined
+source is promoted to P12 canonical; the live composition/provider inventory
+has been refreshed against it and records that the existing P11 store is
+composed. P12-A's
 P11 causal-state rule applies where that selected runtime composes
 ActorChoiceStore; external queue composition remains excluded. Admission must
-reject until the combined candidate is promoted and its exact live composition
-is known. The present SampleScene bootstrap creates legacy NPCs without a
+reject until the complete owner census, mutation invalidation, and admission
+readiness evidence are established. The present SampleScene bootstrap creates legacy NPCs without a
 `PersonId`, while `PersonStore` starts empty; P11 choice execution applies to
 Person-backed NPCs. This composition therefore proves the P11 store and its
 continuation state owner, not that SampleScene NPCs can execute SellGoods
@@ -389,7 +392,7 @@ from P12 to P18.
   error, order and `TryAdvanceDays` behavior.
 - Existing included mutation owners: integrate notifications after successful
   authoritative commits. The exact owner/file list is blocked on validation
-  of the P9-B/P11 composition candidate and a refreshed live profile/provider
+  of the P9-B/P11 composition and the refreshed live profile/provider
   inventory; do not infer a complete list from guard bindings alone.
 - Focused EditMode tests beside bootstrap/profile admission and runtime
   orchestration tests; no diagnostics snapshot becomes a save contract.
@@ -398,14 +401,13 @@ Integration sequence:
 
 1. The additive P9-B/P11 composition was initially integrated at `af656e7` and
    code-validated/reviewed at `ec75e6a` against P18 State `2d314be`. Its
-   post-closure refresh at `29e597e` passed exact-tip independent revalidation;
-   canonical promotion is pending. After promotion, refresh the live read-only
-   composition inventory against the promoted source. The reviewed inventory
-   candidate `d01cd6225ff98a9952b466f7f045ec871b9e3ecc` adds a partial
-   P12-B entrypoint/mutation-invalidation census, but does not supply a
-   complete live owner revision census or committed-mutation proof. Until
-   composition promotion and complete census evidence, the admission manifest
-   cannot be finalized and P12-B runtime integration is blocked.
+   post-closure refresh and P12 canonical promotion at `36e3064` passed
+   exact-tip independent revalidation. The refreshed live read-only composition
+   inventory at `d01cd62` records exact startup cardinalities and a partial
+   P12-B entrypoint/mutation-invalidation census. It does not supply the
+   complete live owner revision census or committed-mutation proof. These
+   specific gaps block finalizing the admission manifest and P12-B runtime
+   integration.
 2. P18-D2 design and implementation are promoted at `6f82bf4` / `9e790c5`.
    The earlier P18-D integration snapshot `5d7eb268` (code integration
    `3d9c0ea`)
@@ -413,9 +415,12 @@ Integration sequence:
    existing receipt-backed boundary adapters, but was incomplete and had not
    handed off the runtime hotspot. The completed bounded consumer is promoted
    at `f1cfed3`, and State child `2d314be` records the exact-tip review and
-   validation evidence. The explicit owner handoff is promoted at P18 State
-   `a49de9d`. Revalidate P12-B seams against the promoted D2 API and handoff
-   contract before opening the P12-B runtime owner window.
+   validation evidence. The explicit owner handoff is recorded by closure
+   marker `a49de9d` in current P18 State `8ac2d78`. P12-B seams were
+   revalidated against the promoted D2 API and handoff contract; the
+   runtime-owner sequencing prerequisite is cleared. P12-B still waits for its
+   independent admission, census, invalidation, owner-thread and quiescence
+   proofs.
 3. Implement immutable admission values/source and rejection behavior without
    serializing owner state. Implement the runtime boundary/token hook using
    the single D2 lease contract. Instrument mutation paths only after the
@@ -539,20 +544,19 @@ This design is bounded to accepted P12-B scope, but P12-B is **not**
 `READY_FOR_IMPLEMENTATION` on this evidence:
 
 1. The additive P9-B/P11 composition code tip `ec75e6a` passed its recorded
-   validation and implementation review. The post-P18-closure tip `29e597e`
-   passed independent exact-tip revalidation; the candidate is not promoted.
-   After promotion, refresh the live
-   profile/provider/owner inventory against canonical composition. The
-   reviewed inventory candidate `d01cd6225ff98a9952b466f7f045ec871b9e3ecc`
-   provides a partial entrypoint/mutation map, not the complete live owner
-   revision census or committed-mutation proof.
+   validation and implementation review. The post-P18-closure tip `36e3064`
+   passed independent exact-tip revalidation and is promoted to P12 canonical.
+   The refreshed live profile/provider/owner inventory at
+   `d01cd6225ff98a9952b466f7f045ec871b9e3ecc` records authored startup counts
+   and composition distinctions plus a partial entrypoint/mutation map, not
+   the complete live owner revision census or committed-mutation proof.
 2. P18-D2 is validated and canonical at `9e790c5`; it guards the legacy
    `TryAdvanceDay`/`TryAdvanceDays` calls. The earlier P18-D integration
    snapshot `5d7eb268` / `3d9c0ea` was incomplete. The chronological consumer
    is now promoted at `f1cfed3`, and State child `2d314be` records its review
-   and validation. The explicit hotspot handoff is promoted at P18 State
-   `a49de9d`; P12-B must still satisfy its own readiness gates before touching
-   `SimulationRuntime`.
+   and validation. The explicit hotspot handoff is recorded by closure marker
+   `a49de9d` in current P18 State tip `8ac2d78`; P12-B must still satisfy its
+   own readiness gates before implementation touches `SimulationRuntime`.
 3. Demonstrate the complete versioned owner-section census and
    mutation-notification inventory. P12-B's eligibility kernel must fail
    closed until P12-C/D/E/F owners register their required adapters; P12-G
@@ -569,18 +573,20 @@ save/load.
 
 ## Current dependency refresh — 2026-09-29
 
-P18 is formally closed at canonical `a49de9d` within its recorded scope, and
-the `SimulationRuntime` hotspot handoff to P12-B is effective. This clears the
+P18 is formally closed within its recorded scope by marker `a49de9d`, recorded
+in current canonical State tip `8ac2d78`, and the `SimulationRuntime` hotspot
+handoff to P12-B is effective. This clears the
 P18 ownership prerequisite; it does not authorize touching the hotspot before
 the P12-B admission, complete live owner/cardinality census, and
 committed-mutation invalidation gates pass.
 
-The P9-B/P11 composition refresh is exact tip
-`29e597ef6bf0b761f74157c098866d9940bd2806`. Relative to the reviewed and
+The P9-B/P11 composition is promoted to P12 canonical at exact tip
+`36e3064e8f60e9c7e8914a23c62d380b708da587`. Relative to the reviewed and
 validated executable composition `ec75e6a`, only `docs/PHASE18_STATE.md`
 changed. Independent exact-tip revalidation passed and prior code validation
-remains applicable; canonical composition and live inventory revalidation
-remain outstanding. The closure-state correction `8ac2d78` included by that
-candidate is not itself promoted to P18 canonical; current P18 canonical stays
-at `a49de9d`. P12-B implementation remains blocked pending composition
-promotion and the separate census/invalidation proofs.
+remains applicable. P18 canonical State tip is `8ac2d78`; closure marker
+`a49de9d` records the P18-to-P12-B runtime handoff. P12-B implementation
+remains blocked on the remaining live owner/revision census,
+committed-mutation invalidation, owner-thread, and quiescence proofs. The
+refreshed inventory documents authored startup cardinalities and known owner
+composition but does not substitute for those runtime proofs.

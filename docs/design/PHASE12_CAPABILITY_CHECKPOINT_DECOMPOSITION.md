@@ -15,10 +15,11 @@ authorization. No capability is delivered by this record.
 `e995e2ae4c10bac1d30d1d158c75216f73842480`; inventory references the
 authoritative architecture `c285466`, P8 State `470667d`, P9 closure
 `82396ae` and P9-B implementation integration `d9a62d7`, P11 closure
-`308e24d`, P14 State `4caecbb`, P18 canonical/State `ba8076c`, and P20 State
-`7a81cc0`, plus both current architecture alignment records. Revalidate these
-references and the actual canonical runtime composition before any checkpoint
-implementation is scheduled.
+`308e24d`, P14 State `4caecbb`, current P18 canonical State tip `8ac2d78`
+(formal closure marker `a49de9d`), P12 canonical composition `36e3064`, and
+P20 State `7a81cc0`, plus both current architecture alignment records.
+Revalidate these references and the actual canonical runtime composition
+before any checkpoint implementation is scheduled.
 
 **Current evidence:** the inventory demonstrates no included owner with a
 complete exact immutable export and staged hydration path. The user has

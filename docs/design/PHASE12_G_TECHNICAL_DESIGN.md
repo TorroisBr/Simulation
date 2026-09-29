@@ -366,9 +366,10 @@ temporal, extensibility and participant identity/cardinality constraints.
 
 ## Current dependency refresh — 2026-09-29
 
-P18 closed at canonical `a49de9d`; its P12-B `SimulationRuntime` hotspot
-handoff is now effective. The P9-B/P11 composition refresh at `29e597e` passed
-independent exact-tip revalidation after that promotion; the prior reviewed and
-validated executable tree is unchanged. Canonical composition promotion and
-the P12 live-profile, owner-coverage, mutation-invalidation, and prerequisite
-checkpoint deliveries remain outstanding. P12-A remains `WAIT_DEPENDENCY`.
+P18 is formally closed by marker `a49de9d`; current P18 canonical State tip is
+`8ac2d78`, and its P12-B `SimulationRuntime` hotspot handoff is effective.
+The P9-B/P11 composition refresh at `36e3064` passed independent exact-tip
+revalidation and is promoted to P12 canonical; the prior reviewed and validated
+executable tree is unchanged. The P12 live-profile, owner-coverage,
+mutation-invalidation, and prerequisite checkpoint deliveries remain
+outstanding. P12-A remains `WAIT_DEPENDENCY`.

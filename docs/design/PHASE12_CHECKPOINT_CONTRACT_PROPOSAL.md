@@ -15,14 +15,16 @@ This proposal changes no canonical capability and makes no claim that capture,
 hydration, or save/load parity currently exists.
 
 **Current-base refresh:** the scoped review against P18 State `ba8076c` found
-the daily profile still compatible. P18 canonical has since advanced: consumer
-code `f1cfed3` was promoted and State-only child `2d314be` records the
-promotion, exact-tip review, validation, and limitations. The refreshed
-P9-B/P11 composition candidate `ec75e6a0912704446fe47f9d727b4656709d05ab`
-merges that P18 state; its listed validation has passed, while independent
-exact-tip review and canonical promotion remain pending. The selected daily
-profile continues to exclude P18 temporal state. P12-A remains
-`WAIT_DEPENDENCY` for implementation.
+the daily profile still compatible. P18 canonical State is now at `8ac2d78`;
+closure marker `a49de9d` formally closes P18 within scope and records the
+P12-B runtime-hotspot handoff. The P9-B/P11 composition code tip
+`ec75e6a0912704446fe47f9d727b4656709d05ab` was independently validated and
+reviewed; its docs-only refresh `36e3064e8f60e9c7e8914a23c62d380b708da587`
+passed exact-tip revalidation and is promoted to P12 canonical. The selected
+daily profile continues to exclude P18 temporal state. P12-A remains
+`WAIT_DEPENDENCY` for implementation because complete owner export/hydration,
+live-profile inventory, and separate implementation authorization remain
+outstanding.
 
 **Historical targeted revalidation:** the earlier review used P8 canonical
 `77f3e1a47a1e007492a794ea777d681a21a36d09` and predates the current P9
@@ -57,8 +59,9 @@ current P9-B promotion-record State/status `14a2e8e`; P9-B code integration
 `00395ef80cfa2364d34ed2170e0735d3a4b1513d`); P11 code promotion
 `0803670cfa2c39163b54ff46a21daa06df5a16f6` /
 current canonical closure State `308e24d0744112e8f2b741521b8b3e4acb51ebbf`;
-P18 canonical State child `2d314be` (P18-D consumer code `f1cfed3` promoted;
-Phase 18 remains open and P12-B hotspot handoff is pending); P14 current canonical
+P18 canonical State tip `8ac2d78` (formal closure marker `a49de9d`; P18-D
+consumer code `f1cfed3` promoted; Phase 18 is closed within scope and the P12-B
+hotspot handoff is effective); P14 current canonical
 State/Brief `4caecbb` (docs-only update) and historical promotion State
 `f8a61fe9634ba9ab56ee31d50b57b45fef292a6f`; P14-A code promotion
 `c44904bb4b0a066eced1d7e8a773b7dc1eea76c0` / State
@@ -305,11 +308,13 @@ omits causal fields.
   do not substitute for P8 identity. P8-E is not a blanket continuation
   prerequisite. P9-B is on current P9 canonical at `d9a62d7`; this P12
   proposal does not establish P12 export/hydration coverage or checkpoint gates.
-- **P18:** P18 canonical State child is `2d314be` (bounded P18-D consumer code
-  `f1cfed3` promoted); the selected daily profile does
-  not compose its timeline, activity lifecycle, availability decisions, or
-  temporal state, and does not claim intraday continuation. P18 is present in
-  this docs-only refresh branch as review context, not integrated runtime code.
+- **P18:** bounded P18-D consumer code `f1cfed3` is promoted; historical
+  promotion State child is `2d314be`, current canonical State tip is `8ac2d78`,
+  and closure marker `a49de9d` records the P12-B runtime-hotspot handoff. The
+  selected daily profile does not compose P18 timeline, activity lifecycle,
+  availability decisions, or temporal state, and does not claim intraday
+  continuation. P18 code in the repository is not part of this profile's
+  daily capture state.
   If a future supported profile composes it,
   preserve `(worldId, profileId, absoluteDay)` boundary identity, tick
   quantum/version, effective `MaxDispatchesPerInstant` or equivalent dispatch
@@ -390,9 +395,9 @@ profile contract.
   integration `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf` (implementation tip
   `00395ef80cfa2364d34ed2170e0735d3a4b1513d`),
   P11 code promotion `0803670cfa2c39163b54ff46a21daa06df5a16f6` and canonical closure State
-  `308e24d0744112e8f2b741521b8b3e4acb51ebbf`, current P18 canonical State
-  `2d314be` (P18-D consumer `f1cfed3` promoted; explicit runtime-hotspot
-  handoff remains pending), P14 current canonical
+`308e24d0744112e8f2b741521b8b3e4acb51ebbf`, current P18 canonical State tip
+`8ac2d78` (formal closure marker `a49de9d`; P18-D consumer `f1cfed3` promoted;
+the explicit runtime-hotspot handoff is effective), P14 current canonical
   State/Brief `4caecbb` (docs-only), historical promotion State `f8a61fe`
   and P14-A code promotion `c44904bb4b0a066eced1d7e8a773b7dc1eea76c0`, P20 Entry Architecture
   `2f9c93b`, Technical Design `6a0d164`, and refreshed proposed P20-A checkpoint
