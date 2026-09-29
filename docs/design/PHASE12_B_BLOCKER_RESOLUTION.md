@@ -34,10 +34,10 @@ or that runtime capture is restricted to a quiescent owner thread.
 
 | Obligation | Source evidence now available | Capability/evidence still required |
 |---|---|---|
-| Live owner/cardinality census | The selected-profile test runs normal genesis against `Simulation-GeneralTest.asset` and inspects the published runtime before day one. It verifies City/NPC, population, market, inventory, and spatial-knowledge cardinalities; Person/Genealogy zero; P8-A geography; P8-B–D exact-zero owner counts/revisions; both receipt witnesses; and empty ActorChoice/directive/travel/expedition state. | This is still a partial live census: several directly observed collections have no owner revision/section-token API, and C roots plus some E/Justice owners are not published or censusable. Each included owner still needs exact identity, section/schema version, count, and revision in the actual capture provider. Source-derived counts cannot stand in for evolved state. |
+| Live owner/cardinality census | The selected-profile test runs normal genesis against `Simulation-GeneralTest.asset` and inspects the published runtime before day one. It verifies City/NPC, population, market, inventory, and spatial-knowledge cardinalities; Person/Genealogy zero; P8-A geography; P8-B–D exact-zero owner counts/revisions; owner-issued passive witnesses for P8-B/C and both receipt sections; and empty ActorChoice/directive/travel/expedition state. | This is still a partial live census: several directly observed collections have no owner revision/section-token API, and C roots plus some E/Justice owners are not published or censusable. The available passive witnesses are not registered as a complete profile inventory. Each included owner still needs exact identity, section/schema version, count, and revision in the capture provider. Source-derived counts cannot stand in for evolved state. |
 | Committed-write invalidation | Successful mutation entrypoints are mapped below, including owner-local revisions and public bypasses. Multi-owner transactions, rollback-only paths, queries, plans and proposals are distinguished. | A successful authoritative commit must notify the one P12-B epoch after the owning commit (or whole multi-owner commit). Failed preflight and full rollback do not notify; a successful compensating write does. Prove every included public path is covered or no longer supported outside an instrumented boundary. |
 | Owner-thread/quiescence | Source audit finds synchronous `Start → InitializeSimulation` and `Update → Simulate` paths. The selected-profile EditMode test calls `Start()` directly and captures no `Update` frame or managed-thread identity. | Bind and verify the actual Unity runtime owner thread; track bootstrap, outer advance and supported in-flight multi-owner operations; reject capture during any scope or from a different thread. The direct EditMode bootstrap test and static absence of thread creation do not prove normal-frame affinity or exclude external callers. |
-| Runtime exact-zero witnesses | The profile has explicit exclusions and known conditional-empty sections. Composed-but-empty is distinct from not composed. | Obtain owner-backed exact-zero values at the same live boundary and revalidate them after collection. Do not infer zero from scene startup, a skipped consumer, or a missing runtime reference. |
+| Runtime exact-zero witnesses | The profile has explicit exclusions and known conditional-empty sections. Composed-but-empty is distinct from not composed; passive owner witnesses now exist for P8-B/C and both receipt ledgers. | Complete the owner-backed inventory, add the remaining owner witnesses, and revalidate the full set after collection. Do not infer zero from scene startup, a skipped consumer, or a missing runtime reference. |
 
 ## Selected-profile census targets
 
@@ -76,17 +76,18 @@ creates `TesteSimulacao`, calls `Start()`, and inspects the published
 - `ActorChoiceStore` is composed, current day is 0, and History is empty.
 - ActorChoice count, directives, travel parties, and expeditions are empty.
   These direct collection/count reads do not all carry an owner revision.
-- P8-B passage options, barriers, option-state rows, barrier-state rows, and
-  crossings are zero; passage is stamped by parent spatial revision 1. P8-C
-  stable anchor bindings and Person positions are each `Count=0, Revision=0`.
-  P8-D route Knowledge and route plans are each zero at revision 0. The P8-E
-  coordinator is not a retained census section. P10 `LocalTopologyStore` is
-  not composed.
+- P8-B `p8b.passage-option-barrier-state` and `p8b.crossings` are exact-zero
+  passive witnesses with stable installed-owner identities and parent spatial
+  revision 1. P8-C `p8c.city-site-location-bindings` and
+  `p8c.person-positions` are exact-zero passive witnesses at revision 0. P8-D
+  route Knowledge and route plans are directly observed at zero/revision 0 but
+  still need owner adapters. The P8-E coordinator is not a retained census
+  section. P10 `LocalTopologyStore` is not composed.
 
-These P8 reads are actual owner-local cardinality/revision observations, but
-they are not yet registered P12-B `OwnerSectionCensusWitness` providers with
-section/schema identities. They reduce the live-evidence gap without closing
-the B section-registration requirement.
+The P8-B/C adapters produce section/schema owner witnesses, but none is
+registered in a complete P12-B runtime census. P8-D remains a direct
+owner-local observation. These reduce the live-evidence gap without closing
+the B inventory or section-registration requirement.
 
 This is a live published runtime composition, but the test manually invokes
 `Start()` in EditMode. It does not exercise Unity `Update`, capture a managed
@@ -105,16 +106,17 @@ For exact-zero evidence, record these roles separately:
 - **Composed/known empty:** `EconomyTransactionService.keyedSaleReceipts` and
   `NpcDecisionRecorder.occurrenceReceipts` exist in reachable composed owners,
   while the selected legacy daily profile does not invoke their P18-D writers.
-  Both now expose owner-issued count/revision witnesses on this feature branch;
-  the selected-profile test observes exact zero for each. This closes only
+  Both expose owner-issued count/revision witnesses on canonical; the
+  selected-profile test observes exact zero for each. This closes only
   these two conditional sections, not all exact-zero or invalidation coverage.
 - **Composed/known empty:** P8-B passage, P8-C City/Site-to-Location bindings
   and Person positions, P8-D route Knowledge/plans, and the P8-E component
   travel-authority sections are composed in the selected profile and
-  explicitly empty. The P8-C binding owner is the runtime-installed
-  `LegacySpatialAnchorBindingStore` (its historical class name does not make
-  these rows the separate legacy City/NPC runtime-ID links under D). Each
-  section must provide a live exact-zero witness; these sections are not
+  explicitly empty. P8-B/C now have passive owner-issued schema-v1 witnesses;
+  P8-D still has direct reads without census adapters. The P8-C binding owner
+  is the runtime-installed `LegacySpatialAnchorBindingStore` (its historical
+  class name does not make these rows the separate legacy City/NPC runtime-ID
+  links under D). Each section must provide a live exact-zero witness; these sections are not
   absent merely because no facts are present.
 - **Not composed:** P10's `LocalTopologyStore`/PlaceContent and autonomy
   services, P14-A local material flow, P18 temporal/intraday state, P19
@@ -443,22 +445,15 @@ not add a second lease, global lock, or duplicate authoritative store.
    closed. Baseline assessment also validates the full section set before
    publishing its new baselines. The canonical P18 advance lease remains the
    only advance lease.
-3. **After B promotion: P8-C exact-zero witness adapters.** The selected live
-   profile already reads two installed P8-C owners with exact local
-   `Count`/`Revision` pairs: `LegacySpatialAnchorBindingStore` and
-   `PersonSpatialPositionStore`. Add passive P12 providers for section IDs
-   `p8c.city-site-location-bindings` and `p8c.person-positions`, schema v1,
-   using the installed cloned runtime store reference as the witness owner
-   identity. Do not modify P8 mutation semantics, register the providers into
-   an incomplete profile protocol, emit epoch notifications, or expose staged
-   source stores. Verify stable identity and exact day-zero zero witnesses in
-   the selected-profile bootstrap test; in `PersonSpatialPresenceTests`, verify
-   successful writes advance the matching count/revision, failed writes do not,
-   and an identical City/Site anchor rebind does not advance revision. The
-   owners are unsynchronized, so these
-   providers remain unusable for capture until owner-thread/quiescence proof.
-   This closes only two composed-empty owner witnesses, not the P8-B/D sections
-   or complete census.
+3. **P8-C exact-zero witness adapters — completed and promoted.** The passive
+   schema-v1 providers for `p8c.city-site-location-bindings` and
+   `p8c.person-positions` use the installed cloned runtime stores as owner
+   identities. Their targeted mutation tests and selected-profile exact-zero
+   assertions passed; they do not alter P8 mutation semantics, register into
+   the incomplete profile protocol, emit epoch notifications, or expose staged
+   source stores. See `docs/design/PHASE12_P8C_CENSUS_CANDIDATE.md`. These
+   unsynchronized providers remain unusable for capture until
+   owner-thread/quiescence proof.
 4. **C owner witnesses/exports:** allocator/registry/record-sequence/RNG
    roots, P9-B genesis provenance, and exact P8-A facts. Capture exact
    identity/index state and provider-use state without rerunning genesis.
@@ -493,7 +488,7 @@ does not make owner groups ready on an unpromoted API.
 
 ### Bounded owner-witness capabilities completed off the runtime hotspot
 
-The accepted P12-B census work now has owner-issued witnesses for two
+The accepted P12-B census work now has owner-issued witnesses for six
 conditional exact-zero sections, without editing `SimulationRuntime`, its
 daily advance wrappers, `SimulationTime`, or the P18 lease seam:
 
@@ -510,12 +505,21 @@ daily advance wrappers, `SimulationTime`, or the P18 lease seam:
    45/45; the bootstrap test passes 1/1. These two sections do not certify the
    rest of the census, connect commits to the shared P12-B epoch, or issue a
    capture token.
+4. P8-C provides installed-owner witnesses for City/Site anchor bindings and
+   Person positions. `PersonSpatialPresenceTests` passes 9/9 and the selected
+   bootstrap profile asserts both exact-zero identities and revisions. This
+   work is promoted at `481358d1f8967d1c0199370601597c329fce69b2`.
+5. P8-B provides an installed passage-child witness and a parent crossing
+   witness. The selected profile asserts exact zero at parent revision 1;
+   passage tests cover successful and rejected mutations, condition changes,
+   and separate crossing cardinality. `SpatialPassageAuthorityTests` passes
+   13/13, bootstrap composition 14/14, ALL EditMode 1954/1954, and Smoke 5/5.
+   This work is promoted at `04d39b23b8509609dcd96990a214922dc0220e8b`.
 
-This slice owns the two receipt owners and narrow bootstrap witness
-publication/tests. It does not touch the P18-owned `SimulationRuntime`
-hotspot, City/NPC, Person/population, core political/military, other Knowledge,
-directives, travel, or expedition owners. Its result is two composed-empty
-exact-zero witnesses, not complete P12-B readiness.
+These bounded slices add only passive witnesses and their tests. None edits
+the P18-owned `SimulationRuntime` hotspot or connects to the shared epoch.
+They do not establish a complete census, owner-thread/quiescence, or P12-B
+readiness.
 
 The source audits also give the bounded design for later runtime proof:
 bind owner-thread identity at completed bootstrap, expose active-operation
@@ -560,14 +564,12 @@ identical. A zero count without a live owner and revision is not a witness.
 ## Readiness result
 
 The complete **static** source map remains a bounded P12-B evidence artifact;
-it is not a complete live census or mutation-completeness proof. The
-owner-local `NpcDecisionRecorder.occurrenceReceipts` witness candidate on
-`codex/phase12/P12BOwnerReceiptCensus` at `2ef4a83` passed exact-tip review.
-The current branch adds `EconomyTransactionService.keyedSaleReceipts`; its
-45 focused transaction tests and the 1-test selected-profile bootstrap run
-passed. The live run verifies both exact-zero receipt sections and P8-A
-cardinality on the published day-zero runtime, but it does not invoke a Unity
-`Update` frame or establish thread ownership/quiescence.
+it is not a complete live census or mutation-completeness proof. The owner-local
+receipt witnesses and P8-B/C witnesses described above are promoted on
+canonical. The live run verifies their exact-zero identities on the published
+day-zero runtime, but it does not invoke a Unity `Update` frame or establish
+thread ownership/quiescence. P8-D route owners still need passive adapters and
+mutation coverage; other C/D/E/F owners also remain incomplete.
 
 The follow-on `codex/phase12/P12BCoordinatorProtocol` candidate adds a
 standalone, non-admitting protocol kernel for versioned section requirements,
