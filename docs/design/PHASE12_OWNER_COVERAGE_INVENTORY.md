@@ -642,15 +642,16 @@ not establish P12-B readiness or authorize implementation.
 
 The P9-B/P11 composition remains preserved by P12 canonical. P12 canonical
 advanced from `36e3064e8f60e9c7e8914a23c62d380b708da587` to
-`4d2a9ad5c7f98a7805dede72f9722aec063231e8` through documentation-only
-reconciliation of the P12 designs, checkpoint decomposition, and owner
-coverage evidence. The executable `Assets` tree remains identical to validated
-code candidate `ec75e6a0912704446fe47f9d727b4656709d05ab`; no composition or
-profile input changed. The current tree retains the reviewed P18 State
-correction `8ac2d78` and closure marker `a49de9d`. The P12 docs candidate passed
-exact-tip review and `git diff --check`; the `ec75e6a` code review and Unity
-validation remain applicable, so no Unity rerun is indicated for these
-documentation-only updates.
+`4d2a9ad5c7f98a7805dede72f9722aec063231e8`, then to
+`0b5b4abb0d0a6064500adafe6a3454e41868c102`, through documentation-only
+reconciliation and exact-tip revalidation records. The executable `Assets`
+tree remains identical to validated code candidate
+`ec75e6a0912704446fe47f9d727b4656709d05ab`; no composition or profile input
+changed. The current tree retains the reviewed P18 State correction `8ac2d78`
+and closure marker `a49de9d`. Independent exact-tip reviews and
+`git diff --check` passed; the `ec75e6a` code review and Unity validation remain
+applicable, so no Unity rerun is indicated for these documentation-only
+updates.
 
 The inventory remains partial. The selected profile's live owner/cardinality
 census, complete mapping from each supported committed mutation to its owner
@@ -671,6 +672,68 @@ seams are reusable, while its `DecisionRecords.cs` diff removes promoted P18-D
 recorder behavior. The exact revalidation and reintegration constraints are
 recorded in [`../PHASE12_P12C_CANDIDATE_REVALIDATION.md`](../PHASE12_P12C_CANDIDATE_REVALIDATION.md).
 P12-B remains its implementation/integration prerequisite.
+
+### Post-promotion owner and writer audit — 2026-09-29
+
+This read-only source pass rechecked the existing owner inventory after P12
+canonical advanced to `0b5b4ab`. The executable source remains code tip
+`ec75e6a`; these findings sharpen the known gaps and do not establish a live
+census, implementation readiness, or P12-A readiness.
+
+- **Identity and sequence roots:** `RuntimeIdAllocator` has fourteen private
+  type-specific counters with no snapshot/revision/export/hydration API.
+  `RuntimeIdentityRegistry` has eight typed dictionaries and public
+  registration paths but no complete count/enumeration, revision, or removal
+  witness. `SimulationRecordSequence` exposes allocation but not its next
+  value or a snapshot/restore seam. These are required causal roots, not
+  world-wide invalidation witnesses.
+- **Person, genealogy, population:** `PersonStore.TryRegister` is a public
+  guarded write with no store revision or committed-write notification;
+  `PersonStore.Persons.Count` is observable but not revision-bound. Person
+  lifecycle and genealogy writes use runtime/domain boundaries, while no
+  composite Person/genealogy export, revision, or staged hydrator is present.
+  Settlement population exposes a local revision and transition receipts, but
+  those witnesses cover only the individual ledger and its receipt state is
+  not a complete profile export.
+- **Legacy spatial and site roots:** `SpatialNetworkRuntime` registration
+  methods have no revision/receipt witness. Route access can expose a backing
+  `List` through an `IReadOnlyList`, and locations/routes have no atomic,
+  revision-bound exact-cardinality query. `ExplorableSiteStore` provides a
+  countable read-only site wrapper and guarded public Add, but no owner revision,
+  immutable export, or staged hydrator. Authored startup counts remain
+  manifest evidence, not a live capture witness.
+- **Selected daily-domain writes:** the source audit confirms public City
+  production, consumption, price-refresh, and important-NPC membership paths
+  bypass a composite City revision. Market, Inventory, and MoneyAccount local
+  revisions cover only their own writes; they do not collectively invalidate
+  the City/NPC snapshot. Merchant trade changes transaction, plan, action, and
+  NPC owners; commercial Knowledge has operation-local revisions/receipts.
+  Crime and Justice have several prepared-operation revisions/receipts, but
+  public daily and action paths can also change NPC, sentence, hidden-status,
+  outcome, knowledge, and social-reaction facts without a complete owner or
+  world invalidation witness. None of these included owners has a demonstrated
+  full immutable P12 export plus staged hydration path.
+- **Institutional and military authorities:** the selected bootstrap supplies
+  no source stores, so the runtime composes fresh-empty institution, office,
+  property/estate, political, force, contingent-manpower-state,
+  force-position, conflict, war, and battle owners. These are included owners,
+  not excluded authorities. `InstitutionStore` and `OfficeStore` bind the
+  health guard but have no local revision; other stores expose selective
+  owner-local revisions that do not form a world epoch. The empty
+  `SettlementManpowerSourceRegistry` and absent `LocalTopologyStore` are
+  distinct `NOT_COMPOSED` cases. Startup construction is not a live exact-zero
+  witness, and none of these included authorities has a complete immutable
+  P12 export plus staged hydration path.
+- **Admission consequence:** runtime owner counts/cardinalities are not
+  revision-bound for the listed roots. P12-B must fail closed on missing or
+  ambiguous witnesses and on any supported committed write that cannot
+  invalidate eligibility. Direct mutable collections and child-owner
+  references remain part of the census; authored initial emptiness cannot
+  substitute for exact-zero admission evidence.
+
+The audit did not find evidence that clears the recorded P12-B blockers or
+changes the P12 checkpoint edges. P12-B remains blocked; P12-A remains
+`WAIT_DEPENDENCY`.
 
 ### Exact authored startup roots — source census against canonical composition
 

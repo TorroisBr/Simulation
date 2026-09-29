@@ -59,3 +59,17 @@ rerun the affected identity/decision suites and the required integration
 validation. Obtain a fresh exact-tip independent review after that integration.
 No tests were run as part of this read-only revalidation, and no P12-C
 capability or P12-A readiness is claimed.
+
+## Current-canonical follow-up — 2026-09-29
+
+P12 canonical subsequently advanced from the reviewed base
+`4d2a9ad5c7f98a7805dede72f9722aec063231e8` to
+`0b5b4abb0d0a6064500adafe6a3454e41868c102`. The intervening changes are
+documentation-only; the executable `Assets` tree and the promoted P18/P11
+recorder behavior remain unchanged. The preserved P12-C candidate
+`531d835f01a9070df42d54291ffde32387fb4358` therefore retains its existing
+classification: preserve the reusable allocator and record-sequence snapshot
+seams, then selectively reintegrate them on current canonical without removing
+P18-D `NpcDecisionRecorder.TryRecordOccurrenceOnce`/receipt ownership or P11
+`ActorChoice` decision type. This follow-up does not satisfy P12-B and does not
+authorize integration or promotion.

@@ -95,3 +95,15 @@ review and Unity validation remain applicable because no executable file
 changed. P12-A remains `WAIT_DEPENDENCY`; this record does not grant its
 separate implementation authorization or claim owner export/hydration
 coverage.
+
+## Post-promotion refresh — 2026-09-29
+
+P12 canonical advanced docs-only from `4d2a9ad5c7f98a7805dede72f9722aec063231e8`
+to `0b5b4abb0d0a6064500adafe6a3454e41868c102`. The promotion records refreshed
+P12-B/G owner evidence, the preserved P12-C candidate's current-base
+compatibility classification, and exact-tip review. It does not change the
+validated `ec75e6a` executable tree or the checkpoint dependency edges.
+P12-B remains blocked on complete live owner/cardinality and committed-write
+invalidation evidence plus owner-thread/quiescence proof; P12-A remains
+`WAIT_DEPENDENCY`. P13 remains dependency-gated. No capability became
+implementation-ready through this promotion.

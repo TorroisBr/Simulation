@@ -5,8 +5,10 @@ design is based on planning commit
 `36618a801607656e339110b683bc6a666a26aeeb`; this document defines a technical
 boundary within that scope. It does not deliver code, start P12-B
 implementation, or establish P12-A readiness. The selected composition is
-canonical at P12 tip `4d2a9ad`; its docs-only ancestry from `36e3064` preserves
-the validated executable tree at `ec75e6a`. P18's runtime-hotspot handoff is
+canonical at P12 tip `0b5b4ab`; its docs-only ancestry from `36e3064` preserves
+the validated executable tree at `ec75e6a`. The `4d2a9ad` to `0b5b4ab`
+promotion updates documentation and revalidation evidence only. P18's
+runtime-hotspot handoff is
 effective at State tip `8ac2d78`. The complete live owner/revision census,
 committed-mutation invalidation, owner-thread/quiescence, and admission-
 readiness evidence still block P12-B implementation.
@@ -102,8 +104,9 @@ ExplorableSite 46/46 passed on this code tip. Following P18 promotion, the
 composition was refreshed at `36e3064e8f60e9c7e8914a23c62d380b708da587` and
 promoted to P12 canonical. Exact-tip revalidation passed because only
 `docs/PHASE18_STATE.md` changed from validated code tip `ec75e6a`. P12
-canonical has since advanced docs-only to `4d2a9ad5c7f98a7805dede72f9722aec063231e8`;
-the committed executable `Assets` tree remains identical to `ec75e6a`. The
+canonical then advanced docs-only through `4d2a9ad5c7f98a7805dede72f9722aec063231e8`
+to `0b5b4abb0d0a6064500adafe6a3454e41868c102`; the committed executable
+`Assets` tree remains identical to `ec75e6a`. The
 updated owner inventory and B-F designs add source evidence but do not supply
 the complete live owner census or mutation-invalidation proof. The manifest's
 exact required provider/section set cannot be finalized until those remaining
@@ -592,9 +595,11 @@ P18 ownership prerequisite; it does not authorize touching the hotspot before
 the P12-B admission, complete live owner/cardinality census, and
 committed-mutation invalidation gates pass.
 
-The P9-B/P11 composition is promoted to P12 canonical at exact tip
-`36e3064e8f60e9c7e8914a23c62d380b708da587`. Relative to the reviewed and
-validated executable composition `ec75e6a`, only `docs/PHASE18_STATE.md`
+The P9-B/P11 executable composition was promoted to P12 canonical at
+`36e3064e8f60e9c7e8914a23c62d380b708da587`. P12 canonical is now
+`0b5b4abb0d0a6064500adafe6a3454e41868c102`, after docs-only reconciliations at
+`4d2a9ad5c7f98a7805dede72f9722aec063231e8` and `0b5b4ab`. Relative to the
+reviewed and validated executable composition `ec75e6a`, only documentation
 changed. Independent exact-tip revalidation passed and prior code validation
 remains applicable. P18 canonical State tip is `8ac2d78`; closure marker
 `a49de9d` records the P18-to-P12-B runtime handoff. P12-B implementation
@@ -602,6 +607,12 @@ remains blocked on the remaining live owner/revision census,
 committed-mutation invalidation, owner-thread, and quiescence proofs. The
 refreshed inventory documents authored startup cardinalities and known owner
 composition but does not substitute for those runtime proofs.
+
+The latest P12 promotion records the B/G inventory refresh and exact-tip
+revalidation of the preserved P12-C candidate. It does not change the selected
+profile or clear a readiness gate. P12-B remains blocked on a complete live
+owner/cardinality census, committed-mutation invalidation, owner-thread and
+quiescence evidence; P12-A remains `WAIT_DEPENDENCY`.
 
 Targeted source revalidation against the promoted code tree confirms the
 runtime advance lease only prevents reentrant day advances. It is an
