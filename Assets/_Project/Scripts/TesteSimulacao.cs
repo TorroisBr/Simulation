@@ -191,7 +191,7 @@ public class TesteSimulacao : MonoBehaviour
                 case "p9.genesis.publish/v1":
                     publishedComposition = new SimulationBootstrapComposition(
                         new SimulationGenesisManifest(simulationConfig, effectiveConfiguration, calendarDefinition, profileFingerprint, profileProvenanceRecords), simulationTime, calendarDefinition, spatialNetwork, domainEventStore,
-                        historyStore, scheduledDirectiveStore, decisionStore, decisionRecorder, npcChronicleService,
+                        historyStore, scheduledDirectiveStore, decisionStore, decisionRecorder, economyTransactionService, npcChronicleService,
                         npcChronicleFormatter, travelPartyStore, travelPartySystem, simulationRuntime,
                         explorableSiteStore, expeditionStore, expeditionSystem);
                     break;

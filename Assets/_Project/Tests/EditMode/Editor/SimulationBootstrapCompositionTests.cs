@@ -201,6 +201,15 @@ public sealed class SimulationBootstrapCompositionTests
         OwnerSectionCensusWitness repeatedOccurrenceReceipts = simulation.Bootstrap.GetNpcDecisionOccurrenceReceiptCensus();
         Assert.That(repeatedOccurrenceReceipts.OwnerInstanceIdentity, Is.SameAs(occurrenceReceipts.OwnerInstanceIdentity));
         Assert.That(repeatedOccurrenceReceipts.Revision, Is.EqualTo(occurrenceReceipts.Revision));
+        OwnerSectionCensusWitness keyedSaleReceipts = simulation.Bootstrap.GetEconomyKeyedSaleReceiptCensus();
+        Assert.That(keyedSaleReceipts.SectionId, Is.EqualTo(EconomyTransactionService.KeyedSaleReceiptSectionId));
+        Assert.That(keyedSaleReceipts.SchemaVersion, Is.EqualTo(EconomyTransactionService.KeyedSaleReceiptSectionSchemaVersion));
+        Assert.That(keyedSaleReceipts.Cardinality, Is.Zero,
+            "The selected daily profile composes the keyed-sale receipt owner but does not invoke its P18-D consumer.");
+        Assert.That(keyedSaleReceipts.Revision, Is.Zero);
+        OwnerSectionCensusWitness repeatedKeyedSaleReceipts = simulation.Bootstrap.GetEconomyKeyedSaleReceiptCensus();
+        Assert.That(repeatedKeyedSaleReceipts.OwnerInstanceIdentity, Is.SameAs(keyedSaleReceipts.OwnerInstanceIdentity));
+        Assert.That(repeatedKeyedSaleReceipts.Revision, Is.EqualTo(keyedSaleReceipts.Revision));
         Assert.That(simulation.Runtime.ActorChoiceStore, Is.Not.Null,
             "The promoted P9-B bootstrap must retain the P11 actor-choice authority in the composed runtime.");
         Assert.That(authority.HexCount, Is.EqualTo(1));
@@ -216,6 +225,41 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(authority.ScaleContext.SourceVersion, Is.EqualTo("1"));
         Assert.That(authority.ScaleContext.DistancePerNeighborStep, Is.EqualTo(1m));
         Assert.That(authority.ScaleContext.Unit, Is.EqualTo("km"));
+        SimulationRuntime runtime = simulation.Bootstrap.Runtime;
+        Assert.That(runtime.Cities, Has.Count.EqualTo(2));
+        Assert.That(runtime.NpcRuntimes, Has.Count.EqualTo(10));
+        Assert.That(runtime.PersonStore.Persons, Is.Empty);
+        Assert.That(runtime.GenealogyRecords, Is.Empty);
+        Assert.That(runtime.Cities.Sum(city => city.CurrentPopulation), Is.EqualTo(1800));
+        Assert.That(runtime.Cities.Sum(city => city.Market.Items.Count), Is.EqualTo(10));
+        Assert.That(runtime.Cities.Sum(city => city.Market.Items.Sum(item => item.Amount)), Is.EqualTo(1395));
+        Assert.That(runtime.NpcRuntimes.Sum(npc => npc.Inventory.Items.Count), Is.EqualTo(2));
+        Assert.That(runtime.NpcRuntimes.Sum(npc => npc.Inventory.Items.Sum(item => item.Amount)), Is.EqualTo(8));
+        Assert.That(runtime.NpcRuntimes.Sum(npc => npc.SpatialKnowledge.KnownLocationRuntimeIds.Count), Is.EqualTo(20));
+        Assert.That(runtime.NpcRuntimes.Sum(npc => npc.SpatialKnowledge.KnownRouteRuntimeIds.Count), Is.EqualTo(10));
+        Assert.That(runtime.NpcRuntimes.All(npc => npc.SpatialKnowledge.Revision == 3), Is.True);
+        Assert.That(runtime.ActorChoiceStore.Count, Is.Zero);
+        Assert.That(simulation.Bootstrap.ScheduledDirectives.Directives, Is.Empty);
+        Assert.That(simulation.Bootstrap.TravelParties.ActiveParties, Is.Empty);
+        Assert.That(simulation.Bootstrap.Expeditions.ActiveExpeditions, Is.Empty);
+        Assert.That(runtime.LocalTopologyStore, Is.Null,
+            "The selected profile excludes P10 local topology and must classify it as not composed.");
+        Assert.That(authority.Revision, Is.EqualTo(1),
+            "The parent spatial revision is the P8-B passage invalidation stamp after the single P8-A geography commit.");
+        Assert.That(authority.CrossingCount, Is.Zero);
+        Assert.That(authority.PassageAuthority.Options, Is.Empty);
+        Assert.That(authority.PassageAuthority.Barriers, Is.Empty);
+        Assert.That(authority.PassageAuthority.OptionStates, Is.Empty);
+        Assert.That(authority.PassageAuthority.BarrierStates, Is.Empty);
+        Assert.That(runtime.LegacySpatialAnchorBindingStore.Count, Is.Zero);
+        Assert.That(runtime.LegacySpatialAnchorBindingStore.Revision, Is.Zero);
+        Assert.That(runtime.PersonSpatialPositionStore.Count, Is.Zero);
+        Assert.That(runtime.PersonSpatialPositionStore.Revision, Is.Zero);
+        Assert.That(runtime.SpatialRouteKnowledgeStore.ObservationCount, Is.Zero);
+        Assert.That(runtime.SpatialRouteKnowledgeStore.Revision, Is.Zero);
+        Assert.That(runtime.PersonRoutePlanStore.PlanCount, Is.Zero);
+        Assert.That(runtime.PersonRoutePlanStore.History, Is.Empty);
+        Assert.That(runtime.PersonRoutePlanStore.Revision, Is.Zero);
         Assert.That(simulation.CurrentDay, Is.Zero);
         Assert.That(simulation.History.HistoricalEvents, Is.Empty);
     }

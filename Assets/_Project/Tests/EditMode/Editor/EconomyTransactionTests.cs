@@ -36,11 +36,22 @@ public sealed class EconomyTransactionTests
         seller.Inventory.AddItem(item, 3, 2f);
         EconomyTransactionService service = new EconomyTransactionService();
 
+        OwnerSectionCensusWitness emptyCensus = service.GetKeyedSaleReceiptCensus();
+        Assert.That(emptyCensus.SectionId, Is.EqualTo(EconomyTransactionService.KeyedSaleReceiptSectionId));
+        Assert.That(emptyCensus.SchemaVersion, Is.EqualTo(EconomyTransactionService.KeyedSaleReceiptSectionSchemaVersion));
+        Assert.That(emptyCensus.Cardinality, Is.Zero);
+        Assert.That(emptyCensus.Revision, Is.Zero);
+        Assert.That(service.GetKeyedSaleReceiptCensus().OwnerInstanceIdentity, Is.SameAs(emptyCensus.OwnerInstanceIdentity));
+
         KeyedSaleReceipt first = service.TryExecuteKeyedMarketSale("proposal-1", "fingerprint-1", "input-1", "request-1", "person-1", "sell", 1, "profile", "tick-1", "site-1", seller, city.Market, item, 2);
         Assert.That(first.Outcome, Is.EqualTo(KeyedSaleOutcome.Committed));
         Assert.That(first.Result.Quantity, Is.EqualTo(2));
         Assert.That(seller.Inventory.GetAmount(item), Is.EqualTo(1));
         Assert.That(seller.Money, Is.EqualTo(first.Result.TotalPrice));
+        OwnerSectionCensusWitness committedCensus = service.GetKeyedSaleReceiptCensus();
+        Assert.That(committedCensus.OwnerInstanceIdentity, Is.SameAs(emptyCensus.OwnerInstanceIdentity));
+        Assert.That(committedCensus.Cardinality, Is.EqualTo(1));
+        Assert.That(committedCensus.Revision, Is.EqualTo(1));
 
         seller.Inventory.AddItem(item, 1, 5f);
         CityRuntime movedToCity = SimulationTestFactory.CreateCity("keyed-sale-moved-city", "keyed-sale-moved-location");
@@ -55,6 +66,10 @@ public sealed class EconomyTransactionTests
         Assert.That(rematerializedSeller.Inventory.GetAmount(item), Is.EqualTo(0));
         KeyedSaleReceipt collision = service.TryExecuteKeyedMarketSale("proposal-1", "fingerprint-1", "input-1", "request-1", "person-1", "sell", 1, "profile", "tick-1", "site-1", seller, city.Market, item, 1);
         Assert.That(collision.Outcome, Is.EqualTo(KeyedSaleOutcome.FingerprintCollision));
+        OwnerSectionCensusWitness replayCensus = service.GetKeyedSaleReceiptCensus();
+        Assert.That(replayCensus.OwnerInstanceIdentity, Is.SameAs(committedCensus.OwnerInstanceIdentity));
+        Assert.That(replayCensus.Cardinality, Is.EqualTo(committedCensus.Cardinality));
+        Assert.That(replayCensus.Revision, Is.EqualTo(committedCensus.Revision));
         Assert.That(first.Snapshot.SellerInventory, Is.EqualTo(3));
         Assert.That(first.Snapshot.MarketStock, Is.EqualTo(0));
         Assert.That(first.Snapshot.SellerRuntimeId, Is.EqualTo(seller.RuntimeId));

@@ -2,6 +2,7 @@
 public sealed class SimulationBootstrapComposition
 {
     private readonly NpcDecisionRecorder decisionRecorder;
+    private readonly EconomyTransactionService economyTransactionService;
 
     internal SimulationBootstrapComposition(
         SimulationGenesisManifest manifest,
@@ -13,6 +14,7 @@ public sealed class SimulationBootstrapComposition
         ScheduledDirectiveStore directives,
         NpcDecisionStore decisions,
         NpcDecisionRecorder decisionRecorder,
+        EconomyTransactionService economyTransactionService,
         NpcChronicleService chronicles,
         NpcChronicleFormatter chronicleFormatter,
         TravelPartyStore travelParties,
@@ -31,6 +33,7 @@ public sealed class SimulationBootstrapComposition
         ScheduledDirectives = directives;
         Decisions = decisions;
         this.decisionRecorder = decisionRecorder ?? throw new System.ArgumentNullException(nameof(decisionRecorder));
+        this.economyTransactionService = economyTransactionService ?? throw new System.ArgumentNullException(nameof(economyTransactionService));
         NpcChronicles = chronicles;
         ChronicleFormatter = chronicleFormatter;
         TravelParties = travelParties;
@@ -55,6 +58,12 @@ public sealed class SimulationBootstrapComposition
     public OwnerSectionCensusWitness GetNpcDecisionOccurrenceReceiptCensus()
     {
         return decisionRecorder.GetOccurrenceReceiptCensus();
+    }
+
+    /// <summary>Returns an owner-issued live census witness, not a receipt export.</summary>
+    public OwnerSectionCensusWitness GetEconomyKeyedSaleReceiptCensus()
+    {
+        return economyTransactionService.GetKeyedSaleReceiptCensus();
     }
 
     public NpcChronicleService NpcChronicles { get; }

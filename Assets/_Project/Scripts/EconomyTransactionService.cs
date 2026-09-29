@@ -262,9 +262,33 @@ public sealed class KeyedSaleReceipt
     internal static KeyedSaleReceipt Collision(string id,string fp,string callerFp = null) => new KeyedSaleReceipt(id,fp,callerFp,KeyedSaleOutcome.FingerprintCollision,null,EconomyTransactionResult.CreateFailure(EconomyTransactionType.OpenMarketSale,MoneyEffect.ExplicitSource,EconomyTransactionFailureReason.InvalidInput));
 }
 
-public sealed class EconomyTransactionService
+public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
 {
+    public const string KeyedSaleReceiptSectionId = "p12e.economy-keyed-sale-receipts";
+    public const int KeyedSaleReceiptSectionSchemaVersion = 1;
+
     private readonly List<KeyedSaleReceipt> keyedSaleReceipts = new List<KeyedSaleReceipt>();
+    private readonly object keyedSaleReceiptsOwnerIdentity = new object();
+    private long keyedSaleReceiptsRevision;
+
+    /// <summary>
+    /// Reports the exact live cardinality and revision of the keyed-sale receipt
+    /// ledger. This is census evidence only, not a receipt export.
+    /// </summary>
+    public OwnerSectionCensusWitness GetKeyedSaleReceiptCensus()
+    {
+        return new OwnerSectionCensusWitness(
+            KeyedSaleReceiptSectionId,
+            KeyedSaleReceiptSectionSchemaVersion,
+            keyedSaleReceiptsOwnerIdentity,
+            keyedSaleReceipts.Count,
+            keyedSaleReceiptsRevision);
+    }
+
+    OwnerSectionCensusWitness IOwnerSectionCensusProvider.GetCurrentCensus()
+    {
+        return GetKeyedSaleReceiptCensus();
+    }
 
     public KeyedSaleReceipt TryExecuteKeyedMarketSale(
         string proposalId, string fingerprint, string actorChoiceInputId, string requestId,
@@ -288,6 +312,17 @@ public sealed class EconomyTransactionService
                 return KeyedSaleReceipt.Collision(proposalId, canonicalFingerprint, fingerprint);
             if (prior.Outcome != KeyedSaleOutcome.ProvenNoInstall) return prior;
             break;
+        }
+
+        // The receipt revision is part of the census contract. Refuse new
+        // installs if it cannot advance without wrapping or reusing a stamp.
+        if (keyedSaleReceiptsRevision == long.MaxValue)
+        {
+            return KeyedSaleReceipt.Rejected(
+                proposalId,
+                fingerprint,
+                null,
+                EconomyTransactionFailureReason.TransactionCommitFailed);
         }
 
         MarketLiquidityMode mode = market != null ? market.Counterparty.LiquidityMode : MarketLiquidityMode.Open;
@@ -449,10 +484,17 @@ public sealed class EconomyTransactionService
 
     private void StoreReceipt(KeyedSaleReceipt receipt)
     {
+        long nextRevision = keyedSaleReceiptsRevision + 1L;
         for (int i = 0; i < keyedSaleReceipts.Count; i++)
-            if (string.Equals(keyedSaleReceipts[i].ProposalId, receipt.ProposalId, StringComparison.Ordinal)) { keyedSaleReceipts[i] = receipt; return; }
+            if (string.Equals(keyedSaleReceipts[i].ProposalId, receipt.ProposalId, StringComparison.Ordinal))
+            {
+                keyedSaleReceipts[i] = receipt;
+                keyedSaleReceiptsRevision = nextRevision;
+                return;
+            }
         if (keyedSaleReceipts.Capacity < keyedSaleReceipts.Count + 1) keyedSaleReceipts.Capacity = keyedSaleReceipts.Count + 1;
         keyedSaleReceipts.Add(receipt);
+        keyedSaleReceiptsRevision = nextRevision;
     }
 
     private static EconomyTransactionResult ValidateSale(NpcRuntime npc, MarketRuntime market, ItemData item, int requested, MarketLiquidityMode mode)
