@@ -2,19 +2,18 @@
 
 ## Current canonical status
 
-**Current P18 canonical State base:** `codex/phase18/canonical` at
-`2d314bea79c9b16f70a3051c0f7d90011df1823e`. That docs-only State update records
-the approved P18-D promotion; the promoted P18-D integration/code tip remains
-`f1cfed3`. This candidate is based on that exact State/canonical tip and is not
-itself canonical.
+**Current P18 canonical State:** `codex/phase18/canonical` at
+`a49de9d046cd828dc7e76acb3571b005e53bee7a`, the user-approved, docs-only Phase
+18 closure and P18-to-P12 hotspot handoff promotion. The promoted P18-D
+integration/code tip remains `f1cfed3`. This candidate records the already
+promoted closure status; it does not change code or scope.
 
 P18-A (including the accepted boundary/continuation extension), P18-B, P18-C
 (including the external-input/deferral adapter), P18-D's bounded consumer, and
 the sale-owner receipt/prepared-install and serialized runtime-window
-prerequisites are promoted. **Current canonical status remains IN PROGRESS**
-at `2d314be` until this candidate is approved and promoted. The closure marker
-below records Phase 18 as **CLOSED / COMPLETED** upon that promotion; it does
-not claim that the candidate branch is already canonical.
+prerequisites are promoted. **Current canonical status is CLOSED / COMPLETED**
+at `a49de9d`, within the bounded objective and promoted checkpoint scopes
+recorded below.
 
 Current architecture/alignment constraints are `c285466` (canonical
 architecture), `4b6dd1d` (intraday/extensibility alignment), and `c285466`
@@ -24,13 +23,13 @@ semantic seams, distinct activity/actor/participant identity, and unconstrained
 participant cardinality. P18 work does not implement the deferred P19 public
 Mod API/loader or P20 coordination layer.
 
-### Phase 18 closure marker — candidate, effective upon promotion
+### Phase 18 closure marker — promoted at `a49de9d`
 
-**Candidate State:** Phase 18 — **CLOSED / COMPLETED**, within the bounded
-objective and promoted checkpoint scopes recorded here. The candidate itself
-contains this formal closure marker. It takes effect only if this candidate is
-approved and promoted to `codex/phase18/canonical`; until then the current
-canonical Phase State remains **IN PROGRESS**.
+Phase 18 is **CLOSED / COMPLETED** within the bounded objective and promoted
+checkpoint scopes recorded here. The user approved and promoted the exact-tip
+reviewed State candidate `a49de9d` from canonical `2d314be`; that promotion is
+the formal closure marker. This docs-only correction records the resulting
+canonical status and does not expand the closed scope.
 
 The mandatory P18-A/B/C/D checkpoints in the Phase 18 Brief are represented by
 promoted capabilities in the current canonical history. The P18-D consumer
@@ -40,7 +39,7 @@ focused, ALL EditMode (1921/1921), complete Smoke (5/5), LongRun (7/7), and
 reviewed State input was `254385e`. The full evidence and test-scenario limits
 remain in the historical records below. Earlier P18-A/B/C validation and
 review evidence is retained in the phase status table; no new Unity run is
-claimed by this docs-only closure candidate.
+claimed by this docs-only status correction.
 
 No additional implementation checkpoint beyond the Phase 18 Brief's P18-A
 through P18-D is proposed as a closure prerequisite. The excluded consumers and
@@ -80,11 +79,10 @@ canonical, and no unresolved product or canonical-architecture decision.
 Items listed above are deferred or separately gated consumers, not missing P18
 requirements.
 
-**Formal closure gate:** promotion of this exact candidate is the user's formal
-approval of Phase 18 closure. Until that approval and promotion, current
-canonical remains **IN PROGRESS** at `2d314be`. On promotion, this candidate
-itself records **CLOSED / COMPLETED**; no later unreviewed State-marker commit
-is required.
+**Formal closure:** the user-approved promotion of `a49de9d` closed Phase 18
+and recorded the P18-D-to-P12-B `SimulationRuntime` hotspot handoff. Current
+canonical is `a49de9d`. P12-B remains subject to its separate composition,
+owner-census, mutation-invalidation, and readiness gates.
 
 ## Historical status snapshot — superseded by the current status above
 
