@@ -4,6 +4,42 @@ using NUnit.Framework;
 public sealed class SimulationLoggerBoundaryOwnerTests
 {
     [Test]
+    public void KeyedMerchantDiagnosticAppendsOnceAndRejectsConflictingReuse()
+    {
+        SimulationLogger logger = new SimulationLogger(new SimulationLogSettings { trade = true });
+        string operationIdentity = "boundary/merchant-trade-state:merchant-1/redirect-log";
+        Assert.That(logger.TryPrepareKeyedOccurrence(operationIdentity, "fingerprint/v1",
+            SimulationLogCategory.Trade, "redirected", out LoggerKeyedOccurrenceCommit prepared), Is.True);
+        Assert.That(prepared.TryCommit(out TimelineFailure failure), Is.True, failure.ToString());
+        string committedLog = logger.FullLog;
+        Assert.That(committedLog, Does.Contain("redirected"));
+
+        Assert.That(logger.TryPrepareKeyedOccurrence(operationIdentity, "fingerprint/v1",
+            SimulationLogCategory.Trade, "redirected", out LoggerKeyedOccurrenceCommit replay), Is.True);
+        Assert.That(replay.TryCommit(out failure), Is.True, failure.ToString());
+        Assert.That(logger.FullLog, Is.EqualTo(committedLog));
+
+        Assert.That(logger.TryPrepareKeyedOccurrence(operationIdentity, "fingerprint/changed",
+            SimulationLogCategory.Trade, "redirected", out _), Is.False);
+        Assert.That(logger.FullLog, Is.EqualTo(committedLog));
+    }
+
+    [Test]
+    public void KeyedMerchantDiagnosticRetainsNoOutputDispositionOnFirstOccurrence()
+    {
+        SimulationLogger logger = new SimulationLogger(new SimulationLogSettings { trade = false });
+        Assert.That(logger.TryPrepareKeyedOccurrence("occurrence/no-output", "fingerprint",
+            SimulationLogCategory.Trade, "hidden diagnostic", out LoggerKeyedOccurrenceCommit prepared), Is.True);
+        Assert.That(prepared.TryCommit(out TimelineFailure failure), Is.True, failure.ToString());
+        Assert.That(logger.FullLog, Does.Not.Contain("hidden diagnostic"));
+
+        Assert.That(logger.TryPrepareKeyedOccurrence("occurrence/no-output", "fingerprint",
+            SimulationLogCategory.Trade, "hidden diagnostic", out LoggerKeyedOccurrenceCommit replay), Is.True);
+        Assert.That(replay.TryCommit(out failure), Is.True, failure.ToString());
+        Assert.That(logger.FullLog, Does.Not.Contain("hidden diagnostic"));
+    }
+
+    [Test]
     public void EnabledBeginDayStepCommitsLegacyOutputAndReceiptWithExactReplay()
     {
         SimulationLogger logger = new SimulationLogger(new SimulationLogSettings { showDay = true });

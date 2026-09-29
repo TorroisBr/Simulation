@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using UnityEngine;
 
-public class MerchantSystem : INpcActionProvider, IAuthoritativeMutationGuardBindable
+public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutationGuardBindable
 {
     private const int LocalMarketSellGoodsActionVersion = 1;
     private const string PlanUrgencyStepId = "merchant-plan-urgency";
@@ -1949,7 +1949,7 @@ public class MerchantSystem : INpcActionProvider, IAuthoritativeMutationGuardBin
         }
     }
 
-    private class MerchantTradeOpportunity
+    internal class MerchantTradeOpportunity
     {
         public ItemData Item { get; }
         public NpcRuntime TargetNpc { get; }

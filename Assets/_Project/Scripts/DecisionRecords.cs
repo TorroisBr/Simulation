@@ -671,6 +671,8 @@ public sealed class NpcDecisionRecorder
     private readonly SimulationRecordSequence recordSequence;
     private readonly NpcDecisionStore decisionStore;
     private readonly SimulationLogger logger;
+    private readonly Dictionary<string, NpcDecisionOccurrenceReceipt> occurrenceReceipts =
+        new Dictionary<string, NpcDecisionOccurrenceReceipt>(StringComparer.Ordinal);
 
     public NpcDecisionRecorder(
         RuntimeIdAllocator idAllocator,
@@ -788,6 +790,62 @@ public sealed class NpcDecisionRecorder
         }
     }
 
+    /// <summary>
+    /// Records an owner operation once. The receipt is retained by the recorder,
+    /// the authority that allocates decision identity/sequence and appends the
+    /// corresponding decision-store record.
+    /// </summary>
+    internal bool TryRecordOccurrenceOnce(
+        string operationIdentity,
+        string operationFingerprint,
+        string primaryActorRuntimeId,
+        NpcDecisionType decisionType,
+        NpcDecisionOrigin origin,
+        string actionDefinitionId,
+        string targetLocationRuntimeId,
+        CommercialDecisionEvidence commercialEvidence,
+        out NpcDecisionRecord decision)
+    {
+        decision = null;
+        if (string.IsNullOrWhiteSpace(operationIdentity)
+            || string.IsNullOrWhiteSpace(operationFingerprint)
+            || string.IsNullOrWhiteSpace(primaryActorRuntimeId)) return false;
+
+        if (occurrenceReceipts.TryGetValue(operationIdentity,
+                out NpcDecisionOccurrenceReceipt existing))
+        {
+            if (existing.OperationFingerprint != operationFingerprint) return false;
+            decision = existing.Decision;
+            return true;
+        }
+
+        try
+        {
+            NpcDecisionRecord candidate = new NpcDecisionRecord(
+                idAllocator.AllocateDecisionId(), simulationTime.AbsoluteDay,
+                recordSequence.Allocate(), primaryActorRuntimeId, decisionType,
+                origin, actionDefinitionId, null, null, targetLocationRuntimeId,
+                commercialEvidence, null);
+            if (!decisionStore.Record(candidate)) return false;
+
+            NpcDecisionOccurrenceReceipt receipt = new NpcDecisionOccurrenceReceipt(
+                operationIdentity, operationFingerprint, candidate);
+            occurrenceReceipts.Add(operationIdentity, receipt);
+            decision = candidate;
+            return true;
+        }
+        catch (ArgumentException exception)
+        {
+            logger.LogError("Cannot create NPC decision record: " + exception.Message);
+            return false;
+        }
+        catch (InvalidOperationException exception)
+        {
+            logger.LogError("Cannot allocate NPC decision record identity: " + exception.Message);
+            return false;
+        }
+    }
+
     private static NpcDecisionType GetDecisionType(NpcActionRuntime actionRuntime)
     {
         switch (actionRuntime.Action.actionType)
@@ -814,5 +872,20 @@ public sealed class NpcDecisionRecorder
             default:
                 return NpcDecisionType.Action;
         }
+    }
+}
+
+internal sealed class NpcDecisionOccurrenceReceipt
+{
+    public string OperationIdentity { get; }
+    public string OperationFingerprint { get; }
+    public NpcDecisionRecord Decision { get; }
+
+    public NpcDecisionOccurrenceReceipt(string operationIdentity,
+        string operationFingerprint, NpcDecisionRecord decision)
+    {
+        OperationIdentity = operationIdentity;
+        OperationFingerprint = operationFingerprint;
+        Decision = decision;
     }
 }

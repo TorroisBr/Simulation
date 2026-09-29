@@ -15,6 +15,8 @@ public class SimulationLogger
     private Dictionary<string, LoggerBeginDayReceipt> beginDayStepReceipts =
         new Dictionary<string, LoggerBeginDayReceipt>(StringComparer.Ordinal);
     private long beginDayStepRevision;
+    private Dictionary<string, LoggerKeyedOccurrenceReceipt> keyedOccurrenceReceipts =
+        new Dictionary<string, LoggerKeyedOccurrenceReceipt>(StringComparer.Ordinal);
 
     public string FullLog => string.Join(Environment.NewLine, reportLines);
 
@@ -60,6 +62,81 @@ public class SimulationLogger
     {
         reportLines.Add(message ?? string.Empty);
         beginDayStepRevision++;
+    }
+
+    /// <summary>Prepares one replay-safe diagnostic delivery owned by this logger.</summary>
+    public bool TryPrepareKeyedOccurrence(string operationIdentity, string operationFingerprint,
+        SimulationLogCategory category, string message,
+        out LoggerKeyedOccurrenceCommit prepared)
+    {
+        prepared = null;
+        if (string.IsNullOrWhiteSpace(operationIdentity)
+            || string.IsNullOrWhiteSpace(operationFingerprint)
+            || string.IsNullOrEmpty(message)) return false;
+
+        keyedOccurrenceReceipts ??= new Dictionary<string, LoggerKeyedOccurrenceReceipt>(StringComparer.Ordinal);
+        string descriptorFingerprint = SpatialStableKey.Encode(operationFingerprint,
+            category.ToString(), message);
+        if (keyedOccurrenceReceipts.TryGetValue(operationIdentity,
+                out LoggerKeyedOccurrenceReceipt existing))
+        {
+            if (existing.DescriptorFingerprint != descriptorFingerprint) return false;
+            prepared = new LoggerKeyedOccurrenceCommit(this, existing, true,
+                descriptorFingerprint, beginDayStepRevision, reportLines,
+                keyedOccurrenceReceipts, keyedOccurrenceReceipts, null, false);
+            return true;
+        }
+
+        if (beginDayStepRevision == long.MaxValue) return false;
+        bool enabled = IsEnabled(category);
+        string output = enabled ? message : null;
+        LoggerKeyedOccurrenceReceipt receipt = new LoggerKeyedOccurrenceReceipt(
+            operationIdentity, descriptorFingerprint,
+            beginDayStepRevision, beginDayStepRevision + 1L, message, enabled);
+        Dictionary<string, LoggerKeyedOccurrenceReceipt> nextReceipts =
+            new Dictionary<string, LoggerKeyedOccurrenceReceipt>(keyedOccurrenceReceipts,
+                StringComparer.Ordinal)
+            {
+                [operationIdentity] = receipt
+            };
+        List<string> nextLines = new List<string>(reportLines.Count + (output != null ? 1 : 0));
+        nextLines.AddRange(reportLines);
+        if (output != null) nextLines.Add(output);
+        prepared = new LoggerKeyedOccurrenceCommit(this, receipt, false,
+            descriptorFingerprint, beginDayStepRevision, reportLines,
+            keyedOccurrenceReceipts, nextReceipts, nextLines, enabled);
+        return true;
+    }
+
+    internal bool TryCommitKeyedOccurrence(LoggerKeyedOccurrenceCommit commit,
+        out TimelineFailure failure)
+    {
+        failure = TimelineFailure.ContinuationFailed;
+        if (commit == null || commit.Owner != this) return false;
+        if (keyedOccurrenceReceipts.TryGetValue(commit.Receipt.OperationIdentity,
+                out LoggerKeyedOccurrenceReceipt retained))
+        {
+            if (retained.DescriptorFingerprint != commit.Receipt.DescriptorFingerprint) return false;
+            failure = TimelineFailure.None;
+            return true;
+        }
+        if (commit.IsReplay || beginDayStepRevision != commit.ExpectedRevision
+            || !ReferenceEquals(reportLines, commit.ExpectedLines)
+            || !ReferenceEquals(keyedOccurrenceReceipts, commit.ExpectedReceipts)
+            || commit.NextReceipts == null || commit.NextLines == null
+            || !commit.NextReceipts.TryGetValue(commit.Receipt.OperationIdentity,
+                out LoggerKeyedOccurrenceReceipt next)
+            || !ReferenceEquals(next, commit.Receipt)
+            || commit.Receipt.OwnerRevisionBefore != beginDayStepRevision
+            || commit.Receipt.OwnerRevisionAfter != beginDayStepRevision + 1L)
+            return false;
+
+        reportLines = commit.NextLines;
+        keyedOccurrenceReceipts = commit.NextReceipts;
+        beginDayStepRevision = commit.Receipt.OwnerRevisionAfter;
+        if (commit.EmitUnityLog) Debug.Log(commit.Receipt.Message);
+        failure = TimelineFailure.None;
+        return true;
     }
 
     /// <summary>Captures the logger-owned daily heading, including a frozen no-output disposition.</summary>
@@ -397,6 +474,71 @@ public sealed class LoggerBeginDayReceipt
         OwnerRevisionAfter = ownerRevisionAfter;
         Disposition = disposition ?? throw new ArgumentNullException(nameof(disposition));
     }
+}
+
+[Serializable]
+internal sealed class LoggerKeyedOccurrenceReceipt
+{
+    [SerializeField] private string operationIdentity;
+    [SerializeField] private string descriptorFingerprint;
+    [SerializeField] private string message;
+    [SerializeField] private long ownerRevisionBefore;
+    [SerializeField] private long ownerRevisionAfter;
+    [SerializeField] private bool outputEnabled;
+
+    internal string OperationIdentity => operationIdentity;
+    internal string DescriptorFingerprint => descriptorFingerprint;
+    internal string Message => message;
+    internal long OwnerRevisionBefore => ownerRevisionBefore;
+    internal long OwnerRevisionAfter => ownerRevisionAfter;
+    internal bool OutputEnabled => outputEnabled;
+
+    internal LoggerKeyedOccurrenceReceipt(string operationIdentity,
+        string descriptorFingerprint, long ownerRevisionBefore,
+        long ownerRevisionAfter, string message, bool outputEnabled)
+    {
+        this.operationIdentity = operationIdentity;
+        this.descriptorFingerprint = descriptorFingerprint;
+        this.ownerRevisionBefore = ownerRevisionBefore;
+        this.ownerRevisionAfter = ownerRevisionAfter;
+        this.message = message;
+        this.outputEnabled = outputEnabled;
+    }
+}
+
+public sealed class LoggerKeyedOccurrenceCommit
+{
+    internal SimulationLogger Owner { get; }
+    internal LoggerKeyedOccurrenceReceipt Receipt { get; }
+    internal bool IsReplay { get; }
+    internal long ExpectedRevision { get; }
+    internal List<string> ExpectedLines { get; }
+    internal Dictionary<string, LoggerKeyedOccurrenceReceipt> ExpectedReceipts { get; }
+    internal Dictionary<string, LoggerKeyedOccurrenceReceipt> NextReceipts { get; }
+    internal List<string> NextLines { get; }
+    internal bool EmitUnityLog { get; }
+
+        internal LoggerKeyedOccurrenceCommit(SimulationLogger owner,
+        LoggerKeyedOccurrenceReceipt receipt, bool isReplay,
+        string descriptorFingerprint, long expectedRevision,
+        List<string> expectedLines,
+        Dictionary<string, LoggerKeyedOccurrenceReceipt> expectedReceipts,
+        Dictionary<string, LoggerKeyedOccurrenceReceipt> nextReceipts,
+        List<string> nextLines, bool emitUnityLog)
+    {
+        Owner = owner;
+        Receipt = receipt;
+        IsReplay = isReplay;
+        ExpectedRevision = expectedRevision;
+        ExpectedLines = expectedLines;
+        ExpectedReceipts = expectedReceipts;
+        NextReceipts = nextReceipts;
+        NextLines = nextLines;
+        EmitUnityLog = emitUnityLog;
+    }
+
+    public bool TryCommit(out TimelineFailure failure) =>
+        Owner.TryCommitKeyedOccurrence(this, out failure);
 }
 
 internal sealed class LoggerBeginDayCommit : IBoundaryContinuationStepCommit

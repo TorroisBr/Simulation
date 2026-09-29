@@ -109,6 +109,24 @@ public sealed class NpcLocalKnowledgeDailyBoundaryStepProvider : IP18DDailyBound
             out prepared, out failure);
     }
 
+    /// <summary>Prepares the later merchant-owned market observation occurrence for a frozen actor.</summary>
+    public bool TryPreparePostShareMarketObservation(NpcRuntime actor,
+        BoundaryContinuationManifest manifest, BoundaryContinuationStep merchantStep,
+        out IBoundaryContinuationStepCommit prepared, out TimelineFailure failure)
+    {
+        prepared = null;
+        if (actor == null || activeOccurrenceId != manifest?.BoundaryOccurrenceId
+            || activeSteps == null || !activeActors.TryGetValue(
+                CreateStepId(actor.RuntimeId), out NpcRuntime frozenActor)
+            || !ReferenceEquals(frozenActor, actor))
+        {
+            failure = TimelineFailure.ContinuationFailed;
+            return false;
+        }
+        return actor.LocalKnowledgeObservationRuntime.TryPreparePostShareMarketObservation(
+            actor, manifest, merchantStep, out prepared, out failure);
+    }
+
     private bool IsExactManifestStep(BoundaryContinuationManifest manifest,
         BoundaryContinuationStep step)
     {
@@ -193,13 +211,14 @@ public sealed class NpcLocalKnowledgeObservationRuntime
             if (existing.DescriptorFingerprint != descriptorFingerprint) return false;
         prepared = new PreparedNpcLocalKnowledgeObservationCommit(this,
                 actor, existing, null, null, null, null, revision, true,
-                merchantKnowledgeEnabled, manifest.AbsoluteDay);
+                merchantKnowledgeEnabled, true, manifest.AbsoluteDay);
             failure = TimelineFailure.None;
             return true;
         }
 
         if (revision == long.MaxValue || step.OwnerRevision != GetRevisionToken(actor)) return false;
         if (!TryCapture(actor, manifest.AbsoluteDay, merchantKnowledgeEnabled,
+                true,
                 out NpcLocalKnowledgeObservationSnapshot snapshot)) return false;
 
         if (!actor.SpatialKnowledge.TryPrepareDiscoverLocations(snapshot.LocationIds,
@@ -212,12 +231,93 @@ public sealed class NpcLocalKnowledgeObservationRuntime
             operationIdentity, descriptorFingerprint, snapshot.Fingerprint,
             actor.RuntimeId, step.PersonId, manifest.AbsoluteDay,
             snapshot.LocationIds.Count, snapshot.MarketObservations.Count,
-            snapshot.LiquidityObservation != null);
+            snapshot.LiquidityObservation != null, snapshot,
+            spatialInstall.ExpectedRevision, spatialInstall.NextRevision,
+            commercialInstall.ExpectedRevision, commercialInstall.NextRevision);
         List<NpcLocalKnowledgeObservationReceipt> nextReceipts =
             new List<NpcLocalKnowledgeObservationReceipt>(ReceiptList) { receipt };
         prepared = new PreparedNpcLocalKnowledgeObservationCommit(this, actor,
             receipt, snapshot, spatialInstall, commercialInstall, nextReceipts,
-            revision, false, merchantKnowledgeEnabled, manifest.AbsoluteDay);
+            revision, false, merchantKnowledgeEnabled, true,
+            manifest.AbsoluteDay);
+        failure = TimelineFailure.None;
+        return true;
+    }
+
+    /// <summary>
+    /// Prepares the distinct market observation performed inside merchant trade-state
+    /// advancement, after the earlier shared observation and commercial-sharing steps.
+    /// This operation intentionally does not rediscover CurrentLocation: legacy
+    /// ObserveCurrentMarket discovers CurrentCity.Location only.
+    /// </summary>
+    internal bool TryPreparePostShareMarketObservation(
+        NpcRuntime actor,
+        BoundaryContinuationManifest manifest,
+        BoundaryContinuationStep merchantStep,
+        out IBoundaryContinuationStepCommit prepared,
+        out TimelineFailure failure)
+    {
+        prepared = null;
+        failure = TimelineFailure.ContinuationFailed;
+        if (actor == null || manifest == null || merchantStep == null
+            || !IsExactManifestStep(manifest, merchantStep)
+            || actor.RuntimeId != merchantStep.OwnerId
+            || merchantStep.PersonId != (actor.PersonId != null ? actor.PersonId.Value : string.Empty)
+            || string.IsNullOrWhiteSpace(actor.RuntimeId)
+            || manifest.AbsoluteDay <= 0L)
+        {
+            return false;
+        }
+
+        string childStepId = "merchant-trade-observation:" + actor.RuntimeId;
+        string operationIdentity = SpatialStableKey.Encode(
+            manifest.ContinuationId, manifest.BoundaryOccurrenceId,
+            merchantStep.StepId, childStepId, OperationKind, OperationVersion);
+        string descriptorFingerprint = SpatialStableKey.Encode(
+            manifest.WorldId, manifest.ProfileId, manifest.BoundaryOccurrenceId,
+            manifest.ContinuationId, manifest.AbsoluteDay.ToString(CultureInfo.InvariantCulture),
+            manifest.ConfigurationIdentity, manifest.ContentIdentity,
+            merchantStep.StepId, merchantStep.OwnerId, merchantStep.PersonId,
+            childStepId, OperationKind, OperationVersion, merchantStep.OwnerRevision,
+            merchantStep.Payload, merchantStep.Disposition);
+
+        if (TryGetReceipt(operationIdentity, out NpcLocalKnowledgeObservationReceipt existing))
+        {
+            if (existing.DescriptorFingerprint != descriptorFingerprint) return false;
+            prepared = new PreparedNpcLocalKnowledgeObservationCommit(this, actor,
+                existing, null, null, null, null, revision, true,
+                true, false,
+                manifest.AbsoluteDay);
+            failure = TimelineFailure.None;
+            return true;
+        }
+
+        if (revision == long.MaxValue
+            || !TryCapture(actor, manifest.AbsoluteDay, true,
+                false,
+                out NpcLocalKnowledgeObservationSnapshot snapshot)
+            || !actor.SpatialKnowledge.TryPrepareDiscoverLocations(snapshot.LocationIds,
+                out SpatialKnowledgeDiscoveryInstall spatialInstall)
+            || !actor.CommercialKnowledge.TryPrepareDirectObservationBatch(
+                snapshot.MarketObservations, snapshot.LiquidityObservation,
+                out CommercialKnowledgeObservationInstall commercialInstall))
+        {
+            return false;
+        }
+
+        NpcLocalKnowledgeObservationReceipt receipt = new NpcLocalKnowledgeObservationReceipt(
+            operationIdentity, descriptorFingerprint, snapshot.Fingerprint,
+            actor.RuntimeId, merchantStep.PersonId, manifest.AbsoluteDay,
+            snapshot.LocationIds.Count, snapshot.MarketObservations.Count,
+            snapshot.LiquidityObservation != null, snapshot,
+            spatialInstall.ExpectedRevision, spatialInstall.NextRevision,
+            commercialInstall.ExpectedRevision, commercialInstall.NextRevision);
+        List<NpcLocalKnowledgeObservationReceipt> nextReceipts =
+            new List<NpcLocalKnowledgeObservationReceipt>(ReceiptList) { receipt };
+        prepared = new PreparedNpcLocalKnowledgeObservationCommit(this, actor,
+            receipt, snapshot, spatialInstall, commercialInstall, nextReceipts,
+            revision, false, true, false,
+            manifest.AbsoluteDay);
         failure = TimelineFailure.None;
         return true;
     }
@@ -267,6 +367,7 @@ public sealed class NpcLocalKnowledgeObservationRuntime
             || (actor.PersonId != null ? actor.PersonId.Value : string.Empty) != commit.Receipt.PersonId
             || commit.SourceSnapshot == null
             || !TryCapture(actor, commit.AbsoluteDay, commit.MerchantKnowledgeEnabled,
+                commit.IncludeCurrentLocation,
                 out NpcLocalKnowledgeObservationSnapshot current)
             || !current.Matches(commit.SourceSnapshot)
             || !commit.SpatialInstall.CanInstall(actor.SpatialKnowledge)
@@ -300,6 +401,7 @@ public sealed class NpcLocalKnowledgeObservationRuntime
 
     private static bool TryCapture(NpcRuntime actor, long absoluteDay,
         bool merchantKnowledgeEnabled,
+        bool includeCurrentLocation,
         out NpcLocalKnowledgeObservationSnapshot snapshot)
     {
         snapshot = null;
@@ -308,8 +410,13 @@ public sealed class NpcLocalKnowledgeObservationRuntime
         SpatialLocationRuntime currentLocation = actor.CurrentLocation;
         CityRuntime currentCity = actor.CurrentCity;
         SpatialLocationRuntime cityLocation = currentCity != null ? currentCity.Location : null;
+        MarketRuntime currentMarket = currentCity != null ? currentCity.Market : null;
+        MarketCounterpartyRuntime currentCounterparty = currentCity != null
+            ? currentCity.MarketCounterparty : null;
         bool eligible = actor.IsAlive && currentLocation != null && !actor.IsTraveling;
-        bool merchant = eligible && merchantKnowledgeEnabled && currentCity != null
+        bool marketEligible = actor.IsAlive && !actor.IsTraveling
+            && (!includeCurrentLocation || currentLocation != null);
+        bool merchant = marketEligible && merchantKnowledgeEnabled && currentCity != null
             && actor.NpcData != null && actor.NpcData.job != null
             && actor.NpcData.job.jobType == NpcJobType.Merchant;
 
@@ -324,6 +431,7 @@ public sealed class NpcLocalKnowledgeObservationRuntime
             actor.IsAlive ? "alive" : "not-alive",
             actor.IsTraveling ? "traveling" : "not-traveling",
             merchantKnowledgeEnabled ? "merchant-enabled" : "merchant-disabled",
+            includeCurrentLocation ? "include-current-location" : "market-location-only",
             currentLocation != null ? currentLocation.RuntimeId ?? string.Empty : string.Empty,
             currentCity != null ? currentCity.RuntimeId ?? string.Empty : string.Empty,
             cityLocation != null ? cityLocation.RuntimeId ?? string.Empty : string.Empty,
@@ -331,7 +439,7 @@ public sealed class NpcLocalKnowledgeObservationRuntime
             absoluteDay.ToString(CultureInfo.InvariantCulture)
         };
 
-        if (eligible)
+        if (eligible && includeCurrentLocation)
         {
             string locationId = currentLocation.RuntimeId;
             locationIds.Add(locationId);
@@ -340,6 +448,7 @@ public sealed class NpcLocalKnowledgeObservationRuntime
         }
 
         List<ItemData> itemReferences = new List<ItemData>();
+        List<MarketItemRuntime> marketItemReferences = new List<MarketItemRuntime>();
         if (merchant)
         {
             locationIds.Add(cityLocation != null ? cityLocation.RuntimeId : null);
@@ -348,13 +457,14 @@ public sealed class NpcLocalKnowledgeObservationRuntime
 
             if (cityLocation != null)
             {
-                foreach (MarketItemRuntime marketItem in currentCity.Market.Items)
+                foreach (MarketItemRuntime marketItem in currentMarket.Items)
                 {
                     if (marketItem == null || marketItem.Item == null
                         || string.IsNullOrWhiteSpace(marketItem.Item.DefinitionId)) continue;
 
                     ItemData item = marketItem.Item;
                     itemReferences.Add(item);
+                    marketItemReferences.Add(marketItem);
                     marketObservations.Add(new CommercialMarketObservation(
                         cityLocation.RuntimeId, item, marketItem.CurrentPrice,
                         marketItem.Amount, absoluteDay, absoluteDay,
@@ -365,7 +475,7 @@ public sealed class NpcLocalKnowledgeObservationRuntime
                     fingerprintParts.Add(marketItem.Amount.ToString(CultureInfo.InvariantCulture));
                 }
 
-                MarketCounterpartyRuntime counterparty = currentCity.MarketCounterparty;
+                MarketCounterpartyRuntime counterparty = currentCounterparty;
                 if (counterparty == null) return false;
                 float observedPurchasingPower = counterparty.LiquidityMode == MarketLiquidityMode.AccountBacked
                     ? counterparty.MoneyAccount.Balance
@@ -381,9 +491,9 @@ public sealed class NpcLocalKnowledgeObservationRuntime
         }
 
         snapshot = new NpcLocalKnowledgeObservationSnapshot(
-            currentLocation, currentCity, cityLocation,
+            currentLocation, currentCity, cityLocation, currentMarket, currentCounterparty,
             locationIds.AsReadOnly(), marketObservations.AsReadOnly(),
-            liquidityObservation, itemReferences.AsReadOnly(),
+            liquidityObservation, itemReferences.AsReadOnly(), marketItemReferences.AsReadOnly(),
             SpatialStableKey.Encode(fingerprintParts.ToArray()));
         return true;
     }
@@ -401,17 +511,30 @@ internal sealed class NpcLocalKnowledgeObservationReceipt
     [UnityEngine.SerializeField] private int locationCount;
     [UnityEngine.SerializeField] private int marketObservationCount;
     [UnityEngine.SerializeField] private bool liquidityObserved;
+    [UnityEngine.SerializeField] private long spatialRevisionBefore;
+    [UnityEngine.SerializeField] private long spatialRevisionAfter;
+    [UnityEngine.SerializeField] private long commercialRevisionBefore;
+    [UnityEngine.SerializeField] private long commercialRevisionAfter;
+    [NonSerialized] private NpcLocalKnowledgeObservationSnapshot sourceSnapshot;
 
     public string OperationIdentity => operationIdentity;
     public string DescriptorFingerprint => descriptorFingerprint;
     public string SnapshotFingerprint => snapshotFingerprint;
     public string ActorRuntimeId => actorRuntimeId;
     public string PersonId => personId;
+    public long SpatialRevisionBefore => spatialRevisionBefore;
+    public long SpatialRevisionAfter => spatialRevisionAfter;
+    public long CommercialRevisionBefore => commercialRevisionBefore;
+    public long CommercialRevisionAfter => commercialRevisionAfter;
+    internal NpcLocalKnowledgeObservationSnapshot SourceSnapshot => sourceSnapshot;
 
     public NpcLocalKnowledgeObservationReceipt(string operationIdentity,
         string descriptorFingerprint, string snapshotFingerprint,
         string actorRuntimeId, string personId, long absoluteDay,
-        int locationCount, int marketObservationCount, bool liquidityObserved)
+        int locationCount, int marketObservationCount, bool liquidityObserved,
+        NpcLocalKnowledgeObservationSnapshot sourceSnapshot,
+        long spatialRevisionBefore, long spatialRevisionAfter,
+        long commercialRevisionBefore, long commercialRevisionAfter)
     {
         this.operationIdentity = operationIdentity;
         this.descriptorFingerprint = descriptorFingerprint;
@@ -422,6 +545,11 @@ internal sealed class NpcLocalKnowledgeObservationReceipt
         this.locationCount = locationCount;
         this.marketObservationCount = marketObservationCount;
         this.liquidityObserved = liquidityObserved;
+        this.sourceSnapshot = sourceSnapshot;
+        this.spatialRevisionBefore = spatialRevisionBefore;
+        this.spatialRevisionAfter = spatialRevisionAfter;
+        this.commercialRevisionBefore = commercialRevisionBefore;
+        this.commercialRevisionAfter = commercialRevisionAfter;
     }
 }
 
@@ -430,26 +558,34 @@ internal sealed class NpcLocalKnowledgeObservationSnapshot
     public SpatialLocationRuntime CurrentLocation { get; }
     public CityRuntime CurrentCity { get; }
     public SpatialLocationRuntime CityLocation { get; }
+    public MarketRuntime Market { get; }
+    public MarketCounterpartyRuntime Counterparty { get; }
     public IReadOnlyList<string> LocationIds { get; }
     public IReadOnlyList<CommercialMarketObservation> MarketObservations { get; }
     public CommercialLiquidityObservation LiquidityObservation { get; }
     public IReadOnlyList<ItemData> ItemReferences { get; }
+    public IReadOnlyList<MarketItemRuntime> MarketItemReferences { get; }
     public string Fingerprint { get; }
 
     public NpcLocalKnowledgeObservationSnapshot(SpatialLocationRuntime currentLocation,
         CityRuntime currentCity, SpatialLocationRuntime cityLocation,
+        MarketRuntime market, MarketCounterpartyRuntime counterparty,
         IReadOnlyList<string> locationIds,
         IReadOnlyList<CommercialMarketObservation> marketObservations,
         CommercialLiquidityObservation liquidityObservation,
-        IReadOnlyList<ItemData> itemReferences, string fingerprint)
+        IReadOnlyList<ItemData> itemReferences,
+        IReadOnlyList<MarketItemRuntime> marketItemReferences, string fingerprint)
     {
         CurrentLocation = currentLocation;
         CurrentCity = currentCity;
         CityLocation = cityLocation;
+        Market = market;
+        Counterparty = counterparty;
         LocationIds = locationIds;
         MarketObservations = marketObservations;
         LiquidityObservation = liquidityObservation;
         ItemReferences = itemReferences;
+        MarketItemReferences = marketItemReferences;
         Fingerprint = fingerprint;
     }
 
@@ -459,9 +595,15 @@ internal sealed class NpcLocalKnowledgeObservationSnapshot
             || !ReferenceEquals(CurrentLocation, other.CurrentLocation)
             || !ReferenceEquals(CurrentCity, other.CurrentCity)
             || !ReferenceEquals(CityLocation, other.CityLocation)
-            || ItemReferences.Count != other.ItemReferences.Count) return false;
+            || !ReferenceEquals(Market, other.Market)
+            || !ReferenceEquals(Counterparty, other.Counterparty)
+            || ItemReferences.Count != other.ItemReferences.Count
+            || MarketItemReferences.Count != other.MarketItemReferences.Count) return false;
         for (int i = 0; i < ItemReferences.Count; i++)
-            if (!ReferenceEquals(ItemReferences[i], other.ItemReferences[i])) return false;
+        {
+            if (!ReferenceEquals(ItemReferences[i], other.ItemReferences[i])
+                || !ReferenceEquals(MarketItemReferences[i], other.MarketItemReferences[i])) return false;
+        }
         return true;
     }
 }
@@ -482,6 +624,7 @@ internal sealed class PreparedNpcLocalKnowledgeObservationCommit : IBoundaryCont
     public long ExpectedOwnerRevision { get; }
     public bool IsReplay { get; }
     public bool MerchantKnowledgeEnabled { get; }
+    public bool IncludeCurrentLocation { get; }
     public long AbsoluteDay { get; }
 
     public IReadOnlyList<DueWorkReference> RetainedTimelineFacts => NoTimelineFacts;
@@ -495,7 +638,7 @@ internal sealed class PreparedNpcLocalKnowledgeObservationCommit : IBoundaryCont
         CommercialKnowledgeObservationInstall commercialInstall,
         List<NpcLocalKnowledgeObservationReceipt> nextReceipts,
         long expectedOwnerRevision, bool isReplay,
-        bool merchantKnowledgeEnabled, long absoluteDay)
+        bool merchantKnowledgeEnabled, bool includeCurrentLocation, long absoluteDay)
     {
         Owner = owner;
         Actor = actor;
@@ -507,6 +650,7 @@ internal sealed class PreparedNpcLocalKnowledgeObservationCommit : IBoundaryCont
         ExpectedOwnerRevision = expectedOwnerRevision;
         IsReplay = isReplay;
         MerchantKnowledgeEnabled = merchantKnowledgeEnabled;
+        IncludeCurrentLocation = includeCurrentLocation;
         AbsoluteDay = absoluteDay;
     }
 

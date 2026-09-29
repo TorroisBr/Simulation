@@ -152,6 +152,113 @@ public sealed class MerchantBoundaryOwnerStepTests
         Assert.That(firstOrder.Payload, Is.Not.EqualTo(reversedOrder.Payload));
     }
 
+    [Test]
+    public void P18DTradeStateOccurrenceObservesPostShareMarketAndReplaysWithoutRepeatingEffects()
+    {
+        ThreeCityFixture world = new ThreeCityFixture();
+        ItemData item = SimulationTestFactory.CreateItem("merchant-p18d-state-item", 10f);
+        world.A.Market.AddStock(item, 10, 20);
+        NpcRuntime merchant = CreateMerchant("merchant-p18d-state-npc",
+            "person.merchant-p18d-state", world.A);
+        merchant.Inventory.AddItem(item, 4, 1f);
+        merchant.SetMerchantTradePlan(item, world.A, world.A, 4, 1f);
+        for (int i = 0; i < 3; i++) merchant.MerchantTradePlan.IncrementWaitDayAtDestination();
+
+        SimulationTime time = new SimulationTime(6L);
+        RecordFixture records = SimulationTestFactory.CreateRecordFixture(6L);
+        MerchantSystem system = SimulationTestFactory.CreateMerchantSystem(
+            null, time, records.DecisionRecorder);
+        DailyBoundaryOperation operation = new DailyBoundaryOperation("merchant-p18d-world",
+            "intraday", 6L);
+        BoundaryContinuationStep step = new BoundaryContinuationStep(0,
+            "merchant-trade-state:" + merchant.RuntimeId, merchant.RuntimeId,
+            "merchant.trade-state", "1", "frozen-roster-v1", "merchant-enabled",
+            merchant.PersonId.Value);
+        BoundaryContinuationManifest manifest = new BoundaryContinuationManifest(
+            operation, "daily-boundary", "1", "configuration/v1", new[] { step }, "content/v1");
+
+        Assert.That(system.TryAdvanceNpcTradeStateOccurrence(merchant, manifest, step,
+            out NpcMerchantTradeStateReceipt receipt, out TimelineFailure failure), Is.True,
+            failure.ToString());
+        Assert.That(receipt, Is.Not.Null);
+        Assert.That(merchant.MerchantTradePlan.WaitDaysAtDestination, Is.Zero);
+        Assert.That(merchant.CommercialKnowledge.TryGetObservation(world.A.Location.RuntimeId,
+            item.DefinitionId, out CommercialMarketObservation observation), Is.True);
+        Assert.That(observation.ObservedDay, Is.EqualTo(6L));
+        long commercialRevision = merchant.CommercialKnowledge.Revision;
+        long spatialRevision = merchant.SpatialKnowledge.Revision;
+        float firstPrice = observation.ObservedPrice;
+
+        item.basePrice += 25f;
+        world.A.UpdateMarketPrices();
+        Assert.That(system.TryAdvanceNpcTradeStateOccurrence(merchant, manifest, step,
+            out NpcMerchantTradeStateReceipt replay, out failure), Is.True, failure.ToString());
+        Assert.That(replay, Is.Not.Null);
+        Assert.That(merchant.MerchantTradePlan.WaitDaysAtDestination, Is.Zero);
+        Assert.That(merchant.CommercialKnowledge.TryGetObservation(world.A.Location.RuntimeId,
+            item.DefinitionId, out CommercialMarketObservation replayed), Is.True);
+        Assert.That(replayed.ObservedPrice, Is.EqualTo(firstPrice));
+        Assert.That(merchant.CommercialKnowledge.Revision, Is.EqualTo(commercialRevision));
+        Assert.That(merchant.SpatialKnowledge.Revision, Is.EqualTo(spatialRevision));
+        Assert.That(records.Decisions.Decisions, Is.Empty);
+    }
+
+    [Test]
+    public void P18DTradeStateRedirectRetainsOneDecisionAndOneKeyedDiagnostic()
+    {
+        ThreeCityFixture world = new ThreeCityFixture();
+        ItemData item = SimulationTestFactory.CreateItem("merchant-p18d-redirect-item", 10f);
+        world.A.Market.AddStock(item, 10, 20);
+        NpcRuntime merchant = CreateMerchant("merchant-p18d-redirect-npc",
+            "person.merchant-p18d-redirect", world.A);
+        merchant.AddMoney(100f);
+        merchant.Inventory.AddItem(item, 4, 1f);
+        merchant.SetMerchantTradePlan(item, world.A, world.A, 4, 100f);
+        merchant.MerchantTradePlan.IncrementWaitDayAtDestination();
+        merchant.SpatialKnowledge.DiscoverLocation(world.A.Location.RuntimeId);
+        merchant.SpatialKnowledge.DiscoverLocation(world.B.Location.RuntimeId);
+        merchant.SpatialKnowledge.DiscoverRoute(world.RouteAB.RuntimeId);
+        merchant.CommercialKnowledge.RecordObservation(SimulationTestFactory.CreateObservation(
+            world.B.Location.RuntimeId, item, 150f, 10, 6L, 6L));
+
+        SimulationTime time = new SimulationTime(6L);
+        RecordFixture records = SimulationTestFactory.CreateRecordFixture(6L);
+        SimulationLogger logger = new SimulationLogger(new SimulationLogSettings { trade = true });
+        MerchantSystem system = new MerchantSystem(
+            new EffectiveMerchantTradeConfiguration(enabled: true),
+            new EffectiveCommercialKnowledgeConfiguration(), world.CreateTravelSystem(time),
+            time, records.DecisionRecorder, logger);
+        DailyBoundaryOperation operation = new DailyBoundaryOperation("merchant-p18d-redirect-world",
+            "intraday", 6L);
+        BoundaryContinuationStep step = new BoundaryContinuationStep(0,
+            "merchant-trade-state:" + merchant.RuntimeId, merchant.RuntimeId,
+            "merchant.trade-state", "1", "frozen-roster-v1", "merchant-enabled",
+            merchant.PersonId.Value);
+        BoundaryContinuationManifest manifest = new BoundaryContinuationManifest(
+            operation, "daily-boundary", "1", "configuration/v1", new[] { step }, "content/v1");
+
+        Assert.That(system.TryAdvanceNpcTradeStateOccurrence(merchant, manifest, step,
+            out NpcMerchantTradeStateReceipt receipt, out TimelineFailure failure), Is.True,
+            failure.ToString());
+        Assert.That(receipt, Is.Not.Null);
+        Assert.That(merchant.MerchantTradePlan.TargetCity, Is.SameAs(world.B));
+        Assert.That(merchant.MerchantTradePlan.OriginDecisionId, Is.Not.Empty);
+        Assert.That(merchant.TravelPlan.TargetCity, Is.SameAs(world.B));
+        Assert.That(records.Decisions.Decisions.Count, Is.EqualTo(1));
+        Assert.That(records.Decisions.Decisions[0].DecisionType, Is.EqualTo(NpcDecisionType.TradeRedirect));
+        string firstLog = logger.FullLog;
+        Assert.That(firstLog, Does.Contain("mudou o destino"));
+
+        merchant.CommercialKnowledge.RecordObservation(SimulationTestFactory.CreateObservation(
+            world.B.Location.RuntimeId, item, 1f, 0, 6L, 6L));
+        Assert.That(system.TryAdvanceNpcTradeStateOccurrence(merchant, manifest, step,
+            out NpcMerchantTradeStateReceipt replay, out failure), Is.True, failure.ToString());
+        Assert.That(replay, Is.Not.Null);
+        Assert.That(merchant.MerchantTradePlan.TargetCity, Is.SameAs(world.B));
+        Assert.That(records.Decisions.Decisions.Count, Is.EqualTo(1));
+        Assert.That(logger.FullLog, Is.EqualTo(firstLog));
+    }
+
     private static NpcRuntime CreateMerchant(string runtimeId, string personId, CityRuntime city)
     {
         NpcRuntime merchant = new NpcRuntime(runtimeId,

@@ -129,6 +129,27 @@ public class NpcTravelPlanRuntime
     public string OriginDecisionId => originDecisionId;
     public bool IsActive => targetLocation != null && reason != NpcTravelReason.None;
 
+    internal NpcTravelPlanState CaptureOwnerState() => new NpcTravelPlanState(
+        targetLocation, targetCity, reason, utility, expectedCost, originDecisionId);
+
+    internal bool MatchesOwnerState(NpcTravelPlanState state) => state != null
+        && ReferenceEquals(targetLocation, state.TargetLocation)
+        && ReferenceEquals(targetCity, state.TargetCity)
+        && reason == state.Reason
+        && utility.Equals(state.Utility)
+        && expectedCost.Equals(state.ExpectedCost)
+        && string.Equals(originDecisionId, state.OriginDecisionId, StringComparison.Ordinal);
+
+    internal void InstallOwnerState(NpcTravelPlanState state)
+    {
+        targetLocation = state.TargetLocation;
+        targetCity = state.TargetCity;
+        reason = state.Reason;
+        utility = state.Utility;
+        expectedCost = state.ExpectedCost;
+        originDecisionId = state.OriginDecisionId;
+    }
+
     public void Set(CityRuntime targetCity, NpcTravelReason reason, float utility, float expectedCost, string originDecisionId = null)
     {
         Set(targetCity?.Location, targetCity, reason, utility, expectedCost, originDecisionId);
@@ -165,6 +186,27 @@ public class NpcTravelPlanRuntime
         utility = 0f;
         expectedCost = 0f;
         originDecisionId = null;
+    }
+}
+
+internal sealed class NpcTravelPlanState
+{
+    internal SpatialLocationRuntime TargetLocation { get; }
+    internal CityRuntime TargetCity { get; }
+    internal NpcTravelReason Reason { get; }
+    internal float Utility { get; }
+    internal float ExpectedCost { get; }
+    internal string OriginDecisionId { get; }
+
+    internal NpcTravelPlanState(SpatialLocationRuntime targetLocation, CityRuntime targetCity,
+        NpcTravelReason reason, float utility, float expectedCost, string originDecisionId)
+    {
+        TargetLocation = targetLocation;
+        TargetCity = targetCity;
+        Reason = reason;
+        Utility = utility;
+        ExpectedCost = expectedCost;
+        OriginDecisionId = originDecisionId;
     }
 }
 
@@ -230,6 +272,34 @@ public class MerchantTradePlanRuntime
     public string OriginDecisionId => originDecisionId;
     public bool HasData => item != null || originCity != null || targetCity != null || plannedAmount > 0 || remainingAmount > 0;
     public bool IsActive => item != null && targetCity != null && RemainingAmount > 0;
+
+    internal MerchantTradePlanState CaptureOwnerState() => new MerchantTradePlanState(
+        item, originCity, targetCity, plannedAmount, remainingAmount,
+        purchasePricePerItem, waitDaysAtDestination, pendingTravelDays, originDecisionId);
+
+    internal bool MatchesOwnerState(MerchantTradePlanState state) => state != null
+        && ReferenceEquals(item, state.Item)
+        && ReferenceEquals(originCity, state.OriginCity)
+        && ReferenceEquals(targetCity, state.TargetCity)
+        && plannedAmount == state.PlannedAmount
+        && remainingAmount == state.RawRemainingAmount
+        && purchasePricePerItem.Equals(state.PurchasePricePerItem)
+        && waitDaysAtDestination == state.WaitDaysAtDestination
+        && pendingTravelDays == state.PendingTravelDays
+        && string.Equals(originDecisionId, state.OriginDecisionId, StringComparison.Ordinal);
+
+    internal void InstallOwnerState(MerchantTradePlanState state)
+    {
+        item = state.Item;
+        originCity = state.OriginCity;
+        targetCity = state.TargetCity;
+        plannedAmount = state.PlannedAmount;
+        remainingAmount = state.RawRemainingAmount;
+        purchasePricePerItem = state.PurchasePricePerItem;
+        waitDaysAtDestination = state.WaitDaysAtDestination;
+        pendingTravelDays = state.PendingTravelDays;
+        originDecisionId = state.OriginDecisionId;
+    }
 
     public void Set(ItemData item, CityRuntime originCity, CityRuntime targetCity, int plannedAmount, float purchasePricePerItem, string originDecisionId = null)
     {
@@ -304,5 +374,37 @@ public class MerchantTradePlanRuntime
         waitDaysAtDestination = 0;
         pendingTravelDays = 0;
         originDecisionId = null;
+    }
+}
+
+internal sealed class MerchantTradePlanState
+{
+    internal ItemData Item { get; }
+    internal CityRuntime OriginCity { get; }
+    internal CityRuntime TargetCity { get; }
+    internal int PlannedAmount { get; }
+    internal int RawRemainingAmount { get; }
+    internal int RemainingAmount => RawRemainingAmount > 0 ? RawRemainingAmount : PlannedAmount;
+    internal float PurchasePricePerItem { get; }
+    internal int WaitDaysAtDestination { get; }
+    internal int PendingTravelDays { get; }
+    internal string OriginDecisionId { get; }
+    internal bool HasData => Item != null || OriginCity != null || TargetCity != null
+        || PlannedAmount > 0 || RawRemainingAmount > 0;
+    internal bool IsActive => Item != null && TargetCity != null && RemainingAmount > 0;
+
+    internal MerchantTradePlanState(ItemData item, CityRuntime originCity, CityRuntime targetCity,
+        int plannedAmount, int rawRemainingAmount, float purchasePricePerItem,
+        int waitDaysAtDestination, int pendingTravelDays, string originDecisionId)
+    {
+        Item = item;
+        OriginCity = originCity;
+        TargetCity = targetCity;
+        PlannedAmount = plannedAmount;
+        RawRemainingAmount = rawRemainingAmount;
+        PurchasePricePerItem = purchasePricePerItem;
+        WaitDaysAtDestination = waitDaysAtDestination;
+        PendingTravelDays = pendingTravelDays;
+        OriginDecisionId = originDecisionId;
     }
 }

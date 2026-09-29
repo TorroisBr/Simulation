@@ -69,6 +69,89 @@ public sealed class P18DLocalKnowledgeObservationTests
     }
 
     [Test]
+    public void PostShareMarketObservationHasDistinctReceiptAndRetainsItsOwnSnapshot()
+    {
+        ItemData item = SimulationTestFactory.CreateItem("p18d-postshare-item", 10f);
+        CityRuntime city = SimulationTestFactory.CreateCity("p18d-postshare-city",
+            "p18d-postshare-location",
+            new MarketItemConfig { item = item, initialAmount = 6, desiredAmount = 10 });
+        NpcRuntime merchant = new NpcRuntime("p18d-postshare-merchant",
+            SimulationTestFactory.CreateNpc("p18d-postshare-merchant", NpcJobType.Merchant),
+            city, 20f);
+        NpcLocalKnowledgeDailyBoundaryStepProvider provider =
+            new NpcLocalKnowledgeDailyBoundaryStepProvider(() => new[] { merchant }, true);
+        DailyBoundaryOperation operation = new DailyBoundaryOperation("world", "intraday", 8L);
+        Assert.That(provider.TryCreateSteps(operation, 0,
+            out IReadOnlyList<BoundaryContinuationStep> steps, out TimelineFailure failure), Is.True);
+        BoundaryContinuationManifest manifest = new BoundaryContinuationManifest(
+            operation, "daily-boundary", "1", "configuration", steps);
+
+        Assert.That(provider.TryPrepareStep(manifest, steps[0],
+            out IBoundaryContinuationStepCommit firstObservation, out failure), Is.True);
+        Assert.That(firstObservation.TryCommit(out failure), Is.True);
+        float preSharePrice = city.Market.Items[0].CurrentPrice;
+
+        item.basePrice += 20f;
+        city.UpdateMarketPrices();
+        float postSharePrice = city.Market.Items[0].CurrentPrice;
+        Assert.That(postSharePrice, Is.Not.EqualTo(preSharePrice));
+        Assert.That(provider.TryPreparePostShareMarketObservation(
+            merchant, manifest, steps[0], out IBoundaryContinuationStepCommit postShare,
+            out failure), Is.True);
+        Assert.That(postShare.TryCommit(out failure), Is.True, failure.ToString());
+        Assert.That(merchant.CommercialKnowledge.TryGetObservation(city.Location.RuntimeId,
+            item.DefinitionId, out CommercialMarketObservation captured), Is.True);
+        // Same-day direct observations have equal source priority, so the
+        // CommercialKnowledge owner intentionally retains its earlier fact.
+        // The post-share occurrence still commits and retains its own source
+        // snapshot for deterministic replay without rewriting that fact.
+        Assert.That(captured.ObservedPrice, Is.EqualTo(preSharePrice));
+
+        long spatialRevision = merchant.SpatialKnowledge.Revision;
+        long commercialRevision = merchant.CommercialKnowledge.Revision;
+        item.basePrice += 20f;
+        city.UpdateMarketPrices();
+        Assert.That(provider.TryPreparePostShareMarketObservation(
+            merchant, manifest, steps[0], out IBoundaryContinuationStepCommit replay,
+            out failure), Is.True);
+        Assert.That(replay.TryCommit(out failure), Is.True, failure.ToString());
+        Assert.That(merchant.CommercialKnowledge.TryGetObservation(city.Location.RuntimeId,
+            item.DefinitionId, out CommercialMarketObservation replayed), Is.True);
+        Assert.That(replayed.ObservedPrice, Is.EqualTo(preSharePrice));
+        Assert.That(merchant.SpatialKnowledge.Revision, Is.EqualTo(spatialRevision));
+        Assert.That(merchant.CommercialKnowledge.Revision, Is.EqualTo(commercialRevision));
+    }
+
+    [Test]
+    public void PostShareMarketObservationRejectsStaleMarketBeforeEitherKnowledgeInstall()
+    {
+        ItemData item = SimulationTestFactory.CreateItem("p18d-postshare-stale-item", 10f);
+        CityRuntime city = SimulationTestFactory.CreateCity("p18d-postshare-stale-city",
+            "p18d-postshare-stale-location",
+            new MarketItemConfig { item = item, initialAmount = 6, desiredAmount = 10 });
+        NpcRuntime merchant = new NpcRuntime("p18d-postshare-stale-merchant",
+            SimulationTestFactory.CreateNpc("p18d-postshare-stale-merchant", NpcJobType.Merchant),
+            city, 20f);
+        NpcLocalKnowledgeDailyBoundaryStepProvider provider =
+            new NpcLocalKnowledgeDailyBoundaryStepProvider(() => new[] { merchant }, true);
+        DailyBoundaryOperation operation = new DailyBoundaryOperation("world", "intraday", 9L);
+        Assert.That(provider.TryCreateSteps(operation, 0,
+            out IReadOnlyList<BoundaryContinuationStep> steps, out TimelineFailure failure), Is.True);
+        BoundaryContinuationManifest manifest = new BoundaryContinuationManifest(
+            operation, "daily-boundary", "1", "configuration", steps);
+        Assert.That(provider.TryPreparePostShareMarketObservation(merchant, manifest,
+            steps[0], out IBoundaryContinuationStepCommit prepared, out failure), Is.True);
+
+        item.basePrice += 15f;
+        city.UpdateMarketPrices();
+        Assert.That(prepared.TryCommit(out failure), Is.False);
+        Assert.That(failure, Is.EqualTo(TimelineFailure.ContinuationFailed));
+        Assert.That(merchant.SpatialKnowledge.KnowsLocation(city.Location.RuntimeId), Is.False);
+        Assert.That(merchant.CommercialKnowledge.TryGetObservation(city.Location.RuntimeId,
+            item.DefinitionId, out _), Is.False);
+    }
+
+    [Test]
     public void ActorStepRejectsSynthesizedDescriptorEvenWhenManifestContainsIt()
     {
         CityRuntime city = SimulationTestFactory.CreateCity("p18d-local-synthesized-city",

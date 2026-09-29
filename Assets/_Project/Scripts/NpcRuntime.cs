@@ -34,6 +34,7 @@ public class NpcRuntime : ICapabilityConditionSource
     [SerializeField]private NpcTravelPlanRuntime travelPlan = new NpcTravelPlanRuntime();
     [SerializeField]private CommercialKnowledgeRuntime commercialKnowledge = new CommercialKnowledgeRuntime();
     [SerializeField]private NpcLocalKnowledgeObservationRuntime localKnowledgeObservationRuntime = new NpcLocalKnowledgeObservationRuntime();
+    [SerializeField]private NpcMerchantTradeStateRuntime merchantTradeStateRuntime = new NpcMerchantTradeStateRuntime();
     [SerializeField]private ExplorableSiteKnowledgeRuntime explorableSiteKnowledge;
     [SerializeField]private SpatialKnowledgeRuntime spatialKnowledge;
     [SerializeField]private LocalTopologyKnowledgeRuntime localTopologyKnowledge;
@@ -91,6 +92,7 @@ public class NpcRuntime : ICapabilityConditionSource
     public NpcTravelPlanRuntime TravelPlan => travelPlan ?? (travelPlan = new NpcTravelPlanRuntime());
     public CommercialKnowledgeRuntime CommercialKnowledge => commercialKnowledge ?? (commercialKnowledge = new CommercialKnowledgeRuntime());
     internal NpcLocalKnowledgeObservationRuntime LocalKnowledgeObservationRuntime => localKnowledgeObservationRuntime ?? (localKnowledgeObservationRuntime = new NpcLocalKnowledgeObservationRuntime());
+    internal NpcMerchantTradeStateRuntime MerchantTradeStateRuntime => merchantTradeStateRuntime ?? (merchantTradeStateRuntime = new NpcMerchantTradeStateRuntime());
     public ExplorableSiteKnowledgeRuntime ExplorableSiteKnowledge => explorableSiteKnowledge ?? (explorableSiteKnowledge = new ExplorableSiteKnowledgeRuntime(runtimeId));
     public SpatialKnowledgeRuntime SpatialKnowledge => spatialKnowledge ?? (spatialKnowledge = new SpatialKnowledgeRuntime(runtimeId));
     public LocalTopologyKnowledgeRuntime LocalTopologyKnowledge => localTopologyKnowledge ?? (localTopologyKnowledge = new LocalTopologyKnowledgeRuntime(runtimeId));
