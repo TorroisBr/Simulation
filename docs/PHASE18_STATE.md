@@ -3,10 +3,11 @@
 ## Current canonical status
 
 **Current P18 canonical State:** `codex/phase18/canonical` at
-`a49de9d046cd828dc7e76acb3571b005e53bee7a`, the user-approved, docs-only Phase
-18 closure and P18-to-P12 hotspot handoff promotion. The promoted P18-D
-integration/code tip remains `f1cfed3`. This candidate records the already
-promoted closure status; it does not change code or scope.
+`8ac2d7885ea1f00d544d88a64bf918a411934f7f`, the docs-only State correction.
+The formal closure marker remains `a49de9d046cd828dc7e76acb3571b005e53bee7a`,
+which records the user-approved Phase 18 closure and P18-to-P12 hotspot
+handoff. The promoted P18-D integration/code tip remains `f1cfed3`. This State
+update changes no code or scope.
 
 P18-A (including the accepted boundary/continuation extension), P18-B, P18-C
 (including the external-input/deferral adapter), P18-D's bounded consumer, and
@@ -80,9 +81,10 @@ Items listed above are deferred or separately gated consumers, not missing P18
 requirements.
 
 **Formal closure:** the user-approved promotion of `a49de9d` closed Phase 18
-and recorded the P18-D-to-P12-B `SimulationRuntime` hotspot handoff. Current
-canonical is `a49de9d`. P12-B remains subject to its separate composition,
-owner-census, mutation-invalidation, and readiness gates.
+and recorded the P18-D-to-P12-B `SimulationRuntime` hotspot handoff. The
+current `codex/phase18/canonical` State tip is `8ac2d78`. P12-B remains
+subject to its separate composition, owner-census, mutation-invalidation, and
+readiness gates.
 
 ## Historical status snapshot — superseded by the current status above
 
