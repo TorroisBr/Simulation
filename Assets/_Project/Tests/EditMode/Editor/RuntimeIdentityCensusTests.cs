@@ -109,6 +109,24 @@ public sealed class RuntimeIdentityCensusTests
     }
 
     [Test]
+    public void RuntimeIdentityConstructorsRejectBlankIdsBeforeRegistryRegistration()
+    {
+        Assert.Throws<ArgumentException>(() => new NpcRuntime(" ", null));
+        Assert.Throws<ArgumentException>(() => new CityRuntime(
+            "", null, new SpatialLocationRuntime("blank-city-location")));
+        Assert.Throws<ArgumentException>(() => new SpatialLocationRuntime("\t"));
+        Assert.Throws<ArgumentException>(() => new SpatialRouteRuntime(
+            "", new SpatialLocationRuntime("blank-route-origin"), new SpatialLocationRuntime("blank-route-destination"), 1));
+        Assert.Throws<ArgumentException>(() => new ExplorableSiteRuntime(
+            "", SimulationTestFactory.CreateExplorableSite("blank-site-definition"), new SpatialLocationRuntime("blank-site-location")));
+        Assert.Throws<ArgumentException>(() => new LocalPlaceRuntime(" "));
+        Assert.Throws<ArgumentException>(() => new LocalTopologyConnectionRuntime(
+            "", new LocalPlaceRuntime("blank-connection-origin"), new LocalPlaceRuntime("blank-connection-destination"), 1f));
+        Assert.Throws<ArgumentException>(() => new NotableItemRuntime(
+            "", SimulationTestFactory.CreateItem("blank-notable-definition")));
+    }
+
+    [Test]
     public void LocalTopologyBatchAdvancesOnceAndEmptyBatchDoesNotAdvance()
     {
         RuntimeIdentityRegistry registry = new RuntimeIdentityRegistry();
