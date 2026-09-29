@@ -132,6 +132,31 @@ public sealed class ContinuationCensusProtocolTests
     }
 
     [Test]
+    public void InvalidLaterOwnerFaultsBatchWithoutPublishingEpoch()
+    {
+        object firstOwner = new object();
+        object secondOwner = new object();
+        MutableWitnessProvider first = new MutableWitnessProvider(CreateWitness(
+            ReceiptSectionId, firstOwner, cardinality: 0, revision: 0));
+        MutableWitnessProvider second = new MutableWitnessProvider(CreateWitness(
+            SecondarySectionId, secondOwner, cardinality: 0, revision: 0));
+        ContinuationCensusProtocol protocol = CreateTwoSectionProtocol(first, second);
+        Assert.That(protocol.TryAssessOwnerSectionInventory(out _), Is.True);
+
+        // The first changed owner is valid, but the second was listed as changed
+        // without advancing its revision. No part of this batch may be published.
+        first.Witness = CreateWitness(ReceiptSectionId, firstOwner, cardinality: 1, revision: 1);
+        Assert.That(protocol.NotifyCommittedMutations(
+            new[] { ReceiptSectionId, SecondarySectionId }, out ContinuationCensusFailure notificationFailure), Is.False);
+        Assert.That(notificationFailure, Is.EqualTo(ContinuationCensusFailure.OwnerCoverageIncomplete));
+        Assert.That(protocol.TryReadMutationEpoch(out long epoch, out ContinuationCensusFailure epochFailure), Is.False);
+        Assert.That(epoch, Is.Zero);
+        Assert.That(epochFailure, Is.EqualTo(ContinuationCensusFailure.ProtocolFaulted));
+        Assert.That(protocol.TryAssessOwnerSectionInventory(out ContinuationCensusFailure assessmentFailure), Is.False);
+        Assert.That(assessmentFailure, Is.EqualTo(ContinuationCensusFailure.ProtocolFaulted));
+    }
+
+    [Test]
     public void OwnerRevisionRollbackIsRejectedAfterAValidNotifiedChange()
     {
         RecordFixture records = SimulationTestFactory.CreateRecordFixture();

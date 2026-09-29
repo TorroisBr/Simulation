@@ -113,14 +113,33 @@ field write.
   composed child passage writes `PassageAuthority.TryRegisterConnection`,
   `TryRegisterWildernessRule`, `TryRegisterBarrier`,
   `TryChangePassageCondition`, and `TryChangeBarrierCondition`.
-  P8-B–E passage/binding/position/Knowledge/plan/travel sections are composed
-  empty and need exact-zero witnesses independent of the required P8-A
-  geography counts. `LocalTopologyStore` is a separate absent P10 owner in
+  P8-B–E passage/binding/position/Knowledge/plan sections need exact-zero
+  witnesses independent of the required P8-A geography counts. Read the
+  installed `SimulationRuntime` clone and its child stores, not pre-clone
+  genesis authorities. `LocalTopologyStore` is a separate absent P10 owner in
   this profile.
 - Keyed deterministic `NextUnit` is pure for fixed seed/key/index in the
   selected provider; if any retained `DeterministicRandomStream` is created,
   `NextUnit` advances its private cursor and `CreateStream` must be reflected
   by the provider-use census. Do not infer stream absence from the interface.
+
+**P8-B–E exact-zero live sections**
+
+- P8-B passage option/barrier state is read from the installed
+  `Runtime.SpatialAuthorityStore.PassageAuthority`; crossings are counted by
+  the installed parent store. Passage snapshots and crossing count can be
+  paired with the parent `SpatialAuthorityStore.Revision`, which advances for
+  these commits. The selected profile starts all of these sections at zero;
+  local-topology bindings are a separate P10 section.
+- P8-C legacy anchors and Person positions have owner-local `Count` and
+  `Revision` witnesses on `LegacySpatialAnchorBindingStore` and
+  `PersonSpatialPositionStore`. P8-D route Knowledge has
+  `ObservationCount`/`Revision`; route plans/history have
+  `PlanCount`/`Revision`. These four selected live stores start empty.
+- P8-E's travel transaction coordinator retains no section state. Census its
+  position, route-plan, route-Knowledge and passage component owners; do not
+  invent a fifth coordinator-owned zero. These synchronous stores do not expose
+  concurrent-read safety, so this census does not prove runtime quiescence.
 
 **P12-D factual roots and multi-owner lifecycle**
 
