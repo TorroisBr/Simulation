@@ -452,9 +452,10 @@ not add a second lease, global lock, or duplicate authoritative store.
    identity. Do not modify P8 mutation semantics, register the providers into
    an incomplete profile protocol, emit epoch notifications, or expose staged
    source stores. Verify stable identity and exact day-zero zero witnesses in
-   the selected-profile bootstrap test; verify successful writes advance the
-   matching count/revision and failed or idempotent writes do not in
-   `PersonSpatialPresenceTests`. The owners are unsynchronized, so these
+   the selected-profile bootstrap test; in `PersonSpatialPresenceTests`, verify
+   successful writes advance the matching count/revision, failed writes do not,
+   and an identical City/Site anchor rebind does not advance revision. The
+   owners are unsynchronized, so these
    providers remain unusable for capture until owner-thread/quiescence proof.
    This closes only two composed-empty owner witnesses, not the P8-B/D sections
    or complete census.
