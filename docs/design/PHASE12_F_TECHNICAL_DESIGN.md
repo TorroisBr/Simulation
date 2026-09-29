@@ -28,15 +28,17 @@ exact-content review, recorded separately in
 `3d5d7a8ce41f34d1fb55864897f9d508f50d8fcf`. The records limit their verdicts
 to the designs and explicitly claim no delivered or promoted capability or
 P12-A readiness. P12-B remains blocked on the complete live
-owner/mutation census, committed-mutation invalidation evidence, composed
-runtime validation, and the P18-D capture/handoff evidence recorded in the
-inventory and B design. C implementation waits on B delivery; D/E implementation
+owner/mutation census, committed-mutation invalidation evidence, validation of
+the refreshed composition candidate `ec75e6a`, and explicit P18-D
+`SimulationRuntime` hotspot handoff. P18-D consumer `3ddf847` was promoted at
+`f1cfed3`; State child `2d314be` records the review and validation, but the
+handoff remains outstanding. C implementation waits on B delivery; D/E implementation
 waits on the named owner roots and interfaces; F remains downstream of C/D/E.
 Earlier review hashes in the preceding F version apply only to their exact
 reviewed contents.
 
-**Current P18-D branch evidence (2026-09-29):** canonical prerequisites are
-promoted at `9e790c5`. The current owner inventory `16611d8` records actor
+**Historical P18-D branch evidence (2026-09-29, before consumer promotion):**
+canonical prerequisites were promoted at `9e790c5`. The owner inventory `16611d8` records actor
 bridge source `4016a73` with execution record `924cfee9b41c77274141795f0f7ddcd117819f89`
 (exact-tip review PASS; focused 5/5) and merchant trade-state owner
 `b05feafd4f95b1a3a559e6d58de339334df57365` (independent exact-tip PASS;
@@ -53,9 +55,9 @@ SellGoods consumer. It rejects P14-A local-material-flow Cities before
 mutation. Test-only follow-up `0887d18` adds the consumer replay regression;
 comment-accuracy follow-up `6a4d971` has fresh validation and corrects the
 scenario wording. The exact-tip P18 review covered code `6a4d971` and State
-`254385e`; current State evidence tip `f1cfed3` records that PASS and accurately
-describes post-terminal replay. Canonical promotion and
-explicit `SimulationRuntime` hotspot handoff remain pending. This candidate
+`254385e`; P18 State child `2d314be` records promotion and the PASS and
+accurately describes post-terminal replay. Explicit `SimulationRuntime`
+hotspot handoff remains pending. This promoted consumer
 does not add P18 temporal state
 to `UnityBootstrap-Daily-v1`, and does not establish P12 owner export or staged
 hydration.
@@ -385,14 +387,15 @@ commitment/planning framework. In particular, do not serialize canonical P8-D
 `PersonSpatialPositionStore`, or P8-E position/travel state, as a substitute
 for the explicitly supported legacy NPC Knowledge and commitment owners. P8-B,
 P8-C, P8-D, and P8-E remain explicit-empty sections, with populated state
-rejected. The optional-profile P18-D consumer candidate `3ddf847`, based on
+rejected. The optional-profile P18-D consumer `3ddf847`, based on
 P14 merge `a2a8edd`, composes chronological advance, successful P18-C handoff,
 and bounded SellGoods; its P14-A local-material-flow City exclusion occurs
-before mutation. It remains noncanonical pending canonical promotion and
-explicit runtime-hotspot handoff; exact-tip review of code `6a4d971` and State
-`254385e` passed, as recorded in State tip `f1cfed3`. Test-only `0887d18` adds the replay
-regression, with comment-only follow-up `6a4d971`; current State evidence tip
-`f1cfed3` records post-terminal replay and passing validation. Candidate composition neither changes the
+before mutation. It is promoted at `f1cfed3`; exact-tip review of code
+`6a4d971` and State `254385e` passed, as recorded by State child `2d314be`.
+Test-only `0887d18` adds the replay regression, with comment-only follow-up
+`6a4d971`; the recorded evidence describes post-terminal replay and passing
+validation. Explicit runtime-hotspot handoff remains pending. The promoted
+consumer neither changes the
 accepted `UnityBootstrap-Daily-v1` profile nor satisfies P12 owner export,
 staged hydration, or B's live census and handoff gates. It adds no P18 temporal
 state to this P12 daily profile.

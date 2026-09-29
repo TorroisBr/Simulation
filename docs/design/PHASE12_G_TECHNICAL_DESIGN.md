@@ -28,17 +28,16 @@ These are design artifacts, not proof that the corresponding capabilities
 have been delivered; revalidate hashes and owner interfaces before
 implementation.
 
-The P18-D prerequisites are canonical at `9e790c5`. Current State evidence tip
-`f1cfed3` records the consumer status and review result; exact-tip review covered
-candidate State `254385e`, while
-the optional-profile P18-D consumer runtime implementation `3ddf847` (based on
+The P18-D prerequisites are canonical at `9e790c5`. The reviewed optional-
+profile P18-D consumer runtime implementation `3ddf847` (based on
 P14 merge `a2a8edd`) composes chronological advance, successful P18-C handoff,
 and the bounded SellGoods consumer. It rejects P14-A local-material-flow
 Cities before mutation. Consumer replay regression `0887d18` has a
 comment-accuracy follow-up `6a4d971`; the corrected candidate passed fresh
-consumer, full EditMode, Smoke, and LongRun validation. Exact-tip review passed;
-canonical promotion and explicit `SimulationRuntime` hotspot handoff remain
-pending. This candidate does not
+consumer, full EditMode, Smoke, and LongRun validation. Exact-tip review passed
+and the consumer was promoted at `f1cfed3`; State-only child `2d314be` records
+the promotion and review. Explicit `SimulationRuntime` hotspot handoff remains
+pending. This promoted consumer does not
 include P18 temporal state in `UnityBootstrap-Daily-v1`, provide P12 owner
 export/staged hydration, or remove B's census/handoff gates.
 
