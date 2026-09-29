@@ -43,6 +43,39 @@ public sealed class P18DConsumerIntegrationTests
     }
 
     [Test]
+    public void TrustedWorldCommandCapturesAtNextUnsealedTickAndExecutesIntraday()
+    {
+        Fixture fixture = CreateFixture();
+        SetActorAtCity(fixture);
+        fixture.Runtime.AdvanceDay();
+        WorldCommandService service = new WorldCommandService(simulationTime: fixture.Runtime.SimulationTime);
+        Assert.That(TrustedLocalUiWorldCommandHandlerRegistration.RegisterActorActionChoiceHandler(
+            service, fixture.Runtime), Is.True);
+        WorldCommand command = new WorldCommand(
+            WorldCommandKind.ActorActionChoice,
+            WorldCommandOrigin.LocalPlayer,
+            WorldCommandAuthorityMode.Request,
+            new ActorActionChoiceWorldCommandPayload(fixture.Actor.PersonId,
+                fixture.SellAction.DefinitionId));
+
+        WorldCommandResult queued = service.Execute(command);
+
+        Assert.That(queued.Success, Is.True, queued.Diagnostic);
+        LogicalTick target = new LogicalTick(LogicalTick.TicksPerDay + 1L);
+        TimelineInputReference queuedInput = fixture.Runtime.P18DTimeline.PreviewInputs(target).Single();
+        Assert.That(queuedInput.CommandKind, Is.EqualTo(ActorChoiceTemporalInputOwner.CommandKind));
+        Assert.That(queuedInput.TargetInstant, Is.EqualTo(target));
+        Assert.That(fixture.Actor.Inventory.GetAmount(fixture.Item), Is.EqualTo(10));
+
+        fixture.Runtime.AdvanceDay();
+
+        Assert.That(fixture.Runtime.ActorChoiceStore.Inputs.Single().Status,
+            Is.EqualTo(ActorChoiceInputStatus.AttemptReturned));
+        Assert.That(fixture.Actor.Inventory.GetAmount(fixture.Item), Is.EqualTo(5));
+        Assert.That(fixture.Records.Decisions.Decisions, Has.Count.EqualTo(1));
+    }
+
+    [Test]
     public void ThrownSuccessRollIsTerminalizedOnceBeforeItEscapes()
     {
         Fixture fixture = CreateFixture(throwOnActionSuccess: true);
@@ -137,6 +170,100 @@ public sealed class P18DConsumerIntegrationTests
             Is.EqualTo(ActorChoiceFailure.ActionUnavailable));
         Assert.That(fixture.Records.Decisions.Decisions, Is.Empty);
         Assert.That(fixture.Actor.Inventory.GetAmount(fixture.Item), Is.EqualTo(10));
+    }
+
+    [Test]
+    public void CommittedSaleReplayAfterPlanActivationReturnsReceiptWithoutRepeatingEffects()
+    {
+        Fixture fixture = CreateFixture();
+        SetActorAtCity(fixture);
+        fixture.Runtime.AdvanceDay();
+        NpcActionRuntime action = fixture.Decisions.CreateRequestedAction(
+            fixture.Actor, fixture.SellAction);
+        Assert.That(action, Is.Not.Null);
+        Assert.That(action.TargetCity, Is.SameAs(fixture.City));
+        Assert.That(action.TargetItem, Is.SameAs(fixture.Item));
+
+        string proposalId = "p18d-replay-proposal";
+        string fingerprint = "p18d-replay-fingerprint";
+        string inputId = "p18d-replay-input";
+        string requestId = "p18d-replay-request";
+        LogicalTick instant = new LogicalTick(fixture.Runtime.P18DTimeline.CurrentInstant.Value + 7L);
+        Assert.That(fixture.Merchant.TryExecuteKeyedLocalMarketSale(
+            fixture.Actor, fixture.Actor.PersonId, action, proposalId, fingerprint,
+            inputId, requestId, "UnityBootstrap-Daily-v1", instant,
+            out KeyedSaleReceipt committed), Is.True);
+        Assert.That(committed.Outcome, Is.EqualTo(KeyedSaleOutcome.Committed));
+        int inventoryAfterFirst = fixture.Actor.Inventory.GetAmount(fixture.Item);
+        int marketAfterFirst = fixture.City.Market.GetAmount(fixture.Item);
+        float balanceAfterFirst = fixture.Actor.Money;
+
+        fixture.Actor.SetMerchantTradePlan(fixture.Item, fixture.City, fixture.City, 5, 1f);
+        Assert.That(fixture.Merchant.TryExecuteKeyedLocalMarketSale(
+            fixture.Actor, fixture.Actor.PersonId, action, proposalId, fingerprint,
+            inputId, requestId, "UnityBootstrap-Daily-v1", instant,
+            out KeyedSaleReceipt replay), Is.True);
+
+        Assert.That(replay, Is.SameAs(committed));
+        Assert.That(fixture.Actor.Inventory.GetAmount(fixture.Item), Is.EqualTo(inventoryAfterFirst));
+        Assert.That(fixture.City.Market.GetAmount(fixture.Item), Is.EqualTo(marketAfterFirst));
+        Assert.That(fixture.Actor.Money, Is.EqualTo(balanceAfterFirst));
+    }
+
+    [Test]
+    public void IntradayCompositionRejectsP14LocalMaterialFlowBeforeAnyBoundaryMutation()
+    {
+        RecordFixture records = SimulationTestFactory.CreateRecordFixture();
+        ItemData item = SimulationTestFactory.CreateItem("p18d-p14-excluded-item", 10f);
+        string locationId = "p18d-p14-excluded-location";
+        CityData data = SimulationTestFactory.CreateCityData("p18d-p14-excluded-city",
+            SimulationTestFactory.CreateMarketItem(item, 6, 20));
+        data.settlementSemanticId = "settlement.p18d-excluded";
+        data.marketStoreSemanticId = "store.p18d-excluded";
+        data.materialFlowLocationId = locationId;
+        data.initialPopulation = 1000;
+        data.marketItems[0].consumptionPer1000Population = 2f;
+        data.productionConfigs.Add(new CityProductionConfig
+        {
+            item = item,
+            amountPerDay = 3,
+            productionSourceId = "source.p18d-excluded",
+            contentRevision = "content-v1"
+        });
+        CityRuntime city = new CityRuntime("runtime.p18d-p14-excluded", data,
+            new SpatialLocationRuntime("legacy.p18d-p14-excluded"));
+        SpatialAuthorityStore spatial = new SpatialAuthorityStore();
+        Assert.That(spatial.TryRegisterHex(new HexRecord(new HexId("hex.p18d-p14-excluded")), out _), Is.True);
+        Assert.That(spatial.TryRegisterLocation(new LocationRecord(new LocationId(locationId),
+            new HexId("hex.p18d-p14-excluded")), out _), Is.True);
+        LegacySpatialAnchorBindingStore anchors = new LegacySpatialAnchorBindingStore(spatial);
+        Assert.That(anchors.TryBindCity(city.RuntimeId, new LocationId(locationId), out _), Is.True);
+
+        int openingStock = city.Market.GetAmount(item);
+        int openingPopulation = city.Population.CurrentPopulation;
+        MerchantSystem merchant = SimulationTestFactory.CreateMerchantSystem(
+            null, records.Time, records.DecisionRecorder, maxTradeAmount: 5);
+        NpcDecisionSystem decisions = new NpcDecisionSystem(new List<INpcActionProvider> { merchant });
+        EffectiveSimulationConfiguration configuration = SimulationConfigurationResolver.ResolveOrThrow(
+            contentOverrides: new SimulationConfigurationOverrides(
+                economy: new EconomyConfigurationOverrides(false),
+                merchantTrade: new MerchantTradeConfigurationOverrides(enabled: true)));
+
+        Assert.Throws<System.ArgumentException>(() => new SimulationRuntime(
+            records.Time, new[] { city }, null,
+            npcDecisionSystem: decisions,
+            decisionRecorder: records.DecisionRecorder,
+            merchantSystem: merchant,
+            configuration: configuration,
+            spatialAuthorityStore: spatial,
+            legacySpatialAnchorBindingStore: anchors,
+            p18dIntradayProfile: new P18DIntradayProfile(
+                "p18d-p14-world", "p18d-p14-profile", "config-v1", "content-v1")));
+
+        Assert.That(records.Time.AbsoluteDay, Is.Zero);
+        Assert.That(city.LastMaterialFlow, Is.Null);
+        Assert.That(city.Market.GetAmount(item), Is.EqualTo(openingStock));
+        Assert.That(city.Population.CurrentPopulation, Is.EqualTo(openingPopulation));
     }
 
     [Test]
@@ -243,7 +370,8 @@ public sealed class P18DConsumerIntegrationTests
                 out secondActor, out materializationFailure), Is.True, materializationFailure.ToString());
             secondActor.Inventory.AddItem(item, 10, 1f);
         }
-        return new Fixture(runtime, records, city, actor, secondActor, item, sellAction);
+        return new Fixture(runtime, records, city, actor, secondActor, item, sellAction,
+            merchantSystem, decisionSystem);
     }
 
     private static void SetActorAtCity(Fixture fixture)
@@ -302,9 +430,12 @@ public sealed class P18DConsumerIntegrationTests
         public NpcRuntime SecondActor { get; }
         public ItemData Item { get; }
         public NpcActionData SellAction { get; }
+        public MerchantSystem Merchant { get; }
+        public NpcDecisionSystem Decisions { get; }
 
         public Fixture(SimulationRuntime runtime, RecordFixture records, CityRuntime city,
-            NpcRuntime actor, NpcRuntime secondActor, ItemData item, NpcActionData sellAction)
+            NpcRuntime actor, NpcRuntime secondActor, ItemData item, NpcActionData sellAction,
+            MerchantSystem merchant, NpcDecisionSystem decisions)
         {
             Runtime = runtime;
             Records = records;
@@ -313,6 +444,8 @@ public sealed class P18DConsumerIntegrationTests
             SecondActor = secondActor;
             Item = item;
             SellAction = sellAction;
+            Merchant = merchant;
+            Decisions = decisions;
         }
     }
 

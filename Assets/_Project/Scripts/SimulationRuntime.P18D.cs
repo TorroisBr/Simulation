@@ -116,6 +116,9 @@ public sealed partial class SimulationRuntime
 
     private void ValidateP18DIntradayComposition()
     {
+        if (cities.Any(city => city != null && city.HasLocalDailyMaterialFlow))
+            throw new ArgumentException(
+                "P18-D intraday composition excludes P14 local daily material-flow cities until a temporal owner adapter is integrated.");
         if (merchantSystem == null || !configuration.MerchantTrade.Enabled
             || npcDecisionSystem == null || decisionRecorder == null)
             throw new ArgumentException(
@@ -199,6 +202,28 @@ public sealed partial class SimulationRuntime
         if (!p18dTimeline.TryAcceptInput(accepted, out failure)) return false;
         p18dNextTimelineInputSequence++;
         return true;
+    }
+
+    /// <summary>
+    /// Captures the trusted WorldCommand input at the current instant when that
+    /// instant is still open, otherwise at the earliest next unsealed tick.
+    /// </summary>
+    internal bool TryCaptureIntradayActorChoiceAtNextUnsealedInstant(
+        string worldCommandId, PersonId actor, string actionDefinitionId,
+        WorldCommandOrigin origin, WorldCommandAuthorityMode authority,
+        out TimelineFailure failure)
+    {
+        failure = TimelineFailure.UnsupportedProfile;
+        if (p18dTimeline == null) return false;
+        long target = p18dTimeline.CurrentInstant.Value;
+        LogicalTick? sealedThrough = p18dTimeline.InputsSealedThrough;
+        if (sealedThrough.HasValue && sealedThrough.Value.Value >= target)
+        {
+            try { target = checked(sealedThrough.Value.Value + 1L); }
+            catch (OverflowException) { failure = TimelineFailure.Overflow; return false; }
+        }
+        return TryCaptureIntradayActorChoice(worldCommandId, actor,
+            actionDefinitionId, new LogicalTick(target), out failure, origin, authority);
     }
 
     public bool TryAdvanceIntradayTo(LogicalTick target, out TimelineFailure failure)
