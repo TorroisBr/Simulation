@@ -443,25 +443,40 @@ not add a second lease, global lock, or duplicate authoritative store.
    closed. Baseline assessment also validates the full section set before
    publishing its new baselines. The canonical P18 advance lease remains the
    only advance lease.
-3. **C owner witnesses/exports:** allocator/registry/record-sequence/RNG
+3. **After B promotion: P8-C exact-zero witness adapters.** The selected live
+   profile already reads two installed P8-C owners with exact local
+   `Count`/`Revision` pairs: `LegacySpatialAnchorBindingStore` and
+   `PersonSpatialPositionStore`. Add passive P12 providers for section IDs
+   `p8c.city-site-location-bindings` and `p8c.person-positions`, schema v1,
+   using the installed cloned runtime store reference as the witness owner
+   identity. Do not modify P8 mutation semantics, register the providers into
+   an incomplete profile protocol, emit epoch notifications, or expose staged
+   source stores. Verify stable identity and exact day-zero zero witnesses in
+   the selected-profile bootstrap test; verify successful writes advance the
+   matching count/revision and failed or idempotent writes do not in
+   `PersonSpatialPresenceTests`. The owners are unsynchronized, so these
+   providers remain unusable for capture until owner-thread/quiescence proof.
+   This closes only two composed-empty owner witnesses, not the P8-B/D sections
+   or complete census.
+4. **C owner witnesses/exports:** allocator/registry/record-sequence/RNG
    roots, P9-B genesis provenance, and exact P8-A facts. Capture exact
    identity/index state and provider-use state without rerunning genesis.
    Integrate only after the B protocol is promoted, as required by the Brief.
-4. **D factual owner witnesses/exports:** City/NPC roots and child owners,
+5. **D factual owner witnesses/exports:** City/NPC roots and child owners,
    population/Person/Genealogy lifecycle, legacy network/sites/anchors. Split
    work by owner and hotspot only after the reviewed B API; birth,
    materialization, death and migration must have a single outer in-flight
    scope and successful-commit notification.
-5. **E core and official provider witnesses/exports:** economy and merchant
+6. **E core and official provider witnesses/exports:** economy and merchant
    owners, justice/crime/appraisal, and selected political/institutional/
    property/military/conflict stores. Develop alongside D only in isolated
    owner worktrees; integrate against the same B contract and actual effective
    provider set.
-6. **F knowledge/commitment witnesses/exports:** directives, P11 choices,
+7. **F knowledge/commitment witnesses/exports:** directives, P11 choices,
    Knowledge, travel/party/expedition. Begin implementation only after C, D,
    and E canonical dependencies are met; preserve exact terminal ActorChoice
    state and reject nonterminal states as already specified.
-7. **B runtime profile proof, then G:** compose the exact census from the
+8. **B runtime profile proof, then G:** compose the exact census from the
    normal P9-B/P11 bootstrap; prove thread/scope rejection, post-commit
    invalidation, positive required cardinalities, exact conditional zeros,
    absent-section classification, and revalidation after collection. P12-G
