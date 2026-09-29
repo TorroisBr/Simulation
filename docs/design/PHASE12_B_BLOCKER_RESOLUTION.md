@@ -83,6 +83,11 @@ creates `TesteSimulacao`, calls `Start()`, and inspects the published
   coordinator is not a retained census section. P10 `LocalTopologyStore` is
   not composed.
 
+These P8 reads are actual owner-local cardinality/revision observations, but
+they are not yet registered P12-B `OwnerSectionCensusWitness` providers with
+section/schema identities. They reduce the live-evidence gap without closing
+the B section-registration requirement.
+
 This is a live published runtime composition, but the test manually invokes
 `Start()` in EditMode. It does not exercise Unity `Update`, capture a managed
 owner-thread identity, census all included owners, or establish quiescence.

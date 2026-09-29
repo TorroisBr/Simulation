@@ -118,8 +118,13 @@ public sealed class EconomyTransactionTests
         CityRuntime city = SimulationTestFactory.CreateCity("keyed-reject-city", "keyed-reject-location");
         NpcRuntime seller = CreateNpc("keyed-reject-seller", 0f, city);
         EconomyTransactionService service = new EconomyTransactionService();
+        OwnerSectionCensusWitness emptyCensus = service.GetKeyedSaleReceiptCensus();
         KeyedSaleReceipt first = service.TryExecuteKeyedMarketSale("proposal-reject", "fp", "input", "request", "person", "sell", 1, "profile", "tick", "site", seller, city.Market, item, 1);
         Assert.That(first.Outcome, Is.EqualTo(KeyedSaleOutcome.TerminalRejection));
+        OwnerSectionCensusWitness retainedFailureCensus = service.GetKeyedSaleReceiptCensus();
+        Assert.That(retainedFailureCensus.OwnerInstanceIdentity, Is.SameAs(emptyCensus.OwnerInstanceIdentity));
+        Assert.That(retainedFailureCensus.Cardinality, Is.EqualTo(1));
+        Assert.That(retainedFailureCensus.Revision, Is.EqualTo(1));
 
         long moneyRevision = seller.MoneyAccount.Revision;
         long inventoryRevision = seller.Inventory.Revision;
@@ -131,6 +136,10 @@ public sealed class EconomyTransactionTests
         KeyedSaleReceipt replay = retry;
         Assert.That(replay, Is.SameAs(first));
         Assert.That(replay.Result.FailureReason, Is.EqualTo(EconomyTransactionFailureReason.InsufficientInventory));
+        OwnerSectionCensusWitness replayCensus = service.GetKeyedSaleReceiptCensus();
+        Assert.That(replayCensus.OwnerInstanceIdentity, Is.SameAs(retainedFailureCensus.OwnerInstanceIdentity));
+        Assert.That(replayCensus.Cardinality, Is.EqualTo(retainedFailureCensus.Cardinality));
+        Assert.That(replayCensus.Revision, Is.EqualTo(retainedFailureCensus.Revision));
     }
 
     [Test]
@@ -218,6 +227,7 @@ public sealed class EconomyTransactionTests
         NpcRuntime seller = CreateNpc("preflight-seller", 0f, city);
         seller.Inventory.AddItem(item, 2, 2f);
         EconomyTransactionService service = new EconomyTransactionService();
+        OwnerSectionCensusWitness emptyCensus = service.GetKeyedSaleReceiptCensus();
         long originalSellerRevision = seller.MoneyAccount.Revision;
         SetRevision(seller.MoneyAccount, long.MaxValue);
         float money = seller.Money;
@@ -232,9 +242,17 @@ public sealed class EconomyTransactionTests
         Assert.That(seller.Money, Is.EqualTo(money));
         Assert.That(seller.Inventory.GetAmount(item), Is.EqualTo(inventory));
         Assert.That(city.Market.GetAmount(item), Is.EqualTo(stock));
+        OwnerSectionCensusWitness retainedPreflightCensus = service.GetKeyedSaleReceiptCensus();
+        Assert.That(retainedPreflightCensus.OwnerInstanceIdentity, Is.SameAs(emptyCensus.OwnerInstanceIdentity));
+        Assert.That(retainedPreflightCensus.Cardinality, Is.EqualTo(1));
+        Assert.That(retainedPreflightCensus.Revision, Is.EqualTo(1));
         SetRevision(seller.MoneyAccount, originalSellerRevision);
         KeyedSaleReceipt retried = service.TryExecuteKeyedMarketSale("preflight-proposal", "preflight-fp", "input", "request", "person", "sell", 1, "profile", "tick", "site", seller, city.Market, item, 1);
         Assert.That(retried.Outcome, Is.EqualTo(KeyedSaleOutcome.Committed));
+        OwnerSectionCensusWitness replacedReceiptCensus = service.GetKeyedSaleReceiptCensus();
+        Assert.That(replacedReceiptCensus.OwnerInstanceIdentity, Is.SameAs(retainedPreflightCensus.OwnerInstanceIdentity));
+        Assert.That(replacedReceiptCensus.Cardinality, Is.EqualTo(retainedPreflightCensus.Cardinality));
+        Assert.That(replacedReceiptCensus.Revision, Is.EqualTo(retainedPreflightCensus.Revision + 1));
     }
 
     [Test]
