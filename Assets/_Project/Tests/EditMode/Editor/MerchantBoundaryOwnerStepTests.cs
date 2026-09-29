@@ -1,5 +1,7 @@
 using System.Collections.Generic;
 using NUnit.Framework;
+using UnityEngine;
+using UnityEngine.TestTools;
 
 public sealed class MerchantBoundaryOwnerStepTests
 {
@@ -237,9 +239,25 @@ public sealed class MerchantBoundaryOwnerStepTests
         BoundaryContinuationManifest manifest = new BoundaryContinuationManifest(
             operation, "daily-boundary", "1", "configuration/v1", new[] { step }, "content/v1");
 
+        Assert.That(records.Decisions.Record(new NpcDecisionRecord(
+            "decision-000001", 6L, 100L, merchant.RuntimeId,
+            NpcDecisionType.Action, NpcDecisionOrigin.Autonomous,
+            null, (string)null, null, null)), Is.True);
+
         OwnerSectionCensusWitness emptyReceiptCensus = records.DecisionRecorder.GetOccurrenceReceiptCensus();
         Assert.That(emptyReceiptCensus.Cardinality, Is.Zero);
         Assert.That(emptyReceiptCensus.Revision, Is.Zero);
+
+        LogAssert.Expect(LogType.Error,
+            "Cannot record duplicate DecisionId 'decision-000001'.");
+        Assert.That(system.TryAdvanceNpcTradeStateOccurrence(merchant, manifest, step,
+            out NpcMerchantTradeStateReceipt failedAttempt, out TimelineFailure failedAttemptReason), Is.False);
+        Assert.That(failedAttempt, Is.Null);
+        Assert.That(failedAttemptReason, Is.EqualTo(TimelineFailure.ContinuationFailed));
+        OwnerSectionCensusWitness afterFailedReceiptCensus = records.DecisionRecorder.GetOccurrenceReceiptCensus();
+        Assert.That(afterFailedReceiptCensus.OwnerInstanceIdentity, Is.SameAs(emptyReceiptCensus.OwnerInstanceIdentity));
+        Assert.That(afterFailedReceiptCensus.Cardinality, Is.Zero);
+        Assert.That(afterFailedReceiptCensus.Revision, Is.Zero);
 
         Assert.That(system.TryAdvanceNpcTradeStateOccurrence(merchant, manifest, step,
             out NpcMerchantTradeStateReceipt receipt, out TimelineFailure failure), Is.True,
@@ -248,8 +266,8 @@ public sealed class MerchantBoundaryOwnerStepTests
         Assert.That(merchant.MerchantTradePlan.TargetCity, Is.SameAs(world.B));
         Assert.That(merchant.MerchantTradePlan.OriginDecisionId, Is.Not.Empty);
         Assert.That(merchant.TravelPlan.TargetCity, Is.SameAs(world.B));
-        Assert.That(records.Decisions.Decisions.Count, Is.EqualTo(1));
-        Assert.That(records.Decisions.Decisions[0].DecisionType, Is.EqualTo(NpcDecisionType.TradeRedirect));
+        Assert.That(records.Decisions.Decisions.Count, Is.EqualTo(2));
+        Assert.That(records.Decisions.Decisions[1].DecisionType, Is.EqualTo(NpcDecisionType.TradeRedirect));
         OwnerSectionCensusWitness committedReceiptCensus = records.DecisionRecorder.GetOccurrenceReceiptCensus();
         Assert.That(committedReceiptCensus.OwnerInstanceIdentity, Is.SameAs(emptyReceiptCensus.OwnerInstanceIdentity));
         Assert.That(committedReceiptCensus.Cardinality, Is.EqualTo(1));
@@ -263,7 +281,7 @@ public sealed class MerchantBoundaryOwnerStepTests
             out NpcMerchantTradeStateReceipt replay, out failure), Is.True, failure.ToString());
         Assert.That(replay, Is.Not.Null);
         Assert.That(merchant.MerchantTradePlan.TargetCity, Is.SameAs(world.B));
-        Assert.That(records.Decisions.Decisions.Count, Is.EqualTo(1));
+        Assert.That(records.Decisions.Decisions.Count, Is.EqualTo(2));
         OwnerSectionCensusWitness replayedReceiptCensus = records.DecisionRecorder.GetOccurrenceReceiptCensus();
         Assert.That(replayedReceiptCensus.OwnerInstanceIdentity, Is.SameAs(committedReceiptCensus.OwnerInstanceIdentity));
         Assert.That(replayedReceiptCensus.Cardinality, Is.EqualTo(committedReceiptCensus.Cardinality));
