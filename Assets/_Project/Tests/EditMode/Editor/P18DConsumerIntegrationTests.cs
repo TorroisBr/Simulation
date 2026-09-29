@@ -1,5 +1,7 @@
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using NUnit.Framework;
 
 public sealed class P18DConsumerIntegrationTests
@@ -173,41 +175,91 @@ public sealed class P18DConsumerIntegrationTests
     }
 
     [Test]
-    public void CommittedSaleReplayAfterPlanActivationReturnsReceiptWithoutRepeatingEffects()
+    public void P18DConsumerReplayAfterPlanActivationUsesCommittedReceiptAndReconcilesTerminalOnce()
     {
         Fixture fixture = CreateFixture();
         SetActorAtCity(fixture);
         fixture.Runtime.AdvanceDay();
-        NpcActionRuntime action = fixture.Decisions.CreateRequestedAction(
-            fixture.Actor, fixture.SellAction);
-        Assert.That(action, Is.Not.Null);
-        Assert.That(action.TargetCity, Is.SameAs(fixture.City));
-        Assert.That(action.TargetItem, Is.SameAs(fixture.Item));
-
-        string proposalId = "p18d-replay-proposal";
-        string fingerprint = "p18d-replay-fingerprint";
-        string inputId = "p18d-replay-input";
-        string requestId = "p18d-replay-request";
         LogicalTick instant = new LogicalTick(fixture.Runtime.P18DTimeline.CurrentInstant.Value + 7L);
-        Assert.That(fixture.Merchant.TryExecuteKeyedLocalMarketSale(
-            fixture.Actor, fixture.Actor.PersonId, action, proposalId, fingerprint,
-            inputId, requestId, "UnityBootstrap-Daily-v1", instant,
-            out KeyedSaleReceipt committed), Is.True);
+        Assert.That(fixture.Runtime.TryCaptureIntradayActorChoice(
+            "intraday-sell-replay", fixture.Actor.PersonId,
+            fixture.SellAction.DefinitionId, instant, out TimelineFailure captureFailure),
+            Is.True, captureFailure.ToString());
+        Assert.That(fixture.Runtime.TryAdvanceIntradayTo(
+            instant, out TimelineFailure advanceFailure), Is.True, advanceFailure.ToString());
+
+        ActorChoiceInput input = fixture.Runtime.ActorChoiceStore.Inputs.Single();
+        Assert.That(input.Status, Is.EqualTo(ActorChoiceInputStatus.AttemptReturned));
+        object execution = GetOnlyP18DActorChoiceExecution(fixture.Runtime);
+        PropertyInfo receiptProperty = execution.GetType().GetProperty("Receipt");
+        KeyedSaleReceipt committed = (KeyedSaleReceipt)receiptProperty.GetValue(execution);
         Assert.That(committed.Outcome, Is.EqualTo(KeyedSaleOutcome.Committed));
         int inventoryAfterFirst = fixture.Actor.Inventory.GetAmount(fixture.Item);
         int marketAfterFirst = fixture.City.Market.GetAmount(fixture.Item);
         float balanceAfterFirst = fixture.Actor.Money;
+        int temporalDispositionCount = input.TemporalDispositions.Count;
+        int actorDecisionReceiptCount = fixture.Runtime.P18DActorDecisionReceipts.Count;
+        FieldInfo merchantLoggerField = typeof(MerchantSystem).GetField(
+            "logger", BindingFlags.Instance | BindingFlags.NonPublic);
+        SimulationLogger merchantLogger = (SimulationLogger)merchantLoggerField.GetValue(fixture.Merchant);
+        string tradeLogAfterFirst = merchantLogger.FullLog;
 
         fixture.Actor.SetMerchantTradePlan(fixture.Item, fixture.City, fixture.City, 5, 1f);
-        Assert.That(fixture.Merchant.TryExecuteKeyedLocalMarketSale(
-            fixture.Actor, fixture.Actor.PersonId, action, proposalId, fingerprint,
-            inputId, requestId, "UnityBootstrap-Daily-v1", instant,
-            out KeyedSaleReceipt replay), Is.True);
 
-        Assert.That(replay, Is.SameAs(committed));
+        // Model an interruption after the owner receipt and once-only consumer bookkeeping
+        // are retained but before the P11/P18-C terminal reconciliation is recorded.
+        SetExecutionProperty(execution, "Stage", "SaleCommitted");
+        SetExecutionProperty(execution, "TerminalKind", "None");
+        SetExecutionProperty(execution, "TerminalProposalId", null);
+        SetExecutionProperty(execution, "TerminalOutcome", null);
+        SetExecutionProperty(execution, "P11TerminalRecorded", false);
+        SetExecutionProperty(execution, "CRequestTerminalRecorded", false);
+
+        MethodInfo resume = typeof(SimulationRuntime).GetMethod(
+            "TryResumeP18DActorChoice", BindingFlags.Instance | BindingFlags.NonPublic);
+        object[] resumeArguments = { execution, TimelineFailure.None };
+        bool resumed = (bool)resume.Invoke(fixture.Runtime, resumeArguments);
+        Assert.That(resumed, Is.True, ((TimelineFailure)resumeArguments[1]).ToString());
+
+        Assert.That(receiptProperty.GetValue(execution), Is.SameAs(committed));
         Assert.That(fixture.Actor.Inventory.GetAmount(fixture.Item), Is.EqualTo(inventoryAfterFirst));
         Assert.That(fixture.City.Market.GetAmount(fixture.Item), Is.EqualTo(marketAfterFirst));
         Assert.That(fixture.Actor.Money, Is.EqualTo(balanceAfterFirst));
+        Assert.That(merchantLogger.FullLog, Is.EqualTo(tradeLogAfterFirst));
+        Assert.That(fixture.Runtime.ActorChoiceStore.Inputs.Single().TemporalDispositions,
+            Has.Count.EqualTo(temporalDispositionCount));
+        Assert.That(fixture.Runtime.P18DActorDecisionReceipts, Has.Count.EqualTo(actorDecisionReceiptCount));
+        Assert.That(GetExecutionProperty(execution, "TradeLogApplied"), Is.True);
+        Assert.That(GetExecutionProperty(execution, "P11TerminalRecorded"), Is.True);
+        Assert.That(GetExecutionProperty(execution, "CRequestTerminalRecorded"), Is.True);
+        Assert.That(GetExecutionProperty(execution, "Stage").ToString(), Is.EqualTo("Terminal"));
+    }
+
+    private static object GetOnlyP18DActorChoiceExecution(SimulationRuntime runtime)
+    {
+        FieldInfo executionsField = typeof(SimulationRuntime).GetField(
+            "p18dActorChoiceExecutions", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(executionsField, Is.Not.Null);
+        IDictionary executions = (IDictionary)executionsField.GetValue(runtime);
+        Assert.That(executions, Has.Count.EqualTo(1));
+        return executions.Values.Cast<object>().Single();
+    }
+
+    private static object GetExecutionProperty(object execution, string propertyName)
+    {
+        PropertyInfo property = execution.GetType().GetProperty(propertyName);
+        Assert.That(property, Is.Not.Null, propertyName);
+        return property.GetValue(execution);
+    }
+
+    private static void SetExecutionProperty(object execution, string propertyName, object value)
+    {
+        PropertyInfo property = execution.GetType().GetProperty(propertyName);
+        Assert.That(property, Is.Not.Null, propertyName);
+        object converted = value is string enumName && property.PropertyType.IsEnum
+            ? System.Enum.Parse(property.PropertyType, enumName)
+            : value;
+        property.SetValue(execution, converted);
     }
 
     [Test]
