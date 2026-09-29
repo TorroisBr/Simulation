@@ -1,8 +1,101 @@
 # Phase 18 State — Intraday Temporal Execution v1
 
-**Status:** PHASE 18 IN PROGRESS — P18-A/B/C promoted, including the additive extension at `1dd0479` and the external-input/deferral adapter at integration tip `b75c5b8` (code `a535441`); P20-A is promoted (code `22df7b3`, P20 State tip `7a81cc0`). P18-D consumes the promoted P11 temporal capture contract. Its exact technical design passed independent review; the sale-owner receipt/prepared-install and per-runtime serialized advance prerequisites were implemented, validated, and promoted at `9e790c59e14ca7f7ed195c0e6267e10f3cd039d7`. P18-D runtime code is `3ddf8476842ad24b9234ccaa65a530722ead8eb4`; consumer replay regression `0887d18` and wording-only test correction `6a4d971` are pushed with fresh focused, full EditMode, Smoke, LongRun, and diff-check evidence. Exact-tip independent review of code `6a4d971` and State `254385e` passed; user approved promotion and `codex/phase18/canonical` advanced from `9e790c5` to `f1cfed3`. The consumer is promoted within its bounded Local SellGoods scope; P14 local material-flow Cities remain excluded pending a temporal owner adapter. Phase 18 remains open.
+## Current canonical status
 
-**Canonical baselines:** P8 `codex/phase8/canonical` at `470667d37863384edadb3d93ef64d8004aff46a3`; P18 `codex/phase18/canonical` at `9e790c59e14ca7f7ed195c0e6267e10f3cd039d7`. The P18-D candidate also merges P14 `codex/phase14/canonical` at `4caecbbfb0464c965811402b3c11d8717605114a`.
+**Current P18 canonical State base:** `codex/phase18/canonical` at
+`2d314bea79c9b16f70a3051c0f7d90011df1823e`. That docs-only State update records
+the approved P18-D promotion; the promoted P18-D integration/code tip remains
+`f1cfed3`. This candidate is based on that exact State/canonical tip and is not
+itself canonical.
+
+P18-A (including the accepted boundary/continuation extension), P18-B, P18-C
+(including the external-input/deferral adapter), P18-D's bounded consumer, and
+the sale-owner receipt/prepared-install and serialized runtime-window
+prerequisites are promoted. **Current canonical status remains IN PROGRESS**
+at `2d314be` until this candidate is approved and promoted. The closure marker
+below records Phase 18 as **CLOSED / COMPLETED** upon that promotion; it does
+not claim that the candidate branch is already canonical.
+
+Current architecture/alignment constraints are `c285466` (canonical
+architecture), `4b6dd1d` (intraday/extensibility alignment), and `c285466`
+(multi-participant activity alignment). The alignments remain active review
+constraints: retain logical instants and causal ordering, extension-compatible
+semantic seams, distinct activity/actor/participant identity, and unconstrained
+participant cardinality. P18 work does not implement the deferred P19 public
+Mod API/loader or P20 coordination layer.
+
+### Phase 18 closure marker — candidate, effective upon promotion
+
+**Candidate State:** Phase 18 — **CLOSED / COMPLETED**, within the bounded
+objective and promoted checkpoint scopes recorded here. The candidate itself
+contains this formal closure marker. It takes effect only if this candidate is
+approved and promoted to `codex/phase18/canonical`; until then the current
+canonical Phase State remains **IN PROGRESS**.
+
+The mandatory P18-A/B/C/D checkpoints in the Phase 18 Brief are represented by
+promoted capabilities in the current canonical history. The P18-D consumer
+promotion at `f1cfed3` has exact-tip implementation review PASS and recorded
+focused, ALL EditMode (1921/1921), complete Smoke (5/5), LongRun (7/7), and
+`git diff --check` evidence. The exact reviewed code/test tip is `6a4d971`; its
+reviewed State input was `254385e`. The full evidence and test-scenario limits
+remain in the historical records below. Earlier P18-A/B/C validation and
+review evidence is retained in the phase status table; no new Unity run is
+claimed by this docs-only closure candidate.
+
+No additional implementation checkpoint beyond the Phase 18 Brief's P18-A
+through P18-D is proposed as a closure prerequisite. The excluded consumers and
+administrative P12-B hotspot handoff below remain deferred/blocked work, not
+unrecorded P18 requirements.
+
+**Closure limits and deferred consumers:**
+
+- P18-D's selected consumer is Local SellGoods only. The replay regression
+  covers a post-terminal replay in the same runtime after rewinding consumer
+  execution flags; it does not prove pre-terminal interruption recovery,
+  process/runtime restart durability, or save/crash recovery. Sale receipts
+  remain scoped to the current `SimulationRuntime` lifetime. These are recorded
+  limits of this slice, not additional mandatory P18 checkpoints under the
+  current Brief.
+- P14 local material-flow Cities remain excluded until their own temporal
+  owner adapter is designed, reviewed, and promoted. P8-E and full travel
+  migration remain separate/deferred work; conversion of every legacy daily
+  domain is not claimed.
+- No concrete Sleep, Dreams, robbery/gang, ritual, War, or MegaEventos gameplay
+  is included. P18 does not deliver persistence, the P19 public extension
+  API/loader, or P20 formation/participant coordination.
+- Temporal identity/cardinality remains open-ended: `ActivityInstanceId` is
+  distinct from `PersonId`, `NpcRuntimeId`, and participant identity; a
+  one-participant fixture does not establish one-to-one activity/actor
+  cardinality. Shared source receipts may fan out while individual transitions
+  retain distinct operation IDs.
+- **SimulationRuntime hotspot disposition:** P18-D's exclusive ownership
+  window is complete and is handed to P12-B as the next exclusive owner of
+  that hotspot. This is an administrative handoff, not P12-B implementation
+  readiness. P12-B must not edit the hotspot until its independently recorded
+  composition, complete owner-census, mutation-invalidation, and readiness
+  gates pass. This Phase 18 closure marker does not assert P12 readiness.
+
+The closure audit found all mandatory P18-A through P18-D checkpoints
+canonical, and no unresolved product or canonical-architecture decision.
+Items listed above are deferred or separately gated consumers, not missing P18
+requirements.
+
+**Formal closure gate:** promotion of this exact candidate is the user's formal
+approval of Phase 18 closure. Until that approval and promotion, current
+canonical remains **IN PROGRESS** at `2d314be`. On promotion, this candidate
+itself records **CLOSED / COMPLETED**; no later unreviewed State-marker commit
+is required.
+
+## Historical status snapshot — superseded by the current status above
+
+The following status and canonical-baseline lines preserve the earlier
+checkpoint record as it stood before the docs-only canonical State update at
+`2d314be`. Their P18-D code promotion reference (`f1cfed3`) remains current;
+the older P18 canonical State reference (`9e790c5`) does not.
+
+**Historical status:** PHASE 18 IN PROGRESS — P18-A/B/C promoted, including the additive extension at `1dd0479` and the external-input/deferral adapter at integration tip `b75c5b8` (code `a535441`); P20-A is promoted (code `22df7b3`, P20 State tip `7a81cc0`). P18-D consumes the promoted P11 temporal capture contract. Its exact technical design passed independent review; the sale-owner receipt/prepared-install and per-runtime serialized advance prerequisites were implemented, validated, and promoted at `9e790c59e14ca7f7ed195c0e6267e10f3cd039d7`. P18-D runtime code is `3ddf8476842ad24b9234ccaa65a530722ead8eb4`; consumer replay regression `0887d18` and wording-only test correction `6a4d971` are pushed with fresh focused, full EditMode, Smoke, LongRun, and diff-check evidence. Exact-tip independent review of code `6a4d971` and State `254385e` passed; user approved promotion and `codex/phase18/canonical` advanced from `9e790c5` to `f1cfed3`. The consumer is promoted within its bounded Local SellGoods scope; P14 local material-flow Cities remain excluded pending a temporal owner adapter. Phase 18 remains open.
+
+**Historical canonical baselines at that snapshot:** P8 `codex/phase8/canonical` at `470667d37863384edadb3d93ef64d8004aff46a3`; P18 `codex/phase18/canonical` at `9e790c59e14ca7f7ed195c0e6267e10f3cd039d7`. The P18-D candidate also merges P14 `codex/phase14/canonical` at `4caecbbfb0464c965811402b3c11d8717605114a`.
 
 **Architecture update:** `c285466c355103d3637ac165246591b72eb7bda0`
 
@@ -157,7 +250,10 @@ The reviewed code integration was based on P18 canonical `ba8076c3bc2c8c354a8755
 
 On the exact candidate tip, EconomyTransactionTests passed 45/45, ALL EditMode passed 1808/1808 (`EditMode-20260928-025030-63d4104987f8414ab0d311e21bb58220.xml`), official complete Smoke passed 5/5 (`EditMode-20260928-025133-46136d27c60f440aa256aaf0aa1925b3.xml`), and `SimulationRuntimeLongRunTests` passed 7/7 (`EditMode-20260928-025209-0da1288bb5d046e1a0b7cff86d01754c.xml`). `git diff --check` passed. The sale regression verifies an item-definition price change does not replace the market's cached sale price before the price-refresh operation. These results promote only the prerequisites; they do not claim a P18-D consumer migration or Phase 18 closure.
 
-## P18-C implementation ownership
+## P18-C implementation ownership — historical pre-P18-D snapshot
+
+This ownership record preserves the state at the P18-C checkpoint. The P18-D
+consumer promotion and current `SimulationRuntime` handoff are recorded above.
 
 Promoted source `ab05ecfe976e80badf6f509b8e9be25ff556ca23` is based exactly on
 `39bd42e9e78f80c1e40b35b099e980ee8bc44a43` and owns the additive receipt log in
@@ -180,6 +276,10 @@ promoted tip. Promotion was approved and fast-forwarded to
 
 ## Architecture constraints carried forward
 
+The first two alignment constraints below remain current. The P18-A/daily-loop
+statement is retained as a pre-P18-D historical boundary and is qualified with
+the selected consumer now promoted.
+
 - The intraday/extensibility alignment is active: logical instants and stable
   causal ordering are required where the selected consumer needs them;
   extensibility-compatible identity/data shape is a review constraint now.
@@ -191,13 +291,21 @@ promoted tip. Promotion was approved and fast-forwarded to
   `(ownerId, workId, revision, occurrence)` work identity use injective,
   length-prefixed encoding. Pending boundary day/identity and the owner's
   idempotency/effect state are explicit reconstruction facts.
-- P18-A does not integrate into `SimulationRuntime.AdvanceDay`; legacy daily
-  execution remains authoritative until a selected P18-D consumer migrates.
+- Before P18-D promotion, P18-A itself did not integrate into
+  `SimulationRuntime.AdvanceDay` and the legacy daily path remained authoritative.
+  P18-D now integrates the selected Local SellGoods consumer chronologically;
+  unrelated daily consumers and full travel migration remain outside this
+  closure scope.
 - P18-A has no dependency on P8-E, P11, or P20. P18-D may depend on the
   specific P8-E/P11 consumer contracts it selects. P20 depends on relevant
   P18-A/B/C outputs but not P18-D or P19.
 
-## Promotion impact and next work
+## Promotion impact and next work — historical progression record
+
+This section retains the progression snapshots used while P18-C was being
+integrated. Any text below that says P18-D awaited a prerequisite describes
+that earlier checkpoint; it is superseded by the current status and closure
+proposal at the top of this file.
 
 **P18-C external-input/deferral adapter:** independent design review PASS at
 exact tip `358c65c85e1eafdd91ef4a6553ba3b0a8c4af249`; the implementation is
