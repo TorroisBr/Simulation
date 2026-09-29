@@ -16,7 +16,7 @@ implemented or promoted.
 **Current evidence revalidation (2026-09-29):** this F scope preserves the
 spatial-boundary correction at `d409549be5aee048ab8a90dc271af80288fa4e01`
 and is checked against the current owner/profile inventory
-`d01cd6225ff98a9952b466f7f045ec871b9e3ecc`, P12-B design/reference refresh
+`190281b08af88c87bbd6cdf67ba3470055e1e608`, P12-B design/reference refresh
 `ef8c72cd388445e25ce9360bb1e689fc0a07c639`, P12-C identity/genesis design
 `edc51571559a9ba4b1a025963de2e25b23c66fd3`, P12-D design
 `e8b83d75e34f8456555065e24bfe67bb30366baa`, and P12-E design
@@ -35,17 +35,19 @@ waits on the named owner roots and interfaces; F remains downstream of C/D/E.
 Earlier review hashes in the preceding F version apply only to their exact
 reviewed contents.
 
-**Current P18-D branch evidence (2026-09-29):** canonical prerequisites remain
-at `9e790c5`; isolated candidates are SellGoods/local observation `43363dd`,
-demography `ddcac0b`, actor-choice bridge source `4016a73` with execution
-record `924cfee9b41c77274141795f0f7ddcd117819f89` (exact-tip review PASS;
-focused 5/5), and separately
-reviewed bridge `10dcfda`; merchant trade-state
-`b05feafd4f95b1a3a559e6d58de339334df57365` has independent exact-tip PASS,
-Merchant 8/8, and local observation 6/6 with retained XMLs. The review found
-only a nonblocking diagnostic-message difference; owner results and effects
-are unchanged. None is a complete or canonical P18-D consumer,
-and none adds P18 temporal state to `UnityBootstrap-Daily-v1`.
+**Current P18-D branch evidence (2026-09-29):** canonical prerequisites are
+promoted at `9e790c5`. The current owner inventory `190281b` records actor
+bridge source `4016a73` with execution record `924cfee9b41c77274141795f0f7ddcd117819f89`
+(exact-tip review PASS; focused 5/5) and merchant trade-state owner
+`b05feafd4f95b1a3a559e6d58de339334df57365` (independent exact-tip PASS;
+Merchant 8/8 and local observation 6/6). The `43363dd` SellGoods/local-
+observation composite contains an evolved actor bridge; the separate
+`4016a73`/`924cfee` review does not cover that composite bridge, which still
+needs exact-tip integration review. The alternate bridge `10dcfda` is not the
+selected composite source. Demography owner `ddcac0b` has independent exact-tip
+review and focused owner validation, but remains an isolated candidate pending
+integration. These candidates are not a complete or canonical P18-D consumer
+and add no P18 temporal state to `UnityBootstrap-Daily-v1`.
 
 Revalidation uses architecture baseline `c285466c355103d3637ac165246591b72eb7bda0`,
 the intraday/extensibility alignment record `4b6dd1d38cffeaf3cc1ac3effea0f8ede8771194`,
