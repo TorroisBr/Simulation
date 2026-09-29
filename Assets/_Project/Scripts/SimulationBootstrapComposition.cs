@@ -14,6 +14,7 @@ public sealed class SimulationBootstrapComposition
         ScheduledDirectiveStore directives,
         NpcDecisionStore decisions,
         NpcDecisionRecorder decisionRecorder,
+        SimulationRecordSequence recordSequence,
         EconomyTransactionService economyTransactionService,
         NpcChronicleService chronicles,
         NpcChronicleFormatter chronicleFormatter,
@@ -33,6 +34,7 @@ public sealed class SimulationBootstrapComposition
         ScheduledDirectives = directives;
         Decisions = decisions;
         this.decisionRecorder = decisionRecorder ?? throw new System.ArgumentNullException(nameof(decisionRecorder));
+        SimulationRecordSequenceCensusProvider = new SimulationRecordSequenceCensusProvider(recordSequence);
         this.economyTransactionService = economyTransactionService ?? throw new System.ArgumentNullException(nameof(economyTransactionService));
         NpcChronicles = chronicles;
         ChronicleFormatter = chronicleFormatter;
@@ -54,6 +56,8 @@ public sealed class SimulationBootstrapComposition
     public HistoryStore History { get; }
     public ScheduledDirectiveStore ScheduledDirectives { get; }
     public NpcDecisionStore Decisions { get; }
+    /// <summary>Passive witness for the shared causal event/decision sequence.</summary>
+    public IOwnerSectionCensusProvider SimulationRecordSequenceCensusProvider { get; }
     /// <summary>Returns an owner-issued live census witness, not a decision-record export.</summary>
     public OwnerSectionCensusWitness GetNpcDecisionOccurrenceReceiptCensus()
     {

@@ -1,6 +1,8 @@
 # P12-B SimulationRecordSequence census witness design
 
-**Status:** Submitted for independent technical review.
+**Status:** Design review passed; implementation is authorized within the accepted P12-B capability scope.
+
+**Design review:** Exact-tip PASS at `codex/phase12/P12BRecordSequenceWitnessDesign` tip `c283ca6`; durable review record is `codex/phase12/P12BRecordSequenceWitnessDesignReview` tip `e10ea4f`.
 
 **Canonical base:** `codex/phase12/canonical` at
 `1ada62b031e738e2bdd5d3d623e028a114961d6e`.
