@@ -296,12 +296,19 @@ City/Site-to-`LocationId` bridge; P8-C `PersonSpatialPositionStore` owns Person
 positions. Both sections, P8-D route Knowledge/plans, and the P8-E component
 travel authorities remain empty. Existing legacy `SpatialNetworkRuntime`
 routes and legacy travel/party/expedition state are included under D/F and do
-not stand in for P8 authorities. The selected
-`TesteSimulacao` composition supplies neither `localTopologyStore` nor
-`armedForceSpatialStateStore`; `SimulationRuntime` therefore keeps
-`localTopologyStore` null (`SimulationRuntime.cs@ec75e6a:543–545`,
-`ArmedForceSpatialPosition.cs@ec75e6a:113–123`). Represent this as
-`NOT_COMPOSED`, not composed-empty, and reject unexpected injection/population.
+not stand in for P8 authorities. The selected `TesteSimulacao` composition
+supplies neither a `LocalTopologyStore` nor a prebuilt
+`ArmedForceSpatialStateStore`. `SimulationRuntime` nevertheless constructs
+its runtime-owned `ContingentManpowerStateStore` and
+`ArmedForceSpatialStateStore` on the default composition path, bound to the
+installed `ArmedForceStore` and spatial authority
+(`SimulationRuntime.cs@ec75e6a:548–563,3370–3378`). The optional
+`LocalTopologyStore` reference is null; the position store itself is
+composed. At selected-profile day zero, manpower has zero states/revision and
+the position store has zero positions/revision. Record both owners as
+`COMPOSED_EMPTY`, not `NOT_COMPOSED`. Their startup emptiness does not exclude
+later supported populated state; accepted P12-E still requires owner coverage
+for it.
 The P10 Ruin/LocalTopology output is not composed and populated P10 facts must
 not slip into this profile. GeneralTest
 has no P14-A exogenous material-source configuration; legacy City production
