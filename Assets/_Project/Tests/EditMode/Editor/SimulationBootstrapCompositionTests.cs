@@ -258,6 +258,55 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(simulation.Bootstrap.ActorChoiceInputCensusProvider.GetCurrentCensus().OwnerInstanceIdentity,
             Is.SameAs(p11ActorChoices.OwnerInstanceIdentity));
 
+        IReadOnlyList<IOwnerSectionCensusProvider> runtimeIdAllocatorProviders =
+            simulation.Bootstrap.RuntimeIdAllocatorCensusProviders;
+        string[] runtimeIdAllocatorSectionIds =
+        {
+            RuntimeIdAllocatorCensusProvider.NpcsSectionId,
+            RuntimeIdAllocatorCensusProvider.CitiesSectionId,
+            RuntimeIdAllocatorCensusProvider.LocationsSectionId,
+            RuntimeIdAllocatorCensusProvider.RoutesSectionId,
+            RuntimeIdAllocatorCensusProvider.EventsSectionId,
+            RuntimeIdAllocatorCensusProvider.DirectivesSectionId,
+            RuntimeIdAllocatorCensusProvider.DecisionsSectionId,
+            RuntimeIdAllocatorCensusProvider.TravelPartiesSectionId,
+            RuntimeIdAllocatorCensusProvider.OrganizationsSectionId,
+            RuntimeIdAllocatorCensusProvider.ExplorableSitesSectionId,
+            RuntimeIdAllocatorCensusProvider.ExpeditionsSectionId,
+            RuntimeIdAllocatorCensusProvider.LocalPlacesSectionId,
+            RuntimeIdAllocatorCensusProvider.LocalConnectionsSectionId,
+            RuntimeIdAllocatorCensusProvider.NotableItemsSectionId
+        };
+        long[] expectedRuntimeIdAllocatorRevisions = { 10L, 2L, 2L, 2L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L };
+        Assert.That(runtimeIdAllocatorProviders.Count, Is.EqualTo(runtimeIdAllocatorSectionIds.Length));
+        object runtimeIdAllocatorOwner = null;
+        for (int i = 0; i < runtimeIdAllocatorProviders.Count; i++)
+        {
+            OwnerSectionCensusWitness witness = runtimeIdAllocatorProviders[i].GetCurrentCensus();
+            Assert.That(witness.SectionId, Is.EqualTo(runtimeIdAllocatorSectionIds[i]));
+            Assert.That(witness.SchemaVersion, Is.EqualTo(RuntimeIdAllocatorCensusProvider.SchemaVersion));
+            Assert.That(witness.Cardinality, Is.EqualTo(1));
+            Assert.That(witness.Revision, Is.EqualTo(expectedRuntimeIdAllocatorRevisions[i]));
+            if (i == 0)
+            {
+                runtimeIdAllocatorOwner = witness.OwnerInstanceIdentity;
+            }
+            else
+            {
+                Assert.That(witness.OwnerInstanceIdentity, Is.SameAs(runtimeIdAllocatorOwner));
+            }
+        }
+
+        OwnerSectionCensusWitness[] repeatedRuntimeIdAllocatorWitnesses = runtimeIdAllocatorProviders
+            .Select(provider => provider.GetCurrentCensus())
+            .ToArray();
+        for (int i = 0; i < repeatedRuntimeIdAllocatorWitnesses.Length; i++)
+        {
+            Assert.That(repeatedRuntimeIdAllocatorWitnesses[i].OwnerInstanceIdentity, Is.SameAs(runtimeIdAllocatorOwner));
+            Assert.That(repeatedRuntimeIdAllocatorWitnesses[i].Cardinality, Is.EqualTo(1));
+            Assert.That(repeatedRuntimeIdAllocatorWitnesses[i].Revision, Is.EqualTo(expectedRuntimeIdAllocatorRevisions[i]));
+        }
+
         SpatialAuthorityStore authority = simulation.Bootstrap.SpatialAuthority;
         SpatialHexCensusProvider hexCensusProvider = new SpatialHexCensusProvider(authority);
         OwnerSectionCensusWitness hexCensus = hexCensusProvider.GetCurrentCensus();

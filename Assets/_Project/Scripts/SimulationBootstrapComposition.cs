@@ -24,6 +24,7 @@ public sealed class SimulationBootstrapComposition
         TravelPartySystem groupTravel,
         SimulationRuntime runtime,
         RuntimeIdentityRegistry runtimeIdentityRegistry,
+        RuntimeIdAllocator runtimeIdAllocator,
         ExplorableSiteStore sites,
         ExpeditionStore expeditions,
         ExpeditionSystem expeditionSystem)
@@ -47,6 +48,7 @@ public sealed class SimulationBootstrapComposition
         ActorChoiceInputCensusProvider = new ActorChoiceP11CensusProvider(Runtime.ActorChoiceStore);
         ActorChoiceTemporalCensusProvider = new ActorChoiceTemporalCensusProvider(Runtime.ActorChoiceStore);
         RuntimeIdentityCensusProviders = RuntimeIdentityRegistryCensusProvider.CreateProviders(runtimeIdentityRegistry);
+        RuntimeIdAllocatorCensusProviders = RuntimeIdAllocatorCensusProvider.CreateProviders(runtimeIdAllocator);
         ExplorableSites = sites;
         Expeditions = expeditions;
         ExpeditionSystem = expeditionSystem;
@@ -87,6 +89,8 @@ public sealed class SimulationBootstrapComposition
     public IOwnerSectionCensusProvider ActorChoiceTemporalCensusProvider { get; }
     /// <summary>Fixed passive witnesses for the runtime's typed identity indexes.</summary>
     public IReadOnlyList<IOwnerSectionCensusProvider> RuntimeIdentityCensusProviders { get; }
+    /// <summary>Fixed passive witnesses for the runtime ID allocator's typed counters.</summary>
+    public IReadOnlyList<IOwnerSectionCensusProvider> RuntimeIdAllocatorCensusProviders { get; }
     /// <summary>The P8-owned spatial truth authority published with the genesis handoff.</summary>
     public SpatialAuthorityStore SpatialAuthority => Runtime.SpatialAuthorityStore;
     public ExplorableSiteStore ExplorableSites { get; }
