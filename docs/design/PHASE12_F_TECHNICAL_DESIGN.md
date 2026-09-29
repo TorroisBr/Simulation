@@ -13,22 +13,30 @@ P12-D factual roots, and P12-E selected core/daily owners are prerequisites to
 F. Their designs are inputs, not evidence that their capabilities have been
 implemented or promoted.
 
-**Latest related design candidates after remote refresh (2026-09-28):**
-P12-B design/reference correction `a490738afffdd70052a3bf63e3866d8698d8e15a`
-and owner-evidence refresh `d0761ce0b5da7df6e998db24128bdedb871a0ac3`;
-P12-C design/reference correction `a490738afffdd70052a3bf63e3866d8698d8e15a`;
-P12-D design `dd81634b1a966f8253cd3dc5f70838e76254b751`; and P12-E design
-`ca8e968f37f3607ca79fcfe17ba44a09f0321475`. Earlier independent review
-passes are recorded at P12-B `45e6be83fc40a1b78908aa79500e46e64532ac4b`,
-P12-C `ceb37049ddbe54602063ba92a92cceafdce50096`, P12-D
-`796eadc1a0bd6b44b646f27f5eeb63de71f6b14`, and P12-E
-`51718c7bd38e9582433d1fa38ff4011ef9cf20c5`; those passes apply to their exact
-reviewed contents and do not automatically review the newer candidate tips.
-No B/C/D/E capability is thereby delivered or promoted. Their dependencies on
-F remain as specified below. The design also applies the current
-intraday/extensibility and multi-participant alignment records:
-P18/P19/P20 constraints remain explicit while their state is excluded from
-this daily profile.
+**Current evidence revalidation (2026-09-29):** this F scope preserves the
+spatial-boundary correction at `d409549be5aee048ab8a90dc271af80288fa4e01`
+and is checked against the current owner/profile inventory
+`d01cd6225ff98a9952b466f7f045ec871b9e3ecc`, P12-B design/reference refresh
+`ef8c72cd388445e25ce9360bb1e689fc0a07c639`, P12-C identity/genesis design
+`edc51571559a9ba4b1a025963de2e25b23c66fd3`, P12-D design
+`e8b83d75e34f8456555065e24bfe67bb30366baa`, and P12-E design
+`104c21cbd53c7bba8855bcac076eddc84bab947e`. P12-C passed exact-tip
+independent review at `edc5157`; P12-D and P12-E passed exact-content
+independent review at `e8b83d7` and `104c21c`. These are design reviews, not
+delivered or promoted capabilities. P12-B remains blocked on the complete live
+owner/mutation census, committed-mutation invalidation evidence, composed
+runtime validation, and the P18-D capture/handoff evidence recorded in the
+inventory and B design. C implementation waits on B delivery; D/E implementation
+waits on the named owner roots and interfaces; F remains downstream of C/D/E.
+Earlier review hashes in the preceding F version apply only to their exact
+reviewed contents.
+
+Revalidation uses architecture baseline `c285466c355103d3637ac165246591b72eb7bda0`,
+the intraday/extensibility alignment record `4b6dd1d38cffeaf3cc1ac3effea0f8ede8771194`,
+and the multi-participant activity alignment incorporated into the current
+architecture. The P12-A daily profile still excludes P18 temporal state, P19
+module state, and P20 shared activities; those identities/cardinality
+constraints remain explicit if a later supported profile includes them.
 
 ## 1. Boundary
 
@@ -348,7 +356,12 @@ commitment/planning framework. In particular, do not serialize canonical P8-D
 `PersonSpatialPositionStore`, or P8-E position/travel state, as a substitute
 for the explicitly supported legacy NPC Knowledge and commitment owners. P8-B,
 P8-C, P8-D, and P8-E remain explicit-empty sections, with populated state
-rejected. P18-D consumer work remains incomplete at pushed composition
-`6fcbfab`; it adds no temporal state to this profile. The alignment constraints
-on extensibility and shared activity identity/cardinality remain review
-constraints without adding those deferred capabilities to this profile.
+rejected. P18-D consumer composition remains incomplete: the current noncanonical
+candidate evidence includes actor-choice bridge `10dcfdaa51e561952c3a78229e0b8bc8d8d590ef`,
+the local-knowledge/market-urgency composition `43363ddde2e8c9ed48ef9e220e2b49fa4cbf3c47`,
+and demography owner `ddcac0bb65d63b9b3e1a8c83b31533c722a63a1e`; the merchant
+trade-state owner is still under implementation. None is a promoted complete
+P18-D runtime composition. They add no temporal state to this P12 daily profile.
+The alignment constraints on extensibility and shared-activity identity and
+cardinality remain review constraints without adding those deferred capabilities
+to this profile.
