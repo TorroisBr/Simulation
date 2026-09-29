@@ -110,6 +110,35 @@ public sealed class SpatialGeographyTests
     }
 
     [Test]
+    public void P8APassiveCensusProvidersObserveSharedRevisionChangesFromOtherSpatialMutation()
+    {
+        SpatialAuthorityStore store = CreateAuthoredFixture();
+        SpatialHexCensusProvider hexProvider = new SpatialHexCensusProvider(store);
+        SpatialLocationCensusProvider locationProvider = new SpatialLocationCensusProvider(store);
+        SpatialScaleContextCensusProvider scaleProvider = new SpatialScaleContextCensusProvider(store);
+
+        AssertP8AWitness(hexProvider, SpatialHexCensusProvider.SectionId, store, 7, 1L);
+        AssertP8AWitness(locationProvider, SpatialLocationCensusProvider.SectionId, store, 1, 1L);
+        AssertP8AWitness(scaleProvider, SpatialScaleContextCensusProvider.SectionId, store, 1, 1L);
+
+        HexBoundaryKey boundary = new HexBoundaryKey(
+            new HexId("hex.fixture.center"), new HexId("hex.fixture.right-upper"));
+        Assert.That(store.PassageAuthority.TryRegisterBarrier(
+            new BarrierRecord(
+                new BarrierId("barrier.p8a-shared-revision"),
+                "content.p8a-shared-revision",
+                "barrier-v1",
+                new[] { boundary }),
+            BarrierCondition.Active,
+            out SpatialAuthorityFailure failure), Is.True, failure.ToString());
+
+        Assert.That(store.Revision, Is.EqualTo(2L));
+        AssertP8AWitness(hexProvider, SpatialHexCensusProvider.SectionId, store, 7, 2L);
+        AssertP8AWitness(locationProvider, SpatialLocationCensusProvider.SectionId, store, 1, 2L);
+        AssertP8AWitness(scaleProvider, SpatialScaleContextCensusProvider.SectionId, store, 1, 2L);
+    }
+
+    [Test]
     public void NeighborQueryUsesOnlyTheSixExistingAxialCellsAndReturnsCoordinateOrder()
     {
         SpatialAuthorityStore store = CreateAuthoredFixture(reverseRegistrationOrder: true);
