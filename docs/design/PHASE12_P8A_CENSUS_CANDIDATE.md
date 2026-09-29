@@ -1,7 +1,7 @@
 # P12-B P8-A passive populated-geography census candidate
 
-**Status:** Implementation candidate; independent exact-tip review pending.
-P12-B remains incomplete and P12-A remains `WAIT_DEPENDENCY`.
+**Status:** Promoted to `codex/phase12/canonical` as a P12-B partial
+foundation. P12-B remains incomplete and P12-A remains `WAIT_DEPENDENCY`.
 
 **Branch:** `codex/phase12/P12BP8APopulatedWitnesses`.
 
@@ -13,6 +13,12 @@ review passed. The design record is `docs/design/PHASE12_P8A_CENSUS_DESIGN.md`.
 
 **Code-bearing candidate tip:** `9efba61` (provider/test commit `3bf0619`,
 followed by the shared-revision temporal test fix `9efba61`).
+
+**Promotion:** User-approved fast-forward from canonical
+`06145c7cbc258c56cc1be1a24adaa1751d32bc01` to the reviewed candidate tip
+`644bdae8ded1d8a938ec380370966ca6c235b881`. Independent exact-tip review
+passed; durable review evidence is branch
+`codex/phase12/P12BP8APopulatedReviewRecord` at `a401860`.
 
 ## Delivered boundary
 

@@ -34,10 +34,10 @@ or that runtime capture is restricted to a quiescent owner thread.
 
 | Obligation | Source evidence now available | Capability/evidence still required |
 |---|---|---|
-| Live owner/cardinality census | The selected-profile test runs normal genesis against `Simulation-GeneralTest.asset` and inspects the published runtime before day one. It verifies City/NPC, population, market, inventory, and spatial-knowledge cardinalities; Person/Genealogy zero; P8-A geography; P8-B–D exact-zero owner counts/revisions; owner-issued passive witnesses for P8-B/C/D and both receipt sections; and empty ActorChoice/directive/travel/expedition state. | This is still a partial live census: several directly observed collections have no owner revision/section-token API, and C roots plus some E/Justice owners are not published or censusable. The available passive witnesses are not registered as a complete profile inventory. Each included owner still needs exact identity, section/schema version, count, and revision in the capture provider. Source-derived counts cannot stand in for evolved state. |
+| Live owner/cardinality census | The selected-profile test runs normal genesis against `Simulation-GeneralTest.asset` and inspects the published runtime before day one. It verifies City/NPC, population, market, inventory, and spatial-knowledge cardinalities; Person/Genealogy zero; positive P8-A geography; P8-B–D exact-zero child-owner counts/revisions; owner-issued passive witnesses for P8-A–D and both receipt sections; and empty ActorChoice/directive/travel/expedition state. | This is still a partial live census: several directly observed collections have no owner revision/section-token API, and C roots beyond P8-A plus some E/Justice owners are not published or censusable. The available passive witnesses are not registered as a complete profile inventory. Each included owner still needs exact identity, section/schema version, count, and revision in the capture provider. Source-derived counts cannot stand in for evolved state. |
 | Committed-write invalidation | Successful mutation entrypoints are mapped below, including owner-local revisions and public bypasses. Multi-owner transactions, rollback-only paths, queries, plans and proposals are distinguished. | A successful authoritative commit must notify the one P12-B epoch after the owning commit (or whole multi-owner commit). Failed preflight and full rollback do not notify; a successful compensating write does. Prove every included public path is covered or no longer supported outside an instrumented boundary. |
 | Owner-thread/quiescence | Source audit finds synchronous `Start → InitializeSimulation` and `Update → Simulate` paths. The selected-profile EditMode test calls `Start()` directly and captures no `Update` frame or managed-thread identity. | Bind and verify the actual Unity runtime owner thread; track bootstrap, outer advance and supported in-flight multi-owner operations; reject capture during any scope or from a different thread. The direct EditMode bootstrap test and static absence of thread creation do not prove normal-frame affinity or exclude external callers. |
-| Runtime exact-zero witnesses | The profile has explicit exclusions and known conditional-empty sections. Composed-but-empty is distinct from not composed; passive owner witnesses now exist for P8-B/C/D and both receipt ledgers. | Complete the owner-backed inventory, add the remaining owner witnesses, and revalidate the full set after collection. Do not infer zero from scene startup, a skipped consumer, or a missing runtime reference. |
+| Runtime exact-zero witnesses | The profile has explicit exclusions and known conditional-empty sections. Composed-but-empty is distinct from not composed; passive owner witnesses now exist for P8-A–D and both receipt ledgers. P8-A is positively populated in the selected profile, while P8-B/C/D child sections and receipt ledgers are exact-zero. | Complete the owner-backed inventory, add the remaining owner witnesses, and revalidate the full set after collection. Do not infer zero from scene startup, a skipped consumer, or a missing runtime reference. |
 
 ## Selected-profile census targets
 
@@ -47,7 +47,7 @@ missing, duplicate, unsupported, or unversioned entries fail closed.
 
 | P12 owner group | Concrete selected-profile owners to witness | Important exactness / current gap |
 |---|---|---|
-| C — causal roots | `RuntimeIdAllocator` (14 per-kind counters), `RuntimeIdentityRegistry` (8 typed indexes), `SimulationRecordSequence`, concrete deterministic-random provider and use/stream state, P9-B genesis manifest/provenance, P8-A geography facts. | Allocator, registry, sequence and RNG lack complete census/export/hydration witnesses. P8-A has local revision/counts, but the composed spatial authority also owns P8-B–E child sections; their explicit empty state must be witnessed separately and cannot be inferred from P8-A’s positive cardinality. |
+| C — causal roots | `RuntimeIdAllocator` (14 per-kind counters), `RuntimeIdentityRegistry` (8 typed indexes), `SimulationRecordSequence`, concrete deterministic-random provider and use/stream state, P9-B genesis manifest/provenance, P8-A geography facts. | Allocator, registry, sequence and RNG lack complete census/export/hydration witnesses. P8-A now has passive local revision/count witnesses but still lacks export/hydration; the composed spatial authority also owns P8-B–E child sections, whose distinct states cannot be inferred from P8-A’s positive cardinality. |
 | D — factual roots | Runtime City and NPC roster/composite state; each City’s Market, accounts, inventories and Population; Person/Genealogy/lifecycle owners; legacy `SpatialNetworkRuntime`, `ExplorableSiteStore`, and their existing runtime-ID location/site links. | City/NPC have no composite revision. `Cities` and `ImportantNpcs` expose backing lists; legacy network exposes mutable collections. Person/lifecycle commits can span owners without a capture scope. Site identity is a root; exploration progress lives in expedition/Knowledge owners. |
 | E — official/core domains | Effective-config-selected City economy, transaction service and child accounts/inventories/markets; Merchant and Commercial Knowledge sharing; Justice/Crime/appraisal; composed political, institution, property/estate, armed-force/manpower/position, conflict/war/battle stores and enabled action providers. | Local guards/revisions are not a global invalidation epoch. Direct child or system mutators bypass coordinator-level evidence. Provider membership must follow resolved effective configuration, not the serialized module list. |
 | F — knowledge/commitments | Political/Crime and per-NPC exploration/adventure Knowledge; directives; default `ActorChoiceStore`; travel and party owners; `ExpeditionStore`/runtime/system. | Several per-NPC knowledge owners, directives, travel and expedition state lack complete revisions; expedition store exposes mutable runtime references. Actor-choice terminal history and sequence are causal continuation state. |
@@ -61,8 +61,11 @@ passed 1/1 using the real
 creates `TesteSimulacao`, calls `Start()`, and inspects the published
 `SimulationBootstrapComposition` before any day advance. It verifies:
 
-- P8-A runtime `SpatialAuthorityStore`: one Hex and one anchored Location,
-  with the selected profile's scale context and IDs.
+- P8-A runtime `SpatialAuthorityStore`: one Hex, one anchored Location and one
+  scale context at revision 1, with the selected profile's semantic IDs and
+  provenance. Promoted `p8a.hexes`, `p8a.locations`, and `p8a.scale-context`
+  witnesses report separate 1/1/1 cardinalities, installed owner identity,
+  and the shared spatial revision.
 - The two City and ten NPC roots; 1,800 aggregate population; ten market
   rows totaling 1,395 units; two NPC inventory rows totaling 8 units; and ten
   per-NPC spatial-Knowledge owners totaling 20 location observations and 10
@@ -85,7 +88,7 @@ creates `TesteSimulacao`, calls `Start()`, and inspects the published
   coordinator is not a retained census section. P10 `LocalTopologyStore` is
   not composed.
 
-The P8-B/C/D adapters produce section/schema owner witnesses, but none is
+The P8-A/B/C/D adapters produce section/schema owner witnesses, but none is
 registered in a complete P12-B runtime census. These reduce the live-evidence
 gap without closing the B inventory or section-registration requirement.
 
@@ -424,7 +427,7 @@ not add a second lease, global lock, or duplicate authoritative store.
    C/D/E/F writer matrix, source-level thread/quiescence limits, and zero-role
    classification. The selected-profile day-zero test now reads City/NPC,
    population, market, inventory, per-NPC spatial-Knowledge, Person/Genealogy,
-   P8-B–D, receipt, directive, ActorChoice, travel and expedition values from
+   P8-A–D, receipt, directive, ActorChoice, travel and expedition values from
    the published runtime. Hidden C roots and several E/Justice owners remain
    without census APIs; direct collection counts without a revision are not
    B witnesses. Independent exact-tip review must confirm the map omissions
@@ -564,11 +567,11 @@ identical. A zero count without a live owner and revision is not a witness.
 
 The complete **static** source map remains a bounded P12-B evidence artifact;
 it is not a complete live census or mutation-completeness proof. The owner-local
-receipt witnesses and P8-B/C/D witnesses described above are promoted on
-canonical. The live run verifies their exact-zero identities on the published
-day-zero runtime, but it does not invoke a Unity `Update` frame or establish
-thread ownership/quiescence. Other C/D/E/F owners and committed-write coverage
-remain incomplete.
+receipt witnesses and P8-A–D witnesses described above are promoted on
+canonical. The live run verifies P8-A positive cardinalities and P8-B/C/D
+exact-zero identities on the published day-zero runtime, but it does not
+invoke a Unity `Update` frame or establish thread ownership/quiescence. Other
+C/D/E/F owners and committed-write coverage remain incomplete.
 
 The follow-on `codex/phase12/P12BCoordinatorProtocol` candidate adds a
 standalone, non-admitting protocol kernel for versioned section requirements,
