@@ -20,12 +20,14 @@ and `DomainEventRecorder` receive that same object. Its private cursor starts at
 the expected live state is one sequence cursor at next value 1.
 
 Add one owner-issued passive census witness for that installed sequence. The
-provider reports schema version 1, the exact `SimulationRecordSequence`
-instance as owner identity, fixed cardinality 1 for the one sequence cursor,
-and a local revision equal to the number of successful sequence allocations.
-The owner can derive the exact next sequence value as `Revision + 1` while
-preserving its current allocation semantics. Keep the cursor private and do
-not expose a raw mutable sequence handle through the bootstrap composition.
+provider reports schema version 1, a stable opaque identity token owned by
+that exact `SimulationRecordSequence` instance, fixed cardinality 1 for the
+one sequence cursor, and a local revision equal to the number of successful
+sequence allocations. The owner can derive the exact next sequence value as
+`Revision + 1` while preserving its current allocation semantics. Keep both
+the cursor and the sequence object private to the existing bootstrap seam; do
+not let the public `OwnerInstanceIdentity` token be cast back to a mutable
+sequence handle.
 
 ## Owner and revision semantics
 
@@ -48,9 +50,11 @@ retained in either record store. No separate mutable revision field is needed:
 the current cursor exactly determines the monotone revision.
 
 The normal game bootstrap must publish a provider constructed from the same
-`recordSequence` field already passed to both recorders. Add a fixed
-`SimulationRecordSequenceCensusProvider` to the existing
-`SimulationBootstrapComposition` handoff and expose only its
+`recordSequence` field already passed to both recorders. The sequence owns a
+private stable census identity token; an internal read-only accessor may
+provide that token to the provider, but no public API returns the sequence
+owner itself. Add a fixed `SimulationRecordSequenceCensusProvider` to the
+existing `SimulationBootstrapComposition` handoff and expose only its
 `IOwnerSectionCensusProvider` interface. Use section ID
 `p12c.simulation-record-sequence`. Do not add a provider registry, change
 sequence allocation order, or treat independent demo/test sequences as part
@@ -58,9 +62,9 @@ of the selected game profile.
 
 ## Required tests
 
-1. On a fresh sequence, assert one section, schema 1, exact owner identity,
-   cardinality 1, and revision 0. Repeated reads remain stable and do not
-   allocate.
+1. On a fresh sequence, assert one section, schema 1, a stable opaque owner
+   token that is not the mutable sequence object, cardinality 1, and revision
+   0. Repeated reads remain stable and do not allocate.
 2. Allocate multiple values and assert values remain consecutive while the
    witness revision advances once per successful allocation.
 3. Use one shared test sequence with the existing decision and event
@@ -73,14 +77,18 @@ of the selected game profile.
    current semantics.
 5. At exhaustion, assert `Allocate()` fails without changing the witness.
 6. In the selected-profile bootstrap test, assert the published witness has
-   the expected installed-owner identity on repeated reads, cardinality 1,
-   and revision 0 before day one.
+   the stable opaque identity token on repeated reads, cardinality 1, and
+   revision 0 before day one. Source wiring must show that the provider was
+   constructed from the same private sequence field supplied to both recorders.
 
 The existing `CoreRuntimeTests.RecordSequence_SharesOneMonotonicSequenceAcrossDecisionsAndEvents`
-continues to cover consecutive record sequence values. Extend the most
-relevant existing test class or add a focused test file without changing
-`SimulationRuntime`, `SimulationTime`, P18's advance lease, or P11 choice
-behavior.
+currently calls `Allocate()` three times directly; its name does not establish
+that the decision and event recorders share the installed owner. Required
+test 3 must record one real decision and one real event through those recorders
+using a single test sequence, then assert their values and the provider's
+shared revision. Extend the most relevant existing test class or add a
+focused test file without changing `SimulationRuntime`, `SimulationTime`,
+P18's advance lease, or P11 choice behavior.
 
 ## Exclusions and readiness
 
