@@ -237,6 +237,10 @@ public sealed class MerchantBoundaryOwnerStepTests
         BoundaryContinuationManifest manifest = new BoundaryContinuationManifest(
             operation, "daily-boundary", "1", "configuration/v1", new[] { step }, "content/v1");
 
+        OwnerSectionCensusWitness emptyReceiptCensus = records.DecisionRecorder.GetOccurrenceReceiptCensus();
+        Assert.That(emptyReceiptCensus.Cardinality, Is.Zero);
+        Assert.That(emptyReceiptCensus.Revision, Is.Zero);
+
         Assert.That(system.TryAdvanceNpcTradeStateOccurrence(merchant, manifest, step,
             out NpcMerchantTradeStateReceipt receipt, out TimelineFailure failure), Is.True,
             failure.ToString());
@@ -246,6 +250,10 @@ public sealed class MerchantBoundaryOwnerStepTests
         Assert.That(merchant.TravelPlan.TargetCity, Is.SameAs(world.B));
         Assert.That(records.Decisions.Decisions.Count, Is.EqualTo(1));
         Assert.That(records.Decisions.Decisions[0].DecisionType, Is.EqualTo(NpcDecisionType.TradeRedirect));
+        OwnerSectionCensusWitness committedReceiptCensus = records.DecisionRecorder.GetOccurrenceReceiptCensus();
+        Assert.That(committedReceiptCensus.OwnerInstanceIdentity, Is.SameAs(emptyReceiptCensus.OwnerInstanceIdentity));
+        Assert.That(committedReceiptCensus.Cardinality, Is.EqualTo(1));
+        Assert.That(committedReceiptCensus.Revision, Is.EqualTo(1L));
         string firstLog = logger.FullLog;
         Assert.That(firstLog, Does.Contain("mudou o destino"));
 
@@ -256,6 +264,10 @@ public sealed class MerchantBoundaryOwnerStepTests
         Assert.That(replay, Is.Not.Null);
         Assert.That(merchant.MerchantTradePlan.TargetCity, Is.SameAs(world.B));
         Assert.That(records.Decisions.Decisions.Count, Is.EqualTo(1));
+        OwnerSectionCensusWitness replayedReceiptCensus = records.DecisionRecorder.GetOccurrenceReceiptCensus();
+        Assert.That(replayedReceiptCensus.OwnerInstanceIdentity, Is.SameAs(committedReceiptCensus.OwnerInstanceIdentity));
+        Assert.That(replayedReceiptCensus.Cardinality, Is.EqualTo(committedReceiptCensus.Cardinality));
+        Assert.That(replayedReceiptCensus.Revision, Is.EqualTo(committedReceiptCensus.Revision));
         Assert.That(logger.FullLog, Is.EqualTo(firstLog));
     }
 

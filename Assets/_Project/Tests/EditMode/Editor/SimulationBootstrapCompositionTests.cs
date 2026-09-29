@@ -192,6 +192,15 @@ public sealed class SimulationBootstrapCompositionTests
 
         SpatialAuthorityStore authority = simulation.Bootstrap.SpatialAuthority;
         Assert.That(simulation.Bootstrap.ProfileContractIdentity, Is.EqualTo(SimulationGenesisPipeline.GeographyProfileContractIdentity));
+        OwnerSectionCensusWitness occurrenceReceipts = simulation.Bootstrap.GetNpcDecisionOccurrenceReceiptCensus();
+        Assert.That(occurrenceReceipts.SectionId, Is.EqualTo(NpcDecisionRecorder.OccurrenceReceiptSectionId));
+        Assert.That(occurrenceReceipts.SchemaVersion, Is.EqualTo(NpcDecisionRecorder.OccurrenceReceiptSectionSchemaVersion));
+        Assert.That(occurrenceReceipts.Cardinality, Is.Zero,
+            "The selected daily profile composes the recorder but not the P18-D receipt writer.");
+        Assert.That(occurrenceReceipts.Revision, Is.Zero);
+        OwnerSectionCensusWitness repeatedOccurrenceReceipts = simulation.Bootstrap.GetNpcDecisionOccurrenceReceiptCensus();
+        Assert.That(repeatedOccurrenceReceipts.OwnerInstanceIdentity, Is.SameAs(occurrenceReceipts.OwnerInstanceIdentity));
+        Assert.That(repeatedOccurrenceReceipts.Revision, Is.EqualTo(occurrenceReceipts.Revision));
         Assert.That(simulation.Runtime.ActorChoiceStore, Is.Not.Null,
             "The promoted P9-B bootstrap must retain the P11 actor-choice authority in the composed runtime.");
         Assert.That(authority.HexCount, Is.EqualTo(1));

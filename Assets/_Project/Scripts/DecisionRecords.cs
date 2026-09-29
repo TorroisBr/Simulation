@@ -664,15 +664,53 @@ public sealed class NpcDecisionStore
     }
 }
 
+/// <summary>
+/// Ephemeral owner-issued cardinality evidence. This witness is not owner state
+/// export and its owner identity is valid only for the live runtime instance.
+/// </summary>
+public sealed class OwnerSectionCensusWitness
+{
+    internal OwnerSectionCensusWitness(
+        string sectionId,
+        int schemaVersion,
+        object ownerInstanceIdentity,
+        int cardinality,
+        long revision)
+    {
+        if (string.IsNullOrWhiteSpace(sectionId)) throw new ArgumentException("Section identity is required.", nameof(sectionId));
+        if (schemaVersion <= 0) throw new ArgumentOutOfRangeException(nameof(schemaVersion));
+        OwnerInstanceIdentity = ownerInstanceIdentity ?? throw new ArgumentNullException(nameof(ownerInstanceIdentity));
+        if (cardinality < 0) throw new ArgumentOutOfRangeException(nameof(cardinality));
+        if (revision < 0L) throw new ArgumentOutOfRangeException(nameof(revision));
+
+        SectionId = sectionId;
+        SchemaVersion = schemaVersion;
+        Cardinality = cardinality;
+        Revision = revision;
+    }
+
+    public string SectionId { get; }
+    public int SchemaVersion { get; }
+    /// <summary>Opaque reference-identity token; it is not serialized or persisted.</summary>
+    public object OwnerInstanceIdentity { get; }
+    public int Cardinality { get; }
+    public long Revision { get; }
+}
+
 public sealed class NpcDecisionRecorder
 {
+    public const string OccurrenceReceiptSectionId = "p12f.npc-decision-occurrence-receipts";
+    public const int OccurrenceReceiptSectionSchemaVersion = 1;
+
     private readonly RuntimeIdAllocator idAllocator;
     private readonly SimulationTime simulationTime;
     private readonly SimulationRecordSequence recordSequence;
     private readonly NpcDecisionStore decisionStore;
     private readonly SimulationLogger logger;
+    private readonly object occurrenceReceiptsOwnerIdentity = new object();
     private readonly Dictionary<string, NpcDecisionOccurrenceReceipt> occurrenceReceipts =
         new Dictionary<string, NpcDecisionOccurrenceReceipt>(StringComparer.Ordinal);
+    private long occurrenceReceiptsRevision;
 
     public NpcDecisionRecorder(
         RuntimeIdAllocator idAllocator,
@@ -686,6 +724,20 @@ public sealed class NpcDecisionRecorder
         this.recordSequence = recordSequence ?? throw new ArgumentNullException(nameof(recordSequence));
         this.decisionStore = decisionStore ?? throw new ArgumentNullException(nameof(decisionStore));
         this.logger = logger ?? new SimulationLogger(null);
+    }
+
+    /// <summary>
+    /// Reports the exact live cardinality and revision of the recorder-owned
+    /// idempotency receipt section. This is census evidence only, not an export.
+    /// </summary>
+    public OwnerSectionCensusWitness GetOccurrenceReceiptCensus()
+    {
+        return new OwnerSectionCensusWitness(
+            OccurrenceReceiptSectionId,
+            OccurrenceReceiptSectionSchemaVersion,
+            occurrenceReceiptsOwnerIdentity,
+            occurrenceReceipts.Count,
+            occurrenceReceiptsRevision);
     }
 
     public NpcDecisionRecord RecordChosenAction(NpcRuntime actor, NpcActionRuntime actionRuntime, NpcDecisionOrigin origin)
@@ -819,6 +871,9 @@ public sealed class NpcDecisionRecorder
             return true;
         }
 
+        if (occurrenceReceiptsRevision == long.MaxValue) return false;
+        long nextReceiptRevision = occurrenceReceiptsRevision + 1L;
+
         try
         {
             NpcDecisionRecord candidate = new NpcDecisionRecord(
@@ -831,6 +886,7 @@ public sealed class NpcDecisionRecorder
             NpcDecisionOccurrenceReceipt receipt = new NpcDecisionOccurrenceReceipt(
                 operationIdentity, operationFingerprint, candidate);
             occurrenceReceipts.Add(operationIdentity, receipt);
+            occurrenceReceiptsRevision = nextReceiptRevision;
             decision = candidate;
             return true;
         }

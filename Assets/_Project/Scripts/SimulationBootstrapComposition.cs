@@ -1,6 +1,8 @@
 /// <summary>Single public handoff for a fully constructed authored bootstrap.</summary>
 public sealed class SimulationBootstrapComposition
 {
+    private readonly NpcDecisionRecorder decisionRecorder;
+
     internal SimulationBootstrapComposition(
         SimulationGenesisManifest manifest,
         SimulationTime time,
@@ -10,6 +12,7 @@ public sealed class SimulationBootstrapComposition
         HistoryStore history,
         ScheduledDirectiveStore directives,
         NpcDecisionStore decisions,
+        NpcDecisionRecorder decisionRecorder,
         NpcChronicleService chronicles,
         NpcChronicleFormatter chronicleFormatter,
         TravelPartyStore travelParties,
@@ -27,6 +30,7 @@ public sealed class SimulationBootstrapComposition
         History = history;
         ScheduledDirectives = directives;
         Decisions = decisions;
+        this.decisionRecorder = decisionRecorder ?? throw new System.ArgumentNullException(nameof(decisionRecorder));
         NpcChronicles = chronicles;
         ChronicleFormatter = chronicleFormatter;
         TravelParties = travelParties;
@@ -47,6 +51,12 @@ public sealed class SimulationBootstrapComposition
     public HistoryStore History { get; }
     public ScheduledDirectiveStore ScheduledDirectives { get; }
     public NpcDecisionStore Decisions { get; }
+    /// <summary>Returns an owner-issued live census witness, not a decision-record export.</summary>
+    public OwnerSectionCensusWitness GetNpcDecisionOccurrenceReceiptCensus()
+    {
+        return decisionRecorder.GetOccurrenceReceiptCensus();
+    }
+
     public NpcChronicleService NpcChronicles { get; }
     public NpcChronicleFormatter ChronicleFormatter { get; }
     public TravelPartyStore TravelParties { get; }
