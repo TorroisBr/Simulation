@@ -66,6 +66,6 @@ commit. It is not the shared P12-B mutation epoch.
   complete P12-B/P12-A readiness.
 
 The selected-profile owner and method paths were read from canonical
-`SpatialAuthorityStore.cs` / `SpatialPassageAuthority.cs` and the existing
+`SpatialAuthority.cs` / `SpatialPassageAuthority.cs` and the existing
 P8-B EditMode suites. P8-B's provider reads remain unsynchronized and are not
 usable for capture before P12-B's owner-thread/quiescence gate is established.
