@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using UnityEngine;
 
 [Serializable]
@@ -9,11 +10,17 @@ public sealed class SpatialKnowledgeRuntime
     [SerializeField] private List<string> knownLocationRuntimeIds = new List<string>();
     [SerializeField] private List<string> knownRouteRuntimeIds = new List<string>();
     [SerializeField] private long revision;
+    private ReadOnlyCollection<string> knownLocationRuntimeIdsView;
+    private ReadOnlyCollection<string> knownRouteRuntimeIdsView;
 
     public string OwnerRuntimeId => ownerRuntimeId;
-    public IReadOnlyList<string> KnownLocationRuntimeIds => KnownLocations;
-    public IReadOnlyList<string> KnownRouteRuntimeIds => KnownRoutes;
+    public IReadOnlyList<string> KnownLocationRuntimeIds =>
+        knownLocationRuntimeIdsView ?? (knownLocationRuntimeIdsView = KnownLocations.AsReadOnly());
+    public IReadOnlyList<string> KnownRouteRuntimeIds =>
+        knownRouteRuntimeIdsView ?? (knownRouteRuntimeIdsView = KnownRoutes.AsReadOnly());
     public long Revision => revision;
+    internal int KnownLocationCount => KnownLocations.Count;
+    internal int KnownRouteCount => KnownRoutes.Count;
 
     private List<string> KnownLocations => knownLocationRuntimeIds ?? (knownLocationRuntimeIds = new List<string>());
     private List<string> KnownRoutes => knownRouteRuntimeIds ?? (knownRouteRuntimeIds = new List<string>());
@@ -110,8 +117,13 @@ public sealed class SpatialKnowledgeRuntime
             return false;
         }
 
+        if (revision == long.MaxValue)
+        {
+            return false;
+        }
+
         ids.Add(runtimeId);
-        if (revision < long.MaxValue) revision++;
+        revision++;
         return true;
     }
 

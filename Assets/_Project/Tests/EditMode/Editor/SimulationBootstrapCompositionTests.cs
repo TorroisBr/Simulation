@@ -233,6 +233,7 @@ public sealed class SimulationBootstrapCompositionTests
             Assert.That(repeatedIdentityWitnesses[i].Revision, Is.EqualTo(16L));
         }
 
+        SimulationRuntime runtime = simulation.Bootstrap.Runtime;
         IReadOnlyList<IOwnerSectionCensusProvider> spatialNetworkProviders =
             simulation.Bootstrap.SpatialNetworkCensusProviders;
         string[] spatialNetworkSectionIds =
@@ -251,6 +252,34 @@ public sealed class SimulationBootstrapCompositionTests
             Assert.That(witness.OwnerInstanceIdentity, Is.Not.SameAs(runtimeIdentityOwner));
             Assert.That(witness.Cardinality, Is.EqualTo(expectedSpatialNetworkCardinalities[i]));
             Assert.That(witness.Revision, Is.EqualTo(4L));
+        }
+
+        IReadOnlyList<IOwnerSectionCensusProvider> spatialKnowledgeProviders =
+            simulation.Bootstrap.SpatialKnowledgeCensusProviders;
+        string[] expectedSpatialKnowledgeSectionIds = runtime.NpcRuntimes
+            .OrderBy(npc => npc.RuntimeId, System.StringComparer.Ordinal)
+            .SelectMany(npc => new[]
+            {
+                SpatialKnowledgeCensusProvider.LocationsSectionPrefix + npc.RuntimeId,
+                SpatialKnowledgeCensusProvider.RoutesSectionPrefix + npc.RuntimeId
+            })
+            .ToArray();
+        Assert.That(spatialKnowledgeProviders.Count, Is.EqualTo(20));
+        Assert.That(spatialKnowledgeProviders.Select(provider => provider.GetCurrentCensus().SectionId),
+            Is.EqualTo(expectedSpatialKnowledgeSectionIds));
+        for (int i = 0; i < runtime.NpcRuntimes.Count; i++)
+        {
+            NpcRuntime npc = runtime.NpcRuntimes[i];
+            OwnerSectionCensusWitness locationWitness = spatialKnowledgeProviders[i * 2].GetCurrentCensus();
+            OwnerSectionCensusWitness routeWitness = spatialKnowledgeProviders[i * 2 + 1].GetCurrentCensus();
+            Assert.That(locationWitness.SchemaVersion, Is.EqualTo(SpatialKnowledgeCensusProvider.SchemaVersion));
+            Assert.That(routeWitness.SchemaVersion, Is.EqualTo(SpatialKnowledgeCensusProvider.SchemaVersion));
+            Assert.That(locationWitness.OwnerInstanceIdentity, Is.SameAs(npc.SpatialKnowledge));
+            Assert.That(routeWitness.OwnerInstanceIdentity, Is.SameAs(npc.SpatialKnowledge));
+            Assert.That(locationWitness.Cardinality, Is.EqualTo(2));
+            Assert.That(routeWitness.Cardinality, Is.EqualTo(1));
+            Assert.That(locationWitness.Revision, Is.EqualTo(3L));
+            Assert.That(routeWitness.Revision, Is.EqualTo(locationWitness.Revision));
         }
 
         OwnerSectionCensusWitness recordSequenceCensus =
@@ -561,7 +590,6 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(authority.ScaleContext.SourceVersion, Is.EqualTo("1"));
         Assert.That(authority.ScaleContext.DistancePerNeighborStep, Is.EqualTo(1m));
         Assert.That(authority.ScaleContext.Unit, Is.EqualTo("km"));
-        SimulationRuntime runtime = simulation.Bootstrap.Runtime;
         Assert.That(runtime.Cities, Has.Count.EqualTo(2));
         Assert.That(runtime.NpcRuntimes, Has.Count.EqualTo(10));
         Assert.That(runtime.PersonStore.Persons, Is.Empty);
