@@ -8,8 +8,11 @@ public sealed class ExplorableSiteStore : IAuthoritativeMutationGuardBindable
     private readonly Dictionary<string, ExplorableSiteRuntime> sitesByRuntimeId =
         new Dictionary<string, ExplorableSiteRuntime>(StringComparer.Ordinal);
     private readonly IReadOnlyList<ExplorableSiteRuntime> readOnlySites;
+    private long revision;
 
     public IReadOnlyList<ExplorableSiteRuntime> Sites => readOnlySites;
+    public int Count => sites.Count;
+    public long Revision => revision;
 
     public ExplorableSiteStore()
     {
@@ -27,8 +30,14 @@ public sealed class ExplorableSiteStore : IAuthoritativeMutationGuardBindable
             return false;
         }
 
+        if (revision == long.MaxValue)
+        {
+            return false;
+        }
+
         sitesByRuntimeId.Add(site.RuntimeId, site);
         sites.Add(site);
+        revision++;
         return true;
     }
 
