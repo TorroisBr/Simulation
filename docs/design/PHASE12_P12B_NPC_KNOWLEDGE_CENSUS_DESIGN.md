@@ -1,7 +1,9 @@
 # P12-B Per-NPC Knowledge Census Design
 
-**Status:** reviewed-design proposal; no implementation or readiness claim  
-**Canonical design base:** `e9ced8e451f42e80ed2132ce494cd5c26e439894`  
+**Status:** reviewed-design proposal; no implementation or readiness claim
+
+**Canonical design base:** `e9ced8e451f42e80ed2132ce494cd5c26e439894`
+
 **Scope:** passive live census of selected per-`NpcRuntime` Knowledge owners for P12-B.
 
 ## Decision
