@@ -1,7 +1,7 @@
 # P12-E Institution and Office Census Design
 
-**Status:** Proposed bounded P12-B live-owner/cardinality evidence; independent
-exact-tip design review pending.
+**Status:** Design review passed; bounded P12-B live-owner/cardinality
+implementation may proceed under accepted capability authorization.
 
 **Base:** property census candidate
 `codex/phase12/P12EPropertyCensus` at
@@ -19,10 +19,10 @@ an absent or excluded section. Publish four required schema-v1 sections:
 
 | Section | Exact installed owner | Cardinality | Revision |
 |---|---|---|---|
-| `p12e.institution.records` | `Runtime.InstitutionStore` | institution record count | `InstitutionStore.Revision` |
-| `p12e.office.records` | `Runtime.OfficeStore` | office record count | `OfficeStore.Revision` |
-| `p12e.office.incumbencies` | `Runtime.OfficeStore` | active incumbency count | `OfficeStore.Revision` |
-| `p12e.office.tenures` | `Runtime.OfficeStore` | all retained tenure records, open and closed | `OfficeStore.Revision` |
+| `p12e.institution.records` | `Runtime.InstitutionStoreForWorldBoundary` | institution record count | `InstitutionStore.Revision` |
+| `p12e.office.records` | `Runtime.OfficeStoreForWorldBoundary` | office record count | `OfficeStore.Revision` |
+| `p12e.office.incumbencies` | `Runtime.OfficeStoreForWorldBoundary` | active incumbency count | `OfficeStore.Revision` |
+| `p12e.office.tenures` | `Runtime.OfficeStoreForWorldBoundary` | all retained tenure records, open and closed | `OfficeStore.Revision` |
 
 Office rows, active incumbencies, and tenure rows are separate cardinalities
 from one authority and therefore share its exact owner identity and revision.
@@ -32,9 +32,11 @@ changes authoritative content even though tenure cardinality remains
 constant. A local revision is required to witness that change.
 
 Providers must be constructed from the runtime-installed stores after normal
-composition. `Runtime.OfficeStore` must remain the installed child of the
-installed `Runtime.InstitutionStore`; source constructor inputs and public
-snapshot copies are not the witness owner.
+composition using the existing in-assembly
+`Runtime.InstitutionStoreForWorldBoundary` and
+`Runtime.OfficeStoreForWorldBoundary` accessors. The installed office owner
+must remain the child of the installed institution owner; source constructor
+inputs and public snapshot copies are not the witness owner.
 
 ## Bounded revision capability
 
@@ -50,7 +52,8 @@ commit paths:
 | `OfficeStore.TryVacateOffice` success | incumbencies −1; tenure row is closed in place | +1 once for the logical store commit |
 | `OfficeStore.TryAddHistoricalTenure` success during runtime-clone construction | tenures +1 | +1 on the newly constructed owner |
 
-All rejected/faulted operations leave cardinalities and revisions unchanged.
+All normal returned rejected/faulted operations leave cardinalities and
+revisions unchanged. This does not claim process-level exception rollback.
 Check revision capacity before the first write in each mutation so overflow
 cannot leave partial owner state; add the minimal `RevisionOverflow` failure
 code to the existing institution foundation failure contract. One successful
@@ -58,7 +61,9 @@ store commit advances its own revision once even when multiple owned facts
 change. If a higher-level operation commits more than once to the same owner,
 each committed store operation advances the local revision; the later shared
 P12-B epoch must still notify once only after the enclosing operation's full
-commit. Keep `PoliticalWorldRevision` separate.
+commit. When that epoch is wired, every OfficeStore commit must update all
+three section baselines sharing its revision, even if only one cardinality
+changes. Keep `PoliticalWorldRevision` separate.
 
 Runtime construction rebuilds owners by replaying institution and office
 registrations, active incumbencies, and closed tenures through existing store
