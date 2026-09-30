@@ -48,13 +48,17 @@ the reviewer confirmed these reported results and separately ran
 
 | Gate | Result | XML |
 |---|---:|---|
-| `SpatialNetworkCensusTests` | 7/7 | `Temp/ValidationResults/EditMode-20260930-161450-148478f5ed6a48e2b57043f6b84c1022.xml` |
-| ALL EditMode | 2015/2015 | `Temp/ValidationResults/EditMode-20260930-161513-e2fe68953b664eeba0664f5513d1e068.xml` |
-| Official complete Smoke filter | 5/5 | `Temp/ValidationResults/EditMode-20260930-161555-54ec14262f714eef82e6784f077c5872.xml` |
+| `SpatialNetworkCensusTests` | 7/7 | `Library/ValidationResults/P12BSpatialNetwork/EditMode-20260930-162210-2a714bab7097400091839da334e354d9.xml` |
+| ALL EditMode | 2015/2015 | `Library/ValidationResults/P12BSpatialNetwork/EditMode-20260930-162238-16453693433948e786c41671326678ab.xml` |
+| Official complete Smoke filter | 5/5 | `Library/ValidationResults/P12BSpatialNetwork/EditMode-20260930-162320-206b1d533ccd49db959886a7a2018055.xml` |
 
 The ALL EditMode run includes the observer read-model and diagnostics
-regressions. Unity logs and XMLs remain in the candidate worktree and are not
-committed as source artifacts.
+regressions. The first results had been written to the harness's temporary
+results directory, which did not retain the focused and full-suite XMLs across
+later runs. All three gates were rerun on the unchanged code-bearing tip with
+the dedicated `Library/ValidationResults/P12BSpatialNetwork` output directory.
+The XMLs and logs are present in the candidate worktree at the paths above;
+they are validation artifacts and are not committed as source files.
 
 ## Scope limits
 
