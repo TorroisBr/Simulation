@@ -64,6 +64,7 @@ public sealed class SimulationBootstrapComposition
         GenealogyCensusProvider = new GenealogyCensusProvider(Runtime.GenealogyStoreForWorldBoundary);
         ExplorableSites = sites;
         ExplorableSiteCensusProvider = new ExplorableSiteCensusProvider(ExplorableSites);
+        SettlementPopulationCensusProviders = SettlementPopulationCensusProvider.CreateProviders(Runtime.Cities);
         Expeditions = expeditions;
         ExpeditionSystem = expeditionSystem;
     }
@@ -133,6 +134,9 @@ public sealed class SimulationBootstrapComposition
     /// <summary>Passive witness for the authored bootstrap's installed
     /// ExplorableSite owner.</summary>
     public ExplorableSiteCensusProvider ExplorableSiteCensusProvider { get; }
+    /// <summary>Fixed passive witnesses for the installed population owners
+    /// of the composed Cities.</summary>
+    public IReadOnlyList<IOwnerSectionCensusProvider> SettlementPopulationCensusProviders { get; }
     public ExpeditionStore Expeditions { get; }
     public ExpeditionSystem ExpeditionSystem { get; }
 }

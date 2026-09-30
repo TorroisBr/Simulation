@@ -51,13 +51,19 @@ public sealed class SettlementPopulationCensusTests
         Assert.That(cities.Select(city => city.Population.CurrentPopulation), Is.EquivalentTo(new[] { 1000, 800 }));
 
         IReadOnlyList<IOwnerSectionCensusProvider> providers =
-            SettlementPopulationCensusProvider.CreateProviders(cities);
+            simulation.Bootstrap.SettlementPopulationCensusProviders;
         Assert.That(providers, Has.Count.EqualTo(4));
         CityRuntime[] orderedCities = cities.OrderBy(city => city.RuntimeId, System.StringComparer.Ordinal).ToArray();
         for (int cityIndex = 0; cityIndex < orderedCities.Length; cityIndex++)
         {
             AssertInitialPair(providers[cityIndex * 2], providers[cityIndex * 2 + 1], orderedCities[cityIndex]);
         }
+
+        OwnerSectionCensusWitness genealogy = simulation.Bootstrap.GenealogyCensusProvider.GetCurrentCensus();
+        Assert.That(genealogy.SectionId, Is.EqualTo(GenealogyCensusProvider.SectionId));
+        Assert.That(genealogy.OwnerInstanceIdentity, Is.Not.Null);
+        Assert.That(genealogy.Cardinality, Is.Zero);
+        Assert.That(genealogy.Revision, Is.Zero);
     }
 
     [Test]
