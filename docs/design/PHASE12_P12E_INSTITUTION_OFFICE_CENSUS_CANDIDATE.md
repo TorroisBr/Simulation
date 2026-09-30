@@ -9,10 +9,10 @@ promotion has not occurred.
 
 **Exact candidate tip:** `35ec9887add812922908d1f402d02d5db3500d44`.
 Independent integration review passed on that exact tip against canonical
-base `69f456d5e3c6d6f7e4b85b36e98968ced0549bf3`; the only commit after the
-code tip is documentation-only. The review found no code, scope, or
-revalidation findings. It did not rerun Unity tests; the exact code tree's
-validation results are listed below.
+base `69f456d5e3c6d6f7e4b85b36e98968ced0549bf3`. The commits after the code
+tip through the reviewed candidate tip are documentation-only. The review
+found no code, scope, or revalidation findings. It did not rerun Unity tests;
+the exact code tree's validation results are listed below.
 
 **Design:** `PHASE12_P12E_INSTITUTION_OFFICE_CENSUS_DESIGN.md`, proposed at
 `e22b8b3` and design-reviewed at `db36087`.
