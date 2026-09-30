@@ -1,13 +1,15 @@
 # P12-B TravelParty owner census design
 
-**Status:** Revised after independent re-review; awaiting exact-tip re-review. This is a
-bounded owner-census sub-capability within the accepted P12-B scope. It adds
+**Status:** Refreshed after Inventory promotion and review feedback; awaiting
+exact-tip technical-design re-review. This is a bounded owner-census
+sub-capability within the accepted P12-B scope. It adds
 no checkpoint ID, product behavior, capture eligibility, or readiness claim.
 It is a design artifact only; implementation follows the accepted P12-B
 review gates and the dependency order below.
 
 **Canonical base:** `codex/phase12/canonical` at
-`f961477380508647d2975272da72d96892944ed9`.
+`e9ced8e451f42e80ed2132ce494cd5c26e439894`, including the promoted per-NPC
+Inventory provider at `15e5a543f3896c02f9dbd9c36c9ba75bc90dac2b`.
 
 **Scope authority:** `docs/phases/PHASE12_BRIEF.md`, the accepted
 `docs/design/PHASE12_CAPABILITY_CHECKPOINT_DECOMPOSITION.md`, and the current
@@ -93,8 +95,10 @@ Implement one private, reentrant store-local mutation monitor. Every public
 both index updates, and revision increment. An internal disposable mutation
 window enters the same monitor and is held across compound operations:
 
-- `TravelPartySystem.TryStartTravelParty` holds the window from before its
-  two-commit capacity check through success or any store compensation.
+- `TravelPartySystem.TryStartTravelParty` holds the window after the mutation
+  guard check and before `TryPrepareTravel` reads party membership, through
+  success or any store compensation. The two-commit capacity check occurs
+  before ID allocation, member mutation, cost charging, or event recording.
 - `TravelPartySystem.AdvanceParties` holds it from the active-party snapshot
   through all party progress and `Complete` commits. Its final-arrival
   capacity check stays before the first member progress mutation.
@@ -172,12 +176,16 @@ Add focused `TravelPartyCensusTests` for the provider and owner lifecycle:
    one store revision increment. Intermediate travel-day progress does not
    change party-store membership/revision. Successful arrival removes the party
    and increments revision once.
-8. Hold the internal mutation window on one thread and attempt a public store
-   Add/Remove from another; prove that writer cannot change count or revision
-   until the compound window releases, after which it proceeds normally.
-   Exercise event-record and Expedition return-association compensation at the
-   saturation boundary while their enclosing window is held; each must either
-   complete both store commits or reject before member/cost side effects.
+8. Hold the internal mutation window on one thread and attempt each public
+   store Add, Complete, and Remove from another; prove the writer cannot change
+   count or revision until the compound window releases, after which it
+   proceeds normally. At the saturation boundary, exercise both event-record
+   compensation and the Expedition return-association compensation while their
+   enclosing window is held. Assert only that each reachable store Add plus
+   Remove either commits both revisions or rejects before store mutation. The
+   current Expedition failure branch does not roll back NPC travel fields or
+   costs after nested party start succeeds; this census slice does not claim
+   full cross-owner rollback.
 
 Use existing `GroupTravelTests` fixtures and invariants where they make the
 outer commit path easier to exercise; do not change travel requirements to
@@ -213,14 +221,20 @@ not make its backing list synchronized or provide a detached snapshot.
 
 ## 5. Integration order, ownership, and dependencies
 
-**Hard integration prerequisite:** complete and promote the in-flight NPC
-Inventory census work's shared P12-B protocol/provider-composition API first.
-Refresh this design against that exact canonical tip, reuse its owner-section
-contract and registration path, and avoid a competing edit to the shared
-composition surface. The Store-local counter/provider may be developed only
-under a separately isolated ownership window after that integration boundary
-is canonical. Do not register an alternate coordinator, mutation epoch, or
-capture path.
+**Inventory integration prerequisite satisfied:** canonical `15e5a54`
+provides `IOwnerSectionCensusProvider`, `OwnerSectionCensusWitness`, and the
+roster-family provider exposure used by the accepted P12-B census work. The
+roster protocol's expected-section/provider inventory is sealed and scoped to
+NPC/Person membership, SpatialKnowledge, and per-NPC Inventory; do not extend
+that protocol with the unrelated TravelParty section or edit its shared
+reconciliation path. Add one fixed `TravelPartyCensusProvider` from the exact
+`TravelPartyStore` already owned by `SimulationBootstrapComposition`, using
+the existing fixed-provider exposure pattern. This provider remains passive
+and does not claim registration in a complete profile-census inventory.
+
+The Store-local counter/provider and lock may now be developed in a separately
+isolated ownership window. Do not register an alternate coordinator, mutation
+epoch, or capture path.
 
 Proposed implementation ownership after that prerequisite:
 
@@ -232,13 +246,22 @@ Proposed implementation ownership after that prerequisite:
 - New `Assets/_Project/Scripts/TravelPartyCensusProvider.cs`: the passive
   schema-v1 adapter over the exact installed `TravelPartyStore`.
 - `Assets/_Project/Scripts/SimulationBootstrapComposition.cs`: publish the
-  fixed provider from the already-composed store, only after Inventory's
-  shared protocol/composition changes are canonical.
+  fixed provider from the already-composed store and assert exact identity
+  with `GroupTravel.Store`.
+- `Assets/_Project/Scripts/ExpeditionSystem.cs`: hold the same store-local
+  mutation window across `TryBeginReturn`'s state transition, nested party
+  start, association, and possible store compensation. Validate that the
+  `TravelPartyStore` passed to `ExpeditionSystem` is reference-identical to
+  the store exposed by its `TravelPartySystem`; reject an invalid split-owner
+  composition before runtime use. Include the affected expedition construction
+  and return-path tests.
 - New `Assets/_Project/Tests/EditMode/Editor/TravelPartyCensusTests.cs`, plus
-  narrow additions to `SimulationBootstrapCompositionTests.cs` and
-  `GroupTravelTests.cs` as needed. Do not edit `SimulationRuntime.cs`,
-  `SimulationTime.cs`, P18's advance lease, or the broader persistence
-  composition in this slice.
+  narrow additions to `SimulationBootstrapCompositionTests.cs`,
+  `GroupTravelTests.cs`, and the relevant `ExpeditionSystem` tests. Assert the
+  selected bootstrap exposes the same store to census and group travel, and
+  verify `ExpeditionSystem` rejects a mismatched store in construction. Do not edit `SimulationRuntime.cs`,
+  `SimulationTime.cs`, `ContinuationCensusProtocol.cs`, P18's advance lease, or
+  the broader persistence composition in this slice.
 
 Relevant current source evidence at the exact base:
 
@@ -261,7 +284,10 @@ Relevant current source evidence at the exact base:
   before any member or cost changes. The Expedition branch uses that same
   spare commit capacity if association fails. Do not require a third slot:
   successful event recording and failed return association are mutually
-  exclusive outcomes of the start call.
+  exclusive outcomes of the start call. The current failure branch removes
+  the party but does not roll back NPC travel fields or costs after nested
+  party start succeeds; this slice verifies only store count/revision
+  compensation and does not claim full cross-owner Expedition rollback.
 - `TravelParty.cs:627-659` and `SimulationRuntime.cs:455,1050`: party system and
   store guard binding in the live runtime.
 - `SimulationBootstrapComposition.cs:22-24,102-103`:
