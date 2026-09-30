@@ -44,15 +44,11 @@ harness in this candidate worktree:
 
 | Gate | Result | Evidence |
 |---|---:|---|
-| `GeneralizedSpatialTravelTests` | 18/18 | `Temp/ValidationResults/EditMode-20260930-200847-19df88761726438d94320a2e219693fe.xml` |
-| `GroupTravelTests` | 32/32 | `Temp/ValidationResults/EditMode-20260930-200911-e43a48a72afa43bda0e22609c778f050.xml` |
-| `SimulationBootstrapCompositionTests` | 14/14 | `Temp/ValidationResults/EditMode-20260930-200928-5aa7dfef8e574703a9ed8a03c085732c.xml` |
-| All EditMode | 2042/2042 | `Temp/ValidationResults/EditMode-20260930-201247-3c223832250b4f1fafd2ea860a29d9f1.xml` |
-| Complete official `Smoke` filter | 5/5 | `Temp/ValidationResults/EditMode-20260930-201333-452db28f7954465c9cafdd74d14d1028.xml` |
-
-The final all-EditMode and Smoke runs include the exact code candidate. The
-focused runs preceded removal of one unused, unrelated Inventory accessor; the
-final full regression gates were rerun after that removal.
+| `GeneralizedSpatialTravelTests` | 18/18 | `Library/ValidationResults/P12BCityCensus/EditMode-20260930-201831-0a04d2419b2548aa9f96f4f136da0801.xml` |
+| `GroupTravelTests` | 32/32 | `Library/ValidationResults/P12BCityCensus/EditMode-20260930-201850-86d9ca0eff014c99806d06687d22b9cc.xml` |
+| `SimulationBootstrapCompositionTests` | 14/14 | `Library/ValidationResults/P12BCityCensus/EditMode-20260930-201909-a6bc652af81844659ae58250dfbf7937.xml` |
+| All EditMode | 2042/2042 | `Library/ValidationResults/P12BCityCensus/EditMode-20260930-201927-534c06e583e7407b848f38c0d581d59b.xml` |
+| Complete official `Smoke` filter | 5/5 | `Library/ValidationResults/P12BCityCensus/EditMode-20260930-202012-76605e7e024549d994605368f0976b7b.xml` |
 
 ## Retained P12 limits
 
