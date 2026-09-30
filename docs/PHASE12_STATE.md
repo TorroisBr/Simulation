@@ -39,16 +39,12 @@ This remains a partial passive owner-census foundation. P12-B is incomplete
 and P12-A remains `WAIT_DEPENDENCY`. The promotion does not provide a complete
 effective-profile inventory, shared mutation-epoch coverage,
 owner-thread/quiescence proof, capture eligibility, immutable exports, or
-staged hydration. P12-D remains blocked on P12-B and P12-C. The next bounded
-owner-inventory slice, the legacy `SpatialNetworkRuntime` location/route
-census, has a reviewed technical design at
-[`PHASE12_P12B_SPATIAL_NETWORK_CENSUS_DESIGN.md`](design/PHASE12_P12B_SPATIAL_NETWORK_CENSUS_DESIGN.md).
-Its exact design review passed at `11b4a27`; it fits accepted P12-B/P12-D
-scope and does not add a human checkpoint-acceptance gate; see the
-[`design review record`](design/PHASE12_P12B_SPATIAL_NETWORK_CENSUS_REVIEW.md).
-The composition hotspot is now part of promoted canonical, so this bounded
-implementation can proceed from the new canonical tip on an isolated feature
-branch. It does not change P12-B readiness or authorize Phase closure.
+staged hydration. P12-D remains blocked on P12-B and P12-C. The reviewed
+legacy `SpatialNetworkRuntime` location/route census is now promoted as
+recorded below. Continue with the remaining owner and invalidation gaps in
+[`PHASE12_B_BLOCKER_RESOLUTION.md`](design/PHASE12_B_BLOCKER_RESOLUTION.md);
+do not treat this witness as complete profile coverage or a P12-B readiness
+change.
 
 **Architecture baseline:** `c285466c355103d3637ac165246591b72eb7bda0`, with
 the intraday/extensibility alignment at `4b6dd1d38cffeaf3cc1ac3effea0f8ede8771194`
@@ -64,7 +60,7 @@ P12-B–P12-G capability decomposition in
 | Checkpoint | Status | Current evidence and limits |
 |---|---|---|
 | P12-A — `UnityBootstrap-Daily-v1` profile integration | `WAIT_DEPENDENCY` | Scope accepted. No included-owner export plus staged-hydration coverage or validated complete live profile inventory exists yet. Its separate implementation authorization remains outstanding. |
-| P12-B — profile admission and completed-boundary lifecycle | `INCOMPLETE — PARTIAL FOUNDATION PROMOTED` | In addition to the promoted non-admitting kernel, receipt owners, P8-A–D, and RuntimeIdentity witnesses, cumulative stack `b889b4747738d933fe48311ef89fc33a40e3dfa0` adds passive witnesses for record sequence, ActorChoice, RuntimeIdAllocator, ArmedForce/manpower/position, Conflict/War/Battle, Estate/Property, and Institution/Office. The separately promoted P12-D GenealogyStore parentage witness is recorded below. See the promoted-stack section and linked candidate evidence below. The static writer map and partial profile evidence remain in `docs/design/PHASE12_B_BLOCKER_RESOLUTION.md`. No complete profile census, shared-epoch connection, Unity owner-thread/quiescence proof, or capture token is established. |
+| P12-B — profile admission and completed-boundary lifecycle | `INCOMPLETE — PARTIAL FOUNDATION PROMOTED` | In addition to the promoted non-admitting kernel, receipt owners, P8-A–D, and RuntimeIdentity witnesses, cumulative stack `b889b4747738d933fe48311ef89fc33a40e3dfa0` adds passive witnesses for record sequence, ActorChoice, RuntimeIdAllocator, ArmedForce/manpower/position, Conflict/War/Battle, Estate/Property, and Institution/Office. Follow-up promotions add P12-D Genealogy parentage and legacy `SpatialNetworkRuntime` location/route witnesses. See the promoted-stack section and linked candidate evidence. The static writer map and partial profile evidence remain in `docs/design/PHASE12_B_BLOCKER_RESOLUTION.md`. No complete profile census, shared-epoch connection, Unity owner-thread/quiescence proof, or capture token is established. |
 | P12-C — identity, provenance, deterministic roots | `BLOCKED_ON_P12-B` | The `RuntimeIdAllocator` passive census and record-sequence witness promoted at `b889b47` are inventory evidence only; they do not provide C exports/hydration, deterministic-root state, or provenance. Preserve `codex/phase12/P12CIdentityRuntimeSnapshot` at `531d835` for selective reintegration only after B readiness and revalidation. |
 | P12-D — factual roots and Person/population relations | `BLOCKED_ON_P12-B_AND_C` | Owner inventory and accepted scope remain; no complete export/hydration capability is claimed. |
 | P12-E — core and official daily-domain owners | `BLOCKED_ON_P12-B_AND_C` | Owner inventory and accepted scope remain; effective-profile provider coverage and exact owner exports are incomplete. |
@@ -74,6 +70,37 @@ P12-B–P12-G capability decomposition in
 Phase 12 remains open. P13 remains dependency-gated. This State does not claim
 save/load support, P12-A readiness, P12-B readiness, Phase closure, or a P13
 historical fork guarantee.
+
+## P12-B SpatialNetwork census promotion — 2026-09-30
+
+With explicit approval, candidate
+`codex/phase12/P12BSpatialNetworkCensus` at
+`46c457fe12d2b287d55553e606fea471255d292d` was fast-forwarded to
+`codex/phase12/canonical` from `eec3fbeecffb52c633ffe0945b3dfa39743ae064`.
+The code-bearing commit is `555594ed899f2e191640f758599058a198c53ee7`,
+tree `da7edc43dcbe7c56fedf52730d5fb808ff7db6d3`. Independent exact-tip
+implementation review passed; the durable review record is
+`codex/phase12/P12BSpatialNetworkCensusReviewRecord` at
+`dc10d7376e22af1a7027ea8bdb238f2e56dfe390`. The candidate and review records
+are linked in
+[`PHASE12_P12B_SPATIAL_NETWORK_CENSUS_CANDIDATE.md`](design/PHASE12_P12B_SPATIAL_NETWORK_CENSUS_CANDIDATE.md)
+and
+[`PHASE12_P12B_SPATIAL_NETWORK_CENSUS_IMPLEMENTATION_REVIEW.md`](design/PHASE12_P12B_SPATIAL_NETWORK_CENSUS_IMPLEMENTATION_REVIEW.md).
+
+It publishes passive schema-v1 owner witnesses for legacy runtime network
+locations and routes. Both bind to the exact installed `SpatialNetworkRuntime`
+and share its monotone revision. The selected authored bootstrap profile
+reports two locations, two routes, and revision four. Validation on the code
+tree passed `SpatialNetworkCensusTests` 7/7, ALL EditMode 2015/2015, complete
+official Smoke 5/5, and `git diff --check`; retained XML evidence is under
+`Library/ValidationResults/P12BSpatialNetwork` in the candidate worktree.
+
+This remains unsynchronized passive census evidence. It does not connect
+network or direct `RuntimeIdentityRegistry` writes to the shared P12-B epoch,
+complete the selected-profile owner inventory, prove owner-thread/quiescence,
+grant capture eligibility, or provide export/hydration. P12-B remains
+incomplete; P12-A remains `WAIT_DEPENDENCY`; P12-C through P12-G remain
+blocked on their documented prerequisites; Phase 12 remains open.
 
 ## Promoted RuntimeIdentityRegistry passive census witnesses
 

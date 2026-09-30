@@ -1,8 +1,8 @@
 # P12-B legacy SpatialNetwork passive-census candidate
 
-**Status:** Implementation and independent exact-tip review passed; required
-validation passed. Ready for the explicit canonical-promotion gate. P12-B
-remains incomplete and P12-A remains `WAIT_DEPENDENCY`.
+**Status:** Promoted to `codex/phase12/canonical` at
+`46c457fe12d2b287d55553e606fea471255d292d`. This is partial passive census
+evidence only; P12-B remains incomplete and P12-A remains `WAIT_DEPENDENCY`.
 
 **Candidate branch:** `codex/phase12/P12BSpatialNetworkCensus`.
 
