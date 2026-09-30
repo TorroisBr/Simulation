@@ -56,13 +56,16 @@ and is not serialized.
 Append `RevisionOverflow` to `PersonStoreFailure` without renumbering existing
 values. Append the corresponding `RevisionOverflow` to
 `PersonMaterializationFailure` and map it explicitly from store failures.
-Initialize the owner-local revision at zero. Preflight overflow before any
-ordinary registry or binding write:
+Initialize the owner-local revision at zero. Preflight revision headroom before
+any registry or binding write. Because either write may be followed by one
+immediate compensation, conservatively reject new registrations and bindings
+when `Revision >= long.MaxValue - 1`; this leaves one increment for rollback.
+The final usable forward-write revision is therefore `long.MaxValue - 1`:
 
 - successful `TryRegister` increments once;
 - successful `TryBindMaterializedNpc` increments once;
-- a successful rollback below saturation increments once after removing the
-  exact prior write;
+- successful `TryRollbackRegistration` and materialization compensation each
+  increment once after removing the exact prior write;
 - rejection, duplicate/no-op, failed binding, and failed rollback leave
   cardinalities and revision unchanged.
 
@@ -73,19 +76,21 @@ compensation paths; rename the internal store operation to make its
 rollback-only role explicit. Preserve current guard behavior and all normal
 Person/binding semantics.
 
-If registration or binding advances the revision from `long.MaxValue - 1` to
-`long.MaxValue` and the enclosing operation then compensates, the rollback-only
-path removes only the exact write already installed by that operation, without
-wrapping the revision. The affected cardinality strictly decreases, while
-ordinary registration and binding are closed at saturation. Thus the pair of
-section cardinalities plus shared revision changes and cannot be replaced by a
-supported same-cardinality write at that saturated revision. Do not permit
-ordinary Person deletion or unbinding at saturation.
+At `long.MaxValue - 1`, valid new registrations and bindings fail with
+`RevisionOverflow` before mutation even if they could have completed without
+compensation. At most, a write from `long.MaxValue - 2` advances to
+`long.MaxValue - 1`; its immediate exact rollback advances to
+`long.MaxValue`. Every successful removal therefore advances the shared
+revision, and no rollback path changes cardinality at saturation without a
+revision change. No new registration or binding is admitted at the reserved
+boundary.
 
 The rollback paths must preserve their existing exact-record/object checks.
 They must not become general public removal APIs or bypass the existing
 runtime mutation guard for binding operations. Keep the current PersonStore
-registration-rollback guard behavior unchanged.
+registration-rollback guard behavior unchanged. No rollback token or
+saturation-only removal bypass is introduced; reserved revision headroom
+ensures a successful compensation remains ordinarily revisioned.
 
 ## Required evidence
 
@@ -98,11 +103,12 @@ registration-rollback guard behavior unchanged.
   invalid Person/NPC, duplicate binding, already-materialized, and
   guard-rejected attempts leave both sections unchanged.
 - Successful registration and binding compensation restore their respective
-  cardinalities; revisions advance below saturation and remain at Max only
-  when exact rollback is needed after a write advanced the revision to Max.
-- At Max, valid ordinary registration/binding fails before mutation with
-  `RevisionOverflow`; rollback of the exact just-installed Person or binding
-  remains possible, leaves the final cardinality restored, and does not wrap.
+  cardinalities and each advance revision exactly once.
+- At `long.MaxValue - 1` and `long.MaxValue`, valid ordinary
+  registration/binding fails before mutation with `RevisionOverflow`.
+- Starting at `long.MaxValue - 2`, a write may advance to `long.MaxValue - 1`
+  and its exact immediate compensation may advance to Max; cardinalities are
+  restored and revision does not wrap.
 - Tests confirm existing failure enum numeric values remain stable and the new
   overflow failure maps through `PersonMaterializationFailure`.
 - Focused Person/materialization suites, ALL EditMode, complete official
