@@ -62,6 +62,13 @@ P12-B operation scope must notify its shared mutation epoch once after this
 whole commit. This design adds no epoch wiring and makes no claim about
 exception rollback for allocation failures.
 
+`RuntimeIdentityRegistry.RegisterLocation` and `RegisterRoute` are also
+public entrypoints independent of `SpatialNetworkRuntime`. Their direct
+successful writes change registry-owned identity indexes but do not change
+network membership or this network revision. Shared-epoch coverage for those
+direct registry writes remains part of the separate open P12-B C-root
+invalidation obligation; this design does not close it.
+
 Prevent supported callers from mutating the network behind its census:
 `Locations` currently exposes the backing `HashSet` as `IEnumerable`, while
 `Routes` and `GetOutgoingRoutes` expose backing `List` instances through
