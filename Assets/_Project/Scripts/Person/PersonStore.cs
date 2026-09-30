@@ -12,7 +12,8 @@ public enum PersonStoreFailure
     NpcAlreadyBoundToAnotherPerson = 6,
     BirthAbsoluteDayInFuture = 7,
     DeathAbsoluteDayInFuture = 8,
-    RuntimeFaulted = 9
+    RuntimeFaulted = 9,
+    RevisionOverflow = 10
 }
 
 /// <summary>
@@ -27,8 +28,11 @@ public sealed class PersonStore : IAuthoritativeMutationGuardBindable
         new Dictionary<string, PersonRuntime>(StringComparer.Ordinal);
     private readonly List<PersonRuntime> persons = new List<PersonRuntime>();
     private readonly IReadOnlyList<PersonRuntime> personSnapshot;
+    private long revision;
 
     public IReadOnlyList<PersonRuntime> Persons => personSnapshot;
+    public int MaterializedBindingCount => personsByNpcRuntimeId.Count;
+    public long Revision => revision;
 
     public PersonStore()
     {
@@ -57,8 +61,15 @@ public sealed class PersonStore : IAuthoritativeMutationGuardBindable
             return false;
         }
 
+        if (CanAdvanceRevisionForForwardWrite() == false)
+        {
+            failure = PersonStoreFailure.RevisionOverflow;
+            return false;
+        }
+
         personsById.Add(person.PersonId, person);
         persons.Add(person);
+        revision++;
         return true;
     }
 
@@ -92,8 +103,14 @@ public sealed class PersonStore : IAuthoritativeMutationGuardBindable
             return false;
         }
 
+        if (CanAdvanceRevision() == false)
+        {
+            return false;
+        }
+
         personsById.Remove(person.PersonId);
         persons.Remove(person);
+        revision++;
         return true;
     }
 
@@ -186,6 +203,12 @@ public sealed class PersonStore : IAuthoritativeMutationGuardBindable
             return false;
         }
 
+        if (CanAdvanceRevisionForForwardWrite() == false)
+        {
+            failure = PersonStoreFailure.RevisionOverflow;
+            return false;
+        }
+
         if (person.TryBindMaterializedNpc(npcRuntimeId) == false)
         {
             failure = PersonStoreFailure.AlreadyMaterialized;
@@ -193,10 +216,11 @@ public sealed class PersonStore : IAuthoritativeMutationGuardBindable
         }
 
         personsByNpcRuntimeId.Add(npcRuntimeId, person);
+        revision++;
         return true;
     }
 
-    internal bool TryUnbindMaterializedNpc(PersonId personId, string npcRuntimeId)
+    internal bool TryRollbackMaterializedNpcBinding(PersonId personId, string npcRuntimeId)
     {
         if (!mutationGuardBinding.CanMutate)
         {
@@ -209,13 +233,27 @@ public sealed class PersonStore : IAuthoritativeMutationGuardBindable
         }
 
         if (personsById.TryGetValue(personId, out PersonRuntime person) == false
+            || personsByNpcRuntimeId.TryGetValue(npcRuntimeId, out PersonRuntime indexedPerson) == false
+            || ReferenceEquals(indexedPerson, person) == false
+            || CanAdvanceRevision() == false
             || person.TryUnbindMaterializedNpc(npcRuntimeId) == false)
         {
             return false;
         }
 
         personsByNpcRuntimeId.Remove(npcRuntimeId);
+        revision++;
         return true;
+    }
+
+    private bool CanAdvanceRevisionForForwardWrite()
+    {
+        return revision < long.MaxValue - 1L;
+    }
+
+    private bool CanAdvanceRevision()
+    {
+        return revision < long.MaxValue;
     }
 
     internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard)

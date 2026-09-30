@@ -18,7 +18,8 @@ public enum PersonMaterializationFailure
     ResidenceConflict = 13,
     PersonDead = 14,
     LifeStateConflict = 15,
-    RuntimeFaulted = 16
+    RuntimeFaulted = 16,
+    RevisionOverflow = 17
 }
 
 /// <summary>
@@ -118,7 +119,7 @@ public static class PersonMaterializationSystem
 
         if (world.TryRegisterNpc(candidate, out WorldNpcRegistryFailure registryFailure) == false)
         {
-            world.PersonStore.TryUnbindMaterializedNpc(personId, runtimeId);
+            world.PersonStore.TryRollbackMaterializedNpcBinding(personId, runtimeId);
             candidate.ClearPersonRuntime();
             candidate.ClearPersonId();
             failure = registryFailure == WorldNpcRegistryFailure.DuplicateRuntimeId
@@ -132,7 +133,7 @@ public static class PersonMaterializationSystem
             startingCity.AddImportantNpc(candidate);
             if (candidate.CurrentCity != startingCity)
             {
-                world.PersonStore.TryUnbindMaterializedNpc(personId, runtimeId);
+                world.PersonStore.TryRollbackMaterializedNpcBinding(personId, runtimeId);
                 candidate.ClearPersonRuntime();
                 candidate.ClearPersonId();
                 world.TryUnregisterNpc(runtimeId, out _);
@@ -235,7 +236,7 @@ public static class PersonMaterializationSystem
             && string.IsNullOrWhiteSpace(npcResidence) == false
             && person.TrySetResidenceSettlementRuntimeId(npcResidence) == false)
         {
-            world.PersonStore.TryUnbindMaterializedNpc(personId, npcRuntimeId);
+            world.PersonStore.TryRollbackMaterializedNpcBinding(personId, npcRuntimeId);
             npcRuntime.ClearPersonRuntime();
             npcRuntime.ClearPersonId();
             failure = PersonMaterializationFailure.ResidenceConflict;
@@ -257,6 +258,8 @@ public static class PersonMaterializationSystem
                 return PersonMaterializationFailure.AlreadyMaterialized;
             case PersonStoreFailure.NpcAlreadyBoundToAnotherPerson:
                 return PersonMaterializationFailure.NpcAlreadyBoundToAnotherPerson;
+            case PersonStoreFailure.RevisionOverflow:
+                return PersonMaterializationFailure.RevisionOverflow;
             default:
                 return PersonMaterializationFailure.RosterRegistrationFailed;
         }
