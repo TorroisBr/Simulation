@@ -73,6 +73,14 @@ public class InventoryRuntime
     public IReadOnlyList<InventoryItemRuntime> Items => readOnlyItems ?? (readOnlyItems = (items ?? (items = new List<InventoryItemRuntime>())).AsReadOnly());
     public long Revision => revision;
 
+    internal bool TryGetCensusCardinality(out int cardinality)
+    {
+        cardinality = 0;
+        if (items == null) return false;
+        cardinality = items.Count;
+        return true;
+    }
+
     public InventoryItemRuntime GetItem(ItemData item)
     {
         InventoryItemRuntime value = (items ?? (items = new List<InventoryItemRuntime>())).Find(x => x != null && x.Item == item);

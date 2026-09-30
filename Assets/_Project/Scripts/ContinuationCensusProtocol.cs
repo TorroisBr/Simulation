@@ -131,6 +131,10 @@ public sealed class ContinuationCensusProtocol
     private IReadOnlyList<NpcRuntime> spatialKnowledgeRoster;
     private IReadOnlyList<IOwnerSectionCensusProvider> spatialKnowledgeFamilyProviders =
         Array.AsReadOnly(new IOwnerSectionCensusProvider[0]);
+    private HashSet<string> inventorySectionIds = new HashSet<string>(StringComparer.Ordinal);
+    private Dictionary<string, NpcRuntime> inventoryNpcOwnersBySection = new Dictionary<string, NpcRuntime>(StringComparer.Ordinal);
+    private IReadOnlyList<NpcRuntime> inventoryRoster;
+    private IReadOnlyList<IOwnerSectionCensusProvider> inventoryFamilyProviders = Array.AsReadOnly(new IOwnerSectionCensusProvider[0]);
 
     private bool expectedSectionsSealed;
     private bool providersSealed;
@@ -308,6 +312,65 @@ public sealed class ContinuationCensusProtocol
     public IReadOnlyList<IOwnerSectionCensusProvider> SpatialKnowledgeFamilyProviders =>
         spatialKnowledgeFamilyProviders;
 
+    public bool RegisterInventoryRosterFamily(IReadOnlyList<NpcRuntime> roster, out ContinuationCensusFailure failure)
+    {
+        if (IsFaulted()) { failure = ContinuationCensusFailure.ProtocolFaulted; return false; }
+        if (IsOwnerThreadBound()) { Fault(); failure = ContinuationCensusFailure.ProtocolFaulted; return false; }
+        if (roster == null || expectedSectionsSealed || providersSealed || inventoryRoster != null)
+        { failure = ContinuationCensusFailure.OwnerCoverageIncomplete; return false; }
+        if (!TryBuildInventoryFamily(roster, out List<InventoryCandidate> candidates, out failure)) { Fault(); return false; }
+        var stagedExpected = new Dictionary<string, OwnerSectionContract>(expectedSections, StringComparer.Ordinal);
+        var stagedRegistered = new Dictionary<string, RegisteredSection>(registeredSections, StringComparer.Ordinal);
+        var ids = new HashSet<string>(StringComparer.Ordinal);
+        var owners = new Dictionary<string, NpcRuntime>(StringComparer.Ordinal);
+        var providers = new IOwnerSectionCensusProvider[candidates.Count];
+        for (int i = 0; i < candidates.Count; i++)
+        {
+            InventoryCandidate c = candidates[i];
+            if (!ids.Add(c.SectionId) || stagedExpected.ContainsKey(c.SectionId)) { Fault(); failure = ContinuationCensusFailure.OwnerCoverageIncomplete; return false; }
+            stagedExpected.Add(c.SectionId, c.Contract);
+            var registered = new RegisteredSection(c.Contract, c.Provider);
+            SetBaseline(registered, c.Witness);
+            stagedRegistered.Add(c.SectionId, registered);
+            owners.Add(c.SectionId, c.NpcOwner);
+            providers[i] = c.Provider;
+        }
+        expectedSections = stagedExpected; registeredSections = stagedRegistered;
+        inventorySectionIds = ids; inventoryNpcOwnersBySection = owners; inventoryRoster = roster;
+        inventoryFamilyProviders = Array.AsReadOnly(providers);
+        failure = ContinuationCensusFailure.None; return true;
+    }
+
+    public IReadOnlyList<IOwnerSectionCensusProvider> InventoryFamilyProviders => inventoryFamilyProviders;
+
+    private sealed class InventoryCandidate
+    {
+        public string SectionId; public OwnerSectionContract Contract; public IOwnerSectionCensusProvider Provider;
+        public NpcRuntime NpcOwner; public InventoryRuntime InventoryOwner; public OwnerSectionCensusWitness Witness;
+    }
+
+    private static bool TryBuildInventoryFamily(IReadOnlyList<NpcRuntime> roster, out List<InventoryCandidate> candidates, out ContinuationCensusFailure failure)
+    {
+        candidates = new List<InventoryCandidate>(); failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+        try
+        {
+            foreach (IOwnerSectionCensusProvider provider in NpcInventoryCensusProvider.CreateProviders(roster))
+            {
+                if (!(provider is NpcInventoryCensusProvider.INpcInventorySectionCensusProvider p)) return false;
+                OwnerSectionCensusWitness w = provider.GetCurrentCensus();
+                string id = NpcInventoryCensusProvider.SectionPrefix + p.RuntimeId;
+                var contract = new OwnerSectionContract(id, NpcInventoryCensusProvider.SchemaVersion, OwnerSectionRole.Required);
+                if (string.IsNullOrWhiteSpace(p.RuntimeId) || p.NpcOwner == null || p.InventoryOwner == null
+                    || !ReferenceEquals(p.NpcOwner.ExistingInventory, p.InventoryOwner)
+                    || !ReferenceEquals(w.OwnerInstanceIdentity, p.InventoryOwner) || !IsWitnessValidForContract(contract, w)) return false;
+                candidates.Add(new InventoryCandidate { SectionId=id, Contract=contract, Provider=provider, NpcOwner=p.NpcOwner, InventoryOwner=p.InventoryOwner, Witness=w });
+            }
+        }
+        catch { return false; }
+        if (candidates.Count != roster.Count) return false;
+        failure = ContinuationCensusFailure.None; return true;
+    }
+
     /// <summary>
     /// Closes provider registration. Missing or extra providers remain a
     /// fail-closed coverage result; sealing does not assert completeness.
@@ -443,7 +506,8 @@ public sealed class ContinuationCensusProtocol
 
         if (registeredSections.Count != expectedSections.Count
             || (spatialKnowledgeRoster != null
-                && !TryValidateSpatialKnowledgeFamilyMatchesRoster(out failure)))
+                && !TryValidateSpatialKnowledgeFamilyMatchesRoster(out failure))
+            || (inventoryRoster != null && !TryValidateInventoryFamilyMatchesRoster(out failure)))
         {
             Fault();
             failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
@@ -606,7 +670,7 @@ public sealed class ContinuationCensusProtocol
             foreach (string sectionId in changedFixedSectionIds)
             {
                 if (string.IsNullOrWhiteSpace(sectionId)
-                    || spatialKnowledgeSectionIds.Contains(sectionId)
+                    || spatialKnowledgeSectionIds.Contains(sectionId) || inventorySectionIds.Contains(sectionId)
                     || !registeredSections.ContainsKey(sectionId)
                     || !changedIds.Add(sectionId))
                 {
@@ -629,6 +693,10 @@ public sealed class ContinuationCensusProtocol
             Fault();
             return false;
         }
+        List<InventoryCandidate> inventoryCandidates = new List<InventoryCandidate>();
+        if (inventoryRoster != null
+            && !TryBuildInventoryFamily(inventoryRoster, out inventoryCandidates, out failure))
+        { Fault(); return false; }
 
         Dictionary<string, RegisteredSection> stagedRegistered =
             new Dictionary<string, RegisteredSection>(StringComparer.Ordinal);
@@ -645,7 +713,7 @@ public sealed class ContinuationCensusProtocol
 
         foreach (KeyValuePair<string, OwnerSectionContract> pair in expectedSections)
         {
-            if (spatialKnowledgeSectionIds.Contains(pair.Key)) continue;
+            if (spatialKnowledgeSectionIds.Contains(pair.Key) || inventorySectionIds.Contains(pair.Key)) continue;
             if (!registeredSections.TryGetValue(pair.Key, out RegisteredSection current))
             {
                 Fault();
@@ -777,6 +845,34 @@ public sealed class ContinuationCensusProtocol
             if (!stagedDynamicIds.Contains(oldSectionId)) familyChanged = true;
         }
 
+        HashSet<string> stagedInventoryIds = new HashSet<string>(StringComparer.Ordinal);
+        Dictionary<string, NpcRuntime> stagedInventoryOwners = new Dictionary<string, NpcRuntime>(StringComparer.Ordinal);
+        IOwnerSectionCensusProvider[] stagedInventoryProviders = new IOwnerSectionCensusProvider[inventoryCandidates.Count];
+        bool inventoryChanged = inventoryCandidates.Count != inventorySectionIds.Count;
+        for (int i = 0; i < inventoryCandidates.Count; i++)
+        {
+            InventoryCandidate c = inventoryCandidates[i];
+            if (!stagedInventoryIds.Add(c.SectionId) || stagedExpected.ContainsKey(c.SectionId))
+            { Fault(); failure = ContinuationCensusFailure.OwnerCoverageIncomplete; return false; }
+            bool existed = registeredSections.TryGetValue(c.SectionId, out RegisteredSection prior);
+            bool sameNpc = existed && inventoryNpcOwnersBySection.TryGetValue(c.SectionId, out NpcRuntime oldNpc) && ReferenceEquals(oldNpc, c.NpcOwner);
+            bool sameOwner = existed && ReferenceEquals(prior.OwnerInstanceIdentity, c.InventoryOwner);
+            if (sameNpc && sameOwner)
+            {
+                if (!TryReadAndValidate(prior, false, out _, out failure)) { Fault(); return false; }
+                stagedRegistered.Add(c.SectionId, prior); stagedExpected.Add(c.SectionId, prior.Contract); stagedInventoryProviders[i] = prior.Provider;
+            }
+            else
+            {
+                inventoryChanged = true;
+                RegisteredSection replacement = new RegisteredSection(c.Contract, c.Provider); SetBaseline(replacement, c.Witness);
+                stagedRegistered.Add(c.SectionId, replacement); stagedExpected.Add(c.SectionId, c.Contract); stagedInventoryProviders[i] = c.Provider;
+            }
+            if (!existed) inventoryChanged = true;
+            stagedInventoryOwners.Add(c.SectionId, c.NpcOwner);
+        }
+        foreach (string oldId in inventorySectionIds) if (!stagedInventoryIds.Contains(oldId)) inventoryChanged = true;
+
         if (personStoreSectionsChanged
             && changedIds.Contains(PersonMembershipCensusProvider.SectionId)
             != changedIds.Contains(PersonMaterializationBindingCensusProvider.SectionId))
@@ -786,7 +882,7 @@ public sealed class ContinuationCensusProtocol
             return false;
         }
 
-        if ((fixedSectionsChanged || familyChanged) && mutationEpoch == long.MaxValue)
+        if ((fixedSectionsChanged || familyChanged || inventoryChanged) && mutationEpoch == long.MaxValue)
         {
             Fault();
             failure = ContinuationCensusFailure.ProtocolFaulted;
@@ -797,9 +893,12 @@ public sealed class ContinuationCensusProtocol
         registeredSections = stagedRegistered;
         spatialKnowledgeSectionIds = stagedDynamicIds;
         spatialKnowledgeNpcOwnersBySection = stagedDynamicNpcOwners;
+        inventorySectionIds = stagedInventoryIds;
+        inventoryNpcOwnersBySection = stagedInventoryOwners;
         if (familyChanged)
             spatialKnowledgeFamilyProviders = Array.AsReadOnly(stagedFamilyProviders);
-        if (fixedSectionsChanged || familyChanged) mutationEpoch++;
+        if (inventoryChanged) inventoryFamilyProviders = Array.AsReadOnly(stagedInventoryProviders);
+        if (fixedSectionsChanged || familyChanged || inventoryChanged) mutationEpoch++;
         failure = ContinuationCensusFailure.None;
         return true;
     }
@@ -1055,6 +1154,22 @@ public sealed class ContinuationCensusProtocol
 
         failure = ContinuationCensusFailure.None;
         return true;
+    }
+
+    private bool TryValidateInventoryFamilyMatchesRoster(out ContinuationCensusFailure failure)
+    {
+        if (!TryBuildInventoryFamily(inventoryRoster, out List<InventoryCandidate> candidates, out failure)) return false;
+        if (candidates.Count != inventorySectionIds.Count) { failure = ContinuationCensusFailure.OwnerCoverageIncomplete; return false; }
+        foreach (InventoryCandidate c in candidates)
+        {
+            if (!inventorySectionIds.Contains(c.SectionId)
+                || !registeredSections.TryGetValue(c.SectionId, out RegisteredSection section)
+                || !inventoryNpcOwnersBySection.TryGetValue(c.SectionId, out NpcRuntime npc)
+                || !ReferenceEquals(npc, c.NpcOwner)
+                || (section.HasBaseline && !ReferenceEquals(section.OwnerInstanceIdentity, c.InventoryOwner)))
+            { failure = ContinuationCensusFailure.OwnerCoverageIncomplete; return false; }
+        }
+        failure = ContinuationCensusFailure.None; return true;
     }
 
     private static bool IsWitnessValidForContract(

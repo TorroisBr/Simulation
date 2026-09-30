@@ -73,6 +73,7 @@ public class NpcRuntime : ICapabilityConditionSource
     public bool IsDead => lifeState == NpcLifeState.Dead;
     public NpcInjurySeverity InjurySeverity => injurySeverity;
     public InventoryRuntime Inventory => inventory ?? (inventory = new InventoryRuntime());
+    internal InventoryRuntime ExistingInventory => inventory;
     public MoneyAccountRuntime MoneyAccount => moneyAccount;
     public float Money => MoneyAccount.Balance;
     public SpatialLocationRuntime CurrentLocation => currentLocation;
