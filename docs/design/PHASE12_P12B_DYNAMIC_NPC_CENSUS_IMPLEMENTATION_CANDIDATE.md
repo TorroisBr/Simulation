@@ -1,12 +1,16 @@
 # P12-B Dynamic NPC SpatialKnowledge census implementation candidate
 
-**Status:** Submitted candidate; awaiting independent implementation review. This does not claim P12-B completion or P12-A readiness.
+**Status:** Exact-tip independent implementation review passed at code tip
+`2c782a7a08abfc1c8b2ba9201efad12f4ac279ae`. The durable review record is
+[`PHASE12_P12B_DYNAMIC_NPC_CENSUS_IMPLEMENTATION_REVIEW.md`](PHASE12_P12B_DYNAMIC_NPC_CENSUS_IMPLEMENTATION_REVIEW.md).
+This does not claim P12-B completion or P12-A readiness.
 
 - **Implementation base:** `0a37e9f053b482d80d0815c95352e3d96b56ed8f`
 - **Feature branch:** `codex/phase12/P12BDynamicNpcCensusImplementation`
 - **Code-bearing tip:** `2c782a7a08abfc1c8b2ba9201efad12f4ac279ae`
 - **Reviewed design:** `156dcb19ecb8f15dc9611e9e0ee45637f775faa8`; review record `8b31a82652ffd958fea6ce2fb68939777a4bd99f`
 - **Contract clarification:** `f3c7edee28968b6af0020c09a08fc0ab8740fe64`; amended review record is on design branch tip `f6a8640`.
+- **Implementation review:** PASS against base `0a37e9f053b482d80d0815c95352e3d96b56ed8f`; exact-tip review was recorded after the cross-thread context correction.
 
 ## Delivered boundary
 
