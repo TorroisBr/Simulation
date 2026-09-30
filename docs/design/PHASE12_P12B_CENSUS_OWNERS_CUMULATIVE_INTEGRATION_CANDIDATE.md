@@ -1,11 +1,11 @@
 # P12-B cumulative owner census integration candidate
 
-**Status:** `VALIDATED_CANDIDATE` at code tip `44fc3ab` and code tree
-`b0be753`. Exact-tip independent code/design/evidence review and required
-validation passed. The candidate branch also contains a State refresh and a
-reviewed SpatialNetwork owner-census technical design; the design review is
-recorded at `11b4a27` and its record is linked from the State. Canonical
-promotion approval remains outstanding. This candidate does not complete
+**Status:** `PROMOTED` to `codex/phase12/canonical` at
+`81435f9f17816a3fb35b59d8ab374ed1cd719444`. Code tip `44fc3ab` and code tree
+`b0be753` passed exact-tip independent code/design/evidence review and
+required validation. The promoted State includes the reviewed SpatialNetwork
+owner-census design at `11b4a27`; the separate design review record is linked
+from `docs/PHASE12_STATE.md`. This partial census foundation does not complete
 P12-B, make P12-A ready, or deliver any export/hydration.
 
 **Canonical base:** `codex/phase12/canonical` at

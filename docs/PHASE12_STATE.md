@@ -14,30 +14,30 @@ check passed at `b889b47`. It retains the separately promoted
 and the earlier P8-A witness at
 `644bdae8ded1d8a938ec380370966ca6c235b881`.
 
-## Canonical refresh and current cumulative census candidate — 2026-09-30
+## Cumulative census promotion and current readiness — 2026-09-30
 
-P12 canonical and its remote are synchronized at
-`676196bcd807603deb9d01bd2855342a7d47a01e`. This tip records the approved
-promotion of the P12-D Genealogy saturated-rollback correction at
+The approved cumulative P12-B passive owner-census candidate
+`codex/phase12/P12BCensusOwnersCumulativeIntegration` was fast-forwarded to
+P12 canonical at `81435f9f17816a3fb35b59d8ab374ed1cd719444`, from previous
+canonical `676196bcd807603deb9d01bd2855342a7d47a01e`. This promoted code tree
+is `b0be75370d32679d0745ed15d29ce359dada0bb6`; exact implementation review
+passed, required focused suites passed, ALL EditMode passed `2008/2008`, the
+complete official Smoke filter passed `5/5`, and `git diff --check` passed.
+The following State-only commit records the promotion. The promoted candidate
+includes the approved P12-D Genealogy saturated-rollback correction at
 `5ef2615bb7d3de6280a2f7a6943a1669ead9002c`; the correction remains limited to
 named-birth compensation at revision saturation. It does not complete P12-D.
 
-The cumulative owner-witness candidate
-`codex/phase12/P12BCensusOwnersCumulativeIntegration` retains code tip
-`44fc3ab94c9666f656149f346fb2cc553d3cb689` and code tree
-`b0be75370d32679d0745ed15d29ce359dada0bb6`, based on canonical `676196b`.
-The exact code/design/integration review passed, required Unity evidence is
-recorded in its candidate, and the exact integration documentation review
-passed at `a7e078d0eb3e136cb64f58ef3e4879f66fb76450`. The State/candidate
-refresh was independently revalidated at docs tip `4daa0f1`; the separate
-SpatialNetwork design review passed at `11b4a27`. The candidate adds published
-PersonStore, ExplorableSite, and per-City SettlementPopulation census
-providers while retaining the promoted Genealogy provider. Canonical
-promotion is still pending explicit approval.
+Its code-bearing tip is `44fc3ab94c9666f656149f346fb2cc553d3cb689` and tree
+`b0be75370d32679d0745ed15d29ce359dada0bb6`, based on prior canonical
+`676196b`. It adds published PersonStore, ExplorableSite, and per-City
+SettlementPopulation census providers while retaining the promoted Genealogy
+provider. Exact-tip implementation and integration review passed; final
+documentation revalidation passed at candidate branch tip `81435f9`.
 
-This candidate remains a partial passive owner-census foundation. P12-B is
-incomplete and P12-A remains `WAIT_DEPENDENCY`. The candidate does not provide
-a complete effective-profile inventory, shared mutation-epoch coverage,
+This remains a partial passive owner-census foundation. P12-B is incomplete
+and P12-A remains `WAIT_DEPENDENCY`. The promotion does not provide a complete
+effective-profile inventory, shared mutation-epoch coverage,
 owner-thread/quiescence proof, capture eligibility, immutable exports, or
 staged hydration. P12-D remains blocked on P12-B and P12-C. The next bounded
 owner-inventory slice, the legacy `SpatialNetworkRuntime` location/route
@@ -46,10 +46,9 @@ census, has a reviewed technical design at
 Its exact design review passed at `11b4a27`; it fits accepted P12-B/P12-D
 scope and does not add a human checkpoint-acceptance gate; see the
 [`design review record`](design/PHASE12_P12B_SPATIAL_NETWORK_CENSUS_REVIEW.md).
-Implementation remains dependency-gated on releasing/re-integrating the cumulative
-`SimulationBootstrapComposition.cs` hotspot against canonical. Neither this
-design nor the cumulative census candidate changes P12-B readiness or
-authorizes canonical promotion.
+The composition hotspot is now part of promoted canonical, so this bounded
+implementation can proceed from the new canonical tip on an isolated feature
+branch. It does not change P12-B readiness or authorize Phase closure.
 
 **Architecture baseline:** `c285466c355103d3637ac165246591b72eb7bda0`, with
 the intraday/extensibility alignment at `4b6dd1d38cffeaf3cc1ac3effea0f8ede8771194`
