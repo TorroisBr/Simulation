@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using NUnit.Framework;
 
 public sealed class ExpeditionTests
@@ -78,6 +79,90 @@ public sealed class ExpeditionTests
         Assert.That((expedition.MemberRuntimeIds as IList<string>)?.IsReadOnly, Is.True);
         Assert.That((expedition.PerformerRuntimeIds as IList<string>)?.IsReadOnly, Is.True);
         Assert.That((expedition.SupportRuntimeIds as IList<string>)?.IsReadOnly, Is.True);
+    }
+
+    [Test]
+    public void ExpeditionSystemRejectsSplitTravelPartyStore()
+    {
+        SpatialTravelFixture fixture = new SpatialTravelFixture();
+        CreateSystem(fixture);
+        TravelPartySystem partySystem = fixture.TravelPartySystem;
+
+        Assert.Throws<ArgumentException>(() => new ExpeditionSystem(
+            new ExpeditionStore(),
+            fixture.Records.Allocator,
+            fixture.IdentityRegistry,
+            fixture.Sites,
+            partySystem,
+            new TravelPartyStore(),
+            fixture.Knowledge,
+            fixture.Records.Time,
+            fixture.Records.EventRecorder));
+    }
+
+    [Test]
+    public void ReturnAssociationFailureCompensatesPartyStoreAtSaturationBoundary()
+    {
+        SpatialTravelFixture fixture = new SpatialTravelFixture();
+        NpcRuntime performer = fixture.CreateNpc("return-race-performer", fixture.CityA, 10f);
+        AddSpatialKnowledge(performer, fixture, includeRoute: true);
+        performer.SpatialKnowledge.DiscoverRoute(fixture.SiteToCityRoute.RuntimeId);
+        fixture.Knowledge.RecordInitialScenarioKnowledge(performer, fixture.Site);
+        ExpeditionSystem system = CreateSystem(fixture);
+        Assert.That(system.TryStartExpedition(fixture.Site, CreateContext(fixture, performer).ActionContext, out ExpeditionRuntime expedition), Is.True);
+        SimulationRuntime runtime = new SimulationRuntime(
+            fixture.Records.Time,
+            new[] { fixture.CityA, fixture.CityB },
+            new[] { performer },
+            economyEnabled: false,
+            travelSystem: fixture.Travel,
+            travelPartySystem: fixture.TravelPartySystem,
+            explorableSiteStore: fixture.Sites,
+            explorableSiteKnowledgeSystem: fixture.Knowledge,
+            expeditionSystem: system);
+        runtime.AdvanceDays(fixture.SiteRoute.TravelDays + 1);
+        Assert.That(expedition.State, Is.EqualTo(ExpeditionState.AtSite));
+
+        SetTravelPartyRevision(fixture.TravelParties, long.MaxValue - 2);
+        List<ActionExecutionParticipant> participants = new List<ActionExecutionParticipant>
+        {
+            new ActionExecutionParticipant(performer.RuntimeId, ActionExecutionParticipantRole.Performer)
+        };
+        ActionExecutionContext returnContext = new ActionExecutionContext(
+            "return-" + expedition.ExpeditionId,
+            participants,
+            expedition.OriginLocationRuntimeId,
+            fixture.SiteToCityRoute.RuntimeId,
+            expedition.OriginDecisionId);
+
+        // No callback exists between the real nested party start and return-party
+        // association. Hold the same reentrant owner window, execute those real
+        // operations stepwise, and force the documented public lifecycle failure
+        // at the precise boundary without scheduler timing or a production hook.
+        using (EnterTravelPartyMutationWindow(fixture.TravelParties))
+        {
+            Assert.That(fixture.TravelPartySystem.CanPlanKnownGroupTravel(returnContext, out _), Is.True);
+            Assert.That(expedition.TryBeginReturn(), Is.True);
+            Assert.That(fixture.TravelPartySystem.TryStartTravelParty(returnContext, out TravelPartyRuntime returnParty), Is.True);
+            Assert.That(fixture.TravelParties.ActiveParties, Has.Count.EqualTo(1));
+            Assert.That(fixture.TravelParties.Revision, Is.EqualTo(long.MaxValue - 1));
+
+            Assert.That(expedition.TryComplete(), Is.True);
+            bool associated = (bool)typeof(ExpeditionRuntime)
+                .GetMethod("TryBeginReturnTravel", BindingFlags.Instance | BindingFlags.NonPublic)
+                .Invoke(expedition, new object[] { returnParty.TravelPartyId });
+            Assert.That(associated, Is.False);
+
+            typeof(ExpeditionRuntime).GetMethod("TryCancelReturn", BindingFlags.Instance | BindingFlags.NonPublic)
+                .Invoke(expedition, null);
+            Assert.That(fixture.TravelParties.Remove(returnParty.TravelPartyId), Is.True);
+        }
+
+        // This asserts only TravelParty Add+Remove compensation, not cross-owner
+        // rollback for Expedition, NPC travel state, or member costs.
+        Assert.That(expedition.State, Is.EqualTo(ExpeditionState.Completed));
+        Assert.That(fixture.TravelParties.ActiveParties, Is.Empty);
+        Assert.That(fixture.TravelParties.Revision, Is.EqualTo(long.MaxValue));
     }
 
     [Test]
@@ -365,6 +450,19 @@ public sealed class ExpeditionTests
             fixture.Knowledge,
             fixture.Records.Time,
             fixture.Records.EventRecorder);
+    }
+
+    private static void SetTravelPartyRevision(TravelPartyStore store, long revision)
+    {
+        typeof(TravelPartyStore).GetField("revision", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(store, revision);
+    }
+
+    private static IDisposable EnterTravelPartyMutationWindow(TravelPartyStore store)
+    {
+        return (IDisposable)typeof(TravelPartyStore)
+            .GetMethod("EnterMutationWindow", BindingFlags.Instance | BindingFlags.NonPublic)
+            .Invoke(store, null);
     }
 
     private static ExpeditionTestContext CreateContext(

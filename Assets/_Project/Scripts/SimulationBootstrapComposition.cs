@@ -1,6 +1,7 @@
+/// <summary>Single public handoff for a fully constructed authored bootstrap.</summary>
+using System;
 using System.Collections.Generic;
 
-/// <summary>Single public handoff for a fully constructed authored bootstrap.</summary>
 public sealed class SimulationBootstrapComposition
 {
     private readonly NpcDecisionRecorder decisionRecorder;
@@ -42,8 +43,13 @@ public sealed class SimulationBootstrapComposition
         this.economyTransactionService = economyTransactionService ?? throw new System.ArgumentNullException(nameof(economyTransactionService));
         NpcChronicles = chronicles;
         ChronicleFormatter = chronicleFormatter;
+        if (travelParties == null || groupTravel == null || groupTravel.Store != travelParties)
+        {
+            throw new ArgumentException("Bootstrap travel systems must share the installed TravelPartyStore.");
+        }
         TravelParties = travelParties;
         GroupTravel = groupTravel;
+        TravelPartyCensusProvider = new TravelPartyCensusProvider(travelParties);
         Runtime = runtime;
         PersonStoreCensusProviders = PersonStoreCensusProvider.CreateProviders(Runtime.PersonStore);
         CityNpcPresenceCensusProviders = CityNpcPresenceCensusProvider.CreateProviders(
@@ -101,6 +107,7 @@ public sealed class SimulationBootstrapComposition
     public NpcChronicleFormatter ChronicleFormatter { get; }
     public TravelPartyStore TravelParties { get; }
     public TravelPartySystem GroupTravel { get; }
+    public IOwnerSectionCensusProvider TravelPartyCensusProvider { get; }
     public SimulationRuntime Runtime { get; }
     /// <summary>Fixed passive witnesses for the installed Person registry and materialization bindings.</summary>
     public IReadOnlyList<IOwnerSectionCensusProvider> PersonStoreCensusProviders { get; }
