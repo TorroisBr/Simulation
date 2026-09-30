@@ -1,6 +1,6 @@
 # P12-B TravelParty owner census design
 
-**Status:** Revised after independent review; awaiting exact-tip re-review. This is a
+**Status:** Revised after independent re-review; awaiting exact-tip re-review. This is a
 bounded owner-census sub-capability within the accepted P12-B scope. It adds
 no checkpoint ID, product behavior, capture eligibility, or readiness claim.
 It is a design artifact only; implementation follows the accepted P12-B
@@ -76,15 +76,37 @@ that never reaches Add produces none. A compensation Remove is not suppressed
 because the outer start returned false.
 
 Before allocating the party ID or changing member travel state, charging
-costs, or recording an event, `TryStartTravelParty` must preflight capacity for
-both possible store commits: Add and, if start-event recording fails, its
-compensating Remove. This call is a synchronous runtime operation; no other
-supported `TravelPartyStore` writer runs between its Add and possible
-compensation. Therefore the two-slot check is sufficient without adding a
-reservation API or changing the public store contract. At revision
+costs, or recording an event, `TryStartTravelParty` must hold the store-local
+mutation window and preflight capacity for both possible store commits: Add
+and one compensating Remove. The window prevents another public store writer
+from consuming the checked capacity before either commit. At revision
 `long.MaxValue - 1`, reject start before any non-store effect; at revision
 `long.MaxValue - 2`, Add followed by successful compensation can reach exactly
 `long.MaxValue`. If both commits succeed, retain both revision increments.
+
+### Store-local mutation serialization
+
+The current runtime guard is a health gate, and the daily advance lease is a
+reentrancy guard; neither serializes public `TravelPartyStore` writers.
+Implement one private, reentrant store-local mutation monitor. Every public
+`Add`, `Complete`, and `Remove` holds it across validation, capacity preflight,
+both index updates, and revision increment. An internal disposable mutation
+window enters the same monitor and is held across compound operations:
+
+- `TravelPartySystem.TryStartTravelParty` holds the window from before its
+  two-commit capacity check through success or any store compensation.
+- `TravelPartySystem.AdvanceParties` holds it from the active-party snapshot
+  through all party progress and `Complete` commits. Its final-arrival
+  capacity check stays before the first member progress mutation.
+- `ExpeditionSystem.TryBeginReturn` holds it across the expedition state
+  transition, nested party start, return-party association, and defensive
+  compensation. The nested `TryStartTravelParty` window is reentrant.
+
+This protects only `TravelPartyStore` membership and its local revision during
+these operations. It does not make unrelated expedition, NPC, or runtime state
+thread-safe; prove global owner-thread affinity or quiescence; or synchronize
+the passive census read. P12-B's eventual capture protocol must still establish
+its separate owner-thread/quiescence and post-collection revalidation gates.
 
 ### Saturation and arrival atomicity
 
@@ -105,8 +127,9 @@ No census provider is allowed to mutate, bind, or bypass the existing
 `IAuthoritativeMutationGuardBindable`; its `Add`, `Complete`, and `Remove`
 check the bound guard. `SimulationRuntime` binds the `TravelPartySystem`, which
 binds the party store. The provider only reads the installed store. A denied
-mutation must leave the witness unchanged. Do not add a second guard or
-operation scope.
+mutation must leave the witness unchanged. The store-local mutation monitor
+above protects only atomic owner commits and compound compensation; it is not a
+second authoritative mutation guard or a P12-B census operation scope.
 
 ## 3. Bootstrap evidence and verification
 
@@ -149,6 +172,12 @@ Add focused `TravelPartyCensusTests` for the provider and owner lifecycle:
    one store revision increment. Intermediate travel-day progress does not
    change party-store membership/revision. Successful arrival removes the party
    and increments revision once.
+8. Hold the internal mutation window on one thread and attempt a public store
+   Add/Remove from another; prove that writer cannot change count or revision
+   until the compound window releases, after which it proceeds normally.
+   Exercise event-record and Expedition return-association compensation at the
+   saturation boundary while their enclosing window is held; each must either
+   complete both store commits or reject before member/cost side effects.
 
 Use existing `GroupTravelTests` fixtures and invariants where they make the
 outer commit path easier to exercise; do not change travel requirements to
@@ -196,9 +225,9 @@ capture path.
 Proposed implementation ownership after that prerequisite:
 
 - `Assets/_Project/Scripts/TravelParty.cs`: the owner-local revision and its
-  Add/Complete/Remove commits; the two-commit start-capacity preflight and
-  local final-arrival capacity preflight in `TravelPartySystem` described
-  above. This is the spatial/travel shared
+  Add/Complete/Remove commits; the store-local mutation monitor, two-commit
+  start-capacity preflight, and local final-arrival capacity preflight in
+  `TravelPartySystem` described above. This is the spatial/travel shared
   semantic hotspot and requires exclusive ownership while edited.
 - New `Assets/_Project/Scripts/TravelPartyCensusProvider.cs`: the passive
   schema-v1 adapter over the exact installed `TravelPartyStore`.
@@ -224,15 +253,15 @@ Relevant current source evidence at the exact base:
 - `ExpeditionSystem.cs:807-819`: after a successful return-party start,
   `TryBeginReturnTravel` associates its nonempty ID with an expedition already
   moved to `Returning`; a defensive failure branch compensates with a direct
-  `TravelPartyStore.Remove`. Under the supported serialized synchronous flow,
-  the return-state transition just succeeded, the created party ID is
-  nonempty, and `TryStartTravelParty` has no callback that mutates expedition
-  state before this association. Thus the association cannot fail under its
-  current supported preconditions. Retain the defensive branch, but classify
-  it as unreachable in the rollback matrix; do not rely on it as a reachable
-  third store commit in the two-slot start-capacity check. If these preconditions
-  change, the caller must preflight capacity for its own compensation before
-  starting the party.
+  `TravelPartyStore.Remove`. Treat this as a possible compensating writer:
+  `ExpeditionRuntime` has other public lifecycle writers, so repository
+  evidence does not make association failure unreachable. The enclosing
+  store-local mutation window prevents competing party-store writers; the
+  nested party start preflights capacity for Add plus one compensating Remove
+  before any member or cost changes. The Expedition branch uses that same
+  spare commit capacity if association fails. Do not require a third slot:
+  successful event recording and failed return association are mutually
+  exclusive outcomes of the start call.
 - `TravelParty.cs:627-659` and `SimulationRuntime.cs:455,1050`: party system and
   store guard binding in the live runtime.
 - `SimulationBootstrapComposition.cs:22-24,102-103`:
