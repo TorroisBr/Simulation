@@ -1,10 +1,18 @@
 # P12-E Institution and Office Census Candidate
 
-**Status:** Implemented and validated; exact-tip independent review pending.
+**Status:** Implemented, validated, and independently reviewed; canonical
+promotion has not occurred.
 
 **Branch:** `codex/phase12/P12EPropertyCensus`.
 
 **Code tip:** `65ebc7f7ab6dd834e2326ff426600483a74c162c`.
+
+**Exact candidate tip:** `35ec9887add812922908d1f402d02d5db3500d44`.
+Independent integration review passed on that exact tip against canonical
+base `69f456d5e3c6d6f7e4b85b36e98968ced0549bf3`; the only commit after the
+code tip is documentation-only. The review found no code, scope, or
+revalidation findings. It did not rerun Unity tests; the exact code tree's
+validation results are listed below.
 
 **Design:** `PHASE12_P12E_INSTITUTION_OFFICE_CENSUS_DESIGN.md`, proposed at
 `e22b8b3` and design-reviewed at `db36087`.
