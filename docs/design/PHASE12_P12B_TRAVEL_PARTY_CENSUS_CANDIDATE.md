@@ -38,8 +38,8 @@ selected-profile bootstrap identity, and split-store rejection.
 
 The implementation is based on the canonical SHA above. The final code-bearing
 tip for fresh exact-tip review is
-`260a688f7ea1a9f86e9b589788cda2c32357e170` (test tree
-`bf95798acdf932a91d54f52c8604ba20928f2cd0`); production code is unchanged from
+`260a688f7ea1a9f86e9b589788cda2c32357e170` (tree
+`34571165d55af36a60f64650dce1968802cfd500`); production code is unchanged from
 `8c446ed8920028566b8af84583e7599bc907791c`. The return-association test does
 not intercept or pause the production `ExpeditionSystem.TryBeginReturn`
 coordinator. Instead, without a supported callback seam or production-only
