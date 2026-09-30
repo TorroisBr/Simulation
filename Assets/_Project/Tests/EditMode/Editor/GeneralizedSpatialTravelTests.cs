@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using NUnit.Framework;
 
 public sealed class GeneralizedSpatialTravelTests
@@ -25,6 +26,127 @@ public sealed class GeneralizedSpatialTravelTests
         Assert.That(npc.CurrentCity, Is.SameAs(fixture.CityA));
         Assert.That(npc.CurrentLocation, Is.SameAs(fixture.CityA.Location));
         Assert.That(fixture.CityA.ImportantNpcs, Has.Member(npc));
+        Assert.That(fixture.CityA.ImportantNpcRevision, Is.EqualTo(1L));
+    }
+
+    [Test]
+    public void CityPresenceRevisionChangesOnlyWhenProjectionMembershipChanges()
+    {
+        SpatialTravelFixture fixture = new SpatialTravelFixture();
+        NpcRuntime npc = fixture.CreateNpc("presence-revision", fixture.CityA, 10f);
+        long initialRevision = fixture.CityA.ImportantNpcRevision;
+
+        Assert.That(npc.SetCurrentPresence(fixture.CityA.Location, fixture.CityA), Is.True);
+        fixture.CityA.AddImportantNpc(npc);
+        Assert.That(fixture.CityA.ImportantNpcRevision, Is.EqualTo(initialRevision));
+        Assert.That(fixture.CityA.ImportantNpcs, Has.Count.EqualTo(1));
+
+        IList<NpcRuntime> readOnlyMembership = fixture.CityA.ImportantNpcs as IList<NpcRuntime>;
+        Assert.That(readOnlyMembership, Is.Not.Null);
+        Assert.Throws<NotSupportedException>(() => readOnlyMembership.Add(npc));
+
+        Assert.That(npc.SetCurrentPresence(fixture.Site.Location), Is.True);
+        Assert.That(fixture.CityA.ImportantNpcs, Is.Empty);
+        Assert.That(fixture.CityA.ImportantNpcRevision, Is.EqualTo(initialRevision + 1));
+
+        Assert.That(npc.SetCurrentPresence(fixture.CityB.Location, fixture.CityB), Is.True);
+        Assert.That(fixture.CityB.ImportantNpcs, Has.Member(npc));
+        Assert.That(fixture.CityB.ImportantNpcRevision, Is.EqualTo(1L));
+    }
+
+    [Test]
+    public void CrossCityPresencePreflightsBothProjectionOwnersBeforeChangingEither()
+    {
+        SpatialTravelFixture fixture = new SpatialTravelFixture();
+        NpcRuntime npc = fixture.CreateNpc("presence-saturated-city", fixture.CityA, 10f);
+        long sourceRevision = fixture.CityA.ImportantNpcRevision;
+        SetCityPresenceRevision(fixture.CityB, long.MaxValue);
+
+        Assert.That(npc.SetCurrentPresence(fixture.CityB.Location, fixture.CityB), Is.False);
+
+        Assert.That(npc.CurrentCity, Is.SameAs(fixture.CityA));
+        Assert.That(npc.CurrentLocation, Is.SameAs(fixture.CityA.Location));
+        Assert.That(fixture.CityA.ImportantNpcs, Has.Member(npc));
+        Assert.That(fixture.CityA.ImportantNpcRevision, Is.EqualTo(sourceRevision));
+        Assert.That(fixture.CityB.ImportantNpcs, Is.Empty);
+        Assert.That(fixture.CityB.ImportantNpcRevision, Is.EqualTo(long.MaxValue));
+    }
+
+    [Test]
+    public void TravelStartArrivalAndCancellationDoNotPartiallyChangeAtRevisionSaturation()
+    {
+        SpatialTravelFixture startFixture = new SpatialTravelFixture();
+        NpcRuntime startBlocked = startFixture.CreateNpc("travel-start-blocked", startFixture.CityA, 10f);
+        SetCityPresenceRevision(startFixture.CityA, long.MaxValue);
+        Assert.That(startBlocked.StartTravel(startFixture.CityB, 1), Is.False);
+        Assert.That(startBlocked.IsTraveling, Is.False);
+        Assert.That(startBlocked.CurrentCity, Is.SameAs(startFixture.CityA));
+        Assert.That(startFixture.CityA.ImportantNpcs, Has.Member(startBlocked));
+
+        SpatialTravelFixture arrivalFixture = new SpatialTravelFixture();
+        NpcRuntime arrivalBlocked = arrivalFixture.CreateNpc("travel-arrival-blocked", arrivalFixture.CityA, 10f);
+        Assert.That(arrivalBlocked.StartTravel(arrivalFixture.CityB, 1), Is.True);
+        SetCityPresenceRevision(arrivalFixture.CityB, long.MaxValue);
+        Assert.That(arrivalBlocked.AdvanceTravelDay(out _), Is.False);
+        Assert.That(arrivalBlocked.IsTraveling, Is.True);
+        Assert.That(arrivalBlocked.TravelDaysRemaining, Is.EqualTo(1));
+        Assert.That(arrivalBlocked.DestinationCity, Is.SameAs(arrivalFixture.CityB));
+        Assert.That(arrivalFixture.CityB.ImportantNpcs, Is.Empty);
+
+        SpatialTravelFixture cancelFixture = new SpatialTravelFixture();
+        NpcRuntime cancelBlocked = cancelFixture.CreateNpc("travel-cancel-blocked", cancelFixture.CityA, 10f);
+        Assert.That(cancelBlocked.StartTravel(cancelFixture.Site.Location, null, 1), Is.True);
+        SetCityPresenceRevision(cancelFixture.CityA, long.MaxValue);
+        Assert.That(cancelBlocked.CancelTravel(cancelFixture.CityA), Is.False);
+        Assert.That(cancelBlocked.IsTraveling, Is.True);
+        Assert.That(cancelBlocked.DestinationLocation, Is.SameAs(cancelFixture.Site.Location));
+        Assert.That(cancelFixture.CityA.ImportantNpcs, Is.Empty);
+    }
+
+    [Test]
+    public void CityPresenceCensusBindsStableOrderedCityOwnersAndExactRevision()
+    {
+        SpatialTravelFixture fixture = new SpatialTravelFixture();
+        NpcRuntime npc = fixture.CreateNpc("city-census", fixture.CityA, 10f);
+
+        IReadOnlyList<IOwnerSectionCensusProvider> providers =
+            CityNpcPresenceCensusProvider.CreateProviders(
+                new[] { fixture.CityB, fixture.CityA },
+                new[] { npc });
+        OwnerSectionCensusWitness first = providers[0].GetCurrentCensus();
+        OwnerSectionCensusWitness second = providers[1].GetCurrentCensus();
+
+        Assert.That(first.SectionId, Is.EqualTo(
+            CityNpcPresenceCensusProvider.SectionIdPrefix + fixture.CityA.RuntimeId));
+        Assert.That(first.SchemaVersion, Is.EqualTo(CityNpcPresenceCensusProvider.SchemaVersion));
+        Assert.That(first.OwnerInstanceIdentity, Is.SameAs(fixture.CityA));
+        Assert.That(first.Cardinality, Is.EqualTo(1));
+        Assert.That(first.Revision, Is.EqualTo(fixture.CityA.ImportantNpcRevision));
+        Assert.That(fixture.CityA.ImportantNpcs, Has.Member(npc));
+        Assert.That(second.OwnerInstanceIdentity, Is.SameAs(fixture.CityB));
+        Assert.That(second.Cardinality, Is.Zero);
+    }
+
+    [Test]
+    public void CityPresenceCensusFailsClosedOnDuplicateOrNonReciprocalProjection()
+    {
+        SpatialTravelFixture duplicateFixture = new SpatialTravelFixture();
+        NpcRuntime duplicate = duplicateFixture.CreateNpc("city-census-duplicate", duplicateFixture.CityA, 10f);
+        AddRawCityProjectionMember(duplicateFixture.CityA, duplicate);
+        IOwnerSectionCensusProvider duplicateProvider = CityNpcPresenceCensusProvider.CreateProviders(
+            new[] { duplicateFixture.CityA },
+            new[] { duplicate })[0];
+
+        Assert.Throws<InvalidOperationException>(() => duplicateProvider.GetCurrentCensus());
+
+        SpatialTravelFixture omittedFixture = new SpatialTravelFixture();
+        NpcRuntime omitted = omittedFixture.CreateNpc("city-census-omitted", omittedFixture.CityA, 10f);
+        RemoveRawCityProjectionMember(omittedFixture.CityA, omitted);
+        IOwnerSectionCensusProvider omittedProvider = CityNpcPresenceCensusProvider.CreateProviders(
+            new[] { omittedFixture.CityA },
+            new[] { omitted })[0];
+
+        Assert.Throws<InvalidOperationException>(() => omittedProvider.GetCurrentCensus());
     }
 
     [Test]
@@ -37,7 +159,7 @@ public sealed class GeneralizedSpatialTravelTests
 
         Assert.That(npc.CurrentLocation, Is.SameAs(fixture.Site.Location));
         Assert.That(npc.CurrentCity, Is.Null);
-        Assert.That(fixture.CityA.ImportantNpcs.Contains(npc), Is.False);
+        Assert.That(fixture.CityA.ImportantNpcs, Has.No.Member(npc));
     }
 
     [Test]
@@ -85,7 +207,8 @@ public sealed class GeneralizedSpatialTravelTests
         Assert.That(fixture.Travel.AdvanceTravels(new List<NpcRuntime> { npc }).Count, Is.EqualTo(1));
         Assert.That(npc.CurrentLocation, Is.SameAs(fixture.CityA.Location));
         Assert.That(npc.CurrentCity, Is.SameAs(fixture.CityA));
-        Assert.That(fixture.CityA.ImportantNpcs.FindAll(candidate => candidate == npc).Count, Is.EqualTo(1));
+        Assert.That(new List<NpcRuntime>(fixture.CityA.ImportantNpcs)
+            .FindAll(candidate => candidate == npc).Count, Is.EqualTo(1));
     }
 
     [Test]
@@ -322,6 +445,28 @@ public sealed class GeneralizedSpatialTravelTests
             destination.RuntimeId,
             routeRuntimeId);
     }
+
+    private static void SetCityPresenceRevision(CityRuntime city, long revision)
+    {
+        typeof(CityRuntime)
+            .GetField("importantNpcRevision", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(city, revision);
+    }
+
+    private static void AddRawCityProjectionMember(CityRuntime city, NpcRuntime npc)
+    {
+        ((List<NpcRuntime>)typeof(CityRuntime)
+            .GetField("importantNpcs", BindingFlags.Instance | BindingFlags.NonPublic)
+            .GetValue(city)).Add(npc);
+    }
+
+    private static void RemoveRawCityProjectionMember(CityRuntime city, NpcRuntime npc)
+    {
+        ((List<NpcRuntime>)typeof(CityRuntime)
+            .GetField("importantNpcs", BindingFlags.Instance | BindingFlags.NonPublic)
+            .GetValue(city)).Remove(npc);
+    }
+
 }
 
 internal sealed class SpatialTravelFixture
@@ -428,4 +573,5 @@ internal sealed class SpatialTravelFixture
             SimulationTestFactory.CreateExplorableSite(id),
             location);
     }
+
 }

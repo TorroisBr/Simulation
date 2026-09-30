@@ -598,6 +598,27 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(authority.ScaleContext.Unit, Is.EqualTo("km"));
         Assert.That(runtime.Cities, Has.Count.EqualTo(2));
         Assert.That(runtime.NpcRuntimes, Has.Count.EqualTo(10));
+        IReadOnlyList<IOwnerSectionCensusProvider> cityPresenceProviders =
+            simulation.Bootstrap.CityNpcPresenceCensusProviders;
+        Assert.That(cityPresenceProviders, Has.Count.EqualTo(runtime.Cities.Count));
+        for (int i = 0; i < runtime.Cities.Count; i++)
+        {
+            CityRuntime city = runtime.Cities[i];
+            OwnerSectionCensusWitness witness = cityPresenceProviders[i].GetCurrentCensus();
+            Assert.That(witness.SectionId, Is.EqualTo(
+                CityNpcPresenceCensusProvider.SectionIdPrefix + city.RuntimeId));
+            Assert.That(witness.SchemaVersion, Is.EqualTo(CityNpcPresenceCensusProvider.SchemaVersion));
+            Assert.That(witness.OwnerInstanceIdentity, Is.SameAs(city));
+            Assert.That(witness.Cardinality, Is.EqualTo(city.ImportantNpcs.Count));
+            Assert.That(witness.Revision, Is.EqualTo(city.ImportantNpcRevision));
+            Assert.That(city.ImportantNpcs.Distinct().Count(), Is.EqualTo(city.ImportantNpcs.Count));
+            Assert.That(city.ImportantNpcs.All(npc => npc != null
+                && npc.CurrentCity == city
+                && npc.CurrentLocation == city.Location
+                && runtime.NpcRuntimes.Contains(npc)), Is.True);
+            Assert.That(runtime.NpcRuntimes.Count(npc => npc.CurrentCity == city),
+                Is.EqualTo(city.ImportantNpcs.Count));
+        }
         Assert.That(runtime.PersonStore.Persons, Is.Empty);
         Assert.That(runtime.GenealogyRecords, Is.Empty);
         Assert.That(runtime.Cities.Sum(city => city.CurrentPopulation), Is.EqualTo(1800));

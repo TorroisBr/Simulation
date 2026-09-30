@@ -46,6 +46,9 @@ public sealed class SimulationBootstrapComposition
         GroupTravel = groupTravel;
         Runtime = runtime;
         PersonStoreCensusProviders = PersonStoreCensusProvider.CreateProviders(Runtime.PersonStore);
+        CityNpcPresenceCensusProviders = CityNpcPresenceCensusProvider.CreateProviders(
+            Runtime.Cities,
+            Runtime.NpcRuntimes);
         ActorChoiceInputCensusProvider = new ActorChoiceP11CensusProvider(Runtime.ActorChoiceStore);
         ActorChoiceTemporalCensusProvider = new ActorChoiceTemporalCensusProvider(Runtime.ActorChoiceStore);
         RuntimeIdentityCensusProviders = RuntimeIdentityRegistryCensusProvider.CreateProviders(runtimeIdentityRegistry);
@@ -101,6 +104,8 @@ public sealed class SimulationBootstrapComposition
     public SimulationRuntime Runtime { get; }
     /// <summary>Fixed passive witnesses for the installed Person registry and materialization bindings.</summary>
     public IReadOnlyList<IOwnerSectionCensusProvider> PersonStoreCensusProviders { get; }
+    /// <summary>Fixed passive witnesses for each City's NPC-presence projection.</summary>
+    public IReadOnlyList<IOwnerSectionCensusProvider> CityNpcPresenceCensusProviders { get; }
     /// <summary>Passive witness for retained P11 actor-choice history.</summary>
     public IOwnerSectionCensusProvider ActorChoiceInputCensusProvider { get; }
     /// <summary>Passive exact-zero witness for excluded P18 temporal actor choices.</summary>

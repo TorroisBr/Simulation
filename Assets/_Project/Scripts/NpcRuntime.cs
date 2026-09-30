@@ -408,19 +408,38 @@ public class NpcRuntime : ICapabilityConditionSource
         }
 
         CityRuntime previousCity = currentCity;
+        bool removePreviousMembership = previousCity != null
+            && previousCity != cityProjection
+            && previousCity.ContainsImportantNpc(this);
+        bool addNewMembership = cityProjection != null
+            && !cityProjection.ContainsImportantNpc(this);
 
-        if (previousCity != null && previousCity != cityProjection)
+        if ((removePreviousMembership
+                && !previousCity.CanRemoveImportantNpcMembership(this))
+            || (addNewMembership
+                && !cityProjection.CanAddImportantNpcMembership(this)))
         {
-            previousCity.RemoveImportantNpc(this);
+            return false;
+        }
+
+        if (removePreviousMembership
+            && !previousCity.TryRemoveImportantNpcMembership(this))
+        {
+            return false;
+        }
+
+        if (addNewMembership
+            && !cityProjection.TryAddImportantNpcMembership(this))
+        {
+            if (removePreviousMembership)
+            {
+                previousCity.TryAddImportantNpcMembership(this);
+            }
+            return false;
         }
 
         currentLocation = location;
         currentCity = cityProjection;
-
-        if (cityProjection != null && cityProjection.ImportantNpcs.Contains(this) == false)
-        {
-            cityProjection.ImportantNpcs.Add(this);
-        }
 
         return true;
     }
@@ -452,9 +471,10 @@ public class NpcRuntime : ICapabilityConditionSource
             return false;
         }
 
-        if (currentCity != null)
+        if (currentCity != null
+            && !currentCity.TryRemoveImportantNpcMembership(this))
         {
-            currentCity.RemoveImportantNpc(this);
+            return false;
         }
 
         currentLocation = null;
@@ -468,6 +488,13 @@ public class NpcRuntime : ICapabilityConditionSource
         travelStartedToday = true;
         travelOriginDecisionId = string.IsNullOrWhiteSpace(originDecisionId) == true ? null : originDecisionId;
         return true;
+    }
+
+    internal bool CanStartTravelPresenceTransition(long requiredRevisionIncrements)
+    {
+        return currentCity == null
+            || !currentCity.ContainsImportantNpc(this)
+            || currentCity.CanApplyImportantNpcRevisionIncrements(requiredRevisionIncrements);
     }
 
     public bool StartTravel(CityRuntime destination, int travelDays, string originDecisionId = null)
@@ -491,6 +518,13 @@ public class NpcRuntime : ICapabilityConditionSource
         arrivedCity = null;
 
         if (IsAlive == false || IsTraveling == false)
+        {
+            return false;
+        }
+
+        if (travelDaysRemaining <= 1
+            && destinationCity != null
+            && !destinationCity.CanAddImportantNpcMembership(this))
         {
             return false;
         }
@@ -528,6 +562,12 @@ public class NpcRuntime : ICapabilityConditionSource
     public bool CancelTravel(SpatialLocationRuntime originLocation, CityRuntime originCityProjection)
     {
         if (IsTraveling == false)
+        {
+            return false;
+        }
+
+        if (originCityProjection != null
+            && !originCityProjection.CanAddImportantNpcMembership(this))
         {
             return false;
         }

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using NUnit.Framework;
 
 public sealed class GroupTravelTests
@@ -472,6 +473,49 @@ public sealed class GroupTravelTests
     }
 
     [Test]
+    public void TravelPartyStartPreflightsAggregateOriginAndRollbackRevisionCapacity()
+    {
+        TravelPartyFixture fixture = SimulationTestFactory.CreateTravelPartyFixture(3);
+        List<NpcRuntime> members = new List<NpcRuntime>(fixture.Members);
+        List<float> balances = members.ConvertAll(member => member.Money);
+        SetCityPresenceRevision(fixture.World.A, long.MaxValue - 5L);
+
+        Assert.That(fixture.System.TryStartTravelParty(CreateContext(fixture), out _), Is.False);
+
+        Assert.That(fixture.World.A.ImportantNpcs.Count, Is.EqualTo(members.Count));
+        Assert.That(fixture.World.A.ImportantNpcs, Is.EquivalentTo(members));
+        Assert.That(members.TrueForAll(member => !member.IsTraveling), Is.True);
+        Assert.That(members.ConvertAll(member => member.Money), Is.EqualTo(balances));
+        Assert.That(fixture.Parties.ActiveParties, Is.Empty);
+        Assert.That(fixture.Records.Events.Events, Is.Empty);
+        Assert.That(fixture.World.A.ImportantNpcRevision, Is.EqualTo(long.MaxValue - 5L));
+    }
+
+    [Test]
+    public void TravelPartyArrivalPreflightsAllDestinationMembershipsBeforeAdvancing()
+    {
+        TravelPartyFixture fixture = SimulationTestFactory.CreateTravelPartyFixture(3);
+        List<NpcRuntime> members = new List<NpcRuntime>(fixture.Members);
+        Assert.That(fixture.System.TryStartTravelParty(CreateContext(fixture), out _), Is.True);
+        fixture.System.AdvanceParties();
+        fixture.System.AdvanceParties();
+        fixture.System.AdvanceParties();
+        Assert.That(members.TrueForAll(member => member.TravelDaysRemaining == 1), Is.True);
+        SetCityPresenceRevision(fixture.World.B, long.MaxValue - 2L);
+
+        IReadOnlyList<NpcRuntime> arrivals = fixture.System.AdvanceParties();
+
+        Assert.That(arrivals, Is.Empty);
+        Assert.That(members.TrueForAll(member => member.IsTraveling
+            && member.TravelDaysRemaining == 1
+            && member.CurrentCity == null), Is.True);
+        Assert.That(fixture.World.B.ImportantNpcs, Is.Empty);
+        Assert.That(fixture.World.B.ImportantNpcRevision, Is.EqualTo(long.MaxValue - 2L));
+        Assert.That(fixture.Parties.ActiveParties, Has.Count.EqualTo(1));
+        Assert.That(fixture.Records.Events.Events, Has.Count.EqualTo(1));
+    }
+
+    [Test]
     public void TravelParty_StartWithoutOriginDecision_DoesNotCreateDecisionRecord()
     {
         TravelPartyFixture fixture = SimulationTestFactory.CreateTravelPartyFixture(1);
@@ -630,6 +674,13 @@ public sealed class GroupTravelTests
             fixture.World.B.Location.RuntimeId,
             routeRuntimeId ?? fixture.World.RouteAB.RuntimeId,
             originDecisionId);
+    }
+
+    private static void SetCityPresenceRevision(CityRuntime city, long revision)
+    {
+        typeof(CityRuntime)
+            .GetField("importantNpcRevision", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(city, revision);
     }
 
     private static TravelPartyRuntime CreatePartySnapshot(

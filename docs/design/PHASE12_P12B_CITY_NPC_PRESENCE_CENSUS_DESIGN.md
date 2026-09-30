@@ -19,6 +19,14 @@ stable City RuntimeId-based section identity. Report:
 - revision: a City-owned monotone revision for actual projection-membership
   changes.
 
+Each provider also holds the runtime's live read-only NPC roster and validates
+both directions before issuing a witness. Every projected City member must be
+present exactly once in that roster, point back to the exact City object and
+its exact Location object, and have a unique RuntimeId. Every rostered NPC
+whose `CurrentCity` is that City must appear exactly once and point to the
+City's exact Location. Duplicate, omitted, or non-reciprocal membership makes
+the provider fail closed instead of issuing a witness.
+
 The revision belongs to the City projection owner. It does not replace
 `NpcRuntime.CurrentCity` or claim that the City list is the sole location
 truth. The witness must compare the City projection to the corresponding NPC
@@ -44,6 +52,17 @@ The implementation must account for construction/bootstrap, materialization,
 presence changes, travel departure, arrival, and cancellation. A mutable raw
 `List<NpcRuntime>` escape is not compatible with an owner revision because it
 allows writes that bypass the stamp.
+
+Single-person travel must check capacity for its actual origin-City membership
+removal before charging or changing travel state. Travel-party start must
+preflight the actual City owners from which members will be removed and the
+resolved origin-City destination used by rollback, reserving capacity for all
+possible compensation additions before changing any participant. Members share
+an origin Location, but their current City membership need not be assumed to
+match that resolved origin City.
+Travel-party arrival must preflight the aggregate destination-City additions
+before advancing any member on the final day. A saturation rejection leaves
+the group's members, costs, and party/event state untouched.
 
 ## Required evidence
 

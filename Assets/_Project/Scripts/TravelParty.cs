@@ -568,6 +568,12 @@ public sealed class TravelPartySystem : IAuthoritativeMutationGuardBindable
                 continue;
             }
 
+            if (members[0].TravelDaysRemaining <= 1
+                && !CanCommitTravelPartyArrival(members))
+            {
+                continue;
+            }
+
             bool allArrived = true;
 
             foreach (NpcRuntime member in members)
@@ -803,7 +809,68 @@ public sealed class TravelPartySystem : IAuthoritativeMutationGuardBindable
             members,
             memberById,
             costs);
+        if (!CanStartTravelProjectionTransaction(preparation))
+        {
+            reason = "City presence census revision capacity is insufficient for group travel and rollback.";
+            return false;
+        }
         return true;
+    }
+
+    private static bool CanStartTravelProjectionTransaction(TravelPreparation preparation)
+    {
+        if (preparation == null) return false;
+
+        Dictionary<CityRuntime, long> requiredIncrements = new Dictionary<CityRuntime, long>();
+        foreach (NpcRuntime member in preparation.Members)
+        {
+            if (member == null) return false;
+
+            CityRuntime currentCity = member.CurrentCity;
+            if (currentCity != null && currentCity.ContainsImportantNpc(member))
+                AddRevisionIncrements(requiredIncrements, currentCity, 1L);
+
+            CityRuntime rollbackCity = preparation.OriginCity;
+            if (rollbackCity != null)
+                AddRevisionIncrements(requiredIncrements, rollbackCity, 1L);
+        }
+
+        foreach (KeyValuePair<CityRuntime, long> requirement in requiredIncrements)
+        {
+            if (!requirement.Key.CanApplyImportantNpcRevisionIncrements(requirement.Value))
+                return false;
+        }
+
+        return true;
+    }
+
+    private static bool CanCommitTravelPartyArrival(List<NpcRuntime> members)
+    {
+        if (members == null || members.Count == 0) return false;
+
+        CityRuntime destinationCity = members[0]?.DestinationCity;
+        if (destinationCity == null)
+        {
+            return members.TrueForAll(member => member != null && member.DestinationCity == null);
+        }
+
+        long requiredIncrements = 0L;
+        foreach (NpcRuntime member in members)
+        {
+            if (member == null || member.DestinationCity != destinationCity) return false;
+            if (!destinationCity.ContainsImportantNpc(member)) requiredIncrements++;
+        }
+
+        return destinationCity.CanApplyImportantNpcRevisionIncrements(requiredIncrements);
+    }
+
+    private static void AddRevisionIncrements(
+        Dictionary<CityRuntime, long> incrementsByCity,
+        CityRuntime city,
+        long increments)
+    {
+        incrementsByCity.TryGetValue(city, out long current);
+        incrementsByCity[city] = current + increments;
     }
 
     private bool TryResolvePartyMembers(TravelPartyRuntime party, out List<NpcRuntime> members)

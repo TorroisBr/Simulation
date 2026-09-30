@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Globalization;
 using UnityEngine;
 
@@ -15,6 +16,8 @@ public class CityRuntime
     [NonSerialized] private PopulationEconomyRuntime populationEconomy;
     [NonSerialized] private SpatialLocationRuntime location;
     [NonSerialized] private List<NpcRuntime> importantNpcs = new List<NpcRuntime>();
+    [NonSerialized] private ReadOnlyCollection<NpcRuntime> readOnlyImportantNpcs;
+    [NonSerialized] private long importantNpcRevision;
     [NonSerialized] private SimulationLogger logger;
     [NonSerialized] private Dictionary<string, CityDailyEconomyReceipt> dailyEconomyReceipts =
         new Dictionary<string, CityDailyEconomyReceipt>(StringComparer.Ordinal);
@@ -78,7 +81,9 @@ public class CityRuntime
             return populationEconomy;
         }
     }
-    public List<NpcRuntime> ImportantNpcs => importantNpcs ?? (importantNpcs = new List<NpcRuntime>());
+    public IReadOnlyList<NpcRuntime> ImportantNpcs => readOnlyImportantNpcs
+        ?? (readOnlyImportantNpcs = EnsureImportantNpcs().AsReadOnly());
+    public long ImportantNpcRevision => importantNpcRevision;
     public string CityName => cityData != null ? cityData.cityName : "Cidade desconhecida";
     public bool HasLocalDailyMaterialFlow => cityData != null
         && (!string.IsNullOrWhiteSpace(cityData.settlementSemanticId)
@@ -542,23 +547,7 @@ public class CityRuntime
             return;
         }
 
-        if (npcRuntime.CurrentCity != this || npcRuntime.CurrentLocation != Location)
-        {
-            if (npcRuntime.CurrentCity != null)
-            {
-                npcRuntime.CurrentCity.RemoveImportantNpc(npcRuntime);
-            }
-
-            if (npcRuntime.SetCurrentPresence(Location, this) == false)
-            {
-                return;
-            }
-        }
-
-        if (ImportantNpcs.Contains(npcRuntime) == false)
-        {
-            ImportantNpcs.Add(npcRuntime);
-        }
+        npcRuntime.SetCurrentPresence(Location, this);
     }
 
     public void RemoveImportantNpc(NpcRuntime npcRuntime)
@@ -568,12 +557,96 @@ public class CityRuntime
             return;
         }
 
-        ImportantNpcs.Remove(npcRuntime);
+        if (!TryRemoveImportantNpcMembership(npcRuntime))
+        {
+            return;
+        }
 
         if (npcRuntime.CurrentCity == this)
         {
             npcRuntime.ClearCurrentPresenceFromCity(this);
         }
+    }
+
+    internal bool ContainsImportantNpc(NpcRuntime npcRuntime)
+    {
+        return npcRuntime != null && EnsureImportantNpcs().Contains(npcRuntime);
+    }
+
+    internal bool CanAddImportantNpcMembership(NpcRuntime npcRuntime)
+    {
+        return npcRuntime != null
+            && (ContainsImportantNpc(npcRuntime) || CanApplyImportantNpcRevisionIncrements(1L));
+    }
+
+    internal bool CanRemoveImportantNpcMembership(NpcRuntime npcRuntime)
+    {
+        return npcRuntime == null
+            || !ContainsImportantNpc(npcRuntime)
+            || CanApplyImportantNpcRevisionIncrements(1L);
+    }
+
+    internal bool CanApplyImportantNpcRevisionIncrements(long increments)
+    {
+        return increments >= 0L
+            && importantNpcRevision <= long.MaxValue - increments;
+    }
+
+    internal bool TryAddImportantNpcMembership(NpcRuntime npcRuntime)
+    {
+        if (npcRuntime == null)
+        {
+            return false;
+        }
+
+        List<NpcRuntime> membership = EnsureImportantNpcs();
+        if (membership.Contains(npcRuntime))
+        {
+            return true;
+        }
+
+        if (importantNpcRevision == long.MaxValue)
+        {
+            return false;
+        }
+
+        membership.Add(npcRuntime);
+        importantNpcRevision++;
+        return true;
+    }
+
+    internal bool TryRemoveImportantNpcMembership(NpcRuntime npcRuntime)
+    {
+        if (npcRuntime == null)
+        {
+            return true;
+        }
+
+        List<NpcRuntime> membership = EnsureImportantNpcs();
+        if (!membership.Contains(npcRuntime))
+        {
+            return true;
+        }
+
+        if (importantNpcRevision == long.MaxValue)
+        {
+            return false;
+        }
+
+        membership.Remove(npcRuntime);
+        importantNpcRevision++;
+        return true;
+    }
+
+    private List<NpcRuntime> EnsureImportantNpcs()
+    {
+        if (importantNpcs == null)
+        {
+            importantNpcs = new List<NpcRuntime>();
+            readOnlyImportantNpcs = null;
+        }
+
+        return importantNpcs;
     }
 
     internal bool CanBindRuntimeMutationGuard(AuthoritativeMutationGuard guard)

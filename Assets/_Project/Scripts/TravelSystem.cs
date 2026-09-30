@@ -121,6 +121,7 @@ public class TravelSystem : IAuthoritativeMutationGuardBindable
             || npcRuntime.IsAlive == false
             || targetLocation == null
             || (targetCityProjection != null && targetCityProjection.Location != targetLocation)
+            || !npcRuntime.CanStartTravelPresenceTransition(1L)
             || IsManagedByTravelParty(npcRuntime)
             || TryGetDirectRoute(npcRuntime.CurrentLocation, targetLocation, out SpatialRouteRuntime route) == false)
         {
@@ -222,6 +223,7 @@ public class TravelSystem : IAuthoritativeMutationGuardBindable
             || npcRuntime.CurrentLocation == null
             || targetLocation == null
             || npcRuntime.IsTraveling == true
+            || !npcRuntime.CanStartTravelPresenceTransition(1L)
             || IsManagedByTravelParty(npcRuntime))
         {
             return false;
