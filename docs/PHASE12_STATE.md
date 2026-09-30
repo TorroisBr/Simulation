@@ -60,7 +60,7 @@ P12-B–P12-G capability decomposition in
 | Checkpoint | Status | Current evidence and limits |
 |---|---|---|
 | P12-A — `UnityBootstrap-Daily-v1` profile integration | `WAIT_DEPENDENCY` | Scope accepted. No included-owner export plus staged-hydration coverage or validated complete live profile inventory exists yet. Its separate implementation authorization remains outstanding. |
-| P12-B — profile admission and completed-boundary lifecycle | `INCOMPLETE — PARTIAL FOUNDATION PROMOTED` | In addition to the promoted non-admitting kernel, receipt owners, P8-A–D, and RuntimeIdentity witnesses, cumulative stack `b889b4747738d933fe48311ef89fc33a40e3dfa0` adds passive witnesses for record sequence, ActorChoice, RuntimeIdAllocator, ArmedForce/manpower/position, Conflict/War/Battle, Estate/Property, and Institution/Office. Follow-up promotions add P12-D Genealogy parentage, legacy `SpatialNetworkRuntime` location/route witnesses, and day-zero per-NPC `SpatialKnowledgeRuntime` location/route witnesses. See the promoted-stack section and linked candidate evidence. The static writer map and partial profile evidence remain in `docs/design/PHASE12_B_BLOCKER_RESOLUTION.md`. No complete profile census, shared-epoch connection, Unity owner-thread/quiescence proof, or capture token is established. |
+| P12-B — profile admission and completed-boundary lifecycle | `INCOMPLETE — PARTIAL FOUNDATION PROMOTED` | In addition to the promoted non-admitting kernel, receipt owners, P8-A–D, and RuntimeIdentity witnesses, cumulative stack `b889b4747738d933fe48311ef89fc33a40e3dfa0` adds passive witnesses for record sequence, ActorChoice, RuntimeIdAllocator, ArmedForce/manpower/position, Conflict/War/Battle, Estate/Property, and Institution/Office. Follow-up promotions add P12-D Genealogy parentage, legacy `SpatialNetworkRuntime` location/route witnesses, day-zero per-NPC `SpatialKnowledgeRuntime` witnesses, and roster-following SpatialKnowledge census at `0021b0aa13fb6ae6d5f27c129c67ba452dbacb4e` (code `2c782a7`). See the promoted-stack sections and linked candidate evidence. The static writer map and partial profile evidence remain in `docs/design/PHASE12_B_BLOCKER_RESOLUTION.md`. There is no complete profile census or shared-epoch coverage for all supported writes, no global Unity owner-thread/quiescence proof, and no capture token. |
 | P12-C — identity, provenance, deterministic roots | `BLOCKED_ON_P12-B` | The `RuntimeIdAllocator` passive census and record-sequence witness promoted at `b889b47` are inventory evidence only; they do not provide C exports/hydration, deterministic-root state, or provenance. Preserve `codex/phase12/P12CIdentityRuntimeSnapshot` at `531d835` for selective reintegration only after B readiness and revalidation. |
 | P12-D — factual roots and Person/population relations | `BLOCKED_ON_P12-B_AND_C` | Owner inventory and accepted scope remain; no complete export/hydration capability is claimed. |
 | P12-E — core and official daily-domain owners | `BLOCKED_ON_P12-B_AND_C` | Owner inventory and accepted scope remain; effective-profile provider coverage and exact owner exports are incomplete. |
@@ -125,11 +125,48 @@ complete official Smoke filter 5/5. Exact XML evidence is retained under
 worktree and linked from
 [`PHASE12_P12B_SPATIAL_KNOWLEDGE_CENSUS_CANDIDATE.md`](design/PHASE12_P12B_SPATIAL_KNOWLEDGE_CENSUS_CANDIDATE.md).
 
-This is a fixed day-zero per-NPC witness set. Evolved/dynamic NPC owner
-coverage, shared mutation-epoch invalidation, owner-thread/quiescence, complete
-profile owner coverage, capture eligibility, and export/hydration remain
-unresolved. P12-B remains incomplete; P12-A remains `WAIT_DEPENDENCY`; Phase
-12 remains open.
+This is a fixed day-zero per-NPC witness set. Roster-driven dynamic
+SpatialKnowledge section membership is now covered by the separate promotion
+record below. Other dynamic NPC owner coverage, discovery-write invalidation,
+shared mutation-epoch coverage for all supported writes, global
+owner-thread/quiescence, complete profile owner coverage, capture eligibility,
+and export/hydration remain unresolved. P12-B remains incomplete; P12-A
+remains `WAIT_DEPENDENCY`; Phase 12 remains open.
+
+## P12-B dynamic NPC SpatialKnowledge census promotion — 2026-09-30
+
+With explicit approval, candidate branch
+`codex/phase12/P12BDynamicNpcCensusImplementation` at
+`0021b0aa13fb6ae6d5f27c129c67ba452dbacb4e` was fast-forwarded to the local
+`codex/phase12/canonical` branch from
+`0a37e9f053b482d80d0815c95352e3d96b56ed8f`.
+The code-bearing commit is `2c782a7a08abfc1c8b2ba9201efad12f4ac279ae`.
+Independent exact-tip implementation review passed against that base; the
+durable record is
+[`PHASE12_P12B_DYNAMIC_NPC_CENSUS_IMPLEMENTATION_REVIEW.md`](design/PHASE12_P12B_DYNAMIC_NPC_CENSUS_IMPLEMENTATION_REVIEW.md)
+at the promoted candidate tip.
+
+The partial protocol now reconciles two schema-v1 SpatialKnowledge sections
+for every currently registered NPC, ordered by ordinal RuntimeId and bound to
+the exact NPC and SpatialKnowledge owner objects. NPC register/unregister and
+Person materialization/adoption use a runtime-owned outer membership context;
+affected PersonStore sections and the dynamic family publish as one delta.
+The local context records its owning thread; a mismatched nested entry faults
+this partial census and cannot join its active context or publish its family
+or epoch. This does not prove global runtime thread affinity or quiescence.
+
+Validation on the code-bearing tip passed `SpatialKnowledgeCensusTests` 16/16,
+`ContinuationCensusProtocolTests` 22/22, ALL EditMode 2035/2035, the complete
+official Smoke filter 5/5, and `git diff --check`. Exact results are retained
+under `Library/ValidationResults/P12BDynamicNpcCensus/` and linked from
+[`PHASE12_P12B_DYNAMIC_NPC_CENSUS_IMPLEMENTATION_CANDIDATE.md`](design/PHASE12_P12B_DYNAMIC_NPC_CENSUS_IMPLEMENTATION_CANDIDATE.md).
+
+This promotes only the roster-following SpatialKnowledge/Person partial
+census. City `ImportantNpcs`, per-NPC inventory, unrelated PersonStore writers,
+SpatialKnowledge discovery invalidation, complete profile inventory, shared
+write coverage, global owner-thread/quiescence, capture eligibility, and
+export/hydration remain open. P12-B remains incomplete and P12-A remains
+`WAIT_DEPENDENCY`.
 
 ## Promoted RuntimeIdentityRegistry passive census witnesses
 
