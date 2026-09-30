@@ -213,6 +213,8 @@ public sealed partial class SimulationRuntime
         npcRosterCensusProtocol != null
             ? npcRosterCensusProtocol.SpatialKnowledgeFamilyProviders
             : Array.AsReadOnly(new IOwnerSectionCensusProvider[0]);
+    public IReadOnlyList<IOwnerSectionCensusProvider> InventoryCensusProviders =>
+        npcRosterCensusProtocol != null ? npcRosterCensusProtocol.InventoryFamilyProviders : Array.AsReadOnly(new IOwnerSectionCensusProvider[0]);
     public ActorChoiceStore ActorChoiceStore => actorChoiceStore;
     public SpatialAuthorityStore SpatialAuthorityStore => spatialAuthorityStore;
     public LegacySpatialAnchorBindingStore LegacySpatialAnchorBindingStore => legacySpatialAnchorBindingStore;
@@ -874,6 +876,7 @@ public sealed partial class SimulationRuntime
                 personStoreCensusProviders[1],
                 out _)
             || !protocol.RegisterSpatialKnowledgeRosterFamily(npcRuntimeSnapshot, out _)
+            || !protocol.RegisterInventoryRosterFamily(npcRuntimeSnapshot, out _)
             || !protocol.SealExpectedSectionInventory(out _)
             || !protocol.SealCensusProviderInventory(out _)
             || !protocol.RegisterExpectedOperation(NpcMembershipCensusOperationId, out _)

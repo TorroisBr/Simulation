@@ -37,10 +37,10 @@ or that runtime capture is restricted to a quiescent owner thread.
 
 | Obligation | Source evidence now available | Capability/evidence still required |
 |---|---|---|
-| Live owner/cardinality census | The selected-profile test runs normal genesis against `Simulation-GeneralTest.asset` and inspects the published runtime before day one. It verifies City/NPC, population, market, inventory, and spatial-knowledge cardinalities; Person/Genealogy zero; positive P8-A geography; P8-B–D exact-zero child-owner counts/revisions; P8-A–D and receipt witnesses; the legacy SpatialNetwork's exact 2 locations/2 routes at revision 4; and empty ActorChoice/directive/travel/expedition state. Promotion `0021b0a` adds a roster-following pair of SpatialKnowledge sections per registered NPC and accounts for fixed PersonStore witnesses at the supported membership/materialization boundary. Promotion `10fb58d` adds one passive exact-owner/cardinality/revision witness per City for `ImportantNpcs` and checks reciprocal membership against the live NPC roster. | This is still a partial live census: per-NPC Inventory and City/NPC composite roots, several directly observed collections, some C roots, and E/Justice owners are not covered by complete owner witnesses. The available passive witnesses are not registered as a complete profile inventory. Each included owner still needs exact identity, section/schema version, count, and revision in the capture provider. Source-derived counts cannot stand in for evolved state. |
-| Committed-write invalidation | Successful mutation entrypoints are mapped below, including owner-local revisions and public bypasses. Multi-owner transactions, rollback-only paths, queries, plans and proposals are distinguished. The promoted dynamic NPC boundary advances its partial epoch for supported roster/materialization deltas. City `ImportantNpcs` now has a local membership revision and passive witness. | A successful authoritative commit must notify the one P12-B epoch after the owning commit (or whole multi-owner commit). Failed preflight and full rollback do not notify; a successful compensating write does. The promotion does not connect SpatialKnowledge discoveries, City/NPC projection, Inventory, unrelated PersonStore writers, or remaining C/D/E/F writes to the shared epoch. Prove every included public path is covered or no longer supported outside an instrumented boundary. |
+| Live owner/cardinality census | The selected-profile test runs normal genesis against `Simulation-GeneralTest.asset` and inspects the published runtime before day one. It verifies City/NPC, population, market, inventory, and spatial-knowledge cardinalities; Person/Genealogy zero; positive P8-A geography; P8-B–D exact-zero child-owner counts/revisions; P8-A–D and receipt witnesses; the legacy SpatialNetwork's exact 2 locations/2 routes at revision 4; and empty ActorChoice/directive/travel/expedition state. Promotion `0021b0a` adds a roster-following pair of SpatialKnowledge sections per registered NPC and accounts for fixed PersonStore witnesses at the supported membership/materialization boundary. Promotion `10fb58d` adds one passive exact-owner/cardinality/revision witness per City for `ImportantNpcs` and checks reciprocal membership against the live NPC roster. Promotion `15e5a54` adds a roster-following Inventory section per registered NPC, bound to the exact installed NPC and Inventory owners. | This is still a partial live census: City/NPC composite roots, several directly observed collections, some C roots, and E/Justice owners are not covered by complete owner witnesses. The available passive witnesses are not registered as a complete profile inventory. Each included owner still needs exact identity, section/schema version, count, and revision in the capture provider. Source-derived counts cannot stand in for evolved state. |
+| Committed-write invalidation | Successful mutation entrypoints are mapped below, including owner-local revisions and public bypasses. Multi-owner transactions, rollback-only paths, queries, plans and proposals are distinguished. The promoted dynamic NPC boundary advances its partial epoch for supported roster/materialization deltas. City `ImportantNpcs` now has a local membership revision and passive witness; the Inventory witness observes its owner-local revision. | A successful authoritative commit must notify the one P12-B epoch after the owning commit (or whole multi-owner commit). Failed preflight and full rollback do not notify; a successful compensating write does. The promotions do not connect SpatialKnowledge discoveries, City/NPC projection, direct InventoryRuntime writes, unrelated PersonStore writers, or remaining C/D/E/F writes to the shared epoch. Prove every included public path is covered or no longer supported outside an instrumented boundary. |
 | Owner-thread/quiescence | Source audit finds synchronous `Start → InitializeSimulation` and `Update → Simulate` paths. The selected-profile EditMode test calls `Start()` directly and captures no `Update` frame or managed-thread identity. Promotion `0021b0a` checks the owner thread for the local NPC membership census context and fail-closes on a mismatched nested entry. | Bind and verify the actual Unity runtime owner thread; track bootstrap, outer advance and every supported in-flight multi-owner operation; reject capture during any scope or from a different thread. The local membership check does not prove normal-frame affinity or exclude external callers across the runtime. |
-| Runtime exact-zero witnesses | The profile has explicit exclusions and known conditional-empty sections. Composed-but-empty is distinct from not composed; passive owner witnesses now exist for P8-A–D, both receipt ledgers, and legacy SpatialNetwork locations/routes. P8-A and legacy SpatialNetwork are positively populated; P8-B/C/D child sections and receipt ledgers are exact-zero. The promoted dynamic SpatialKnowledge family is positively populated for each rostered bootstrap NPC, and the per-City projection witness reports each installed City owner. | Complete the owner-backed inventory, add the remaining owner witnesses, and revalidate the full set after collection. Directives, travel parties, and expeditions currently have raw day-zero empty-list observations only, without owner revision witnesses. Do not infer zero from scene startup, a skipped consumer, or a missing runtime reference. |
+| Runtime exact-zero witnesses | The profile has explicit exclusions and known conditional-empty sections. Composed-but-empty is distinct from not composed; passive owner witnesses now exist for P8-A–D, both receipt ledgers, legacy SpatialNetwork locations/routes, dynamic NPC SpatialKnowledge and per-NPC Inventory, and per-City presence. P8-A and legacy SpatialNetwork are positively populated; P8-B/C/D child sections and receipt ledgers are exact-zero. The dynamic SpatialKnowledge and Inventory families report every rostered bootstrap NPC, and the City projection witness reports each installed City owner. | Add the remaining owner witnesses and revalidate the full set after collection. Directives, travel parties, and expeditions currently have raw day-zero empty-list observations only, without owner revision witnesses. Do not infer zero from scene startup, a skipped consumer, or a missing runtime reference. |
 
 ## Selected-profile census targets
 
@@ -194,8 +194,10 @@ revision.
 - **E owners:** the two `MarketRuntime` instances start with five item rows
   each and 1,395 units total; ten NPC-owned accounts/inventories are composed,
   with two authored NPC inventories containing four units each. Market and
-  inventory revisions exist, but no market-row or aggregate NPC-account/
-  inventory census was found. Several political stores expose local
+  InventoryRuntime revisions exist. Rostered per-NPC Inventory row-count and
+  revision witnesses are now promoted, but market rows still have no row-level
+  witness and no broader account/commerce aggregate census was found. Several
+  political stores expose local
   Count/Revision (`PoliticalClaimStore`, `FactionStore`, `PoliticalSupportStore`,
   `PoliticalKnowledgeStore`, `ArmedForceStore`); institution, office,
   property/estate, political-decision, manpower/spatial-force, persistent
@@ -673,7 +675,25 @@ The cross-thread correction is local to this membership context: mismatched
 nested entry faults the partial census and cannot join or reconcile through
 the owner thread's live context. It does not establish runtime-wide owner
 thread binding or quiescence. City `ImportantNpcs` now has its separate
-passive local witness; per-NPC Inventory, SpatialKnowledge content changes,
-unrelated PersonStore writers, remaining profile owner sections, shared-write
-invalidation, and capture eligibility remain blockers. P12-B remains
-incomplete; P12-A remains `WAIT_DEPENDENCY`.
+passive local witness; SpatialKnowledge content changes, direct Inventory
+write invalidation, unrelated PersonStore writers, remaining profile owner
+sections, shared-write invalidation, and capture eligibility remain blockers.
+P12-B remains incomplete; P12-A remains `WAIT_DEPENDENCY`.
+
+### Dynamic per-NPC Inventory witness promoted at `15e5a54`
+
+With explicit approval, candidate
+`codex/phase12/P12BNpcInventoryCensus` was fast-forwarded from canonical
+`f961477` to `15e5a54`. Each currently rostered NPC contributes one exact
+schema-v1 Inventory witness for its installed `InventoryRuntime`. The family
+reconciles with the existing dynamic SpatialKnowledge and fixed PersonStore
+sections at the supported roster/materialization boundary. Same-roster owner
+replacement faults census rather than rebinding a section. Independent review
+passed against the exact base and candidate tip; its durable record is on
+`codex/phase12/P12BNpcInventoryCensusReviewRecord` at `f98c5d4`.
+
+This closes only the missing per-NPC Inventory passive owner witness. It does
+not connect `InventoryRuntime.AddItem`/`RemoveItem` to the shared epoch, prove
+the composed City set is complete, cover out-of-composition `StartingCity`
+references, or add owner-thread/quiescence, capture, export, or hydration.
+P12-B remains incomplete and P12-A remains `WAIT_DEPENDENCY`.
