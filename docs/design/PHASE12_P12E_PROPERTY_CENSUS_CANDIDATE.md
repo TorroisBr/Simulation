@@ -1,7 +1,7 @@
 # P12-E Property Census Candidate
 
-**Status:** Implementation reviewed and validated; canonical promotion has
-not occurred.
+**Status:** Implementation reviewed and validated; promoted at cumulative
+canonical tip `b889b47`.
 
 **Branch:** `codex/phase12/P12EPropertyCensus`
 

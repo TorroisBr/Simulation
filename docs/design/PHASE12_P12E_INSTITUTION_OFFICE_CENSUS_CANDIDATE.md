@@ -1,7 +1,7 @@
 # P12-E Institution and Office Census Candidate
 
-**Status:** Implemented, validated, and independently reviewed; canonical
-promotion has not occurred.
+**Status:** Implemented, validated, and independently reviewed; promoted at
+cumulative canonical tip `b889b47`.
 
 **Branch:** `codex/phase12/P12EPropertyCensus`.
 
@@ -71,5 +71,5 @@ only. It does not connect commits to the shared mutation epoch, prove
 owner-thread/quiescence, register a complete profile census, provide export
 or staged hydration, complete P12-B, or make P12-A `READY`. It adds no
 institutional gameplay semantics and does not change the accepted P12-A
-authorization gate. The candidate has not been promoted to
-`codex/phase12/canonical`.
+authorization gate. The candidate was promoted to `codex/phase12/canonical`
+at `b889b47`.

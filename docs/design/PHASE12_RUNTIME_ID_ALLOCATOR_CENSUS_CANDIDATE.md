@@ -1,6 +1,8 @@
 # P12-C RuntimeIdAllocator passive census candidate
 
-**Status:** Implementation and required validation complete; independent exact-tip implementation review pending.
+**Status:** Promoted at cumulative canonical tip `b889b47`. The integrated
+code tree `65ebc7f` passed ALL EditMode `1985/1985` and official Smoke `5/5`;
+exact integration review passed at `35ec988`.
 
 **Canonical base:** `codex/phase12/canonical` at
 `69f456d5e3c6d6f7e4b85b36e98968ced0549bf3`.

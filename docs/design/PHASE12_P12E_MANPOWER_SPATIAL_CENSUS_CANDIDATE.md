@@ -4,6 +4,10 @@
 implementation review complete; durable review record is
 `PHASE12_P12E_MANPOWER_SPATIAL_CENSUS_REVIEW.md`.
 
+**Canonical promotion:** Included in the cumulative census stack promoted at
+`b889b47`; exact integration review passed at `35ec988`, with full-tree
+validation on code tip `65ebc7f`.
+
 **Candidate branch:** `codex/phase12/P12EManpowerSpatialCensus`.
 
 **Code-bearing candidate:** `89613fa` (`Add manpower and force-position

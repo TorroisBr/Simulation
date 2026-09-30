@@ -612,3 +612,29 @@ official complete Smoke; exact result paths are in
 P12-B owner coverage, shared committed-write invalidation, owner-thread or
 quiescence proof, or capture eligibility. P12-B remains incomplete and P12-A
 remains `WAIT_DEPENDENCY`.
+
+### Cumulative passive owner-witness extension promoted at `b889b47`
+
+The reviewed cumulative census stack was promoted to P12 canonical at
+`b889b4747738d933fe48311ef89fc33a40e3dfa0` from base
+`69f456d5e3c6d6f7e4b85b36e98968ced0549bf3`. Its code tree
+`65ebc7f7ab6dd834e2326ff426600483a74c162c` passed the complete EditMode
+suite `1985/1985`, official complete `Smoke` `5/5`, and `git diff --check`.
+Independent exact integration review passed at `35ec988`; the final
+docs-only candidate tip check passed at `b889b47`.
+
+In addition to earlier receipt, P8, and RuntimeIdentity witnesses, the stack
+adds passive owner/cardinality witnesses for `SimulationRecordSequence`,
+`ActorChoiceStore`, `RuntimeIdAllocator`, `ArmedForceStore`, contingent
+manpower, armed-force position, persistent Conflict/War/Battle, Estate and
+Property, and Institution/Office. Their slice-level contracts and focused
+validation are linked from `docs/PHASE12_STATE.md` and the corresponding
+`docs/design/PHASE12_*_CENSUS_CANDIDATE.md` records.
+
+This promotion improves owner inventory evidence only. The selected-profile
+census is still incomplete; there is no shared committed-write invalidation
+for all supported owners, owner-thread/quiescence proof, or capture token.
+City/NPC composite owners, Person/Genealogy/population, economy and Justice/
+Crime, remaining Knowledge/commitment owners, and the accepted export and
+staged-hydration work remain open. P12-B remains incomplete and P12-A remains
+`WAIT_DEPENDENCY`.

@@ -1,6 +1,8 @@
 # P12-E ArmedForceStore passive census candidate
 
-**Status:** Implementation and required validation complete; exact-tip integration review pending.
+**Status:** Promoted at cumulative canonical tip `b889b47`. The integrated
+code tree `65ebc7f` passed ALL EditMode `1985/1985` and official Smoke `5/5`;
+exact integration review passed at `35ec988`.
 
 **Integration anchor:** reviewed census integration candidate
 `codex/phase12/P12BActorChoiceRecordSequenceIntegration` at `b355919`.

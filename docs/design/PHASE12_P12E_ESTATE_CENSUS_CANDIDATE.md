@@ -3,6 +3,10 @@
 **Status:** Implementation, validation, and independent exact-tip review
 complete. P12-B remains incomplete; P12-A remains `WAIT_DEPENDENCY`.
 
+**Canonical promotion:** Included in the cumulative census stack promoted at
+`b889b47`; exact integration review passed at `35ec988`, with full-tree
+validation on code tip `65ebc7f`.
+
 **Branch:** `codex/phase12/P12EEstateCensus`.
 
 **Code-bearing candidate:** `ceb0940d51049cc7f44170f5d3c2ea27d5d9df60`.

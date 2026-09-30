@@ -907,3 +907,27 @@ lifecycle, Knowledge provenance/freshness, expedition progress, party
 commitments, and NPC action/trade-plan state. P12-F remains downstream of
 P12-C, P12-D, and P12-E;
 this audit is an owner-inventory advance only, not implementation readiness.
+
+### Cumulative passive owner-witness promotion — canonical `b889b47`
+
+P12 canonical now includes the cumulative census stack promoted at
+`b889b4747738d933fe48311ef89fc33a40e3dfa0` (code tree
+`65ebc7f7ab6dd834e2326ff426600483a74c162c`). The exact integration review
+passed at `35ec988`; the docs-only final tip check passed at `b889b47`; ALL
+EditMode passed `1985/1985`, complete official Smoke `5/5`, and diff-check
+passed on the code tree.
+
+The promoted passive witnesses now cover record sequence, ActorChoice,
+RuntimeIdAllocator, ArmedForce/manpower/position, Conflict/War/Battle,
+Estate/Property, and Institution/Office in addition to earlier promoted
+receipt, P8, and RuntimeIdentity owners. Individual section ownership,
+cardinality, revision, and focused evidence are recorded in the candidate
+documents referenced from `PHASE12_STATE.md`.
+
+This does not prove complete effective-profile owner coverage or complete
+committed-write invalidation. City/NPC composite state, population/Person/
+Genealogy, economy and Justice/Crime, and additional Knowledge/commitment
+owners still require bounded evidence and export/hydration work. These passive
+witnesses are not shared-epoch wiring, owner-thread/quiescence proof, capture
+eligibility, or a restore contract. P12-B remains incomplete and P12-A stays
+`WAIT_DEPENDENCY`.

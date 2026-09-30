@@ -3,13 +3,15 @@
 **Status:** PHASE 12 IN PROGRESS — P12-A WAIT_DEPENDENCY; P12-B INCOMPLETE
 (PARTIAL FOUNDATION PROMOTED).
 
-**Latest promoted P12-B candidate tip:** reviewed `RuntimeIdentityRegistry`
-census candidate `033854452c1167e053f57076803819ffe3a16840`, approved and
-fast-forwarded to `codex/phase12/canonical` from
-`1ada62b031e738e2bdd5d3d623e028a114961d6e` on 2026-09-29. Its independent
-exact-tip implementation review is recorded by
-`codex/phase12/P12BRuntimeIdentityWitnessReviewRecord` at `c113f52`. Prior
-promoted P8-A passive geography witness candidate:
+**Latest promoted P12-B owner-witness candidate tip:** cumulative passive
+census stack `codex/phase12/P12EPropertyCensus` at
+`b889b4747738d933fe48311ef89fc33a40e3dfa0`, fast-forwarded from canonical
+`69f456d5e3c6d6f7e4b85b36e98968ced0549bf3`. Its code-bearing tree is
+`65ebc7f7ab6dd834e2326ff426600483a74c162c`; exact integration review passed
+at `35ec9887add812922908d1f402d02d5db3500d44`, and the final docs-only tip
+check passed at `b889b47`. It retains the separately promoted
+`RuntimeIdentityRegistry` witness at `033854452c1167e053f57076803819ffe3a16840`
+and the earlier P8-A witness at
 `644bdae8ded1d8a938ec380370966ca6c235b881`.
 
 **Architecture baseline:** `c285466c355103d3637ac165246591b72eb7bda0`, with
@@ -26,8 +28,8 @@ P12-B–P12-G capability decomposition in
 | Checkpoint | Status | Current evidence and limits |
 |---|---|---|
 | P12-A — `UnityBootstrap-Daily-v1` profile integration | `WAIT_DEPENDENCY` | Scope accepted. No included-owner export plus staged-hydration coverage or validated complete live profile inventory exists yet. Its separate implementation authorization remains outstanding. |
-| P12-B — profile admission and completed-boundary lifecycle | `INCOMPLETE — PARTIAL FOUNDATION PROMOTED` | The reviewed non-admitting census kernel and exact receipt-owner witnesses were promoted at `9da25b47ab0bc0f6a1a10032dfceaad05f6316e`; passive P8-C City/Site binding and Person-position witnesses at `481358d1f8967d1c0199370601597c329fce69b2`; P8-B passage/barrier/crossing witnesses at `04d39b23b8509609dcd96990a214922dc0220e8b`; P8-D route-observation/plan-history witnesses at `d92fdfb6b5ceb517c210be7cea5faab52ebb5641`; P8-A populated Hex/Location/scale-context witnesses at `644bdae8ded1d8a938ec380370966ca6c235b881`; and eight `RuntimeIdentityRegistry` typed-index witnesses at `033854452c1167e053f57076803819ffe3a16840`. The static C/D/E/F writer map and partial selected-profile day-zero evidence are recorded in `docs/design/PHASE12_B_BLOCKER_RESOLUTION.md`. These promotions do not register a complete profile census, connect committed writes to the shared epoch, prove Unity owner-thread/quiescence, or issue a capture token. |
-| P12-C — identity, provenance, deterministic roots | `BLOCKED_ON_P12-B` | Preserve `codex/phase12/P12CIdentityRuntimeSnapshot` at `531d835` for selective reintegration only after B promotion and revalidation. It does not satisfy B or provide the remaining C root witnesses. |
+| P12-B — profile admission and completed-boundary lifecycle | `INCOMPLETE — PARTIAL FOUNDATION PROMOTED` | In addition to the promoted non-admitting kernel, receipt owners, P8-A–D, and RuntimeIdentity witnesses, cumulative stack `b889b4747738d933fe48311ef89fc33a40e3dfa0` adds passive witnesses for record sequence, ActorChoice, RuntimeIdAllocator, ArmedForce/manpower/position, Conflict/War/Battle, Estate/Property, and Institution/Office. See the promoted-stack section and linked candidate evidence below. The static writer map and partial profile evidence remain in `docs/design/PHASE12_B_BLOCKER_RESOLUTION.md`. No complete profile census, shared-epoch connection, Unity owner-thread/quiescence proof, or capture token is established. |
+| P12-C — identity, provenance, deterministic roots | `BLOCKED_ON_P12-B` | The `RuntimeIdAllocator` passive census and record-sequence witness promoted at `b889b47` are inventory evidence only; they do not provide C exports/hydration, deterministic-root state, or provenance. Preserve `codex/phase12/P12CIdentityRuntimeSnapshot` at `531d835` for selective reintegration only after B readiness and revalidation. |
 | P12-D — factual roots and Person/population relations | `BLOCKED_ON_P12-B_AND_C` | Owner inventory and accepted scope remain; no complete export/hydration capability is claimed. |
 | P12-E — core and official daily-domain owners | `BLOCKED_ON_P12-B_AND_C` | Owner inventory and accepted scope remain; effective-profile provider coverage and exact owner exports are incomplete. |
 | P12-F — Knowledge, directives, choices, commitments | `BLOCKED_ON_P12-C_D_E` | Accepted scope remains dependency-gated; no complete export/hydration capability is claimed. |
@@ -204,6 +206,35 @@ plan revision without adding a history row. These reads remain unsynchronized
 and passive. They are not registered in a complete profile census, do not
 connect writes to the shared mutation epoch, do not prove owner-thread or
 quiescence, and do not grant capture eligibility. P12-B remains incomplete;
+P12-A remains `WAIT_DEPENDENCY`.
+
+## Promoted cumulative passive owner-witness extension
+
+The cumulative owner-census candidate was approved and fast-forwarded from
+P12 canonical `69f456d5e3c6d6f7e4b85b36e98968ced0549bf3` to
+`b889b4747738d933fe48311ef89fc33a40e3dfa0`. Its code-bearing tree is
+`65ebc7f7ab6dd834e2326ff426600483a74c162c`; the exact integration review
+passed at `35ec9887add812922908d1f402d02d5db3500d44`, and the docs-only final
+tip check passed at `b889b47`.
+
+The promoted stack includes passive owner witnesses for:
+
+- `SimulationRecordSequence`, `ActorChoiceStore`, and `RuntimeIdAllocator`;
+- `ArmedForceStore`, contingent manpower, and armed-force spatial position;
+- persistent Conflict, War, and Battle stores;
+- Estate and Property ownership/transfer history; and
+- Institution, Office, active incumbency, and retained tenure history.
+
+Focused evidence remains in the linked candidate records under
+`docs/design/PHASE12_*_CENSUS_CANDIDATE.md`. The final code tree passed ALL
+EditMode `1985/1985`, the complete official `Smoke` filter `5/5`, and
+`git diff --check`. This integrates the reviewed slices without closing P12-B
+or changing the P12-C/D/E/F/G dependencies.
+
+These are still passive per-owner witnesses. They do not register a complete
+effective-profile census, prove every supported committed write reaches the
+shared epoch, establish owner-thread/quiescence, issue capture eligibility,
+or provide immutable exports and staged hydration. P12-B remains incomplete;
 P12-A remains `WAIT_DEPENDENCY`.
 
 ## Remaining dependency-ordered P12-B blockers
