@@ -14,18 +14,31 @@ public static class SpatialKnowledgeCensusProvider
         Routes
     }
 
-    private sealed class SectionProvider : IOwnerSectionCensusProvider
+    internal interface ISpatialKnowledgeSectionCensusProvider : IOwnerSectionCensusProvider
     {
+        string RuntimeId { get; }
+        NpcRuntime NpcOwner { get; }
+        SpatialKnowledgeRuntime SpatialKnowledgeOwner { get; }
+    }
+
+    private sealed class SectionProvider : ISpatialKnowledgeSectionCensusProvider
+    {
+        private readonly NpcRuntime npcOwner;
         private readonly SpatialKnowledgeRuntime owner;
         private readonly Section section;
         private readonly string sectionId;
 
-        public SectionProvider(SpatialKnowledgeRuntime owner, Section section, string sectionId)
+        public SectionProvider(NpcRuntime npcOwner, SpatialKnowledgeRuntime owner, Section section, string sectionId)
         {
+            this.npcOwner = npcOwner ?? throw new ArgumentNullException(nameof(npcOwner));
             this.owner = owner ?? throw new ArgumentNullException(nameof(owner));
             this.section = section;
             this.sectionId = sectionId;
         }
+
+        public string RuntimeId => npcOwner.RuntimeId;
+        public NpcRuntime NpcOwner => npcOwner;
+        public SpatialKnowledgeRuntime SpatialKnowledgeOwner => owner;
 
         public OwnerSectionCensusWitness GetCurrentCensus()
         {
@@ -86,10 +99,12 @@ public static class SpatialKnowledgeCensusProvider
 
             SpatialKnowledgeRuntime owner = npc.SpatialKnowledge;
             providers[providerIndex++] = new SectionProvider(
+                npc,
                 owner,
                 Section.Locations,
                 LocationsSectionPrefix + npc.RuntimeId);
             providers[providerIndex++] = new SectionProvider(
+                npc,
                 owner,
                 Section.Routes,
                 RoutesSectionPrefix + npc.RuntimeId);

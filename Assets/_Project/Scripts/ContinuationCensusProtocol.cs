@@ -94,11 +94,43 @@ public sealed class ContinuationCensusProtocol
         }
     }
 
-    private readonly Dictionary<string, OwnerSectionContract> expectedSections =
+    private sealed class SpatialKnowledgeSectionCandidate
+    {
+        public readonly string SectionId;
+        public readonly OwnerSectionContract Contract;
+        public readonly IOwnerSectionCensusProvider Provider;
+        public readonly NpcRuntime NpcOwner;
+        public readonly SpatialKnowledgeRuntime SpatialKnowledgeOwner;
+        public readonly OwnerSectionCensusWitness Witness;
+
+        public SpatialKnowledgeSectionCandidate(
+            string sectionId,
+            OwnerSectionContract contract,
+            IOwnerSectionCensusProvider provider,
+            NpcRuntime npcOwner,
+            SpatialKnowledgeRuntime spatialKnowledgeOwner,
+            OwnerSectionCensusWitness witness)
+        {
+            SectionId = sectionId;
+            Contract = contract;
+            Provider = provider;
+            NpcOwner = npcOwner;
+            SpatialKnowledgeOwner = spatialKnowledgeOwner;
+            Witness = witness;
+        }
+    }
+
+    private Dictionary<string, OwnerSectionContract> expectedSections =
         new Dictionary<string, OwnerSectionContract>(StringComparer.Ordinal);
-    private readonly Dictionary<string, RegisteredSection> registeredSections =
+    private Dictionary<string, RegisteredSection> registeredSections =
         new Dictionary<string, RegisteredSection>(StringComparer.Ordinal);
     private readonly HashSet<string> expectedOperations = new HashSet<string>(StringComparer.Ordinal);
+    private HashSet<string> spatialKnowledgeSectionIds = new HashSet<string>(StringComparer.Ordinal);
+    private Dictionary<string, NpcRuntime> spatialKnowledgeNpcOwnersBySection =
+        new Dictionary<string, NpcRuntime>(StringComparer.Ordinal);
+    private IReadOnlyList<NpcRuntime> spatialKnowledgeRoster;
+    private IReadOnlyList<IOwnerSectionCensusProvider> spatialKnowledgeFamilyProviders =
+        Array.AsReadOnly(new IOwnerSectionCensusProvider[0]);
 
     private bool expectedSectionsSealed;
     private bool providersSealed;
@@ -200,6 +232,81 @@ public sealed class ContinuationCensusProtocol
         failure = ContinuationCensusFailure.None;
         return true;
     }
+
+    /// <summary>
+    /// Declares the one supported dynamic census family for the world's current
+    /// NPC roster. The roster is world-owned; callers cannot supply a detached
+    /// provider list as the family source.
+    /// </summary>
+    public bool RegisterSpatialKnowledgeRosterFamily(
+        IReadOnlyList<NpcRuntime> roster,
+        out ContinuationCensusFailure failure)
+    {
+        if (IsFaulted())
+        {
+            failure = ContinuationCensusFailure.ProtocolFaulted;
+            return false;
+        }
+        if (IsOwnerThreadBound())
+        {
+            Fault();
+            failure = ContinuationCensusFailure.ProtocolFaulted;
+            return false;
+        }
+        if (roster == null || expectedSectionsSealed || providersSealed || spatialKnowledgeRoster != null)
+        {
+            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+            return false;
+        }
+
+        if (!TryBuildSpatialKnowledgeFamily(roster,
+                out List<SpatialKnowledgeSectionCandidate> candidates, out failure))
+        {
+            Fault();
+            return false;
+        }
+
+        Dictionary<string, OwnerSectionContract> stagedExpected =
+            new Dictionary<string, OwnerSectionContract>(expectedSections, StringComparer.Ordinal);
+        Dictionary<string, RegisteredSection> stagedRegistered =
+            new Dictionary<string, RegisteredSection>(registeredSections, StringComparer.Ordinal);
+        HashSet<string> stagedIds = new HashSet<string>(StringComparer.Ordinal);
+        Dictionary<string, NpcRuntime> stagedNpcOwners = new Dictionary<string, NpcRuntime>(StringComparer.Ordinal);
+        IOwnerSectionCensusProvider[] stagedProviders =
+            new IOwnerSectionCensusProvider[candidates.Count];
+
+        for (int i = 0; i < candidates.Count; i++)
+        {
+            SpatialKnowledgeSectionCandidate candidate = candidates[i];
+            if (!stagedIds.Add(candidate.SectionId)
+                || stagedExpected.ContainsKey(candidate.SectionId)
+                || stagedRegistered.ContainsKey(candidate.SectionId))
+            {
+                Fault();
+                failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+                return false;
+            }
+
+            stagedExpected.Add(candidate.SectionId, candidate.Contract);
+            stagedRegistered.Add(candidate.SectionId,
+                new RegisteredSection(candidate.Contract, candidate.Provider));
+            stagedNpcOwners.Add(candidate.SectionId, candidate.NpcOwner);
+            stagedProviders[i] = candidate.Provider;
+        }
+
+        expectedSections = stagedExpected;
+        registeredSections = stagedRegistered;
+        spatialKnowledgeSectionIds = stagedIds;
+        spatialKnowledgeNpcOwnersBySection = stagedNpcOwners;
+        spatialKnowledgeRoster = roster;
+        spatialKnowledgeFamilyProviders = Array.AsReadOnly(stagedProviders);
+        failure = ContinuationCensusFailure.None;
+        return true;
+    }
+
+    /// <summary>Latest reconciled per-NPC provider snapshot for the declared family.</summary>
+    public IReadOnlyList<IOwnerSectionCensusProvider> SpatialKnowledgeFamilyProviders =>
+        spatialKnowledgeFamilyProviders;
 
     /// <summary>
     /// Closes provider registration. Missing or extra providers remain a
@@ -321,8 +428,7 @@ public sealed class ContinuationCensusProtocol
             return false;
         }
 
-        if (!expectedSectionsSealed || !providersSealed || expectedSections.Count == 0
-            || registeredSections.Count != expectedSections.Count)
+        if (!expectedSectionsSealed || !providersSealed || expectedSections.Count == 0)
         {
             failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
             return false;
@@ -332,6 +438,15 @@ public sealed class ContinuationCensusProtocol
         if (activeOperationCount != 0)
         {
             failure = ContinuationCensusFailure.OperationInProgress;
+            return false;
+        }
+
+        if (registeredSections.Count != expectedSections.Count
+            || (spatialKnowledgeRoster != null
+                && !TryValidateSpatialKnowledgeFamilyMatchesRoster(out failure)))
+        {
+            Fault();
+            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
             return false;
         }
 
@@ -458,6 +573,237 @@ public sealed class ContinuationCensusProtocol
         return true;
     }
 
+    /// <summary>
+    /// Atomically reconciles the declared NPC SpatialKnowledge family together
+    /// with fixed sections changed by one outer roster/materialization boundary.
+    /// This is intentionally specialized; it is not a general post-seal provider
+    /// registration API.
+    /// </summary>
+    public bool TryReconcileSpatialKnowledgeRosterAndNotifyCommittedMutations(
+        IEnumerable<string> changedFixedSectionIds,
+        long personStoreRevisionAtOperationStart,
+        out ContinuationCensusFailure failure)
+    {
+        if (!TryRequireOwnerThread(out failure)) return false;
+        if (spatialKnowledgeRoster == null
+            || activeOperationCount == 0
+            || personStoreRevisionAtOperationStart < 0L)
+        {
+            Fault();
+            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+            return false;
+        }
+
+        HashSet<string> changedIds = new HashSet<string>(StringComparer.Ordinal);
+        try
+        {
+            if (changedFixedSectionIds == null)
+            {
+                Fault();
+                failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+                return false;
+            }
+            foreach (string sectionId in changedFixedSectionIds)
+            {
+                if (string.IsNullOrWhiteSpace(sectionId)
+                    || spatialKnowledgeSectionIds.Contains(sectionId)
+                    || !registeredSections.ContainsKey(sectionId)
+                    || !changedIds.Add(sectionId))
+                {
+                    Fault();
+                    failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+                    return false;
+                }
+            }
+        }
+        catch
+        {
+            Fault();
+            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+            return false;
+        }
+
+        if (!TryBuildSpatialKnowledgeFamily(spatialKnowledgeRoster,
+                out List<SpatialKnowledgeSectionCandidate> candidates, out failure))
+        {
+            Fault();
+            return false;
+        }
+
+        Dictionary<string, RegisteredSection> stagedRegistered =
+            new Dictionary<string, RegisteredSection>(StringComparer.Ordinal);
+        Dictionary<string, OwnerSectionContract> stagedExpected =
+            new Dictionary<string, OwnerSectionContract>(StringComparer.Ordinal);
+        Dictionary<string, IOwnerSectionCensusProvider> currentFixedProviders =
+            new Dictionary<string, IOwnerSectionCensusProvider>(StringComparer.Ordinal);
+        bool fixedSectionsChanged = false;
+        bool personStoreSectionsChanged = false;
+        OwnerSectionCensusWitness personMembershipWitness = null;
+        OwnerSectionCensusWitness personBindingWitness = null;
+        bool hasPersonMembership = false;
+        bool hasPersonBinding = false;
+
+        foreach (KeyValuePair<string, OwnerSectionContract> pair in expectedSections)
+        {
+            if (spatialKnowledgeSectionIds.Contains(pair.Key)) continue;
+            if (!registeredSections.TryGetValue(pair.Key, out RegisteredSection current))
+            {
+                Fault();
+                failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+                return false;
+            }
+
+            bool notified = changedIds.Contains(pair.Key);
+            if (!TryReadAndValidate(current, allowRevisionAdvance: notified,
+                    out OwnerSectionCensusWitness witness, out failure))
+            {
+                Fault();
+                return false;
+            }
+
+            bool sectionChanged = current.HasBaseline
+                && (witness.Revision != current.LastRevision
+                    || witness.Cardinality != current.LastCardinality);
+            if (notified != sectionChanged
+                || (notified && (!current.HasBaseline || witness.Revision == current.LastRevision)))
+            {
+                Fault();
+                failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+                return false;
+            }
+
+            if (notified)
+            {
+                fixedSectionsChanged = true;
+                RegisteredSection stagedSection = CloneRegisteredSection(current);
+                SetBaseline(stagedSection, witness);
+                stagedRegistered.Add(pair.Key, stagedSection);
+            }
+            else
+            {
+                stagedRegistered.Add(pair.Key, current);
+            }
+            stagedExpected.Add(pair.Key, pair.Value);
+
+            if (pair.Key == PersonMembershipCensusProvider.SectionId)
+            {
+                hasPersonMembership = true;
+                personMembershipWitness = witness;
+                personStoreSectionsChanged |= sectionChanged;
+            }
+            else if (pair.Key == PersonMaterializationBindingCensusProvider.SectionId)
+            {
+                hasPersonBinding = true;
+                personBindingWitness = witness;
+                personStoreSectionsChanged |= sectionChanged;
+            }
+        }
+
+        if (!hasPersonMembership
+            || !hasPersonBinding
+            || !ReferenceEquals(
+                    personMembershipWitness.OwnerInstanceIdentity,
+                    personBindingWitness.OwnerInstanceIdentity)
+                || personMembershipWitness.Revision != personBindingWitness.Revision
+                || personMembershipWitness.Revision < personStoreRevisionAtOperationStart
+                || personStoreRevisionAtOperationStart != GetBaselineRevision(
+                    registeredSections[PersonMembershipCensusProvider.SectionId])
+                || personStoreRevisionAtOperationStart != GetBaselineRevision(
+                    registeredSections[PersonMaterializationBindingCensusProvider.SectionId])
+                || (personStoreSectionsChanged
+                    ? (!changedIds.Contains(PersonMembershipCensusProvider.SectionId)
+                        || !changedIds.Contains(PersonMaterializationBindingCensusProvider.SectionId))
+                    : (changedIds.Contains(PersonMembershipCensusProvider.SectionId)
+                        || changedIds.Contains(PersonMaterializationBindingCensusProvider.SectionId))))
+        {
+            Fault();
+            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+            return false;
+        }
+
+        HashSet<string> stagedDynamicIds = new HashSet<string>(StringComparer.Ordinal);
+        Dictionary<string, NpcRuntime> stagedDynamicNpcOwners =
+            new Dictionary<string, NpcRuntime>(StringComparer.Ordinal);
+        IOwnerSectionCensusProvider[] stagedFamilyProviders =
+            new IOwnerSectionCensusProvider[candidates.Count];
+        bool familyChanged = candidates.Count != spatialKnowledgeSectionIds.Count;
+
+        for (int i = 0; i < candidates.Count; i++)
+        {
+            SpatialKnowledgeSectionCandidate candidate = candidates[i];
+            if (!stagedDynamicIds.Add(candidate.SectionId)
+                || stagedExpected.ContainsKey(candidate.SectionId))
+            {
+                Fault();
+                failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+                return false;
+            }
+
+            bool existed = registeredSections.TryGetValue(candidate.SectionId, out RegisteredSection current);
+            bool sameNpcOwner = existed
+                && spatialKnowledgeNpcOwnersBySection.TryGetValue(candidate.SectionId, out NpcRuntime oldNpcOwner)
+                && ReferenceEquals(oldNpcOwner, candidate.NpcOwner);
+            bool sameKnowledgeOwner = existed
+                && ReferenceEquals(current.OwnerInstanceIdentity, candidate.SpatialKnowledgeOwner);
+
+            if (sameNpcOwner && sameKnowledgeOwner)
+            {
+                if (!TryReadAndValidate(current, allowRevisionAdvance: false,
+                        out _, out failure))
+                {
+                    Fault();
+                    return false;
+                }
+                stagedRegistered.Add(candidate.SectionId, current);
+                stagedExpected.Add(candidate.SectionId, current.Contract);
+                stagedFamilyProviders[i] = current.Provider;
+            }
+            else
+            {
+                familyChanged = true;
+                RegisteredSection replacement = new RegisteredSection(candidate.Contract, candidate.Provider);
+                SetBaseline(replacement, candidate.Witness);
+                stagedRegistered.Add(candidate.SectionId, replacement);
+                stagedExpected.Add(candidate.SectionId, candidate.Contract);
+                stagedFamilyProviders[i] = candidate.Provider;
+            }
+
+            if (!existed) familyChanged = true;
+            stagedDynamicNpcOwners.Add(candidate.SectionId, candidate.NpcOwner);
+        }
+
+        foreach (string oldSectionId in spatialKnowledgeSectionIds)
+        {
+            if (!stagedDynamicIds.Contains(oldSectionId)) familyChanged = true;
+        }
+
+        if (personStoreSectionsChanged
+            && changedIds.Contains(PersonMembershipCensusProvider.SectionId)
+            != changedIds.Contains(PersonMaterializationBindingCensusProvider.SectionId))
+        {
+            Fault();
+            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+            return false;
+        }
+
+        if ((fixedSectionsChanged || familyChanged) && mutationEpoch == long.MaxValue)
+        {
+            Fault();
+            failure = ContinuationCensusFailure.ProtocolFaulted;
+            return false;
+        }
+
+        expectedSections = stagedExpected;
+        registeredSections = stagedRegistered;
+        spatialKnowledgeSectionIds = stagedDynamicIds;
+        spatialKnowledgeNpcOwnersBySection = stagedDynamicNpcOwners;
+        if (familyChanged)
+            spatialKnowledgeFamilyProviders = Array.AsReadOnly(stagedFamilyProviders);
+        if (fixedSectionsChanged || familyChanged) mutationEpoch++;
+        failure = ContinuationCensusFailure.None;
+        return true;
+    }
+
     public bool TryReadMutationEpoch(out long epoch, out ContinuationCensusFailure failure)
     {
         epoch = 0L;
@@ -550,6 +896,198 @@ public sealed class ContinuationCensusProtocol
         }
 
         activeOperationCount--;
+    }
+
+    private bool TryBuildSpatialKnowledgeFamily(
+        IReadOnlyList<NpcRuntime> roster,
+        out List<SpatialKnowledgeSectionCandidate> candidates,
+        out ContinuationCensusFailure failure)
+    {
+        candidates = new List<SpatialKnowledgeSectionCandidate>();
+        failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+        if (roster == null) return false;
+
+        IReadOnlyList<IOwnerSectionCensusProvider> providers;
+        try
+        {
+            providers = SpatialKnowledgeCensusProvider.CreateProviders(roster);
+        }
+        catch
+        {
+            return false;
+        }
+
+        HashSet<string> sectionIds = new HashSet<string>(StringComparer.Ordinal);
+        Dictionary<string, Tuple<NpcRuntime, SpatialKnowledgeRuntime, int>> ownersByRuntimeId =
+            new Dictionary<string, Tuple<NpcRuntime, SpatialKnowledgeRuntime, int>>(StringComparer.Ordinal);
+        foreach (IOwnerSectionCensusProvider provider in providers)
+        {
+            if (!(provider is SpatialKnowledgeCensusProvider.ISpatialKnowledgeSectionCensusProvider spatialProvider))
+                return false;
+
+            OwnerSectionCensusWitness witness;
+            try
+            {
+                witness = provider.GetCurrentCensus();
+            }
+            catch
+            {
+                return false;
+            }
+
+            string runtimeId = spatialProvider.RuntimeId;
+            string expectedSectionId;
+            int sectionKind;
+            if (witness != null
+                && string.Equals(witness.SectionId,
+                    SpatialKnowledgeCensusProvider.LocationsSectionPrefix + runtimeId,
+                    StringComparison.Ordinal))
+            {
+                expectedSectionId = SpatialKnowledgeCensusProvider.LocationsSectionPrefix + runtimeId;
+                sectionKind = 1;
+            }
+            else if (witness != null
+                && string.Equals(witness.SectionId,
+                    SpatialKnowledgeCensusProvider.RoutesSectionPrefix + runtimeId,
+                    StringComparison.Ordinal))
+            {
+                expectedSectionId = SpatialKnowledgeCensusProvider.RoutesSectionPrefix + runtimeId;
+                sectionKind = 2;
+            }
+            else
+            {
+                return false;
+            }
+
+            OwnerSectionContract contract;
+            try
+            {
+                contract = new OwnerSectionContract(
+                    expectedSectionId,
+                    SpatialKnowledgeCensusProvider.SchemaVersion,
+                    OwnerSectionRole.Required);
+            }
+            catch
+            {
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(runtimeId)
+                || spatialProvider.NpcOwner == null
+                || spatialProvider.SpatialKnowledgeOwner == null
+                || !ReferenceEquals(spatialProvider.SpatialKnowledgeOwner, witness.OwnerInstanceIdentity)
+                || !string.Equals(spatialProvider.SpatialKnowledgeOwner.OwnerRuntimeId, runtimeId, StringComparison.Ordinal)
+                || !sectionIds.Add(expectedSectionId)
+                || !IsWitnessValidForContract(contract, witness))
+            {
+                return false;
+            }
+
+            if (ownersByRuntimeId.TryGetValue(runtimeId,
+                    out Tuple<NpcRuntime, SpatialKnowledgeRuntime, int> existingOwner))
+            {
+                if (!ReferenceEquals(existingOwner.Item1, spatialProvider.NpcOwner)
+                    || !ReferenceEquals(existingOwner.Item2, spatialProvider.SpatialKnowledgeOwner)
+                    || (existingOwner.Item3 & sectionKind) != 0)
+                {
+                    return false;
+                }
+                ownersByRuntimeId[runtimeId] = Tuple.Create(
+                    existingOwner.Item1,
+                    existingOwner.Item2,
+                    existingOwner.Item3 | sectionKind);
+            }
+            else
+            {
+                ownersByRuntimeId.Add(runtimeId, Tuple.Create(
+                    spatialProvider.NpcOwner,
+                    spatialProvider.SpatialKnowledgeOwner,
+                    sectionKind));
+            }
+
+            candidates.Add(new SpatialKnowledgeSectionCandidate(
+                expectedSectionId,
+                contract,
+                provider,
+                spatialProvider.NpcOwner,
+                spatialProvider.SpatialKnowledgeOwner,
+                witness));
+        }
+
+        if (providers.Count != roster.Count * 2 || ownersByRuntimeId.Count != roster.Count)
+            return false;
+        foreach (Tuple<NpcRuntime, SpatialKnowledgeRuntime, int> owner in ownersByRuntimeId.Values)
+        {
+            if (owner.Item3 != 3) return false;
+        }
+
+        failure = ContinuationCensusFailure.None;
+        return true;
+    }
+
+    private bool TryValidateSpatialKnowledgeFamilyMatchesRoster(out ContinuationCensusFailure failure)
+    {
+        if (!TryBuildSpatialKnowledgeFamily(spatialKnowledgeRoster,
+                out List<SpatialKnowledgeSectionCandidate> candidates, out failure))
+        {
+            return false;
+        }
+
+        if (candidates.Count != spatialKnowledgeSectionIds.Count)
+        {
+            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+            return false;
+        }
+
+        foreach (SpatialKnowledgeSectionCandidate candidate in candidates)
+        {
+            if (!spatialKnowledgeSectionIds.Contains(candidate.SectionId)
+                || !registeredSections.TryGetValue(candidate.SectionId, out RegisteredSection section)
+                || !spatialKnowledgeNpcOwnersBySection.TryGetValue(candidate.SectionId, out NpcRuntime npcOwner)
+                || !ReferenceEquals(npcOwner, candidate.NpcOwner)
+                || (section.HasBaseline
+                    && !ReferenceEquals(section.OwnerInstanceIdentity, candidate.SpatialKnowledgeOwner)))
+            {
+                failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+                return false;
+            }
+        }
+
+        failure = ContinuationCensusFailure.None;
+        return true;
+    }
+
+    private static bool IsWitnessValidForContract(
+        OwnerSectionContract contract,
+        OwnerSectionCensusWitness witness)
+    {
+        return contract != null
+            && witness != null
+            && string.Equals(witness.SectionId, contract.SectionId, StringComparison.Ordinal)
+            && witness.SchemaVersion == contract.SchemaVersion
+            && witness.OwnerInstanceIdentity != null
+            && witness.Cardinality >= 0
+            && witness.Revision >= 0L
+            && ((contract.Role != OwnerSectionRole.ExplicitlyEmpty
+                    && contract.Role != OwnerSectionRole.Excluded)
+                || witness.Cardinality == 0);
+    }
+
+    private static RegisteredSection CloneRegisteredSection(RegisteredSection source)
+    {
+        RegisteredSection clone = new RegisteredSection(source.Contract, source.Provider)
+        {
+            OwnerInstanceIdentity = source.OwnerInstanceIdentity,
+            LastCardinality = source.LastCardinality,
+            LastRevision = source.LastRevision,
+            HasBaseline = source.HasBaseline
+        };
+        return clone;
+    }
+
+    private static long GetBaselineRevision(RegisteredSection section)
+    {
+        return section != null && section.HasBaseline ? section.LastRevision : -1L;
     }
 
     private bool TryReadAndValidate(
@@ -647,6 +1185,8 @@ public sealed class ContinuationCensusProtocol
     private bool IsFaulted() => Volatile.Read(ref protocolFaulted) != 0;
 
     private bool IsOwnerThreadBound() => Volatile.Read(ref ownerThreadBinding) != null;
+
+    internal void FaultClosed() => Fault();
 
     private void Fault() => Interlocked.Exchange(ref protocolFaulted, 1);
 }

@@ -68,6 +68,48 @@ public sealed class SimulationRuntimeSpatialInvariantReport
 
 public sealed partial class SimulationRuntime
 {
+    private const string NpcMembershipCensusOperationId = "runtime.npc-membership";
+
+    private sealed class NpcMembershipCensusContext
+    {
+        public readonly long PersonStoreRevisionAtStart;
+        public SimulationOperationScope ProtocolScope;
+        public int NestingDepth;
+        public long PersonStoreRevisionDelta;
+        public bool RosterChanged;
+
+        public NpcMembershipCensusContext(long personStoreRevisionAtStart)
+        {
+            PersonStoreRevisionAtStart = personStoreRevisionAtStart;
+            NestingDepth = 1;
+        }
+    }
+
+    private sealed class NpcMembershipCensusScope : IDisposable
+    {
+        private readonly SimulationRuntime owner;
+        private readonly NpcMembershipCensusContext context;
+        private bool disposed;
+
+        public NpcMembershipCensusScope(SimulationRuntime owner, NpcMembershipCensusContext context)
+        {
+            this.owner = owner;
+            this.context = context;
+        }
+
+        public void MarkRosterChanged()
+        {
+            context.RosterChanged = true;
+        }
+
+        public void Dispose()
+        {
+            if (disposed) return;
+            disposed = true;
+            owner.ExitNpcMembershipCensusScope(context);
+        }
+    }
+
     private readonly AuthoritativeMutationGuard mutationGuard = new AuthoritativeMutationGuard();
     private bool advanceLeaseHeld;
     private readonly SimulationTime simulationTime;
@@ -81,6 +123,9 @@ public sealed partial class SimulationRuntime
     private readonly IAggregateDemographyProvider aggregateDemographyProvider;
     private DailyDemographyReport lastDailyDemographyReport;
     private readonly PersonStore personStore;
+    private readonly IReadOnlyList<IOwnerSectionCensusProvider> personStoreCensusProviders;
+    private ContinuationCensusProtocol npcRosterCensusProtocol;
+    private NpcMembershipCensusContext activeNpcMembershipCensusContext;
     private readonly ActorChoiceStore actorChoiceStore;
     private readonly SpatialAuthorityStore spatialAuthorityStore;
     private readonly LegacySpatialAnchorBindingStore legacySpatialAnchorBindingStore;
@@ -149,6 +194,11 @@ public sealed partial class SimulationRuntime
     public SimulationCalendar Calendar => calendar;
     public DailyDemographyReport LastDailyDemographyReport => lastDailyDemographyReport;
     public PersonStore PersonStore => personStore;
+    /// <summary>Latest reconciled passive per-NPC SpatialKnowledge witness snapshot.</summary>
+    public IReadOnlyList<IOwnerSectionCensusProvider> SpatialKnowledgeCensusProviders =>
+        npcRosterCensusProtocol != null
+            ? npcRosterCensusProtocol.SpatialKnowledgeFamilyProviders
+            : Array.AsReadOnly(new IOwnerSectionCensusProvider[0]);
     public ActorChoiceStore ActorChoiceStore => actorChoiceStore;
     public SpatialAuthorityStore SpatialAuthorityStore => spatialAuthorityStore;
     public LegacySpatialAnchorBindingStore LegacySpatialAnchorBindingStore => legacySpatialAnchorBindingStore;
@@ -581,6 +631,7 @@ public sealed partial class SimulationRuntime
         this.naturalMortalitySamples = naturalMortalitySamples;
         this.aggregateDemographyProvider = aggregateDemographyProvider;
         this.personStore = resolvedPersonStore;
+        this.personStoreCensusProviders = PersonStoreCensusProvider.CreateProviders(resolvedPersonStore);
         this.actorChoiceStore = resolvedActorChoiceStore;
         this.spatialAuthorityStore = resolvedSpatialAuthorityStore;
         this.legacySpatialAnchorBindingStore = resolvedLegacySpatialAnchorBindingStore;
@@ -781,7 +832,151 @@ public sealed partial class SimulationRuntime
         isComposingNpcRoster = false;
 
         InitializeP18DIntradayProfile(p18dIntradayProfile);
+        InitializeNpcRosterCensusProtocol();
 
+    }
+
+    private void InitializeNpcRosterCensusProtocol()
+    {
+        ContinuationCensusProtocol protocol = new ContinuationCensusProtocol();
+        npcRosterCensusProtocol = protocol;
+
+        OwnerSectionContract personMembership = new OwnerSectionContract(
+            PersonMembershipCensusProvider.SectionId,
+            PersonMembershipCensusProvider.SchemaVersion,
+            OwnerSectionRole.Required);
+        OwnerSectionContract personBindings = new OwnerSectionContract(
+            PersonMaterializationBindingCensusProvider.SectionId,
+            PersonMaterializationBindingCensusProvider.SchemaVersion,
+            OwnerSectionRole.Required);
+        if (!protocol.RegisterExpectedSection(personMembership, out _)
+            || !protocol.RegisterExpectedSection(personBindings, out _)
+            || !protocol.RegisterCensusProvider(
+                PersonMembershipCensusProvider.SectionId,
+                personStoreCensusProviders[0],
+                out _)
+            || !protocol.RegisterCensusProvider(
+                PersonMaterializationBindingCensusProvider.SectionId,
+                personStoreCensusProviders[1],
+                out _)
+            || !protocol.RegisterSpatialKnowledgeRosterFamily(npcRuntimeSnapshot, out _)
+            || !protocol.SealExpectedSectionInventory(out _)
+            || !protocol.SealCensusProviderInventory(out _)
+            || !protocol.RegisterExpectedOperation(NpcMembershipCensusOperationId, out _)
+            || !protocol.SealOperationInventory(out _)
+            || !protocol.BindOwnerThread(out _))
+        {
+            npcRosterCensusProtocol = null;
+            return;
+        }
+
+        if (!protocol.TryAssessOwnerSectionInventory(out _))
+            npcRosterCensusProtocol = null;
+    }
+
+    /// <summary>Assesses this partial passive NPC/Person census only.</summary>
+    public bool TryAssessNpcRosterCensus(out ContinuationCensusFailure failure)
+    {
+        if (npcRosterCensusProtocol == null)
+        {
+            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+            return false;
+        }
+        return npcRosterCensusProtocol.TryAssessOwnerSectionInventory(out failure);
+    }
+
+    /// <summary>Reads the shared epoch for this partial passive NPC/Person census only.</summary>
+    public bool TryReadNpcRosterCensusMutationEpoch(
+        out long epoch,
+        out ContinuationCensusFailure failure)
+    {
+        epoch = 0L;
+        if (npcRosterCensusProtocol == null)
+        {
+            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+            return false;
+        }
+        return npcRosterCensusProtocol.TryReadMutationEpoch(out epoch, out failure);
+    }
+
+    private NpcMembershipCensusScope BeginNpcMembershipCensusScope()
+    {
+        if (activeNpcMembershipCensusContext != null)
+        {
+            activeNpcMembershipCensusContext.NestingDepth++;
+            return new NpcMembershipCensusScope(this, activeNpcMembershipCensusContext);
+        }
+
+        NpcMembershipCensusContext context = new NpcMembershipCensusContext(personStore.Revision);
+        if (npcRosterCensusProtocol != null
+            && npcRosterCensusProtocol.TryEnterOperation(
+                NpcMembershipCensusOperationId,
+                out SimulationOperationScope protocolScope,
+                out _))
+        {
+            context.ProtocolScope = protocolScope;
+        }
+        else if (npcRosterCensusProtocol != null)
+        {
+            npcRosterCensusProtocol.FaultClosed();
+        }
+        activeNpcMembershipCensusContext = context;
+        return new NpcMembershipCensusScope(this, context);
+    }
+
+    private void ExitNpcMembershipCensusScope(NpcMembershipCensusContext context)
+    {
+        if (!ReferenceEquals(activeNpcMembershipCensusContext, context)
+            || context.NestingDepth <= 0)
+        {
+            return;
+        }
+
+        context.NestingDepth--;
+        if (context.NestingDepth != 0) return;
+
+        long personStoreRevision = personStore.Revision;
+        bool revisionDeltaFits = context.PersonStoreRevisionDelta >= 0L
+            && context.PersonStoreRevisionAtStart <= long.MaxValue - context.PersonStoreRevisionDelta;
+        long expectedPersonStoreRevision = revisionDeltaFits
+            ? context.PersonStoreRevisionAtStart + context.PersonStoreRevisionDelta
+            : -1L;
+        if (!revisionDeltaFits || personStoreRevision != expectedPersonStoreRevision)
+        {
+            npcRosterCensusProtocol?.FaultClosed();
+        }
+        else if (context.RosterChanged || context.PersonStoreRevisionDelta != 0L)
+        {
+            List<string> changedFixedSections = new List<string>();
+            if (context.PersonStoreRevisionDelta != 0L)
+            {
+                changedFixedSections.Add(PersonMembershipCensusProvider.SectionId);
+                changedFixedSections.Add(PersonMaterializationBindingCensusProvider.SectionId);
+            }
+
+            if (context.ProtocolScope != null && npcRosterCensusProtocol != null)
+            {
+                npcRosterCensusProtocol.TryReconcileSpatialKnowledgeRosterAndNotifyCommittedMutations(
+                    changedFixedSections,
+                    context.PersonStoreRevisionAtStart,
+                    out _);
+            }
+        }
+
+        context.ProtocolScope?.Dispose();
+        activeNpcMembershipCensusContext = null;
+    }
+
+    internal void MarkNpcMembershipPersonStoreRevisionCommitted()
+    {
+        NpcMembershipCensusContext context = activeNpcMembershipCensusContext;
+        if (context == null || context.PersonStoreRevisionDelta == long.MaxValue)
+        {
+            npcRosterCensusProtocol?.FaultClosed();
+            return;
+        }
+
+        context.PersonStoreRevisionDelta++;
     }
 
     private void BindCoreMutationGuardAuthorities()
@@ -924,11 +1119,28 @@ public sealed partial class SimulationRuntime
         mutationGuard.MarkFaulted(reason);
     }
 
+    internal void MarkNpcMembershipCensusCompensationFailed()
+    {
+        mutationGuard.MarkFaulted(AuthoritativeMutationFaultReason.RollbackRestoreFailed);
+        npcRosterCensusProtocol?.FaultClosed();
+    }
+
     /// <summary>
     /// Registers one named NPC in the world-owned roster. The operation rejects null,
     /// unidentified, and duplicate RuntimeIds and never changes population aggregates.
     /// </summary>
     public bool TryRegisterNpc(NpcRuntime npcRuntime, out WorldNpcRegistryFailure failure)
+    {
+        using (NpcMembershipCensusScope censusScope = BeginNpcMembershipCensusScope())
+        {
+            return TryRegisterNpcWithinMembershipCensus(npcRuntime, censusScope, out failure);
+        }
+    }
+
+    private bool TryRegisterNpcWithinMembershipCensus(
+        NpcRuntime npcRuntime,
+        NpcMembershipCensusScope censusScope,
+        out WorldNpcRegistryFailure failure)
     {
         failure = WorldNpcRegistryFailure.None;
 
@@ -995,6 +1207,7 @@ public sealed partial class SimulationRuntime
 
         npcRegistryById.Add(npcRuntime.RuntimeId, npcRuntime);
         npcRuntimes.Add(npcRuntime);
+        censusScope.MarkRosterChanged();
         return true;
     }
 
@@ -1004,6 +1217,17 @@ public sealed partial class SimulationRuntime
     /// that disappeared from the authoritative roster.
     /// </summary>
     public bool TryUnregisterNpc(string runtimeId, out WorldNpcRegistryFailure failure)
+    {
+        using (NpcMembershipCensusScope censusScope = BeginNpcMembershipCensusScope())
+        {
+            return TryUnregisterNpcWithinMembershipCensus(runtimeId, censusScope, out failure);
+        }
+    }
+
+    private bool TryUnregisterNpcWithinMembershipCensus(
+        string runtimeId,
+        NpcMembershipCensusScope censusScope,
+        out WorldNpcRegistryFailure failure)
     {
         failure = WorldNpcRegistryFailure.None;
 
@@ -1039,6 +1263,7 @@ public sealed partial class SimulationRuntime
 
         npcRegistryById.Remove(runtimeId);
         npcRuntimes.Remove(npcRuntime);
+        censusScope.MarkRosterChanged();
         return true;
     }
 
@@ -2363,15 +2588,18 @@ public sealed partial class SimulationRuntime
         out NpcRuntime npcRuntime,
         out PersonMaterializationFailure failure)
     {
-        return PersonMaterializationSystem.TryMaterializePerson(
-            this,
-            personId,
-            npcData,
-            runtimeId,
-            startingCity,
-            initialMoney,
-            out npcRuntime,
-            out failure);
+        using (NpcMembershipCensusScope censusScope = BeginNpcMembershipCensusScope())
+        {
+            return PersonMaterializationSystem.TryMaterializePerson(
+                this,
+                personId,
+                npcData,
+                runtimeId,
+                startingCity,
+                initialMoney,
+                out npcRuntime,
+                out failure);
+        }
     }
 
     public bool TryBindExistingNpcToPerson(
@@ -2379,11 +2607,14 @@ public sealed partial class SimulationRuntime
         string npcRuntimeId,
         out PersonMaterializationFailure failure)
     {
-        return PersonMaterializationSystem.TryBindExistingNpcToPerson(
-            this,
-            personId,
-            npcRuntimeId,
-            out failure);
+        using (NpcMembershipCensusScope censusScope = BeginNpcMembershipCensusScope())
+        {
+            return PersonMaterializationSystem.TryBindExistingNpcToPerson(
+                this,
+                personId,
+                npcRuntimeId,
+                out failure);
+        }
     }
 
     public bool TryBindExistingPersonResident(

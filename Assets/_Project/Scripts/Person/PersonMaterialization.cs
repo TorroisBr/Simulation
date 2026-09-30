@@ -116,12 +116,15 @@ public static class PersonMaterializationSystem
             failure = MapStoreFailure(storeFailure);
             return false;
         }
+        world.MarkNpcMembershipPersonStoreRevisionCommitted();
 
         if (world.TryRegisterNpc(candidate, out WorldNpcRegistryFailure registryFailure) == false)
         {
-            world.PersonStore.TryRollbackMaterializedNpcBinding(personId, runtimeId);
+            bool bindingRestored = world.PersonStore.TryRollbackMaterializedNpcBinding(personId, runtimeId);
+            if (bindingRestored) world.MarkNpcMembershipPersonStoreRevisionCommitted();
             candidate.ClearPersonRuntime();
             candidate.ClearPersonId();
+            if (!bindingRestored) world.MarkNpcMembershipCensusCompensationFailed();
             failure = registryFailure == WorldNpcRegistryFailure.DuplicateRuntimeId
                 ? PersonMaterializationFailure.DuplicateNpcRuntimeId
                 : PersonMaterializationFailure.RosterRegistrationFailed;
@@ -133,10 +136,13 @@ public static class PersonMaterializationSystem
             startingCity.AddImportantNpc(candidate);
             if (candidate.CurrentCity != startingCity)
             {
-                world.PersonStore.TryRollbackMaterializedNpcBinding(personId, runtimeId);
+                bool bindingRestored = world.PersonStore.TryRollbackMaterializedNpcBinding(personId, runtimeId);
+                if (bindingRestored) world.MarkNpcMembershipPersonStoreRevisionCommitted();
                 candidate.ClearPersonRuntime();
                 candidate.ClearPersonId();
-                world.TryUnregisterNpc(runtimeId, out _);
+                bool npcUnregistered = world.TryUnregisterNpc(runtimeId, out _);
+                if (!bindingRestored || !npcUnregistered)
+                    world.MarkNpcMembershipCensusCompensationFailed();
                 failure = PersonMaterializationFailure.InvalidStartingContext;
                 return false;
             }
@@ -231,14 +237,17 @@ public static class PersonMaterializationSystem
             failure = MapStoreFailure(storeFailure);
             return false;
         }
+        world.MarkNpcMembershipPersonStoreRevisionCommitted();
 
         if (string.IsNullOrWhiteSpace(personResidence) == true
             && string.IsNullOrWhiteSpace(npcResidence) == false
             && person.TrySetResidenceSettlementRuntimeId(npcResidence) == false)
         {
-            world.PersonStore.TryRollbackMaterializedNpcBinding(personId, npcRuntimeId);
+            bool bindingRestored = world.PersonStore.TryRollbackMaterializedNpcBinding(personId, npcRuntimeId);
+            if (bindingRestored) world.MarkNpcMembershipPersonStoreRevisionCommitted();
             npcRuntime.ClearPersonRuntime();
             npcRuntime.ClearPersonId();
+            if (!bindingRestored) world.MarkNpcMembershipCensusCompensationFailed();
             failure = PersonMaterializationFailure.ResidenceConflict;
             return false;
         }

@@ -267,6 +267,12 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(spatialKnowledgeProviders.Count, Is.EqualTo(20));
         Assert.That(spatialKnowledgeProviders.Select(provider => provider.GetCurrentCensus().SectionId),
             Is.EqualTo(expectedSpatialKnowledgeSectionIds));
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure npcCensusFailure), Is.True,
+            npcCensusFailure.ToString());
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+            out long npcCensusEpoch, out ContinuationCensusFailure npcEpochFailure), Is.True,
+            npcEpochFailure.ToString());
+        Assert.That(npcCensusEpoch, Is.Zero);
         for (int i = 0; i < runtime.NpcRuntimes.Count; i++)
         {
             NpcRuntime npc = runtime.NpcRuntimes[i];

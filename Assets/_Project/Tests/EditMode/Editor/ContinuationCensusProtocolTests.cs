@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Reflection;
 using System.Threading;
 using NUnit.Framework;
@@ -356,6 +357,96 @@ public sealed class ContinuationCensusProtocolTests
         Assert.That(failure, Is.EqualTo(ContinuationCensusFailure.ProtocolFaulted));
     }
 
+    [Test]
+    public void DynamicNpcFamilyAssessmentReturnsBusyWithoutEnumeratingActiveRoster()
+    {
+        PersonStore store = new PersonStore();
+        CountingNpcRoster roster = new CountingNpcRoster(new NpcRuntime("npc-active-family", null));
+        ContinuationCensusProtocol protocol = CreateSpatialKnowledgeProtocol(store, roster);
+        roster.ResetReads();
+
+        Assert.That(protocol.TryEnterOperation("runtime.npc-membership", out SimulationOperationScope scope, out _), Is.True);
+        Assert.That(protocol.TryAssessOwnerSectionInventory(out ContinuationCensusFailure failure), Is.False);
+        Assert.That(failure, Is.EqualTo(ContinuationCensusFailure.OperationInProgress));
+        Assert.That(roster.ReadCount, Is.Zero,
+            "The active-operation check precedes the dynamic family enumeration and every owner census read.");
+        scope.Dispose();
+        Assert.That(protocol.TryAssessOwnerSectionInventory(out _), Is.True);
+    }
+
+    [Test]
+    public void CompensatedPersonStoreWriteNotifiesBothSectionsOnceWithoutFamilyDelta()
+    {
+        PersonStore store = new PersonStore();
+        PersonRuntime person = new PersonRuntime(new PersonId("person-census-compensation"));
+        Assert.That(store.TryRegister(person, out _), Is.True);
+        List<NpcRuntime> roster = new List<NpcRuntime> { new NpcRuntime("npc-compensation-family", null) };
+        ContinuationCensusProtocol protocol = CreateSpatialKnowledgeProtocol(store, roster);
+        IReadOnlyList<IOwnerSectionCensusProvider> providersBefore = protocol.SpatialKnowledgeFamilyProviders;
+        NpcRuntime npc = roster[0];
+        long revisionAtStart = store.Revision;
+
+        Assert.That(protocol.TryEnterOperation("runtime.npc-membership", out SimulationOperationScope scope, out _), Is.True);
+        Assert.That(TryBindPerson(store, person.PersonId, npc.RuntimeId), Is.True);
+        Assert.That(TryRollbackPersonBinding(store, person.PersonId, npc.RuntimeId), Is.True);
+        Assert.That(store.Revision, Is.EqualTo(revisionAtStart + 2L));
+        Assert.That(store.MaterializedBindingCount, Is.Zero);
+        Assert.That(protocol.TryReconcileSpatialKnowledgeRosterAndNotifyCommittedMutations(
+            new[]
+            {
+                PersonMembershipCensusProvider.SectionId,
+                PersonMaterializationBindingCensusProvider.SectionId
+            },
+            revisionAtStart,
+            out ContinuationCensusFailure reconciliationFailure), Is.True, reconciliationFailure.ToString());
+        Assert.That(protocol.SpatialKnowledgeFamilyProviders, Is.SameAs(providersBefore));
+        Assert.That(protocol.TryReadMutationEpoch(out long epoch, out _), Is.True);
+        Assert.That(epoch, Is.EqualTo(1L));
+        Assert.That(protocol.TryAssessOwnerSectionInventory(out ContinuationCensusFailure activeFailure), Is.False);
+        Assert.That(activeFailure, Is.EqualTo(ContinuationCensusFailure.OperationInProgress));
+
+        scope.Dispose();
+        Assert.That(protocol.TryAssessOwnerSectionInventory(out ContinuationCensusFailure finalFailure), Is.True,
+            finalFailure.ToString());
+    }
+
+    [Test]
+    public void DuplicateNpcInReconciliationFailsBeforePublishingAnyFamilyOrEpoch()
+    {
+        PersonStore store = new PersonStore();
+        List<NpcRuntime> roster = new List<NpcRuntime> { new NpcRuntime("npc-malformed-family", null) };
+        ContinuationCensusProtocol protocol = CreateSpatialKnowledgeProtocol(store, roster);
+        IReadOnlyList<IOwnerSectionCensusProvider> providersBefore = protocol.SpatialKnowledgeFamilyProviders;
+
+        Assert.That(protocol.TryEnterOperation("runtime.npc-membership", out SimulationOperationScope scope, out _), Is.True);
+        roster.Add(new NpcRuntime("npc-malformed-family", null));
+        Assert.That(protocol.TryReconcileSpatialKnowledgeRosterAndNotifyCommittedMutations(
+            new string[0], store.Revision, out ContinuationCensusFailure failure), Is.False);
+        Assert.That(failure, Is.EqualTo(ContinuationCensusFailure.OwnerCoverageIncomplete));
+        Assert.That(protocol.SpatialKnowledgeFamilyProviders, Is.SameAs(providersBefore));
+        Assert.That(protocol.TryReadMutationEpoch(out long epoch, out ContinuationCensusFailure epochFailure), Is.False);
+        Assert.That(epoch, Is.Zero);
+        Assert.That(epochFailure, Is.EqualTo(ContinuationCensusFailure.ProtocolFaulted));
+        scope.Dispose();
+    }
+
+    [Test]
+    public void MissedRosterReconciliationFailsClosedOnAssessment()
+    {
+        PersonStore store = new PersonStore();
+        List<NpcRuntime> roster = new List<NpcRuntime> { new NpcRuntime("npc-missed-family", null) };
+        ContinuationCensusProtocol protocol = CreateSpatialKnowledgeProtocol(store, roster);
+        IReadOnlyList<IOwnerSectionCensusProvider> providersBefore = protocol.SpatialKnowledgeFamilyProviders;
+        roster.Add(new NpcRuntime("npc-unnotified-family", null));
+
+        Assert.That(protocol.TryAssessOwnerSectionInventory(out ContinuationCensusFailure failure), Is.False);
+        Assert.That(failure, Is.EqualTo(ContinuationCensusFailure.OwnerCoverageIncomplete));
+        Assert.That(protocol.SpatialKnowledgeFamilyProviders, Is.SameAs(providersBefore));
+        Assert.That(protocol.TryReadMutationEpoch(out long epoch, out ContinuationCensusFailure epochFailure), Is.False);
+        Assert.That(epoch, Is.Zero);
+        Assert.That(epochFailure, Is.EqualTo(ContinuationCensusFailure.ProtocolFaulted));
+    }
+
     private static ContinuationCensusProtocol CreateProtocol(
         IOwnerSectionCensusProvider provider,
         OwnerSectionRole role)
@@ -406,6 +497,51 @@ public sealed class ContinuationCensusProtocolTests
         Assert.That(protocol.SealOperationInventory(out _), Is.True);
         Assert.That(protocol.BindOwnerThread(out _), Is.True);
         return protocol;
+    }
+
+    private static ContinuationCensusProtocol CreateSpatialKnowledgeProtocol(
+        PersonStore store,
+        IReadOnlyList<NpcRuntime> roster)
+    {
+        IReadOnlyList<IOwnerSectionCensusProvider> personProviders = PersonStoreCensusProvider.CreateProviders(store);
+        ContinuationCensusProtocol protocol = new ContinuationCensusProtocol();
+        Assert.That(protocol.RegisterExpectedSection(new OwnerSectionContract(
+            PersonMembershipCensusProvider.SectionId,
+            PersonMembershipCensusProvider.SchemaVersion,
+            OwnerSectionRole.Required), out _), Is.True);
+        Assert.That(protocol.RegisterExpectedSection(new OwnerSectionContract(
+            PersonMaterializationBindingCensusProvider.SectionId,
+            PersonMaterializationBindingCensusProvider.SchemaVersion,
+            OwnerSectionRole.Required), out _), Is.True);
+        Assert.That(protocol.RegisterCensusProvider(
+            PersonMembershipCensusProvider.SectionId, personProviders[0], out _), Is.True);
+        Assert.That(protocol.RegisterCensusProvider(
+            PersonMaterializationBindingCensusProvider.SectionId, personProviders[1], out _), Is.True);
+        Assert.That(protocol.RegisterSpatialKnowledgeRosterFamily(roster, out ContinuationCensusFailure familyFailure), Is.True,
+            familyFailure.ToString());
+        Assert.That(protocol.SealExpectedSectionInventory(out _), Is.True);
+        Assert.That(protocol.SealCensusProviderInventory(out _), Is.True);
+        Assert.That(protocol.RegisterExpectedOperation("runtime.npc-membership", out _), Is.True);
+        Assert.That(protocol.SealOperationInventory(out _), Is.True);
+        Assert.That(protocol.BindOwnerThread(out _), Is.True);
+        Assert.That(protocol.TryAssessOwnerSectionInventory(out ContinuationCensusFailure initialFailure), Is.True,
+            initialFailure.ToString());
+        return protocol;
+    }
+
+    private static bool TryBindPerson(PersonStore store, PersonId personId, string runtimeId)
+    {
+        object[] arguments = { personId, runtimeId, PersonStoreFailure.None };
+        return (bool)typeof(PersonStore).GetMethod(
+            "TryBindMaterializedNpc", BindingFlags.Instance | BindingFlags.NonPublic)
+            .Invoke(store, arguments);
+    }
+
+    private static bool TryRollbackPersonBinding(PersonStore store, PersonId personId, string runtimeId)
+    {
+        return (bool)typeof(PersonStore).GetMethod(
+            "TryRollbackMaterializedNpcBinding", BindingFlags.Instance | BindingFlags.NonPublic)
+            .Invoke(store, new object[] { personId, runtimeId });
     }
 
     private static OwnerSectionCensusWitness CreateWitness(
@@ -480,5 +616,44 @@ public sealed class ContinuationCensusProtocolTests
         }
 
         public OwnerSectionCensusWitness GetCurrentCensus() => Witness;
+    }
+
+    private sealed class CountingNpcRoster : IReadOnlyList<NpcRuntime>
+    {
+        private readonly NpcRuntime[] npcs;
+
+        public int ReadCount { get; private set; }
+        public int Count
+        {
+            get
+            {
+                ReadCount++;
+                return npcs.Length;
+            }
+        }
+
+        public NpcRuntime this[int index]
+        {
+            get
+            {
+                ReadCount++;
+                return npcs[index];
+            }
+        }
+
+        public CountingNpcRoster(params NpcRuntime[] npcs)
+        {
+            this.npcs = npcs ?? new NpcRuntime[0];
+        }
+
+        public void ResetReads() => ReadCount = 0;
+
+        public IEnumerator<NpcRuntime> GetEnumerator()
+        {
+            ReadCount++;
+            return ((IEnumerable<NpcRuntime>)npcs).GetEnumerator();
+        }
+
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
     }
 }
