@@ -72,9 +72,22 @@ public sealed class SpatialNetworkRuntime
     private readonly HashSet<SpatialLocationRuntime> locations = new HashSet<SpatialLocationRuntime>();
     private readonly List<SpatialRouteRuntime> routes = new List<SpatialRouteRuntime>();
     private readonly Dictionary<SpatialLocationRuntime, List<SpatialRouteRuntime>> outgoingRoutes = new Dictionary<SpatialLocationRuntime, List<SpatialRouteRuntime>>();
+    private long revision;
 
-    public IEnumerable<SpatialLocationRuntime> Locations => locations;
-    public IReadOnlyList<SpatialRouteRuntime> Routes => routes;
+    public IEnumerable<SpatialLocationRuntime> Locations
+    {
+        get
+        {
+            SpatialLocationRuntime[] snapshot = new SpatialLocationRuntime[locations.Count];
+            locations.CopyTo(snapshot);
+            return Array.AsReadOnly(snapshot);
+        }
+    }
+
+    public IReadOnlyList<SpatialRouteRuntime> Routes => Array.AsReadOnly(routes.ToArray());
+    public int LocationCount => locations.Count;
+    public int RouteCount => routes.Count;
+    public long Revision => revision;
 
     public SpatialNetworkRuntime(RuntimeIdentityRegistry identityRegistry, SimulationLogger logger = null)
     {
@@ -96,6 +109,11 @@ public sealed class SpatialNetworkRuntime
             return false;
         }
 
+        if (CanAdvanceRevision("spatial location") == false)
+        {
+            return false;
+        }
+
         if (identityRegistry.RegisterLocation(location) == false)
         {
             return false;
@@ -103,6 +121,7 @@ public sealed class SpatialNetworkRuntime
 
         locations.Add(location);
         outgoingRoutes.Add(location, new List<SpatialRouteRuntime>());
+        revision++;
         return true;
     }
 
@@ -120,6 +139,11 @@ public sealed class SpatialNetworkRuntime
             return false;
         }
 
+        if (CanAdvanceRevision("spatial route") == false)
+        {
+            return false;
+        }
+
         if (identityRegistry.RegisterRoute(route) == false)
         {
             return false;
@@ -127,6 +151,7 @@ public sealed class SpatialNetworkRuntime
 
         routes.Add(route);
         outgoingRoutes[route.Origin].Add(route);
+        revision++;
         return true;
     }
 
@@ -144,7 +169,7 @@ public sealed class SpatialNetworkRuntime
     {
         if (origin != null && outgoingRoutes.TryGetValue(origin, out List<SpatialRouteRuntime> foundRoutes) == true)
         {
-            return foundRoutes;
+            return Array.AsReadOnly(foundRoutes.ToArray());
         }
 
         return Array.Empty<SpatialRouteRuntime>();
@@ -187,6 +212,17 @@ public sealed class SpatialNetworkRuntime
             logger.LogError($"Direct route from location '{origin.RuntimeId}' to '{destination.RuntimeId}' is ambiguous: {directRouteCount} routes exist.");
         }
 
+        return false;
+    }
+
+    private bool CanAdvanceRevision(string registrationKind)
+    {
+        if (revision < long.MaxValue)
+        {
+            return true;
+        }
+
+        logger.LogError($"Cannot register {registrationKind}: spatial network census revision is exhausted.");
         return false;
     }
 }

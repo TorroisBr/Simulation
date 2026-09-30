@@ -65,6 +65,7 @@ public sealed class SimulationBootstrapComposition
         ExplorableSites = sites;
         ExplorableSiteCensusProvider = new ExplorableSiteCensusProvider(ExplorableSites);
         SettlementPopulationCensusProviders = SettlementPopulationCensusProvider.CreateProviders(Runtime.Cities);
+        SpatialNetworkCensusProviders = SpatialNetworkCensusProvider.CreateProviders(SpatialNetwork);
         Expeditions = expeditions;
         ExpeditionSystem = expeditionSystem;
     }
@@ -137,6 +138,8 @@ public sealed class SimulationBootstrapComposition
     /// <summary>Fixed passive witnesses for the installed population owners
     /// of the composed Cities.</summary>
     public IReadOnlyList<IOwnerSectionCensusProvider> SettlementPopulationCensusProviders { get; }
+    /// <summary>Fixed passive witnesses for the installed legacy spatial-network Locations and Routes.</summary>
+    public IReadOnlyList<IOwnerSectionCensusProvider> SpatialNetworkCensusProviders { get; }
     public ExpeditionStore Expeditions { get; }
     public ExpeditionSystem ExpeditionSystem { get; }
 }

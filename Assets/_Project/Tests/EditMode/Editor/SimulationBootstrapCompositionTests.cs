@@ -232,6 +232,27 @@ public sealed class SimulationBootstrapCompositionTests
             Assert.That(repeatedIdentityWitnesses[i].Cardinality, Is.EqualTo(expectedRuntimeIdentityCardinalities[i]));
             Assert.That(repeatedIdentityWitnesses[i].Revision, Is.EqualTo(16L));
         }
+
+        IReadOnlyList<IOwnerSectionCensusProvider> spatialNetworkProviders =
+            simulation.Bootstrap.SpatialNetworkCensusProviders;
+        string[] spatialNetworkSectionIds =
+        {
+            SpatialNetworkCensusProvider.LocationsSectionId,
+            SpatialNetworkCensusProvider.RoutesSectionId
+        };
+        int[] expectedSpatialNetworkCardinalities = { 2, 2 };
+        Assert.That(spatialNetworkProviders.Count, Is.EqualTo(spatialNetworkSectionIds.Length));
+        for (int i = 0; i < spatialNetworkProviders.Count; i++)
+        {
+            OwnerSectionCensusWitness witness = spatialNetworkProviders[i].GetCurrentCensus();
+            Assert.That(witness.SectionId, Is.EqualTo(spatialNetworkSectionIds[i]));
+            Assert.That(witness.SchemaVersion, Is.EqualTo(SpatialNetworkCensusProvider.SchemaVersion));
+            Assert.That(witness.OwnerInstanceIdentity, Is.SameAs(simulation.Bootstrap.SpatialNetwork));
+            Assert.That(witness.OwnerInstanceIdentity, Is.Not.SameAs(runtimeIdentityOwner));
+            Assert.That(witness.Cardinality, Is.EqualTo(expectedSpatialNetworkCardinalities[i]));
+            Assert.That(witness.Revision, Is.EqualTo(4L));
+        }
+
         OwnerSectionCensusWitness recordSequenceCensus =
             simulation.Bootstrap.SimulationRecordSequenceCensusProvider.GetCurrentCensus();
         Assert.That(recordSequenceCensus.SectionId, Is.EqualTo(SimulationRecordSequenceCensusProvider.SectionId));
