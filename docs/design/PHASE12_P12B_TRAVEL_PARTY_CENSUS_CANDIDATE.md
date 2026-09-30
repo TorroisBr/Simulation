@@ -36,7 +36,10 @@ selected-profile bootstrap identity, and split-store rejection.
 
 ## Validation
 
-Validation ran on the candidate worktree based on the SHA above:
+The code-bearing implementation candidate is
+`7456ea39af18a17190145dfb26f5932e01745564` (tree
+`992cdd22ff7c46d26a05788b63871b6af9b557e1`). Validation ran on that code
+tree based on the SHA above. This evidence document is a docs-only follow-up.
 
 - `TravelPartyCensusTests`: 9/9 —
   `Temp/ValidationResults/EditMode-20260930-220047-0adab0a11cfc4d26a2e651afab22c501.xml`
@@ -52,8 +55,8 @@ Validation ran on the candidate worktree based on the SHA above:
   `Temp/ValidationResults/EditMode-20260930-220206-9780518c95884d42ad41f7f316640ad5.xml`
 - `git diff --check`: passed.
 
-The final exact candidate SHA and independent code-review record are appended
-after the candidate is committed. This branch is not a canonical promotion.
+Independent exact-tip code review is pending. This branch is not a canonical
+promotion.
 
 ## Scope limits
 
