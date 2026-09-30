@@ -60,7 +60,7 @@ P12-B–P12-G capability decomposition in
 | Checkpoint | Status | Current evidence and limits |
 |---|---|---|
 | P12-A — `UnityBootstrap-Daily-v1` profile integration | `WAIT_DEPENDENCY` | Scope accepted. No included-owner export plus staged-hydration coverage or validated complete live profile inventory exists yet. Its separate implementation authorization remains outstanding. |
-| P12-B — profile admission and completed-boundary lifecycle | `INCOMPLETE — PARTIAL FOUNDATION PROMOTED` | In addition to the promoted non-admitting kernel, receipt owners, P8-A–D, and RuntimeIdentity witnesses, cumulative stack `b889b4747738d933fe48311ef89fc33a40e3dfa0` adds passive witnesses for record sequence, ActorChoice, RuntimeIdAllocator, ArmedForce/manpower/position, Conflict/War/Battle, Estate/Property, and Institution/Office. Follow-up promotions add P12-D Genealogy parentage, legacy `SpatialNetworkRuntime` location/route witnesses, day-zero per-NPC `SpatialKnowledgeRuntime` witnesses, roster-following SpatialKnowledge census at `0021b0aa13fb6ae6d5f27c129c67ba452dbacb4e` (code `2c782a7`), the per-City NPC-presence projection witness at `10fb58d088e515d76bb86de2d7381c9ea9cb7483` (code `aafa81e`), and roster-following per-NPC Inventory witnesses at `15e5a543f3896c02f9dbd9c36c9ba75bc90dac2b`. See the promoted-stack sections and linked candidate evidence. The static writer map and partial profile evidence remain in `docs/design/PHASE12_B_BLOCKER_RESOLUTION.md`. There is no complete profile census or shared-epoch coverage for all supported writes, no global Unity owner-thread/quiescence proof, and no capture token. |
+| P12-B — profile admission and completed-boundary lifecycle | `INCOMPLETE — PARTIAL FOUNDATION PROMOTED` | In addition to the promoted non-admitting kernel, receipt owners, P8-A–D, and RuntimeIdentity witnesses, cumulative stack `b889b4747738d933fe48311ef89fc33a40e3dfa0` adds passive witnesses for record sequence, ActorChoice, RuntimeIdAllocator, ArmedForce/manpower/position, Conflict/War/Battle, Estate/Property, and Institution/Office. Follow-up promotions add P12-D Genealogy parentage, legacy `SpatialNetworkRuntime` location/route witnesses, day-zero per-NPC `SpatialKnowledgeRuntime` witnesses, roster-following SpatialKnowledge census at `0021b0aa13fb6ae6d5f27c129c67ba452dbacb4e` (code `2c782a7`), the per-City NPC-presence projection witness at `10fb58d088e515d76bb86de2d7381c9ea9cb7483` (code `aafa81e`), roster-following per-NPC Inventory witnesses at `15e5a543f3896c02f9dbd9c36c9ba75bc90dac2b`, and the passive TravelParty owner witness at `b78a271f9c552b40bade1a45168388eafa670f59` (code/test `260a688`, review `e891058`). See the promoted-stack sections and linked candidate evidence. The static writer map and partial profile evidence remain in `docs/design/PHASE12_B_BLOCKER_RESOLUTION.md`. There is no complete profile census or shared-epoch coverage for all supported writes, no global Unity owner-thread/quiescence proof, and no capture token. |
 | P12-C — identity, provenance, deterministic roots | `BLOCKED_ON_P12-B` | The `RuntimeIdAllocator` passive census and record-sequence witness promoted at `b889b47` are inventory evidence only; they do not provide C exports/hydration, deterministic-root state, or provenance. Preserve `codex/phase12/P12CIdentityRuntimeSnapshot` at `531d835` for selective reintegration only after B readiness and revalidation. |
 | P12-D — factual roots and Person/population relations | `BLOCKED_ON_P12-B_AND_C` | Owner inventory and accepted scope remain; no complete export/hydration capability is claimed. |
 | P12-E — core and official daily-domain owners | `BLOCKED_ON_P12-B_AND_C` | Owner inventory and accepted scope remain; effective-profile provider coverage and exact owner exports are incomplete. |
@@ -474,6 +474,43 @@ is a separate full-profile admission blocker. This promotion adds no global
 owner-thread/quiescence proof, capture eligibility, export, or hydration.
 P12-B remains incomplete and P12-A remains `WAIT_DEPENDENCY`.
 
+## P12-B TravelParty census promotion — 2026-09-30
+
+With explicit approval, `codex/phase12/P12BTravelPartyCensusImplementation`
+was fast-forwarded to `codex/phase12/canonical` at
+`b78a271f9c552b40bade1a45168388eafa670f59` from canonical
+`e9ced8e451f42e80ed2132ce494cd5c26e439894`. Its code/test tip is
+`260a688f7ea1a9f86e9b589788cda2c32357e170` (tree
+`34571165d55af36a60f64650dce1968802cfd500`). Independent exact-tip review
+passed; the durable PASS record is
+`codex/phase12/P12BTravelPartyCensusImplementationReview2` at
+`e8910587fdd894a5090c4208b30c5e834acb528f`. The previous HOLD record is
+preserved separately.
+
+The candidate publishes the exact installed `TravelPartyStore` through a
+schema-v1 passive census provider reporting active party-instance count and
+owner-local revision. Party identity remains distinct from member NPC
+identities; cardinality counts party instances, not participants. The bounded
+compensation test uses a deterministic stepwise sequence through real store
+and lifecycle operations; it does not claim to pause the complete
+`ExpeditionSystem.TryBeginReturn` coordinator. The reviewer verified the
+production coordinator's matching mutation-window boundary and found this
+proof sufficient without a production-only test hook.
+
+Validation on the code/test tip passed `TravelPartyCensus` 10/10,
+`GroupTravel` 32/32, `Expedition` 14/14, bootstrap composition 14/14, ALL
+EditMode 2061/2061, complete official Smoke 5/5, and `git diff --check`.
+All six XML/log pairs were independently inspected against their recorded
+SHA-256 values in
+[`PHASE12_P12B_TRAVEL_PARTY_CENSUS_CANDIDATE.md`](design/PHASE12_P12B_TRAVEL_PARTY_CENSUS_CANDIDATE.md).
+
+This is a passive owner witness only. It does not prove member-level census
+coverage, global committed-write invalidation, complete profile inventory,
+owner-thread/quiescence, capture eligibility, export, or hydration. It adds
+no P18 timeline/handoff behavior and no permanent Activity-to-Actor or
+NPC-owned authority rule. P12-B remains incomplete; P12-A remains
+`WAIT_DEPENDENCY`.
+
 ## Remaining dependency-ordered P12-B blockers
 
 The static successful-writer inventory is recorded; proving every included
@@ -485,8 +522,9 @@ supported-writer coverage.
 
 P8-A through P8-D owner witnesses and the RuntimeIdentityRegistry witness are
 now promoted. This adds positive day-zero P8-A geography cardinalities while
-P8-B/C/D and registry witnesses cover their separate sections. Remaining
+P8-B/C/D and registry witnesses cover their separate sections. The promoted
+TravelParty witness covers only party-instance count/revision. Remaining
 causal C roots, factual D, official E, and commitment F owners still need exact
-witness providers and supported-writer coverage. The remaining committed-write invalidation and
-owner-thread/quiescence blockers are unchanged. Phase 12 remains open and no
-P12-A implementation authorization is implied.
+witness providers and supported-writer coverage. The remaining committed-write
+invalidation and owner-thread/quiescence blockers are unchanged. Phase 12
+remains open and no P12-A implementation authorization is implied.
