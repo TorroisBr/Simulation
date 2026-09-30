@@ -419,6 +419,15 @@ public sealed class CommercialKnowledgeRuntime
     public IReadOnlyList<CommercialMarketObservation> Observations => ObservationList;
     public IReadOnlyList<CommercialLiquidityObservation> LiquidityObservations => LiquidityObservationList;
     public long Revision => revision;
+    internal bool TryReadCensus(out int marketCount, out int liquidityCount, out int shareReceiptCount, out long currentRevision)
+    {
+        marketCount = 0; liquidityCount = 0; shareReceiptCount = 0; currentRevision = revision;
+        if (observations == null || liquidityObservations == null || shareReceipts == null) return false;
+        marketCount = observations.Count;
+        liquidityCount = liquidityObservations.Count;
+        shareReceiptCount = shareReceipts.Count;
+        return true;
+    }
     private List<CommercialKnowledgeShareReceipt> ShareReceipts => shareReceipts ?? (shareReceipts = new List<CommercialKnowledgeShareReceipt>());
 
     private List<CommercialMarketObservation> ObservationList => observations ?? (observations = new List<CommercialMarketObservation>());

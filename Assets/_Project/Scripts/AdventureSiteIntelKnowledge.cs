@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using UnityEngine;
 
 public enum AdventureIntelSource
 {
@@ -238,12 +239,14 @@ public sealed class AdventureAccessObservation : AdventureSiteIntelObservation
 public sealed class AdventureSiteIntelKnowledgeRuntime
 {
     private readonly string ownerRuntimeId;
+    [SerializeField] private long revision;
     private readonly List<AdventureOppositionObservation> oppositionObservations = new List<AdventureOppositionObservation>();
     private readonly List<AdventureNotableItemObservation> notableItemObservations = new List<AdventureNotableItemObservation>();
     private readonly List<AdventureCommonResourceObservation> commonResourceObservations = new List<AdventureCommonResourceObservation>();
     private readonly List<AdventureAccessObservation> accessObservations = new List<AdventureAccessObservation>();
 
     public string OwnerRuntimeId => ownerRuntimeId;
+    public long Revision => revision;
     public IReadOnlyList<AdventureOppositionObservation> OppositionObservations => oppositionObservations.AsReadOnly();
     public IReadOnlyList<AdventureNotableItemObservation> NotableItemObservations => notableItemObservations.AsReadOnly();
     public IReadOnlyList<AdventureCommonResourceObservation> CommonResourceObservations => commonResourceObservations.AsReadOnly();
@@ -336,7 +339,7 @@ public sealed class AdventureSiteIntelKnowledgeRuntime
         return false;
     }
 
-    private static bool Record<T>(List<T> observations, T incoming) where T : AdventureSiteIntelObservation
+    private bool Record<T>(List<T> observations, T incoming) where T : AdventureSiteIntelObservation
     {
         if (incoming == null)
         {
@@ -356,11 +359,15 @@ public sealed class AdventureSiteIntelKnowledgeRuntime
                 return false;
             }
 
+            if (revision == long.MaxValue) return false;
             observations[i] = incoming;
+            revision++;
             return true;
         }
 
+        if (revision == long.MaxValue) return false;
         observations.Add(incoming);
+        revision++;
         return true;
     }
 
