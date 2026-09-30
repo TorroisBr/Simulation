@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using UnityEngine;
 
 public enum SimulationRuntimeAdvanceFailure
@@ -73,16 +74,23 @@ public sealed partial class SimulationRuntime
     private sealed class NpcMembershipCensusContext
     {
         public readonly long PersonStoreRevisionAtStart;
+        public readonly Thread OwnerThread;
+        public readonly int OwnerManagedThreadId;
         public SimulationOperationScope ProtocolScope;
         public int NestingDepth;
         public long PersonStoreRevisionDelta;
         public bool RosterChanged;
 
-        public NpcMembershipCensusContext(long personStoreRevisionAtStart)
+        public NpcMembershipCensusContext(long personStoreRevisionAtStart, Thread ownerThread)
         {
             PersonStoreRevisionAtStart = personStoreRevisionAtStart;
+            OwnerThread = ownerThread ?? throw new ArgumentNullException(nameof(ownerThread));
+            OwnerManagedThreadId = ownerThread.ManagedThreadId;
             NestingDepth = 1;
         }
+
+        public bool IsOwnedByCurrentThread() => ReferenceEquals(OwnerThread, Thread.CurrentThread)
+            && OwnerManagedThreadId == Thread.CurrentThread.ManagedThreadId;
     }
 
     private sealed class NpcMembershipCensusScope : IDisposable
@@ -99,6 +107,12 @@ public sealed partial class SimulationRuntime
 
         public void MarkRosterChanged()
         {
+            if (context == null) return;
+            if (!context.IsOwnedByCurrentThread())
+            {
+                owner.FaultNpcMembershipCensusBoundary();
+                return;
+            }
             context.RosterChanged = true;
         }
 
@@ -125,7 +139,7 @@ public sealed partial class SimulationRuntime
     private readonly PersonStore personStore;
     private readonly IReadOnlyList<IOwnerSectionCensusProvider> personStoreCensusProviders;
     private ContinuationCensusProtocol npcRosterCensusProtocol;
-    private NpcMembershipCensusContext activeNpcMembershipCensusContext;
+    private volatile NpcMembershipCensusContext activeNpcMembershipCensusContext;
     private readonly ActorChoiceStore actorChoiceStore;
     private readonly SpatialAuthorityStore spatialAuthorityStore;
     private readonly LegacySpatialAnchorBindingStore legacySpatialAnchorBindingStore;
@@ -901,13 +915,22 @@ public sealed partial class SimulationRuntime
 
     private NpcMembershipCensusScope BeginNpcMembershipCensusScope()
     {
-        if (activeNpcMembershipCensusContext != null)
+        NpcMembershipCensusContext activeContext = activeNpcMembershipCensusContext;
+        if (activeContext != null)
         {
-            activeNpcMembershipCensusContext.NestingDepth++;
-            return new NpcMembershipCensusScope(this, activeNpcMembershipCensusContext);
+            if (!activeContext.IsOwnedByCurrentThread())
+            {
+                FaultNpcMembershipCensusBoundary();
+                return new NpcMembershipCensusScope(this, null);
+            }
+
+            activeContext.NestingDepth++;
+            return new NpcMembershipCensusScope(this, activeContext);
         }
 
-        NpcMembershipCensusContext context = new NpcMembershipCensusContext(personStore.Revision);
+        NpcMembershipCensusContext context = new NpcMembershipCensusContext(
+            personStore.Revision,
+            Thread.CurrentThread);
         if (npcRosterCensusProtocol != null
             && npcRosterCensusProtocol.TryEnterOperation(
                 NpcMembershipCensusOperationId,
@@ -926,6 +949,13 @@ public sealed partial class SimulationRuntime
 
     private void ExitNpcMembershipCensusScope(NpcMembershipCensusContext context)
     {
+        if (context == null) return;
+        if (!context.IsOwnedByCurrentThread())
+        {
+            FaultNpcMembershipCensusBoundary();
+            return;
+        }
+
         if (!ReferenceEquals(activeNpcMembershipCensusContext, context)
             || context.NestingDepth <= 0)
         {
@@ -970,14 +1000,18 @@ public sealed partial class SimulationRuntime
     internal void MarkNpcMembershipPersonStoreRevisionCommitted()
     {
         NpcMembershipCensusContext context = activeNpcMembershipCensusContext;
-        if (context == null || context.PersonStoreRevisionDelta == long.MaxValue)
+        if (context == null
+            || !context.IsOwnedByCurrentThread()
+            || context.PersonStoreRevisionDelta == long.MaxValue)
         {
-            npcRosterCensusProtocol?.FaultClosed();
+            FaultNpcMembershipCensusBoundary();
             return;
         }
 
         context.PersonStoreRevisionDelta++;
     }
+
+    private void FaultNpcMembershipCensusBoundary() => npcRosterCensusProtocol?.FaultClosed();
 
     private void BindCoreMutationGuardAuthorities()
     {

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Threading;
 using NUnit.Framework;
 
 public sealed class SpatialKnowledgeCensusTests
@@ -346,6 +347,42 @@ public sealed class SpatialKnowledgeCensusTests
 
         scope.Dispose();
         Assert.That(runtime.SpatialKnowledgeCensusProviders, Is.SameAs(providersBefore));
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure failure), Is.False);
+        Assert.That(failure, Is.EqualTo(ContinuationCensusFailure.ProtocolFaulted));
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+            out long epoch, out ContinuationCensusFailure epochFailure), Is.False);
+        Assert.That(epoch, Is.Zero);
+        Assert.That(epochFailure, Is.EqualTo(ContinuationCensusFailure.ProtocolFaulted));
+    }
+
+    [Test]
+    public void CrossThreadNestedMembershipEntryCannotJoinOrReconcileOwnerContext()
+    {
+        SimulationRuntime runtime = CreateRuntime();
+        IReadOnlyList<IOwnerSectionCensusProvider> providersBefore = runtime.SpatialKnowledgeCensusProviders;
+        IDisposable ownerScope = (IDisposable)typeof(SimulationRuntime).GetMethod(
+                "BeginNpcMembershipCensusScope", BindingFlags.Instance | BindingFlags.NonPublic)
+            .Invoke(runtime, null);
+        Exception workerFailure = null;
+        Thread worker = new Thread(() =>
+        {
+            try
+            {
+                runtime.TryRegisterNpc(new NpcRuntime("npc-cross-thread-census", null), out _);
+            }
+            catch (Exception exception)
+            {
+                workerFailure = exception;
+            }
+        });
+
+        worker.Start();
+        worker.Join();
+        ownerScope.Dispose();
+
+        Assert.That(workerFailure, Is.Null);
+        Assert.That(runtime.SpatialKnowledgeCensusProviders, Is.SameAs(providersBefore),
+            "A mismatched nested entry cannot publish through the live owner context.");
         Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure failure), Is.False);
         Assert.That(failure, Is.EqualTo(ContinuationCensusFailure.ProtocolFaulted));
         Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
