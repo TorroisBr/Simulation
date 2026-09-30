@@ -202,7 +202,8 @@ public enum InstitutionFoundationFailureCode
     InvalidEndAbsoluteDay,
     InvalidVacancyRecognitionReason,
     StaleIncumbency,
-    RuntimeFaulted
+    RuntimeFaulted,
+    RevisionOverflow
 }
 
 /// <summary>

@@ -57,6 +57,9 @@ public sealed class SimulationBootstrapComposition
         BattleCensusProvider = new PersistentBattleCensusProvider(Runtime.BattleStore);
         EstateCensusProvider = new EstateCensusProvider(Runtime.EstateStore);
         PropertyOwnershipCensusProviders = PropertyOwnershipCensusProvider.CreateProviders(Runtime.PropertyOwnershipStore);
+        InstitutionOfficeCensusProviders = InstitutionOfficeCensusProvider.CreateProviders(
+            Runtime.InstitutionStoreForWorldBoundary,
+            Runtime.OfficeStoreForWorldBoundary);
         ExplorableSites = sites;
         Expeditions = expeditions;
         ExpeditionSystem = expeditionSystem;
@@ -115,6 +118,8 @@ public sealed class SimulationBootstrapComposition
     public IOwnerSectionCensusProvider EstateCensusProvider { get; }
     /// <summary>Fixed passive witnesses for current property ownership and retained transfer history.</summary>
     public IReadOnlyList<IOwnerSectionCensusProvider> PropertyOwnershipCensusProviders { get; }
+    /// <summary>Fixed passive witnesses for institution, office, incumbency and tenure owners.</summary>
+    public IReadOnlyList<IOwnerSectionCensusProvider> InstitutionOfficeCensusProviders { get; }
     /// <summary>The P8-owned spatial truth authority published with the genesis handoff.</summary>
     public SpatialAuthorityStore SpatialAuthority => Runtime.SpatialAuthorityStore;
     public ExplorableSiteStore ExplorableSites { get; }

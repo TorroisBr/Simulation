@@ -10,6 +10,10 @@ public sealed class InstitutionStore : IAuthoritativeMutationGuardBindable
     private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
     private readonly Dictionary<string, InstitutionRecord> records =
         new Dictionary<string, InstitutionRecord>(StringComparer.Ordinal);
+    private long revision;
+
+    public int Count => records.Count;
+    public long Revision => revision;
 
     public IReadOnlyList<InstitutionRecord> Institutions
     {
@@ -45,7 +49,16 @@ public sealed class InstitutionStore : IAuthoritativeMutationGuardBindable
             return false;
         }
 
+        if (revision == long.MaxValue)
+        {
+            failure = InstitutionFoundationFailure.Create(
+                InstitutionFoundationFailureCode.RevisionOverflow,
+                "The institution store revision cannot advance further.");
+            return false;
+        }
+
         records.Add(record.Id.Value, record);
+        revision++;
         failure = InstitutionFoundationFailure.None;
         return true;
     }
@@ -75,6 +88,7 @@ public sealed class OfficeStore : IAuthoritativeMutationGuardBindable
     private readonly Dictionary<string, OfficeIncumbency> incumbencies =
         new Dictionary<string, OfficeIncumbency>(StringComparer.Ordinal);
     private readonly List<OfficeTenureRecord> tenureHistory = new List<OfficeTenureRecord>();
+    private long revision;
 
     public OfficeStore(InstitutionStore institutionStore)
     {
@@ -82,6 +96,11 @@ public sealed class OfficeStore : IAuthoritativeMutationGuardBindable
     }
 
     internal InstitutionStore InstitutionStoreForWorldBoundary => institutionStore;
+
+    public int Count => records.Count;
+    public int IncumbencyCount => incumbencies.Count;
+    public int TenureCount => tenureHistory.Count;
+    public long Revision => revision;
 
     public IReadOnlyList<OfficeRecord> Offices
     {
@@ -182,7 +201,16 @@ public sealed class OfficeStore : IAuthoritativeMutationGuardBindable
             return false;
         }
 
+        if (revision == long.MaxValue)
+        {
+            failure = InstitutionFoundationFailure.Create(
+                InstitutionFoundationFailureCode.RevisionOverflow,
+                "The office store revision cannot advance further.");
+            return false;
+        }
+
         records.Add(record.Id.Value, record);
+        revision++;
         failure = InstitutionFoundationFailure.None;
         return true;
     }
@@ -287,6 +315,14 @@ public sealed class OfficeStore : IAuthoritativeMutationGuardBindable
             return false;
         }
 
+        if (revision == long.MaxValue)
+        {
+            failure = InstitutionFoundationFailure.Create(
+                InstitutionFoundationFailureCode.RevisionOverflow,
+                "The office store revision cannot advance further.");
+            return false;
+        }
+
         OfficeIncumbency next = new OfficeIncumbency(officeId, incumbent, startAbsoluteDay);
         incumbencies.Add(officeId.Value, next);
         tenureHistory.Add(new OfficeTenureRecord(
@@ -295,6 +331,7 @@ public sealed class OfficeStore : IAuthoritativeMutationGuardBindable
             startAbsoluteDay,
             null,
             null));
+        revision++;
         failure = InstitutionFoundationFailure.None;
         return true;
     }
@@ -364,6 +401,14 @@ public sealed class OfficeStore : IAuthoritativeMutationGuardBindable
             return false;
         }
 
+        if (revision == long.MaxValue)
+        {
+            failure = InstitutionFoundationFailure.Create(
+                InstitutionFoundationFailureCode.RevisionOverflow,
+                "The office store revision cannot advance further.");
+            return false;
+        }
+
         OfficeTenureRecord closed = new OfficeTenureRecord(
             current.OfficeId,
             current.Incumbent,
@@ -393,6 +438,7 @@ public sealed class OfficeStore : IAuthoritativeMutationGuardBindable
             }
         }
 
+        revision++;
         failure = InstitutionFoundationFailure.None;
         return true;
     }
@@ -434,7 +480,16 @@ public sealed class OfficeStore : IAuthoritativeMutationGuardBindable
             }
         }
 
+        if (revision == long.MaxValue)
+        {
+            failure = InstitutionFoundationFailure.Create(
+                InstitutionFoundationFailureCode.RevisionOverflow,
+                "The office store revision cannot advance further.");
+            return false;
+        }
+
         tenureHistory.Add(record);
+        revision++;
         failure = InstitutionFoundationFailure.None;
         return true;
     }

@@ -432,6 +432,52 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(repeatedPropertyWitnesses[0].Revision, Is.Zero);
         Assert.That(repeatedPropertyWitnesses[1].Revision, Is.Zero);
 
+        IReadOnlyList<IOwnerSectionCensusProvider> institutionOfficeProviders =
+            simulation.Bootstrap.InstitutionOfficeCensusProviders;
+        Assert.That(institutionOfficeProviders, Has.Count.EqualTo(4));
+        OwnerSectionCensusWitness institutionWitness = institutionOfficeProviders[0].GetCurrentCensus();
+        OwnerSectionCensusWitness officeWitness = institutionOfficeProviders[1].GetCurrentCensus();
+        OwnerSectionCensusWitness incumbencyWitness = institutionOfficeProviders[2].GetCurrentCensus();
+        OwnerSectionCensusWitness tenureWitness = institutionOfficeProviders[3].GetCurrentCensus();
+        Assert.That(institutionWitness.SectionId, Is.EqualTo(InstitutionOfficeCensusProvider.InstitutionsSectionId));
+        Assert.That(officeWitness.SectionId, Is.EqualTo(InstitutionOfficeCensusProvider.OfficesSectionId));
+        Assert.That(incumbencyWitness.SectionId, Is.EqualTo(InstitutionOfficeCensusProvider.IncumbenciesSectionId));
+        Assert.That(tenureWitness.SectionId, Is.EqualTo(InstitutionOfficeCensusProvider.TenuresSectionId));
+        Assert.That(institutionWitness.SchemaVersion, Is.EqualTo(InstitutionOfficeCensusProvider.SchemaVersion));
+        Assert.That(officeWitness.SchemaVersion, Is.EqualTo(InstitutionOfficeCensusProvider.SchemaVersion));
+        Assert.That(incumbencyWitness.SchemaVersion, Is.EqualTo(InstitutionOfficeCensusProvider.SchemaVersion));
+        Assert.That(tenureWitness.SchemaVersion, Is.EqualTo(InstitutionOfficeCensusProvider.SchemaVersion));
+        Assert.That(institutionWitness.OwnerInstanceIdentity,
+            Is.SameAs(GetRuntimeOwner(simulation.Runtime, "institutionStore")));
+        Assert.That(officeWitness.OwnerInstanceIdentity,
+            Is.SameAs(GetRuntimeOwner(simulation.Runtime, "officeStore")));
+        Assert.That(incumbencyWitness.OwnerInstanceIdentity, Is.SameAs(officeWitness.OwnerInstanceIdentity));
+        Assert.That(tenureWitness.OwnerInstanceIdentity, Is.SameAs(officeWitness.OwnerInstanceIdentity));
+        Assert.That(institutionWitness.Cardinality, Is.Zero);
+        Assert.That(officeWitness.Cardinality, Is.Zero);
+        Assert.That(incumbencyWitness.Cardinality, Is.Zero);
+        Assert.That(tenureWitness.Cardinality, Is.Zero);
+        Assert.That(institutionWitness.Revision, Is.Zero);
+        Assert.That(officeWitness.Revision, Is.Zero);
+        Assert.That(incumbencyWitness.Revision, Is.Zero);
+        Assert.That(tenureWitness.Revision, Is.Zero);
+        OwnerSectionCensusWitness[] repeatedInstitutionOfficeWitnesses = institutionOfficeProviders
+            .Select(provider => provider.GetCurrentCensus())
+            .ToArray();
+        Assert.That(repeatedInstitutionOfficeWitnesses[0].OwnerInstanceIdentity,
+            Is.SameAs(institutionWitness.OwnerInstanceIdentity));
+        Assert.That(repeatedInstitutionOfficeWitnesses[1].OwnerInstanceIdentity,
+            Is.SameAs(officeWitness.OwnerInstanceIdentity));
+        Assert.That(repeatedInstitutionOfficeWitnesses[2].OwnerInstanceIdentity,
+            Is.SameAs(officeWitness.OwnerInstanceIdentity));
+        Assert.That(repeatedInstitutionOfficeWitnesses[3].OwnerInstanceIdentity,
+            Is.SameAs(officeWitness.OwnerInstanceIdentity));
+        for (int i = 0; i < repeatedInstitutionOfficeWitnesses.Length; i++)
+        {
+            Assert.That(repeatedInstitutionOfficeWitnesses[i].Cardinality, Is.Zero);
+            Assert.That(repeatedInstitutionOfficeWitnesses[i].Revision, Is.Zero);
+        }
+
         SpatialAuthorityStore authority = simulation.Bootstrap.SpatialAuthority;
         SpatialHexCensusProvider hexCensusProvider = new SpatialHexCensusProvider(authority);
         OwnerSectionCensusWitness hexCensus = hexCensusProvider.GetCurrentCensus();
@@ -856,5 +902,16 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(candidateHistory.HistoricalEvents, Is.Empty);
         Assert.That(simulation.CurrentDay, Is.Zero);
         Assert.That(simulation.History, Is.Null);
+    }
+
+    private static object GetRuntimeOwner(SimulationRuntime runtime, string fieldName)
+    {
+        FieldInfo field = typeof(SimulationRuntime).GetField(
+            fieldName,
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(field, Is.Not.Null, "Expected runtime owner field " + fieldName + ".");
+        object owner = field.GetValue(runtime);
+        Assert.That(owner, Is.Not.Null, "Expected runtime owner " + fieldName + ".");
+        return owner;
     }
 }
