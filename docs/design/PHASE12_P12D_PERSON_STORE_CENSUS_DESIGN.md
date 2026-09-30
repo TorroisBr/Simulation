@@ -1,6 +1,9 @@
 # P12-D PersonStore Registry Census Design
 
-**Status:** Bounded technical design for independent review.
+**Status:** Accepted bounded technical design; independent exact-tip design
+review passed at `d06f721bc24eb0d7202fa523e495f45df8cb11c6`. The implementation
+candidate and its validation are recorded in
+`PHASE12_P12D_PERSON_STORE_CENSUS_CANDIDATE.md`.
 
 **Base:** `codex/phase12/canonical` at
 `676196bcd807603deb9d01bd2855342a7d47a01e`.
