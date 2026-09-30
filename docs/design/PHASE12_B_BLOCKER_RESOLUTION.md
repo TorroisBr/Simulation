@@ -194,8 +194,10 @@ revision.
 - **E owners:** the two `MarketRuntime` instances start with five item rows
   each and 1,395 units total; ten NPC-owned accounts/inventories are composed,
   with two authored NPC inventories containing four units each. Market and
-  inventory revisions exist, but no market-row or aggregate NPC-account/
-  inventory census was found. Several political stores expose local
+  InventoryRuntime revisions exist. Rostered per-NPC Inventory row-count and
+  revision witnesses are now promoted, but market rows still have no row-level
+  witness and no broader account/commerce aggregate census was found. Several
+  political stores expose local
   Count/Revision (`PoliticalClaimStore`, `FactionStore`, `PoliticalSupportStore`,
   `PoliticalKnowledgeStore`, `ArmedForceStore`); institution, office,
   property/estate, political-decision, manpower/spatial-force, persistent

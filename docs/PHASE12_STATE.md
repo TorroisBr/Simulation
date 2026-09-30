@@ -164,8 +164,8 @@ under `Library/ValidationResults/P12BDynamicNpcCensus/` and linked from
 This promotes only the roster-following SpatialKnowledge/Person partial
 census. The passive City `ImportantNpcs` projection witness is promoted
 separately below; broader City/NPC composite coverage, shared-epoch wiring,
-per-NPC inventory, unrelated PersonStore writers, SpatialKnowledge discovery
-invalidation, complete profile inventory, global owner-thread/quiescence,
+direct Inventory write invalidation, unrelated PersonStore writers,
+SpatialKnowledge discovery invalidation, complete profile inventory, global owner-thread/quiescence,
 capture eligibility, and export/hydration remain open. P12-B remains
 incomplete and P12-A remains `WAIT_DEPENDENCY`.
 
