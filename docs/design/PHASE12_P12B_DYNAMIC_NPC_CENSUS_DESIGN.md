@@ -32,8 +32,10 @@ not the nested registration call.
 This checkpoint makes the existing passive P12-B SpatialKnowledge witness
 family follow the currently installed NPC roster at completed roster
 membership boundaries. It covers successful direct NPC registration and
-unregistration plus Person-to-NPC materialization and its rollback path.
-It does not make any other P12 owner inventory complete.
+unregistration plus Person-to-NPC materialization/adoption and their rollback
+paths. It also accounts for the already witnessed `PersonStore` sections when
+those operations change its shared revision. It does not make any other P12
+owner inventory complete.
 
 For every NPC in the live roster, the family contains exactly two schema-v1
 sections:
@@ -55,11 +57,12 @@ roster; it is not an arbitrary caller-supplied provider list. The census
 protocol continues to reject general registration after setup. It gains one
 owner-thread reconciliation operation for this previously declared family.
 
-Reconciliation is an atomic set replacement performed only by the outermost
-successful roster membership transaction, while that transaction's
-registered operation scope is still active. It enumerates the full current
-roster, constructs and validates both sections for each NPC, then stages the
-complete family delta before replacing protocol state:
+Reconciliation is one atomic outer-operation commit, performed while the
+runtime-owned transaction context is still active and before its registered
+operation scope exits. It enumerates the full current roster, constructs and
+validates both sections for each NPC, and stages the complete family delta
+together with every changed fixed census section before replacing protocol
+state:
 
 1. Reject null NPCs, blank or duplicate RuntimeIds, absent or mismatched
    SpatialKnowledge owners, duplicate section ids, invalid witnesses, and
@@ -75,15 +78,28 @@ complete family delta before replacing protocol state:
    treat it as an owner replacement in the same atomic delta and seed the new
    pair. A changed owner reference without this explicit family reconciliation
    remains a fail-closed identity mismatch.
-6. Advance the existing mutation epoch once for a non-empty add, remove, or
-   replacement delta, including a new owner whose two cardinalities are zero.
-   Leave it unchanged for a failed/rolled-back operation or a no-op roster
-   operation.
+6. Include both fixed `PersonStore` sections whenever that store's revision
+   changed during the outer operation, even if rollback restored its
+   materialization-binding cardinality. Both
+   `p12d.person.membership` and
+   `p12d.person.materialization-binding` share that revision and must receive
+   the same commit boundary.
+7. Advance the existing mutation epoch at most once for the union of changed
+   fixed sections and dynamic-family additions, removals, or replacements.
+   A newly added owner with two zero counts still changes the family. A fully
+   compensated operation may leave the family unchanged yet still require one
+   epoch advance because an included fixed owner's revision advanced. Leave
+   the epoch unchanged only when no included owner revision or family
+   membership changed.
 
-All candidate witnesses and the resulting key set are validated before any
-protocol dictionary, expected-section set, provider reference, baseline, or
-epoch changes. Failure leaves protocol state unchanged and faults or rejects
-the outer P12 operation according to the existing fail-closed runtime rule.
+The protocol needs one combined commit operation for this boundary. It must
+not call dynamic-family reconciliation and
+`NotifyCommittedMutations(PersonStoreSections)` separately, since that would
+double-advance the epoch for one outer operation. All candidate witnesses and
+the resulting key set are validated before any protocol dictionary,
+expected-section set, provider reference, baseline, or epoch changes. Failure
+leaves protocol state unchanged and faults or rejects the outer P12 operation
+according to the existing fail-closed runtime rule.
 
 At every owner-section assessment, the protocol verifies that the current
 family enumeration still matches the reconciled section ids and owner
@@ -98,13 +114,30 @@ exits.
 
 `TryRegisterNpc` and `TryUnregisterNpc` keep their existing gameplay acceptance
 and rejection rules. A direct successful call is one outer membership
-transaction. Calls nested by `PersonMaterializationSystem.TryMaterializePerson`
-join that outer transaction and only mark its roster set dirty; they do not
-publish a provider delta. Materialization reconciles once after the optional
-starting-City binding succeeds. If materialization rolls back successfully,
-the original roster and census inventory remain unchanged. If rollback cannot
-restore the original world state, the runtime is faulted and no census
-assessment may succeed.
+transaction. A runtime-owned nesting context, separate from the protocol's
+active-operation count, associates nested roster calls with their outer
+materialization/adoption operation; nested calls only mark membership dirty
+and cannot reconcile early. A direct registration or unregistration creates
+its own outer context. This is necessary because `SimulationOperationScope`
+tracks only a count, not operation identity.
+
+On successful new Person materialization, the final commit includes the two
+`PersonStore` census sections and the added SpatialKnowledge pair in one epoch
+advance. If materialization fails after `TryBindMaterializedNpc` and its
+compensation succeeds, the binding count returns to its prior value but
+`PersonStore.Revision` advances once for the bind and once for the rollback.
+The final commit therefore includes both `PersonStore` sections and advances
+the epoch once; the dynamic family remains unchanged. Failures before any
+PersonStore write do not advance the epoch. A failed compensation faults the
+runtime/protocol and blocks all census assessment; it does not publish a
+partial provider delta or claim a successful commit.
+
+`TryBindExistingNpcToPerson` and its compensation use the same fixed-section
+accounting path but do not change the NPC SpatialKnowledge family. This keeps
+the shared PersonStore revision observable without widening this checkpoint
+to Person export or hydration. The design's commit helper must accept one
+changed-section set and one optional dynamic-family delta, then update all
+baselines and advance the epoch no more than once.
 
 Death and emigration do not remove an NPC from `SimulationRuntime.NpcRuntimes`
 and therefore do not remove its pair. An unregistration rejected because an
@@ -113,10 +146,16 @@ NPC remains Person-bound or resident leaves the family unchanged. Existing
 replacement is represented by the atomic family delta above rather than an
 implicit change to an already-live section.
 
-This transaction boundary tracks roster membership only. It does not imply
-that every other runtime mutation enters a P12 operation scope or notifies the
-shared epoch. The broader committed-write map and global owner-thread and
-quiescence proofs remain separate P12-B blockers.
+The materialization path may also change a City `ImportantNpcs` projection;
+that projection has no complete owner witness in the current inventory and
+remains a separate P12-B gap. This checkpoint must not claim complete outer
+write coverage or capture readiness until that and the other committed-write
+gaps are resolved. The combined commit accounts for all currently admitted
+fixed sections affected by the operation plus the dynamic family, without
+double-advancing the epoch. Other PersonStore mutations such as birth/death
+remain in the broader writer map; if they change its revision without a
+registered combined commit, assessment must fail closed. Global
+owner-thread/quiescence proof remains a separate P12-B blocker.
 
 ## Required implementation evidence
 
@@ -131,8 +170,15 @@ The later implementation must prove:
   Person-bound/resident rejection, death, and emigration retain the pair;
 - successful Person materialization adds the pair only after all materialized
   bindings complete;
-- a materialization failure after nested roster registration restores the
-  original census set and does not advance the epoch;
+- successful materialization updates both fixed `PersonStore` section
+  revisions and the new SpatialKnowledge pair with one shared epoch advance;
+- a failure after PersonStore binding with successful compensation restores
+  the materialization count, leaves the dynamic family unchanged, reports
+  both `PersonStore` sections, and advances the shared epoch exactly once;
+- successful legacy adoption updates both `PersonStore` sections once without
+  changing the dynamic family, and compensated adoption failure still
+  advances the epoch once when the owner revision advanced twice;
+- a failure before any included owner changes advances no epoch;
 - an incomplete rollback faults the runtime and blocks assessment;
 - census assessment during an active membership operation reports
   `OperationInProgress` without reading a partial owner set;
