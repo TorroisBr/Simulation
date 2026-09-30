@@ -3,7 +3,7 @@
 **Status:** PHASE 12 IN PROGRESS — P12-A WAIT_DEPENDENCY; P12-B INCOMPLETE
 (PARTIAL FOUNDATION PROMOTED).
 
-**Latest promoted P12-B owner-witness candidate tip:** cumulative passive
+**Previously promoted cumulative P12-B owner-witness candidate tip:** passive
 census stack `codex/phase12/P12EPropertyCensus` at
 `b889b4747738d933fe48311ef89fc33a40e3dfa0`, fast-forwarded from canonical
 `69f456d5e3c6d6f7e4b85b36e98968ced0549bf3`. Its code-bearing tree is
@@ -13,6 +13,35 @@ check passed at `b889b47`. It retains the separately promoted
 `RuntimeIdentityRegistry` witness at `033854452c1167e053f57076803819ffe3a16840`
 and the earlier P8-A witness at
 `644bdae8ded1d8a938ec380370966ca6c235b881`.
+
+## Canonical refresh and current cumulative census candidate — 2026-09-30
+
+P12 canonical and its remote are synchronized at
+`676196bcd807603deb9d01bd2855342a7d47a01e`. This tip records the approved
+promotion of the P12-D Genealogy saturated-rollback correction at
+`5ef2615bb7d3de6280a2f7a6943a1669ead9002c`; the correction remains limited to
+named-birth compensation at revision saturation. It does not complete P12-D.
+
+The cumulative owner-witness candidate
+`codex/phase12/P12BCensusOwnersCumulativeIntegration` retains code tip
+`44fc3ab94c9666f656149f346fb2cc553d3cb689` and code tree
+`b0be75370d32679d0745ed15d29ce359dada0bb6`, based on canonical `676196b`.
+The exact code/design/integration review passed, required Unity evidence is
+recorded in its candidate, and the final documentation audit passed at branch
+tip `a7e078d0eb3e136cb64f58ef3e4879f66fb76450`. The candidate adds published
+PersonStore, ExplorableSite, and per-City SettlementPopulation census
+providers while retaining the promoted Genealogy provider. Canonical
+promotion is still pending explicit approval.
+
+This candidate remains a partial passive owner-census foundation. P12-B is
+incomplete and P12-A remains `WAIT_DEPENDENCY`. The candidate does not provide
+a complete effective-profile inventory, shared mutation-epoch coverage,
+owner-thread/quiescence proof, capture eligibility, immutable exports, or
+staged hydration. P12-D remains blocked on P12-B and P12-C. The next bounded
+owner-inventory investigation is the legacy `SpatialNetworkRuntime`
+location/route census; its result is technical design work within the
+accepted P12-B scope and does not itself authorize implementation or
+promotion.
 
 **Architecture baseline:** `c285466c355103d3637ac165246591b72eb7bda0`, with
 the intraday/extensibility alignment at `4b6dd1d38cffeaf3cc1ac3effea0f8ede8771194`
