@@ -269,15 +269,16 @@ completion. P12-B remains incomplete; P12-A remains `WAIT_DEPENDENCY`; P12-D
 remains blocked on P12-B and P12-C.
 
 The subsequent P12-D multi-owner commit-graph audit found a revision-saturation
-rollback defect in the promoted code. A bounded correction is now implemented
-on `codex/phase12/P12DGenealogyRollbackSaturation` at
-`f631de8a9209956cf61d0f901867cca244befcaf`, independently reviewed PASS
+rollback defect in the promoted code. The bounded correction's code commit is
+`f631de8a9209956cf61d0f901867cca244befcaf` (tree
+`ae029655824dd3ec6a73bc3c17a9bb2708014401`); it was independently reviewed
 against exact parent `8f04a62bf2e66995efe8f311f5d62cff191acb11` (based on
-P12 canonical `543196a`), and validated (focused named-birth 15/15, Genealogy
+P12 canonical `543196a`) and validated (focused named-birth 15/15, Genealogy
 census 4/4, ALL EditMode 1990/1990, complete official Smoke 5/5, diff-check).
-It remains pending canonical promotion. Until that promotion, do not treat the
-promoted Genealogy slice as integrated with named-birth rollback. The
-correction does not change P12-B/P12-A readiness.
+The reviewed correction candidate at `5ef2615bb7d3de6280a2f7a6943a1669ead9002c`
+was approved and fast-forwarded to P12 canonical. The promoted Genealogy slice
+now includes the saturated named-birth rollback repair. This does not change
+P12-B/P12-A readiness or close P12-D.
 
 ## Remaining dependency-ordered P12-B blockers
 

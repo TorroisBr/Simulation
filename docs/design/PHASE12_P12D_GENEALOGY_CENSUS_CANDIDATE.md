@@ -16,9 +16,10 @@ revision-saturation defect. The bounded correction is implemented on
 `codex/phase12/P12DGenealogyRollbackSaturation` at
 `f631de8a9209956cf61d0f901867cca244befcaf`, independently reviewed PASS
 against exact parent `8f04a62bf2e66995efe8f311f5d62cff191acb11` (based on
-P12 canonical `543196a`), and validated. It remains a separate candidate
-pending its canonical-promotion gate; until promoted, this witness is not
-treated as integrated with named-birth rollback.
+P12 canonical `543196a`), and validated. The docs-complete candidate tip
+`5ef2615bb7d3de6280a2f7a6943a1669ead9002c` was approved and promoted to
+`codex/phase12/canonical`. The promoted Genealogy witness now includes the
+saturated named-birth rollback repair.
 
 The bounded proposal in
 `PHASE12_P12D_GENEALOGY_CENSUS_DESIGN.md` was independently revalidated
@@ -94,8 +95,9 @@ Implementation commit `f631de8a9209956cf61d0f901867cca244befcaf` has tree
 passed against parent `8f04a62` and confirmed the rollback path has no other
 callers. Validation on that tree passed: named-birth lifecycle 15/15,
 Genealogy census 4/4, ALL EditMode 1990/1990, complete official Smoke 5/5,
-and `git diff --check`. This is a correction candidate only and does not
-establish P12-B readiness or change P12-A/P12-D blockers.
+and `git diff --check`. The correction was promoted at canonical tip
+`5ef2615bb7d3de6280a2f7a6943a1669ead9002c`. It does not establish P12-B
+readiness or change P12-A/P12-D blockers.
 
 ## Limits retained
 

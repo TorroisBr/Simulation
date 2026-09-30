@@ -7,8 +7,9 @@
 implementation review passed against parent `8f04a62`. Focused
 `PersonNamedBirthLifecycleTests` passed 15/15, `GenealogyCensusTests` 4/4,
 ALL EditMode 1990/1990, the complete official Smoke filter 5/5, and
-`git diff --check`. The candidate awaits canonical promotion; this does not
-close P12-D or satisfy P12-B.
+`git diff --check`. The docs-complete candidate tip
+`5ef2615bb7d3de6280a2f7a6943a1669ead9002c` was approved and promoted to
+`codex/phase12/canonical`. This does not close P12-D or satisfy P12-B.
 
 **Base:** P12 canonical `543196a6e29b10675cfab70d4883c1d7f5551195`.
 
