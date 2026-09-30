@@ -405,6 +405,33 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(repeatedEstateWitness.Cardinality, Is.Zero);
         Assert.That(repeatedEstateWitness.Revision, Is.Zero);
 
+        IReadOnlyList<IOwnerSectionCensusProvider> propertyProviders =
+            simulation.Bootstrap.PropertyOwnershipCensusProviders;
+        Assert.That(propertyProviders, Has.Count.EqualTo(2));
+        OwnerSectionCensusWitness propertyOwnershipWitness = propertyProviders[0].GetCurrentCensus();
+        OwnerSectionCensusWitness propertyHistoryWitness = propertyProviders[1].GetCurrentCensus();
+        Assert.That(propertyOwnershipWitness.SectionId, Is.EqualTo(PropertyOwnershipCensusProvider.OwnershipSectionId));
+        Assert.That(propertyOwnershipWitness.SchemaVersion, Is.EqualTo(PropertyOwnershipCensusProvider.SchemaVersion));
+        Assert.That(propertyHistoryWitness.SectionId, Is.EqualTo(PropertyOwnershipCensusProvider.TransferHistorySectionId));
+        Assert.That(propertyHistoryWitness.SchemaVersion, Is.EqualTo(PropertyOwnershipCensusProvider.SchemaVersion));
+        Assert.That(propertyOwnershipWitness.OwnerInstanceIdentity, Is.SameAs(simulation.Runtime.PropertyOwnershipStore));
+        Assert.That(propertyHistoryWitness.OwnerInstanceIdentity, Is.SameAs(propertyOwnershipWitness.OwnerInstanceIdentity));
+        Assert.That(propertyOwnershipWitness.Cardinality, Is.Zero);
+        Assert.That(propertyHistoryWitness.Cardinality, Is.Zero);
+        Assert.That(propertyOwnershipWitness.Revision, Is.Zero);
+        Assert.That(propertyHistoryWitness.Revision, Is.Zero);
+        OwnerSectionCensusWitness[] repeatedPropertyWitnesses = propertyProviders
+            .Select(provider => provider.GetCurrentCensus())
+            .ToArray();
+        Assert.That(repeatedPropertyWitnesses[0].OwnerInstanceIdentity,
+            Is.SameAs(propertyOwnershipWitness.OwnerInstanceIdentity));
+        Assert.That(repeatedPropertyWitnesses[1].OwnerInstanceIdentity,
+            Is.SameAs(propertyOwnershipWitness.OwnerInstanceIdentity));
+        Assert.That(repeatedPropertyWitnesses[0].Cardinality, Is.Zero);
+        Assert.That(repeatedPropertyWitnesses[1].Cardinality, Is.Zero);
+        Assert.That(repeatedPropertyWitnesses[0].Revision, Is.Zero);
+        Assert.That(repeatedPropertyWitnesses[1].Revision, Is.Zero);
+
         SpatialAuthorityStore authority = simulation.Bootstrap.SpatialAuthority;
         SpatialHexCensusProvider hexCensusProvider = new SpatialHexCensusProvider(authority);
         OwnerSectionCensusWitness hexCensus = hexCensusProvider.GetCurrentCensus();
