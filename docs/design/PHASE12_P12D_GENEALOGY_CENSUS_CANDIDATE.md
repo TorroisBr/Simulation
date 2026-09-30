@@ -30,8 +30,11 @@ the existing runtime clone/accessor remained unchanged.
 - `GenealogyCensusProvider` publishes schema-v1 section
   `p12d.genealogy.parentage` from the installed runtime `GenealogyStore`.
 - The witness identity is the exact installed store object, cardinality is
-  `GenealogyStore.Count` (direct parentage edges), and the local revision
-  increments once after every successful add or removal.
+  `GenealogyStore.Count` (direct parentage edges), and ordinary public add and
+  remove commits increment the local revision once. The internal named-birth
+  compensation path can remove a previously added edge at saturation without
+  advancing the revision; cardinality strictly decreases while ordinary
+  mutations are closed.
 - The fixed provider is constructed by `SimulationBootstrapComposition` from
   `Runtime.GenealogyStoreForWorldBoundary`. The public bootstrap exposes the
   provider and does not expose the mutable store.

@@ -247,11 +247,13 @@ was fast-forwarded to that tip. The code-bearing commit is
 only record the candidate design and validation evidence.
 
 The promoted schema-v1 `p12d.genealogy.parentage` witness is bound to the
-installed runtime `GenealogyStore`, counts direct parentage edges, and advances
-its local revision once for each successful add or removal. Add/remove
-preflight revision overflow before changing edges. Clone construction retains
-the existing deterministic replay behavior and exposes only the installed
-clone through the bootstrap composition.
+installed runtime `GenealogyStore` and counts direct parentage edges. Ordinary
+public add/remove commits advance its local revision once and preflight
+revision overflow before changing edges. The internal named-birth compensation
+path may remove an edge at saturation without advancing the revision; this
+strictly decreases cardinality while ordinary mutations are closed. Clone
+construction retains the existing deterministic replay behavior and exposes
+only the installed clone through the bootstrap composition.
 
 Independent implementation review passed on the exact code tip and the
 docs-only candidate update was reviewed. Validation passed: focused
