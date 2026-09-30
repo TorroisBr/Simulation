@@ -55,3 +55,16 @@ export, or staged hydration. It is partial owner census evidence only.
 P12-B remains incomplete; P12-A remains `WAIT_DEPENDENCY`; P12-D remains
 blocked on P12-B and P12-C. Canonical promotion requires explicit human
 approval under `docs/EXECUTION_MODEL.md`.
+
+## Subsequent documentation-only refresh
+
+The cumulative candidate's code tip remains `44fc3ab` and code tree remains
+`b0be753`; no executable files changed after the exact integration review.
+The State/candidate refresh at docs tip `4daa0f1` was independently
+revalidated, including all ten exact-tree validation XMLs and clean
+`git diff --check`. Its additional legacy SpatialNetwork design was reviewed
+independently at design tip `11b4a27`; the separate design review record is
+[`PHASE12_P12B_SPATIAL_NETWORK_CENSUS_REVIEW.md`](PHASE12_P12B_SPATIAL_NETWORK_CENSUS_REVIEW.md).
+The design review preserves the remaining direct registry invalidation
+obligation and the composition hotspot dependency. Neither documentation-only
+update changes this candidate's implementation scope or promotion status.

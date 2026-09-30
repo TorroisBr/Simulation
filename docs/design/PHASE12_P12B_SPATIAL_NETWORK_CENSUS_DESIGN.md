@@ -1,7 +1,9 @@
 # P12-B Legacy SpatialNetwork Census Design
 
-**Status:** Bounded technical design submitted for independent review. No
-implementation has started.
+**Status:** Independent technical review passed at design tip `11b4a27`.
+Implementation remains dependency-gated until the cumulative composition
+hotspot is promoted or intentionally re-integrated on the then-current
+canonical base. No implementation has started.
 
 **Canonical design base:** `codex/phase12/canonical` at
 `676196bcd807603deb9d01bd2855342a7d47a01e`.

@@ -27,8 +27,10 @@ The cumulative owner-witness candidate
 `44fc3ab94c9666f656149f346fb2cc553d3cb689` and code tree
 `b0be75370d32679d0745ed15d29ce359dada0bb6`, based on canonical `676196b`.
 The exact code/design/integration review passed, required Unity evidence is
-recorded in its candidate, and the final documentation audit passed at branch
-tip `a7e078d0eb3e136cb64f58ef3e4879f66fb76450`. The candidate adds published
+recorded in its candidate, and the exact integration documentation review
+passed at `a7e078d0eb3e136cb64f58ef3e4879f66fb76450`. The State/candidate
+refresh was independently revalidated at docs tip `4daa0f1`; the separate
+SpatialNetwork design review passed at `11b4a27`. The candidate adds published
 PersonStore, ExplorableSite, and per-City SettlementPopulation census
 providers while retaining the promoted Genealogy provider. Canonical
 promotion is still pending explicit approval.
@@ -38,10 +40,16 @@ incomplete and P12-A remains `WAIT_DEPENDENCY`. The candidate does not provide
 a complete effective-profile inventory, shared mutation-epoch coverage,
 owner-thread/quiescence proof, capture eligibility, immutable exports, or
 staged hydration. P12-D remains blocked on P12-B and P12-C. The next bounded
-owner-inventory investigation is the legacy `SpatialNetworkRuntime`
-location/route census; its result is technical design work within the
-accepted P12-B scope and does not itself authorize implementation or
-promotion.
+owner-inventory slice, the legacy `SpatialNetworkRuntime` location/route
+census, has a reviewed technical design at
+[`PHASE12_P12B_SPATIAL_NETWORK_CENSUS_DESIGN.md`](design/PHASE12_P12B_SPATIAL_NETWORK_CENSUS_DESIGN.md).
+Its exact design review passed at `11b4a27`; it fits accepted P12-B/P12-D
+scope and does not add a human checkpoint-acceptance gate; see the
+[`design review record`](design/PHASE12_P12B_SPATIAL_NETWORK_CENSUS_REVIEW.md).
+Implementation remains dependency-gated on releasing/re-integrating the cumulative
+`SimulationBootstrapComposition.cs` hotspot against canonical. Neither this
+design nor the cumulative census candidate changes P12-B readiness or
+authorizes canonical promotion.
 
 **Architecture baseline:** `c285466c355103d3637ac165246591b72eb7bda0`, with
 the intraday/extensibility alignment at `4b6dd1d38cffeaf3cc1ac3effea0f8ede8771194`
