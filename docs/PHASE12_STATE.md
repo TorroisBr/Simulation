@@ -267,14 +267,14 @@ completion. P12-B remains incomplete; P12-A remains `WAIT_DEPENDENCY`; P12-D
 remains blocked on P12-B and P12-C.
 
 The subsequent P12-D multi-owner commit-graph audit found a revision-saturation
-rollback defect in this canonical code: with Genealogy revision at
-`long.MaxValue - 1`, a two-parent birth can install one edge, reject the second
-edge at overflow, then fail to remove the first edge because removal also
-rejects at `long.MaxValue`. The birth path still rolls back its Person
-registration, leaving a parentage edge to an unregistered Person. A bounded
-correction is under implementation/revalidation; do not treat the current
-Genealogy slice as integrated with named-birth rollback until that correction
-is promoted. This does not change P12-B/P12-A readiness.
+rollback defect in the promoted code. A bounded correction is now implemented
+on `codex/phase12/P12DGenealogyRollbackSaturation` at
+`f631de8a9209956cf61d0f901867cca244befcaf`, independently reviewed PASS
+against `543196a`, and validated (focused named-birth 15/15, Genealogy census
+4/4, ALL EditMode 1990/1990, complete official Smoke 5/5, diff-check). It
+remains pending canonical promotion. Until that promotion, do not treat the
+promoted Genealogy slice as integrated with named-birth rollback. The
+correction does not change P12-B/P12-A readiness.
 
 ## Remaining dependency-ordered P12-B blockers
 

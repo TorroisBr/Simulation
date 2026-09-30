@@ -1,5 +1,15 @@
 # P12-D Genealogy Saturation Rollback Amendment
 
+**Implementation status:** Implemented at
+`codex/phase12/P12DGenealogyRollbackSaturation` commit
+`f631de8a9209956cf61d0f901867cca244befcaf` (tree
+`ae029655824dd3ec6a73bc3c17a9bb2708014401`). Exact-tip independent
+implementation review passed against parent `8f04a62`. Focused
+`PersonNamedBirthLifecycleTests` passed 15/15, `GenealogyCensusTests` 4/4,
+ALL EditMode 1990/1990, the complete official Smoke filter 5/5, and
+`git diff --check`. The candidate awaits canonical promotion; this does not
+close P12-D or satisfy P12-B.
+
 **Base:** P12 canonical `543196a6e29b10675cfab70d4883c1d7f5551195`.
 
 **Purpose:** Correct the promoted passive Genealogy witness's interaction with

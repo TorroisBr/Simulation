@@ -12,11 +12,12 @@ completion, P12-B readiness, or P12-A readiness.
 `bde930477b7614a7fb1baed01497dbd1fe063927`.
 
 **Post-promotion revalidation:** A cross-owner birth/rollback audit found a
-revision-saturation defect. At `long.MaxValue - 1`, a two-parent birth can add
-one edge, fail its second edge at overflow, then fail to remove the first edge
-at `long.MaxValue`; the Person registration is removed while its genealogy
-edge remains. A bounded correction is in progress. Until it is promoted, this
-candidate must not be treated as integrated with named-birth rollback.
+revision-saturation defect. The bounded correction is implemented on
+`codex/phase12/P12DGenealogyRollbackSaturation` at
+`f631de8a9209956cf61d0f901867cca244befcaf`, independently reviewed PASS
+against `543196a`, and validated. It remains a separate candidate pending its
+canonical-promotion gate; until promoted, this witness is not treated as
+integrated with named-birth rollback.
 
 The bounded proposal in
 `PHASE12_P12D_GENEALOGY_CENSUS_DESIGN.md` was independently revalidated
@@ -72,6 +73,25 @@ Validation on the final candidate tree passed:
 The three result XMLs are retained in the candidate worktree under
 `Library/ValidationResults/P12DGenealogyCensus`; the validation rerun did not
 change source code after the exact-tip implementation review.
+
+## Saturated named-birth rollback correction candidate
+
+The follow-up defect was corrected without changing public add/remove
+semantics. Ordinary `TryAddParentage` and `TryRemoveParentage` continue to
+reject at `long.MaxValue`; an internal exact-edge rollback path is called only
+by named-birth compensation for an edge recorded as added by that same attempt.
+At saturation it removes the edge and adjacency links without wrapping the
+revision. The regression proves that a two-parent birth starting at
+`long.MaxValue - 1` fails with no child registration, genealogy edge, or
+population change, leaving `(Count, Revision) = (0, long.MaxValue)`.
+
+Implementation commit `f631de8a9209956cf61d0f901867cca244befcaf` has tree
+`ae029655824dd3ec6a73bc3c17a9bb2708014401`. Independent exact-tip review
+passed against parent `8f04a62` and confirmed the rollback path has no other
+callers. Validation on that tree passed: named-birth lifecycle 15/15,
+Genealogy census 4/4, ALL EditMode 1990/1990, complete official Smoke 5/5,
+and `git diff --check`. This is a correction candidate only and does not
+establish P12-B readiness or change P12-A/P12-D blockers.
 
 ## Limits retained
 
