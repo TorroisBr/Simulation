@@ -644,6 +644,17 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(runtime.ActorChoiceStore.Count, Is.Zero);
         Assert.That(simulation.Bootstrap.ScheduledDirectives.Directives, Is.Empty);
         Assert.That(simulation.Bootstrap.TravelParties.ActiveParties, Is.Empty);
+        OwnerSectionCensusWitness travelPartyWitness = simulation.Bootstrap.TravelPartyCensusProvider.GetCurrentCensus();
+        Assert.That(travelPartyWitness.SectionId, Is.EqualTo("p12f.travel-parties"));
+        Assert.That(travelPartyWitness.SchemaVersion, Is.EqualTo(1));
+        Assert.That(travelPartyWitness.OwnerInstanceIdentity, Is.SameAs(simulation.Bootstrap.TravelParties));
+        Assert.That(simulation.Bootstrap.GroupTravel.Store, Is.SameAs(simulation.Bootstrap.TravelParties));
+        Assert.That(travelPartyWitness.Cardinality, Is.Zero);
+        Assert.That(travelPartyWitness.Revision, Is.Zero);
+        OwnerSectionCensusWitness repeatedTravelPartyWitness = simulation.Bootstrap.TravelPartyCensusProvider.GetCurrentCensus();
+        Assert.That(repeatedTravelPartyWitness.OwnerInstanceIdentity, Is.SameAs(travelPartyWitness.OwnerInstanceIdentity));
+        Assert.That(repeatedTravelPartyWitness.Cardinality, Is.Zero);
+        Assert.That(repeatedTravelPartyWitness.Revision, Is.Zero);
         Assert.That(simulation.Bootstrap.Expeditions.ActiveExpeditions, Is.Empty);
         Assert.That(runtime.LocalTopologyStore, Is.Null,
             "The selected profile excludes P10 local topology and must classify it as not composed.");

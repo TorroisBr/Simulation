@@ -65,6 +65,10 @@ public sealed class ExpeditionSystem : IAuthoritativeMutationGuardBindable
         this.explorableSiteStore = explorableSiteStore ?? throw new ArgumentNullException(nameof(explorableSiteStore));
         this.travelPartySystem = travelPartySystem ?? throw new ArgumentNullException(nameof(travelPartySystem));
         this.travelPartyStore = travelPartyStore ?? throw new ArgumentNullException(nameof(travelPartyStore));
+        if (this.travelPartySystem.Store != this.travelPartyStore)
+        {
+            throw new ArgumentException("Expedition and TravelPartySystem must share the same TravelPartyStore.", nameof(travelPartyStore));
+        }
         this.explorableSiteKnowledgeSystem = explorableSiteKnowledgeSystem
             ?? throw new ArgumentNullException(nameof(explorableSiteKnowledgeSystem));
         this.localTopologyKnowledgeSystem = new LocalTopologyKnowledgeSystem();
@@ -752,6 +756,15 @@ public sealed class ExpeditionSystem : IAuthoritativeMutationGuardBindable
     }
 
     public bool TryBeginReturn(ExpeditionRuntime expedition, out string reason)
+    {
+        if (RejectIfFaulted(out reason)) return false;
+        using (travelPartyStore.EnterMutationWindow())
+        {
+            return TryBeginReturnInMutationWindow(expedition, out reason);
+        }
+    }
+
+    private bool TryBeginReturnInMutationWindow(ExpeditionRuntime expedition, out string reason)
     {
         if (RejectIfFaulted(out reason))
         {

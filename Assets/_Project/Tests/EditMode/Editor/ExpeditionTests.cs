@@ -81,6 +81,25 @@ public sealed class ExpeditionTests
     }
 
     [Test]
+    public void ExpeditionSystemRejectsSplitTravelPartyStore()
+    {
+        SpatialTravelFixture fixture = new SpatialTravelFixture();
+        CreateSystem(fixture);
+        TravelPartySystem partySystem = fixture.TravelPartySystem;
+
+        Assert.Throws<ArgumentException>(() => new ExpeditionSystem(
+            new ExpeditionStore(),
+            fixture.Records.Allocator,
+            fixture.IdentityRegistry,
+            fixture.Sites,
+            partySystem,
+            new TravelPartyStore(),
+            fixture.Knowledge,
+            fixture.Records.Time,
+            fixture.Records.EventRecorder));
+    }
+
+    [Test]
     public void ExpeditionStorePreservesOrderAndRejectsDuplicatesAndOverlappingMembers()
     {
         ExpeditionStore store = new ExpeditionStore();

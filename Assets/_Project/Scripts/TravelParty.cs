@@ -204,12 +204,15 @@ public sealed class TravelPartyRuntime
 
 public sealed class TravelPartyStore : IAuthoritativeMutationGuardBindable
 {
+    private readonly object mutationSync = new object();
+    private long revision;
     private readonly List<TravelPartyRuntime> activeParties = new List<TravelPartyRuntime>();
     private readonly Dictionary<string, TravelPartyRuntime> partiesById = new Dictionary<string, TravelPartyRuntime>(StringComparer.Ordinal);
     private readonly IReadOnlyList<TravelPartyRuntime> readOnlyActiveParties;
     private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
 
     public IReadOnlyList<TravelPartyRuntime> ActiveParties => readOnlyActiveParties;
+    public long Revision => revision;
 
     public TravelPartyStore()
     {
@@ -225,6 +228,8 @@ public sealed class TravelPartyStore : IAuthoritativeMutationGuardBindable
 
     public bool Add(TravelPartyRuntime party)
     {
+        using (EnterMutationWindow())
+        {
         if (!mutationGuardBinding.CanMutate)
         {
             return false;
@@ -243,9 +248,13 @@ public sealed class TravelPartyStore : IAuthoritativeMutationGuardBindable
             }
         }
 
+        if (!CanCommitMutations(1)) return false;
+
         partiesById.Add(party.TravelPartyId, party);
         activeParties.Add(party);
+        revision++;
         return true;
+        }
     }
 
     public bool TryGetPartyForNpc(string npcRuntimeId, out TravelPartyRuntime party)
@@ -289,6 +298,8 @@ public sealed class TravelPartyStore : IAuthoritativeMutationGuardBindable
 
     public bool Complete(string travelPartyId)
     {
+        using (EnterMutationWindow())
+        {
         if (!mutationGuardBinding.CanMutate)
         {
             return false;
@@ -300,15 +311,21 @@ public sealed class TravelPartyStore : IAuthoritativeMutationGuardBindable
         {
             return false;
         }
+
+        if (!CanCommitMutations(1)) return false;
 
         party.MarkCompleted();
         partiesById.Remove(travelPartyId);
         activeParties.Remove(party);
+        revision++;
         return true;
+        }
     }
 
     public bool Remove(string travelPartyId)
     {
+        using (EnterMutationWindow())
+        {
         if (!mutationGuardBinding.CanMutate)
         {
             return false;
@@ -321,9 +338,37 @@ public sealed class TravelPartyStore : IAuthoritativeMutationGuardBindable
             return false;
         }
 
+        if (!CanCommitMutations(1)) return false;
+
         partiesById.Remove(travelPartyId);
         activeParties.Remove(party);
+        revision++;
         return true;
+        }
+    }
+
+    internal IDisposable EnterMutationWindow()
+    {
+        System.Threading.Monitor.Enter(mutationSync);
+        return new MutationWindow(mutationSync);
+    }
+
+    internal bool CanCommitMutations(int count)
+    {
+        return count >= 0 && revision <= long.MaxValue - count;
+    }
+
+    private sealed class MutationWindow : IDisposable
+    {
+        private object sync;
+        public MutationWindow(object sync) { this.sync = sync; }
+        public void Dispose()
+        {
+            object current = sync;
+            if (current == null) return;
+            sync = null;
+            System.Threading.Monitor.Exit(current);
+        }
     }
 
     internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard)
@@ -399,6 +444,24 @@ public sealed class TravelPartySystem : IAuthoritativeMutationGuardBindable
     }
 
     public bool TryStartTravelParty(ActionExecutionContext context, out TravelPartyRuntime party)
+    {
+        if (!mutationGuardBinding.CanMutate)
+        {
+            party = null;
+            return false;
+        }
+        using (partyStore.EnterMutationWindow())
+        {
+        if (!partyStore.CanCommitMutations(2))
+        {
+            party = null;
+            return false;
+        }
+        return TryStartTravelPartyInMutationWindow(context, out party);
+        }
+    }
+
+    private bool TryStartTravelPartyInMutationWindow(ActionExecutionContext context, out TravelPartyRuntime party)
     {
         party = null;
 
@@ -534,6 +597,14 @@ public sealed class TravelPartySystem : IAuthoritativeMutationGuardBindable
 
     public IReadOnlyList<NpcRuntime> AdvanceParties()
     {
+        using (partyStore.EnterMutationWindow())
+        {
+        return AdvancePartiesInMutationWindow();
+        }
+    }
+
+    private IReadOnlyList<NpcRuntime> AdvancePartiesInMutationWindow()
+    {
         ThrowIfFaulted();
 
         List<NpcRuntime> arrivals = new List<NpcRuntime>();
@@ -569,7 +640,7 @@ public sealed class TravelPartySystem : IAuthoritativeMutationGuardBindable
             }
 
             if (members[0].TravelDaysRemaining <= 1
-                && !CanCommitTravelPartyArrival(members))
+                && (!partyStore.CanCommitMutations(1) || !CanCommitTravelPartyArrival(members)))
             {
                 continue;
             }
