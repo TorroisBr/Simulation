@@ -114,5 +114,5 @@ P12-A remains `WAIT_DEPENDENCY`; P12-D remains blocked on P12-B and P12-C.
 
 The exact-tip code/design/evidence review and final documentation
 revalidation have passed. The remaining gate is explicit human approval to
-advance `codex/phase12/canonical` from `676196b` to the reviewed candidate
-branch tip `03d80e9`, under `docs/EXECUTION_MODEL.md`.
+fast-forward `codex/phase12/canonical` from `676196b` to the final reviewed
+tip of this integration branch, under `docs/EXECUTION_MODEL.md`.
