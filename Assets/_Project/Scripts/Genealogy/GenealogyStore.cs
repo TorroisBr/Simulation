@@ -14,8 +14,10 @@ public sealed class GenealogyStore : IAuthoritativeMutationGuardBindable
         new Dictionary<PersonId, HashSet<PersonId>>();
     private readonly Dictionary<PersonId, HashSet<PersonId>> parentsByChild =
         new Dictionary<PersonId, HashSet<PersonId>>();
+    private long revision;
 
     public int Count => records.Count;
+    public long Revision => revision;
 
     /// <summary>
     /// Returns a deterministic read-only snapshot ordered by parent and child.
@@ -82,9 +84,18 @@ public sealed class GenealogyStore : IAuthoritativeMutationGuardBindable
             return false;
         }
 
+        if (revision == long.MaxValue)
+        {
+            failure = GenealogyFailure.Create(
+                GenealogyFailureCode.RevisionOverflow,
+                "The genealogy revision cannot advance beyond its maximum value.");
+            return false;
+        }
+
         records.Add(record);
         AddAdjacency(childrenByParent, parent, child);
         AddAdjacency(parentsByChild, child, parent);
+        revision++;
         failure = GenealogyFailure.None;
         return true;
     }
@@ -172,7 +183,7 @@ public sealed class GenealogyStore : IAuthoritativeMutationGuardBindable
         }
 
         ParentageRecord record = new ParentageRecord(parent, child);
-        if (records.Remove(record) == false)
+        if (records.Contains(record) == false)
         {
             failure = GenealogyFailure.Create(
                 GenealogyFailureCode.ParentageNotFound,
@@ -180,8 +191,18 @@ public sealed class GenealogyStore : IAuthoritativeMutationGuardBindable
             return false;
         }
 
+        if (revision == long.MaxValue)
+        {
+            failure = GenealogyFailure.Create(
+                GenealogyFailureCode.RevisionOverflow,
+                "The genealogy revision cannot advance beyond its maximum value.");
+            return false;
+        }
+
+        records.Remove(record);
         RemoveAdjacency(childrenByParent, parent, child);
         RemoveAdjacency(parentsByChild, child, parent);
+        revision++;
         failure = GenealogyFailure.None;
         return true;
     }

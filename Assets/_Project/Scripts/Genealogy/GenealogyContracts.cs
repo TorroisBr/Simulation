@@ -10,7 +10,8 @@ public enum GenealogyFailureCode
     DuplicateParentage,
     WouldCreateCycle,
     ParentageNotFound,
-    RuntimeFaulted
+    RuntimeFaulted,
+    RevisionOverflow
 }
 
 /// <summary>
