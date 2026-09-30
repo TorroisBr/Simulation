@@ -1,13 +1,22 @@
 # P12-D Genealogy passive census-witness candidate
 
-**Status:** Exact-tip independent implementation review passed. This bounded
-owner-evidence slice is not canonical delivery, P12-D completion, P12-B
-readiness, or P12-A readiness.
+**Status:** Promoted as passive owner evidence to `codex/phase12/canonical` at
+`bde930477b7614a7fb1baed01497dbd1fe063927`. It does not establish P12-D
+completion, P12-B readiness, or P12-A readiness.
 
 **Base:** P12 canonical `d0c2733994aaf51e417b7c9f49f2b3489c4c49c3`.
 
-**Candidate:** `codex/phase12/P12DGenealogyCensusWitness` at
-`3afbc593fad8648e5a2ae20b7ec1a9d988769fb9`.
+**Code-bearing commit:** `3afbc593fad8648e5a2ae20b7ec1a9d988769fb9`.
+
+**Promoted branch tip:** `codex/phase12/P12DGenealogyCensusWitness` at
+`bde930477b7614a7fb1baed01497dbd1fe063927`.
+
+**Post-promotion revalidation:** A cross-owner birth/rollback audit found a
+revision-saturation defect. At `long.MaxValue - 1`, a two-parent birth can add
+one edge, fail its second edge at overflow, then fail to remove the first edge
+at `long.MaxValue`; the Person registration is removed while its genealogy
+edge remains. A bounded correction is in progress. Until it is promoted, this
+candidate must not be treated as integrated with named-birth rollback.
 
 The bounded proposal in
 `PHASE12_P12D_GENEALOGY_CENSUS_DESIGN.md` was independently revalidated

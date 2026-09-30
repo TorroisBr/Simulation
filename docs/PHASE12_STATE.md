@@ -28,7 +28,7 @@ P12-B–P12-G capability decomposition in
 | Checkpoint | Status | Current evidence and limits |
 |---|---|---|
 | P12-A — `UnityBootstrap-Daily-v1` profile integration | `WAIT_DEPENDENCY` | Scope accepted. No included-owner export plus staged-hydration coverage or validated complete live profile inventory exists yet. Its separate implementation authorization remains outstanding. |
-| P12-B — profile admission and completed-boundary lifecycle | `INCOMPLETE — PARTIAL FOUNDATION PROMOTED` | In addition to the promoted non-admitting kernel, receipt owners, P8-A–D, and RuntimeIdentity witnesses, cumulative stack `b889b4747738d933fe48311ef89fc33a40e3dfa0` adds passive witnesses for record sequence, ActorChoice, RuntimeIdAllocator, ArmedForce/manpower/position, Conflict/War/Battle, Estate/Property, and Institution/Office. See the promoted-stack section and linked candidate evidence below. The static writer map and partial profile evidence remain in `docs/design/PHASE12_B_BLOCKER_RESOLUTION.md`. No complete profile census, shared-epoch connection, Unity owner-thread/quiescence proof, or capture token is established. |
+| P12-B — profile admission and completed-boundary lifecycle | `INCOMPLETE — PARTIAL FOUNDATION PROMOTED` | In addition to the promoted non-admitting kernel, receipt owners, P8-A–D, and RuntimeIdentity witnesses, cumulative stack `b889b4747738d933fe48311ef89fc33a40e3dfa0` adds passive witnesses for record sequence, ActorChoice, RuntimeIdAllocator, ArmedForce/manpower/position, Conflict/War/Battle, Estate/Property, and Institution/Office. The separately promoted P12-D GenealogyStore parentage witness is recorded below. See the promoted-stack section and linked candidate evidence below. The static writer map and partial profile evidence remain in `docs/design/PHASE12_B_BLOCKER_RESOLUTION.md`. No complete profile census, shared-epoch connection, Unity owner-thread/quiescence proof, or capture token is established. |
 | P12-C — identity, provenance, deterministic roots | `BLOCKED_ON_P12-B` | The `RuntimeIdAllocator` passive census and record-sequence witness promoted at `b889b47` are inventory evidence only; they do not provide C exports/hydration, deterministic-root state, or provenance. Preserve `codex/phase12/P12CIdentityRuntimeSnapshot` at `531d835` for selective reintegration only after B readiness and revalidation. |
 | P12-D — factual roots and Person/population relations | `BLOCKED_ON_P12-B_AND_C` | Owner inventory and accepted scope remain; no complete export/hydration capability is claimed. |
 | P12-E — core and official daily-domain owners | `BLOCKED_ON_P12-B_AND_C` | Owner inventory and accepted scope remain; effective-profile provider coverage and exact owner exports are incomplete. |
@@ -236,6 +236,45 @@ effective-profile census, prove every supported committed write reaches the
 shared epoch, establish owner-thread/quiescence, issue capture eligibility,
 or provide immutable exports and staged hydration. P12-B remains incomplete;
 P12-A remains `WAIT_DEPENDENCY`.
+
+## Promoted P12-D Genealogy parentage witness
+
+The reviewed candidate branch `codex/phase12/P12DGenealogyCensusWitness` was
+based on canonical `d0c2733994aaf51e417b7c9f49f2b3489c4c49c3` and approved for
+promotion at branch tip `bde930477b7614a7fb1baed01497dbd1fe063927`. Canonical
+was fast-forwarded to that tip. The code-bearing commit is
+`3afbc593fad8648e5a2ae20b7ec1a9d988769fb9`; the intervening and final commits
+only record the candidate design and validation evidence.
+
+The promoted schema-v1 `p12d.genealogy.parentage` witness is bound to the
+installed runtime `GenealogyStore`, counts direct parentage edges, and advances
+its local revision once for each successful add or removal. Add/remove
+preflight revision overflow before changing edges. Clone construction retains
+the existing deterministic replay behavior and exposes only the installed
+clone through the bootstrap composition.
+
+Independent implementation review passed on the exact code tip and the
+docs-only candidate update was reviewed. Validation passed: focused
+`GenealogyCensusTests` 3/3, ALL EditMode 1988/1988, and the complete official
+`Smoke` filter 5/5. Exact evidence paths and the detailed test boundary are in
+`docs/design/PHASE12_P12D_GENEALOGY_CENSUS_CANDIDATE.md`.
+
+This remains one passive, unsynchronized owner witness. It is not registered
+in the complete P12-B profile inventory, does not connect writes to the shared
+mutation epoch, and proves neither owner-thread/quiescence nor capture
+eligibility. It adds no genealogy semantics, export, hydration, or P12-D
+completion. P12-B remains incomplete; P12-A remains `WAIT_DEPENDENCY`; P12-D
+remains blocked on P12-B and P12-C.
+
+The subsequent P12-D multi-owner commit-graph audit found a revision-saturation
+rollback defect in this canonical code: with Genealogy revision at
+`long.MaxValue - 1`, a two-parent birth can install one edge, reject the second
+edge at overflow, then fail to remove the first edge because removal also
+rejects at `long.MaxValue`. The birth path still rolls back its Person
+registration, leaving a parentage edge to an unregistered Person. A bounded
+correction is under implementation/revalidation; do not treat the current
+Genealogy slice as integrated with named-birth rollback until that correction
+is promoted. This does not change P12-B/P12-A readiness.
 
 ## Remaining dependency-ordered P12-B blockers
 
