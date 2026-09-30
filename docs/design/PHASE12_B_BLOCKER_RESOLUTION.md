@@ -41,7 +41,7 @@ or that runtime capture is restricted to a quiescent owner thread.
 | Obligation | Source evidence now available | Capability/evidence still required |
 |---|---|---|
 | Live owner/cardinality census | The selected-profile test runs normal genesis against `Simulation-GeneralTest.asset` and inspects the published runtime before day one. It verifies City/NPC, population, market, inventory, and spatial-knowledge cardinalities; Person/Genealogy zero; positive P8-A geography; P8-B–D exact-zero child-owner counts/revisions; P8-A–D and receipt witnesses; the legacy SpatialNetwork's exact 2 locations/2 routes at revision 4; and empty ActorChoice/directive/travel/expedition state. | This is still a partial live census: several directly observed collections have no owner revision/section-token API, and some C roots plus E/Justice owners are not covered by complete owner witnesses. The available passive witnesses are not registered as a complete profile inventory. Each included owner still needs exact identity, section/schema version, count, and revision in the capture provider. Source-derived counts cannot stand in for evolved state. |
-| Committed-write invalidation | Successful mutation entrypoints are mapped below, including owner-local revisions and public bypasses. Multi-owner transactions, rollback-only paths, queries, plans and proposals are distinguished. | A successful authoritative commit must notify the one P12-B epoch after the owning commit (or whole multi-owner commit). Failed preflight and full rollback do not notify; a successful compensating write does. Prove every included public path is covered or no longer supported outside an instrumented boundary. |
+| Committed-write invalidation | Successful mutation entrypoints are mapped below, including owner-local revisions and public bypasses. Multi-owner transactions, rollback-only paths, queries, plans and proposals are distinguished. | A successful authoritative commit must notify the one P12-B epoch after the owning commit (or whole multi-owner commit). A rollback needs no refresh only if every registered witness revision remains unchanged. If compensation advanced monotone revisions, the current protocol requires a complete revision refresh; see `PHASE12_P12B_OPERATION_FOOTPRINT_AUDIT.md` for the reviewed technical recommendation and outstanding contract reconciliation. |
 | Owner-thread/quiescence | Source audit finds synchronous `Start → InitializeSimulation` and `Update → Simulate` paths. The selected-profile EditMode test calls `Start()` directly and captures no `Update` frame or managed-thread identity. | Bind and verify the actual Unity runtime owner thread; track bootstrap, outer advance and supported in-flight multi-owner operations; reject capture during any scope or from a different thread. The direct EditMode bootstrap test and static absence of thread creation do not prove normal-frame affinity or exclude external callers. |
 | Runtime exact-zero witnesses | The profile has explicit exclusions and known conditional-empty sections. Composed-but-empty is distinct from not composed; passive owner witnesses now exist for P8-A–D, both receipt ledgers, RuntimeIdentityRegistry typed indexes, and legacy SpatialNetwork locations/routes. P8-A and legacy SpatialNetwork are positively populated; P8-B/C/D child sections, conditional receipt ledgers, and the unused RuntimeIdentityRegistry typed indexes are exact-zero. | Complete the owner-backed inventory, add the remaining owner witnesses, and revalidate the full set after collection. Do not infer zero from scene startup, a skipped consumer, or a missing runtime reference. |
 
@@ -67,7 +67,7 @@ scope:
 
 | Owner | Exposed write path | Census/invalidation consequence |
 |---|---|---|
-| Per-NPC `SpatialKnowledgeRuntime` | `DiscoverLocation` and `DiscoverRoute` advance the local revision. `KnownLocationRuntimeIds` and `KnownRouteRuntimeIds` return the backing `List<string>` behind `IReadOnlyList<string>`, so a caller can change knowledge cardinality/content without advancing that revision. | The current selected profile has ten such owners. Each is mutable world knowledge and must be witnessed separately. A revision-based witness is not trustworthy until callers cannot mutate through the returned collections and every supported discovery path is in the commit map. |
+| Per-NPC `SpatialKnowledgeRuntime` | `DiscoverLocation` and `DiscoverRoute` advance the local revision. `KnownLocationRuntimeIds` and `KnownRouteRuntimeIds` return the backing `List<string>` behind `IReadOnlyList<string>`, so a caller can change knowledge cardinality/content without advancing that revision. At `Revision == long.MaxValue`, `DiscoverId` currently appends a new ID but leaves the saturated revision unchanged. | The current selected profile has ten such owners. Each is mutable world knowledge and must be witnessed separately. A revision-based witness is not trustworthy until callers cannot mutate through the returned collections, revision exhaustion rejects before mutation, and every supported discovery path is in the commit map. The P12-B-only census design records the bounded correction; P12-F export/hydration remains dependency-gated. |
 | `NpcRuntime` status | `CurrentStatus` returns the backing `List<NpcStatusData>`. List operations such as `Add`, `Remove`, `Clear`, or index replacement bypass `NpcRuntime.AddStatus`/`RemoveStatus`. | Current status is part of NPC state; a parent/composite witness or an instrumented owner boundary must account for these writes. |
 | `NpcRuntime` current action | `CurrentActionRuntime` returns the installed mutable object. `NpcActionRuntime.SetSuccessChanceMultiplier`, `SetOriginDecisionId`, `SetStableOccurrenceKey`, `SetCommercialDecisionEvidence`, and `SetCommercialScoutingEvidence` can change its future-affecting or causal evidence after installation. | The NPC parent wrapper does not observe these child writes. The committed-write map must include the live child mutators or replace the exposure with an owner-notifying seam. |
 | `NpcRuntime` plans | `TravelPlan` and `MerchantTradePlan` return installed mutable objects. `NpcTravelPlanRuntime.Set`/`Clear` and `MerchantTradePlanRuntime.Set`, `RedirectTo`, wait/travel counters, `RegisterSale`, and `Clear` mutate them without using the corresponding `NpcRuntime` wrapper. | These plan changes are retained future-affecting NPC state; wrapper-only invalidation would miss them. Include direct child paths in the operation map and export contract. |
@@ -75,7 +75,8 @@ scope:
 Production write callers for the selected per-NPC SpatialKnowledge owners
 include authored bootstrap discovery, `TravelSystem`, `TravelParty`,
 `MerchantSystem`, and `SimulationRuntime` paths. Read-only census tests do not
-close these owner-write paths.
+close these owner-write paths. `PHASE12_P12B_OPERATION_FOOTPRINT_AUDIT.md`
+records the corresponding owner/operation gaps across C/D/E/F.
 
 ### Live selected-profile day-zero evidence
 
@@ -520,9 +521,14 @@ not add a second lease, global lock, or duplicate authoritative store.
    owner worktrees; integrate against the same B contract and actual effective
    provider set.
 7. **F knowledge/commitment witnesses/exports:** directives, P11 choices,
-   Knowledge, travel/party/expedition. Begin implementation only after C, D,
-   and E canonical dependencies are met; preserve exact terminal ActorChoice
-   state and reject nonterminal states as already specified.
+   per-NPC Knowledge, travel/party/expedition. Begin F implementation only
+   after C, D, and E canonical dependencies are met; preserve exact terminal
+   ActorChoice state and reject nonterminal states as already specified. The
+   current per-NPC SpatialKnowledge owners lack census providers, expose
+   mutable lists, and permit a new discovery at saturated revision; the
+   bounded P12-B census design in
+   `PHASE12_P12B_SPATIAL_KNOWLEDGE_CENSUS_DESIGN.md` must be independently
+   classified against this F dependency before implementation.
 8. **B runtime profile proof, then G:** compose the exact census from the
    normal P9-B/P11 bootstrap; prove thread/scope rejection, post-commit
    invalidation, positive required cardinalities, exact conditional zeros,

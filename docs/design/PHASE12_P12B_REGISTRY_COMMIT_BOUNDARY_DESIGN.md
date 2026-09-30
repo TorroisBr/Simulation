@@ -85,10 +85,16 @@ Therefore the existing API's exact caller obligation is:
   bootstrap, or PlaceContent installation. An intermediate notification could
   publish partial owner baselines and would incorrectly count a later-rolled-
   back operation as a committed write.
-- Failed preflight, rejected writes, idempotent no-ops, empty topology batches,
-  and complete rollback do not notify. A successful compensating mutation
-  that changes world truth is itself a commit and must notify after its outer
-  installation completes.
+- Failed preflight, rejected writes, idempotent no-ops, and empty topology
+  batches do not notify because no owner revision advanced. The RuntimeIdentity
+  registry has no removal/rollback API. If a future supported outer operation
+  compensates a registry write or another owner write while leaving a
+  monotone witness revision advanced, it must refresh every changed baseline
+  once at outer-operation exit. The current protocol can do this only through
+  `NotifyCommittedMutations`, which also advances the mutation epoch; leaving
+  those revisions stale makes the next complete assessment fail closed. A
+  no-op/full rollback that leaves every registered witness revision unchanged
+  needs no notification.
 - For bootstrap, establish the initial profile baseline only after the
   complete runtime composition has been successfully published. Do not assess
   or notify against partially built registry/network state.
@@ -109,7 +115,13 @@ Other transaction-shaped boundaries can be mapped from source—economy
 transactions, Person/population lifecycle, battle terminal resolution, and
 prepared Commercial Knowledge sharing—but direct leaf APIs and child-store
 mutators remain callable outside those boundaries. Mapping these groups to
-their complete changed-section sets is still outstanding.
+their complete changed-section sets is still outstanding. In particular,
+PersonStore/Genealogy rollback paths can restore cardinality while advancing
+their monotone revisions; see the reviewed source footprint in
+`PHASE12_P12B_OPERATION_FOOTPRINT_AUDIT.md`. The generic “full rollback does
+not notify” line in the earlier blocker matrix applies only when every
+registered witness revision is unchanged and must be reconciled with these
+revision-visible compensation paths before runtime wiring.
 
 The targeted post-promotion owner revalidation also found selected-state
 revision bypasses outside the registry: per-NPC `SpatialKnowledgeRuntime`
