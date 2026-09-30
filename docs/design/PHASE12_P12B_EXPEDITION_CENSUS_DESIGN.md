@@ -147,15 +147,45 @@ spending the second slot between the first commit and its external call.
 `TravelPartySystem`: the first is consumed by Add; the second by either
 `TryBeginTravel` or the compensating ExpeditionStore `Remove`. Release any
 unused slot when the flow exits. If reservation fails, do not add the
-Expedition or start a TravelParty. `TryBeginReturn` likewise reserves two
-slots before the `Returning` transition and before invoking
-`TravelPartySystem`: consume one for `TryBeginReturn`, then consume the other
-for `TryBeginReturnTravel` on success or `TryCancelReturn` on failure. Release
-unused slots on every exit. This is a revision-capacity reservation only; it
-does not claim an atomic transaction across ExpeditionStore and
+Expedition or start a TravelParty. The start token must install its narrow
+fence atomically with publishing the exact newly added Expedition in the
+store, so no public writer can race between `Add` and fence acquisition. If
+Add fails, release both token and capacity without exposing an Expedition.
+While the external call is in progress, every
+other mutation of that exact Expedition—including public `Remove`, attached
+runtime/objective leaf mutation, completion/finalization, and other system
+writers—must fail with a transient busy result and no mutation. The matching
+start workflow alone may consume its reserved slot for `TryBeginTravel` or
+compensating `Remove`; release the fence and any unused slot on every return,
+failure, or exception path. The fence is per object, not a store-wide lock:
+mutations of unrelated expeditions may proceed subject to outstanding
+revision reservations.
+
+`TryBeginReturn` likewise reserves two slots and installs an exact-object
+return-operation fence atomically with its `Returning` transition, before
+invoking `TravelPartySystem`: consume one for `TryBeginReturn`, then consume the other
+for `TryBeginReturnTravel` on success or `TryCancelReturn` on failure. While
+party creation/association is in progress, every other mutation of that exact
+Expedition—including attached `TryComplete()`, public `Remove`, direct
+runtime/objective leaf mutation, and other system writers—must fail transiently
+without mutation. Only the matching return workflow may consume its reserved
+slots. Release the fence and unused capacity on every success, failure, or
+exception exit. Unrelated expeditions remain mutable subject to reserved-slot
+capacity. This is a revision-capacity reservation and per-object lifecycle
+fence only; it does not claim an atomic transaction across ExpeditionStore and
 TravelParty/NPC owners. A failed reservation leaves expedition state, owner
 indexes, participant travel state, costs, and expedition lifecycle events
 unchanged.
+
+The composed return path currently acquires `TravelPartyStore`'s mutation
+window before mutating Expedition state. Preserve this single cross-owner lock
+order: `TravelPartyStore` then `ExpeditionStore`; no path may acquire the
+TravelPartyStore window while holding the ExpeditionStore monitor. The
+ExpeditionStore monitor must still be released around callbacks/external
+owner work as specified below; the per-object operation fence preserves the
+exact Expedition against competing writers during that interval. Do not
+reverse the order to `ExpeditionStore` then `TravelPartyStore` or introduce a
+second nested acquisition order.
 
 Other compound writes use the same mechanism sized to their maximum number of
 possible ExpeditionStore commits. A failed capacity preflight must leave
@@ -275,6 +305,23 @@ Focused tests should establish:
   return-party association failure compensation. Verify the second commit
   consumes its slot, the revision reaches but never exceeds `long.MaxValue`,
   and no reservation leaks;
+- with ample revision capacity, pause start at the injected external
+  `TravelPartySystem` boundary after Expedition `Add`; a public
+  `ExpeditionStore.Remove` of that exact newly added object/ID and an attached
+  runtime/objective mutation must report busy and leave indexes, object,
+  revision, party state, and events unchanged. Resume both success and
+  compensation paths and verify only the matching workflow can consume its
+  reserved second slot, then verify the fence/reservation is released so a
+  subsequent ordinary mutation behaves normally;
+- with ample revision capacity, pause return at the injected external
+  `TravelPartySystem` boundary after the `Returning` commit; attached direct
+  `TryComplete()` and public `ExpeditionStore.Remove` for that exact object
+  must report busy and leave state/indexes/revision unchanged. Exercise both
+  successful party association and failed-party/association compensation;
+  verify only the matching workflow consumes the reserved second slot,
+  cancellation restores the expected state where applicable, and all fences
+  and unused reservations are released so ordinary completion/removal can
+  proceed afterward;
 - attached direct `TryComplete()` and `ReconcileAfterTravel` use exact-object
   finalization: an impostor/stale object is rejected, success transitions and
   removes the exact row once, and saturation leaves both state and indexes
