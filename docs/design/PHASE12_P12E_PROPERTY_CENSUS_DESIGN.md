@@ -1,7 +1,7 @@
 # P12-E Property Ownership Census Design
 
-**Status:** Proposed bounded owner witness; independent exact-tip design review
-pending.
+**Status:** Design review passed; bounded passive-witness implementation may
+proceed under accepted P12-B/P12-E capability authorization.
 
 **Base:** implementation-reviewed Estate census candidate
 `codex/phase12/P12EEstateCensus` at
@@ -20,8 +20,8 @@ section, both reporting the exact same installed owner identity:
 
 | Section | Installed owner | Cardinality | Existing stamp |
 |---|---|---|---|
-| `p12e.property.ownership` | `Runtime.PropertyOwnershipStore` | `Count` | `Revision` |
-| `p12e.property.transfer-history` | `Runtime.PropertyOwnershipStore` | `TransferHistory.Count` | `Revision` |
+| `p12e.property.ownership` | `Runtime.PropertyOwnershipStore` | `Count` | `Revision`; `Required` |
+| `p12e.property.transfer-history` | `Runtime.PropertyOwnershipStore` | `TransferHistory.Count` | `Revision`; `Required` |
 
 Current ownership contains one row per registered `PropertyId`. Transfer
 history contains one row per retained explicit transfer. The two
@@ -30,7 +30,9 @@ same owner identity and revision across two section IDs reflect two views of
 distinct facts in one authority; the accepted census protocol already allows
 multiple sections from one owner. The selected authored bootstrap begins with
 both sets empty and must report exact zero cardinalities/revision and stable
-owner identity on repeated reads.
+owner identity on repeated reads. `Required` describes the sections' evolving
+role; day-zero zero values are observations, not an `ExplicitlyEmpty`
+classification.
 
 The provider only reads existing facts. It does not add property, transfer,
 estate, or succession behavior.
@@ -64,6 +66,9 @@ write path has been registered for invalidation.
   previous/new owners and the live record has the new owner.
 - Duplicate property registration and a rejected transfer leave both
   sections' counts, owner identity, and shared revision unchanged.
+- A populated runtime clone preserves ownership count, transfer-history
+  count, and exact revision while retaining equivalent rows/history and
+  leaving the source store unchanged.
 - Reuse existing property and transfer semantics, same-world Person
   validation, stale-transition check, runtime guard, and transfer history.
   No new setter, write path, repair, or transfer behavior is added.
