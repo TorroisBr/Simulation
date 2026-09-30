@@ -49,12 +49,20 @@ public sealed class NpcKnowledgeCensusTests
             CommercialKnowledgeRuntime owner = new CommercialKnowledgeRuntime();
             FieldInfo selected = typeof(CommercialKnowledgeRuntime).GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
             selected.SetValue(owner, null);
+            FieldInfo markets = typeof(CommercialKnowledgeRuntime).GetField("observations", BindingFlags.Instance | BindingFlags.NonPublic);
+            FieldInfo liquidity = typeof(CommercialKnowledgeRuntime).GetField("liquidityObservations", BindingFlags.Instance | BindingFlags.NonPublic);
+            FieldInfo receipts = typeof(CommercialKnowledgeRuntime).GetField("shareReceipts", BindingFlags.Instance | BindingFlags.NonPublic);
+            object marketsBefore = markets.GetValue(owner);
+            object liquidityBefore = liquidity.GetValue(owner);
+            object receiptsBefore = receipts.GetValue(owner);
             FieldInfo revision = typeof(CommercialKnowledgeRuntime).GetField("revision", BindingFlags.Instance | BindingFlags.NonPublic);
             revision.SetValue(owner, 7L);
             MethodInfo read = typeof(CommercialKnowledgeRuntime).GetMethod("TryReadCensus", BindingFlags.Instance | BindingFlags.NonPublic);
             object[] args = { 0, 0, 0, 0L };
             Assert.That(read.Invoke(owner, args), Is.EqualTo(false));
-            Assert.That(selected.GetValue(owner), Is.Null);
+            Assert.That(markets.GetValue(owner), Is.SameAs(marketsBefore));
+            Assert.That(liquidity.GetValue(owner), Is.SameAs(liquidityBefore));
+            Assert.That(receipts.GetValue(owner), Is.SameAs(receiptsBefore));
             Assert.That(revision.GetValue(owner), Is.EqualTo(7L));
         }
     }
