@@ -45,7 +45,7 @@ public sealed class ExplorableSiteCensusTests
         simulation.Start();
 
         ExplorableSiteStore owner = simulation.Bootstrap.ExplorableSites;
-        ExplorableSiteCensusProvider provider = new ExplorableSiteCensusProvider(owner);
+        ExplorableSiteCensusProvider provider = simulation.Bootstrap.ExplorableSiteCensusProvider;
         OwnerSectionCensusWitness first = provider.GetCurrentCensus();
         OwnerSectionCensusWitness second = provider.GetCurrentCensus();
 

@@ -62,6 +62,7 @@ public sealed class SimulationBootstrapComposition
             Runtime.OfficeStoreForWorldBoundary);
         GenealogyCensusProvider = new GenealogyCensusProvider(Runtime.GenealogyStoreForWorldBoundary);
         ExplorableSites = sites;
+        ExplorableSiteCensusProvider = new ExplorableSiteCensusProvider(ExplorableSites);
         Expeditions = expeditions;
         ExpeditionSystem = expeditionSystem;
     }
@@ -126,6 +127,9 @@ public sealed class SimulationBootstrapComposition
     /// <summary>The P8-owned spatial truth authority published with the genesis handoff.</summary>
     public SpatialAuthorityStore SpatialAuthority => Runtime.SpatialAuthorityStore;
     public ExplorableSiteStore ExplorableSites { get; }
+    /// <summary>Passive witness for the authored bootstrap's installed
+    /// ExplorableSite owner.</summary>
+    public ExplorableSiteCensusProvider ExplorableSiteCensusProvider { get; }
     public ExpeditionStore Expeditions { get; }
     public ExpeditionSystem ExpeditionSystem { get; }
 }
