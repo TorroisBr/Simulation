@@ -15,9 +15,10 @@ completion, P12-B readiness, or P12-A readiness.
 revision-saturation defect. The bounded correction is implemented on
 `codex/phase12/P12DGenealogyRollbackSaturation` at
 `f631de8a9209956cf61d0f901867cca244befcaf`, independently reviewed PASS
-against `543196a`, and validated. It remains a separate candidate pending its
-canonical-promotion gate; until promoted, this witness is not treated as
-integrated with named-birth rollback.
+against exact parent `8f04a62bf2e66995efe8f311f5d62cff191acb11` (based on
+P12 canonical `543196a`), and validated. It remains a separate candidate
+pending its canonical-promotion gate; until promoted, this witness is not
+treated as integrated with named-birth rollback.
 
 The bounded proposal in
 `PHASE12_P12D_GENEALOGY_CENSUS_DESIGN.md` was independently revalidated
