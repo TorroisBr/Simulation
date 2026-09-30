@@ -1,6 +1,7 @@
 # P12-E Persistent Battle Census Design
 
-**Status:** Proposed bounded owner witness; independent design review pending.
+**Status:** Independent exact-tip design review PASS. Durable record:
+`PHASE12_P12E_BATTLE_CENSUS_DESIGN_REVIEW.md`.
 
 **Base:** reviewed and validated War census candidate
 `codex/phase12/P12EWarCensus` at `4c6319164f11e1112ed21317f8cddb32f12bec61`.
