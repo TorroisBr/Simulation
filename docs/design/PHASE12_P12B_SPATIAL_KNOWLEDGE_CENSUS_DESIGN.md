@@ -1,8 +1,10 @@
 # P12-B per-NPC SpatialKnowledge census design
 
-**Status:** Bounded P12-B census proposal for independent technical review.
-It adds no P12-F export/hydration capability and no implementation starts
-until the reviewer confirms this remains within accepted P12-B scope.
+**Status:** Bounded P12-B census design independently reviewed PASS at
+candidate `cfcc2fe1116d7f557ff958434a1218caedd15607` against canonical base
+`81ddfe4bd0620b1b61a0a52aa074ef2ed57c2833`. The accepted P12-B prerequisite
+authorization covers this census-only implementation. This design adds no
+P12-F export/hydration capability and grants no canonical promotion.
 
 **Evidence base:** P12 canonical `81ddfe4`; selected profile source basis
 `ec75e6a`; current owner/write-path details in
