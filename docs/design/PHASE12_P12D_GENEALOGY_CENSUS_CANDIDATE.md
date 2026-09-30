@@ -55,10 +55,14 @@ Validation on the final candidate tree passed:
 
 | Gate | Result | Evidence |
 |---|---:|---|
-| `GenealogyCensusTests` | 3/3 | `Temp/ValidationResults/EditMode-20260930-030901-9949f66e829b450c888879af5e895045.xml` |
-| ALL EditMode | 1988/1988 | `Temp/ValidationResults/EditMode-20260930-030918-8b7c5a08578d4d0190f7ec46bbab8402.xml` |
-| Official complete Smoke filter | 5/5 | `Temp/ValidationResults/EditMode-20260930-030953-dcae70a5f9fa405894faeaba7ffa0b6e.xml` |
+| `GenealogyCensusTests` | 3/3 | `Library/ValidationResults/P12DGenealogyCensus/EditMode-20260930-031626-4f9e23f6d8ed45e2a131bda8d9fc8001.xml` |
+| ALL EditMode | 1988/1988 | `Library/ValidationResults/P12DGenealogyCensus/EditMode-20260930-031645-89ead902cfeb470998b6247433aee7bc.xml` |
+| Official complete Smoke filter | 5/5 | `Library/ValidationResults/P12DGenealogyCensus/EditMode-20260930-031719-3ecfb319f50e4e129f6be315f4ecdde8.xml` |
 | `git diff --check` | passed | candidate diff from `d0c2733` |
+
+The three result XMLs are retained in the candidate worktree under
+`Library/ValidationResults/P12DGenealogyCensus`; the validation rerun did not
+change source code after the exact-tip implementation review.
 
 ## Limits retained
 
