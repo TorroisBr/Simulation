@@ -27,11 +27,12 @@ identity exists. Any mismatch, saturated/invalid revision state, or owner
 identity mismatch fails closed. It must not synthesize an expedition from
 events, decisions, NPC travel parties, or UI state.
 
-`ExpeditionStore` currently retains only active expeditions. `Complete` removes
-an expedition from both indexes only after it has entered `Completed`; a
-successful completion therefore changes the census owner state even though
-the resulting cardinality returns to its prior value. The owner revision is
-required to expose that committed change.
+`ExpeditionStore` retains active expeditions. An attached
+`ExpeditionRuntime.TryComplete()` must not transition an indexed row to
+`Completed` while leaving it in the active list. Completion is one
+store-owned exact-object finalization that transitions and removes the same
+object atomically, with one owner revision; the resulting cardinality may be
+unchanged while its revision advances.
 
 ## Mutable truth and mutation coverage
 
@@ -49,20 +50,27 @@ revision publication as one owner commit boundary. Provider reads use the
 same monitor. Attach each stored `ExpeditionRuntime` and its
 `ExpeditionObjectiveRuntime` to that exact store when `Add` commits; direct
 runtime leaf methods must enter the attached owner window and report whether
-they changed truth. Keep their current public surface where practical, but an
-unattached runtime retains its current standalone behavior. Never permit one
-runtime to be attached to two stores or silently rebind it.
+they changed truth. An attached `TryComplete()` delegates to the exact store's
+finalization API; it cannot leave a Completed row indexed. That API checks
+reference identity, active membership, and `Returning` state, preflights one
+revision, transitions to `Completed`, removes that exact object from both
+indexes, and publishes one revision as one owner commit. A stale object,
+mismatched ID, absent row, or wrong state fails before mutation. An unattached
+runtime retains its standalone `TryComplete()` state-transition behavior.
+Never permit one runtime to be attached to two stores or silently rebind it.
 
 The revision contract is per actual committed owner mutation, not per high-
 level user intent:
 
 - `Add` increments once after both active indexes are coherently updated.
 - A successful state/progress/current-place/visited-place/observed-connection/
-  objective transition increments once for the entire leaf operation. A
-  successful traversal that changes both connection and destination-place
+  objective transition increments once for the entire leaf operation, except
+  exact completion, which is combined with active-index removal as specified
+  below. A successful traversal that changes connection and destination-place
   facts still increments once.
-- A successful `Remove` of a Preparing expedition increments once; successful
-  `Complete` removal increments once.
+- A successful `Remove` of a Preparing expedition increments once. Exact
+  attached completion combines the Completed transition and removal from both
+  indexes into one finalization commit and increments once.
 - Invalid, rejected, missing, duplicate, already-completed, or semantic no-op
   calls do not increment. For example, recording an already-observed
   connection with no other changed fact remains a no-op; repeating a terminal
@@ -98,8 +106,8 @@ paths:
 - Objective completion through resource retrieval, notable-item retrieval,
   opposition resolution, and direct `TryMarkObjectiveComplete`.
 - Return and completion: `TryBeginReturn`, return-party creation and
-  compensation (`TryCancelReturn`, `TryBeginReturnTravel`), `TryComplete`, and
-  `ExpeditionStore.Complete`.
+  compensation (`TryCancelReturn`, `TryBeginReturnTravel`), and exact-object
+  finalization through `TryComplete` / the store API.
 - The autonomous consumer's begin/advance/explore/traverse/retrieve/opposition/
   return paths must use the same attached owner operation paths. The autonomy
   system's reservation and failed-execution caches are not ExpeditionStore
@@ -143,26 +151,58 @@ and compensation. If an operation commits an ExpeditionStore write and a later
 external owner fails, record the actual ExpeditionStore compensation as its
 own revision when it succeeds; do not claim global atomic rollback.
 
-To avoid a new lock-order cycle, all paths acquire the ExpeditionStore monitor
-before invoking nested travel-party, content, inventory, conflict, or event
-work. Audit the selected collaborators for any callback that re-enters a
-different store and then tries to acquire ExpeditionStore in reverse order.
-The monitor is reentrant for same-thread nested ExpeditionStore calls; that
-does not make arbitrary reentrant callbacks or concurrent cross-owner
-transactions safe. If a supported collaborator introduces a reverse
-acquisition path, use a scoped owner permit/operation context to preserve the
-single serialized owner boundary rather than nesting unrelated locks in an
-unreviewed order.
+### Objective completion after external effects
 
-For `ReconcileAfterTravel` completion, finalization must verify exact active
-owner identity before mutation: the argument is the exact object returned by
-the exact store's ID lookup, it is still active and `Returning`, and the
-completed runtime transition and store removal refer to that same object.
-Capacity must be available before `TryComplete`; then the transition plus
-removal form one owner operation with one revision. If the store no longer
-contains that exact object, reject before changing its state. The same exact
-store/object identity validation applies to every `ExpeditionSystem` mutation
-entry point.
+Resource retrieval and opposition resolution can mutate another owner before
+the matching `ExpeditionObjectiveRuntime` is marked complete: retrieval may
+change Inventory/PlaceContent state, and opposition resolution may change
+Conflict/opposition state. Before invoking those external effects, the
+ExpeditionStore must reserve one revision slot under its owner window whenever
+the exact active expedition has a matching incomplete objective whose success
+would complete it (Retrieve definition/notable ID match, or Eliminate target
+ID match). Reservation also pins that expedition's objective-completion
+eligibility so a concurrent owner mutation cannot consume the slot or make
+the reservation refer to a different objective. Do not hold the store monitor
+while calling external owners; use a scoped reservation token, released on
+every failure/exception path and consumed by the subsequent objective
+completion commit. Other mutations must account for outstanding reservations
+when checking revision capacity.
+
+If capacity cannot be reserved, reject before calling inventory, content,
+conflict, opposition, or event mutation paths. If the external action fails,
+release the unused reservation and leave Expedition revision/objective
+unchanged. If it succeeds, consume the reserved slot to mark the objective
+complete. Preserve the external owners' existing semantics and do not claim
+cross-owner rollback: this reservation prevents a known saturation rejection
+after a successful external effect, but it does not make the stores one
+transaction or compensate unrelated external failures. Direct
+`TryMarkObjectiveComplete` uses the ordinary attached owner preflight; the
+scoped reservation path is for system operations that must perform external
+effects first.
+
+Do not hold the ExpeditionStore monitor while invoking external owners or
+callbacks that may re-enter other stores. Use the scoped capacity reservation
+described above when an external effect must precede an Expedition owner
+commit. For any remaining operation that requires coordinated nested store
+work, audit the current collaborators for reverse acquisition and keep a
+single documented lock order. The monitor is reentrant for same-thread nested
+ExpeditionStore calls; that does not make arbitrary reentrant callbacks or
+concurrent cross-owner transactions safe. If a supported collaborator
+introduces reverse acquisition, use a scoped owner permit/operation context
+rather than nesting unrelated locks in an unreviewed order.
+
+Name the exact-object API `ExpeditionStore.TryFinalizeCompletion(expected)`
+(or an equivalent internal signature that requires the expected object).
+For `ReconcileAfterTravel` completion, replace the current sequence
+`expedition.TryComplete()` then `expeditionStore.Complete(id)` with one call to
+the store's exact-object finalization API. It verifies that the argument is
+the exact object returned by that store's ID lookup, is still active and
+`Returning`, and remains in both active indexes. It preflights one revision,
+transitions that same runtime to `Completed`, removes it from both indexes,
+then publishes one revision under the owner window. If identity, state, or
+capacity checks fail, it leaves the runtime and indexes unchanged. The same
+exact store/object identity validation applies to every `ExpeditionSystem`
+mutation entry point.
 
 ## Bootstrap composition and tests
 
@@ -190,8 +230,18 @@ Focused tests should establish:
 - Add+Remove compensation advances twice when both writes commit, while
   preflight at insufficient remaining capacity rejects before external travel
   state, costs, or events are changed;
-- completion saturation rejects before marking the runtime Completed or
-  removing the exact active object;
+- attached direct `TryComplete()` and `ReconcileAfterTravel` use exact-object
+  finalization: an impostor/stale object is rejected, success transitions and
+  removes the exact row once, and saturation leaves both state and indexes
+  unchanged;
+- with a matching incomplete Retrieve objective at saturated revision, the
+  operation rejects before Inventory/PlaceContent mutation; with a matching
+  incomplete Eliminate objective it rejects before conflict resolution or
+  opposition mutation. Assert relevant owner counts/revisions, objective
+  state, and event counts remain unchanged on both rejected paths;
+- objective-completion reservation prevents intervening Expedition writes
+  from consuming its reserved revision slot, and the token releases on failed
+  external operations and exceptions;
 - a second thread attempting an attached runtime mutation blocks while a
   provider read or owner mutation window is held, then observes the committed
   state/revision pair;
