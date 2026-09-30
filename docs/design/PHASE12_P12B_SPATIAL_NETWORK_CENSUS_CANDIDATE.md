@@ -74,5 +74,5 @@ shared mutation epoch, establish owner-thread/quiescence or capture
 eligibility, or add exports/hydration. It changes no P8 stores, new
 geography/routes, or gameplay semantics. P12-B remains incomplete; P12-A
 remains `WAIT_DEPENDENCY`; and P12-C through P12-G remain blocked as recorded
-in `docs/PHASE12_STATE.md`. Canonical promotion requires explicit approval
-under `docs/EXECUTION_MODEL.md`.
+in `docs/PHASE12_STATE.md`. Any future canonical promotion requires explicit
+approval under `docs/EXECUTION_MODEL.md`.
