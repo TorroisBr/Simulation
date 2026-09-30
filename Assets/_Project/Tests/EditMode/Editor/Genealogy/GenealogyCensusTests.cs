@@ -55,6 +55,13 @@ public sealed class GenealogyCensusTests
         Assert.That(runtime.TryAddParentage(a, b, out PersonGenealogyFailure firstAdd), Is.True, firstAdd.ToString());
         AssertWitness(provider.GetCurrentCensus(), installed, 1, 1L);
 
+        Assert.That(installed.TryAddParentage(null, b, out GenealogyFailure invalidParent), Is.False);
+        Assert.That(invalidParent.Code, Is.EqualTo(GenealogyFailureCode.InvalidParent));
+        AssertWitness(provider.GetCurrentCensus(), installed, 1, 1L);
+        Assert.That(installed.TryAddParentage(a, null, out GenealogyFailure invalidChild), Is.False);
+        Assert.That(invalidChild.Code, Is.EqualTo(GenealogyFailureCode.InvalidChild));
+        AssertWitness(provider.GetCurrentCensus(), installed, 1, 1L);
+
         Assert.That(runtime.TryAddParentage(a, b, out PersonGenealogyFailure duplicate), Is.False);
         Assert.That(duplicate, Is.EqualTo(PersonGenealogyFailure.DuplicateParentage));
         AssertWitness(provider.GetCurrentCensus(), installed, 1, 1L);
