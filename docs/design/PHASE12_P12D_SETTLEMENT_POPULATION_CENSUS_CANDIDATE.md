@@ -24,12 +24,13 @@ The aggregate section cardinality is `1`; its live value remains
 receipt-ledger-local monotone revision read together under the existing receipt
 lock.
 
-The receipt revision advances once for each newly installed receipt and once
-for a `RestoreSnapshot` call that prunes one or more receipts. Replay,
+The receipt revision advances once for each newly installed receipt and, while
+below `long.MaxValue`, once for a `RestoreSnapshot` call that prunes one or more
+receipts. Replay,
 conflict, stale/rejected operations, unreceipted transitions, and restores
 without pruning do not advance it. At revision saturation, new receipt-backed
-installs fail with the existing `RevisionOverflow` result; rollback may remove
-receipts without wrapping because cardinality strictly decreases and further
+installs fail with the existing `RevisionOverflow` result; pruning at
+saturation may still reduce receipt cardinality without wrapping, and further
 installs remain closed.
 
 ## Independent review result
