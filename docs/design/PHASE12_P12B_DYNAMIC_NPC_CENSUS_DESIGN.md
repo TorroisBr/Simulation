@@ -2,7 +2,8 @@
 
 **Status:** Independent technical review passed at exact design tip
 `156dcb19ecb8f15dc9611e9e0ee45637f775faa8`; implementation may proceed under
-the previously accepted P12-B prerequisite authority.
+the previously accepted P12-B prerequisite authority. Implementation
+revalidation found one conditional path below is unreachable in current code.
 
 - **Design base:** P12 canonical `0a37e9f053b482d80d0815c95352e3d96b56ed8f`.
 - **Accepted authority:** P12-B in
@@ -174,12 +175,19 @@ The later implementation must prove:
   bindings complete;
 - successful materialization updates both fixed `PersonStore` section
   revisions and the new SpatialKnowledge pair with one shared epoch advance;
-- a failure after PersonStore binding with successful compensation restores
-  the materialization count, leaves the dynamic family unchanged, reports
-  both `PersonStore` sections, and advances the shared epoch exactly once;
+- if a supported path can fail after PersonStore binding and compensate, that
+  compensation restores the materialization count, leaves the dynamic family
+  unchanged, reports both `PersonStore` sections, and advances the shared
+  epoch exactly once; current synchronous APIs expose no deterministic
+  post-bind materialization failure input, so do not add a synthetic failure
+  seam or new failure semantics;
 - successful legacy adoption updates both `PersonStore` sections once without
-  changing the dynamic family, and compensated adoption failure still
-  advances the epoch once when the owner revision advanced twice;
+  changing the dynamic family; current `TryBindExistingNpcToPerson` has no
+  reachable post-bind failure because `PersonRuntime.TrySetResidenceSettlementRuntimeId`
+  unconditionally succeeds once reached. Test its supported pre-bind
+  rejections without revision change. Do not add a synthetic failure seam or
+  new failure semantics. If a later contract makes post-bind adoption fallible,
+  revalidate rollback accounting before including that path;
 - a failure before any included owner changes advances no epoch;
 - an incomplete rollback faults the runtime and blocks assessment;
 - census assessment during an active membership operation reports
@@ -205,7 +213,22 @@ implementation authorization are established.
 
 The P12-B–P12-G prerequisite implementation authority already accepted in
 `PHASE12_BRIEF.md` covers this bounded owner-census work. No additional
-checkpoint acceptance is required; independent technical review is the next
-gate. Implementation must use an isolated branch based on the then-current
-P12 canonical tip and serialize the `SimulationRuntime` / materialization
-hotspot with other writers.
+checkpoint acceptance is required. Implementation must use an isolated branch
+based on the then-current P12 canonical tip and serialize the `SimulationRuntime`
+/ materialization hotspot with other writers.
+
+## Implementation revalidation note
+
+At canonical `0a37e9f053b482d80d0815c95352e3d96b56ed8f`,
+`PersonRuntime.TrySetResidenceSettlementRuntimeId` only assigns the requested
+value and returns true. After materialization's PersonStore bind, the remaining
+roster registration checks repeat pre-bind checks on the same synchronous
+runtime, and starting-City presence uses that City's own Location and a fresh
+alive, non-traveling candidate. Thus neither adoption nor materialization has a
+deterministic supported post-bind failure input in the current API. The
+implementation must cover successful paths and pre-bind rejection, harden any
+existing compensation result so a future failed rollback faults/blocks the
+census, and preserve fail-closed accounting if a future supported post-bind
+compensation path is introduced. Do not add synthetic failure seams or new
+failure semantics. This narrows test evidence to reachable behavior; it adds no
+product or failure semantics.
