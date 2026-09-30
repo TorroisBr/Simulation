@@ -88,16 +88,20 @@ The bounded implementation owns:
   `SimulationBootstrapCompositionTests.cs`.
 
 Review existing read consumers in `AdventureAutonomy.cs`,
-`AdventureExpeditionAutonomySystem.cs`, `TravelSystem.cs`, and
-`TesteSimulacao.cs` before changing collection-view behavior.
+`AdventureExpeditionAutonomySystem.cs`, `TravelSystem.cs`,
+`TesteSimulacao.cs`, `WorldObserverReadModel.cs`, and
+`Diagnostics/WorldStateSnapshot.cs` before changing collection-view
+behavior. The observer and diagnostic snapshot consumers copy and sort these
+collections; retain that behavior and include their focused regressions.
 
 Focused tests should establish exact installed-owner identity, stable section
 IDs/schema, selected-profile 2/2/revision-4 values, one revision per
 successful write, unchanged count/revision and registry state on rejection,
 local-revision saturation preflight, protection from collection-view
-mutation, and preserved outgoing-route adjacency. Then run the affected
-spatial/bootstrap regression suites, ALL EditMode, complete official Smoke,
-and `git diff --check` under the current promotion gate.
+mutation, preserved outgoing-route adjacency, and unchanged observer and
+diagnostic snapshot output. Then run the affected spatial/bootstrap and
+observer/diagnostics regression suites, ALL EditMode, complete official
+Smoke, and `git diff --check` under the current promotion gate.
 
 ## Exclusions and readiness
 
