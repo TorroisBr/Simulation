@@ -2,8 +2,9 @@
 
 **Result: CHANGES REQUIRED**
 
-**Reviewed design tip:** `675b6bbcc95be79666405ebff42de1f204d6c40d`  
-**Review base:** P12 canonical `19d0373d6a71b63536248ecc9091e66c9b3a708b`  
+**Reviewed design tip:** `675b6bbcc95be79666405ebff42de1f204d6c40d`
+
+**Review base:** P12 canonical `19d0373d6a71b63536248ecc9091e66c9b3a708b`
 **Reviewer:** independent Luna design review
 
 ## Scope checked
