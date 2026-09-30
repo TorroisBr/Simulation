@@ -1,8 +1,10 @@
 # P12-B cumulative owner census integration candidate
 
-**Status:** Code integration and required validation passed; awaiting exact-tip
-independent integration review and canonical promotion approval. This candidate
-does not complete P12-B, make P12-A ready, or deliver any export/hydration.
+**Status:** `VALIDATED_CANDIDATE` at code tip `44fc3ab` and docs review tip
+`b174f35`; exact-tip independent code/design/evidence review and required
+validation passed. Canonical promotion approval remains outstanding. This
+candidate does not complete P12-B, make P12-A ready, or deliver any
+export/hydration.
 
 **Canonical base:** `codex/phase12/canonical` at
 `676196bcd807603deb9d01bd2855342a7d47a01e`.
