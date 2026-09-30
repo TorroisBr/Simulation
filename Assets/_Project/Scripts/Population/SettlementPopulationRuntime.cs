@@ -12,6 +12,7 @@ public sealed class SettlementPopulationRuntime : IAuthoritativeMutationGuardBin
     private readonly string settlementRuntimeId;
     private int currentPopulation;
     private long revision;
+    private long operationReceiptRevision;
     private Dictionary<string, PopulationOperationReceipt> operationReceipts =
         new Dictionary<string, PopulationOperationReceipt>(StringComparer.Ordinal);
 
@@ -39,6 +40,11 @@ public sealed class SettlementPopulationRuntime : IAuthoritativeMutationGuardBin
                 }
             }
 
+            if (discardedReceiptIds.Count > 0 && operationReceiptRevision < long.MaxValue)
+            {
+                operationReceiptRevision++;
+            }
+
             foreach (string operationIdentity in discardedReceiptIds)
             {
                 operationReceipts.Remove(operationIdentity);
@@ -46,6 +52,15 @@ public sealed class SettlementPopulationRuntime : IAuthoritativeMutationGuardBin
 
             currentPopulation = population;
             revision = expectedRevision;
+        }
+    }
+
+    internal void GetOperationReceiptCensus(out int cardinality, out long receiptRevision)
+    {
+        lock (operationReceiptGate)
+        {
+            cardinality = operationReceipts.Count;
+            receiptRevision = operationReceiptRevision;
         }
     }
 
@@ -114,10 +129,17 @@ public sealed class SettlementPopulationRuntime : IAuthoritativeMutationGuardBin
                 return false;
             }
 
+            if (operationReceiptRevision == long.MaxValue)
+            {
+                failure = PopulationTransitionFailure.RevisionOverflow;
+                return false;
+            }
+
             operationReceipts.Add(operationIdentity, new PopulationOperationReceipt(
                 operationFingerprint, transition));
             currentPopulation = transition.PopulationAfter;
             revision++;
+            operationReceiptRevision++;
             newlyApplied = true;
             return true;
         }
