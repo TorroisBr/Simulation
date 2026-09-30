@@ -1,6 +1,8 @@
 # P12-B Dynamic NPC SpatialKnowledge Census Design
 
-**Status:** Proposed bounded P12-B technical design; pending independent review.
+**Status:** Independent technical review passed at exact design tip
+`156dcb19ecb8f15dc9611e9e0ee45637f775faa8`; implementation may proceed under
+the previously accepted P12-B prerequisite authority.
 
 - **Design base:** P12 canonical `0a37e9f053b482d80d0815c95352e3d96b56ed8f`.
 - **Accepted authority:** P12-B in
