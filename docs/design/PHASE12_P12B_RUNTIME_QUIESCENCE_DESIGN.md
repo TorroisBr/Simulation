@@ -4,235 +4,241 @@
 design review are pending. This document does not declare P12-B complete or
 P12-A ready.
 
-**Evidence base:** Phase 12 canonical `e9ced8e451f42e80ed2132ce494cd5c26e439894`,
-including `docs/PHASE12_STATE.md` and
-`docs/design/PHASE12_B_BLOCKER_RESOLUTION.md`; current
-`SimulationRuntime`, `TesteSimulacao`, `ContinuationCensusProtocol`, and P18
-logical-timeline/advance-lease implementation on that commit.
+**Evidence base:** Phase 12 canonical `19d0373d6a71b63536248ecc9091e66c9b3a708b`,
+including `docs/PHASE12_STATE.md`, `docs/phases/PHASE12_BRIEF.md`, and
+`docs/design/PHASE12_B_BLOCKER_RESOLUTION.md`, plus the current
+`SimulationRuntime`, `SimulationTime`, `TesteSimulacao`, and
+`ContinuationCensusProtocol` implementation.
 
 ## Purpose and boundary
 
-The selected `UnityBootstrap-Daily-v1` profile needs a runtime-owned proof that
-its supported bootstrap publication and outer time-advance operations are
-admitted on the Unity `Start` thread and that a census cannot be assessed while
-one of those operations is still executing. The existing P12 census protocol
-already binds to a managed thread and counts explicitly registered synchronous
-operation scopes. `SimulationRuntime` currently binds that protocol to the
-thread on which its constructor runs, but it only accounts for the nested
-NPC-membership operation. `TesteSimulacao.Start` currently does not retain an
-explicit thread identity, bootstrap has no operation scope held through
-publication, and daily/intraday outer advances are guarded by P18's
-reentrancy-only lease rather than a thread-affinity/quiescence scope.
+The accepted `UnityBootstrap-Daily-v1` profile needs runtime-owned proof that
+its supported publication and completed-day advancement are admitted on the
+Unity `Start` thread and that a census cannot be assessed while one of those
+operations is still executing. The existing census protocol binds to a managed
+thread and counts explicitly registered synchronous scopes. `SimulationRuntime`
+currently binds to the thread on which its constructor runs and registers the
+nested NPC-membership operation. `TesteSimulacao.Start` does not retain an
+explicit thread identity or hold a scope through publication. The public
+`SimulationTime.AdvanceDay` and `TryAdvanceDay` methods can also write the
+runtime-bound clock outside the full runtime day operation.
 
 This design adds only the runtime admission adapter for:
 
-1. the existing `TesteSimulacao.Start` authored-genesis/publication path;
-2. the existing P12 `runtime.npc-membership` nested operation; and
-3. accepted, nonzero `SimulationRuntime` day and P18 intraday outer advances,
-   including their synchronous post-success work and handoff.
+1. the validation-tail and publication portion of the existing synchronous
+   `TesteSimulacao.Start` bootstrap, after `SimulationRuntime` and its partial
+   census baseline exist;
+2. the existing nested `runtime.npc-membership` operation;
+3. nonzero outer daily advances through `SimulationRuntime.AdvanceDay`,
+   `TryAdvanceDay`, and `TryAdvanceDays`; and
+4. calls to public `SimulationTime.AdvanceDay` / `TryAdvanceDay` on the
+   `SimulationTime` instance owned by this runtime, routed through that same
+   outer daily-advance operation.
 
-The adapter is a single-thread admission/counting mechanism, not a lock and not
-a substitute for owner-store synchronization. It does not establish exhaustive
-owner coverage, map every writer to an invalidation, make uninstrumented commits
-safe, add operation registration around arbitrary public methods, or itself
-issue capture eligibility. Census completeness, committed-write invalidation,
-exact owner/cardinality evidence, and export/hydration remain separate P12-B
-obligations. P12-A remains `WAIT_DEPENDENCY` until all of its independently
-specified prerequisites and authorization are satisfied.
+The adapter is single-thread admission and operation counting, not a lock and
+not a substitute for owner-store synchronization. It does not establish
+exhaustive owner coverage, map every writer to invalidation, make uninstrumented
+commits safe, register arbitrary operations, or issue capture eligibility.
+The live owner/cardinality census and committed-write invalidation obligations
+remain separate P12-B blockers. P12-A remains `WAIT_DEPENDENCY` until all of
+its prerequisites and separate authorization are satisfied.
+
+The accepted profile is daily and excludes intraday state. This adapter covers
+completed daily boundaries only and does not extend the supported profile.
 
 ## Existing behavior and constraints
 
-- `TesteSimulacao.Start` calls `InitializeSimulation` synchronously. Its
-  `SimulationGenesisPipeline.ExecuteStages` creates `SimulationRuntime` in
-  `p9.genesis.validate-profile/v1`, validates, then assigns
-  `publishedComposition` in `p9.genesis.publish/v1`. That assignment occurs
-  before the stage callback and before the entire pipeline returns.
-- `SimulationRuntime.InitializeNpcRosterCensusProtocol` currently registers
-  the partial fixed and dynamic census providers, seals their inventories,
-  registers `runtime.npc-membership`, seals the operation inventory, binds to
-  `Thread.CurrentThread`, and establishes an initial baseline.
-- `ContinuationCensusProtocol.TryEnterOperation` rejects/faults a call from a
-  non-owner thread and increments a registered operation count. Its
-  `SimulationOperationScope.Dispose` decrements the count on the bound thread.
-  Assessment returns `OperationInProgress` whenever the count is nonzero.
+- `TesteSimulacao.Start` calls `InitializeSimulation`, which runs the authored
+  genesis stages synchronously. `SimulationRuntime` is constructed in
+  `p9.genesis.validate-profile/v1`, after the authored-world, geography, and
+  authored-actor stages. The runtime validates the selected profile, then
+  `publishedComposition` is assigned in `p9.genesis.publish/v1`. That assignment
+  occurs before the stage callback and before `ExecuteStages` returns.
+- `SimulationRuntime.InitializeNpcRosterCensusProtocol` registers the partial
+  fixed/dynamic census providers, seals those inventories, registers
+  `runtime.npc-membership`, seals the operation inventory, binds to the current
+  thread, and establishes an initial baseline. This remains a partial census.
+- `ContinuationCensusProtocol.TryEnterOperation` requires its bound thread,
+  increments a registered operation count, and fails/faults on a wrong-thread
+  call. A `SimulationOperationScope` disposed on the wrong thread faults the
+  protocol without allowing the count to appear quiescent.
 - `BeginNpcMembershipCensusScope` nests the existing membership scope and
-  closes it after membership reconciliation. Keep that scope and its exact
-  commit semantics unchanged; it naturally nests inside bootstrap or advance
-  scopes when those outer scopes are active.
-- `SimulationRuntime.TryAdvanceDay`, `TryAdvanceDays`, and
-  `TryAdvanceIntradayTo` use `AdvanceLease`. The lease rejects reentrant
-  advances, but its own comments and behavior expressly do not make it a
-  cross-thread lock. Keep its Boolean/reentrancy behavior unchanged.
-- P18 intraday advancement can finish timeline clock movement before the
-  runtime's synchronous post-success reconciliation/handoff finishes. The
-  outer admission scope must cover both the timeline core and all of that
-  handoff work. Do not add a separate scope inside the P18 clock core that
-  would close before the handoff.
-- Existing zero-day `TryAdvanceDays(0)` is a successful no-op; negative day
-  counts fail as invalid. These semantics remain unchanged.
+  closes it after membership reconciliation. Preserve its commit and mutation
+  notification behavior unchanged.
+- `SimulationRuntime.TryAdvanceDay` advances the clock and then executes the
+  daily domain sequence. `TryAdvanceDays(0)` is a successful no-op; negative
+  counts fail as invalid. Preserve these results and do not open a scope for
+  zero, invalid, or otherwise rejected requests.
+- The public `SimulationTime.AdvanceDay` and `TryAdvanceDay` currently mutate
+  `absoluteDay` directly when the mutation guard permits. `SimulationRuntime`
+  exposes its `SimulationTime`, so these are real write paths that must not
+  bypass the completed-day operation boundary for a runtime-owned clock.
+- Canonical already includes the passive `TravelParty` witness at promotion
+  `b78a271f9c552b40bade1a45168388eafa670f59` (code/test tip
+  `260a688f7ea1a9f86e9b589788cda2c32357e170`, exact-tip review
+  `e8910587fdd894a5090c4208b30c5e834acb528f`). It binds to the exact installed
+  `TravelPartyStore`, reports active party-instance cardinality and owner-local
+  revision, and the selected bootstrap profile expects cardinality zero. Keep
+  this existing exact-zero/stable-owner witness as profile evidence; do not add
+  it to or otherwise widen the partial `ContinuationCensusProtocol` inventory.
 
 ## Proposed contract
 
-### 1. Capture and bind the Unity startup thread explicitly
+### 1. Capture and bind the actual Unity `Start` thread
 
-At the beginning of `TesteSimulacao.Start`, capture both the `Thread.CurrentThread`
-object and its `ManagedThreadId`, before `InitializeSimulation` performs any
-genesis stage. Retain that immutable expected identity for the lifetime of the
-component. Do not infer it later from whichever thread happens to construct a
-runtime, and do not use a synchronization context or thread ID alone as the
-identity check.
+At the beginning of `TesteSimulacao.Start`, before the first genesis stage,
+capture both the `Thread.CurrentThread` reference and its
+`ManagedThreadId`. Retain this immutable expected identity for the component.
+Do not infer it later from whichever thread constructs the runtime, and do not
+use a synchronization context or a managed ID alone as thread identity.
 
-Pass that exact expected thread identity into the `SimulationRuntime` created
-by this bootstrap. During runtime census-protocol setup, verify by reference
-identity and managed ID that the current thread equals the captured `Start`
-thread, then bind the protocol to that expected thread. Binding must be
-explicit; a mismatched or absent expected binding fails closed and must not
-silently fall back to the constructor's current thread. Test-only direct runtime
-composition may pass its explicitly selected current thread as the expected
-owner; it must use the same binding contract.
+Pass the captured identity into the `SimulationRuntime` created during the
+validation stage. Runtime census-protocol setup verifies by thread-reference
+identity and managed ID that construction is occurring on the captured
+`Start` thread, then explicitly binds the protocol to that expected thread.
+A missing or mismatched expected identity fails closed; it must not silently
+fall back to the constructor's current thread. Direct runtime test fixtures
+must supply their selected owner thread explicitly and use the same binding
+contract.
 
-`TesteSimulacao.Update` verifies it is on the captured startup thread before it
-can call `Simulate`. Regardless, each public day/intraday admission path in
-`SimulationRuntime` also verifies the protocol owner thread before acquiring
-the existing advance lease or mutating any clock/domain state. Thus callers
-that bypass `Update` cannot advance from a worker thread. Wrong-thread admission
-faults the partial protocol closed and returns its existing typed failure (or
-throws through the existing `AdvanceDay` wrapper); it performs no advance.
-Wrong-thread scope disposal also follows the existing protocol fail-closed
-behavior.
+The Unity genesis pipeline is synchronous, so the authored-world, geography,
+and actor stages preceding `SimulationRuntime` construction run on the thread
+captured at `Start`. They occur before the runtime census protocol and its
+operation scope exist; this adapter does not claim to census or scope those
+earlier stages. Binding at runtime construction verifies the synchronous
+pipeline has not moved to another thread. The operation scope begins only after
+the runtime's initial partial-census baseline and protects the remaining
+validation tail and publication.
 
-The protocol baseline is established only after fixed and dynamic providers,
-expected sections, and the complete set of operation IDs in this bounded
-adapter have been registered and sealed. This baseline remains a baseline for
-the currently registered partial census, not proof of the complete profile.
+`TesteSimulacao.Update` verifies the captured thread before calling `Simulate`.
+Each runtime daily-advance entry also verifies the bound protocol owner thread
+before any clock/domain mutation, so callers that bypass `Update` cannot
+advance from another thread. Wrong-thread admission faults the partial
+protocol closed and returns the runtime's existing typed failure (or throws
+through `AdvanceDay`); no day or domain owner advances.
 
-### 2. Hold one bootstrap operation scope through publication
+### 2. Scope the validation tail through publication
 
-Register one stable operation ID, for example `runtime.bootstrap-publication`,
-in the protocol operation inventory before it is sealed. Immediately after the
-initial census baseline succeeds, `SimulationRuntime` enters that operation
-scope and retains it as its bootstrap scope. Starting it before the baseline
-would make the initial assessment busy; starting it after publication would
-leave the authored-genesis gap unaccounted.
+Register one fixed operation ID such as `runtime.bootstrap-publication` before
+sealing the protocol operation inventory. Register the fixed daily-advance
+operation ID from section 3 at the same time. After
+provider/operation inventories are sealed and the initial partial-census
+baseline succeeds, enter and retain the bootstrap operation scope.
 
-The scope begins after protocol baseline and before the remaining authored
-genesis/profile validation work continues. It remains active while
-`SimulationGenesisPipeline` executes all remaining stages, including authored
-world creation, runtime composition and validation, and publication. Once
-`publishedComposition` has been assigned and `ExecuteStages` returns normally,
-`TesteSimulacao` calls a runtime completion method that verifies the expected
-thread and published composition, then disposes the bootstrap scope. The
-completion call must be after successful return from the entire pipeline, not
-inside the `publish` stage: stage callbacks and code after assignment are still
-synchronous startup work.
+Because `SimulationRuntime` is created in `p9.genesis.validate-profile/v1`,
+this scope begins at the validation tail, after the authored-world, geography,
+and actor stages have completed. It remains active through the rest of profile
+validation, `publishedComposition` assignment in the publish stage, the stage
+callback, and normal return from the complete `SimulationGenesisPipeline`.
+Only after that return, and after verifying that the component is still bound
+to the captured thread and `publishedComposition` is present, does
+`TesteSimulacao` close the bootstrap scope. Do not close it inside the publish
+stage: assignment precedes callbacks and is not the full startup boundary.
 
-Wrap startup completion in `try/finally`. If any stage, publication callback,
-or post-publication startup step throws, or the pipeline returns without a
-published composition, mark runtime admission/protocol faulted and keep the
-bootstrap incomplete. A scope may be disposed in the failure path only after
-the protocol is faulted; disposing it must never make the failed runtime look
-quiescent/admissible. The `TesteSimulacao` instance must not retry into or
-expose that failed runtime as a healthy published world. Preserve the original
-exception behavior after recording the fail-closed condition.
+Wrap all of `InitializeSimulation` in a permanent fail-closed bootstrap latch.
+Set the latch before rethrowing any exception or reporting a missing
+publication. If failure occurs after `publishedComposition` was assigned,
+revoke publication by clearing `publishedComposition` and any cached/public
+composition exposure, fault the runtime protocol/admission, and keep the
+bootstrap marked failed. The component must never retry genesis or expose the
+previously assigned composition as healthy. This includes a stage-callback
+exception after assignment. Preserve the original exception behavior after
+revocation/fault recording.
 
-### 3. Add outer operation scopes for actual advances
+On any startup failure after the bootstrap scope begins, fault the protocol
+before disposal. A faulted protocol with a stranded active count cannot report
+successful quiescence. If failure occurs before runtime creation, the component
+latch still prevents a later retry; no protocol exists yet to fault. A
+successful startup closes the scope exactly once after full pipeline return.
 
-Register separate stable operation IDs for the outer day-advance API and the
-outer intraday-advance API (including `runtime.advance-day` and
-`runtime.advance-intraday`, or equivalent fixed identifiers). Keep
-`runtime.npc-membership` distinct and nested. Do not register a generic caller
-supplied operation name.
+### 3. Scope daily advances and route direct clock writes through them
 
-For `TryAdvanceDay`, `TryAdvanceDays(dayCount > 0)`, and
-`TryAdvanceIntradayTo`, first perform non-mutating argument/profile/reentrancy
-preflight and verify the bound owner thread. A wrong-thread call faults and
-returns before clock or domain work. Preserve the existing P18 advance lease:
-if it is already held, return the current reentrant/busy failure without
-starting a new outer operation. Once an otherwise supported nonzero outer
-advance is admitted, enter exactly one corresponding census operation scope
-and acquire/use the existing lease according to current failure semantics.
-Close the census scope in `finally` on success, ordinary failure, or thrown
-exception.
+Register one stable, closed operation ID for the outer runtime day operation,
+for example `runtime.advance-day`. Keep `runtime.npc-membership` separate and
+nested. No caller-supplied operation ID is allowed.
 
-For `TryAdvanceDays(dayCount > 0)`, the one scope covers the complete requested
-batch, every successful daily boundary in the loop, and any subsequent
-post-success work; it is not opened and closed around each internal day. A
-negative count returns its existing invalid-count failure without a scope, and
-zero remains a no-op with no scope or epoch effect. A call rejected because the
-runtime is unsupported/faulted or because the existing lease is already held
-does not enter a scope. This preserves the distinction between admission of a
-real operation and a no-op/rejected call.
+For `SimulationRuntime.TryAdvanceDay` and `TryAdvanceDays(dayCount > 0)`,
+verify owner-thread identity and perform non-mutating validity/reentrancy
+preflight before entering the corresponding operation scope. Once admitted,
+the one outer scope covers the full operation: clock advancement, every daily
+domain system, nested NPC membership, and all synchronous post-clock work. For
+`TryAdvanceDays`, one scope spans the whole requested batch and closes in
+`finally` on success, ordinary failure, or exception. A negative count,
+zero count, faulted runtime, or rejected/reentrant request opens no scope and
+preserves existing no-op/failure behavior.
 
-For P18, the day API's scope covers the next-day timeline target through
-successful advancement and all synchronous P18 handoff/reconciliation before
-the public method returns. `TryAdvanceIntradayTo` similarly covers input
-sealing, causal timeline steps, timeline-success handoffs, pending post-advance
-handoff completion, and runtime post-success work. Scope disposal is in the
-outer public method's `finally`, after the existing `AdvanceLease` cleanup.
-No change is made to P18 timeline semantics, timeline-owned state, bool lease
-reentrancy, accepted input order, continuation protocol, or P18 failure mapping.
+When `SimulationRuntime` binds its `SimulationTime`, install a private owner
+callback so its public `SimulationTime.AdvanceDay` and `TryAdvanceDay` route
+through the runtime's normal full-day advance admission instead of writing the
+clock independently. A direct call on this runtime-owned clock therefore has
+the same completed-day semantics and owner-thread/quiescence scope as
+`SimulationRuntime.AdvanceDay` / `TryAdvanceDay`. The runtime's own daily core
+uses a separate internal clock-commit primitive to avoid recursive dispatch.
+The callback is a fixed runtime binding, not a public operation-registration
+hook. A detached, unbound `SimulationTime` retains its standalone clock
+behavior but is not part of `UnityBootstrap-Daily-v1` and cannot be admitted as
+that profile's runtime clock.
 
-If an exception occurs after time advances but before post-success handoff is
-complete, the scope remains active until stack unwinding reaches `finally`,
-then closes on the captured owner thread. Existing domain/runtime fault policy
-continues to determine whether the runtime may advance again; this design does
-not turn a partially completed advance into a success or rollback it.
+The runtime callback dispatches directly to the same `TryAdvanceDay` entry, so
+the single `runtime.advance-day` operation scope covers calls through either
+public API. It does not publish an intermediate point where the clock has
+advanced but daily domain work is incomplete. Attempts to enter the same
+runtime recursively are rejected by existing runtime reentrancy semantics.
+Map runtime failures to an explicit `SimulationTimeAdvanceFailure` result (or
+equivalent typed internal result) for `TryAdvanceDay`; the void
+`SimulationTime.AdvanceDay` wrapper continues to throw on failure. Overflow and
+runtime-faulted cases retain their existing meanings.
 
 ## Fail-closed behavior
 
-Any of the following prevents further admitted advances and makes partial
-census assessment fail closed: inability to bind the expected Unity startup
-thread; binding/current-thread mismatch; missing operation registration;
-attempted operation entry from another thread; impossible scope accounting;
-bootstrap exception or missing publication; or disposal/exit on a different
-thread. A failed bootstrap cannot publish a healthy runtime. A wrong-thread
-advance cannot acquire the domain mutation path or move `SimulationTime` or the
-P18 `CurrentInstant`.
+Failure to bind the expected `Start` thread, wrong-thread admission, missing
+operation registration, impossible scope accounting, failed bootstrap,
+missing publication, or wrong-thread scope disposal prevents successful
+quiescence assessment. A failed bootstrap is permanently latched and any
+partially assigned publication is revoked. Wrong-thread calls cannot move the
+runtime clock or advance domain state. The direct public clock methods on a
+runtime-owned instance cannot bypass runtime admission; standalone unbound
+clock instances are outside this profile's capture scope.
 
-Protocol operation counts are not synchronization. The bounded contract relies
-on Unity's normal serialized main-thread callback execution and rejects
-off-thread runtime admission. It does not block or make direct mutable store
-references thread-safe. Out-of-band writes that bypass an instrumented owner
-commit remain outside this adapter and must be resolved through the separate
-P12-B writer/invalidation map.
+Operation counts are not synchronization. The adapter relies on Unity's normal
+serialized main-thread callbacks and rejects off-thread runtime admission. It
+does not lock owner stores or make direct store references thread-safe.
+Out-of-band writes that bypass an instrumented owner commit remain separate
+P12-B writer/invalidation blockers.
 
 ## Validation matrix for a later implementation candidate
 
-Tests should use the existing protocol/runtime/bootstrap fixtures where
-possible and prove both behavior and unchanged boundaries:
-
 | Case | Required evidence |
 |---|---|
-| Unity `Start` binding | Captured thread reference and managed ID are passed to the composed runtime; baseline succeeds only on that exact thread. A mismatched explicit binding fails closed. |
-| Bootstrap in progress | From a stage callback after baseline and before publication, census/quiescence assessment reports `OperationInProgress`; it becomes idle only after successful full pipeline return and completion. |
-| Successful publication | Published composition exists before bootstrap scope closes; later census assessment can succeed and reports active count zero. |
-| Bootstrap exception before publication | Protocol/admission becomes faulted, no healthy composition is exposed, active scope cannot be mistaken for successful quiescence, and original startup failure propagates. |
-| Exception after assignment/before pipeline return | Bootstrap still fails closed; stage callback exception does not leave a published composition treated as ready. |
-| `Update`/direct runtime wrong thread | No day, timeline instant, or domain owner advances; protocol/admission faults or returns the existing typed owner-thread failure. Verify both the Unity entry guard and direct runtime entry guard. |
-| Accepted day advance | Operation count is nonzero during day-boundary/domain work and returns to zero in `finally`; an NPC membership mutation nests without closing the outer scope early. |
-| Accepted multi-day advance | One outer scope spans all requested days and releases after the final day or a later-day failure. |
-| P18 intraday success | Scope remains active through timeline completion and every synchronous successful-advance handoff, then becomes idle. |
-| P18 day-boundary success | The day API's scope covers the P18 timeline path and its post-success handoff. |
-| Reentrant advance | Existing `AdvanceLease` rejection and failure mapping remain unchanged; no nested outer scope is leaked. |
-| Zero/invalid/no-op | `TryAdvanceDays(0)` remains true, advances nothing, and enters no operation scope; negative count and invalid/unsupported operations preserve existing failure semantics without mutation. |
-| Ordinary failure and thrown exception | Every admitted scope closes via `finally`; existing timeline and mutation-guard failure behavior is unchanged. |
-| Existing P18 semantics | Existing P18 input, continuation, reentrancy, failure mapping, and handoff suites pass unchanged. |
+| Unity `Start` binding | Captured thread reference and managed ID are passed into the composed runtime; binding succeeds on that exact thread and mismatched/missing binding fails closed. |
+| Earlier genesis stages | Assert stage order and that they run synchronously on the captured `Start` thread. Do not claim a census operation scope before the runtime exists. |
+| Validation-tail scope | A callback after baseline and before publication observes `OperationInProgress`; the scope becomes idle only after successful full pipeline return. |
+| Successful publication | Composition assignment precedes scope close; afterward assessment can succeed and active operation count is zero. |
+| Exception before runtime creation | Permanent component latch prevents a second `Start`/retry from creating another world. |
+| Exception during validation before publication | Protocol faults; bootstrap stays failed; no healthy composition is exposed; original exception propagates. |
+| Exception after composition assignment | Revoke `publishedComposition` and public exposure, latch bootstrap failed, fault runtime admission, and ensure repeat startup cannot retry or expose the assigned object. |
+| `Update`/direct runtime wrong thread | No day or owner advances; protocol faults or returns the typed owner-thread failure. Verify both Unity entry and direct runtime entry. |
+| Accepted day advance | Operation count is nonzero during clock and daily domain work, including nested NPC membership, then returns to zero in `finally`. |
+| Multi-day advance | One outer scope spans all days and releases after the final boundary or later-day failure. |
+| Direct `SimulationTime.TryAdvanceDay` | On the runtime-owned clock, dispatches through the full runtime daily advance; during callbacks census reports `OperationInProgress`, no half-advanced clock boundary is observable, and the scope returns to zero. |
+| Direct `SimulationTime.AdvanceDay` | Uses the same runtime dispatch and exception behavior; wrong-thread and reentrant calls do not mutate the clock. |
+| Zero/invalid/no-op | `TryAdvanceDays(0)` remains true with no time/domain change and no scope/epoch effect; negative count and rejected requests preserve existing failure behavior. |
+| Failure and exception | Every admitted outer scope closes in `finally`; runtime faults and incomplete work are not reported as a successful daily boundary. |
+| Canonical TravelParty witness | Retain the promoted candidate's existing selected-bootstrap assertion of exact-zero active parties and exact installed `TravelPartyStore` owner identity/revision. Do not add a TravelParty section to or otherwise widen `ContinuationCensusProtocol`. |
+| Existing daily behavior | Relevant legacy day-advance, `SimulationTime`, bootstrap, census, and complete Smoke suites pass. |
 
 ## Remaining P12-B obligations after this adapter
 
-This adapter would close only the runtime thread/admission/quiescence slice
-for the explicitly named scopes. It does not establish that the selected
-profile has every expected owner/cardinality, nor that all successful commits
-to those owners notify the shared epoch. In particular, the existing passive
-census stack—including dynamic NPC/Person membership and Inventory witnesses,
-City NPC-presence, geography/network and other promoted owners—remains partial.
-The live profile still needs a complete owner/cardinality census and exact-zero
-witnesses; remaining direct/indirect writes still need mapping to owner commit
-notifications or explicit exclusions. Uninstrumented operations must not be
-claimed as covered by bootstrap/day/intraday scopes merely because they happen
-on the same thread.
+This adapter would close only the owner-thread and admission/quiescence slice
+for the named startup tail and daily operations. It does not establish that the
+selected profile has every expected owner/cardinality, nor that all successful
+commits notify the shared epoch. The promoted census stack, including the
+TravelParty exact-zero/stable-owner witness, is still only partial live-profile
+evidence. The full profile owner inventory, remaining exact-zero witnesses,
+supported writer map, and invalidation wiring remain open. A same-thread
+operation is not covered just because it occurs during startup or a day; only
+the specifically named scopes are accounted for.
 
-The design does not issue a capture token, define save bytes, add owner
-registration for uninstrumented commits, add export/staged hydration, establish
-P12-A readiness, authorize P12-A implementation, close P12-B, or change any
-P18 time/lease semantics.
+The design does not issue capture eligibility, define save bytes, add generic
+owner registration, provide export/staged hydration, establish P12-A
+readiness, authorize P12-A implementation, or close P12-B.
