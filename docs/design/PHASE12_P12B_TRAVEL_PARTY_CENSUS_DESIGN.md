@@ -111,6 +111,12 @@ these operations. It does not make unrelated expedition, NPC, or runtime state
 thread-safe; prove global owner-thread affinity or quiescence; or synchronize
 the passive census read. P12-B's eventual capture protocol must still establish
 its separate owner-thread/quiescence and post-collection revalidation gates.
+The capacity guarantee assumes the selected authored profile's concrete
+recorder/logger path and no same-thread callback that re-enters
+`TravelPartyStore` while a compound window is active. Arbitrary injected
+reentrant store callbacks are outside this slice; if they become a supported
+path, use a scoped commit permit and test it rather than relying on the
+reentrant monitor alone.
 
 ### Saturation and arrival atomicity
 
