@@ -1,6 +1,6 @@
 # P12-B TravelParty owner census design
 
-**Status:** Submitted for independent technical-design review. This is a
+**Status:** Revised after independent review; awaiting exact-tip re-review. This is a
 bounded owner-census sub-capability within the accepted P12-B scope. It adds
 no checkpoint ID, product behavior, capture eligibility, or readiness claim.
 It is a design artifact only; implementation follows the accepted P12-B
@@ -75,6 +75,17 @@ two successful store commits and must produce two increments. A failed start
 that never reaches Add produces none. A compensation Remove is not suppressed
 because the outer start returned false.
 
+Before allocating the party ID or changing member travel state, charging
+costs, or recording an event, `TryStartTravelParty` must preflight capacity for
+both possible store commits: Add and, if start-event recording fails, its
+compensating Remove. This call is a synchronous runtime operation; no other
+supported `TravelPartyStore` writer runs between its Add and possible
+compensation. Therefore the two-slot check is sufficient without adding a
+reservation API or changing the public store contract. At revision
+`long.MaxValue - 1`, reject start before any non-store effect; at revision
+`long.MaxValue - 2`, Add followed by successful compensation can reach exactly
+`long.MaxValue`. If both commits succeed, retain both revision increments.
+
 ### Saturation and arrival atomicity
 
 `TravelPartySystem.AdvanceParties` currently advances member state and records
@@ -124,7 +135,12 @@ Add focused `TravelPartyCensusTests` for the provider and owner lifecycle:
    guard-denied mutations leave exact witness values and existing party state
    unchanged.
 5. A successful Add plus successful compensating Remove yields two revision
-   increments even though final cardinality is zero.
+   increments even though final cardinality is zero. Inject a start-event
+   recording failure at revision `long.MaxValue - 2`; verify the party is
+   removed, members and costs are rolled back, and revision reaches exactly
+   `long.MaxValue`. At revision `long.MaxValue - 1`, verify the same start is
+   rejected before ID allocation, member mutation, cost charge, or event
+   recording, leaving gameplay state and witness unchanged.
 6. At `long.MaxValue`, valid Add/Complete/Remove attempts fail before changes;
    for Complete, `IsCompleted` remains false. Saturated final-arrival coverage
    proves `AdvanceParties` does not progress/clear members or record an arrival
@@ -180,8 +196,9 @@ capture path.
 Proposed implementation ownership after that prerequisite:
 
 - `Assets/_Project/Scripts/TravelParty.cs`: the owner-local revision and its
-  Add/Complete/Remove commits; the local final-arrival capacity preflight in
-  `TravelPartySystem` described above. This is the spatial/travel shared
+  Add/Complete/Remove commits; the two-commit start-capacity preflight and
+  local final-arrival capacity preflight in `TravelPartySystem` described
+  above. This is the spatial/travel shared
   semantic hotspot and requires exclusive ownership while edited.
 - New `Assets/_Project/Scripts/TravelPartyCensusProvider.cs`: the passive
   schema-v1 adapter over the exact installed `TravelPartyStore`.
@@ -204,6 +221,18 @@ Relevant current source evidence at the exact base:
   compensating Remove after an event-recording failure.
 - `TravelParty.cs:535-623`: daily party progression and arrival ordering; the
   saturation preflight must occur before final member mutation.
+- `ExpeditionSystem.cs:807-819`: after a successful return-party start,
+  `TryBeginReturnTravel` associates its nonempty ID with an expedition already
+  moved to `Returning`; a defensive failure branch compensates with a direct
+  `TravelPartyStore.Remove`. Under the supported serialized synchronous flow,
+  the return-state transition just succeeded, the created party ID is
+  nonempty, and `TryStartTravelParty` has no callback that mutates expedition
+  state before this association. Thus the association cannot fail under its
+  current supported preconditions. Retain the defensive branch, but classify
+  it as unreachable in the rollback matrix; do not rely on it as a reachable
+  third store commit in the two-slot start-capacity check. If these preconditions
+  change, the caller must preflight capacity for its own compensation before
+  starting the party.
 - `TravelParty.cs:627-659` and `SimulationRuntime.cs:455,1050`: party system and
   store guard binding in the live runtime.
 - `SimulationBootstrapComposition.cs:22-24,102-103`:
