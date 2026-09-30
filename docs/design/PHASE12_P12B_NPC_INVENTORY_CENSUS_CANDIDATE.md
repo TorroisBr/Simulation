@@ -1,7 +1,11 @@
 # P12-B dynamic NPC Inventory census candidate
 
-**Status:** implementation candidate; not promoted and not a P12-B readiness
-claim.
+**Status:** promoted to P12 canonical at `15e5a543f3896c02f9dbd9c36c9ba75bc90dac2b`;
+this is not a P12-B readiness claim. Exact-tip implementation review is
+recorded as
+`docs/design/PHASE12_P12B_NPC_INVENTORY_CENSUS_IMPLEMENTATION_REVIEW.md` on
+`codex/phase12/P12BNpcInventoryCensusReviewRecord` at
+`f98c5d4f3ddc3721b4b31de1a40f063e2b333831`.
 
 **Base:** `f961477380508647d2975272da72d96892944ed9`.
 

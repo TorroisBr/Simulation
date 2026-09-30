@@ -60,7 +60,7 @@ P12-B–P12-G capability decomposition in
 | Checkpoint | Status | Current evidence and limits |
 |---|---|---|
 | P12-A — `UnityBootstrap-Daily-v1` profile integration | `WAIT_DEPENDENCY` | Scope accepted. No included-owner export plus staged-hydration coverage or validated complete live profile inventory exists yet. Its separate implementation authorization remains outstanding. |
-| P12-B — profile admission and completed-boundary lifecycle | `INCOMPLETE — PARTIAL FOUNDATION PROMOTED` | In addition to the promoted non-admitting kernel, receipt owners, P8-A–D, and RuntimeIdentity witnesses, cumulative stack `b889b4747738d933fe48311ef89fc33a40e3dfa0` adds passive witnesses for record sequence, ActorChoice, RuntimeIdAllocator, ArmedForce/manpower/position, Conflict/War/Battle, Estate/Property, and Institution/Office. Follow-up promotions add P12-D Genealogy parentage, legacy `SpatialNetworkRuntime` location/route witnesses, day-zero per-NPC `SpatialKnowledgeRuntime` witnesses, roster-following SpatialKnowledge census at `0021b0aa13fb6ae6d5f27c129c67ba452dbacb4e` (code `2c782a7`), and the per-City NPC-presence projection witness at `10fb58d088e515d76bb86de2d7381c9ea9cb7483` (code `aafa81e`). See the promoted-stack sections and linked candidate evidence. The static writer map and partial profile evidence remain in `docs/design/PHASE12_B_BLOCKER_RESOLUTION.md`. There is no complete profile census or shared-epoch coverage for all supported writes, no global Unity owner-thread/quiescence proof, and no capture token. |
+| P12-B — profile admission and completed-boundary lifecycle | `INCOMPLETE — PARTIAL FOUNDATION PROMOTED` | In addition to the promoted non-admitting kernel, receipt owners, P8-A–D, and RuntimeIdentity witnesses, cumulative stack `b889b4747738d933fe48311ef89fc33a40e3dfa0` adds passive witnesses for record sequence, ActorChoice, RuntimeIdAllocator, ArmedForce/manpower/position, Conflict/War/Battle, Estate/Property, and Institution/Office. Follow-up promotions add P12-D Genealogy parentage, legacy `SpatialNetworkRuntime` location/route witnesses, day-zero per-NPC `SpatialKnowledgeRuntime` witnesses, roster-following SpatialKnowledge census at `0021b0aa13fb6ae6d5f27c129c67ba452dbacb4e` (code `2c782a7`), the per-City NPC-presence projection witness at `10fb58d088e515d76bb86de2d7381c9ea9cb7483` (code `aafa81e`), and roster-following per-NPC Inventory witnesses at `15e5a543f3896c02f9dbd9c36c9ba75bc90dac2b`. See the promoted-stack sections and linked candidate evidence. The static writer map and partial profile evidence remain in `docs/design/PHASE12_B_BLOCKER_RESOLUTION.md`. There is no complete profile census or shared-epoch coverage for all supported writes, no global Unity owner-thread/quiescence proof, and no capture token. |
 | P12-C — identity, provenance, deterministic roots | `BLOCKED_ON_P12-B` | The `RuntimeIdAllocator` passive census and record-sequence witness promoted at `b889b47` are inventory evidence only; they do not provide C exports/hydration, deterministic-root state, or provenance. Preserve `codex/phase12/P12CIdentityRuntimeSnapshot` at `531d835` for selective reintegration only after B readiness and revalidation. |
 | P12-D — factual roots and Person/population relations | `BLOCKED_ON_P12-B_AND_C` | Owner inventory and accepted scope remain; no complete export/hydration capability is claimed. |
 | P12-E — core and official daily-domain owners | `BLOCKED_ON_P12-B_AND_C` | Owner inventory and accepted scope remain; effective-profile provider coverage and exact owner exports are incomplete. |
@@ -436,11 +436,43 @@ in
 
 This remains a passive City projection witness. It does not wire City writes
 to the shared mutation epoch, prove owner-thread/quiescence, provide
-export/hydration, or grant capture eligibility. It does not supply per-NPC
-Inventory census or global owner coverage. It continues to rely on the
+export/hydration, or grant capture eligibility. It does not supply global
+owner coverage. It continues to rely on the
 existing `SimulationRuntime.Cities` boundary; City composition sealing and
 drift detection remain unsolved. P12-B remains incomplete and P12-A remains
 `WAIT_DEPENDENCY`.
+
+## P12-B dynamic per-NPC Inventory census promotion — 2026-09-30
+
+With explicit approval, candidate
+`codex/phase12/P12BNpcInventoryCensus` was fast-forwarded from canonical
+`f961477380508647d2975272da72d96892944ed9` to `15e5a543f3896c02f9dbd9c36c9ba75bc90dac2b`.
+The code-bearing changes add one schema-v1 `p12f.inventory/<RuntimeId>`
+witness per currently rostered NPC, ordered by ordinal RuntimeId and bound to
+the exact installed `NpcRuntime` and `InventoryRuntime`. The witness reports
+the item-row count and existing local Inventory revision without triggering
+lazy owner or item-storage creation. Inventory family reconciliation joins
+the existing NPC membership operation with the dynamic SpatialKnowledge and
+fixed PersonStore sections. Same-roster owner replacement fails census closed
+and retains the previously published provider snapshot.
+
+Independent exact-tip implementation review passed against the base/current
+canonical tip `f961477`; the durable review record is
+`codex/phase12/P12BNpcInventoryCensusReviewRecord` at
+`f98c5d4f3ddc3721b4b31de1a40f063e2b333831`. Validation on candidate tip
+`15e5a54` passed `NpcInventoryCensusTests` 7/7, bootstrap composition 14/14,
+ALL EditMode 2049/2049, complete official Smoke 5/5, and `git diff --check`.
+Exact XML evidence is retained in
+`Library/ValidationResults/P12BNpcInventoryCensus` in the candidate worktree
+and linked from
+[`PHASE12_P12B_NPC_INVENTORY_CENSUS_CANDIDATE.md`](design/PHASE12_P12B_NPC_INVENTORY_CENSUS_CANDIDATE.md).
+
+This remains a passive Inventory owner witness. Direct Inventory writes still
+do not notify the shared P12-B epoch. The witness does not seal City
+composition or cover an NPC `StartingCity` outside the composed City list; that
+is a separate full-profile admission blocker. This promotion adds no global
+owner-thread/quiescence proof, capture eligibility, export, or hydration.
+P12-B remains incomplete and P12-A remains `WAIT_DEPENDENCY`.
 
 ## Remaining dependency-ordered P12-B blockers
 
