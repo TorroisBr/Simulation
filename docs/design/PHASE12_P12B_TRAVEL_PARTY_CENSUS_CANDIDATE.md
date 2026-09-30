@@ -36,23 +36,31 @@ selected-profile bootstrap identity, and split-store rejection.
 
 ## Validation
 
-The code-bearing implementation candidate is
-`7456ea39af18a17190145dfb26f5932e01745564` (tree
-`992cdd22ff7c46d26a05788b63871b6af9b557e1`). Validation ran on that code
-tree based on the SHA above. This evidence document is a docs-only follow-up.
+The code-bearing candidate for fresh exact-tip review is
+`8c446ed8920028566b8af84583e7599bc907791c` (tree
+`bf95798acdf932a91d54f52c8604ba20928f2cd0`), based on the SHA above. It adds
+the reviewed return-association compensation exercise and direct rejected/no-op
+witness checks. The return-association test uses the existing public
+`ExpeditionRuntime.TryComplete` lifecycle writer concurrently with
+`ExpeditionSystem.TryBeginReturn`; it forces the association failure after the
+TravelParty Add, then asserts only the store's Add+Remove count/revision result.
+The test passed in the focused Expedition suite on repeated runs. It does not
+claim cross-owner Expedition, NPC, or cost rollback.
 
-- `TravelPartyCensusTests`: 9/9 —
-  `Temp/ValidationResults/EditMode-20260930-220047-0adab0a11cfc4d26a2e651afab22c501.xml`
+Validation ran on this exact code-bearing tree:
+
+- `TravelPartyCensusTests`: 10/10 —
+  `Temp/ValidationResults/EditMode-20260930-221423-8e87ca97cba34a13bf9369dcb2144413.xml`
 - `GroupTravelTests`: 32/32 —
-  `Temp/ValidationResults/EditMode-20260930-215906-7afe36c28f504aaabfb2e0dc1bf5be9f.xml`
-- `ExpeditionTests`: 13/13 —
-  `Temp/ValidationResults/EditMode-20260930-220106-9505d943b06d46b5bfe186fdf47be794.xml`
+  `Temp/ValidationResults/EditMode-20260930-221516-1cfb95e3a92540368f5ea600167f9bb3.xml`
+- `ExpeditionTests`: 14/14 —
+  `Temp/ValidationResults/EditMode-20260930-221500-9920edfa08ba4773b1f4885ac0b76fa1.xml`
 - `SimulationBootstrapCompositionTests`: 14/14 —
-  `Temp/ValidationResults/EditMode-20260930-215939-28423f519bd64debbbed7f276aee947b.xml`
-- ALL EditMode: 2059/2059 —
-  `Temp/ValidationResults/EditMode-20260930-220124-eb51e8ae21ef479e9b43d9e244da6208.xml`
+  `Temp/ValidationResults/EditMode-20260930-221532-c80af612fcbf441792b4193ea395c8b0.xml`
+- ALL EditMode: 2061/2061 —
+  `Temp/ValidationResults/EditMode-20260930-221550-3050e57238034222a75c2913a83b7573.xml`
 - Complete official `Smoke`: 5/5 —
-  `Temp/ValidationResults/EditMode-20260930-220206-9780518c95884d42ad41f7f316640ad5.xml`
+  `Temp/ValidationResults/EditMode-20260930-221627-2af6ba476b074328855384625b167069.xml`
 - `git diff --check`: passed.
 
 Independent exact-tip code review is pending. This branch is not a canonical
