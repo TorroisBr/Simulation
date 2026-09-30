@@ -664,7 +664,7 @@ public static class PersonBirthLifecycleSystem
     {
         for (int index = addedParentIds.Count - 1; index >= 0; index--)
         {
-            PersonGenealogySystem.TryStoreRemove(
+            PersonGenealogySystem.TryRollbackParentageForBirth(
                 world,
                 addedParentIds[index],
                 childId);

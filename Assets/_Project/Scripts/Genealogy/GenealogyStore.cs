@@ -152,6 +152,23 @@ public sealed class GenealogyStore : IAuthoritativeMutationGuardBindable
         PersonId child,
         out GenealogyFailure failure)
     {
+        return TryRemoveParentageCore(parent, child, false, out failure);
+    }
+
+    internal bool TryRollbackParentageForBirth(
+        PersonId parent,
+        PersonId child,
+        out GenealogyFailure failure)
+    {
+        return TryRemoveParentageCore(parent, child, true, out failure);
+    }
+
+    private bool TryRemoveParentageCore(
+        PersonId parent,
+        PersonId child,
+        bool allowSaturatedRollback,
+        out GenealogyFailure failure)
+    {
         if (!mutationGuardBinding.CanMutate)
         {
             failure = GenealogyFailure.Create(GenealogyFailureCode.RuntimeFaulted, "The runtime is faulted.");
@@ -191,7 +208,8 @@ public sealed class GenealogyStore : IAuthoritativeMutationGuardBindable
             return false;
         }
 
-        if (revision == long.MaxValue)
+        bool saturated = revision == long.MaxValue;
+        if (saturated && allowSaturatedRollback == false)
         {
             failure = GenealogyFailure.Create(
                 GenealogyFailureCode.RevisionOverflow,
@@ -202,7 +220,11 @@ public sealed class GenealogyStore : IAuthoritativeMutationGuardBindable
         records.Remove(record);
         RemoveAdjacency(childrenByParent, parent, child);
         RemoveAdjacency(parentsByChild, child, parent);
-        revision++;
+        if (saturated == false)
+        {
+            revision++;
+        }
+
         failure = GenealogyFailure.None;
         return true;
     }

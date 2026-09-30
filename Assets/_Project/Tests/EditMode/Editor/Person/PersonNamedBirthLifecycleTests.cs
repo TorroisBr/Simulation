@@ -168,6 +168,47 @@ public sealed class PersonNamedBirthLifecycleTests
     }
 
     [Test]
+    public void SaturatedGenealogyRollbackRemovesPartialParentageFromRejectedBirth()
+    {
+        CityRuntime city = CreateCity("birth-genealogy-saturation", 5);
+        SimulationRuntime world = CreateWorld(new SimulationTime(), city);
+        PersonId firstParent = new PersonId("birth-genealogy-parent-a");
+        PersonId secondParent = new PersonId("birth-genealogy-parent-b");
+        PersonId childId = new PersonId("birth-genealogy-child");
+        Assert.That(world.TryRegisterPerson(new PersonRuntime(firstParent), out _), Is.True);
+        Assert.That(world.TryRegisterPerson(new PersonRuntime(secondParent), out _), Is.True);
+
+        GenealogyStore genealogy = GetGenealogyStore(world);
+        SetPrivateField(genealogy, "revision", long.MaxValue - 1L);
+        GenealogyCensusProvider censusProvider = new GenealogyCensusProvider(genealogy);
+        OwnerSectionCensusWitness before = censusProvider.GetCurrentCensus();
+        int populationBefore = city.CurrentPopulation;
+        long populationRevisionBefore = city.Population.Revision;
+
+        Assert.That(world.TryApplyNamedBirth(
+            city,
+            childId,
+            new[] { firstParent, secondParent },
+            out PersonBirthTransition transition,
+            out PersonBirthLifecycleFailure failure), Is.False);
+
+        Assert.That(transition, Is.Null);
+        Assert.That(failure, Is.EqualTo(PersonBirthLifecycleFailure.ParentageMutationFailed));
+        Assert.That(world.PersonStore.TryGet(childId, out _), Is.False);
+        Assert.That(genealogy.Count, Is.Zero);
+        Assert.That(genealogy.Revision, Is.EqualTo(long.MaxValue));
+        OwnerSectionCensusWitness after = censusProvider.GetCurrentCensus();
+        Assert.That(after.OwnerInstanceIdentity, Is.SameAs(genealogy));
+        Assert.That(after.Cardinality, Is.Zero);
+        Assert.That(after.Revision, Is.EqualTo(long.MaxValue));
+        Assert.That(after.Revision, Is.Not.EqualTo(before.Revision));
+        Assert.That(genealogy.IsDirectParent(firstParent, childId), Is.False);
+        Assert.That(genealogy.IsDirectParent(secondParent, childId), Is.False);
+        Assert.That(city.CurrentPopulation, Is.EqualTo(populationBefore));
+        Assert.That(city.Population.Revision, Is.EqualTo(populationRevisionBefore));
+    }
+
+    [Test]
     public void StaleDayProposalCannotApply()
     {
         CityRuntime city = CreateCity("birth-stale-day", 5);
@@ -383,5 +424,16 @@ public sealed class PersonNamedBirthLifecycleTests
             BindingFlags.Instance | BindingFlags.NonPublic);
         Assert.That(field, Is.Not.Null, fieldName);
         field.SetValue(instance, value);
+    }
+
+    private static GenealogyStore GetGenealogyStore(SimulationRuntime world)
+    {
+        FieldInfo field = typeof(SimulationRuntime).GetField(
+            "genealogyStore",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(field, Is.Not.Null);
+        GenealogyStore store = field.GetValue(world) as GenealogyStore;
+        Assert.That(store, Is.Not.Null);
+        return store;
     }
 }

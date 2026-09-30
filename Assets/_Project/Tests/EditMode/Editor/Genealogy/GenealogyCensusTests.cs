@@ -137,6 +137,33 @@ public sealed class GenealogyCensusTests
         AssertWitness(provider.GetCurrentCensus(), installed, 1, 1L);
     }
 
+    [Test]
+    public void OrdinaryAddAndRemoveRemainClosedAtSaturatedRevision()
+    {
+        PersonStore persons = new PersonStore();
+        Register(persons, "genealogy-saturated-parent");
+        Register(persons, "genealogy-saturated-child");
+        Register(persons, "genealogy-saturated-other");
+        SimulationRuntime runtime = new SimulationRuntime(
+            new SimulationTime(), null, null, economyEnabled: false, personStore: persons);
+        GenealogyStore installed = GetInstalledGenealogyStore(runtime);
+        PersonId parent = new PersonId("genealogy-saturated-parent");
+        PersonId child = new PersonId("genealogy-saturated-child");
+        PersonId other = new PersonId("genealogy-saturated-other");
+        Assert.That(runtime.TryAddParentage(parent, child, out _), Is.True);
+        SetPrivateField(installed, "revision", long.MaxValue);
+
+        Assert.That(installed.TryAddParentage(parent, other, out GenealogyFailure addFailure), Is.False);
+        Assert.That(addFailure.Code, Is.EqualTo(GenealogyFailureCode.RevisionOverflow));
+        Assert.That(installed.TryRemoveParentage(parent, child, out GenealogyFailure removeFailure), Is.False);
+        Assert.That(removeFailure.Code, Is.EqualTo(GenealogyFailureCode.RevisionOverflow));
+
+        Assert.That(installed.Count, Is.EqualTo(1));
+        Assert.That(installed.Revision, Is.EqualTo(long.MaxValue));
+        Assert.That(installed.IsDirectParent(parent, child), Is.True);
+        Assert.That(installed.IsDirectParent(parent, other), Is.False);
+    }
+
     private TesteSimulacao CreateSelectedSampleSimulation()
     {
         SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
@@ -167,6 +194,15 @@ public sealed class GenealogyCensusTests
         Assert.That(store.TryRegister(
             new PersonRuntime(new PersonId(id)),
             out PersonStoreFailure failure), Is.True, failure.ToString());
+    }
+
+    private static void SetPrivateField(object instance, string fieldName, object value)
+    {
+        FieldInfo field = instance.GetType().GetField(
+            fieldName,
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(field, Is.Not.Null, fieldName);
+        field.SetValue(instance, value);
     }
 
     private static void AssertWitness(

@@ -134,12 +134,12 @@ public static class PersonGenealogySystem
         return true;
     }
 
-    internal static bool TryStoreRemove(
+    internal static bool TryRollbackParentageForBirth(
         SimulationRuntime world,
         PersonId parentId,
         PersonId childId)
     {
-        return world.GenealogyStoreForWorldBoundary.TryRemoveParentage(
+        return world.GenealogyStoreForWorldBoundary.TryRollbackParentageForBirth(
             parentId,
             childId,
             out _);
