@@ -361,6 +361,17 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(repeatedForcePositionWitness.Cardinality, Is.Zero);
         Assert.That(repeatedForcePositionWitness.Revision, Is.Zero);
 
+        OwnerSectionCensusWitness conflictWitness = simulation.Bootstrap.ConflictCensusProvider.GetCurrentCensus();
+        Assert.That(conflictWitness.SectionId, Is.EqualTo(PersistentConflictCensusProvider.SectionId));
+        Assert.That(conflictWitness.SchemaVersion, Is.EqualTo(PersistentConflictCensusProvider.SchemaVersion));
+        Assert.That(conflictWitness.OwnerInstanceIdentity, Is.SameAs(simulation.Runtime.ConflictStore));
+        Assert.That(conflictWitness.Cardinality, Is.Zero);
+        Assert.That(conflictWitness.Revision, Is.Zero);
+        OwnerSectionCensusWitness repeatedConflictWitness = simulation.Bootstrap.ConflictCensusProvider.GetCurrentCensus();
+        Assert.That(repeatedConflictWitness.OwnerInstanceIdentity, Is.SameAs(conflictWitness.OwnerInstanceIdentity));
+        Assert.That(repeatedConflictWitness.Cardinality, Is.Zero);
+        Assert.That(repeatedConflictWitness.Revision, Is.Zero);
+
         SpatialAuthorityStore authority = simulation.Bootstrap.SpatialAuthority;
         SpatialHexCensusProvider hexCensusProvider = new SpatialHexCensusProvider(authority);
         OwnerSectionCensusWitness hexCensus = hexCensusProvider.GetCurrentCensus();
