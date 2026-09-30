@@ -62,7 +62,11 @@ public sealed class PersonStoreCensusTests
         Assert.That(registrationFailure, Is.EqualTo(PersonStoreFailure.InvalidPerson));
         AssertWitnesses(providers, store, 1, 0, 1L);
 
-        Assert.That(TryBind(store, person.PersonId, "npc-census-writes", out PersonStoreFailure bindingFailure), Is.True);
+        Assert.That(TryBind(store, person.PersonId, "  ", out PersonStoreFailure bindingFailure), Is.False);
+        Assert.That(bindingFailure, Is.EqualTo(PersonStoreFailure.InvalidNpcRuntimeId));
+        AssertWitnesses(providers, store, 1, 0, 1L);
+
+        Assert.That(TryBind(store, person.PersonId, "npc-census-writes", out bindingFailure), Is.True);
         Assert.That(bindingFailure, Is.EqualTo(PersonStoreFailure.None));
         AssertWitnesses(providers, store, 1, 1, 2L);
 
@@ -72,10 +76,19 @@ public sealed class PersonStoreCensusTests
         Assert.That(bindingFailure, Is.EqualTo(PersonStoreFailure.PersonNotRegistered));
         AssertWitnesses(providers, store, 1, 1, 2L);
 
+        PersonRuntime otherPerson = new PersonRuntime(new PersonId("person-census-other-owner"));
+        Assert.That(store.TryRegister(otherPerson, out registrationFailure), Is.True, registrationFailure.ToString());
+        AssertWitnesses(providers, store, 2, 1, 3L);
+        Assert.That(TryBind(store, otherPerson.PersonId, "npc-census-writes", out bindingFailure), Is.False);
+        Assert.That(bindingFailure, Is.EqualTo(PersonStoreFailure.NpcAlreadyBoundToAnotherPerson));
+        AssertWitnesses(providers, store, 2, 1, 3L);
+
         Assert.That(TryRollbackBinding(store, person.PersonId, "npc-census-writes"), Is.True);
-        AssertWitnesses(providers, store, 1, 0, 3L);
+        AssertWitnesses(providers, store, 2, 0, 4L);
         Assert.That(TryRollbackRegistration(store, person), Is.True);
-        AssertWitnesses(providers, store, 0, 0, 4L);
+        AssertWitnesses(providers, store, 1, 0, 5L);
+        Assert.That(TryRollbackRegistration(store, otherPerson), Is.True);
+        AssertWitnesses(providers, store, 0, 0, 6L);
     }
 
     [Test]
