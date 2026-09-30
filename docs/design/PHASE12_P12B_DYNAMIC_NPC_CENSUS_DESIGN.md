@@ -1,9 +1,8 @@
 # P12-B Dynamic NPC SpatialKnowledge Census Design
 
-**Status:** Independent technical review passed at exact design tip
-`156dcb19ecb8f15dc9611e9e0ee45637f775faa8`; implementation may proceed under
-the previously accepted P12-B prerequisite authority. Implementation
-revalidation found one conditional path below is unreachable in current code.
+**Status:** Independent technical review and revalidation passed at exact
+design tip `f3c7edee28968b6af0020c09a08fc0ab8740fe64`; implementation may
+proceed under the previously accepted P12-B prerequisite authority.
 
 - **Design base:** P12 canonical `0a37e9f053b482d80d0815c95352e3d96b56ed8f`.
 - **Accepted authority:** P12-B in
