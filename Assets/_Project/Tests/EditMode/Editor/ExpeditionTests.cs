@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
-using System.Threading;
 using NUnit.Framework;
 
 public sealed class ExpeditionTests
@@ -102,7 +101,7 @@ public sealed class ExpeditionTests
     }
 
     [Test]
-    public void ReturnAssociationRaceCompensatesPartyStoreAtSaturationBoundary()
+    public void ReturnAssociationFailureCompensatesPartyStoreAtSaturationBoundary()
     {
         SpatialTravelFixture fixture = new SpatialTravelFixture();
         NpcRuntime performer = fixture.CreateNpc("return-race-performer", fixture.CityA, 10f);
@@ -125,30 +124,42 @@ public sealed class ExpeditionTests
         Assert.That(expedition.State, Is.EqualTo(ExpeditionState.AtSite));
 
         SetTravelPartyRevision(fixture.TravelParties, long.MaxValue - 2);
-        bool returned = true;
-        string reason = null;
-        int finished = 0;
-        Thread operation = new Thread(() =>
+        List<ActionExecutionParticipant> participants = new List<ActionExecutionParticipant>
         {
-            returned = system.TryBeginReturn(expedition, out reason);
-            Interlocked.Exchange(ref finished, 1);
-        });
-        operation.Priority = ThreadPriority.AboveNormal;
-        operation.Start();
-        while (Volatile.Read(ref finished) == 0)
-        {
-            if (expedition.State == ExpeditionState.Returning)
-            {
-                expedition.TryComplete();
-            }
-            Thread.Yield();
-        }
-        operation.Join();
-        Assert.That(returned, Is.False);
-        Assert.That(reason, Does.Contain("associate"));
+            new ActionExecutionParticipant(performer.RuntimeId, ActionExecutionParticipantRole.Performer)
+        };
+        ActionExecutionContext returnContext = new ActionExecutionContext(
+            "return-" + expedition.ExpeditionId,
+            participants,
+            expedition.OriginLocationRuntimeId,
+            fixture.SiteToCityRoute.RuntimeId,
+            expedition.OriginDecisionId);
 
-        // The public lifecycle writer can invalidate the return association after the
-        // party's Add; this bounded test asserts only the TravelParty compensation.
+        // No callback exists between the real nested party start and return-party
+        // association. Hold the same reentrant owner window, execute those real
+        // operations stepwise, and force the documented public lifecycle failure
+        // at the precise boundary without scheduler timing or a production hook.
+        using (EnterTravelPartyMutationWindow(fixture.TravelParties))
+        {
+            Assert.That(fixture.TravelPartySystem.CanPlanKnownGroupTravel(returnContext, out _), Is.True);
+            Assert.That(expedition.TryBeginReturn(), Is.True);
+            Assert.That(fixture.TravelPartySystem.TryStartTravelParty(returnContext, out TravelPartyRuntime returnParty), Is.True);
+            Assert.That(fixture.TravelParties.ActiveParties, Has.Count.EqualTo(1));
+            Assert.That(fixture.TravelParties.Revision, Is.EqualTo(long.MaxValue - 1));
+
+            Assert.That(expedition.TryComplete(), Is.True);
+            bool associated = (bool)typeof(ExpeditionRuntime)
+                .GetMethod("TryBeginReturnTravel", BindingFlags.Instance | BindingFlags.NonPublic)
+                .Invoke(expedition, new object[] { returnParty.TravelPartyId });
+            Assert.That(associated, Is.False);
+
+            typeof(ExpeditionRuntime).GetMethod("TryCancelReturn", BindingFlags.Instance | BindingFlags.NonPublic)
+                .Invoke(expedition, null);
+            Assert.That(fixture.TravelParties.Remove(returnParty.TravelPartyId), Is.True);
+        }
+
+        // This asserts only TravelParty Add+Remove compensation, not cross-owner
+        // rollback for Expedition, NPC travel state, or member costs.
         Assert.That(expedition.State, Is.EqualTo(ExpeditionState.Completed));
         Assert.That(fixture.TravelParties.ActiveParties, Is.Empty);
         Assert.That(fixture.TravelParties.Revision, Is.EqualTo(long.MaxValue));
@@ -445,6 +456,13 @@ public sealed class ExpeditionTests
     {
         typeof(TravelPartyStore).GetField("revision", BindingFlags.Instance | BindingFlags.NonPublic)
             .SetValue(store, revision);
+    }
+
+    private static IDisposable EnterTravelPartyMutationWindow(TravelPartyStore store)
+    {
+        return (IDisposable)typeof(TravelPartyStore)
+            .GetMethod("EnterMutationWindow", BindingFlags.Instance | BindingFlags.NonPublic)
+            .Invoke(store, null);
     }
 
     private static ExpeditionTestContext CreateContext(
