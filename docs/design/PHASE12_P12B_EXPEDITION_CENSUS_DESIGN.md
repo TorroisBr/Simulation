@@ -89,7 +89,7 @@ party creation fails, Add and compensating Remove are two owner writes (+2).
 If party creation succeeds but `TryBeginTravel` fails, the writes are Add and
 Remove (+2), with no state transition. Do not introduce a special hidden
 rollback that erases a committed owner write or resets the revision. Capacity
-for both possible writes must be preflighted before Add. If start is later
+for both possible writes must be reserved before Add. If start is later
 refactored to prepare every fallible dependency before publishing the
 expedition, that may avoid the temporary Add/Remove pair, but it is outside
 this census-only design and must preserve existing transaction semantics.
@@ -131,16 +131,37 @@ revision when truth changes.
 
 Before mutating an attached expedition, preflight revision capacity. Before
 `Add`, preflight before changing either list or dictionary. Before a compound
-store operation, preflight enough capacity for each independently committed
-write it can make, including known compensation. In particular, the current
-start sequence requires capacity for two writes (Add plus either
-`TryBeginTravel` or compensating `Remove`); if capacity is insufficient,
-reject before publishing Add or starting the travel party. `TryBeginReturn`
-similarly reserves capacity for the state transition plus return-party ID
-association or state compensation before its first owner mutation. A failed
-capacity preflight must leave expedition state,
-objective state, owner indexes, participant travel state, and emitted
-expedition lifecycle events unchanged.
+store operation spanning an external-owner call, reserve capacity for every
+ExpeditionStore write it may commit, including known compensation. A
+reservation is acquired/released under the owner monitor but does not hold the
+monitor while the external owner runs. Track outstanding reservations in the
+store. Each reserved commit consumes one slot atomically with its owner write;
+unused slots are released on every success/failure/exception exit. Every
+unreserved ExpeditionStore mutation must leave enough room at
+`long.MaxValue` for all outstanding slots (`revision + outstanding
+reservations + requested writes` must be representable), or reject before
+mutation. This prevents another thread or a reentrant collaborator from
+spending the second slot between the first commit and its external call.
+
+`TryStartExpedition` reserves two slots before `Add` and before invoking
+`TravelPartySystem`: the first is consumed by Add; the second by either
+`TryBeginTravel` or the compensating ExpeditionStore `Remove`. Release any
+unused slot when the flow exits. If reservation fails, do not add the
+Expedition or start a TravelParty. `TryBeginReturn` likewise reserves two
+slots before the `Returning` transition and before invoking
+`TravelPartySystem`: consume one for `TryBeginReturn`, then consume the other
+for `TryBeginReturnTravel` on success or `TryCancelReturn` on failure. Release
+unused slots on every exit. This is a revision-capacity reservation only; it
+does not claim an atomic transaction across ExpeditionStore and
+TravelParty/NPC owners. A failed reservation leaves expedition state, owner
+indexes, participant travel state, costs, and expedition lifecycle events
+unchanged.
+
+Other compound writes use the same mechanism sized to their maximum number of
+possible ExpeditionStore commits. A failed capacity preflight must leave
+expedition state, objective state, owner indexes, participant travel state,
+and emitted expedition lifecycle events unchanged. The objective-completion
+reservation described below uses this same outstanding-slot accounting.
 
 The serialized window is scoped to the ExpeditionStore owner and mutations
 covered by this design. It does not make all related owners transactional.
@@ -230,6 +251,17 @@ Focused tests should establish:
 - Add+Remove compensation advances twice when both writes commit, while
   preflight at insufficient remaining capacity rejects before external travel
   state, costs, or events are changed;
+- deterministic `long.MaxValue` boundary interleavings cover both start and
+  return: with only one slot left, two-slot reservation fails before the first
+  ExpeditionStore write or TravelPartySystem call; with exactly two slots,
+  and no pre-existing reservations, pause at the external-call boundary after
+  the first commit and attempt an unrelated direct Expedition mutation, which
+  must reject while the reserved slot remains protected. Exercise successful
+  start, failed-start compensation, and the defensive `TryBeginTravel` failure
+  compensation; also successful return, failed-party compensation, and
+  return-party association failure compensation. Verify the second commit
+  consumes its slot, the revision reaches but never exceeds `long.MaxValue`,
+  and no reservation leaks;
 - attached direct `TryComplete()` and `ReconcileAfterTravel` use exact-object
   finalization: an impostor/stale object is rejected, success transitions and
   removes the exact row once, and saturation leaves both state and indexes
