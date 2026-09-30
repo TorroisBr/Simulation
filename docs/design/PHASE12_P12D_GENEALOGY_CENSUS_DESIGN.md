@@ -1,6 +1,10 @@
 # P12-D Genealogy Owner Census Design
 
-**Status:** Bounded technical proposal; independent design review pending.
+**Status:** Bounded technical proposal; independent design review passed.
+
+The exact-tip design review passed at `f17dff4` against the stated canonical
+base. The reviewer requested one additional focused rejection assertion for
+the null `ParentageRecord` overload; that evidence is included below.
 
 **Base:** `codex/phase12/canonical` at
 `69f456d5e3c6d6f7e4b85b36e98968ced0549bf3`.
@@ -87,7 +91,9 @@ does not synchronize reads or prove that boundary.
 - Through normal `SimulationRuntime.TryAddParentage` and
   `TryRemoveParentage` calls, a successful edge add/removal increments the
   local revision once. A duplicate, self-edge, cycle, invalid endpoint, or
-  missing-edge rejection leaves count and revision unchanged.
+  missing-edge rejection leaves count and revision unchanged. The
+  `TryAddParentage((ParentageRecord)null, ...)` overload rejection also leaves
+  the witnesses unchanged.
 - After add/remove/re-add activity, the census reports the live direct-edge
   cardinality and a revision that reflects every successful content commit,
   including a later different edge that replaces a removed edge at the same
