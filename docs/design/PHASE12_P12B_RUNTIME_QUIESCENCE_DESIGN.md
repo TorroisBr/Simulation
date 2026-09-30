@@ -23,7 +23,8 @@ explicit thread identity or hold a scope through publication. The public
 `SimulationTime.AdvanceDay` and `TryAdvanceDay` methods can also write the
 runtime-bound clock outside the full runtime day operation.
 
-This design adds only the runtime admission adapter for:
+This design adds only the runtime admission adapter for the selected
+`UnityBootstrap-Daily-v1` profile, and only for:
 
 1. the validation-tail and publication portion of the existing synchronous
    `TesteSimulacao.Start` bootstrap, after `SimulationRuntime` and its partial
@@ -33,7 +34,8 @@ This design adds only the runtime admission adapter for:
    `TryAdvanceDay`, and `TryAdvanceDays`; and
 4. calls to public `SimulationTime.AdvanceDay` / `TryAdvanceDay` on the
    `SimulationTime` instance owned by this runtime, routed through that same
-   outer daily-advance operation.
+   outer daily-advance operation when, and only when, the runtime's selected
+   profile is `UnityBootstrap-Daily-v1`.
 
 The adapter is single-thread admission and operation counting, not a lock and
 not a substitute for owner-store synchronization. It does not establish
@@ -45,6 +47,16 @@ its prerequisites and separate authorization are satisfied.
 
 The accepted profile is daily and excludes intraday state. This adapter covers
 completed daily boundaries only and does not extend the supported profile.
+The adapter must be enabled by an explicit selected-profile predicate, not by
+the mere fact that a `SimulationRuntime` owns a `SimulationTime`. For
+`UnityBootstrap-Daily-v1`, install the private clock callback and use the
+`runtime.advance-day` outer admission scope. For a P18-backed timeline profile,
+do not install this callback or apply this P12 admission wrapper: there,
+`SimulationTime.AbsoluteDay` is a timeline projection,
+`SimulationTime.TryAdvanceDay` must continue to return
+`TimelineProjectionOwnsClock`, and `SimulationRuntime.TryAdvanceDay` must
+advance the P18 timeline under its own contract. P12 adds no P18 operation
+scope or temporal behavior.
 
 ## Existing behavior and constraints
 
@@ -153,11 +165,16 @@ successful startup closes the scope exactly once after full pipeline return.
 
 ### 3. Scope daily advances and route direct clock writes through them
 
-Register one stable, closed operation ID for the outer runtime day operation,
-for example `runtime.advance-day`. Keep `runtime.npc-membership` separate and
-nested. No caller-supplied operation ID is allowed.
+Only when the runtime's selected-profile predicate identifies
+`UnityBootstrap-Daily-v1`, register and use one stable, closed operation ID
+for the outer runtime day operation, for example `runtime.advance-day`. Keep
+`runtime.npc-membership` separate and nested. No caller-supplied operation ID
+is allowed. P18 timeline-backed profiles do not register or enter this P12
+operation; their `SimulationRuntime.TryAdvanceDay` follows the P18 timeline
+contract.
 
-For `SimulationRuntime.TryAdvanceDay` and `TryAdvanceDays(dayCount > 0)`,
+For `UnityBootstrap-Daily-v1`, `SimulationRuntime.TryAdvanceDay` and
+`TryAdvanceDays(dayCount > 0)`:
 verify owner-thread identity and perform non-mutating validity/reentrancy
 preflight before entering the corresponding operation scope. Once admitted,
 the one outer scope covers the full operation: clock advancement, every daily
@@ -167,27 +184,32 @@ domain system, nested NPC membership, and all synchronous post-clock work. For
 zero count, faulted runtime, or rejected/reentrant request opens no scope and
 preserves existing no-op/failure behavior.
 
-When `SimulationRuntime` binds its `SimulationTime`, install a private owner
-callback so its public `SimulationTime.AdvanceDay` and `TryAdvanceDay` route
+When, and only when, the runtime's selected profile predicate identifies
+`UnityBootstrap-Daily-v1`, bind its `SimulationTime` to a private owner
+callback so public `SimulationTime.AdvanceDay` and `TryAdvanceDay` route
 through the runtime's normal full-day advance admission instead of writing the
-clock independently. A direct call on this runtime-owned clock therefore has
-the same completed-day semantics and owner-thread/quiescence scope as
-`SimulationRuntime.AdvanceDay` / `TryAdvanceDay`. The runtime's own daily core
-uses a separate internal clock-commit primitive to avoid recursive dispatch.
-The callback is a fixed runtime binding, not a public operation-registration
-hook. A detached, unbound `SimulationTime` retains its standalone clock
-behavior but is not part of `UnityBootstrap-Daily-v1` and cannot be admitted as
-that profile's runtime clock.
+clock independently. A direct call on this profile's runtime-owned clock
+therefore has the same completed-day semantics and owner-thread/quiescence
+scope as `SimulationRuntime.AdvanceDay` / `TryAdvanceDay`. The runtime's own
+daily core uses a separate internal clock-commit primitive to avoid recursive
+dispatch. The callback is a fixed runtime binding, not a public
+operation-registration hook. For any other profile, this P12 design neither
+installs nor changes clock dispatch. In particular, a P18-backed runtime
+retains timeline ownership and projection behavior. A detached, unbound
+`SimulationTime` retains its standalone clock behavior and is not part of
+`UnityBootstrap-Daily-v1`.
 
-The runtime callback dispatches directly to the same `TryAdvanceDay` entry, so
-the single `runtime.advance-day` operation scope covers calls through either
-public API. It does not publish an intermediate point where the clock has
-advanced but daily domain work is incomplete. Attempts to enter the same
-runtime recursively are rejected by existing runtime reentrancy semantics.
-Map runtime failures to an explicit `SimulationTimeAdvanceFailure` result (or
-equivalent typed internal result) for `TryAdvanceDay`; the void
-`SimulationTime.AdvanceDay` wrapper continues to throw on failure. Overflow and
-runtime-faulted cases retain their existing meanings.
+For `UnityBootstrap-Daily-v1`, the runtime callback dispatches directly to the
+same `TryAdvanceDay` entry, so the single `runtime.advance-day` operation scope
+covers calls through either public API. It does not publish an intermediate
+point where the clock has advanced but daily domain work is incomplete.
+Attempts to enter the same runtime recursively are rejected by existing
+runtime reentrancy semantics. Map runtime failures to an explicit
+`SimulationTimeAdvanceFailure` result (or equivalent typed internal result)
+for `TryAdvanceDay`; the void `SimulationTime.AdvanceDay` wrapper continues to
+throw on failure. Overflow and runtime-faulted cases retain their existing
+meanings. These callback and result-mapping requirements do not apply to P18
+timeline-backed profiles.
 
 ## Fail-closed behavior
 
@@ -222,6 +244,7 @@ P12-B writer/invalidation blockers.
 | Multi-day advance | One outer scope spans all days and releases after the final boundary or later-day failure. |
 | Direct `SimulationTime.TryAdvanceDay` | On the runtime-owned clock, dispatches through the full runtime daily advance; during callbacks census reports `OperationInProgress`, no half-advanced clock boundary is observable, and the scope returns to zero. |
 | Direct `SimulationTime.AdvanceDay` | Uses the same runtime dispatch and exception behavior; wrong-thread and reentrant calls do not mutate the clock. |
+| Selected-profile clock dispatch | For `UnityBootstrap-Daily-v1`, the selected-profile predicate enables callback installation and outer admission; for a P18 timeline profile, no P12 callback is installed, `SimulationTime.TryAdvanceDay` returns `TimelineProjectionOwnsClock`, and `SimulationRuntime.TryAdvanceDay` advances the timeline. Assert both branches explicitly so the daily adapter cannot intercept or reinterpret P18 clock semantics. |
 | Zero/invalid/no-op | `TryAdvanceDays(0)` remains true with no time/domain change and no scope/epoch effect; negative count and rejected requests preserve existing failure behavior. |
 | Failure and exception | Every admitted outer scope closes in `finally`; runtime faults and incomplete work are not reported as a successful daily boundary. |
 | Canonical TravelParty witness | Retain the promoted candidate's existing selected-bootstrap assertion of exact-zero active parties and exact installed `TravelPartyStore` owner identity/revision. Do not add a TravelParty section to or otherwise widen `ContinuationCensusProtocol`. |
