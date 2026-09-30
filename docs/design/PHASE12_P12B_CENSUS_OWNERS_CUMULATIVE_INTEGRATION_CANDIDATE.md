@@ -64,6 +64,14 @@ atomic snapshot.
   satisfies its outstanding Genealogy-composition handoff without replacing
   the promoted provider.
 
+The reviewed source design and original owner-local submission are retained at
+[`PHASE12_P12D_SETTLEMENT_POPULATION_CENSUS_DESIGN.md`](PHASE12_P12D_SETTLEMENT_POPULATION_CENSUS_DESIGN.md)
+and
+[`PHASE12_P12D_SETTLEMENT_POPULATION_CENSUS_CANDIDATE.md`](PHASE12_P12D_SETTLEMENT_POPULATION_CENSUS_CANDIDATE.md).
+Their original `811c639`/`4bc5a8e` refs remain identified in those records;
+the revalidation notes distinguish the earlier owner-local block from this
+integrated candidate.
+
 The current code tip is a cumulative integration of those retained changes on
 the named canonical base. The PersonStore, ExplorableSite, population and
 Genealogy/bootstrap interactions have been revalidated together below.
