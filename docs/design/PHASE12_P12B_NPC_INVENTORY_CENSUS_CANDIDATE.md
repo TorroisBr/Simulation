@@ -34,10 +34,13 @@ remains a separate blocker.
 All results were produced in this candidate worktree and retained under
 `Library/ValidationResults/P12BNpcInventoryCensus`:
 
-- `NpcInventoryCensusTests`: 6/6, `EditMode-20260930-204649-20f2b613076e452282aac67e6c7d75b2.xml`.
+- `NpcInventoryCensusTests`: 7/7 after the exact-owner replacement correction,
+  `EditMode-20260930-205545-6aa1847a3bd345c8bcf660b3ff7e7762.xml`.
 - `SimulationBootstrapCompositionTests`: 14/14, `EditMode-20260930-204203-595e024e090d4074a1c04389c9c5c47a.xml`.
-- ALL EditMode: 2048/2048, `EditMode-20260930-204714-b9592a0d1f974f648e38c5167a916bfe.xml`.
-- Complete official Smoke: 5/5, `EditMode-20260930-204809-5d133bd480a442d7b8dfd825ebee37f0.xml`.
+- ALL EditMode after the correction: 2049/2049,
+  `EditMode-20260930-205607-d2faa205d2aa434ca71f21473ddcc504.xml`.
+- Complete official Smoke after the correction: 5/5,
+  `EditMode-20260930-205746-af115ff95cd245718b5490656983f73c.xml`.
 - `git diff --check`: passed.
 
 This candidate does not complete P12-B, change P12-A readiness, establish

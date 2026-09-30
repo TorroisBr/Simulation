@@ -66,6 +66,25 @@ public sealed class NpcInventoryCensusTests
     }
 
     [Test]
+    public void SameRosterRuntimeIdOwnerReplacementFailsClosedWithoutReseedingInventory()
+    {
+        NpcRuntime original = new NpcRuntime("same-roster-inventory-id", null);
+        SimulationRuntime runtime = new SimulationRuntime(new SimulationTime(), null, new[] { original }, economyEnabled: false);
+        var providersBefore = runtime.InventoryCensusProviders;
+        IOwnerSectionCensusProvider publishedBefore = providersBefore[0];
+        object originalInventory = publishedBefore.GetCurrentCensus().OwnerInstanceIdentity;
+        NpcRuntime replacement = new NpcRuntime(original.RuntimeId, null);
+        object roster = typeof(SimulationRuntime).GetField("npcRuntimes", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(runtime);
+        ((System.Collections.Generic.List<NpcRuntime>)roster)[0] = replacement;
+
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure failure), Is.False);
+        Assert.That(failure, Is.EqualTo(ContinuationCensusFailure.OwnerCoverageIncomplete));
+        Assert.That(runtime.InventoryCensusProviders, Is.SameAs(providersBefore),
+            "The protocol must retain its previous published snapshot and fail closed on unannounced owner replacement.");
+        Assert.That(runtime.InventoryCensusProviders[0].GetCurrentCensus().OwnerInstanceIdentity, Is.SameAs(originalInventory));
+    }
+
+    [Test]
     public void RosterInventoryReconciliationDoesNotMaskStaleCityProjection()
     {
         CityRuntime city = SimulationTestFactory.CreateCity("inventory-city", "inventory-city-location");

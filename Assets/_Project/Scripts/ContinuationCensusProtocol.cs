@@ -857,6 +857,12 @@ public sealed class ContinuationCensusProtocol
             bool existed = registeredSections.TryGetValue(c.SectionId, out RegisteredSection prior);
             bool sameNpc = existed && inventoryNpcOwnersBySection.TryGetValue(c.SectionId, out NpcRuntime oldNpc) && ReferenceEquals(oldNpc, c.NpcOwner);
             bool sameOwner = existed && ReferenceEquals(prior.OwnerInstanceIdentity, c.InventoryOwner);
+            if (existed && (!sameNpc || !sameOwner))
+            {
+                Fault();
+                failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+                return false;
+            }
             if (sameNpc && sameOwner)
             {
                 if (!TryReadAndValidate(prior, false, out _, out failure)) { Fault(); return false; }
