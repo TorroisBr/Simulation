@@ -184,6 +184,55 @@ public sealed class ExpeditionTests
     }
 
     [Test]
+    public void ExpeditionStorePublishesPassiveRevisionAndExactCompletionWitness()
+    {
+        ExpeditionStore store = new ExpeditionStore();
+        ExpeditionCensusProvider provider = new ExpeditionCensusProvider(store);
+        ExpeditionRuntime expedition = new ExpeditionRuntime(
+            "expedition-census", "site-1", "location-a", "location-site", "route-a-site", "party-1", null,
+            new[] { "npc-1" }, new[] { "npc-1" }, Array.Empty<string>(), ExpeditionState.Returning);
+
+        OwnerSectionCensusWitness empty = provider.GetCurrentCensus();
+        Assert.That(empty.SectionId, Is.EqualTo(ExpeditionCensusProvider.SectionId));
+        Assert.That(empty.SchemaVersion, Is.EqualTo(1));
+        Assert.That(empty.OwnerInstanceIdentity, Is.SameAs(store));
+        Assert.That(empty.Cardinality, Is.Zero);
+        Assert.That(empty.Revision, Is.Zero);
+
+        Assert.That(store.Add(expedition), Is.True);
+        Assert.That(provider.GetCurrentCensus().Cardinality, Is.EqualTo(1));
+        Assert.That(provider.GetCurrentCensus().Revision, Is.EqualTo(1));
+        Assert.That(expedition.TryComplete(), Is.True);
+        OwnerSectionCensusWitness complete = provider.GetCurrentCensus();
+        Assert.That(expedition.State, Is.EqualTo(ExpeditionState.Completed));
+        Assert.That(complete.Cardinality, Is.Zero);
+        Assert.That(complete.Revision, Is.EqualTo(2));
+        Assert.That(store.GetById(expedition.ExpeditionId), Is.Null);
+        Assert.That(expedition.TryComplete(), Is.False);
+        Assert.That(provider.GetCurrentCensus().Revision, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void AttachedExpeditionLeafMutationAdvancesExactlyOnce()
+    {
+        ExpeditionStore store = new ExpeditionStore();
+        ExpeditionRuntime expedition = new ExpeditionRuntime(
+            "expedition-leaf", "site-1", "location-a", "location-site", "route-a-site", null, null,
+            new[] { "npc-1" }, new[] { "npc-1" }, Array.Empty<string>(), ExpeditionState.AtSite,
+            ExpeditionObjectiveRuntime.Explore(2));
+        Assert.That(store.Add(expedition), Is.True);
+        Assert.That(store.Revision, Is.EqualTo(1));
+        Assert.That(expedition.TryBeginExploration(), Is.True);
+        Assert.That(store.Revision, Is.EqualTo(2));
+        Assert.That(expedition.TrySetCurrentLocalPlace("place-1", out bool firstVisit), Is.True);
+        Assert.That(firstVisit, Is.True);
+        Assert.That(store.Revision, Is.EqualTo(3));
+        Assert.That(expedition.TrySetCurrentLocalPlace("place-1", out firstVisit), Is.True);
+        Assert.That(firstVisit, Is.False);
+        Assert.That(store.Revision, Is.EqualTo(3));
+    }
+
+    [Test]
     public void ExpeditionStartRequiresTargetSiteRouteAndParticipantPresenceTruth()
     {
         SpatialTravelFixture fixture = new SpatialTravelFixture();

@@ -146,43 +146,36 @@ public sealed class ExpeditionSystem : IAuthoritativeMutationGuardBindable
             return false;
         }
 
-        if (expeditionStore.Add(createdExpedition) == false)
+        if (!expeditionStore.TryReserveNew(createdExpedition, out ExpeditionStore.OperationReservation startReservation)) return false;
+        using (startReservation)
         {
-            return false;
-        }
+            if (!expeditionStore.AddAndFence(startReservation)) return false;
+            TravelPartyRuntime party;
+            bool partyStarted;
+            try { partyStarted = travelPartySystem.TryStartTravelParty(context, out party); }
+            catch { expeditionStore.RemoveReserved(startReservation); throw; }
+            if (partyStarted == false)
+            {
+                expeditionStore.RemoveReserved(startReservation);
+                return false;
+            }
 
-        if (travelPartySystem.TryStartTravelParty(context, out TravelPartyRuntime party) == false)
-        {
-            expeditionStore.Remove(createdExpedition.ExpeditionId);
-            return false;
-        }
+            if (expeditionStore.CommitReserved(startReservation, () => createdExpedition.TryBeginTravelCore(party.TravelPartyId)) == false)
+            {
+                // Defensive compensation preserves every committed owner revision.
+                expeditionStore.RemoveReserved(startReservation);
+                logger.LogError("Expedition could not enter TravelingToSite after TravelParty creation.");
+                return false;
+            }
 
-        if (createdExpedition.TryBeginTravel(party.TravelPartyId) == false)
-        {
-            // The preparation validation makes this unreachable for a valid party.
-            // Keep the store coherent if a future lifecycle change invalidates it.
-            expeditionStore.Remove(createdExpedition.ExpeditionId);
-            logger.LogError("Expedition could not enter TravelingToSite after TravelParty creation.");
-            return false;
-        }
-
-        bool eventRecorded = domainEventRecorder == null || domainEventRecorder.Record(
-            (eventId, absoluteDay, recordSequence) => new ExpeditionStartedEvent(
-                eventId,
-                absoluteDay,
-                recordSequence,
-                createdExpedition.ExpeditionId,
-                createdExpedition.TargetSiteRuntimeId,
-                createdExpedition.OriginLocationRuntimeId,
-                createdExpedition.TargetLocationRuntimeId,
-                createdExpedition.TravelPartyId,
-                createdExpedition.PerformerRuntimeIds,
-                createdExpedition.SupportRuntimeIds,
-                createdExpedition.OriginDecisionId));
-
-        if (eventRecorded == false)
-        {
-            logger.LogWarning("Expedition start event could not be recorded for ExpeditionId '" + createdExpedition.ExpeditionId + "'.");
+            bool eventRecorded = domainEventRecorder == null || domainEventRecorder.Record(
+                (eventId, absoluteDay, recordSequence) => new ExpeditionStartedEvent(
+                    eventId, absoluteDay, recordSequence, createdExpedition.ExpeditionId,
+                    createdExpedition.TargetSiteRuntimeId, createdExpedition.OriginLocationRuntimeId,
+                    createdExpedition.TargetLocationRuntimeId, createdExpedition.TravelPartyId,
+                    createdExpedition.PerformerRuntimeIds, createdExpedition.SupportRuntimeIds,
+                    createdExpedition.OriginDecisionId));
+            if (eventRecorded == false) logger.LogWarning("Expedition start event could not be recorded for ExpeditionId '" + createdExpedition.ExpeditionId + "'.");
         }
 
         expedition = createdExpedition;
@@ -503,18 +496,21 @@ public sealed class ExpeditionSystem : IAuthoritativeMutationGuardBindable
         }
 
         bool objectiveWasCompleted = expedition.IsObjectiveComplete;
-        float averageUnitCost = content.GetStack(item).AverageUnitCost;
-        if (placeContentStore.TryTakeStack(owner, item, amount, out int removedAmount) == false)
-        {
-            reason = "Target resource could not be removed atomically from the place.";
-            return false;
-        }
-
-        performer.Inventory.AddItem(item, removedAmount, averageUnitCost);
+        ExpeditionStore.OperationReservation objectiveReservation = null;
         if (expedition.Objective.ObjectiveType == ExpeditionObjectiveType.Retrieve
-            && expedition.Objective.TargetItemDefinitionId == item.DefinitionId)
+            && expedition.Objective.TargetItemDefinitionId == item.DefinitionId
+            && !expedition.IsObjectiveComplete
+            && !expeditionStore.TryReserveObjectiveCompletion(expedition, out objectiveReservation))
+        { reason = "Expedition objective owner is busy or revision capacity is unavailable."; return false; }
+        float averageUnitCost = content.GetStack(item).AverageUnitCost;
+        using (objectiveReservation)
         {
-            expedition.TryMarkObjectiveComplete();
+            if (placeContentStore.TryTakeStack(owner, item, amount, out int removedAmount) == false)
+            { reason = "Target resource could not be removed atomically from the place."; return false; }
+            performer.Inventory.AddItem(item, removedAmount, averageUnitCost);
+            if (objectiveReservation != null
+                && !expeditionStore.CommitReserved(objectiveReservation, expedition.TryMarkObjectiveCompleteCore))
+            { reason = "Expedition objective completion could not be committed."; return false; }
         }
 
         RecordObjectiveCompletedIfNeeded(expedition, objectiveWasCompleted, item.DefinitionId);
@@ -590,23 +586,19 @@ public sealed class ExpeditionSystem : IAuthoritativeMutationGuardBindable
         }
 
         bool objectiveWasCompleted = expedition.IsObjectiveComplete;
-        if (placeContentStore.TryTransferNotableFromPlaceToNpc(
-            sourceOwner,
-            notableItemRuntimeId,
-            destinationPerformer,
-            out notable,
-            out reason) == false)
+        bool completesObjective = expedition.Objective.ObjectiveType == ExpeditionObjectiveType.Retrieve
+            && string.Equals(expedition.Objective.TargetNotableItemRuntimeId, notableItemRuntimeId, StringComparison.Ordinal)
+            && !expedition.IsObjectiveComplete;
+        ExpeditionStore.OperationReservation objectiveReservation = null;
+        if (completesObjective && !expeditionStore.TryReserveObjectiveCompletion(expedition, out objectiveReservation))
+        { reason = "Expedition objective owner is busy or revision capacity is unavailable."; return false; }
+        using (objectiveReservation)
         {
-            return false;
-        }
-
-        if (expedition.Objective.ObjectiveType == ExpeditionObjectiveType.Retrieve
-            && string.Equals(
-                expedition.Objective.TargetNotableItemRuntimeId,
-                notableItemRuntimeId,
-                StringComparison.Ordinal) == true)
-        {
-            expedition.TryMarkObjectiveComplete();
+            if (placeContentStore.TryTransferNotableFromPlaceToNpc(
+                sourceOwner, notableItemRuntimeId, destinationPerformer, out notable, out reason) == false) return false;
+            if (objectiveReservation != null
+                && !expeditionStore.CommitReserved(objectiveReservation, expedition.TryMarkObjectiveCompleteCore))
+            { reason = "Expedition objective completion could not be committed."; return false; }
         }
 
         RecordObjectiveCompletedIfNeeded(expedition, objectiveWasCompleted, notableItemRuntimeId);
@@ -646,6 +638,14 @@ public sealed class ExpeditionSystem : IAuthoritativeMutationGuardBindable
         }
 
         bool objectiveWasCompleted = expedition.IsObjectiveComplete;
+        bool completesObjective = expedition.Objective.ObjectiveType == ExpeditionObjectiveType.Eliminate
+            && expedition.Objective.TargetOppositionRuntimeId == opposition.RuntimeId
+            && !expedition.IsObjectiveComplete;
+        ExpeditionStore.OperationReservation objectiveReservation = null;
+        if (completesObjective && !expeditionStore.TryReserveObjectiveCompletion(expedition, out objectiveReservation))
+        { reason = "Expedition objective owner is busy or revision capacity is unavailable."; return false; }
+        using (objectiveReservation)
+        {
         if (placeContentStore.TryResolveOpposition(
             owner,
             opposition,
@@ -655,15 +655,11 @@ public sealed class ExpeditionSystem : IAuthoritativeMutationGuardBindable
             worldRuntime,
             out result,
             out reason) == false)
-        {
-            return false;
-        }
+        { return false; }
 
-        if (expedition.Objective.ObjectiveType == ExpeditionObjectiveType.Eliminate
-            && expedition.Objective.TargetOppositionRuntimeId == opposition.RuntimeId
-            && opposition.IsResolved)
-        {
-            expedition.TryMarkObjectiveComplete();
+        if (objectiveReservation != null && opposition.IsResolved
+            && !expeditionStore.CommitReserved(objectiveReservation, expedition.TryMarkObjectiveCompleteCore))
+        { reason = "Expedition objective completion could not be committed."; return false; }
         }
 
         RecordObjectiveCompletedIfNeeded(expedition, objectiveWasCompleted, opposition.RuntimeId);
@@ -811,25 +807,29 @@ public sealed class ExpeditionSystem : IAuthoritativeMutationGuardBindable
             return false;
         }
 
-        if (expedition.TryBeginReturn() == false)
+        if (!expeditionStore.TryReserveExisting(expedition, out ExpeditionStore.OperationReservation returnReservation))
+        { reason = "Expedition owner revision capacity is unavailable."; return false; }
+        using (returnReservation)
         {
-            reason = "Expedition could not enter the Returning state.";
-            return false;
-        }
-
-        if (travelPartySystem.TryStartTravelParty(returnContext, out TravelPartyRuntime party) == false)
-        {
-            expedition.TryCancelReturn();
-            reason = "The real macro return TravelParty could not be started.";
-            return false;
-        }
-
-        if (expedition.TryBeginReturnTravel(party.TravelPartyId) == false)
-        {
-            expedition.TryCancelReturn();
-            travelPartyStore.Remove(party.TravelPartyId);
-            reason = "Expedition could not associate its real macro return TravelParty.";
-            return false;
+            if (!expeditionStore.CommitReserved(returnReservation, expedition.TryBeginReturnCore))
+            { reason = "Expedition could not enter the Returning state."; return false; }
+            TravelPartyRuntime party;
+            bool partyStarted;
+            try { partyStarted = travelPartySystem.TryStartTravelParty(returnContext, out party); }
+            catch { expeditionStore.CommitReserved(returnReservation, expedition.TryCancelReturnCore); throw; }
+            if (partyStarted == false)
+            {
+                expeditionStore.CommitReserved(returnReservation, expedition.TryCancelReturnCore);
+                reason = "The real macro return TravelParty could not be started.";
+                return false;
+            }
+            if (!expeditionStore.CommitReserved(returnReservation, () => expedition.TryBeginReturnTravelCore(party.TravelPartyId)))
+            {
+                expeditionStore.CommitReserved(returnReservation, expedition.TryCancelReturnCore);
+                travelPartyStore.Remove(party.TravelPartyId);
+                reason = "Expedition could not associate its real macro return TravelParty.";
+                return false;
+            }
         }
 
         RecordLifecycleEvent(
@@ -1089,8 +1089,7 @@ public sealed class ExpeditionSystem : IAuthoritativeMutationGuardBindable
             }
 
             if (CanReconcileReturn(expedition) == false
-                || expedition.TryComplete() == false
-                || expeditionStore.Complete(expedition.ExpeditionId) == false)
+                || expeditionStore.TryFinalizeCompletion(expedition) == false)
             {
                 continue;
             }

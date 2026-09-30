@@ -141,6 +141,36 @@ public sealed class ExpeditionObjectiveRuntime
 [Serializable]
 public sealed class ExpeditionRuntime
 {
+    internal sealed class OwnerSnapshot : IEquatable<OwnerSnapshot>
+    {
+        private readonly ExpeditionState state;
+        private readonly string party, place;
+        private readonly int progress;
+        private readonly bool completed;
+        private readonly string[] visited, observed;
+        internal OwnerSnapshot(ExpeditionRuntime value)
+        {
+            state = value.state;
+            party = value.travelPartyId;
+            place = value.currentLocalPlaceRuntimeId;
+            progress = value.objective.Progress;
+            completed = value.objective.IsCompleted;
+            visited = new List<string>(value.visitedLocalPlaceRuntimeIds).ToArray();
+            observed = new List<string>(value.observedLocalConnectionRuntimeIds).ToArray();
+        }
+        public bool Equals(OwnerSnapshot other) => other != null
+            && state == other.state && party == other.party && place == other.place
+            && progress == other.progress && completed == other.completed
+            && ListsEqual(visited, other.visited) && ListsEqual(observed, other.observed);
+        public override bool Equals(object obj) => Equals(obj as OwnerSnapshot);
+        public override int GetHashCode() => state.GetHashCode() ^ progress;
+        private static bool ListsEqual(string[] left, string[] right)
+        {
+            if (left.Length != right.Length) return false;
+            for (int i = 0; i < left.Length; i++) if (!string.Equals(left[i], right[i], StringComparison.Ordinal)) return false;
+            return true;
+        }
+    }
     private readonly string expeditionId;
     private readonly string targetSiteRuntimeId;
     private readonly string originLocationRuntimeId;
@@ -158,6 +188,13 @@ public sealed class ExpeditionRuntime
     private readonly IReadOnlyList<string> readOnlyObservedLocalConnectionRuntimeIds;
     private ExpeditionState state;
     private string currentLocalPlaceRuntimeId;
+    [NonSerialized]
+    private ExpeditionStore attachedStore;
+    internal ExpeditionStore AttachedStore => attachedStore;
+    internal bool TryAttach(ExpeditionStore store) { if (store == null || (attachedStore != null && !ReferenceEquals(attachedStore, store))) return false; attachedStore = store; return true; }
+    internal OwnerSnapshot CaptureOwnerSnapshot() => new OwnerSnapshot(this);
+    internal void TryCompleteCore() { state = ExpeditionState.Completed; }
+    private bool Mutate(Func<bool> mutation) => attachedStore == null ? mutation() : attachedStore.TryMutate(this, mutation);
 
     public string ExpeditionId => expeditionId;
     public string TargetSiteRuntimeId => targetSiteRuntimeId;
@@ -270,6 +307,11 @@ public sealed class ExpeditionRuntime
 
     public bool TryBeginExploration()
     {
+        if (attachedStore != null) return Mutate(TryBeginExplorationCore);
+        return TryBeginExplorationCore();
+    }
+    private bool TryBeginExplorationCore()
+    {
         if (CanBeginExploration() == false)
         {
             return false;
@@ -280,6 +322,11 @@ public sealed class ExpeditionRuntime
     }
 
     public bool TryAdvanceAbstractProgress(int progressDelta = 1)
+    {
+        if (attachedStore != null) return Mutate(() => TryAdvanceAbstractProgressCore(progressDelta));
+        return TryAdvanceAbstractProgressCore(progressDelta);
+    }
+    private bool TryAdvanceAbstractProgressCore(int progressDelta)
     {
         if (CanContinueExploration() == false || progressDelta <= 0)
         {
@@ -300,6 +347,18 @@ public sealed class ExpeditionRuntime
     }
 
     public bool TrySetCurrentLocalPlace(string localPlaceRuntimeId, out bool firstVisit)
+    {
+        firstVisit = false;
+        if (attachedStore != null)
+        {
+            bool observedFirstVisit = false;
+            bool result = Mutate(() => TrySetCurrentLocalPlaceCore(localPlaceRuntimeId, out observedFirstVisit));
+            firstVisit = observedFirstVisit;
+            return result;
+        }
+        return TrySetCurrentLocalPlaceCore(localPlaceRuntimeId, out firstVisit);
+    }
+    private bool TrySetCurrentLocalPlaceCore(string localPlaceRuntimeId, out bool firstVisit)
     {
         firstVisit = false;
         if (CanContinueExploration() == false || string.IsNullOrWhiteSpace(localPlaceRuntimeId) == true)
@@ -332,6 +391,18 @@ public sealed class ExpeditionRuntime
     public bool TryRecordObservedConnection(string localConnectionRuntimeId, out bool firstObservation)
     {
         firstObservation = false;
+        if (attachedStore != null)
+        {
+            bool observedFirst = false;
+            bool result = Mutate(() => TryRecordObservedConnectionCore(localConnectionRuntimeId, out observedFirst));
+            firstObservation = observedFirst;
+            return result;
+        }
+        return TryRecordObservedConnectionCore(localConnectionRuntimeId, out firstObservation);
+    }
+    private bool TryRecordObservedConnectionCore(string localConnectionRuntimeId, out bool firstObservation)
+    {
+        firstObservation = false;
         if (CanContinueExploration() == false || string.IsNullOrWhiteSpace(localConnectionRuntimeId) == true)
         {
             return false;
@@ -350,6 +421,18 @@ public sealed class ExpeditionRuntime
         string localConnectionRuntimeId,
         string destinationLocalPlaceRuntimeId,
         out bool advanced)
+    {
+        advanced = false;
+        if (attachedStore != null)
+        {
+            bool didAdvance = false;
+            bool result = Mutate(() => TryTraverseLocalConnectionCore(localConnectionRuntimeId, destinationLocalPlaceRuntimeId, out didAdvance));
+            advanced = didAdvance;
+            return result;
+        }
+        return TryTraverseLocalConnectionCore(localConnectionRuntimeId, destinationLocalPlaceRuntimeId, out advanced);
+    }
+    private bool TryTraverseLocalConnectionCore(string localConnectionRuntimeId, string destinationLocalPlaceRuntimeId, out bool advanced)
     {
         advanced = false;
         if (CanContinueExploration() == false
@@ -384,6 +467,11 @@ public sealed class ExpeditionRuntime
 
     public bool TryMarkObjectiveComplete()
     {
+        if (attachedStore != null) return Mutate(TryMarkObjectiveCompleteCore);
+        return TryMarkObjectiveCompleteCore();
+    }
+    internal bool TryMarkObjectiveCompleteCore()
+    {
         if ((state != ExpeditionState.Exploring && state != ExpeditionState.AtSite)
             || objective.IsCompleted == true)
         {
@@ -396,6 +484,11 @@ public sealed class ExpeditionRuntime
 
     public bool TryBeginReturn()
     {
+        if (attachedStore != null) return Mutate(TryBeginReturnCore);
+        return TryBeginReturnCore();
+    }
+    internal bool TryBeginReturnCore()
+    {
         if (CanBeginReturn() == false)
         {
             return false;
@@ -407,6 +500,7 @@ public sealed class ExpeditionRuntime
 
     public bool TryComplete()
     {
+        if (attachedStore != null) return attachedStore.TryFinalizeCompletion(this);
         if (state != ExpeditionState.Returning)
         {
             return false;
@@ -417,6 +511,11 @@ public sealed class ExpeditionRuntime
     }
 
     internal bool TryBeginTravel(string newTravelPartyId)
+    {
+        if (attachedStore != null) return Mutate(() => TryBeginTravelCore(newTravelPartyId));
+        return TryBeginTravelCore(newTravelPartyId);
+    }
+    internal bool TryBeginTravelCore(string newTravelPartyId)
     {
         if (state != ExpeditionState.Preparing || string.IsNullOrWhiteSpace(newTravelPartyId) == true)
         {
@@ -430,6 +529,11 @@ public sealed class ExpeditionRuntime
 
     internal bool TryArriveAtSite()
     {
+        if (attachedStore != null) return Mutate(TryArriveAtSiteCore);
+        return TryArriveAtSiteCore();
+    }
+    private bool TryArriveAtSiteCore()
+    {
         if (state != ExpeditionState.TravelingToSite)
         {
             return false;
@@ -441,6 +545,11 @@ public sealed class ExpeditionRuntime
 
     internal bool TryBeginReturnTravel(string newTravelPartyId)
     {
+        if (attachedStore != null) return Mutate(() => TryBeginReturnTravelCore(newTravelPartyId));
+        return TryBeginReturnTravelCore(newTravelPartyId);
+    }
+    internal bool TryBeginReturnTravelCore(string newTravelPartyId)
+    {
         if (state != ExpeditionState.Returning || string.IsNullOrWhiteSpace(newTravelPartyId) == true)
         {
             return false;
@@ -451,6 +560,11 @@ public sealed class ExpeditionRuntime
     }
 
     internal bool TryCancelReturn()
+    {
+        if (attachedStore != null) return Mutate(TryCancelReturnCore);
+        return TryCancelReturnCore();
+    }
+    internal bool TryCancelReturnCore()
     {
         if (state != ExpeditionState.Returning)
         {
