@@ -112,6 +112,7 @@ added. No immutable owner export, staged hydration, or restoration behavior is
 added. This is partial owner census evidence only. P12-B remains incomplete;
 P12-A remains `WAIT_DEPENDENCY`; P12-D remains blocked on P12-B and P12-C.
 
-The next gate for this candidate is an independent review of the exact
-integration tip and its complete diff against `676196b`, followed by explicit
-human canonical-promotion approval under `docs/EXECUTION_MODEL.md`.
+The exact-tip code/design/evidence review and final documentation
+revalidation have passed. The remaining gate is explicit human approval to
+advance `codex/phase12/canonical` from `676196b` to the reviewed candidate
+branch tip `03d80e9`, under `docs/EXECUTION_MODEL.md`.
