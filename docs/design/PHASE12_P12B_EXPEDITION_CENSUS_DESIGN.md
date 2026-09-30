@@ -181,13 +181,26 @@ Conflict/opposition state. Before invoking those external effects, the
 ExpeditionStore must reserve one revision slot under its owner window whenever
 the exact active expedition has a matching incomplete objective whose success
 would complete it (Retrieve definition/notable ID match, or Eliminate target
-ID match). Reservation also pins that expedition's objective-completion
-eligibility so a concurrent owner mutation cannot consume the slot or make
-the reservation refer to a different objective. Do not hold the store monitor
-while calling external owners; use a scoped reservation token, released on
-every failure/exception path and consumed by the subsequent objective
-completion commit. Other mutations must account for outstanding reservations
-when checking revision capacity.
+ID match). The token binds to the exact active expedition and its objective,
+including the expected state and target identity. While it is outstanding,
+all other mutations to that same expedition must serialize behind it: because
+the external call is synchronous, implement this as a fail-fast owner-busy
+result with no mutation (callers may retry after token release), or an
+equivalent deferred operation. This applies to direct runtime/objective leaf
+methods, `TryBeginReturn`/`TryCancelReturn`, completion/finalization, and any
+other system writer that could change that expedition's state, objective, or
+active membership. Read-only checks remain allowed. Only the matching token
+may commit the reserved objective completion. This prevents, for example,
+`TryBeginReturn` from changing `Exploring` to `Returning` while retrieval or
+opposition resolution is running outside the store lock.
+
+Do not hold the store monitor while calling external owners; use a scoped
+reservation token, released on every failure/exception path and consumed by
+the subsequent objective completion commit. Other mutations must account for
+outstanding reservations when checking revision capacity. The reservation
+must remain pinned to the exact objective until it is consumed or released;
+an unrelated expedition may continue mutating if capacity remains after all
+reserved slots are accounted for.
 
 If capacity cannot be reserved, reject before calling inventory, content,
 conflict, opposition, or event mutation paths. If the external action fails,
@@ -271,6 +284,14 @@ Focused tests should establish:
   incomplete Eliminate objective it rejects before conflict resolution or
   opposition mutation. Assert relevant owner counts/revisions, objective
   state, and event counts remain unchanged on both rejected paths;
+- with ample revision capacity, hold a matching objective token at an
+  injected Inventory or opposition/conflict boundary and attempt
+  `TryBeginReturn` plus a direct objective/runtime mutation on that same
+  expedition. Each must return the transient owner-busy result without
+  changing state/revision; then let the external operation succeed and verify
+  the token commits the objective completion. In a paired failure case,
+  release the token and verify the blocked mutation can succeed afterward.
+  These eligibility interleavings are separate from saturation tests;
 - objective-completion reservation prevents intervening Expedition writes
   from consuming its reserved revision slot, and the token releases on failed
   external operations and exceptions;
