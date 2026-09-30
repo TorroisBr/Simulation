@@ -35,10 +35,10 @@ coherent counts.
 
 | Suite | Result | XML |
 |---|---:|---|
-| `SpatialKnowledgeCensusTests` | 3/3 | `Temp/ValidationResults/EditMode-20260930-173946-dc2b685abb734bf6a2909624d8a227b1.xml` |
-| `SimulationBootstrapCompositionTests` | 14/14 | `Temp/ValidationResults/EditMode-20260930-174002-d3a7ad52589b40bdbe04ee152d8befcf.xml` |
-| ALL EditMode | 2018/2018 | `Temp/ValidationResults/EditMode-20260930-173827-720ee38e1e754528936781466cfb7b79.xml` |
-| Official complete `Smoke` filter | 5/5 | `Temp/ValidationResults/EditMode-20260930-173910-e1da9b52a9f748af9cec389a7f510993.xml` |
+| `SpatialKnowledgeCensusTests` | 3/3 | `Library/ValidationResults/P12BSpatialKnowledgeReview/EditMode-20260930-174732-9e86d9c3272144da9eb73ffba24fc8ea.xml` |
+| `SimulationBootstrapCompositionTests` | 14/14 | `Library/ValidationResults/P12BSpatialKnowledgeReview/EditMode-20260930-174927-d98bac27819e4dd993503e606874e7c2.xml` |
+| ALL EditMode | 2018/2018 | `Library/ValidationResults/P12BSpatialKnowledgeReview/EditMode-20260930-174800-a98b5860ee014d6aa89b22b1d3a50eaf.xml` |
+| Official complete `Smoke` filter | 5/5 | `Library/ValidationResults/P12BSpatialKnowledgeReview/EditMode-20260930-174858-f67b8f991aac47f084e98086aef742fa.xml` |
 
-`git diff --check origin/codex/phase12/canonical..de49358` passed. The full
+`git diff --check origin/codex/phase12/canonical..de49358` passed for the code-bearing change. The exact candidate-tip documentation diff-check also passed after these retained paths were recorded. The full
 EditMode and Smoke runs were completed after the final code change.
