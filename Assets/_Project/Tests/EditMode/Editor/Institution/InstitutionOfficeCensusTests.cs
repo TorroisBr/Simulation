@@ -117,6 +117,12 @@ public sealed class InstitutionOfficeCensusTests
             Is.EqualTo(InstitutionalVacancyRecognitionFailure.IncumbentNotFactuallyDead));
         AssertWitnesses(providers, runtime, 1, 1, 1, 1, 1L, 2L);
 
+        Assert.That(runtime.TryProposeInstitutionalVacancyRecognition(
+            officeId,
+            InstitutionalVacancyRecognitionReason.ExplicitDecision,
+            out InstitutionalVacancyRecognitionTransition staleTransition,
+            out InstitutionalVacancyRecognitionFailure proposalFailure), Is.True, proposalFailure.ToString());
+
         Assert.That(runtime.TryVacateOffice(
             officeId,
             out InstitutionFoundationFailure vacancyFailure), Is.True, vacancyFailure.ToString());
@@ -133,6 +139,13 @@ public sealed class InstitutionOfficeCensusTests
             successorId,
             0L,
             out InstitutionFoundationFailure reassignmentFailure), Is.True, reassignmentFailure.ToString());
+        AssertWitnesses(providers, runtime, 1, 1, 1, 2, 1L, 4L);
+
+        Assert.That(runtime.TryApplyInstitutionalVacancyRecognition(
+            staleTransition,
+            out InstitutionalVacancyRecognitionFailure staleApplyFailure), Is.False);
+        Assert.That(staleApplyFailure,
+            Is.EqualTo(InstitutionalVacancyRecognitionFailure.StaleIncumbency));
         AssertWitnesses(providers, runtime, 1, 1, 1, 2, 1L, 4L);
     }
 
