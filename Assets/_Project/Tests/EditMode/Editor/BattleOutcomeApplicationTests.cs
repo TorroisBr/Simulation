@@ -17,6 +17,8 @@ public sealed class BattleOutcomeApplicationTests
     public void Apply_MultipleSourcesCommitsExactDeathsAndSingleStoreRevisions()
     {
         Fixture fixture = CreateFixture(MultiSourceSeeds(), DeathRule(1L), recorder: CreateSuccessfulRecorder());
+        PersistentBattleCensusProvider battleCensusProvider = new PersistentBattleCensusProvider(fixture.World.BattleStore);
+        OwnerSectionCensusWitness battleCensusBefore = battleCensusProvider.GetCurrentCensus();
         long battleRevision = fixture.World.BattleStore.Revision;
         long manpowerRevision = fixture.World.ContingentManpowerStateStore.Revision;
         long forceRevision = fixture.World.ArmedForceStore.Revision;
@@ -30,6 +32,11 @@ public sealed class BattleOutcomeApplicationTests
         Assert.That(result.Outcome, Is.Not.Null);
         Assert.That(result.Outcome.ResolvedAbsoluteDay, Is.EqualTo(fixture.World.CurrentDay));
         Assert.That(fixture.World.BattleStore.Revision, Is.EqualTo(battleRevision + 1L));
+        OwnerSectionCensusWitness battleCensusAfter = battleCensusProvider.GetCurrentCensus();
+        Assert.That(battleCensusAfter.OwnerInstanceIdentity, Is.SameAs(fixture.World.BattleStore));
+        Assert.That(battleCensusAfter.OwnerInstanceIdentity, Is.SameAs(battleCensusBefore.OwnerInstanceIdentity));
+        Assert.That(battleCensusAfter.Cardinality, Is.EqualTo(battleCensusBefore.Cardinality));
+        Assert.That(battleCensusAfter.Revision, Is.EqualTo(battleCensusBefore.Revision + 1L));
         Assert.That(fixture.World.ContingentManpowerStateStore.Revision, Is.EqualTo(manpowerRevision + 1L));
         Assert.That(fixture.World.ArmedForceStore.Revision, Is.EqualTo(forceRevision + 1L));
         Assert.That(fixture.World.ArmedForceStore.TryGetContingent(new ContingentId("contingent-a1"), out ContingentRecord contingentA1), Is.True);
@@ -313,6 +320,8 @@ public sealed class BattleOutcomeApplicationTests
     public void TerminalBattleStoreExceptionAfterAssignment_RestoresBattleAndEarlierDomains()
     {
         Fixture fixture = CreateFixture(MultiSourceSeeds(), DeathRule(1L));
+        PersistentBattleCensusProvider battleCensusProvider = new PersistentBattleCensusProvider(fixture.World.BattleStore);
+        OwnerSectionCensusWitness battleCensusBefore = battleCensusProvider.GetCurrentCensus();
         string before = WorldStateCanonicalWriter.Write(Capture(fixture));
         RevisionCapture revisions = CaptureRevisions(fixture);
         SetPersistentBattleFailure(fixture, "ThrowAfterTerminalWriteForTests");
@@ -322,6 +331,11 @@ public sealed class BattleOutcomeApplicationTests
         Assert.That(result.Failure.Code, Is.EqualTo(BattleOutcomeApplicationFailureCode.CommitFailedRolledBack));
         Assert.That(WorldStateCanonicalWriter.Write(Capture(fixture)), Is.EqualTo(before));
         AssertRevisions(fixture, revisions);
+        OwnerSectionCensusWitness battleCensusAfter = battleCensusProvider.GetCurrentCensus();
+        Assert.That(battleCensusAfter.OwnerInstanceIdentity, Is.SameAs(battleCensusBefore.OwnerInstanceIdentity));
+        Assert.That(battleCensusAfter.Cardinality, Is.EqualTo(battleCensusBefore.Cardinality));
+        Assert.That(battleCensusAfter.Revision, Is.EqualTo(battleCensusBefore.Revision),
+            "A failed terminal transaction restores the Battle census to its exact prior local revision.");
         Assert.That(fixture.World.BattleStore.TryGet(fixture.BattleId, out PersistentBattleRecord battle), Is.True);
         Assert.That(battle.LifecycleState, Is.EqualTo(BattleLifecycleState.Active));
         Assert.That(battle.TerminalOutcome, Is.Null);

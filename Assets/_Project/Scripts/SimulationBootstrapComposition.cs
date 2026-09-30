@@ -54,6 +54,7 @@ public sealed class SimulationBootstrapComposition
         ArmedForceSpatialCensusProvider = new ArmedForceSpatialCensusProvider(Runtime.ArmedForceSpatialStateStore);
         ConflictCensusProvider = new PersistentConflictCensusProvider(Runtime.ConflictStore);
         WarCensusProvider = new PersistentWarCensusProvider(Runtime.WarStore);
+        BattleCensusProvider = new PersistentBattleCensusProvider(Runtime.BattleStore);
         ExplorableSites = sites;
         Expeditions = expeditions;
         ExpeditionSystem = expeditionSystem;
@@ -106,6 +107,8 @@ public sealed class SimulationBootstrapComposition
     public IOwnerSectionCensusProvider ConflictCensusProvider { get; }
     /// <summary>Passive witness for the runtime's persistent war owner.</summary>
     public IOwnerSectionCensusProvider WarCensusProvider { get; }
+    /// <summary>Passive witness for the runtime's persistent battle owner.</summary>
+    public IOwnerSectionCensusProvider BattleCensusProvider { get; }
     /// <summary>The P8-owned spatial truth authority published with the genesis handoff.</summary>
     public SpatialAuthorityStore SpatialAuthority => Runtime.SpatialAuthorityStore;
     public ExplorableSiteStore ExplorableSites { get; }
