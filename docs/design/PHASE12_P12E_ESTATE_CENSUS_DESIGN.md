@@ -1,7 +1,7 @@
 # P12-E Estate Census Design
 
-**Status:** Proposed bounded owner witness; independent exact-tip design review
-pending.
+**Status:** Independent exact-tip design review PASS. Durable record:
+`PHASE12_P12E_ESTATE_CENSUS_DESIGN_REVIEW.md`.
 
 **Base:** implementation-reviewed Battle census candidate
 `codex/phase12/P12EBattleCensus` at
@@ -34,14 +34,17 @@ open an estate when a Person dies; only the existing explicit
 
 ## Existing revision and write semantics
 
-`EstateStore.TryRegister` is the only owner write and is internal to the
-existing Estate-opening path. A successful open inserts the EstateId row and
-the deceased-Person secondary index together, then advances the store's local
-revision once. Duplicate EstateId, an existing estate for the same deceased
-Person, an unregistered or living Person, invalid/stale opening data, a
-faulted runtime, or revision overflow rejects without advancing the witness.
-The installed store is bound to the runtime mutation guard and is cloned
-against the runtime-resolved PersonStore during composition.
+`EstateStore.TryRegister` is the only owner write. A live explicit open reaches
+it through the existing Estate-opening path. Runtime composition also uses
+that internal registration while populating a new cloned store; this is
+construction-time copy population, not another live gameplay writer. A
+successful open inserts the EstateId row and the deceased-Person secondary
+index together, then advances the installed store's local revision once.
+Duplicate EstateId, an existing estate for the same deceased Person, an
+unregistered or living Person, invalid/stale opening data, a faulted runtime,
+or revision overflow rejects without advancing the witness. The installed
+store is bound to the runtime mutation guard and is cloned against the
+runtime-resolved PersonStore during composition.
 
 No delete or Estate record update API exists in the current owner. The witness
 reports its present local revision; it does not connect Estate writes to the
@@ -55,9 +58,10 @@ P12-B shared mutation epoch or establish whole-profile invalidation.
   composition, explicitly opens one Estate through
   `SimulationRuntime.TryOpenEstate`, and verifies the installed-owner witness
   advances from zero rows/revision to one row/revision.
-- Repeating the open for that deceased Person or opening for an unknown/living
-  Person leaves count and revision unchanged. Existing Estate domain failures
-  remain authoritative; the census adds no alternate validation.
+- Repeating the open for that deceased Person, reusing the same EstateId for a
+  different deceased Person, or opening for an unknown/living Person leaves
+  count and revision unchanged. Existing Estate domain failures remain
+  authoritative; the census adds no alternate validation.
 - Verify the store retains one Estate record and its deceased-Person lookup
   resolves that same record; do not double-count the secondary index.
 - Reuse existing Estate invariants, runtime guard, and composition behavior.
