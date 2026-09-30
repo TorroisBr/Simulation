@@ -1,8 +1,9 @@
 # P12-E Persistent War Census Design
 
-**Status:** Initial independent design review PASS; optional-Conflict evidence
-refinement is pending exact-tip recheck and durable review record. Existing
-accepted P12-B/P12-E capability authorization applies.
+**Status:** Independent exact-tip design review PASS at
+`0a8a883226761a706e3c70c01967c1f4c756b91b`; durable review record is
+`PHASE12_P12E_WAR_CENSUS_DESIGN_REVIEW.md`. Existing accepted P12-B/P12-E
+capability authorization applies.
 
 **Integration anchor:** reviewed Conflict census candidate
 `codex/phase12/P12EConflictCensus` at `b170d4e`.
