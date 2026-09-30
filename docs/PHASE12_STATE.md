@@ -272,9 +272,10 @@ The subsequent P12-D multi-owner commit-graph audit found a revision-saturation
 rollback defect in the promoted code. A bounded correction is now implemented
 on `codex/phase12/P12DGenealogyRollbackSaturation` at
 `f631de8a9209956cf61d0f901867cca244befcaf`, independently reviewed PASS
-against `543196a`, and validated (focused named-birth 15/15, Genealogy census
-4/4, ALL EditMode 1990/1990, complete official Smoke 5/5, diff-check). It
-remains pending canonical promotion. Until that promotion, do not treat the
+against exact parent `8f04a62bf2e66995efe8f311f5d62cff191acb11` (based on
+P12 canonical `543196a`), and validated (focused named-birth 15/15, Genealogy
+census 4/4, ALL EditMode 1990/1990, complete official Smoke 5/5, diff-check).
+It remains pending canonical promotion. Until that promotion, do not treat the
 promoted Genealogy slice as integrated with named-birth rollback. The
 correction does not change P12-B/P12-A readiness.
 
