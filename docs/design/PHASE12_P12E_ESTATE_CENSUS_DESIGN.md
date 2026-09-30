@@ -1,7 +1,9 @@
 # P12-E Estate Census Design
 
-**Status:** Independent exact-tip design review PASS. Durable record:
-`PHASE12_P12E_ESTATE_CENSUS_DESIGN_REVIEW.md`.
+**Status:** Implementation and validation complete; independent design and
+exact-tip implementation reviews PASS. Records:
+`PHASE12_P12E_ESTATE_CENSUS_DESIGN_REVIEW.md` and
+`PHASE12_P12E_ESTATE_CENSUS_REVIEW.md`.
 
 **Base:** implementation-reviewed Battle census candidate
 `codex/phase12/P12EBattleCensus` at
