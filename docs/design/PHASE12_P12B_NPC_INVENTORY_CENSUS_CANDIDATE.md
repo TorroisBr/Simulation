@@ -20,6 +20,12 @@ epoch at most once per operation. Rostered dead/emigrated NPCs retain their
 section. Inventory revision/owner drift or malformed/missing owners fail
 closed. Direct inventory writes retain InventoryRuntime's existing revision
 only; this candidate adds no writer notifications or global epoch wiring.
+An existing RuntimeId section may not be rebound to a new NPC or inventory
+owner: a same-roster InventoryRuntime replacement discovered while an
+unrelated NPC registration crosses the outer membership reconciliation faults
+the census and retains the previously published provider snapshot. The roster
+registration itself reports its domain insertion result; census assessment
+then fails closed.
 
 The separate City ImportantNpcs projection remains outside this family and
 epoch. A targeted test leaves a stale City projection after NPC unregister:
@@ -34,13 +40,13 @@ remains a separate blocker.
 All results were produced in this candidate worktree and retained under
 `Library/ValidationResults/P12BNpcInventoryCensus`:
 
-- `NpcInventoryCensusTests`: 7/7 after the exact-owner replacement correction,
-  `EditMode-20260930-205545-6aa1847a3bd345c8bcf660b3ff7e7762.xml`.
+- `NpcInventoryCensusTests`: 7/7 with the outer membership reconciliation
+  exercise, `EditMode-20260930-210124-5abc057da95f429cbd64e85dcf26997e.xml`.
 - `SimulationBootstrapCompositionTests`: 14/14, `EditMode-20260930-204203-595e024e090d4074a1c04389c9c5c47a.xml`.
-- ALL EditMode after the correction: 2049/2049,
-  `EditMode-20260930-205607-d2faa205d2aa434ca71f21473ddcc504.xml`.
-- Complete official Smoke after the correction: 5/5,
-  `EditMode-20260930-205746-af115ff95cd245718b5490656983f73c.xml`.
+- ALL EditMode after the reconciliation test update: 2049/2049,
+  `EditMode-20260930-210156-d10dd0089a78481a890267893d4755e8.xml`.
+- Complete official Smoke after the reconciliation test update: 5/5,
+  `EditMode-20260930-210325-f6a427f360e44a339cdd55b75febc38e.xml`.
 - `git diff --check`: passed.
 
 This candidate does not complete P12-B, change P12-A readiness, establish

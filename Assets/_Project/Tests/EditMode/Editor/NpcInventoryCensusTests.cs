@@ -66,22 +66,25 @@ public sealed class NpcInventoryCensusTests
     }
 
     [Test]
-    public void SameRosterRuntimeIdOwnerReplacementFailsClosedWithoutReseedingInventory()
+    public void OwnerReplacementCrossingMembershipBoundaryFailsReconciliationWithoutPublishing()
     {
         NpcRuntime original = new NpcRuntime("same-roster-inventory-id", null);
         SimulationRuntime runtime = new SimulationRuntime(new SimulationTime(), null, new[] { original }, economyEnabled: false);
         var providersBefore = runtime.InventoryCensusProviders;
         IOwnerSectionCensusProvider publishedBefore = providersBefore[0];
         object originalInventory = publishedBefore.GetCurrentCensus().OwnerInstanceIdentity;
-        NpcRuntime replacement = new NpcRuntime(original.RuntimeId, null);
-        object roster = typeof(SimulationRuntime).GetField("npcRuntimes", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(runtime);
-        ((System.Collections.Generic.List<NpcRuntime>)roster)[0] = replacement;
+        InventoryRuntime replacementInventory = new InventoryRuntime();
+        typeof(NpcRuntime).GetField("inventory", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(original, replacementInventory);
 
+        // This unrelated roster mutation drives the normal outer membership reconciliation.
+        Assert.That(runtime.TryRegisterNpc(new NpcRuntime("unrelated-registration", null), out _), Is.True);
         Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure failure), Is.False);
-        Assert.That(failure, Is.EqualTo(ContinuationCensusFailure.OwnerCoverageIncomplete));
+        Assert.That(failure, Is.EqualTo(ContinuationCensusFailure.ProtocolFaulted));
         Assert.That(runtime.InventoryCensusProviders, Is.SameAs(providersBefore),
-            "The protocol must retain its previous published snapshot and fail closed on unannounced owner replacement.");
+            "Reconciliation must retain its previous provider snapshot when the same NPC RuntimeId has a replaced inventory owner.");
         Assert.That(runtime.InventoryCensusProviders[0].GetCurrentCensus().OwnerInstanceIdentity, Is.SameAs(originalInventory));
+        Assert.That(runtime.InventoryCensusProviders[0].GetCurrentCensus().OwnerInstanceIdentity, Is.Not.SameAs(replacementInventory));
     }
 
     [Test]
