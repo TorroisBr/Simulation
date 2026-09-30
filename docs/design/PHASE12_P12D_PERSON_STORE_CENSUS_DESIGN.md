@@ -83,7 +83,13 @@ compensation. At most, a write from `long.MaxValue - 2` advances to
 `long.MaxValue`. Every successful removal therefore advances the shared
 revision, and no rollback path changes cardinality at saturation without a
 revision change. No new registration or binding is admitted at the reserved
-boundary.
+boundary. Each rollback path also preflights its own revision increment; when
+already at `long.MaxValue`, it returns failure before changing the registry,
+Person binding, or binding index. The normal serialized immediate
+compensation path cannot reach that state after its forward write under the
+reserved-headroom rule; the check fails closed if this precondition is
+violated. Such a failed compensation does not prove the enclosing multi-owner
+operation atomic; this witness remains passive and unsynchronized.
 
 The rollback paths must preserve their existing exact-record/object checks.
 They must not become general public removal APIs or bypass the existing
@@ -106,6 +112,9 @@ ensures a successful compensation remains ordinarily revisioned.
   cardinalities and each advance revision exactly once.
 - At `long.MaxValue - 1` and `long.MaxValue`, valid ordinary
   registration/binding fails before mutation with `RevisionOverflow`.
+- A direct saturated rollback/unbind attempt at `long.MaxValue` fails before
+  mutation, preserving the Person row, binding index, cardinalities, and
+  revision.
 - Starting at `long.MaxValue - 2`, a write may advance to `long.MaxValue - 1`
   and its exact immediate compensation may advance to Max; cardinalities are
   restored and revision does not wrap.
