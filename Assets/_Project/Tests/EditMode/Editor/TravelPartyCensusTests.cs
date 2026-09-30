@@ -21,7 +21,14 @@ public sealed class TravelPartyCensusTests
         TravelPartyCensusProvider provider = new TravelPartyCensusProvider(fixture.Parties);
         TravelPartyRuntime first = CreateParty("party-a", "member-a");
         AssertWitness(provider, fixture.Parties, 0, 0);
+        Assert.That(fixture.Parties.Add(null), Is.False);
+        Assert.That(fixture.Parties.Complete("missing"), Is.False);
+        Assert.That(fixture.Parties.Remove("missing"), Is.False);
+        AssertWitness(provider, fixture.Parties, 0, 0);
         Assert.That(fixture.Parties.Add(first), Is.True);
+        AssertWitness(provider, fixture.Parties, 1, 1);
+        Assert.That(fixture.Parties.Add(CreateParty("party-a", "member-duplicate-id")), Is.False);
+        Assert.That(fixture.Parties.Add(CreateParty("party-overlap", "member-a")), Is.False);
         AssertWitness(provider, fixture.Parties, 1, 1);
         Assert.That(fixture.Parties.Complete(first.TravelPartyId), Is.True);
         Assert.That(first.IsCompleted, Is.True);
@@ -118,6 +125,7 @@ public sealed class TravelPartyCensusTests
     {
         TravelPartyFixture fixture = SimulationTestFactory.CreateTravelPartyFixture();
         SetRevision(fixture.Parties, long.MaxValue - 2);
+        float[] originalBalances = fixture.Members.Select(member => member.Money).ToArray();
         typeof(SimulationRecordSequence).GetField("nextSequence", BindingFlags.Instance | BindingFlags.NonPublic)
             .SetValue(fixture.Records.Sequence, long.MaxValue);
         ActionExecutionContext context = CreateContext(fixture);
@@ -128,6 +136,23 @@ public sealed class TravelPartyCensusTests
         Assert.That(fixture.Parties.ActiveParties, Is.Empty);
         Assert.That(fixture.Parties.Revision, Is.EqualTo(long.MaxValue));
         Assert.That(fixture.Members.All(member => member.IsTraveling == false), Is.True);
+        Assert.That(fixture.Members.Select(member => member.Money).ToArray(), Is.EqualTo(originalBalances));
+    }
+
+    [Test]
+    public void GuardDeniedStoreMutationDoesNotChangeCensus()
+    {
+        TravelPartyStore store = new TravelPartyStore();
+        TravelPartyCensusProvider provider = new TravelPartyCensusProvider(store);
+        Type guardType = typeof(TravelPartyStore).Assembly.GetType("AuthoritativeMutationGuard");
+        object guard = Activator.CreateInstance(guardType, nonPublic: true);
+        guardType.GetMethod("MarkFaulted", BindingFlags.Instance | BindingFlags.NonPublic)
+            .Invoke(guard, new object[] { AuthoritativeMutationFaultReason.IntegrityRestoreFailed });
+        typeof(TravelPartyStore).GetMethod("TryBindMutationGuard", BindingFlags.Instance | BindingFlags.NonPublic)
+            .Invoke(store, new[] { guard });
+
+        Assert.That(store.Add(CreateParty("guarded-party", "guarded-member")), Is.False);
+        AssertWitness(provider, store, 0, 0);
     }
 
     [Test]

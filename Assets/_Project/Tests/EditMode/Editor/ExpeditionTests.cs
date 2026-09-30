@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
+using System.Threading;
 using NUnit.Framework;
 
 public sealed class ExpeditionTests
@@ -97,6 +99,59 @@ public sealed class ExpeditionTests
             fixture.Knowledge,
             fixture.Records.Time,
             fixture.Records.EventRecorder));
+    }
+
+    [Test]
+    public void ReturnAssociationRaceCompensatesPartyStoreAtSaturationBoundary()
+    {
+        SpatialTravelFixture fixture = new SpatialTravelFixture();
+        NpcRuntime performer = fixture.CreateNpc("return-race-performer", fixture.CityA, 10f);
+        AddSpatialKnowledge(performer, fixture, includeRoute: true);
+        performer.SpatialKnowledge.DiscoverRoute(fixture.SiteToCityRoute.RuntimeId);
+        fixture.Knowledge.RecordInitialScenarioKnowledge(performer, fixture.Site);
+        ExpeditionSystem system = CreateSystem(fixture);
+        Assert.That(system.TryStartExpedition(fixture.Site, CreateContext(fixture, performer).ActionContext, out ExpeditionRuntime expedition), Is.True);
+        SimulationRuntime runtime = new SimulationRuntime(
+            fixture.Records.Time,
+            new[] { fixture.CityA, fixture.CityB },
+            new[] { performer },
+            economyEnabled: false,
+            travelSystem: fixture.Travel,
+            travelPartySystem: fixture.TravelPartySystem,
+            explorableSiteStore: fixture.Sites,
+            explorableSiteKnowledgeSystem: fixture.Knowledge,
+            expeditionSystem: system);
+        runtime.AdvanceDays(fixture.SiteRoute.TravelDays + 1);
+        Assert.That(expedition.State, Is.EqualTo(ExpeditionState.AtSite));
+
+        SetTravelPartyRevision(fixture.TravelParties, long.MaxValue - 2);
+        bool returned = true;
+        string reason = null;
+        int finished = 0;
+        Thread operation = new Thread(() =>
+        {
+            returned = system.TryBeginReturn(expedition, out reason);
+            Interlocked.Exchange(ref finished, 1);
+        });
+        operation.Priority = ThreadPriority.AboveNormal;
+        operation.Start();
+        while (Volatile.Read(ref finished) == 0)
+        {
+            if (expedition.State == ExpeditionState.Returning)
+            {
+                expedition.TryComplete();
+            }
+            Thread.Yield();
+        }
+        operation.Join();
+        Assert.That(returned, Is.False);
+        Assert.That(reason, Does.Contain("associate"));
+
+        // The public lifecycle writer can invalidate the return association after the
+        // party's Add; this bounded test asserts only the TravelParty compensation.
+        Assert.That(expedition.State, Is.EqualTo(ExpeditionState.Completed));
+        Assert.That(fixture.TravelParties.ActiveParties, Is.Empty);
+        Assert.That(fixture.TravelParties.Revision, Is.EqualTo(long.MaxValue));
     }
 
     [Test]
@@ -384,6 +439,12 @@ public sealed class ExpeditionTests
             fixture.Knowledge,
             fixture.Records.Time,
             fixture.Records.EventRecorder);
+    }
+
+    private static void SetTravelPartyRevision(TravelPartyStore store, long revision)
+    {
+        typeof(TravelPartyStore).GetField("revision", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(store, revision);
     }
 
     private static ExpeditionTestContext CreateContext(
