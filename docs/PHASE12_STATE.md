@@ -687,8 +687,24 @@ Other promoted passive witnesses include RuntimeIdentityRegistry, RuntimeIdAlloc
 
 The refreshed operation matrix confirms that NPC membership reconciliation is the only production path currently notifying the partial shared mutation epoch. Bootstrap publication, daily advance, and membership have bounded active scopes; those counts are not locks and do not cover direct owner calls. No selected cross-owner operation is complete for shared-epoch coverage. No CaptureEligible/token API exists. P12-B remains INCOMPLETE; P12-A remains WAIT_DEPENDENCY; P13 remains BLOCKED.
 
-The next blocker is DESIGN_REQUIRED for a current owner-commit/outer-operation contract. The bounded MoneyAccount write-invalidation slice is the first recommended implementation after independent design review; it closes only successful per-account commit notification, not Market/Inventory/City/merchant transaction coherence. Audit and design candidate files:
+The next blocker is DESIGN_REQUIRED for a current owner-commit/outer-operation contract. The first docs-only candidate proposed an account-only slice and was returned NEEDS_CHANGES by independent review. The revised design proposes a bounded NPC-to-NPC trade transaction over already-registered account and Inventory owners; it is not implementation-ready until fresh independent exact-tip design review passes. Audit and design candidate files:
 - docs/design/PHASE12_POST_MONEY_ACCOUNT_BLOCKER_REFRESH.md
 - docs/design/PHASE12_P12B_POST_MONEY_ACCOUNT_INVALIDATION_DESIGN.md
 
 Candidate branch: codex/phase12/P12BPostMoneyAccountBlockerRefresh, based on f913dd0. Independent exact-tip design/documentation review is pending. This records no new checkpoint ID, scope acceptance, implementation authorization, P12-A readiness, code validation, canonical promotion, or Phase closure.
+
+### Design review correction — 2026-10-01
+
+Independent review of the first docs-only blocker-refresh candidate at
+`5372048860412f617250ade1e9be3b49479525d3` returned NEEDS_CHANGES. It found
+that an account-local callback was not an enclosing multi-owner boundary and
+that the design did not classify prepared account installs. Source review
+confirmed that `MoneyAccountRuntime.InstallPrepared` is called from P18-D keyed
+sale and P18 timeline daily economy, both outside `UnityBootstrap-Daily-v1`.
+The candidate audit/design were revised to make the first bounded operation
+NPC-to-NPC trade, covering only its already-registered buyer/seller account and
+Inventory sections and every successful compensation under one named outer
+scope. Later MerchantSystem plan completion, direct writer paths, other economy
+methods and non-NPC account owners remain explicit gaps. This revised design
+requires a fresh exact-tip independent review before implementation. P12-B
+remains incomplete, P12-A remains `WAIT_DEPENDENCY`, and P13 remains blocked.
