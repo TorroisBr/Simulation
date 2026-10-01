@@ -625,3 +625,21 @@ and records no new checkpoint acceptance.
 P12-B remains incomplete, P12-A remains `WAIT_DEPENDENCY`, P13 remains
 dependency-gated, and Phase 12 remains open. No complete census, shared-epoch
 coverage, capture eligibility, export, or hydration is inferred.
+
+## P12-B operation-footprint refresh promotion — 2026-10-01
+
+With explicit approval, `codex/phase12/canonical` was fast-forwarded from
+`70bc1e50a7107a1489614a62f5f34694b6b52498` to the reviewed, documentation-only
+candidate `4f125864290113a257bc4f926e5e19d9a3b48da6`. This promotes the
+operation-footprint revalidation and its State/review evidence only; it changes
+no executable code and adds no implementation authorization.
+
+The audit confirms that the selected profile has partial bootstrap, daily, and
+NPC-membership scopes. It does not establish a complete owner/cardinality
+inventory, supported-write coverage of the mutation epoch, or a single
+Expedition operation boundary. The complete owner-section and supported-
+operation matrix remains the prerequisite to further runtime wiring.
+
+P12-B remains incomplete; P12-A remains `WAIT_DEPENDENCY`; P13 remains
+dependency-gated; Phase 12 remains open. Capture eligibility and
+export/hydration are not provided by this promotion.
