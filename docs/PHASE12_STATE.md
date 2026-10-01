@@ -708,3 +708,9 @@ scope. Later MerchantSystem plan completion, direct writer paths, other economy
 methods and non-NPC account owners remain explicit gaps. This revised design
 requires a fresh exact-tip independent review before implementation. P12-B
 remains incomplete, P12-A remains `WAIT_DEPENDENCY`, and P13 remains blocked.
+
+The selected-profile asset cross-check confirms the two `Simulation-GeneralTest`
+City assets use CityData's Open-liquidity/Free-consumption defaults, so no
+non-NPC MoneyAccountRuntime is instantiated for `UnityBootstrap-Daily-v1`.
+Account-backed City owners remain out of this profile and require separate
+sections if selected by a future profile.
