@@ -954,11 +954,11 @@ validates the expedition store's owner/index identity under its read window.
 
 The profile composes an `ExplorableSiteCensusProvider` bound to its exact
 `ExplorableSiteStore`; that owner exposes `Count`/`Revision`, and successful
-`Add` advances its local revision. The authored profile currently has zero
-ExplorableSites and startup checks the store count against that input, but the
-selected-profile test does not read this census provider. Treat the live
-ExplorableSite owner/cardinality/revision read as outstanding revalidation,
-not as closed exact-zero witness evidence.
+`Add` advances its local revision. The selected-profile test now reads the
+installed owner's exact 0-count/0-revision witness and verifies stable
+owner identity, cardinality, and revision on a repeated read. This closes the
+day-zero ExplorableSite witness gap only; it does not establish an evolved
+boundary census or complete P12-B coverage.
 
 These providers do not create complete P12-B owner registration, shared-epoch
 invalidation, capture eligibility, owner-thread/quiescence proof, immutable

@@ -40,7 +40,7 @@ or that runtime capture is restricted to a quiescent owner thread.
 | Live owner/cardinality census | The selected-profile test runs normal genesis against `Simulation-GeneralTest.asset` and inspects the published runtime before day one. It verifies City/NPC, population, market, inventory, and spatial-knowledge cardinalities; Person/Genealogy zero; positive P8-A geography; P8-B–D exact-zero child-owner counts/revisions; P8-A–D and receipt witnesses; the legacy SpatialNetwork's exact 2 locations/2 routes at revision 4; and empty ActorChoice/directive/travel/expedition state. Promotion `0021b0a` adds a roster-following pair of SpatialKnowledge sections per registered NPC and accounts for fixed PersonStore witnesses at the supported membership/materialization boundary. Promotion `10fb58d` adds one passive exact-owner/cardinality/revision witness per City for `ImportantNpcs` and checks reciprocal membership against the live NPC roster. Promotion `15e5a54` adds a roster-following Inventory section per registered NPC, bound to the exact installed NPC and Inventory owners. | This is still a partial live census: City/NPC composite roots, several directly observed collections, some C roots, and E/Justice owners are not covered by complete owner witnesses. The available passive witnesses are not registered as a complete profile inventory. Each included owner still needs exact identity, section/schema version, count, and revision in the capture provider. Source-derived counts cannot stand in for evolved state. |
 | Committed-write invalidation | Successful mutation entrypoints are mapped below, including owner-local revisions and public bypasses. Multi-owner transactions, rollback-only paths, queries, plans and proposals are distinguished. The promoted dynamic NPC boundary advances its partial epoch for supported roster/materialization deltas. City `ImportantNpcs` now has a local membership revision and passive witness; the Inventory witness observes its owner-local revision. | A successful authoritative commit must notify the one P12-B epoch after the owning commit (or whole multi-owner commit). Failed preflight and full rollback do not notify; a successful compensating write does. The promotions do not connect SpatialKnowledge discoveries, City/NPC projection, direct InventoryRuntime writes, unrelated PersonStore writers, or remaining C/D/E/F writes to the shared epoch. Prove every included public path is covered or no longer supported outside an instrumented boundary. |
 | Owner-thread/quiescence | Source audit finds synchronous `Start → InitializeSimulation` and `Update → Simulate` paths. The selected-profile EditMode test calls `Start()` directly and captures no `Update` frame or managed-thread identity. Promotion `0021b0a` checks the owner thread for the local NPC membership census context and fail-closes on a mismatched nested entry. | Bind and verify the actual Unity runtime owner thread; track bootstrap, outer advance and every supported in-flight multi-owner operation; reject capture during any scope or from a different thread. The local membership check does not prove normal-frame affinity or exclude external callers across the runtime. |
-| Runtime exact-zero witnesses | The profile has explicit exclusions and known conditional-empty sections. Composed-but-empty is distinct from not composed; passive owner witnesses now exist for P8-A–D, both receipt ledgers, legacy SpatialNetwork locations/routes, dynamic NPC SpatialKnowledge and per-NPC Inventory, per-City presence, scheduled directives, TravelParty instances, active Expeditions, and ExplorableSite records. The selected-profile test observes empty directives, exact 0/0 TravelParty and Expedition witnesses, and fixed owner identities for those providers. The ExplorableSite provider is composed and owner-bound, but this profile test does not read its witness. | Complete the live witness read for ExplorableSite and add witnesses for remaining included owners, then revalidate the full set. These owner-local providers do not establish complete census registration, shared-epoch invalidation, or capture eligibility. Do not infer zero from scene startup, a skipped consumer, or a missing runtime reference. |
+| Runtime exact-zero witnesses | The profile has explicit exclusions and known conditional-empty sections. Composed-but-empty is distinct from not composed; passive owner witnesses now exist for P8-A–D, both receipt ledgers, legacy SpatialNetwork locations/routes, dynamic NPC SpatialKnowledge and per-NPC Inventory, per-City presence, scheduled directives, TravelParty instances, active Expeditions, and ExplorableSite records. The selected-profile test observes empty directives, exact 0/0 TravelParty, Expedition, and ExplorableSite witnesses, with stable installed-owner identities. | Add witnesses for remaining included owners and revalidate the full set. These owner-local providers do not establish complete census registration, shared-epoch invalidation, or capture eligibility. Do not infer zero from scene startup, a skipped consumer, or a missing runtime reference. |
 
 ## Selected-profile census targets
 
@@ -93,9 +93,10 @@ creates `TesteSimulacao`, calls `Start()`, and inspects the published
   live count and revision; TravelParty and Expedition witnesses report exact
   cardinality 0 and revision 0 on their installed owners. These local witnesses
   do not constitute complete P12-B census registration or epoch invalidation.
-- The composed ExplorableSite provider is bound to the installed site store,
-  which exposes owner-local count and revision. The selected-profile test does
-  not read this provider, so its live exact-zero witness remains outstanding.
+- The composed ExplorableSite provider is bound to the installed site store.
+  The selected-profile test now reads its exact 0-count/0-revision witness,
+  verifies the installed owner identity, and verifies stable identity/count/
+  revision on a repeated read. This is day-zero evidence only.
 - P8-B `p8b.passage-option-barrier-state` and `p8b.crossings` are exact-zero
   passive witnesses with stable installed-owner identities and parent spatial
   revision 1. P8-C `p8c.city-site-location-bindings` and
@@ -729,3 +730,29 @@ remaining live owner/cardinality inventory, committed-write invalidation,
 unaccounted-operation, or full-profile eligibility blockers. P12-B remains
 incomplete and P12-A remains `WAIT_DEPENDENCY`; no downstream checkpoint is
 made ready by this adapter alone.
+
+### Selected-profile ExplorableSite census revalidation — 2026-10-01
+
+The existing
+`SimulationBootstrapCompositionTests.SelectedSampleSceneProfileBootstrapsItsAuthoredP8GeographyBeforeDayOne`
+now reads `ExplorableSiteCensusProvider` from the published composition. It
+asserts section/schema, the exact installed `ExplorableSiteStore` identity,
+cardinality 0, revision 0, and stable owner identity/cardinality/revision on a
+second read. The test-only change is commit `20861f32e48f2f8b794fa44e10cf63fa7e6f0d05`.
+
+Validation on that code/test tree passed: the selected-profile test 1/1, ALL
+EditMode 2107/2107, official Smoke 5/5, and `git diff --check`. XML/log
+artifacts are retained under `Library/ValidationResults/P12BExplorableSiteProfile`,
+`P12BExplorableSiteAll`, and `P12BExplorableSiteSmoke` respectively. The XML
+SHA-256 values are `24cabb4a35733455e9f4adc77a3785486f3e6c281a9ffccbf4618d21e88bb6fa`,
+`3f7f97b87696c615979a85daa864444713001acc2af4c32191c0b0f321f77d35`, and
+`c4f5796e8b5748cd953f0e86e6b940ad08c05095be3d07e771181571ade2f2df`;
+the corresponding log hashes are `e7ef9e297cd7ff3b65e2209334ad52fa81c20aab04240174bb98ff99a95d33e0`,
+`dae046a9bf06d2c97cbfda295069fa98d8e1c09e44d54fc1760a2fffc760fdfd`, and
+`ba694751cf592accea36d6eaa6e5ca73d0524b017403c2e68f234d174b4a4eae`.
+
+This closes the exact-zero ExplorableSite witness at selected-profile day
+zero. It does not prove evolved-boundary cardinality, register the section in
+a complete P12-B census, connect writes to the shared epoch, or establish
+capture eligibility, quiescence, export, or hydration. P12-B remains
+incomplete and P12-A remains `WAIT_DEPENDENCY`.
