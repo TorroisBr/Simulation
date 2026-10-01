@@ -5820,7 +5820,8 @@ Estas perguntas não devem receber resposta implícita sem nova definição:
     continuam conceitos distintos. A proposta requer gate arquitetural antes
     de se tornar contrato de implementação.
 12. **Superfície factual read-only** — o mesmo estudo propõe readers por
-    capacidade e sessões de leitura com consistência declarada, sem expor
+    capacidade, status explícito de autoridade/disponibilidade dos fatos e
+    sessões de leitura com consistência declarada, sem expor
     Stores, snapshots diagnósticos, estruturas de P12 ou tipos de World
     Exchange como API do domínio. O primeiro recorte candidato é Faction.
     Projeção, adaptação externa e extensibilidade futura ainda não estão
