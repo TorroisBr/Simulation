@@ -60,6 +60,7 @@ public sealed class SimulationBootstrapComposition
         CityNpcPresenceCensusProviders = CityNpcPresenceCensusProvider.CreateProviders(
             Runtime.Cities,
             Runtime.NpcRuntimes);
+        CityMarketCensusProviders = CityMarketCensusProvider.CreateProviders(Runtime.Cities);
         ActorChoiceInputCensusProvider = new ActorChoiceP11CensusProvider(Runtime.ActorChoiceStore);
         ActorChoiceTemporalCensusProvider = new ActorChoiceTemporalCensusProvider(Runtime.ActorChoiceStore);
         RuntimeIdentityCensusProviders = RuntimeIdentityRegistryCensusProvider.CreateProviders(runtimeIdentityRegistry);
@@ -121,6 +122,8 @@ public sealed class SimulationBootstrapComposition
     public IReadOnlyList<IOwnerSectionCensusProvider> PersonStoreCensusProviders { get; }
     /// <summary>Fixed passive witnesses for each City's NPC-presence projection.</summary>
     public IReadOnlyList<IOwnerSectionCensusProvider> CityNpcPresenceCensusProviders { get; }
+    /// <summary>Fixed passive witnesses for each installed City's Market stock rows.</summary>
+    public IReadOnlyList<IOwnerSectionCensusProvider> CityMarketCensusProviders { get; }
     /// <summary>Passive witness for retained P11 actor-choice history.</summary>
     public IOwnerSectionCensusProvider ActorChoiceInputCensusProvider { get; }
     /// <summary>Passive exact-zero witness for excluded P18 temporal actor choices.</summary>
