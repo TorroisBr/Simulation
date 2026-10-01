@@ -51,7 +51,7 @@ Inventory provider snapshot and exact owner evidence unchanged.
   bootstrap composition; this candidate supplies that integration.
 - NPC Knowledge implementation and test completion: exact reviewed tip
   `b3939550ccbef0869366235bd526f8e1ae013399`, tree
-  `8fad4baca495507edbcc9661bbc96df530d3541e); independent exact-tip review
+  `8fad4baca495507edbcc9661bbc96df530d3541e`; independent exact-tip review
   passed. The source provider and test branch remains
   `codex/phase12/P12BKnowledgeCensusTestCompletion`.
 
@@ -61,20 +61,26 @@ owner-specific contracts or broaden their semantics.
 
 ## Validation evidence
 
-Validation was run on the exact code tree `c9fc250`:
+Validation was run on code tree `c9fc250` (local commit
+`3ab131d1aab9ea52b77015c10205fc6269d547c0`):
 
 - `NpcKnowledgeCensusTests`: 17/17.
 - `SimulationBootstrapCompositionTests`: 14/14.
 - `ScheduledDirectiveCensusTests`: 6/6.
 - ALL EditMode: 2099/2099.
 - Complete official Smoke filter: 5/5.
-- `git diff --check`: clean.
+- `git diff --check` from the P12 canonical base: clean.
 
-The validation result directories were ignored local artifacts and are not
-present in the migrated E: checkout. These counts are retained from the
-completed exact-tree validation run in the orchestration record; the reviewer
-must call out that XML/log hashes cannot be independently checked from this
-checkout. The code tree itself is unchanged from the validated tree.
+The exact official Smoke XML and log remain in the candidate worktree at
+`Temp/ValidationResults/EditMode-20261001-022027-9e0eee49e12a455ca598ca7c64b67082.xml`
+and the matching `.log`. The XML reports result `Passed`, total 5, passed 5,
+failed 0, and its EditMode suite reports 2099 test cases. SHA-256:
+XML `679C89D748F4731781E36E7CF5910ACEB260FB80008F14AE4B1B6D254059F66B`;
+log `5D86433D7DFEDB80FE6A8F9959547395CC4408B7378F4B4867E593DE1676FBB3`.
+The focused-suite and ALL EditMode results were reported by the completed
+exact-tree validation run, but their separate XML/log files are not present in
+this migrated checkout. The reviewer should preserve that evidence limitation;
+the code tree itself is unchanged from the validated tree.
 
 ## Scope limits
 
