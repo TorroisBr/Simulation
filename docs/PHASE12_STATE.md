@@ -71,6 +71,40 @@ Phase 12 remains open. P13 remains dependency-gated. This State does not claim
 save/load support, P12-A readiness, P12-B readiness, Phase closure, or a P13
 historical fork guarantee.
 
+**Latest reviewed candidate (promotion pending at time of this record):** the
+bounded Market-operation invalidation candidate is exact-tip reviewed PASS at
+`b577312c2edc6d3124c6d2b9dd3a1201dc9055ae` (tree
+`88ec452a979a7439b825858a6b1b271f8bc6c948`) against canonical base
+`b8a7da54864bee3fb9b8916793240e91fbce0955`. It extends only the Open-market
+purchase/sale owner commits, direct Market commits, and the selected daily
+production/Free-consumption/price-refresh paths. Its review, candidate
+validation, and refreshed owner/operation/epoch matrix are linked at the end
+of this State and in `docs/design/PHASE12_B_BLOCKER_RESOLUTION.md`.
+
+## P12-B Market operation invalidation candidate — 2026-10-01
+
+Independent exact-tip code review PASSed on candidate
+`b577312c2edc6d3124c6d2b9dd3a1201dc9055ae`, tree
+`88ec452a979a7439b825858a6b1b271f8bc6c948`, based on canonical
+`b8a7da54864bee3fb9b8916793240e91fbce0955`. Durable review evidence is
+`docs/design/PHASE12_P12B_MARKET_OPERATION_INVALIDATION_REVIEW.md`; validation
+results and artifact hashes are in
+`docs/design/PHASE12_P12B_MARKET_OPERATION_INVALIDATION_CANDIDATE.md`.
+
+The bounded slice registers the exact composed City Market owners; scopes
+Open-market purchase/sale over the exact NPC account, Inventory, and Market
+sections; reports committed owner revisions and successful compensation; and
+reports direct Market stock/changed-price commits plus selected daily City
+production, Free consumption, and price refresh. Direct Market mutations are
+owner-thread/baseline guarded and notify their Market section, but do not
+require an active named operation scope. Other transaction families and
+public owner writers remain uncovered.
+
+This candidate does not complete P12-B or establish complete owner coverage,
+complete shared-epoch coverage, capture eligibility, export, or hydration.
+P12-A remains `WAIT_DEPENDENCY`, P13 remains blocked, and Phase 12 remains
+open. Canonical promotion remains a separate human gate.
+
 ## P12-B SpatialNetwork census promotion — 2026-09-30
 
 With explicit approval, candidate

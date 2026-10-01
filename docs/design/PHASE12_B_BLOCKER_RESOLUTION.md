@@ -2,11 +2,12 @@
 
 **Status:** Static owner/write-map pass complete, with a partial live
 day-zero census through the selected-profile bootstrap test. P12 canonical
-`10fb58d` includes passive owner witnesses for each installed City’s
-`ImportantNpcs` projection and for the installed legacy `SpatialNetworkRuntime`
-locations and routes. Complete owner coverage,
-committed-write invalidation, runtime capture fencing, and P12 readiness are
-not claimed. This record decomposes the already accepted
+`b8a7da5` includes the previously promoted passive owner witnesses and the
+bounded post-MoneyAccount NPC-trade invalidation slice. Exact-tip reviewed
+candidate `b577312` adds a bounded Open-market/Market-owner invalidation slice;
+it is presented for canonical promotion with the State/matrix refresh below.
+Complete owner coverage, complete shared-epoch invalidation, runtime capture
+fencing, and P12 readiness are not claimed. This record decomposes the already accepted
 P12-B–P12-G scopes. It adds no checkpoint ID, product behavior, or
 implementation authorization.
 
@@ -707,6 +708,30 @@ the composed City set is complete, cover out-of-composition `StartingCity`
 references, or add owner-thread/quiescence, capture, export, or hydration.
 P12-B remains incomplete and P12-A remains `WAIT_DEPENDENCY`.
 
+## Reviewed P12-B Market operation invalidation candidate — 2026-10-01
+
+This matrix addendum updates the Market-related D/E writer rows above against
+P12 canonical base `b8a7da54864bee3fb9b8916793240e91fbce0955`. Independent
+exact-tip code review PASSed for candidate `b577312c2edc6d3124c6d2b9dd3a1201dc9055ae`
+(tree `88ec452a979a7439b825858a6b1b271f8bc6c948`); durable review evidence is
+`docs/design/PHASE12_P12B_MARKET_OPERATION_INVALIDATION_REVIEW.md`. The State,
+candidate, and matrix refresh are included with this candidate-branch record
+for the separate canonical-promotion gate.
+
+| Bounded writer family | Reviewed coverage in this candidate | Current limit after this candidate |
+|---|---|---|
+| `runtime.economy.market-purchase` / `runtime.economy.market-sale` | The composed exact City Market owners are registered before profile sealing. Bound Open-market purchase/sale preflight the exact rostered NPC account and Inventory plus Market identity/revision before owner writes; each committed account, Inventory, Market revision, and successful compensation is reported within the named operation scope. The exact Market wrapper service is shared with `MerchantSystem`. | This covers these two Market transaction families only. Other EconomyTransactionService families, Merchant plan/Knowledge effects, travel charges, and account-backed City/Counterparty paths remain outside this operation slice. It is not a complete E-owner map or capture boundary. |
+| Direct Market owner mutators | `AddStock`, `RemoveStockUpTo`, and changed `UpdatePrices` preflight the owner thread and exact Market baseline, then report the successful Market revision. Price refresh refuses a changed-price commit when the revision is exhausted. Tests verify changed-price revision/epoch advancement and no-op stability. | Direct Market calls do not require an active named operation scope. They notify only their Market section and do not prove a universal boundary around all public child-owner writes. |
+| Daily City production, Free consumption, and price refresh | The existing synchronous day path runs inside `runtime.advance-day`; Market commits notify their owner while that scope is active. Candidate tests verify production, Free-consumption, and changed-price daily commits each advance the Market revision and partial epoch. | This is the selected daily path only. It does not cover every `CityRuntime`/Market caller, every supported owner, or operation completeness outside the scoped day advance. |
+
+This is a reviewed partial shared-epoch extension, not complete shared-epoch
+coverage. The exact validation counts and XML/log hashes are recorded in
+`docs/design/PHASE12_P12B_MARKET_OPERATION_INVALIDATION_CANDIDATE.md`. At the
+time this proposal was prepared, canonical promotion was still pending.
+P12-B remains incomplete; P12-A remains `WAIT_DEPENDENCY`; P13 remains blocked.
+No complete owner coverage, capture eligibility, export, or hydration is
+claimed.
+
 ### Reviewed P12-B runtime-admission adapter — implementation boundary
 
 The earlier hotspot hold above predates the refreshed, independently
@@ -762,3 +787,4 @@ incomplete and P12-A remains `WAIT_DEPENDENCY`.
 The reviewed partial census now publishes one exact installed `MoneyAccountRuntime` identity/cardinality/local-revision witness per currently rostered NPC. Candidate and exact-tip review evidence are linked from `docs/design/PHASE12_P12B_NPC_MONEY_ACCOUNT_CENSUS_CANDIDATE.md` and `docs/design/PHASE12_P12B_NPC_MONEY_ACCOUNT_CENSUS_IMPLEMENTATION_REVIEW.md`.
 
 This closes only the per-NPC passive identity/cardinality census gap. `TryDebit`/`TryCredit` remain direct child writes with local revision only; they are not connected to the shared protocol epoch. The promotion does not establish complete owner coverage, committed-write invalidation, quiescence, capture eligibility, export, or hydration. P12-B remains incomplete, P12-A remains `WAIT_DEPENDENCY`, and P13 remains blocked.
+

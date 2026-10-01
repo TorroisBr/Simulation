@@ -1,13 +1,12 @@
 # P12-B selected Market operation invalidation candidate
 
-**Status:** Implementation and required validation complete; independent exact-tip code review pending. This candidate does not request canonical promotion.
+**Status:** Implementation and required validation complete; independent exact-tip code review PASS. The durable review record is included on this candidate branch; canonical promotion remains a separate human gate. This candidate does not itself perform canonical promotion.
 
 ## Exact boundary
 
 - Canonical base: `codex/phase12/canonical` at `b8a7da54864bee3fb9b8916793240e91fbce0955`.
 - Implementation commit: `55cb17109292930a4ac73026c3a4cf186403d5bf`.
-- Exact-tip coverage commit: `c81c5159ff71ace1e64e8e74d9f027393a5299ca`.
-- Exact candidate code/test tree: `e5182972550e5eab9bf9a926ca4bf5d483ddaec3`.
+- Published exact-tip candidate: `b577312c2edc6d3124c6d2b9dd3a1201dc9055ae`, tree `88ec452a979a7439b825858a6b1b271f8bc6c948`.
 - Candidate branch: `codex/phase12/P12BMarketOperationInvalidation`.
 - Reviewed design: `PHASE12_P12B_MARKET_OPERATION_INVALIDATION_DESIGN.md`; exact-tip design review PASS at `9a71eb65b00d7425172225d0812de5f5cfb2c121`, durable record `PHASE12_P12B_MARKET_OPERATION_INVALIDATION_DESIGN_REVIEW.md`.
 
@@ -23,7 +22,12 @@ The transaction scope does not include later Merchant plan completion, TravelPla
 
 ## Validation
 
-All results below are from the exact code tree above. XML and log paths are under `Temp/ValidationResults`; SHA-256 values were read immediately after each successful run.
+All results below exercise code and test files present in the exact published
+candidate tree above; the validation-record documentation was refreshed after
+those runs and did not alter the implementation or test files. XML and log
+artifacts are retained under
+`Library/ValidationResults/P12BMarketOperationInvalidation`; SHA-256 values
+were read from the retained files after the successful runs.
 
 | Suite | Result | XML | XML SHA-256 | Log SHA-256 |
 |---|---:|---|---|---|
@@ -38,4 +42,4 @@ All results below are from the exact code tree above. XML and log paths are unde
 
 ## Review and promotion boundary
 
-The first independent exact-tip implementation review identified missing witnesses for changed-price refresh and daily Free-consumption/price-refresh commits. Coverage commit `c81c5159ff71ace1e64e8e74d9f027393a5299ca` adds those four assertions: direct changed-price revision/epoch plus no-op stability, and daily Free-consumption and changed-price revision/epoch. The expanded focused suites, ALL EditMode, official Smoke, and diff-check pass on the exact candidate code/test tree above. Independent exact-tip implementation re-review is pending. Canonical promotion requires separate approval. Promotion would advance only this bounded Market-operation invalidation slice; it would not complete P12-B, make P12-A ready, or unblock P13.
+The first independent exact-tip implementation review identified missing witnesses for changed-price refresh and daily Free-consumption/price-refresh commits. The published candidate adds those witnesses: direct changed-price revision/epoch plus no-op stability, and daily Free-consumption and changed-price revision/epoch. Independent exact-tip re-review PASSed on published commit `b577312c2edc6d3124c6d2b9dd3a1201dc9055ae` (tree `88ec452a979a7439b825858a6b1b271f8bc6c948`); the durable review record is `PHASE12_P12B_MARKET_OPERATION_INVALIDATION_REVIEW.md` on the candidate branch. Canonical promotion requires separate approval. Promotion would advance only this bounded Market-operation invalidation slice; it would not complete P12-B, make P12-A ready, or unblock P13.
