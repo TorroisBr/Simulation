@@ -4,7 +4,7 @@
 **Canonical base:** `43dba1b5d16cba1558c4c39239f3cd0d4c669958`.
 **Code-bearing commit:** `2bdd0990acc2bdc2d6073b0863fc1ae94a209c4d` (tree `58f0e76525a0ee6dc9b7f73f34dcbf71db944a09`).
 **Design authority:** reviewed P12-B per-NPC MoneyAccount census boundary and approved implementation scope.
-**Status:** implementation candidate; independent exact-tip code review pending.
+**Status:** independent exact-tip implementation review PASS; durable record: `PHASE12_P12B_NPC_MONEY_ACCOUNT_CENSUS_IMPLEMENTATION_REVIEW.md` (this docs-only commit). Awaiting separate canonical promotion approval.
 
 ## Delivered boundary
 
@@ -29,3 +29,4 @@ Validation used `Tools/UnityValidation/Invoke-UnityValidation.ps1`; result artif
 | `git diff --check` | passed | — | — |
 
 The four XML result summaries were parsed from the retained artifacts; all report `Passed`, with zero failed and zero skipped tests. The candidate commit contains only the census source, runtime/protocol integration, focused tests, and their two Unity metadata files.
+
