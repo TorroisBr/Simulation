@@ -43,10 +43,14 @@ All result XML and log files are retained under `Library/ValidationResults/P12BR
 
 ## Independent exact-tip implementation review
 
-**Result:** PASS  
-**Reviewed candidate tip:** `de65ae22f79cddf83769dcedd838f46c109bb210`  
-**Reviewed implementation commit/tree:** `9d4b035bc484286cfb58d66cca07809844c30254` / `911d7cc9ff4e9c0205ae3305df4757099a461b0a`  
-**Review base:** P12 canonical `f538a096bf4b2558566518483bc60f0129718a3b`  
+**Result:** PASS
+
+**Reviewed candidate tip:** `de65ae22f79cddf83769dcedd838f46c109bb210`
+
+**Reviewed implementation commit/tree:** `9d4b035bc484286cfb58d66cca07809844c30254` / `911d7cc9ff4e9c0205ae3305df4757099a461b0a`
+
+**Review base:** P12 canonical `f538a096bf4b2558566518483bc60f0129718a3b`
+
 **Reviewer:** independent Luna implementation review
 
 The exact-tip reviewer confirmed that Start captures both thread identity components only for the explicitly selected profile; the runtime revalidates the identity and rejects P18 composition; the fixed operation registrations precede sealing; and the bootstrap scope begins after the existing partial census baseline and ends after full pipeline return. The reviewer also confirmed the direct-clock dispatcher is selected-profile-only, P18 clock behavior is unchanged, exception paths fault admission, and the documentation preserves P12-B/P12-A limits. No blocking findings were reported. `git diff --check` passed against the exact base and candidate tip. The reviewer independently verified each listed result XML/log SHA-256 and test count.
