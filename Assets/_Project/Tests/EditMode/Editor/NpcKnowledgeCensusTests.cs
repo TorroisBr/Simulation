@@ -402,6 +402,52 @@ public sealed class NpcKnowledgeCensusTests
     }
 
     [Test]
+    public void KnowledgeRosterReconciliationPreservesInventoryFamilyCoverageAndProviders()
+    {
+        PersonStore personStore = new PersonStore();
+        NpcRuntime npcB = new NpcRuntime("inventory-npc-b", null);
+        InventoryRuntime npcBInventory = npcB.Inventory;
+        List<NpcRuntime> roster = new List<NpcRuntime> { npcB };
+        ContinuationCensusProtocol protocol = CreateCompleteNpcFamilyProtocol(personStore, roster, includeInventory: true);
+        IReadOnlyList<IOwnerSectionCensusProvider> inventoryBefore = protocol.InventoryFamilyProviders;
+        Assert.That(inventoryBefore, Has.Count.EqualTo(1));
+        Assert.That(inventoryBefore[0].GetCurrentCensus().OwnerInstanceIdentity, Is.SameAs(npcBInventory));
+        Assert.That(protocol.NpcKnowledgeFamilyProviders, Has.Count.EqualTo(10));
+
+        NpcRuntime npcA = new NpcRuntime("inventory-npc-a", null);
+        InventoryRuntime npcAInventory = npcA.Inventory;
+        roster.Add(npcA);
+        ReconcileNpcFamily(protocol, personStore);
+
+        IReadOnlyList<IOwnerSectionCensusProvider> inventoryAfterAddition = protocol.InventoryFamilyProviders;
+        Assert.That(inventoryAfterAddition, Has.Count.EqualTo(2));
+        Assert.That(inventoryAfterAddition[0].GetCurrentCensus().SectionId,
+            Is.EqualTo(NpcInventoryCensusProvider.SectionPrefix + npcA.RuntimeId));
+        Assert.That(inventoryAfterAddition[0].GetCurrentCensus().OwnerInstanceIdentity, Is.SameAs(npcAInventory));
+        Assert.That(inventoryAfterAddition[1], Is.SameAs(inventoryBefore[0]));
+        Assert.That(inventoryAfterAddition[1].GetCurrentCensus().OwnerInstanceIdentity, Is.SameAs(npcBInventory));
+        Assert.That(protocol.NpcKnowledgeFamilyProviders, Has.Count.EqualTo(20));
+        Assert.That(protocol.NpcKnowledgeFamilyProviders.Select(p => p.GetCurrentCensus().SectionId)
+            .Intersect(inventoryAfterAddition.Select(p => p.GetCurrentCensus().SectionId)), Is.Empty,
+            "Inventory and Knowledge section families must remain disjoint during shared roster reconciliation.");
+        Assert.That(ReadEpoch(protocol), Is.EqualTo(1L),
+            "The Inventory and Knowledge additions must publish under the single outer roster mutation epoch.");
+        Assert.That(protocol.TryAssessOwnerSectionInventory(out ContinuationCensusFailure addAssessment), Is.True,
+            addAssessment.ToString());
+
+        roster.Remove(npcA);
+        ReconcileNpcFamily(protocol, personStore);
+        IReadOnlyList<IOwnerSectionCensusProvider> inventoryAfterRemoval = protocol.InventoryFamilyProviders;
+        Assert.That(inventoryAfterRemoval, Has.Count.EqualTo(1));
+        Assert.That(inventoryAfterRemoval[0], Is.SameAs(inventoryBefore[0]));
+        Assert.That(inventoryAfterRemoval[0].GetCurrentCensus().OwnerInstanceIdentity, Is.SameAs(npcBInventory));
+        Assert.That(protocol.NpcKnowledgeFamilyProviders, Has.Count.EqualTo(10));
+        Assert.That(ReadEpoch(protocol), Is.EqualTo(2L));
+        Assert.That(protocol.TryAssessOwnerSectionInventory(out ContinuationCensusFailure removeAssessment), Is.True,
+            removeAssessment.ToString());
+    }
+
+    [Test]
     public void KnowledgeFamilyReconciliationRebindsEachTypedOwnerAndKeepsOtherProviders()
     {
         PersonStore personStore = new PersonStore();
@@ -448,14 +494,13 @@ public sealed class NpcKnowledgeCensusTests
         NpcRuntime first = new NpcRuntime("atomic-a", null);
         NpcRuntime second = new NpcRuntime("atomic-b", null);
         List<NpcRuntime> roster = new List<NpcRuntime> { first, second };
-        ContinuationCensusProtocol protocol = CreateCompleteNpcFamilyProtocol(personStore, roster);
+        ContinuationCensusProtocol protocol = CreateCompleteNpcFamilyProtocol(personStore, roster, includeInventory: true);
         IReadOnlyList<IOwnerSectionCensusProvider> spatialBefore = protocol.SpatialKnowledgeFamilyProviders;
         IReadOnlyList<IOwnerSectionCensusProvider> knowledgeBefore = protocol.NpcKnowledgeFamilyProviders;
+        IReadOnlyList<IOwnerSectionCensusProvider> inventoryBefore = protocol.InventoryFamilyProviders;
 
-        NpcRuntime replacementFirst = new NpcRuntime(first.RuntimeId, null);
         typeof(NpcRuntime).GetField("commercialKnowledge", BindingFlags.Instance | BindingFlags.NonPublic)
             .SetValue(second, null);
-        roster[0] = replacementFirst;
 
         Assert.That(protocol.TryEnterOperation("runtime.npc-membership", out SimulationOperationScope scope, out _), Is.True);
         Assert.That(protocol.TryReconcileSpatialKnowledgeRosterAndNotifyCommittedMutations(
@@ -463,6 +508,11 @@ public sealed class NpcKnowledgeCensusTests
         Assert.That(failure, Is.EqualTo(ContinuationCensusFailure.OwnerCoverageIncomplete));
         Assert.That(protocol.SpatialKnowledgeFamilyProviders, Is.SameAs(spatialBefore));
         Assert.That(protocol.NpcKnowledgeFamilyProviders, Is.SameAs(knowledgeBefore));
+        Assert.That(protocol.InventoryFamilyProviders, Is.SameAs(inventoryBefore),
+            "A failed Knowledge reconciliation must not publish a partial Inventory provider snapshot.");
+        Assert.That(protocol.InventoryFamilyProviders, Has.Count.EqualTo(2));
+        Assert.That(protocol.InventoryFamilyProviders[0].GetCurrentCensus().OwnerInstanceIdentity, Is.SameAs(first.Inventory));
+        Assert.That(protocol.InventoryFamilyProviders[1].GetCurrentCensus().OwnerInstanceIdentity, Is.SameAs(second.Inventory));
         Assert.That(protocol.TryReadMutationEpoch(out long epoch, out ContinuationCensusFailure epochFailure), Is.False);
         Assert.That(epoch, Is.Zero);
         Assert.That(epochFailure, Is.EqualTo(ContinuationCensusFailure.ProtocolFaulted));
@@ -633,7 +683,8 @@ public sealed class NpcKnowledgeCensusTests
 
     private static ContinuationCensusProtocol CreateCompleteNpcFamilyProtocol(
         PersonStore personStore,
-        IReadOnlyList<NpcRuntime> roster)
+        IReadOnlyList<NpcRuntime> roster,
+        bool includeInventory = false)
     {
         IReadOnlyList<IOwnerSectionCensusProvider> personProviders = PersonStoreCensusProvider.CreateProviders(personStore);
         ContinuationCensusProtocol protocol = new ContinuationCensusProtocol();
@@ -647,6 +698,12 @@ public sealed class NpcKnowledgeCensusTests
         Assert.That(protocol.RegisterCensusProvider(PersonMaterializationBindingCensusProvider.SectionId, personProviders[1], out _), Is.True);
         Assert.That(protocol.RegisterSpatialKnowledgeRosterFamily(roster, out ContinuationCensusFailure spatialFailure), Is.True,
             spatialFailure.ToString());
+        if (includeInventory)
+        {
+            foreach (NpcRuntime npc in roster) _ = npc.Inventory;
+            Assert.That(protocol.RegisterInventoryRosterFamily(roster, out ContinuationCensusFailure inventoryFailure), Is.True,
+                inventoryFailure.ToString());
+        }
         Assert.That(protocol.RegisterNpcKnowledgeRosterFamily(roster, out ContinuationCensusFailure knowledgeFailure), Is.True,
             knowledgeFailure.ToString());
         Assert.That(protocol.SealExpectedSectionInventory(out _), Is.True);
