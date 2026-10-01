@@ -15,19 +15,19 @@ Add a roster-following census family for NPC-owned accounts only. The family pro
 
 ## Witness contract
 
-- Register one schema-v1 section for each exact NPC in the installed runtime roster, keyed with the existing per-NPC section-ID convention and stable `NpcRuntime.RuntimeId`.
+- Register one schema-v1 section for each exact NPC in the installed runtime roster. Use the collision-free prefix `p12e.npc-money-account/` followed by the stable `NpcRuntime.RuntimeId`; this is distinct from `p12f.inventory/` and `p12e.city-market-stock-rows/`.
 - Bind the witness to the exact object returned by `NpcRuntime.MoneyAccount`; report cardinality `1` for a present owner, including a zero-balance account, and report only `MoneyAccountRuntime.Revision`.
 - Do not include balance or other account payload in the witness. Do not replace or materialize an account while reading it.
 - Require a valid unique NPC RuntimeId, a non-null account, and a distinct account object per NPC. A missing or aliased owner is an incomplete/invalid census section and must fail closed.
 - Order providers ordinally by NPC RuntimeId and return an immutable provider view, consistent with the existing Inventory family.
 - If an account reference changes while its NPC remains registered, retain the last published family and fault/reject reconciliation; do not silently adopt a replacement. Removing an NPC and later registering a new NPC with the same RuntimeId is a new membership boundary and may publish its new account owner.
 
-The witness is passive and unsynchronized. Revision changes establish only that this account owner recorded a local mutation; they do not prove a shared mutation epoch, runtime operation boundary, or capture eligibility.
+The witness is passive and unsynchronized. Revision changes establish only that this account owner recorded a local mutation; they do not prove a shared mutation epoch, runtime operation boundary, or capture eligibility. The family is registered in `ContinuationCensusProtocol`, but this slice adds no mutation notification for account writers. Therefore a successful account revision advance without an existing supported notification must make the next census assessment or membership reconciliation fail closed and latch the census protocol fault. This is deliberate evidence that account-write invalidation is still missing; it must not disable or alter ordinary gameplay operations, and it does not establish capture eligibility.
 
 ## Smallest integration surface
 
 - Add `NpcMoneyAccountCensusProviders.cs` and its Unity metadata.
-- Add the family beside the existing per-NPC Inventory family in `ContinuationCensusProtocol` registration, validation, owner-identity tracking, and staged roster reconciliation. Publish the family only after the full membership reconciliation succeeds.
+- Add the family beside the existing per-NPC Inventory family in `ContinuationCensusProtocol` registration, validation, owner-identity tracking, and staged roster reconciliation. Publish the family only after the full membership reconciliation succeeds. Do not add account-write notifications or broaden the shared mutation-epoch surface in this package.
 - Expose the reconciled family through `SimulationRuntime` and the existing bootstrap composition boundary used by the census providers.
 - Leave `NpcRuntime`, `MoneyAccountRuntime`, transaction semantics, and account writers unchanged unless exact review finds that the stated identity/revision contract is false.
 
@@ -40,6 +40,7 @@ Do not add mutation-epoch wiring, runtime operation scopes, balance export, hydr
 3. Adding/removing an NPC updates only its account section within the same atomic membership reconciliation as the already registered families. Removing and later registering a new NPC with the same RuntimeId publishes the new account identity.
 4. Null accounts, duplicate RuntimeIds, aliased account objects, or an unexpected in-place account replacement fail closed without partially publishing the account family or disturbing other families.
 5. Census reads do not materialize missing accounts. Tests must assert only identity, cardinality, and revision; they must not expose balances through the witness.
+6. A positive account write without a supported account-section notification causes the next census assessment to reject/fault rather than accept a stale baseline. A subsequent roster reconciliation also rejects if it encounters that unnotified revision. Zero/no-op and failed writes leave the protocol assessment valid because the owner revision did not advance.
 
 Run focused census and roster-reconciliation tests, the selected-profile bootstrap test, the required P12 EditMode/Smoke regressions, and `git diff --check` on the exact implementation tip. Keep test XML/log hashes with the candidate record.
 
