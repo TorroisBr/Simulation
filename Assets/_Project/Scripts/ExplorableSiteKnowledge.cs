@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using UnityEngine;
 
 public enum ExplorableSiteKnowledgeSource
 {
@@ -69,9 +70,11 @@ public sealed class ExplorableSiteKnowledgeRuntime
     private readonly List<ExplorableSiteKnowledgeObservation> observations =
         new List<ExplorableSiteKnowledgeObservation>();
     private readonly IReadOnlyList<ExplorableSiteKnowledgeObservation> readOnlyObservations;
+    [SerializeField] private long revision;
 
     public string OwnerRuntimeId => ownerRuntimeId;
     public IReadOnlyList<ExplorableSiteKnowledgeObservation> Observations => readOnlyObservations;
+    public long Revision => revision;
 
     public ExplorableSiteKnowledgeRuntime(string ownerRuntimeId)
     {
@@ -116,7 +119,9 @@ public sealed class ExplorableSiteKnowledgeRuntime
 
         if (existingIndex < 0)
         {
+            if (revision == long.MaxValue) return false;
             observations.Add(observation);
+            revision++;
             return true;
         }
 
@@ -125,7 +130,9 @@ public sealed class ExplorableSiteKnowledgeRuntime
             return false;
         }
 
+        if (revision == long.MaxValue) return false;
         observations[existingIndex] = observation;
+        revision++;
         return true;
     }
 

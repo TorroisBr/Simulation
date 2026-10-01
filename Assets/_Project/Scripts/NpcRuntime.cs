@@ -92,12 +92,16 @@ public class NpcRuntime : ICapabilityConditionSource
     public MerchantTradePlanRuntime MerchantTradePlan => merchantTradePlan ?? (merchantTradePlan = new MerchantTradePlanRuntime());
     public NpcTravelPlanRuntime TravelPlan => travelPlan ?? (travelPlan = new NpcTravelPlanRuntime());
     public CommercialKnowledgeRuntime CommercialKnowledge => commercialKnowledge ?? (commercialKnowledge = new CommercialKnowledgeRuntime());
+    internal CommercialKnowledgeRuntime ExistingCommercialKnowledge => commercialKnowledge;
     internal NpcLocalKnowledgeObservationRuntime LocalKnowledgeObservationRuntime => localKnowledgeObservationRuntime ?? (localKnowledgeObservationRuntime = new NpcLocalKnowledgeObservationRuntime());
     internal NpcMerchantTradeStateRuntime MerchantTradeStateRuntime => merchantTradeStateRuntime ?? (merchantTradeStateRuntime = new NpcMerchantTradeStateRuntime());
     public ExplorableSiteKnowledgeRuntime ExplorableSiteKnowledge => explorableSiteKnowledge ?? (explorableSiteKnowledge = new ExplorableSiteKnowledgeRuntime(runtimeId));
+    internal ExplorableSiteKnowledgeRuntime ExistingExplorableSiteKnowledge => explorableSiteKnowledge;
     public SpatialKnowledgeRuntime SpatialKnowledge => spatialKnowledge ?? (spatialKnowledge = new SpatialKnowledgeRuntime(runtimeId));
     public LocalTopologyKnowledgeRuntime LocalTopologyKnowledge => localTopologyKnowledge ?? (localTopologyKnowledge = new LocalTopologyKnowledgeRuntime(runtimeId));
+    internal LocalTopologyKnowledgeRuntime ExistingLocalTopologyKnowledge => localTopologyKnowledge;
     public AdventureSiteIntelKnowledgeRuntime AdventureSiteIntelKnowledge => adventureSiteIntelKnowledge ?? (adventureSiteIntelKnowledge = new AdventureSiteIntelKnowledgeRuntime(runtimeId));
+    internal AdventureSiteIntelKnowledgeRuntime ExistingAdventureSiteIntelKnowledge => adventureSiteIntelKnowledge;
 	public string NpcName => npcData != null ? npcData.name : "NPC desconhecido";
 
     internal bool CanBindRuntimeMutationGuard(AuthoritativeMutationGuard guard)

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using UnityEngine;
 
 public enum LocalTopologyKnowledgeSource
 {
@@ -200,6 +201,7 @@ public sealed class LocalConnectionKnowledgeObservation
 public sealed class LocalTopologyKnowledgeRuntime
 {
     private readonly string ownerRuntimeId;
+    [SerializeField] private long revision;
     private readonly List<LocalPlaceKnowledgeObservation> placeObservations =
         new List<LocalPlaceKnowledgeObservation>();
     private readonly List<LocalConnectionKnowledgeObservation> connectionObservations =
@@ -208,6 +210,7 @@ public sealed class LocalTopologyKnowledgeRuntime
     private readonly IReadOnlyList<LocalConnectionKnowledgeObservation> readOnlyConnectionObservations;
 
     public string OwnerRuntimeId => ownerRuntimeId;
+    public long Revision => revision;
     public IReadOnlyList<LocalPlaceKnowledgeObservation> PlaceObservations => readOnlyPlaceObservations;
     public IReadOnlyList<LocalConnectionKnowledgeObservation> ConnectionObservations => readOnlyConnectionObservations;
 
@@ -278,7 +281,9 @@ public sealed class LocalTopologyKnowledgeRuntime
 
         if (existingIndex < 0)
         {
+            if (revision == long.MaxValue) return false;
             placeObservations.Add(observation);
+            revision++;
             return true;
         }
 
@@ -287,7 +292,9 @@ public sealed class LocalTopologyKnowledgeRuntime
             return false;
         }
 
+        if (revision == long.MaxValue) return false;
         placeObservations[existingIndex] = observation;
+        revision++;
         return true;
     }
 
@@ -308,7 +315,9 @@ public sealed class LocalTopologyKnowledgeRuntime
 
         if (existingIndex < 0)
         {
+            if (revision == long.MaxValue) return false;
             connectionObservations.Add(observation);
+            revision++;
             return true;
         }
 
@@ -317,7 +326,9 @@ public sealed class LocalTopologyKnowledgeRuntime
             return false;
         }
 
+        if (revision == long.MaxValue) return false;
         connectionObservations[existingIndex] = observation;
+        revision++;
         return true;
     }
 
