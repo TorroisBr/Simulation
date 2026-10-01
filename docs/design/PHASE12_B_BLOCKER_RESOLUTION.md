@@ -756,3 +756,9 @@ zero. It does not prove evolved-boundary cardinality, register the section in
 a complete P12-B census, connect writes to the shared epoch, or establish
 capture eligibility, quiescence, export, or hydration. P12-B remains
 incomplete and P12-A remains `WAIT_DEPENDENCY`.
+
+### Per-NPC MoneyAccount census promoted at `9f615d8`
+
+The reviewed partial census now publishes one exact installed `MoneyAccountRuntime` identity/cardinality/local-revision witness per currently rostered NPC. Candidate and exact-tip review evidence are linked from `docs/design/PHASE12_P12B_NPC_MONEY_ACCOUNT_CENSUS_CANDIDATE.md` and `docs/design/PHASE12_P12B_NPC_MONEY_ACCOUNT_CENSUS_IMPLEMENTATION_REVIEW.md`.
+
+This closes only the per-NPC passive identity/cardinality census gap. `TryDebit`/`TryCredit` remain direct child writes with local revision only; they are not connected to the shared protocol epoch. The promotion does not establish complete owner coverage, committed-write invalidation, quiescence, capture eligibility, export, or hydration. P12-B remains incomplete, P12-A remains `WAIT_DEPENDENCY`, and P13 remains blocked.

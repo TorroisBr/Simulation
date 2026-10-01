@@ -4,7 +4,7 @@
 **Canonical base:** `43dba1b5d16cba1558c4c39239f3cd0d4c669958`.
 **Code-bearing commit:** `2bdd0990acc2bdc2d6073b0863fc1ae94a209c4d` (tree `58f0e76525a0ee6dc9b7f73f34dcbf71db944a09`).
 **Design authority:** reviewed P12-B per-NPC MoneyAccount census boundary and approved implementation scope.
-**Status:** independent exact-tip implementation review PASS; durable record: `PHASE12_P12B_NPC_MONEY_ACCOUNT_CENSUS_IMPLEMENTATION_REVIEW.md` (this docs-only commit). Awaiting separate canonical promotion approval.
+**Status:** promoted to `codex/phase12/canonical` at `9f615d84c80b797397b85ea1fac2e32361081370`; this remains a partial P12-B census witness only.
 
 ## Delivered boundary
 
