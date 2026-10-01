@@ -697,3 +697,27 @@ not connect `InventoryRuntime.AddItem`/`RemoveItem` to the shared epoch, prove
 the composed City set is complete, cover out-of-composition `StartingCity`
 references, or add owner-thread/quiescence, capture, export, or hydration.
 P12-B remains incomplete and P12-A remains `WAIT_DEPENDENCY`.
+
+### Reviewed P12-B runtime-admission adapter — implementation boundary
+
+The earlier hotspot hold above predates the refreshed, independently
+reviewed design `docs/design/PHASE12_P12B_RUNTIME_QUIESCENCE_DESIGN.md` at
+`e5a32b8ec226204e751e1da41dfcf2546a760718` and the explicit acceptance of the
+P12-B prerequisite scopes. For this bounded adapter only, that reviewed design
+now authorizes work in `SimulationRuntime`, `SimulationTime`,
+`ContinuationCensusProtocol`, and the selected bootstrap entry.
+
+The permitted slice is limited to `UnityBootstrap-Daily-v1`: capture and bind
+the actual Unity Start-thread identity, account for the synchronous validation
+tail through successful publication, scope nonzero daily and multi-day runtime
+advances, and route that profile's runtime-owned direct clock calls through
+the same daily operation. The P18 projected-clock path remains unchanged. This
+adapter adds no owner sections, shared mutation-epoch wiring, generic
+registration, or capture token.
+
+This addendum supersedes the earlier sentence forbidding all edits to those
+runtime hotspots only for the named adapter slice. It does not resolve the
+remaining live owner/cardinality inventory, committed-write invalidation,
+unaccounted-operation, or full-profile eligibility blockers. P12-B remains
+incomplete and P12-A remains `WAIT_DEPENDENCY`; no downstream checkpoint is
+made ready by this adapter alone.

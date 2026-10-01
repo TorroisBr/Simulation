@@ -60,3 +60,43 @@ boundary is made explicit and re-reviewed. This is a compatibility correction
 to preserve the already accepted P12 exclusion and canonical P18 clock
 ownership; it does not request new product scope or a P18 dependency. P12-B
 remains incomplete and P12-A remains `WAIT_DEPENDENCY`.
+
+---
+
+**Result: PASS**
+
+**Reviewed design tip:** `e5a32b8ec226204e751e1da41dfcf2546a760718`
+
+**Review base:** P12 canonical `f538a096bf4b2558566518483bc60f0129718a3b`
+**Reviewer:** independent Luna design review
+
+## Revalidation and disposition — 2026-10-01
+
+The refreshed design explicitly selects only `UnityBootstrap-Daily-v1`,
+captures both the Unity `Start` thread reference and managed ID, and rejects
+combination with a P18 timeline profile. The direct `SimulationTime` callback
+and the outer daily operation scope apply only to that selected daily profile;
+P18 timeline projection, direct-clock rejection, intraday execution, and
+handoff remain under P18 ownership.
+
+The proposal preserves the promoted owner-composition registration order and
+the existing partial census baseline. It adds its fixed operation IDs before
+sealing the inventory, then opens the bootstrap tail scope after the baseline.
+That scope lasts through complete pipeline return and publication callbacks;
+failure revokes publication and faults the protocol. Daily and multi-day
+advances use the existing runtime advance lease and one registered outer
+operation scope, with the runtime-owned direct clock routed through the same
+entry point. Zero-day and rejected requests do not open a scope.
+
+The design is bounded to admission and active-operation accounting for those
+named synchronous paths. It does not assert full live owner/cardinality
+coverage, shared committed-write invalidation, capture eligibility, P12-A
+readiness, or P12-B completion. ScheduledDirective and Expedition witnesses
+remain outside the partial continuation census as documented limits. The
+proposal is compatible with current canonical code and preserves the approved
+P18 boundary.
+
+This PASS supersedes the prior disposition for design tip `675b6bb` only for
+the refreshed proposal at `e5a32b8`. The accepted P12 prerequisite scope
+authorizes its bounded implementation. This record does not review or approve
+an implementation candidate and does not authorize canonical promotion.
