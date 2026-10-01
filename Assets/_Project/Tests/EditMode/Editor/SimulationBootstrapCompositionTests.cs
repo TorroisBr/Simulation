@@ -786,6 +786,22 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(simulation.Bootstrap.ExpeditionSystem.Store, Is.SameAs(simulation.Bootstrap.Expeditions));
         Assert.That(expeditionWitness.Cardinality, Is.EqualTo(simulation.Bootstrap.Expeditions.ActiveExpeditions.Count));
         Assert.That(expeditionWitness.Revision, Is.Zero);
+        Assert.That(simulation.Bootstrap.ExplorableSites.Sites, Is.Empty);
+        OwnerSectionCensusWitness explorableSiteWitness =
+            simulation.Bootstrap.ExplorableSiteCensusProvider.GetCurrentCensus();
+        Assert.That(explorableSiteWitness.SectionId, Is.EqualTo(ExplorableSiteCensusProvider.SectionId));
+        Assert.That(explorableSiteWitness.SchemaVersion, Is.EqualTo(ExplorableSiteCensusProvider.SchemaVersion));
+        Assert.That(explorableSiteWitness.OwnerInstanceIdentity, Is.SameAs(simulation.Bootstrap.ExplorableSites));
+        Assert.That(explorableSiteWitness.Cardinality, Is.Zero);
+        Assert.That(explorableSiteWitness.Cardinality, Is.EqualTo(simulation.Bootstrap.ExplorableSites.Count));
+        Assert.That(explorableSiteWitness.Revision, Is.Zero);
+        Assert.That(explorableSiteWitness.Revision, Is.EqualTo(simulation.Bootstrap.ExplorableSites.Revision));
+        OwnerSectionCensusWitness repeatedExplorableSiteWitness =
+            simulation.Bootstrap.ExplorableSiteCensusProvider.GetCurrentCensus();
+        Assert.That(repeatedExplorableSiteWitness.OwnerInstanceIdentity,
+            Is.SameAs(explorableSiteWitness.OwnerInstanceIdentity));
+        Assert.That(repeatedExplorableSiteWitness.Cardinality, Is.EqualTo(explorableSiteWitness.Cardinality));
+        Assert.That(repeatedExplorableSiteWitness.Revision, Is.EqualTo(explorableSiteWitness.Revision));
         Assert.That(runtime.LocalTopologyStore, Is.Null,
             "The selected profile excludes P10 local topology and must classify it as not composed.");
         Assert.That(authority.Revision, Is.EqualTo(1),
