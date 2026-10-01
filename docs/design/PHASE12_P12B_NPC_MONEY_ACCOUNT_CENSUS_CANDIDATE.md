@@ -29,4 +29,3 @@ Validation used `Tools/UnityValidation/Invoke-UnityValidation.ps1`; result artif
 | `git diff --check` | passed | — | — |
 
 The four XML result summaries were parsed from the retained artifacts; all report `Passed`, with zero failed and zero skipped tests. The candidate commit contains only the census source, runtime/protocol integration, focused tests, and their two Unity metadata files.
-
