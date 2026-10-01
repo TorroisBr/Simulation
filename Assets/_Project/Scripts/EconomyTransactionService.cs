@@ -937,11 +937,7 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
                 actorRuntimeId: npc.RuntimeId);
         }
 
-        bool moneyCommitted = accountBacked == true
-            ? TryCommitMoneyTransfer(npc.MoneyAccount, counterparty.MoneyAccount, totalPrice)
-            : npc.MoneyAccount.TryDebit(totalPrice);
-
-        if (moneyCommitted == false)
+        if (!market.CanInstall(market.Revision))
         {
             return EconomyTransactionResult.CreateFailure(
                 transactionType,
@@ -950,17 +946,10 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
                 actorRuntimeId: npc.RuntimeId);
         }
 
-        if (market.RemoveStockUpTo(item, quantity) != quantity)
+        bool p12Tracking = p12CensusRuntime != null
+            && p12CensusRuntime.HasP12MarketOperationAdapter;
+        if (p12Tracking && accountBacked)
         {
-            if (accountBacked == true)
-            {
-                TryCommitMoneyTransfer(counterparty.MoneyAccount, npc.MoneyAccount, totalPrice);
-            }
-            else
-            {
-                npc.MoneyAccount.TryCredit(totalPrice);
-            }
-
             return EconomyTransactionResult.CreateFailure(
                 transactionType,
                 moneyEffect,
@@ -968,22 +957,92 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
                 actorRuntimeId: npc.RuntimeId);
         }
 
-        npc.Inventory.AddItem(item, quantity, unitPrice);
+        SimulationOperationScope operationScope = null;
+        string accountSectionId = null;
+        string inventorySectionId = null;
+        string marketSectionId = null;
+        if (p12Tracking
+            && !p12CensusRuntime.TryBeginP12MarketOperation(
+                npc,
+                market,
+                transactionType,
+                out operationScope,
+                out accountSectionId,
+                out inventorySectionId,
+                out marketSectionId))
+        {
+            return EconomyTransactionResult.CreateFailure(
+                transactionType,
+                moneyEffect,
+                EconomyTransactionFailureReason.TransactionCommitFailed,
+                actorRuntimeId: npc.RuntimeId);
+        }
 
-        return EconomyTransactionResult.CreateSuccess(
-            transactionType,
-            moneyEffect,
-            totalPrice,
-            item.DefinitionId,
-            requestedQuantity,
-            quantity,
-            unitPrice,
-            totalPrice,
-            sourceRuntimeId: accountBacked == true ? npc.RuntimeId : null,
-            destinationRuntimeId: accountBacked == true ? counterparty.CounterpartyRuntimeId : null,
-            actorRuntimeId: npc.RuntimeId,
-            itemSourceRuntimeId: counterparty.CounterpartyRuntimeId,
-            itemDestinationRuntimeId: npc.RuntimeId);
+        try
+        {
+            bool moneyCommitted = accountBacked == true
+                ? TryCommitMoneyTransfer(npc.MoneyAccount, counterparty.MoneyAccount, totalPrice)
+                : npc.MoneyAccount.TryDebit(totalPrice);
+
+            if (moneyCommitted == false)
+            {
+                return EconomyTransactionResult.CreateFailure(
+                    transactionType,
+                    moneyEffect,
+                    EconomyTransactionFailureReason.TransactionCommitFailed,
+                    actorRuntimeId: npc.RuntimeId);
+            }
+            NotifyP12MarketOwnerMutation(p12Tracking, accountSectionId);
+
+            if (market.RemoveStockUpTo(item, quantity) != quantity)
+            {
+                bool refunded = accountBacked == true
+                    ? TryCommitMoneyTransfer(counterparty.MoneyAccount, npc.MoneyAccount, totalPrice)
+                    : npc.MoneyAccount.TryCredit(totalPrice);
+                if (refunded) NotifyP12MarketOwnerMutation(p12Tracking, accountSectionId);
+
+                return EconomyTransactionResult.CreateFailure(
+                    transactionType,
+                    moneyEffect,
+                    EconomyTransactionFailureReason.TransactionCommitFailed,
+                    actorRuntimeId: npc.RuntimeId);
+            }
+
+            long inventoryRevisionBefore = npc.Inventory.Revision;
+            npc.Inventory.AddItem(item, quantity, unitPrice);
+            if (npc.Inventory.Revision != inventoryRevisionBefore)
+            {
+                NotifyP12MarketOwnerMutation(p12Tracking, inventorySectionId);
+            }
+            else if (p12Tracking)
+            {
+                p12CensusRuntime.FaultRuntimeAdmission();
+                return EconomyTransactionResult.CreateFailure(
+                    transactionType,
+                    moneyEffect,
+                    EconomyTransactionFailureReason.TransactionCommitFailed,
+                    actorRuntimeId: npc.RuntimeId);
+            }
+
+            return EconomyTransactionResult.CreateSuccess(
+                transactionType,
+                moneyEffect,
+                totalPrice,
+                item.DefinitionId,
+                requestedQuantity,
+                quantity,
+                unitPrice,
+                totalPrice,
+                sourceRuntimeId: accountBacked == true ? npc.RuntimeId : null,
+                destinationRuntimeId: accountBacked == true ? counterparty.CounterpartyRuntimeId : null,
+                actorRuntimeId: npc.RuntimeId,
+                itemSourceRuntimeId: counterparty.CounterpartyRuntimeId,
+                itemDestinationRuntimeId: npc.RuntimeId);
+        }
+        finally
+        {
+            operationScope?.Dispose();
+        }
     }
 
     private EconomyTransactionResult ExecuteMarketSale(
@@ -1124,11 +1183,7 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
                 actorRuntimeId: npc.RuntimeId);
         }
 
-        bool moneyCommitted = accountBacked == true
-            ? TryCommitMoneyTransfer(counterparty.MoneyAccount, npc.MoneyAccount, totalPrice)
-            : npc.MoneyAccount.TryCredit(totalPrice);
-
-        if (moneyCommitted == false)
+        if (!market.CanInstall(market.Revision))
         {
             return EconomyTransactionResult.CreateFailure(
                 transactionType,
@@ -1137,17 +1192,10 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
                 actorRuntimeId: npc.RuntimeId);
         }
 
-        if (npc.Inventory.RemoveItem(item, quantity) == false)
+        bool p12Tracking = p12CensusRuntime != null
+            && p12CensusRuntime.HasP12MarketOperationAdapter;
+        if (p12Tracking && accountBacked)
         {
-            if (accountBacked == true)
-            {
-                TryCommitMoneyTransfer(npc.MoneyAccount, counterparty.MoneyAccount, totalPrice);
-            }
-            else
-            {
-                npc.MoneyAccount.TryDebit(totalPrice);
-            }
-
             return EconomyTransactionResult.CreateFailure(
                 transactionType,
                 moneyEffect,
@@ -1155,22 +1203,94 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
                 actorRuntimeId: npc.RuntimeId);
         }
 
-        market.AddStock(item, quantity);
+        SimulationOperationScope operationScope = null;
+        string accountSectionId = null;
+        string inventorySectionId = null;
+        string marketSectionId = null;
+        if (p12Tracking
+            && !p12CensusRuntime.TryBeginP12MarketOperation(
+                npc,
+                market,
+                transactionType,
+                out operationScope,
+                out accountSectionId,
+                out inventorySectionId,
+                out marketSectionId))
+        {
+            return EconomyTransactionResult.CreateFailure(
+                transactionType,
+                moneyEffect,
+                EconomyTransactionFailureReason.TransactionCommitFailed,
+                actorRuntimeId: npc.RuntimeId);
+        }
 
-        return EconomyTransactionResult.CreateSuccess(
-            transactionType,
-            moneyEffect,
-            totalPrice,
-            item.DefinitionId,
-            requestedQuantity,
-            quantity,
-            unitPrice,
-            totalPrice,
-            sourceRuntimeId: accountBacked == true ? counterparty.CounterpartyRuntimeId : null,
-            destinationRuntimeId: accountBacked == true ? npc.RuntimeId : null,
-            actorRuntimeId: npc.RuntimeId,
-            itemSourceRuntimeId: npc.RuntimeId,
-            itemDestinationRuntimeId: counterparty.CounterpartyRuntimeId);
+        try
+        {
+            bool moneyCommitted = accountBacked == true
+                ? TryCommitMoneyTransfer(counterparty.MoneyAccount, npc.MoneyAccount, totalPrice)
+                : npc.MoneyAccount.TryCredit(totalPrice);
+
+            if (moneyCommitted == false)
+            {
+                return EconomyTransactionResult.CreateFailure(
+                    transactionType,
+                    moneyEffect,
+                    EconomyTransactionFailureReason.TransactionCommitFailed,
+                    actorRuntimeId: npc.RuntimeId);
+            }
+            NotifyP12MarketOwnerMutation(p12Tracking, accountSectionId);
+
+            if (npc.Inventory.RemoveItem(item, quantity) == false)
+            {
+                bool refunded = accountBacked == true
+                    ? TryCommitMoneyTransfer(npc.MoneyAccount, counterparty.MoneyAccount, totalPrice)
+                    : npc.MoneyAccount.TryDebit(totalPrice);
+                if (refunded) NotifyP12MarketOwnerMutation(p12Tracking, accountSectionId);
+
+                return EconomyTransactionResult.CreateFailure(
+                    transactionType,
+                    moneyEffect,
+                    EconomyTransactionFailureReason.TransactionCommitFailed,
+                    actorRuntimeId: npc.RuntimeId);
+            }
+            NotifyP12MarketOwnerMutation(p12Tracking, inventorySectionId);
+
+            int addedToMarket = market.AddStock(item, quantity);
+            if (addedToMarket != quantity)
+            {
+                if (p12Tracking) p12CensusRuntime.FaultRuntimeAdmission();
+                return EconomyTransactionResult.CreateFailure(
+                    transactionType,
+                    moneyEffect,
+                    EconomyTransactionFailureReason.TransactionCommitFailed,
+                    actorRuntimeId: npc.RuntimeId);
+            }
+
+            return EconomyTransactionResult.CreateSuccess(
+                transactionType,
+                moneyEffect,
+                totalPrice,
+                item.DefinitionId,
+                requestedQuantity,
+                quantity,
+                unitPrice,
+                totalPrice,
+                sourceRuntimeId: accountBacked == true ? counterparty.CounterpartyRuntimeId : null,
+                destinationRuntimeId: accountBacked == true ? npc.RuntimeId : null,
+                actorRuntimeId: npc.RuntimeId,
+                itemSourceRuntimeId: npc.RuntimeId,
+                itemDestinationRuntimeId: counterparty.CounterpartyRuntimeId);
+        }
+        finally
+        {
+            operationScope?.Dispose();
+        }
+    }
+
+    private void NotifyP12MarketOwnerMutation(bool tracking, string sectionId)
+    {
+        if (!tracking) return;
+        p12CensusRuntime.NotifyP12MarketOperationOwnerMutation(sectionId);
     }
 
     public EconomyTransactionResult TryExecutePopulationConsumption(

@@ -101,6 +101,317 @@ public sealed class SimulationRuntimeAdmissionTests
     }
 
     [Test]
+    public void P12MarketWrappers_UseSharedServiceAndNotifyEveryCommittedOwner()
+    {
+        ItemData item = SimulationTestFactory.CreateItem("p12-market-roundtrip", 10f);
+        CityRuntime city = SimulationTestFactory.CreateCity(
+            "p12-market-roundtrip-city",
+            "p12-market-roundtrip-location",
+            SimulationTestFactory.CreateMarketItem(item, 10, 10));
+        NpcRuntime npc = new NpcRuntime(
+            "p12-market-roundtrip-npc",
+            SimulationTestFactory.CreateNpc("p12-market-roundtrip-npc"),
+            city,
+            100f);
+        SimulationRuntime runtime = new SimulationRuntime(
+            new SimulationTime(),
+            new[] { city },
+            new[] { npc },
+            economyEnabled: false,
+            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1());
+        EconomyTransactionService service = new EconomyTransactionService();
+        BindP12CensusRuntime(service, runtime);
+
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long before, out ContinuationCensusFailure beforeFailure),
+            Is.True, beforeFailure.ToString());
+        Assert.That(city.Market.BuyItem(npc, item, 2, out int bought, out _, out _), Is.True);
+        Assert.That(bought, Is.EqualTo(2));
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long afterPurchase, out ContinuationCensusFailure purchaseFailure),
+            Is.True, purchaseFailure.ToString());
+        Assert.That(afterPurchase, Is.EqualTo(before + 3),
+            "the shared bound wrapper reports the NPC account, Market, and Inventory commits");
+
+        Assert.That(city.Market.SellItem(npc, item, 1, out int sold, out _, out _, out _), Is.True);
+        Assert.That(sold, Is.EqualTo(1));
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long afterSale, out ContinuationCensusFailure saleFailure),
+            Is.True, saleFailure.ToString());
+        Assert.That(afterSale, Is.EqualTo(afterPurchase + 3));
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure assessment), Is.True,
+            assessment.ToString());
+    }
+
+    [Test]
+    public void P12MarketSale_ReportsAccountCommitAndSuccessfulCompensationWhenInventoryCannotCommit()
+    {
+        ItemData item = SimulationTestFactory.CreateItem("p12-market-sale-compensation", 10f);
+        CityRuntime city = SimulationTestFactory.CreateCity(
+            "p12-market-sale-compensation-city",
+            "p12-market-sale-compensation-location",
+            SimulationTestFactory.CreateMarketItem(item, 0, 10));
+        NpcRuntime npc = new NpcRuntime(
+            "p12-market-sale-compensation-npc",
+            SimulationTestFactory.CreateNpc("p12-market-sale-compensation-npc"),
+            city,
+            20f);
+        npc.Inventory.AddItem(item, 2, 4f);
+        typeof(InventoryRuntime).GetField("revision", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(npc.Inventory, long.MaxValue);
+        SimulationRuntime runtime = new SimulationRuntime(
+            new SimulationTime(),
+            new[] { city },
+            new[] { npc },
+            economyEnabled: false,
+            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1());
+        EconomyTransactionService service = new EconomyTransactionService();
+        BindP12CensusRuntime(service, runtime);
+
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long before, out ContinuationCensusFailure beforeFailure),
+            Is.True, beforeFailure.ToString());
+        EconomyTransactionResult result = service.TryExecuteMarketSale(npc, city.Market, item, 1);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.FailureReason, Is.EqualTo(EconomyTransactionFailureReason.TransactionCommitFailed));
+        Assert.That(npc.Money, Is.EqualTo(20f));
+        Assert.That(npc.Inventory.GetAmount(item), Is.EqualTo(2));
+        Assert.That(city.Market.GetAmount(item), Is.Zero);
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long after, out ContinuationCensusFailure afterFailure),
+            Is.True, afterFailure.ToString());
+        Assert.That(after, Is.EqualTo(before + 2), "the successful credit and account reversal both advance the epoch");
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure assessment), Is.True,
+            assessment.ToString());
+    }
+
+    [Test]
+    public void P12MarketSale_ExhaustedMarketRevisionRejectsBeforeAnyOwnerCommit()
+    {
+        ItemData item = SimulationTestFactory.CreateItem("p12-market-revision-limit", 10f);
+        CityRuntime city = SimulationTestFactory.CreateCity(
+            "p12-market-revision-limit-city",
+            "p12-market-revision-limit-location",
+            SimulationTestFactory.CreateMarketItem(item, 0, 10));
+        typeof(MarketRuntime).GetField("revision", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(city.Market, long.MaxValue);
+        NpcRuntime npc = new NpcRuntime(
+            "p12-market-revision-limit-npc",
+            SimulationTestFactory.CreateNpc("p12-market-revision-limit-npc"),
+            city,
+            20f);
+        npc.Inventory.AddItem(item, 2, 4f);
+        SimulationRuntime runtime = new SimulationRuntime(
+            new SimulationTime(),
+            new[] { city },
+            new[] { npc },
+            economyEnabled: false,
+            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1());
+        EconomyTransactionService service = new EconomyTransactionService();
+        BindP12CensusRuntime(service, runtime);
+
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure initialAssessment), Is.True,
+            initialAssessment.ToString());
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long before, out ContinuationCensusFailure beforeFailure),
+            Is.True, beforeFailure.ToString());
+        EconomyTransactionResult result = service.TryExecuteMarketSale(npc, city.Market, item, 1);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.FailureReason, Is.EqualTo(EconomyTransactionFailureReason.TransactionCommitFailed));
+        Assert.That(npc.Money, Is.EqualTo(20f));
+        Assert.That(npc.Inventory.GetAmount(item), Is.EqualTo(2));
+        Assert.That(city.Market.GetAmount(item), Is.Zero);
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long after, out ContinuationCensusFailure afterFailure),
+            Is.True, afterFailure.ToString());
+        Assert.That(after, Is.EqualTo(before));
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure assessment), Is.True,
+            assessment.ToString());
+    }
+
+    [Test]
+    public void P12MarketPurchase_ExhaustedMarketRevisionRejectsBeforeAnyOwnerCommit()
+    {
+        ItemData item = SimulationTestFactory.CreateItem("p12-market-purchase-revision-limit", 10f);
+        CityRuntime city = SimulationTestFactory.CreateCity(
+            "p12-market-purchase-revision-limit-city",
+            "p12-market-purchase-revision-limit-location",
+            SimulationTestFactory.CreateMarketItem(item, 5, 5));
+        typeof(MarketRuntime).GetField("revision", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(city.Market, long.MaxValue);
+        NpcRuntime npc = new NpcRuntime(
+            "p12-market-purchase-revision-limit-npc",
+            SimulationTestFactory.CreateNpc("p12-market-purchase-revision-limit-npc"),
+            city,
+            50f);
+        SimulationRuntime runtime = new SimulationRuntime(
+            new SimulationTime(),
+            new[] { city },
+            new[] { npc },
+            economyEnabled: false,
+            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1());
+        EconomyTransactionService service = new EconomyTransactionService();
+        BindP12CensusRuntime(service, runtime);
+
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure initialAssessment), Is.True,
+            initialAssessment.ToString());
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long before, out ContinuationCensusFailure beforeFailure),
+            Is.True, beforeFailure.ToString());
+        EconomyTransactionResult result = service.TryExecuteMarketPurchase(npc, city.Market, item, 1);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.FailureReason, Is.EqualTo(EconomyTransactionFailureReason.TransactionCommitFailed));
+        Assert.That(npc.Money, Is.EqualTo(50f));
+        Assert.That(npc.Inventory.GetAmount(item), Is.Zero);
+        Assert.That(city.Market.GetAmount(item), Is.EqualTo(5));
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long after, out ContinuationCensusFailure afterFailure),
+            Is.True, afterFailure.ToString());
+        Assert.That(after, Is.EqualTo(before));
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure assessment), Is.True,
+            assessment.ToString());
+    }
+
+    [Test]
+    public void P12MarketPurchase_StaleMarketRevisionRejectsBeforeAnyOwnerCommit()
+    {
+        ItemData item = SimulationTestFactory.CreateItem("p12-market-stale-revision", 10f);
+        CityRuntime city = SimulationTestFactory.CreateCity(
+            "p12-market-stale-revision-city",
+            "p12-market-stale-revision-location",
+            SimulationTestFactory.CreateMarketItem(item, 5, 5));
+        NpcRuntime npc = new NpcRuntime(
+            "p12-market-stale-revision-npc",
+            SimulationTestFactory.CreateNpc("p12-market-stale-revision-npc"),
+            city,
+            50f);
+        SimulationRuntime runtime = new SimulationRuntime(
+            new SimulationTime(),
+            new[] { city },
+            new[] { npc },
+            economyEnabled: false,
+            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1());
+        EconomyTransactionService service = new EconomyTransactionService();
+        BindP12CensusRuntime(service, runtime);
+        typeof(MarketRuntime).GetField("revision", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(city.Market, city.Market.Revision + 1);
+
+        EconomyTransactionResult result = service.TryExecuteMarketPurchase(npc, city.Market, item, 1);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.FailureReason, Is.EqualTo(EconomyTransactionFailureReason.TransactionCommitFailed));
+        Assert.That(npc.Money, Is.EqualTo(50f));
+        Assert.That(npc.Inventory.GetAmount(item), Is.Zero);
+        Assert.That(city.Market.GetAmount(item), Is.EqualTo(5));
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure assessment), Is.False);
+        Assert.That(assessment, Is.EqualTo(ContinuationCensusFailure.ProtocolFaulted));
+    }
+
+    [Test]
+    public void P12MarketPurchase_WrongThreadRejectsBeforeAnyOwnerCommit()
+    {
+        ItemData item = SimulationTestFactory.CreateItem("p12-market-wrong-thread", 10f);
+        CityRuntime city = SimulationTestFactory.CreateCity(
+            "p12-market-wrong-thread-city",
+            "p12-market-wrong-thread-location",
+            SimulationTestFactory.CreateMarketItem(item, 5, 5));
+        NpcRuntime npc = new NpcRuntime(
+            "p12-market-wrong-thread-npc",
+            SimulationTestFactory.CreateNpc("p12-market-wrong-thread-npc"),
+            city,
+            50f);
+        SimulationRuntime runtime = new SimulationRuntime(
+            new SimulationTime(),
+            new[] { city },
+            new[] { npc },
+            economyEnabled: false,
+            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1());
+        EconomyTransactionService service = new EconomyTransactionService();
+        BindP12CensusRuntime(service, runtime);
+        EconomyTransactionResult result = null;
+        Thread offThread = new Thread(() => result = service.TryExecuteMarketPurchase(npc, city.Market, item, 1));
+        offThread.Start();
+        offThread.Join();
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.FailureReason, Is.EqualTo(EconomyTransactionFailureReason.TransactionCommitFailed));
+        Assert.That(npc.Money, Is.EqualTo(50f));
+        Assert.That(npc.Inventory.GetAmount(item), Is.Zero);
+        Assert.That(city.Market.GetAmount(item), Is.EqualTo(5));
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure assessment), Is.False);
+        Assert.That(assessment, Is.EqualTo(ContinuationCensusFailure.ProtocolFaulted));
+    }
+
+    [Test]
+    public void P12MarketDirectMutation_UpdatesLiveMarketWitnessAndSkipsNoOps()
+    {
+        ItemData initialItem = SimulationTestFactory.CreateItem("p12-market-direct-initial", 5f);
+        ItemData addedItem = SimulationTestFactory.CreateItem("p12-market-direct-added", 7f);
+        CityRuntime city = SimulationTestFactory.CreateCity(
+            "p12-market-direct-city",
+            "p12-market-direct-location",
+            SimulationTestFactory.CreateMarketItem(initialItem, 4, 4));
+        NpcRuntime npc = new NpcRuntime(
+            "p12-market-direct-npc",
+            SimulationTestFactory.CreateNpc("p12-market-direct-npc"),
+            city,
+            10f);
+        SimulationRuntime runtime = new SimulationRuntime(
+            new SimulationTime(),
+            new[] { city },
+            new[] { npc },
+            economyEnabled: false,
+            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1());
+        EconomyTransactionService service = new EconomyTransactionService();
+        BindP12CensusRuntime(service, runtime);
+
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long before, out ContinuationCensusFailure beforeFailure),
+            Is.True, beforeFailure.ToString());
+        Assert.That(city.Market.AddStock(addedItem, 3), Is.EqualTo(3));
+        Assert.That(city.Market.AddStock(initialItem, 0), Is.Zero);
+        Assert.That(city.Market.RemoveStockUpTo(initialItem, 0), Is.Zero);
+        city.Market.UpdatePrices();
+
+        Assert.That(city.Market.Items.Count, Is.EqualTo(2));
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long after, out ContinuationCensusFailure afterFailure),
+            Is.True, afterFailure.ToString());
+        Assert.That(after, Is.EqualTo(before + 1), "only the new row stock commit is reported");
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure assessment), Is.True,
+            assessment.ToString());
+    }
+
+    [Test]
+    public void P12DailyMarketProduction_ReportsMarketCommitInsideAdvance()
+    {
+        ItemData item = SimulationTestFactory.CreateItem("p12-daily-market-production", 5f);
+        CityData cityData = SimulationTestFactory.CreateCityData(
+            "p12-daily-market-production-city-data",
+            SimulationTestFactory.CreateMarketItem(item, 10, 10));
+        cityData.productionConfigs.Add(new CityProductionConfig { item = item, amountPerDay = 2 });
+        CityRuntime city = new CityRuntime(
+            "p12-daily-market-production-city",
+            cityData,
+            new SpatialLocationRuntime("p12-daily-market-production-location"));
+        SimulationRuntime runtime = new SimulationRuntime(
+            new SimulationTime(),
+            new[] { city },
+            new NpcRuntime[0],
+            economyEnabled: true,
+            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1());
+        EconomyTransactionService service = new EconomyTransactionService();
+        BindP12CensusRuntime(service, runtime);
+        long initialMarketRevision = city.Market.Revision;
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long before, out ContinuationCensusFailure beforeFailure),
+            Is.True, beforeFailure.ToString());
+
+        Assert.That(runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure advanceFailure), Is.True,
+            advanceFailure.ToString());
+
+        Assert.That(city.Market.Revision, Is.EqualTo(initialMarketRevision + 1));
+        Assert.That(city.Market.GetAmount(item), Is.EqualTo(12));
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long after, out ContinuationCensusFailure afterFailure),
+            Is.True, afterFailure.ToString());
+        Assert.That(after, Is.EqualTo(before + 1));
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure assessment), Is.True,
+            assessment.ToString());
+    }
+
+    [Test]
     public void P12NpcTrade_ReportsBuyerDebitAndSuccessfulCompensationWhenSellerCreditCannotCommit()
     {
         ItemData item = SimulationTestFactory.CreateItem("p12-npc-trade-compensation");
@@ -356,9 +667,9 @@ public sealed class SimulationRuntimeAdmissionTests
 
     private static void BindP12CensusRuntime(EconomyTransactionService service, SimulationRuntime runtime)
     {
-        typeof(EconomyTransactionService)
-            .GetMethod("BindP12CensusRuntime", BindingFlags.Instance | BindingFlags.NonPublic)
-            .Invoke(service, new object[] { runtime });
+        typeof(SimulationRuntime)
+            .GetMethod("BindP12EconomyTransactionService", BindingFlags.Instance | BindingFlags.NonPublic)
+            .Invoke(runtime, new object[] { service });
     }
 
     [TestCase(false)]

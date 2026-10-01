@@ -89,4 +89,31 @@ public sealed class CityMarketCensusTests
         Assert.That(newRow.Cardinality, Is.EqualTo(6));
         Assert.That(newRow.Revision, Is.EqualTo(initialRevision + 2));
     }
+
+    [Test]
+    public void MarketPriceRefresh_DoesNotMutateWhenRevisionIsExhausted()
+    {
+        ItemData item = SimulationTestFactory.CreateItem("market-price-revision-exhausted", 10f);
+        CityRuntime city = SimulationTestFactory.CreateCity(
+            "market-price-revision-exhausted-city",
+            "market-price-revision-exhausted-location",
+            SimulationTestFactory.CreateMarketItem(item, 10, 10));
+        MarketRuntime market = city.Market;
+        float existingPrice = market.GetPrice(item);
+        typeof(MarketRuntime).GetField("revision", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(market, long.MaxValue);
+        item.basePrice = 20f;
+
+        market.UpdatePrices();
+
+        Assert.That(market.GetPrice(item), Is.EqualTo(existingPrice),
+            "a derived price change cannot commit without a new local revision");
+        Assert.That(market.Revision, Is.EqualTo(long.MaxValue));
+
+        item.basePrice = 10f;
+        market.UpdatePrices();
+        Assert.That(market.GetPrice(item), Is.EqualTo(existingPrice),
+            "a price refresh that would not change stored values remains a no-op");
+        Assert.That(market.Revision, Is.EqualTo(long.MaxValue));
+    }
 }

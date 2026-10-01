@@ -62,17 +62,19 @@ public class MarketItemRuntime
 
     internal void UpdatePrice()
     {
-        if (item == null)
-        {
-            currentPrice = 0f;
-            return;
-        }
+        currentPrice = CalculatePrice();
+    }
+
+    internal bool WouldPriceChange() => currentPrice != CalculatePrice();
+
+    private float CalculatePrice()
+    {
+        if (item == null) return 0f;
 
         float basePrice = Mathf.Max(0.01f, item.basePrice);
         float stockForRatio = Mathf.Max(1, amount);
         float multiplier = desiredAmount / stockForRatio;
-
-        currentPrice = basePrice * Mathf.Clamp(multiplier, 0.5f, 3f);
+        return basePrice * Mathf.Clamp(multiplier, 0.5f, 3f);
     }
 }
 
@@ -83,6 +85,9 @@ public class MarketRuntime
     [NonSerialized] private MarketCounterpartyRuntime counterparty;
     [NonSerialized] private ReadOnlyCollection<MarketItemRuntime> readOnlyItems;
     [NonSerialized] private long revision;
+    [NonSerialized] private Func<bool> p12MutationAdmission;
+    [NonSerialized] private Action p12MutationCommitted;
+    [NonSerialized] private EconomyTransactionService p12TransactionService;
 
     public IReadOnlyList<MarketItemRuntime> Items => readOnlyItems ?? (readOnlyItems = (items ?? (items = new List<MarketItemRuntime>())).AsReadOnly());
     public long Revision => revision;
@@ -169,6 +174,8 @@ public class MarketRuntime
             return 0;
         }
 
+        if (!CanCommitP12OwnerMutation()) return 0;
+
         MarketItemRuntime marketItem = GetOrCreateItem(item, desiredAmount);
         if (marketItem.AddAmount(amount) == false)
         {
@@ -177,6 +184,7 @@ public class MarketRuntime
 
         marketItem.UpdatePrice();
         revision++;
+        NotifyP12OwnerMutation();
         return amount;
     }
 
@@ -207,45 +215,87 @@ public class MarketRuntime
             return 0;
         }
 
+        if (!CanCommitP12OwnerMutation()) return 0;
+
         marketItem.RemoveAmount(amountToRemove);
         marketItem.UpdatePrice();
         revision++;
+        NotifyP12OwnerMutation();
         return amountToRemove;
     }
 
     public bool BuyItem(NpcRuntime npc, ItemData item, int requestedAmount, out int amountBought, out float unitPrice, out float totalPrice)
     {
-        EconomyTransactionResult result = new EconomyTransactionService().TryExecuteMarketPurchase(npc, this, item, requestedAmount);
-        amountBought = result.Quantity;
-        unitPrice = result.UnitPrice;
-        totalPrice = result.TotalPrice;
-        return result.Success;
+        EconomyTransactionResult service = p12TransactionService != null
+            ? p12TransactionService.TryExecuteMarketPurchase(npc, this, item, requestedAmount)
+            : new EconomyTransactionService().TryExecuteMarketPurchase(npc, this, item, requestedAmount);
+        amountBought = service.Quantity;
+        unitPrice = service.UnitPrice;
+        totalPrice = service.TotalPrice;
+        return service.Success;
     }
 
     public bool SellItem(NpcRuntime npc, ItemData item, int requestedAmount, out int amountSold, out float unitPrice, out float totalPrice, out float approximateProfit)
     {
         float averageUnitCost = npc != null && item != null ? npc.Inventory.GetAverageUnitCost(item) : 0f;
-        EconomyTransactionResult result = new EconomyTransactionService().TryExecuteMarketSale(npc, this, item, requestedAmount);
-        amountSold = result.Quantity;
-        unitPrice = result.UnitPrice;
-        totalPrice = result.TotalPrice;
-        approximateProfit = result.Success ? (unitPrice - averageUnitCost) * amountSold : 0f;
-        return result.Success;
+        EconomyTransactionResult transaction = p12TransactionService != null
+            ? p12TransactionService.TryExecuteMarketSale(npc, this, item, requestedAmount)
+            : new EconomyTransactionService().TryExecuteMarketSale(npc, this, item, requestedAmount);
+        amountSold = transaction.Quantity;
+        unitPrice = transaction.UnitPrice;
+        totalPrice = transaction.TotalPrice;
+        approximateProfit = transaction.Success ? (unitPrice - averageUnitCost) * amountSold : 0f;
+        return transaction.Success;
     }
 
     public void UpdatePrices()
     {
+        List<MarketItemRuntime> currentItems = items ?? (items = new List<MarketItemRuntime>());
         bool changed = false;
-        foreach (MarketItemRuntime item in items ?? (items = new List<MarketItemRuntime>()))
+        foreach (MarketItemRuntime item in currentItems)
         {
-            if (item != null)
-            {
-                float previous = item.CurrentPrice;
-                item.UpdatePrice();
-                changed |= previous != item.CurrentPrice;
-            }
+            changed |= item != null && item.WouldPriceChange();
         }
-        if (changed && revision < long.MaxValue) revision++;
+        if (!changed || revision == long.MaxValue || !CanCommitP12OwnerMutation()) return;
+
+        foreach (MarketItemRuntime item in currentItems)
+            if (item != null) item.UpdatePrice();
+
+        revision++;
+        NotifyP12OwnerMutation();
+    }
+
+    internal void BindP12MutationBoundary(Func<bool> admission, Action committed)
+    {
+        if (admission == null) throw new ArgumentNullException(nameof(admission));
+        if (committed == null) throw new ArgumentNullException(nameof(committed));
+        if (p12MutationAdmission != null || p12MutationCommitted != null)
+            throw new InvalidOperationException("MarketRuntime is already bound to a P12 mutation boundary.");
+
+        p12MutationAdmission = admission;
+        p12MutationCommitted = committed;
+    }
+
+    internal void BindP12TransactionService(EconomyTransactionService service)
+    {
+        if (service == null) throw new ArgumentNullException(nameof(service));
+        if (p12TransactionService != null && !ReferenceEquals(p12TransactionService, service))
+            throw new InvalidOperationException("MarketRuntime cannot be bound to a different P12 transaction service.");
+        p12TransactionService = service;
+    }
+
+    private bool CanCommitP12OwnerMutation()
+    {
+        if (p12MutationAdmission == null) return true;
+        try { return p12MutationAdmission(); }
+        catch { return false; }
+    }
+
+    private void NotifyP12OwnerMutation()
+    {
+        if (p12MutationCommitted == null) return;
+        try { p12MutationCommitted(); }
+        catch { }
     }
 
     private MarketItemRuntime GetOrCreateItem(ItemData item, int desiredAmount)

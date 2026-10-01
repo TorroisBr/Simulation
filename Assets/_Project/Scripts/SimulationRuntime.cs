@@ -122,6 +122,8 @@ public sealed partial class SimulationRuntime
     private const string BootstrapPublicationCensusOperationId = "runtime.bootstrap-publication";
     private const string DailyAdvanceCensusOperationId = "runtime.advance-day";
     private const string NpcTradeCensusOperationId = "runtime.economy.npc-trade";
+    private const string MarketPurchaseCensusOperationId = "runtime.economy.market-purchase";
+    private const string MarketSaleCensusOperationId = "runtime.economy.market-sale";
 
     private sealed class NpcMembershipCensusContext
     {
@@ -192,6 +194,8 @@ public sealed partial class SimulationRuntime
     private readonly PersonStore personStore;
     private readonly IReadOnlyList<IOwnerSectionCensusProvider> personStoreCensusProviders;
     private ContinuationCensusProtocol npcRosterCensusProtocol;
+    private readonly Dictionary<MarketRuntime, string> marketSectionIdsByOwner =
+        new Dictionary<MarketRuntime, string>();
     private volatile NpcMembershipCensusContext activeNpcMembershipCensusContext;
     private readonly ActorChoiceStore actorChoiceStore;
     private readonly SpatialAuthorityStore spatialAuthorityStore;
@@ -969,6 +973,7 @@ public sealed partial class SimulationRuntime
             || !protocol.RegisterInventoryRosterFamily(npcRuntimeSnapshot, out _)
             || !protocol.RegisterMoneyAccountRosterFamily(npcRuntimeSnapshot, out _)
             || !protocol.RegisterNpcKnowledgeRosterFamily(npcRuntimeSnapshot, out _)
+            || (runtimeAdmissionContext != null && !TryRegisterCityMarketCensusProviders(protocol))
             || !protocol.SealExpectedSectionInventory(out _)
             || !protocol.SealCensusProviderInventory(out _))
         {
@@ -989,6 +994,12 @@ public sealed partial class SimulationRuntime
                     out _)
                 && protocol.RegisterExpectedOperation(
                     NpcTradeCensusOperationId,
+                    out _)
+                && protocol.RegisterExpectedOperation(
+                    MarketPurchaseCensusOperationId,
+                    out _)
+                && protocol.RegisterExpectedOperation(
+                    MarketSaleCensusOperationId,
                     out _);
         }
 
@@ -1009,7 +1020,67 @@ public sealed partial class SimulationRuntime
         }
 
         if (!protocol.TryAssessOwnerSectionInventory(out _))
+        {
             npcRosterCensusProtocol = null;
+            return;
+        }
+
+        if (runtimeAdmissionContext != null)
+        {
+            try
+            {
+                foreach (KeyValuePair<MarketRuntime, string> pair in marketSectionIdsByOwner)
+                {
+                    MarketRuntime market = pair.Key;
+                    string sectionId = pair.Value;
+                    market.BindP12MutationBoundary(
+                        () => CanCommitP12MarketOwnerMutation(market, sectionId),
+                        () => NotifyP12MarketOwnerMutation(sectionId));
+                }
+            }
+            catch
+            {
+                protocol.FaultClosed();
+                npcRosterCensusProtocol = null;
+            }
+        }
+    }
+
+    private bool TryRegisterCityMarketCensusProviders(ContinuationCensusProtocol protocol)
+    {
+        try
+        {
+            IReadOnlyList<IOwnerSectionCensusProvider> providers =
+                CityMarketCensusProvider.CreateProviders(cities);
+            for (int i = 0; i < providers.Count; i++)
+            {
+                IOwnerSectionCensusProvider provider = providers[i];
+                OwnerSectionCensusWitness witness = provider.GetCurrentCensus();
+                if (!(witness.OwnerInstanceIdentity is MarketRuntime market)
+                    || string.IsNullOrWhiteSpace(witness.SectionId)
+                    || marketSectionIdsByOwner.ContainsKey(market)
+                    || !protocol.RegisterExpectedSection(
+                        new OwnerSectionContract(
+                            witness.SectionId,
+                            witness.SchemaVersion,
+                            OwnerSectionRole.Required),
+                        out _)
+                    || !protocol.RegisterCensusProvider(witness.SectionId, provider, out _))
+                {
+                    protocol.FaultClosed();
+                    return false;
+                }
+
+                marketSectionIdsByOwner.Add(market, witness.SectionId);
+            }
+
+            return true;
+        }
+        catch
+        {
+            protocol.FaultClosed();
+            return false;
+        }
     }
 
     /// <summary>Assesses this partial passive NPC/Person census only.</summary>
@@ -1049,6 +1120,104 @@ public sealed partial class SimulationRuntime
     }
 
     internal bool HasNpcTradeCensusAdapter => runtimeAdmissionContext != null;
+    internal bool HasP12MarketOperationAdapter => runtimeAdmissionContext != null;
+
+    internal void BindP12EconomyTransactionService(EconomyTransactionService service)
+    {
+        if (service == null) throw new ArgumentNullException(nameof(service));
+        service.BindP12CensusRuntime(this);
+        if (runtimeAdmissionContext == null) return;
+        if (npcRosterCensusProtocol == null)
+            throw new InvalidOperationException("The P12 Market owner census is unavailable.");
+
+        foreach (MarketRuntime market in marketSectionIdsByOwner.Keys)
+            market.BindP12TransactionService(service);
+    }
+
+    internal bool TryBeginP12MarketOperation(
+        NpcRuntime npc,
+        MarketRuntime market,
+        EconomyTransactionType transactionType,
+        out SimulationOperationScope scope,
+        out string accountSectionId,
+        out string inventorySectionId,
+        out string marketSectionId)
+    {
+        scope = null;
+        accountSectionId = null;
+        inventorySectionId = null;
+        marketSectionId = null;
+        if (runtimeAdmissionContext == null) return false;
+
+        string operationContractId = transactionType == EconomyTransactionType.OpenMarketPurchase
+            ? MarketPurchaseCensusOperationId
+            : transactionType == EconomyTransactionType.OpenMarketSale
+                ? MarketSaleCensusOperationId
+                : null;
+
+        if (!IsRuntimeAdmissionOwnerThreadCurrent()
+            || npcRosterCensusProtocol == null
+            || string.IsNullOrWhiteSpace(operationContractId)
+            || !TryResolveNpcTradeParticipantSections(npc, out accountSectionId, out inventorySectionId)
+            || market == null
+            || !marketSectionIdsByOwner.TryGetValue(market, out marketSectionId))
+        {
+            FaultRuntimeAdmission();
+            return false;
+        }
+
+        if (!npcRosterCensusProtocol.TryValidateUnchangedSections(
+                new[] { accountSectionId, inventorySectionId, marketSectionId },
+                out _))
+        {
+            FaultRuntimeAdmission();
+            return false;
+        }
+
+        if (!TryEnterRuntimeAdmissionOperation(operationContractId, out scope))
+        {
+            FaultRuntimeAdmission();
+            return false;
+        }
+
+        return true;
+    }
+
+    private bool CanCommitP12MarketOwnerMutation(MarketRuntime market, string sectionId)
+    {
+        if (runtimeAdmissionContext == null) return true;
+        if (!IsRuntimeAdmissionOwnerThreadCurrent()
+            || npcRosterCensusProtocol == null
+            || market == null
+            || !marketSectionIdsByOwner.TryGetValue(market, out string registeredSectionId)
+            || !string.Equals(registeredSectionId, sectionId, StringComparison.Ordinal)
+            || !npcRosterCensusProtocol.TryValidateUnchangedSections(new[] { sectionId }, out _))
+        {
+            FaultRuntimeAdmission();
+            return false;
+        }
+
+        return true;
+    }
+
+    private void NotifyP12MarketOwnerMutation(string sectionId)
+    {
+        if (runtimeAdmissionContext == null || npcRosterCensusProtocol == null) return;
+        try
+        {
+            if (!npcRosterCensusProtocol.NotifyCommittedMutation(sectionId, out _))
+                npcRosterCensusProtocol.FaultClosed();
+        }
+        catch
+        {
+            npcRosterCensusProtocol.FaultClosed();
+        }
+    }
+
+    internal void NotifyP12MarketOperationOwnerMutation(string sectionId)
+    {
+        NotifyP12MarketOwnerMutation(sectionId);
+    }
 
     internal bool TryBeginNpcTradeCensusOperation(
         NpcRuntime buyer,
