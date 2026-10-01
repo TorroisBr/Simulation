@@ -2,7 +2,7 @@
 
 **Work package:** accepted P12-B owner-witness inventory; no new checkpoint ID.
 **Canonical base:** `7be88ca7816b14c934729bffec56178ce3eb7e5a`.
-**Status:** design submitted for independent review; not implementation-ready until that review passes.
+**Status:** independent design review PASS; implementation may proceed under accepted P12-B scope. Code is not yet submitted.
 
 ## Evidence and gap
 
@@ -23,3 +23,4 @@ The witness counts stock rows only. It does not census item amounts/prices as de
 ## Implementation and validation if reviewed
 
 Add one provider file and bootstrap composition property/wiring, plus focused tests in the selected-profile composition suite for section IDs/order/schema, exact installed owner identity, 5/5 cardinality, repeat stability, same-row revision invalidation, and new-row cardinality/revision change. Run the focused census and bootstrap composition suites, ALL EditMode, the official Smoke filter, and `git diff --check` on the exact code tree. No `SimulationRuntime`, `MarketRuntime`, `ContinuationCensusProtocol`, or mutation-epoch edit is required or in scope. Keep the candidate isolated on `codex/phase12/P12BMarketStockCensusDesign` and refresh it against canonical before integration if canonical advances.
+
