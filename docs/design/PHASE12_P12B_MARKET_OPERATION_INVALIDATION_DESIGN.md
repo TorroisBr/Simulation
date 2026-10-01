@@ -1,6 +1,6 @@
 # P12-B selected Market operation and invalidation design
 
-**Status:** Technical design candidate; awaiting independent review. This is a bounded implementation slice within the accepted P12-B prerequisite scope and creates no new checkpoint ID or product behavior.
+**Status:** Revised technical design candidate after independent review of `85d6761`; awaiting exact-tip re-review. This is a bounded implementation slice within the accepted P12-B prerequisite scope and creates no new checkpoint ID or product behavior.
 
 ## Baseline and authority
 
@@ -31,7 +31,7 @@ The alternatives rank lower for this isolated next slice. Crime's theft path use
 ### Owner registration and local commit bridge
 
 1. Reuse `CityMarketCensusProvider.CreateProviders(cities)` for the exact two selected City Markets. Register each provider's existing section as `Required`, with schema v1, exact Market object identity, live row cardinality (including zero), and Market-local revision. For the current two-City profile this adds two sections to the partial registered set; it does not make the set complete.
-2. Bind each registered `MarketRuntime` to its exact Market section notification callback after protocol registration and before bootstrap publication. A successful `AddStock`, `RemoveStockUpTo`, or `UpdatePrices` revision commit reports that one Market section immediately. A no-op or failed owner call does not report a change. The callback faults P12 admission closed if the protocol cannot record a committed change; it never rewrites an already established domain result.
+2. Bind each registered `MarketRuntime` to its exact Market section notification callback after protocol registration and before bootstrap publication. A successful `AddStock`, `RemoveStockUpTo`, or `UpdatePrices` revision commit reports that one Market section immediately. `UpdatePrices` must first determine whether any price would change; if so and the revision is exhausted, it performs no price writes. If no price changes, it remains a no-op even at the revision limit. A no-op or failed owner call does not report a change. The callback faults P12 admission closed if the protocol cannot record a committed change; it never rewrites an already established domain result.
 3. This owner-local bridge also covers selected daily production, Free-mode consumption, and price refresh: `SimulationRuntime.SimulateEconomyDay` already runs under `runtime.advance-day`, and its City methods use those Market writers. The P18-specific prepared `CityRuntime.TryCommitDailyEconomy` path is excluded from `UnityBootstrap-Daily-v1` and is not changed.
 
 ### Purchase and sale operations
@@ -41,7 +41,7 @@ The alternatives rank lower for this isolated next slice. Crime's theft path use
 3. Keep the named service scope active from before the first possible commit through all owner commits, compensation, and result publication. The selected profile supports Open liquidity only. Account-backed City/Counterparty MoneyAccounts are not composed by this profile; a bound P12 service must reject an account-backed path before any write rather than imply its owners are covered.
 4. Purchase commit order is the existing NPC debit, Market stock removal, then NPC Inventory addition. Notify each exact changed section after its local revision commits. If a later stage fails and the existing method refunds the NPC, notify that committed account revision too. Sale commit order is NPC account credit, NPC Inventory removal, then Market stock addition, with the existing account reversal notified when Inventory removal fails.
 5. Before a sale's first owner write, require that the exact Market revision can advance once as well as the existing stock-capacity preflight. The current service ignores a failed `Market.AddStock` result after earlier writes; the implementation must check the committed amount and must never treat an absent Market revision as a successful stock commit. If the preflightable revision-capacity check fails, return the existing transaction failure before any owner changes. If an unexpected post-preflight install failure occurs, notify every owner that actually committed and fault P12 closed; do not claim whole-operation rollback.
-6. Route `MarketRuntime.BuyItem` and `SellItem` through the same bound transaction service when the City Market is part of this P12 runtime, so those existing wrappers do not silently create an unbound service. Standalone Market instances retain the current fallback behavior.
+6. `TesteSimulacao` already creates the transaction service used by `MerchantSystem`. After constructing `SimulationRuntime` and before bootstrap publication, bind that exact same service to the runtime's P12 census bridge and to every registered City `MarketRuntime`. The Market wrappers use this installed service; an unbound standalone Market retains the current fresh-service fallback. Do not create a second transaction service for a composed P12 Market.
 
 ## Explicitly bounded exclusions
 
@@ -53,6 +53,18 @@ The alternatives rank lower for this isolated next slice. Crime's theft path use
 
 ## Validation and review plan
 
-Before code submission, add focused tests for exact Market registration/identity and row cardinality changes; Open purchase/sale success and each committed owner notification; successful compensation; stale Market/NPC baselines and wrong-thread rejection before writes; bound Market wrappers using the shared service; daily production/Free consumption/price-refresh notifications; no-op and failed Market writes; and the Market revision-exhaustion sale preflight. Preserve existing unbound domain behavior.
+Before code submission, add focused tests for exact Market registration/identity and row cardinality changes; Open purchase/sale success and each committed owner notification; successful compensation; stale Market/NPC baselines and wrong-thread rejection before writes; bound Market wrappers using the shared service; daily production/Free consumption/price-refresh notifications; no-op and failed Market writes; Market revision-exhaustion sale preflight; and changed/no-op `UpdatePrices` behavior at revision exhaustion. Preserve existing unbound domain behavior.
 
 Run the relevant EconomyTransaction, Market/City stock, SimulationRuntime admission and daily-economy suites, ALL EditMode, official Smoke, and `git diff --check` on the exact code tree. Record exact XML/log hashes. Obtain independent exact-tip review against the actual canonical base before treating implementation as a validated candidate. Canonical promotion remains a separate human gate.
+
+## Independent design review correction — 2026-10-01
+
+Exact-tip review of `85d6761` returned NEEDS_CHANGES. It identified that
+`MarketRuntime.UpdatePrices` could change price fields at `long.MaxValue`
+without advancing its revision, and that the candidate had not specified how
+`MarketRuntime.BuyItem` / `SellItem` receive the shared P12-bound transaction
+service. This revision adds a pre-mutation price-change/revision-capacity rule
+and test, and explicitly binds the exact service already used by MerchantSystem
+to each composed P12 Market before bootstrap publication. Standalone Market
+fallback behavior remains unchanged. No implementation or canonical promotion
+is claimed.
