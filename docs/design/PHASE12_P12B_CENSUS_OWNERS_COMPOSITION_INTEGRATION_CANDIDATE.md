@@ -8,10 +8,10 @@ promotion or Phase closure.
 
 **Code candidate:** `codex/phase12/P12BCensusOwnersCompositionIntegration`
 at `72239ad1013dad5d507bad9737c358b1cadfe752`, tree
-`c9fc250195bb5fda11935c687294f8ae5738bd9a`. The candidate code tree is
-identical to the locally validated tree `3ab131d1aab9ea52b77015c10205fc6269d547c0`.
-The source merge commits remain ancestors of the code candidate; no canonical
-history was rewritten.
+`c9fc250195bb5fda11935c687294f8ae5738bd9a`. The local implementation commit
+used for validation was `3ab131d1aab9ea52b77015c10205fc6269d547c0`, whose Git
+tree is the same `c9fc250` tree. The source merge commits remain ancestors of
+the code candidate; no canonical history was rewritten.
 
 **Candidate record branch:** `codex/phase12/P12BCensusOwnersCompositionCandidateRecord`.
 
