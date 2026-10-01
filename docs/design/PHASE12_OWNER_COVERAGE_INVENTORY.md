@@ -705,13 +705,15 @@ census, implementation readiness, or P12-A readiness.
   Settlement population exposes a local revision and transition receipts, but
   those witnesses cover only the individual ledger and its receipt state is
   not a complete profile export.
-- **Legacy spatial and site roots:** `SpatialNetworkRuntime` registration
-  methods have no revision/receipt witness. Route access can expose a backing
-  `List` through an `IReadOnlyList`, and locations/routes have no atomic,
-  revision-bound exact-cardinality query. `ExplorableSiteStore` provides a
-  countable read-only site wrapper and guarded public Add, but no owner revision,
-  immutable export, or staged hydrator. Authored startup counts remain
-  manifest evidence, not a live capture witness.
+- **Legacy spatial and site roots:** `SpatialNetworkRuntime` now returns
+  detached read-only collection views and exposes exact location/route
+  count/revision witnesses. Successful registrations advance its owner-local
+  revision, but there is no shared P12 epoch or complete owner export/hydrator;
+  direct `RuntimeIdentityRegistry` writes can bypass that owner. The
+  `ExplorableSiteStore` provides guarded Add and owner-local `Count`/`Revision`,
+  but no immutable export or staged hydrator. Its local revision is not a
+  shared P12 epoch. Authored startup counts remain manifest evidence, not a
+  live capture witness.
 - **Selected daily-domain writes:** the source audit confirms public City
   production, consumption, price-refresh, and important-NPC membership paths
   bypass a composite City revision. Market, Inventory, and MoneyAccount local
@@ -869,24 +871,27 @@ P12-C/D/E dependencies for P12-F.
   distinct from the absent P10 `LocalTopologyStore`. Read-only collection wrappers may also
   expose live observation objects. Preserve all observation provenance and
   freshness through detached owner values.
-- **Scheduled directives:** `ScheduledDirectiveStore.Add` is guarded but has no
-  store revision or export/restore API. Its `Directives` read-only wrapper and
-  `GetPendingForDay` return live directive objects; public
-  `MarkSucceeded`/`MarkFailed`/`MarkSkipped` mutate lifecycle facts outside a
-  store-level revision witness.
+- **Scheduled directives:** `ScheduledDirectiveStore.Add` and owner-mediated
+  terminal transitions advance a local store revision, and its passive census
+  provider reports exact store identity, count, and revision. It has no
+  export/restore API. Its `Directives` read-only wrapper and `GetPendingForDay`
+  return live directive objects; the local witness is not a staged owner value
+  or shared P12 epoch.
 - **Actor choices:** `ActorChoiceStore` guards its write/transition methods
   and its read APIs return copies, but it has no owner revision or immutable
   export/staged restore API. Its private next-input sequence, command-ID
   history, temporal indexes and full terminal disposition history must be
   captured together; its internal `Clone` is not an export/hydration contract.
-- **Travel parties:** `TravelPartyStore` guards Add/Complete/Remove and uses
-  read-only member snapshots, but has no store revision, receipt, export or
-  hydrator. Party progress/cost and reciprocal NPC-party state need one
-  consistent staged boundary.
-- **Expeditions:** `ExpeditionStore` has no guard/revision/export and returns
-  live `ExpeditionRuntime` instances through read-only-typed collection APIs.
-  Public expedition progress/lifecycle methods and mutable objective state can
-  therefore change a stored item without a store revision witness.
+- **Travel parties:** `TravelPartyStore` guards Add/Complete/Remove and its
+  travel-system paths advance a local revision; the passive provider reports
+  exact active-party cardinality and revision. It still has no receipt,
+  immutable export, or staged hydrator. Party progress/cost and reciprocal
+  NPC-party state need one consistent staged boundary.
+- **Expeditions:** `ExpeditionStore` serializes owner writes, advances a local
+  revision for committed store/runtime mutations, and validates exact active
+  instance identity/cardinality under its census read window. It has no
+  immutable export or staged hydrator, and its collection APIs expose live
+  `ExpeditionRuntime` instances rather than detached owner values.
 - **NPC commitments:** `NpcRuntime` exposes live `CurrentActionRuntime` and
   `MerchantTradePlan` objects; `NpcActionRuntime` and the plan objects have
   public mutators, while the NPC API can replace or clear action/plan state.
@@ -930,4 +935,32 @@ Genealogy, economy and Justice/Crime, and additional Knowledge/commitment
 owners still require bounded evidence and export/hydration work. These passive
 witnesses are not shared-epoch wiring, owner-thread/quiescence proof, capture
 eligibility, or a restore contract. P12-B remains incomplete and P12-A stays
+`WAIT_DEPENDENCY`.
+
+### P12-B passive count/revision witness reconciliation — 2026-10-01
+
+Canonical code now composes fixed owner-local providers for scheduled
+directives, TravelParty instances, active Expedition instances, and
+ExplorableSite records. This supersedes the 2026-09-29 statements above that
+the stores lacked local count/revision witnesses.
+
+`SimulationBootstrapCompositionTests.SelectedSampleSceneProfileBootstrapsItsAuthoredP8GeographyBeforeDayOne`
+reads the directive provider against its exact installed store: the directive
+list is empty, and the witness owner, cardinality, and revision match that
+store. It reads the TravelParty and Expedition providers against the installed
+owners at exact cardinality 0 and revision 0. Expedition cardinality counts
+active `ExpeditionRuntime` instances, not member NPCs. The census provider
+validates the expedition store's owner/index identity under its read window.
+
+The profile composes an `ExplorableSiteCensusProvider` bound to its exact
+`ExplorableSiteStore`; that owner exposes `Count`/`Revision`, and successful
+`Add` advances its local revision. The authored profile currently has zero
+ExplorableSites and startup checks the store count against that input, but the
+selected-profile test does not read this census provider. Treat the live
+ExplorableSite owner/cardinality/revision read as outstanding revalidation,
+not as closed exact-zero witness evidence.
+
+These providers do not create complete P12-B owner registration, shared-epoch
+invalidation, capture eligibility, owner-thread/quiescence proof, immutable
+export, or staged hydration. P12-B remains incomplete; P12-A remains
 `WAIT_DEPENDENCY`.
