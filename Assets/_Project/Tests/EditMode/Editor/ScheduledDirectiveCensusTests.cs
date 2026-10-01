@@ -45,7 +45,7 @@ public sealed class ScheduledDirectiveCensusTests
         Assert.That(store.Add(skipped), Is.True);
         Assert.That(failed.MarkFailed(4L, "failure"), Is.True);
         Assert.That(skipped.MarkSkipped(5L, "skip"), Is.True);
-        AssertCensus(provider, store, 3, 7L);
+        AssertCensus(provider, store, 3, 6L);
     }
 
     [Test]

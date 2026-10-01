@@ -285,6 +285,121 @@ public sealed class SimulationBootstrapCompositionTests
             Assert.That(inventoryWitness.Cardinality, Is.EqualTo(inventoryOwners[i].Inventory.Items.Count));
             Assert.That(inventoryWitness.Revision, Is.EqualTo(inventoryOwners[i].Inventory.Revision));
         }
+        IReadOnlyList<IOwnerSectionCensusProvider> npcKnowledgeProviders =
+            simulation.Bootstrap.NpcKnowledgeCensusProviders;
+        NpcRuntime[] knowledgeOwners = runtime.NpcRuntimes
+            .OrderBy(npc => npc.RuntimeId, System.StringComparer.Ordinal)
+            .ToArray();
+        string[] knowledgeSectionPrefixes =
+        {
+            "p12f.explorable-site-knowledge/",
+            "p12f.local-topology-knowledge.places/",
+            "p12f.local-topology-knowledge.connections/",
+            "p12f.adventure-intel.opposition/",
+            "p12f.adventure-intel.notable-items/",
+            "p12f.adventure-intel.common-resources/",
+            "p12f.adventure-intel.access/",
+            "p12f.commercial-knowledge.markets/",
+            "p12f.commercial-knowledge.liquidity/",
+            "p12f.commercial-knowledge.share-receipts/"
+        };
+        Assert.That(npcKnowledgeProviders.Count, Is.EqualTo(knowledgeOwners.Length * knowledgeSectionPrefixes.Length));
+        int travelingMerchantCount = 0;
+        int travelingMerchantsWithMarketKnowledge = 0;
+        for (int npcIndex = 0; npcIndex < knowledgeOwners.Length; npcIndex++)
+        {
+            NpcRuntime npc = knowledgeOwners[npcIndex];
+            CommercialKnowledgeRuntime commercial = ReadPrivateField<CommercialKnowledgeRuntime>(npc, "commercialKnowledge");
+            List<CommercialKnowledgeShareReceipt> commercialShareReceipts =
+                ReadPrivateField<List<CommercialKnowledgeShareReceipt>>(commercial, "shareReceipts");
+            int marketCount = commercial.Observations.Count;
+            int liquidityCount = commercial.LiquidityObservations.Count;
+            int shareReceiptCount = commercialShareReceipts.Count;
+            long commercialRevision = commercial.Revision;
+
+            object[] typedOwners =
+            {
+                ReadPrivateField<ExplorableSiteKnowledgeRuntime>(npc, "explorableSiteKnowledge"),
+                ReadPrivateField<LocalTopologyKnowledgeRuntime>(npc, "localTopologyKnowledge"),
+                ReadPrivateField<LocalTopologyKnowledgeRuntime>(npc, "localTopologyKnowledge"),
+                ReadPrivateField<AdventureSiteIntelKnowledgeRuntime>(npc, "adventureSiteIntelKnowledge"),
+                ReadPrivateField<AdventureSiteIntelKnowledgeRuntime>(npc, "adventureSiteIntelKnowledge"),
+                ReadPrivateField<AdventureSiteIntelKnowledgeRuntime>(npc, "adventureSiteIntelKnowledge"),
+                ReadPrivateField<AdventureSiteIntelKnowledgeRuntime>(npc, "adventureSiteIntelKnowledge"),
+                commercial,
+                commercial,
+                commercial
+            };
+            int[] expectedCardinalities =
+            {
+                ((ExplorableSiteKnowledgeRuntime)typedOwners[0]).Observations.Count,
+                ((LocalTopologyKnowledgeRuntime)typedOwners[1]).PlaceObservations.Count,
+                ((LocalTopologyKnowledgeRuntime)typedOwners[2]).ConnectionObservations.Count,
+                ((AdventureSiteIntelKnowledgeRuntime)typedOwners[3]).OppositionObservations.Count,
+                ((AdventureSiteIntelKnowledgeRuntime)typedOwners[4]).NotableItemObservations.Count,
+                ((AdventureSiteIntelKnowledgeRuntime)typedOwners[5]).CommonResourceObservations.Count,
+                ((AdventureSiteIntelKnowledgeRuntime)typedOwners[6]).AccessObservations.Count,
+                marketCount,
+                liquidityCount,
+                shareReceiptCount
+            };
+            long[] expectedRevisions =
+            {
+                ((ExplorableSiteKnowledgeRuntime)typedOwners[0]).Revision,
+                ((LocalTopologyKnowledgeRuntime)typedOwners[1]).Revision,
+                ((LocalTopologyKnowledgeRuntime)typedOwners[2]).Revision,
+                ((AdventureSiteIntelKnowledgeRuntime)typedOwners[3]).Revision,
+                ((AdventureSiteIntelKnowledgeRuntime)typedOwners[4]).Revision,
+                ((AdventureSiteIntelKnowledgeRuntime)typedOwners[5]).Revision,
+                ((AdventureSiteIntelKnowledgeRuntime)typedOwners[6]).Revision,
+                commercialRevision,
+                commercialRevision,
+                commercialRevision
+            };
+            for (int sectionIndex = 0; sectionIndex < knowledgeSectionPrefixes.Length; sectionIndex++)
+            {
+                OwnerSectionCensusWitness witness = npcKnowledgeProviders[
+                    npcIndex * knowledgeSectionPrefixes.Length + sectionIndex].GetCurrentCensus();
+                Assert.That(witness.SectionId,
+                    Is.EqualTo(knowledgeSectionPrefixes[sectionIndex] + npc.RuntimeId));
+                Assert.That(witness.SchemaVersion, Is.EqualTo(NpcKnowledgeCensusProvider.SchemaVersion));
+                Assert.That(witness.OwnerInstanceIdentity, Is.SameAs(typedOwners[sectionIndex]));
+                Assert.That(witness.Cardinality, Is.EqualTo(expectedCardinalities[sectionIndex]));
+                Assert.That(witness.Revision, Is.EqualTo(expectedRevisions[sectionIndex]));
+            }
+
+            bool isTravelingMerchant = npc.NpcData != null
+                && npc.NpcData.job != null
+                && npc.NpcData.job.jobType == NpcJobType.Merchant
+                && npc.NpcData.job.merchantBehavior == MerchantBehavior.Traveling;
+            if (isTravelingMerchant)
+            {
+                travelingMerchantCount++;
+                IReadOnlyList<CommercialMarketObservation> observations = commercial.Observations;
+                if (observations.Count > 0) travelingMerchantsWithMarketKnowledge++;
+                foreach (CommercialMarketObservation observation in observations)
+                {
+                    Assert.That(observation.Source, Is.EqualTo(CommercialKnowledgeSource.InitialScenarioKnowledge));
+                    Assert.That(observation.ObservedDay, Is.Zero);
+                    Assert.That(observation.ReceivedDay, Is.Zero);
+                    CityRuntime observedCity = runtime.Cities.SingleOrDefault(city =>
+                        city.Location != null && city.Location.RuntimeId == observation.LocationRuntimeId);
+                    Assert.That(observedCity, Is.Not.Null,
+                        "Bootstrap merchant Knowledge must refer to a City in the selected authored profile.");
+                    MarketItemRuntime observedItem = observedCity.Market.Items.LastOrDefault(item =>
+                        item != null && item.Item != null && item.Item.DefinitionId == observation.ItemDefinitionId);
+                    Assert.That(observedItem, Is.Not.Null,
+                        "Bootstrap merchant Knowledge must correspond to an authored market item.");
+                    Assert.That(observation.ObservedPrice, Is.EqualTo(observedItem.CurrentPrice));
+                    Assert.That(observation.ObservedStock, Is.EqualTo(observedItem.Amount));
+                }
+            }
+        }
+        Assert.That(travelingMerchantCount, Is.GreaterThan(0),
+            "The selected profile contains authored traveling merchants whose Knowledge owners must be covered.");
+        Assert.That(travelingMerchantsWithMarketKnowledge, Is.GreaterThan(0),
+            "The selected profile must census actual initial market Knowledge on at least one authored traveling merchant.");
+
         for (int i = 0; i < runtime.NpcRuntimes.Count; i++)
         {
             NpcRuntime npc = runtime.NpcRuntimes[i];
@@ -643,6 +758,14 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(runtime.NpcRuntimes.All(npc => npc.SpatialKnowledge.Revision == 3), Is.True);
         Assert.That(runtime.ActorChoiceStore.Count, Is.Zero);
         Assert.That(simulation.Bootstrap.ScheduledDirectives.Directives, Is.Empty);
+        OwnerSectionCensusWitness scheduledDirectiveWitness =
+            simulation.Bootstrap.ScheduledDirectiveCensusProvider.GetCurrentCensus();
+        Assert.That(scheduledDirectiveWitness.SectionId, Is.EqualTo(ScheduledDirectiveCensusProvider.SectionId));
+        Assert.That(scheduledDirectiveWitness.SchemaVersion, Is.EqualTo(ScheduledDirectiveCensusProvider.SchemaVersion));
+        Assert.That(scheduledDirectiveWitness.OwnerInstanceIdentity, Is.SameAs(simulation.Bootstrap.ScheduledDirectives));
+        Assert.That(scheduledDirectiveWitness.Cardinality,
+            Is.EqualTo(simulation.Bootstrap.ScheduledDirectives.Directives.Count));
+        Assert.That(scheduledDirectiveWitness.Revision, Is.EqualTo(simulation.Bootstrap.ScheduledDirectives.Revision));
         Assert.That(simulation.Bootstrap.TravelParties.ActiveParties, Is.Empty);
         OwnerSectionCensusWitness travelPartyWitness = simulation.Bootstrap.TravelPartyCensusProvider.GetCurrentCensus();
         Assert.That(travelPartyWitness.SectionId, Is.EqualTo("p12f.travel-parties"));
@@ -656,6 +779,13 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(repeatedTravelPartyWitness.Cardinality, Is.Zero);
         Assert.That(repeatedTravelPartyWitness.Revision, Is.Zero);
         Assert.That(simulation.Bootstrap.Expeditions.ActiveExpeditions, Is.Empty);
+        OwnerSectionCensusWitness expeditionWitness = simulation.Bootstrap.ExpeditionCensusProvider.GetCurrentCensus();
+        Assert.That(expeditionWitness.SectionId, Is.EqualTo(ExpeditionCensusProvider.SectionId));
+        Assert.That(expeditionWitness.SchemaVersion, Is.EqualTo(ExpeditionCensusProvider.SchemaVersion));
+        Assert.That(expeditionWitness.OwnerInstanceIdentity, Is.SameAs(simulation.Bootstrap.Expeditions));
+        Assert.That(simulation.Bootstrap.ExpeditionSystem.Store, Is.SameAs(simulation.Bootstrap.Expeditions));
+        Assert.That(expeditionWitness.Cardinality, Is.EqualTo(simulation.Bootstrap.Expeditions.ActiveExpeditions.Count));
+        Assert.That(expeditionWitness.Revision, Is.Zero);
         Assert.That(runtime.LocalTopologyStore, Is.Null,
             "The selected profile excludes P10 local topology and must classify it as not composed.");
         Assert.That(authority.Revision, Is.EqualTo(1),
@@ -1012,5 +1142,15 @@ public sealed class SimulationBootstrapCompositionTests
         object owner = field.GetValue(runtime);
         Assert.That(owner, Is.Not.Null, "Expected runtime owner " + fieldName + ".");
         return owner;
+    }
+
+    private static T ReadPrivateField<T>(object target, string fieldName) where T : class
+    {
+        Assert.That(target, Is.Not.Null, "Expected an owner before reading " + fieldName + ".");
+        FieldInfo field = target.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(field, Is.Not.Null, "Expected field " + fieldName + " on " + target.GetType().Name + ".");
+        T value = field.GetValue(target) as T;
+        Assert.That(value, Is.Not.Null, "Expected existing owner field " + fieldName + ".");
+        return value;
     }
 }

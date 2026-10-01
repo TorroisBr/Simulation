@@ -30,6 +30,10 @@ public sealed class SimulationBootstrapComposition
         ExpeditionStore expeditions,
         ExpeditionSystem expeditionSystem)
     {
+        if (directives == null) throw new ArgumentNullException(nameof(directives));
+        if (expeditions == null || expeditionSystem == null || !ReferenceEquals(expeditionSystem.Store, expeditions))
+            throw new ArgumentException("Bootstrap expedition owner and system must share the installed ExpeditionStore.");
+
         Manifest = manifest;
         SimulationTime = time;
         Calendar = calendar;
@@ -37,6 +41,7 @@ public sealed class SimulationBootstrapComposition
         DomainEventStore = events;
         History = history;
         ScheduledDirectives = directives;
+        ScheduledDirectiveCensusProvider = new ScheduledDirectiveCensusProvider(directives);
         Decisions = decisions;
         this.decisionRecorder = decisionRecorder ?? throw new System.ArgumentNullException(nameof(decisionRecorder));
         SimulationRecordSequenceCensusProvider = new SimulationRecordSequenceCensusProvider(recordSequence);
@@ -77,6 +82,7 @@ public sealed class SimulationBootstrapComposition
         SpatialNetworkCensusProviders = SpatialNetworkCensusProvider.CreateProviders(SpatialNetwork);
         Expeditions = expeditions;
         ExpeditionSystem = expeditionSystem;
+        ExpeditionCensusProvider = new ExpeditionCensusProvider(expeditions);
     }
 
     public string ProfileContractIdentity => Manifest.ContractIdentity;
@@ -88,6 +94,8 @@ public sealed class SimulationBootstrapComposition
     public DomainEventStore DomainEventStore { get; }
     public HistoryStore History { get; }
     public ScheduledDirectiveStore ScheduledDirectives { get; }
+    /// <summary>Passive witness for the exact scheduled-directive store installed in this bootstrap.</summary>
+    public IOwnerSectionCensusProvider ScheduledDirectiveCensusProvider { get; }
     public NpcDecisionStore Decisions { get; }
     /// <summary>Passive witness for the shared causal event/decision sequence.</summary>
     public IOwnerSectionCensusProvider SimulationRecordSequenceCensusProvider { get; }
@@ -155,6 +163,11 @@ public sealed class SimulationBootstrapComposition
     /// <summary>Fixed passive per-NPC witnesses for spatial Knowledge locations and routes.</summary>
     public IReadOnlyList<IOwnerSectionCensusProvider> SpatialKnowledgeCensusProviders =>
         Runtime.SpatialKnowledgeCensusProviders;
+    /// <summary>Fixed passive per-NPC witnesses for the selected local and commercial Knowledge owners.</summary>
+    public IReadOnlyList<IOwnerSectionCensusProvider> NpcKnowledgeCensusProviders =>
+        Runtime.NpcKnowledgeCensusProviders;
     public ExpeditionStore Expeditions { get; }
     public ExpeditionSystem ExpeditionSystem { get; }
+    /// <summary>Passive witness for the exact expedition store shared by its system.</summary>
+    public IOwnerSectionCensusProvider ExpeditionCensusProvider { get; }
 }

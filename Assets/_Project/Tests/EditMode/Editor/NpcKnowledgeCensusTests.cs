@@ -34,6 +34,45 @@ public sealed class NpcKnowledgeCensusTests
     }
 
     [Test]
+    public void SimulationRuntimeReconcilesKnowledgeFamilyThroughNpcMembershipOperations()
+    {
+        SimulationRuntime runtime = new SimulationRuntime(
+            new SimulationTime(), null, null, economyEnabled: false);
+        Assert.That(runtime.NpcKnowledgeCensusProviders, Is.Empty);
+
+        NpcRuntime npcB = new NpcRuntime("runtime-knowledge-b", null);
+        Assert.That(runtime.TryRegisterNpc(npcB, out _), Is.True);
+        IReadOnlyList<IOwnerSectionCensusProvider> afterFirstRegistration = runtime.NpcKnowledgeCensusProviders;
+        Assert.That(afterFirstRegistration, Has.Count.EqualTo(10));
+        IOwnerSectionCensusProvider[] retainedNpcBProviders = afterFirstRegistration.ToArray();
+        Assert.That(retainedNpcBProviders.All(provider =>
+            provider.GetCurrentCensus().SectionId.EndsWith("/" + npcB.RuntimeId, StringComparison.Ordinal)), Is.True);
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure firstAssessment), Is.True,
+            firstAssessment.ToString());
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long firstEpoch, out _), Is.True);
+        Assert.That(firstEpoch, Is.EqualTo(1L));
+
+        NpcRuntime npcA = new NpcRuntime("runtime-knowledge-a", null);
+        Assert.That(runtime.TryRegisterNpc(npcA, out _), Is.True);
+        IReadOnlyList<IOwnerSectionCensusProvider> afterSecondRegistration = runtime.NpcKnowledgeCensusProviders;
+        Assert.That(afterSecondRegistration, Has.Count.EqualTo(20));
+        Assert.That(afterSecondRegistration.Skip(10).ToArray(), Is.EqualTo(retainedNpcBProviders),
+            "A normal roster addition must retain the unchanged NPC's exact Knowledge provider family.");
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure secondAssessment), Is.True,
+            secondAssessment.ToString());
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long secondEpoch, out _), Is.True);
+        Assert.That(secondEpoch, Is.EqualTo(2L));
+
+        Assert.That(runtime.TryUnregisterNpc(npcA.RuntimeId, out _), Is.True);
+        Assert.That(runtime.NpcKnowledgeCensusProviders, Has.Count.EqualTo(10));
+        Assert.That(runtime.NpcKnowledgeCensusProviders, Is.EqualTo(retainedNpcBProviders));
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure removalAssessment), Is.True,
+            removalAssessment.ToString());
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long finalEpoch, out _), Is.True);
+        Assert.That(finalEpoch, Is.EqualTo(3L));
+    }
+
+    [Test]
     public void MissingOwnerAndNullCommercialBackingCollectionsFailWithoutMaterialization()
     {
         foreach (string ownerFieldName in new[] { "explorableSiteKnowledge", "localTopologyKnowledge", "adventureSiteIntelKnowledge", "commercialKnowledge" })
