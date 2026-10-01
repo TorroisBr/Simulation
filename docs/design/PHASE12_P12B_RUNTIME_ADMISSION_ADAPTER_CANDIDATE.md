@@ -1,6 +1,6 @@
 # P12-B Runtime Admission Adapter — Implementation Candidate
 
-**Status:** Implemented candidate; awaiting independent exact-tip implementation review and canonical-promotion approval. P12-B remains incomplete; P12-A remains `WAIT_DEPENDENCY`.
+**Status:** Implemented candidate; independent exact-tip implementation review passed. Canonical-promotion approval remains pending. P12-B remains incomplete; P12-A remains `WAIT_DEPENDENCY`.
 
 ## Exact base and reviewed contract
 
@@ -40,6 +40,16 @@ All result XML and log files are retained under `Library/ValidationResults/P12BR
 | Official Smoke filter | 5/5 | `EditMode-20261001-132131-67ef32546fca429aab4b10c3ea0c8b57.xml` — `4d4faa31b44d406b62379b7fe01b2340ed9e3640d4c5272d923d3850d11e9f73` | `EditMode-20261001-132131-67ef32546fca429aab4b10c3ea0c8b57.log` — `b567ae1a7a753aac30a752d0bde1b45533552d0ad9f721864969fc518c39d750` |
 
 `git diff --check` passed on the implementation commit. The EditMode run includes the existing daily long-run tests. Focused coverage verifies Start-thread capture, bootstrap scope through full publication, publication revocation/latching after failure, direct clock dispatch and reentrancy, off-thread rejection, interrupted single/batch fault closure, zero/invalid day behavior, and the P18-composition negative path.
+
+## Independent exact-tip implementation review
+
+**Result:** PASS  
+**Reviewed candidate tip:** `de65ae22f79cddf83769dcedd838f46c109bb210`  
+**Reviewed implementation commit/tree:** `9d4b035bc484286cfb58d66cca07809844c30254` / `911d7cc9ff4e9c0205ae3305df4757099a461b0a`  
+**Review base:** P12 canonical `f538a096bf4b2558566518483bc60f0129718a3b`  
+**Reviewer:** independent Luna implementation review
+
+The exact-tip reviewer confirmed that Start captures both thread identity components only for the explicitly selected profile; the runtime revalidates the identity and rejects P18 composition; the fixed operation registrations precede sealing; and the bootstrap scope begins after the existing partial census baseline and ends after full pipeline return. The reviewer also confirmed the direct-clock dispatcher is selected-profile-only, P18 clock behavior is unchanged, exception paths fault admission, and the documentation preserves P12-B/P12-A limits. No blocking findings were reported. `git diff --check` passed against the exact base and candidate tip. The reviewer independently verified each listed result XML/log SHA-256 and test count.
 
 ## Remaining P12 blockers and explicit limits
 
