@@ -29,8 +29,9 @@ The approved architecture study is
 Architecture §§91A–91B establish durable WorldId semantics for one causal
 continuation branch and a bounded read-only factual projection surface. That
 architecture approval alone left the individual capabilities **DESIGN
-PROPOSED**; separately reviewed candidate readiness appears below and does
-not itself promote an approved checkpoint or Phase delivery.
+PROPOSED**. The independently reviewed WI-A and FR-B technical contracts are
+now promoted as **READY_FOR_IMPLEMENTATION** planning entries below; no
+runtime capability or Phase delivery is implied.
 No new numbered phase is assigned: identity belongs at successful world composition, factual
 readers are a later bounded cross-domain capability, and the first World
 Exchange producer is a later adapter integration. Mod-defined projection
@@ -44,15 +45,16 @@ work must revalidate against them; current P12-B work is not invalidated.
 A Faction projection port and producer do not require P12-A, P12-B, full P12,
 P13 mechanics or P19; selected P12 epoch/quiescence infrastructure may be
 reused only if it covers the projected owner set. A real producer requires a
-stable WorldId, a coherent approved Faction read and the current external
-document contract, with adaptation outside the Simulation domain. P13 still
+stable WorldId, a coherent approved Faction read and an approved external
+collection-coverage contract, with adaptation outside the Simulation domain. P13 still
 requires P12 continuation and recoverable causal history independently of
 projection. See the study's DAG and explicit remaining gates before scheduling.
 
-### Proposed bounded execution checkpoints (design candidate, 2026-10-01)
+### Promoted bounded execution checkpoints (2026-10-01)
 
-The design candidate at `codex/architecture/world-projection-checkpoints`
-refines the approved direction into **WI-A World Identity Foundation**,
+The reviewed candidate `bd0d7979d556da12fd69046087d75d0a93b1803d`
+was fast-forwarded into this architecture branch. It refines the approved
+direction into **WI-A World Identity Foundation**,
 **FR-B Factual Read Surface Foundation**, **FR-C Faction Factual Reader**,
 and **WX-D First World Exchange Producer**. These are cross-phase
 checkpoint labels, not new numbered Phases or delivered capabilities. The
@@ -62,30 +64,31 @@ bounded designs are [WI-A](design/WORLD_IDENTITY_FOUNDATION_DESIGN.md),
 [WX-D](design/WORLD_EXCHANGE_FIRST_PRODUCER_DESIGN.md). Independent review of
 the technical design at `9606263` is recorded in
 [the review record](design/WORLD_PROJECTION_CHECKPOINTS_DESIGN_REVIEW.md).
-These candidate verdicts do not promote the checkpoints into canonical
-architecture or authorize runtime implementation.
+The reviewed checkpoint contracts are now canonical planning authority. Their
+readiness does not assert delivered implementation or authorize a broader scope.
 
 ```text
-approved architecture f27954a
+approved architecture f27954a + promoted checkpoint contracts bd0d797
   ├─ WI-A WorldId ────────────────────────────┐
   └─ FR-B read foundation → FR-C Faction ────┼→ WX-D producer
                                                ↑
                          External coverage contract
 ```
 
-WI-A and FR-B can be designed and implemented independently in isolated
-worktrees; they meet only at WX-D. FR-C implementation requires FR-B. WX-D
+WI-A and FR-B may be implemented independently in isolated worktrees, with
+serial integration at shared P12-B hotspots. They meet semantically at WX-D.
+FR-C implementation requires promoted FR-B. WX-D
 requires WI-A, FR-C, and an External-owned portable collection-coverage
 contract. World Exchange v1 requires all nine arrays and cannot distinguish
 unsupported from known-empty, so `World + Factions` padded with unsupported
 empty arrays is not yet an honest first artifact. The External repository owns
-that contract decision; this candidate changes no External files.
+that contract decision; this promotion changes no External files.
 
-| Checkpoint | Proposed owner / reviewed candidate readiness | Hard prerequisites | Current implementation hotspot |
+| Checkpoint | Owner / canonical planning readiness | Hard prerequisites | Current implementation hotspot |
 |---|---|---|---|
-| WI-A | Cross-phase world composition / READY_FOR_IMPLEMENTATION (candidate) | Approved WorldId semantics; canonical promotion still required | `TesteSimulacao` private-draft/publication gate, `SimulationRuntime`, P18 profile handoff; reconcile and serialize integration with active P12-B bootstrap scope. |
-| FR-B | Cross-domain factual read infrastructure / READY_FOR_IMPLEMENTATION (candidate) | Approved projection semantics; explicit `UnityBootstrapDailyV1` owner-thread boundary; canonical promotion still required | `SimulationRuntime` read admission plus Faction/Person Store writer guards; serialize runtime integration with active P12-B writer. |
-| FR-C | Faction factual capability / WAIT_DEPENDENCY | FR-B promoted capability | Narrow Faction registration/runtime facade; isolated candidate may be prepared after FR-B contract review. |
+| WI-A | Cross-phase world composition / READY_FOR_IMPLEMENTATION | Approved WorldId semantics | `TesteSimulacao` private-draft/publication gate, `SimulationRuntime`, P18 profile handoff; reconcile and serialize integration with active P12-B bootstrap scope. |
+| FR-B | Cross-domain factual read infrastructure / READY_FOR_IMPLEMENTATION | Approved projection semantics; explicit `UnityBootstrapDailyV1` owner-thread boundary | `SimulationRuntime` read admission plus Faction/Person Store writer guards; serialize runtime integration with active P12-B writer. |
+| FR-C | Faction factual capability / WAIT_DEPENDENCY | FR-B promoted capability | Narrow Faction registration/runtime facade; do not begin implementation before FR-B promotion. |
 | WX-D | Dedicated Simulation integration project / WAIT_DEPENDENCY | WI-A, FR-C, External coverage contract | Adapter project; no direct P12-B runtime write planned. |
 
 Relationship classification: P9 → WI-A is **ARCHITECTURAL_ALIGNMENT**

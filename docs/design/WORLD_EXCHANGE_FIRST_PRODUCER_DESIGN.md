@@ -1,6 +1,6 @@
 # First real World Exchange producer — bounded integration design (WX-D)
 
-**Reviewed candidate status:** WAIT_DEPENDENCY on WI-A, FR-C and an External-owned coverage contract; independent review at `96062630aed6e1fbb616a48d97290c331aed50c6` confirms the current v1 ambiguity.
+**Canonical planning status:** WAIT_DEPENDENCY on promoted WI-A and FR-C capabilities and an External-owned coverage contract; independent review at `96062630aed6e1fbb616a48d97290c331aed50c6` confirms the current v1 ambiguity.
 
 **Architecture base:** `f27954af6d880df123736027fd55e86874d6de68`.
 **External evidence:** `Simulation-External/packages/world-schema/src/index.ts`, `docs/WORLD_EXCHANGE.md`, and `docs/WORLD_EXCHANGE_CONTRACT_PRESSURE_REVIEW.md` inspected read-only on 2026-10-01.

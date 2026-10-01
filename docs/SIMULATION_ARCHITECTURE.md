@@ -5529,7 +5529,7 @@ Participação não pode existir apenas numa lista transitória de NPCs carregad
 
 ## 91A. Identidade durável do mundo
 
-**DECIDIDO — DIREÇÃO ARQUITETURAL; CAPACIDADE EM DESIGN PROPOSED**
+**DECIDIDO — DIREÇÃO ARQUITETURAL; WI-A COM DESIGN TÉCNICO READY_FOR_IMPLEMENTATION; CAPACIDADE NÃO IMPLEMENTADA**
 
 `WorldId` identifica uma continuação causal independente do mundo. Uma nova
 identidade é publicada com o World Truth inicial completo e validado, antes da
@@ -5549,15 +5549,16 @@ ocorrências da branch precisam ser inequívocas. Templates, cenários e clones
 não usam identidade de conteúdo como identidade do mundo resultante.
 
 Não se exige `LineageId` ou `BranchId` separado em v1: `WorldId` identifica a
-branch e a proveniência registra sua origem. A representação, alocação,
-compatibilidade com mundos antigos, gatilho de ramificação de saves copiados e
-conciliação dos IDs/receipts P18 herdados no fork permanecem design técnico ou
+branch e a proveniência registra sua origem. A representação e alocação do
+primeiro WorldId estão no design técnico WI-A promovido; compatibilidade com
+mundos antigos, gatilho de ramificação de saves copiados e conciliação dos
+IDs/receipts P18 herdados no fork permanecem design técnico ou
 decisão de produto específica. O `worldId` atualmente injetado em P18 não
 constitui, por si, implementação desta identidade durável.
 
 ## 91B. Projeção factual read-only
 
-**DECIDIDO — DIREÇÃO ARQUITETURAL; CAPACIDADE EM DESIGN PROPOSED**
+**DECIDIDO — DIREÇÃO ARQUITETURAL; FR-B COM DESIGN TÉCNICO READY_FOR_IMPLEMENTATION; CAPACIDADE NÃO IMPLEMENTADA**
 
 Consumidores de fatos aprovados usarão readers por capacidade com registros
 imutáveis, IDs semânticos e origem de autoridade declarada. A superfície não
@@ -5588,8 +5589,19 @@ posterior e depende de consumidor e contrato público concretos.
 
 O estudo aprovado em
 [`design/WORLD_IDENTITY_AND_PROJECTION_SURFACE_STUDY.md`](design/WORLD_IDENTITY_AND_PROJECTION_SURFACE_STUDY.md)
-detalha evidência, DAG, exclusões e questões técnicas. Nenhum checkpoint está
-`READY_FOR_IMPLEMENTATION` por esta decisão arquitetural.
+detalha evidência, DAG, exclusões e questões técnicas. Os contratos técnicos
+promovidos em
+[`design/WORLD_IDENTITY_FOUNDATION_DESIGN.md`](design/WORLD_IDENTITY_FOUNDATION_DESIGN.md)
+e
+[`design/FACTUAL_READ_SURFACE_FOUNDATION_DESIGN.md`](design/FACTUAL_READ_SURFACE_FOUNDATION_DESIGN.md)
+tornam WI-A e FR-B
+`READY_FOR_IMPLEMENTATION` no planejamento, independentemente um do outro.
+FR-C aguarda FR-B promovido como capacidade; WX-D aguarda WI-A, FR-C e
+contrato externo de cobertura de coleções. A aprovação de design não afirma
+que qualquer dessas capacidades já exista em código. O recorte coerente
+inicial de FR-B é explicitamente `UnityBootstrapDailyV1` e exige admissão de
+todos os escritores Faction/Person relevantes. A ambiguidade entre coleção
+vazia e conceito não suportado em World Exchange pertence ao contrato externo.
 
 ---
 
@@ -5877,11 +5889,12 @@ Estas perguntas não devem receber resposta implícita sem nova definição:
    deferidos até existir uma Phase própria.
 9. **Government/constitution framework** — não generalizar a partir da política de sucessão apenas.
 10. **Título/social status** — contratos finais dependem de use cases.
-11. **Mecânica de WorldId e projeção** — a direção semântica é decidida em
-    §§91A–91B. Representação/alocação, migração de perfis sem ID, gatilho da
-    ramificação de saves copiados, compatibilidade de IDs P18 no fork, reader
-    coerente concreto e mapeamento externo do primeiro recorte aguardam seus
-    respectivos designs e gates; não alteram a direção aprovada por omissão.
+11. **Mecânica restante de WorldId e projeção** — a direção semântica é
+    decidida em §§91A–91B; WI-A e FR-B têm designs técnicos promovidos.
+    Migração de perfis sem ID, gatilho da ramificação de saves copiados,
+    compatibilidade de IDs P18 no fork, leitor Faction após FR-B e contrato
+    externo de cobertura/mapeamento do primeiro documento ainda dependem dos
+    seus respectivos gates; não alteram a direção aprovada por omissão.
 
 ---
 

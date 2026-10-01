@@ -1,6 +1,6 @@
 # Factual Read Surface Foundation — bounded technical design (FR-B)
 
-**Reviewed candidate status:** READY_FOR_IMPLEMENTATION at review tip `96062630aed6e1fbb616a48d97290c331aed50c6`; canonical promotion pending.
+**Canonical planning status:** READY_FOR_IMPLEMENTATION. Reviewed at `96062630aed6e1fbb616a48d97290c331aed50c6`, final candidate verified at `bd0d7979d556da12fd69046087d75d0a93b1803d`, then promoted to `codex/architecture/world-identity-projection`. No implementation is claimed.
 
 **Architecture base:** `f27954af6d880df123736027fd55e86874d6de68`.
 **Owner:** Simulation read infrastructure, independent of World Exchange and WorldId allocation.
