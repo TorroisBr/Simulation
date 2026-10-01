@@ -3,7 +3,7 @@
 **Work package:** accepted P12-B owner/cardinality census; no new checkpoint ID or semantic scope.
 **Design branch:** `codex/phase12/P12BNpcMoneyAccountCensusDesign`.
 **Canonical base:** `43dba1b5d16cba1558c4c39239f3cd0d4c669958` (after the Market census promotion and State refresh).
-**Status:** proposed for independent technical review; no implementation authorization is created by this record.
+**Status:** independently reviewed PASS on design tip `a14f674c188339df18013e7beeaa564f5d8c997d`; no new checkpoint or implementation authorization is created by this record.
 
 ## Evidence and bounded objective
 
