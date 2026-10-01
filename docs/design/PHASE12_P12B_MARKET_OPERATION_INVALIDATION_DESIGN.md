@@ -1,6 +1,6 @@
 # P12-B selected Market operation and invalidation design
 
-**Status:** Revised technical design candidate after independent review of `85d6761`; awaiting exact-tip re-review. This is a bounded implementation slice within the accepted P12-B prerequisite scope and creates no new checkpoint ID or product behavior.
+**Status:** Independent exact-tip design review passed for `9a71eb65b00d7425172225d0812de5f5cfb2c121`. This is a bounded implementation slice within the accepted P12-B prerequisite scope and creates no new checkpoint ID or product behavior.
 
 ## Baseline and authority
 
@@ -59,7 +59,11 @@ Run the relevant EconomyTransaction, Market/City stock, SimulationRuntime admiss
 
 ## Independent design review correction — 2026-10-01
 
-Exact-tip review of `85d6761` returned NEEDS_CHANGES. It identified that
+Exact-tip review of `85d6761` returned NEEDS_CHANGES. The corrections were
+independently re-reviewed at exact design tip
+`9a71eb65b00d7425172225d0812de5f5cfb2c121`; PASS is recorded in
+`PHASE12_P12B_MARKET_OPERATION_INVALIDATION_DESIGN_REVIEW.md`. The first review
+identified that
 `MarketRuntime.UpdatePrices` could change price fields at `long.MaxValue`
 without advancing its revision, and that the candidate had not specified how
 `MarketRuntime.BuyItem` / `SellItem` receive the shared P12-bound transaction
