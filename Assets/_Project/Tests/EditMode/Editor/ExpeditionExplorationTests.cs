@@ -1,4 +1,5 @@
 using System;
+using System.Reflection;
 using NUnit.Framework;
 
 public sealed class ExpeditionExplorationTests
@@ -188,6 +189,55 @@ public sealed class ExpeditionExplorationTests
     }
 
     [Test]
+    public void SaturatedRetrieveObjectiveDoesNotConsumePlaceContentOrInventory()
+    {
+        ItemData item = SimulationTestFactory.CreateItem("retrieve-saturated");
+        ExplorationFixture fixture = CreateContentFixture(ExpeditionObjectiveRuntime.Retrieve(item.DefinitionId));
+        Assert.That(fixture.ContentStore.TryAddStack(
+            fixture.Site, item, 2, PlaceContentPersistencePolicy.Durable, out _), Is.True);
+        SetExpeditionRevision(fixture.System.Store, long.MaxValue);
+        int contentBefore = fixture.ContentStore.GetOrCreate(fixture.Site).GetAmount(item);
+        int inventoryBefore = fixture.Member.Inventory.GetAmount(item);
+        int eventsBefore = fixture.World.Records.Events.Events.Count;
+
+        Assert.That(fixture.System.TryRetrieveTargetResource(fixture.Expedition, item, 1, out string reason), Is.False);
+        Assert.That(reason, Does.Contain("busy or revision capacity"));
+        Assert.That(fixture.ContentStore.GetOrCreate(fixture.Site).GetAmount(item), Is.EqualTo(contentBefore));
+        Assert.That(fixture.Member.Inventory.GetAmount(item), Is.EqualTo(inventoryBefore));
+        Assert.That(fixture.Expedition.IsObjectiveComplete, Is.False);
+        Assert.That(fixture.System.Store.Revision, Is.EqualTo(long.MaxValue));
+        Assert.That(fixture.World.Records.Events.Events.Count, Is.EqualTo(eventsBefore));
+    }
+
+    [Test]
+    public void SaturatedEliminateObjectiveDoesNotResolveOppositionOrEmitEvents()
+    {
+        ExplorationFixture fixture = CreateContentFixture(ExpeditionObjectiveRuntime.Eliminate("saturated-opposition"));
+        PlaceOppositionRuntime opposition = new PlaceOppositionRuntime("saturated-opposition");
+        opposition.AddAggregateParticipant(new AggregateParticipantSnapshot("band", 1f));
+        Assert.That(fixture.ContentStore.TryAddOpposition(fixture.Site, opposition, out _), Is.True);
+        Conflict conflict = opposition.CreateConflict("saturated-conflict", new[] { fixture.Member });
+        ConflictResolutionService resolver = CreateWinningResolver();
+        SetExpeditionRevision(fixture.System.Store, long.MaxValue);
+        int eventsBefore = fixture.World.Records.Events.Events.Count;
+
+        Assert.That(fixture.System.TryResolvePlaceOpposition(
+            fixture.Expedition,
+            PlaceContentOwnerReference.ForExplorableSite(fixture.Site),
+            opposition,
+            conflict,
+            resolver,
+            out _,
+            out string reason), Is.False);
+        Assert.That(reason, Does.Contain("busy or revision capacity"));
+        Assert.That(opposition.IsResolved, Is.False);
+        Assert.That(fixture.ContentStore.GetOrCreate(fixture.Site).ActiveOppositions, Contains.Item(opposition));
+        Assert.That(fixture.Expedition.IsObjectiveComplete, Is.False);
+        Assert.That(fixture.System.Store.Revision, Is.EqualTo(long.MaxValue));
+        Assert.That(fixture.World.Records.Events.Events.Count, Is.EqualTo(eventsBefore));
+    }
+
+    [Test]
     public void ExploreObjectiveCanCompleteAbstractly()
     {
         ExplorationFixture fixture = CreateDirectFixture(ExpeditionState.AtSite, ExpeditionObjectiveRuntime.Explore());
@@ -339,11 +389,17 @@ public sealed class ExpeditionExplorationTests
         Assert.That(fixture.Expedition.ObservedLocalConnectionRuntimeIds, Has.Count.EqualTo(connectionsBefore));
     }
 
-    private static ExplorationFixture CreateDirectFixture(ExpeditionState state, ExpeditionObjectiveRuntime objective)
+    private static ExplorationFixture CreateDirectFixture(
+        ExpeditionState state,
+        ExpeditionObjectiveRuntime objective,
+        bool includeContentStore = false)
     {
         SpatialTravelFixture world = new SpatialTravelFixture();
         NpcRuntime member = world.CreateNpc("direct-explorer", world.CityA, 100f);
-        ExpeditionSystem system = CreateSystem(world);
+        PlaceContentStore contentStore = includeContentStore
+            ? new PlaceContentStore(world.Records.Allocator, world.IdentityRegistry)
+            : null;
+        ExpeditionSystem system = CreateSystem(world, contentStore);
         ExpeditionRuntime expedition = new ExpeditionRuntime(
             "direct-expedition",
             world.Site.RuntimeId,
@@ -358,39 +414,54 @@ public sealed class ExpeditionExplorationTests
             state,
             objective);
         Assert.That(system.Store.Add(expedition), Is.True);
-        return new ExplorationFixture(world, system, member, expedition);
+        return new ExplorationFixture(world, system, member, expedition, contentStore);
     }
 
     private static ExplorationFixture CreateDetailedFixture()
     {
-        ExplorationFixture fixture = CreateDirectFixture(ExpeditionState.AtSite, ExpeditionObjectiveRuntime.Explore());
-        RuntimeIdentityRegistry registry = fixture.World.IdentityRegistry;
+        SpatialTravelFixture world = new SpatialTravelFixture();
+        NpcRuntime member = world.CreateNpc("detailed-explorer", world.CityA, 100f);
+        PlaceContentStore contentStore = new PlaceContentStore(world.Records.Allocator, world.IdentityRegistry);
+        RuntimeIdentityRegistry registry = world.IdentityRegistry;
         LocalTopologyStore topologyStore = new LocalTopologyStore(registry);
         LocalTopologyRuntime topology = new LocalTopologyRuntime(
-            LocalTopologyOwnerReference.ForExplorableSite(fixture.Site), registry);
-        fixture.Root = new LocalPlaceRuntime("explore-root", "Entry");
-        fixture.Hidden = new LocalPlaceRuntime("explore-hidden", "Hidden");
-        fixture.Connection = new LocalTopologyConnectionRuntime(
-            "explore-connection", fixture.Root, fixture.Hidden, 1f);
-        Assert.That(topology.AddPlace(fixture.Root, null, true), Is.True);
-        Assert.That(topology.AddPlace(fixture.Hidden, fixture.Root), Is.True);
-        Assert.That(topology.AddConnection(fixture.Connection), Is.True);
+            LocalTopologyOwnerReference.ForExplorableSite(world.Site), registry);
+        LocalPlaceRuntime root = new LocalPlaceRuntime("explore-root", "Entry");
+        LocalPlaceRuntime hidden = new LocalPlaceRuntime("explore-hidden", "Hidden");
+        LocalTopologyConnectionRuntime connection = new LocalTopologyConnectionRuntime(
+            "explore-connection", root, hidden, 1f);
+        Assert.That(topology.AddPlace(root, null, true), Is.True);
+        Assert.That(topology.AddPlace(hidden, root), Is.True);
+        Assert.That(topology.AddConnection(connection), Is.True);
         Assert.That(topologyStore.Add(topology), Is.True);
-        fixture.Member.SetCurrentPresence(fixture.Site.Location);
-        fixture.System = CreateSystem(fixture.World, fixture.ContentStore, topologyStore);
-        Assert.That(fixture.System.Store.Add(fixture.Expedition), Is.True);
+        member.SetCurrentPresence(world.Site.Location);
+        ExpeditionSystem system = CreateSystem(world, contentStore, topologyStore);
+        ExpeditionRuntime expedition = new ExpeditionRuntime(
+            "detailed-expedition",
+            world.Site.RuntimeId,
+            world.CityA.Location.RuntimeId,
+            world.Site.Location.RuntimeId,
+            world.SiteRoute.RuntimeId,
+            null,
+            null,
+            new[] { member.RuntimeId },
+            new[] { member.RuntimeId },
+            Array.Empty<string>(),
+            ExpeditionState.AtSite,
+            ExpeditionObjectiveRuntime.Explore());
+        Assert.That(system.Store.Add(expedition), Is.True);
+        ExplorationFixture fixture = new ExplorationFixture(world, system, member, expedition, contentStore)
+        {
+            Root = root,
+            Hidden = hidden,
+            Connection = connection
+        };
         return fixture;
     }
 
     private static ExplorationFixture CreateContentFixture(ExpeditionObjectiveRuntime objective)
     {
-        ExplorationFixture fixture = CreateDirectFixture(ExpeditionState.Exploring, objective);
-        fixture.ContentStore = new PlaceContentStore(
-            fixture.World.Records.Allocator,
-            fixture.World.IdentityRegistry);
-        fixture.System = CreateSystem(fixture.World, fixture.ContentStore, null);
-        Assert.That(fixture.System.Store.Add(fixture.Expedition), Is.True);
-        return fixture;
+        return CreateDirectFixture(ExpeditionState.Exploring, objective, includeContentStore: true);
     }
 
     private static ExplorationFixture CreateReturningFixture()
@@ -422,7 +493,13 @@ public sealed class ExpeditionExplorationTests
     private static ConflictResolutionService CreateWinningResolver()
     {
         return new ConflictResolutionService(
-            new ConflictResolver(new FixedCapabilityModel(100f), new SequenceConflictRandomSource(0.5f, 0.5f)));
+                new ConflictResolver(new FixedCapabilityModel(100f), new SequenceConflictRandomSource(0.5f, 0.5f)));
+    }
+
+    private static void SetExpeditionRevision(ExpeditionStore store, long value)
+    {
+        typeof(ExpeditionStore).GetField("revision", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(store, value);
     }
 
     private static ExpeditionSystem CreateSystem(
@@ -509,13 +586,14 @@ public sealed class ExpeditionExplorationTests
             SpatialTravelFixture world,
             ExpeditionSystem system,
             NpcRuntime member,
-            ExpeditionRuntime expedition)
+            ExpeditionRuntime expedition,
+            PlaceContentStore contentStore = null)
         {
             World = world;
             System = system;
             Member = member;
             Expedition = expedition;
-            ContentStore = new PlaceContentStore(world.Records.Allocator, world.IdentityRegistry);
+            ContentStore = contentStore ?? new PlaceContentStore(world.Records.Allocator, world.IdentityRegistry);
         }
     }
 
