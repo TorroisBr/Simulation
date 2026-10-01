@@ -714,3 +714,32 @@ City assets use CityData's Open-liquidity/Free-consumption defaults, so no
 non-NPC MoneyAccountRuntime is instantiated for `UnityBootstrap-Daily-v1`.
 Account-backed City owners remain out of this profile and require separate
 sections if selected by a future profile.
+
+## P12-B NPC trade owner-commit implementation candidate — 2026-10-01
+
+The bounded NPC-to-NPC trade slice has been implemented on
+`codex/phase12/P12BPostMoneyAccountBlockerRefresh`, based on current P12
+canonical `f913dd088f71b74cfab7c1bd8a1a79b7ce9a29ea`. Code commit
+`9c75311ee4920f6b45552361cb20e6152252a1ec` has tree
+`8745ee9bf03aca9cdb17308f32cbf3abafea3332`. The implementation registers
+`runtime.economy.npc-trade`, binds the shared transaction service before
+bootstrap publication, validates participant section identity and unchanged
+baselines before the first commit, and notifies each committed account or
+Inventory revision—including successful compensation writes—inside one
+scoped operation. Continuation bookkeeping failure faults P12 admission closed
+without changing the established domain result.
+
+Focused validation passed SimulationRuntimeAdmission 12/12,
+NpcMoneyAccountCensus 10/10, NpcInventoryCensus 7/7,
+ContinuationCensusProtocol 22/22, and EconomyTransaction 45/45. ALL EditMode
+passed 2122/2122, official EditMode Smoke passed 5/5, and `git diff --check`
+passed. Exact artifact paths and XML/log hashes are in
+`docs/design/PHASE12_P12B_NPC_TRADE_INVALIDATION_CANDIDATE.md`.
+
+The implementation remains limited to `TryExecuteNpcTrade` and its four
+rostered NPC account/Inventory sections. MerchantSystem plan completion,
+direct owner writes, other transaction families, complete profile census,
+capture eligibility, export, and hydration remain uncovered. Independent
+exact-tip implementation review and canonical promotion are pending. This
+candidate does not complete P12-B, make P12-A ready, or unblock P13; Phase 12
+remains open.
