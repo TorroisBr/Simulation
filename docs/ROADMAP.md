@@ -79,8 +79,8 @@ that contract decision; this candidate changes no External files.
 
 | Checkpoint | Proposed owner / readiness before review | Hard prerequisites | Current implementation hotspot |
 |---|---|---|---|
-| WI-A | Cross-phase world composition / DESIGN PROPOSED | Approved WorldId semantics | `TesteSimulacao`, `SimulationRuntime`, P18 profile handoff; serialize integration with active P12-B writer. |
-| FR-B | Cross-domain factual read infrastructure / DESIGN PROPOSED | Approved projection semantics; supported serialized host boundary | `SimulationRuntime` read admission; serialize integration with active P12-B writer. |
+| WI-A | Cross-phase world composition / DESIGN PROPOSED | Approved WorldId semantics | `TesteSimulacao` private-draft/publication gate, `SimulationRuntime`, P18 profile handoff; reconcile and serialize integration with active P12-B bootstrap scope. |
+| FR-B | Cross-domain factual read infrastructure / DESIGN PROPOSED | Approved projection semantics; explicit `UnityBootstrapDailyV1` owner-thread boundary | `SimulationRuntime` read admission plus Faction/Person Store writer guards; serialize runtime integration with active P12-B writer. |
 | FR-C | Faction factual capability / WAIT_DEPENDENCY | FR-B promoted capability | Narrow Faction registration/runtime facade; isolated candidate may be prepared after FR-B contract review. |
 | WX-D | Dedicated Simulation integration project / WAIT_DEPENDENCY | WI-A, FR-C, External coverage contract | Adapter project; no direct P12-B runtime write planned. |
 
