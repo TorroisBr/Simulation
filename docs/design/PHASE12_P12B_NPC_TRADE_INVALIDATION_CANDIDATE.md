@@ -1,6 +1,7 @@
 # P12-B NPC trade owner-commit candidate
 
-**Status:** Revised and validated implementation candidate; independent exact-tip code re-review passed and is durably recorded; canonical promotion remains pending.
+**Status:** Independently reviewed and promoted to P12 canonical at
+`522cf9158d9f650675eccfb6bcec4144dbaa32e2`; P12-B remains incomplete.
 
 ## Candidate identity
 
@@ -97,3 +98,17 @@ It does not complete P12-B, establish a complete selected-profile owner set or
 shared-epoch coverage, or implement capture eligibility, export, or hydration.
 P12-B remains incomplete, P12-A remains `WAIT_DEPENDENCY`, P13 remains blocked,
 and Phase 12 remains open.
+
+## Canonical promotion
+
+With approval, `codex/phase12/canonical` was fast-forwarded from
+`f913dd088f71b74cfab7c1bd8a1a79b7ce9a29ea` to candidate tip
+`522cf9158d9f650675eccfb6bcec4144dbaa32e2`. The reviewed code candidate is
+`49b32c548e4b8c666657c031105401246cff2563`; its exact-tip independent review
+passed and is durably recorded at
+`0279c8e40b5c51bdf5cd6dd03247832766a726de`.
+
+The promotion advances only the bounded NPC-to-NPC trade invalidation slice.
+P12-B remains incomplete, P12-A remains `WAIT_DEPENDENCY`, and P13 remains
+blocked. It establishes no complete owner inventory, shared-epoch coverage,
+capture eligibility, export, or hydration.

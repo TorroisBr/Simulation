@@ -761,10 +761,31 @@ NpcMoneyAccountCensus 10/10, NpcInventoryCensus 7/7,
 ContinuationCensusProtocol 22/22, EconomyTransaction 45/45, ALL EditMode
 2125/2125, official EditMode Smoke 5/5, and `git diff --check`. Exact filenames
 and XML/log hashes are recorded in
-`docs/design/PHASE12_P12B_NPC_TRADE_INVALIDATION_CANDIDATE.md`. The candidate
-is not canonical; independent exact-tip code re-review passed against candidate tip
+`docs/design/PHASE12_P12B_NPC_TRADE_INVALIDATION_CANDIDATE.md`. Independent exact-tip code re-review passed against candidate tip
 `49b32c548e4b8c666657c031105401246cff2563`. The durable record is
 `docs/design/PHASE12_P12B_NPC_TRADE_INVALIDATION_REVIEW.md`, committed at
-`0279c8e40b5c51bdf5cd6dd03247832766a726de`. Canonical promotion remains
-pending. P12-B remains incomplete, P12-A remains `WAIT_DEPENDENCY`, and
+`0279c8e40b5c51bdf5cd6dd03247832766a726de`. Canonical promotion is recorded below.
+P12-B remains incomplete, P12-A remains `WAIT_DEPENDENCY`, and
 P13 remains blocked.
+
+## P12-B NPC trade invalidation promotion — 2026-10-01
+
+With approval, `codex/phase12/canonical` was fast-forwarded from
+`f913dd088f71b74cfab7c1bd8a1a79b7ce9a29ea` to
+`522cf9158d9f650675eccfb6bcec4144dbaa32e2`. The promoted bounded slice is
+NPC-to-NPC trade owner-commit invalidation. The reviewed code candidate is
+`49b32c548e4b8c666657c031105401246cff2563`; independent exact-tip review
+passed and its durable record is
+`docs/design/PHASE12_P12B_NPC_TRADE_INVALIDATION_REVIEW.md` at
+`0279c8e40b5c51bdf5cd6dd03247832766a726de`.
+
+The trade boundary covers only the exact rostered buyer/seller MoneyAccount
+and Inventory sections, with per-commit notifications through success and
+compensation. Failed bound precommit admission rejects before owner writes;
+postcommit bookkeeping failure preserves the established domain result while
+faulting P12 admission closed. Validation and artifact hashes remain in the
+candidate record.
+
+This does not complete P12-B or establish complete owner coverage, complete
+shared-epoch coverage, capture eligibility, export, or hydration. P12-A remains
+`WAIT_DEPENDENCY`; P13 remains blocked; Phase 12 remains open.
