@@ -683,6 +683,15 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
                 out sellerAccountSectionId,
                 out buyerInventorySectionId,
                 out sellerInventorySectionId);
+            if (!censusTracking)
+            {
+                return EconomyTransactionResult.CreateFailure(
+                    transactionType,
+                    moneyEffect,
+                    EconomyTransactionFailureReason.TransactionCommitFailed,
+                    buyerRuntimeId: buyer.RuntimeId,
+                    sellerRuntimeId: seller.RuntimeId);
+            }
         }
 
         try
