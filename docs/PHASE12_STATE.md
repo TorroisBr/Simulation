@@ -643,3 +643,28 @@ operation matrix remains the prerequisite to further runtime wiring.
 P12-B remains incomplete; P12-A remains `WAIT_DEPENDENCY`; P13 remains
 dependency-gated; Phase 12 remains open. Capture eligibility and
 export/hydration are not provided by this promotion.
+
+## P12-B per-City Market stock census promotion — 2026-10-01
+
+With explicit approval, `codex/phase12/canonical` was fast-forwarded from
+`7be88ca7816b14c934729bffec56178ce3eb7e5a` through the exact-tip-reviewed
+candidate `533c1e54f362218f222bf567dc1cacb8fdf68600` and its durable review
+record commit `9dbae5b6e20caccfabfabf63e27ac5d75dc15008`. The implementation
+commit is `3b2a9c2807ac95c6c929fe1104fcb078f364b96f` (tree
+`1bb0a2b9e271d8070fe1012a0fecf7b37b0763e5`); the exact candidate tree is
+`014ada28ba228be3e6faa104a876f521dd2a5835`. The review record is
+`docs/design/PHASE12_P12B_MARKET_STOCK_CENSUS_IMPLEMENTATION_REVIEW.md`.
+
+The promoted addition is only a passive per-City Market stock-row census
+witness: each installed Market reports its row count and that same owner's
+existing local revision. Exact-tip review verified the full candidate diff,
+reviewed candidate SHA, and validation artifacts. The recorded validation
+passed Market census 1/1, bootstrap composition 14/14, ALL EditMode
+2108/2108, official EditMode Smoke 5/5, and `git diff --check`; detailed
+artifact hashes remain in
+`docs/design/PHASE12_P12B_MARKET_STOCK_CENSUS_CANDIDATE.md`.
+
+This does not complete P12-B or establish runtime operation wiring, shared
+mutation-epoch coverage, global owner-thread/quiescence, capture eligibility,
+export, or hydration. P12-B remains incomplete, P12-A remains
+`WAIT_DEPENDENCY`, P13 remains blocked, and Phase 12 remains open.
