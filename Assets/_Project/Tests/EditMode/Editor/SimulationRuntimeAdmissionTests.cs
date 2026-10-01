@@ -362,15 +362,23 @@ public sealed class SimulationRuntimeAdmissionTests
 
         Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long before, out ContinuationCensusFailure beforeFailure),
             Is.True, beforeFailure.ToString());
+        long initialMarketRevision = city.Market.Revision;
         Assert.That(city.Market.AddStock(addedItem, 3), Is.EqualTo(3));
         Assert.That(city.Market.AddStock(initialItem, 0), Is.Zero);
         Assert.That(city.Market.RemoveStockUpTo(initialItem, 0), Is.Zero);
         city.Market.UpdatePrices();
 
+        initialItem.basePrice = 6f;
+        city.Market.UpdatePrices();
+        Assert.That(city.Market.GetPrice(initialItem), Is.EqualTo(6f));
+        city.Market.UpdatePrices();
+
         Assert.That(city.Market.Items.Count, Is.EqualTo(2));
+        Assert.That(city.Market.Revision, Is.EqualTo(initialMarketRevision + 2),
+            "the row addition and changed-price refresh each commit one Market revision");
         Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long after, out ContinuationCensusFailure afterFailure),
             Is.True, afterFailure.ToString());
-        Assert.That(after, Is.EqualTo(before + 1), "only the new row stock commit is reported");
+        Assert.That(after, Is.EqualTo(before + 2), "the row addition and changed-price refresh are reported; no-ops are not");
         Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure assessment), Is.True,
             assessment.ToString());
     }
@@ -404,6 +412,79 @@ public sealed class SimulationRuntimeAdmissionTests
 
         Assert.That(city.Market.Revision, Is.EqualTo(initialMarketRevision + 1));
         Assert.That(city.Market.GetAmount(item), Is.EqualTo(12));
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long after, out ContinuationCensusFailure afterFailure),
+            Is.True, afterFailure.ToString());
+        Assert.That(after, Is.EqualTo(before + 1));
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure assessment), Is.True,
+            assessment.ToString());
+    }
+
+    [Test]
+    public void P12DailyFreeConsumption_ReportsMarketCommitInsideAdvance()
+    {
+        ItemData item = SimulationTestFactory.CreateItem("p12-daily-free-consumption", 5f);
+        CityData cityData = SimulationTestFactory.CreateCityData(
+            "p12-daily-free-consumption-city",
+            SimulationTestFactory.CreateMarketItem(item, 4, 4));
+        cityData.marketItems[0].consumptionPer1000Population = 1f;
+        CityRuntime city = new CityRuntime(
+            "p12-daily-free-consumption-city",
+            cityData,
+            new SpatialLocationRuntime("p12-daily-free-consumption-location"));
+        SimulationRuntime runtime = new SimulationRuntime(
+            new SimulationTime(),
+            new[] { city },
+            new NpcRuntime[0],
+            economyEnabled: true,
+            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1());
+        EconomyTransactionService service = new EconomyTransactionService();
+        BindP12CensusRuntime(service, runtime);
+        long initialMarketRevision = city.Market.Revision;
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long before, out ContinuationCensusFailure beforeFailure),
+            Is.True, beforeFailure.ToString());
+
+        Assert.That(runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure advanceFailure), Is.True,
+            advanceFailure.ToString());
+
+        Assert.That(city.Market.GetAmount(item), Is.EqualTo(3));
+        Assert.That(city.Market.Revision, Is.EqualTo(initialMarketRevision + 1));
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long after, out ContinuationCensusFailure afterFailure),
+            Is.True, afterFailure.ToString());
+        Assert.That(after, Is.EqualTo(before + 1));
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure assessment), Is.True,
+            assessment.ToString());
+    }
+
+    [Test]
+    public void P12DailyChangedPriceRefresh_ReportsMarketCommitInsideAdvance()
+    {
+        ItemData item = SimulationTestFactory.CreateItem("p12-daily-price-refresh", 5f);
+        CityData cityData = SimulationTestFactory.CreateCityData(
+            "p12-daily-price-refresh-city",
+            SimulationTestFactory.CreateMarketItem(item, 10, 10));
+        CityRuntime city = new CityRuntime(
+            "p12-daily-price-refresh-city",
+            cityData,
+            new SpatialLocationRuntime("p12-daily-price-refresh-location"));
+        SimulationRuntime runtime = new SimulationRuntime(
+            new SimulationTime(),
+            new[] { city },
+            new NpcRuntime[0],
+            economyEnabled: true,
+            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1());
+        EconomyTransactionService service = new EconomyTransactionService();
+        BindP12CensusRuntime(service, runtime);
+        long initialMarketRevision = city.Market.Revision;
+        Assert.That(city.Market.GetPrice(item), Is.EqualTo(5f));
+        item.basePrice = 6f;
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long before, out ContinuationCensusFailure beforeFailure),
+            Is.True, beforeFailure.ToString());
+
+        Assert.That(runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure advanceFailure), Is.True,
+            advanceFailure.ToString());
+
+        Assert.That(city.Market.GetPrice(item), Is.EqualTo(6f));
+        Assert.That(city.Market.Revision, Is.EqualTo(initialMarketRevision + 1));
         Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long after, out ContinuationCensusFailure afterFailure),
             Is.True, afterFailure.ToString());
         Assert.That(after, Is.EqualTo(before + 1));
