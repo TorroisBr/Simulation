@@ -762,6 +762,9 @@ ContinuationCensusProtocol 22/22, EconomyTransaction 45/45, ALL EditMode
 2125/2125, official EditMode Smoke 5/5, and `git diff --check`. Exact filenames
 and XML/log hashes are recorded in
 `docs/design/PHASE12_P12B_NPC_TRADE_INVALIDATION_CANDIDATE.md`. The candidate
-is not canonical; independent exact-tip re-review and canonical promotion
-remain pending. P12-B remains incomplete, P12-A remains `WAIT_DEPENDENCY`, and
+is not canonical; independent exact-tip code re-review passed against candidate tip
+`49b32c548e4b8c666657c031105401246cff2563`. The durable record is
+`docs/design/PHASE12_P12B_NPC_TRADE_INVALIDATION_REVIEW.md`, committed at
+`0279c8e40b5c51bdf5cd6dd03247832766a726de`. Canonical promotion remains
+pending. P12-B remains incomplete, P12-A remains `WAIT_DEPENDENCY`, and
 P13 remains blocked.

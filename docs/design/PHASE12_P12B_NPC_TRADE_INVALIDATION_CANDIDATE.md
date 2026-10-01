@@ -1,6 +1,6 @@
 # P12-B NPC trade owner-commit candidate
 
-**Status:** Revised and validated implementation candidate; independent exact-tip code re-review and canonical promotion remain pending.
+**Status:** Revised and validated implementation candidate; independent exact-tip code re-review passed and is durably recorded; canonical promotion remains pending.
 
 ## Candidate identity
 
@@ -78,8 +78,11 @@ returned NEEDS_CHANGES because a failed precommit adapter admission disabled
 tracking but still allowed the trade to write. Commit
 `5ab42a9880b866f9f8d94b9365b2c5fb51c15ff7` corrects that gap: failed bound
 P12 admission returns `TransactionCommitFailed` before any owner commit, while
-postcommit bookkeeping faults continue to preserve the domain result. The
-revised candidate awaits independent exact-tip code re-review.
+postcommit bookkeeping faults continue to preserve the domain result. Independent exact-tip code re-review passed against candidate tip
+`49b32c548e4b8c666657c031105401246cff2563`. The durable record is
+`docs/design/PHASE12_P12B_NPC_TRADE_INVALIDATION_REVIEW.md`, committed at
+`0279c8e40b5c51bdf5cd6dd03247832766a726de`. The reviewed code commit/tree and
+validation evidence above are unchanged. Canonical promotion remains pending.
 
 ## Limits
 
