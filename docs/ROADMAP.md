@@ -48,6 +48,64 @@ document contract, with adaptation outside the Simulation domain. P13 still
 requires P12 continuation and recoverable causal history independently of
 projection. See the study's DAG and explicit remaining gates before scheduling.
 
+### Proposed bounded execution checkpoints (design candidate, 2026-10-01)
+
+The design candidate at `codex/architecture/world-projection-checkpoints`
+refines the approved direction into **WI-A World Identity Foundation**,
+**FR-B Factual Read Surface Foundation**, **FR-C Faction Factual Reader**,
+and **WX-D First World Exchange Producer**. These are cross-phase
+checkpoint labels, not new numbered Phases or delivered capabilities. The
+bounded designs are [WI-A](design/WORLD_IDENTITY_FOUNDATION_DESIGN.md),
+[FR-B](design/FACTUAL_READ_SURFACE_FOUNDATION_DESIGN.md),
+[FR-C](design/FACTION_FACTUAL_READER_DESIGN.md), and
+[WX-D](design/WORLD_EXCHANGE_FIRST_PRODUCER_DESIGN.md). Their proposed
+readiness is subject to independent review and canonical promotion.
+
+```text
+approved architecture f27954a
+  ├─ WI-A WorldId ────────────────────────────┐
+  └─ FR-B read foundation → FR-C Faction ────┼→ WX-D producer
+                                               ↑
+                         External coverage contract
+```
+
+WI-A and FR-B can be designed and implemented independently in isolated
+worktrees; they meet only at WX-D. FR-C implementation requires FR-B. WX-D
+requires WI-A, FR-C, and an External-owned portable collection-coverage
+contract. World Exchange v1 requires all nine arrays and cannot distinguish
+unsupported from known-empty, so `World + Factions` padded with unsupported
+empty arrays is not yet an honest first artifact. The External repository owns
+that contract decision; this candidate changes no External files.
+
+| Checkpoint | Proposed owner / readiness before review | Hard prerequisites | Current implementation hotspot |
+|---|---|---|---|
+| WI-A | Cross-phase world composition / DESIGN PROPOSED | Approved WorldId semantics | `TesteSimulacao`, `SimulationRuntime`, P18 profile handoff; serialize integration with active P12-B writer. |
+| FR-B | Cross-domain factual read infrastructure / DESIGN PROPOSED | Approved projection semantics; supported serialized host boundary | `SimulationRuntime` read admission; serialize integration with active P12-B writer. |
+| FR-C | Faction factual capability / WAIT_DEPENDENCY | FR-B promoted capability | Narrow Faction registration/runtime facade; isolated candidate may be prepared after FR-B contract review. |
+| WX-D | Dedicated Simulation integration project / WAIT_DEPENDENCY | WI-A, FR-C, External coverage contract | Adapter project; no direct P12-B runtime write planned. |
+
+Relationship classification: P9 → WI-A is **ARCHITECTURAL_ALIGNMENT**
+(publication seam, no P9 reopening); P18 → WI-A/FR-B is
+**ARCHITECTURAL_ALIGNMENT** (typed identity handoff/completed boundary);
+P12-B → FR-B is **OPTIONAL_REUSE**, not a global coherence proof, while
+P12-B → WI-A is **NO DEPENDENCY** but shares implementation hotspots;
+WI-A → future P12-C/P12-A and P13 is **ARCHITECTURAL_ALIGNMENT** until those
+scopes implement continuation/fork identity, at which point WI-A's promoted
+contract is a **HARD_DEPENDENCY** for their identity-bearing work. P12-A,
+P12-C, full P12 and P13 mechanics → WX-D are **NO DEPENDENCY** for the first
+live artifact. P19 → all four is **NO DEPENDENCY**. Simulation-External
+coverage contract → WX-D is a **HARD_DEPENDENCY**; its TypeScript packages
+remain external authority and are never a Simulation domain dependency.
+
+Reconstruction-sensitive state: the published WorldId is a causal input to
+continuation/fork identity; FR-B/FR-C copy current facts and create no new
+authoritative state; WX-D is a disposable, potentially stale artifact. Future
+P12 preserves WorldId on load, while P13 creates a new one with source-world
+and fork-boundary provenance and must reconcile inherited pre-fork history with
+new post-fork namespaces. Existing closed P9/P18 delivery remains closed;
+active P12-B is not invalidated, and its `SimulationRuntime`/bootstrap
+hotspots require serial integration, not a second concurrent writer.
+
 ## Placement of temporal and extension work
 
 P18 is one phase with dependent checkpoints, rather than separate phases for

@@ -1,0 +1,32 @@
+# World Identity Foundation — bounded technical design (WI-A)
+
+**Candidate status:** DESIGN PROPOSED; independent review required before implementation readiness.
+
+**Architecture base:** `f27954af6d880df123736027fd55e86874d6de68` (`codex/architecture/world-identity-projection`).
+**Owner:** cross-phase world-composition identity; P9 publication seam, P12 continuation and P13 fork consumers. This does not reopen P9.
+
+## Contract and scope
+
+Introduce a dedicated immutable `WorldId` reference value in `Assets/_Project/Scripts/WorldIdentity.cs`, alongside other domain IDs, with ordinal equality and a single canonical textual form `world:` followed by 32 lowercase hexadecimal GUID digits. Construction accepts a `Guid` and rejects `Guid.Empty`; parsing requires that exact canonical form. It is string-backed at its public boundary, with GUID allocation semantics, and is neither the genesis fingerprint/seed nor a save/runtime identity. An independent identity source at the **composition entry** allocates the candidate once, before genesis validation. The default source may use `Guid.NewGuid()` there; tests inject a deterministic source. The candidate is an external causal input to deterministic genesis/reconstruction, not a draw from the simulation random stream. Collision or a duplicate supplied identity is rejected by the host's world registry where one exists; no claim of global collision detection is made.
+
+The canonical owner is the composed world identity context held by `SimulationBootstrapComposition`, with the same immutable object passed into its `SimulationRuntime`. `TesteSimulacao` holds only a private unpublished candidate through synchronous stages. `p9.genesis.publish/v1` publishes World Truth and this identity in the same composition object. The identity is visible only through a successfully published composition and its runtime. A failure at any later stage callback revokes the composition under the existing bootstrap failure latch; no public WorldId survives. No ID is regenerated on day advance, export, or recreation of a consumer.
+
+For P12, a later save contract must persist this exact canonical value as continuation identity and hydrate it **before** publishing a loaded composition. Loading or copying a save preserves it. A product action that independently continues a copy must explicitly allocate a new ID at the branch boundary, never infer branching from a file copy. For P13, the fork transaction takes source `WorldId` plus an actually simulated logical boundary, reconstructs source truth there, allocates a distinct new `WorldId`, and publishes provenance `(source WorldId, fork boundary)` atomically with the forked world. Pre-fork inherited records retain their approved historical identities/meaning; P13 must separately design post-fork identity namespaces, inherited-history representation, and provenance encoding. This checkpoint neither implements nor chooses those schemas.
+
+## P18 compatibility
+
+`P18DIntradayProfile.WorldId` is currently an arbitrary string passed to `ActivityLifecycleStore`, `P18DDailyBoundaryOwner`, and `SimulationTimeline`. Add a typed profile constructor or typed factory accepting canonical `WorldId`, then pass its canonical text through the existing internal P18 ID encoders. World-composed P18 profiles must receive the same candidate instance and construction must reject a conflicting profile ID. Preserve the existing string constructor for standalone closed-scope P18 fixtures and compatibility, but it cannot independently establish a published world identity. Do not rewrite occurrence encodings or P18 scheduling. Tests must prove canonical handoff and unchanged P18 identity output for equivalent text.
+
+## Failure, determinism, migration
+
+An invalid/empty ID, missing allocation, or mismatch in composition fails before publication. Unpublished candidate IDs consumed on failed attempts may be skipped. Uniqueness is not seed-derived: two independently created worlds with the same authored profile and seed receive distinct IDs. A genesis retry after failure follows the existing fail-closed bootstrap policy. Existing direct `SimulationRuntime` constructors used by tests may remain identity-less unless a published-world path is asserted; production composition must require the ID. Legacy saves and migration are future P12 save-contract decisions, not silent fallback to seed/path. No `LineageId` or `BranchId` is added.
+
+## Dependencies, files, tests
+
+P9 publication is an **ARCHITECTURAL_ALIGNMENT**; completed P9 is not reopened. P12-B is **NO_DEPENDENCY** for identity semantics but a `TesteSimulacao`/`SimulationRuntime` implementation hotspot, so integration must be serialized with its active writer. P12-C and future P12-A are downstream **ARCHITECTURAL_ALIGNMENT**; P13 is a downstream **HARD_DEPENDENCY** on this identity contract. P18 is **ARCHITECTURAL_ALIGNMENT** through the compatibility constructor. P19 and Simulation-External are **NO_DEPENDENCY** for WI-A.
+
+Expected implementation files: new `WorldIdentity.cs` and `.meta`; `SimulationGenesisPipeline.cs` (composition carrying identity), `TesteSimulacao.cs` (private allocation/publication), `SimulationRuntime.cs`/`.P18D.cs` (same identity and P18 handoff); targeted EditMode bootstrap/P18 identity tests. Do not change P12-B census or P13 fork code.
+
+Required tests: successful publication; identity stable across advances and access paths; failure before and after composition assignment exposes no ID; two independent same-seed worlds differ; injected ID deterministic in tests without consuming simulation RNG; invalid/mismatched P18 profile fails; old P18 fixture path retains prior behavior; future P12/P13 seams have no false implementation claim. `git diff --check` and applicable Unity EditMode tests belong to the later implementation, not this design turn.
+
+**Completion:** exactly one immutable published ID per composed continuation, stable consumer handoff, fail-closed genesis, and no identity inferred from seed, path, profile, runtime allocation, or exporter. `Guid.NewGuid()` inside an exporter is forbidden.
