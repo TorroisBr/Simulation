@@ -691,7 +691,7 @@ The next blocker is DESIGN_REQUIRED for a current owner-commit/outer-operation c
 - docs/design/PHASE12_POST_MONEY_ACCOUNT_BLOCKER_REFRESH.md
 - docs/design/PHASE12_P12B_POST_MONEY_ACCOUNT_INVALIDATION_DESIGN.md
 
-Candidate branch: codex/phase12/P12BPostMoneyAccountBlockerRefresh, based on f913dd0. Independent exact-tip design/documentation review is pending. This records no new checkpoint ID, scope acceptance, implementation authorization, P12-A readiness, code validation, canonical promotion, or Phase closure.
+Candidate branch: `codex/phase12/P12BPostMoneyAccountBlockerRefresh`, based on f913dd0. Independent exact-tip design review passed for candidate `e5c2d2a0fe6d07331570b635f72c8f3a95bdb47f`; durable evidence is `docs/design/PHASE12_P12B_POST_MONEY_ACCOUNT_INVALIDATION_REVIEW.md`. The prior accepted P12-B prerequisite scope authorizes the bounded NPC-to-NPC trade implementation after design review; this does not create new scope or checkpoint authority. Implementation is beginning on the reviewed contract. No code validation, canonical promotion, P12-A readiness, or Phase closure is claimed.
 
 ### Design review correction — 2026-10-01
 
