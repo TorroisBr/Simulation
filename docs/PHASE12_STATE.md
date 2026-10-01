@@ -565,3 +565,40 @@ causal C roots, factual D, official E, and commitment F owners still need exact
 witness providers and supported-writer coverage. The remaining committed-write
 invalidation and owner-thread/quiescence blockers are unchanged. Phase 12
 remains open and no P12-A implementation authorization is implied.
+
+## P12-B bounded runtime admission/quiescence adapter promotion — 2026-10-01
+
+With explicit approval, candidate `codex/phase12/P12BRuntimeQuiescenceAdapterIntegration`
+was fast-forwarded from P12 canonical `f538a096bf4b2558566518483bc60f0129718a3b`
+to `f60d8e65bea5f0b3f8964eef85957cf84451d6ba`. Its runtime implementation
+commit is `9d4b035bc484286cfb58d66cca07809844c30254` (tree
+`911d7cc9ff4e9c0205ae3305df4757099a461b0a`). The accepted technical design
+`e5a32b8ec226204e751e1da41dfcf2546a760718` and its independent design PASS
+remain linked from the implementation candidate record.
+
+The selected `UnityBootstrap-Daily-v1` profile now carries the Unity `Start`
+thread identity into the runtime and its partial census protocol. Its named
+bootstrap-publication and daily-advance scopes are admitted on that captured
+thread; direct runtime-owned daily clock calls route through the same daily
+operation. The adapter rejects combination with a P18 timeline profile and
+preserves P18 timeline clock ownership. Failure in an admitted bootstrap or
+daily operation faults partial admission; selected-profile publication is
+revoked and failed Start is latched. The candidate adds a selected-profile
+ExplorableSite witness assertion for exact installed-owner identity and stable
+day-zero count/revision zero.
+
+Independent exact-tip implementation and final-delta review passed. The
+review record is `codex/phase12/P12BRuntimeAdmissionAdapterReviewRecord` at
+`bd62a1e7e1d5a4da0b5778fec99dee12bf62f9d9`. Validation passed runtime
+admission 8/8, P18D compatibility 26/26, selected-profile census 1/1, ALL
+EditMode 2107/2107, the complete official Smoke filter 5/5, and
+`git diff --check`. Exact validation artifact hashes are retained in
+`docs/design/PHASE12_P12B_RUNTIME_ADMISSION_ADAPTER_CANDIDATE.md` and the
+review record.
+
+This promotion supplies only the bounded admission/quiescence adapter and
+related census evidence. It does not establish a complete effective-profile
+census, full supported-write coverage of the shared mutation epoch, global
+owner-thread/quiescence coverage, capture eligibility, immutable export, or
+staged hydration. P12-B remains incomplete; P12-A remains
+`WAIT_DEPENDENCY`; Phase 12 remains open.
