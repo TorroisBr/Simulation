@@ -27,9 +27,10 @@ Runtime World Expansion remains a future consumer without an assigned dedicated 
 The approved architecture study is
 [`design/WORLD_IDENTITY_AND_PROJECTION_SURFACE_STUDY.md`](design/WORLD_IDENTITY_AND_PROJECTION_SURFACE_STUDY.md).
 Architecture §§91A–91B establish durable WorldId semantics for one causal
-continuation branch and a bounded read-only factual projection surface. The
-individual capabilities remain **DESIGN PROPOSED**, not
-`READY_FOR_IMPLEMENTATION`, an approved checkpoint ID, or Phase delivery.
+continuation branch and a bounded read-only factual projection surface. That
+architecture approval alone left the individual capabilities **DESIGN
+PROPOSED**; separately reviewed candidate readiness appears below and does
+not itself promote an approved checkpoint or Phase delivery.
 No new numbered phase is assigned: identity belongs at successful world composition, factual
 readers are a later bounded cross-domain capability, and the first World
 Exchange producer is a later adapter integration. Mod-defined projection
