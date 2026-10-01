@@ -69,6 +69,138 @@ public sealed class SimulationRuntimeAdmissionTests
     }
 
     [Test]
+    public void P12NpcTrade_NotifiesEachCommittedAccountAndInventoryOwner()
+    {
+        ItemData item = SimulationTestFactory.CreateItem("p12-npc-trade");
+        NpcRuntime buyer = new NpcRuntime("buyer-trade", SimulationTestFactory.CreateNpc("buyer-trade"), null, 100f);
+        NpcRuntime seller = new NpcRuntime("seller-trade", SimulationTestFactory.CreateNpc("seller-trade"), null, 20f);
+        seller.Inventory.AddItem(item, 3, 4f);
+        SimulationRuntime runtime = new SimulationRuntime(
+            new SimulationTime(),
+            null,
+            new[] { buyer, seller },
+            economyEnabled: false,
+            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1());
+        EconomyTransactionService service = new EconomyTransactionService();
+        BindP12CensusRuntime(service, runtime);
+
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long before, out ContinuationCensusFailure beforeFailure),
+            Is.True, beforeFailure.ToString());
+        EconomyTransactionResult result = service.TryExecuteNpcTrade(buyer, seller, item, 2, 10f);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(buyer.Money, Is.EqualTo(80f));
+        Assert.That(seller.Money, Is.EqualTo(40f));
+        Assert.That(buyer.Inventory.GetAmount(item), Is.EqualTo(2));
+        Assert.That(seller.Inventory.GetAmount(item), Is.EqualTo(1));
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long after, out ContinuationCensusFailure afterFailure),
+            Is.True, afterFailure.ToString());
+        Assert.That(after, Is.EqualTo(before + 4), "each of the two account and two Inventory installs advances the epoch");
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure assessment), Is.True,
+            assessment.ToString());
+    }
+
+    [Test]
+    public void P12NpcTrade_ReportsBuyerDebitAndSuccessfulCompensationWhenSellerCreditCannotCommit()
+    {
+        ItemData item = SimulationTestFactory.CreateItem("p12-npc-trade-compensation");
+        NpcRuntime buyer = new NpcRuntime("buyer-compensation", SimulationTestFactory.CreateNpc("buyer-compensation"), null, 100f);
+        NpcRuntime seller = new NpcRuntime("seller-compensation", SimulationTestFactory.CreateNpc("seller-compensation"), null, 20f);
+        seller.Inventory.AddItem(item, 3, 4f);
+        typeof(MoneyAccountRuntime).GetField("revision", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(seller.MoneyAccount, long.MaxValue);
+        SimulationRuntime runtime = new SimulationRuntime(
+            new SimulationTime(),
+            null,
+            new[] { buyer, seller },
+            economyEnabled: false,
+            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1());
+        EconomyTransactionService service = new EconomyTransactionService();
+        BindP12CensusRuntime(service, runtime);
+
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long before, out ContinuationCensusFailure beforeFailure),
+            Is.True, beforeFailure.ToString());
+        EconomyTransactionResult result = service.TryExecuteNpcTrade(buyer, seller, item, 2, 10f);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.FailureReason, Is.EqualTo(EconomyTransactionFailureReason.TransactionCommitFailed));
+        Assert.That(buyer.Money, Is.EqualTo(100f));
+        Assert.That(seller.Money, Is.EqualTo(20f));
+        Assert.That(seller.Inventory.GetAmount(item), Is.EqualTo(3));
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long after, out ContinuationCensusFailure afterFailure),
+            Is.True, afterFailure.ToString());
+        Assert.That(after, Is.EqualTo(before + 2), "the debit and its committed compensation are both reported");
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure assessment), Is.True,
+            assessment.ToString());
+    }
+
+    [Test]
+    public void P12NpcTrade_ReportsBothSuccessfulAccountCompensationsWhenSellerInventoryCannotCommit()
+    {
+        ItemData item = SimulationTestFactory.CreateItem("p12-npc-trade-inventory-compensation");
+        NpcRuntime buyer = new NpcRuntime("buyer-inventory-compensation", SimulationTestFactory.CreateNpc("buyer-inventory-compensation"), null, 100f);
+        NpcRuntime seller = new NpcRuntime("seller-inventory-compensation", SimulationTestFactory.CreateNpc("seller-inventory-compensation"), null, 20f);
+        seller.Inventory.AddItem(item, 3, 4f);
+        typeof(InventoryRuntime).GetField("revision", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(seller.Inventory, long.MaxValue);
+        SimulationRuntime runtime = new SimulationRuntime(
+            new SimulationTime(),
+            null,
+            new[] { buyer, seller },
+            economyEnabled: false,
+            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1());
+        EconomyTransactionService service = new EconomyTransactionService();
+        BindP12CensusRuntime(service, runtime);
+
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long before, out ContinuationCensusFailure beforeFailure),
+            Is.True, beforeFailure.ToString());
+        EconomyTransactionResult result = service.TryExecuteNpcTrade(buyer, seller, item, 2, 10f);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.FailureReason, Is.EqualTo(EconomyTransactionFailureReason.TransactionCommitFailed));
+        Assert.That(buyer.Money, Is.EqualTo(100f));
+        Assert.That(seller.Money, Is.EqualTo(20f));
+        Assert.That(seller.Inventory.GetAmount(item), Is.EqualTo(3));
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long after, out ContinuationCensusFailure afterFailure),
+            Is.True, afterFailure.ToString());
+        Assert.That(after, Is.EqualTo(before + 4), "debit, credit, and both committed account compensations are reported");
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure assessment), Is.True,
+            assessment.ToString());
+    }
+
+    [Test]
+    public void P12NpcTrade_PreexistingUnnotifiedOwnerDriftFaultsAdmissionBeforeTheTradeButPreservesDomainResult()
+    {
+        ItemData item = SimulationTestFactory.CreateItem("p12-npc-trade-drift");
+        NpcRuntime buyer = new NpcRuntime("buyer-drift", SimulationTestFactory.CreateNpc("buyer-drift"), null, 100f);
+        NpcRuntime seller = new NpcRuntime("seller-drift", SimulationTestFactory.CreateNpc("seller-drift"), null, 20f);
+        seller.Inventory.AddItem(item, 3, 4f);
+        SimulationRuntime runtime = new SimulationRuntime(
+            new SimulationTime(),
+            null,
+            new[] { buyer, seller },
+            economyEnabled: false,
+            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1());
+        EconomyTransactionService service = new EconomyTransactionService();
+        BindP12CensusRuntime(service, runtime);
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long before, out _), Is.True);
+        buyer.MoneyAccount.TryCredit(5f);
+
+        EconomyTransactionResult result = service.TryExecuteNpcTrade(buyer, seller, item, 2, 10f);
+
+        Assert.That(result.Success, Is.True, "continuation bookkeeping cannot change the domain transaction result");
+        Assert.That(buyer.Money, Is.EqualTo(85f));
+        Assert.That(seller.Money, Is.EqualTo(40f));
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long after, out ContinuationCensusFailure epochFailure),
+            Is.False);
+        Assert.That(epochFailure, Is.EqualTo(ContinuationCensusFailure.ProtocolFaulted));
+        Assert.That(after, Is.Zero);
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure assessment), Is.False);
+        Assert.That(assessment, Is.EqualTo(ContinuationCensusFailure.ProtocolFaulted));
+        Assert.That(before, Is.Zero);
+    }
+
+    [Test]
     public void DailyProfileRejectsWrongThreadWithoutAdvancingAndFaultsPartialProtocol()
     {
         SimulationRuntime runtime = new SimulationRuntime(
@@ -126,6 +258,13 @@ public sealed class SimulationRuntimeAdmissionTests
         Assert.That(runtime.CurrentDay, Is.Zero);
         Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure censusFailure), Is.False);
         Assert.That(censusFailure, Is.EqualTo(ContinuationCensusFailure.ProtocolFaulted));
+    }
+
+    private static void BindP12CensusRuntime(EconomyTransactionService service, SimulationRuntime runtime)
+    {
+        typeof(EconomyTransactionService)
+            .GetMethod("BindP12CensusRuntime", BindingFlags.Instance | BindingFlags.NonPublic)
+            .Invoke(service, new object[] { runtime });
     }
 
     [TestCase(false)]

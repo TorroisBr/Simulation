@@ -270,6 +270,7 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
     private readonly List<KeyedSaleReceipt> keyedSaleReceipts = new List<KeyedSaleReceipt>();
     private readonly object keyedSaleReceiptsOwnerIdentity = new object();
     private long keyedSaleReceiptsRevision;
+    private SimulationRuntime p12CensusRuntime;
 
     /// <summary>
     /// Reports the exact live cardinality and revision of the keyed-sale receipt
@@ -288,6 +289,19 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
     OwnerSectionCensusWitness IOwnerSectionCensusProvider.GetCurrentCensus()
     {
         return GetKeyedSaleReceiptCensus();
+    }
+
+    internal void BindP12CensusRuntime(SimulationRuntime runtime)
+    {
+        if (runtime == null) throw new ArgumentNullException(nameof(runtime));
+        if (p12CensusRuntime != null && !ReferenceEquals(p12CensusRuntime, runtime))
+            throw new InvalidOperationException("EconomyTransactionService cannot be rebound to a different P12 runtime.");
+        p12CensusRuntime = runtime;
+    }
+
+    private void NotifyNpcTradeOwnerMutation(bool tracking, string sectionId)
+    {
+        if (tracking) p12CensusRuntime.NotifyNpcTradeOwnerMutation(sectionId);
     }
 
     public KeyedSaleReceipt TryExecuteKeyedMarketSale(
@@ -653,56 +667,106 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
                 sellerRuntimeId: seller.RuntimeId);
         }
 
-        if (buyer.MoneyAccount.TryDebit(totalPrice) == false)
+        SimulationOperationScope censusScope = null;
+        string buyerAccountSectionId = null;
+        string sellerAccountSectionId = null;
+        string buyerInventorySectionId = null;
+        string sellerInventorySectionId = null;
+        bool censusTracking = p12CensusRuntime != null && p12CensusRuntime.HasNpcTradeCensusAdapter;
+        if (censusTracking)
         {
-            return EconomyTransactionResult.CreateFailure(
-                transactionType,
-                moneyEffect,
-                EconomyTransactionFailureReason.TransactionCommitFailed,
-                buyerRuntimeId: buyer.RuntimeId,
-                sellerRuntimeId: seller.RuntimeId);
+            censusTracking = p12CensusRuntime.TryBeginNpcTradeCensusOperation(
+                buyer,
+                seller,
+                out censusScope,
+                out buyerAccountSectionId,
+                out sellerAccountSectionId,
+                out buyerInventorySectionId,
+                out sellerInventorySectionId);
         }
 
-        if (seller.MoneyAccount.TryCredit(totalPrice) == false)
+        try
         {
-            buyer.MoneyAccount.TryCredit(totalPrice);
-            return EconomyTransactionResult.CreateFailure(
+            long buyerAccountRevision = buyer.MoneyAccount.Revision;
+            bool buyerDebitSucceeded = buyer.MoneyAccount.TryDebit(totalPrice);
+            if (buyer.MoneyAccount.Revision != buyerAccountRevision)
+                NotifyNpcTradeOwnerMutation(censusTracking, buyerAccountSectionId);
+            if (buyerDebitSucceeded == false)
+            {
+                return EconomyTransactionResult.CreateFailure(
+                    transactionType,
+                    moneyEffect,
+                    EconomyTransactionFailureReason.TransactionCommitFailed,
+                    buyerRuntimeId: buyer.RuntimeId,
+                    sellerRuntimeId: seller.RuntimeId);
+            }
+
+            long sellerAccountRevision = seller.MoneyAccount.Revision;
+            bool sellerCreditSucceeded = seller.MoneyAccount.TryCredit(totalPrice);
+            if (seller.MoneyAccount.Revision != sellerAccountRevision)
+                NotifyNpcTradeOwnerMutation(censusTracking, sellerAccountSectionId);
+            if (sellerCreditSucceeded == false)
+            {
+                long buyerCompensationRevision = buyer.MoneyAccount.Revision;
+                buyer.MoneyAccount.TryCredit(totalPrice);
+                if (buyer.MoneyAccount.Revision != buyerCompensationRevision)
+                    NotifyNpcTradeOwnerMutation(censusTracking, buyerAccountSectionId);
+                return EconomyTransactionResult.CreateFailure(
+                    transactionType,
+                    moneyEffect,
+                    EconomyTransactionFailureReason.TransactionCommitFailed,
+                    buyerRuntimeId: buyer.RuntimeId,
+                    sellerRuntimeId: seller.RuntimeId);
+            }
+
+            long sellerInventoryRevision = seller.Inventory.Revision;
+            bool sellerInventoryRemoved = seller.Inventory.RemoveItem(item, quantity);
+            if (seller.Inventory.Revision != sellerInventoryRevision)
+                NotifyNpcTradeOwnerMutation(censusTracking, sellerInventorySectionId);
+            if (sellerInventoryRemoved == false)
+            {
+                long sellerCompensationRevision = seller.MoneyAccount.Revision;
+                seller.MoneyAccount.TryDebit(totalPrice);
+                if (seller.MoneyAccount.Revision != sellerCompensationRevision)
+                    NotifyNpcTradeOwnerMutation(censusTracking, sellerAccountSectionId);
+
+                long buyerCompensationRevision = buyer.MoneyAccount.Revision;
+                buyer.MoneyAccount.TryCredit(totalPrice);
+                if (buyer.MoneyAccount.Revision != buyerCompensationRevision)
+                    NotifyNpcTradeOwnerMutation(censusTracking, buyerAccountSectionId);
+                return EconomyTransactionResult.CreateFailure(
+                    transactionType,
+                    moneyEffect,
+                    EconomyTransactionFailureReason.TransactionCommitFailed,
+                    buyerRuntimeId: buyer.RuntimeId,
+                    sellerRuntimeId: seller.RuntimeId);
+            }
+
+            long buyerInventoryRevision = buyer.Inventory.Revision;
+            buyer.Inventory.AddItem(item, quantity, unitPrice);
+            if (buyer.Inventory.Revision != buyerInventoryRevision)
+                NotifyNpcTradeOwnerMutation(censusTracking, buyerInventorySectionId);
+
+            return EconomyTransactionResult.CreateSuccess(
                 transactionType,
                 moneyEffect,
-                EconomyTransactionFailureReason.TransactionCommitFailed,
+                totalPrice,
+                item.DefinitionId,
+                quantity,
+                quantity,
+                unitPrice,
+                totalPrice,
+                sourceRuntimeId: buyer.RuntimeId,
+                destinationRuntimeId: seller.RuntimeId,
                 buyerRuntimeId: buyer.RuntimeId,
-                sellerRuntimeId: seller.RuntimeId);
+                sellerRuntimeId: seller.RuntimeId,
+                itemSourceRuntimeId: seller.RuntimeId,
+                itemDestinationRuntimeId: buyer.RuntimeId);
         }
-
-        if (seller.Inventory.RemoveItem(item, quantity) == false)
+        finally
         {
-            seller.MoneyAccount.TryDebit(totalPrice);
-            buyer.MoneyAccount.TryCredit(totalPrice);
-            return EconomyTransactionResult.CreateFailure(
-                transactionType,
-                moneyEffect,
-                EconomyTransactionFailureReason.TransactionCommitFailed,
-                buyerRuntimeId: buyer.RuntimeId,
-                sellerRuntimeId: seller.RuntimeId);
+            censusScope?.Dispose();
         }
-
-        buyer.Inventory.AddItem(item, quantity, unitPrice);
-
-        return EconomyTransactionResult.CreateSuccess(
-            transactionType,
-            moneyEffect,
-            totalPrice,
-            item.DefinitionId,
-            quantity,
-            quantity,
-            unitPrice,
-            totalPrice,
-            sourceRuntimeId: buyer.RuntimeId,
-            destinationRuntimeId: seller.RuntimeId,
-            buyerRuntimeId: buyer.RuntimeId,
-            sellerRuntimeId: seller.RuntimeId,
-            itemSourceRuntimeId: seller.RuntimeId,
-            itemDestinationRuntimeId: buyer.RuntimeId);
     }
 
     public EconomyTransactionResult TryExecuteOpenMarketPurchase(

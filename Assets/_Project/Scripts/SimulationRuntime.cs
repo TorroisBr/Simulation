@@ -121,6 +121,7 @@ public sealed partial class SimulationRuntime
     private const string NpcMembershipCensusOperationId = "runtime.npc-membership";
     private const string BootstrapPublicationCensusOperationId = "runtime.bootstrap-publication";
     private const string DailyAdvanceCensusOperationId = "runtime.advance-day";
+    private const string NpcTradeCensusOperationId = "runtime.economy.npc-trade";
 
     private sealed class NpcMembershipCensusContext
     {
@@ -985,6 +986,9 @@ public sealed partial class SimulationRuntime
                     out _)
                 && protocol.RegisterExpectedOperation(
                     DailyAdvanceCensusOperationId,
+                    out _)
+                && protocol.RegisterExpectedOperation(
+                    NpcTradeCensusOperationId,
                     out _);
         }
 
@@ -1042,6 +1046,149 @@ public sealed partial class SimulationRuntime
         return TryEnterRuntimeAdmissionOperation(
             BootstrapPublicationCensusOperationId,
             out scope);
+    }
+
+    internal bool HasNpcTradeCensusAdapter => runtimeAdmissionContext != null;
+
+    internal bool TryBeginNpcTradeCensusOperation(
+        NpcRuntime buyer,
+        NpcRuntime seller,
+        out SimulationOperationScope scope,
+        out string buyerAccountSectionId,
+        out string sellerAccountSectionId,
+        out string buyerInventorySectionId,
+        out string sellerInventorySectionId)
+    {
+        scope = null;
+        buyerAccountSectionId = null;
+        sellerAccountSectionId = null;
+        buyerInventorySectionId = null;
+        sellerInventorySectionId = null;
+        if (runtimeAdmissionContext == null) return false;
+
+        if (!IsRuntimeAdmissionOwnerThreadCurrent()
+            || npcRosterCensusProtocol == null
+            || !TryResolveNpcTradeParticipantSections(
+                buyer,
+                out buyerAccountSectionId,
+                out buyerInventorySectionId)
+            || !TryResolveNpcTradeParticipantSections(
+                seller,
+                out sellerAccountSectionId,
+                out sellerInventorySectionId))
+        {
+            FaultRuntimeAdmission();
+            return false;
+        }
+
+        if (!npcRosterCensusProtocol.TryValidateUnchangedSections(
+                new[]
+                {
+                    buyerAccountSectionId,
+                    sellerAccountSectionId,
+                    buyerInventorySectionId,
+                    sellerInventorySectionId
+                },
+                out _))
+        {
+            FaultRuntimeAdmission();
+            return false;
+        }
+
+        return TryEnterRuntimeAdmissionOperation(NpcTradeCensusOperationId, out scope);
+    }
+
+    internal void NotifyNpcTradeOwnerMutation(string sectionId)
+    {
+        if (runtimeAdmissionContext == null || npcRosterCensusProtocol == null) return;
+        try
+        {
+            if (!npcRosterCensusProtocol.NotifyCommittedMutation(sectionId, out _))
+                npcRosterCensusProtocol.FaultClosed();
+        }
+        catch
+        {
+            npcRosterCensusProtocol.FaultClosed();
+        }
+    }
+
+    private bool TryResolveNpcTradeParticipantSections(
+        NpcRuntime npc,
+        out string accountSectionId,
+        out string inventorySectionId)
+    {
+        accountSectionId = null;
+        inventorySectionId = null;
+        if (npc == null
+            || string.IsNullOrWhiteSpace(npc.RuntimeId)
+            || !npcRegistryById.TryGetValue(npc.RuntimeId, out NpcRuntime registeredNpc)
+            || !ReferenceEquals(registeredNpc, npc)
+            || npc.MoneyAccount == null
+            || npc.ExistingInventory == null)
+        {
+            return false;
+        }
+
+        string expectedAccountSectionId = NpcMoneyAccountCensusProvider.SectionPrefix + npc.RuntimeId;
+        string expectedInventorySectionId = NpcInventoryCensusProvider.SectionPrefix + npc.RuntimeId;
+        bool accountFound = false;
+        bool inventoryFound = false;
+        try
+        {
+            foreach (IOwnerSectionCensusProvider provider in MoneyAccountCensusProviders)
+            {
+                if (!(provider is NpcMoneyAccountCensusProvider.INpcMoneyAccountSectionCensusProvider accountProvider)
+                    || !string.Equals(accountProvider.RuntimeId, npc.RuntimeId, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                OwnerSectionCensusWitness witness = provider.GetCurrentCensus();
+                if (!ReferenceEquals(accountProvider.NpcOwner, npc)
+                    || !ReferenceEquals(accountProvider.MoneyAccountOwner, npc.MoneyAccount)
+                    || !ReferenceEquals(witness.OwnerInstanceIdentity, npc.MoneyAccount)
+                    || !string.Equals(witness.SectionId, expectedAccountSectionId, StringComparison.Ordinal)
+                    || witness.SchemaVersion != NpcMoneyAccountCensusProvider.SchemaVersion
+                    || witness.Cardinality != 1
+                    || witness.Revision != npc.MoneyAccount.Revision)
+                {
+                    return false;
+                }
+
+                accountFound = true;
+            }
+
+            foreach (IOwnerSectionCensusProvider provider in InventoryCensusProviders)
+            {
+                if (!(provider is NpcInventoryCensusProvider.INpcInventorySectionCensusProvider inventoryProvider)
+                    || !string.Equals(inventoryProvider.RuntimeId, npc.RuntimeId, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                OwnerSectionCensusWitness witness = provider.GetCurrentCensus();
+                if (!ReferenceEquals(inventoryProvider.NpcOwner, npc)
+                    || !ReferenceEquals(inventoryProvider.InventoryOwner, npc.ExistingInventory)
+                    || !ReferenceEquals(witness.OwnerInstanceIdentity, npc.ExistingInventory)
+                    || !string.Equals(witness.SectionId, expectedInventorySectionId, StringComparison.Ordinal)
+                    || witness.SchemaVersion != NpcInventoryCensusProvider.SchemaVersion
+                    || witness.Revision != npc.ExistingInventory.Revision)
+                {
+                    return false;
+                }
+
+                inventoryFound = true;
+            }
+        }
+        catch
+        {
+            return false;
+        }
+
+        if (!accountFound || !inventoryFound) return false;
+        accountSectionId = expectedAccountSectionId;
+        inventorySectionId = expectedInventorySectionId;
+        return true;
     }
 
     internal bool IsRuntimeAdmissionOwnerThreadCurrent()

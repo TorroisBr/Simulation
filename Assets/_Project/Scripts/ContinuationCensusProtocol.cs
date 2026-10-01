@@ -703,6 +703,63 @@ public sealed class ContinuationCensusProtocol
     }
 
     /// <summary>
+    /// Checks that the named registered owner sections still match their last
+    /// accepted witnesses without changing the mutation epoch. This may be used
+    /// inside a broader active operation to reject a stale child boundary before
+    /// its first commit.
+    /// </summary>
+    internal bool TryValidateUnchangedSections(
+        IEnumerable<string> sectionIds,
+        out ContinuationCensusFailure failure)
+    {
+        if (!TryRequireOwnerThread(out failure)) return false;
+        if (sectionIds == null)
+        {
+            Fault();
+            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+            return false;
+        }
+
+        HashSet<string> seen = new HashSet<string>(StringComparer.Ordinal);
+        int validatedCount = 0;
+        try
+        {
+            foreach (string sectionId in sectionIds)
+            {
+                if (string.IsNullOrWhiteSpace(sectionId)
+                    || !seen.Add(sectionId)
+                    || !registeredSections.TryGetValue(sectionId, out RegisteredSection section)
+                    || !section.HasBaseline
+                    || !TryReadAndValidate(section, allowRevisionAdvance: false, out _, out failure))
+                {
+                    Fault();
+                    if (failure == ContinuationCensusFailure.None)
+                        failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+                    return false;
+                }
+
+                validatedCount++;
+            }
+        }
+        catch
+        {
+            Fault();
+            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+            return false;
+        }
+
+        if (validatedCount == 0)
+        {
+            Fault();
+            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+            return false;
+        }
+
+        failure = ContinuationCensusFailure.None;
+        return true;
+    }
+
+    /// <summary>
     /// Records one successful outer commit that changed one or more owner
     /// sections. All changed witnesses are validated before any baseline or
     /// epoch is updated, so one logical commit advances the epoch exactly once.

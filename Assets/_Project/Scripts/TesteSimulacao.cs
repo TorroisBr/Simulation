@@ -245,6 +245,7 @@ public class TesteSimulacao : MonoBehaviour
                             calendarDefinition: calendarDefinition,
                             spatialAuthorityStore: genesisSpatialAuthority,
                             runtimeAdmissionContext: runtimeAdmissionContext);
+                        economyTransactionService.BindP12CensusRuntime(simulationRuntime);
                         if (runtimeAdmissionContext != null
                             && !simulationRuntime.TryBeginBootstrapPublicationScope(out bootstrapPublicationScope))
                         {
