@@ -59,10 +59,10 @@ public sealed class ContinuationCensusProtocol
         public readonly Thread Thread;
         public readonly int ManagedThreadId;
 
-        public OwnerThreadBinding(Thread thread)
+        public OwnerThreadBinding(Thread thread, int managedThreadId)
         {
             Thread = thread ?? throw new ArgumentNullException(nameof(thread));
-            ManagedThreadId = thread.ManagedThreadId;
+            ManagedThreadId = managedThreadId;
         }
     }
 
@@ -528,6 +528,16 @@ public sealed class ContinuationCensusProtocol
     /// <summary>Binds once to the current managed thread after bootstrap completes.</summary>
     public bool BindOwnerThread(out ContinuationCensusFailure failure)
     {
+        Thread currentThread = Thread.CurrentThread;
+        return BindOwnerThread(currentThread, currentThread.ManagedThreadId, out failure);
+    }
+
+    /// <summary>Binds to an explicitly captured owner thread after verifying the current caller.</summary>
+    internal bool BindOwnerThread(
+        Thread expectedOwnerThread,
+        int expectedOwnerThreadId,
+        out ContinuationCensusFailure failure)
+    {
         failure = ContinuationCensusFailure.None;
         if (IsFaulted())
         {
@@ -542,7 +552,20 @@ public sealed class ContinuationCensusProtocol
             return false;
         }
 
-        OwnerThreadBinding binding = new OwnerThreadBinding(Thread.CurrentThread);
+        if (expectedOwnerThread == null
+            || expectedOwnerThreadId <= 0
+            || expectedOwnerThread.ManagedThreadId != expectedOwnerThreadId
+            || !ReferenceEquals(Thread.CurrentThread, expectedOwnerThread)
+            || Thread.CurrentThread.ManagedThreadId != expectedOwnerThreadId)
+        {
+            Fault();
+            failure = ContinuationCensusFailure.WrongOwnerThread;
+            return false;
+        }
+
+        OwnerThreadBinding binding = new OwnerThreadBinding(
+            expectedOwnerThread,
+            expectedOwnerThreadId);
         if (Interlocked.CompareExchange(ref ownerThreadBinding, binding, null) != null)
         {
             Fault();

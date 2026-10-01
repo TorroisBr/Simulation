@@ -13,6 +13,55 @@ public enum SimulationRuntimeAdvanceFailure
     TemporalAdvanceFailed = 5
 }
 
+public enum SimulationRuntimeAdmissionProfile
+{
+    None = 0,
+    UnityBootstrapDailyV1 = 1
+}
+
+/// <summary>Explicit profile and Unity Start-thread identity for the bounded P12 daily adapter.</summary>
+public sealed class SimulationRuntimeAdmissionContext
+{
+    public SimulationRuntimeAdmissionProfile Profile { get; }
+    internal Thread ExpectedOwnerThread { get; }
+    internal int ExpectedOwnerThreadId { get; }
+
+    public SimulationRuntimeAdmissionContext(
+        SimulationRuntimeAdmissionProfile profile,
+        Thread expectedOwnerThread,
+        int expectedOwnerThreadId)
+    {
+        if (profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1)
+            throw new ArgumentOutOfRangeException(nameof(profile));
+        if (expectedOwnerThread == null)
+            throw new ArgumentNullException(nameof(expectedOwnerThread));
+        if (expectedOwnerThreadId <= 0
+            || expectedOwnerThread.ManagedThreadId != expectedOwnerThreadId)
+            throw new ArgumentException(
+                "The expected managed thread id must match the captured Unity Start thread.",
+                nameof(expectedOwnerThreadId));
+
+        Profile = profile;
+        ExpectedOwnerThread = expectedOwnerThread;
+        ExpectedOwnerThreadId = expectedOwnerThreadId;
+    }
+
+    public static SimulationRuntimeAdmissionContext CaptureUnityBootstrapDailyV1()
+    {
+        Thread ownerThread = Thread.CurrentThread;
+        return new SimulationRuntimeAdmissionContext(
+            SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1,
+            ownerThread,
+            ownerThread.ManagedThreadId);
+    }
+
+    internal bool IsOwnedByCurrentThread()
+    {
+        return ReferenceEquals(ExpectedOwnerThread, Thread.CurrentThread)
+            && ExpectedOwnerThreadId == Thread.CurrentThread.ManagedThreadId;
+    }
+}
+
 /// <summary>Adapts the spatial authority's passage child to the P8-C transit resolver seam.</summary>
 internal sealed class SpatialPassageTraversalOptionResolver : ISpatialTraversalOptionResolver
 {
@@ -70,6 +119,8 @@ public sealed class SimulationRuntimeSpatialInvariantReport
 public sealed partial class SimulationRuntime
 {
     private const string NpcMembershipCensusOperationId = "runtime.npc-membership";
+    private const string BootstrapPublicationCensusOperationId = "runtime.bootstrap-publication";
+    private const string DailyAdvanceCensusOperationId = "runtime.advance-day";
 
     private sealed class NpcMembershipCensusContext
     {
@@ -126,6 +177,7 @@ public sealed partial class SimulationRuntime
 
     private readonly AuthoritativeMutationGuard mutationGuard = new AuthoritativeMutationGuard();
     private bool advanceLeaseHeld;
+    private readonly SimulationRuntimeAdmissionContext runtimeAdmissionContext;
     private readonly SimulationTime simulationTime;
     private readonly List<CityRuntime> cities;
     private readonly List<NpcRuntime> npcRuntimes;
@@ -419,8 +471,27 @@ public sealed partial class SimulationRuntime
         SpatialRouteKnowledgeStore spatialRouteKnowledgeStore = null,
         PersonRoutePlanStore personRoutePlanStore = null,
         ActorChoiceStore actorChoiceStore = null,
-        P18DIntradayProfile p18dIntradayProfile = null)
+        P18DIntradayProfile p18dIntradayProfile = null,
+        SimulationRuntimeAdmissionContext runtimeAdmissionContext = null)
     {
+        if (runtimeAdmissionContext != null)
+        {
+            if (p18dIntradayProfile != null)
+            {
+                throw new ArgumentException(
+                    "The P12 daily runtime-admission adapter cannot be combined with a P18 timeline profile.",
+                    nameof(runtimeAdmissionContext));
+            }
+
+            if (!runtimeAdmissionContext.IsOwnedByCurrentThread())
+            {
+                throw new ArgumentException(
+                    "The P12 runtime must be constructed on its captured Unity Start thread.",
+                    nameof(runtimeAdmissionContext));
+            }
+        }
+
+        this.runtimeAdmissionContext = runtimeAdmissionContext;
         List<CityRuntime> resolvedCities = cities != null
             ? new List<CityRuntime>(cities)
             : new List<CityRuntime>();
@@ -855,6 +926,17 @@ public sealed partial class SimulationRuntime
         InitializeP18DIntradayProfile(p18dIntradayProfile);
         InitializeNpcRosterCensusProtocol();
 
+        if (runtimeAdmissionContext != null)
+        {
+            if (npcRosterCensusProtocol == null
+                || !simulationTime.TryBindRuntimeAdvanceDispatcher(TryAdvanceFromRuntimeOwnedClock))
+            {
+                npcRosterCensusProtocol?.FaultClosed();
+                throw new InvalidOperationException(
+                    "The P12 runtime-admission adapter could not bind to its initialized census protocol and clock.");
+            }
+        }
+
     }
 
     private void InitializeNpcRosterCensusProtocol()
@@ -884,10 +966,36 @@ public sealed partial class SimulationRuntime
             || !protocol.RegisterInventoryRosterFamily(npcRuntimeSnapshot, out _)
             || !protocol.RegisterNpcKnowledgeRosterFamily(npcRuntimeSnapshot, out _)
             || !protocol.SealExpectedSectionInventory(out _)
-            || !protocol.SealCensusProviderInventory(out _)
-            || !protocol.RegisterExpectedOperation(NpcMembershipCensusOperationId, out _)
-            || !protocol.SealOperationInventory(out _)
-            || !protocol.BindOwnerThread(out _))
+            || !protocol.SealCensusProviderInventory(out _))
+        {
+            npcRosterCensusProtocol = null;
+            return;
+        }
+
+        bool operationsRegistered = protocol.RegisterExpectedOperation(
+            NpcMembershipCensusOperationId,
+            out _);
+        if (operationsRegistered && runtimeAdmissionContext != null)
+        {
+            operationsRegistered = protocol.RegisterExpectedOperation(
+                    BootstrapPublicationCensusOperationId,
+                    out _)
+                && protocol.RegisterExpectedOperation(
+                    DailyAdvanceCensusOperationId,
+                    out _);
+        }
+
+        bool ownerThreadBound = false;
+        if (operationsRegistered && protocol.SealOperationInventory(out _))
+        {
+            ownerThreadBound = runtimeAdmissionContext == null
+                ? protocol.BindOwnerThread(out _)
+                : protocol.BindOwnerThread(
+                    runtimeAdmissionContext.ExpectedOwnerThread,
+                    runtimeAdmissionContext.ExpectedOwnerThreadId,
+                    out _);
+        }
+        if (!operationsRegistered || !ownerThreadBound)
         {
             npcRosterCensusProtocol = null;
             return;
@@ -920,6 +1028,68 @@ public sealed partial class SimulationRuntime
             return false;
         }
         return npcRosterCensusProtocol.TryReadMutationEpoch(out epoch, out failure);
+    }
+
+    internal bool TryBeginBootstrapPublicationScope(out SimulationOperationScope scope)
+    {
+        scope = null;
+        if (runtimeAdmissionContext == null)
+            return false;
+
+        return TryEnterRuntimeAdmissionOperation(
+            BootstrapPublicationCensusOperationId,
+            out scope);
+    }
+
+    internal bool IsRuntimeAdmissionOwnerThreadCurrent()
+    {
+        if (runtimeAdmissionContext == null)
+            return true;
+
+        if (runtimeAdmissionContext.IsOwnedByCurrentThread())
+            return true;
+
+        npcRosterCensusProtocol?.FaultClosed();
+        return false;
+    }
+
+    internal void FaultRuntimeAdmission()
+    {
+        npcRosterCensusProtocol?.FaultClosed();
+    }
+
+    private bool TryEnterRuntimeAdmissionOperation(
+        string operationContractId,
+        out SimulationOperationScope scope)
+    {
+        scope = null;
+        if (runtimeAdmissionContext == null
+            || !IsRuntimeAdmissionOwnerThreadCurrent()
+            || npcRosterCensusProtocol == null
+            || !npcRosterCensusProtocol.TryEnterOperation(
+                operationContractId,
+                out scope,
+                out _))
+        {
+            npcRosterCensusProtocol?.FaultClosed();
+            return false;
+        }
+
+        return true;
+    }
+
+    private bool TryAdvanceFromRuntimeOwnedClock(out SimulationTimeAdvanceFailure failure)
+    {
+        if (TryAdvanceDay(out SimulationRuntimeAdvanceFailure runtimeFailure))
+        {
+            failure = SimulationTimeAdvanceFailure.None;
+            return true;
+        }
+
+        failure = runtimeFailure == SimulationRuntimeAdvanceFailure.AbsoluteDayOverflow
+            ? SimulationTimeAdvanceFailure.AbsoluteDayOverflow
+            : SimulationTimeAdvanceFailure.RuntimeFaulted;
+        return false;
     }
 
     private NpcMembershipCensusScope BeginNpcMembershipCensusScope()
@@ -2807,6 +2977,12 @@ public sealed partial class SimulationRuntime
     public bool TryAdvanceDay(out SimulationRuntimeAdvanceFailure failure)
     {
         failure = SimulationRuntimeAdvanceFailure.None;
+        if (runtimeAdmissionContext != null && !IsRuntimeAdmissionOwnerThreadCurrent())
+        {
+            failure = SimulationRuntimeAdvanceFailure.RuntimeFaulted;
+            return false;
+        }
+
         if (TryAcquireAdvanceLease(out AdvanceLease lease) == false)
         {
             failure = SimulationRuntimeAdvanceFailure.AdvanceAlreadyInProgress;
@@ -2815,6 +2991,44 @@ public sealed partial class SimulationRuntime
 
         using (lease)
         {
+            if (runtimeAdmissionContext != null)
+            {
+                if (mutationGuard.CanMutate == false)
+                {
+                    failure = SimulationRuntimeAdvanceFailure.RuntimeFaulted;
+                    return false;
+                }
+
+                if (!simulationTime.TryValidateAdvance(out SimulationTimeAdvanceFailure timeFailure))
+                {
+                    failure = timeFailure == SimulationTimeAdvanceFailure.AbsoluteDayOverflow
+                        ? SimulationRuntimeAdvanceFailure.AbsoluteDayOverflow
+                        : SimulationRuntimeAdvanceFailure.RuntimeFaulted;
+                    return false;
+                }
+
+                if (!TryEnterRuntimeAdmissionOperation(
+                        DailyAdvanceCensusOperationId,
+                        out SimulationOperationScope operationScope))
+                {
+                    failure = SimulationRuntimeAdvanceFailure.RuntimeFaulted;
+                    return false;
+                }
+
+                using (operationScope)
+                {
+                    try
+                    {
+                        return TryAdvanceDayCore(out failure);
+                    }
+                    catch
+                    {
+                        FaultRuntimeAdmission();
+                        throw;
+                    }
+                }
+            }
+
             if (p18dTimeline != null)
             {
                 LogicalTick target;
@@ -2844,7 +3058,7 @@ public sealed partial class SimulationRuntime
             return false;
         }
 
-        if (simulationTime.TryAdvanceDay(out SimulationTimeAdvanceFailure timeFailure) == false)
+        if (simulationTime.TryAdvanceDayFromRuntime(out SimulationTimeAdvanceFailure timeFailure) == false)
         {
             failure = timeFailure == SimulationTimeAdvanceFailure.RuntimeFaulted
                 ? SimulationRuntimeAdvanceFailure.RuntimeFaulted
@@ -4455,6 +4669,12 @@ public sealed partial class SimulationRuntime
             return true;
         }
 
+        if (runtimeAdmissionContext != null && !IsRuntimeAdmissionOwnerThreadCurrent())
+        {
+            failure = SimulationRuntimeAdvanceFailure.RuntimeFaulted;
+            return false;
+        }
+
         if (TryAcquireAdvanceLease(out AdvanceLease lease) == false)
         {
             failure = SimulationRuntimeAdvanceFailure.AdvanceAlreadyInProgress;
@@ -4469,35 +4689,66 @@ public sealed partial class SimulationRuntime
                 return false;
             }
 
-            for (int i = 0; i < dayCount; i++)
+            if (runtimeAdmissionContext != null
+                && !simulationTime.TryValidateAdvance(out SimulationTimeAdvanceFailure initialTimeFailure))
             {
-                bool advanced;
-                if (p18dTimeline != null)
+                failure = initialTimeFailure == SimulationTimeAdvanceFailure.AbsoluteDayOverflow
+                    ? SimulationRuntimeAdvanceFailure.AbsoluteDayOverflow
+                    : SimulationRuntimeAdvanceFailure.RuntimeFaulted;
+                return false;
+            }
+
+            SimulationOperationScope operationScope = null;
+            if (runtimeAdmissionContext != null
+                && !TryEnterRuntimeAdmissionOperation(
+                    DailyAdvanceCensusOperationId,
+                    out operationScope))
+            {
+                failure = SimulationRuntimeAdvanceFailure.RuntimeFaulted;
+                return false;
+            }
+
+            using (operationScope)
+            {
+                try
                 {
-                    LogicalTick target;
-                    try
+                    for (int i = 0; i < dayCount; i++)
                     {
-                        target = p18dTimeline.CurrentInstant.NextDayBoundary;
+                        bool advanced;
+                        if (p18dTimeline != null)
+                        {
+                            LogicalTick target;
+                            try
+                            {
+                                target = p18dTimeline.CurrentInstant.NextDayBoundary;
+                            }
+                            catch (OverflowException)
+                            {
+                                failure = SimulationRuntimeAdvanceFailure.AbsoluteDayOverflow;
+                                return false;
+                            }
+
+                            advanced = TryAdvanceP18DIntradayToCore(target, out failure);
+                        }
+                        else
+                        {
+                            advanced = TryAdvanceDayCore(out failure);
+                        }
+
+                        if (advanced == false)
+                        {
+                            return false;
+                        }
+
+                        daysAdvanced++;
                     }
-                    catch (OverflowException)
-                    {
-                        failure = SimulationRuntimeAdvanceFailure.AbsoluteDayOverflow;
-                        return false;
-                    }
-
-                    advanced = TryAdvanceP18DIntradayToCore(target, out failure);
                 }
-                else
+                catch
                 {
-                    advanced = TryAdvanceDayCore(out failure);
+                    if (runtimeAdmissionContext != null)
+                        FaultRuntimeAdmission();
+                    throw;
                 }
-
-                if (advanced == false)
-                {
-                    return false;
-                }
-
-                daysAdvanced++;
             }
         }
 

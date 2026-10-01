@@ -385,6 +385,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TesteSimulacao
   simulationConfig: {fileID: 11400000, guid: ba87bf49ee034da6bda3daeef8e40c3f, type: 2}
+  runtimeAdmissionProfile: 1
   daysToSimulate: 8
   maxMerchantTradeAmount: 5
   minimumProfitPerItem: 1

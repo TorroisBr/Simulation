@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
+using System.Threading;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -8,6 +9,7 @@ public class TesteSimulacao : MonoBehaviour
 {
     [SerializeField] private SimulationConfigData simulationConfig;
     [SerializeField] private int daysToSimulate = 1;
+    [SerializeField] private SimulationRuntimeAdmissionProfile runtimeAdmissionProfile;
 
     private List<NpcRuntime> npcRuntimeList = new List<NpcRuntime>();
     private List<CityRuntime> cityRuntimeList = new List<CityRuntime>();
@@ -53,6 +55,12 @@ public class TesteSimulacao : MonoBehaviour
     private IAuthoritativeRandomSource authoritativeRandomSource;
     private long lastEconomySnapshotDay;
     private SimulationBootstrapComposition publishedComposition;
+    private Thread bootstrapStartThread;
+    private int bootstrapStartThreadId;
+    private SimulationRuntimeAdmissionContext runtimeAdmissionContext;
+    private SimulationOperationScope bootstrapPublicationScope;
+    private bool bootstrapStartAttempted;
+    private bool bootstrapFailed;
 
 
     public SimulationBootstrapComposition Bootstrap => publishedComposition;
@@ -99,11 +107,43 @@ public class TesteSimulacao : MonoBehaviour
 
     public void Start()
     {
+        if (bootstrapFailed
+            || (runtimeAdmissionProfile == SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+                && bootstrapStartAttempted))
+            return;
+
+        if (runtimeAdmissionProfile != SimulationRuntimeAdmissionProfile.None
+            && runtimeAdmissionProfile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1)
+        {
+            bootstrapFailed = true;
+            throw new System.InvalidOperationException("The selected runtime-admission profile is not supported.");
+        }
+
+        if (runtimeAdmissionProfile == SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1)
+        {
+            bootstrapStartAttempted = true;
+            bootstrapStartThread = Thread.CurrentThread;
+            bootstrapStartThreadId = bootstrapStartThread.ManagedThreadId;
+            runtimeAdmissionContext = new SimulationRuntimeAdmissionContext(
+                runtimeAdmissionProfile,
+                bootstrapStartThread,
+                bootstrapStartThreadId);
+        }
+
         InitializeSimulation();
     }
 
     public void Update()
     {
+        if (bootstrapFailed)
+            return;
+
+        if (runtimeAdmissionContext != null && !IsBootstrapStartThreadCurrent())
+        {
+            simulationRuntime?.FaultRuntimeAdmission();
+            return;
+        }
+
         if (Keyboard.current != null && Keyboard.current.spaceKey.wasPressedThisFrame == true)
         {
             Simulate(Mathf.Max(1, daysToSimulate));
@@ -112,96 +152,157 @@ public class TesteSimulacao : MonoBehaviour
 
     private void InitializeSimulation(System.Action<string> stageCompleted = null)
     {
-        if (publishedComposition != null) return;
+        bool selectedAdmissionProfile = runtimeAdmissionProfile == SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1;
+        if ((selectedAdmissionProfile && bootstrapFailed) || publishedComposition != null) return;
+        if (selectedAdmissionProfile && runtimeAdmissionContext == null)
+        {
+            bootstrapFailed = true;
+            throw new System.InvalidOperationException(
+                "The selected daily runtime-admission profile must be initialized through Start so its owner thread is captured.");
+        }
+        if (runtimeAdmissionContext != null && !IsBootstrapStartThreadCurrent())
+        {
+            bootstrapFailed = true;
+            simulationRuntime?.FaultRuntimeAdmission();
+            throw new System.InvalidOperationException(
+                "Simulation bootstrap must remain on the Unity Start thread captured for the selected profile.");
+        }
+
         string profileFingerprint = null;
         System.Collections.Generic.IReadOnlyList<string> profileProvenanceRecords = null;
-        SimulationGenesisPipeline.ExecuteStages(stageId =>
+        bool pipelineReturnedNormally = false;
+        try
         {
-            switch (stageId)
+            SimulationGenesisPipeline.ExecuteStages(stageId =>
             {
-                case "p9.genesis.resolve-profile/v1":
-                    SimulationGenesisPipeline.ValidateProfile(simulationConfig);
-                    simulationTime = new SimulationTime();
-                    authoritativeRandomSource = new DeterministicRandomSource(simulationConfig.useFixedSimulationSeed ? simulationConfig.simulationSeed : 0);
-                    lastEconomySnapshotDay = 0;
-                    logger = new SimulationLogger(simulationConfig.LogSettings);
-                    logger.BeginSimulation(simulationConfig.simulationName, simulationConfig.EnabledModules, simulationConfig.Cities.Count, simulationConfig.Npcs.Count);
-                    calendarDefinition = ResolveCalendarDefinition();
-                    enabledModules = new SimulationModuleSet(simulationConfig, logger);
-                    effectiveConfiguration = ResolveRuntimeConfiguration();
-                    genesisSpatialAuthority = new SpatialAuthorityStore();
-                    profileFingerprint = SimulationGenesisPipeline.CreateFingerprint(
-                        simulationConfig, effectiveConfiguration, calendarDefinition, out profileProvenanceRecords);
-                    AppendScenarioDiagnostics(effectiveConfiguration);
-                    runtimeIdAllocator = new RuntimeIdAllocator();
-                    explorableSiteKnowledgeSystem = new ExplorableSiteKnowledgeSystem();
-                    recordSequence = new SimulationRecordSequence();
-                    historyStore = new HistoryStore();
-                    domainEventStore = new DomainEventStore(historyStore, new HistoryPolicy(), logger);
-                    domainEventRecorder = new DomainEventRecorder(runtimeIdAllocator, simulationTime, recordSequence, domainEventStore, logger);
-                    decisionStore = new NpcDecisionStore(logger);
-                    decisionRecorder = new NpcDecisionRecorder(runtimeIdAllocator, simulationTime, recordSequence, decisionStore, logger);
-                    npcChronicleService = new NpcChronicleService(decisionStore, domainEventStore);
-                    npcChronicleFormatter = new NpcChronicleFormatter(ResolveNpcDisplayName, ResolveLocationDisplayName, ResolveItemDisplayName, ResolveActionDisplayName);
-                    scheduledDirectiveStore = new ScheduledDirectiveStore(simulationTime, logger);
-                    runtimeIdentityRegistry = new RuntimeIdentityRegistry(logger);
-                    spatialNetwork = new SpatialNetworkRuntime(runtimeIdentityRegistry, logger);
-                    break;
-                case "p9.genesis.authored-world/v1":
-                    CityRuntimeList.Clear();
-                    cityRuntimesByDefinition.Clear();
-                    cityRuntimeByLocation.Clear();
-                    CreateCityRuntimes();
-                    explorableSiteStore = new ExplorableSiteStore();
-                    explorableSiteRuntimesByDefinition.Clear();
-                    CreateExplorableSiteRuntimes();
-                    CreateSpatialRoutes();
-                    break;
-                case SimulationGenesisPipeline.GeographyStageId:
-                    ComposeAuthoredGeography();
-                    break;
-                case "p9.genesis.authored-actors/v1":
-                    NpcRuntimeList.Clear();
-                    npcRuntimesByDefinition.Clear();
-                    CreateNpcRuntimes();
-                    CreateScheduledDirectives();
-                    scheduledDirectiveSystem = new ScheduledDirectiveSystem(scheduledDirectiveStore, runtimeIdentityRegistry, logger);
-                    economyTransactionService = new EconomyTransactionService();
-                    expeditionStore = new ExpeditionStore();
-                    break;
-                case "p9.genesis.validate-profile/v1":
-                    RebuildSystems(effectiveConfiguration);
-                    BootstrapInitialSpatialKnowledge();
-                    BootstrapInitialExplorableSiteKnowledge();
-                    BootstrapInitialCommercialKnowledge();
-                    InitializeJusticeState();
-                    simulationRuntime = new SimulationRuntime(
-                        simulationTime: simulationTime, cities: CityRuntimeList, npcRuntimes: NpcRuntimeList,
-                        configuredActions: ConfiguredActions, scheduledDirectiveSystem: scheduledDirectiveSystem,
-                        justiceSystem: justiceSystem, crimeSystem: crimeSystem, npcDecisionSystem: npcDecisionSystem,
-                        travelSystem: travelSystem, travelPartySystem: travelPartySystem, merchantSystem: merchantSystem,
-                        commercialKnowledgeSharingSystem: commercialKnowledgeSharingSystem, decisionRecorder: decisionRecorder,
-                        logger: logger, explorableSiteStore: explorableSiteStore,
-                        explorableSiteKnowledgeSystem: explorableSiteKnowledgeSystem, expeditionSystem: expeditionSystem,
-                        configuration: effectiveConfiguration, randomSource: authoritativeRandomSource,
-                        calendarDefinition: calendarDefinition,
-                        spatialAuthorityStore: genesisSpatialAuthority);
-                    ValidateCandidateProfile();
-                    break;
-                case "p9.genesis.publish/v1":
-                    publishedComposition = new SimulationBootstrapComposition(
-                        new SimulationGenesisManifest(simulationConfig, effectiveConfiguration, calendarDefinition, profileFingerprint, profileProvenanceRecords), simulationTime, calendarDefinition, spatialNetwork, domainEventStore,
-                        historyStore, scheduledDirectiveStore, decisionStore, decisionRecorder, recordSequence, economyTransactionService, npcChronicleService,
-                        npcChronicleFormatter, travelPartyStore, travelPartySystem, simulationRuntime,
-                        runtimeIdentityRegistry,
-                        runtimeIdAllocator,
-                        explorableSiteStore, expeditionStore, expeditionSystem);
-                    break;
-                default:
-                    throw new System.InvalidOperationException("Undeclared authored genesis stage: " + stageId);
+                switch (stageId)
+                {
+                    case "p9.genesis.resolve-profile/v1":
+                        SimulationGenesisPipeline.ValidateProfile(simulationConfig);
+                        simulationTime = new SimulationTime();
+                        authoritativeRandomSource = new DeterministicRandomSource(simulationConfig.useFixedSimulationSeed ? simulationConfig.simulationSeed : 0);
+                        lastEconomySnapshotDay = 0;
+                        logger = new SimulationLogger(simulationConfig.LogSettings);
+                        logger.BeginSimulation(simulationConfig.simulationName, simulationConfig.EnabledModules, simulationConfig.Cities.Count, simulationConfig.Npcs.Count);
+                        calendarDefinition = ResolveCalendarDefinition();
+                        enabledModules = new SimulationModuleSet(simulationConfig, logger);
+                        effectiveConfiguration = ResolveRuntimeConfiguration();
+                        genesisSpatialAuthority = new SpatialAuthorityStore();
+                        profileFingerprint = SimulationGenesisPipeline.CreateFingerprint(
+                            simulationConfig, effectiveConfiguration, calendarDefinition, out profileProvenanceRecords);
+                        AppendScenarioDiagnostics(effectiveConfiguration);
+                        runtimeIdAllocator = new RuntimeIdAllocator();
+                        explorableSiteKnowledgeSystem = new ExplorableSiteKnowledgeSystem();
+                        recordSequence = new SimulationRecordSequence();
+                        historyStore = new HistoryStore();
+                        domainEventStore = new DomainEventStore(historyStore, new HistoryPolicy(), logger);
+                        domainEventRecorder = new DomainEventRecorder(runtimeIdAllocator, simulationTime, recordSequence, domainEventStore, logger);
+                        decisionStore = new NpcDecisionStore(logger);
+                        decisionRecorder = new NpcDecisionRecorder(runtimeIdAllocator, simulationTime, recordSequence, decisionStore, logger);
+                        npcChronicleService = new NpcChronicleService(decisionStore, domainEventStore);
+                        npcChronicleFormatter = new NpcChronicleFormatter(ResolveNpcDisplayName, ResolveLocationDisplayName, ResolveItemDisplayName, ResolveActionDisplayName);
+                        scheduledDirectiveStore = new ScheduledDirectiveStore(simulationTime, logger);
+                        runtimeIdentityRegistry = new RuntimeIdentityRegistry(logger);
+                        spatialNetwork = new SpatialNetworkRuntime(runtimeIdentityRegistry, logger);
+                        break;
+                    case "p9.genesis.authored-world/v1":
+                        CityRuntimeList.Clear();
+                        cityRuntimesByDefinition.Clear();
+                        cityRuntimeByLocation.Clear();
+                        CreateCityRuntimes();
+                        explorableSiteStore = new ExplorableSiteStore();
+                        explorableSiteRuntimesByDefinition.Clear();
+                        CreateExplorableSiteRuntimes();
+                        CreateSpatialRoutes();
+                        break;
+                    case SimulationGenesisPipeline.GeographyStageId:
+                        ComposeAuthoredGeography();
+                        break;
+                    case "p9.genesis.authored-actors/v1":
+                        NpcRuntimeList.Clear();
+                        npcRuntimesByDefinition.Clear();
+                        CreateNpcRuntimes();
+                        CreateScheduledDirectives();
+                        scheduledDirectiveSystem = new ScheduledDirectiveSystem(scheduledDirectiveStore, runtimeIdentityRegistry, logger);
+                        economyTransactionService = new EconomyTransactionService();
+                        expeditionStore = new ExpeditionStore();
+                        break;
+                    case "p9.genesis.validate-profile/v1":
+                        RebuildSystems(effectiveConfiguration);
+                        BootstrapInitialSpatialKnowledge();
+                        BootstrapInitialExplorableSiteKnowledge();
+                        BootstrapInitialCommercialKnowledge();
+                        InitializeJusticeState();
+                        simulationRuntime = new SimulationRuntime(
+                            simulationTime: simulationTime, cities: CityRuntimeList, npcRuntimes: NpcRuntimeList,
+                            configuredActions: ConfiguredActions, scheduledDirectiveSystem: scheduledDirectiveSystem,
+                            justiceSystem: justiceSystem, crimeSystem: crimeSystem, npcDecisionSystem: npcDecisionSystem,
+                            travelSystem: travelSystem, travelPartySystem: travelPartySystem, merchantSystem: merchantSystem,
+                            commercialKnowledgeSharingSystem: commercialKnowledgeSharingSystem, decisionRecorder: decisionRecorder,
+                            logger: logger, explorableSiteStore: explorableSiteStore,
+                            explorableSiteKnowledgeSystem: explorableSiteKnowledgeSystem, expeditionSystem: expeditionSystem,
+                            configuration: effectiveConfiguration, randomSource: authoritativeRandomSource,
+                            calendarDefinition: calendarDefinition,
+                            spatialAuthorityStore: genesisSpatialAuthority,
+                            runtimeAdmissionContext: runtimeAdmissionContext);
+                        if (runtimeAdmissionContext != null
+                            && !simulationRuntime.TryBeginBootstrapPublicationScope(out bootstrapPublicationScope))
+                        {
+                            throw new System.InvalidOperationException(
+                                "The P12 bootstrap publication scope could not begin after the initial census baseline.");
+                        }
+                        ValidateCandidateProfile();
+                        break;
+                    case "p9.genesis.publish/v1":
+                        publishedComposition = new SimulationBootstrapComposition(
+                            new SimulationGenesisManifest(simulationConfig, effectiveConfiguration, calendarDefinition, profileFingerprint, profileProvenanceRecords), simulationTime, calendarDefinition, spatialNetwork, domainEventStore,
+                            historyStore, scheduledDirectiveStore, decisionStore, decisionRecorder, recordSequence, economyTransactionService, npcChronicleService,
+                            npcChronicleFormatter, travelPartyStore, travelPartySystem, simulationRuntime,
+                            runtimeIdentityRegistry,
+                            runtimeIdAllocator,
+                            explorableSiteStore, expeditionStore, expeditionSystem);
+                        break;
+                    default:
+                        throw new System.InvalidOperationException("Undeclared authored genesis stage: " + stageId);
+                }
+                stageCompleted?.Invoke(stageId);
+            }, simulationConfig != null && simulationConfig.useAuthoredGeographyProfile);
+
+            if (selectedAdmissionProfile && publishedComposition == null)
+                throw new System.InvalidOperationException("Simulation genesis returned without publishing its composition.");
+            if (runtimeAdmissionContext != null && !IsBootstrapStartThreadCurrent())
+                throw new System.InvalidOperationException("Simulation bootstrap completed on a thread other than its captured Unity Start thread.");
+
+            pipelineReturnedNormally = true;
+        }
+        catch
+        {
+            if (selectedAdmissionProfile)
+            {
+                bootstrapFailed = true;
+                publishedComposition = null;
+                simulationRuntime?.FaultRuntimeAdmission();
             }
-            stageCompleted?.Invoke(stageId);
-        }, simulationConfig != null && simulationConfig.useAuthoredGeographyProfile);
+            throw;
+        }
+        finally
+        {
+            if (bootstrapPublicationScope != null)
+            {
+                if (!pipelineReturnedNormally)
+                    simulationRuntime?.FaultRuntimeAdmission();
+
+                bootstrapPublicationScope.Dispose();
+                bootstrapPublicationScope = null;
+            }
+        }
+    }
+
+    private bool IsBootstrapStartThreadCurrent()
+    {
+        return bootstrapStartThread != null
+            && ReferenceEquals(bootstrapStartThread, Thread.CurrentThread)
+            && bootstrapStartThreadId == Thread.CurrentThread.ManagedThreadId;
     }
 
     private void ComposeAuthoredGeography()
