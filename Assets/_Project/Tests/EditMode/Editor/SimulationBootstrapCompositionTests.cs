@@ -273,6 +273,22 @@ public sealed class SimulationBootstrapCompositionTests
             out long npcCensusEpoch, out ContinuationCensusFailure npcEpochFailure), Is.True,
             npcEpochFailure.ToString());
         Assert.That(npcCensusEpoch, Is.Zero);
+        IReadOnlyList<IOwnerSectionCensusProvider> moneyAccountProviders =
+            simulation.Bootstrap.Runtime.MoneyAccountCensusProviders;
+        NpcRuntime[] moneyAccountOwners = runtime.NpcRuntimes
+            .OrderBy(npc => npc.RuntimeId, System.StringComparer.Ordinal)
+            .ToArray();
+        Assert.That(moneyAccountProviders.Count, Is.EqualTo(10));
+        Assert.That(moneyAccountProviders.Count, Is.EqualTo(moneyAccountOwners.Length));
+        for (int i = 0; i < moneyAccountOwners.Length; i++)
+        {
+            OwnerSectionCensusWitness witness = moneyAccountProviders[i].GetCurrentCensus();
+            Assert.That(witness.SectionId, Is.EqualTo(NpcMoneyAccountCensusProvider.SectionPrefix + moneyAccountOwners[i].RuntimeId));
+            Assert.That(witness.SchemaVersion, Is.EqualTo(NpcMoneyAccountCensusProvider.SchemaVersion));
+            Assert.That(witness.OwnerInstanceIdentity, Is.SameAs(moneyAccountOwners[i].MoneyAccount));
+            Assert.That(witness.Cardinality, Is.EqualTo(1));
+            Assert.That(witness.Revision, Is.EqualTo(moneyAccountOwners[i].MoneyAccount.Revision));
+        }
         IReadOnlyList<IOwnerSectionCensusProvider> inventoryProviders = simulation.Bootstrap.Runtime.InventoryCensusProviders;
         NpcRuntime[] inventoryOwners = runtime.NpcRuntimes.OrderBy(npc => npc.RuntimeId, System.StringComparer.Ordinal).ToArray();
         Assert.That(inventoryProviders.Count, Is.EqualTo(inventoryOwners.Length));

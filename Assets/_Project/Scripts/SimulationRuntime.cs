@@ -267,6 +267,8 @@ public sealed partial class SimulationRuntime
             : Array.AsReadOnly(new IOwnerSectionCensusProvider[0]);
     public IReadOnlyList<IOwnerSectionCensusProvider> InventoryCensusProviders =>
         npcRosterCensusProtocol != null ? npcRosterCensusProtocol.InventoryFamilyProviders : Array.AsReadOnly(new IOwnerSectionCensusProvider[0]);
+    public IReadOnlyList<IOwnerSectionCensusProvider> MoneyAccountCensusProviders =>
+        npcRosterCensusProtocol != null ? npcRosterCensusProtocol.MoneyAccountFamilyProviders : Array.AsReadOnly(new IOwnerSectionCensusProvider[0]);
     /// <summary>Latest reconciled passive per-NPC Knowledge witness snapshot.</summary>
     public IReadOnlyList<IOwnerSectionCensusProvider> NpcKnowledgeCensusProviders =>
         npcRosterCensusProtocol != null
@@ -964,6 +966,7 @@ public sealed partial class SimulationRuntime
                 out _)
             || !protocol.RegisterSpatialKnowledgeRosterFamily(npcRuntimeSnapshot, out _)
             || !protocol.RegisterInventoryRosterFamily(npcRuntimeSnapshot, out _)
+            || !protocol.RegisterMoneyAccountRosterFamily(npcRuntimeSnapshot, out _)
             || !protocol.RegisterNpcKnowledgeRosterFamily(npcRuntimeSnapshot, out _)
             || !protocol.SealExpectedSectionInventory(out _)
             || !protocol.SealCensusProviderInventory(out _))
