@@ -142,6 +142,38 @@ The design uses existing ownership: map supported operations to exact owner sect
 
 The accepted P12-B–P12-G prerequisite authorization was recorded on 2026-09-27. This audit identifies no new product/canonical architecture decision and no new checkpoint-acceptance gate. The 2026-09-27 acceptance already authorizes prerequisite implementation within its accepted P12 scope. Independent design review is the next technical gate; it adds no new authority or scope. Canonical promotion and P12-A implementation authorization remain separate human gates.
 
+## Candidate operation delta — 2026-10-01 (not canonical)
+
+The implementation candidate at code commit
+`5ab42a9880b866f9f8d94b9365b2c5fb51c15ff7` adds one bounded operation path
+on `codex/phase12/P12BPostMoneyAccountBlockerRefresh`:
+`runtime.economy.npc-trade` around
+`EconomyTransactionService.TryExecuteNpcTrade`. If promoted, this operation
+would move from MISSING to PARTIAL: the bound P12 runtime verifies the exact
+registered buyer/seller NPCs and their existing account/Inventory sections,
+checks the accepted baselines before the first commit, and scopes the complete
+trade including compensations. Each actual account or Inventory revision
+commit is reported individually to the existing partial epoch. Precommit
+admission failure returns `TransactionCommitFailed` before any trade write;
+postcommit bookkeeping failure faults admission closed while preserving the
+established domain result.
+
+This is a candidate delta, not a canonical capability. The canonical
+operation matrix above remains authoritative until the separately gated
+promotion. If this slice is promoted, the next dependency-ordered operation
+work remains the other selected economy flows: NPC/Market purchase and sale,
+money transfer, configured population consumption, travel charge/restore and
+group compensation, plus their actual daily merchant call paths. Their Market,
+account, Inventory, transaction/receipt, plan and Knowledge owners still lack
+complete enclosing scopes and shared-epoch participation. The direct owner
+entrypoints and subsequent MerchantSystem plan completion also remain
+uncovered by the NPC-trade candidate.
+
+The candidate does not change the 142-section sealed partial census count,
+make the effective owner set complete, provide an operation-wide lock, or add
+a capture-token/eligibility lifecycle. P12-B remains incomplete, P12-A remains
+`WAIT_DEPENDENCY`, and P13 remains blocked.
+
 ## Work and validation
 
 Documentation-only. No Unity tests were run or needed. Run git diff --check and exact-tip independent design/documentation review before presenting this candidate for canonical promotion.

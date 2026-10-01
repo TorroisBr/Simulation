@@ -743,3 +743,25 @@ capture eligibility, export, and hydration remain uncovered. Independent
 exact-tip implementation review and canonical promotion are pending. This
 candidate does not complete P12-B, make P12-A ready, or unblock P13; Phase 12
 remains open.
+
+### Exact-tip review correction — 2026-10-01
+
+Independent review of the first code candidate tip `5d42cef6a9ceec4eb0af49689e1f67c07d571eaf`
+returned NEEDS_CHANGES: a failed bound P12 precommit admission disabled
+notifications but still allowed the domain trade to commit. The correction at
+`5ab42a9880b866f9f8d94b9365b2c5fb51c15ff7` returns the existing
+`TransactionCommitFailed` result before any owner write when participant,
+owner-thread, baseline, or operation admission fails. A service without a bound
+P12 runtime retains its established path; bookkeeping failure after a committed
+owner still preserves the trade result and faults P12 admission closed. Its
+code tree is `6f8bab112ef0f7c97bfde31aa3dbd637db4f8a33`.
+
+The revised code tree passed focused SimulationRuntimeAdmission 15/15,
+NpcMoneyAccountCensus 10/10, NpcInventoryCensus 7/7,
+ContinuationCensusProtocol 22/22, EconomyTransaction 45/45, ALL EditMode
+2125/2125, official EditMode Smoke 5/5, and `git diff --check`. Exact filenames
+and XML/log hashes are recorded in
+`docs/design/PHASE12_P12B_NPC_TRADE_INVALIDATION_CANDIDATE.md`. The candidate
+is not canonical; independent exact-tip re-review and canonical promotion
+remain pending. P12-B remains incomplete, P12-A remains `WAIT_DEPENDENCY`, and
+P13 remains blocked.
