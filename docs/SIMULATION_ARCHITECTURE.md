@@ -5527,6 +5527,72 @@ Participação não pode existir apenas numa lista transitória de NPCs carregad
 
 ---
 
+## 91A. Identidade durável do mundo
+
+**DECIDIDO — DIREÇÃO ARQUITETURAL; CAPACIDADE EM DESIGN PROPOSED**
+
+`WorldId` identifica uma continuação causal independente do mundo. Uma nova
+identidade é publicada com o World Truth inicial completo e validado, antes da
+primeira fronteira simulada. Gênese que falha não publica mundo nem `WorldId`.
+Seed, fingerprint/conteúdo de gênese, arquivo de save e instância runtime não
+são a identidade do mundo. O owner é a composição/identidade do mundo, não uma
+etapa geradora, store espacial, exporter ou timeline.
+
+Save/load da mesma continuação preserva `WorldId`. Copiar bytes de um save não
+cria automaticamente outro mundo; antes de duas cópias continuarem
+independentemente, uma delas precisa de uma operação explícita de branch e
+novo `WorldId`. Um fork histórico P13 reconstrói o estado exato na fronteira T
+realmente simulada e publica uma continuação independente com novo `WorldId` e
+proveniência `(WorldId de origem, fronteira T)`. Fatos e IDs herdados do
+período anterior a T conservam sua identidade de domínio; novas alocações e
+ocorrências da branch precisam ser inequívocas. Templates, cenários e clones
+não usam identidade de conteúdo como identidade do mundo resultante.
+
+Não se exige `LineageId` ou `BranchId` separado em v1: `WorldId` identifica a
+branch e a proveniência registra sua origem. A representação, alocação,
+compatibilidade com mundos antigos, gatilho de ramificação de saves copiados e
+conciliação dos IDs/receipts P18 herdados no fork permanecem design técnico ou
+decisão de produto específica. O `worldId` atualmente injetado em P18 não
+constitui, por si, implementação desta identidade durável.
+
+## 91B. Projeção factual read-only
+
+**DECIDIDO — DIREÇÃO ARQUITETURAL; CAPACIDADE EM DESIGN PROPOSED**
+
+Consumidores de fatos aprovados usarão readers por capacidade com registros
+imutáveis, IDs semânticos e origem de autoridade declarada. A superfície não
+expõe Stores, coleções mutáveis, `NpcRuntime`, Unity, estruturas privadas de
+captura P12 ou tipos de World Exchange como contrato de domínio. Projeção não
+é persistência, History, diagnóstico autoritativo nem segunda World Truth.
+Adapters convertem semântica de Simulation para seus formatos externos; uma
+necessidade de apresentação não cria automaticamente um fato do mundo.
+
+O contrato de leitura distingue: fato autoritativo presente; fato opcional
+validamente ausente; fato atualmente indisponível por falta de owner/corte
+coerente/relação; conceito não suportado por reader aprovado; valor derivado
+para apresentação com fonte identificada; e Knowledge de um Actor, que requer
+perspectiva separada e não se apresenta como Truth objetiva. Coleção vazia
+somente significa ausência factual se a capacidade foi lida completamente.
+Adapters preservam essas diferenças ou recusam uma tradução inadequada.
+
+Exportação factual autoritativa exige sessão de leitura coerente para os owners
+declarados, em uma fronteira lógica concluída ou corte validado; falha ou
+repete se não puder provar o corte. Inspeção best-effort pode existir quando
+rotulada como não coerente. Infraestrutura de época/quiescência P12 pode ser
+reutilizada se cobrir o recorte, mas P12-A, P12-B e fechamento completo de P12
+não são pré-requisitos gerais da projeção factual. P19 não é pré-requisito do
+primeiro produtor oficial. Faction é o primeiro recorte real recomendado após
+`WorldId` e reader factual coerente; relações com Person exigem validação do
+corte entre os respectivos owners. Extensibilidade de projeção por mods é
+posterior e depende de consumidor e contrato público concretos.
+
+O estudo aprovado em
+[`design/WORLD_IDENTITY_AND_PROJECTION_SURFACE_STUDY.md`](design/WORLD_IDENTITY_AND_PROJECTION_SURFACE_STUDY.md)
+detalha evidência, DAG, exclusões e questões técnicas. Nenhum checkpoint está
+`READY_FOR_IMPLEMENTATION` por esta decisão arquitetural.
+
+---
+
 ## 92. Save != Replay != History
 
 **DECIDIDO**
@@ -5811,21 +5877,11 @@ Estas perguntas não devem receber resposta implícita sem nova definição:
    deferidos até existir uma Phase própria.
 9. **Government/constitution framework** — não generalizar a partir da política de sucessão apenas.
 10. **Título/social status** — contratos finais dependem de use cases.
-11. **Identidade durável do mundo e branches** — o código P18 já recebe um
-    `worldId` para namespace temporal, mas sua criação, preservação em save e
-    semântica de fork não estão decididas. O estudo candidato
-    [`design/WORLD_IDENTITY_AND_PROJECTION_SURFACE_STUDY.md`](design/WORLD_IDENTITY_AND_PROJECTION_SURFACE_STUDY.md)
-    propõe `WorldId` por continuação causal, novo ID em fork independente e
-    proveniência da origem. Seed, fingerprint, arquivo e instância runtime
-    continuam conceitos distintos. A proposta requer gate arquitetural antes
-    de se tornar contrato de implementação.
-12. **Superfície factual read-only** — o mesmo estudo propõe readers por
-    capacidade, status explícito de autoridade/disponibilidade dos fatos e
-    sessões de leitura com consistência declarada, sem expor
-    Stores, snapshots diagnósticos, estruturas de P12 ou tipos de World
-    Exchange como API do domínio. O primeiro recorte candidato é Faction.
-    Projeção, adaptação externa e extensibilidade futura ainda não estão
-    aprovadas como implementação nem recebem autoridade sobre World Truth.
+11. **Mecânica de WorldId e projeção** — a direção semântica é decidida em
+    §§91A–91B. Representação/alocação, migração de perfis sem ID, gatilho da
+    ramificação de saves copiados, compatibilidade de IDs P18 no fork, reader
+    coerente concreto e mapeamento externo do primeiro recorte aguardam seus
+    respectivos designs e gates; não alteram a direção aprovada por omissão.
 
 ---
 

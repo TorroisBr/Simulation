@@ -11,6 +11,7 @@ Reconstruct the authoritative state at any actually simulated boundary from the 
 ## Dependencies and gates
 
 - **Hard semantic contracts:** existing `SAVE != REPLAY != HISTORY`, deterministic execution, first simulated boundary, and runtime mutation semantics.
+- **World identity alignment:** architecture §91A requires a reconstructed fork to publish a new `WorldId` with parent WorldId and actual simulated boundary provenance after recovering the exact inherited truth/state. Pre-fork domain identities remain inherited; future branch-local allocations and P18 occurrences must be unambiguous without reapplying old effects. The precise namespace/receipt mechanism is a P13 technical design gate, not permission to narrow historical forkability. P13 mechanics are not a prerequisite for present-time factual projection.
 - **Hard capabilities:** P12 continuation for the included world and recoverable initial/changed domain state; command/input semantics sufficient to preserve causal order.
 - **Integration dependency:** reconstructed state and fork use the same authoritative domain stores and compatible execution as normal continuation.
 - **Soft ordering:** generated initial worlds help validation, but a manually authored world can also establish the first boundary.

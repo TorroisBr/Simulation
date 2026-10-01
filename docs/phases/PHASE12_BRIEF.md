@@ -20,6 +20,7 @@ For supported compatible versions/profiles, continuing from boundary T and savin
 ## Dependencies and gates
 
 - **Hard semantic contracts:** deterministic simulation, semantic IDs, effective configuration/calendar/content compatibility and current-world mutation authority are already defined.
+- **World identity alignment:** architecture §§91A–91B approve `WorldId` for one causal continuation branch. P12-C identity/provenance design and future P12-A supported save/load must preserve that identity for same-branch continuation; a seed, profile fingerprint, save path or P18-injected namespace alone does not satisfy it. Revalidate those contracts when they reach this boundary. This is not a new P12 save schema or a retroactive P12-B readiness gate; current P12-B work remains within its accepted scope. Factual projection is not P12 capture, and P12-A, P12-B and full P12 closure are not general prerequisites for its bounded readers.
 - **Hard capabilities:** complete closure needs hydration/continuation for every authoritative domain in the declared supported save scope; domain-specific integrations wait for stable corresponding contracts/capabilities.
 - **Integration dependency:** restoration occurs at consistent boundaries and composes all relevant stores, plans, RNG state and command context without a second world authority.
 - **Soft ordering:** generation and content may evolve in parallel; this does not excuse a false claim of complete save coverage.
