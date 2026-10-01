@@ -22,6 +22,30 @@ Phases 5–7 are closed within their documented scopes. P8-A/B/C/D/E are canonic
 
 Runtime World Expansion remains a future consumer without an assigned dedicated phase. Its absence from this sequence does not forbid a later insertion or assign it to Phase 15 by implication.
 
+## World identity and factual projection — architecture candidate
+
+The current candidate study is
+[`design/WORLD_IDENTITY_AND_PROJECTION_SURFACE_STUDY.md`](design/WORLD_IDENTITY_AND_PROJECTION_SURFACE_STUDY.md).
+It proposes durable WorldId semantics for one causal continuation branch and a
+bounded read-only factual projection surface. This is **DESIGN PROPOSED**, not
+`READY_FOR_IMPLEMENTATION`, an approved checkpoint ID, or Phase delivery.
+Its semantic choice requires the architecture promotion gate. No new numbered
+phase is assigned: identity belongs at successful world composition, factual
+readers are a later bounded cross-domain capability, and the first World
+Exchange producer is a later adapter integration. Mod-defined projection
+extensions remain deferred until a real P19-compatible consumer exists.
+
+For the proposed dependency graph, WorldId aligns with P9's atomic pre-start
+publication without reopening closed P9. Identity-preserving P12 save/load and
+P13 branch publication would consume the approved WorldId contract when it
+exists. A Faction projection port and producer do not require P12-A, full P12,
+P13 mechanics or P19; selected P12 epoch/quiescence infrastructure may be
+reused only if it covers the projected owner set. A real producer requires a
+stable WorldId, a coherent approved Faction read and the current external
+document contract, with adaptation outside the Simulation domain. P13 still
+requires P12 continuation and recoverable causal history independently of
+projection. See the study's DAG and explicit remaining gates before scheduling.
+
 ## Placement of temporal and extension work
 
 P18 is one phase with dependent checkpoints, rather than separate phases for

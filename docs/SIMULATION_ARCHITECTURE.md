@@ -5811,6 +5811,20 @@ Estas perguntas não devem receber resposta implícita sem nova definição:
    deferidos até existir uma Phase própria.
 9. **Government/constitution framework** — não generalizar a partir da política de sucessão apenas.
 10. **Título/social status** — contratos finais dependem de use cases.
+11. **Identidade durável do mundo e branches** — o código P18 já recebe um
+    `worldId` para namespace temporal, mas sua criação, preservação em save e
+    semântica de fork não estão decididas. O estudo candidato
+    [`design/WORLD_IDENTITY_AND_PROJECTION_SURFACE_STUDY.md`](design/WORLD_IDENTITY_AND_PROJECTION_SURFACE_STUDY.md)
+    propõe `WorldId` por continuação causal, novo ID em fork independente e
+    proveniência da origem. Seed, fingerprint, arquivo e instância runtime
+    continuam conceitos distintos. A proposta requer gate arquitetural antes
+    de se tornar contrato de implementação.
+12. **Superfície factual read-only** — o mesmo estudo propõe readers por
+    capacidade e sessões de leitura com consistência declarada, sem expor
+    Stores, snapshots diagnósticos, estruturas de P12 ou tipos de World
+    Exchange como API do domínio. O primeiro recorte candidato é Faction.
+    Projeção, adaptação externa e extensibilidade futura ainda não estão
+    aprovadas como implementação nem recebem autoridade sobre World Truth.
 
 ---
 
