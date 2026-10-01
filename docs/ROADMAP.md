@@ -58,8 +58,11 @@ checkpoint labels, not new numbered Phases or delivered capabilities. The
 bounded designs are [WI-A](design/WORLD_IDENTITY_FOUNDATION_DESIGN.md),
 [FR-B](design/FACTUAL_READ_SURFACE_FOUNDATION_DESIGN.md),
 [FR-C](design/FACTION_FACTUAL_READER_DESIGN.md), and
-[WX-D](design/WORLD_EXCHANGE_FIRST_PRODUCER_DESIGN.md). Their proposed
-readiness is subject to independent review and canonical promotion.
+[WX-D](design/WORLD_EXCHANGE_FIRST_PRODUCER_DESIGN.md). Independent review of
+the technical design at `9606263` is recorded in
+[the review record](design/WORLD_PROJECTION_CHECKPOINTS_DESIGN_REVIEW.md).
+These candidate verdicts do not promote the checkpoints into canonical
+architecture or authorize runtime implementation.
 
 ```text
 approved architecture f27954a
@@ -77,10 +80,10 @@ unsupported from known-empty, so `World + Factions` padded with unsupported
 empty arrays is not yet an honest first artifact. The External repository owns
 that contract decision; this candidate changes no External files.
 
-| Checkpoint | Proposed owner / readiness before review | Hard prerequisites | Current implementation hotspot |
+| Checkpoint | Proposed owner / reviewed candidate readiness | Hard prerequisites | Current implementation hotspot |
 |---|---|---|---|
-| WI-A | Cross-phase world composition / DESIGN PROPOSED | Approved WorldId semantics | `TesteSimulacao` private-draft/publication gate, `SimulationRuntime`, P18 profile handoff; reconcile and serialize integration with active P12-B bootstrap scope. |
-| FR-B | Cross-domain factual read infrastructure / DESIGN PROPOSED | Approved projection semantics; explicit `UnityBootstrapDailyV1` owner-thread boundary | `SimulationRuntime` read admission plus Faction/Person Store writer guards; serialize runtime integration with active P12-B writer. |
+| WI-A | Cross-phase world composition / READY_FOR_IMPLEMENTATION (candidate) | Approved WorldId semantics; canonical promotion still required | `TesteSimulacao` private-draft/publication gate, `SimulationRuntime`, P18 profile handoff; reconcile and serialize integration with active P12-B bootstrap scope. |
+| FR-B | Cross-domain factual read infrastructure / READY_FOR_IMPLEMENTATION (candidate) | Approved projection semantics; explicit `UnityBootstrapDailyV1` owner-thread boundary; canonical promotion still required | `SimulationRuntime` read admission plus Faction/Person Store writer guards; serialize runtime integration with active P12-B writer. |
 | FR-C | Faction factual capability / WAIT_DEPENDENCY | FR-B promoted capability | Narrow Faction registration/runtime facade; isolated candidate may be prepared after FR-B contract review. |
 | WX-D | Dedicated Simulation integration project / WAIT_DEPENDENCY | WI-A, FR-C, External coverage contract | Adapter project; no direct P12-B runtime write planned. |
 

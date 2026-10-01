@@ -1,6 +1,6 @@
 # World Identity Foundation — bounded technical design (WI-A)
 
-**Candidate status:** DESIGN PROPOSED; independent review required before implementation readiness.
+**Reviewed candidate status:** READY_FOR_IMPLEMENTATION at review tip `96062630aed6e1fbb616a48d97290c331aed50c6`; canonical promotion pending.
 
 **Architecture base:** `f27954af6d880df123736027fd55e86874d6de68` (`codex/architecture/world-identity-projection`).
 **Owner:** cross-phase world-composition identity; P9 publication seam, P12 continuation and P13 fork consumers. This does not reopen P9.

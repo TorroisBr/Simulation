@@ -1,6 +1,6 @@
 # Faction Factual Reader — bounded technical design (FR-C)
 
-**Candidate status:** DESIGN PROPOSED; implementation waits for FR-B capability.
+**Reviewed candidate status:** WAIT_DEPENDENCY on promoted FR-B capability; independent design review at `96062630aed6e1fbb616a48d97290c331aed50c6` found no separate semantic blocker.
 
 **Architecture base:** `f27954af6d880df123736027fd55e86874d6de68`.
 **Owner:** Simulation factual projection of the existing `FactionStore`; no new faction gameplay.
