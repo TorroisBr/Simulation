@@ -678,3 +678,17 @@ The census publishes one passive schema-v1 witness per currently rostered NPC, o
 Validation on the code-bearing tree passed focused census 10/10, selected bootstrap composition 14/14, ALL EditMode 2118/2118, official Smoke 5/5, and `git diff --check`. Exact XML/log names and SHA-256 values are recorded in the candidate document.
 
 This remains passive local-revision evidence. Direct account writes are not wired to the protocol mutation epoch; the promotion makes no shared-epoch completeness, capture-eligibility, export/hydration, or full-profile census claim. P12-B remains incomplete; P12-A remains `WAIT_DEPENDENCY`; P13 remains blocked; Phase 12 remains open.
+
+## P12-B post-MoneyAccount owner/operation refresh candidate — 2026-10-01
+
+A documentation-only refresh based on canonical f913dd088f71b74cfab7c1bd8a1a79b7ce9a29ea reconstructs the post-Market and post-MoneyAccount state. The current partial protocol seals 142 selected-profile sections at the authored ten-NPC day-zero roster: two PersonStore sections, two per-NPC SpatialKnowledge sections, one per-NPC Inventory section, one per-NPC MoneyAccount section, and ten per-NPC Knowledge sections. This is not the complete effective-profile owner inventory.
+
+Other promoted passive witnesses include RuntimeIdentityRegistry, RuntimeIdAllocator, SimulationRecordSequence, ActorChoice, City presence/Market/SettlementPopulation, Genealogy, P8-A–D, legacy SpatialNetwork, ExplorableSite, Estate/Property, Institution/Office, ArmedForce/manpower/position, Conflict/War/Battle, ScheduledDirective, TravelParty, Expedition, and conditional receipts. They are not all registered in the sealed P12 protocol. City/NPC composite revisions, remaining Justice/Crime/economy census facts, and other mutable direct owners remain incomplete.
+
+The refreshed operation matrix confirms that NPC membership reconciliation is the only production path currently notifying the partial shared mutation epoch. Bootstrap publication, daily advance, and membership have bounded active scopes; those counts are not locks and do not cover direct owner calls. No selected cross-owner operation is complete for shared-epoch coverage. No CaptureEligible/token API exists. P12-B remains INCOMPLETE; P12-A remains WAIT_DEPENDENCY; P13 remains BLOCKED.
+
+The next blocker is DESIGN_REQUIRED for a current owner-commit/outer-operation contract. The bounded MoneyAccount write-invalidation slice is the first recommended implementation after independent design review; it closes only successful per-account commit notification, not Market/Inventory/City/merchant transaction coherence. Audit and design candidate files:
+- docs/design/PHASE12_POST_MONEY_ACCOUNT_BLOCKER_REFRESH.md
+- docs/design/PHASE12_P12B_POST_MONEY_ACCOUNT_INVALIDATION_DESIGN.md
+
+Candidate branch: codex/phase12/P12BPostMoneyAccountBlockerRefresh, based on f913dd0. Independent exact-tip design/documentation review is pending. This records no new checkpoint ID, scope acceptance, implementation authorization, P12-A readiness, code validation, canonical promotion, or Phase closure.
