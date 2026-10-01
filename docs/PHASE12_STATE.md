@@ -511,6 +511,43 @@ no P18 timeline/handoff behavior and no permanent Activity-to-Actor or
 NPC-owned authority rule. P12-B remains incomplete; P12-A remains
 `WAIT_DEPENDENCY`.
 
+## P12-B ScheduledDirective, Expedition, and NPC Knowledge composition promotion — 2026-09-30
+
+With explicit approval, candidate
+`codex/phase12/P12BCensusOwnersCompositionIntegration` was fast-forwarded
+from canonical `19d0373d6a71b63536248ecc9091e66c9b3a708b` to code-bearing tip
+`72239ad1013dad5d507bad9737c358b1cadfe752`, tree
+`c9fc250195bb5fda11935c687294f8ae5738bd9a`. The source owner candidates
+remain in the integration history. The candidate composes the reviewed
+ScheduledDirective, Expedition, and per-NPC Knowledge census providers through
+the normal runtime/bootstrap boundary. Knowledge roster reconciliation is
+staged before publication and preserves the Inventory family on success and
+failed reconciliation.
+
+Independent exact-tip integration review passed against canonical
+`19d0373`; the durable record is
+`codex/phase12/P12BCensusOwnersCompositionIntegrationReviewRecord` at
+`b4fe15f0b32acea82c7ca4da608efde9346e8221`. The candidate contract and
+evidence record is
+`codex/phase12/P12BCensusOwnersCompositionCandidateRecord` at
+`3b60dd61c7d84e08cfda587e83fb18a69decb957`.
+
+The exact code tree's completed validation record reports Knowledge census
+17/17, bootstrap composition 14/14, ScheduledDirective census 6/6, ALL
+EditMode 2099/2099, official Smoke 5/5, and clean `git diff --check`. The
+reviewer independently verified the retained Smoke XML/log hashes recorded in
+the candidate file; the focused-suite and full EditMode XML/log files were
+absent from the migrated checkout. The Smoke XML records 5/5 and its assembly
+metadata lists 2,099 test cases; it is not itself evidence that all 2,099 ran.
+
+This promotes only partial passive census composition. It does not complete
+the effective-profile owner inventory or P12-B, connect every supported owner
+write to the shared epoch, prove runtime-wide owner-thread/quiescence, grant
+capture eligibility, or provide immutable exports, staged hydration, or
+restoration. P12-B remains incomplete; P12-A remains
+`WAIT_DEPENDENCY`; downstream P12 checkpoints remain blocked as recorded;
+Phase 12 remains open.
+
 ## Remaining dependency-ordered P12-B blockers
 
 The static successful-writer inventory is recorded; proving every included
