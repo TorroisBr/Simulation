@@ -602,3 +602,26 @@ census, full supported-write coverage of the shared mutation epoch, global
 owner-thread/quiescence coverage, capture eligibility, immutable export, or
 staged hydration. P12-B remains incomplete; P12-A remains
 `WAIT_DEPENDENCY`; Phase 12 remains open.
+
+## P12-B operation-footprint refresh candidate — 2026-10-01
+
+The docs-only operation-footprint refresh was prepared on this canonical base
+`70bc1e50a7107a1489614a62f5f34694b6b52498` as
+`codex/phase12/P12BOperationFootprintRefresh`. Audit commit
+`abf7246cd472e522139dd15867c38f6b6e7afd2a` corrects stale statements from the
+older `81ddfe4` audit and separates the selected daily, membership, Travel,
+TravelParty, and Expedition outer paths. Independent exact-tip review passed;
+the review record is `docs/design/PHASE12_P12B_OPERATION_FOOTPRINT_REFRESH_REVIEW.md`.
+
+The refreshed evidence confirms that the promoted adapter registers only the
+partial owner and operation inventories described above. It does not supply
+the complete effective-profile owner/cardinality set or map every supported
+commit to the shared epoch. In particular, the Expedition start, daily
+autonomy, direct exploration/effects, return, and travel-reconciliation paths
+have different owner commits and bypasses; this evidence does not authorize a
+new runtime operation or callback. This candidate changes no executable code
+and records no new checkpoint acceptance.
+
+P12-B remains incomplete, P12-A remains `WAIT_DEPENDENCY`, P13 remains
+dependency-gated, and Phase 12 remains open. No complete census, shared-epoch
+coverage, capture eligibility, export, or hydration is inferred.
