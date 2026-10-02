@@ -256,6 +256,28 @@ public sealed class SimulationBootstrapCompositionTests
     }
 
     [Test]
+    public void UnsupportedRuntimeProfileExposesUnavailableFactualReadSurface()
+    {
+        SimulationConfigData config = SimulationTestFactory.CreateSimulationConfig();
+        GameObject simulationObject = new GameObject("frb-unavailable-profile-test");
+        simulationObjects.Add(simulationObject);
+        TesteSimulacao simulation = simulationObject.AddComponent<TesteSimulacao>();
+        typeof(TesteSimulacao).GetField("simulationConfig", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(simulation, config);
+
+        simulation.Start();
+
+        Assert.That(simulation.Bootstrap, Is.Not.Null);
+        Assert.That(simulation.Bootstrap.FactualReads, Is.Not.Null);
+        Assert.That(simulation.Bootstrap.FactualReads.TryCaptureCoherent(
+            out FactualReadCapture capture,
+            "faction/collection/v1"), Is.False);
+        Assert.That(capture.IsCoherent, Is.False);
+        Assert.That(capture.TryGet<string>("faction/collection/v1", out FactReadResult<string> result), Is.True);
+        Assert.That(result.Status, Is.EqualTo(FactReadStatus.Unavailable));
+    }
+
+    [Test]
     public void SelectedDailyProfilePublishesCoherentFactualReadOnlyAfterBootstrapCloses()
     {
         SimulationConfigData config = SimulationTestFactory.CreateSimulationConfig();
