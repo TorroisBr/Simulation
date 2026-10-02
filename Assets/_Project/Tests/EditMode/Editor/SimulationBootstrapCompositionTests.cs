@@ -255,6 +255,106 @@ public sealed class SimulationBootstrapCompositionTests
         AssertPublicWorldAccessorsUnavailable(simulation, "after retry attempts");
     }
 
+    [Test]
+    public void SelectedDailyProfilePublishesCoherentFactualReadOnlyAfterBootstrapCloses()
+    {
+        SimulationConfigData config = SimulationTestFactory.CreateSimulationConfig();
+        ConfigureGeography(config);
+        GameObject simulationObject = new GameObject("frb-live-publication-test");
+        simulationObjects.Add(simulationObject);
+        TesteSimulacao simulation = simulationObject.AddComponent<TesteSimulacao>();
+        typeof(TesteSimulacao).GetField("simulationConfig", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(simulation, config);
+        typeof(TesteSimulacao).GetField("runtimeAdmissionProfile", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(simulation, SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1);
+        System.Threading.Thread ownerThread = System.Threading.Thread.CurrentThread;
+        typeof(TesteSimulacao).GetField("bootstrapStartThread", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(simulation, ownerThread);
+        typeof(TesteSimulacao).GetField("bootstrapStartThreadId", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(simulation, ownerThread.ManagedThreadId);
+        typeof(TesteSimulacao).GetField("runtimeAdmissionContext", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(simulation, new SimulationRuntimeAdmissionContext(
+                SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1,
+                ownerThread,
+                ownerThread.ManagedThreadId));
+
+        FactualReadCoordinator draftReads = null;
+        InvokeBootstrapInitialize(simulation, stageId =>
+        {
+            Assert.That(simulation.Bootstrap, Is.Null, stageId);
+            if (stageId != "p9.genesis.publish/v1") return;
+
+            SimulationBootstrapComposition draft = (SimulationBootstrapComposition)typeof(TesteSimulacao)
+                .GetField("draftComposition", BindingFlags.Instance | BindingFlags.NonPublic)
+                .GetValue(simulation);
+            Assert.That(draft, Is.Not.Null);
+            draftReads = draft.FactualReads;
+            Assert.That(draftReads, Is.Not.Null);
+            Assert.That(draftReads.TryCaptureCoherent(
+                out FactualReadCapture unpublishedCapture,
+                "faction/collection/v1"), Is.False);
+            Assert.That(unpublishedCapture.IsCoherent, Is.False);
+            Assert.That(unpublishedCapture.TryGet<string>(
+                "faction/collection/v1",
+                out FactReadResult<string> unpublishedResult), Is.True);
+            Assert.That(unpublishedResult.Status, Is.EqualTo(FactReadStatus.Unavailable));
+        });
+
+        Assert.That(simulation.Bootstrap, Is.Not.Null);
+        Assert.That(simulation.Bootstrap.FactualReads, Is.SameAs(draftReads));
+        Assert.That(simulation.Bootstrap.WorldId, Is.SameAs(simulation.Runtime.WorldId));
+        Assert.That(simulation.Bootstrap.FactualReads.TryCaptureCoherent(
+            out FactualReadCapture initialCapture,
+            "faction/collection/v1"), Is.True);
+        Assert.That(initialCapture.IsCoherent, Is.True);
+        Assert.That(initialCapture.LogicalBoundary, Is.EqualTo(simulation.CurrentDay));
+        Assert.That(initialCapture.FactionStoreRevision,
+            Is.EqualTo(((FactionStore)GetRuntimeOwner(simulation.Runtime, "factionStore")).Revision));
+        Assert.That(initialCapture.PersonStoreRevision, Is.EqualTo(simulation.Runtime.PersonStore.Revision));
+        Assert.That(initialCapture.TryGet<string>(
+            "faction/collection/v1",
+            out FactReadResult<string> unsupportedFactionReader), Is.True);
+        Assert.That(unsupportedFactionReader.Status, Is.EqualTo(FactReadStatus.Unsupported));
+
+        Assert.That(simulation.Runtime.TryAcquireAdvanceLease(out SimulationRuntime.AdvanceLease lease), Is.True);
+        using (lease)
+        {
+            Assert.That(simulation.Bootstrap.FactualReads.TryCaptureCoherent(
+                out FactualReadCapture busyCapture,
+                "faction/collection/v1"), Is.False);
+            Assert.That(busyCapture.IsCoherent, Is.False);
+        }
+
+        FactualReadCapture offThreadCapture = null;
+        bool offThreadSucceeded = true;
+        System.Threading.Thread captureThread = new System.Threading.Thread(() =>
+        {
+            offThreadSucceeded = simulation.Bootstrap.FactualReads.TryCaptureCoherent(
+                out offThreadCapture,
+                "faction/collection/v1");
+        });
+        captureThread.Start();
+        Assert.That(captureThread.Join(System.TimeSpan.FromSeconds(5)), Is.True);
+        Assert.That(offThreadSucceeded, Is.False);
+        Assert.That(offThreadCapture.IsCoherent, Is.False);
+        Assert.That(simulation.Bootstrap.FactualReads.TryCaptureCoherent(
+            out FactualReadCapture ownerThreadCapture,
+            "faction/collection/v1"), Is.True);
+        Assert.That(ownerThreadCapture.IsCoherent, Is.True);
+
+        simulation.Runtime.AdvanceDay();
+        Assert.That(simulation.Bootstrap.FactualReads.TryCaptureCoherent(
+            out FactualReadCapture advancedCapture,
+            "faction/collection/v1"), Is.True);
+        Assert.That(advancedCapture.LogicalBoundary, Is.EqualTo(1L));
+
+        simulation.Runtime.FaultRuntimeAdmission();
+        Assert.That(simulation.Bootstrap.FactualReads.TryCaptureCoherent(
+            out FactualReadCapture faultedCapture,
+            "faction/collection/v1"), Is.False);
+        Assert.That(faultedCapture.IsCoherent, Is.False);
+    }
+
     private static void AssertPublicWorldAccessorsUnavailable(TesteSimulacao simulation, string context)
     {
         Assert.That(simulation.Bootstrap, Is.Null, context);

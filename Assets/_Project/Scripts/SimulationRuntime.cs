@@ -116,7 +116,7 @@ public sealed class SimulationRuntimeSpatialInvariantReport
     }
 }
 
-public sealed partial class SimulationRuntime
+public sealed partial class SimulationRuntime : IFactualReadRuntimeState
 {
     private const string NpcMembershipCensusOperationId = "runtime.npc-membership";
     private const string BootstrapPublicationCensusOperationId = "runtime.bootstrap-publication";
@@ -237,6 +237,8 @@ public sealed partial class SimulationRuntime
     private readonly SimulationRuntimeAdmissionContext runtimeAdmissionContext;
     private readonly SimulationRecordSequence simulationRecordSequence;
     private readonly SimulationRecordSequenceCensusProvider simulationRecordSequenceCensusProvider;
+    private readonly FactualReadCoordinator factualReadCoordinator;
+    private volatile bool factualReadWorldPublished;
     private readonly SimulationTime simulationTime;
     private readonly List<CityRuntime> cities;
     private readonly List<NpcRuntime> npcRuntimes;
@@ -326,6 +328,7 @@ public sealed partial class SimulationRuntime
     public AuthoritativeMutationHealth MutationHealth => mutationGuard.Health;
     public bool IsMutationFaulted => mutationGuard.Health == AuthoritativeMutationHealth.Faulted;
     public AuthoritativeMutationFaultReason MutationFaultReason => mutationGuard.FaultReason;
+    internal FactualReadCoordinator FactualReads => factualReadCoordinator;
     public long CurrentDay => p18dTimeline != null
         ? p18dTimeline.CurrentInstant.AbsoluteDay
         : simulationTime.AbsoluteDay;
@@ -1032,8 +1035,88 @@ public sealed partial class SimulationRuntime
                 throw new InvalidOperationException(
                     "The P12 runtime-admission adapter could not bind to its initialized census protocol and clock.");
             }
+
+            FactualReadAdmission factualReadAdmission = new FactualReadAdmission(this);
+            if (!factualReadAdmission.TryBindStores(this.factionStore, this.personStore))
+            {
+                throw new InvalidOperationException(
+                    "The FR-B factual-read admission could not bind to the composed FactionStore and PersonStore.");
+            }
+
+            factualReadCoordinator = new FactualReadCoordinator(
+                factualReadAdmission,
+                Array.Empty<IFactualReader>());
         }
 
+    }
+
+    SimulationRuntimeAdmissionContext IFactualReadRuntimeState.AdmissionContext => runtimeAdmissionContext;
+
+    bool IFactualReadRuntimeState.IsWorldPublished => factualReadWorldPublished;
+
+    bool IFactualReadRuntimeState.IsHealthy
+    {
+        get
+        {
+            // This only checks the selected runtime's health. Factual coherence
+            // is bounded by the two store revisions below, not the partial P12 epoch.
+            return runtimeAdmissionContext != null
+                && npcRosterCensusProtocol != null
+                && mutationGuard.CanMutate
+                && npcRosterCensusProtocol.TryReadMutationEpoch(out _, out _);
+        }
+    }
+
+    bool IFactualReadRuntimeState.IsBootstrapOrAdvanceActive
+    {
+        get
+        {
+            if (advanceLeaseHeld
+                || activeNpcMembershipCensusContext != null
+                || activeP12MerchantOperationContext != null
+                || runtimeAdmissionContext == null
+                || npcRosterCensusProtocol == null
+                || !npcRosterCensusProtocol.TryReadActiveOperationCount(out int activeOperationCount, out _))
+            {
+                return true;
+            }
+
+            return activeOperationCount != 0;
+        }
+    }
+
+    bool IFactualReadRuntimeState.TryReadCompletedLogicalBoundary(out long logicalBoundary)
+    {
+        logicalBoundary = 0L;
+        if (runtimeAdmissionContext == null
+            || runtimeAdmissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+            || !runtimeAdmissionContext.IsOwnedByCurrentThread()
+            || ((IFactualReadRuntimeState)this).IsBootstrapOrAdvanceActive)
+        {
+            return false;
+        }
+
+        logicalBoundary = CurrentDay;
+        return logicalBoundary >= 0L;
+    }
+
+    internal bool TryMarkWorldPublishedForFactualRead()
+    {
+        if (runtimeAdmissionContext == null)
+            return true;
+
+        if (factualReadCoordinator == null
+            || factualReadWorldPublished
+            || !runtimeAdmissionContext.IsOwnedByCurrentThread()
+            || !((IFactualReadRuntimeState)this).IsHealthy
+            || ((IFactualReadRuntimeState)this).IsBootstrapOrAdvanceActive
+            || !((IFactualReadRuntimeState)this).TryReadCompletedLogicalBoundary(out _))
+        {
+            return false;
+        }
+
+        factualReadWorldPublished = true;
+        return true;
     }
 
     private void InitializeNpcRosterCensusProtocol()

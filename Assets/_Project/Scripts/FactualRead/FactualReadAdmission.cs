@@ -178,10 +178,10 @@ internal sealed class FactualReadAdmission
             && runtimeState != null
             && admissionContext != null
             && admissionContext.Profile == SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+            && IsOwnerThreadCurrent()
             && runtimeState.IsWorldPublished
             && runtimeState.IsHealthy
-            && !runtimeState.IsBootstrapOrAdvanceActive
-            && IsOwnerThreadCurrent();
+            && !runtimeState.IsBootstrapOrAdvanceActive;
     }
 
     private bool IsOwnerThreadCurrent()
