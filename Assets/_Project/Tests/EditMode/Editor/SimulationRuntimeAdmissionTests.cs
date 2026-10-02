@@ -129,6 +129,51 @@ public sealed class SimulationRuntimeAdmissionTests
     }
 
     [Test]
+    public void DirectPlanOwnerCommitsOutsideMerchantOperationRefreshTheirBaselinesImmediately()
+    {
+        ItemData item = SimulationTestFactory.CreateItem("p12-direct-plan-owner-item", 10f);
+        CityRuntime city = SimulationTestFactory.CreateCity(
+            "p12-direct-plan-owner-city",
+            "p12-direct-plan-owner-location");
+        NpcRuntime merchant = new NpcRuntime(
+            "p12-direct-plan-owner-actor",
+            SimulationTestFactory.CreateNpc("p12-direct-plan-owner-actor", NpcJobType.Merchant),
+            city,
+            100f);
+        SimulationRuntime runtime = new SimulationRuntime(
+            new SimulationTime(),
+            new[] { city },
+            new[] { merchant },
+            economyEnabled: false,
+            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1());
+
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+            out long before, out ContinuationCensusFailure beforeFailure), Is.True, beforeFailure.ToString());
+
+        merchant.MerchantTradePlan.Set(item, city, city, 2, 4f);
+
+        Assert.That(merchant.MerchantTradePlan.Revision, Is.EqualTo(1));
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+            out long afterMerchantPlan, out ContinuationCensusFailure merchantPlanFailure),
+            Is.True, merchantPlanFailure.ToString());
+        Assert.That(afterMerchantPlan, Is.EqualTo(before + 1),
+            "a committed direct merchant-plan write outside the nested operation immediately advances its owner section");
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure afterMerchantPlanAssessment),
+            Is.True, afterMerchantPlanAssessment.ToString());
+
+        merchant.TravelPlan.Set(city, NpcTravelReason.Trade, 1f, 2f, "direct-plan-owner-decision");
+
+        Assert.That(merchant.TravelPlan.Revision, Is.EqualTo(1));
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+            out long afterTravelPlan, out ContinuationCensusFailure travelPlanFailure),
+            Is.True, travelPlanFailure.ToString());
+        Assert.That(afterTravelPlan, Is.EqualTo(afterMerchantPlan + 1),
+            "a committed direct travel-plan write outside the nested operation immediately advances its owner section");
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure assessment), Is.True,
+            assessment.ToString());
+    }
+
+    [Test]
     public void MerchantOperationBatchesChangedOwnerSectionsOnceAndHoldsScopeThroughCommit()
     {
         ItemData item = SimulationTestFactory.CreateItem("p12-merchant-operation-item", 10f);
