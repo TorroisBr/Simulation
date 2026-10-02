@@ -895,3 +895,22 @@ previous row that described the old-base WI-A candidate as awaiting refresh.
 
 The WI-A promotion changes no P12-B readiness label. P12-B remains
 incomplete; P12-A remains `WAIT_DEPENDENCY`; P13 remains blocked.
+
+## Current P12-B blocker refresh — 2026-10-02 post record-sequence promotion
+
+The current canonical base is `e64caf08e7ada24a0f6b8c193207a6242018896d`.
+The prior post-WI-A matrix above is historical at `ae0a0b4`; this addendum
+refreshes only the affected record-sequence and queued FR-B rows while
+retaining the wider owner/operation audit and its known omissions.
+
+| Area | Current evidence | Remaining blocker |
+|---|---|---|
+| Selected-profile `SimulationRecordSequence` | Promoted code `cd7ca4498d2c1d3591c227bd9011429f9bd06d8f`, exact tree `5282d65fbc4311bb6b907770a4e6fa363ad633df`; exact-tip review and focused 6/6, ALL EditMode 2180/2180, Smoke 5/5 validation are retained in the candidate/review records. Successful selected production-path `Allocate()` calls invalidate the sequence owner and partial shared epoch once, including nested registered scopes. | Event, Decision, occurrence-receipt, and preceding domain writes remain outside this slice. This is not complete C-root or shared-epoch coverage and provides no capture eligibility. |
+| FR-B factual-read live integration handoff | Reviewed source candidate `codex/frb/frb-live-integration` at `5c43733088bfbe860183f849d16295b542c1f465`, formerly based on P12 canonical `1ac675cc558aa919a749167647c10506c11303fc`; handoff/review evidence is retained at `codex/frb/frb-live-integration-review` `f4e23a7`. It touches `SimulationRuntime` and `SimulationBootstrapComposition`, which also changed in the P12 promotion. | Recompose on `e64caf0` at the next serialized hotspot boundary. Compare the resulting code tree with the reviewed tree; rerun validation for the actual delta and obtain fresh exact-tip review if code changes. This work does not block independent owner/source audits. |
+| Highest-value remaining P12-B gap | The accepted source map identifies cross-owner operations whose commits span multiple factual owners; `TravelPartySystem.AdvanceParties` is a concrete selected-profile path that may mutate party, spatial position, route Knowledge, and NPC/City travel state in one continuation. Current promoted operations cover only their named boundaries. | After the FR-B hotspot handoff is safely rebased/recomposed, audit `AdvanceParties` against its exact current call graph and owner hooks. Produce a bounded operation design only if source evidence confirms uncovered commits and a single existing outer boundary can own them without changing gameplay semantics. Do not claim global operation/epoch completeness. |
+| Global status | Canonical Phase 12 State still marks P12-B INCOMPLETE, P12-A `WAIT_DEPENDENCY`, P13 BLOCKED; P12-C through P12-G retain their documented dependency edges. | The record-sequence promotion changes no downstream readiness. No complete census, global quiescence, capture eligibility, export, or hydration is implied. |
+
+This refresh selects a source-audit target, not a newly authorized implementation
+checkpoint. The FR-B handoff remains serialized with other edits to
+`SimulationRuntime`/bootstrap; unrelated P12 evidence and owner work can
+continue on isolated branches.
