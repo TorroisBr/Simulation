@@ -17,14 +17,18 @@ live integration candidate and is not Phase-integrated or canonical-ready.
 | FR-C architecture authority | `451340c56e9b676bf6ea43412bcb856b9ccde3de` |
 | Diagnostic revision proposal / review | `64f33fd2c935ff1ab78ccfa08fb3bbecdf4b4c17` / independent **PASS** |
 | FR-C diagnostic acceptance record | `775f3c9c7f11dc3312dd4dbf7ccac424d67f2029` |
-| Phase 12 canonical at latest refresh | `e64caf08e7ada24a0f6b8c193207a6242018896d` |
+| Phase 12 canonical at latest refresh | `1dce6d54a33ac1b1778b1a44a7794512a58416e8` |
 
 FR-B live remains `INTEGRATION_HANDOFF_READY` and its handoff is queued for the
-Phase Master. The refreshed Phase 12 canonical ref `e64caf08` does not contain
-FR-B live candidate `5c437330` (`5c437330` is not an ancestor of `e64caf08`).
-Comparing those tips shows 227 changed lines in `SimulationRuntime.cs` plus
-changes in `SimulationBootstrapComposition.cs` and `FactualReadAdmission.cs`.
-FR-C remains dependent on FR-B becoming canonical. The FR-C delta leaves those
+Phase Master. The refreshed Phase 12 canonical ref
+`1dce6d54a33ac1b1778b1a44a7794512a58416e8` does not contain FR-B live candidate
+`5c437330` (`5c437330` is not an ancestor of `1dce6d54`). The current diff from
+the FR-B candidate to that canonical tip spans 13 files, including 227 changed
+lines in `SimulationRuntime.cs` and changes in
+`SimulationBootstrapComposition.cs` and `FactualReadAdmission.cs`, plus the
+record-sequence implementation, tests, and P12 evidence. This confirms the
+shared runtime/bootstrap/admission collision is still active. FR-C remains
+dependent on FR-B becoming canonical. The FR-C delta leaves those
 runtime/bootstrap/admission files unchanged from its `5c437330` base. Because
 the Phase canonical has since changed those same shared files, this provisional
 commit delivers the immutable reader, contracts, diagnostics, and focused
@@ -53,9 +57,11 @@ data.
 
 ## Exact-tree validation
 
-The code-bearing candidate at `b1e9985d49bc9b6353e0b13e727bf9a3cd1a2a87`
-passed the following gates. XML and logs are retained under the ignored local
-archive `Library/ValidationResults/FRC-Provisional/`.
+The final code-bearing candidate at
+`2177f7aabcf395c9192d021a0541d0aad6e97250` (tree
+`04c266297354b128358fae52570d941115e8a8bc`) passed the following gates. XML
+and logs are retained under the ignored local archive
+`Library/ValidationResults/FRC-Provisional/`.
 
 | Gate | Result | XML | XML SHA-256 | Log | Log SHA-256 |
 |---|---:|---|---|---|---|
@@ -83,6 +89,12 @@ ran no tests; the validation table records the independently executed gates.
 `FactionStore.cs`, `PersonStore.cs`,
 `SimulationBootstrapComposition.cs`, and `SimulationRuntime.cs` are unchanged
 in the FR-C delta from its provisional FR-B base.
+
+## WX-D readiness audit — 2026-10-02
+
+The read-only Simulation-External checkout is clean at `32ceb6ed223f51259ff230a96a5056d60eb66ea1`, matching `origin/main` at the latest remote check. Its current `docs/WORLD_EXCHANGE_CONTRACT_PRESSURE_REVIEW.md` still classifies the required `factions` collection as `UNRESOLVED`: FactionStore is authoritative, but source/port coverage still needs approval. `docs/SIMULATION_ENTITY_MAPPING.md` calls Faction `READY_TO_PROJECT` at the concept level while retaining the read port, reciprocal membership-field policy, and World identity as cross-cutting prerequisites.
+
+The safe mapping boundary is clear: use FactionId as stable identity, carry a source-owned display name only when present, and derive current membership only from active affiliation facts. Do not project membership policy, expulsion permission, Knowledge, support, or a fabricated label. The unresolved collection-completeness rule still prevents treating an empty collection as proof of no Factions or treating this Faction capability as a complete World Exchange payload. No Simulation-External files were changed. WX-D remains blocked on canonical/promoted FR-C and an approved External collection-coverage contract.
 
 ## Current orchestration status
 
