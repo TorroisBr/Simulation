@@ -70,4 +70,3 @@ code-bearing change. `FactionStore.cs`, `PersonStore.cs`,
 - FR-C design: implementation-ready after independent diagnostic-revision review.
 - FR-C implementation: provisional validated core; exact-tip independent code review in progress; runtime binding waits for canonical FR-B.
 - WX-D: waits on FR-C and the approved Simulation-External collection-coverage contract.
-
