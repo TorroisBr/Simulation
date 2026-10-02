@@ -439,6 +439,8 @@ public sealed partial class SimulationRuntime
     public IReadOnlyList<NpcRuntime> NpcRuntimes => npcRuntimeSnapshot;
     public PlaceContentStore PlaceContentStore => placeContentStore;
     public CrimeSocialAppraisalWorldState CrimeSocialAppraisal => crimeSocialAppraisalWorldState;
+    /// <summary>The causal world identity retained by a published composition, when supplied.</summary>
+    public WorldId WorldId { get; }
 
     public SimulationRuntime(
         SimulationTime simulationTime,
@@ -498,8 +500,10 @@ public sealed partial class SimulationRuntime
         PersonRoutePlanStore personRoutePlanStore = null,
         ActorChoiceStore actorChoiceStore = null,
         P18DIntradayProfile p18dIntradayProfile = null,
-        SimulationRuntimeAdmissionContext runtimeAdmissionContext = null)
+        SimulationRuntimeAdmissionContext runtimeAdmissionContext = null,
+        WorldId worldId = null)
     {
+        WorldId = worldId;
         if (runtimeAdmissionContext != null)
         {
             if (p18dIntradayProfile != null)
