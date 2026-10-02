@@ -38,22 +38,22 @@ When the runtime admission adapter is active, each direct leaf calls its bound p
 1. Verify the current caller is the already-bound runtime owner thread.
 2. Verify the callback is still associated with the exact account/inventory instance and current section IDs for the installed NPC roster. Inventory resolves to its full alias section set.
 3. Call `TryValidateUnchangedSections` for every section that the write will change. This must happen before the first state mutation. Preserve the existing outer NPC-trade and Open-market operation preflights; the leaf check is a final owner-local guard, not a replacement.
-4. If owner identity, thread, protocol state, or baseline validation fails, fault admission closed and perform no write. Preserve each public leaf's existing rejection shape where available (`false` for account debit/credit and inventory removal). `AddItem` has a `void` API; its implementation must not silently commit after failed admission. The independent reviewer should verify the narrowest compatible failure behavior for that existing API and that transactional callers cannot report success when it is rejected.
+4. If owner identity, thread, protocol state, or baseline validation fails, fault admission closed and perform no write. Preserve `TryCredit`, `TryDebit`, and `RemoveItem` rejection behavior (`false`). Add the explicit result-bearing `bool TryAddItem(...)`; it returns `false` when the write is rejected before commit. Keep the existing `void AddItem(...)` signature as a compatibility wrapper that delegates to `TryAddItem` and discards its result, but reserve that wrapper for legacy/nontransactional callers. No transactional caller may use `AddItem` or report success without checking `TryAddItem`.
 5. A no-op/invalid path must retain its current domain behavior and must not fault or notify merely because it did no write: account amount zero, rejected debit/credit, invalid/no-op addition, failed removal, and owner revision exhaustion do not publish an epoch change.
 
 Do not add player/actor authorization or defensive validation at this boundary. It is a runtime consistency and write-invalidation adapter for the trusted local game flow.
 
 ### Post-commit notification
 
-After a successful leaf has changed its local revision, notify exactly the section(s) bound to that owner through `ContinuationCensusProtocol.NotifyCommittedMutation` for an account or `NotifyCommittedMutations` for an Inventory owner (including all current Inventory aliases). Use the already-existing witness provider to refresh the same local revision/cardinality baseline; do not copy or synthesize census facts.
+After a successful leaf has changed its local revision, attempt to notify exactly the section(s) bound to that owner through `ContinuationCensusProtocol.NotifyCommittedMutation` for an account or `NotifyCommittedMutations` for an Inventory owner (including all current Inventory aliases). Use the already-existing witness provider to refresh the same local revision/cardinality baseline; do not copy or synthesize census facts.
 
-- A successful positive debit/credit is one owner commit and must advance its bound section baseline and the shared epoch once. A successful zero-value call does neither.
-- Each successful `AddItem` / `RemoveItem` is one owner commit and must advance the relevant Inventory baseline(s) and the shared epoch once, even where only quantity or average cost changes and row count stays constant.
+- A successful positive debit/credit is one owner commit and attempts to advance its bound section baseline and shared epoch once. If notification is accepted, the baseline advances; a successful zero-value call does neither.
+- Each successful `TryAddItem` / `RemoveItem` is one owner commit and attempts to advance the relevant Inventory baseline(s) and shared epoch once, even where only quantity or average cost changes and row count stays constant.
 - Failed leaf calls and no-op calls do not notify. A successful compensating write is a separate successful owner commit and is notified; never erase prior commits or pretend an attempted compensation restored a prior epoch.
-- Notification occurs after the local revision advances. If post-commit notification fails or throws, fault the protocol closed and preserve the already-committed domain result. Do not roll back or report that an already-completed leaf failed solely to disguise an unrecorded epoch.
+- Notification occurs after the local revision advances. Do not add a preflight epoch-capacity check. If post-commit notification fails or throws, including when the epoch is already `long.MaxValue`, fault the protocol closed and preserve the already-committed domain result: successful account methods and `TryAddItem` still return success. The protocol rejects the epoch update and subsequent census assessment is unavailable. Do not roll back or report that an already-completed leaf failed solely to disguise an unrecorded epoch. This matches the existing Market mutation-boundary behavior.
 - Keep callback state nonserialized, matching the existing runtime mutation-boundary pattern. With no P12 runtime-admission context, these hooks must preserve current behavior and make no new admission/readiness claim.
 
-The existing protocol rejects epoch overflow when notification is attempted. Review whether the new owner preflight needs a narrow capacity check to ensure a successful direct write cannot occur when its notification is already impossible. Do not broaden the protocol or claim an overflow guarantee without that proof.
+Epoch saturation is a documented post-commit fault case, not a pre-write admission check. It does not grant a P12-B readiness claim.
 
 ### NPC trade and Open-market duplicate avoidance
 
@@ -65,7 +65,28 @@ Keep the outer named scopes and preflight behavior:
 - Keep Market's own direct mutation callbacks/notices. The sale/purchase service must still notify the Market owner when its Market mutation commits; this contract changes only NPC account/inventory notification ownership.
 - Keep transaction result and compensation rules otherwise unchanged. The leaf callbacks are nested in the current outer named scope where those transaction paths already use one. This contract does not add operation IDs or assert that every other writer or in-flight operation is tracked.
 
-A trade may contain several independently committed account/inventory leaf writes. Each leaf updates its own baseline while the already-open outer operation keeps owner assessment unavailable. A compensating leaf is also notified. This contract promises committed-write invalidation for these owners; it does not redefine the trade as a single new transaction protocol.
+A trade may contain several independently committed account/inventory leaf writes. Each accepted notification updates its own baseline while the already-open outer operation keeps owner assessment unavailable. A compensating leaf is also notified. If any post-commit notification faults the protocol, the owner write remains committed and later baseline updates may be rejected. This contract promises committed-write invalidation for these owners; it does not redefine the trade as a single new transaction protocol.
+
+### Result-bearing Inventory addition and transactional callers
+
+`InventoryRuntime.TryAddItem(ItemData item, int amount, float unitCost = 0f)` returns `true` only when the call commits one local Inventory revision increment. It returns `false` for the existing invalid/no-op cases and for P12 pre-write admission rejection; rejected calls leave the Inventory unchanged. Preserve `void AddItem(ItemData item, int amount, float unitCost = 0f)` as a source-compatible wrapper for legacy/nontransactional setup and content callers only. It delegates to `TryAddItem` and intentionally ignores the bool. Transactional code must call `TryAddItem` and branch on the result.
+
+Update and test every current transactional NPC-owner call site:
+
+- `EconomyTransactionService.TryExecuteNpcTrade`: use `TryAddItem` for the buyer after buyer debit, seller credit, and seller Inventory removal. If it returns `false`, return `TransactionCommitFailed`; never return trade success. Those earlier owner writes are already committed. The current trade path has no rollback branch for a failed final add, and this bounded contract does not promise a new atomic transaction or guaranteed reversal. Any existing compensation that a caller performs remains a sequence of separately committed/notified writes.
+- `EconomyTransactionService.ExecuteMarketPurchase` (the Open-market purchase path): use `TryAddItem` for the NPC after the money write and Market stock removal. If it returns `false`, return `TransactionCommitFailed`; never report purchase success. Preserve the already-committed money/Market effects truthfully; this contract does not promise rollback or atomicity.
+- `ExpeditionSystem.TryRetrieveTargetResource` (the resource-retrieval path): use `TryAddItem` after `PlaceContentStore.TryTakeStack`. If it returns `false`, return `false` with a failure reason and do not commit/record objective completion. The place-stack removal has already committed; no restoration guarantee is introduced. This path gains leaf invalidation only when its performer Inventory is one of the bound NPC census owners; this does not add an expedition operation scope or cover its other owners.
+
+`PlaceContentStackRuntime` uses its own InventoryRuntime and is not an NPC census owner; its existing `AddItem` use remains a legacy/nontransactional wrapper caller. Bootstrap fixture/setup writes in `TesteSimulacao` likewise occur outside the bound runtime transaction contract. Inventory test fixtures may continue using `AddItem` when they do not need a result. Audit all call sites so a transactional path never silently discards a `TryAddItem` rejection.
+
+### Added test obligations
+
+The implementation validation must include focused tests that prove:
+
+- `TryAddItem` returns `true` and advances revision exactly once for a valid add; returns `false` without mutation for invalid/no-op inputs and for rejected pre-write admission; and preserves the `void AddItem` compatibility wrapper behavior for legacy callers.
+- NPC trade, Open-market purchase, and `TryRetrieveTargetResource` return failure and never success when the destination `TryAddItem` rejects. Assert and document the already-committed earlier effects in each path; do not assert rollback that the contract does not provide.
+- Inventory alias sections are included in one batch notification and the epoch advances once for that physical write; trade/Open-market tests detect duplicate leaf notifications while retaining Market notifications.
+- With mutation epoch set to `long.MaxValue`, an otherwise successful account write and Inventory `TryAddItem` still commit and return success; notification faults the protocol closed, the epoch remains saturated, and a subsequent census assessment returns unavailable/faulted. This is the specified behavior; no capacity-preflight rejection is expected.
 
 ## Prepared installs: explicit non-coverage
 
@@ -95,9 +116,10 @@ Leaf writes made by a system such as an expedition are invalidated only if they 
 Expected implementation files, if the separate post-review implementation gate is met:
 
 - `Assets/_Project/Scripts/MoneyAccountRuntime.cs`: pre-write / post-commit hooks around `TryCredit` and `TryDebit`.
-- `Assets/_Project/Scripts/InventoryRuntime.cs`: hooks around `AddItem` and `RemoveItem`, including the existing void-add failure-shape decision.
+- `Assets/_Project/Scripts/InventoryRuntime.cs`: hooks around `TryAddItem` and `RemoveItem`, retaining `AddItem` as a compatibility wrapper.
 - `Assets/_Project/Scripts/SimulationRuntime.cs`: bind/unbind exact owner callbacks, reconcile them with roster changes, resolve Inventory aliases to all section IDs, and implement owner-thread/baseline notification adapters.
-- `Assets/_Project/Scripts/EconomyTransactionService.cs`: remove only duplicated account/inventory notifications on NPC trade/Open-market paths; retain Market notices, transaction scopes, and compensation logic.
+- `Assets/_Project/Scripts/EconomyTransactionService.cs`: remove only duplicated account/inventory notifications on NPC trade/Open-market paths and handle `TryAddItem == false` as transaction failure; retain Market notices, scopes, and current partial-commit/compensation behavior.
+- `Assets/_Project/Scripts/ExpeditionSystem.cs`: handle `TryAddItem == false` in `TryRetrieveTargetResource` after the source stack removal, without claiming rollback or operation-scope coverage.
 - Focused new tests should prefer a new test source file to avoid collisions with active P12 census/composition test partitions. Extend `ContinuationCensusProtocol.cs` only if review proves the existing protocol lacks a required narrow preflight primitive; no general protocol redesign is in scope.
 
 Do not modify `FactionStore`, `PersonStore`, `SimulationBootstrapComposition`, `TesteSimulacao`, ProjectSettings, or unrelated Unity metadata for this contract.
@@ -112,4 +134,5 @@ Do not modify `FactionStore`, `PersonStore`, `SimulationBootstrapComposition`, `
 6. Verify the trade and Open-market service no longer double-notify NPC owner writes, while Market notifications and existing outer operation scopes remain.
 7. Inspect every `InstallPrepared` path and confirm the exclusions and future whole-operation batch requirement are accurate.
 8. Confirm the selected contract does not imply global shared-epoch coverage, runtime quiescence, capture eligibility, P12-B completion, P12-A readiness, or P13 readiness.
-9. Decide whether the existing protocol needs a narrowly scoped preflight for epoch-capacity exhaustion and whether `AddItem`'s void rejection can preserve transactional correctness without widening gameplay scope.
+9. Confirm no epoch-capacity preflight was added, saturation behavior matches the Market precedent, and tests cover committed domain success plus failed subsequent census assessment.
+10. Confirm `TryAddItem` result semantics, the legacy `AddItem` wrapper boundary, every transactional caller above, and failure results after the earlier commits listed for each path.
