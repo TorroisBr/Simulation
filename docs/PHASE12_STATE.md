@@ -848,3 +848,45 @@ candidate record.
 This does not complete P12-B or establish complete owner coverage, complete
 shared-epoch coverage, capture eligibility, export, or hydration. P12-A remains
 `WAIT_DEPENDENCY`; P13 remains blocked; Phase 12 remains open.
+
+
+## P12-B direct NPC owner invalidation candidate
+
+The direct per-NPC MoneyAccount and Inventory committed-write invalidation
+candidate is now validated and independently reviewed. Its P12 canonical base
+is 2f7c7422812de40aa1223e8310dcbd9f5d8ca474; exact code candidate
+c49f957e45c3059231e9ec66e4010a7c3a389988 has tested tree
+627af2fbd7f93e0025106ee5ba87e72bae6c4ed2. The durable exact-tip review and
+validation record are
+docs/design/PHASE12_P12B_DIRECT_NPC_OWNER_INVALIDATION_REVIEW.md and
+docs/design/PHASE12_P12B_DIRECT_NPC_OWNER_INVALIDATION_CANDIDATE.md.
+
+Validation passed the focused NPC owner invalidation, economy, MoneyAccount,
+NPC census, Inventory census, Expedition, and runtime-admission suites; ALL
+EditMode passed 2149/2149, official Smoke passed 5/5, and git diff --check
+passed. The recorded Unity XML paths and SHA-256 hashes are in the candidate
+record. This integration State is prepared on the candidate branch; canonical
+promotion remains an explicit human gate.
+
+The direct-owner slice connects only already-censused per-NPC MoneyAccount
+and Inventory owner writes to the partial shared epoch. It does not complete
+P12-B, complete the selected-profile owner set or shared-epoch coverage, prove
+global owner-thread/quiescence, enable capture, or add export/hydration.
+P12-A remains WAIT_DEPENDENCY and P13 remains blocked.
+
+The P12-B operation/epoch matrix addendum records the updated blocker
+classification. In particular, the earlier post-Market direct account and
+Inventory writer gap is now a validated candidate but remains outside
+canonical until this separate promotion gate is completed. The reviewed NPC
+money-transfer operation design at commit
+30c00d78fcb68c2969ac2eac3ed694423c55783e, with durable review record
+884aa1b27f1de3a3d330eb75053bab01ffec7cc2 on
+codex/phase12/P12BMoneyTransferOperationDesign, remains WAIT_DEPENDENCY until
+the direct-owner capability is promoted. Do not infer transfer-operation
+coverage from this candidate.
+
+Architecture promotion 451340c56e9b676bf6ea43412bcb856b9ccde3de adds the
+approved WorldId and factual-reader contracts; it does not reopen P9/P18 or
+claim P12 capability. The candidate still requires serial integration and
+revalidation at the shared SimulationRuntime window with WI-A and any later
+runtime owner.
