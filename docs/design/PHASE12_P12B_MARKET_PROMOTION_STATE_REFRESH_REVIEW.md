@@ -37,3 +37,17 @@ set. The current total must be stated as 144; the earlier 142 count must be
 clearly labeled as a historical snapshot. The candidate was corrected in
 follow-up commit `366a1db8421274bd0a3bfd7d2b1bb7ec4ddd97e4` and requires
 independent re-review before any promotion.
+
+
+## Final exact-tip re-review
+
+**Result:** PASS on candidate `codex/phase12/P12BMarketPromotionStateRefresh` at
+`2f7c7422812de40aa1223e8310dcbd9f5d8ca474`, based on canonical
+`b77e154e86b510c9f47ea9042fe5a1edb39749b0`. The first review correction is
+resolved: the historical State snapshot dates the 142-section baseline, and
+the current matrix reports 144 sections (that baseline plus two Market
+sections). Market promotion and exact review evidence remain consistent.
+Only the two intended documentation files differ from canonical, and
+`git diff --check b77e154..2f7c742` passes. P12-B remains incomplete,
+P12-A remains `WAIT_DEPENDENCY`, and P13 remains blocked. No code,
+ProjectSettings, or unrelated `.meta` files changed.
