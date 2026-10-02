@@ -142,7 +142,7 @@ public sealed class FactionFactualReaderTests
         AddCorruptAffiliation(factions, new FactionAffiliationRecord(
             faction.Id, person.PersonId, 1L, affiliationId: new FactionAffiliationId("aff-second")));
 
-        FactualReadCoordinator duplicateCoordinator = CreateCoordinator(factions, people, 0L);
+        FactualReadCoordinator duplicateCoordinator = CreateCoordinator(factions, people, 1L);
         Assert.That(duplicateCoordinator.TryCaptureCoherent(
             out FactualReadCapture duplicateCapture,
             FactionFactualReader.FactionTruthCapabilityId), Is.False);
@@ -169,12 +169,47 @@ public sealed class FactionFactualReaderTests
         FactionRecord faction = RegisterFaction(factions, "faction", "Faction", 10L);
         PersonRuntime person = RegisterPerson(people, "person");
         RegisterAffiliation(factions, faction.Id, person.PersonId, 5L, "aff-before-created");
-        FactualReadCoordinator coordinator = CreateCoordinator(factions, people, 0L);
+        FactualReadCoordinator coordinator = CreateCoordinator(factions, people, 10L);
 
         Assert.That(coordinator.TryCaptureCoherent(
             out FactualReadCapture capture,
             FactionFactualReader.FactionTruthCapabilityId), Is.False);
         Assert.That(capture.Diagnostics[0].Code, Is.EqualTo("faction.active-affiliation.invalid-day"));
+    }
+
+    [Test]
+    public void FutureFactionCreationAndAffiliationDatesAreUnavailable()
+    {
+        PersonStore futureFactionPeople = new PersonStore();
+        FactionStore futureFactionStore = new FactionStore(futureFactionPeople);
+        RegisterFaction(futureFactionStore, "future-faction", "Future", 1L);
+        FactualReadCoordinator futureFactionCoordinator = CreateCoordinator(futureFactionStore, futureFactionPeople, 0L);
+        Assert.That(futureFactionCoordinator.TryCaptureCoherent(
+            out FactualReadCapture futureFactionCapture,
+            FactionFactualReader.FactionTruthCapabilityId), Is.False);
+        Assert.That(futureFactionCapture.Diagnostics[0].Code, Is.EqualTo("faction.record.created-after-boundary"));
+
+        PersonStore futureJoinPeople = new PersonStore();
+        FactionStore futureJoinStore = new FactionStore(futureJoinPeople);
+        FactionRecord joinedFaction = RegisterFaction(futureJoinStore, "faction", "Faction", 0L);
+        PersonRuntime futureJoinPerson = RegisterPerson(futureJoinPeople, "future-join");
+        RegisterAffiliation(futureJoinStore, joinedFaction.Id, futureJoinPerson.PersonId, 1L, "aff-future-join");
+        FactualReadCoordinator futureJoinCoordinator = CreateCoordinator(futureJoinStore, futureJoinPeople, 0L);
+        Assert.That(futureJoinCoordinator.TryCaptureCoherent(
+            out FactualReadCapture futureJoinCapture,
+            FactionFactualReader.FactionTruthCapabilityId), Is.False);
+        Assert.That(futureJoinCapture.Diagnostics[0].Code, Is.EqualTo("faction.affiliation.joined-after-boundary"));
+
+        PersonStore futureEndPeople = new PersonStore();
+        FactionStore futureEndStore = new FactionStore(futureEndPeople);
+        FactionRecord endedFaction = RegisterFaction(futureEndStore, "faction", "Faction", 0L);
+        PersonRuntime futureEndPerson = RegisterPerson(futureEndPeople, "future-end");
+        RegisterAffiliation(futureEndStore, endedFaction.Id, futureEndPerson.PersonId, 0L, "aff-future-end", 1L);
+        FactualReadCoordinator futureEndCoordinator = CreateCoordinator(futureEndStore, futureEndPeople, 0L);
+        Assert.That(futureEndCoordinator.TryCaptureCoherent(
+            out FactualReadCapture futureEndCapture,
+            FactionFactualReader.FactionTruthCapabilityId), Is.False);
+        Assert.That(futureEndCapture.Diagnostics[0].Code, Is.EqualTo("faction.affiliation.ended-after-boundary"));
     }
 
     private static FactualReadCoordinator CreateCoordinator(FactionStore factions, PersonStore people, long logicalBoundary)

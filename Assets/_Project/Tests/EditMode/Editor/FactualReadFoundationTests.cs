@@ -501,8 +501,8 @@ public sealed class FactualReadFoundationTests
         public string CapabilityId { get; }
         public int Version { get; }
         public Type ValueType => typeof(T);
-        public FactualReadOutcome<T> Read() => FactualReadOutcome<T>.FromResult(read());
+        public FactualReadOutcome<T> Read(long logicalBoundary) => FactualReadOutcome<T>.FromResult(read());
 
-        IFactualReadOutcome IFactualReader.ReadUntyped() => Read();
+        IFactualReadOutcome IFactualReader.ReadUntyped(long logicalBoundary) => Read(logicalBoundary);
     }
 }

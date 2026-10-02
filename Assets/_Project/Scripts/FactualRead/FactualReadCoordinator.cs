@@ -6,12 +6,12 @@ internal interface IFactualReader
     string CapabilityId { get; }
     int Version { get; }
     Type ValueType { get; }
-    IFactualReadOutcome ReadUntyped();
+    IFactualReadOutcome ReadUntyped(long logicalBoundary);
 }
 
 internal interface IFactualReader<T> : IFactualReader
 {
-    FactualReadOutcome<T> Read();
+    FactualReadOutcome<T> Read(long logicalBoundary);
 }
 
 /// <summary>
@@ -85,7 +85,7 @@ public sealed class FactualReadCoordinator
                 IFactualReadOutcome outcome;
                 try
                 {
-                    outcome = reader.ReadUntyped();
+                    outcome = reader.ReadUntyped(before.LogicalBoundary);
                 }
                 catch (Exception)
                 {
