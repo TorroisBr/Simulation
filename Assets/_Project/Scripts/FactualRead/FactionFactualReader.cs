@@ -175,26 +175,27 @@ internal sealed class FactionFactualReader : IFactualReader<FactionTruthFacts>
                     "faction.affiliation.ended-after-boundary",
                     "An affiliation ended after the captured logical boundary.");
             }
-            if (!source.IsActive)
-                continue;
-
             if (!factionCreatedDays.TryGetValue(source.FactionId.Value, out long createdAbsoluteDay))
             {
                 return Invalid(
-                    "faction.active-affiliation.faction-endpoint-missing",
-                    "An active affiliation references an unavailable Faction endpoint.");
+                    "faction.affiliation.faction-endpoint-missing",
+                    "An affiliation references an unavailable Faction endpoint.");
             }
+            if (source.JoinedAbsoluteDay < createdAbsoluteDay)
+            {
+                return Invalid(
+                    "faction.affiliation.joined-before-faction-created",
+                    "An affiliation joined before its Faction was created.");
+            }
+            if (!source.IsActive)
+                continue;
+
             if (!personStore.TryGet(source.PersonId, out _))
                 return FactualReadOutcome<FactionTruthFacts>.Unavailable(PersonEndpointMissingCode, PersonEndpointMissingMessage);
             if (!activePairs.Add(Tuple.Create(source.FactionId.Value, source.PersonId.Value)))
             {
                 return Invalid("faction.active-affiliation.duplicate-pair", "Faction owner state contains duplicate active faction/person affiliations.");
             }
-            if (source.JoinedAbsoluteDay < createdAbsoluteDay)
-            {
-                return Invalid("faction.active-affiliation.invalid-day", "An active affiliation has an impossible source day.");
-            }
-
             activeFacts.Add(new ActiveFactionAffiliationFact(
                 new FactionAffiliationId(source.AffiliationId.Value),
                 new FactionId(source.FactionId.Value),
