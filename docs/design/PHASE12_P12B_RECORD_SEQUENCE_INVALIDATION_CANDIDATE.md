@@ -1,9 +1,10 @@
 # P12-B SimulationRecordSequence invalidation candidate
 
-**Status:** Updated after the prior exact-tip review returned NEEDS_CHANGES;
-the nested-operation coverage finding is addressed and this exact tip is ready
-for independent re-review. This candidate promotes no canonical code and does
-not complete P12-B.
+**Status:** Independent exact-tip implementation review passed for code
+`cd7ca4498d2c1d3591c227bd9011429f9bd06d8f` and tree
+`5282d65fbc4311bb6b907770a4e6fa363ad633df`. The durable review record is
+`docs/design/PHASE12_P12B_RECORD_SEQUENCE_INVALIDATION_IMPLEMENTATION_REVIEW.md`.
+This candidate promotes no canonical code and does not complete P12-B.
 
 ## Candidate identity
 

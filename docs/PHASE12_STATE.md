@@ -1076,3 +1076,31 @@ persistence, save/load, P13 fork behavior, FR-B live read composition or read
 cut, a Faction projection, or a World Exchange producer. It does not complete
 P12-B or make P12-A ready. P12-B remains INCOMPLETE; P12-A remains
 `WAIT_DEPENDENCY`; P13 remains BLOCKED; Phase 12 remains open.
+
+## P12-B record-sequence invalidation candidate review — 2026-10-02
+
+The P12-B `SimulationRecordSequence` mutation-invalidation candidate is
+independently reviewed and validated for canonical consideration. Its exact
+canonical base was `1ac675cc558aa919a749167647c10506c11303fc`; exact code tip is
+`cd7ca4498d2c1d3591c227bd9011429f9bd06d8f` (tree
+`5282d65fbc4311bb6b907770a4e6fa363ad633df`). The pushed candidate/evidence tip
+at review time was `c4acda50aee93da1511139d03437d006d9156319` on
+`codex/phase12/P12BRecordSequenceInvalidationNestedScopeFix`. The durable
+design review is `6c46dfc`; the implementation review is recorded in
+`docs/design/PHASE12_P12B_RECORD_SEQUENCE_INVALIDATION_IMPLEMENTATION_REVIEW.md`.
+
+The initial exact-tip implementation review requested a test for one sequence
+allocation under nested registered operation scopes. The candidate adds that
+focused assertion without production-code changes. Exact-code validation
+passed focused `SimulationRecordSequenceP12InvalidationTests` 6/6, ALL
+EditMode 2180/2180, official Smoke 5/5, and `git diff --check`; the exact XML
+and log paths and SHA-256 hashes are recorded in the candidate and review
+documents.
+
+This State entry records a reviewed candidate, not canonical delivery or
+promotion. The bounded scope is only invalidation for the one selected-profile
+record-sequence owner. Event, Decision, occurrence-receipt sections and
+preceding domain mutations remain uncovered. No complete owner/operation or
+shared-epoch coverage, global quiescence, capture eligibility, export,
+hydration, or P12-B completion is claimed. P12-B remains INCOMPLETE; P12-A
+remains `WAIT_DEPENDENCY`; P13 remains BLOCKED; Phase 12 remains open.
