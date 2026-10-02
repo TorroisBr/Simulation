@@ -178,6 +178,20 @@ public sealed partial class SimulationRuntime
         }
     }
 
+    private sealed class P12NpcOwnerMutationBinding
+    {
+        public readonly object Owner;
+        public readonly string[] SectionIds;
+        public Func<bool> Admission;
+        public Action Committed;
+
+        public P12NpcOwnerMutationBinding(object owner, string[] sectionIds)
+        {
+            Owner = owner ?? throw new ArgumentNullException(nameof(owner));
+            SectionIds = sectionIds ?? throw new ArgumentNullException(nameof(sectionIds));
+        }
+    }
+
     private readonly AuthoritativeMutationGuard mutationGuard = new AuthoritativeMutationGuard();
     private bool advanceLeaseHeld;
     private readonly SimulationRuntimeAdmissionContext runtimeAdmissionContext;
@@ -196,6 +210,10 @@ public sealed partial class SimulationRuntime
     private ContinuationCensusProtocol npcRosterCensusProtocol;
     private readonly Dictionary<MarketRuntime, string> marketSectionIdsByOwner =
         new Dictionary<MarketRuntime, string>();
+    private readonly Dictionary<MoneyAccountRuntime, P12NpcOwnerMutationBinding> npcMoneyAccountMutationBindings =
+        new Dictionary<MoneyAccountRuntime, P12NpcOwnerMutationBinding>();
+    private readonly Dictionary<InventoryRuntime, P12NpcOwnerMutationBinding> npcInventoryMutationBindings =
+        new Dictionary<InventoryRuntime, P12NpcOwnerMutationBinding>();
     private volatile NpcMembershipCensusContext activeNpcMembershipCensusContext;
     private readonly ActorChoiceStore actorChoiceStore;
     private readonly SpatialAuthorityStore spatialAuthorityStore;
@@ -1029,6 +1047,9 @@ public sealed partial class SimulationRuntime
         {
             try
             {
+                if (!TryRebindNpcOwnerMutationBoundaries())
+                    throw new InvalidOperationException("The P12 NPC owner mutation boundaries could not bind to the accepted owner census.");
+
                 foreach (KeyValuePair<MarketRuntime, string> pair in marketSectionIdsByOwner)
                 {
                     MarketRuntime market = pair.Key;
@@ -1080,6 +1101,248 @@ public sealed partial class SimulationRuntime
         {
             protocol.FaultClosed();
             return false;
+        }
+    }
+
+    private bool TryRebindNpcOwnerMutationBoundaries()
+    {
+        if (runtimeAdmissionContext == null) return true;
+        if (!IsRuntimeAdmissionOwnerThreadCurrent() || npcRosterCensusProtocol == null)
+        {
+            FaultRuntimeAdmission();
+            return false;
+        }
+        if (!TryUnbindNpcOwnerMutationBoundaries()) return false;
+
+        try
+        {
+            List<P12NpcOwnerMutationBinding> accountBindings = new List<P12NpcOwnerMutationBinding>();
+            HashSet<string> accountSectionIds = new HashSet<string>(StringComparer.Ordinal);
+            HashSet<MoneyAccountRuntime> accountOwners = new HashSet<MoneyAccountRuntime>();
+            IReadOnlyList<IOwnerSectionCensusProvider> accountProviders = MoneyAccountCensusProviders;
+            if (accountProviders.Count != npcRuntimes.Count) throw new InvalidOperationException("NPC account census does not match the installed roster.");
+            foreach (IOwnerSectionCensusProvider censusProvider in accountProviders)
+            {
+                if (!(censusProvider is NpcMoneyAccountCensusProvider.INpcMoneyAccountSectionCensusProvider provider)
+                    || string.IsNullOrWhiteSpace(provider.RuntimeId)
+                    || !npcRegistryById.TryGetValue(provider.RuntimeId, out NpcRuntime registeredNpc)
+                    || !ReferenceEquals(registeredNpc, provider.NpcOwner)
+                    || !ReferenceEquals(registeredNpc.MoneyAccount, provider.MoneyAccountOwner))
+                    throw new InvalidOperationException("NPC account census identity does not match the installed roster.");
+
+                OwnerSectionCensusWitness witness = censusProvider.GetCurrentCensus();
+                string sectionId = NpcMoneyAccountCensusProvider.SectionPrefix + provider.RuntimeId;
+                if (!accountSectionIds.Add(sectionId)
+                    || !accountOwners.Add(provider.MoneyAccountOwner)
+                    || !ReferenceEquals(witness.OwnerInstanceIdentity, provider.MoneyAccountOwner)
+                    || !string.Equals(witness.SectionId, sectionId, StringComparison.Ordinal)
+                    || witness.SchemaVersion != NpcMoneyAccountCensusProvider.SchemaVersion
+                    || witness.Cardinality != 1
+                    || witness.Revision != provider.MoneyAccountOwner.Revision)
+                    throw new InvalidOperationException("NPC account census witness is not an exact current owner witness.");
+
+                accountBindings.Add(new P12NpcOwnerMutationBinding(provider.MoneyAccountOwner, new[] { sectionId }));
+            }
+
+            List<P12NpcOwnerMutationBinding> inventoryBindings = new List<P12NpcOwnerMutationBinding>();
+            HashSet<string> inventorySectionIds = new HashSet<string>(StringComparer.Ordinal);
+            IReadOnlyList<IOwnerSectionCensusProvider> inventoryProviders = InventoryCensusProviders;
+            if (inventoryProviders.Count != npcRuntimes.Count) throw new InvalidOperationException("NPC Inventory census does not match the installed roster.");
+            foreach (IOwnerSectionCensusProvider censusProvider in inventoryProviders)
+            {
+                if (!(censusProvider is NpcInventoryCensusProvider.INpcInventorySectionCensusProvider provider)
+                    || string.IsNullOrWhiteSpace(provider.RuntimeId)
+                    || !npcRegistryById.TryGetValue(provider.RuntimeId, out NpcRuntime registeredNpc)
+                    || !ReferenceEquals(registeredNpc, provider.NpcOwner)
+                    || !ReferenceEquals(registeredNpc.ExistingInventory, provider.InventoryOwner))
+                    throw new InvalidOperationException("NPC Inventory census identity does not match the installed roster.");
+
+                OwnerSectionCensusWitness witness = censusProvider.GetCurrentCensus();
+                string sectionId = NpcInventoryCensusProvider.SectionPrefix + provider.RuntimeId;
+                if (!inventorySectionIds.Add(sectionId)
+                    || !ReferenceEquals(witness.OwnerInstanceIdentity, provider.InventoryOwner)
+                    || !string.Equals(witness.SectionId, sectionId, StringComparison.Ordinal)
+                    || witness.SchemaVersion != NpcInventoryCensusProvider.SchemaVersion
+                    || !provider.InventoryOwner.TryGetCensusCardinality(out int cardinality)
+                    || witness.Cardinality != cardinality
+                    || witness.Revision != provider.InventoryOwner.Revision)
+                    throw new InvalidOperationException("NPC Inventory census witness is not an exact current owner witness.");
+
+                P12NpcOwnerMutationBinding existing = null;
+                foreach (P12NpcOwnerMutationBinding candidate in inventoryBindings)
+                {
+                    if (ReferenceEquals(candidate.Owner, provider.InventoryOwner))
+                    {
+                        existing = candidate;
+                        break;
+                    }
+                }
+
+                if (existing == null)
+                    inventoryBindings.Add(new P12NpcOwnerMutationBinding(provider.InventoryOwner, new[] { sectionId }));
+                else
+                {
+                    string[] expanded = new string[existing.SectionIds.Length + 1];
+                    Array.Copy(existing.SectionIds, expanded, existing.SectionIds.Length);
+                    expanded[expanded.Length - 1] = sectionId;
+                    inventoryBindings.Remove(existing);
+                    inventoryBindings.Add(new P12NpcOwnerMutationBinding(provider.InventoryOwner, expanded));
+                }
+            }
+
+            if (accountSectionIds.Count != npcRuntimes.Count || inventorySectionIds.Count != npcRuntimes.Count)
+                throw new InvalidOperationException("The NPC owner census does not cover every installed NPC.");
+
+            foreach (P12NpcOwnerMutationBinding binding in accountBindings)
+            {
+                binding.Admission = () => CanCommitP12NpcOwnerMutation(binding);
+                binding.Committed = () => NotifyP12NpcOwnerMutation(binding);
+                ((MoneyAccountRuntime)binding.Owner).BindP12MutationBoundary(binding.Admission, binding.Committed);
+                npcMoneyAccountMutationBindings.Add((MoneyAccountRuntime)binding.Owner, binding);
+            }
+
+            foreach (P12NpcOwnerMutationBinding binding in inventoryBindings)
+            {
+                Array.Sort(binding.SectionIds, StringComparer.Ordinal);
+                binding.Admission = () => CanCommitP12NpcOwnerMutation(binding);
+                binding.Committed = () => NotifyP12NpcOwnerMutation(binding);
+                ((InventoryRuntime)binding.Owner).BindP12MutationBoundary(binding.Admission, binding.Committed);
+                npcInventoryMutationBindings.Add((InventoryRuntime)binding.Owner, binding);
+            }
+
+            return true;
+        }
+        catch
+        {
+            TryUnbindNpcOwnerMutationBoundaries();
+            FaultRuntimeAdmission();
+            return false;
+        }
+    }
+
+    private bool TryUnbindNpcOwnerMutationBoundaries()
+    {
+        bool succeeded = true;
+        foreach (KeyValuePair<MoneyAccountRuntime, P12NpcOwnerMutationBinding> pair in
+            new List<KeyValuePair<MoneyAccountRuntime, P12NpcOwnerMutationBinding>>(npcMoneyAccountMutationBindings))
+        {
+            if (pair.Key.UnbindP12MutationBoundary(pair.Value.Admission, pair.Value.Committed))
+                npcMoneyAccountMutationBindings.Remove(pair.Key);
+            else
+                succeeded = false;
+        }
+        foreach (KeyValuePair<InventoryRuntime, P12NpcOwnerMutationBinding> pair in
+            new List<KeyValuePair<InventoryRuntime, P12NpcOwnerMutationBinding>>(npcInventoryMutationBindings))
+        {
+            if (pair.Key.UnbindP12MutationBoundary(pair.Value.Admission, pair.Value.Committed))
+                npcInventoryMutationBindings.Remove(pair.Key);
+            else
+                succeeded = false;
+        }
+        if (!succeeded) FaultRuntimeAdmission();
+        return succeeded;
+    }
+
+    private bool CanCommitP12NpcOwnerMutation(P12NpcOwnerMutationBinding binding)
+    {
+        if (runtimeAdmissionContext == null) return true;
+        if (binding == null
+            || !IsRuntimeAdmissionOwnerThreadCurrent()
+            || npcRosterCensusProtocol == null)
+        {
+            FaultRuntimeAdmission();
+            return false;
+        }
+
+        bool exactBinding;
+        if (binding.Owner is MoneyAccountRuntime account)
+        {
+            exactBinding = npcMoneyAccountMutationBindings.TryGetValue(account, out P12NpcOwnerMutationBinding registeredAccountBinding)
+                && ReferenceEquals(registeredAccountBinding, binding)
+                && binding.SectionIds.Length == 1;
+            if (exactBinding)
+            {
+                string sectionId = binding.SectionIds[0];
+                string prefix = NpcMoneyAccountCensusProvider.SectionPrefix;
+                string runtimeId = sectionId.StartsWith(prefix, StringComparison.Ordinal)
+                    ? sectionId.Substring(prefix.Length)
+                    : null;
+                exactBinding = !string.IsNullOrWhiteSpace(runtimeId)
+                    && npcRegistryById.TryGetValue(runtimeId, out NpcRuntime registeredNpcForAccount)
+                    && ReferenceEquals(registeredNpcForAccount.MoneyAccount, account)
+                    && string.Equals(registeredNpcForAccount.RuntimeId, runtimeId, StringComparison.Ordinal);
+                if (exactBinding)
+                {
+                    int ownerCount = 0;
+                    foreach (NpcRuntime rosterNpc in npcRuntimes)
+                        if (rosterNpc != null && ReferenceEquals(rosterNpc.MoneyAccount, account)) ownerCount++;
+                    exactBinding = ownerCount == 1;
+                }
+            }
+        }
+        else if (binding.Owner is InventoryRuntime inventory)
+        {
+            exactBinding = npcInventoryMutationBindings.TryGetValue(inventory, out P12NpcOwnerMutationBinding registeredInventoryBinding)
+                && ReferenceEquals(registeredInventoryBinding, binding);
+            if (exactBinding)
+            {
+                List<string> currentSectionIds = new List<string>();
+                foreach (NpcRuntime npc in npcRuntimes)
+                {
+                    if (npc == null || !ReferenceEquals(npc.ExistingInventory, inventory)) continue;
+                    if (string.IsNullOrWhiteSpace(npc.RuntimeId)
+                        || !npcRegistryById.TryGetValue(npc.RuntimeId, out NpcRuntime registeredNpc)
+                        || !ReferenceEquals(registeredNpc, npc))
+                    {
+                        exactBinding = false;
+                        break;
+                    }
+                    currentSectionIds.Add(NpcInventoryCensusProvider.SectionPrefix + npc.RuntimeId);
+                }
+                currentSectionIds.Sort(StringComparer.Ordinal);
+                if (currentSectionIds.Count != binding.SectionIds.Length)
+                    exactBinding = false;
+                for (int i = 0; exactBinding && i < currentSectionIds.Count; i++)
+                    exactBinding = string.Equals(currentSectionIds[i], binding.SectionIds[i], StringComparison.Ordinal);
+                if (currentSectionIds.Count == 0) exactBinding = false;
+            }
+        }
+        else
+        {
+            exactBinding = false;
+        }
+
+        if (!exactBinding
+            || !npcRosterCensusProtocol.TryValidateUnchangedSections(binding.SectionIds, out _))
+        {
+            FaultRuntimeAdmission();
+            return false;
+        }
+
+        return true;
+    }
+
+    private void NotifyP12NpcOwnerMutation(P12NpcOwnerMutationBinding binding)
+    {
+        if (runtimeAdmissionContext == null || npcRosterCensusProtocol == null) return;
+        try
+        {
+            bool current = binding != null
+                && ((binding.Owner is MoneyAccountRuntime account
+                        && npcMoneyAccountMutationBindings.TryGetValue(account, out P12NpcOwnerMutationBinding accountBinding)
+                        && ReferenceEquals(accountBinding, binding))
+                    || (binding.Owner is InventoryRuntime inventory
+                        && npcInventoryMutationBindings.TryGetValue(inventory, out P12NpcOwnerMutationBinding inventoryBinding)
+                        && ReferenceEquals(inventoryBinding, binding)));
+            bool accepted = current && (binding.Owner is InventoryRuntime
+                ? npcRosterCensusProtocol.NotifyCommittedMutations(binding.SectionIds, out _)
+                : binding.SectionIds.Length == 1
+                    && npcRosterCensusProtocol.NotifyCommittedMutation(binding.SectionIds[0], out _));
+            if (!accepted) npcRosterCensusProtocol.FaultClosed();
+        }
+        catch
+        {
+            npcRosterCensusProtocol.FaultClosed();
         }
     }
 
@@ -1484,10 +1747,20 @@ public sealed partial class SimulationRuntime
 
             if (context.ProtocolScope != null && npcRosterCensusProtocol != null)
             {
-                npcRosterCensusProtocol.TryReconcileSpatialKnowledgeRosterAndNotifyCommittedMutations(
+                bool reconciled = npcRosterCensusProtocol.TryReconcileSpatialKnowledgeRosterAndNotifyCommittedMutations(
                     changedFixedSections,
                     context.PersonStoreRevisionAtStart,
                     out _);
+                if (!reconciled)
+                {
+                    npcRosterCensusProtocol.FaultClosed();
+                }
+                else if (context.RosterChanged
+                    && runtimeAdmissionContext != null
+                    && !TryRebindNpcOwnerMutationBoundaries())
+                {
+                    npcRosterCensusProtocol.FaultClosed();
+                }
             }
         }
 

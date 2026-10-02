@@ -69,6 +69,8 @@ public class InventoryRuntime
     [SerializeField] private List<InventoryItemRuntime> items = new List<InventoryItemRuntime>();
     [NonSerialized] private ReadOnlyCollection<InventoryItemRuntime> readOnlyItems;
     [NonSerialized] private long revision;
+    [NonSerialized] private Func<bool> p12MutationAdmission;
+    [NonSerialized] private Action p12MutationCommitted;
 
     public IReadOnlyList<InventoryItemRuntime> Items => readOnlyItems ?? (readOnlyItems = (items ?? (items = new List<InventoryItemRuntime>())).AsReadOnly());
     public long Revision => revision;
@@ -116,7 +118,9 @@ public class InventoryRuntime
             return false;
         }
 
-        InventoryItemRuntime inventoryItem = (items ?? (items = new List<InventoryItemRuntime>())).Find(x => x != null && x.Item == item);
+        InventoryItemRuntime inventoryItem = items != null
+            ? items.Find(x => x != null && x.Item == item)
+            : null;
 
         if (inventoryItem == null || inventoryItem.Amount > int.MaxValue - amount)
         {
@@ -139,32 +143,45 @@ public class InventoryRuntime
 
     public void AddItem(ItemData item, int amount, float unitCost = 0f)
     {
-        if (item == null || amount <= 0 || revision == long.MaxValue)
-        {
-            return;
-        }
+        TryAddItem(item, amount, unitCost);
+    }
 
-        InventoryItemRuntime inventoryItem = (items ?? (items = new List<InventoryItemRuntime>())).Find(x => x != null && x.Item == item);
+    public bool TryAddItem(ItemData item, int amount, float unitCost = 0f)
+    {
+        if (CanAddItem(item, amount, unitCost) == false || CanCommitP12Mutation() == false)
+            return false;
+
+        InventoryItemRuntime inventoryItem = items != null
+            ? items.Find(x => x != null && x.Item == item)
+            : null;
 
         if (inventoryItem == null)
         {
             EnsureItems().Add(new InventoryItemRuntime(item, amount, unitCost));
             revision++;
-            return;
+            NotifyP12MutationCommitted();
+            return true;
         }
 
         inventoryItem.Add(amount, unitCost);
         revision++;
+        NotifyP12MutationCommitted();
+        return true;
     }
 
     public bool RemoveItem(ItemData item, int amount)
     {
-        InventoryItemRuntime inventoryItem = (items ?? (items = new List<InventoryItemRuntime>())).Find(x => x != null && x.Item == item);
+        InventoryItemRuntime inventoryItem = items != null
+            ? items.Find(x => x != null && x.Item == item)
+            : null;
 
-        if (revision == long.MaxValue || inventoryItem == null || inventoryItem.Remove(amount) == false)
+        if (revision == long.MaxValue || inventoryItem == null || amount <= 0
+            || inventoryItem.Amount < amount || CanCommitP12Mutation() == false)
         {
             return false;
         }
+
+        if (inventoryItem.Remove(amount) == false) return false;
 
         if (inventoryItem.Amount <= 0)
         {
@@ -172,8 +189,46 @@ public class InventoryRuntime
         }
 
         revision++;
+        NotifyP12MutationCommitted();
 
         return true;
+    }
+
+    internal void BindP12MutationBoundary(Func<bool> admission, Action committed)
+    {
+        if (admission == null) throw new ArgumentNullException(nameof(admission));
+        if (committed == null) throw new ArgumentNullException(nameof(committed));
+        if (p12MutationAdmission != null || p12MutationCommitted != null)
+            throw new InvalidOperationException("InventoryRuntime is already bound to a P12 mutation boundary.");
+
+        p12MutationAdmission = admission;
+        p12MutationCommitted = committed;
+    }
+
+    internal bool UnbindP12MutationBoundary(Func<bool> admission, Action committed)
+    {
+        if (!ReferenceEquals(p12MutationAdmission, admission)
+            || !ReferenceEquals(p12MutationCommitted, committed)) return false;
+
+        p12MutationAdmission = null;
+        p12MutationCommitted = null;
+        return true;
+    }
+
+    internal bool HasP12MutationBoundary => p12MutationAdmission != null || p12MutationCommitted != null;
+
+    private bool CanCommitP12Mutation()
+    {
+        if (p12MutationAdmission == null) return true;
+        try { return p12MutationAdmission(); }
+        catch { return false; }
+    }
+
+    private void NotifyP12MutationCommitted()
+    {
+        if (p12MutationCommitted == null) return;
+        try { p12MutationCommitted(); }
+        catch { }
     }
 
     public bool IsEmpty()

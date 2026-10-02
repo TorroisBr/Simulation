@@ -576,6 +576,7 @@ public sealed class SimulationRuntimeAdmissionTests
         EconomyTransactionService service = new EconomyTransactionService();
         BindP12CensusRuntime(service, runtime);
         Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long before, out _), Is.True);
+        UnbindCurrentP12OwnerBoundary(buyer.MoneyAccount);
         buyer.MoneyAccount.TryCredit(5f);
 
         EconomyTransactionResult result = service.TryExecuteNpcTrade(buyer, seller, item, 2, 10f);
@@ -655,7 +656,7 @@ public sealed class SimulationRuntimeAdmissionTests
     }
 
     [Test]
-    public void P12NpcTrade_PostCommitCensusFailurePreservesCommittedDomainResult()
+    public void P12NpcTrade_SaturationAfterFirstCommitPreservesCommittedLeafAndFaultsProtocol()
     {
         ItemData item = SimulationTestFactory.CreateItem("p12-npc-trade-post-commit-fault");
         NpcRuntime buyer = new NpcRuntime("buyer-post-commit-fault", SimulationTestFactory.CreateNpc("buyer-post-commit-fault"), null, 100f);
@@ -677,11 +678,14 @@ public sealed class SimulationRuntimeAdmissionTests
 
         EconomyTransactionResult result = service.TryExecuteNpcTrade(buyer, seller, item, 2, 10f);
 
-        Assert.That(result.Success, Is.True);
+        Assert.That(result.Success, Is.False,
+            "The first leaf commit is retained; later writes are rejected after the protocol faults, and this contract adds no trade rollback.");
+        Assert.That(result.FailureReason, Is.EqualTo(EconomyTransactionFailureReason.TransactionCommitFailed));
         Assert.That(buyer.Money, Is.EqualTo(80f));
-        Assert.That(seller.Money, Is.EqualTo(40f));
-        Assert.That(buyer.Inventory.GetAmount(item), Is.EqualTo(2));
-        Assert.That(seller.Inventory.GetAmount(item), Is.EqualTo(1));
+        Assert.That(buyer.MoneyAccount.Revision, Is.EqualTo(1));
+        Assert.That(seller.Money, Is.EqualTo(20f));
+        Assert.That(buyer.Inventory.GetAmount(item), Is.Zero);
+        Assert.That(seller.Inventory.GetAmount(item), Is.EqualTo(3));
         Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure assessment), Is.False);
         Assert.That(assessment, Is.EqualTo(ContinuationCensusFailure.ProtocolFaulted));
     }
@@ -751,6 +755,18 @@ public sealed class SimulationRuntimeAdmissionTests
         typeof(SimulationRuntime)
             .GetMethod("BindP12EconomyTransactionService", BindingFlags.Instance | BindingFlags.NonPublic)
             .Invoke(runtime, new object[] { service });
+    }
+
+    private static void UnbindCurrentP12OwnerBoundary(object owner)
+    {
+        Func<bool> admission = (Func<bool>)owner.GetType().GetField(
+            "p12MutationAdmission", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(owner);
+        Action committed = (Action)owner.GetType().GetField(
+            "p12MutationCommitted", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(owner);
+        MethodInfo method = owner.GetType().GetMethod(
+            "UnbindP12MutationBoundary", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(method, Is.Not.Null);
+        Assert.That(method.Invoke(owner, new object[] { admission, committed }), Is.True);
     }
 
     [TestCase(false)]
