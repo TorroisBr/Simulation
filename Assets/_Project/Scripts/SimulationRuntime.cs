@@ -235,6 +235,8 @@ public sealed partial class SimulationRuntime
     private readonly AuthoritativeMutationGuard mutationGuard = new AuthoritativeMutationGuard();
     private bool advanceLeaseHeld;
     private readonly SimulationRuntimeAdmissionContext runtimeAdmissionContext;
+    private readonly SimulationRecordSequence simulationRecordSequence;
+    private readonly SimulationRecordSequenceCensusProvider simulationRecordSequenceCensusProvider;
     private readonly SimulationTime simulationTime;
     private readonly List<CityRuntime> cities;
     private readonly List<NpcRuntime> npcRuntimes;
@@ -549,6 +551,7 @@ public sealed partial class SimulationRuntime
         ActorChoiceStore actorChoiceStore = null,
         P18DIntradayProfile p18dIntradayProfile = null,
         SimulationRuntimeAdmissionContext runtimeAdmissionContext = null,
+        SimulationRecordSequence recordSequence = null,
         WorldId worldId = null)
     {
         WorldId = worldId;
@@ -570,6 +573,22 @@ public sealed partial class SimulationRuntime
         }
 
         this.runtimeAdmissionContext = runtimeAdmissionContext;
+        if (runtimeAdmissionContext != null)
+        {
+            simulationRecordSequence = recordSequence
+                ?? decisionRecorder?.RecordSequence
+                ?? new SimulationRecordSequence();
+            if (recordSequence != null
+                && decisionRecorder != null
+                && !ReferenceEquals(recordSequence, decisionRecorder.RecordSequence))
+            {
+                throw new ArgumentException(
+                    "The selected P12 runtime and decision recorder must share the exact SimulationRecordSequence owner.",
+                    nameof(recordSequence));
+            }
+            simulationRecordSequenceCensusProvider =
+                new SimulationRecordSequenceCensusProvider(simulationRecordSequence);
+        }
         List<CityRuntime> resolvedCities = cities != null
             ? new List<CityRuntime>(cities)
             : new List<CityRuntime>();
@@ -1045,6 +1064,8 @@ public sealed partial class SimulationRuntime
             || !protocol.RegisterMoneyAccountRosterFamily(npcRuntimeSnapshot, out _)
             || !protocol.RegisterNpcKnowledgeRosterFamily(npcRuntimeSnapshot, out _)
             || !protocol.RegisterNpcPlanRosterFamily(npcRuntimeSnapshot, out _)
+            || (runtimeAdmissionContext != null
+                && !TryRegisterSimulationRecordSequenceCensusProvider(protocol))
             || (runtimeAdmissionContext != null && !TryRegisterCityMarketCensusProviders(protocol))
             || !protocol.SealExpectedSectionInventory(out _)
             || !protocol.SealCensusProviderInventory(out _))
@@ -1107,6 +1128,10 @@ public sealed partial class SimulationRuntime
         {
             try
             {
+                simulationRecordSequence.BindP12MutationBoundary(
+                    CanCommitP12SimulationRecordSequenceMutation,
+                    NotifyP12SimulationRecordSequenceMutation);
+
                 if (!TryRebindNpcOwnerMutationBoundaries())
                     throw new InvalidOperationException("The P12 NPC owner mutation boundaries could not bind to the accepted owner census.");
 
@@ -1124,6 +1149,52 @@ public sealed partial class SimulationRuntime
                 protocol.FaultClosed();
                 npcRosterCensusProtocol = null;
             }
+        }
+    }
+
+    private bool TryRegisterSimulationRecordSequenceCensusProvider(ContinuationCensusProtocol protocol)
+    {
+        if (protocol == null
+            || simulationRecordSequence == null
+            || simulationRecordSequenceCensusProvider == null)
+        {
+            protocol?.FaultClosed();
+            return false;
+        }
+
+        try
+        {
+            OwnerSectionCensusWitness witness = simulationRecordSequenceCensusProvider.GetCurrentCensus();
+            if (witness == null
+                || !string.Equals(
+                    witness.SectionId,
+                    SimulationRecordSequenceCensusProvider.SectionId,
+                    StringComparison.Ordinal)
+                || witness.SchemaVersion != SimulationRecordSequenceCensusProvider.SchemaVersion
+                || witness.Cardinality != 1
+                || !ReferenceEquals(witness.OwnerInstanceIdentity, simulationRecordSequence.CensusOwnerIdentity)
+                || witness.Revision != simulationRecordSequence.CensusRevision
+                || !protocol.RegisterExpectedSection(
+                    new OwnerSectionContract(
+                        SimulationRecordSequenceCensusProvider.SectionId,
+                        SimulationRecordSequenceCensusProvider.SchemaVersion,
+                        OwnerSectionRole.Required),
+                    out _)
+                || !protocol.RegisterCensusProvider(
+                    SimulationRecordSequenceCensusProvider.SectionId,
+                    simulationRecordSequenceCensusProvider,
+                    out _))
+            {
+                protocol.FaultClosed();
+                return false;
+            }
+
+            return true;
+        }
+        catch
+        {
+            protocol.FaultClosed();
+            return false;
         }
     }
 
@@ -1862,6 +1933,77 @@ public sealed partial class SimulationRuntime
             return false;
         }
         return npcRosterCensusProtocol.TryReadMutationEpoch(out epoch, out failure);
+    }
+
+    internal bool HasSameSimulationRecordSequenceOwner(IOwnerSectionCensusProvider otherProvider)
+    {
+        if (runtimeAdmissionContext == null) return true;
+        if (simulationRecordSequenceCensusProvider == null || otherProvider == null) return false;
+
+        try
+        {
+            OwnerSectionCensusWitness runtimeWitness = simulationRecordSequenceCensusProvider.GetCurrentCensus();
+            OwnerSectionCensusWitness otherWitness = otherProvider.GetCurrentCensus();
+            return runtimeWitness != null
+                && otherWitness != null
+                && string.Equals(runtimeWitness.SectionId, SimulationRecordSequenceCensusProvider.SectionId, StringComparison.Ordinal)
+                && string.Equals(otherWitness.SectionId, runtimeWitness.SectionId, StringComparison.Ordinal)
+                && otherWitness.SchemaVersion == runtimeWitness.SchemaVersion
+                && otherWitness.Cardinality == 1
+                && runtimeWitness.Cardinality == 1
+                && ReferenceEquals(otherWitness.OwnerInstanceIdentity, runtimeWitness.OwnerInstanceIdentity)
+                && otherWitness.Revision == runtimeWitness.Revision;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private bool CanCommitP12SimulationRecordSequenceMutation()
+    {
+        if (runtimeAdmissionContext == null) return true;
+        if (!IsRuntimeAdmissionOwnerThreadCurrent()
+            || npcRosterCensusProtocol == null
+            || simulationRecordSequenceCensusProvider == null
+            || !npcRosterCensusProtocol.TryValidateUnchangedSections(
+                new[] { SimulationRecordSequenceCensusProvider.SectionId },
+                out _))
+        {
+            FaultRuntimeAdmission();
+            return false;
+        }
+
+        return true;
+    }
+
+    private void NotifyP12SimulationRecordSequenceMutation()
+    {
+        if (runtimeAdmissionContext == null) return;
+        try
+        {
+            if (npcRosterCensusProtocol == null
+                || !npcRosterCensusProtocol.NotifyCommittedMutation(
+                    SimulationRecordSequenceCensusProvider.SectionId,
+                    out _))
+            {
+                FaultRuntimeAdmission();
+                throw new InvalidOperationException(
+                    "The committed P12 record-sequence allocation could not advance the mutation epoch.");
+            }
+        }
+        catch (InvalidOperationException)
+        {
+            FaultRuntimeAdmission();
+            throw;
+        }
+        catch (Exception exception)
+        {
+            FaultRuntimeAdmission();
+            throw new InvalidOperationException(
+                "The committed P12 record-sequence allocation could not be reported to its census protocol.",
+                exception);
+        }
     }
 
     internal bool TryBeginBootstrapPublicationScope(out SimulationOperationScope scope)

@@ -5,6 +5,8 @@ public sealed class SimulationRecordSequence
 {
     private long nextSequence = 1L;
     private readonly object censusOwnerIdentity = new object();
+    private Func<bool> p12MutationAdmission;
+    private Action p12MutationCommitted;
 
     internal object CensusOwnerIdentity => censusOwnerIdentity;
     internal long CensusRevision => nextSequence - 1L;
@@ -16,9 +18,36 @@ public sealed class SimulationRecordSequence
             throw new InvalidOperationException("Simulation record sequence is exhausted.");
         }
 
+        if (p12MutationAdmission != null && !CanCommitP12Mutation())
+        {
+            throw new InvalidOperationException("The P12 record-sequence mutation was rejected before allocation.");
+        }
+
         long allocated = nextSequence;
         nextSequence++;
+        NotifyP12MutationCommitted();
         return allocated;
+    }
+
+    internal void BindP12MutationBoundary(Func<bool> admission, Action committed)
+    {
+        if (admission == null) throw new ArgumentNullException(nameof(admission));
+        if (committed == null) throw new ArgumentNullException(nameof(committed));
+        if (p12MutationAdmission != null || p12MutationCommitted != null)
+            throw new InvalidOperationException("SimulationRecordSequence is already bound to a P12 mutation boundary.");
+        p12MutationAdmission = admission;
+        p12MutationCommitted = committed;
+    }
+
+    private bool CanCommitP12Mutation()
+    {
+        try { return p12MutationAdmission(); }
+        catch { return false; }
+    }
+
+    private void NotifyP12MutationCommitted()
+    {
+        p12MutationCommitted?.Invoke();
     }
 }
 
@@ -717,6 +746,8 @@ public sealed class NpcDecisionRecorder : IOwnerSectionCensusProvider
     private readonly Dictionary<string, NpcDecisionOccurrenceReceipt> occurrenceReceipts =
         new Dictionary<string, NpcDecisionOccurrenceReceipt>(StringComparer.Ordinal);
     private long occurrenceReceiptsRevision;
+
+    internal SimulationRecordSequence RecordSequence => recordSequence;
 
     public NpcDecisionRecorder(
         RuntimeIdAllocator idAllocator,

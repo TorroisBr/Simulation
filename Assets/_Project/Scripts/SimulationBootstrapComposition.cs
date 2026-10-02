@@ -52,7 +52,16 @@ public sealed class SimulationBootstrapComposition
         ScheduledDirectiveCensusProvider = new ScheduledDirectiveCensusProvider(directives);
         Decisions = decisions;
         this.decisionRecorder = decisionRecorder ?? throw new System.ArgumentNullException(nameof(decisionRecorder));
-        SimulationRecordSequenceCensusProvider = new SimulationRecordSequenceCensusProvider(recordSequence);
+        SimulationRecordSequenceCensusProvider sequenceCensusProvider =
+            new SimulationRecordSequenceCensusProvider(recordSequence);
+        if (!runtime.HasSameSimulationRecordSequenceOwner(sequenceCensusProvider))
+        {
+            runtime.FaultRuntimeAdmission();
+            throw new ArgumentException(
+                "The selected P12 runtime and bootstrap must expose the exact same record-sequence owner witness.",
+                nameof(recordSequence));
+        }
+        SimulationRecordSequenceCensusProvider = sequenceCensusProvider;
         this.economyTransactionService = economyTransactionService ?? throw new System.ArgumentNullException(nameof(economyTransactionService));
         NpcChronicles = chronicles;
         ChronicleFormatter = chronicleFormatter;
