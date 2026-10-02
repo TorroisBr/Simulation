@@ -726,7 +726,7 @@ This remains passive local-revision evidence. Direct account writes are not wire
 
 ## Historical P12-B post-MoneyAccount blocker snapshot — 2026-10-01
 
-A documentation-only refresh based on canonical f913dd088f71b74cfab7c1bd8a1a79b7ce9a29ea reconstructs the post-Market and post-MoneyAccount state. The current partial protocol seals 142 selected-profile sections at the authored ten-NPC day-zero roster: two PersonStore sections, two per-NPC SpatialKnowledge sections, one per-NPC Inventory section, one per-NPC MoneyAccount section, and ten per-NPC Knowledge sections. This is not the complete effective-profile owner inventory.
+At this historical snapshot based on canonical f913dd088f71b74cfab7c1bd8a1a79b7ce9a29ea, the partial protocol sealed 142 selected-profile sections at the authored ten-NPC day-zero roster: two PersonStore sections, two per-NPC SpatialKnowledge sections, one per-NPC Inventory section, one per-NPC MoneyAccount section, and ten per-NPC Knowledge sections. This is not the complete effective-profile owner inventory.
 
 Other promoted passive witnesses include RuntimeIdentityRegistry, RuntimeIdAllocator, SimulationRecordSequence, ActorChoice, City presence/Market/SettlementPopulation, Genealogy, P8-A–D, legacy SpatialNetwork, ExplorableSite, Estate/Property, Institution/Office, ArmedForce/manpower/position, Conflict/War/Battle, ScheduledDirective, TravelParty, Expedition, and conditional receipts. They are not all registered in the sealed P12 protocol. City/NPC composite revisions, remaining Justice/Crime/economy census facts, and other mutable direct owners remain incomplete.
 
