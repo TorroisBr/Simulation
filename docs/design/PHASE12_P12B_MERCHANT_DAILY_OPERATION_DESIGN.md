@@ -1,11 +1,11 @@
 # P12-B selected daily Merchant operation — technical design
 
 **Status:** Documentation-only design candidate refreshed onto P12 canonical
-a66c215d1e8e9db34ea559a8bf2a0803fbdbf4ab. Initial independent exact-tip
-review at `fff5e9364c7c63c4c36e6635f12adb32e610c795` returned
-`REVISIONS_REQUIRED`; this revision addresses both findings and awaits a new
-exact-tip review. It adds no checkpoint ID, product behavior, architecture
-rule, State claim, or promotion.
+`a66c215d1e8e9db34ea559a8bf2a0803fbdbf4ab`. The revised exact-tip technical
+review passed at design tip `e9fbdada98eb6fed2d1e7a446ac9a4085504c676`; its
+durable record is `6cb0837fdf85c777febeb51f1c20fab65fbf2db6` on
+`codex/phase12/P12BMerchantDailyOperationDesignReview2`. This design adds no
+checkpoint ID, product behavior, architecture rule, State claim, or promotion.
 
 ## Authority and source baseline
 
