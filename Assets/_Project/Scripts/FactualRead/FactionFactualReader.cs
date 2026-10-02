@@ -103,8 +103,11 @@ internal sealed class FactionFactualReader : IFactualReader<FactionTruthFacts>
     public int Version => 1;
     public Type ValueType => typeof(FactionTruthFacts);
 
-    public FactualReadOutcome<FactionTruthFacts> Read()
+    public FactualReadOutcome<FactionTruthFacts> Read(long logicalBoundary)
     {
+        if (logicalBoundary < 0L)
+            return Invalid("faction.capture-boundary.invalid", "The captured logical boundary is invalid.");
+
         IReadOnlyList<FactionRecord> sourceFactions = factionStore.Factions;
         IReadOnlyList<FactionAffiliationRecord> sourceAffiliations = factionStore.Affiliations;
         if (sourceFactions == null || sourceAffiliations == null)
@@ -120,6 +123,12 @@ internal sealed class FactionFactualReader : IFactualReader<FactionTruthFacts>
                 || !Enum.IsDefined(typeof(FactionMembershipPolicy), source.MembershipPolicy))
             {
                 return Invalid("faction.record.invalid", "A registered Faction record is invalid.");
+            }
+            if (source.CreatedAbsoluteDay > logicalBoundary)
+            {
+                return Invalid(
+                    "faction.record.created-after-boundary",
+                    "A Faction was created after the captured logical boundary.");
             }
             if (!factionIds.Add(source.Id.Value))
                 return Invalid("faction.record.duplicate-id", "Faction owner state contains duplicate Faction identifiers.");
@@ -154,6 +163,18 @@ internal sealed class FactionFactualReader : IFactualReader<FactionTruthFacts>
             }
             if (!affiliationIds.Add(source.AffiliationId.Value))
                 return Invalid("faction.affiliation.duplicate-id", "Faction owner state contains duplicate affiliation identifiers.");
+            if (source.JoinedAbsoluteDay > logicalBoundary)
+            {
+                return Invalid(
+                    "faction.affiliation.joined-after-boundary",
+                    "An affiliation joined after the captured logical boundary.");
+            }
+            if (source.EndedAbsoluteDay.HasValue && source.EndedAbsoluteDay.Value > logicalBoundary)
+            {
+                return Invalid(
+                    "faction.affiliation.ended-after-boundary",
+                    "An affiliation ended after the captured logical boundary.");
+            }
             if (!source.IsActive)
                 continue;
 
@@ -207,6 +228,6 @@ internal sealed class FactionFactualReader : IFactualReader<FactionTruthFacts>
                 right.FactionAffiliationId.Value);
     }
 
-    FactualReadOutcome<FactionTruthFacts> IFactualReader<FactionTruthFacts>.Read() => Read();
-    IFactualReadOutcome IFactualReader.ReadUntyped() => Read();
+    FactualReadOutcome<FactionTruthFacts> IFactualReader<FactionTruthFacts>.Read(long logicalBoundary) => Read(logicalBoundary);
+    IFactualReadOutcome IFactualReader.ReadUntyped(long logicalBoundary) => Read(logicalBoundary);
 }
