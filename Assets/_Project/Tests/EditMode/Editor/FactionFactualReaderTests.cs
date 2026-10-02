@@ -24,7 +24,7 @@ public sealed class FactionFactualReaderTests
         RegisterAffiliation(factions, upper.Id, personUpper.PersonId, 2L, "aff-upper-upper");
         RegisterAffiliation(factions, dotless.Id, personDotless.PersonId, 3L, "aff-dotless");
         RegisterAffiliation(factions, lower.Id, personLower.PersonId, 5L, "aff-lower");
-        RegisterAffiliation(factions, zeta.Id, formerPerson.PersonId, 1L, "aff-ended", 3L);
+        RegisterAffiliation(factions, zeta.Id, formerPerson.PersonId, 2L, "aff-ended", 3L);
 
         CultureInfo previousCulture = CultureInfo.CurrentCulture;
         CultureInfo previousUiCulture = CultureInfo.CurrentUICulture;
@@ -158,7 +158,7 @@ public sealed class FactionFactualReaderTests
         Assert.That(orphanCoordinator.TryCaptureCoherent(
             out FactualReadCapture orphanCapture,
             FactionFactualReader.FactionTruthCapabilityId), Is.False);
-        Assert.That(orphanCapture.Diagnostics[0].Code, Is.EqualTo("faction.active-affiliation.faction-endpoint-missing"));
+        Assert.That(orphanCapture.Diagnostics[0].Code, Is.EqualTo("faction.affiliation.faction-endpoint-missing"));
     }
 
     [Test]
@@ -174,7 +174,34 @@ public sealed class FactionFactualReaderTests
         Assert.That(coordinator.TryCaptureCoherent(
             out FactualReadCapture capture,
             FactionFactualReader.FactionTruthCapabilityId), Is.False);
-        Assert.That(capture.Diagnostics[0].Code, Is.EqualTo("faction.active-affiliation.invalid-day"));
+        Assert.That(capture.Diagnostics[0].Code, Is.EqualTo("faction.affiliation.joined-before-faction-created"));
+    }
+
+    [Test]
+    public void EndedAffiliationsStillRequireFactionEndpointAndValidJoinChronology()
+    {
+        PersonStore orphanPeople = new PersonStore();
+        FactionStore orphanFactionStore = new FactionStore(orphanPeople);
+        PersonRuntime orphanPerson = RegisterPerson(orphanPeople, "orphan-ended");
+        AddCorruptAffiliation(orphanFactionStore, new FactionAffiliationRecord(
+            new FactionId("missing-faction"), orphanPerson.PersonId, 0L, 1L,
+            new FactionAffiliationId("ended-orphan"), FactionAffiliationEndReason.VoluntaryLeave));
+        FactualReadCoordinator orphanCoordinator = CreateCoordinator(orphanFactionStore, orphanPeople, 1L);
+        Assert.That(orphanCoordinator.TryCaptureCoherent(
+            out FactualReadCapture orphanCapture,
+            FactionFactualReader.FactionTruthCapabilityId), Is.False);
+        Assert.That(orphanCapture.Diagnostics[0].Code, Is.EqualTo("faction.affiliation.faction-endpoint-missing"));
+
+        PersonStore chronologyPeople = new PersonStore();
+        FactionStore chronologyStore = new FactionStore(chronologyPeople);
+        FactionRecord lateFaction = RegisterFaction(chronologyStore, "late-faction", "Late", 10L);
+        PersonRuntime chronologyPerson = RegisterPerson(chronologyPeople, "ended-before-faction");
+        RegisterAffiliation(chronologyStore, lateFaction.Id, chronologyPerson.PersonId, 5L, "ended-before-created", 6L);
+        FactualReadCoordinator chronologyCoordinator = CreateCoordinator(chronologyStore, chronologyPeople, 10L);
+        Assert.That(chronologyCoordinator.TryCaptureCoherent(
+            out FactualReadCapture chronologyCapture,
+            FactionFactualReader.FactionTruthCapabilityId), Is.False);
+        Assert.That(chronologyCapture.Diagnostics[0].Code, Is.EqualTo("faction.affiliation.joined-before-faction-created"));
     }
 
     [Test]
