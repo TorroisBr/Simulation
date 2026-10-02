@@ -2,7 +2,7 @@
 
 **Status:** Static owner/write-map pass complete, with a partial live
 day-zero census through the selected-profile bootstrap test. Current P12
-canonical is `b77e154e86b510c9f47ea9042fe5a1edb39749b0`; it includes the
+canonical at the direct-owner candidate base is `2f7c7422812de40aa1223e8310dcbd9f5d8ca474`; it includes the
 previously promoted passive owner witnesses, the reviewed NPC-trade
 invalidation slice, and the promoted Market-operation invalidation bundle.
 The latter's code candidate is `b577312c2edc6d3124c6d2b9dd3a1201dc9055ae`
@@ -810,3 +810,28 @@ The reviewed partial census now publishes one exact installed `MoneyAccountRunti
 
 This closes only the per-NPC passive identity/cardinality census gap. `TryDebit`/`TryCredit` remain direct child writes with local revision only; they are not connected to the shared protocol epoch. The promotion does not establish complete owner coverage, committed-write invalidation, quiescence, capture eligibility, export, or hydration. P12-B remains incomplete, P12-A remains `WAIT_DEPENDENCY`, and P13 remains blocked.
 
+
+
+## Direct NPC owner-write invalidation candidate refresh
+
+This addendum refreshes the post-Market writer and operation classification
+against P12 canonical 2f7c7422812de40aa1223e8310dcbd9f5d8ca474 and approved
+architecture baseline 451340c56e9b676bf6ea43412bcb856b9ccde3de.
+
+| Obligation | Current evidence | Remaining gap / readiness |
+|---|---|---|
+| Direct per-NPC owner writes | Candidate c49f957e45c3059231e9ec66e4010a7c3a389988 (tree 627af2fbd7f93e0025106ee5ba87e72bae6c4ed2), based on P12 canonical 2f7c742, passed exact-tip independent review and required validation. It preflights exact owner identity, owner-thread, local revision and shared protocol baseline; direct account debit/credit and Inventory add/remove notify once after commit; roster rebinding and existing trade/Open-market duplicate suppression are covered. | Validated candidate is not canonical until its separate human promotion gate. It does not close P12-B or establish universal shared-epoch coverage. |
+| NPC money transfer | Reviewed bounded design 30c00d78fcb68c2969ac2eac3ed694423c55783e and durable exact-tip review 884aa1b27f1de3a3d330eb75053bab01ffec7cc2 on codex/phase12/P12BMoneyTransferOperationDesign. | WAIT_DEPENDENCY on canonical direct per-NPC owner hooks. After that promotion, refresh the contract against the promoted tip and implement the named multi-owner transfer boundary, including compensation. No current implementation or transfer coverage is claimed. |
+| Other EconomyTransactionService and D/E/F writers | Existing NPC trade, Open-market operations, selected Market direct/daily commits, and candidate direct NPC account/Inventory writes are separately bounded. | Other transfer/travel/merchant/crime/justice/population/knowledge and public writer families remain uncovered; no complete operation inventory or capture boundary. |
+| Owner inventory and quiescence | Promoted partial day-zero census and runtime admission evidence remain. | Complete effective-profile owner coverage, global owner-thread/quiescence, stable capture eligibility, export and hydration remain absent. P12-A stays WAIT_DEPENDENCY. |
+
+This candidate adds no owner family and no product behavior. It does not infer
+that every P12-supported operation participates in the shared epoch. P12-B
+remains incomplete and P13 remains blocked.
+
+The approved WorldId/factual-projection architecture at
+451340c56e9b676bf6ea43412bcb856b9ccde3de does not change this candidate's
+account/Inventory mutation semantics. The WorldId design is an independent
+capability track; WI-A and P12 must nevertheless serialize integration work on
+SimulationRuntime. Candidate integration against the updated runtime is a
+revalidation obligation, not a reason to discard this direct-owner candidate.
