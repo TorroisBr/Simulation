@@ -977,3 +977,39 @@ remains blocked; Phase 12 remains open.
 
 Current checkpoint status remains: P12-A WAIT_DEPENDENCY; P12-B INCOMPLETE;
 P12-C through P12-G blocked by their documented prerequisites; P13 blocked.
+
+## P12-B selected daily Merchant operation promotion — 2026-10-02
+
+With explicit approval, `codex/phase12/canonical` was fast-forwarded from
+`a66c215d1e8e9db34ea559a8bf2a0803fbdbf4ab` to the exact reviewed candidate
+`5e643b7e4535b5bb699eb021d3b313243bf45658`. The code-bearing test commit is
+`3ed113bf35546964cd4a56f424578dc1213f41fa` (tree
+`876e810757c55b098d805e6e9ac012da7e6cab4d`). The candidate evidence is
+`docs/design/PHASE12_P12B_MERCHANT_DAILY_OPERATION_CANDIDATE.md`; independent
+exact-tip review passed and is durably recorded at
+`5f4fd440720ff0d9e5461edab06a299a9a1a6830` on
+`codex/phase12/P12BMerchantDailyOperationImplementationReview`.
+
+The promoted boundary is only the selected daily Merchant operation
+`runtime.merchant.advance-npc-trade-state`. It admits and batches mutations for
+the reviewed Merchant-owned Knowledge and plan owners during the existing
+normal call; direct supported owner-thread writes outside that nested operation
+refresh the corresponding baselines and invalidate the changed plan owner.
+The global decision allocator, record sequence, and decision read model remain
+outside this slice.
+
+Exact-tree validation passed: focused suites `SimulationRuntimeAdmissionTests`
+31/31, `NpcPlanCensusTests` 5/5, `NpcKnowledgeCensusTests` 17/17,
+`ContinuationCensusProtocolTests` 22/22, `NpcOwnerCommitInvalidationTests`
+13/13, `P18DLocalKnowledgeObservationTests` 6/6,
+`P18DConsumerIntegrationTests` 9/9, `MerchantLiquidityTests` 11/11,
+`SimulationBootstrapCompositionTests` 14/14, and
+`SimulationRuntimeLongRunTests` 7/7; ALL EditMode 2160/2160; official Smoke
+5/5; and `git diff --check` PASS. The retained XML/log hashes are recorded in
+the candidate evidence file.
+
+This promotion does not establish P12-B completion, complete owner or
+operation coverage, complete shared-epoch coverage, capture eligibility,
+export, hydration, or P12-A readiness. P12-B remains INCOMPLETE; P12-A remains
+`WAIT_DEPENDENCY`; P13 remains BLOCKED; Phase 12 remains open. The owner and
+operation matrix still requires a refreshed residual-gap classification.
