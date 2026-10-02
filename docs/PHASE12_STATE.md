@@ -919,13 +919,19 @@ P12-B is INCOMPLETE; P12-A is WAIT_DEPENDENCY; P13 is BLOCKED. It does not
 prove complete owner census, complete shared-epoch coverage, global runtime
 quiescence, capture eligibility, export, hydration, or phase closure.
 
-WI-A implementation `3b39e0d89858dce517ad72cbb76da621eb954bad` has now been
+WI-A implementation `3b39e0d89858dce517ad72cbb76da621eb954bad` was
 reviewed against this P12 integration base and promoted with its exact-tip
 review record at `codex/wia/canonical` tip
-`93b6f0e8cedcb63437cbf5fa5de3461853c81462`. Its shared
-`SimulationRuntime`/bootstrap handoff still requires the targeted combined
-hotspot revalidation recorded in the WI-A handoff note before another runtime
-owner integrates.
+`93b6f0e8cedcb63437cbf5fa5de3461853c81462`. The targeted combined
+`SimulationRuntime`/bootstrap revalidation passed at exact WI-A code tip
+`3b39e0d89858dce517ad72cbb76da621eb954bad`; durable review evidence is
+`codex/phase12/P12BWIARuntimeHotspotRevalidation` at
+`313095ecec87b11928708607821c6b9ad9b5e275`, record
+`docs/design/PHASE12_P12B_WIA_RUNTIME_HOTSPOT_REVALIDATION.md`. It confirms
+the P12 owner hooks and operation scopes remain intact and WI-A closes the
+existing bootstrap publication scope before exposing the world. The review
+examined retained tests; it did not rerun them. FR-B still needs its own exact
+Faction/Person read-cut proof and serialized integration review.
 
 The next P12 operation gap is the reviewed NPC-to-NPC money-transfer boundary.
 The old contract review predates this promotion and is being refreshed before
