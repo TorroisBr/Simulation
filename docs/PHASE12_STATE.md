@@ -1048,3 +1048,31 @@ establish complete owner/epoch coverage, capture eligibility, export,
 hydration, P12-A readiness, P12-B completion, or P13 readiness. P12-B remains
 INCOMPLETE; P12-A remains `WAIT_DEPENDENCY`; P13 remains BLOCKED; Phase 12
 remains open.
+
+## P12 WI-A current-base integration and revalidation promotion — 2026-10-02
+
+With the user's explicit approval, `codex/phase12/canonical` was fast-forwarded
+from `66f91c68d367e03703ab014046d5e62c3f89ebbe` to
+`ae0a0b4fed921dfb3fd7e173a4787309120bece2`. The code-bearing commit is
+`242ae6bf81c2f4da832be1e7948bbaac004a620b`, tree
+`284e7a9a229671419c4ea0c545c02b4513e41717`, directly based on the prior P12
+canonical tip. The promoted tip adds the durable exact-tip review and
+revalidation record at
+`docs/design/PHASE12_P12B_WIA_POST_FRB_REVALIDATION.md`; no source or test code
+changed after validation/review.
+
+Independent exact-tip review passed on code `242ae6b` and tree `284e7a9` against
+P12 base `66f91c6`, architecture `c285466c355103d3637ac165246591b72eb7bda0`,
+and WI-A canonical baseline `534d2dd1b6ed8cdc168c0c90328adc6b6c1eedf5`.
+Validation on that exact code tree passed four focused suites (105/105), ALL
+EditMode (2174/2174), official Smoke (5/5), and `git diff --check`. The
+review/validation record includes the exact per-suite XML/log SHA-256 values;
+local artifacts are retained under
+`Library/ValidationResults/WIA-P12-PostFRB-20261002/`.
+
+This promotes only the bounded WI-A World Identity integration/revalidation
+with the current P12 bootstrap/admission composition. It does not provide P12
+persistence, save/load, P13 fork behavior, FR-B live read composition or read
+cut, a Faction projection, or a World Exchange producer. It does not complete
+P12-B or make P12-A ready. P12-B remains INCOMPLETE; P12-A remains
+`WAIT_DEPENDENCY`; P13 remains BLOCKED; Phase 12 remains open.

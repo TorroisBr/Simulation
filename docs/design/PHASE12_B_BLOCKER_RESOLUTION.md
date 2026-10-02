@@ -878,3 +878,20 @@ They do not establish complete owner or operation coverage, complete
 shared-epoch coverage, capture eligibility, export, hydration, P12-B
 completion or P13 readiness. P12-B remains incomplete, P12-A remains
 `WAIT_DEPENDENCY`, and P13 remains blocked.
+
+## Current P12-B owner/operation/runtime matrix — 2026-10-02 post WI-A integration
+
+This refresh uses P12 canonical integration tip
+`ae0a0b4fed921dfb3fd7e173a4787309120bece2`, after the approved WI-A
+World Identity current-base integration/revalidation. It supersedes the
+previous row that described the old-base WI-A candidate as awaiting refresh.
+
+| Area | Current evidence | Remaining blocker |
+|---|---|---|
+| WI-A/P12 bootstrap composition | Promoted code `242ae6bf81c2f4da832be1e7948bbaac004a620b` (tree `284e7a9a229671419c4ea0c545c02b4513e41717`) is based on P12 canonical `66f91c68d367e03703ab014046d5e62c3f89ebbe`. Exact-tip independent review and current-base focused/full validation passed; the durable record is `docs/design/PHASE12_P12B_WIA_POST_FRB_REVALIDATION.md`. | This is a bounded World Identity publication/composition integration. It does not establish full owner coverage, universal shared-epoch coverage, runtime-wide quiescence, capture eligibility, or P12-B readiness. |
+| FR-B factual-read core | Promoted core remains at code `0ad19ecd9633e01d358a9ff826ca3ca5f8e3627c` (tree `09c3243ccb5f21a559dbcba3fa1dc6c4050ff516`), canonical evidence tip `451d06e62b7c95d7b600b77f10b0510049d62961`. | Production runtime composition and selected-profile Faction/Person read-cut work remain a separate WI/FR workstream. They are not delivered by WI-A integration and do not use the partial P12 epoch as global coherence. |
+| Remaining owner/operation/epoch coverage | Promoted census and operation evidence remains partial, including only the bounded operation families listed above. | Reconcile remaining live owner/cardinality, committed-write invalidation, shared-epoch, admission/quiescence, and capture-eligibility gaps. Do not default to another passive census when an operation/admission blocker is higher value. |
+| Downstream continuation | P12-A remains `WAIT_DEPENDENCY`; P12-C through P12-G retain their explicit dependencies; P13 remains blocked. | WI-A integration does not imply persistence, save/load, fork semantics, P12-A readiness, P12-B completion, or P13 readiness. |
+
+The WI-A promotion changes no P12-B readiness label. P12-B remains
+incomplete; P12-A remains `WAIT_DEPENDENCY`; P13 remains blocked.
