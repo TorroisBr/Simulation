@@ -1,6 +1,6 @@
 # WI-A implementation partition: serialized runtime handoff
 
-**Base:** P12 canonical `b77e154e86b510c9f47ea9042fe5a1edb39749b0`.
+**Base:** P12 canonical `2f7c7422812de40aa1223e8310dcbd9f5d8ca474`.
 **Status:** the isolated implementation adds canonical `WorldId`, allocates it
 before genesis validation, stores it on the private bootstrap composition, and
 opens the `TesteSimulacao` publication gate only after synchronous stages and
