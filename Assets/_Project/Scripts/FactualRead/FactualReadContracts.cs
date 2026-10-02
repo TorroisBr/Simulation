@@ -32,6 +32,78 @@ internal interface IFactualReadResult
     string SourceAuthority { get; }
 }
 
+internal interface IFactualReadOutcome
+{
+    IFactualReadResult Result { get; }
+    FactualReadDiagnosticData Diagnostic { get; }
+}
+
+internal sealed class FactualReadDiagnosticData
+{
+    internal FactualReadDiagnosticData(string code, string message)
+    {
+        if (string.IsNullOrWhiteSpace(code))
+            throw new ArgumentException("A stable diagnostic code is required.", nameof(code));
+        if (string.IsNullOrWhiteSpace(message))
+            throw new ArgumentException("A deterministic diagnostic message is required.", nameof(message));
+        Code = code;
+        Message = message;
+    }
+
+    internal string Code { get; }
+    internal string Message { get; }
+}
+
+/// <summary>Immutable, non-authoritative explanation attached to an unavailable capture.</summary>
+public sealed class FactualReadDiagnostic
+{
+    internal FactualReadDiagnostic(string capabilityId, string code, string message)
+    {
+        if (string.IsNullOrWhiteSpace(capabilityId))
+            throw new ArgumentException("A capability id is required.", nameof(capabilityId));
+        if (string.IsNullOrWhiteSpace(code))
+            throw new ArgumentException("A diagnostic code is required.", nameof(code));
+        if (string.IsNullOrWhiteSpace(message))
+            throw new ArgumentException("A diagnostic message is required.", nameof(message));
+        CapabilityId = capabilityId;
+        Code = code;
+        Message = message;
+    }
+
+    public string CapabilityId { get; }
+    public string Code { get; }
+    public string Message { get; }
+}
+
+internal sealed class FactualReadOutcome<T> : IFactualReadOutcome
+{
+    private FactualReadOutcome(FactReadResult<T> result, FactualReadDiagnosticData diagnostic)
+    {
+        Result = result ?? throw new ArgumentNullException(nameof(result));
+        if (diagnostic != null && result.Status != FactReadStatus.Unavailable)
+            throw new ArgumentException("Only Unavailable outcomes may carry diagnostics.", nameof(diagnostic));
+        Diagnostic = diagnostic;
+    }
+
+    internal FactReadResult<T> Result { get; }
+    internal FactualReadDiagnosticData Diagnostic { get; }
+
+    internal static FactualReadOutcome<T> FromResult(FactReadResult<T> result)
+    {
+        return new FactualReadOutcome<T>(result, null);
+    }
+
+    internal static FactualReadOutcome<T> Unavailable(string code, string message)
+    {
+        return new FactualReadOutcome<T>(
+            FactReadResult<T>.Unavailable(),
+            new FactualReadDiagnosticData(code, message));
+    }
+
+    IFactualReadResult IFactualReadOutcome.Result => Result;
+    FactualReadDiagnosticData IFactualReadOutcome.Diagnostic => Diagnostic;
+}
+
 /// <summary>A status-bearing result from one approved factual capability.</summary>
 public sealed class FactReadResult<T> : IFactualReadResult
 {
@@ -196,6 +268,7 @@ public sealed class FactualReadCapture
     private readonly Dictionary<string, FactualReadResultEntry> resultsByCapability;
     private readonly ReadOnlyCollection<string> requestedCapabilityIds;
     private readonly ReadOnlyCollection<FactualReadSourceVersion> sourceVersions;
+    private readonly ReadOnlyCollection<FactualReadDiagnostic> diagnostics;
 
     internal FactualReadCapture(
         bool isCoherent,
@@ -203,7 +276,8 @@ public sealed class FactualReadCapture
         long? factionStoreRevision,
         long? personStoreRevision,
         IEnumerable<FactualReadResultEntry> results,
-        IEnumerable<FactualReadSourceVersion> sourceVersions)
+        IEnumerable<FactualReadSourceVersion> sourceVersions,
+        IEnumerable<FactualReadDiagnostic> diagnostics = null)
     {
         IsCoherent = isCoherent;
         Mode = FactualReadCaptureMode.Coherent;
@@ -238,6 +312,26 @@ public sealed class FactualReadCapture
             left.CapabilityId,
             right.CapabilityId));
         this.sourceVersions = copiedVersions.AsReadOnly();
+
+        List<FactualReadDiagnostic> copiedDiagnostics = diagnostics == null
+            ? new List<FactualReadDiagnostic>()
+            : new List<FactualReadDiagnostic>(diagnostics);
+        if (isCoherent && copiedDiagnostics.Count != 0)
+            throw new ArgumentException("A coherent capture cannot contain failure diagnostics.", nameof(diagnostics));
+        copiedDiagnostics.Sort(CompareDiagnostics);
+        foreach (FactualReadDiagnostic diagnostic in copiedDiagnostics)
+        {
+            if (diagnostic == null)
+                throw new ArgumentException("Capture diagnostics must be complete.", nameof(diagnostics));
+            if (!resultsByCapability.TryGetValue(diagnostic.CapabilityId, out FactualReadResultEntry diagnosticResult)
+                || diagnosticResult.Result.Status != FactReadStatus.Unavailable)
+            {
+                throw new ArgumentException(
+                    "Capture diagnostics must refer to an unavailable requested capability.",
+                    nameof(diagnostics));
+            }
+        }
+        this.diagnostics = copiedDiagnostics.AsReadOnly();
     }
 
     public FactualReadCaptureMode Mode { get; }
@@ -247,6 +341,15 @@ public sealed class FactualReadCapture
     public long? PersonStoreRevision { get; }
     public IReadOnlyList<string> RequestedCapabilityIds => requestedCapabilityIds;
     public IReadOnlyList<FactualReadSourceVersion> SourceVersions => sourceVersions;
+    public IReadOnlyList<FactualReadDiagnostic> Diagnostics => diagnostics;
+
+    private static int CompareDiagnostics(FactualReadDiagnostic left, FactualReadDiagnostic right)
+    {
+        int capability = StringComparer.Ordinal.Compare(left?.CapabilityId, right?.CapabilityId);
+        if (capability != 0) return capability;
+        int code = StringComparer.Ordinal.Compare(left?.Code, right?.Code);
+        return code != 0 ? code : StringComparer.Ordinal.Compare(left?.Message, right?.Message);
+    }
 
     public bool TryGet<T>(string capabilityId, out FactReadResult<T> result)
     {
