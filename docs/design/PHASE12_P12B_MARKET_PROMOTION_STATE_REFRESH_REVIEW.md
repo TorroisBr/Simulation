@@ -1,6 +1,6 @@
 # P12-B Market promotion State/matrix exact-tip review
 
-**Result:** PASS
+**First review result:** NEEDS_CHANGES
 
 **Reviewed candidate:** `codex/phase12/P12BMarketPromotionStateRefresh` at
 `57259f66ace203a28b7cd2773881e849593a0c54`.
@@ -28,3 +28,12 @@ classifies the bounded follow-up design as `DESIGN_REQUIRED`.
 
 `git diff --check` passed. No code, ProjectSettings, or existing `.meta`
 files changed.
+
+
+The first exact-tip review found a cardinality wording discrepancy. The new
+current owner-census row said the selected profile seals 142 sections, but the
+promoted Market bundle adds two exact Market sections to the prior 142-section
+set. The current total must be stated as 144; the earlier 142 count must be
+clearly labeled as a historical snapshot. The candidate was corrected in
+follow-up commit `366a1db8421274bd0a3bfd7d2b1bb7ec4ddd97e4` and requires
+independent re-review before any promotion.
