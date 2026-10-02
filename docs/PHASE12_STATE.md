@@ -71,17 +71,27 @@ Phase 12 remains open. P13 remains dependency-gated. This State does not claim
 save/load support, P12-A readiness, P12-B readiness, Phase closure, or a P13
 historical fork guarantee.
 
-**Latest reviewed candidate (promotion pending at time of this record):** the
-bounded Market-operation invalidation candidate is exact-tip reviewed PASS at
+**Market-operation invalidation — promoted on current P12 canonical:** the
+bounded candidate is exact-tip reviewed PASS at
 `b577312c2edc6d3124c6d2b9dd3a1201dc9055ae` (tree
 `88ec452a979a7439b825858a6b1b271f8bc6c948`) against canonical base
-`b8a7da54864bee3fb9b8916793240e91fbce0955`. It extends only the Open-market
-purchase/sale owner commits, direct Market commits, and the selected daily
-production/Free-consumption/price-refresh paths. Its review, candidate
-validation, and refreshed owner/operation/epoch matrix are linked at the end
-of this State and in `docs/design/PHASE12_B_BLOCKER_RESOLUTION.md`.
+`b8a7da54864bee3fb9b8916793240e91fbce0955`. With approval, its reviewed
+bundle was fast-forwarded to `codex/phase12/canonical` at
+`b77e154e86b510c9f47ea9042fe5a1edb39749b0`. It extends only Open-market
+purchase/sale owner commits, direct Market commits, and selected daily
+production/Free-consumption/price-refresh paths. Review, validation, and the
+refreshed owner/operation/epoch matrix are linked in
+`docs/design/PHASE12_P12B_MARKET_OPERATION_INVALIDATION_REVIEW.md`,
+`docs/design/PHASE12_P12B_MARKET_OPERATION_INVALIDATION_CANDIDATE.md`, and
+`docs/design/PHASE12_B_BLOCKER_RESOLUTION.md`.
 
-## P12-B Market operation invalidation candidate — 2026-10-01
+## P12-B Market operation invalidation promotion — 2026-10-01
+
+With explicit approval, the reviewed candidate bundle was fast-forwarded
+from canonical `b8a7da54864bee3fb9b8916793240e91fbce0955` to
+`b77e154e86b510c9f47ea9042fe5a1edb39749b0` on
+`codex/phase12/canonical`. This records promotion only; P12-B remains
+incomplete and Phase 12 remains open.
 
 Independent exact-tip code review PASSed on candidate
 `b577312c2edc6d3124c6d2b9dd3a1201dc9055ae`, tree
@@ -103,7 +113,8 @@ public owner writers remain uncovered.
 This candidate does not complete P12-B or establish complete owner coverage,
 complete shared-epoch coverage, capture eligibility, export, or hydration.
 P12-A remains `WAIT_DEPENDENCY`, P13 remains blocked, and Phase 12 remains
-open. Canonical promotion remains a separate human gate.
+open. Canonical promotion is complete for this bounded slice; future candidate
+promotions remain separate human gates.
 
 ## P12-B SpatialNetwork census promotion — 2026-09-30
 
@@ -713,19 +724,33 @@ Validation on the code-bearing tree passed focused census 10/10, selected bootst
 
 This remains passive local-revision evidence. Direct account writes are not wired to the protocol mutation epoch; the promotion makes no shared-epoch completeness, capture-eligibility, export/hydration, or full-profile census claim. P12-B remains incomplete; P12-A remains `WAIT_DEPENDENCY`; P13 remains blocked; Phase 12 remains open.
 
-## P12-B post-MoneyAccount owner/operation refresh candidate — 2026-10-01
+## Historical P12-B post-MoneyAccount blocker snapshot — 2026-10-01
 
 A documentation-only refresh based on canonical f913dd088f71b74cfab7c1bd8a1a79b7ce9a29ea reconstructs the post-Market and post-MoneyAccount state. The current partial protocol seals 142 selected-profile sections at the authored ten-NPC day-zero roster: two PersonStore sections, two per-NPC SpatialKnowledge sections, one per-NPC Inventory section, one per-NPC MoneyAccount section, and ten per-NPC Knowledge sections. This is not the complete effective-profile owner inventory.
 
 Other promoted passive witnesses include RuntimeIdentityRegistry, RuntimeIdAllocator, SimulationRecordSequence, ActorChoice, City presence/Market/SettlementPopulation, Genealogy, P8-A–D, legacy SpatialNetwork, ExplorableSite, Estate/Property, Institution/Office, ArmedForce/manpower/position, Conflict/War/Battle, ScheduledDirective, TravelParty, Expedition, and conditional receipts. They are not all registered in the sealed P12 protocol. City/NPC composite revisions, remaining Justice/Crime/economy census facts, and other mutable direct owners remain incomplete.
 
-The refreshed operation matrix confirms that NPC membership reconciliation is the only production path currently notifying the partial shared mutation epoch. Bootstrap publication, daily advance, and membership have bounded active scopes; those counts are not locks and do not cover direct owner calls. No selected cross-owner operation is complete for shared-epoch coverage. No CaptureEligible/token API exists. P12-B remains INCOMPLETE; P12-A remains WAIT_DEPENDENCY; P13 remains BLOCKED.
+The preceding operation-matrix sentence was a historical snapshot before the
+NPC-trade and Market invalidation promotions. Current canonical also notifies
+the partial shared mutation epoch for the reviewed NPC-to-NPC trade and
+Open-market purchase/sale operations, direct Market stock/changed-price
+commits, and selected daily production, Free-consumption, and price-refresh
+commits. Bootstrap publication, daily advance, and membership retain their
+bounded scopes. Direct per-NPC MoneyAccount and Inventory writes and other
+operation families remain uncovered; no selected cross-owner operation set
+is complete for shared-epoch coverage. No CaptureEligible/token API exists.
+P12-B remains INCOMPLETE; P12-A remains WAIT_DEPENDENCY; P13 remains BLOCKED.
 
-The next blocker is DESIGN_REQUIRED for a current owner-commit/outer-operation contract. The first docs-only candidate proposed an account-only slice and was returned NEEDS_CHANGES by independent review. The revised design proposes a bounded NPC-to-NPC trade transaction over already-registered account and Inventory owners; it is not implementation-ready until fresh independent exact-tip design review passes. Audit and design candidate files:
-- docs/design/PHASE12_POST_MONEY_ACCOUNT_BLOCKER_REFRESH.md
-- docs/design/PHASE12_P12B_POST_MONEY_ACCOUNT_INVALIDATION_DESIGN.md
-
-Candidate branch: `codex/phase12/P12BPostMoneyAccountBlockerRefresh`, based on f913dd0. Independent exact-tip design review passed for candidate `e5c2d2a0fe6d07331570b635f72c8f3a95bdb47f`; durable evidence is `docs/design/PHASE12_P12B_POST_MONEY_ACCOUNT_INVALIDATION_REVIEW.md`. The prior accepted P12-B prerequisite scope authorizes the bounded NPC-to-NPC trade implementation after design review; this does not create new scope or checkpoint authority. Implementation is beginning on the reviewed contract. No code validation, canonical promotion, P12-A readiness, or Phase closure is claimed.
+The post-Market highest-value remaining P12-B operation/epoch gap is
+`DESIGN_REQUIRED`: successful direct writes to the already-censused per-NPC
+MoneyAccount and Inventory owners advance only their local revisions. The next
+bounded contract must connect those committed writes to the partial shared
+epoch, retain exact owner identity and baseline checks, and prevent duplicate
+notifications when the same writers execute inside the already-instrumented
+NPC-trade or Open-market purchase/sale operations. Other writer families,
+complete owner coverage, and capture eligibility remain outside that slice.
+This design work does not create a P12-B readiness claim. P12-A remains
+`WAIT_DEPENDENCY`; P13 remains blocked.
 
 ### Design review correction — 2026-10-01
 

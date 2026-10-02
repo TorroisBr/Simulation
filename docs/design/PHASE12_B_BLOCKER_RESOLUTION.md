@@ -1,15 +1,16 @@
 # P12-B blocker resolution and dependency plan
 
 **Status:** Static owner/write-map pass complete, with a partial live
-day-zero census through the selected-profile bootstrap test. P12 canonical
-`b8a7da5` includes the previously promoted passive owner witnesses and the
-bounded post-MoneyAccount NPC-trade invalidation slice. Exact-tip reviewed
-candidate `b577312` adds a bounded Open-market/Market-owner invalidation slice;
-it is presented for canonical promotion with the State/matrix refresh below.
-Complete owner coverage, complete shared-epoch invalidation, runtime capture
-fencing, and P12 readiness are not claimed. This record decomposes the already accepted
-P12-B–P12-G scopes. It adds no checkpoint ID, product behavior, or
-implementation authorization.
+day-zero census through the selected-profile bootstrap test. Current P12
+canonical is `b77e154e86b510c9f47ea9042fe5a1edb39749b0`; it includes the
+previously promoted passive owner witnesses, the reviewed NPC-trade
+invalidation slice, and the promoted Market-operation invalidation bundle.
+The latter's code candidate is `b577312c2edc6d3124c6d2b9dd3a1201dc9055ae`
+(tree `88ec452a979a7439b825858a6b1b271f8bc6c948`) and its exact-tip review
+passed. Complete owner coverage, complete shared-epoch invalidation, runtime
+capture fencing, and P12 readiness are not claimed. This record decomposes
+already accepted P12-B–P12-G scopes. It adds no checkpoint ID, product
+behavior, or implementation authorization.
 
 **Evidence baseline:** P12 canonical
 `04105d31e88fca97888dddb8e974236a7f4b6804`; the selected-profile source basis
@@ -708,17 +709,20 @@ the composed City set is complete, cover out-of-composition `StartingCity`
 references, or add owner-thread/quiescence, capture, export, or hydration.
 P12-B remains incomplete and P12-A remains `WAIT_DEPENDENCY`.
 
-## Reviewed P12-B Market operation invalidation candidate — 2026-10-01
+## Promoted P12-B Market operation invalidation — 2026-10-01
 
-This matrix addendum updates the Market-related D/E writer rows above against
-P12 canonical base `b8a7da54864bee3fb9b8916793240e91fbce0955`. Independent
+This matrix addendum updates the Market-related D/E writer rows above. The
+reviewed candidate was based on P12 canonical
+`b8a7da54864bee3fb9b8916793240e91fbce0955` and, with approval, its reviewed
+bundle was fast-forwarded to `codex/phase12/canonical` at
+`b77e154e86b510c9f47ea9042fe5a1edb39749b0`. Independent
 exact-tip code review PASSed for candidate `b577312c2edc6d3124c6d2b9dd3a1201dc9055ae`
 (tree `88ec452a979a7439b825858a6b1b271f8bc6c948`); durable review evidence is
 `docs/design/PHASE12_P12B_MARKET_OPERATION_INVALIDATION_REVIEW.md`. The State,
-candidate, and matrix refresh are included with this candidate-branch record
-for the separate canonical-promotion gate.
+candidate, and matrix refresh from the candidate branch are retained as
+durable promotion evidence.
 
-| Bounded writer family | Reviewed coverage in this candidate | Current limit after this candidate |
+| Bounded writer family | Reviewed coverage in the promoted code | Current limit after this promotion |
 |---|---|---|
 | `runtime.economy.market-purchase` / `runtime.economy.market-sale` | The composed exact City Market owners are registered before profile sealing. Bound Open-market purchase/sale preflight the exact rostered NPC account and Inventory plus Market identity/revision before owner writes; each committed account, Inventory, Market revision, and successful compensation is reported within the named operation scope. The exact Market wrapper service is shared with `MerchantSystem`. | This covers these two Market transaction families only. Other EconomyTransactionService families, Merchant plan/Knowledge effects, travel charges, and account-backed City/Counterparty paths remain outside this operation slice. It is not a complete E-owner map or capture boundary. |
 | Direct Market owner mutators | `AddStock`, `RemoveStockUpTo`, and changed `UpdatePrices` preflight the owner thread and exact Market baseline, then report the successful Market revision. Price refresh refuses a changed-price commit when the revision is exhausted. Tests verify changed-price revision/epoch advancement and no-op stability. | Direct Market calls do not require an active named operation scope. They notify only their Market section and do not prove a universal boundary around all public child-owner writes. |
@@ -726,11 +730,29 @@ for the separate canonical-promotion gate.
 
 This is a reviewed partial shared-epoch extension, not complete shared-epoch
 coverage. The exact validation counts and XML/log hashes are recorded in
-`docs/design/PHASE12_P12B_MARKET_OPERATION_INVALIDATION_CANDIDATE.md`. At the
-time this proposal was prepared, canonical promotion was still pending.
-P12-B remains incomplete; P12-A remains `WAIT_DEPENDENCY`; P13 remains blocked.
-No complete owner coverage, capture eligibility, export, or hydration is
+`docs/design/PHASE12_P12B_MARKET_OPERATION_INVALIDATION_CANDIDATE.md`. P12-B
+remains incomplete; P12-A remains `WAIT_DEPENDENCY`; P13 remains blocked. No
+complete owner coverage, capture eligibility, export, or hydration is
 claimed.
+
+## Current post-Market P12-B blocker classification — 2026-10-01
+
+| Classification | Current evidence and remaining blocker | Readiness |
+|---|---|---|
+| **OWNER_CENSUS_GAP** | The partial coordinator seals 142 selected-profile day-zero sections, but this is not the complete effective-profile owner set. Many promoted passive witnesses are not registered in the sealed protocol; City/NPC composite facts and remaining Justice, Crime, economy, and other mutable owners remain gaps. | **DESIGN_REQUIRED** to reconcile the complete live owner/cardinality set; do not repeat already promoted Market or per-NPC MoneyAccount census. |
+| **OPERATION_COVERAGE_GAP** | Promoted bounds cover NPC trade, Open-market purchase/sale, direct Market commits, selected daily Market commits, bootstrap publication, advance, and NPC membership. Direct per-NPC MoneyAccount/Inventory writes, other `EconomyTransactionService.Try*` families, Merchant commits, travel charges, and other D/E/F operation families remain uncovered. | **DESIGN_REQUIRED** for bounded uncovered writer and outer-operation mapping. |
+| **SHARED_EPOCH_GAP** | Existing notifications cover the exact reviewed NPC-trade and Open-market owner commits, selected direct/daily Market commits, and supported membership reconciliation. `MoneyAccountRuntime.TryCredit/TryDebit` and `InventoryRuntime.AddItem/RemoveItem` advance local revisions without shared-epoch notification. Nested execution must avoid double notifications when these writes occur inside instrumented trade/Open-market paths; prepared installs need explicit classification. | **DESIGN_REQUIRED** for the reviewed direct NPC-owner invalidation contract. |
+| **ADMISSION_QUIESCENCE_GAP** | The selected `UnityBootstrap-Daily-v1` adapter binds its Unity owner thread and scopes publication/advance. It is not exhaustive runtime-wide proof for every writer or cross-owner operation. | **WAIT_DEPENDENCY** on complete owner and operation inventory/coverage. |
+| **CAPTURE_ELIGIBILITY_GAP** | No `CaptureEligible` or token API exists. Complete owner/cardinality registration, supported-write coverage, healthy idle admission, and stable before/after witnesses are not established. | **WAIT_DEPENDENCY** on the preceding census, operation, and quiescence obligations. |
+| **OTHER_TRUE_BLOCKER** | P12-A still needs validated live-profile inventory, complete owner export/staged hydration, and its separate implementation authorization. P13 remains blocked on P12 continuation and recoverable causal history. | **WAIT_DEPENDENCY**. |
+
+The highest-value next bounded P12-B design is successful direct-write
+invalidation for the already-censused per-NPC MoneyAccount and Inventory
+owners. Its contract must preserve exact owner identity/local revision and
+owner-thread/baseline preflight, notify only after successful commits, and
+avoid duplicate epoch advancement inside the existing named trade and
+Open-market operation scopes. This does not imply P12-B readiness or add new
+owner families.
 
 ### Reviewed P12-B runtime-admission adapter — implementation boundary
 
