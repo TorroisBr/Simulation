@@ -1,30 +1,36 @@
 # FR-C Factual Reader — provisional candidate
 
-**Status:** `PROVISIONAL_IMPLEMENTATION_VALIDATED`; exact-tip independent code
-review is in progress. This candidate is stacked on the reviewed FR-B live
-integration candidate and is not Phase-integrated or canonical-ready.
+**Status:** `PROVISIONAL_IMPLEMENTATION_VALIDATED`; an exact-tip review found a
+timeline blocker, fixed additively, and exact-tip re-review is in progress.
+This candidate is stacked on the reviewed FR-B live integration candidate and
+is not Phase-integrated or canonical-ready.
 
 ## Identity and dependencies
 
 | Identity | Value |
 |---|---|
 | Capability branch | `codex/frc/frc-factual-reader` |
-| FR-C code candidate | `b1e9985d49bc9b6353e0b13e727bf9a3cd1a2a87` |
-| Tested code tree | `5dd1be8a771101803886139fbfbeb8c1eddf553f` |
+| FR-C code candidate | `22535a600e55a3b25aa76f7dddae1984b19c8a3f` |
+| Tested code tree | `75a6d25874faf04eac97e4bf7b46d35777c6fc05` |
 | Provisional FR-B base | `5c43733088bfbe860183f849d16295b542c1f465` (tree `d7d463960756e313bdc3800a20ecc976b659f2c5`) |
 | FR-B live exact-tip review | `f4e23a7c9a8777c36fb006626f24dbed1b6d6d46` |
 | FR-C architecture authority | `451340c56e9b676bf6ea43412bcb856b9ccde3de` |
 | Diagnostic revision proposal / review | `64f33fd2c935ff1ab78ccfa08fb3bbecdf4b4c17` / independent **PASS** |
 | FR-C diagnostic acceptance record | `775f3c9c7f11dc3312dd4dbf7ccac424d67f2029` |
-| Phase 12 canonical at last refresh | `1ac675cc558aa919a749167647c10506c11303fc` |
+| Phase 12 canonical at latest refresh | `e64caf08e7ada24a0f6b8c193207a6242018896d` |
 
 FR-B live remains `INTEGRATION_HANDOFF_READY` and its handoff is queued for the
-Phase Master. FR-C remains dependent on FR-B becoming canonical. `SimulationRuntime.cs`
-is a shared P12 hotspot with active worktrees, so this provisional commit
-delivers the immutable reader, contracts, diagnostics, and focused coverage
-without runtime registration. Recompose that narrow binding against the actual
-post-FR-B Phase canonical tree, then rerun integration validation and exact-tip
-review. No numbered Phase canonical ref was changed.
+Phase Master. The refreshed Phase 12 canonical ref `e64caf08` does not contain
+FR-B live candidate `5c437330` (`5c437330` is not an ancestor of `e64caf08`).
+Comparing those tips shows 227 changed lines in `SimulationRuntime.cs` plus
+changes in `SimulationBootstrapComposition.cs` and `FactualReadAdmission.cs`.
+FR-C remains dependent on FR-B becoming canonical. The FR-C delta leaves those
+runtime/bootstrap/admission files unchanged from its `5c437330` base. Because
+the Phase canonical has since changed those same shared files, this provisional
+commit delivers the immutable reader, contracts, diagnostics, and focused
+coverage without runtime registration. Recompose that narrow binding against
+the actual post-FR-B Phase canonical tree, then rerun integration validation
+and exact-tip review. No numbered Phase canonical ref was changed by this work.
 
 ## Delivered provisional scope
 
@@ -52,15 +58,19 @@ archive `Library/ValidationResults/FRC-Provisional/`.
 
 | Gate | Result | XML | XML SHA-256 | Log | Log SHA-256 |
 |---|---:|---|---|---|---|
-| `FactualReadFoundationTests` | 9/9 | `EditMode-20261002-221022-fe8a8e3e59bb49c0acd7796b9a00e496.xml` | `90F17B818C6EC7BCFFF3C73506CC7FB2B1D54EFD7BE5B355505F2DB2B31AA7A8` | matching `.log` | `BFEBFCC6B4851E97659F4C557EDA5025472622EFF46FA4D4EEE42CB0B95DAED5` |
-| `FactionFactualReaderTests` | 5/5 | `EditMode-20261002-221036-180e425ebc574f68af14f3e409c2dbdb.xml` | `7BF6B3D5C375475925EA1592184DF8C9A03B1CA616B324694BF76F75F1275BB6` | matching `.log` | `DB2E8215DD026CA53B1EE221E04EBE5CA6000990AF96F2E028D053F4A1666CC5` |
-| ALL EditMode | 2182/2182 | `EditMode-20261002-221050-c9c5d4de14e94fdeb63ffbeaf0a3e130.xml` | `4673D292E78A05D79B3FEDE4C722D7C488D613804BEC30F7FBDD9300A49FE5EA` | matching `.log` | `A5288CC3315CA7069033B08D44420E6D5A8C97880701676C42DF679A4EA64B5B` |
-| Official EditMode `Smoke` | 5/5 | `EditMode-20261002-221123-ab73469e0d504190b4b9da35a61699aa.xml` | `2D541FC513BFC73E72E6AEA28073EF9C40A1F491B98C77B07E07A4778B809C58` | matching `.log` | `A8250C45C78AF1F52360C59A0144C423026B06446E1A3FFB752E5CBC06FD48D0` |
+| `FactualReadFoundationTests` | 9/9 | `EditMode-20261002-222301-52fe0d003aad4328965ff83368ff8406.xml` | `3A0D98A18B1F448AFE102EC3C57AFD53B568C13CA74A73E79DC5280074943926` | matching `.log` | `BF0D6031A9DD9742C6C7B85B0888C857B0E1F27134F8312EF7ED655FBE8A5D21` |
+| `FactionFactualReaderTests` | 6/6 | `EditMode-20261002-222357-14fdd0105f1f4856864f290a697c8e72.xml` | `D12DBB9993E3B3D90618CFCFB868C5AC1776762D7E24A403B395841AD69214CE` | matching `.log` | `3BA47EE144A079B417B71017346315630F866D044E4C0A25BE1117377076E270` |
+| ALL EditMode | 2183/2183 | `EditMode-20261002-222427-5ac07272f51947ee8e8b01cd185f18d4.xml` | `E942BD79E8B55FDBA555A1E2FB02087A0F50902D5B28AE4C7929CECD89D9606A` | matching `.log` | `2EA8EA94CA59024E99685614084D12F125DDAF2731B51D8364A0497B5B222944` |
+| Official EditMode `Smoke` | 5/5 | `EditMode-20261002-222501-3be099869b79463b8fbc5a17f6708ddf.xml` | `A1714B20FB3E351C1F1511F017640AD163C5BAE583092DC199736A4F4FD7C0B2` | matching `.log` | `FB5DD32B4FFC201394D1A0C86C505909E5A8145B6119B89B81BCFC7F5608E454` |
 | `git diff --check` from FR-B candidate base | PASS | — | — | — | — |
 
 The final two full gates and focused runs were executed after the final
-code-bearing change. `FactionStore.cs`, `PersonStore.cs`,
-`SimulationBootstrapComposition.cs`, and `SimulationRuntime.cs` are unchanged.
+code-bearing change. The code review's P1 finding was that the reader did not
+bound creation, join, and end dates by the captured logical boundary. The
+internal reader seam now passes the coordinator's pre-capture boundary, and
+tests reject future creation, join, and end dates. `FactionStore.cs`, `PersonStore.cs`,
+`SimulationBootstrapComposition.cs`, and `SimulationRuntime.cs` are unchanged
+in the FR-C delta from its provisional FR-B base.
 
 ## Current orchestration status
 
@@ -68,5 +78,5 @@ code-bearing change. `FactionStore.cs`, `PersonStore.cs`,
 - FR-B core: promoted.
 - FR-B live integration: handoff-ready; waiting for Phase Master canonical integration.
 - FR-C design: implementation-ready after independent diagnostic-revision review.
-- FR-C implementation: provisional validated core; exact-tip independent code review in progress; runtime binding waits for canonical FR-B.
+- FR-C implementation: provisional validated core at `22535a6`; first review's timeline finding is fixed and exact-tip re-review is in progress; runtime binding waits for canonical FR-B.
 - WX-D: waits on FR-C and the approved Simulation-External collection-coverage contract.
