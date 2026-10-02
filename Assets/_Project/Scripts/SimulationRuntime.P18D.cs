@@ -7,6 +7,8 @@ using System.Linq;
 public sealed class P18DIntradayProfile
 {
     public string WorldId { get; }
+    /// <summary>The exact canonical identity instance supplied by a composed world, when available.</summary>
+    public WorldId WorldIdentity { get; }
     public string ProfileId { get; }
     public string ConfigurationIdentity { get; }
     public string ContentIdentity { get; }
@@ -22,6 +24,18 @@ public sealed class P18DIntradayProfile
         ProfileId = profileId;
         ConfigurationIdentity = configurationIdentity;
         ContentIdentity = contentIdentity;
+    }
+
+    public P18DIntradayProfile(WorldId worldId, string profileId,
+        string configurationIdentity, string contentIdentity)
+        : this(RequireWorldId(worldId).Value, profileId, configurationIdentity, contentIdentity)
+    {
+        WorldIdentity = worldId;
+    }
+
+    private static WorldId RequireWorldId(WorldId worldId)
+    {
+        return worldId ?? throw new ArgumentNullException(nameof(worldId));
     }
 }
 
@@ -54,6 +68,7 @@ public sealed partial class SimulationRuntime
     {
         if (profile == null) return;
 
+        ValidateWorldIdentityForP18DIntradayProfile(profile);
         p18dIntradayProfile = profile;
         ValidateP18DIntradayComposition();
 
@@ -84,6 +99,22 @@ public sealed partial class SimulationRuntime
         p18dActorChoiceDecisionBridge = new ActorChoiceTemporalDecisionBridge(
             actorChoiceStore, p18dActorDecisionRequestState, profile.ProfileId);
         p18dLastTimelineFailure = TimelineFailure.None;
+    }
+
+    private void ValidateWorldIdentityForP18DIntradayProfile(P18DIntradayProfile profile)
+    {
+        if (WorldId == null)
+        {
+            if (profile.WorldIdentity != null)
+                throw new ArgumentException(
+                    "A typed P18-D intraday profile requires the composed runtime to carry its WorldId.",
+                    nameof(profile));
+            return;
+        }
+        if (profile.WorldIdentity == null || !ReferenceEquals(WorldId, profile.WorldIdentity))
+            throw new ArgumentException(
+                "A composed runtime requires its exact WorldId instance in the P18-D intraday profile.",
+                nameof(profile));
     }
 
     private List<IP18DDailyBoundaryStepProvider> BuildP18DDailyBoundaryProviders()
