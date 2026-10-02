@@ -507,7 +507,8 @@ public sealed class ExpeditionSystem : IAuthoritativeMutationGuardBindable
         {
             if (placeContentStore.TryTakeStack(owner, item, amount, out int removedAmount) == false)
             { reason = "Target resource could not be removed atomically from the place."; return false; }
-            performer.Inventory.AddItem(item, removedAmount, averageUnitCost);
+            if (performer.Inventory.TryAddItem(item, removedAmount, averageUnitCost) == false)
+            { reason = "Target resource was removed, but the performer Inventory rejected the addition."; return false; }
             if (objectiveReservation != null
                 && !expeditionStore.CommitReserved(objectiveReservation, expedition.TryMarkObjectiveCompleteCore))
             { reason = "Expedition objective completion could not be committed."; return false; }

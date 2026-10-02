@@ -299,9 +299,9 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
         p12CensusRuntime = runtime;
     }
 
-    private void NotifyNpcTradeOwnerMutation(bool tracking, string sectionId)
+    private void NotifyNpcTradeOwnerMutation(bool tracking, string sectionId, bool ownerNotifiesCommit)
     {
-        if (tracking) p12CensusRuntime.NotifyNpcTradeOwnerMutation(sectionId);
+        if (tracking && !ownerNotifiesCommit) p12CensusRuntime.NotifyNpcTradeOwnerMutation(sectionId);
     }
 
     public KeyedSaleReceipt TryExecuteKeyedMarketSale(
@@ -699,7 +699,7 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
             long buyerAccountRevision = buyer.MoneyAccount.Revision;
             bool buyerDebitSucceeded = buyer.MoneyAccount.TryDebit(totalPrice);
             if (buyer.MoneyAccount.Revision != buyerAccountRevision)
-                NotifyNpcTradeOwnerMutation(censusTracking, buyerAccountSectionId);
+                NotifyNpcTradeOwnerMutation(censusTracking, buyerAccountSectionId, buyer.MoneyAccount.HasP12MutationBoundary);
             if (buyerDebitSucceeded == false)
             {
                 return EconomyTransactionResult.CreateFailure(
@@ -713,13 +713,13 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
             long sellerAccountRevision = seller.MoneyAccount.Revision;
             bool sellerCreditSucceeded = seller.MoneyAccount.TryCredit(totalPrice);
             if (seller.MoneyAccount.Revision != sellerAccountRevision)
-                NotifyNpcTradeOwnerMutation(censusTracking, sellerAccountSectionId);
+                NotifyNpcTradeOwnerMutation(censusTracking, sellerAccountSectionId, seller.MoneyAccount.HasP12MutationBoundary);
             if (sellerCreditSucceeded == false)
             {
                 long buyerCompensationRevision = buyer.MoneyAccount.Revision;
                 buyer.MoneyAccount.TryCredit(totalPrice);
                 if (buyer.MoneyAccount.Revision != buyerCompensationRevision)
-                    NotifyNpcTradeOwnerMutation(censusTracking, buyerAccountSectionId);
+                    NotifyNpcTradeOwnerMutation(censusTracking, buyerAccountSectionId, buyer.MoneyAccount.HasP12MutationBoundary);
                 return EconomyTransactionResult.CreateFailure(
                     transactionType,
                     moneyEffect,
@@ -731,18 +731,18 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
             long sellerInventoryRevision = seller.Inventory.Revision;
             bool sellerInventoryRemoved = seller.Inventory.RemoveItem(item, quantity);
             if (seller.Inventory.Revision != sellerInventoryRevision)
-                NotifyNpcTradeOwnerMutation(censusTracking, sellerInventorySectionId);
+                NotifyNpcTradeOwnerMutation(censusTracking, sellerInventorySectionId, seller.Inventory.HasP12MutationBoundary);
             if (sellerInventoryRemoved == false)
             {
                 long sellerCompensationRevision = seller.MoneyAccount.Revision;
                 seller.MoneyAccount.TryDebit(totalPrice);
                 if (seller.MoneyAccount.Revision != sellerCompensationRevision)
-                    NotifyNpcTradeOwnerMutation(censusTracking, sellerAccountSectionId);
+                    NotifyNpcTradeOwnerMutation(censusTracking, sellerAccountSectionId, seller.MoneyAccount.HasP12MutationBoundary);
 
                 long buyerCompensationRevision = buyer.MoneyAccount.Revision;
                 buyer.MoneyAccount.TryCredit(totalPrice);
                 if (buyer.MoneyAccount.Revision != buyerCompensationRevision)
-                    NotifyNpcTradeOwnerMutation(censusTracking, buyerAccountSectionId);
+                    NotifyNpcTradeOwnerMutation(censusTracking, buyerAccountSectionId, buyer.MoneyAccount.HasP12MutationBoundary);
                 return EconomyTransactionResult.CreateFailure(
                     transactionType,
                     moneyEffect,
@@ -752,9 +752,18 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
             }
 
             long buyerInventoryRevision = buyer.Inventory.Revision;
-            buyer.Inventory.AddItem(item, quantity, unitPrice);
+            bool buyerInventoryAdded = buyer.Inventory.TryAddItem(item, quantity, unitPrice);
             if (buyer.Inventory.Revision != buyerInventoryRevision)
-                NotifyNpcTradeOwnerMutation(censusTracking, buyerInventorySectionId);
+                NotifyNpcTradeOwnerMutation(censusTracking, buyerInventorySectionId, buyer.Inventory.HasP12MutationBoundary);
+            if (!buyerInventoryAdded)
+            {
+                return EconomyTransactionResult.CreateFailure(
+                    transactionType,
+                    moneyEffect,
+                    EconomyTransactionFailureReason.TransactionCommitFailed,
+                    buyerRuntimeId: buyer.RuntimeId,
+                    sellerRuntimeId: seller.RuntimeId);
+            }
 
             return EconomyTransactionResult.CreateSuccess(
                 transactionType,
@@ -992,14 +1001,14 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
                     EconomyTransactionFailureReason.TransactionCommitFailed,
                     actorRuntimeId: npc.RuntimeId);
             }
-            NotifyP12MarketOwnerMutation(p12Tracking, accountSectionId);
+            NotifyP12MarketOwnerMutation(p12Tracking, accountSectionId, npc.MoneyAccount.HasP12MutationBoundary);
 
             if (market.RemoveStockUpTo(item, quantity) != quantity)
             {
                 bool refunded = accountBacked == true
                     ? TryCommitMoneyTransfer(counterparty.MoneyAccount, npc.MoneyAccount, totalPrice)
                     : npc.MoneyAccount.TryCredit(totalPrice);
-                if (refunded) NotifyP12MarketOwnerMutation(p12Tracking, accountSectionId);
+                if (refunded) NotifyP12MarketOwnerMutation(p12Tracking, accountSectionId, npc.MoneyAccount.HasP12MutationBoundary);
 
                 return EconomyTransactionResult.CreateFailure(
                     transactionType,
@@ -1009,14 +1018,14 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
             }
 
             long inventoryRevisionBefore = npc.Inventory.Revision;
-            npc.Inventory.AddItem(item, quantity, unitPrice);
+            bool inventoryAdded = npc.Inventory.TryAddItem(item, quantity, unitPrice);
             if (npc.Inventory.Revision != inventoryRevisionBefore)
             {
-                NotifyP12MarketOwnerMutation(p12Tracking, inventorySectionId);
+                NotifyP12MarketOwnerMutation(p12Tracking, inventorySectionId, npc.Inventory.HasP12MutationBoundary);
             }
-            else if (p12Tracking)
+            if (!inventoryAdded)
             {
-                p12CensusRuntime.FaultRuntimeAdmission();
+                if (p12Tracking) p12CensusRuntime.FaultRuntimeAdmission();
                 return EconomyTransactionResult.CreateFailure(
                     transactionType,
                     moneyEffect,
@@ -1238,14 +1247,14 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
                     EconomyTransactionFailureReason.TransactionCommitFailed,
                     actorRuntimeId: npc.RuntimeId);
             }
-            NotifyP12MarketOwnerMutation(p12Tracking, accountSectionId);
+            NotifyP12MarketOwnerMutation(p12Tracking, accountSectionId, npc.MoneyAccount.HasP12MutationBoundary);
 
             if (npc.Inventory.RemoveItem(item, quantity) == false)
             {
                 bool refunded = accountBacked == true
                     ? TryCommitMoneyTransfer(npc.MoneyAccount, counterparty.MoneyAccount, totalPrice)
                     : npc.MoneyAccount.TryDebit(totalPrice);
-                if (refunded) NotifyP12MarketOwnerMutation(p12Tracking, accountSectionId);
+                if (refunded) NotifyP12MarketOwnerMutation(p12Tracking, accountSectionId, npc.MoneyAccount.HasP12MutationBoundary);
 
                 return EconomyTransactionResult.CreateFailure(
                     transactionType,
@@ -1253,7 +1262,7 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
                     EconomyTransactionFailureReason.TransactionCommitFailed,
                     actorRuntimeId: npc.RuntimeId);
             }
-            NotifyP12MarketOwnerMutation(p12Tracking, inventorySectionId);
+            NotifyP12MarketOwnerMutation(p12Tracking, inventorySectionId, npc.Inventory.HasP12MutationBoundary);
 
             int addedToMarket = market.AddStock(item, quantity);
             if (addedToMarket != quantity)
@@ -1287,9 +1296,9 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
         }
     }
 
-    private void NotifyP12MarketOwnerMutation(bool tracking, string sectionId)
+    private void NotifyP12MarketOwnerMutation(bool tracking, string sectionId, bool ownerNotifiesCommit)
     {
-        if (!tracking) return;
+        if (!tracking || ownerNotifiesCommit) return;
         p12CensusRuntime.NotifyP12MarketOperationOwnerMutation(sectionId);
     }
 
