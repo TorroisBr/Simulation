@@ -890,3 +890,50 @@ approved WorldId and factual-reader contracts; it does not reopen P9/P18 or
 claim P12 capability. The candidate still requires serial integration and
 revalidation at the shared SimulationRuntime window with WI-A and any later
 runtime owner.
+
+
+## Current canonical refresh — 2026-10-02
+
+P12 canonical now includes the approved direct NPC owner-write invalidation
+slice. The code candidate is `c49f957e45c3059231e9ec66e4010a7c3a389988`
+(tree `627af2fbd7f93e0025106ee5ba87e72bae6c4ed2`), based on
+`2f7c7422812de40aa1223e8310dcbd9f5d8ca474`. Its reviewed State/matrix
+integration bundle is canonical at `9d1474b4299d8e888dd387e02e9018d9e8627f84`.
+Exact-tip implementation review passed; the P12 candidate and review records
+retain the focused suite results (NPC owner invalidation 13/13, economy
+transaction 45/45, MoneyAccount census 27/27, NPC census 10/10, Inventory
+census 7/7, Expedition 32/32, Runtime Admission 25/25), ALL EditMode 2149/2149,
+official Smoke 5/5, and `git diff --check` PASS.
+
+This slice links direct committed writes to already-censused per-NPC
+MoneyAccount and Inventory owners with exact identity, owner-thread, local
+revision, and protocol-baseline checks. It reports a successful direct
+debit/credit or inventory add/remove once after commit, suppresses duplicate
+notifications inside already-scoped NPC trade and Open-market operations, and
+faults closed when supported roster replacement invalidates the owner binding.
+It does not add owners or operation families.
+
+The promotion supersedes the older candidate-status addenda below that say
+this capability is waiting for promotion. It remains a bounded partial epoch:
+P12-B is INCOMPLETE; P12-A is WAIT_DEPENDENCY; P13 is BLOCKED. It does not
+prove complete owner census, complete shared-epoch coverage, global runtime
+quiescence, capture eligibility, export, hydration, or phase closure.
+
+WI-A implementation `3b39e0d89858dce517ad72cbb76da621eb954bad` has now been
+reviewed against this P12 integration base and promoted with its exact-tip
+review record at `codex/wia/canonical` tip
+`93b6f0e8cedcb63437cbf5fa5de3461853c81462`. Its shared
+`SimulationRuntime`/bootstrap handoff still requires the targeted combined
+hotspot revalidation recorded in the WI-A handoff note before another runtime
+owner integrates.
+
+The next P12 operation gap is the reviewed NPC-to-NPC money-transfer boundary.
+The old contract review predates this promotion and is being refreshed before
+implementation. The preserved design edits correct the actual float API,
+require a P12-bound raw-account overload to reject before writes, and preserve
+the existing finite zero-value successful no-op without revision/epoch
+advancement. No transfer-operation coverage is claimed until the refreshed
+contract is independently reviewed and implemented.
+
+Current checkpoint status remains: P12-A WAIT_DEPENDENCY; P12-B INCOMPLETE;
+P12-C through P12-G blocked by their documented prerequisites; P13 blocked.
