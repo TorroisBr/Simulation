@@ -9,9 +9,9 @@
 - P12 direct-owner implementation: `c49f957e45c3059231e9ec66e4010a7c3a389988` (tree `627af2fbd7f93e0025106ee5ba87e72bae6c4ed2`).
 - WI-A implementation: `3b39e0d89858dce517ad72cbb76da621eb954bad`, directly based on `9d1474b4299d8e888dd387e02e9018d9e8627f84`; full tree `b9a1a6fa5f003a0149ae9e41c2af1bc99b6b2b9d`; Assets subtree `492d3a17747e9537b25c4f16c957abf2a80904be`.
 - Architecture baseline: `451340c56e9b676bf6ea43412bcb856b9ccde3de`, §§91A–91B.
-- The supplied WI-A implementation review reference is `93b6f0e`; this record documents the separate targeted P12 interaction revalidation.
+- The orchestrator cites a separate exact-tip WI-A code review record as `93b6f0e`. This note records the targeted P12 interaction revalidation and does not replace that review.
 
-P12 canonical `b4c100d` contains `9d1474b) in its ancestry and has no Assets changes since that promotion. The current State keeps P12-B incomplete, P12-A `WAIT_DEPENDENCY`, and P13 blocked.
+P12 canonical `b4c100d` contains `9d1474b` in its ancestry and has no Assets changes since that promotion. The current State keeps P12-B incomplete, P12-A `WAIT_DEPENDENCY`, and P13 blocked.
 
 ## Findings
 
@@ -49,4 +49,4 @@ The WI-A handoff note records Bootstrap focused 19/19, P18D consumer 10/10, Runt
 
 This revalidation does not close P12, make P12-A ready, unblock P13, complete a global P12 epoch, or implement FR-B. P12-B remains incomplete; P12-A remains `WAIT_DEPENDENCY`; P13 remains blocked.
 
-The WI-A handoff note records that P12 canonical was still `2f7c742` pending promotion. That statement reflects its pre-promotion snapshot and is superseded by current canonical `b4c100d); the handoff note itself was not changed here. Later FR-B integration must again serialize the shared `SimulationRuntime` hotspot and preserve both the WI-A publication gate and P12 notifications while retaining FR-B's exact Faction/Person admission as its coherence proof.
+The WI-A handoff note records that P12 canonical was still `2f7c742` pending promotion. That statement reflects its pre-promotion snapshot and is superseded by current canonical `b4c100d`; the handoff note itself was not changed here. Later FR-B integration must again serialize the shared `SimulationRuntime` hotspot and preserve both the WI-A publication gate and P12 notifications while retaining FR-B's exact Faction/Person admission as its coherence proof.
