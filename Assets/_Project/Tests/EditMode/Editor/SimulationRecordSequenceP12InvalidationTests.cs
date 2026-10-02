@@ -52,6 +52,41 @@ public sealed class SimulationRecordSequenceP12InvalidationTests
     }
 
     [Test]
+    public void AllocationInsideNestedRegisteredOperationsAdvancesRevisionAndEpochOnce()
+    {
+        RecordFixture records = SimulationTestFactory.CreateRecordFixture();
+        SimulationRuntime runtime = CreateRuntime(records, records.Sequence);
+        SimulationRecordSequenceCensusProvider provider = new SimulationRecordSequenceCensusProvider(records.Sequence);
+        ContinuationCensusProtocol protocol = (ContinuationCensusProtocol)typeof(SimulationRuntime)
+            .GetField("npcRosterCensusProtocol", BindingFlags.Instance | BindingFlags.NonPublic)
+            .GetValue(runtime);
+
+        Assert.That(protocol.TryEnterOperation(
+            "runtime.bootstrap-publication", out SimulationOperationScope outer, out ContinuationCensusFailure outerFailure),
+            Is.True, outerFailure.ToString());
+        using (outer)
+        {
+            Assert.That(protocol.TryEnterOperation(
+                "runtime.bootstrap-publication", out SimulationOperationScope inner, out ContinuationCensusFailure innerFailure),
+                Is.True, innerFailure.ToString());
+            using (inner)
+            {
+                Assert.That(protocol.TryReadActiveOperationCount(out int active, out ContinuationCensusFailure activeFailure),
+                    Is.True, activeFailure.ToString());
+                Assert.That(active, Is.EqualTo(2));
+
+                Assert.That(records.Sequence.Allocate(), Is.EqualTo(1L));
+                Assert.That(provider.GetCurrentCensus().Revision, Is.EqualTo(1L),
+                    "one committed allocation emits one owner-section revision even inside nested operations");
+            }
+        }
+
+        AssertEpoch(runtime, 1L);
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure finalAssessment), Is.True,
+            finalAssessment.ToString());
+    }
+
+    [Test]
     public void WrongThreadAndStaleBaselineRejectBeforeConsumingSequence()
     {
         RecordFixture records = SimulationTestFactory.CreateRecordFixture();
