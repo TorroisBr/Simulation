@@ -1046,7 +1046,10 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
 
         factualReadCoordinator = new FactualReadCoordinator(
             factualReadAdmission,
-            Array.Empty<IFactualReader>());
+            new IFactualReader[]
+            {
+                new FactionFactualReader(this.factionStore, this.personStore)
+            });
 
     }
 

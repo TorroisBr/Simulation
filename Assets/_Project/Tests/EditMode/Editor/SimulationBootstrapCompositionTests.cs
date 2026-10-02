@@ -258,6 +258,7 @@ public sealed class SimulationBootstrapCompositionTests
     [Test]
     public void UnsupportedRuntimeProfileExposesUnavailableFactualReadSurface()
     {
+        const string factionCapabilityId = "simulation.faction-truth/v1";
         SimulationConfigData config = SimulationTestFactory.CreateSimulationConfig();
         GameObject simulationObject = new GameObject("frb-unavailable-profile-test");
         simulationObjects.Add(simulationObject);
@@ -271,15 +272,18 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(simulation.Bootstrap.FactualReads, Is.Not.Null);
         Assert.That(simulation.Bootstrap.FactualReads.TryCaptureCoherent(
             out FactualReadCapture capture,
-            "faction/collection/v1"), Is.False);
+            factionCapabilityId), Is.False);
         Assert.That(capture.IsCoherent, Is.False);
-        Assert.That(capture.TryGet<string>("faction/collection/v1", out FactReadResult<string> result), Is.True);
+        Assert.That(capture.TryGet<FactionTruthFacts>(
+            factionCapabilityId,
+            out FactReadResult<FactionTruthFacts> result), Is.True);
         Assert.That(result.Status, Is.EqualTo(FactReadStatus.Unavailable));
     }
 
     [Test]
     public void SelectedDailyProfilePublishesCoherentFactualReadOnlyAfterBootstrapCloses()
     {
+        const string factionCapabilityId = "simulation.faction-truth/v1";
         SimulationConfigData config = SimulationTestFactory.CreateSimulationConfig();
         ConfigureGeography(config);
         GameObject simulationObject = new GameObject("frb-live-publication-test");
@@ -314,11 +318,11 @@ public sealed class SimulationBootstrapCompositionTests
             Assert.That(draftReads, Is.Not.Null);
             Assert.That(draftReads.TryCaptureCoherent(
                 out FactualReadCapture unpublishedCapture,
-                "faction/collection/v1"), Is.False);
+                factionCapabilityId), Is.False);
             Assert.That(unpublishedCapture.IsCoherent, Is.False);
-            Assert.That(unpublishedCapture.TryGet<string>(
-                "faction/collection/v1",
-                out FactReadResult<string> unpublishedResult), Is.True);
+            Assert.That(unpublishedCapture.TryGet<FactionTruthFacts>(
+                factionCapabilityId,
+                out FactReadResult<FactionTruthFacts> unpublishedResult), Is.True);
             Assert.That(unpublishedResult.Status, Is.EqualTo(FactReadStatus.Unavailable));
         });
 
@@ -327,23 +331,29 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(simulation.Bootstrap.WorldId, Is.SameAs(simulation.Runtime.WorldId));
         Assert.That(simulation.Bootstrap.FactualReads.TryCaptureCoherent(
             out FactualReadCapture initialCapture,
+            factionCapabilityId,
             "faction/collection/v1"), Is.True);
         Assert.That(initialCapture.IsCoherent, Is.True);
         Assert.That(initialCapture.LogicalBoundary, Is.EqualTo(simulation.CurrentDay));
         Assert.That(initialCapture.FactionStoreRevision,
             Is.EqualTo(((FactionStore)GetRuntimeOwner(simulation.Runtime, "factionStore")).Revision));
         Assert.That(initialCapture.PersonStoreRevision, Is.EqualTo(simulation.Runtime.PersonStore.Revision));
+        Assert.That(initialCapture.TryGet<FactionTruthFacts>(
+            factionCapabilityId,
+            out FactReadResult<FactionTruthFacts> factionFactsResult), Is.True);
+        Assert.That(factionFactsResult.Status, Is.EqualTo(FactReadStatus.Present));
+        Assert.That(factionFactsResult.Value, Is.Not.Null);
         Assert.That(initialCapture.TryGet<string>(
             "faction/collection/v1",
-            out FactReadResult<string> unsupportedFactionReader), Is.True);
-        Assert.That(unsupportedFactionReader.Status, Is.EqualTo(FactReadStatus.Unsupported));
+            out FactReadResult<string> unsupportedCapability), Is.True);
+        Assert.That(unsupportedCapability.Status, Is.EqualTo(FactReadStatus.Unsupported));
 
         Assert.That(simulation.Runtime.TryAcquireAdvanceLease(out SimulationRuntime.AdvanceLease lease), Is.True);
         using (lease)
         {
             Assert.That(simulation.Bootstrap.FactualReads.TryCaptureCoherent(
                 out FactualReadCapture busyCapture,
-                "faction/collection/v1"), Is.False);
+                factionCapabilityId), Is.False);
             Assert.That(busyCapture.IsCoherent, Is.False);
         }
 
@@ -353,7 +363,7 @@ public sealed class SimulationBootstrapCompositionTests
         {
             offThreadSucceeded = simulation.Bootstrap.FactualReads.TryCaptureCoherent(
                 out offThreadCapture,
-                "faction/collection/v1");
+                factionCapabilityId);
         });
         captureThread.Start();
         Assert.That(captureThread.Join(System.TimeSpan.FromSeconds(5)), Is.True);
@@ -361,19 +371,19 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(offThreadCapture.IsCoherent, Is.False);
         Assert.That(simulation.Bootstrap.FactualReads.TryCaptureCoherent(
             out FactualReadCapture ownerThreadCapture,
-            "faction/collection/v1"), Is.True);
+            factionCapabilityId), Is.True);
         Assert.That(ownerThreadCapture.IsCoherent, Is.True);
 
         simulation.Runtime.AdvanceDay();
         Assert.That(simulation.Bootstrap.FactualReads.TryCaptureCoherent(
             out FactualReadCapture advancedCapture,
-            "faction/collection/v1"), Is.True);
+            factionCapabilityId), Is.True);
         Assert.That(advancedCapture.LogicalBoundary, Is.EqualTo(1L));
 
         simulation.Runtime.FaultRuntimeAdmission();
         Assert.That(simulation.Bootstrap.FactualReads.TryCaptureCoherent(
             out FactualReadCapture faultedCapture,
-            "faction/collection/v1"), Is.False);
+            factionCapabilityId), Is.False);
         Assert.That(faultedCapture.IsCoherent, Is.False);
     }
 
