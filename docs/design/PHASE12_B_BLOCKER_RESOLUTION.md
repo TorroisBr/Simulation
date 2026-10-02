@@ -856,13 +856,12 @@ slices remained bounded. The following post-Merchant refresh supersedes its
 then-next-operation note; other uncovered supported writers remain to be
 enumerated without broadening any promoted operation.
 
-## Current P12-B owner/operation matrix — 2026-10-02 post daily Merchant promotion
+## Current P12-B owner/operation matrix — 2026-10-02 post FR-B core promotion
 
-This refresh uses executable P12 canonical tip
-`5e643b7e4535b5bb699eb021d3b313243bf45658` and the promoted-scope State record
-`3662fa7f942a1020f5f90c31af92c9fbefe15334`. It supersedes the prior statement
-that the selected daily Merchant plan and Knowledge writes were still
-uncovered.
+This refresh uses P12 canonical code tip
+`451d06e62b7c95d7b600b77f10b0510049d62961`, after the approved bounded FR-B
+core promotion. It retains the post-Merchant operation map and adds the exact
+FR-B core result and current WI-A revalidation status.
 
 | Area | Current canonical evidence | Remaining blocker |
 |---|---|---|
@@ -870,12 +869,12 @@ uncovered.
 | NPC-to-NPC money transfer | Promoted at `2f2b731866aea86eb52ef2b51eb687c88bf91bc4`, code `66415aefe6834fc73e9e6c3b22fe0ee3058cfa11`, review `09f9f49ef85faf5c24eae57acba4426ca0bc39f8`. | Only the exact source/destination MoneyAccount transfer, compensation and result boundary is covered. Other economy methods, Crime/reverse transfer, travel charges and other account owners remain open. |
 | Selected daily Merchant operation | Promoted at `5e643b7e4535b5bb699eb021d3b313243bf45658`; code/test tip `3ed113bf35546964cd4a56f424578dc1213f41fa`, tested tree `876e810757c55b098d805e6e9ac012da7e6cab4d`, exact-tip review `5f4fd440720ff0d9e5461edab06a299a9a1a6830`. It scopes only the existing normal `MerchantSystem.AdvanceNpcTradeState` call and admitted/batched mutations for its reviewed Merchant-owned Knowledge and plan owners. Direct supported owner-thread plan writes outside the nested operation refresh the corresponding baseline and invalidate the changed plan owner. | The global decision allocator, record sequence and decision read model are outside this slice. This does not cover every Merchant entrypoint, unrelated Knowledge owner, travel charge or other public writer. See the candidate evidence for the exact owner identities/cardinalities and tests. |
 | Remaining selected-profile owner inventory | Promoted passive witnesses and writer evidence remain partial; several providers are outside the sealed protocol, and City/NPC composites plus Justice, Crime, remaining economy and other mutable owners are not shown complete. | Reconcile the full live owner/cardinality set with the accepted profile and exact supported writers before any capture-readiness claim. |
-| Runtime admission/quiescence and capture | WI-A canonical remains `534d2dd1b6ed8cdc168c0c90328adc6b6c1eedf5`; prior combined revalidation record `faa06800d93db2f17f9ae0a39f6f27185e36b104` reviewed candidate `34ada9279ac332e7f7b1aeb64fb851afdba91fdb` against the previous P12 base `a66c215`. | P12 has since advanced through the Merchant `SimulationRuntime` change. Revalidate/reintegrate the WI-A composition on the new base before relying on that older combined result. FR-B still needs a real composed-runtime Faction/Person read cut and serialized integration. No global quiescence proof or capture token exists. |
-| FR-B factual read foundation | Architecture baseline `451340c56e9b676bf6ea43412bcb856b9ccde3de` marks the bounded design READY_FOR_IMPLEMENTATION without a hard P12-B or WI-A dependency. Local core candidate `1797ce0fffcfec7dc4debf5c6196ce62343457c6` is based on `2f7c742`; its paths are disjoint from P12 through `5e643b7` and WI-A canonical `534d2dd`. | It is not yet refreshed/reviewed on the current tip and has no production `SimulationRuntime`/bootstrap callsite; tests use a fake runtime-state provider. Rebase, focused/full validate and independently review the core without runtime edits. Integrate the real selected-profile read cut in a later serialized runtime/bootstrap/admission window. |
-| Downstream continuation | P12-A remains `WAIT_DEPENDENCY`; P12-C remains blocked on P12-B; P12-D/E/F/G remain blocked on their documented predecessor capabilities; P13 remains blocked on promoted continuation plus recoverable causal inputs and initial-world/mutation semantics. | Do not infer readiness from the Merchant operation, FR-B core, prior WI-A review, or passive census evidence. |
+| Runtime admission/quiescence and capture | WI-A canonical remains `534d2dd1b6ed8cdc168c0c90328adc6b6c1eedf5`. Current-base revalidation candidate `codex/wia/P12CurrentRevalidation` is code `19bcf3415555b5ed336664e9dee925d4497b219c` (tree `5b82e0e67a2f454850c4a8da70729443016c61c4`), evidence/review tip `5858029d811e733dc9e2252eb800cf69fb101ddf`; six focused/full gates and exact-tip review passed against prior P12 canonical `d6e52dc`. | P12 canonical has since advanced to `451d06e` with FR-B core. Preserve the candidate and rebase/revalidate it against the current tip before relying on or promoting the combined integration. It does not prove FR-B's exact read cut, global quiescence, or capture eligibility. |
+| FR-B factual-read core | Promoted at P12 code tip `0ad19ecd9633e01d358a9ff826ca3ca5f8e3627c` (tree `09c3243ccb5f21a559dbcba3fa1dc6c4050ff516`), canonical promotion/evidence tip `451d06e62b7c95d7b600b77f10b0510049d62961`; exact review, focused 8/8, ALL EditMode 2168/2168, and Smoke 5/5 are recorded in `docs/design/FRB_FACTUAL_READ_FOUNDATION_CANDIDATE.md`. It adds contracts, admission, coordinator, and FactionStore/PersonStore read-time guards. | No production `SimulationRuntime`/bootstrap reader composition or exact selected-profile Faction/Person read cut exists. Readers must supply immutable copied facts. This is not complete profile coverage, shared-epoch coverage, capture eligibility, export/hydration, or P12-B readiness. |
+| Downstream continuation | P12-A remains `WAIT_DEPENDENCY`; P12-C remains blocked on P12-B; P12-D/E/F/G retain their documented prerequisite edges; P13 remains blocked on promoted continuation plus recoverable causal inputs and initial-world/mutation semantics. | Do not infer readiness from the Merchant operation, FR-B core, WI-A identity publication, or passive census evidence. |
 
-The Merchant promotion covers only its named daily call and owner set. It does
-not establish complete owner or operation coverage, complete shared-epoch
-coverage, capture eligibility, export, hydration, P12-B completion or P13
-readiness. P12-B remains incomplete, P12-A remains `WAIT_DEPENDENCY`, and
-P13 remains blocked.
+The Merchant and FR-B promotions cover only their bounded operations/core.
+They do not establish complete owner or operation coverage, complete
+shared-epoch coverage, capture eligibility, export, hydration, P12-B
+completion or P13 readiness. P12-B remains incomplete, P12-A remains
+`WAIT_DEPENDENCY`, and P13 remains blocked.

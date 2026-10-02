@@ -930,8 +930,16 @@ review record at `codex/wia/canonical` tip
 `docs/design/PHASE12_P12B_WIA_RUNTIME_HOTSPOT_REVALIDATION.md`. It confirms
 the P12 owner hooks and operation scopes remain intact and WI-A closes the
 existing bootstrap publication scope before exposing the world. The review
-examined retained tests; it did not rerun them. FR-B still needs its own exact
-Faction/Person read-cut proof and serialized integration review.
+examined retained tests; it did not rerun them. The bounded FR-B factual-read
+core was later promoted at P12 code tip
+`0ad19ecd9633e01d358a9ff826ca3ca5f8e3627c` (tree
+`09c3243ccb5f21a559dbcba3fa1dc6c4050ff516`), with exact-tip review and
+validation recorded in
+`docs/design/FRB_FACTUAL_READ_FOUNDATION_CANDIDATE.md`. It adds the core
+contracts, admission, coordinator, and Faction/Person store guards only. FR-B
+still needs production runtime composition and an exact selected-profile
+Faction/Person read-cut proof. The partial P12 epoch is not a global coherence
+boundary; no capture token or P12-B completion is implied.
 
 The P12 operation gap identified at this refresh was the bounded NPC-to-NPC
 money-transfer boundary. Its refreshed design was based on P12 canonical
@@ -1015,3 +1023,28 @@ export, hydration, or P12-A readiness. P12-B remains INCOMPLETE; P12-A remains
 owner and operation gaps are classified in the latest post-promotion matrix at
 `docs/design/PHASE12_B_BLOCKER_RESOLUTION.md`; the matrix remains partial and
 does not make P12-B ready.
+
+## P12-B bounded FR-B factual-read core promotion — 2026-10-02
+
+With explicit approval, P12 canonical was fast-forwarded from
+`d6e52dcdbf5fe2a36de92c6516485040d54e4279` to reviewed branch tip
+`451d06e62b7c95d7b600b77f10b0510049d62961`. The code-bearing commit is
+`0ad19ecd9633e01d358a9ff826ca3ca5f8e3627c` (tree
+`09c3243ccb5f21a559dbcba3fa1dc6c4050ff516`); the durable candidate and
+exact-tip review evidence is
+`docs/design/FRB_FACTUAL_READ_FOUNDATION_CANDIDATE.md`.
+
+Focused `FactualReadFoundationTests` passed 8/8, ALL EditMode passed
+2168/2168, the official Smoke filter passed 5/5, and `git diff --check`
+passed. Independent exact-tip code review passed against P12 base `d6e52dc`
+and architecture authority `c285466c355103d3637ac165246591b72eb7bda0`.
+
+This promotes only the bounded core contracts, admission, coordinator, and
+FactionStore/PersonStore read-time mutation guards. It does not compose live
+readers into `SimulationRuntime`/bootstrap or prove the selected-profile
+Faction/Person read cut. Readers must provide immutable copied fact values;
+the generic result wrapper does not deep-copy references. This does not
+establish complete owner/epoch coverage, capture eligibility, export,
+hydration, P12-A readiness, P12-B completion, or P13 readiness. P12-B remains
+INCOMPLETE; P12-A remains `WAIT_DEPENDENCY`; P13 remains BLOCKED; Phase 12
+remains open.
