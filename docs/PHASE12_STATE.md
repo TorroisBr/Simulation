@@ -933,13 +933,19 @@ existing bootstrap publication scope before exposing the world. The review
 examined retained tests; it did not rerun them. FR-B still needs its own exact
 Faction/Person read-cut proof and serialized integration review.
 
-The next P12 operation gap is the reviewed NPC-to-NPC money-transfer boundary.
-The old contract review predates this promotion and is being refreshed before
-implementation. The preserved design edits correct the actual float API,
-require a P12-bound raw-account overload to reject before writes, and preserve
-the existing finite zero-value successful no-op without revision/epoch
-advancement. No transfer-operation coverage is claimed until the refreshed
-contract is independently reviewed and implemented.
+The next P12 operation gap is the bounded NPC-to-NPC money-transfer
+boundary. Its refreshed design is based on current P12 canonical
+`ed14e8dd9575a56461f7648d7ff786e114224785`, with exact design tip
+`ea1d5b58ab8c5204c7559d13be10034e3a8732eb` and independent PASS review
+record `74dc9b5360fb356eca58874878942ee90b786fd8` on
+`codex/phase12/P12BMoneyTransferOperationDesignRefresh`. The contract covers
+only the two exact rostered NPC MoneyAccount sections, uses promoted owner
+hooks for each commit, and keeps one named scope across transfer and any
+successful source compensation. The P12-bound raw-account overload rejects
+before writes; finite zero transfer between distinct valid accounts retains
+success without revisions or epoch advancement. The accepted P12-B
+prerequisite authorization and exact design review make this slice
+READY_FOR_IMPLEMENTATION. Implementation is not yet delivered.
 
 Current checkpoint status remains: P12-A WAIT_DEPENDENCY; P12-B INCOMPLETE;
 P12-C through P12-G blocked by their documented prerequisites; P13 blocked.
