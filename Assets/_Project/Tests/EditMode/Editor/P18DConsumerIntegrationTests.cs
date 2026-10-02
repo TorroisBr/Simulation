@@ -13,6 +13,43 @@ public sealed class P18DConsumerIntegrationTests
     public void TearDown() => SimulationTestFactory.CleanupDefinitions();
 
     [Test]
+    public void TypedWorldIdentityUsesLegacyCanonicalEncodingAndRequiresExactRuntimeHandoff()
+    {
+        WorldId identity = new WorldId(new System.Guid("12345678-1234-5678-9abc-def012345678"));
+        P18DIntradayProfile typedProfile = new P18DIntradayProfile(
+            identity, "UnityBootstrap-Daily-v1", "config-v1", "content-v1");
+        P18DIntradayProfile legacyProfile = new P18DIntradayProfile(
+            identity.Value, "UnityBootstrap-Daily-v1", "config-v1", "content-v1");
+
+        Assert.That(typedProfile.WorldId, Is.EqualTo(legacyProfile.WorldId));
+        Assert.That(typedProfile.WorldIdentity, Is.SameAs(identity));
+        Assert.That(legacyProfile.WorldIdentity, Is.Null);
+        ActivityLifecycleStore typedActivities = new ActivityLifecycleStore(typedProfile.WorldId);
+        ActivityLifecycleStore legacyActivities = new ActivityLifecycleStore(legacyProfile.WorldId);
+        Assert.That(typedActivities.TryPropose(new ActivityDefinition("identity-check", "v1"),
+            "same-creation", out ActivityInstanceSnapshot typedActivity, out ActivityFailure typedFailure),
+            Is.True, typedFailure.ToString());
+        Assert.That(legacyActivities.TryPropose(new ActivityDefinition("identity-check", "v1"),
+            "same-creation", out ActivityInstanceSnapshot legacyActivity, out ActivityFailure legacyFailure),
+            Is.True, legacyFailure.ToString());
+        Assert.That(typedActivity.Id, Is.EqualTo(legacyActivity.Id));
+
+        Fixture fixture = CreateFixture(runtimeWorldId: identity, profileWorldId: identity);
+        Assert.That(fixture.Runtime.WorldId, Is.SameAs(identity));
+        Assert.Throws<System.ArgumentException>(() => CreateFixture(profileWorldId: identity));
+
+        WorldId conflictingIdentity = new WorldId(new System.Guid("87654321-4321-8765-cba9-876543210fed"));
+        Assert.Throws<System.ArgumentException>(() => CreateFixture(
+            runtimeWorldId: identity, profileWorldId: conflictingIdentity));
+        WorldId sameValueDistinctInstance = new WorldId(
+            new System.Guid("12345678-1234-5678-9abc-def012345678"));
+        Assert.That(sameValueDistinctInstance, Is.EqualTo(identity));
+        Assert.That(sameValueDistinctInstance, Is.Not.SameAs(identity));
+        Assert.Throws<System.ArgumentException>(() => CreateFixture(
+            runtimeWorldId: identity, profileWorldId: sameValueDistinctInstance));
+    }
+
+    [Test]
     public void IntradaySellChoiceExecutesAtCapturedTickAndTimelineOwnsClock()
     {
         Fixture fixture = CreateFixture();
@@ -367,7 +404,8 @@ public sealed class P18DConsumerIntegrationTests
             Is.EquivalentTo(new[] { fixture.Actor.PersonId.Value, fixture.SecondActor.PersonId.Value }));
     }
 
-    private static Fixture CreateFixture(bool throwOnActionSuccess = false, bool includeSecondActor = false)
+    private static Fixture CreateFixture(bool throwOnActionSuccess = false, bool includeSecondActor = false,
+        WorldId runtimeWorldId = null, WorldId profileWorldId = null)
     {
         RecordFixture records = SimulationTestFactory.CreateRecordFixture();
         ItemData item = SimulationTestFactory.CreateItem("p18d-intraday-item", 10f);
@@ -397,8 +435,12 @@ public sealed class P18DConsumerIntegrationTests
             merchantSystem: merchantSystem,
             configuration: configuration,
             randomSource: throwOnActionSuccess ? new ThrowingActionSuccessRandomSource() : null,
-            p18dIntradayProfile: new P18DIntradayProfile(
-                "p18d-test-world", "UnityBootstrap-Daily-v1", "test-config-v1", "test-content-v1"));
+            p18dIntradayProfile: profileWorldId != null
+                ? new P18DIntradayProfile(profileWorldId,
+                    "UnityBootstrap-Daily-v1", "test-config-v1", "test-content-v1")
+                : new P18DIntradayProfile(
+                    "p18d-test-world", "UnityBootstrap-Daily-v1", "test-config-v1", "test-content-v1"),
+            worldId: runtimeWorldId);
 
         PersonId personId = new PersonId("p18d-intraday-person");
         Assert.That(runtime.TryRegisterPerson(new PersonRuntime(personId), out PersonStoreFailure registrationFailure),
