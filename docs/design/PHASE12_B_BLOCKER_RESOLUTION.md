@@ -851,8 +851,31 @@ money-transfer boundary as unpromoted or uncovered.
 | Runtime admission, quiescence, capture | WI-A is canonical at `93b6f0e8cedcb63437cbf5fa5de3461853c81462`, based on promoted P12 tip `9d1474b4299d8e888dd387e02e9018d9e8627f84`; its implementation/review is retained. Combined P12/WI-A hotspot revalidation passed at exact WI-A code `3b39e0d89858dce517ad72cbb76da621eb954bad`; durable record is `codex/phase12/P12BWIARuntimeHotspotRevalidation` tip `313095ecec87b11928708607821c6b9ad9b5e275`. | This validates only the WI-A/P12 composition. FR-B needs its own serialized runtime integration and exact Faction/Person read-cut proof. No global quiescence proof or capture token exists. |
 | Downstream continuation | P12-A remains WAIT_DEPENDENCY; P12-C through P12-G retain their documented prerequisite edges; P13 remains blocked. | Do not infer readiness from either promotion. |
 
-The promoted direct-owner and NPC-to-NPC transfer slices remain bounded. The
-next operation analysis must separately enumerate merchant daily plan and
-knowledge writes and other uncovered supported writers; it must not broaden
-the promoted transfer operation. Any subsequent implementation still needs
-its own reviewed owner map and serialized SimulationRuntime integration.
+At that matrix baseline, the promoted direct-owner and NPC-to-NPC transfer
+slices remained bounded. The following post-Merchant refresh supersedes its
+then-next-operation note; other uncovered supported writers remain to be
+enumerated without broadening any promoted operation.
+
+## Current P12-B owner/operation matrix — 2026-10-02 post daily Merchant promotion
+
+This refresh uses executable P12 canonical tip
+`5e643b7e4535b5bb699eb021d3b313243bf45658` and the promoted-scope State record
+`3662fa7f942a1020f5f90c31af92c9fbefe15334`. It supersedes the prior statement
+that the selected daily Merchant plan and Knowledge writes were still
+uncovered.
+
+| Area | Current canonical evidence | Remaining blocker |
+|---|---|---|
+| Per-NPC MoneyAccount/Inventory direct writes | Promoted at integration tip `9d1474b4299d8e888dd387e02e9018d9e8627f84`; exact identity, local revision, owner-thread, protocol baseline, post-commit invalidation, and duplicate suppression within the separately scoped NPC-trade/Open-market operations are bounded there. | No other owner families or unscoped cross-owner transactions are covered. |
+| NPC-to-NPC money transfer | Promoted at `2f2b731866aea86eb52ef2b51eb687c88bf91bc4`, code `66415aefe6834fc73e9e6c3b22fe0ee3058cfa11`, review `09f9f49ef85faf5c24eae57acba4426ca0bc39f8`. | Only the exact source/destination MoneyAccount transfer, compensation and result boundary is covered. Other economy methods, Crime/reverse transfer, travel charges and other account owners remain open. |
+| Selected daily Merchant operation | Promoted at `5e643b7e4535b5bb699eb021d3b313243bf45658`; code/test tip `3ed113bf35546964cd4a56f424578dc1213f41fa`, tested tree `876e810757c55b098d805e6e9ac012da7e6cab4d`, exact-tip review `5f4fd440720ff0d9e5461edab06a299a9a1a6830`. It scopes only the existing normal `MerchantSystem.AdvanceNpcTradeState` call and admitted/batched mutations for its reviewed Merchant-owned Knowledge and plan owners. Direct supported owner-thread plan writes outside the nested operation refresh the corresponding baseline and invalidate the changed plan owner. | The global decision allocator, record sequence and decision read model are outside this slice. This does not cover every Merchant entrypoint, unrelated Knowledge owner, travel charge or other public writer. See the candidate evidence for the exact owner identities/cardinalities and tests. |
+| Remaining selected-profile owner inventory | Promoted passive witnesses and writer evidence remain partial; several providers are outside the sealed protocol, and City/NPC composites plus Justice, Crime, remaining economy and other mutable owners are not shown complete. | Reconcile the full live owner/cardinality set with the accepted profile and exact supported writers before any capture-readiness claim. |
+| Runtime admission/quiescence and capture | WI-A canonical remains `534d2dd1b6ed8cdc168c0c90328adc6b6c1eedf5`; prior combined revalidation record `faa06800d93db2f17f9ae0a39f6f27185e36b104` reviewed candidate `34ada9279ac332e7f7b1aeb64fb851afdba91fdb` against the previous P12 base `a66c215`. | P12 has since advanced through the Merchant `SimulationRuntime` change. Revalidate/reintegrate the WI-A composition on the new base before relying on that older combined result. FR-B still needs a real composed-runtime Faction/Person read cut and serialized integration. No global quiescence proof or capture token exists. |
+| FR-B factual read foundation | Architecture baseline `451340c56e9b676bf6ea43412bcb856b9ccde3de` marks the bounded design READY_FOR_IMPLEMENTATION without a hard P12-B or WI-A dependency. Local core candidate `1797ce0fffcfec7dc4debf5c6196ce62343457c6` is based on `2f7c742`; its paths are disjoint from P12 through `5e643b7` and WI-A canonical `534d2dd`. | It is not yet refreshed/reviewed on the current tip and has no production `SimulationRuntime`/bootstrap callsite; tests use a fake runtime-state provider. Rebase, focused/full validate and independently review the core without runtime edits. Integrate the real selected-profile read cut in a later serialized runtime/bootstrap/admission window. |
+| Downstream continuation | P12-A remains `WAIT_DEPENDENCY`; P12-C remains blocked on P12-B; P12-D/E/F/G remain blocked on their documented predecessor capabilities; P13 remains blocked on promoted continuation plus recoverable causal inputs and initial-world/mutation semantics. | Do not infer readiness from the Merchant operation, FR-B core, prior WI-A review, or passive census evidence. |
+
+The Merchant promotion covers only its named daily call and owner set. It does
+not establish complete owner or operation coverage, complete shared-epoch
+coverage, capture eligibility, export, hydration, P12-B completion or P13
+readiness. P12-B remains incomplete, P12-A remains `WAIT_DEPENDENCY`, and
+P13 remains blocked.

@@ -1011,5 +1011,7 @@ the candidate evidence file.
 This promotion does not establish P12-B completion, complete owner or
 operation coverage, complete shared-epoch coverage, capture eligibility,
 export, hydration, or P12-A readiness. P12-B remains INCOMPLETE; P12-A remains
-`WAIT_DEPENDENCY`; P13 remains BLOCKED; Phase 12 remains open. The owner and
-operation matrix still requires a refreshed residual-gap classification.
+`WAIT_DEPENDENCY`; P13 remains BLOCKED; Phase 12 remains open. The residual
+owner and operation gaps are classified in the latest post-promotion matrix at
+`docs/design/PHASE12_B_BLOCKER_RESOLUTION.md`; the matrix remains partial and
+does not make P12-B ready.
