@@ -306,6 +306,10 @@ public class TesteSimulacao : MonoBehaviour
                         "The P12 bootstrap publication scope did not close with healthy registered-owner quiescence: " + closeFailure);
             }
 
+            if (simulationRuntime == null || !simulationRuntime.TryMarkWorldPublishedForFactualRead())
+                throw new System.InvalidOperationException(
+                    "The FR-B factual-read surface could not bind to a healthy completed world publication.");
+
             unpublishedWorldId = null;
             worldPublished = true;
         }
