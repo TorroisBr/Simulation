@@ -1,17 +1,17 @@
 # FR-C Factual Reader — provisional candidate
 
-**Status:** `PROVISIONAL_IMPLEMENTATION_VALIDATED`; an exact-tip review found a
-timeline blocker, fixed additively, and exact-tip re-review is in progress.
-This candidate is stacked on the reviewed FR-B live integration candidate and
-is not Phase-integrated or canonical-ready.
+**Status:** `PROVISIONAL_IMPLEMENTATION_VALIDATED`; independent exact-tip
+implementation review passed. This candidate is stacked on the reviewed FR-B
+live integration candidate and is not Phase-integrated or canonical-ready.
 
 ## Identity and dependencies
 
 | Identity | Value |
 |---|---|
 | Capability branch | `codex/frc/frc-factual-reader` |
-| FR-C code candidate | `22535a600e55a3b25aa76f7dddae1984b19c8a3f` |
-| Tested code tree | `75a6d25874faf04eac97e4bf7b46d35777c6fc05` |
+| FR-C code candidate | `2177f7aabcf395c9192d021a0541d0aad6e97250` |
+| Tested code tree | `04c266297354b128358fae52570d941115e8a8bc` |
+| Exact-tip implementation review | **PASS** at `2177f7aabcf395c9192d021a0541d0aad6e97250` / `04c266297354b128358fae52570d941115e8a8bc` |
 | Provisional FR-B base | `5c43733088bfbe860183f849d16295b542c1f465` (tree `d7d463960756e313bdc3800a20ecc976b659f2c5`) |
 | FR-B live exact-tip review | `f4e23a7c9a8777c36fb006626f24dbed1b6d6d46` |
 | FR-C architecture authority | `451340c56e9b676bf6ea43412bcb856b9ccde3de` |
@@ -44,7 +44,8 @@ whose result is `Unavailable`.
 `FactionFactualReader` implements `simulation.faction-truth/v1`. It returns
 copied immutable Faction and current active-affiliation facts, preserves source
 fields, represents blank names as absent, validates active Faction and Person
-endpoints, rejects duplicate/impossible affiliation state, filters ended
+endpoints, validates Faction endpoints and join chronology for active and ended
+affiliations, rejects duplicate/impossible affiliation state, filters ended
 affiliations, and uses ordinal/numeric ordering. The reader accepts only its
 FactionStore's exact PersonStore and retains neither store in its result. The
 scope consumes no actor Knowledge, support, presentation, or World Exchange
@@ -58,17 +59,28 @@ archive `Library/ValidationResults/FRC-Provisional/`.
 
 | Gate | Result | XML | XML SHA-256 | Log | Log SHA-256 |
 |---|---:|---|---|---|---|
-| `FactualReadFoundationTests` | 9/9 | `EditMode-20261002-222301-52fe0d003aad4328965ff83368ff8406.xml` | `3A0D98A18B1F448AFE102EC3C57AFD53B568C13CA74A73E79DC5280074943926` | matching `.log` | `BF0D6031A9DD9742C6C7B85B0888C857B0E1F27134F8312EF7ED655FBE8A5D21` |
-| `FactionFactualReaderTests` | 6/6 | `EditMode-20261002-222357-14fdd0105f1f4856864f290a697c8e72.xml` | `D12DBB9993E3B3D90618CFCFB868C5AC1776762D7E24A403B395841AD69214CE` | matching `.log` | `3BA47EE144A079B417B71017346315630F866D044E4C0A25BE1117377076E270` |
-| ALL EditMode | 2183/2183 | `EditMode-20261002-222427-5ac07272f51947ee8e8b01cd185f18d4.xml` | `E942BD79E8B55FDBA555A1E2FB02087A0F50902D5B28AE4C7929CECD89D9606A` | matching `.log` | `2EA8EA94CA59024E99685614084D12F125DDAF2731B51D8364A0497B5B222944` |
-| Official EditMode `Smoke` | 5/5 | `EditMode-20261002-222501-3be099869b79463b8fbc5a17f6708ddf.xml` | `A1714B20FB3E351C1F1511F017640AD163C5BAE583092DC199736A4F4FD7C0B2` | matching `.log` | `FB5DD32B4FFC201394D1A0C86C505909E5A8145B6119B89B81BCFC7F5608E454` |
+| `FactualReadFoundationTests` | 9/9 | `EditMode-20261002-223315-3a8c2680151c4572be93aac19e4a0c9e.xml` | `805992AB0843FDA6BDAE6F00243FC4312E7BD1500A4F6481138E9C814B1625CF` | matching `.log` | `F5856E4AC201DD879E297677DF09FD8BFB89F150716EE632FE91EC9F183B8BEC` |
+| `FactionFactualReaderTests` | 7/7 | `EditMode-20261002-223328-65b04dec513d4831842bff3e64c0a85a.xml` | `7009EA4A5CD64F8C36B79421F8AF65BEE6C2F93E11BB123099215947D2AE914E` | matching `.log` | `456E8890EFC1BD92BABC3A657DCF01902DF68B559A978769DC225DACAF3D1D00` |
+| ALL EditMode | 2184/2184 | `EditMode-20261002-223342-84a14c4b4c554eb5b46e28b71c1879ae.xml` | `EAB6ABC7CF3B130FD0C4AA4CA24DB84AA2A169DDA79CF1CE628F78DC568AF12A` | matching `.log` | `C6931100E991C2381E0A98E8B98B192139A2C516E9E5A30A1EA3E25803D81914` |
+| Official EditMode `Smoke` | 5/5 | `EditMode-20261002-223417-51aa0ce008454a958be7648c326881a5.xml` | `268726230ED6A9E7E01CC011164F69687C01FEC10E3E6C6A71CEB03CD95C0D3A` | matching `.log` | `8239A18171BABECB348D0B8A006FF475C69364DD0642ECE108E8547C50EE40F7` |
 | `git diff --check` from FR-B candidate base | PASS | — | — | — | — |
 
 The final two full gates and focused runs were executed after the final
-code-bearing change. The code review's P1 finding was that the reader did not
-bound creation, join, and end dates by the captured logical boundary. The
-internal reader seam now passes the coordinator's pre-capture boundary, and
-tests reject future creation, join, and end dates. `FactionStore.cs`, `PersonStore.cs`,
+code-bearing change. The first exact-tip review found a P1: creation, join,
+and end dates were not bounded by the captured logical boundary. The internal
+reader seam now passes the coordinator's pre-capture boundary, and tests
+reject future dates. The second review found a P2: ended affiliations skipped
+Faction endpoint and join chronology validation. Those checks now run before
+the inactive-row filter, with new ended-row regressions.
+
+An independent reviewer approved exact code candidate
+`2177f7aabcf395c9192d021a0541d0aad6e97250` / tree
+`04c266297354b128358fae52570d941115e8a8bc` against FR-B base
+`5c43733088bfbe860183f849d16295b542c1f465` and architecture authority
+`451340c56e9b676bf6ea43412bcb856b9ccde3de`. The reviewer confirmed both prior
+findings are fixed and found no blocking code issue. Review was read-only and
+ran no tests; the validation table records the independently executed gates.
+`FactionStore.cs`, `PersonStore.cs`,
 `SimulationBootstrapComposition.cs`, and `SimulationRuntime.cs` are unchanged
 in the FR-C delta from its provisional FR-B base.
 
@@ -78,5 +90,5 @@ in the FR-C delta from its provisional FR-B base.
 - FR-B core: promoted.
 - FR-B live integration: handoff-ready; waiting for Phase Master canonical integration.
 - FR-C design: implementation-ready after independent diagnostic-revision review.
-- FR-C implementation: provisional validated core at `22535a6`; first review's timeline finding is fixed and exact-tip re-review is in progress; runtime binding waits for canonical FR-B.
+- FR-C implementation: provisionally validated and independently reviewed at `2177f7a`; runtime binding waits for canonical FR-B.
 - WX-D: waits on FR-C and the approved Simulation-External collection-coverage contract.
