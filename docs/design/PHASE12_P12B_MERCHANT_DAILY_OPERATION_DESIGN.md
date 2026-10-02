@@ -1,9 +1,11 @@
 # P12-B selected daily Merchant operation — technical design
 
 **Status:** Documentation-only design candidate refreshed onto P12 canonical
-a66c215d1e8e9db34ea559a8bf2a0803fbdbf4ab. Pending independent exact-tip
-design review. It adds no checkpoint ID, product behavior, architecture rule,
-implementation readiness, State claim, or promotion.
+a66c215d1e8e9db34ea559a8bf2a0803fbdbf4ab. Initial independent exact-tip
+review at `fff5e9364c7c63c4c36e6635f12adb32e610c795` returned
+`REVISIONS_REQUIRED`; this revision addresses both findings and awaits a new
+exact-tip review. It adds no checkpoint ID, product behavior, architecture
+rule, State claim, or promotion.
 
 ## Authority and source baseline
 
@@ -90,7 +92,7 @@ even when its plan data is empty; its revision records successful changes to
 the embedded facts. |
 | Reconcile changed destination and Trade travel intent | Wrong-target branch may set a travel intention or clear Trade travel then redirect the merchant plan to CurrentCity (MerchantSystem.cs:62-76). SetTradeTravelPlan sets intent only after route feasibility/cost checks (MerchantSystem.cs:924-938); it charges nothing. | Same exact merchant/travel-plan owner instances and witnesses. A successful no-op setter must not advance a revision. |
 | Wait-state and target changes | Amount-zero clears the plan; unavailable knowledge increments destination wait; a useful local buyer/profitable market resets wait; redirect changes target and installs Trade travel intent; no redirect increments wait (MerchantSystem.cs:78-122). MerchantTradePlanRuntime mutators are NpcActionRuntime.cs:304-376; NpcTravelPlanRuntime mutators are NpcActionRuntime.cs:145-188. | Same exact embedded owner witnesses. Current RedirectTo, wait, Set, and Clear methods lack revision/saturation handling. Instrument only these owner-local mutations so a real change advances that owner revision and saturation rejects before that mutation. Do not revise unrelated plan APIs. |
-| Optional redirect decision record | Redirect calls NpcDecisionRecorder.Record before changing the plan (MerchantSystem.cs:103-115). The recorder allocates a decision ID and record sequence then appends to NpcDecisionStore (DecisionRecords.cs:793-847); failed append can leave allocator/sequence progress, and caller still redirects with null decision ID. | Include exact RuntimeIdAllocator decision-counter and SimulationRecordSequence witnesses when recording is attempted. Passive providers exist (RuntimeIdAllocatorCensusProviders.cs:22-40; SimulationRecordSequenceCensus.cs:4-23), but passive census does not prove registration/invalidation. NpcDecisionStore is a separate append/read-model owner without local revision/provider; current blocker matrix classifies decision/event read models separately from authoritative epoch owners. Do not claim its append advances the world-truth epoch. Reconcile its P12-F continuation treatment separately. |
+| Optional redirect decision record | Redirect calls NpcDecisionRecorder.Record before changing the plan (MerchantSystem.cs:103-115). The recorder allocates a decision ID and record sequence then appends to NpcDecisionStore (DecisionRecords.cs:793-847); failed append can leave allocator/sequence progress, and caller still redirects with null decision ID. | Preserve current record and redirect behavior, but exclude RuntimeIdAllocator decision counters, SimulationRecordSequence, and NpcDecisionStore from this invocation's preflight and changed-owner epoch batch. An earlier actor's choice/record can advance the global causal roots between roster Merchant calls, so treating them as prerequisites would reject later otherwise-valid calls. These remain explicitly uncovered P12-C/P12-F causal-root/read-model writer families. Passive census is not coverage; do not claim the append advances world-truth epoch. |
 
 CommercialKnowledgeRuntime.RecordObservation and
 RecordLiquidityObservation advance one shared local revision on successful
@@ -106,7 +108,7 @@ representation nor defines persistence/hydration. Use existing RuntimeId and
 location IDs for identity, not object hashes, roster index alone, or new
 gameplay IDs.
 
-### Required owner matrix for later implementation
+### Required owner matrix for implementation
 
 1. Reuse the existing per-NPC SpatialKnowledge and CommercialKnowledge census
    providers (SpatialKnowledgeCensusProviders.cs,
@@ -114,16 +116,43 @@ gameplay IDs.
    registered. Their shared revisions require paired/all-sibling notifications.
 2. Add narrow census/revision seams for embedded merchant and travel plans.
    Bind by exact owner object plus NPC RuntimeId; define empty and populated
-   cardinality explicitly.
-3. Include existing decision allocator and record-sequence sections in
-   preflight/delta accounting when redirect recording is attempted. Their
-   values are causal roots; passive witnesses or the recorder's occurrence
-   receipt provider do not cover the NpcDecisionStore append.
-4. Classify NpcDecisionStore separately as a read model and reconcile its
-   reference/lifecycle/export treatment under P12-F before any persistence
-   claim. Do not convert it to world-truth epoch authority without a reviewed
-   contract.
-5. Confirm exact registered profile owners and that all changed revision
+   cardinality explicitly. Successful state changes advance the local owner
+   revision once; no-op setters do not. Reject revision saturation before the
+   plan mutation.
+3. Route successful mutations of these four owner families through exact
+   owner-bound commit hooks. For SpatialKnowledge, notify both location and
+   route sections; for CommercialKnowledge, notify market, liquidity, and
+   share-receipt siblings; for each embedded plan, notify its singleton NPC
+   section. A hook has a pre-write admission check and a post-commit report;
+   both bind to the exact installed object and RuntimeId. The pre-write check
+   verifies the serialized owner thread, live registration, and usable local
+   revision before the owner mutates. During the selected `runtime.advance-day`,
+   direct Knowledge-sharing, post-travel observation, and plan writes outside
+   the nested Merchant call update their owner baselines at their commit
+   boundary. The named nested Merchant operation opens a changed-section
+   collector: its owner hooks append exact sibling IDs without publishing an
+   intermediate epoch, then one atomic post-commit batch publishes all changed
+   sections on return or throw. The collector closes before the operation
+   scope exits. Hooks outside that named collector notify the exact changed
+   sections immediately, so a supported earlier daily write cannot stale the
+   next roster member's preflight.
+4. Preserve standalone unbound owner use by keeping the hooks absent until
+   runtime composition binds the selected owners. A bound mutation must pass
+   the runtime's serialized owner-thread admission before writing. A failed
+   owner-thread check rejects before mutation and faults the continuation
+   protocol closed. A post-commit witness/notification failure cannot undo
+   domain facts; it faults admission/capture closed and preserves the domain
+   method's existing result/exception behavior. Bound mutations made on the
+   admitted owner thread outside a named operation may still refresh their
+   exact owner baseline, but do not acquire an operation ID or extend the
+   named Merchant operation's coverage.
+5. Exclude RuntimeIdAllocator, SimulationRecordSequence, and NpcDecisionStore
+   from this invocation's preflight and epoch claim. Leave these global
+   causal-root/read-model writer families uncovered for their own P12-C/P12-F
+   treatment; passive providers do not imply coverage. Classify
+   NpcDecisionStore separately and reconcile its reference/lifecycle/export
+   treatment under P12-F before any persistence claim.
+6. Confirm exact registered profile owners and that all changed revision
    sections remain in one accepted protocol baseline. This is a bounded
    consumer map, not the complete selected-profile owner census.
 
@@ -133,14 +162,22 @@ AdvanceNpcTradeState has early returns and sequentially commits knowledge and
 plan facts; it is not an atomic multi-owner transaction. There is no rollback
 contract. Preserve that behavior.
 
-- Validate exact actor, operation registration, owner thread, and every
-  required pre-write baseline before the first supported write. Operation-scope entry failure, wrong-thread, stale/unregistered owner, or missing required section rejects the call and faults the P12 adapter closed before the method runs.
+- Validate exact actor, operation registration, serialized owner thread, and
+  every required pre-write baseline before the first supported write.
+  Operation-scope entry failure, wrong-thread, stale/unregistered owner, or
+  missing required section rejects the call and faults the P12 adapter closed
+  before the method runs. Allocator/sequence/read-model witnesses are
+  deliberately outside this bounded preflight.
 - Run the existing method in semantic order. No actual owner revision change
-  means no mutation notification. On normal return with changes, batch all
-  changed registered owner section IDs into one NotifyCommittedMutations call,
-  advancing the protocol epoch once for this outer per-NPC invocation. For
-  shared SpatialKnowledge or CommercialKnowledge revisions, include every
-  sibling section whose witness observes the same underlying revision.
+  means no mutation notification. Owner hooks route every supported successful
+  commit to its exact registered section set. During the nested Merchant
+  invocation, collect changed sections and send one `NotifyCommittedMutations`
+  batch on normal return, advancing the protocol epoch once for this
+  per-NPC invocation. For shared SpatialKnowledge or CommercialKnowledge
+  revisions, include every sibling section whose witness observes the same
+  underlying revision. Direct same-owner commits before or after this nested
+  invocation notify their sections at their own commit boundary so later
+  preflight does not mistake supported work for drift.
 - If the method throws after owner changes, those changes remain committed.
   In a finally path, report exact changed section witnesses before disposing
   the operation scope, then rethrow the original exception. Bookkeeping
@@ -148,8 +185,10 @@ contract. Preserve that behavior.
   outcome. This follows the current P12 post-commit contract.
 - NpcDecisionRecorder.Record is not an all-or-nothing transaction: ID/sequence
   allocation may advance even if the store refuses the record. Preserve its
-  null result and the existing redirect behavior. Tests must distinguish
-  allocator/sequence delta from a decision-store append.
+  null result and the existing redirect behavior. These allocator/sequence
+  and decision-store changes are outside this operation's epoch claim and
+  remain uncovered P12-C/P12-F work; tests verify behavior without claiming
+  those roots as this operation's owner delta.
 - Local plan revision saturation must reject before changing that plan owner.
   Existing Knowledge saturation rejects its observation without changing its
   local owner. Do not claim whole-invocation rollback when an earlier
@@ -180,25 +219,34 @@ proves only this slice.
    liquidity add/replace/no-op; current City/location/item IDs and current/
    received day; shared revisions update all sibling baselines; saturation
    causes no local write.
-3. **Plan normalization:** local merchant clears stale plan; inactive plan;
+3. **Owner-hook temporal invalidation:** writes from
+   `RefreshLocalKnowledgeAndShare` and post-travel observation occur before a
+   later roster Merchant call; their exact shared-owner section baselines are
+   refreshed before that later preflight. Direct same-owner mutations outside
+   the named Merchant call on the serialized owner thread refresh their exact
+   baseline without acquiring the Merchant operation ID. Wrong-thread bound
+   mutation is rejected before owner facts change; standalone unbound owner
+   use preserves current behavior.
+4. **Plan normalization:** local merchant clears stale plan; inactive plan;
    Inventory lacks item; amount <= 0; missing observation increments wait;
    local buyer/profitable market resets wait; infeasible target clears only
    Trade travel intent and redirects locally; feasible target sets intent;
    redirect records a decision then changes target/travel intent; no redirect
    increments wait. Assert no-op and real-change revision behavior.
-4. **Decision identity:** successful redirect allocates unique DecisionId and
+5. **Decision identity:** successful redirect allocates unique DecisionId and
    sequence entry; rejected NpcDecisionStore.Record after allocation leaves
    allocated counters/sequence visible and follows current null-decision
    redirect behavior; no redirect allocates neither. Verify current
    read-model classification.
-5. **Post-commit/partial failure:** no changed owners means no epoch; multiple
-   changed sections in one invocation advance once; exception after knowledge
-   but before plan update reports committed owners without undo; exception
-   after redirect recording reports causal roots before rethrow; epoch
-   saturation faults closed while retaining prior commits; local owner
-   saturation refuses that owner change. Operation active count exits on all
-   returns/throws.
-6. **Scope guards:** direct TryExecuteAction, separate ObserveCurrentMarket
+6. **Post-commit/partial failure:** no changed owners means no epoch; multiple
+   changed sections in one Merchant invocation advance once; exception after
+   knowledge but before plan update reports committed owners without undo;
+   exception after redirect recording reports the changed Knowledge/plan
+   owners while allocator/sequence/read-model changes remain outside this
+   batch; epoch saturation faults closed while retaining prior commits; local
+   owner saturation refuses that owner change. Operation active count exits
+   on all returns/throws.
+7. **Scope guards:** direct TryExecuteAction, separate ObserveCurrentMarket
    calls on arrival/other scheduled paths, and other direct plan mutation
    paths do not become covered implicitly. Keep their writer mappings open.
 
@@ -213,10 +261,12 @@ proves only this slice.
 2. Independently review this exact-tip design against architecture §5 (World
    Truth versus Knowledge), §16 (Knowledge), Economy/Merchant boundaries,
    accepted P12-B contracts, P12 State, and actual source/test behavior.
-3. Resolve the exact-owner providers and local revisions for merchant plan,
-   travel plan, and allocator/sequence delta mapping. Recheck P12-F's
-   decision-record treatment. If review finds genuine semantic/product
-   ambiguity, stop only for that issue; current source does not require a new
+3. Implement exact-owner providers and local revisions for merchant and
+   travel plans; route supported commits for all four owner families through
+   the bound mutation hooks; exclude allocator/sequence/read-model roots from
+   this operation's preflight/epoch claim and retain their uncovered status.
+   Recheck P12-F's decision-record treatment without changing it here. These
+   corrections resolve the initial review findings without a new semantic or
    product choice.
 4. After design review and readiness check, implement with isolated ownership.
    Serialize later SimulationRuntime edits against the promoted transfer
