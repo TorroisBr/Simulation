@@ -22,6 +22,7 @@ public enum PersonStoreFailure
 public sealed class PersonStore : IAuthoritativeMutationGuardBindable
 {
     private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
+    private FactualReadAdmission factualReadAdmission;
     private readonly Dictionary<PersonId, PersonRuntime> personsById =
         new Dictionary<PersonId, PersonRuntime>();
     private readonly Dictionary<string, PersonRuntime> personsByNpcRuntimeId =
@@ -43,7 +44,7 @@ public sealed class PersonStore : IAuthoritativeMutationGuardBindable
     {
         failure = PersonStoreFailure.None;
 
-        if (!mutationGuardBinding.CanMutate)
+        if (!mutationGuardBinding.CanMutate || !CanMutateThroughFactualReadAdmission())
         {
             failure = PersonStoreFailure.RuntimeFaulted;
             return false;
@@ -95,7 +96,8 @@ public sealed class PersonStore : IAuthoritativeMutationGuardBindable
     /// </summary>
     internal bool TryRollbackRegistration(PersonRuntime person)
     {
-        if (person == null
+        if (!CanMutateThroughFactualReadAdmission()
+            || person == null
             || person.IsMaterialized == true
             || personsById.TryGetValue(person.PersonId, out PersonRuntime registeredPerson) == false
             || ReferenceEquals(registeredPerson, person) == false)
@@ -167,7 +169,7 @@ public sealed class PersonStore : IAuthoritativeMutationGuardBindable
     {
         failure = PersonStoreFailure.None;
 
-        if (!mutationGuardBinding.CanMutate)
+        if (!mutationGuardBinding.CanMutate || !CanMutateThroughFactualReadAdmission())
         {
             failure = PersonStoreFailure.RuntimeFaulted;
             return false;
@@ -222,7 +224,7 @@ public sealed class PersonStore : IAuthoritativeMutationGuardBindable
 
     internal bool TryRollbackMaterializedNpcBinding(PersonId personId, string npcRuntimeId)
     {
-        if (!mutationGuardBinding.CanMutate)
+        if (!mutationGuardBinding.CanMutate || !CanMutateThroughFactualReadAdmission())
         {
             return false;
         }
@@ -274,5 +276,32 @@ public sealed class PersonStore : IAuthoritativeMutationGuardBindable
     bool IAuthoritativeMutationGuardBindable.TryBindMutationGuard(AuthoritativeMutationGuard guard)
     {
         return TryBindMutationGuard(guard);
+    }
+
+    internal bool CanBindFactualReadAdmission(FactualReadAdmission admission)
+    {
+        return admission != null
+            && (factualReadAdmission == null || ReferenceEquals(factualReadAdmission, admission));
+    }
+
+    internal bool TryBindFactualReadAdmission(FactualReadAdmission admission)
+    {
+        if (!CanBindFactualReadAdmission(admission))
+            return false;
+        if (factualReadAdmission == null)
+            factualReadAdmission = admission;
+        return true;
+    }
+
+    internal void TryUnbindFactualReadAdmission(FactualReadAdmission admission)
+    {
+        if (ReferenceEquals(factualReadAdmission, admission))
+            factualReadAdmission = null;
+    }
+
+    private bool CanMutateThroughFactualReadAdmission()
+    {
+        return factualReadAdmission == null
+            || factualReadAdmission.CanMutatePersonStore(this);
     }
 }

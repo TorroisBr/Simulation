@@ -6,6 +6,7 @@ public sealed class FactionStore : IAuthoritativeMutationGuardBindable
 {
     private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
     private readonly PersonStore personStore;
+    private FactualReadAdmission factualReadAdmission;
     private readonly object ownerToken = new object();
     private readonly Dictionary<string, FactionRecord> factionsById =
         new Dictionary<string, FactionRecord>(StringComparer.Ordinal);
@@ -47,7 +48,7 @@ public sealed class FactionStore : IAuthoritativeMutationGuardBindable
 
     public bool TryRegister(FactionRecord record, out FactionFoundationFailure failure)
     {
-        if (!mutationGuardBinding.CanMutate)
+        if (!mutationGuardBinding.CanMutate || !CanMutateThroughFactualReadAdmission())
         {
             failure = FactionFoundationFailure.Create(FactionFoundationFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.");
             return false;
@@ -121,7 +122,7 @@ public sealed class FactionStore : IAuthoritativeMutationGuardBindable
 
     public bool TryRegisterAffiliation(FactionAffiliationRecord record, out FactionFoundationFailure failure)
     {
-        if (!mutationGuardBinding.CanMutate)
+        if (!mutationGuardBinding.CanMutate || !CanMutateThroughFactualReadAdmission())
         {
             failure = FactionFoundationFailure.Create(FactionFoundationFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.");
             return false;
@@ -150,7 +151,7 @@ public sealed class FactionStore : IAuthoritativeMutationGuardBindable
 
     internal bool TryApplyAdd(FactionAffiliationAddTransition transition, out FactionFoundationFailure failure)
     {
-        if (!mutationGuardBinding.CanMutate)
+        if (!mutationGuardBinding.CanMutate || !CanMutateThroughFactualReadAdmission())
         {
             failure = FactionFoundationFailure.Create(FactionFoundationFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.");
             return false;
@@ -191,7 +192,7 @@ public sealed class FactionStore : IAuthoritativeMutationGuardBindable
 
     internal bool TryApplyEnd(FactionAffiliationEndTransition transition, out FactionFoundationFailure failure)
     {
-        if (!mutationGuardBinding.CanMutate)
+        if (!mutationGuardBinding.CanMutate || !CanMutateThroughFactualReadAdmission())
         {
             failure = FactionFoundationFailure.Create(FactionFoundationFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.");
             return false;
@@ -325,4 +326,36 @@ public sealed class FactionStore : IAuthoritativeMutationGuardBindable
 
     bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard) => CanBindMutationGuard(guard);
     bool IAuthoritativeMutationGuardBindable.TryBindMutationGuard(AuthoritativeMutationGuard guard) => TryBindMutationGuard(guard);
+
+    internal bool IsBoundToPersonStore(PersonStore candidate)
+    {
+        return ReferenceEquals(personStore, candidate);
+    }
+
+    internal bool CanBindFactualReadAdmission(FactualReadAdmission admission)
+    {
+        return admission != null
+            && (factualReadAdmission == null || ReferenceEquals(factualReadAdmission, admission));
+    }
+
+    internal bool TryBindFactualReadAdmission(FactualReadAdmission admission)
+    {
+        if (!CanBindFactualReadAdmission(admission))
+            return false;
+        if (factualReadAdmission == null)
+            factualReadAdmission = admission;
+        return true;
+    }
+
+    internal void TryUnbindFactualReadAdmission(FactualReadAdmission admission)
+    {
+        if (ReferenceEquals(factualReadAdmission, admission))
+            factualReadAdmission = null;
+    }
+
+    private bool CanMutateThroughFactualReadAdmission()
+    {
+        return factualReadAdmission == null
+            || factualReadAdmission.CanMutateFactionStore(this);
+    }
 }
