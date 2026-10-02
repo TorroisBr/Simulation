@@ -46,10 +46,10 @@ recorded below. Continue with the remaining owner and invalidation gaps in
 do not treat this witness as complete profile coverage or a P12-B readiness
 change.
 
-**Architecture baseline:** `c285466c355103d3637ac165246591b72eb7bda0`, with
-the intraday/extensibility alignment at `4b6dd1d38cffeaf3cc1ac3effea0f8ede8771194`
-and the multi-participant activity alignment at
-`c285466c355103d3637ac165246591b72eb7bda0`.
+**Architecture baseline:** `451340c56e9b676bf6ea43412bcb856b9ccde3de`,
+including the approved WorldId and factual-projection contracts in §§91A–91B.
+The intraday/extensibility alignment remains `4b6dd1d38cffeaf3cc1ac3effea0f8ede8771194`;
+the multi-participant activity alignment remains `c285466c355103d3637ac165246591b72eb7bda0`.
 
 **Planning authority:** `docs/phases/PHASE12_BRIEF.md` and the accepted
 P12-B–P12-G capability decomposition in
