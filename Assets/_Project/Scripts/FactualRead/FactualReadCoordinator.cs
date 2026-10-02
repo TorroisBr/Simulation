@@ -6,12 +6,12 @@ internal interface IFactualReader
     string CapabilityId { get; }
     int Version { get; }
     Type ValueType { get; }
-    IFactualReadResult ReadUntyped();
+    IFactualReadOutcome ReadUntyped();
 }
 
 internal interface IFactualReader<T> : IFactualReader
 {
-    FactReadResult<T> Read();
+    FactualReadOutcome<T> Read();
 }
 
 /// <summary>
@@ -82,21 +82,66 @@ public sealed class FactualReadCoordinator
                     continue;
                 }
 
-                IFactualReadResult result;
+                IFactualReadOutcome outcome;
                 try
                 {
-                    result = reader.ReadUntyped();
+                    outcome = reader.ReadUntyped();
                 }
                 catch (Exception)
                 {
-                    capture = CreateUnavailableCapture(requested);
+                    capture = CreateUnavailableCapture(
+                        requested,
+                        new[]
+                        {
+                            CreateDiagnostic(
+                                capabilityId,
+                                "reader-exception",
+                                "A factual reader failed during coherent capture.")
+                        });
                     return false;
                 }
 
-                if (result == null || result.ValueType != reader.ValueType
-                    || result.Status == FactReadStatus.Unavailable)
+                IFactualReadResult result = outcome?.Result;
+                if (result == null || result.ValueType != reader.ValueType)
                 {
-                    capture = CreateUnavailableCapture(requested);
+                    capture = CreateUnavailableCapture(
+                        requested,
+                        new[]
+                        {
+                            CreateDiagnostic(
+                                capabilityId,
+                                "reader-invalid-outcome",
+                                "A factual reader returned an invalid outcome.")
+                        });
+                    return false;
+                }
+
+                if (result.Status == FactReadStatus.Unavailable)
+                {
+                    FactualReadDiagnosticData diagnostic = outcome.Diagnostic;
+                    if (diagnostic == null)
+                    {
+                        diagnostic = new FactualReadDiagnosticData(
+                            "reader-unavailable",
+                            "The factual reader reported unavailable data.");
+                    }
+                    capture = CreateUnavailableCapture(
+                        requested,
+                        new[] { CreateDiagnostic(capabilityId, diagnostic.Code, diagnostic.Message) });
+                    return false;
+                }
+
+                if (outcome.Diagnostic != null)
+                {
+                    capture = CreateUnavailableCapture(
+                        requested,
+                        new[]
+                        {
+                            CreateDiagnostic(
+                                capabilityId,
+                                "reader-invalid-outcome",
+                                "A factual reader returned an invalid outcome.")
+                        });
                     return false;
                 }
 
@@ -131,7 +176,9 @@ public sealed class FactualReadCoordinator
         }
     }
 
-    private FactualReadCapture CreateUnavailableCapture(IReadOnlyList<string> requested)
+    private FactualReadCapture CreateUnavailableCapture(
+        IReadOnlyList<string> requested,
+        IEnumerable<FactualReadDiagnostic> diagnostics = null)
     {
         List<FactualReadResultEntry> results = new List<FactualReadResultEntry>();
         if (requested != null)
@@ -149,7 +196,12 @@ public sealed class FactualReadCoordinator
             }
         }
 
-        return new FactualReadCapture(false, null, null, null, results, null);
+        return new FactualReadCapture(false, null, null, null, results, null, diagnostics);
+    }
+
+    private static FactualReadDiagnostic CreateDiagnostic(string capabilityId, string code, string message)
+    {
+        return new FactualReadDiagnostic(capabilityId, code, message);
     }
 
     private static bool TryCopyAndSortRequests(string[] source, out string[] requested)

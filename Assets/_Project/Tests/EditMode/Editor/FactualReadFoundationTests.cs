@@ -130,6 +130,10 @@ public sealed class FactualReadFoundationTests
             "throws"), Is.False);
         AssertUnavailable<int>(thrownCapture, "first");
         AssertUnavailable<string>(thrownCapture, "throws");
+        Assert.That(thrownCapture.Diagnostics, Has.Count.EqualTo(1));
+        Assert.That(thrownCapture.Diagnostics[0].CapabilityId, Is.EqualTo("throws"));
+        Assert.That(thrownCapture.Diagnostics[0].Code, Is.EqualTo("reader-exception"));
+        Assert.That(thrownCapture.Diagnostics[0].Message, Does.Not.Contain("reader failure"));
 
         ReadHarness changedHarness = CreateBoundHarness();
         FactualReadCoordinator changedCoordinator = new FactualReadCoordinator(
@@ -151,6 +155,51 @@ public sealed class FactualReadFoundationTests
         AssertUnavailable<int>(changedCapture, "first");
         AssertUnavailable<int>(changedCapture, "changes-boundary");
         Assert.That(changedCapture.LogicalBoundary, Is.Null);
+    }
+
+    [Test]
+    public void DiagnosticsAreCopiedSortedAndReaderUnavailableGetsStableDiagnostic()
+    {
+        FactualReadDiagnostic[] diagnostics =
+        {
+            new FactualReadDiagnostic("zeta", "z.code", "z message"),
+            new FactualReadDiagnostic("alpha", "b.code", "b message"),
+            new FactualReadDiagnostic("alpha", "a.code", "a message")
+        };
+        FactualReadCapture diagnosticCapture = new FactualReadCapture(
+            false,
+            null,
+            null,
+            null,
+            new[]
+            {
+                new FactualReadResultEntry("alpha", typeof(int), FactReadResult<int>.Unavailable()),
+                new FactualReadResultEntry("zeta", typeof(int), FactReadResult<int>.Unavailable())
+            },
+            null,
+            diagnostics);
+        diagnostics[0] = null;
+
+        Assert.That(diagnosticCapture.Diagnostics, Has.Count.EqualTo(3));
+        Assert.That(diagnosticCapture.Diagnostics[0].CapabilityId, Is.EqualTo("alpha"));
+        Assert.That(diagnosticCapture.Diagnostics[0].Code, Is.EqualTo("a.code"));
+        Assert.That(diagnosticCapture.Diagnostics[1].Code, Is.EqualTo("b.code"));
+        Assert.That(diagnosticCapture.Diagnostics[2].CapabilityId, Is.EqualTo("zeta"));
+        IList<FactualReadDiagnostic> diagnosticView = diagnosticCapture.Diagnostics as IList<FactualReadDiagnostic>;
+        Assert.That(diagnosticView, Is.Not.Null);
+        Assert.That(diagnosticView.IsReadOnly, Is.True);
+
+        ReadHarness harness = CreateBoundHarness();
+        FactualReadCoordinator coordinator = new FactualReadCoordinator(
+            harness.Admission,
+            new IFactualReader[]
+            {
+                new DelegateReader<int>("unavailable", 1, () => FactReadResult<int>.Unavailable())
+            });
+        Assert.That(coordinator.TryCaptureCoherent(out FactualReadCapture unavailableCapture, "unavailable"), Is.False);
+        Assert.That(unavailableCapture.Diagnostics, Has.Count.EqualTo(1));
+        Assert.That(unavailableCapture.Diagnostics[0].CapabilityId, Is.EqualTo("unavailable"));
+        Assert.That(unavailableCapture.Diagnostics[0].Code, Is.EqualTo("reader-unavailable"));
     }
 
     [Test]
@@ -452,8 +501,8 @@ public sealed class FactualReadFoundationTests
         public string CapabilityId { get; }
         public int Version { get; }
         public Type ValueType => typeof(T);
-        public FactReadResult<T> Read() => read();
+        public FactualReadOutcome<T> Read() => FactualReadOutcome<T>.FromResult(read());
 
-        IFactualReadResult IFactualReader.ReadUntyped() => Read();
+        IFactualReadOutcome IFactualReader.ReadUntyped() => Read();
     }
 }
