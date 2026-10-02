@@ -914,3 +914,25 @@ This refresh selects a source-audit target, not a newly authorized implementatio
 checkpoint. The FR-B handoff remains serialized with other edits to
 `SimulationRuntime`/bootstrap; unrelated P12 evidence and owner work can
 continue on isolated branches.
+
+## Current P12-B blocker refresh — 2026-10-02 post FR-B live integration
+
+P12 canonical is now at promotion record `28d33a2c8f10ddb724819893a0b5f2804a6f5b0b`.
+Its code tree is the independently reviewed current-base integration
+`aeb76c687d00a49f505ab264a58a508a20e4923b` (tree
+`862eb904c6679a66d4dd2a2e2ad7f174ec8479c2`), based on prior canonical
+`1dce6d54a33ac1b1778b1a44a7794512a58416e8`.
+
+| Area | Current canonical evidence | Remaining blocker |
+|---|---|---|
+| FR-B selected-profile live integration | The composed runtime exposes a factual-read coordinator. Only `UnityBootstrap-Daily-v1` binds its exact FactionStore/PersonStore pair; availability follows successful publication and healthy bootstrap closure. Owner-thread, healthy-idle admission and logical-day/exact-store-revision bracketing guard the synchronous read cut. The partial P12 epoch is health-only; other profiles remain unavailable and requested readers remain unsupported. Exact-tip review, focused 21/21, ALL EditMode 2182/2182, Smoke 5/5 and diff-check PASS are retained in the promotion record. | This selected daily read surface is not P12-A capture eligibility, complete owner coverage, whole-world coherence, complete shared-epoch coverage, export or hydration. No reader is implemented. |
+| Cross-owner continuation: `TravelPartySystem.AdvanceParties` | The post-record-sequence source audit remains applicable: the recomposition changed `SimulationRuntime`, bootstrap composition, factual-read admission, the Unity entry point and bootstrap tests; it did not change `TravelParty.cs` or its direct owner-write implementations. The runtime call still occurs inside the existing `runtime.advance-day` outer operation. The path has committed party/NPC travel-state, arrival City projection, per-NPC SpatialKnowledge and party-completion effects. | This is the highest-value remaining operation gap supported by the current source map. Next, record the exact ordered commit points, partial-progress/error semantics, owner-section mapping and existing mutation notifications in a bounded nested-operation design. Preserve normal gameplay semantics, make no global operation/epoch claim, and serialize only actual SimulationRuntime/runtime-owner edits. |
+| Other uncovered writers and owner census | Existing census and operation evidence remains partial. Promoted direct NPC-owner, MoneyAccount transfer, Merchant, Market, identity, City/NPC, record-sequence, quiescence, and FR-B slices cover only their recorded owners and boundaries. | Continue against the accepted live profile owner/operation matrix. Prefer cross-owner commit boundaries and missing owner notifications over duplicating passive census. No P12-B completion or capture eligibility follows. |
+| Downstream readiness | P12-A remains `WAIT_DEPENDENCY`; P12-B remains INCOMPLETE; P12-C through P12-G retain their documented gates; P13 remains BLOCKED. | The FR-B integration changes no dependency label and makes no export/hydration or causal-history capability available. |
+
+The FR-B integration is promoted and its hotspot is released for subsequent
+bounded work. The TravelParty source audit was against the preceding canonical
+and remains source-valid because the promoted code delta does not touch its
+system or owner mutators; recheck the call path at the implementation boundary.
+The next design is an operation-coverage proposal only, not an implementation
+candidate or readiness claim.

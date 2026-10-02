@@ -1135,3 +1135,41 @@ remains INCOMPLETE; P12-A remains `WAIT_DEPENDENCY`; P13 remains BLOCKED; Phase
 12 remains open. The next refresh must use canonical tip `e64caf0` and consume
 the queued FR-B live-integration handoff only after recomposition and required
 current-base revalidation.
+
+## P12-B FR-B selected-profile live integration promotion — 2026-10-02
+
+With explicit approval, `codex/phase12/canonical` was fast-forwarded from
+`1dce6d54a33ac1b1778b1a44a7794512a58416e8` to
+`28d33a2c8f10ddb724819893a0b5f2804a6f5b0b`. The promoted code tip is
+`aeb76c687d00a49f505ab264a58a508a20e4923b`, tree
+`862eb904c6679a66d4dd2a2e2ad7f174ec8479c2`. The exact-tip independent
+implementation review and promotion record are durably included at the
+promoted tip; the review commit adds only
+`docs/design/FRB_LIVE_INTEGRATION_P12_CURRENT_REVIEW.md` after the reviewed
+code commit. The earlier old-base FR-B candidate and review remain preserved.
+
+The bounded integration exposes a `FactualReadCoordinator` on each composed
+runtime, but only `UnityBootstrap-Daily-v1` binds its exact composed
+`FactionStore`/`PersonStore` pair. That surface becomes available after
+successful world publication and healthy bootstrap-operation closure. Reads
+require the bound owner thread and healthy idle runtime, and bracket the
+synchronous read cut with the selected profile's logical day and exact store
+revisions while supported owner mutations are guarded. Other profiles remain
+unbound/unavailable and the reader set remains empty, so requested capabilities
+are unsupported. The partial P12 mutation epoch is a health signal only, not a
+whole-world coherence boundary.
+
+Exact-tree validation passed `SimulationBootstrapCompositionTests` 21/21,
+ALL EditMode 2182/2182, official EditMode Smoke 5/5, and
+`git diff --check`. The retained XML/log hashes and independent exact-tip
+review are recorded in
+`docs/design/FRB_LIVE_INTEGRATION_P12_CURRENT_REVIEW.md`.
+
+This does not establish P12-B completion, complete owner or shared-epoch
+coverage, runtime-wide quiescence, capture eligibility, export, hydration,
+P12-A readiness, or P13 readiness. Day-zero factual reads allowed by FR-B are
+not P12-A completed-day capture eligibility. P12-B remains INCOMPLETE; P12-A
+remains `WAIT_DEPENDENCY`; P13 remains BLOCKED; Phase 12 remains open. The
+post-promotion DAG adds no newly READY numbered-phase implementation checkpoint:
+P12-A and P12-C through P12-G retain their documented prerequisite edges,
+and P13 remains blocked on continuation plus recoverable causal inputs.
