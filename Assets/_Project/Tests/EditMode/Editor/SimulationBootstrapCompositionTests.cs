@@ -15,6 +15,182 @@ public sealed class SimulationBootstrapCompositionTests
         SimulationTestFactory.CleanupDefinitions();
     }
 
+    [Test]
+    public void WorldIdUsesOneCanonicalNonEmptyGuidForm()
+    {
+        System.Guid guid = new System.Guid("00112233-4455-6677-8899-aabbccddeeff");
+        var worldId = new WorldId(guid);
+
+        Assert.That(worldId.Value, Is.EqualTo("world:00112233445566778899aabbccddeeff"));
+        Assert.That(WorldId.Parse(worldId.Value), Is.EqualTo(worldId));
+        Assert.That(WorldId.TryParse(worldId.Value, out WorldId parsed), Is.True);
+        Assert.That(parsed, Is.EqualTo(worldId));
+        Assert.That(WorldId.TryParse("WORLD:00112233445566778899aabbccddeeff", out _), Is.False);
+        Assert.That(WorldId.TryParse("world:00112233445566778899AABBCCDDEEFF", out _), Is.False);
+        Assert.That(WorldId.TryParse("world:00112233445566778899aabbccddeef", out _), Is.False);
+        Assert.That(WorldId.TryParse("world:00000000000000000000000000000000", out _), Is.False);
+        Assert.Throws<System.FormatException>(() => WorldId.Parse("world:invalid"));
+        Assert.Throws<System.ArgumentException>(() => new WorldId(System.Guid.Empty));
+    }
+
+    [Test]
+    public void GenesisCallbacksCannotObserveWorldBeforeFinalPublicationGate()
+    {
+        SimulationConfigData config = SimulationTestFactory.CreateSimulationConfig();
+        ConfigureGeography(config);
+        config.useFixedSimulationSeed = true;
+        config.simulationSeed = 4217;
+        GameObject simulationObject = new GameObject("world-identity-publication-gate-test");
+        simulationObjects.Add(simulationObject);
+        TesteSimulacao simulation = simulationObject.AddComponent<TesteSimulacao>();
+        typeof(TesteSimulacao).GetField("simulationConfig", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(simulation, config);
+        var identity = new WorldId(new System.Guid("12345678-1234-5678-9abc-def012345678"));
+        int identityAllocationCount = 0;
+        typeof(TesteSimulacao).GetField("worldIdentityAllocator", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(simulation, new System.Func<WorldId>(() =>
+            {
+                identityAllocationCount++;
+                return identity;
+            }));
+        var completedStages = new List<string>();
+
+        InvokeBootstrapInitialize(simulation, stageId =>
+        {
+            completedStages.Add(stageId);
+            Assert.That(simulation.Bootstrap, Is.Null, stageId);
+            Assert.That(simulation.Runtime, Is.Null, stageId);
+            Assert.That(simulation.SimulationTime, Is.Null, stageId);
+            Assert.That(simulation.Calendar, Is.Null, stageId);
+            Assert.That(simulation.SpatialNetwork, Is.Null, stageId);
+            Assert.That(simulation.DomainEventStore, Is.Null, stageId);
+            Assert.That(simulation.History, Is.Null, stageId);
+            Assert.That(simulation.ScheduledDirectives, Is.Null, stageId);
+            Assert.That(simulation.Decisions, Is.Null, stageId);
+            Assert.That(simulation.NpcChronicles, Is.Null, stageId);
+            Assert.That(simulation.ChronicleFormatter, Is.Null, stageId);
+            Assert.That(simulation.TravelParties, Is.Null, stageId);
+            Assert.That(simulation.GroupTravel, Is.Null, stageId);
+            Assert.That(simulation.ExplorableSites, Is.Null, stageId);
+            Assert.That(simulation.Expeditions, Is.Null, stageId);
+            Assert.That(simulation.ExpeditionRuntime, Is.Null, stageId);
+            Assert.That(simulation.ExpeditionSystem, Is.Null, stageId);
+            Assert.That(simulation.CurrentDay, Is.Zero, stageId);
+            Assert.That(simulation.CurrentDate, Is.EqualTo(default(SimulationDate)), stageId);
+            Assert.That(simulation.FullLog, Is.Empty, stageId);
+            Assert.That(simulation.GetFullLog(), Is.Empty, stageId);
+            Assert.That(simulation.TryStartTravelParty(null), Is.False, stageId);
+            Assert.That(simulation.TryStartExpedition(null, null, out _), Is.False, stageId);
+            Assert.That(simulation.TryGetNpcRuntime("npc-000001", out _), Is.False, stageId);
+            Assert.That(simulation.TryGetCityRuntime("city-000001", out _), Is.False, stageId);
+            Assert.That(simulation.TryGetSpatialLocation("location-000001", out _), Is.False, stageId);
+            Assert.That(simulation.TryGetSpatialRoute("route-000001", out _), Is.False, stageId);
+            Assert.That(simulation.TryGetExplorableSiteRuntime("site-000001", out _), Is.False, stageId);
+            Assert.That(simulation.GetNpcChronicle("npc-000001"), Is.Empty, stageId);
+            Assert.That(identityAllocationCount, Is.EqualTo(1), "identity is allocated before the first genesis stage");
+        });
+
+        Assert.That(completedStages, Is.EqualTo(SimulationGenesisPipeline.ResolveStageOrder(includeAuthoredGeography: true)));
+        Assert.That(simulation.Bootstrap, Is.Not.Null);
+        Assert.That(simulation.Bootstrap.WorldId, Is.SameAs(identity));
+        Assert.That(identityAllocationCount, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void SameSeedWorldsReceiveDistinctStableIdentitiesWithoutChangingSeededRandomDraws()
+    {
+        SimulationConfigData config = SimulationTestFactory.CreateSimulationConfig();
+        ConfigureGeography(config);
+        config.useFixedSimulationSeed = true;
+        config.simulationSeed = 8451;
+        GameObject firstObject = new GameObject("world-identity-first-same-seed-test");
+        GameObject secondObject = new GameObject("world-identity-second-same-seed-test");
+        simulationObjects.Add(firstObject);
+        simulationObjects.Add(secondObject);
+        TesteSimulacao first = firstObject.AddComponent<TesteSimulacao>();
+        TesteSimulacao second = secondObject.AddComponent<TesteSimulacao>();
+        typeof(TesteSimulacao).GetField("simulationConfig", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(first, config);
+        typeof(TesteSimulacao).GetField("simulationConfig", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(second, config);
+
+        first.Start();
+        second.Start();
+
+        WorldId firstIdentity = first.Bootstrap.WorldId;
+        WorldId secondIdentity = second.Bootstrap.WorldId;
+        Assert.That(firstIdentity, Is.Not.EqualTo(secondIdentity));
+        Assert.That(first.Bootstrap.ProfileFingerprint, Is.EqualTo(second.Bootstrap.ProfileFingerprint));
+        IAuthoritativeRandomSource firstRandom = ReadPrivateField<IAuthoritativeRandomSource>(first, "authoritativeRandomSource");
+        IAuthoritativeRandomSource secondRandom = ReadPrivateField<IAuthoritativeRandomSource>(second, "authoritativeRandomSource");
+        Assert.That(firstRandom.NextUnit("world-identity-independent-stream"),
+            Is.EqualTo(secondRandom.NextUnit("world-identity-independent-stream")));
+
+        first.Runtime.AdvanceDay();
+        Assert.That(first.Bootstrap.WorldId, Is.SameAs(firstIdentity));
+        Assert.That(second.Bootstrap.WorldId, Is.SameAs(secondIdentity));
+    }
+
+    [Test]
+    public void FailedPublishCallbackDiscardsIdentityAndPermanentlyLatchesBootstrap()
+    {
+        SimulationConfigData config = SimulationTestFactory.CreateSimulationConfig();
+        ConfigureGeography(config);
+        GameObject simulationObject = new GameObject("world-identity-failed-publication-test");
+        simulationObjects.Add(simulationObject);
+        TesteSimulacao simulation = simulationObject.AddComponent<TesteSimulacao>();
+        typeof(TesteSimulacao).GetField("simulationConfig", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(simulation, config);
+        int identityAllocationCount = 0;
+        WorldId identity = new WorldId(new System.Guid("87654321-4321-8765-cba9-876543210fed"));
+
+        typeof(TesteSimulacao).GetField("worldIdentityAllocator", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(simulation, new System.Func<WorldId>(() =>
+            {
+                identityAllocationCount++;
+                return identity;
+            }));
+        var retainedPublicAccessors = new List<object>();
+        TargetInvocationException failure = Assert.Throws<TargetInvocationException>(() =>
+            InvokeBootstrapInitialize(simulation, stageId =>
+            {
+                Assert.That(simulation.Bootstrap, Is.Null, stageId);
+                Assert.That(simulation.Runtime, Is.Null, stageId);
+                Assert.That(simulation.SimulationTime, Is.Null, stageId);
+                Assert.That(simulation.FullLog, Is.Empty, stageId);
+                if (stageId == "p9.genesis.publish/v1")
+                {
+                    retainedPublicAccessors.AddRange(new object[]
+                    {
+                        simulation.Bootstrap, simulation.Runtime, simulation.SimulationTime, simulation.Calendar,
+                        simulation.SpatialNetwork, simulation.DomainEventStore, simulation.History,
+                        simulation.ScheduledDirectives, simulation.Decisions, simulation.NpcChronicles,
+                        simulation.ChronicleFormatter, simulation.TravelParties, simulation.GroupTravel,
+                        simulation.ExplorableSites, simulation.Expeditions, simulation.ExpeditionRuntime,
+                        simulation.ExpeditionSystem, simulation.FullLog, simulation.GetFullLog(),
+                        simulation.CurrentDay, simulation.CurrentDate, simulation.GetNpcChronicle("npc-000001")
+                    });
+                    throw new System.InvalidOperationException("injected publish callback failure");
+                }
+            }));
+
+        Assert.That(failure.InnerException, Is.TypeOf<System.InvalidOperationException>());
+        Assert.That(retainedPublicAccessors.OfType<WorldId>(), Is.Empty);
+        Assert.That(retainedPublicAccessors.OfType<SimulationBootstrapComposition>(), Is.Empty);
+        Assert.That(retainedPublicAccessors.OfType<SimulationRuntime>(), Is.Empty);
+        Assert.That(simulation.Bootstrap, Is.Null);
+        Assert.That(simulation.Runtime, Is.Null);
+        Assert.That(typeof(TesteSimulacao).GetField("draftComposition", BindingFlags.Instance | BindingFlags.NonPublic)
+            .GetValue(simulation), Is.Null);
+        Assert.That(identityAllocationCount, Is.EqualTo(1));
+
+        int retryCallbackCount = 0;
+        InvokeBootstrapInitialize(simulation, _ => retryCallbackCount++);
+        Assert.That(retryCallbackCount, Is.Zero);
+        Assert.That(identityAllocationCount, Is.EqualTo(1));
+        Assert.That(simulation.Bootstrap, Is.Null);
+    }
+
     [TearDown]
     public void TearDown()
     {
@@ -1185,4 +1361,14 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(value, Is.Not.Null, "Expected existing owner field " + fieldName + ".");
         return value;
     }
+
+    private static void InvokeBootstrapInitialize(TesteSimulacao simulation, System.Action<string> stageCompleted)
+    {
+        MethodInfo initialize = typeof(TesteSimulacao).GetMethod(
+            "InitializeSimulation",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(initialize, Is.Not.Null);
+        initialize.Invoke(simulation, new object[] { stageCompleted });
+    }
+
 }

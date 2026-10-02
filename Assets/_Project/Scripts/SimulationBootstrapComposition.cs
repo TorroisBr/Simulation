@@ -8,6 +8,7 @@ public sealed class SimulationBootstrapComposition
     private readonly EconomyTransactionService economyTransactionService;
 
     internal SimulationBootstrapComposition(
+        WorldId worldId,
         SimulationGenesisManifest manifest,
         SimulationTime time,
         CalendarDefinition calendar,
@@ -30,6 +31,7 @@ public sealed class SimulationBootstrapComposition
         ExpeditionStore expeditions,
         ExpeditionSystem expeditionSystem)
     {
+        WorldId = worldId ?? throw new ArgumentNullException(nameof(worldId));
         if (directives == null) throw new ArgumentNullException(nameof(directives));
         if (expeditions == null || expeditionSystem == null || !ReferenceEquals(expeditionSystem.Store, expeditions))
             throw new ArgumentException("Bootstrap expedition owner and system must share the installed ExpeditionStore.");
@@ -88,6 +90,8 @@ public sealed class SimulationBootstrapComposition
 
     public string ProfileContractIdentity => Manifest.ContractIdentity;
     public string ProfileFingerprint => Manifest.Fingerprint;
+    /// <summary>The stable identity allocated for this composed world continuation.</summary>
+    public WorldId WorldId { get; }
     public SimulationGenesisManifest Manifest { get; }
     public SimulationTime SimulationTime { get; }
     public CalendarDefinition Calendar { get; }

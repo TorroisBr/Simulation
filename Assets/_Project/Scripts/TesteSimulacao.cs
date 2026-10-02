@@ -53,8 +53,12 @@ public class TesteSimulacao : MonoBehaviour
     private CalendarDefinition calendarDefinition = CalendarDefinition.CreateDefault();
     private EffectiveSimulationConfiguration effectiveConfiguration;
     private IAuthoritativeRandomSource authoritativeRandomSource;
+    private System.Func<WorldId> worldIdentityAllocator = CreateWorldIdentity;
+    private WorldId unpublishedWorldId;
     private long lastEconomySnapshotDay;
+    private SimulationBootstrapComposition draftComposition;
     private SimulationBootstrapComposition publishedComposition;
+    private volatile bool worldPublished;
     private Thread bootstrapStartThread;
     private int bootstrapStartThreadId;
     private SimulationRuntimeAdmissionContext runtimeAdmissionContext;
@@ -63,32 +67,35 @@ public class TesteSimulacao : MonoBehaviour
     private bool bootstrapFailed;
 
 
-    public SimulationBootstrapComposition Bootstrap => publishedComposition;
-    public string FullLog => publishedComposition != null && logger != null ? logger.FullLog : string.Empty;
-    public SimulationTime SimulationTime => publishedComposition?.SimulationTime;
-    public CalendarDefinition Calendar => publishedComposition?.Calendar;
-    public SpatialNetworkRuntime SpatialNetwork => publishedComposition?.SpatialNetwork;
-    public DomainEventStore DomainEventStore => publishedComposition?.DomainEventStore;
-    public HistoryStore History => publishedComposition?.History;
-    public ScheduledDirectiveStore ScheduledDirectives => publishedComposition?.ScheduledDirectives;
-    public NpcDecisionStore Decisions => publishedComposition?.Decisions;
-    public NpcChronicleService NpcChronicles => publishedComposition?.NpcChronicles;
-    public NpcChronicleFormatter ChronicleFormatter => publishedComposition?.ChronicleFormatter;
-    public TravelPartyStore TravelParties => publishedComposition?.TravelParties;
-    public TravelPartySystem GroupTravel => publishedComposition?.GroupTravel;
-    public SimulationRuntime Runtime => publishedComposition?.Runtime;
-    public ExplorableSiteStore ExplorableSites => publishedComposition?.ExplorableSites;
-    public ExpeditionStore Expeditions => publishedComposition?.Expeditions;
-    public ExpeditionSystem ExpeditionRuntime => publishedComposition?.ExpeditionSystem;
-    public ExpeditionSystem ExpeditionSystem => publishedComposition?.ExpeditionSystem;
-    public long CurrentDay => publishedComposition != null ? publishedComposition.SimulationTime.AbsoluteDay : 0;
-    public SimulationDate CurrentDate => publishedComposition != null
-        ? publishedComposition.Runtime.Calendar.GetDate(CurrentDay)
+    private SimulationBootstrapComposition PublicComposition => worldPublished ? publishedComposition : null;
+
+    public SimulationBootstrapComposition Bootstrap => PublicComposition;
+    public string FullLog => PublicComposition != null && logger != null ? logger.FullLog : string.Empty;
+    public SimulationTime SimulationTime => PublicComposition?.SimulationTime;
+    public CalendarDefinition Calendar => PublicComposition?.Calendar;
+    public SpatialNetworkRuntime SpatialNetwork => PublicComposition?.SpatialNetwork;
+    public DomainEventStore DomainEventStore => PublicComposition?.DomainEventStore;
+    public HistoryStore History => PublicComposition?.History;
+    public ScheduledDirectiveStore ScheduledDirectives => PublicComposition?.ScheduledDirectives;
+    public NpcDecisionStore Decisions => PublicComposition?.Decisions;
+    public NpcChronicleService NpcChronicles => PublicComposition?.NpcChronicles;
+    public NpcChronicleFormatter ChronicleFormatter => PublicComposition?.ChronicleFormatter;
+    public TravelPartyStore TravelParties => PublicComposition?.TravelParties;
+    public TravelPartySystem GroupTravel => PublicComposition?.GroupTravel;
+    public SimulationRuntime Runtime => PublicComposition?.Runtime;
+    public ExplorableSiteStore ExplorableSites => PublicComposition?.ExplorableSites;
+    public ExpeditionStore Expeditions => PublicComposition?.Expeditions;
+    public ExpeditionSystem ExpeditionRuntime => PublicComposition?.ExpeditionSystem;
+    public ExpeditionSystem ExpeditionSystem => PublicComposition?.ExpeditionSystem;
+    public long CurrentDay => PublicComposition != null ? PublicComposition.SimulationTime.AbsoluteDay : 0;
+    public SimulationDate CurrentDate => PublicComposition != null
+        ? PublicComposition.Runtime.Calendar.GetDate(CurrentDay)
         : default(SimulationDate);
 
     public bool TryStartTravelParty(ActionExecutionContext context)
     {
-        return publishedComposition != null && publishedComposition.Runtime.TryStartTravelParty(context);
+        SimulationBootstrapComposition composition = PublicComposition;
+        return composition != null && composition.Runtime.TryStartTravelParty(context);
     }
 
     public bool TryStartExpedition(
@@ -96,13 +103,14 @@ public class TesteSimulacao : MonoBehaviour
         ActionExecutionContext context,
         out ExpeditionRuntime expedition)
     {
-        if (publishedComposition == null || publishedComposition.ExpeditionSystem == null)
+        SimulationBootstrapComposition composition = PublicComposition;
+        if (composition == null || composition.ExpeditionSystem == null)
         {
             expedition = null;
             return false;
         }
 
-        return publishedComposition.ExpeditionSystem.TryStartExpedition(targetSite, context, out expedition);
+        return composition.ExpeditionSystem.TryStartExpedition(targetSite, context, out expedition);
     }
 
     public void Start()
@@ -153,7 +161,7 @@ public class TesteSimulacao : MonoBehaviour
     private void InitializeSimulation(System.Action<string> stageCompleted = null)
     {
         bool selectedAdmissionProfile = runtimeAdmissionProfile == SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1;
-        if ((selectedAdmissionProfile && bootstrapFailed) || publishedComposition != null) return;
+        if (bootstrapFailed || publishedComposition != null || draftComposition != null) return;
         if (selectedAdmissionProfile && runtimeAdmissionContext == null)
         {
             bootstrapFailed = true;
@@ -170,9 +178,14 @@ public class TesteSimulacao : MonoBehaviour
 
         string profileFingerprint = null;
         System.Collections.Generic.IReadOnlyList<string> profileProvenanceRecords = null;
-        bool pipelineReturnedNormally = false;
+        Thread initializeThread = Thread.CurrentThread;
+        int initializeThreadId = initializeThread.ManagedThreadId;
         try
         {
+            unpublishedWorldId = worldIdentityAllocator?.Invoke();
+            if (unpublishedWorldId == null)
+                throw new System.InvalidOperationException("World identity allocation returned no identity.");
+
             SimulationGenesisPipeline.ExecuteStages(stageId =>
             {
                 switch (stageId)
@@ -255,7 +268,8 @@ public class TesteSimulacao : MonoBehaviour
                         ValidateCandidateProfile();
                         break;
                     case "p9.genesis.publish/v1":
-                        publishedComposition = new SimulationBootstrapComposition(
+                        draftComposition = new SimulationBootstrapComposition(
+                            unpublishedWorldId,
                             new SimulationGenesisManifest(simulationConfig, effectiveConfiguration, calendarDefinition, profileFingerprint, profileProvenanceRecords), simulationTime, calendarDefinition, spatialNetwork, domainEventStore,
                             historyStore, scheduledDirectiveStore, decisionStore, decisionRecorder, recordSequence, economyTransactionService, npcChronicleService,
                             npcChronicleFormatter, travelPartyStore, travelPartySystem, simulationRuntime,
@@ -269,30 +283,47 @@ public class TesteSimulacao : MonoBehaviour
                 stageCompleted?.Invoke(stageId);
             }, simulationConfig != null && simulationConfig.useAuthoredGeographyProfile);
 
-            if (selectedAdmissionProfile && publishedComposition == null)
-                throw new System.InvalidOperationException("Simulation genesis returned without publishing its composition.");
+            if (draftComposition == null)
+                throw new System.InvalidOperationException("Simulation genesis returned without creating its private composition draft.");
+            if (!ReferenceEquals(Thread.CurrentThread, initializeThread)
+                || Thread.CurrentThread.ManagedThreadId != initializeThreadId)
+                throw new System.InvalidOperationException("Simulation genesis completed on a thread other than its composition-entry thread.");
             if (runtimeAdmissionContext != null && !IsBootstrapStartThreadCurrent())
                 throw new System.InvalidOperationException("Simulation bootstrap completed on a thread other than its captured Unity Start thread.");
 
-            pipelineReturnedNormally = true;
+            publishedComposition = draftComposition;
+            draftComposition = null;
+
+            if (bootstrapPublicationScope != null)
+            {
+                bootstrapPublicationScope.Dispose();
+                bootstrapPublicationScope = null;
+                ContinuationCensusFailure closeFailure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+                if (simulationRuntime == null
+                    || !simulationRuntime.TryAssessNpcRosterCensus(out closeFailure))
+                    throw new System.InvalidOperationException(
+                        "The P12 bootstrap publication scope did not close with healthy registered-owner quiescence: " + closeFailure);
+            }
+
+            unpublishedWorldId = null;
+            worldPublished = true;
         }
         catch
         {
-            if (selectedAdmissionProfile)
-            {
-                bootstrapFailed = true;
-                publishedComposition = null;
+            bootstrapFailed = true;
+            worldPublished = false;
+            unpublishedWorldId = null;
+            draftComposition = null;
+            publishedComposition = null;
+            if (runtimeAdmissionContext != null)
                 simulationRuntime?.FaultRuntimeAdmission();
-            }
             throw;
         }
         finally
         {
             if (bootstrapPublicationScope != null)
             {
-                if (!pipelineReturnedNormally)
-                    simulationRuntime?.FaultRuntimeAdmission();
-
+                simulationRuntime?.FaultRuntimeAdmission();
                 bootstrapPublicationScope.Dispose();
                 bootstrapPublicationScope = null;
             }
@@ -304,6 +335,11 @@ public class TesteSimulacao : MonoBehaviour
         return bootstrapStartThread != null
             && ReferenceEquals(bootstrapStartThread, Thread.CurrentThread)
             && bootstrapStartThreadId == Thread.CurrentThread.ManagedThreadId;
+    }
+
+    private static WorldId CreateWorldIdentity()
+    {
+        return new WorldId(System.Guid.NewGuid());
     }
 
     private void ComposeAuthoredGeography()
@@ -458,7 +494,7 @@ public class TesteSimulacao : MonoBehaviour
 
     public bool TryGetNpcRuntime(string runtimeId, out NpcRuntime npcRuntime)
     {
-        if (publishedComposition != null && runtimeIdentityRegistry != null)
+        if (PublicComposition != null && runtimeIdentityRegistry != null)
         {
             return runtimeIdentityRegistry.TryGetNpc(runtimeId, out npcRuntime);
         }
@@ -470,7 +506,7 @@ public class TesteSimulacao : MonoBehaviour
 
     public bool TryGetCityRuntime(string runtimeId, out CityRuntime cityRuntime)
     {
-        if (publishedComposition != null && runtimeIdentityRegistry != null)
+        if (PublicComposition != null && runtimeIdentityRegistry != null)
         {
             return runtimeIdentityRegistry.TryGetCity(runtimeId, out cityRuntime);
         }
@@ -482,7 +518,7 @@ public class TesteSimulacao : MonoBehaviour
 
     public bool TryGetSpatialLocation(string runtimeId, out SpatialLocationRuntime location)
     {
-        if (publishedComposition != null && spatialNetwork != null)
+        if (PublicComposition != null && spatialNetwork != null)
         {
             return spatialNetwork.TryGetLocation(runtimeId, out location);
         }
@@ -494,7 +530,7 @@ public class TesteSimulacao : MonoBehaviour
 
     public bool TryGetSpatialRoute(string runtimeId, out SpatialRouteRuntime route)
     {
-        if (publishedComposition != null && spatialNetwork != null)
+        if (PublicComposition != null && spatialNetwork != null)
         {
             return spatialNetwork.TryGetRoute(runtimeId, out route);
         }
@@ -506,7 +542,7 @@ public class TesteSimulacao : MonoBehaviour
 
     public bool TryGetExplorableSiteRuntime(string runtimeId, out ExplorableSiteRuntime siteRuntime)
     {
-        if (publishedComposition != null && runtimeIdentityRegistry != null)
+        if (PublicComposition != null && runtimeIdentityRegistry != null)
         {
             return runtimeIdentityRegistry.TryGetExplorableSite(runtimeId, out siteRuntime);
         }
@@ -518,7 +554,7 @@ public class TesteSimulacao : MonoBehaviour
 
     public IReadOnlyList<NpcChronicleEntry> GetNpcChronicle(string npcRuntimeId)
     {
-        return publishedComposition != null && npcChronicleService != null
+        return PublicComposition != null && npcChronicleService != null
             ? npcChronicleService.GetChronicle(npcRuntimeId)
             : System.Array.Empty<NpcChronicleEntry>();
     }
@@ -548,7 +584,7 @@ public class TesteSimulacao : MonoBehaviour
 
     private void Simulate(int daysToSimulate)
     {
-        if (publishedComposition == null || simulationRuntime == null)
+        if (PublicComposition == null || simulationRuntime == null)
         {
             return;
         }
