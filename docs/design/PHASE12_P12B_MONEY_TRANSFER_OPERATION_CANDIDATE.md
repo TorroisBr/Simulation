@@ -1,7 +1,8 @@
 # P12-B NPC money-transfer operation implementation candidate
 
-**Status:** implementation candidate; awaiting independent exact-tip review and
-separate canonical promotion approval. This is part of accepted P12-B
+**Status:** promoted to P12 canonical at `2f2b731866aea86eb52ef2b51eb687c88bf91bc4`
+after independent exact-tip review, recorded at
+`09f9f49ef85faf5c24eae57acba4426ca0bc39f8`. This is part of accepted P12-B
 prerequisite work and adds no new checkpoint ID or product behavior.
 
 | Identity | Value |
@@ -67,9 +68,9 @@ remain green.
 
 ## Integration limits
 
-Integrate only after exact-tip independent review. Revalidate against the
-current P12 canonical tip before promotion if that tip advances. Preserve the
-existing State limits: P12-B incomplete, P12-A `WAIT_DEPENDENCY`, and P13
-blocked. No other Economy transaction family, crime outcome, City account,
-merchant, travel, Justice, epoch, capture, or continuation capability is
-included.
+The candidate was fast-forwarded onto P12 canonical from `53989ee` after the
+review and approval gates passed. The exact reviewed code tree is unchanged.
+Preserve the existing State limits: P12-B incomplete, P12-A
+`WAIT_DEPENDENCY`, and P13 blocked. No other Economy transaction family,
+crime outcome, City account, merchant, travel, Justice, epoch, capture, or
+continuation capability is included.

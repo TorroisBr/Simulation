@@ -933,8 +933,8 @@ existing bootstrap publication scope before exposing the world. The review
 examined retained tests; it did not rerun them. FR-B still needs its own exact
 Faction/Person read-cut proof and serialized integration review.
 
-The next P12 operation gap is the bounded NPC-to-NPC money-transfer
-boundary. Its refreshed design is based on current P12 canonical
+The P12 operation gap identified at this refresh was the bounded NPC-to-NPC
+money-transfer boundary. Its refreshed design was based on P12 canonical
 `ed14e8dd9575a56461f7648d7ff786e114224785`, with exact design tip
 `ea1d5b58ab8c5204c7559d13be10034e3a8732eb` and independent PASS review
 record `74dc9b5360fb356eca58874878942ee90b786fd8` on
@@ -944,8 +944,36 @@ hooks for each commit, and keeps one named scope across transfer and any
 successful source compensation. The P12-bound raw-account overload rejects
 before writes; finite zero transfer between distinct valid accounts retains
 success without revisions or epoch advancement. The accepted P12-B
-prerequisite authorization and exact design review make this slice
-READY_FOR_IMPLEMENTATION. Implementation is not yet delivered.
+prerequisite authorization and exact design review made this slice
+READY_FOR_IMPLEMENTATION. Its reviewed implementation is now promoted; the
+remaining operation matrix must be reevaluated against the new canonical tip.
+
+## P12-B NPC money-transfer operation promotion — 2026-10-02
+
+With explicit approval, the implementation candidate
+`codex/phase12/P12BMoneyTransferImplementation` was fast-forwarded from P12
+canonical `53989ee940e0dc0b22492873ebaffb2cd02f8f58` to
+`2f2b731866aea86eb52ef2b51eb687c88bf91bc4`. Its code-bearing commit is
+`66415aefe6834fc73e9e6c3b22fe0ee3058cfa11` (tree
+`862bceb6164bf5ddeed49ca8007d9be3ed4670d6`). Independent exact-tip review
+passed with no actionable findings and is durably recorded at
+`09f9f49ef85faf5c24eae57acba4426ca0bc39f8` on
+`codex/phase12/P12BMoneyTransferImplementationReview`.
+
+The candidate registers and scopes only
+`runtime.economy.money-transfer` for a transfer between exact rostered NPC
+MoneyAccount owners, including committed debit, credit, compensation and
+result selection. Promoted owner hooks remain the commit notification path;
+the P12-bound raw-account overload rejects before writes. The validation
+record at the candidate contains matching retained XML/log hashes: admission
+28/28, economy transaction 45/45, crime integration 12/12, ALL EditMode
+2152/2152, official Smoke 5/5, and `git diff --check` PASS.
+
+This promotion does not complete P12-B or establish complete owner or
+operation coverage, universal shared-epoch coverage, runtime-wide
+owner-thread/quiescence, capture eligibility, export/hydration, or P12-A
+readiness. P12-B remains incomplete; P12-A remains `WAIT_DEPENDENCY`; P13
+remains blocked; Phase 12 remains open.
 
 Current checkpoint status remains: P12-A WAIT_DEPENDENCY; P12-B INCOMPLETE;
 P12-C through P12-G blocked by their documented prerequisites; P13 blocked.
