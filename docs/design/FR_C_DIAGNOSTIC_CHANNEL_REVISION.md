@@ -2,11 +2,12 @@
 
 ## Status and bases
 
-- Design state: proposed for independent exact-tip review.
+- Design state: `IMPLEMENTATION_READY`, provisional on the reviewed FR-B live candidate; Phase 12 integration is still required before FR-C can be called integrated.
 - FR-C design authority: `codex/architecture/world-identity-projection` at `451340c56e9b676bf6ea43412bcb856b9ccde3de`; original FR-C review `96062630aed6e1fbb616a48d97290c331aed50c6` found no semantic blocker apart from the FR-B capability dependency.
 - FR-B provisional implementation base: reviewed code commit `5c43733088bfbe860183f849d16295b542c1f465`, tree `d7d463960756e313bdc3800a20ecc976b659f2c5`.
 - Phase 12 canonical at this revision's start: `1ac675cc558aa919a749167647c10506c11303fc`.
 - This FR-C line is provisional and stacked on the FR-B candidate. It does not claim FR-B is canonical or FR-C integrated.
+- Independent exact-tip design review: **PASS** against proposal commit `64f33fd2c935ff1ab78ccfa08fb3bbecdf4b4c17`, tree `aee2ab0ad6ecbe6f46be0e0ff062ee885e055993`, in a clean detached worktree. The reviewer found no blocking design issue, made no changes, and ran no tests.
 
 ## Problem
 
@@ -35,6 +36,12 @@ The reader remains inside `TryCaptureCoherent`; the coordinator's before/after l
 Add focused factual-read tests proving that diagnostics are immutable, sorted deterministically, tied to the right capability, and preserved when the coordinator discards all factual output. Verify that a reader exception produces only the stable generic diagnostic and does not publish exception text. Existing result-status and no-partial-capture tests must continue to pass.
 
 The FR-C reader tests must also cover source-field fidelity; blank display names; known-empty Factions; active versus ended affiliations; same-cut Person endpoint verification; fail-closed invalid endpoints with diagnostics; duplicate/invalid affiliation rejection; deterministic ordering across insertion orders and locale; immutable copied records and collections; boundary/revision changes; and exclusion of actor Knowledge/support facts.
+
+## Independent design review record
+
+The reviewer confirmed that capture-scoped diagnostics satisfy the FR-C requirement while leaving factual statuses unchanged and allowing the coordinator to discard every value from a failed capture. The additive read-only capture property preserves public `FactReadResult<T>` and `TryGet<T>` behavior; the reader outcome wrapper changes only the internal reader seam. The reviewer also confirmed the deterministic sorting and generic exception-diagnostic boundary.
+
+Implementation checks carried forward from review: accept or retain diagnostics only for `Unavailable` outcomes; attribute each diagnostic to the capability that produced it; test preservation of that diagnostic after all factual values are discarded. No design review findings remain open.
 
 ## Provisional implementation plan and boundaries
 
