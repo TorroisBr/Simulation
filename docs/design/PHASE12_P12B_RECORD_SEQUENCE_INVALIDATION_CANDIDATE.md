@@ -10,7 +10,6 @@ not complete P12-B.
 - Canonical base: `1ac675cc558aa919a749167647c10506c11303fc`
 - Code candidate: `cd7ca4498d2c1d3591c227bd9011429f9bd06d8f`
 - Code tree: `5282d65fbc4311bb6b907770a4e6fa363ad633df`
-- Candidate evidence commit: `2394c9ada04cec1588550e4b12f757f1efb630a6`
 - Design: `a9c1214bff81907f6f0b34b329e2d391401f4a7a`
 - Independent design review: `codex/phase12/P12BRecordSequenceInvalidationDesignReview`
   at `6c46dfc` (PASS).
