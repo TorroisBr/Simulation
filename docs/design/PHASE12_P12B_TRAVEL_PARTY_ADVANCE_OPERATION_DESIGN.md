@@ -1,10 +1,12 @@
 # P12-B selected-profile TravelParty advance operation design
 
-**Status:** bounded technical design proposal; awaiting independent exact-tip
-design review. This is a sub-slice of the already accepted P12-B capability
-scope. It adds no gameplay rule, checkpoint ID, capture eligibility, or Phase
-readiness claim. Implementation may proceed only after the design review passes
-and its assumptions still match canonical.
+**Status:** bounded technical design; independent exact-tip review PASS at
+`c75c673be48b506c71730d12503b42bebc6f7f4c`, recorded in
+`PHASE12_P12B_TRAVEL_PARTY_ADVANCE_OPERATION_DESIGN_REVIEW.md`. This is a
+sub-slice of the already accepted P12-B capability scope. It adds no gameplay
+rule, checkpoint ID, capture eligibility, or Phase readiness claim. The
+implementation candidate must revalidate these assumptions against its current
+canonical base.
 
 **Canonical base:** `codex/phase12/canonical` at
 `0f36331d84ad3139171d36f980dfe6fa635ae30c` (promotion State and blocker-matrix
