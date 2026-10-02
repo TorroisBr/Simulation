@@ -405,12 +405,22 @@ public sealed class NpcKnowledgeCensusTests
         List<NpcRuntime> roster = new List<NpcRuntime> { npcB };
         ContinuationCensusProtocol protocol = CreateCompleteNpcFamilyProtocol(personStore, roster);
         IReadOnlyList<IOwnerSectionCensusProvider> initialKnowledge = protocol.NpcKnowledgeFamilyProviders;
+        IReadOnlyList<IOwnerSectionCensusProvider> initialPlans = protocol.NpcPlanFamilyProviders;
+        Assert.That(initialPlans, Has.Count.EqualTo(2));
 
         NpcRuntime npcA = new NpcRuntime("npc-a", null);
         roster.Add(npcA);
         ReconcileNpcFamily(protocol, personStore);
         IReadOnlyList<IOwnerSectionCensusProvider> afterAddition = protocol.NpcKnowledgeFamilyProviders;
+        IReadOnlyList<IOwnerSectionCensusProvider> plansAfterAddition = protocol.NpcPlanFamilyProviders;
         Assert.That(afterAddition, Has.Count.EqualTo(20));
+        Assert.That(plansAfterAddition, Has.Count.EqualTo(4));
+        Assert.That(plansAfterAddition[0].GetCurrentCensus().SectionId,
+            Is.EqualTo(NpcPlanCensusProvider.MerchantTradePlanSectionPrefix + "npc-a"));
+        Assert.That(plansAfterAddition[1].GetCurrentCensus().SectionId,
+            Is.EqualTo(NpcPlanCensusProvider.TravelPlanSectionPrefix + "npc-a"));
+        Assert.That(plansAfterAddition[2], Is.SameAs(initialPlans[0]));
+        Assert.That(plansAfterAddition[3], Is.SameAs(initialPlans[1]));
         Assert.That(afterAddition[0].GetCurrentCensus().SectionId, Does.EndWith("/npc-a"));
         Assert.That(afterAddition[10].GetCurrentCensus().SectionId, Does.EndWith("/npc-b"));
         Assert.That(afterAddition[10], Is.SameAs(initialKnowledge[0]));
@@ -421,7 +431,11 @@ public sealed class NpcKnowledgeCensusTests
         roster.Remove(npcA);
         ReconcileNpcFamily(protocol, personStore);
         IReadOnlyList<IOwnerSectionCensusProvider> afterRemoval = protocol.NpcKnowledgeFamilyProviders;
+        IReadOnlyList<IOwnerSectionCensusProvider> plansAfterRemoval = protocol.NpcPlanFamilyProviders;
         Assert.That(afterRemoval, Has.Count.EqualTo(10));
+        Assert.That(plansAfterRemoval, Has.Count.EqualTo(2));
+        Assert.That(plansAfterRemoval[0], Is.SameAs(initialPlans[0]));
+        Assert.That(plansAfterRemoval[1], Is.SameAs(initialPlans[1]));
         Assert.That(afterRemoval[0].GetCurrentCensus().SectionId, Does.EndWith("/npc-b"));
         Assert.That(ReadEpoch(protocol), Is.EqualTo(2L));
         Assert.That(protocol.TryAssessOwnerSectionInventory(out ContinuationCensusFailure removeAssessment), Is.True,
@@ -431,7 +445,15 @@ public sealed class NpcKnowledgeCensusTests
         roster[0] = replacement;
         ReconcileNpcFamily(protocol, personStore);
         IReadOnlyList<IOwnerSectionCensusProvider> afterReplacement = protocol.NpcKnowledgeFamilyProviders;
+        IReadOnlyList<IOwnerSectionCensusProvider> plansAfterReplacement = protocol.NpcPlanFamilyProviders;
         Assert.That(afterReplacement, Has.Count.EqualTo(10));
+        Assert.That(plansAfterReplacement, Has.Count.EqualTo(2));
+        Assert.That(plansAfterReplacement[0], Is.Not.SameAs(plansAfterRemoval[0]));
+        Assert.That(plansAfterReplacement[0].GetCurrentCensus().OwnerInstanceIdentity,
+            Is.SameAs(replacement.MerchantTradePlan));
+        Assert.That(plansAfterReplacement[1], Is.Not.SameAs(plansAfterRemoval[1]));
+        Assert.That(plansAfterReplacement[1].GetCurrentCensus().OwnerInstanceIdentity,
+            Is.SameAs(replacement.TravelPlan));
         Assert.That(afterReplacement[0], Is.Not.SameAs(afterRemoval[0]));
         Assert.That(afterReplacement[0].GetCurrentCensus().OwnerInstanceIdentity,
             Is.SameAs(replacement.ExplorableSiteKnowledge));
@@ -745,6 +767,8 @@ public sealed class NpcKnowledgeCensusTests
         }
         Assert.That(protocol.RegisterNpcKnowledgeRosterFamily(roster, out ContinuationCensusFailure knowledgeFailure), Is.True,
             knowledgeFailure.ToString());
+        Assert.That(protocol.RegisterNpcPlanRosterFamily(roster, out ContinuationCensusFailure planFailure), Is.True,
+            planFailure.ToString());
         Assert.That(protocol.SealExpectedSectionInventory(out _), Is.True);
         Assert.That(protocol.SealCensusProviderInventory(out _), Is.True);
         Assert.That(protocol.RegisterExpectedOperation("runtime.npc-membership", out _), Is.True);

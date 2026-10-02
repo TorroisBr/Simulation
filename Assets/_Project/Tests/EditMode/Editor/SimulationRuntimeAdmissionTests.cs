@@ -69,6 +69,149 @@ public sealed class SimulationRuntimeAdmissionTests
     }
 
     [Test]
+    public void DailyKnowledgeWritersRefreshOwnerBaselinesBeforeMerchantRosterCall()
+    {
+        ItemData item = SimulationTestFactory.CreateItem("p12-merchant-daily-item", 10f);
+        CityRuntime city = SimulationTestFactory.CreateCity(
+            "p12-merchant-daily-city",
+            "p12-merchant-daily-location",
+            SimulationTestFactory.CreateMarketItem(item, 8, 10));
+        NpcRuntime merchant = new NpcRuntime(
+            "p12-merchant-daily-actor",
+            SimulationTestFactory.CreateNpc("p12-merchant-daily-actor", NpcJobType.Merchant),
+            city,
+            100f);
+        SimulationTime time = new SimulationTime();
+        EffectiveSimulationConfiguration defaults = SimulationConfigurationDefaults.Create();
+        EffectiveSimulationConfiguration configuration = new EffectiveSimulationConfiguration(
+            defaults.Population,
+            new EffectiveEconomyConfiguration(false),
+            defaults.Travel,
+            defaults.Crime,
+            defaults.GuardCrime,
+            defaults.NaturalMortality,
+            defaults.AggregateDemography,
+            new EffectiveMerchantTradeConfiguration(enabled: true),
+            defaults.CommercialKnowledge);
+        MerchantSystem merchantSystem = new MerchantSystem(
+            new EffectiveMerchantTradeConfiguration(enabled: true),
+            defaults.CommercialKnowledge,
+            null,
+            time,
+            null);
+        SimulationRuntime runtime = new SimulationRuntime(
+            time,
+            new[] { city },
+            new[] { merchant },
+            merchantSystem: merchantSystem,
+            configuration: configuration,
+            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1());
+
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long before, out ContinuationCensusFailure beforeFailure),
+            Is.True, beforeFailure.ToString());
+        const int dayCount = 100;
+        Assert.That(runtime.TryAdvanceDays(dayCount, out int advanced, out SimulationRuntimeAdvanceFailure advanceFailure),
+            Is.True, advanceFailure.ToString());
+        Assert.That(advanced, Is.EqualTo(dayCount));
+        Assert.That(merchant.SpatialKnowledge.KnowsLocation(city.Location.RuntimeId), Is.True);
+        Assert.That(merchant.CommercialKnowledge.TryGetObservation(
+            city.Location.RuntimeId, item.DefinitionId, out CommercialMarketObservation observation), Is.True);
+        Assert.That(observation.ObservedDay, Is.EqualTo(dayCount));
+        Assert.That(merchant.CommercialKnowledge.TryGetLiquidityObservation(
+            city.Location.RuntimeId, out CommercialLiquidityObservation liquidity), Is.True);
+        Assert.That(liquidity.ObservedDay, Is.EqualTo(dayCount));
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long after, out ContinuationCensusFailure afterFailure),
+            Is.True, afterFailure.ToString());
+        Assert.That(after, Is.EqualTo(before + 3 + ((dayCount - 1) * 2)),
+            "the first daily refresh commits SpatialKnowledge once and CommercialKnowledge twice; each later refresh updates the two shared-revision Commercial sections before the same-day Merchant roster call");
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure assessment), Is.True,
+            assessment.ToString());
+    }
+
+    [Test]
+    public void MerchantOperationBatchesChangedOwnerSectionsOnceAndHoldsScopeThroughCommit()
+    {
+        ItemData item = SimulationTestFactory.CreateItem("p12-merchant-operation-item", 10f);
+        CityRuntime city = SimulationTestFactory.CreateCity(
+            "p12-merchant-operation-city",
+            "p12-merchant-operation-location",
+            SimulationTestFactory.CreateMarketItem(item, 8, 10));
+        CityRuntime staleTarget = SimulationTestFactory.CreateCity(
+            "p12-merchant-operation-stale-target",
+            "p12-merchant-operation-stale-target-location");
+        NpcRuntime merchant = new NpcRuntime(
+            "p12-merchant-operation-actor",
+            SimulationTestFactory.CreateNpc(
+                "p12-merchant-operation-actor", NpcJobType.Merchant, MerchantBehavior.Local),
+            city,
+            100f);
+        merchant.MerchantTradePlan.Set(item, city, city, 2, 4f);
+        merchant.TravelPlan.Set(staleTarget, NpcTravelReason.Trade, 20f, 1f, "existing-trade-intent");
+        SimulationTime time = new SimulationTime();
+        EffectiveSimulationConfiguration defaults = SimulationConfigurationDefaults.Create();
+        EffectiveSimulationConfiguration configuration = new EffectiveSimulationConfiguration(
+            defaults.Population,
+            new EffectiveEconomyConfiguration(false),
+            defaults.Travel,
+            defaults.Crime,
+            defaults.GuardCrime,
+            defaults.NaturalMortality,
+            defaults.AggregateDemography,
+            new EffectiveMerchantTradeConfiguration(enabled: true),
+            defaults.CommercialKnowledge);
+        MerchantSystem merchantSystem = new MerchantSystem(
+            new EffectiveMerchantTradeConfiguration(enabled: true),
+            defaults.CommercialKnowledge,
+            null,
+            time,
+            null);
+        SimulationRuntime runtime = new SimulationRuntime(
+            time,
+            new[] { city },
+            new[] { merchant },
+            merchantSystem: merchantSystem,
+            configuration: configuration,
+            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1());
+
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long before, out ContinuationCensusFailure beforeFailure),
+            Is.True, beforeFailure.ToString());
+        MethodInfo beginOperation = typeof(SimulationRuntime).GetMethod(
+            "TryBeginP12MerchantDailyNpcTradeOperation",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(beginOperation, Is.Not.Null);
+        object[] arguments = { merchant, null };
+        Assert.That((bool)beginOperation.Invoke(runtime, arguments), Is.True);
+        System.IDisposable operationScope = (System.IDisposable)arguments[1];
+        Assert.That(operationScope, Is.Not.Null);
+        using (operationScope)
+        {
+            Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure activeFailure), Is.False);
+            Assert.That(activeFailure, Is.EqualTo(ContinuationCensusFailure.OperationInProgress));
+            merchantSystem.AdvanceNpcTradeState(merchant);
+        }
+
+        Assert.That(merchant.SpatialKnowledge.KnowsLocation(city.Location.RuntimeId), Is.True);
+        Assert.That(merchant.MerchantTradePlan.HasData, Is.False,
+            "the local merchant normalizes its existing plan inside the nested operation");
+        Assert.That(merchant.TravelPlan.IsActive, Is.False,
+            "clearing the local merchant plan clears its embedded Trade travel intent in the same batch");
+        Assert.That(merchant.MerchantTradePlan.Revision, Is.EqualTo(2));
+        Assert.That(merchant.TravelPlan.Revision, Is.EqualTo(2));
+        Assert.That(merchant.CommercialKnowledge.TryGetObservation(
+            city.Location.RuntimeId, item.DefinitionId, out CommercialMarketObservation observation), Is.True);
+        Assert.That(observation.ObservedDay, Is.Zero);
+        Assert.That(merchant.CommercialKnowledge.TryGetLiquidityObservation(
+            city.Location.RuntimeId, out CommercialLiquidityObservation liquidity), Is.True);
+        Assert.That(liquidity.ObservedDay, Is.Zero);
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long after, out ContinuationCensusFailure afterFailure),
+            Is.True, afterFailure.ToString());
+        Assert.That(after, Is.EqualTo(before + 1),
+            "SpatialKnowledge and all CommercialKnowledge sibling sections publish as one post-commit epoch");
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure assessment), Is.True,
+            assessment.ToString());
+    }
+
+    [Test]
     public void P12NpcTrade_NotifiesEachCommittedAccountAndInventoryOwner()
     {
         ItemData item = SimulationTestFactory.CreateItem("p12-npc-trade");

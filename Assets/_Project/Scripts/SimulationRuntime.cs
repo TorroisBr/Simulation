@@ -125,6 +125,7 @@ public sealed partial class SimulationRuntime
     private const string NpcMoneyTransferCensusOperationId = "runtime.economy.money-transfer";
     private const string MarketPurchaseCensusOperationId = "runtime.economy.market-purchase";
     private const string MarketSaleCensusOperationId = "runtime.economy.market-sale";
+    private const string MerchantDailyNpcTradeCensusOperationId = "runtime.merchant.advance-npc-trade-state";
 
     private sealed class NpcMembershipCensusContext
     {
@@ -193,6 +194,44 @@ public sealed partial class SimulationRuntime
         }
     }
 
+    private sealed class P12MerchantOperationContext
+    {
+        public readonly Thread OwnerThread;
+        public readonly int OwnerManagedThreadId;
+        public readonly HashSet<string> ChangedSectionIds = new HashSet<string>(StringComparer.Ordinal);
+        public SimulationOperationScope ProtocolScope;
+
+        public P12MerchantOperationContext(Thread ownerThread, SimulationOperationScope protocolScope)
+        {
+            OwnerThread = ownerThread ?? throw new ArgumentNullException(nameof(ownerThread));
+            OwnerManagedThreadId = ownerThread.ManagedThreadId;
+            ProtocolScope = protocolScope ?? throw new ArgumentNullException(nameof(protocolScope));
+        }
+
+        public bool IsOwnedByCurrentThread() => ReferenceEquals(OwnerThread, Thread.CurrentThread)
+            && OwnerManagedThreadId == Thread.CurrentThread.ManagedThreadId;
+    }
+
+    private sealed class P12MerchantOperationScope : IDisposable
+    {
+        private readonly SimulationRuntime owner;
+        private readonly P12MerchantOperationContext context;
+        private bool disposed;
+
+        public P12MerchantOperationScope(SimulationRuntime owner, P12MerchantOperationContext context)
+        {
+            this.owner = owner;
+            this.context = context;
+        }
+
+        public void Dispose()
+        {
+            if (disposed) return;
+            disposed = true;
+            owner?.ExitP12MerchantOperation(context);
+        }
+    }
+
     private readonly AuthoritativeMutationGuard mutationGuard = new AuthoritativeMutationGuard();
     private bool advanceLeaseHeld;
     private readonly SimulationRuntimeAdmissionContext runtimeAdmissionContext;
@@ -215,7 +254,16 @@ public sealed partial class SimulationRuntime
         new Dictionary<MoneyAccountRuntime, P12NpcOwnerMutationBinding>();
     private readonly Dictionary<InventoryRuntime, P12NpcOwnerMutationBinding> npcInventoryMutationBindings =
         new Dictionary<InventoryRuntime, P12NpcOwnerMutationBinding>();
+    private readonly Dictionary<SpatialKnowledgeRuntime, P12NpcOwnerMutationBinding> npcSpatialKnowledgeMutationBindings =
+        new Dictionary<SpatialKnowledgeRuntime, P12NpcOwnerMutationBinding>();
+    private readonly Dictionary<CommercialKnowledgeRuntime, P12NpcOwnerMutationBinding> npcCommercialKnowledgeMutationBindings =
+        new Dictionary<CommercialKnowledgeRuntime, P12NpcOwnerMutationBinding>();
+    private readonly Dictionary<MerchantTradePlanRuntime, P12NpcOwnerMutationBinding> npcMerchantPlanMutationBindings =
+        new Dictionary<MerchantTradePlanRuntime, P12NpcOwnerMutationBinding>();
+    private readonly Dictionary<NpcTravelPlanRuntime, P12NpcOwnerMutationBinding> npcTravelPlanMutationBindings =
+        new Dictionary<NpcTravelPlanRuntime, P12NpcOwnerMutationBinding>();
     private volatile NpcMembershipCensusContext activeNpcMembershipCensusContext;
+    private volatile P12MerchantOperationContext activeP12MerchantOperationContext;
     private readonly ActorChoiceStore actorChoiceStore;
     private readonly SpatialAuthorityStore spatialAuthorityStore;
     private readonly LegacySpatialAnchorBindingStore legacySpatialAnchorBindingStore;
@@ -992,6 +1040,7 @@ public sealed partial class SimulationRuntime
             || !protocol.RegisterInventoryRosterFamily(npcRuntimeSnapshot, out _)
             || !protocol.RegisterMoneyAccountRosterFamily(npcRuntimeSnapshot, out _)
             || !protocol.RegisterNpcKnowledgeRosterFamily(npcRuntimeSnapshot, out _)
+            || !protocol.RegisterNpcPlanRosterFamily(npcRuntimeSnapshot, out _)
             || (runtimeAdmissionContext != null && !TryRegisterCityMarketCensusProviders(protocol))
             || !protocol.SealExpectedSectionInventory(out _)
             || !protocol.SealCensusProviderInventory(out _))
@@ -1022,6 +1071,9 @@ public sealed partial class SimulationRuntime
                     out _)
                 && protocol.RegisterExpectedOperation(
                     MarketSaleCensusOperationId,
+                    out _)
+                && protocol.RegisterExpectedOperation(
+                    MerchantDailyNpcTradeCensusOperationId,
                     out _);
         }
 
@@ -1194,6 +1246,101 @@ public sealed partial class SimulationRuntime
                 }
             }
 
+            List<P12NpcOwnerMutationBinding> spatialBindings = new List<P12NpcOwnerMutationBinding>();
+            IReadOnlyList<IOwnerSectionCensusProvider> spatialProviders =
+                SpatialKnowledgeCensusProvider.CreateProviders(npcRuntimes);
+            foreach (IOwnerSectionCensusProvider censusProvider in spatialProviders)
+            {
+                if (!(censusProvider is SpatialKnowledgeCensusProvider.ISpatialKnowledgeSectionCensusProvider provider)
+                    || string.IsNullOrWhiteSpace(provider.RuntimeId)
+                    || !npcRegistryById.TryGetValue(provider.RuntimeId, out NpcRuntime registeredNpc)
+                    || !ReferenceEquals(registeredNpc, provider.NpcOwner)
+                    || !ReferenceEquals(registeredNpc.ExistingSpatialKnowledge, provider.SpatialKnowledgeOwner))
+                    throw new InvalidOperationException("Spatial Knowledge census identity does not match the installed roster.");
+
+                OwnerSectionCensusWitness witness = censusProvider.GetCurrentCensus();
+                if (!ReferenceEquals(witness.OwnerInstanceIdentity, provider.SpatialKnowledgeOwner)
+                    || witness.SchemaVersion != SpatialKnowledgeCensusProvider.SchemaVersion
+                    || witness.Revision != provider.SpatialKnowledgeOwner.Revision)
+                    throw new InvalidOperationException("Spatial Knowledge census witness is not an exact current owner witness.");
+
+                AddP12NpcOwnerMutationSection(
+                    spatialBindings,
+                    provider.SpatialKnowledgeOwner,
+                    witness.SectionId);
+            }
+            foreach (P12NpcOwnerMutationBinding binding in spatialBindings)
+                if (binding.SectionIds.Length != 2)
+                    throw new InvalidOperationException("Each SpatialKnowledge owner must bind its location and route sections.");
+
+            List<P12NpcOwnerMutationBinding> commercialBindings = new List<P12NpcOwnerMutationBinding>();
+            IReadOnlyList<IOwnerSectionCensusProvider> knowledgeProviders =
+                NpcKnowledgeCensusProvider.CreateProviders(npcRuntimes);
+            foreach (IOwnerSectionCensusProvider censusProvider in knowledgeProviders)
+            {
+                if (!(censusProvider is NpcKnowledgeCensusProvider.INpcKnowledgeSectionCensusProvider provider)
+                    || provider.SectionKind < 7 || provider.SectionKind > 9)
+                    continue;
+                if (string.IsNullOrWhiteSpace(provider.RuntimeId)
+                    || !npcRegistryById.TryGetValue(provider.RuntimeId, out NpcRuntime registeredNpc)
+                    || !ReferenceEquals(registeredNpc, provider.NpcOwner)
+                    || !(provider.TypedOwner is CommercialKnowledgeRuntime commercialOwner)
+                    || !ReferenceEquals(registeredNpc.ExistingCommercialKnowledge, commercialOwner))
+                    throw new InvalidOperationException("Commercial Knowledge census identity does not match the installed roster.");
+
+                OwnerSectionCensusWitness witness = censusProvider.GetCurrentCensus();
+                if (!ReferenceEquals(witness.OwnerInstanceIdentity, commercialOwner)
+                    || witness.SchemaVersion != NpcKnowledgeCensusProvider.SchemaVersion
+                    || witness.Revision != commercialOwner.Revision
+                    || !string.Equals(witness.SectionId,
+                        NpcKnowledgeCensusProvider.SectionIdFor(provider.SectionKind, provider.RuntimeId),
+                        StringComparison.Ordinal))
+                    throw new InvalidOperationException("Commercial Knowledge census witness is not an exact current owner witness.");
+
+                AddP12NpcOwnerMutationSection(commercialBindings, commercialOwner, witness.SectionId);
+            }
+            foreach (P12NpcOwnerMutationBinding binding in commercialBindings)
+                if (binding.SectionIds.Length != 3)
+                    throw new InvalidOperationException("Each CommercialKnowledge owner must bind markets, liquidity, and share receipts.");
+
+            List<P12NpcOwnerMutationBinding> merchantPlanBindings = new List<P12NpcOwnerMutationBinding>();
+            List<P12NpcOwnerMutationBinding> travelPlanBindings = new List<P12NpcOwnerMutationBinding>();
+            IReadOnlyList<IOwnerSectionCensusProvider> planProviders = npcRosterCensusProtocol.NpcPlanFamilyProviders;
+            foreach (IOwnerSectionCensusProvider censusProvider in planProviders)
+            {
+                if (!(censusProvider is NpcPlanCensusProvider.INpcPlanSectionCensusProvider provider)
+                    || string.IsNullOrWhiteSpace(provider.RuntimeId)
+                    || !npcRegistryById.TryGetValue(provider.RuntimeId, out NpcRuntime registeredNpc)
+                    || !ReferenceEquals(registeredNpc, provider.NpcOwner))
+                    throw new InvalidOperationException("NPC plan census identity does not match the installed roster.");
+
+                OwnerSectionCensusWitness witness = censusProvider.GetCurrentCensus();
+                if (!ReferenceEquals(witness.OwnerInstanceIdentity, provider.PlanOwner)
+                    || witness.Cardinality != 1
+                    || witness.SchemaVersion != NpcPlanCensusProvider.SchemaVersion
+                    || !string.Equals(witness.SectionId,
+                        NpcPlanCensusProvider.SectionIdFor(provider.Kind, provider.RuntimeId),
+                        StringComparison.Ordinal))
+                    throw new InvalidOperationException("NPC plan census witness is not an exact current owner witness.");
+
+                if (provider.Kind == NpcPlanCensusProvider.MerchantTradePlanKind
+                    && provider.PlanOwner is MerchantTradePlanRuntime merchantPlan
+                    && ReferenceEquals(registeredNpc.ExistingMerchantTradePlan, merchantPlan))
+                    AddP12NpcOwnerMutationSection(merchantPlanBindings, merchantPlan, witness.SectionId);
+                else if (provider.Kind == NpcPlanCensusProvider.TravelPlanKind
+                    && provider.PlanOwner is NpcTravelPlanRuntime travelPlan
+                    && ReferenceEquals(registeredNpc.ExistingTravelPlan, travelPlan))
+                    AddP12NpcOwnerMutationSection(travelPlanBindings, travelPlan, witness.SectionId);
+                else
+                    throw new InvalidOperationException("NPC plan owner does not match its exact embedded field.");
+            }
+            foreach (P12NpcOwnerMutationBinding binding in merchantPlanBindings)
+                if (binding.SectionIds.Length != 1)
+                    throw new InvalidOperationException("An embedded NPC plan owner must bind exactly one RuntimeId section.");
+            foreach (P12NpcOwnerMutationBinding binding in travelPlanBindings)
+                if (binding.SectionIds.Length != 1)
+                    throw new InvalidOperationException("An embedded NPC plan owner must bind exactly one RuntimeId section.");
+
             if (accountSectionIds.Count != npcRuntimes.Count || inventorySectionIds.Count != npcRuntimes.Count)
                 throw new InvalidOperationException("The NPC owner census does not cover every installed NPC.");
 
@@ -1214,6 +1361,12 @@ public sealed partial class SimulationRuntime
                 npcInventoryMutationBindings.Add((InventoryRuntime)binding.Owner, binding);
             }
 
+            BindP12MerchantOwnerMutationBoundaries(
+                spatialBindings,
+                commercialBindings,
+                merchantPlanBindings,
+                travelPlanBindings);
+
             return true;
         }
         catch
@@ -1221,6 +1374,74 @@ public sealed partial class SimulationRuntime
             TryUnbindNpcOwnerMutationBoundaries();
             FaultRuntimeAdmission();
             return false;
+        }
+    }
+
+    private static void AddP12NpcOwnerMutationSection(
+        List<P12NpcOwnerMutationBinding> bindings,
+        object owner,
+        string sectionId)
+    {
+        if (bindings == null || owner == null || string.IsNullOrWhiteSpace(sectionId))
+            throw new ArgumentException("A P12 owner binding requires an exact owner and section.");
+        P12NpcOwnerMutationBinding existing = null;
+        foreach (P12NpcOwnerMutationBinding candidate in bindings)
+            if (ReferenceEquals(candidate.Owner, owner)) { existing = candidate; break; }
+        if (existing == null)
+        {
+            bindings.Add(new P12NpcOwnerMutationBinding(owner, new[] { sectionId }));
+            return;
+        }
+        if (Array.IndexOf(existing.SectionIds, sectionId) >= 0)
+            throw new InvalidOperationException("A P12 owner section is duplicated.");
+        string[] expanded = new string[existing.SectionIds.Length + 1];
+        Array.Copy(existing.SectionIds, expanded, existing.SectionIds.Length);
+        expanded[expanded.Length - 1] = sectionId;
+        bindings.Remove(existing);
+        bindings.Add(new P12NpcOwnerMutationBinding(owner, expanded));
+    }
+
+    private void BindP12MerchantOwnerMutationBoundaries(
+        IEnumerable<P12NpcOwnerMutationBinding> spatialBindings,
+        IEnumerable<P12NpcOwnerMutationBinding> commercialBindings,
+        IEnumerable<P12NpcOwnerMutationBinding> merchantPlanBindings,
+        IEnumerable<P12NpcOwnerMutationBinding> travelPlanBindings)
+    {
+        BindP12MerchantOwnerMutationBoundaries(
+            spatialBindings,
+            npcSpatialKnowledgeMutationBindings,
+            (binding, admission, committed) => ((SpatialKnowledgeRuntime)binding.Owner)
+                .BindP12MutationBoundary(admission, committed));
+        BindP12MerchantOwnerMutationBoundaries(
+            commercialBindings,
+            npcCommercialKnowledgeMutationBindings,
+            (binding, admission, committed) => ((CommercialKnowledgeRuntime)binding.Owner)
+                .BindP12MutationBoundary(admission, committed));
+        BindP12MerchantOwnerMutationBoundaries(
+            merchantPlanBindings,
+            npcMerchantPlanMutationBindings,
+            (binding, admission, committed) => ((MerchantTradePlanRuntime)binding.Owner)
+                .BindP12MutationBoundary(admission, committed));
+        BindP12MerchantOwnerMutationBoundaries(
+            travelPlanBindings,
+            npcTravelPlanMutationBindings,
+            (binding, admission, committed) => ((NpcTravelPlanRuntime)binding.Owner)
+                .BindP12MutationBoundary(admission, committed));
+    }
+
+    private void BindP12MerchantOwnerMutationBoundaries<TOwner>(
+        IEnumerable<P12NpcOwnerMutationBinding> bindings,
+        Dictionary<TOwner, P12NpcOwnerMutationBinding> destination,
+        Action<P12NpcOwnerMutationBinding, Func<bool>, Action> bind)
+        where TOwner : class
+    {
+        foreach (P12NpcOwnerMutationBinding binding in bindings)
+        {
+            Array.Sort(binding.SectionIds, StringComparer.Ordinal);
+            binding.Admission = () => CanCommitP12MerchantOwnerMutation(binding);
+            binding.Committed = () => NotifyP12MerchantOwnerMutation(binding);
+            bind(binding, binding.Admission, binding.Committed);
+            destination.Add((TOwner)binding.Owner, binding);
         }
     }
 
@@ -1240,6 +1461,38 @@ public sealed partial class SimulationRuntime
         {
             if (pair.Key.UnbindP12MutationBoundary(pair.Value.Admission, pair.Value.Committed))
                 npcInventoryMutationBindings.Remove(pair.Key);
+            else
+                succeeded = false;
+        }
+        foreach (KeyValuePair<SpatialKnowledgeRuntime, P12NpcOwnerMutationBinding> pair in
+            new List<KeyValuePair<SpatialKnowledgeRuntime, P12NpcOwnerMutationBinding>>(npcSpatialKnowledgeMutationBindings))
+        {
+            if (pair.Key.UnbindP12MutationBoundary(pair.Value.Admission, pair.Value.Committed))
+                npcSpatialKnowledgeMutationBindings.Remove(pair.Key);
+            else
+                succeeded = false;
+        }
+        foreach (KeyValuePair<CommercialKnowledgeRuntime, P12NpcOwnerMutationBinding> pair in
+            new List<KeyValuePair<CommercialKnowledgeRuntime, P12NpcOwnerMutationBinding>>(npcCommercialKnowledgeMutationBindings))
+        {
+            if (pair.Key.UnbindP12MutationBoundary(pair.Value.Admission, pair.Value.Committed))
+                npcCommercialKnowledgeMutationBindings.Remove(pair.Key);
+            else
+                succeeded = false;
+        }
+        foreach (KeyValuePair<MerchantTradePlanRuntime, P12NpcOwnerMutationBinding> pair in
+            new List<KeyValuePair<MerchantTradePlanRuntime, P12NpcOwnerMutationBinding>>(npcMerchantPlanMutationBindings))
+        {
+            if (pair.Key.UnbindP12MutationBoundary(pair.Value.Admission, pair.Value.Committed))
+                npcMerchantPlanMutationBindings.Remove(pair.Key);
+            else
+                succeeded = false;
+        }
+        foreach (KeyValuePair<NpcTravelPlanRuntime, P12NpcOwnerMutationBinding> pair in
+            new List<KeyValuePair<NpcTravelPlanRuntime, P12NpcOwnerMutationBinding>>(npcTravelPlanMutationBindings))
+        {
+            if (pair.Key.UnbindP12MutationBoundary(pair.Value.Admission, pair.Value.Committed))
+                npcTravelPlanMutationBindings.Remove(pair.Key);
             else
                 succeeded = false;
         }
@@ -1324,6 +1577,238 @@ public sealed partial class SimulationRuntime
         }
 
         return true;
+    }
+
+    private bool CanCommitP12MerchantOwnerMutation(P12NpcOwnerMutationBinding binding)
+    {
+        if (runtimeAdmissionContext == null) return true;
+        if (!IsRuntimeAdmissionOwnerThreadCurrent()
+            || npcRosterCensusProtocol == null
+            || !IsCurrentP12MerchantOwnerBinding(binding))
+        {
+            FaultRuntimeAdmission();
+            return false;
+        }
+
+        P12MerchantOperationContext context = activeP12MerchantOperationContext;
+        if (context != null)
+        {
+            if (!context.IsOwnedByCurrentThread())
+            {
+                FaultRuntimeAdmission();
+                return false;
+            }
+
+            bool alreadyChanged = true;
+            foreach (string sectionId in binding.SectionIds)
+                alreadyChanged &= context.ChangedSectionIds.Contains(sectionId);
+            if (alreadyChanged) return true;
+        }
+
+        if (!npcRosterCensusProtocol.TryValidateUnchangedSections(binding.SectionIds, out _))
+        {
+            FaultRuntimeAdmission();
+            return false;
+        }
+
+        return true;
+    }
+
+    private bool IsCurrentP12MerchantOwnerBinding(P12NpcOwnerMutationBinding binding)
+    {
+        if (binding == null || binding.Owner == null || binding.SectionIds.Length == 0) return false;
+        bool registered;
+        string prefix;
+        int expectedSectionCount;
+        if (binding.Owner is SpatialKnowledgeRuntime spatial)
+        {
+            registered = npcSpatialKnowledgeMutationBindings.TryGetValue(spatial, out P12NpcOwnerMutationBinding spatialKnown)
+                && ReferenceEquals(spatialKnown, binding);
+            prefix = null;
+            expectedSectionCount = 2;
+        }
+        else if (binding.Owner is CommercialKnowledgeRuntime commercial)
+        {
+            registered = npcCommercialKnowledgeMutationBindings.TryGetValue(commercial, out P12NpcOwnerMutationBinding commercialKnown)
+                && ReferenceEquals(commercialKnown, binding);
+            prefix = null;
+            expectedSectionCount = 3;
+        }
+        else if (binding.Owner is MerchantTradePlanRuntime merchantPlan)
+        {
+            registered = npcMerchantPlanMutationBindings.TryGetValue(merchantPlan, out P12NpcOwnerMutationBinding merchantKnown)
+                && ReferenceEquals(merchantKnown, binding);
+            prefix = NpcPlanCensusProvider.MerchantTradePlanSectionPrefix;
+            expectedSectionCount = 1;
+        }
+        else if (binding.Owner is NpcTravelPlanRuntime travelPlan)
+        {
+            registered = npcTravelPlanMutationBindings.TryGetValue(travelPlan, out P12NpcOwnerMutationBinding travelKnown)
+                && ReferenceEquals(travelKnown, binding);
+            prefix = NpcPlanCensusProvider.TravelPlanSectionPrefix;
+            expectedSectionCount = 1;
+        }
+        else
+        {
+            return false;
+        }
+
+        if (!registered || binding.SectionIds.Length != expectedSectionCount) return false;
+        string[] expected = new string[expectedSectionCount];
+        int matchingNpcCount = 0;
+        foreach (NpcRuntime npc in npcRuntimes)
+        {
+            if (npc == null || string.IsNullOrWhiteSpace(npc.RuntimeId)
+                || !npcRegistryById.TryGetValue(npc.RuntimeId, out NpcRuntime installed)
+                || !ReferenceEquals(installed, npc)) return false;
+
+            bool owns = binding.Owner is SpatialKnowledgeRuntime spatialOwner
+                ? ReferenceEquals(npc.ExistingSpatialKnowledge, spatialOwner)
+                : binding.Owner is CommercialKnowledgeRuntime commercialOwner
+                    ? ReferenceEquals(npc.ExistingCommercialKnowledge, commercialOwner)
+                    : binding.Owner is MerchantTradePlanRuntime merchantOwner
+                        ? ReferenceEquals(npc.ExistingMerchantTradePlan, merchantOwner)
+                        : binding.Owner is NpcTravelPlanRuntime travelOwner
+                            && ReferenceEquals(npc.ExistingTravelPlan, travelOwner);
+            if (!owns) continue;
+            matchingNpcCount++;
+            if (binding.Owner is SpatialKnowledgeRuntime)
+            {
+                expected[0] = SpatialKnowledgeCensusProvider.LocationsSectionPrefix + npc.RuntimeId;
+                expected[1] = SpatialKnowledgeCensusProvider.RoutesSectionPrefix + npc.RuntimeId;
+            }
+            else if (binding.Owner is CommercialKnowledgeRuntime)
+            {
+                expected[0] = NpcKnowledgeCensusProvider.SectionIdFor(7, npc.RuntimeId);
+                expected[1] = NpcKnowledgeCensusProvider.SectionIdFor(8, npc.RuntimeId);
+                expected[2] = NpcKnowledgeCensusProvider.SectionIdFor(9, npc.RuntimeId);
+            }
+            else
+            {
+                expected[0] = prefix + npc.RuntimeId;
+            }
+        }
+
+        if (matchingNpcCount != 1) return false;
+        Array.Sort(expected, StringComparer.Ordinal);
+        for (int i = 0; i < expected.Length; i++)
+            if (!string.Equals(expected[i], binding.SectionIds[i], StringComparison.Ordinal)) return false;
+        return true;
+    }
+
+    private void NotifyP12MerchantOwnerMutation(P12NpcOwnerMutationBinding binding)
+    {
+        if (runtimeAdmissionContext == null || npcRosterCensusProtocol == null) return;
+        try
+        {
+            if (!IsRuntimeAdmissionOwnerThreadCurrent() || !IsCurrentP12MerchantOwnerBinding(binding))
+            {
+                FaultRuntimeAdmission();
+                return;
+            }
+
+            P12MerchantOperationContext context = activeP12MerchantOperationContext;
+            if (context != null)
+            {
+                if (!context.IsOwnedByCurrentThread())
+                {
+                    FaultRuntimeAdmission();
+                    return;
+                }
+                foreach (string sectionId in binding.SectionIds)
+                    context.ChangedSectionIds.Add(sectionId);
+                return;
+            }
+
+            if (!npcRosterCensusProtocol.NotifyCommittedMutations(binding.SectionIds, out _))
+                FaultRuntimeAdmission();
+        }
+        catch
+        {
+            FaultRuntimeAdmission();
+        }
+    }
+
+    private bool TryBeginP12MerchantDailyNpcTradeOperation(
+        NpcRuntime npc,
+        out P12MerchantOperationScope scope)
+    {
+        scope = null;
+        if (runtimeAdmissionContext == null) return false;
+        if (!IsRuntimeAdmissionOwnerThreadCurrent()
+            || npcRosterCensusProtocol == null
+            || npc == null
+            || string.IsNullOrWhiteSpace(npc.RuntimeId)
+            || !npcRegistryById.TryGetValue(npc.RuntimeId, out NpcRuntime installedNpc)
+            || !ReferenceEquals(installedNpc, npc)
+            || activeP12MerchantOperationContext != null
+            || npc.ExistingMerchantTradePlan == null
+            || npc.ExistingTravelPlan == null
+            || npc.ExistingSpatialKnowledge == null
+            || npc.ExistingCommercialKnowledge == null
+            || !npcMerchantPlanMutationBindings.TryGetValue(npc.ExistingMerchantTradePlan, out P12NpcOwnerMutationBinding merchantPlanBinding)
+            || !npcTravelPlanMutationBindings.TryGetValue(npc.ExistingTravelPlan, out P12NpcOwnerMutationBinding travelPlanBinding)
+            || !npcSpatialKnowledgeMutationBindings.TryGetValue(npc.ExistingSpatialKnowledge, out P12NpcOwnerMutationBinding spatialBinding)
+            || !npcCommercialKnowledgeMutationBindings.TryGetValue(npc.ExistingCommercialKnowledge, out P12NpcOwnerMutationBinding commercialBinding)
+            || !IsCurrentP12MerchantOwnerBinding(merchantPlanBinding)
+            || !IsCurrentP12MerchantOwnerBinding(travelPlanBinding)
+            || !IsCurrentP12MerchantOwnerBinding(spatialBinding)
+            || !IsCurrentP12MerchantOwnerBinding(commercialBinding))
+        {
+            FaultRuntimeAdmission();
+            return false;
+        }
+
+        List<string> sectionIds = new List<string>(
+            merchantPlanBinding.SectionIds.Length + travelPlanBinding.SectionIds.Length
+            + spatialBinding.SectionIds.Length + commercialBinding.SectionIds.Length);
+        sectionIds.AddRange(merchantPlanBinding.SectionIds);
+        sectionIds.AddRange(travelPlanBinding.SectionIds);
+        sectionIds.AddRange(spatialBinding.SectionIds);
+        sectionIds.AddRange(commercialBinding.SectionIds);
+        HashSet<string> distinctSections = new HashSet<string>(sectionIds, StringComparer.Ordinal);
+        if (distinctSections.Count != sectionIds.Count
+            || !npcRosterCensusProtocol.TryValidateUnchangedSections(sectionIds, out _)
+            || !TryEnterRuntimeAdmissionOperation(MerchantDailyNpcTradeCensusOperationId, out SimulationOperationScope protocolScope))
+        {
+            FaultRuntimeAdmission();
+            return false;
+        }
+
+        P12MerchantOperationContext context = new P12MerchantOperationContext(Thread.CurrentThread, protocolScope);
+        activeP12MerchantOperationContext = context;
+        scope = new P12MerchantOperationScope(this, context);
+        return true;
+    }
+
+    private void ExitP12MerchantOperation(P12MerchantOperationContext context)
+    {
+        if (context == null) return;
+        try
+        {
+            if (!ReferenceEquals(activeP12MerchantOperationContext, context)
+                || !context.IsOwnedByCurrentThread())
+            {
+                FaultRuntimeAdmission();
+                return;
+            }
+
+            if (context.ChangedSectionIds.Count != 0
+                && !npcRosterCensusProtocol.NotifyCommittedMutations(context.ChangedSectionIds, out _))
+                FaultRuntimeAdmission();
+        }
+        catch
+        {
+            FaultRuntimeAdmission();
+        }
+        finally
+        {
+            if (ReferenceEquals(activeP12MerchantOperationContext, context))
+                activeP12MerchantOperationContext = null;
+            SimulationOperationScope operation = context.ProtocolScope;
+            context.ProtocolScope = null;
+            operation?.Dispose();
+        }
     }
 
     private void NotifyP12NpcOwnerMutation(P12NpcOwnerMutationBinding binding)
@@ -3875,7 +4360,25 @@ public sealed partial class SimulationRuntime
 
             if (configuration.MerchantTrade.Enabled)
             {
-                merchantSystem?.AdvanceNpcTradeState(npcRuntime);
+                if (merchantSystem != null)
+                {
+                    if (runtimeAdmissionContext == null)
+                    {
+                        merchantSystem.AdvanceNpcTradeState(npcRuntime);
+                    }
+                    else if (!TryBeginP12MerchantDailyNpcTradeOperation(
+                        npcRuntime,
+                        out P12MerchantOperationScope merchantOperationScope))
+                    {
+                        throw new InvalidOperationException(
+                            "The P12 daily Merchant owner operation could not be admitted.");
+                    }
+                    else
+                    {
+                        using (merchantOperationScope)
+                            merchantSystem.AdvanceNpcTradeState(npcRuntime);
+                    }
+                }
             }
 
             if (TryProcessScheduledDirective(npcRuntime) == true)

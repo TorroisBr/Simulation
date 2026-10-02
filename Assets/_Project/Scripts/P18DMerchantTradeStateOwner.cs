@@ -88,6 +88,8 @@ public sealed class NpcMerchantTradeStateRuntime
                 != commit.Receipt.PersonId
             || !commit.Actor.MerchantTradePlan.MatchesOwnerState(commit.ExpectedPlan)
             || !commit.Actor.TravelPlan.MatchesOwnerState(commit.ExpectedTravelPlan)
+            || !commit.Actor.MerchantTradePlan.CanInstallOwnerState(commit.NextPlan)
+            || !commit.Actor.TravelPlan.CanInstallOwnerState(commit.NextTravelPlan)
             || commit.NextReceipts == null
             || commit.NextReceipts.Count != ReceiptList.Count + 1
             || !ReferenceEquals(commit.NextReceipts[commit.NextReceipts.Count - 1], commit.Receipt))

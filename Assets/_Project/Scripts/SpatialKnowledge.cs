@@ -10,6 +10,8 @@ public sealed class SpatialKnowledgeRuntime
     [SerializeField] private List<string> knownLocationRuntimeIds = new List<string>();
     [SerializeField] private List<string> knownRouteRuntimeIds = new List<string>();
     [SerializeField] private long revision;
+    [NonSerialized] private Func<bool> p12MutationAdmission;
+    [NonSerialized] private Action p12MutationCommitted;
     private ReadOnlyCollection<string> knownLocationRuntimeIdsView;
     private ReadOnlyCollection<string> knownRouteRuntimeIdsView;
 
@@ -47,12 +49,12 @@ public sealed class SpatialKnowledgeRuntime
 
     public bool DiscoverLocation(string locationRuntimeId)
     {
-        return DiscoverId(KnownLocations, locationRuntimeId, ref revision);
+        return DiscoverId(KnownLocations, locationRuntimeId);
     }
 
     public bool DiscoverRoute(string routeRuntimeId)
     {
-        return DiscoverId(KnownRoutes, routeRuntimeId, ref revision);
+        return DiscoverId(KnownRoutes, routeRuntimeId);
     }
 
     internal bool TryPrepareDiscoverLocations(IReadOnlyList<string> locationRuntimeIds,
@@ -83,13 +85,50 @@ public sealed class SpatialKnowledgeRuntime
     internal bool CanInstall(SpatialKnowledgeDiscoveryInstall prepared) => prepared != null
         && prepared.Owner == this
         && prepared.ExpectedRevision == revision
-        && Matches(KnownLocations, prepared.ExpectedLocationIds);
+        && Matches(KnownLocations, prepared.ExpectedLocationIds)
+        && (prepared.NextRevision == revision || CanCommitP12Mutation());
 
     internal void InstallPrepared(SpatialKnowledgeDiscoveryInstall prepared)
     {
+        if (prepared == null || prepared.Owner != this || prepared.ExpectedRevision != revision
+            || prepared.NextRevision == revision || !CanCommitP12Mutation()) return;
         KnownLocations.Clear();
         KnownLocations.AddRange(prepared.NextLocationIds);
         revision = prepared.NextRevision;
+        NotifyP12MutationCommitted();
+    }
+
+    internal void BindP12MutationBoundary(Func<bool> admission, Action committed)
+    {
+        if (admission == null) throw new ArgumentNullException(nameof(admission));
+        if (committed == null) throw new ArgumentNullException(nameof(committed));
+        if (p12MutationAdmission != null || p12MutationCommitted != null)
+            throw new InvalidOperationException("SpatialKnowledgeRuntime is already bound to a P12 mutation boundary.");
+        p12MutationAdmission = admission;
+        p12MutationCommitted = committed;
+    }
+
+    internal bool UnbindP12MutationBoundary(Func<bool> admission, Action committed)
+    {
+        if (!ReferenceEquals(p12MutationAdmission, admission)
+            || !ReferenceEquals(p12MutationCommitted, committed)) return false;
+        p12MutationAdmission = null;
+        p12MutationCommitted = null;
+        return true;
+    }
+
+    private bool CanCommitP12Mutation()
+    {
+        if (p12MutationAdmission == null) return true;
+        try { return p12MutationAdmission(); }
+        catch { return false; }
+    }
+
+    private void NotifyP12MutationCommitted()
+    {
+        if (p12MutationCommitted == null) return;
+        try { p12MutationCommitted(); }
+        catch { }
     }
 
     private static bool ContainsId(List<string> ids, string runtimeId)
@@ -110,7 +149,7 @@ public sealed class SpatialKnowledgeRuntime
         return false;
     }
 
-    private static bool DiscoverId(List<string> ids, string runtimeId, ref long revision)
+    private bool DiscoverId(List<string> ids, string runtimeId)
     {
         if (string.IsNullOrWhiteSpace(runtimeId) == true || ContainsId(ids, runtimeId) == true)
         {
@@ -122,8 +161,11 @@ public sealed class SpatialKnowledgeRuntime
             return false;
         }
 
+        if (!CanCommitP12Mutation()) return false;
+
         ids.Add(runtimeId);
         revision++;
+        NotifyP12MutationCommitted();
         return true;
     }
 

@@ -415,6 +415,8 @@ public sealed class CommercialKnowledgeRuntime
     [SerializeField] private List<CommercialLiquidityObservation> liquidityObservations = new List<CommercialLiquidityObservation>();
     [SerializeField] private List<CommercialKnowledgeShareReceipt> shareReceipts = new List<CommercialKnowledgeShareReceipt>();
     [SerializeField] private long revision;
+    [NonSerialized] private Func<bool> p12MutationAdmission;
+    [NonSerialized] private Action p12MutationCommitted;
 
     public IReadOnlyList<CommercialMarketObservation> Observations => ObservationList;
     public IReadOnlyList<CommercialLiquidityObservation> LiquidityObservations => LiquidityObservationList;
@@ -445,8 +447,10 @@ public sealed class CommercialKnowledgeRuntime
         if (existingIndex < 0)
         {
             if (revision == long.MaxValue) return false;
+            if (!CanCommitP12Mutation()) return false;
             ObservationList.Add(observation);
             revision++;
+            NotifyP12MutationCommitted();
             return true;
         }
 
@@ -458,8 +462,10 @@ public sealed class CommercialKnowledgeRuntime
         }
 
         if (revision == long.MaxValue) return false;
+        if (!CanCommitP12Mutation()) return false;
         ObservationList[existingIndex] = observation;
         revision++;
+        NotifyP12MutationCommitted();
         return true;
     }
 
@@ -500,8 +506,10 @@ public sealed class CommercialKnowledgeRuntime
         if (existingIndex < 0)
         {
             if (revision == long.MaxValue) return false;
+            if (!CanCommitP12Mutation()) return false;
             LiquidityObservationList.Add(observation);
             revision++;
+            NotifyP12MutationCommitted();
             return true;
         }
 
@@ -511,8 +519,10 @@ public sealed class CommercialKnowledgeRuntime
         }
 
         if (revision == long.MaxValue) return false;
+        if (!CanCommitP12Mutation()) return false;
         LiquidityObservationList[existingIndex] = observation;
         revision++;
+        NotifyP12MutationCommitted();
         return true;
     }
 
@@ -597,13 +607,17 @@ public sealed class CommercialKnowledgeRuntime
     }
 
     internal bool CanInstall(CommercialKnowledgeObservationInstall prepared) =>
-        prepared != null && prepared.Owner == this && revision == prepared.ExpectedRevision;
+        prepared != null && prepared.Owner == this && revision == prepared.ExpectedRevision
+        && (prepared.NextRevision == revision || CanCommitP12Mutation());
 
     internal void InstallPrepared(CommercialKnowledgeObservationInstall prepared)
     {
+        if (prepared == null || prepared.Owner != this || revision != prepared.ExpectedRevision
+            || prepared.NextRevision == revision || !CanCommitP12Mutation()) return;
         observations = prepared.NextMarketObservations;
         liquidityObservations = prepared.NextLiquidityObservations;
         revision = prepared.NextRevision;
+        NotifyP12MutationCommitted();
     }
 
     public bool TryGetShareReceipt(string operationIdentity, out CommercialKnowledgeShareReceipt receipt)
@@ -697,13 +711,48 @@ public sealed class CommercialKnowledgeRuntime
         }
         if (revision != commit.ExpectedRevision || revision == long.MaxValue
             || commit.NextMarketObservations == null || commit.NextLiquidityObservations == null
-            || commit.NextReceipts == null || TryGetShareReceipt(commit.Receipt.OperationIdentity, out _)) return false;
+            || commit.NextReceipts == null || TryGetShareReceipt(commit.Receipt.OperationIdentity, out _)
+            || !CanCommitP12Mutation()) return false;
         observations = commit.NextMarketObservations;
         liquidityObservations = commit.NextLiquidityObservations;
         shareReceipts = commit.NextReceipts;
         revision++;
+        NotifyP12MutationCommitted();
         receipt = commit.Receipt;
         return true;
+    }
+
+    internal void BindP12MutationBoundary(Func<bool> admission, Action committed)
+    {
+        if (admission == null) throw new ArgumentNullException(nameof(admission));
+        if (committed == null) throw new ArgumentNullException(nameof(committed));
+        if (p12MutationAdmission != null || p12MutationCommitted != null)
+            throw new InvalidOperationException("CommercialKnowledgeRuntime is already bound to a P12 mutation boundary.");
+        p12MutationAdmission = admission;
+        p12MutationCommitted = committed;
+    }
+
+    internal bool UnbindP12MutationBoundary(Func<bool> admission, Action committed)
+    {
+        if (!ReferenceEquals(p12MutationAdmission, admission)
+            || !ReferenceEquals(p12MutationCommitted, committed)) return false;
+        p12MutationAdmission = null;
+        p12MutationCommitted = null;
+        return true;
+    }
+
+    private bool CanCommitP12Mutation()
+    {
+        if (p12MutationAdmission == null) return true;
+        try { return p12MutationAdmission(); }
+        catch { return false; }
+    }
+
+    private void NotifyP12MutationCommitted()
+    {
+        if (p12MutationCommitted == null) return;
+        try { p12MutationCommitted(); }
+        catch { }
     }
 
     private int FindObservationIndex(string locationRuntimeId, string itemDefinitionId)

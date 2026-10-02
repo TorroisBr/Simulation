@@ -120,6 +120,9 @@ public class NpcTravelPlanRuntime
     [SerializeField] private float utility;
     [SerializeField] private float expectedCost;
     [SerializeField] private string originDecisionId;
+    [SerializeField] private long revision;
+    [NonSerialized] private Func<bool> p12MutationAdmission;
+    [NonSerialized] private Action p12MutationCommitted;
 
     public SpatialLocationRuntime TargetLocation => targetLocation;
     public CityRuntime TargetCity => targetCity;
@@ -127,6 +130,7 @@ public class NpcTravelPlanRuntime
     public float Utility => utility;
     public float ExpectedCost => expectedCost;
     public string OriginDecisionId => originDecisionId;
+    public long Revision => revision;
     public bool IsActive => targetLocation != null && reason != NpcTravelReason.None;
 
     internal NpcTravelPlanState CaptureOwnerState() => new NpcTravelPlanState(
@@ -140,14 +144,24 @@ public class NpcTravelPlanRuntime
         && expectedCost.Equals(state.ExpectedCost)
         && string.Equals(originDecisionId, state.OriginDecisionId, StringComparison.Ordinal);
 
-    internal void InstallOwnerState(NpcTravelPlanState state)
+    internal bool CanInstallOwnerState(NpcTravelPlanState state) => state != null
+        && (MatchesOwnerState(state)
+            || (revision < long.MaxValue && CanCommitP12Mutation()));
+
+    internal bool InstallOwnerState(NpcTravelPlanState state)
     {
+        if (state == null) return false;
+        if (MatchesOwnerState(state)) return true;
+        if (revision == long.MaxValue || !CanCommitP12Mutation()) return false;
         targetLocation = state.TargetLocation;
         targetCity = state.TargetCity;
         reason = state.Reason;
         utility = state.Utility;
         expectedCost = state.ExpectedCost;
         originDecisionId = state.OriginDecisionId;
+        revision++;
+        NotifyP12MutationCommitted();
+        return true;
     }
 
     public void Set(CityRuntime targetCity, NpcTravelReason reason, float utility, float expectedCost, string originDecisionId = null)
@@ -170,22 +184,53 @@ public class NpcTravelPlanRuntime
             return;
         }
 
-        this.targetLocation = targetLocation;
-        targetCity = targetCityProjection;
-        this.reason = reason;
-        this.utility = Mathf.Max(0f, utility);
-        this.expectedCost = Mathf.Max(0f, expectedCost);
-        this.originDecisionId = string.IsNullOrWhiteSpace(originDecisionId) == true ? null : originDecisionId;
+        NpcTravelPlanState next = new NpcTravelPlanState(
+            targetLocation,
+            targetCityProjection,
+            reason,
+            Mathf.Max(0f, utility),
+            Mathf.Max(0f, expectedCost),
+            string.IsNullOrWhiteSpace(originDecisionId) == true ? null : originDecisionId);
+        InstallOwnerState(next);
     }
 
     public void Clear()
     {
-        targetLocation = null;
-        targetCity = null;
-        reason = NpcTravelReason.None;
-        utility = 0f;
-        expectedCost = 0f;
-        originDecisionId = null;
+        InstallOwnerState(new NpcTravelPlanState(
+            null, null, NpcTravelReason.None, 0f, 0f, null));
+    }
+
+    internal void BindP12MutationBoundary(Func<bool> admission, Action committed)
+    {
+        if (admission == null) throw new ArgumentNullException(nameof(admission));
+        if (committed == null) throw new ArgumentNullException(nameof(committed));
+        if (p12MutationAdmission != null || p12MutationCommitted != null)
+            throw new InvalidOperationException("NpcTravelPlanRuntime is already bound to a P12 mutation boundary.");
+        p12MutationAdmission = admission;
+        p12MutationCommitted = committed;
+    }
+
+    internal bool UnbindP12MutationBoundary(Func<bool> admission, Action committed)
+    {
+        if (!ReferenceEquals(p12MutationAdmission, admission)
+            || !ReferenceEquals(p12MutationCommitted, committed)) return false;
+        p12MutationAdmission = null;
+        p12MutationCommitted = null;
+        return true;
+    }
+
+    private bool CanCommitP12Mutation()
+    {
+        if (p12MutationAdmission == null) return true;
+        try { return p12MutationAdmission(); }
+        catch { return false; }
+    }
+
+    private void NotifyP12MutationCommitted()
+    {
+        if (p12MutationCommitted == null) return;
+        try { p12MutationCommitted(); }
+        catch { }
     }
 }
 
@@ -260,6 +305,9 @@ public class MerchantTradePlanRuntime
     [SerializeField] private int waitDaysAtDestination;
     [SerializeField] private int pendingTravelDays;
     [SerializeField] private string originDecisionId;
+    [SerializeField] private long revision;
+    [NonSerialized] private Func<bool> p12MutationAdmission;
+    [NonSerialized] private Action p12MutationCommitted;
 
     public ItemData Item => item;
     public CityRuntime OriginCity => originCity;
@@ -270,6 +318,7 @@ public class MerchantTradePlanRuntime
     public int WaitDaysAtDestination => waitDaysAtDestination;
     public int PendingTravelDays => pendingTravelDays;
     public string OriginDecisionId => originDecisionId;
+    public long Revision => revision;
     public bool HasData => item != null || originCity != null || targetCity != null || plannedAmount > 0 || remainingAmount > 0;
     public bool IsActive => item != null && targetCity != null && RemainingAmount > 0;
 
@@ -288,8 +337,15 @@ public class MerchantTradePlanRuntime
         && pendingTravelDays == state.PendingTravelDays
         && string.Equals(originDecisionId, state.OriginDecisionId, StringComparison.Ordinal);
 
-    internal void InstallOwnerState(MerchantTradePlanState state)
+    internal bool CanInstallOwnerState(MerchantTradePlanState state) => state != null
+        && (MatchesOwnerState(state)
+            || (revision < long.MaxValue && CanCommitP12Mutation()));
+
+    internal bool InstallOwnerState(MerchantTradePlanState state)
     {
+        if (state == null) return false;
+        if (MatchesOwnerState(state)) return true;
+        if (revision == long.MaxValue || !CanCommitP12Mutation()) return false;
         item = state.Item;
         originCity = state.OriginCity;
         targetCity = state.TargetCity;
@@ -299,49 +355,58 @@ public class MerchantTradePlanRuntime
         waitDaysAtDestination = state.WaitDaysAtDestination;
         pendingTravelDays = state.PendingTravelDays;
         originDecisionId = state.OriginDecisionId;
+        revision++;
+        NotifyP12MutationCommitted();
+        return true;
     }
 
     public void Set(ItemData item, CityRuntime originCity, CityRuntime targetCity, int plannedAmount, float purchasePricePerItem, string originDecisionId = null)
     {
-        this.item = item;
-        this.originCity = originCity;
-        this.targetCity = targetCity;
-        this.plannedAmount = Mathf.Max(0, plannedAmount);
-        remainingAmount = this.plannedAmount;
-        this.purchasePricePerItem = Mathf.Max(0f, purchasePricePerItem);
-        waitDaysAtDestination = 0;
-        pendingTravelDays = 0;
-        this.originDecisionId = string.IsNullOrWhiteSpace(originDecisionId) == true ? null : originDecisionId;
+        int normalizedAmount = Mathf.Max(0, plannedAmount);
+        InstallOwnerState(new MerchantTradePlanState(
+            item,
+            originCity,
+            targetCity,
+            normalizedAmount,
+            normalizedAmount,
+            Mathf.Max(0f, purchasePricePerItem),
+            0,
+            0,
+            string.IsNullOrWhiteSpace(originDecisionId) == true ? null : originDecisionId));
     }
 
     public void RedirectTo(CityRuntime targetCity, string originDecisionId = null)
     {
-        if (this.targetCity != targetCity)
-        {
-            waitDaysAtDestination = 0;
-        }
-
-        this.targetCity = targetCity;
-
-        if (string.IsNullOrWhiteSpace(originDecisionId) == false)
-        {
-            this.originDecisionId = originDecisionId;
-        }
+        int nextWaitDays = this.targetCity != targetCity ? 0 : waitDaysAtDestination;
+        string nextDecisionId = string.IsNullOrWhiteSpace(originDecisionId) == false
+            ? originDecisionId
+            : this.originDecisionId;
+        InstallOwnerState(new MerchantTradePlanState(
+            item, originCity, targetCity, plannedAmount, remainingAmount,
+            purchasePricePerItem, nextWaitDays, pendingTravelDays, nextDecisionId));
     }
 
     public void IncrementWaitDayAtDestination()
     {
-        waitDaysAtDestination++;
+        InstallOwnerState(new MerchantTradePlanState(
+            item, originCity, targetCity, plannedAmount, remainingAmount,
+            purchasePricePerItem, waitDaysAtDestination + 1, pendingTravelDays,
+            originDecisionId));
     }
 
     public void ResetWaitDaysAtDestination()
     {
-        waitDaysAtDestination = 0;
+        InstallOwnerState(new MerchantTradePlanState(
+            item, originCity, targetCity, plannedAmount, remainingAmount,
+            purchasePricePerItem, 0, pendingTravelDays, originDecisionId));
     }
 
     public void IncrementPendingTravelDay()
     {
-        pendingTravelDays++;
+        InstallOwnerState(new MerchantTradePlanState(
+            item, originCity, targetCity, plannedAmount, remainingAmount,
+            purchasePricePerItem, waitDaysAtDestination, pendingTravelDays + 1,
+            originDecisionId));
     }
 
     public bool RegisterSale(int amountSold)
@@ -351,29 +416,53 @@ public class MerchantTradePlanRuntime
             return false;
         }
 
-        remainingAmount = Mathf.Max(0, RemainingAmount - amountSold);
-        waitDaysAtDestination = 0;
-
-        if (remainingAmount > 0)
-        {
-            return false;
-        }
-
-        Clear();
-        return true;
+        int nextRemainingAmount = Mathf.Max(0, RemainingAmount - amountSold);
+        bool completed = nextRemainingAmount <= 0;
+        MerchantTradePlanState next = completed
+            ? new MerchantTradePlanState(null, null, null, 0, 0, 0f, 0, 0, null)
+            : new MerchantTradePlanState(item, originCity, targetCity,
+                plannedAmount, nextRemainingAmount, purchasePricePerItem, 0,
+                pendingTravelDays, originDecisionId);
+        return InstallOwnerState(next) && completed;
     }
 
     public void Clear()
     {
-        item = null;
-        originCity = null;
-        targetCity = null;
-        plannedAmount = 0;
-        remainingAmount = 0;
-        purchasePricePerItem = 0f;
-        waitDaysAtDestination = 0;
-        pendingTravelDays = 0;
-        originDecisionId = null;
+        InstallOwnerState(new MerchantTradePlanState(null, null, null,
+            0, 0, 0f, 0, 0, null));
+    }
+
+    internal void BindP12MutationBoundary(Func<bool> admission, Action committed)
+    {
+        if (admission == null) throw new ArgumentNullException(nameof(admission));
+        if (committed == null) throw new ArgumentNullException(nameof(committed));
+        if (p12MutationAdmission != null || p12MutationCommitted != null)
+            throw new InvalidOperationException("MerchantTradePlanRuntime is already bound to a P12 mutation boundary.");
+        p12MutationAdmission = admission;
+        p12MutationCommitted = committed;
+    }
+
+    internal bool UnbindP12MutationBoundary(Func<bool> admission, Action committed)
+    {
+        if (!ReferenceEquals(p12MutationAdmission, admission)
+            || !ReferenceEquals(p12MutationCommitted, committed)) return false;
+        p12MutationAdmission = null;
+        p12MutationCommitted = null;
+        return true;
+    }
+
+    private bool CanCommitP12Mutation()
+    {
+        if (p12MutationAdmission == null) return true;
+        try { return p12MutationAdmission(); }
+        catch { return false; }
+    }
+
+    private void NotifyP12MutationCommitted()
+    {
+        if (p12MutationCommitted == null) return;
+        try { p12MutationCommitted(); }
+        catch { }
     }
 }
 
