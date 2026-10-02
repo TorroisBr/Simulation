@@ -1026,6 +1026,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         InitializeP18DIntradayProfile(p18dIntradayProfile);
         InitializeNpcRosterCensusProtocol();
 
+        FactualReadAdmission factualReadAdmission = new FactualReadAdmission(this);
         if (runtimeAdmissionContext != null)
         {
             if (npcRosterCensusProtocol == null
@@ -1036,17 +1037,16 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                     "The P12 runtime-admission adapter could not bind to its initialized census protocol and clock.");
             }
 
-            FactualReadAdmission factualReadAdmission = new FactualReadAdmission(this);
             if (!factualReadAdmission.TryBindStores(this.factionStore, this.personStore))
             {
                 throw new InvalidOperationException(
                     "The FR-B factual-read admission could not bind to the composed FactionStore and PersonStore.");
             }
-
-            factualReadCoordinator = new FactualReadCoordinator(
-                factualReadAdmission,
-                Array.Empty<IFactualReader>());
         }
+
+        factualReadCoordinator = new FactualReadCoordinator(
+            factualReadAdmission,
+            Array.Empty<IFactualReader>());
 
     }
 

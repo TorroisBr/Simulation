@@ -137,7 +137,7 @@ public sealed class SimulationBootstrapComposition
     public TravelPartySystem GroupTravel { get; }
     public IOwnerSectionCensusProvider TravelPartyCensusProvider { get; }
     public SimulationRuntime Runtime { get; }
-    /// <summary>Coherent factual-read surface for the selected daily profile; null when that profile is not composed.</summary>
+    /// <summary>Factual-read surface; unsupported runtime profiles return unavailable captures.</summary>
     public FactualReadCoordinator FactualReads => Runtime.FactualReads;
     /// <summary>Fixed passive witnesses for the installed Person registry and materialization bindings.</summary>
     public IReadOnlyList<IOwnerSectionCensusProvider> PersonStoreCensusProviders { get; }
