@@ -746,13 +746,12 @@ claimed.
 | **CAPTURE_ELIGIBILITY_GAP** | No `CaptureEligible` or token API exists. Complete owner/cardinality registration, supported-write coverage, healthy idle admission, and stable before/after witnesses are not established. | **WAIT_DEPENDENCY** on the preceding census, operation, and quiescence obligations. |
 | **OTHER_TRUE_BLOCKER** | P12-A still needs validated live-profile inventory, complete owner export/staged hydration, and its separate implementation authorization. P13 remains blocked on P12 continuation and recoverable causal history. | **WAIT_DEPENDENCY**. |
 
-The highest-value next bounded P12-B design is successful direct-write
-invalidation for the already-censused per-NPC MoneyAccount and Inventory
-owners. Its contract must preserve exact owner identity/local revision and
-owner-thread/baseline preflight, notify only after successful commits, and
-avoid duplicate epoch advancement inside the existing named trade and
-Open-market operation scopes. This does not imply P12-B readiness or add new
-owner families.
+Historical snapshot — 2026-10-01 canonical: direct per-NPC MoneyAccount
+and Inventory write invalidation was the next bounded design target. The
+candidate and exact review now recorded in the addendum below address that
+target; this paragraph is retained only to preserve the earlier blocker
+history. The next operation design is the separate NPC money-transfer scope,
+which remains dependency-gated on promotion of those direct-owner hooks.
 
 ### Reviewed P12-B runtime-admission adapter — implementation boundary
 
