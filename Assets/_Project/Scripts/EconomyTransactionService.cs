@@ -544,6 +544,14 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
         MoneyAccountRuntime destination,
         float amount)
     {
+        if (p12CensusRuntime != null)
+        {
+            return EconomyTransactionResult.CreateFailure(
+                EconomyTransactionType.MoneyTransfer,
+                MoneyEffect.Transfer,
+                EconomyTransactionFailureReason.TransactionCommitFailed);
+        }
+
         return TryTransferMoney(source, destination, amount, null, null);
     }
 
@@ -560,6 +568,49 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
                 EconomyTransactionFailureReason.InvalidInput,
                 source != null ? source.RuntimeId : null,
                 destination != null ? destination.RuntimeId : null);
+        }
+
+        if (p12CensusRuntime != null)
+        {
+            MoneyAccountRuntime sourceAccount = source.MoneyAccount;
+            MoneyAccountRuntime destinationAccount = destination.MoneyAccount;
+            EconomyTransactionResult preflightFailure = ValidateMoneyTransfer(
+                sourceAccount,
+                destinationAccount,
+                amount,
+                source.RuntimeId,
+                destination.RuntimeId);
+            if (preflightFailure != null) return preflightFailure;
+
+            if (!p12CensusRuntime.HasNpcTradeCensusAdapter
+                || !p12CensusRuntime.TryBeginNpcMoneyTransferCensusOperation(
+                    source,
+                    destination,
+                    out SimulationOperationScope operationScope,
+                    out _,
+                    out _))
+            {
+                return EconomyTransactionResult.CreateFailure(
+                    EconomyTransactionType.MoneyTransfer,
+                    MoneyEffect.Transfer,
+                    EconomyTransactionFailureReason.TransactionCommitFailed,
+                    source.RuntimeId,
+                    destination.RuntimeId);
+            }
+
+            try
+            {
+                return TryTransferMoney(
+                    sourceAccount,
+                    destinationAccount,
+                    amount,
+                    source.RuntimeId,
+                    destination.RuntimeId);
+            }
+            finally
+            {
+                operationScope.Dispose();
+            }
         }
 
         return TryTransferMoney(source.MoneyAccount, destination.MoneyAccount, amount, source.RuntimeId, destination.RuntimeId);
@@ -1607,6 +1658,42 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
         EconomyTransactionType transactionType = EconomyTransactionType.MoneyTransfer;
         MoneyEffect moneyEffect = MoneyEffect.Transfer;
 
+        EconomyTransactionResult preflightFailure = ValidateMoneyTransfer(
+            source,
+            destination,
+            amount,
+            sourceRuntimeId,
+            destinationRuntimeId);
+        if (preflightFailure != null) return preflightFailure;
+
+        if (TryCommitMoneyTransfer(source, destination, amount) == false)
+        {
+            return EconomyTransactionResult.CreateFailure(
+                transactionType,
+                moneyEffect,
+                EconomyTransactionFailureReason.TransactionCommitFailed,
+                sourceRuntimeId,
+                destinationRuntimeId);
+        }
+
+        return EconomyTransactionResult.CreateSuccess(
+            transactionType,
+            moneyEffect,
+            amount,
+            totalPrice: amount,
+            sourceRuntimeId: sourceRuntimeId,
+            destinationRuntimeId: destinationRuntimeId);
+    }
+
+    private static EconomyTransactionResult ValidateMoneyTransfer(
+        MoneyAccountRuntime source,
+        MoneyAccountRuntime destination,
+        float amount,
+        string sourceRuntimeId,
+        string destinationRuntimeId)
+    {
+        EconomyTransactionType transactionType = EconomyTransactionType.MoneyTransfer;
+        MoneyEffect moneyEffect = MoneyEffect.Transfer;
         if (source == null || destination == null || IsValidNonNegativeFiniteAmount(amount) == false)
         {
             return EconomyTransactionResult.CreateFailure(
@@ -1647,23 +1734,7 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
                 destinationRuntimeId);
         }
 
-        if (TryCommitMoneyTransfer(source, destination, amount) == false)
-        {
-            return EconomyTransactionResult.CreateFailure(
-                transactionType,
-                moneyEffect,
-                EconomyTransactionFailureReason.TransactionCommitFailed,
-                sourceRuntimeId,
-                destinationRuntimeId);
-        }
-
-        return EconomyTransactionResult.CreateSuccess(
-            transactionType,
-            moneyEffect,
-            amount,
-            totalPrice: amount,
-            sourceRuntimeId: sourceRuntimeId,
-            destinationRuntimeId: destinationRuntimeId);
+        return null;
     }
 
     private static bool TryCommitMoneyTransfer(

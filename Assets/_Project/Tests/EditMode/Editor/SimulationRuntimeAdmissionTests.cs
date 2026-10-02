@@ -101,6 +101,200 @@ public sealed class SimulationRuntimeAdmissionTests
     }
 
     [Test]
+    public void P12MoneyTransfer_ScopesExactAccountCommitsAndKeepsZeroValueAsNoOp()
+    {
+        NpcRuntime source = new NpcRuntime("p12-transfer-source", null, null, 100f);
+        NpcRuntime destination = new NpcRuntime("p12-transfer-destination", null, null, 25f);
+        SimulationRuntime runtime = new SimulationRuntime(
+            new SimulationTime(),
+            null,
+            new[] { source, destination },
+            economyEnabled: false,
+            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1());
+        EconomyTransactionService service = new EconomyTransactionService();
+        BindP12CensusRuntime(service, runtime);
+
+        ContinuationCensusFailure[] observedOperationFailures = new ContinuationCensusFailure[2];
+        int observedCommits = 0;
+        Action observeCommit = () =>
+        {
+            if (observedCommits < observedOperationFailures.Length)
+                runtime.TryAssessNpcRosterCensus(out observedOperationFailures[observedCommits]);
+            observedCommits++;
+        };
+        WrapP12AccountCommit(source.MoneyAccount, observeCommit);
+        WrapP12AccountCommit(destination.MoneyAccount, observeCommit);
+
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long before, out ContinuationCensusFailure beforeFailure),
+            Is.True, beforeFailure.ToString());
+        EconomyTransactionResult result = service.TryTransferMoney(source, destination, 40f);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(source.Money, Is.EqualTo(60f));
+        Assert.That(destination.Money, Is.EqualTo(65f));
+        Assert.That(source.MoneyAccount.Revision, Is.EqualTo(1));
+        Assert.That(destination.MoneyAccount.Revision, Is.EqualTo(1));
+        Assert.That(observedCommits, Is.EqualTo(2));
+        Assert.That(observedOperationFailures, Is.All.EqualTo(ContinuationCensusFailure.OperationInProgress));
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long afterTransfer, out ContinuationCensusFailure afterFailure),
+            Is.True, afterFailure.ToString());
+        Assert.That(afterTransfer, Is.EqualTo(before + 2));
+        AssertMoneyAccountWitness(runtime, source, source.MoneyAccount, 1);
+        AssertMoneyAccountWitness(runtime, destination, destination.MoneyAccount, 1);
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure assessment), Is.True,
+            assessment.ToString());
+
+        long sourceRevision = source.MoneyAccount.Revision;
+        long destinationRevision = destination.MoneyAccount.Revision;
+        Assert.That(service.TryTransferMoney(source, destination, 0f).Success, Is.True);
+        Assert.That(source.MoneyAccount.Revision, Is.EqualTo(sourceRevision));
+        Assert.That(destination.MoneyAccount.Revision, Is.EqualTo(destinationRevision));
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long afterZero, out ContinuationCensusFailure zeroFailure),
+            Is.True, zeroFailure.ToString());
+        Assert.That(afterZero, Is.EqualTo(afterTransfer));
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure afterZeroAssessment), Is.True,
+            afterZeroAssessment.ToString());
+
+        EconomyTransactionResult invalid = service.TryTransferMoney(source, destination, float.NaN);
+        Assert.That(invalid.Success, Is.False);
+        Assert.That(invalid.FailureReason, Is.EqualTo(EconomyTransactionFailureReason.InvalidInput));
+        Assert.That(source.Money, Is.EqualTo(60f));
+        Assert.That(destination.Money, Is.EqualTo(65f));
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long afterInvalid, out ContinuationCensusFailure invalidFailure),
+            Is.True, invalidFailure.ToString());
+        Assert.That(afterInvalid, Is.EqualTo(afterTransfer));
+
+        EconomyTransactionResult raw = service.TryTransferMoney(
+            source.MoneyAccount,
+            destination.MoneyAccount,
+            1f);
+        Assert.That(raw.Success, Is.False);
+        Assert.That(raw.FailureReason, Is.EqualTo(EconomyTransactionFailureReason.TransactionCommitFailed));
+        Assert.That(source.Money, Is.EqualTo(60f));
+        Assert.That(destination.Money, Is.EqualTo(65f));
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long afterRaw, out ContinuationCensusFailure rawFailure),
+            Is.True, rawFailure.ToString());
+        Assert.That(afterRaw, Is.EqualTo(afterTransfer));
+    }
+
+    [Test]
+    public void P12MoneyTransfer_CompensationCommitsSourceRevisionWithinOneOperation()
+    {
+        NpcRuntime source = new NpcRuntime("p12-transfer-comp-source", null, null, 100f);
+        NpcRuntime destination = new NpcRuntime("p12-transfer-comp-destination", null, null, 25f);
+        SetAccountRevision(destination.MoneyAccount, long.MaxValue);
+        SimulationRuntime runtime = new SimulationRuntime(
+            new SimulationTime(),
+            null,
+            new[] { source, destination },
+            economyEnabled: false,
+            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1());
+        EconomyTransactionService service = new EconomyTransactionService();
+        BindP12CensusRuntime(service, runtime);
+
+        ContinuationCensusFailure[] observedFailures = new ContinuationCensusFailure[2];
+        int observedCommits = 0;
+        WrapP12AccountCommit(source.MoneyAccount, () =>
+        {
+            if (observedCommits < observedFailures.Length)
+                runtime.TryAssessNpcRosterCensus(out observedFailures[observedCommits]);
+            observedCommits++;
+        });
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long before, out ContinuationCensusFailure beforeFailure),
+            Is.True, beforeFailure.ToString());
+
+        EconomyTransactionResult result = service.TryTransferMoney(source, destination, 10f);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.FailureReason, Is.EqualTo(EconomyTransactionFailureReason.TransactionCommitFailed));
+        Assert.That(source.Money, Is.EqualTo(100f), "the existing source-credit compensation remains in force");
+        Assert.That(source.MoneyAccount.Revision, Is.EqualTo(2), "debit and successful refund are distinct committed revisions");
+        Assert.That(destination.Money, Is.EqualTo(25f));
+        Assert.That(destination.MoneyAccount.Revision, Is.EqualTo(long.MaxValue));
+        Assert.That(observedCommits, Is.EqualTo(2));
+        Assert.That(observedFailures, Is.All.EqualTo(ContinuationCensusFailure.OperationInProgress));
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long after, out ContinuationCensusFailure afterFailure),
+            Is.True, afterFailure.ToString());
+        Assert.That(after, Is.EqualTo(before + 2));
+        AssertMoneyAccountWitness(runtime, source, source.MoneyAccount, 2);
+        AssertMoneyAccountWitness(runtime, destination, destination.MoneyAccount, long.MaxValue);
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure assessment), Is.True,
+            assessment.ToString());
+    }
+
+    [Test]
+    public void P12MoneyTransfer_RejectsStaleOrReplacedOwnersAndWrongThreadBeforeWrites()
+    {
+        NpcRuntime source = new NpcRuntime("p12-transfer-stale-source", null, null, 100f);
+        NpcRuntime destination = new NpcRuntime("p12-transfer-stale-destination", null, null, 25f);
+        SimulationRuntime runtime = new SimulationRuntime(
+            new SimulationTime(),
+            null,
+            new[] { source, destination },
+            economyEnabled: false,
+            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1());
+        EconomyTransactionService service = new EconomyTransactionService();
+        BindP12CensusRuntime(service, runtime);
+
+        NpcRuntime staleSource = new NpcRuntime(source.RuntimeId, null, null, 100f);
+        EconomyTransactionResult stale = service.TryTransferMoney(staleSource, destination, 10f);
+        Assert.That(stale.Success, Is.False);
+        Assert.That(stale.FailureReason, Is.EqualTo(EconomyTransactionFailureReason.TransactionCommitFailed));
+        Assert.That(source.Money, Is.EqualTo(100f));
+        Assert.That(staleSource.Money, Is.EqualTo(100f));
+        Assert.That(destination.Money, Is.EqualTo(25f));
+        Assert.That(staleSource.MoneyAccount.Revision, Is.Zero);
+
+        NpcRuntime secondSource = new NpcRuntime("p12-transfer-replaced-source", null, null, 80f);
+        NpcRuntime secondDestination = new NpcRuntime("p12-transfer-replaced-destination", null, null, 20f);
+        SimulationRuntime secondRuntime = new SimulationRuntime(
+            new SimulationTime(),
+            null,
+            new[] { secondSource, secondDestination },
+            economyEnabled: false,
+            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1());
+        EconomyTransactionService secondService = new EconomyTransactionService();
+        BindP12CensusRuntime(secondService, secondRuntime);
+        MoneyAccountRuntime replacementAccount = new MoneyAccountRuntime(80f);
+        typeof(NpcRuntime)
+            .GetField("moneyAccount", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(secondSource, replacementAccount);
+        EconomyTransactionResult replaced = secondService.TryTransferMoney(secondSource, secondDestination, 10f);
+        Assert.That(replaced.Success, Is.False);
+        Assert.That(replaced.FailureReason, Is.EqualTo(EconomyTransactionFailureReason.TransactionCommitFailed));
+        Assert.That(secondSource.MoneyAccount, Is.SameAs(replacementAccount));
+        Assert.That(replacementAccount.Balance, Is.EqualTo(80f));
+        Assert.That(replacementAccount.Revision, Is.Zero);
+        Assert.That(secondDestination.Money, Is.EqualTo(20f));
+
+        NpcRuntime thirdSource = new NpcRuntime("p12-transfer-thread-source", null, null, 80f);
+        NpcRuntime thirdDestination = new NpcRuntime("p12-transfer-thread-destination", null, null, 20f);
+        SimulationRuntime thirdRuntime = new SimulationRuntime(
+            new SimulationTime(),
+            null,
+            new[] { thirdSource, thirdDestination },
+            economyEnabled: false,
+            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1());
+        EconomyTransactionService thirdService = new EconomyTransactionService();
+        BindP12CensusRuntime(thirdService, thirdRuntime);
+
+        EconomyTransactionResult rejected = null;
+        Thread wrongThread = new Thread(() =>
+        {
+            rejected = thirdService.TryTransferMoney(thirdSource, thirdDestination, 10f);
+        });
+        wrongThread.Start();
+        wrongThread.Join();
+
+        Assert.That(rejected.Success, Is.False);
+        Assert.That(rejected.FailureReason, Is.EqualTo(EconomyTransactionFailureReason.TransactionCommitFailed));
+        Assert.That(thirdSource.Money, Is.EqualTo(80f));
+        Assert.That(thirdDestination.Money, Is.EqualTo(20f));
+        Assert.That(thirdSource.MoneyAccount.Revision, Is.Zero);
+        Assert.That(thirdDestination.MoneyAccount.Revision, Is.Zero);
+    }
+
+    [Test]
     public void P12MarketWrappers_UseSharedServiceAndNotifyEveryCommittedOwner()
     {
         ItemData item = SimulationTestFactory.CreateItem("p12-market-roundtrip", 10f);
@@ -748,6 +942,48 @@ public sealed class SimulationRuntimeAdmissionTests
         Assert.That(runtime.CurrentDay, Is.Zero);
         Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure censusFailure), Is.False);
         Assert.That(censusFailure, Is.EqualTo(ContinuationCensusFailure.ProtocolFaulted));
+    }
+
+    private static void AssertMoneyAccountWitness(
+        SimulationRuntime runtime,
+        NpcRuntime npc,
+        MoneyAccountRuntime account,
+        long expectedRevision)
+    {
+        string expectedSectionId = NpcMoneyAccountCensusProvider.SectionPrefix + npc.RuntimeId;
+        foreach (IOwnerSectionCensusProvider provider in runtime.MoneyAccountCensusProviders)
+        {
+            OwnerSectionCensusWitness witness = provider.GetCurrentCensus();
+            if (!string.Equals(witness.SectionId, expectedSectionId, System.StringComparison.Ordinal)) continue;
+
+            Assert.That(witness.OwnerInstanceIdentity, Is.SameAs(account));
+            Assert.That(witness.SchemaVersion, Is.EqualTo(NpcMoneyAccountCensusProvider.SchemaVersion));
+            Assert.That(witness.Cardinality, Is.EqualTo(1));
+            Assert.That(witness.Revision, Is.EqualTo(expectedRevision));
+            return;
+        }
+
+        Assert.Fail("The expected per-NPC MoneyAccount witness was not published: " + expectedSectionId);
+    }
+
+    private static void WrapP12AccountCommit(MoneyAccountRuntime account, Action observeCommit)
+    {
+        FieldInfo callbackField = typeof(MoneyAccountRuntime).GetField(
+            "p12MutationCommitted",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        Action original = (Action)callbackField.GetValue(account);
+        callbackField.SetValue(account, (Action)(() =>
+        {
+            observeCommit();
+            original();
+        }));
+    }
+
+    private static void SetAccountRevision(MoneyAccountRuntime account, long revision)
+    {
+        typeof(MoneyAccountRuntime)
+            .GetField("revision", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(account, revision);
     }
 
     private static void BindP12CensusRuntime(EconomyTransactionService service, SimulationRuntime runtime)

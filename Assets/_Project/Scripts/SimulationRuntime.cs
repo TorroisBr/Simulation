@@ -122,6 +122,7 @@ public sealed partial class SimulationRuntime
     private const string BootstrapPublicationCensusOperationId = "runtime.bootstrap-publication";
     private const string DailyAdvanceCensusOperationId = "runtime.advance-day";
     private const string NpcTradeCensusOperationId = "runtime.economy.npc-trade";
+    private const string NpcMoneyTransferCensusOperationId = "runtime.economy.money-transfer";
     private const string MarketPurchaseCensusOperationId = "runtime.economy.market-purchase";
     private const string MarketSaleCensusOperationId = "runtime.economy.market-sale";
 
@@ -1014,6 +1015,9 @@ public sealed partial class SimulationRuntime
                     NpcTradeCensusOperationId,
                     out _)
                 && protocol.RegisterExpectedOperation(
+                    NpcMoneyTransferCensusOperationId,
+                    out _)
+                && protocol.RegisterExpectedOperation(
                     MarketPurchaseCensusOperationId,
                     out _)
                 && protocol.RegisterExpectedOperation(
@@ -1530,6 +1534,38 @@ public sealed partial class SimulationRuntime
         return TryEnterRuntimeAdmissionOperation(NpcTradeCensusOperationId, out scope);
     }
 
+    internal bool TryBeginNpcMoneyTransferCensusOperation(
+        NpcRuntime source,
+        NpcRuntime destination,
+        out SimulationOperationScope scope,
+        out string sourceAccountSectionId,
+        out string destinationAccountSectionId)
+    {
+        scope = null;
+        sourceAccountSectionId = null;
+        destinationAccountSectionId = null;
+        if (runtimeAdmissionContext == null) return false;
+
+        if (!IsRuntimeAdmissionOwnerThreadCurrent()
+            || npcRosterCensusProtocol == null
+            || !TryResolveNpcMoneyAccountSection(source, out sourceAccountSectionId)
+            || !TryResolveNpcMoneyAccountSection(destination, out destinationAccountSectionId))
+        {
+            FaultRuntimeAdmission();
+            return false;
+        }
+
+        if (!npcRosterCensusProtocol.TryValidateUnchangedSections(
+                new[] { sourceAccountSectionId, destinationAccountSectionId },
+                out _))
+        {
+            FaultRuntimeAdmission();
+            return false;
+        }
+
+        return TryEnterRuntimeAdmissionOperation(NpcMoneyTransferCensusOperationId, out scope);
+    }
+
     internal void NotifyNpcTradeOwnerMutation(string sectionId)
     {
         if (runtimeAdmissionContext == null || npcRosterCensusProtocol == null) return;
@@ -1551,45 +1587,18 @@ public sealed partial class SimulationRuntime
     {
         accountSectionId = null;
         inventorySectionId = null;
+        if (!TryResolveNpcMoneyAccountSection(npc, out accountSectionId)) return false;
         if (npc == null
-            || string.IsNullOrWhiteSpace(npc.RuntimeId)
-            || !npcRegistryById.TryGetValue(npc.RuntimeId, out NpcRuntime registeredNpc)
-            || !ReferenceEquals(registeredNpc, npc)
-            || npc.MoneyAccount == null
             || npc.ExistingInventory == null)
         {
+            accountSectionId = null;
             return false;
         }
 
-        string expectedAccountSectionId = NpcMoneyAccountCensusProvider.SectionPrefix + npc.RuntimeId;
         string expectedInventorySectionId = NpcInventoryCensusProvider.SectionPrefix + npc.RuntimeId;
-        bool accountFound = false;
         bool inventoryFound = false;
         try
         {
-            foreach (IOwnerSectionCensusProvider provider in MoneyAccountCensusProviders)
-            {
-                if (!(provider is NpcMoneyAccountCensusProvider.INpcMoneyAccountSectionCensusProvider accountProvider)
-                    || !string.Equals(accountProvider.RuntimeId, npc.RuntimeId, StringComparison.Ordinal))
-                {
-                    continue;
-                }
-
-                OwnerSectionCensusWitness witness = provider.GetCurrentCensus();
-                if (!ReferenceEquals(accountProvider.NpcOwner, npc)
-                    || !ReferenceEquals(accountProvider.MoneyAccountOwner, npc.MoneyAccount)
-                    || !ReferenceEquals(witness.OwnerInstanceIdentity, npc.MoneyAccount)
-                    || !string.Equals(witness.SectionId, expectedAccountSectionId, StringComparison.Ordinal)
-                    || witness.SchemaVersion != NpcMoneyAccountCensusProvider.SchemaVersion
-                    || witness.Cardinality != 1
-                    || witness.Revision != npc.MoneyAccount.Revision)
-                {
-                    return false;
-                }
-
-                accountFound = true;
-            }
-
             foreach (IOwnerSectionCensusProvider provider in InventoryCensusProviders)
             {
                 if (!(provider is NpcInventoryCensusProvider.INpcInventorySectionCensusProvider inventoryProvider)
@@ -1614,12 +1623,66 @@ public sealed partial class SimulationRuntime
         }
         catch
         {
+            accountSectionId = null;
             return false;
         }
 
-        if (!accountFound || !inventoryFound) return false;
-        accountSectionId = expectedAccountSectionId;
+        if (!inventoryFound)
+        {
+            accountSectionId = null;
+            return false;
+        }
         inventorySectionId = expectedInventorySectionId;
+        return true;
+    }
+
+    private bool TryResolveNpcMoneyAccountSection(NpcRuntime npc, out string accountSectionId)
+    {
+        accountSectionId = null;
+        if (npc == null
+            || string.IsNullOrWhiteSpace(npc.RuntimeId)
+            || !npcRegistryById.TryGetValue(npc.RuntimeId, out NpcRuntime registeredNpc)
+            || !ReferenceEquals(registeredNpc, npc)
+            || npc.MoneyAccount == null)
+        {
+            return false;
+        }
+
+        string expectedAccountSectionId = NpcMoneyAccountCensusProvider.SectionPrefix + npc.RuntimeId;
+        bool accountFound = false;
+        try
+        {
+            foreach (IOwnerSectionCensusProvider provider in MoneyAccountCensusProviders)
+            {
+                if (!(provider is NpcMoneyAccountCensusProvider.INpcMoneyAccountSectionCensusProvider accountProvider)
+                    || !string.Equals(accountProvider.RuntimeId, npc.RuntimeId, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                OwnerSectionCensusWitness witness = provider.GetCurrentCensus();
+                if (accountFound
+                    || !ReferenceEquals(accountProvider.NpcOwner, npc)
+                    || !ReferenceEquals(accountProvider.MoneyAccountOwner, npc.MoneyAccount)
+                    || !ReferenceEquals(witness.OwnerInstanceIdentity, npc.MoneyAccount)
+                    || !string.Equals(witness.SectionId, expectedAccountSectionId, StringComparison.Ordinal)
+                    || witness.SchemaVersion != NpcMoneyAccountCensusProvider.SchemaVersion
+                    || witness.Cardinality != 1
+                    || witness.Revision != npc.MoneyAccount.Revision)
+                {
+                    return false;
+                }
+
+                accountFound = true;
+            }
+        }
+        catch
+        {
+            return false;
+        }
+
+        if (!accountFound) return false;
+        accountSectionId = expectedAccountSectionId;
         return true;
     }
 
