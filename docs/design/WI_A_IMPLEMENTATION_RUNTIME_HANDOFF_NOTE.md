@@ -64,10 +64,14 @@ review record are canonical at `93b6f0e8cedcb63437cbf5fa5de3461853c81462`.
 The code remains the reviewed source/test tree recorded above; this status
 refresh changes documentation only.
 
-Before another implementation integrates through `SimulationRuntime`, the
-combined hotspot review must verify that WI-A's final publication gate
-preserves the promoted P12 direct-owner notifications and named-operation
-admission. FR-B must continue to use exact Faction/Person admission as its
-read-cut proof; the partial P12 epoch is not global coherence evidence.
+The combined WI-A/P12 `SimulationRuntime`/bootstrap hotspot review passed
+on WI-A code `3b39e0d89858dce517ad72cbb76da621eb954bad`. Its durable targeted
+revalidation is `codex/phase12/P12BWIARuntimeHotspotRevalidation` at
+`313095ecec87b11928708607821c6b9ad9b5e275`. It confirms that WI-A's final
+publication gate preserves the promoted P12 direct-owner notifications and
+named-operation admission. Tests were reviewed, not rerun. FR-B must still use
+exact Faction/Person admission as its read-cut proof; the partial P12 epoch is
+not global coherence evidence and FR-B requires its own serialized integration
+review.
 Persistence/fork semantics remain outside WI-A. P12-B remains incomplete,
 P12-A remains WAIT_DEPENDENCY, and P13 remains blocked.
