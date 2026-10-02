@@ -2,12 +2,14 @@
 
 ## Candidate boundary
 
-This is the implementation candidate for the approved WI-A World Identity
-Foundation checkpoint, based on the reviewed P12 integration proposal
-`9d1474b4299d8e888dd387e02e9018d9e8627f84`. That base contains the reviewed
-P12 direct NPC-owner invalidation code plus its State/matrix records. The
-canonical P12 branch remains `2f7c7422812de40aa1223e8310dcbd9f5d8ca474` until
-its separate promotion gate is approved.
+This implementation was reviewed on exact code tip
+`3b39e0d89858dce517ad72cbb76da621eb954bad` and promoted with its durable
+review record to `codex/wia/canonical` at
+`93b6f0e8cedcb63437cbf5fa5de3461853c81462`. Its reviewed P12 integration
+base is `9d1474b4299d8e888dd387e02e9018d9e8627f84`, which contains the direct
+NPC-owner invalidation implementation and its State/matrix records. P12
+canonical has since advanced with docs-only State/matrix refreshes; its current
+tip is recorded on the P12 branch.
 
 The implementation establishes one immutable, process-local `WorldId` in the
 canonical `world:<32 lowercase hexadecimal digits>` form. `TesteSimulacao`
@@ -53,3 +55,19 @@ publication hotspot. Before any later FR-B composition, revalidate the WI-A
 publication gate against P12 operation admission, preserve P12 owner commit
 notifications, and keep FR-B's exact Faction/Person admission as its read-cut
 proof rather than treating the partial P12 epoch as global coherence evidence.
+
+
+## Promotion and current runtime handoff — 2026-10-02
+
+WI-A's exact-tip implementation review passed and its implementation plus
+review record are canonical at `93b6f0e8cedcb63437cbf5fa5de3461853c81462`.
+The code remains the reviewed source/test tree recorded above; this status
+refresh changes documentation only.
+
+Before another implementation integrates through `SimulationRuntime`, the
+combined hotspot review must verify that WI-A's final publication gate
+preserves the promoted P12 direct-owner notifications and named-operation
+admission. FR-B must continue to use exact Faction/Person admission as its
+read-cut proof; the partial P12 epoch is not global coherence evidence.
+Persistence/fork semantics remain outside WI-A. P12-B remains incomplete,
+P12-A remains WAIT_DEPENDENCY, and P13 remains blocked.
