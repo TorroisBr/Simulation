@@ -834,3 +834,23 @@ account/Inventory mutation semantics. The WorldId design is an independent
 capability track; WI-A and P12 must nevertheless serialize integration work on
 SimulationRuntime. Candidate integration against the updated runtime is a
 revalidation obligation, not a reason to discard this direct-owner candidate.
+
+
+## Current P12-B operation/epoch matrix — 2026-10-02
+
+This addendum supersedes older candidate-status rows below where they describe
+direct per-NPC MoneyAccount/Inventory invalidation as unpromoted or uncovered.
+
+| Area | Current canonical evidence | Remaining blocker |
+|---|---|---|
+| Per-NPC MoneyAccount and Inventory direct writes | Promoted with integration tip `9d1474b4299d8e888dd387e02e9018d9e8627f84`; code `c49f957e45c3059231e9ec66e4010a7c3a389988`, tree `627af2fbd7f93e0025106ee5ba87e72bae6c4ed2`. Exact per-NPC owner identity, local revision, owner-thread and shared protocol baseline are preflighted; successful direct commits notify the partial epoch once, with duplicate suppression inside the separately scoped NPC trade and Open-market operations. Exact-tip review and focused/full validation are retained in the candidate/review records. | No other owner families or unscoped cross-owner transactions are covered. This is not complete shared-epoch coverage or P12-B readiness. |
+| NPC-to-NPC money transfer | Prior proposal `30c00d78fcb68c2969ac2eac3ed694423c55783e` and review `884aa1b27f1de3a3d330eb75053bab01ffec7cc2` predate the promoted direct-owner hooks and are being refreshed. The preserved follow-up corrects the live float API, disallows the raw-account overload while P12-bound before any write, and records the existing finite zero-value success as a no-op with no owner revision or epoch advance. | Refresh the bounded operation contract against current canonical, obtain exact-tip independent design review, then implement only the NPC overload's source/destination account scope and successful compensation. No transfer operation coverage is yet claimed. |
+| Remaining selected-profile owner inventory | The promoted census and writer evidence remain partial; several passive providers remain outside sealed protocol registration, and City/NPC composites plus Justice, Crime, remaining economy, and other mutable owners have not been shown complete. | Complete live owner/cardinality census and reconcile it with the exact supported profile before capture claims. |
+| Other operation families and shared epoch | Existing bounded coverage includes NPC trade, Open-market purchase/sale, selected direct/daily Market writes, direct per-NPC account/Inventory writes, selected publication/advance scopes, and supported membership reconciliation. | Other EconomyTransactionService methods, merchant plan commits, travel charges, Crime/Justice, Knowledge, and other supported public writers remain uncovered. Avoid duplicate or universal claims. |
+| Runtime admission, quiescence, capture | WI-A is canonical at `93b6f0e8cedcb63437cbf5fa5de3461853c81462`, based on promoted P12 tip `9d1474b4299d8e888dd387e02e9018d9e8627f84`; its implementation/review is retained. | Combined P12/WI-A SimulationRuntime hotspot revalidation is pending. No global quiescence proof or capture token exists. |
+| Downstream continuation | P12-A remains WAIT_DEPENDENCY; P12-C through P12-G retain their documented prerequisite edges; P13 remains blocked. | Do not infer readiness from either promotion. |
+
+The promoted direct-owner slice is retained. The money-transfer design is a
+separate next operation boundary, not a reason to broaden the just-promoted
+candidate. Its prior review must be refreshed on the current base before
+implementation.
