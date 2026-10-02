@@ -10,8 +10,8 @@ prerequisite capability work. P12-B remains incomplete, P12-A remains
 | Candidate branch | `codex/phase12/P12BMerchantDailyOperationImplementation` |
 | Canonical base | `codex/phase12/canonical` at `a66c215d1e8e9db34ea559a8bf2a0803fbdbf4ab` |
 | Reviewed design | `e9fbdada98eb6fed2d1e7a446ac9a4085504c676`; exact-tip PASS record `6cb0837fdf85c777febeb51f1c20fab65fbf2db6` on `codex/phase12/P12BMerchantDailyOperationDesignReview2` |
-| Code candidate | `1701b416c1524080e5017ef722e9e2645cd9b261` |
-| Tested code tree | `9a76379ecd38ee5a10a7756c11b50c6bc68ac561` |
+| Code candidate | `3ed113bf35546964cd4a56f424578dc1213f41fa` |
+| Tested code tree | `876e810757c55b098d805e6e9ac012da7e6cab4d` |
 | Architecture baseline | `451340c56e9b676bf6ea43412bcb856b9ccde3de` |
 
 ## Delivered boundary
@@ -29,11 +29,14 @@ owner witnesses. Each included NPC has one merchant-plan section and one
 travel-plan section, both cardinality one. The operation also binds the
 existing SpatialKnowledge location/route pair and CommercialKnowledge
 market/liquidity/share-receipt triple. Direct supported owner writes on the
-serialized runtime owner thread refresh their exact current baselines. During
-the named operation, committed changed sections are collected and reported as
-one epoch batch; a no-change invocation produces no batch. Shared local owner
-revisions notify every sibling section. Plan revisions advance only on a
-successful state change and reject saturation before changing that plan.
+serialized runtime owner thread refresh their exact current baselines. This
+includes direct `MerchantTradePlan.Set` and `TravelPlan.Set` commits outside
+the named operation; each successful direct plan change advances its exact
+local revision and produces its own epoch invalidation. During the named
+operation, committed changed sections are collected and reported as one epoch
+batch; a no-change invocation produces no batch. Shared local owner revisions
+notify every sibling section. Plan revisions advance only on a successful
+state change and reject saturation before changing that plan.
 
 If a domain method throws after owner writes, the operation reports those
 committed owners in its `finally` path and preserves the exception and domain
@@ -49,7 +52,8 @@ The code candidate changes `CommercialKnowledge.cs`,
 `SpatialKnowledge.cs`; it adds `NpcPlanCensusProvider.cs` and tests in
 `NpcPlanCensusTests.cs`. It extends `NpcKnowledgeCensusTests.cs` and
 `SimulationRuntimeAdmissionTests.cs` for dynamic roster reconciliation,
-owner-hook admission, temporal batching and long-run behavior.
+owner-hook admission, temporal batching, long-run behavior, and direct plan
+owner invalidation outside the named operation.
 
 The optional `NpcDecisionRecorder` allocator, sequence and decision store are
 not included in this operation's preflight or epoch claim. Separate Merchant
@@ -63,9 +67,10 @@ rule, product scope, Phase State, or checkpoint inventory.
 ## Exact-tree validation
 
 All validation below ran against tested code tree
-`9a76379ecd38ee5a10a7756c11b50c6bc68ac561`, before documentation-only
-candidate evidence was added. Focused tests were rerun after committing the
-code candidate. Unity's harness clears `Temp/ValidationResults` on its next
+`876e810757c55b098d805e6e9ac012da7e6cab4d`, before documentation-only
+candidate evidence was added. Focused tests were rerun after the code change;
+the direct-plan invalidation regression was rerun after its commit. Unity's
+harness clears `Temp/ValidationResults` on its next
 launch, so each result was copied to the ignored local archive
 `Library/ValidationResults/P12BMerchantDailyOperationImplementation/` and
 identified by SHA-256. These result artifacts are available in the active
@@ -73,26 +78,27 @@ worktree for independent review; they are not code changes.
 
 | Gate | Result | XML SHA-256 | Log SHA-256 |
 |---|---:|---|---|
-| `SimulationRuntimeAdmissionTests` | 30/30 | `83EF51C57860EB4A03425537CE24BB4C94886DCA1BA34F6E0CE37D0A72E69F14` | `490A7D7F4780C67E8A741D79743F8C4F335E960E6794BF07F59C87226AAFE04E` |
-| `NpcPlanCensusTests` | 5/5 | `F6206DFC8674184D46814BC9E99860D8A54E0466908090E2288DAA3E6087719C` | `2B040ADED9822738C4D7E4988BBB85BD1DBAD81BC9E3FC6F7E6D8ED6EF50215E` |
-| `NpcKnowledgeCensusTests` | 17/17 | `87380BF49CC4D85CFC5F97539D2BF0FE4931F4BD9A6E86FAEC848FF3FD6CB802` | `9999719E3ADBAEDECE110DCB06E91546757A716B07FB3EF64AC1694FE9A5D2B3` |
-| `ContinuationCensusProtocolTests` | 22/22 | `7711B402952A6DC9A88BC1542773BD62440A67446860D3BE4CD9212118D81E45` | `FC096AE7EC29AC559E5FEF46DD5EDDD590894407ED77A3AB9C47CE329F56F6F1` |
-| `NpcOwnerCommitInvalidationTests` | 13/13 | `700B462659052D15AC67E8E35B9507BEBD7CC585D597BFD0B3C436B710194199` | `DFFA90B740934CDCDDB459DBF2EB2789DD114F3A6DC4605FB9E907A8BFDFA80F` |
-| `P18DLocalKnowledgeObservationTests` | 6/6 | `ECFD7A767004431AAC4059949A480215D63678DDD06E4ADEB857F4F684B34AFC` | `359CE8C1E2D4C6CEEF43200EB63C0B219FB60C6B4A5FB798186319E2DF53276A` |
-| `P18DConsumerIntegrationTests` | 9/9 | `71B4376C032961469B0D411641F5571D7972F532E1F278FC5CC937DA4D741B8B` | `CB566C1C25F3F974DA1446D996EDBE7064990C86C19FCFF3AAA960E799B8A3E2` |
-| `MerchantLiquidityTests` | 11/11 | `90585C628B85AD37EE29E4863092C388EBCD38A3CD15F9484A268F2C7F074442` | `566850152388513EEDFBD539EB941BCC87D7B3F951FB6BEF2324B32AC107AF45` |
-| `SimulationBootstrapCompositionTests` | 14/14 | `FE5F4B2973D15AFF7BAB7A3FEF741D76C0DFDC967836B21E18C6EBE25BB223E1` | `48660BA8A9468B1FA0994DE1F2013076ACBDA6E44A93E91A33DDDB72B6868763` |
-| `SimulationRuntimeLongRunTests` | 7/7 | `D55FFD6AA62298F83A728F0FAEE677570DE24C1EBDE62BF812CB1E5729C0333F` | `BA1215693AB89DACFB24FD0E4084C25A503794EC8E6A5810480EB28B9FB58807` |
-| ALL EditMode | 2159/2159 | `10F5967FF7D1B162B164F8A191F604D3A81B5D6E743055362C56C884C953CFB4` | `8C946F70E2DD096F1134D9F749C27FEB005A62CD238D0FEC54A066E42616EF4B` |
-| Official EditMode `Smoke` | 5/5 | `F30FEBA0E95D306DEB96E940F2817FDE2C01A37B8AE878B432B5C61E1ECE34A5` | `57DC30A9E84F3067A7571BBD2A34EA489F5A22F8968AAEB9D4F3FCD88594987A` |
+| `SimulationRuntimeAdmissionTests` | 31/31 | `95025CFDFA37D556BF2DEE5A7F7E6D8527EABDBF1CF744EBD62D6589BB946245` | `155D3C6AD500E61E58B39827CF895F7A82D481FF43B472F27AE86F3FBC3318E7` |
+| `NpcPlanCensusTests` | 5/5 | `8FBC080E552D39ECE7F521864274159523982313F220AB42F1F95D1C4134D3D6` | `D79A0F392716A6102E84160FA41BC71A330C550C95C557E851078462D5704F39` |
+| `NpcKnowledgeCensusTests` | 17/17 | `D846D728127DECC676AC036BD7B194F8D9539E87DB1218DBD90C976D1AFBCC8D` | `74ADC3C7338E0A150D1429BCCE8F8B6711CA9F24883D7C913AFE40086301B859` |
+| `ContinuationCensusProtocolTests` | 22/22 | `FB58A467459A6F74CFF9681B7433173266C851E3A22B18282C9E5BB1319F11D4` | `00EE72A854C18B2EB5001CAD8688CCD0F1AD44D45E0E83FCAB8D41549C2C0449` |
+| `NpcOwnerCommitInvalidationTests` | 13/13 | `3D5190F710FAFCAD32B7C6B9FE3DB432D994DCB080ED0E5B193D91FC691C321A` | `F754947029D91A7E539D260398C15745A83DA41AAC3C7F54EB51D6631C0CBE69` |
+| `P18DLocalKnowledgeObservationTests` | 6/6 | `A7A9CC8AAB78962063AA1B05DC0AC6F86670DD8A1E076FD9432A2610ADD28FAC` | `75B064897F05E56EBD831602965C8753AEEC9E5F54226E51B5FA7A859397E4B9` |
+| `P18DConsumerIntegrationTests` | 9/9 | `25B45EACAB86BBC84B6E7E04D1A9F0C91FFFBAED96450F35C14AC4B2B583FB56` | `EFFD4804E9CE3E1D8D42407A308AB9E696211C5104F615500D8D58629F85A941` |
+| `MerchantLiquidityTests` | 11/11 | `558BE608A9EBE6271239AEC472ABDBD9DE07828BC515EA6C94110038406700DE` | `3C455CABB65241F34616FFCECD1280636EA424734D5D6ADC418A0CFA20530ADF` |
+| `SimulationBootstrapCompositionTests` | 14/14 | `ECC41F329DE65638C9C601C108BC2733AC9D315150D2D786B69EF1F154D73075` | `3C7B88F87B0779AE1B94079231A17885199BF8E73D8DEDCAD478A36DD44B32F3` |
+| `SimulationRuntimeLongRunTests` | 7/7 | `01CD547EBE01D3A565A3FADCBB77B40E3D97DDD531E4CB3975BD31A69B25B8F0` | `504A151702872F3128BCD88C70F02069C808679BB1F6F601EACBFA0739A35A86` |
+| ALL EditMode | 2160/2160 | `F6D7735FD2AD5230B55A72203CF1EFE351CF6310D3B31A59B9A16BFB463A5B41` | `B2FC3A8AFDCB6B3DC7DA1D1EA7CA8372B5678F59B7BD48CA29A91294071715CA` |
+| Official EditMode `Smoke` | 5/5 | `B0870F0E2A4DDB0DA2F6928451DB0925A79C6075D4337731FCCF9A5BA96544F8` | `3DDEDCD2800C2EF2AF9FA818B0DF502DB456578AB789E4B32707FE3680B5B3B1` |
 | `git diff --check` | PASS | — | — |
 
 The focused coverage includes owner identity/cardinality, dynamic roster
 addition/removal and same-ID actor replacement, exact plan revisions and
-saturation, wrong-thread rejection before owner writes, direct Knowledge
-baseline refresh, one-batch operation accounting, exception/partial-commit
-semantics, selected-profile composition, and the 100-day merchant execution
-path. Full EditMode and official Smoke gates passed on the same code tree.
+saturation, wrong-thread rejection before owner writes, direct Knowledge and
+plan-owner baseline refresh, per-write plan invalidation outside the named
+operation, one-batch operation accounting, exception/partial-commit semantics,
+selected-profile composition, and the 100-day merchant execution path. Full
+EditMode and official Smoke gates passed on the same code tree.
 
 Canonical promotion is a separate approval gate. Until that gate passes,
 P12-B remains incomplete and P12-A/P13 retain their recorded blocked status.
