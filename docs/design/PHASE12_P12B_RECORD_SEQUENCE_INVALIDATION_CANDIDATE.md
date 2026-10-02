@@ -1,13 +1,16 @@
 # P12-B SimulationRecordSequence invalidation candidate
 
-**Status:** Submitted for independent exact-tip implementation review. This
-candidate promotes no canonical code and does not complete P12-B.
+**Status:** Updated after the prior exact-tip review returned NEEDS_CHANGES;
+the nested-operation coverage finding is addressed and this exact tip is ready
+for independent re-review. This candidate promotes no canonical code and does
+not complete P12-B.
 
 ## Candidate identity
 
 - Canonical base: `1ac675cc558aa919a749167647c10506c11303fc`
-- Code candidate: `1e9f11966c88fd207e28264bdecb77b7f2a2f1a6`
-- Code tree: `ca4ea6db1cf6797c9908bbb95c0bc5023c719709`
+- Code candidate: `cd7ca4498d2c1d3591c227bd9011429f9bd06d8f`
+- Code tree: `5282d65fbc4311bb6b907770a4e6fa363ad633df`
+- Candidate evidence commit: `2394c9ada04cec1588550e4b12f757f1efb630a6`
 - Design: `a9c1214bff81907f6f0b34b329e2d391401f4a7a`
 - Independent design review: `codex/phase12/P12BRecordSequenceInvalidationDesignReview`
   at `6c46dfc` (PASS).
@@ -33,9 +36,11 @@ decision recorder is rejected before runtime owner binding.
 
 Tests cover ordinary decision recording, domain-event recording,
 first-occurrence decision recording, idempotent receipt replay, exact one-step
-epoch advancement, wrong-thread and stale-baseline rejection, exhaustion,
-post-commit notification failure with the sequence retained, and rejection of
-a sequence that differs from the decision recorder.
+epoch advancement, one allocation under nested registered bootstrap
+publication scopes (one owner revision and one shared-epoch increment),
+wrong-thread and stale-baseline rejection, exhaustion, post-commit
+notification failure with the sequence retained, and rejection of a sequence
+that differs from the decision recorder.
 
 ## Validation on exact code tree
 
@@ -44,19 +49,26 @@ zero inconclusive tests. Their exact paths and SHA-256 values are:
 
 | Gate | Result | XML SHA-256 | Log SHA-256 |
 |---|---:|---|---|
-| Focused `SimulationRecordSequenceP12InvalidationTests` EditMode | 5/5 | `B9A4C867957AE011DBE944766671C58D3C44346C3FCFAAD78359B5328CA8A287` | `C0D4B61B7C3B42E33991EF88C5646853C1A2545EF2F02BA0A14D61036FD8427C` |
-| ALL EditMode | 2179/2179 | `B5A523FB5510A45CEF653006527947E6FD69D56BE4EA7133E93C4175FD9BAAFE` | `76F69A1A5A1053ABD6EEBA81CA531E282E08F18B2F5876ACC26FC902375DEDE6` |
-| Official Smoke (`EditMode -TestFilter Smoke`) | 5/5 | `07386D7878862169252F99713BA69D8290E98F6A869DD73C8F2625DD71A59B39` | `FEB6EADCF9C9BC9C228C8DF09A27318D2887B97E4C4736B490F0556FB05078D5` |
+| Focused `SimulationRecordSequenceP12InvalidationTests` EditMode | 6/6 | `551DF9AC56675CCC03983AFE0D3477AF690A95A07078B39CD3D4A8EA611AF8BA` | `ED66DD6E92F410E1246C96585078CEDD9DAF08B4B9B010FD124099B86B29B529` |
+| ALL EditMode | 2180/2180 | `18FCA8A8E1628F425596AEFAC8CA36C955789E71057021D02C6CDE5EDBA23B53` | `DE9947AEE3829A044875DC0552A35B378C183C633D8B8E3AD251EA51EC2A776C` |
+| Official Smoke (`EditMode -TestFilter Smoke`) | 5/5 | `2D71B0C94154D75A6DCCCEB16343B03D24789EEEDEE043BEC02F368560629DE2` | `6E30DFB03E820EE7E7939C0B02E75784B9A247182BD1FF8C66465E9259F175BC` |
 
 Artifacts are under
-`Library/ValidationResults/P12BRecordSequenceInvalidation/` in the validation
+`Library/ValidationResults/P12BRecordSequenceInvalidationFix/` in the validation
 worktree, named respectively:
 
-- `EditMode-20261002-213259-2353e5076cae4cfa99fa29d37d766a0c.xml` and `.log`
-- `EditMode-20261002-213317-aaf7d5801f584a35b1273f4dcfce7312.xml` and `.log`
-- `EditMode-20261002-213356-60153f95fd2c4384bd0de8c0300484b1.xml` and `.log`
+- `EditMode-20261002-214926-8c2a6bb8a31e41bc87fea1e68a7bbed3.xml` and `.log`
+- `EditMode-20261002-214951-881ac17e779d4565a48c7960c8b1c76e.xml` and `.log`
+- `EditMode-20261002-215118-5bd4180cbe4744e097deee9312e72eff.xml` and `.log`
 
-`git diff 1ac675cc558aa919a749167647c10506c11303fc 1e9f11966c88fd207e28264bdecb77b7f2a2f1a6 --check` passed.
+The prior exact-tip implementation review of code `1e9f119` returned
+NEEDS_CHANGES solely for missing evidence that nested surrounding P12
+operation scopes do not duplicate a sequence allocation notification. The new
+focused test enters the registered bootstrap-publication operation twice,
+allocates once, then asserts owner revision 1, shared epoch 1 after scope
+closure, and a healthy final census. No production code changed in response.
+
+`git diff 1ac675cc558aa919a749167647c10506c11303fc cd7ca4498d2c1d3591c227bd9011429f9bd06d8f --check` passed.
 
 ## Limits retained
 
