@@ -1386,3 +1386,19 @@ on B and C; P12-F waits on C/D/E; P12-G waits on B through F plus validated
 live-profile inventory; P13 remains blocked on P12 continuation and
 recoverable causal inputs/history. Phase 12 remains open and is not ready for
 closure.
+
+## P12-B ScheduledDirective selected-profile invalidation promotion — 2026-10-03
+
+Under the standing `AUTONOMOUS_BOUNDED_PROMOTION` policy, `codex/phase12/canonical` fast-forwarded from `54fc23b89cb13598dd184a2b5b6bacf9dc23b0a7` to reviewed candidate `f23cbd9b6959771249e8f4446808b8402fbd8b9f`. The implementation code is `b8dced9666438d736c8bd2b417390d52988f3c78`, exact tree `248abaacad1538a40a4b0a7af4e1898749993128`. Independent exact-tip review PASS is recorded in [`PHASE12_P12B_SCHEDULED_DIRECTIVE_INVALIDATION_IMPLEMENTATION_REVIEW.md`](design/PHASE12_P12B_SCHEDULED_DIRECTIVE_INVALIDATION_IMPLEMENTATION_REVIEW.md); candidate and retained validation artifact hashes are in [`PHASE12_P12B_SCHEDULED_DIRECTIVE_INVALIDATION_CANDIDATE.md`](design/PHASE12_P12B_SCHEDULED_DIRECTIVE_INVALIDATION_CANDIDATE.md).
+
+The bounded adapter registers the exact selected-profile `ScheduledDirectiveStore` witness, preserves optional omission by standalone runtimes, and requires exact store/provider identity at published bootstrap composition. Successful supported post-bind Adds and terminal transitions preflight before commit and report after commit, including duplicate/unresolved skips from `PrepareDay`; transient `TryTakeDirective` remains outside the authoritative section. The integration uses the existing direct and nested-operation invalidation paths.
+
+Exact-tree evidence: `ScheduledDirectiveCensusTests` 16/16; `SimulationRuntimeAdmissionTests` 31/31; `SimulationBootstrapCompositionTests` 21/21; `SimulationRuntimeOrchestrationTests` 12/12; ALL EditMode 2241/2241; official EditMode Smoke 5/5; `git diff --check` PASS. The independent reviewer verified all six retained XML/log hash pairs. Tests were not rerun for this promotion because the reviewed executable tree did not change.
+
+This promotion covers only selected-profile ScheduledDirective owner invalidation. P12-B remains `INCOMPLETE`; P12-A remains `WAIT_DEPENDENCY`; P12-C through P12-G retain their dependency gates; P13 historical reconstruction/fork remains blocked on continuation and recoverable causal history. No complete owner or shared-epoch coverage, global quiescence, capture eligibility, export, hydration, P12-A/P13 readiness, or Phase closure is claimed.
+
+### Architecture refresh and numbered-phase DAG
+
+This promotion was revalidated against current architecture `3bf09249b7dd9e255c3493aacfd75c96080a31e3`. Its P15-A/P16-A planning additions are upstream-irrelevant to this P12 code tree; `UnityBootstrap-Daily-v1` remains unchanged. P15-A and P16-A are independently implementation-ready handoffs and are being developed in isolated candidates. Before P15 promotion, prove the new `StructureStore` is excluded from the daily profile. Before P16 promotion, prove the new carried-supply/receipt state cannot be silently omitted from P12; its extension of the ArmedForce spatial owner requires serial P12 integration and a negative daily-profile rejection test.
+
+P13 retention/causal-input work remains design-only; authoritative fork implementation is dependency-blocked. P19 public extension design is ready, while loader/runtime work stays deferred. P10/P14/P20 follow-ons remain `READY_FOR_PRODUCT_SCOPE_DECISION`; P17 remains deferred. This promotion changes no numbered-phase dependency edge. Phase 12 remains open.

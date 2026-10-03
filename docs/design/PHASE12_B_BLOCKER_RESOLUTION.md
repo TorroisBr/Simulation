@@ -1074,3 +1074,16 @@ not add a checkpoint ID or broaden P12-A.
 
 P12-B remains incomplete; P12-A remains `WAIT_DEPENDENCY`; P13 remains
 blocked. The numbered-phase DAG is unchanged.
+
+## P12-B owner/operation refresh — 2026-10-03 after ScheduledDirective invalidation
+
+Current P12 code/review tip is `f23cbd9b6959771249e8f4446808b8402fbd8b9f`; reviewed executable code is `b8dced9666438d736c8bd2b417390d52988f3c78`, tree `248abaacad1538a40a4b0a7af4e1898749993128`. The independent exact-tip review and validation are linked from `PHASE12_STATE.md`. The current architecture baseline is `3bf09249b7dd9e255c3493aacfd75c96080a31e3`.
+
+| Writer/owner family | Current selected-profile evidence | Remaining boundary |
+|---|---|---|
+| ScheduledDirective store and lifecycle | P12 now binds the exact composed cardinality-one section. Supported post-bind Add and terminal state transitions preflight before mutation and notify after commit, including duplicate/unresolved `PrepareDay` skips. Transient `TryTakeDirective` remains non-authoritative. | This covers only the selected store and supported paths in the implementation review. It does not establish complete profile owner or write coverage, capture eligibility, or export/hydration. |
+| Expedition owner and start | The exact passive `p12f.expeditions` witness and store-local mutation boundary already exist. `ExpeditionSystem.TryStartExpedition` is an existing selected-profile path that allocates an ExpeditionId, commits `AddAndFence`, starts a TravelParty, then commits `CommitReserved` to attach the party; failure may compensate through `RemoveReserved`. TravelParty has its own P12 adapter, while Expedition commits are not registered with the P12 epoch. | Highest-value next audit/design candidate is the bounded Expedition start/owner invalidation boundary. Confirm the complete ordered call graph, failure/compensation behavior, and whether existing nested TravelParty batching can be composed without changing semantics. Do not widen to all Expedition progress/lifecycle writers absent source evidence. |
+| Daily selected profile and new P15/P16 state | `UnityBootstrap-Daily-v1` has not been broadened. P15-A adds a separate `StructureStore`; P16-A adds supply/receipt state to the ArmedForce spatial authority already visible to the P12 owner matrix. | P15 must prove explicit daily-profile exclusion. P16 must fail closed if unsupported P16 state appears in the daily profile and requires a negative admission test. Serialize P16 ArmedForce-store and all SimulationRuntime/bootstrap admission changes with P12-B. |
+| Downstream readiness | P12-B remains `INCOMPLETE`; P12-A remains `WAIT_DEPENDENCY`; P12-C waits on B; P12-D/E wait on B and C; P12-F waits on C/D/E; P12-G waits on B–F plus complete live-profile inventory; P13 reconstruction/fork remains blocked. | No complete live owner census, complete shared epoch, global owner-thread/quiescence, capture eligibility, export, or hydration is claimed. |
+
+The current P15-A and P16-A implementation candidates are isolated from the P12 runtime/bootstrap window while their owner-level files are developed. They are based on the preceding P12 code tip and must be refreshed/recomposed against the current P12 canonical branch before hotspot integration, followed by the profile-specific negative admission evidence required by the architecture.
