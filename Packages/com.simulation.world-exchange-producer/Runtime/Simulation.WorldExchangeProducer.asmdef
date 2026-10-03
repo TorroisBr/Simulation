@@ -1,0 +1,6 @@
+{
+  "name": "Simulation.WorldExchangeProducer",
+  "rootNamespace": "Simulation.WorldExchangeProducer",
+  "autoReferenced": true,
+  "noEngineReferences": true
+}
