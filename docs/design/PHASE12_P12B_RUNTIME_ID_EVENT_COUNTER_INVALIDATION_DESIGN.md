@@ -1,9 +1,9 @@
 # P12-B selected-profile RuntimeIdAllocator Event-counter invalidation design
 
-**Status:** independent technical review PASS; sufficient for implementation
-within the accepted P12-B capability authorization. No implementation or
-promotion is yet claimed. Review identity and findings are recorded in
-`PHASE12_P12B_RUNTIME_ID_EVENT_COUNTER_INVALIDATION_DESIGN_REVIEW.md`.
+**Status:** revised technical design awaiting independent re-review. An earlier
+version passed review at `b7788cfbbf960b1d2279ff4ec7457462c0af1c6d`; a final
+source check found that version overstated the existing epoch-capacity
+preflight. No implementation or promotion is claimed.
 
 **Canonical base:** `codex/phase12/canonical` at
 `aa8f0305bea9f10c15045e07400d8785c2bd9e23`. This base adds only the
@@ -47,10 +47,16 @@ This design adds only selected-profile shared-epoch invalidation for successful
    supplied. Keep the remaining thirteen passive allocator sections outside
    this protocol.
 3. Add a one-time P12 mutation-boundary binding on `RuntimeIdAllocator` for
-   `AllocateEventId()` only. Before incrementing the counter, the callback
-   verifies the selected runtime owner thread, exact registered section and
-   live owner baseline, plus mutation-epoch capacity using the existing
-   `CanCommitP12MutationSections` path. If rejected, no EventId is allocated.
+   `AllocateEventId()` only. Check allocator exhaustion first. Before
+   incrementing the counter, the callback verifies the selected runtime owner
+   thread, exact registered section and live owner baseline through
+   `CanCommitP12MutationSections`, then separately verifies mutation-epoch
+   capacity through a small internal `ContinuationCensusProtocol` check. The
+   existing `CanCommitP12MutationSections` path does **not** check epoch
+   capacity; `NotifyCommittedMutations` currently discovers a saturated epoch
+   only after the owner write. If either preflight fails, no EventId is
+   allocated. An epoch-capacity failure fault-closes admission, matching the
+   protocol's existing saturated-notification behavior.
 4. After the Event counter advances successfully, notify exactly
    `p12c.runtime-id-allocator.events` through the existing
    `NotifyP12MutationSections` helper. This appends the section to an active
@@ -65,8 +71,16 @@ This design adds only selected-profile shared-epoch invalidation for successful
    causal root.
 6. Check allocator exhaustion before admission. Exhausted or rejected calls
    leave the next counter and local revision unchanged and emit no commit
-   notification. A successful allocation notifies even if subsequent event
-   construction or store insertion fails.
+   notification. Epoch capacity is checked before each selected EventId
+   allocation, including inside an active TravelParty or Merchant batch. A
+   successful allocation notifies even if subsequent event construction or
+   store insertion fails. At `long.MaxValue - 1`, one direct allocation may
+   advance the epoch to `long.MaxValue`; the next allocation is rejected
+   before changing the Event counter. When nested in a multi-owner operation,
+   the existing outer commit remains responsible for the single epoch step.
+   This boundary does not add rollback semantics to those operations: it only
+   guarantees that a rejected EventId allocation does not advance the Event
+   counter after epoch capacity is exhausted.
 
 No `DomainEventRecorder` API change or new operation ID is required. The
 existing nested TravelParty and Merchant contexts own batching when active;
@@ -97,6 +111,9 @@ Focused coverage must prove:
 - successful direct `AllocateEventId()` advances its local revision and the
   partial mutation epoch once;
 - rejected admission and exhausted allocation do not advance either;
+- an epoch already at `long.MaxValue` rejects before the Event counter
+  changes, and the protocol is fault-closed; the `long.MaxValue - 1` boundary
+  permits the final representable epoch step;
 - successful allocation still invalidates if a later event factory/store step
   fails;
 - allocation during `TravelPartySystem.AdvanceParties` joins the existing
