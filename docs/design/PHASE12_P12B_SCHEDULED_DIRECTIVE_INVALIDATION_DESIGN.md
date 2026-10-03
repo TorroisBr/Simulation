@@ -23,9 +23,12 @@ The required owner section is the existing
 `p12f.scheduled-directives`, schema 1, owned by the exact store installed in
 the published composition. Cardinality counts every stored row, including
 terminal rows; local revision advances once per successful Add or terminal
-state commit. P12 reports one changed section per successful commit through
-the current mutation-section dispatcher. It does not claim that the whole
-directive action or daily advance is one atomic P12 operation.
+state commit. P12 reports each committed owner revision through the current
+mutation-section dispatcher. A standalone commit notifies the protocol
+immediately. If an existing TravelParty, Merchant, or solo-travel operation
+batch is active, the changed section is coalesced into that operation and
+accounted at its outer boundary. This does not claim that the whole directive
+action or daily advance is one atomic P12 operation.
 
 ## 2. Source-grounded mutation boundary
 
@@ -84,11 +87,22 @@ store-level admission/committed callback pattern.
 For each supported write:
 
 1. Run the existing guard, identity/ownership, duplicate/state/day, and local
-   revision-capacity checks without changing owner-visible state.
+   revision-capacity checks without changing owner-visible state. For Add,
+   defer binding the incoming directive to the guard/store until after P12
+   admission, so a rejected preflight leaves even that incoming object
+   untouched.
 2. If P12 callbacks are bound, preflight owner thread, exact store/provider
    identity, current section count/revision, unchanged-section baseline, and
    mutation-epoch capacity before changing membership or row state. A failed
-   P12 preflight faults admission closed and leaves the store commit untouched.
+   P12 preflight faults the protocol and must propagate as an
+   `InvalidOperationException` before any directive binding or owner commit.
+   This propagation is required because current `PrepareDay` and actor-turn
+   callers ignore the boolean result of `MarkSkipped`/`MarkSucceeded`/
+   `MarkFailed`; returning `false` alone could let the daily advance report
+   success. The runtime's existing selected-P12 advance catch faults and
+   rethrows the failure. Do not catch or convert it to an ordinary directive
+   rejection. With no P12 callback bound, preserve the existing non-P12
+   boolean behavior.
 3. Apply the existing owner commit. For Add-with-immediate-Skipped, insertion
    and initial status remain one store commit and one revision increment.
 4. After the revision increments, verify the exact live witness and notify
@@ -98,9 +112,18 @@ For each supported write:
 
 Before runtime callback binding, Add continues to build genesis state and its
 final witness becomes the initial baseline. After binding, a supported Add
-uses the same preflight/commit/notify sequence. Successful terminal changes
-each advance revision and partial epoch once. Repeated, rejected, exhausted,
-or transient lookup paths do not notify.
+uses the same preflight/commit/notify sequence. Every successful owner commit
+advances the local revision once. A standalone commit is notified immediately;
+commits inside an existing batch are coalesced by changed section and accounted
+once when that batch closes. Repeated, rejected, exhausted, or transient lookup
+paths do not notify. A P12 preflight denial is exceptional and propagates; it
+is not converted to a normal `false` result.
+
+If terminal-state admission fails after the directive action or other daily
+work has already committed, those earlier domain effects are not rolled back.
+The selected P12 advance faults and aborts by propagating the admission
+exception; this slice does not add an action-plus-directive transaction or
+claim daily atomicity.
 
 The store monitor protects its own local census coherence. It is not a new
 runtime lock, owner-thread guarantee, or quiescence proof. Existing P12 owner
@@ -131,14 +154,18 @@ and unrelated operation owners untouched. The main hotspot is
 
 Focused tests should prove exact runtime/store identity, required-section
 registration for the selected P12 profile, genesis baseline after authored
-Adds, one preflight and one revision/epoch change per successful post-bind
-Add or terminal transition, Add-with-immediate-Skipped as one commit, and
-unchanged count/revision/epoch for failed/repeated operations. Cover
-`PrepareDay` conflict and unresolved-actor skips, normal success/failure
-terminal paths, and `TryTakeDirective` remaining transient. Exercise stale
-owner/revision and epoch-capacity rejection before store mutation, plus
-post-commit notification failure faulting the runtime. Preserve legacy
-non-P12 behavior.
+Adds, one preflight and one revision change per successful post-bind Add or
+terminal transition, Add-with-immediate-Skipped as one commit, and unchanged
+count/revision/epoch for failed/repeated operations. Verify that standalone
+commits notify immediately and that commits within an existing operation batch
+are coalesced at its outer boundary. Cover `PrepareDay` conflict and
+unresolved-actor skips, normal success/failure terminal paths, and
+`TryTakeDirective` remaining transient. Exercise stale owner/revision and
+epoch-capacity rejection before any directive binding or store mutation;
+assert that rejected `PrepareDay` and actor-turn terminal commits propagate
+through selected-P12 daily advance instead of reporting success. Also cover
+Add denial, post-commit notification failure faulting the runtime, and
+unchanged non-P12 boolean behavior.
 
 Then run affected runtime/admission and bootstrap suites, ALL EditMode,
 official Smoke, and `git diff --check` on the exact code tree. Record artifact
