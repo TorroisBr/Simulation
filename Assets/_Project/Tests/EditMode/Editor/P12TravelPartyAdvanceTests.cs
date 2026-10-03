@@ -219,7 +219,8 @@ public sealed class P12TravelPartyAdvanceTests
             fixture.Records.Time,
             fixture.Travel,
             fixture.System,
-            fixture.Records.Sequence);
+            fixture.Records.Sequence,
+            fixture.Records.Allocator);
         ContinuationCensusProtocol protocol = GetProtocol(runtime);
         List<int> activeOperationsAtTravelOwnerCommit = new List<int>();
         WrapNpcTravelCommitted(fixture.Bruno, () =>
@@ -242,11 +243,16 @@ public sealed class P12TravelPartyAdvanceTests
 
         Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long beforeArrival, out ContinuationCensusFailure readBeforeArrival),
             Is.True, readBeforeArrival.ToString());
+        IOwnerSectionCensusProvider eventCounterProvider =
+            RuntimeIdAllocatorCensusProvider.CreateEventCounterProvider(fixture.Records.Allocator);
+        long eventCounterRevisionBeforeArrival = eventCounterProvider.GetCurrentCensus().Revision;
         Assert.That(runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure arrivalFailure), Is.True, arrivalFailure.ToString());
         Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long afterArrival, out ContinuationCensusFailure readAfterArrival),
             Is.True, readAfterArrival.ToString());
         Assert.That(afterArrival, Is.EqualTo(beforeArrival + 1),
-            "TravelParty, City, NPC, SpatialKnowledge, and record-sequence writes share one nested operation epoch");
+            "TravelParty, City, NPC, SpatialKnowledge, Event-counter, and record-sequence writes share one nested operation epoch");
+        Assert.That(eventCounterProvider.GetCurrentCensus().Revision, Is.EqualTo(eventCounterRevisionBeforeArrival + 1),
+            "the arrival event ID allocation is included in the selected allocator census");
         Assert.That(fixture.Parties.ActiveParties, Is.Empty);
         Assert.That(fixture.Members.All(member => member.CurrentCity == fixture.World.B
             && member.ActiveTravelPartyId == null && !member.IsTraveling), Is.True);
@@ -322,7 +328,8 @@ public sealed class P12TravelPartyAdvanceTests
         SimulationTime time = null,
         TravelSystem travelSystem = null,
         TravelPartySystem travelPartySystem = null,
-        SimulationRecordSequence sequence = null)
+        SimulationRecordSequence sequence = null,
+        RuntimeIdAllocator runtimeIdAllocator = null)
     {
         return new SimulationRuntime(
             time ?? new SimulationTime(),
@@ -334,6 +341,7 @@ public sealed class P12TravelPartyAdvanceTests
             travelSystem: travelSystem,
             travelPartySystem: travelPartySystem,
             recordSequence: sequence,
+            runtimeIdAllocator: runtimeIdAllocator,
             runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1());
     }
 

@@ -62,6 +62,15 @@ public sealed class SimulationBootstrapComposition
                 nameof(recordSequence));
         }
         SimulationRecordSequenceCensusProvider = sequenceCensusProvider;
+        IOwnerSectionCensusProvider eventCounterCensusProvider =
+            RuntimeIdAllocatorCensusProvider.CreateEventCounterProvider(runtimeIdAllocator);
+        if (!runtime.HasSameRuntimeIdAllocatorEventCounterOwner(eventCounterCensusProvider))
+        {
+            runtime.FaultRuntimeAdmission();
+            throw new ArgumentException(
+                "The selected P12 runtime and bootstrap must expose the exact same RuntimeIdAllocator Event-counter owner witness.",
+                nameof(runtimeIdAllocator));
+        }
         this.economyTransactionService = economyTransactionService ?? throw new System.ArgumentNullException(nameof(economyTransactionService));
         NpcChronicles = chronicles;
         ChronicleFormatter = chronicleFormatter;

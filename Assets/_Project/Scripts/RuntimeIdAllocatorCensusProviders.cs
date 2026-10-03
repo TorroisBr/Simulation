@@ -85,4 +85,10 @@ public static class RuntimeIdAllocatorCensusProvider
         };
         return Array.AsReadOnly(providers);
     }
+
+    public static IOwnerSectionCensusProvider CreateEventCounterProvider(RuntimeIdAllocator owner)
+    {
+        if (owner == null) throw new ArgumentNullException(nameof(owner));
+        return new CounterProvider(owner, RuntimeIdAllocatorCensusCounter.Events, EventsSectionId);
+    }
 }

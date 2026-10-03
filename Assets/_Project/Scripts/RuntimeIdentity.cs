@@ -19,6 +19,8 @@ public sealed class RuntimeIdAllocator
     private long nextLocalPlaceSequence = 1;
     private long nextLocalConnectionSequence = 1;
     private long nextNotableItemSequence = 1;
+    private Func<bool> p12EventIdMutationAdmission;
+    private Action p12EventIdMutationCommitted;
 
     internal object CensusOwnerIdentity => censusOwnerIdentity;
 
@@ -66,7 +68,36 @@ public sealed class RuntimeIdAllocator
 
     public string AllocateEventId()
     {
-        return Allocate("event", ref nextEventSequence);
+        if (nextEventSequence == long.MaxValue)
+        {
+            throw new InvalidOperationException("RuntimeId sequence is exhausted for type 'event'.");
+        }
+
+        if (p12EventIdMutationAdmission != null && !CanCommitP12EventIdMutation())
+        {
+            throw new InvalidOperationException("The P12 Event-ID mutation was rejected before allocation.");
+        }
+
+        string runtimeId = "event-" + nextEventSequence.ToString("D6", CultureInfo.InvariantCulture);
+        nextEventSequence++;
+        p12EventIdMutationCommitted?.Invoke();
+        return runtimeId;
+    }
+
+    internal void BindP12EventIdMutationBoundary(Func<bool> admission, Action committed)
+    {
+        if (admission == null) throw new ArgumentNullException(nameof(admission));
+        if (committed == null) throw new ArgumentNullException(nameof(committed));
+        if (p12EventIdMutationAdmission != null || p12EventIdMutationCommitted != null)
+            throw new InvalidOperationException("RuntimeIdAllocator Event IDs are already bound to a P12 mutation boundary.");
+        p12EventIdMutationAdmission = admission;
+        p12EventIdMutationCommitted = committed;
+    }
+
+    private bool CanCommitP12EventIdMutation()
+    {
+        try { return p12EventIdMutationAdmission(); }
+        catch { return false; }
     }
 
     public string AllocateDirectiveId()

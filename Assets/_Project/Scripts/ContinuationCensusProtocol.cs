@@ -1543,6 +1543,20 @@ public sealed class ContinuationCensusProtocol
         return true;
     }
 
+    internal bool TryValidateMutationEpochCapacity(out ContinuationCensusFailure failure)
+    {
+        if (!TryRequireOwnerThread(out failure)) return false;
+        if (mutationEpoch == long.MaxValue)
+        {
+            Fault();
+            failure = ContinuationCensusFailure.ProtocolFaulted;
+            return false;
+        }
+
+        failure = ContinuationCensusFailure.None;
+        return true;
+    }
+
     /// <summary>Enters a registered synchronous operation on the bound owner thread.</summary>
     public bool TryEnterOperation(
         string operationContractId,

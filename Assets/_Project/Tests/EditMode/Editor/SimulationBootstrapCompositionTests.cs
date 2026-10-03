@@ -888,6 +888,12 @@ public sealed class SimulationBootstrapCompositionTests
             Assert.That(witness.SchemaVersion, Is.EqualTo(RuntimeIdAllocatorCensusProvider.SchemaVersion));
             Assert.That(witness.Cardinality, Is.EqualTo(1));
             Assert.That(witness.Revision, Is.EqualTo(expectedRuntimeIdAllocatorRevisions[i]));
+            if (i == 4)
+            {
+                Assert.That(simulation.Runtime.HasSameRuntimeIdAllocatorEventCounterOwner(
+                    runtimeIdAllocatorProviders[i]), Is.True,
+                    "the bootstrap composition publishes the exact Event-counter owner bound into its selected runtime");
+            }
             if (i == 0)
             {
                 runtimeIdAllocatorOwner = witness.OwnerInstanceIdentity;

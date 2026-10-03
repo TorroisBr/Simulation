@@ -259,7 +259,8 @@ public class TesteSimulacao : MonoBehaviour
                             spatialAuthorityStore: genesisSpatialAuthority,
                             runtimeAdmissionContext: runtimeAdmissionContext,
                             recordSequence: recordSequence,
-                            worldId: unpublishedWorldId);
+                            worldId: unpublishedWorldId,
+                            runtimeIdAllocator: runtimeIdAllocator);
                         simulationRuntime.BindP12EconomyTransactionService(economyTransactionService);
                         if (runtimeAdmissionContext != null
                             && !simulationRuntime.TryBeginBootstrapPublicationScope(out bootstrapPublicationScope))
