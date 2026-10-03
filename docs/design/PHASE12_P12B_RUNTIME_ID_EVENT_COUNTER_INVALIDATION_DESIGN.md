@@ -1,9 +1,11 @@
 # P12-B selected-profile RuntimeIdAllocator Event-counter invalidation design
 
-**Status:** revised technical design awaiting independent re-review. An earlier
-version passed review at `b7788cfbbf960b1d2279ff4ec7457462c0af1c6d`; a final
-source check found that version overstated the existing epoch-capacity
-preflight. No implementation or promotion is claimed.
+**Status:** revised technical design independently reviewed PASS and sufficient
+for implementation within the accepted P12-B capability authorization. The
+earlier version at `b7788cfbbf960b1d2279ff4ec7457462c0af1c6d` overstated the
+existing epoch-capacity preflight; that finding is corrected here and recorded
+in `PHASE12_P12B_RUNTIME_ID_EVENT_COUNTER_INVALIDATION_DESIGN_REVIEW_REVISION.md`.
+No implementation or promotion is claimed.
 
 **Canonical base:** `codex/phase12/canonical` at
 `aa8f0305bea9f10c15045e07400d8785c2bd9e23`. This base adds only the
