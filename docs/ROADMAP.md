@@ -22,9 +22,9 @@ Phases 5–7 are closed within their documented scopes. P8-A/B/C/D/E are canonic
 
 Runtime World Expansion remains a future consumer without an assigned dedicated phase. Its absence from this sequence does not forbid a later insertion or assign it to Phase 15 by implication.
 
-## Bounded next-slice candidate — 2026-10-03
+## Bounded next-slice planning promotion — 2026-10-03
 
-The user selected P15-A, one runtime structure at an existing canonical Location, and P16-A, one existing ArmedForce crossing one valid passage with finite carried supply. Their [P15-A](design/PHASE15A_RUNTIME_STRUCTURE_CHECKPOINT.md) and [P16-A](design/PHASE16A_SINGLE_PASSAGE_MOVEMENT_CHECKPOINT.md) contracts are independently reviewed candidate planning/technical-design records awaiting architecture promotion. They do not expand `UnityBootstrap-Daily-v1` or authorize implementation before that promotion. P15-A uses a synthetic inert proving structure without material debit because P14-A supplies no applicable generic construction-cost transaction; P16-A extends the existing military position owner with carried supply and must fail closed under the P12 profile admission rule.
+The user selected P15-A, one runtime structure at an existing canonical Location, and P16-A, one existing ArmedForce crossing one valid passage with finite carried supply. Their [P15-A](design/PHASE15A_RUNTIME_STRUCTURE_CHECKPOINT.md) and [P16-A](design/PHASE16A_SINGLE_PASSAGE_MOVEMENT_CHECKPOINT.md) planning/technical-design contracts were independently reviewed and promoted at architecture content SHA `a2788e6400251b5ce3cf8d2269ea8a5b5fdfd4a8`. They are eligible for the Master implementation workflow, not delivered runtime capabilities. They do not expand `UnityBootstrap-Daily-v1`. P15-A uses a synthetic inert proving structure without material debit because P14-A supplies no applicable generic construction-cost transaction; P16-A extends the existing military position owner with carried supply and must fail closed under the P12 profile admission rule.
 
 The [P13 retention/causal-input design](design/PHASE13_RETENTION_CAUSAL_INPUT_DESIGN.md) and [P19 public-extension-surface design](design/PHASE19_PUBLIC_EXTENSION_SURFACE_DESIGN.md) may advance independently. P13 reconstruction/fork implementation still waits on exact continuation of the chosen world/profile and recoverable causal history. P19 loader implementation remains deferred. The [P10/P14/P20 decision packet](architecture/P10_P14_P20_NEXT_SCOPE_DECISIONS.md) recommends options but selects no follow-on gameplay scope.
 
@@ -48,20 +48,20 @@ P10-A / P14-A / P20-A → respective next-slice product choices
 
 The [P12 capability DAG audit](architecture/P12_CAPABILITY_DAG_AUDIT.md) separates the accepted `UnityBootstrap-Daily-v1` continuation profile from entry of new authoritative domain capabilities. P12-B is still incomplete on `origin/codex/phase12/canonical` at `54fc23b`; P12-C–G and P12-A retain their accepted chain. Full P12 closure still means exact, validated deterministic continuation for every admitted owner. A newly composed unsupported owner causes profile admission to reject, never silent omission or automatic P12 scope growth. No global `PHASE 12 FOUNDATION READY` milestone is introduced. Each new owner instead passes the architecture §92A continuation-aware entry gate before its bounded checkpoint can be implemented.
 
-The [Master handoff](architecture/P12_CAPABILITY_DAG_MASTER_HANDOFF.md) records the post-promotion ready set, product-scope choices and serial integration boundaries. It is a dated scheduling aid; current owning States and code determine delivery.
+The earlier [P12 capability-DAG handoff](architecture/P12_CAPABILITY_DAG_MASTER_HANDOFF.md) records its historical ready set. The [current P15/P16 handoff](architecture/P15_P16_NEXT_SLICES_MASTER_HANDOFF.md) supersedes its P15/P16 product-gate entries; current owning States and code still determine delivery.
 
 While P12-B admission is incomplete, a new owner must either stay outside the selected composition by construction or prove a fail-closed admission hook and negative rejection test before its domain checkpoint is promoted. The latter is a serial P12-B integration, not an independent edit to that hotspot.
 
 | Phase / track | P12 relationship | Next gate |
 |---|---|---|
 | P10 | Pre-start authoring independent; later saved generated profile is a specific P12 integration. | P10-A promoted; any next content slice is `READY_FOR_PRODUCT_SCOPE_DECISION`. |
-| P13 | Strategy and causal-input design independent; actual fork needs complete continuation of its chosen world/profile plus recoverable history. | Design may proceed; reconstruction/fork implementation `WAIT_DEPENDENCY`. |
+| P13 | Strategy and causal-input design independent; actual fork needs complete continuation of its chosen world/profile plus recoverable history. | Retention/causal-input design ready; reconstruction/fork implementation `WAIT_DEPENDENCY`. |
 | P14 | Domain work continuation-aware, not blocked by P12. | P14-A promoted; any follow-on is `READY_FOR_PRODUCT_SCOPE_DECISION`. |
-| P15 | Domain work continuation-aware, not blocked by P12 closure. | First founding/construction consumer and actor authority are `READY_FOR_PRODUCT_SCOPE_DECISION`; no checkpoint implementation yet. |
-| P16 | Domain work continuation-aware, not blocked by P12 closure. | First movement/logistics/command scope is `READY_FOR_PRODUCT_SCOPE_DECISION`; P7/P8/P14 and conditional P18 capability gates remain. |
+| P15 | Domain work continuation-aware, not blocked by P12 closure. | P15-A reviewed design promoted; `READY_FOR_MASTER_IMPLEMENTATION_HANDOFF` for one inert structure at an existing Location, with profile-safety gate before domain promotion. Broader founding remains unselected. |
+| P16 | Domain work continuation-aware, not blocked by P12 closure. | P16-A reviewed design promoted; `READY_FOR_MASTER_IMPLEMENTATION_HANDOFF` for one selected force/one passage/finite supply, with profile-safety gate before domain promotion. Broader routes remain unselected. |
 | P17 | Deferred by strategic/domain/product prerequisites, not P12. | P16, territory/political authority and War semantics; no implementation checkpoint. |
 | P18 | Bounded A–D scope closed; a future intraday save profile requires specific temporal-state coverage. | No reopening for P12. |
-| P19 | Public-surface design may use real consumers; durable mod-state support needs specific P12/P13 integration. | Loader scope and checkpoint design remain deferred; no blanket P12 gate. |
+| P19 | Public-surface design may use real consumers; durable mod-state support needs specific P12/P13 integration. | Bounded public-extension-surface design ready; loader scope/implementation remain deferred; no blanket P12 gate. |
 | P20 | P20-A promoted; future saved shared activity requires specific temporal/participant-state coverage. | Further consumer is `READY_FOR_PRODUCT_SCOPE_DECISION`. |
 
 ```text
@@ -72,7 +72,7 @@ complete continuation of chosen world/profile + causal history + compatible exec
   → P13 authoritative reconstruction and independent fork
 ```
 
-P13 retention/checkpoint and causal-input design is ready as isolated architecture work; P15/P16 could be designed and implemented before P12 closure **after** their actual product, technical-review and promoted-capability gates. No new P15/P16 implementation checkpoint is approved here. P10/P14/P20 follow-ons similarly await bounded product scope. The Master may run these tracks in separate worktrees while P12-B continues, serializing shared `SimulationRuntime`, spatial/domain owner and persistence-composition hotspots at integration. Existing candidate impact is targeted; no closed phase is reopened by this dependency clarification.
+P13 retention/checkpoint and causal-input design is ready as isolated architecture work; P15-A/P16-A have approved bounded scope and reviewed technical design, so the Master may start isolated implementation workflows before P12 closure after checking current prerequisites. P10/P14/P20 follow-ons still await bounded product scope. The Master may run P15-A/P16-A in separate worktrees while P12-B continues, serializing shared `SimulationRuntime`, spatial/domain owner and persistence-composition hotspots at integration. No closed phase is reopened by this dependency clarification.
 
 WI-A, FR-B and FR-C integrations and the bounded WX-D World Exchange v2 producer have since been promoted/handed off through P12 canonical. Simulation-External `main` at `0ce8403` owns the v2 `collectionCoverage` contract. These delivered cross-cutting slices do not supply P12 capture, save/load or P13 fork. The checkpoint table below records **their planning readiness when its 2026-10-01 design was promoted**, not current delivery; use current owning States and code for delivery.
 

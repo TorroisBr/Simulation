@@ -1,6 +1,6 @@
 # Master handoff — bounded P15/P16 next slices and parallel design
 
-**Architecture baseline:** `codex/architecture/world-identity-projection` at `da34d50bd7831ac3eefab31e925492ede8dded5c` (2026-10-03). This handoff is a candidate until independent review and explicit architecture-canonical promotion. Recheck refs, States and code when scheduling; the active P12-B worktree is not part of this candidate. The independent review [record](P15_P16_NEXT_SLICES_REVIEW_RECORD.md) validates content tip `3ca00b8a74da2cdab807ec4dc5f8ec95454645b7`.
+**Architecture baseline:** `codex/architecture/world-identity-projection` planning content promoted at `a2788e6400251b5ce3cf8d2269ea8a5b5fdfd4a8` from base `da34d50bd7831ac3eefab31e925492ede8dded5c` (2026-10-03). Recheck refs, States and code when scheduling; the active P12-B worktree remains an independent stream. The independent review [record](P15_P16_NEXT_SLICES_REVIEW_RECORD.md) validates content tip `3ca00b8a74da2cdab807ec4dc5f8ec95454645b7` and the final metadata delta.
 
 ## Ready set and gates
 
@@ -12,7 +12,7 @@
 | P19 public-extension-surface design | `P19_PUBLIC_EXTENSION_SURFACE_DESIGN_READY` for design only | Use [the design](../design/PHASE19_PUBLIC_EXTENSION_SURFACE_DESIGN.md) to scope a real new-world generation contributor contract first. | Loader and durable module-state implementation remain deferred and need their own consumer/technical review and compatible continuation/history. |
 | P10 / P14 / P20 next slices | `READY_FOR_PRODUCT_SCOPE_DECISION` | Present the [decision packet](P10_P14_P20_NEXT_SCOPE_DECISIONS.md); do not dispatch a follow-on. | Human chooses bounded gameplay scope; then design/review and promoted prerequisites. |
 
-The technical-design records are not runtime capabilities. The independent technical review passed at `3ca00b8`; `READY_FOR_MASTER_IMPLEMENTATION_HANDOFF` becomes effective only after this architecture candidate is canonically promoted. Even then the Master checks the current code, profile admission, isolation and conflict windows before implementation dispatch.
+The technical-design records are not runtime capabilities. The independent technical review passed at `3ca00b8`; `READY_FOR_MASTER_IMPLEMENTATION_HANDOFF` is effective after architecture promotion at `a2788e6`. The Master checks current code, profile admission, isolation and conflict windows before implementation dispatch.
 
 ## Dependency and hotspot ownership
 
@@ -32,4 +32,4 @@ P15-A writes a new `StructureStore` and reads `SpatialAuthorityStore`; P16-A cha
 
 P15-A retains ID, definition/revision, Location link, creation boundary and accepted causal order. P16-A retains the immutable selected-force binding, force position, finite supply item/quantity, one successful-crossing receipt with operation ID, passage and fixed P8 evaluation context/revision and accepted causal order. External inputs to a durable world additionally retain payload and authority. Both expose exact semantic-state and private staged-hydration/validation seams for future P12/P13 work without implementing Save or Replay now. P16-A has no general multi-move ordering policy; a second crossing, including at the same boundary, rejects unchanged. Tests must establish rejected mutation leaves records, indexes and revisions unchanged, deterministic clone/order, future fork before/after behavior and selected P12 profile fail-closed behavior. Documentation changes alone require diff/link/review checks, no Unity test.
 
-The next human gate is approval of the independently reviewed architecture/planning candidate for canonical promotion under `AGENTS.md` and `EXECUTION_MODEL.md`. No closed Phase is reopened. P12-B continues on its own stream.
+Architecture-canonical promotion was approved and completed. Future domain checkpoint promotions retain their own implementation review and human gates under `AGENTS.md` and `EXECUTION_MODEL.md`. No closed Phase is reopened. P12-B continues on its own stream.

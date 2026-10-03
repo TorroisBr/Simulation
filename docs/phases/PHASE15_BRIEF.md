@@ -1,6 +1,6 @@
 # Phase 15 — Runtime Construction & Founding v1
 
-**Authority:** planning entry subordinate to `../SIMULATION_ARCHITECTURE.md`. **Readiness:** first product scope approved; P15-A technical design is independently reviewed PASS at content tip `3ca00b8`; pending canonical promotion. No implementation is authorized by this Brief alone.
+**Authority:** planning entry subordinate to `../SIMULATION_ARCHITECTURE.md`. **Readiness:** P15-A product scope and independently reviewed technical design promoted in architecture at `a2788e6`; `READY_FOR_MASTER_IMPLEMENTATION_HANDOFF`, subject to current-base implementation gates. No runtime delivery is claimed by this Brief.
 
 ## Objective and closure
 
