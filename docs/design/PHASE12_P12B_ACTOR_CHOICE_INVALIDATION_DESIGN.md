@@ -1,7 +1,7 @@
 # P12-B ActorChoice owner invalidation design
 
-**Status:** Bounded technical design for independent review; no implementation
-or new checkpoint acceptance is implied.
+**Status:** Independent design review PASS; bounded implementation may proceed
+within the accepted P12-B prerequisite capability scope.
 
 **Accepted capability:** P12-B — selected-profile admission and
 completed-boundary lifecycle, within the already accepted P12-B prerequisite
