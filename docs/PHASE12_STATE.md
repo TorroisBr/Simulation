@@ -1300,3 +1300,40 @@ The promoted WX-D producer remains bounded to WI-A WorldId and FR-C Faction fact
 ### Numbered-phase DAG refresh
 
 The canonical move adds no dependency edge and no new Phase 12 readiness. The P12-B blocker matrix was re-read against this canonical tip and refreshed in `docs/design/PHASE12_B_BLOCKER_RESOLUTION.md`. P12-B remains `INCOMPLETE`; P12-A remains `WAIT_DEPENDENCY`; P12-C remains blocked on B; P12-D/E remain blocked on B and C; P12-F remains blocked on C/D/E; P12-G remains blocked on B through F and a validated live-profile inventory; P13 remains blocked on continuation and recoverable causal inputs/history. Phase 12 remains open. No capture eligibility, complete owner or shared-epoch coverage, global quiescence, export, hydration, P12-A readiness, or P13 readiness is inferred.
+
+## P12-B selected-profile RuntimeIdAllocator Decision-counter invalidation promotion — 2026-10-03
+
+After the final refreshed preflight, `codex/phase12/canonical` advanced from
+`22525cb5f96eb9eed2e168b7e6a23fdc1e420304` to
+`22e5e51ac1383f91c30ea9d1c15351020dd93b38` by clean fast-forward. The reviewed
+implementation is `52154053219e30e679bc400adf55c2f577bd8106`, exact tree
+`ddd3684daf264a15af9c217c8edb4e390e82602d`. Independent exact-tip review
+passed for documentation candidate `42b61a6fd41785461d6137098c8277acfcf00146`
+and the unchanged code tree; its durable final review record is the tip
+`22e5e51ac1383f91c30ea9d1c15351020dd93b38`.
+
+The selected `UnityBootstrap-Daily-v1` protocol registers and binds only the
+existing required, cardinality-one Decision counter witness on the exact
+`RuntimeIdAllocator`. A successful `AllocateDecisionId()` preflights owner
+thread, baseline revision, and epoch capacity before incrementing, then
+reports only the Decision section. Existing TravelParty/Merchant nested
+batching is preserved. The consumed ID remains committed if later record
+sequence allocation fails. No other allocator counters, DecisionStore,
+occurrence receipts, ActorChoice, or new operation semantics are included.
+
+Retained exact-tree validation passed the five focused suites (15/15, 31/31,
+21/21, 14/14, 3/3), ALL EditMode 2227/2227, official EditMode Smoke 5/5, and
+`git diff --check`. The candidate and implementation-review records contain
+artifact paths and SHA-256 hashes. This is one bounded owner invalidation
+slice only: P12-B remains `INCOMPLETE`; P12-A remains `WAIT_DEPENDENCY`; P13
+remains `BLOCKED`; Phase 12 remains open. No complete owner/operation/shared-
+epoch coverage, global quiescence, capture eligibility, export, hydration,
+P12-A readiness, or P13 readiness is inferred.
+
+### Numbered-phase DAG refresh
+
+No dependency edge or readiness label changes: P12-A remains
+`WAIT_DEPENDENCY`; P12-B remains `INCOMPLETE`; P12-C waits on B; P12-D/E wait
+on B and C; P12-F waits on C/D/E; P12-G waits on B through F plus validated
+live-profile inventory; P13 remains blocked on P12 continuation and
+recoverable causal inputs/history. Phase 12 is not ready for closure.

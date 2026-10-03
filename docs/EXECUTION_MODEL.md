@@ -65,13 +65,34 @@ An architecture blocker record identifies checkpoint, base SHA, exact unanswered
 ```text
 implementation → focused validation → SUBMITTED
 → independent review → VALIDATED_CANDIDATE
-→ integration/regression → explicit human approval initially
+→ integration/regression → AUTONOMOUS_BOUNDED_PROMOTION when all criteria pass
 → PROMOTED + State evidence → DAG refresh
 ```
 
 Worker completion, green tests, candidate existence, and technical-plan approval are not promotion. Review the full diff against its actual base and check semantic architecture, technical design, mutation authority, deterministic and replay/fork implications, stale state, atomicity, scope, tests, and hotspot interference. Before promotion verify ancestry, expected diff, current remote, integration evidence, State accuracy, required tests, `git diff --check`, and absence of unresolved blockers. Do not force-push, silently merge main, or discard user work.
 
-Canonical promotion initially requires human approval. A later policy may explicitly authorize narrow automatic classes; this document does not. Phase closure separately requires the closure objective and mandatory checkpoints canonical, appropriate regression and independent closure review, known limitations and deferred consumers recorded, and a formal State marker. A state-only closure commit may be appropriate. Closing a phase never requires every future consumer.
+### Autonomous bounded promotion
+
+Routine bounded numbered-phase checkpoint/slice promotion is authorized without another human approval when **all** of these conditions hold:
+
+1. The slice is within an already accepted Phase Brief, canonical architecture baseline, or approved checkpoint decomposition.
+2. No unresolved gameplay/product or canonical architecture decision remains.
+3. The change has not materially broadened beyond its reviewed contract.
+4. Required technical design review has passed where applicable.
+5. Independent implementation review passed on the exact proposed code tip/tree.
+6. Required focused validation passed.
+7. Required full EditMode validation passed.
+8. Official Smoke passed where applicable.
+9. `git diff --check` passed.
+10. Immediately before promotion, refreshed remote canonical and candidate refs confirm clean fast-forward ancestry.
+11. The reviewed code tree is unchanged and review/validation artifacts still match it.
+12. No newer canonical change invalidates reviewed assumptions; any required revalidation/review passed.
+13. Integration is safe, additive, and non-destructive.
+14. Unrelated user files and changes remain untouched.
+
+When every condition passes, promote autonomously, record the exact final SHA and evidence in State, push the named canonical branch, verify synchronization, and rebuild the complete dependency DAG. Do not ask for a separate approval for this bounded promotion. If any condition fails, identify and resolve the technical gap; stop only for a genuine human gate or unresolved decision. This rule reduces approval stops, not review, validation, preflight, or scope discipline.
+
+Formal Phase closure separately requires the closure objective and mandatory checkpoints canonical, appropriate regression and independent closure review, known limitations and deferred consumers recorded, and a formal State marker. Human approval is still required for closure and reopening; it is also required for genuine product/canonical architecture decisions, changing an accepted Phase objective, a major new checkpoint not implied by canonical planning, incompatible public/external contracts not already authorized, destructive/irreversible actions, force-pushing or rewriting shared history, or deleting important unintegrated remote history. A state-only closure commit may be appropriate. Closing a phase never requires every future consumer.
 
 After canonical advancement, classify each active candidate with orchestrator/reviewer evidence: `UPSTREAM_IRRELEVANT` (continue, still validate at integration), `REVALIDATE` (rerun affected review/tests), `REINTEGRATE` (refresh composition without discarding work), or `INVALIDATED` (return to design/work). A worker alone cannot declare a semantic change irrelevant. Failed tests should be diagnosed in-track; failed review returns for changes; merge conflicts require inspection of both semantics. Preserve a recoverable candidate record rather than restarting or deleting blindly.
 
@@ -79,7 +100,7 @@ After canonical advancement, classify each active candidate with orchestrator/re
 
 Each checkpoint introducing authoritative mutable state or external causal input must answer: **what must future reconstruction recover to reproduce this causality?** Consider stable IDs, factual state and commitments, payload/authority/logical boundary/ordering of commands, effective content/configuration and calendar, random context, and causally relevant provenance. Put the declaration in the Brief/checkpoint contract, verify it in technical and candidate review, and record actual delivery in State. This gate does not require early save/replay implementation. Diagnostics, events, and selective History are not primary truth.
 
-Stop a run when all safe READY work is exhausted; only human/architecture gates remain; canonical promotion or phase closure awaits required approval; an active semantic conflict cannot be isolated; validation cannot be resolved in scope; canonical changed unexpectedly and impact cannot yet be classified; or resource/context limits require a resumable handoff. Do not promise background execution absent an actual scheduled/run mechanism, wait indefinitely inside a worker for a human decision, or start speculative distant phases to keep agents busy.
+Stop a run when all safe READY work is exhausted; only genuine human/architecture gates remain; an active semantic conflict cannot be isolated; validation cannot be resolved in scope; canonical changed unexpectedly and impact cannot yet be classified; or resource/context limits require a resumable handoff. Do not promise background execution absent an actual scheduled/run mechanism, wait indefinitely inside a worker for a human decision, or start speculative distant phases to keep agents busy.
 
 Roadmap revisions may insert/split/merge phases or checkpoints. Preserve historical State, record new dependency impact, and reclassify candidates. A change to simulation meaning must go through architecture approval; a change to product scope or material roadmap priorities remains human-gated.
 

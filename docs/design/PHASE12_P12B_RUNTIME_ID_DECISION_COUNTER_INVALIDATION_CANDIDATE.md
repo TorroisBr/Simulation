@@ -1,6 +1,6 @@
 # P12-B RuntimeIdAllocator Decision-counter invalidation candidate
 
-**Status:** independently reviewed `VALIDATED_CANDIDATE`; full required validation passed on the exact code tree. Review is recorded in [`PHASE12_P12B_RUNTIME_ID_DECISION_COUNTER_INVALIDATION_IMPLEMENTATION_REVIEW.md`](PHASE12_P12B_RUNTIME_ID_DECISION_COUNTER_INVALIDATION_IMPLEMENTATION_REVIEW.md). Canonical promotion, P12-B completion, P12-A readiness, and P13 readiness are not claimed.
+**Status:** `PROMOTED` to `codex/phase12/canonical` at `22e5e51ac1383f91c30ea9d1c15351020dd93b38`; independently reviewed `VALIDATED_CANDIDATE` and required validation passed on the unchanged code tree. Review is recorded in [`PHASE12_P12B_RUNTIME_ID_DECISION_COUNTER_INVALIDATION_IMPLEMENTATION_REVIEW.md`](PHASE12_P12B_RUNTIME_ID_DECISION_COUNTER_INVALIDATION_IMPLEMENTATION_REVIEW.md). P12-B completion, P12-A readiness, and P13 readiness are not claimed.
 
 **Canonical base:** `codex/phase12/canonical` at `22525cb5f96eb9eed2e168b7e6a23fdc1e420304`.
 **Reviewed design:** `1d265aa411292393b693914e8552ad23dac7ce14`; design review record `f7406787c6280a9191f5111fe796ca636e4a4994`.

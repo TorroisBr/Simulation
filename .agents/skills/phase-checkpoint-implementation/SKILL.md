@@ -1,6 +1,6 @@
 ---
 name: phase-checkpoint-implementation
-description: Carry an approved, implementation-ready checkpoint through an isolated, validated, independently reviewed candidate and integration preparation; stop before canonical promotion.
+description: Carry an approved, implementation-ready checkpoint through an isolated, validated, independently reviewed candidate and integration preparation; hand off to canonical promotion under the standing bounded-promotion policy.
 ---
 
 # Phase checkpoint implementation
@@ -12,6 +12,6 @@ Use only after scope and architecture are approved, required technical design is
 3. Run focused tests during implementation, then the required affected regressions and promotion-level suites stated by `AGENTS.md`, Brief, State, and Execution Model. Keep durable result artifacts and record exact base/candidate SHAs, changed files, tests, replay/fork impact, risks, and integration needs. Run `git diff --check`.
 4. Commit/push a durable candidate and validation record under standing Git authority. Request an independent exact-tip review using `candidate-review`; the author must not approve their own work.
 5. Address findings with additive commits where possible, rerun affected validation, and obtain a new review for each changed code tip. Prepare dependency-safe integration when required, preserving candidate provenance and rerunning integration validation.
-6. Stop at canonical promotion. The candidate and its integration evidence are reviewable inputs to the separate `canonical-promotion` gate, not promotion approval.
+6. Hand off to the separate `canonical-promotion` workflow after exact-tip review and integration validation. That workflow promotes autonomously when all bounded-promotion conditions pass; stop only if a genuine human gate or unresolved decision remains.
 
 Diagnose failed tests and ordinary conflicts from repository evidence. Escalate only an actual unresolved product or canonical architecture decision; do not broaden scope to resolve a blocker speculatively.

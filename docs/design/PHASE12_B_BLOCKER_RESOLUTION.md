@@ -1009,3 +1009,30 @@ P12 canonical is `55a93ba58b572dafb70647f387148c0a4bde97c3`, reached by the appr
 Proceed with the exact `RuntimeIdAllocator.AllocateDecisionId()` committed-write boundary. Reuse the existing census section/provider and the Event-counter's reviewed bind/preflight/notify pattern; retain a distinct Decision section and no new operation or product behavior. Audit record creation ordering and post-allocation failures, then prepare a bounded technical design, independent review, implementation, focused/regression/full validation, and exact-tip code review. The existing accepted P12-B capability authorization covers this selected owner invalidation; no new architecture or product scope is introduced. Other allocator counters, all-operation completeness, complete owner coverage, capture eligibility, export, hydration, and downstream readiness remain unclaimed.
 
 The refreshed numbered-phase DAG is unchanged: P12-A is `WAIT_DEPENDENCY`; P12-B remains `INCOMPLETE`; P12-C waits on B; P12-D/E wait on B and C; P12-F waits on C/D/E; P12-G waits on B–F plus live-profile inventory; P13 remains blocked on P12 continuation and recoverable causal inputs/history. The WX-D handoff creates no Phase 19 readiness or P12 edge.
+
+## Current P12-B owner/operation/epoch refresh — 2026-10-03 after Decision-counter promotion
+
+Canonical is `22e5e51ac1383f91c30ea9d1c15351020dd93b38`. The Decision-counter
+code is `52154053219e30e679bc400adf55c2f577bd8106`, exact tree
+`ddd3684daf264a15af9c217c8edb4e390e82602d`; design and independent exact-tip
+review, focused/full validation, and artifact hashes are linked from the P12
+State and candidate record.
+
+| Writer/owner family | Current selected-profile coverage | Remaining boundary |
+|---|---|---|
+| RuntimeIdAllocator Event counter | Successful `AllocateEventId()` is bound to the exact cardinality-one Events witness and partial epoch; it joins a current TravelParty/Merchant batch when applicable. | Only the Events counter is covered by that slice. |
+| RuntimeIdAllocator Decision counter | Successful `AllocateDecisionId()` is now bound to the exact cardinality-one Decisions witness and partial epoch, with preflight before cursor advance and notification after commit; existing nested batching remains. | No other allocator counter, DecisionStore/read-model, occurrence-receipt, or ActorChoice write is included. |
+| TravelParty advance and solo travel start | The selected daily paths are wrapped in their reviewed nested operations with bounded owner sets and existing partial-commit/compensation semantics preserved. | Other party/expedition lifecycle paths and all-operation completeness remain open. |
+| ActorChoice lifecycle | P11's exact ActorChoice store and transition semantics are canonical. `SimulationRuntime` exposes capture/defer/reject/dispatch/returned/threw transition paths; current P12 registration is not shown among the registered selected-profile census providers. | Audit current provider/guard wiring and actual daily-boundary reachability. The bounded next design candidate is post-commit invalidation for the existing ActorChoice owner transitions only, preserving transition order and no-fallback behavior. Do not widen to decision read models or other operations. |
+| Other accepted P12-B owner families | Market, Merchant, money transfer, NPC owner writes, selected City/presence and quiescence adapters remain covered only within their recorded exact slices. | Continue the committed-write map by existing owner and supported selected-profile paths; do not infer general coverage from census witnesses. |
+| Downstream readiness | P12-B remains `INCOMPLETE`; P12-A remains `WAIT_DEPENDENCY`; P12-C waits on B; P12-D/E on B and C; P12-F on C/D/E; P12-G on B–F and validated live-profile inventory; P13 remains blocked. | Decision-counter promotion unlocks no downstream checkpoint. No full census/epoch, capture, export, hydration, or closure is claimed. |
+
+The Decision counter closes the prior central allocator gap only for the
+selected `AllocateDecisionId()` writer. The next bounded audit is the
+ActorChoice store lifecycle because it is already a supported P11 state owner
+and can be mutated on the selected actor-turn path. Confirm exact P12 owner
+binding, all successful transition commit points, temporal owner identity and
+cardinality assumptions, and enclosing daily-operation behavior before
+implementation. If existing P12 scope and code leave that boundary unambiguous,
+continue with bounded design/review/implementation; otherwise isolate the
+specific missing evidence rather than proposing broad owner registration.
