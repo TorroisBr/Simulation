@@ -11,7 +11,9 @@ it adds no gameplay behavior or Phase scope.
 - Triggering implementation review: `NEEDS_CHANGES` for candidate
   `ba1ded6e56d0358de37dbbb70f449c01cbd47318`, recorded in
   `PHASE12_P12B_SOLO_TRAVEL_START_OPERATION_IMPLEMENTATION_REVIEW.md`.
-- Independent review of this revalidation: pending.
+- Independent review of this revalidation: PASS at revalidation tip
+  `4b79a5d176dd73e2814dbfdf76b73c6117ec8d23`, recorded in
+  `PHASE12_P12B_SOLO_TRAVEL_START_OPERATION_DESIGN_REVALIDATION_REVIEW.md`.
 
 ## Source-City ownership refinement
 
