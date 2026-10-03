@@ -1,7 +1,9 @@
 # P12-B selected-profile TravelParty advance operation candidate
 
-**Status:** implementation candidate pushed for independent exact-tip code
-review. No canonical promotion or Phase closure is recorded here.
+**Status:** independent exact-tip implementation review PASS for code
+`ac0bcffe4d345c81d77bfa56b19e3591a9ebb46c`, recorded in
+`PHASE12_P12B_TRAVEL_PARTY_ADVANCE_IMPLEMENTATION_REVIEW.md`. No canonical
+promotion or Phase closure is recorded here.
 
 ## Candidate identity
 
