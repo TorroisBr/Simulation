@@ -28,7 +28,7 @@ Relevant executable files are Assets/_Project/Scripts/SimulationGenesisPipeline.
 
 ## 3. Proposed public contract shape
 
-The public contract is a small set of typed, semantic contribution contracts over immutable descriptors. Names below describe responsibilities; they are illustrative and do not freeze final CLR names, ABI, serialization, or loader technology.
+The public contract is a small set of typed, semantic contribution contracts over immutable descriptors. Conceptually, an ISimulationExtension entry point describes a ModuleManifest and registers through an IExtensionContributionBuilder. The builder exposes AddGenerationStage(descriptor, handler), AddActivity(descriptor, policy/effect handlers), and conditional AddStateOwner(descriptor, owner) operations. Each operation accepts an immutable descriptor; runtime handlers receive only the corresponding typed context and owner-scoped ports. Names below describe responsibilities; these are illustrative and do not freeze final CLR names, ABI, serialization, or loader technology.
 
 | Contract | Required information and behavior |
 |---|---|
