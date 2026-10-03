@@ -10,6 +10,8 @@ using System.Globalization;
 public sealed class ActorChoiceStore : IAuthoritativeMutationGuardBindable
 {
     private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
+    private Func<bool> p12MutationAdmission;
+    private Action p12MutationCommitted;
     private readonly PersonStore personStore;
     private readonly List<ActorChoiceInput> inputs = new List<ActorChoiceInput>();
     private readonly Dictionary<string, int> indexByInputId = new Dictionary<string, int>(StringComparer.Ordinal);
@@ -136,6 +138,7 @@ public sealed class ActorChoiceStore : IAuthoritativeMutationGuardBindable
         }
 
         if (!CanAdvanceCensusRevision(out failure)) return false;
+        if (!CanCommitP12Mutation(out failure)) return false;
 
         long inputSequence = nextInputSequence;
         ActorChoiceInputId inputId = new ActorChoiceInputId(
@@ -157,6 +160,7 @@ public sealed class ActorChoiceStore : IAuthoritativeMutationGuardBindable
         worldCommandIds.Add(worldCommandId);
         nextInputSequence++;
         censusRevision++;
+        p12MutationCommitted?.Invoke();
         input = captured.Copy();
         failure = ActorChoiceStoreFailureCode.None;
         return true;
@@ -689,11 +693,38 @@ public sealed class ActorChoiceStore : IAuthoritativeMutationGuardBindable
         }
 
         if (!CanAdvanceCensusRevision(out failure)) return false;
+        if (!CanCommitP12Mutation(out failure)) return false;
 
         string id = current.InputId.Value;
         int index = indexByInputId[id];
         inputs[index] = current.WithDisposition(nextStatus, disposition);
         censusRevision++;
+        p12MutationCommitted?.Invoke();
+        failure = ActorChoiceStoreFailureCode.None;
+        return true;
+    }
+
+    private bool CanCommitP12Mutation(out ActorChoiceStoreFailureCode failure)
+    {
+        if (p12MutationAdmission != null)
+        {
+            bool admitted;
+            try
+            {
+                admitted = p12MutationAdmission();
+            }
+            catch
+            {
+                admitted = false;
+            }
+
+            if (!admitted)
+            {
+                failure = ActorChoiceStoreFailureCode.RuntimeFaulted;
+                return false;
+            }
+        }
+
         failure = ActorChoiceStoreFailureCode.None;
         return true;
     }
@@ -913,6 +944,20 @@ public sealed class ActorChoiceStore : IAuthoritativeMutationGuardBindable
     internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard)
     {
         return mutationGuardBinding.TryBindTo(guard);
+    }
+
+    internal void BindP12MutationBoundary(Func<bool> admission, Action committed)
+    {
+        if (admission == null) throw new ArgumentNullException(nameof(admission));
+        if (committed == null) throw new ArgumentNullException(nameof(committed));
+        if (p12MutationAdmission != null || p12MutationCommitted != null)
+        {
+            throw new InvalidOperationException(
+                "ActorChoiceStore is already bound to a P12 mutation boundary.");
+        }
+
+        p12MutationAdmission = admission;
+        p12MutationCommitted = committed;
     }
 
     bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard)

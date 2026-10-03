@@ -337,6 +337,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
     private readonly RuntimeIdAllocator runtimeIdAllocator;
     private readonly IOwnerSectionCensusProvider runtimeIdAllocatorEventCounterCensusProvider;
     private readonly IOwnerSectionCensusProvider runtimeIdAllocatorDecisionCounterCensusProvider;
+    private ActorChoiceP11CensusProvider actorChoiceP11CensusProvider;
     private readonly FactualReadCoordinator factualReadCoordinator;
     private volatile bool factualReadWorldPublished;
     private readonly SimulationTime simulationTime;
@@ -1277,6 +1278,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             || (runtimeAdmissionContext != null && runtimeIdAllocator != null
                 && !TryRegisterRuntimeIdAllocatorDecisionCounterCensusProvider(protocol))
             || (runtimeAdmissionContext != null
+                && !TryRegisterActorChoiceP11CensusProvider(protocol))
+            || (runtimeAdmissionContext != null
                 && !TryRegisterTravelPartyCensusProvider(protocol))
             || (runtimeAdmissionContext != null
                 && !TryRegisterCityNpcPresenceCensusProviders(protocol))
@@ -1368,6 +1371,13 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                         NotifyP12RuntimeIdDecisionCounterMutation);
                 }
 
+                if (actorChoiceP11CensusProvider != null)
+                {
+                    actorChoiceStore.BindP12MutationBoundary(
+                        CanCommitP12ActorChoiceMutation,
+                        NotifyP12ActorChoiceMutation);
+                }
+
                 if (!TryRebindNpcOwnerMutationBoundaries())
                     throw new InvalidOperationException("The P12 NPC owner mutation boundaries could not bind to the accepted owner census.");
 
@@ -1446,6 +1456,53 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                 return false;
             }
 
+            return true;
+        }
+        catch
+        {
+            protocol.FaultClosed();
+            return false;
+        }
+    }
+
+    private bool TryRegisterActorChoiceP11CensusProvider(ContinuationCensusProtocol protocol)
+    {
+        if (protocol == null || actorChoiceStore == null)
+        {
+            protocol?.FaultClosed();
+            return false;
+        }
+
+        try
+        {
+            ActorChoiceP11CensusProvider provider = new ActorChoiceP11CensusProvider(actorChoiceStore);
+            OwnerSectionCensusWitness witness = provider.GetCurrentCensus();
+            if (witness == null
+                || !string.Equals(
+                    witness.SectionId,
+                    ActorChoiceP11CensusProvider.SectionId,
+                    StringComparison.Ordinal)
+                || witness.SchemaVersion != ActorChoiceP11CensusProvider.SchemaVersion
+                || witness.Cardinality < 0
+                || witness.Cardinality != actorChoiceStore.P11InputCount
+                || !ReferenceEquals(witness.OwnerInstanceIdentity, actorChoiceStore.CensusOwnerIdentity)
+                || witness.Revision != actorChoiceStore.CensusRevision
+                || !protocol.RegisterExpectedSection(
+                    new OwnerSectionContract(
+                        ActorChoiceP11CensusProvider.SectionId,
+                        ActorChoiceP11CensusProvider.SchemaVersion,
+                        OwnerSectionRole.Required),
+                    out _)
+                || !protocol.RegisterCensusProvider(
+                    ActorChoiceP11CensusProvider.SectionId,
+                    provider,
+                    out _))
+            {
+                protocol.FaultClosed();
+                return false;
+            }
+
+            actorChoiceP11CensusProvider = provider;
             return true;
         }
         catch
@@ -3088,6 +3145,38 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         }
     }
 
+    internal bool HasSameActorChoiceP11Owner(IOwnerSectionCensusProvider otherProvider)
+    {
+        if (runtimeAdmissionContext == null) return true;
+        if (actorChoiceP11CensusProvider == null || actorChoiceStore == null || otherProvider == null)
+            return false;
+
+        try
+        {
+            OwnerSectionCensusWitness runtimeWitness = actorChoiceP11CensusProvider.GetCurrentCensus();
+            OwnerSectionCensusWitness otherWitness = otherProvider.GetCurrentCensus();
+            return runtimeWitness != null
+                && otherWitness != null
+                && string.Equals(
+                    runtimeWitness.SectionId,
+                    ActorChoiceP11CensusProvider.SectionId,
+                    StringComparison.Ordinal)
+                && string.Equals(otherWitness.SectionId, runtimeWitness.SectionId, StringComparison.Ordinal)
+                && runtimeWitness.SchemaVersion == ActorChoiceP11CensusProvider.SchemaVersion
+                && otherWitness.SchemaVersion == runtimeWitness.SchemaVersion
+                && runtimeWitness.Cardinality == actorChoiceStore.P11InputCount
+                && otherWitness.Cardinality == runtimeWitness.Cardinality
+                && ReferenceEquals(runtimeWitness.OwnerInstanceIdentity, actorChoiceStore.CensusOwnerIdentity)
+                && ReferenceEquals(otherWitness.OwnerInstanceIdentity, runtimeWitness.OwnerInstanceIdentity)
+                && runtimeWitness.Revision == actorChoiceStore.CensusRevision
+                && otherWitness.Revision == runtimeWitness.Revision;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     private bool CanCommitP12SimulationRecordSequenceMutation()
     {
         if (runtimeAdmissionContext == null) return true;
@@ -3202,6 +3291,86 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         }
 
         return true;
+    }
+
+    private bool CanCommitP12ActorChoiceMutation()
+    {
+        if (runtimeAdmissionContext == null) return true;
+        if (!IsRuntimeAdmissionOwnerThreadCurrent()
+            || npcRosterCensusProtocol == null
+            || actorChoiceStore == null
+            || actorChoiceP11CensusProvider == null
+            || !IsCurrentP12ActorChoiceP11Owner()
+            || !CanCommitP12MutationSections(
+                new[] { ActorChoiceP11CensusProvider.SectionId }))
+        {
+            FaultRuntimeAdmission();
+            return false;
+        }
+
+        bool hasReservedBatchEpoch = activeP12TravelPartyAdvanceOperationContext != null
+            || activeP12MerchantOperationContext != null
+            || activeP12SoloTravelStartOperationContext != null;
+        if (!hasReservedBatchEpoch
+            && !npcRosterCensusProtocol.TryValidateMutationEpochCapacity(out _))
+        {
+            FaultRuntimeAdmission();
+            return false;
+        }
+
+        return true;
+    }
+
+    private bool IsCurrentP12ActorChoiceP11Owner()
+    {
+        try
+        {
+            OwnerSectionCensusWitness witness = actorChoiceP11CensusProvider?.GetCurrentCensus();
+            return witness != null
+                && string.Equals(
+                    witness.SectionId,
+                    ActorChoiceP11CensusProvider.SectionId,
+                    StringComparison.Ordinal)
+                && witness.SchemaVersion == ActorChoiceP11CensusProvider.SchemaVersion
+                && witness.Cardinality >= 0
+                && witness.Cardinality == actorChoiceStore.P11InputCount
+                && ReferenceEquals(witness.OwnerInstanceIdentity, actorChoiceStore.CensusOwnerIdentity)
+                && witness.Revision == actorChoiceStore.CensusRevision;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private void NotifyP12ActorChoiceMutation()
+    {
+        if (runtimeAdmissionContext == null) return;
+        try
+        {
+            if (!IsRuntimeAdmissionOwnerThreadCurrent()
+                || npcRosterCensusProtocol == null
+                || !IsCurrentP12ActorChoiceP11Owner()
+                || !NotifyP12MutationSections(
+                    new[] { ActorChoiceP11CensusProvider.SectionId }))
+            {
+                FaultRuntimeAdmission();
+                throw new InvalidOperationException(
+                    "The committed P12 ActorChoice mutation could not advance its census epoch.");
+            }
+        }
+        catch (InvalidOperationException)
+        {
+            FaultRuntimeAdmission();
+            throw;
+        }
+        catch (Exception exception)
+        {
+            FaultRuntimeAdmission();
+            throw new InvalidOperationException(
+                "The committed P12 ActorChoice mutation could not be reported to its census protocol.",
+                exception);
+        }
     }
 
     private void NotifyP12RuntimeIdDecisionCounterMutation()

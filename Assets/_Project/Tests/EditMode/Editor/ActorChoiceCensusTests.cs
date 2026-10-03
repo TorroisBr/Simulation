@@ -1,4 +1,6 @@
+using System;
 using System.Reflection;
+using System.Threading;
 using NUnit.Framework;
 
 public sealed class ActorChoiceCensusTests
@@ -182,6 +184,137 @@ public sealed class ActorChoiceCensusTests
         Assert.That(temporalUnchanged.TemporalDispositions, Is.Empty);
     }
 
+    [Test]
+    public void DailyProfileTracksExactActorChoiceP11OwnerAndEveryStandaloneCommit()
+    {
+        SimulationRuntime runtime = CreateDailyProfileRuntime();
+        ActorChoiceStore store = runtime.ActorChoiceStore;
+        ActorChoiceP11CensusProvider provider = new ActorChoiceP11CensusProvider(store);
+        ActorChoiceTemporalCensusProvider temporalProvider = new ActorChoiceTemporalCensusProvider(store);
+
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure initialFailure),
+            Is.True, initialFailure.ToString());
+        Assert.That(runtime.HasSameActorChoiceP11Owner(provider), Is.True);
+        Assert.That(runtime.HasSameActorChoiceP11Owner(temporalProvider), Is.False,
+            "the P18 temporal section is not the selected daily P11 section");
+        Assert.That(runtime.HasSameActorChoiceP11Owner(
+            new ActorChoiceP11CensusProvider(CloneStore(store, new PersonStore()))), Is.False,
+            "a similarly populated clone is not the runtime-owned store");
+        AssertRuntimeP11(runtime, provider, 0, 0L, 0L);
+
+        ActorChoiceInput deferred = CaptureP11(store, "p12-choice-defer", "p12-choice-defer-actor");
+        AssertRuntimeP11(runtime, provider, 1, 1L, 1L);
+        Assert.That(store.TryCapture("p12-choice-defer", new PersonId("duplicate"), "sell-goods",
+            WorldCommandOrigin.System, WorldCommandAuthorityMode.Request, 0L, out _,
+            out ActorChoiceStoreFailureCode duplicateFailure), Is.False);
+        Assert.That(duplicateFailure, Is.EqualTo(ActorChoiceStoreFailureCode.DuplicateWorldCommandId));
+        AssertRuntimeP11(runtime, provider, 1, 1L, 1L);
+
+        Assert.That(store.TryDefer(deferred.InputId, 1L, 0, ActorChoiceDeferralReason.Traveling, out _), Is.True);
+        AssertRuntimeP11(runtime, provider, 1, 2L, 2L);
+        Assert.That(store.TryReject(deferred.InputId, 2L, 0, ActorChoiceFailure.ActionUnavailable, out _), Is.True);
+        AssertRuntimeP11(runtime, provider, 1, 3L, 3L);
+        Assert.That(store.TryDefer(deferred.InputId, 3L, 0, ActorChoiceDeferralReason.Traveling, out _), Is.False,
+            "a replayed terminal transition is a no-op");
+        AssertRuntimeP11(runtime, provider, 1, 3L, 3L);
+
+        ActorChoiceInput returned = CaptureP11(store, "p12-choice-return", "p12-choice-return-actor");
+        AssertRuntimeP11(runtime, provider, 2, 4L, 4L);
+        Assert.That(store.TryMarkDispatchStarted(returned.InputId, 1L, 1, "p12-choice-return-decision", out _), Is.True);
+        AssertRuntimeP11(runtime, provider, 2, 5L, 5L);
+        Assert.That(store.TryRecordAttemptReturned(returned.InputId, 1L, 1, NpcActionResult.Succeeded(), out _), Is.True);
+        AssertRuntimeP11(runtime, provider, 2, 6L, 6L);
+
+        ActorChoiceInput threw = CaptureP11(store, "p12-choice-throw", "p12-choice-throw-actor");
+        AssertRuntimeP11(runtime, provider, 3, 7L, 7L);
+        Assert.That(store.TryMarkDispatchStarted(threw.InputId, 1L, 2, "p12-choice-throw-decision", out _), Is.True);
+        AssertRuntimeP11(runtime, provider, 3, 8L, 8L);
+        Assert.That(store.TryRecordAttemptThrew(threw.InputId, 1L, 2, out _), Is.True);
+        AssertRuntimeP11(runtime, provider, 3, 9L, 9L);
+
+        OwnerSectionCensusWitness p11 = provider.GetCurrentCensus();
+        OwnerSectionCensusWitness temporal = temporalProvider.GetCurrentCensus();
+        Assert.That(p11.SectionId, Is.EqualTo(ActorChoiceP11CensusProvider.SectionId));
+        Assert.That(p11.SchemaVersion, Is.EqualTo(ActorChoiceP11CensusProvider.SchemaVersion));
+        Assert.That(p11.Cardinality, Is.EqualTo(3));
+        Assert.That(temporal.SectionId, Is.EqualTo(ActorChoiceTemporalCensusProvider.SectionId));
+        Assert.That(temporal.Cardinality, Is.Zero);
+        Assert.That(temporal.Revision, Is.EqualTo(9L));
+        Assert.That(temporal.OwnerInstanceIdentity, Is.SameAs(p11.OwnerInstanceIdentity));
+    }
+
+    [Test]
+    public void DailyProfileRejectsActorChoiceMutationWhenOwnerThreadIsWrong()
+    {
+        SimulationRuntime runtime = CreateDailyProfileRuntime();
+        ActorChoiceStore store = runtime.ActorChoiceStore;
+        bool result = true;
+        ActorChoiceStoreFailureCode failure = ActorChoiceStoreFailureCode.None;
+        Thread wrongThread = new Thread(() => result = store.TryCapture(
+            "p12-choice-wrong-thread",
+            new PersonId("p12-choice-wrong-thread-actor"),
+            "sell-goods",
+            WorldCommandOrigin.System,
+            WorldCommandAuthorityMode.Request,
+            0L,
+            out _,
+            out failure));
+
+        wrongThread.Start();
+        wrongThread.Join();
+
+        Assert.That(result, Is.False);
+        Assert.That(failure, Is.EqualTo(ActorChoiceStoreFailureCode.RuntimeFaulted));
+        Assert.That(store.Count, Is.Zero);
+        Assert.That(new ActorChoiceP11CensusProvider(store).GetCurrentCensus().Revision, Is.Zero);
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure censusFailure), Is.False);
+        Assert.That(censusFailure, Is.EqualTo(ContinuationCensusFailure.ProtocolFaulted));
+    }
+
+    [Test]
+    public void DailyProfileRejectsActorChoiceCommitAtEpochCapacityBeforeStoreMutation()
+    {
+        SimulationRuntime runtime = CreateDailyProfileRuntime();
+        SetProtocolMutationEpoch(runtime, long.MaxValue);
+
+        Assert.That(runtime.ActorChoiceStore.TryCapture("p12-choice-epoch-full",
+            new PersonId("p12-choice-epoch-full-actor"), "sell-goods", WorldCommandOrigin.System,
+            WorldCommandAuthorityMode.Request, 0L, out _, out ActorChoiceStoreFailureCode failure), Is.False);
+        Assert.That(failure, Is.EqualTo(ActorChoiceStoreFailureCode.RuntimeFaulted));
+        Assert.That(runtime.ActorChoiceStore.Count, Is.Zero);
+        Assert.That(new ActorChoiceP11CensusProvider(runtime.ActorChoiceStore).GetCurrentCensus().Revision, Is.Zero);
+    }
+
+    [Test]
+    public void DailyProfileRejectsActorChoiceCommitAgainstStaleP11BaselineBeforeMutation()
+    {
+        SimulationRuntime runtime = CreateDailyProfileRuntime();
+        ActorChoiceStore store = runtime.ActorChoiceStore;
+        FieldInfo admissionField = typeof(ActorChoiceStore).GetField(
+            "p12MutationAdmission", BindingFlags.Instance | BindingFlags.NonPublic);
+        FieldInfo committedField = typeof(ActorChoiceStore).GetField(
+            "p12MutationCommitted", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(admissionField, Is.Not.Null);
+        Assert.That(committedField, Is.Not.Null);
+        Func<bool> admission = (Func<bool>)admissionField.GetValue(store);
+        Action committed = (Action)committedField.GetValue(store);
+
+        admissionField.SetValue(store, null);
+        committedField.SetValue(store, null);
+        Assert.That(store.TryCapture("p12-choice-untracked",
+            new PersonId("p12-choice-untracked-actor"), "sell-goods", WorldCommandOrigin.System,
+            WorldCommandAuthorityMode.Request, 0L, out _, out _), Is.True);
+        admissionField.SetValue(store, admission);
+        committedField.SetValue(store, committed);
+
+        Assert.That(store.TryCapture("p12-choice-after-stale-baseline",
+            new PersonId("p12-choice-after-stale-baseline-actor"), "sell-goods", WorldCommandOrigin.System,
+            WorldCommandAuthorityMode.Request, 0L, out _, out ActorChoiceStoreFailureCode failure), Is.False);
+        Assert.That(failure, Is.EqualTo(ActorChoiceStoreFailureCode.RuntimeFaulted));
+        Assert.That(store.Count, Is.EqualTo(1));
+        Assert.That(new ActorChoiceP11CensusProvider(store).GetCurrentCensus().Revision, Is.EqualTo(1L));
+    }
+
     private static void AssertP11(ActorChoiceP11CensusProvider provider, int count, long revision)
     {
         OwnerSectionCensusWitness witness = provider.GetCurrentCensus();
@@ -240,5 +373,41 @@ public sealed class ActorChoiceCensusTests
         FieldInfo field = typeof(ActorChoiceStore).GetField("censusRevision", BindingFlags.Instance | BindingFlags.NonPublic);
         Assert.That(field, Is.Not.Null);
         field.SetValue(store, revision);
+    }
+
+    private static SimulationRuntime CreateDailyProfileRuntime()
+    {
+        return new SimulationRuntime(
+            new SimulationTime(),
+            null,
+            null,
+            economyEnabled: false,
+            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1());
+    }
+
+    private static void AssertRuntimeP11(
+        SimulationRuntime runtime,
+        ActorChoiceP11CensusProvider provider,
+        int count,
+        long revision,
+        long epoch)
+    {
+        AssertP11(provider, count, revision);
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+            out long actualEpoch, out ContinuationCensusFailure failure), Is.True, failure.ToString());
+        Assert.That(actualEpoch, Is.EqualTo(epoch));
+        Assert.That(runtime.TryAssessNpcRosterCensus(out failure), Is.True, failure.ToString());
+    }
+
+    private static void SetProtocolMutationEpoch(SimulationRuntime runtime, long epoch)
+    {
+        FieldInfo protocolField = typeof(SimulationRuntime).GetField(
+            "npcRosterCensusProtocol", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(protocolField, Is.Not.Null);
+        object protocol = protocolField.GetValue(runtime);
+        FieldInfo epochField = typeof(ContinuationCensusProtocol).GetField(
+            "mutationEpoch", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(epochField, Is.Not.Null);
+        epochField.SetValue(protocol, epoch);
     }
 }
