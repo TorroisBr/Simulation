@@ -1337,3 +1337,46 @@ No dependency edge or readiness label changes: P12-A remains
 on B and C; P12-F waits on C/D/E; P12-G waits on B through F plus validated
 live-profile inventory; P13 remains blocked on P12 continuation and
 recoverable causal inputs/history. Phase 12 is not ready for closure.
+
+## P12-B selected-profile ActorChoice owner-invalidation promotion — 2026-10-03
+
+After refreshed exact-tip preflight, `codex/phase12/canonical` advanced by
+clean fast-forward from `f1ec63ea7fa0592b3a280e138a80023e3cacc6b7` to
+`3b25852bfc678095dd97327aecfaa2559b151bc1`. The reviewed implementation is
+`0bb87c89662397857c7e55267bbc60f32ce0676a`, tree
+`aa570c943299eafe52c9a5a9b05a9487bdfd5add`; the exact-tip implementation
+review and retained validation are recorded in
+`docs/design/PHASE12_P12B_ACTOR_CHOICE_INVALIDATION_IMPLEMENTATION_REVIEW.md`
+and `docs/design/PHASE12_P12B_ACTOR_CHOICE_INVALIDATION_CANDIDATE.md`.
+
+For the selected `UnityBootstrap-Daily-v1` profile, P11 ActorChoice is now
+registered against the exact runtime-owned store. Supported successful
+capture/disposition commits preflight the owner-thread, section baseline, and
+epoch capacity before mutation, then notify after commit through the existing
+P12 operation batching/direct path. This does not register or bind the P18
+temporal section. Exact-tree validation passed ActorChoice census 9/9, the
+ActorChoice suite 49/49, runtime admission 31/31, bootstrap composition
+21/21, ALL EditMode 2231/2231, official Smoke 5/5, and `git diff --check`.
+
+This is one bounded P11 owner-invalidation slice. P12-B remains `INCOMPLETE`;
+P12-A remains `WAIT_DEPENDENCY`; P13 remains blocked. It does not establish
+complete owner/operation/shared-epoch coverage, global quiescence, capture
+eligibility, export, hydration, or Phase closure.
+
+The refreshed blocker matrix selects ScheduledDirective committed-state
+invalidation as the next bounded source/design task. The selected runtime
+composes its store and system; `AdvanceDayAfterClockAdvance` prepares due
+directives and the actor-turn path marks supported terminal outcomes, while
+the P12 runtime does not currently register/bind this owner section. An older
+store-local census candidate remains unintegrated and must be revalidated on
+the current base; this next task is the missing live owner invalidation
+boundary, not a census-only delivery.
+
+### Numbered-phase DAG refresh
+
+No dependency edge or readiness label changes: P12-A remains
+`WAIT_DEPENDENCY`; P12-B remains `INCOMPLETE`; P12-C waits on B; P12-D/E wait
+on B and C; P12-F waits on C/D/E; P12-G waits on B through F plus validated
+live-profile inventory; P13 remains blocked on P12 continuation and
+recoverable causal inputs/history. Phase 12 remains open and is not ready for
+closure.
