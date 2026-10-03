@@ -98,14 +98,14 @@ travel batch is active. Do not invoke the action provider after a failed P12
 preflight. The existing daily-advance failure path should receive the
 admission failure so the runtime faults closed before gameplay mutation.
 
-`EconomyTransactionService.TryChargeTravel` and a possible
-`TryRestoreTravelCharge` already use the named
-`runtime.economy.money-transfer` operation when the P12 admission adapter is
-active. Preserve that nested operation beneath `runtime.travel.start`; the
-account's existing mutation callbacks must join the outer solo-travel changed
-set while each money-transfer child still records its own operation boundary.
-The outer scope owns the single coalesced epoch notification for the whole
-travel-start attempt, including a debit followed by compensation.
+`EconomyTransactionService.TryChargeTravel` and
+`TryRestoreTravelCharge` commit directly through `MoneyAccount.TryDebit` and
+`MoneyAccount.TryCredit`; they do not enter the separate
+`runtime.economy.money-transfer` operation used by NPC-to-NPC transfers. Do
+not add that child operation for travel. The existing account callbacks join
+the outer solo-travel changed set, and the outer scope owns the single
+coalesced epoch notification for the whole travel-start attempt, including a
+debit followed by compensation.
 
 While the operation is active, route existing owner callbacks through its
 changed-section set instead of notifying the protocol separately. Update both
@@ -166,8 +166,8 @@ Required focused coverage:
 
 - operation is registered only for the admitted selected daily composition,
   appears nested below `runtime.advance-day`, and is absent from legacy
-  unadmitted execution; any existing `runtime.economy.money-transfer` child
-  remains nested beneath `runtime.travel.start`;
+  unadmitted execution; travel charge/restore produce no synthetic
+  `runtime.economy.money-transfer` child operation;
 - exact actor/account/travel-state/travel-plan/SpatialKnowledge/City/Event/
   sequence identity, cardinality, section IDs, revision baselines, owner
   thread, uniqueness, and epoch-capacity preflight; stale or substituted
