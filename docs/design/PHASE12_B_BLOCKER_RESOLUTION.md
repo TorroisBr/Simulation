@@ -1050,23 +1050,24 @@ are recorded in the Phase 12 State and linked candidate/review evidence.
 | RuntimeIdAllocator Event and Decision counters | Successful `AllocateEventId()` and `AllocateDecisionId()` writes preflight their exact cardinality-one sections and partial epoch before advancing, then report committed revisions through existing batching/direct notification. | Other allocator counters and preceding domain writes remain separate; no complete allocator-root or shared-epoch coverage is claimed. |
 | P11 ActorChoice lifecycle | The exact selected-profile `ActorChoiceStore` owner section is registered. Successful P11 capture/disposition commits preflight and notify after commit; active TravelParty/Merchant/SoloTravel collectors remain the batching path. | P18 temporal ActorChoice remains a distinct, unregistered owner section. The P11 slice does not cover other stores or complete actor/operation coverage. |
 | ScheduledDirective lifecycle | `TesteSimulacao` creates the selected profile's `ScheduledDirectiveStore` and `ScheduledDirectiveSystem`. The normal day path calls `PrepareDay`; the actor-turn path calls `TryTakeDirective`, then may mark a directive Succeeded, Failed, or Skipped. `PrepareDay` can also mark duplicate-target or unresolved-actor rows Skipped. `TryTakeDirective` changes only transient system lookup state. Current P12 `SimulationRuntime` has no `ScheduledDirectiveCensusProvider` registration or mutation bind. | Next bounded design: reuse the store-owned successful Add/terminal-transition commit boundary, register the exact composed store section in P12, preflight before supported selected-profile owner commits, and notify after commit. Preserve selection, take, action, terminal-state, and error semantics. Do not claim global quiescence or complete P12-B. |
-| Preserved ScheduledDirective candidate | Remote store-local census implementation `03ffa1031c3a7f125d1d8cff00f72d22749816bb` and static review `f906453a35d91523600e82f9b3ce7c3cd103f7b1` are retained on their branches. The review explicitly says it does not wire the provider into `SimulationBootstrapComposition`, did not run Unity tests, and approves only a local passive adapter. | Preserve as implementation/source material; it is not a live selected-profile capability and is based on old canonical `19d0373d6a71b63536248ecc9091e66c9b3a708b`. Revalidate or recompute its applicable code against `3b25852` before reuse. |
+| Existing ScheduledDirective census foundation | Store-local monitor/revision and `ScheduledDirectiveCensusProvider` are already canonical at `03ffa1031c3a7f125d1d8cff00f72d22749816bb`; the exact-store provider is exposed by `SimulationBootstrapComposition` at `72239ad`. The P12 runtime protocol still does not register the section or bind mutation callbacks. | Preserve and reuse the canonical witness. The older static review `f906453a35d91523600e82f9b3ce7c3cd103f7b1` reviewed only the local store/provider and predates composition exposure; it did not run Unity tests and is not review of P12 epoch integration. The active gap is P12 runtime registration, preflight, and post-commit notification on the current base. |
 | Downstream readiness | P12-B remains `INCOMPLETE`; P12-A remains `WAIT_DEPENDENCY`; P12-C waits on B; P12-D/E wait on B and C; P12-F waits on C/D/E; P12-G waits on B–F and validated live-profile inventory; P13 remains blocked. | ActorChoice invalidation adds no readiness edge. No capture eligibility, complete profile owner/write coverage, export, hydration, or Phase closure is inferred. |
 
 ### Next dependency-safe P12-B task
 
 Produce a bounded design and independent review for ScheduledDirective
-selected-profile owner invalidation. The smallest useful slice must cover the
-store-local state commits that can occur after the runtime baseline is
-established, including terminal transitions from normal directive
+selected-profile owner invalidation. The smallest useful slice binds the
+existing store-local commit boundary to the exact selected-profile P12
+provider. Cover terminal transitions from normal directive
 preparation/processing and any supported post-publication Add path. Initial
-genesis Adds occur before the profile baseline and must remain represented by
-the initial witness, without synthetic runtime notifications. Census sampling
+genesis Adds occur before the profile baseline and remain represented by the
+initial witness, without synthetic runtime notifications. Census sampling
 and mutation preflight/notification must use the exact store installed in the
 published composition. Preserve transient `TryTakeDirective` semantics and
-all existing directive behavior. This work is within the accepted P12-B
-prerequisite capability scope; it does not add a checkpoint ID or broaden
-P12-A.
+all existing directive behavior. Reuse the already canonical owner-local
+revision/provider implementation; do not rebuild a passive census slice.
+This work is within the accepted P12-B prerequisite capability scope; it does
+not add a checkpoint ID or broaden P12-A.
 
 P12-B remains incomplete; P12-A remains `WAIT_DEPENDENCY`; P13 remains
 blocked. The numbered-phase DAG is unchanged.

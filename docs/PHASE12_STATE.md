@@ -1366,11 +1366,13 @@ eligibility, export, hydration, or Phase closure.
 The refreshed blocker matrix selects ScheduledDirective committed-state
 invalidation as the next bounded source/design task. The selected runtime
 composes its store and system; `AdvanceDayAfterClockAdvance` prepares due
-directives and the actor-turn path marks supported terminal outcomes, while
-the P12 runtime does not currently register/bind this owner section. An older
-store-local census candidate remains unintegrated and must be revalidated on
-the current base; this next task is the missing live owner invalidation
-boundary, not a census-only delivery.
+directives and the actor-turn path marks supported terminal outcomes. The
+store-local revision/witness is already canonical at
+`03ffa1031c3a7f125d1d8cff00f72d22749816bb`, and its provider is exposed by
+the bootstrap composition at `72239ad`. The current P12 runtime does not
+register/bind this owner section. The next task is that missing live
+owner-invalidation boundary, not a census-only delivery; preserve the
+existing owner witness rather than rebuilding it.
 
 ### Numbered-phase DAG refresh
 
