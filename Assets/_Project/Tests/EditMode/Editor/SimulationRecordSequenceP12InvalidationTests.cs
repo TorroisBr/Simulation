@@ -221,7 +221,9 @@ public sealed class SimulationRecordSequenceP12InvalidationTests
             RuntimeIdAllocatorCensusProvider.CreateEventCounterProvider(exhaustedAllocator);
 
         Assert.That(exhaustedProvider.GetCurrentCensus().Revision, Is.EqualTo(long.MaxValue - 1L));
-        Assert.Throws<InvalidOperationException>(() => exhaustedAllocator.AllocateEventId());
+        InvalidOperationException exhaustion = Assert.Throws<InvalidOperationException>(
+            () => exhaustedAllocator.AllocateEventId());
+        Assert.That(exhaustion.Message, Is.EqualTo("RuntimeId sequence exhausted for type 'event'."));
         Assert.That(exhaustedProvider.GetCurrentCensus().Revision, Is.EqualTo(long.MaxValue - 1L));
         AssertEpoch(exhaustedRuntime, 0L);
         Assert.That(exhaustedRuntime.TryAssessNpcRosterCensus(out ContinuationCensusFailure assessment), Is.True,

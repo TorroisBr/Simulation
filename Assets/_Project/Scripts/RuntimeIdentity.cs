@@ -70,7 +70,7 @@ public sealed class RuntimeIdAllocator
     {
         if (nextEventSequence == long.MaxValue)
         {
-            throw new InvalidOperationException("RuntimeId sequence is exhausted for type 'event'.");
+            throw new InvalidOperationException("RuntimeId sequence exhausted for type 'event'.");
         }
 
         if (p12EventIdMutationAdmission != null && !CanCommitP12EventIdMutation())
