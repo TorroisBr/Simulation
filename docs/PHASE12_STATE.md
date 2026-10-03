@@ -1276,3 +1276,16 @@ P12-B still lacks complete live owner/cardinality coverage, complete
 committed-write/shared-epoch coverage, runtime-wide owner-thread/quiescence
 proof, and capture eligibility. No export, hydration, P12-A readiness, P13
 readiness, or Phase closure is claimed.
+
+
+## P12-B selected-profile solo travel-start operation promotion  2026-10-03
+
+With the standing bounded-promotion authorization and successful final preflight, `codex/phase12/canonical` advanced from `e76e50bfefc68b827d54ceb74e0b25293e0ad7b8` to `26346b51a9c591b30bdf5e70c43520a1d9ac563f`. The reviewed executable code is `fe0e0be03403e92001173deae1fafe58dfe432d2`, tree `d72e84d6a442440ab82bacf6a0eb32165a9d7055`. Candidate evidence and independent implementation review are retained in `docs/design/PHASE12_P12B_SOLO_TRAVEL_START_OPERATION_CANDIDATE.md` and `docs/design/PHASE12_P12B_SOLO_TRAVEL_START_OPERATION_IMPLEMENTATION_REVIEW_R2.md`.
+
+The bounded selected-profile operation enters around the existing bound `TravelActionProvider` only for the selected Travel action. The source-City presence section is included only if that City reciprocally contains the NPC, matching the mutation in `NpcRuntime.StartTravel`. Exact-tree validation passed the focused solo-travel suite 11/11, affected economy/spatial/runtime suites, ALL EditMode 2216/2216, official Smoke 5/5, and `git diff --check`. The evidence document records the superseded 10/11 fixture attempt and corrected 11/11 rerun. No Travel scheduling API or unsupported Travel directive was added.
+
+This promotion covers only this bounded operation/invalidation slice. It does not establish complete live-owner or operation coverage, complete shared-epoch coverage, global quiescence, capture eligibility, export, hydration, P12-A readiness, P12-B completion, P13 readiness, or Phase 12 closure.
+
+### Numbered-phase status after solo travel promotion
+
+No dependency edge or phase readiness changed. P12-B remains `INCOMPLETE`; P12-A remains `WAIT_DEPENDENCY`; P13 remains `BLOCKED`; Phase 12 remains open. The P12 owner/operation/epoch matrix will be refreshed after the queued WX-D candidate has been recomposed and integrated, as directed by the Phase Master. WX-D is outside P12 scope and is not included as P12 continuation capability.
