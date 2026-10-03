@@ -959,3 +959,33 @@ The Event counter target is within the previously accepted P12-B prerequisite
 capability authorization. It is not a new checkpoint ID or architecture
 decision. Review and implementation must remain limited to the existing
 selected-profile Event counter witness and successful allocator writes.
+
+## Current P12-B owner/operation/epoch refresh — 2026-10-03 post Event-counter promotion
+
+P12 canonical is `55ac2ebdec4bdbcda6085668188730b7bcb9cd5a`, a clean
+fast-forward from `aa8f0305bea9f10c15045e07400d8785c2bd9e23`. The Event-counter
+implementation is code `a573e5120951f8ac10c2da5b6ad79e066991a57a`, tree
+`8e3e2966601d834c2c23429e253d02a9d1a7bb8c`; exact review and validation are
+retained in the candidate/review documents named by the current Phase 12
+State.
+
+| Area | Current canonical evidence | Remaining blocker |
+|---|---|---|
+| Selected-profile Event counter | Exact `RuntimeIdAllocator` Events section is registered and bound in `UnityBootstrap-Daily-v1`. A successful `AllocateEventId()` validates exhaustion, owner thread, exact baseline, and epoch capacity before advancing the allocator; the post-commit notification enters the current TravelParty/Merchant batch when one is active, otherwise advances the partial epoch. Failed/exhausted preflight does not consume or notify. | Only the Event counter is covered by this allocator slice. The other thirteen allocator counters, Decision/read-model relationships, and preceding domain writes remain separate. The already-promoted `SimulationRecordSequence` hook remains its own bounded owner slice. This is not complete allocator-root or shared-epoch coverage. |
+| Solo travel-start path | Current selected-profile call path is `TravelActionProvider.TryExecuteAction` → `TravelSystem.TryStartTravel` → `EconomyTransactionService.TryChargeTravel` → `NpcRuntime.StartTravel` → origin/route `SpatialKnowledge` discoveries → `DomainEventRecorder.Record` (Event ID then record sequence) → `TravelActionProvider.ClearTravelPlan`. The runtime invokes the action provider from its daily actor turn. | The call has no named P12 `runtime.travel.start` operation. Account, NPC travel-state, City presence, Knowledge, Event, sequence, and travel-plan notifications currently commit independently; there is no preflight of that exact owner set or one close-time changed-section batch. Design the smallest selected-profile operation, including charge compensation and post-start event-failure semantics, without changing gameplay behavior. |
+| Runtime admission/quiescence | The selected profile binds its Unity owner thread and scopes bootstrap/publication and daily advance; direct owner callbacks remain partial. The new Event callback fails closed when its owner/epoch notification cannot be recorded. | This is not exhaustive runtime-wide owner-thread/quiescence proof. The travel operation must compose inside the existing daily advance without claiming global quiescence or capturing unrelated day work. |
+| Capture eligibility and downstream DAG | P12-A remains `WAIT_DEPENDENCY`, P12-B `INCOMPLETE`; P12-C is blocked on B, P12-D/E on B and C, P12-F on C/D/E, P12-G on B–F plus validated live profile inventory; P13 remains blocked on continuation and recoverable causal history. | Complete live owner/cardinality inventory, supported-write invalidation, quiescence, capture eligibility, export, and hydration remain unresolved. Event promotion creates no new READY numbered-phase checkpoint. |
+
+The source re-audit confirms solo travel-start as the highest-value next
+bounded operation gap. `TryStartTravel` charges before installing NPC travel
+state; if the NPC transition rejects, existing code attempts a charge restore.
+After successful travel-state installation it performs two Knowledge writes
+and records the start event. Event/sequence or later event-storage failure
+does not roll back the already installed travel state. The bounded contract
+must preserve these existing commit and failure semantics. It covers only the
+normal selected-profile Travel action entry, not every standalone owner API
+or unrelated travel/party/expedition behavior.
+
+P12-B remains incomplete; P12-A remains `WAIT_DEPENDENCY`; P13 remains
+blocked. No complete owner or shared-epoch coverage, global quiescence,
+capture eligibility, export, or hydration is implied.

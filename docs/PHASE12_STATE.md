@@ -1226,3 +1226,53 @@ remains `INCOMPLETE`, P12-C remains blocked on P12-B, P12-D/E on P12-B and
 P12-C, P12-F on P12-C/D/E, P12-G on P12-B through P12-F plus a validated live
 profile inventory, and P13 remains blocked on continuation plus recoverable
 causal inputs. Phase 12 remains open.
+
+## P12-B RuntimeIdAllocator Event-counter invalidation promotion — 2026-10-03
+
+After final preflight, P12 canonical was fast-forwarded from
+`aa8f0305bea9f10c15045e07400d8785c2bd9e23` to
+`55ac2ebdec4bdbcda6085668188730b7bcb9cd5a`. The reviewed code is
+`a573e5120951f8ac10c2da5b6ad79e066991a57a`, tree
+`8e3e2966601d834c2c23429e253d02a9d1a7bb8c`. Exact-tip independent review is
+PASS in
+`docs/design/PHASE12_P12B_RUNTIME_ID_EVENT_COUNTER_INVALIDATION_IMPLEMENTATION_REVIEW.md`;
+candidate identity and retained validation hashes are in
+`docs/design/PHASE12_P12B_RUNTIME_ID_EVENT_COUNTER_INVALIDATION_CANDIDATE.md`.
+
+The selected `UnityBootstrap-Daily-v1` runtime now registers and binds only
+the existing cardinality-one Event counter witness. Successful
+`AllocateEventId()` writes invalidate that owner and the partial shared epoch;
+allocations join an active TravelParty or Merchant batch. Exhaustion and
+rejected preflight do not advance the counter. A later event-construction or
+storage failure does not roll back an already consumed ID. The exact legacy
+exhaustion message is preserved.
+
+Exact-tree validation passed the focused record-sequence invalidation suite
+11/11, TravelParty advance 10/10, bootstrap composition 21/21, ALL EditMode
+2205/2205, official Smoke 5/5, and `git diff --check`. XML/log names and
+SHA-256 values are retained in the candidate evidence document.
+
+The refreshed P12-B matrix is in
+`docs/design/PHASE12_B_BLOCKER_RESOLUTION.md`. It reclassifies Event allocation
+as covered only for this selected owner and identifies solo travel-start as
+the next bounded cross-owner operation to audit. Other allocator counters,
+unrelated Event/Decision/read-model writes, and preceding domain commits
+remain outside this slice.
+
+### Numbered-phase DAG refresh
+
+This promotion changes no dependency edge or checkpoint readiness. P12-A
+remains `WAIT_DEPENDENCY` pending complete included-owner export and staged
+hydration, a validated complete live-profile inventory, and its separate
+implementation authorization. P12-B remains `INCOMPLETE`. P12-C remains
+blocked on P12-B; P12-D and P12-E remain blocked on P12-B/P12-C; P12-F remains
+blocked on P12-C/P12-D/P12-E; P12-G remains blocked on P12-B through P12-F
+and the validated live inventory. P13 remains blocked on P12 continuation and
+recoverable causal inputs/history. Phases 9 and 18 retain their recorded
+closure scopes; no new numbered-phase implementation checkpoint became
+`READY`, and Phase 12 is not ready for closure.
+
+P12-B still lacks complete live owner/cardinality coverage, complete
+committed-write/shared-epoch coverage, runtime-wide owner-thread/quiescence
+proof, and capture eligibility. No export, hydration, P12-A readiness, P13
+readiness, or Phase closure is claimed.

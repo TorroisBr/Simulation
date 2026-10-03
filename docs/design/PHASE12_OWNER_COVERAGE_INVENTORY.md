@@ -964,3 +964,21 @@ These providers do not create complete P12-B owner registration, shared-epoch
 invalidation, capture eligibility, owner-thread/quiescence proof, immutable
 export, or staged hydration. P12-B remains incomplete; P12-A remains
 `WAIT_DEPENDENCY`.
+
+### RuntimeIdAllocator Event allocation invalidation — 2026-10-03
+
+P12 canonical now observes successful selected-profile `AllocateEventId()`
+writes through the exact existing `p12c.runtime-id-allocator.events` witness.
+The provider remains cardinality one and reports the allocator's local
+revision (`nextEventSequence - 1`). The runtime preflights that section and
+partial epoch before allocation, then publishes the committed revision through
+the existing notification path; nested TravelParty/Merchant operations collect
+the Event section into their changed-owner batch. Exhaustion/rejected preflight
+does not consume an ID, and post-allocation event failure does not undo it.
+
+This closes only the Event-counter mutation-invalidation gap for the selected
+profile. The other thirteen allocator counter families and their supported
+writers remain uncovered. The allocator still has no exact immutable
+continuation export or staged hydration contract. This does not establish
+complete C-root coverage, complete shared-epoch coverage, P12-B readiness, or
+capture eligibility.
