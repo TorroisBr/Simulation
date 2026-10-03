@@ -56,18 +56,24 @@ logging, return, and exception behavior.
 
 ## 3. Runtime registration and exact ownership
 
-During selected-profile P12 census initialization, obtain the store from the
-installed `ScheduledDirectiveSystem` (a read-only internal `Store` property is
-the smallest exposure). Construct or reuse a provider for that exact store,
-validate section ID/schema, nonnegative dynamic cardinality, owner reference,
-and revision, then register `p12f.scheduled-directives` as Required in the
-sealed protocol. A missing system/store or mismatched witness faults selected
-P12 admission closed. Non-P12 runtimes retain their existing behavior.
+During selected-profile P12 census initialization, when a
+`ScheduledDirectiveSystem` is installed, obtain its store (a read-only
+internal `Store` property is the smallest exposure). Construct or reuse a
+provider for that exact store, validate section ID/schema, nonnegative dynamic
+cardinality, owner reference, and revision, then register
+`p12f.scheduled-directives` as Required in the sealed protocol. The published
+`UnityBootstrap-Daily-v1` composition always supplies this owner, so the
+bootstrap composition check below must fault and reject publication if the
+runtime has no matching registered owner. `SimulationRuntime` also supports
+standalone compositions that omit this optional system; those compositions
+omit this section and make no ScheduledDirective coverage claim. Non-P12
+runtimes retain their existing behavior.
 
 `SimulationBootstrapComposition` already creates a provider from its
 `directives` argument. Add a runtime ownership check, patterned after the
 existing record-sequence and allocator checks, so the published composition
-proves its provider samples the exact store registered by the runtime. Do not
+proves its provider samples the exact store registered by the runtime. This
+check rejects a missing runtime owner as well as a different store. Do not
 create a second store or discover ownership through reflection.
 
 When the selected P12 runtime binds owner mutation callbacks, bind admission
