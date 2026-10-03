@@ -28,10 +28,12 @@ candidate against the current base.
 ## Implementation scope
 
 The producer emits only schema v2. A narrow Unity host accepts a published
-`SimulationBootstrapComposition`, calls its factual-read surface once for
-`simulation.faction-truth/v1`, and passes copied facts and coherent boundary
-evidence to the embedded producer package. It does not access a Store. Faction
-coverage is `INCLUDED` when the complete Faction collection is nonempty and
+`SimulationBootstrapComposition` and calls its factual-read surface once for
+`simulation.faction-truth/v1`. The host validates the capture's coherent
+boundary, store revisions, capability, and source-version evidence, then
+passes only the copied `WorldId` and Faction ID/display-name values to the
+embedded producer package. It does not access a Store. Faction coverage is
+`INCLUDED` when the complete Faction collection is nonempty and
 `KNOWN_EMPTY` when it is empty. People, Cities, Locations, Organizations,
 Institutions, Items, HistoricalEvents, and Relationships are empty with
 `UNSUPPORTED` coverage. A failed, unavailable, malformed, or incoherent read

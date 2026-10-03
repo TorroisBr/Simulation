@@ -50,7 +50,7 @@ FR-C's active-affiliation facts are endpoint-validated but do not establish a co
 
 ## Adapter boundary clarification
 
-The portable v2 DTOs, ID mapping, coverage validation, deterministic JSON serialization, and atomic `*.world.json` publication belong to a dedicated embedded integration package at `Packages/com.simulation.world-exchange-producer`. A narrow Unity host in `Assets/_Project/Scripts/WorldExchange` accepts a composed bootstrap, calls its promoted FactualRead surface once, then passes copied World/Faction facts and boundary evidence into the package. The host never reads a Store directly. No Simulation domain or runtime owner depends on World Exchange types, and WX-D does not modify SimulationRuntime or bootstrap composition.
+The portable v2 DTOs, ID mapping, coverage validation, deterministic JSON serialization, and atomic `*.world.json` publication belong to a dedicated embedded integration package at `Packages/com.simulation.world-exchange-producer`. A narrow Unity host in `Assets/_Project/Scripts/WorldExchange` accepts a composed bootstrap and calls its promoted FactualRead surface once. The host validates the coherent boundary, store revisions, capability, and source-version evidence, then passes only the copied WorldId and Faction ID/display-name values to the package. The host never reads a Store directly. No Simulation domain or runtime owner depends on World Exchange types, and WX-D does not modify SimulationRuntime or bootstrap composition.
 
 The first artifact is a stale-able, read-only World Exchange v2 projection. It is not a Simulation save, P12 snapshot, transport endpoint, synchronization path, or write-back mechanism.
 
