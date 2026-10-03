@@ -176,6 +176,7 @@ public sealed class SimulationRuntimeAdmissionTests
     [Test]
     public void MerchantOperationBatchesChangedOwnerSectionsOnceAndHoldsScopeThroughCommit()
     {
+        RecordFixture records = SimulationTestFactory.CreateRecordFixture();
         ItemData item = SimulationTestFactory.CreateItem("p12-merchant-operation-item", 10f);
         CityRuntime city = SimulationTestFactory.CreateCity(
             "p12-merchant-operation-city",
@@ -192,7 +193,7 @@ public sealed class SimulationRuntimeAdmissionTests
             100f);
         merchant.MerchantTradePlan.Set(item, city, city, 2, 4f);
         merchant.TravelPlan.Set(staleTarget, NpcTravelReason.Trade, 20f, 1f, "existing-trade-intent");
-        SimulationTime time = new SimulationTime();
+        SimulationTime time = records.Time;
         EffectiveSimulationConfiguration defaults = SimulationConfigurationDefaults.Create();
         EffectiveSimulationConfiguration configuration = new EffectiveSimulationConfiguration(
             defaults.Population,
@@ -209,14 +210,17 @@ public sealed class SimulationRuntimeAdmissionTests
             defaults.CommercialKnowledge,
             null,
             time,
-            null);
+            records.DecisionRecorder);
         SimulationRuntime runtime = new SimulationRuntime(
             time,
             new[] { city },
             new[] { merchant },
+            decisionRecorder: records.DecisionRecorder,
             merchantSystem: merchantSystem,
             configuration: configuration,
-            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1());
+            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            recordSequence: records.Sequence,
+            runtimeIdAllocator: records.Allocator);
 
         Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long before, out ContinuationCensusFailure beforeFailure),
             Is.True, beforeFailure.ToString());
@@ -233,6 +237,15 @@ public sealed class SimulationRuntimeAdmissionTests
             Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure activeFailure), Is.False);
             Assert.That(activeFailure, Is.EqualTo(ContinuationCensusFailure.OperationInProgress));
             merchantSystem.AdvanceNpcTradeState(merchant);
+            Assert.That(records.DecisionRecorder.Record(
+                merchant.RuntimeId,
+                NpcDecisionType.TradeRedirect,
+                NpcDecisionOrigin.Autonomous,
+                null,
+                null,
+                staleTarget.Location.RuntimeId,
+                null), Is.Not.Null,
+                "the Decision ID and record sequence are allocated while the existing Merchant batch is active");
         }
 
         Assert.That(merchant.SpatialKnowledge.KnowsLocation(city.Location.RuntimeId), Is.True);
@@ -251,7 +264,11 @@ public sealed class SimulationRuntimeAdmissionTests
         Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long after, out ContinuationCensusFailure afterFailure),
             Is.True, afterFailure.ToString());
         Assert.That(after, Is.EqualTo(before + 1),
-            "SpatialKnowledge and all CommercialKnowledge sibling sections publish as one post-commit epoch");
+            "owner, Decision-counter, and record-sequence changes publish as one post-commit epoch");
+        Assert.That(RuntimeIdAllocatorCensusProvider.CreateDecisionCounterProvider(records.Allocator)
+            .GetCurrentCensus().Revision, Is.EqualTo(1L));
+        Assert.That(new SimulationRecordSequenceCensusProvider(records.Sequence)
+            .GetCurrentCensus().Revision, Is.EqualTo(1L));
         Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure assessment), Is.True,
             assessment.ToString());
     }

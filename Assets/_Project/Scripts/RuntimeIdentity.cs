@@ -21,6 +21,8 @@ public sealed class RuntimeIdAllocator
     private long nextNotableItemSequence = 1;
     private Func<bool> p12EventIdMutationAdmission;
     private Action p12EventIdMutationCommitted;
+    private Func<bool> p12DecisionIdMutationAdmission;
+    private Action p12DecisionIdMutationCommitted;
 
     internal object CensusOwnerIdentity => censusOwnerIdentity;
 
@@ -107,7 +109,36 @@ public sealed class RuntimeIdAllocator
 
     public string AllocateDecisionId()
     {
-        return Allocate("decision", ref nextDecisionSequence);
+        if (nextDecisionSequence == long.MaxValue)
+        {
+            throw new InvalidOperationException("RuntimeId sequence exhausted for type 'decision'.");
+        }
+
+        if (p12DecisionIdMutationAdmission != null && !CanCommitP12DecisionIdMutation())
+        {
+            throw new InvalidOperationException("The P12 Decision-ID mutation was rejected before allocation.");
+        }
+
+        string runtimeId = "decision-" + nextDecisionSequence.ToString("D6", CultureInfo.InvariantCulture);
+        nextDecisionSequence++;
+        p12DecisionIdMutationCommitted?.Invoke();
+        return runtimeId;
+    }
+
+    internal void BindP12DecisionIdMutationBoundary(Func<bool> admission, Action committed)
+    {
+        if (admission == null) throw new ArgumentNullException(nameof(admission));
+        if (committed == null) throw new ArgumentNullException(nameof(committed));
+        if (p12DecisionIdMutationAdmission != null || p12DecisionIdMutationCommitted != null)
+            throw new InvalidOperationException("RuntimeIdAllocator Decision IDs are already bound to a P12 mutation boundary.");
+        p12DecisionIdMutationAdmission = admission;
+        p12DecisionIdMutationCommitted = committed;
+    }
+
+    private bool CanCommitP12DecisionIdMutation()
+    {
+        try { return p12DecisionIdMutationAdmission(); }
+        catch { return false; }
     }
 
     public string AllocateTravelPartyId()

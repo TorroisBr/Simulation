@@ -894,6 +894,12 @@ public sealed class SimulationBootstrapCompositionTests
                     runtimeIdAllocatorProviders[i]), Is.True,
                     "the bootstrap composition publishes the exact Event-counter owner bound into its selected runtime");
             }
+            if (i == 6)
+            {
+                Assert.That(simulation.Runtime.HasSameRuntimeIdAllocatorDecisionCounterOwner(
+                    runtimeIdAllocatorProviders[i]), Is.True,
+                    "the bootstrap composition publishes the exact Decision-counter owner bound into its selected runtime");
+            }
             if (i == 0)
             {
                 runtimeIdAllocatorOwner = witness.OwnerInstanceIdentity;

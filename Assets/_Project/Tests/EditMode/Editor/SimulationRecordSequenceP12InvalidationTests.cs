@@ -169,6 +169,175 @@ public sealed class SimulationRecordSequenceP12InvalidationTests
     }
 
     [Test]
+    public void SelectedDailyProfileTracksExactDecisionCounterOwnerAndSuccessfulAllocation()
+    {
+        RecordFixture records = SimulationTestFactory.CreateRecordFixture();
+        SimulationRuntime runtime = CreateRuntime(records, records.Sequence, records.Allocator);
+        IOwnerSectionCensusProvider provider =
+            RuntimeIdAllocatorCensusProvider.CreateDecisionCounterProvider(records.Allocator);
+        OwnerSectionCensusWitness initial = provider.GetCurrentCensus();
+
+        Assert.That(initial.SectionId, Is.EqualTo(RuntimeIdAllocatorCensusProvider.DecisionsSectionId));
+        Assert.That(initial.SchemaVersion, Is.EqualTo(RuntimeIdAllocatorCensusProvider.SchemaVersion));
+        Assert.That(initial.OwnerInstanceIdentity, Is.SameAs(records.Allocator.CensusOwnerIdentity));
+        Assert.That(initial.Cardinality, Is.EqualTo(1));
+        Assert.That(initial.Revision, Is.Zero);
+        Assert.That(runtime.HasSameRuntimeIdAllocatorDecisionCounterOwner(provider), Is.True);
+        Assert.That(runtime.HasSameRuntimeIdAllocatorDecisionCounterOwner(
+            RuntimeIdAllocatorCensusProvider.CreateDecisionCounterProvider(new RuntimeIdAllocator())), Is.False,
+            "a second allocator with the same counter value is not the selected owner");
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure initialAssessment), Is.True,
+            initialAssessment.ToString());
+
+        Assert.That(records.Allocator.AllocateDecisionId(), Is.EqualTo("decision-000001"));
+        Assert.That(provider.GetCurrentCensus().Revision, Is.EqualTo(1L));
+        Assert.That(RuntimeIdAllocatorCensusProvider.CreateEventCounterProvider(records.Allocator)
+            .GetCurrentCensus().Revision, Is.Zero,
+            "the Decision allocation does not change another allocator counter");
+        AssertEpoch(runtime, 1L);
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure finalAssessment), Is.True,
+            finalAssessment.ToString());
+    }
+
+    [Test]
+    public void RejectedOrExhaustedDecisionAllocationDoesNotAdvanceCounterOrEpoch()
+    {
+        RecordFixture staleRecords = SimulationTestFactory.CreateRecordFixture();
+        SimulationRuntime staleRuntime = CreateRuntime(
+            staleRecords, staleRecords.Sequence, staleRecords.Allocator);
+        IOwnerSectionCensusProvider staleProvider =
+            RuntimeIdAllocatorCensusProvider.CreateDecisionCounterProvider(staleRecords.Allocator);
+        typeof(RuntimeIdAllocator)
+            .GetField("nextDecisionSequence", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(staleRecords.Allocator, 2L);
+
+        Assert.That(staleProvider.GetCurrentCensus().Revision, Is.EqualTo(1L));
+        Assert.Throws<InvalidOperationException>(() => staleRecords.Allocator.AllocateDecisionId());
+        Assert.That(staleProvider.GetCurrentCensus().Revision, Is.EqualTo(1L));
+        ContinuationCensusProtocol staleProtocol = (ContinuationCensusProtocol)typeof(SimulationRuntime)
+            .GetField("npcRosterCensusProtocol", BindingFlags.Instance | BindingFlags.NonPublic)
+            .GetValue(staleRuntime);
+        Assert.That(typeof(ContinuationCensusProtocol)
+            .GetField("mutationEpoch", BindingFlags.Instance | BindingFlags.NonPublic)
+            .GetValue(staleProtocol), Is.Zero);
+        AssertProtocolFaulted(staleRuntime);
+
+        RecordFixture wrongThreadRecords = SimulationTestFactory.CreateRecordFixture();
+        SimulationRuntime wrongThreadRuntime = CreateRuntime(
+            wrongThreadRecords, wrongThreadRecords.Sequence, wrongThreadRecords.Allocator);
+        IOwnerSectionCensusProvider wrongThreadProvider =
+            RuntimeIdAllocatorCensusProvider.CreateDecisionCounterProvider(wrongThreadRecords.Allocator);
+        Exception wrongThreadFailure = null;
+        Thread worker = new Thread(() =>
+        {
+            try { wrongThreadRecords.Allocator.AllocateDecisionId(); }
+            catch (Exception exception) { wrongThreadFailure = exception; }
+        });
+        worker.Start();
+        worker.Join();
+
+        Assert.That(wrongThreadFailure, Is.TypeOf<InvalidOperationException>());
+        Assert.That(wrongThreadProvider.GetCurrentCensus().Revision, Is.Zero);
+        Assert.That(typeof(RuntimeIdAllocator)
+            .GetField("nextDecisionSequence", BindingFlags.Instance | BindingFlags.NonPublic)
+            .GetValue(wrongThreadRecords.Allocator), Is.EqualTo(1L));
+        AssertProtocolFaulted(wrongThreadRuntime);
+
+        SimulationRecordSequence unusedSequence = new SimulationRecordSequence();
+        RuntimeIdAllocator exhaustedAllocator = new RuntimeIdAllocator();
+        typeof(RuntimeIdAllocator)
+            .GetField("nextDecisionSequence", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(exhaustedAllocator, long.MaxValue);
+        SimulationRuntime exhaustedRuntime = CreateRuntime(null, unusedSequence, exhaustedAllocator);
+        IOwnerSectionCensusProvider exhaustedProvider =
+            RuntimeIdAllocatorCensusProvider.CreateDecisionCounterProvider(exhaustedAllocator);
+
+        Assert.That(exhaustedProvider.GetCurrentCensus().Revision, Is.EqualTo(long.MaxValue - 1L));
+        InvalidOperationException exhaustion = Assert.Throws<InvalidOperationException>(
+            () => exhaustedAllocator.AllocateDecisionId());
+        Assert.That(exhaustion.Message, Is.EqualTo("RuntimeId sequence exhausted for type 'decision'."));
+        Assert.That(exhaustedProvider.GetCurrentCensus().Revision, Is.EqualTo(long.MaxValue - 1L));
+        AssertEpoch(exhaustedRuntime, 0L);
+        Assert.That(exhaustedRuntime.TryAssessNpcRosterCensus(out ContinuationCensusFailure assessment), Is.True,
+            assessment.ToString());
+    }
+
+    [Test]
+    public void DecisionCounterCapacityPreflightRejectsAtMaximumAndAllowsFinalEpochStep()
+    {
+        RecordFixture exhaustedEpochRecords = SimulationTestFactory.CreateRecordFixture();
+        SimulationRuntime exhaustedEpochRuntime = CreateRuntime(
+            exhaustedEpochRecords, exhaustedEpochRecords.Sequence, exhaustedEpochRecords.Allocator);
+        IOwnerSectionCensusProvider exhaustedEpochProvider =
+            RuntimeIdAllocatorCensusProvider.CreateDecisionCounterProvider(exhaustedEpochRecords.Allocator);
+        ContinuationCensusProtocol exhaustedEpochProtocol = (ContinuationCensusProtocol)typeof(SimulationRuntime)
+            .GetField("npcRosterCensusProtocol", BindingFlags.Instance | BindingFlags.NonPublic)
+            .GetValue(exhaustedEpochRuntime);
+        typeof(ContinuationCensusProtocol)
+            .GetField("mutationEpoch", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(exhaustedEpochProtocol, long.MaxValue);
+
+        Assert.Throws<InvalidOperationException>(() => exhaustedEpochRecords.Allocator.AllocateDecisionId());
+        Assert.That(exhaustedEpochProvider.GetCurrentCensus().Revision, Is.Zero);
+        Assert.That(typeof(RuntimeIdAllocator)
+            .GetField("nextDecisionSequence", BindingFlags.Instance | BindingFlags.NonPublic)
+            .GetValue(exhaustedEpochRecords.Allocator), Is.EqualTo(1L));
+        AssertProtocolFaulted(exhaustedEpochRuntime);
+
+        RecordFixture finalEpochRecords = SimulationTestFactory.CreateRecordFixture();
+        SimulationRuntime finalEpochRuntime = CreateRuntime(
+            finalEpochRecords, finalEpochRecords.Sequence, finalEpochRecords.Allocator);
+        IOwnerSectionCensusProvider finalEpochProvider =
+            RuntimeIdAllocatorCensusProvider.CreateDecisionCounterProvider(finalEpochRecords.Allocator);
+        ContinuationCensusProtocol finalEpochProtocol = (ContinuationCensusProtocol)typeof(SimulationRuntime)
+            .GetField("npcRosterCensusProtocol", BindingFlags.Instance | BindingFlags.NonPublic)
+            .GetValue(finalEpochRuntime);
+        typeof(ContinuationCensusProtocol)
+            .GetField("mutationEpoch", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(finalEpochProtocol, long.MaxValue - 1L);
+
+        Assert.That(finalEpochRecords.Allocator.AllocateDecisionId(), Is.EqualTo("decision-000001"));
+        Assert.That(finalEpochProvider.GetCurrentCensus().Revision, Is.EqualTo(1L));
+        Assert.That(finalEpochRuntime.TryReadNpcRosterCensusMutationEpoch(
+            out long finalEpoch, out ContinuationCensusFailure readFailure), Is.True, readFailure.ToString());
+        Assert.That(finalEpoch, Is.EqualTo(long.MaxValue));
+
+        Assert.Throws<InvalidOperationException>(() => finalEpochRecords.Allocator.AllocateDecisionId());
+        Assert.That(finalEpochProvider.GetCurrentCensus().Revision, Is.EqualTo(1L));
+        Assert.That(typeof(RuntimeIdAllocator)
+            .GetField("nextDecisionSequence", BindingFlags.Instance | BindingFlags.NonPublic)
+            .GetValue(finalEpochRecords.Allocator), Is.EqualTo(2L));
+        AssertProtocolFaulted(finalEpochRuntime);
+    }
+
+    [Test]
+    public void DecisionAllocationRemainsInvalidatedWhenLaterRecordSequenceAllocationFails()
+    {
+        RecordFixture records = SimulationTestFactory.CreateRecordFixture();
+        typeof(SimulationRecordSequence)
+            .GetField("nextSequence", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(records.Sequence, long.MaxValue);
+        SimulationRuntime runtime = CreateRuntime(records, records.Sequence, records.Allocator);
+        IOwnerSectionCensusProvider decisionProvider =
+            RuntimeIdAllocatorCensusProvider.CreateDecisionCounterProvider(records.Allocator);
+        SimulationRecordSequenceCensusProvider sequenceProvider =
+            new SimulationRecordSequenceCensusProvider(records.Sequence);
+        LogAssert.Expect(LogType.Error,
+            "Cannot allocate NPC decision record identity: Simulation record sequence is exhausted.");
+
+        Assert.That(records.DecisionRecorder.Record(
+            "actor", NpcDecisionType.Action, NpcDecisionOrigin.Autonomous,
+            "action", null, null, null), Is.Null);
+
+        Assert.That(decisionProvider.GetCurrentCensus().Revision, Is.EqualTo(1L));
+        Assert.That(sequenceProvider.GetCurrentCensus().Revision, Is.EqualTo(long.MaxValue - 1L));
+        Assert.That(records.Decisions.Decisions, Is.Empty);
+        AssertEpoch(runtime, 1L);
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure assessment), Is.True,
+            assessment.ToString());
+    }
+
+    [Test]
     public void RejectedOrExhaustedEventAllocationDoesNotAdvanceCounterOrEpoch()
     {
         RecordFixture staleRecords = SimulationTestFactory.CreateRecordFixture();
@@ -310,6 +479,7 @@ public sealed class SimulationRecordSequenceP12InvalidationTests
         Assert.That(allocator.AllocateEventId(), Is.EqualTo("event-000001"));
         Assert.That(allocator.AllocateEventId(), Is.EqualTo("event-000002"));
         Assert.That(allocator.AllocateNpcId(), Is.EqualTo("npc-000001"));
+        Assert.That(allocator.AllocateDecisionId(), Is.EqualTo("decision-000001"));
     }
 
     [Test]

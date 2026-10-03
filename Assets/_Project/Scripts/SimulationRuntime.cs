@@ -336,6 +336,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
     private readonly SimulationRecordSequenceCensusProvider simulationRecordSequenceCensusProvider;
     private readonly RuntimeIdAllocator runtimeIdAllocator;
     private readonly IOwnerSectionCensusProvider runtimeIdAllocatorEventCounterCensusProvider;
+    private readonly IOwnerSectionCensusProvider runtimeIdAllocatorDecisionCounterCensusProvider;
     private readonly FactualReadCoordinator factualReadCoordinator;
     private volatile bool factualReadWorldPublished;
     private readonly SimulationTime simulationTime;
@@ -691,6 +692,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         {
             runtimeIdAllocatorEventCounterCensusProvider =
                 RuntimeIdAllocatorCensusProvider.CreateEventCounterProvider(runtimeIdAllocator);
+            runtimeIdAllocatorDecisionCounterCensusProvider =
+                RuntimeIdAllocatorCensusProvider.CreateDecisionCounterProvider(runtimeIdAllocator);
         }
         if (runtimeAdmissionContext != null)
         {
@@ -1271,6 +1274,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                 && !TryRegisterSimulationRecordSequenceCensusProvider(protocol))
             || (runtimeAdmissionContext != null && runtimeIdAllocator != null
                 && !TryRegisterRuntimeIdAllocatorEventCounterCensusProvider(protocol))
+            || (runtimeAdmissionContext != null && runtimeIdAllocator != null
+                && !TryRegisterRuntimeIdAllocatorDecisionCounterCensusProvider(protocol))
             || (runtimeAdmissionContext != null
                 && !TryRegisterTravelPartyCensusProvider(protocol))
             || (runtimeAdmissionContext != null
@@ -1354,6 +1359,13 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                     runtimeIdAllocator.BindP12EventIdMutationBoundary(
                         CanCommitP12RuntimeIdEventCounterMutation,
                         NotifyP12RuntimeIdEventCounterMutation);
+                }
+
+                if (runtimeIdAllocatorDecisionCounterCensusProvider != null)
+                {
+                    runtimeIdAllocator.BindP12DecisionIdMutationBoundary(
+                        CanCommitP12RuntimeIdDecisionCounterMutation,
+                        NotifyP12RuntimeIdDecisionCounterMutation);
                 }
 
                 if (!TryRebindNpcOwnerMutationBoundaries())
@@ -1474,6 +1486,52 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                 || !protocol.RegisterCensusProvider(
                     RuntimeIdAllocatorCensusProvider.EventsSectionId,
                     runtimeIdAllocatorEventCounterCensusProvider,
+                    out _))
+            {
+                protocol.FaultClosed();
+                return false;
+            }
+
+            return true;
+        }
+        catch
+        {
+            protocol.FaultClosed();
+            return false;
+        }
+    }
+
+    private bool TryRegisterRuntimeIdAllocatorDecisionCounterCensusProvider(ContinuationCensusProtocol protocol)
+    {
+        if (protocol == null
+            || runtimeIdAllocator == null
+            || runtimeIdAllocatorDecisionCounterCensusProvider == null)
+        {
+            protocol?.FaultClosed();
+            return false;
+        }
+
+        try
+        {
+            OwnerSectionCensusWitness witness = runtimeIdAllocatorDecisionCounterCensusProvider.GetCurrentCensus();
+            if (witness == null
+                || !string.Equals(
+                    witness.SectionId,
+                    RuntimeIdAllocatorCensusProvider.DecisionsSectionId,
+                    StringComparison.Ordinal)
+                || witness.SchemaVersion != RuntimeIdAllocatorCensusProvider.SchemaVersion
+                || witness.Cardinality != 1
+                || !ReferenceEquals(witness.OwnerInstanceIdentity, runtimeIdAllocator.CensusOwnerIdentity)
+                || witness.Revision != runtimeIdAllocator.GetCensusRevision(RuntimeIdAllocatorCensusCounter.Decisions)
+                || !protocol.RegisterExpectedSection(
+                    new OwnerSectionContract(
+                        RuntimeIdAllocatorCensusProvider.DecisionsSectionId,
+                        RuntimeIdAllocatorCensusProvider.SchemaVersion,
+                        OwnerSectionRole.Required),
+                    out _)
+                || !protocol.RegisterCensusProvider(
+                    RuntimeIdAllocatorCensusProvider.DecisionsSectionId,
+                    runtimeIdAllocatorDecisionCounterCensusProvider,
                     out _))
             {
                 protocol.FaultClosed();
@@ -3005,6 +3063,31 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         }
     }
 
+    internal bool HasSameRuntimeIdAllocatorDecisionCounterOwner(IOwnerSectionCensusProvider otherProvider)
+    {
+        if (runtimeAdmissionContext == null) return true;
+        if (runtimeIdAllocatorDecisionCounterCensusProvider == null || otherProvider == null) return false;
+
+        try
+        {
+            OwnerSectionCensusWitness runtimeWitness = runtimeIdAllocatorDecisionCounterCensusProvider.GetCurrentCensus();
+            OwnerSectionCensusWitness otherWitness = otherProvider.GetCurrentCensus();
+            return runtimeWitness != null
+                && otherWitness != null
+                && string.Equals(runtimeWitness.SectionId, RuntimeIdAllocatorCensusProvider.DecisionsSectionId, StringComparison.Ordinal)
+                && string.Equals(otherWitness.SectionId, runtimeWitness.SectionId, StringComparison.Ordinal)
+                && otherWitness.SchemaVersion == runtimeWitness.SchemaVersion
+                && otherWitness.Cardinality == 1
+                && runtimeWitness.Cardinality == 1
+                && ReferenceEquals(otherWitness.OwnerInstanceIdentity, runtimeWitness.OwnerInstanceIdentity)
+                && otherWitness.Revision == runtimeWitness.Revision;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     private bool CanCommitP12SimulationRecordSequenceMutation()
     {
         if (runtimeAdmissionContext == null) return true;
@@ -3095,6 +3178,56 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             FaultRuntimeAdmission();
             throw new InvalidOperationException(
                 "The committed P12 Event-ID allocation could not be reported to its census protocol.",
+                exception);
+        }
+    }
+
+    private bool CanCommitP12RuntimeIdDecisionCounterMutation()
+    {
+        if (runtimeAdmissionContext == null) return true;
+        if (!IsRuntimeAdmissionOwnerThreadCurrent()
+            || npcRosterCensusProtocol == null
+            || runtimeIdAllocatorDecisionCounterCensusProvider == null
+            || !CanCommitP12MutationSections(
+                new[] { RuntimeIdAllocatorCensusProvider.DecisionsSectionId }))
+        {
+            FaultRuntimeAdmission();
+            return false;
+        }
+
+        if (!npcRosterCensusProtocol.TryValidateMutationEpochCapacity(out _))
+        {
+            FaultRuntimeAdmission();
+            return false;
+        }
+
+        return true;
+    }
+
+    private void NotifyP12RuntimeIdDecisionCounterMutation()
+    {
+        if (runtimeAdmissionContext == null) return;
+        try
+        {
+            if (npcRosterCensusProtocol == null
+                || !NotifyP12MutationSections(
+                    new[] { RuntimeIdAllocatorCensusProvider.DecisionsSectionId }))
+            {
+                FaultRuntimeAdmission();
+                throw new InvalidOperationException(
+                    "The committed P12 Decision-ID allocation could not advance the mutation epoch.");
+            }
+        }
+        catch (InvalidOperationException)
+        {
+            FaultRuntimeAdmission();
+            throw;
+        }
+        catch (Exception exception)
+        {
+            FaultRuntimeAdmission();
+            throw new InvalidOperationException(
+                "The committed P12 Decision-ID allocation could not be reported to its census protocol.",
                 exception);
         }
     }
