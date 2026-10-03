@@ -1,6 +1,6 @@
 # WX-D v2 integration after P12 solo-travel promotion
 
-**Status:** Reintegrated and revalidated on the new canonical-derived base; fresh exact-tip independent integration review pending.
+**Status:** Reintegrated, revalidated, and independently reviewed at exact tip `fbc6ee053dc034fb12bf374b899e6baeb91c1d05`; see [the review record](WXD_V2_POST_SOLO_TRAVEL_INTEGRATION_REVIEW.md).
 
 ## Baseline and drift classification
 
