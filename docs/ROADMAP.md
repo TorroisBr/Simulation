@@ -26,6 +26,8 @@ Runtime World Expansion remains a future consumer without an assigned dedicated 
 
 The [P12 capability DAG audit](architecture/P12_CAPABILITY_DAG_AUDIT.md) separates the accepted `UnityBootstrap-Daily-v1` continuation profile from entry of new authoritative domain capabilities. P12-B is still incomplete on `origin/codex/phase12/canonical` at `54fc23b`; P12-C–G and P12-A retain their accepted chain. Full P12 closure still means exact, validated deterministic continuation for every admitted owner. A newly composed unsupported owner causes profile admission to reject, never silent omission or automatic P12 scope growth. No global `PHASE 12 FOUNDATION READY` milestone is introduced. Each new owner instead passes the architecture §92A continuation-aware entry gate before its bounded checkpoint can be implemented.
 
+The [Master handoff](architecture/P12_CAPABILITY_DAG_MASTER_HANDOFF.md) records the post-promotion ready set, product-scope choices and serial integration boundaries. It is a dated scheduling aid; current owning States and code determine delivery.
+
 While P12-B admission is incomplete, a new owner must either stay outside the selected composition by construction or prove a fail-closed admission hook and negative rejection test before its domain checkpoint is promoted. The latter is a serial P12-B integration, not an independent edit to that hotspot.
 
 | Phase / track | P12 relationship | Next gate |

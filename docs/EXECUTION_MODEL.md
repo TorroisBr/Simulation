@@ -51,6 +51,8 @@ Checkpoint execution states are `PLANNED`, `IN_PROGRESS`, `SUBMITTED`, `VALIDATE
 
 Readiness is calculated from current canonical docs/code and explicit dependency IDs, not from historical chat memory or phase-number order. A candidate or unreviewed plan does not satisfy a promoted-capability edge. An explicit isolated dependency on a named candidate may allow preparation, but not implicit downstream canonical unlock.
 
+For the promoted P12 capability DAG, the Master must not treat `P12 open` as a blanket implementation lock on later numbered phases. Apply the per-owner continuation-aware gate and the actual promoted capability edge for each bounded consumer. P12's accepted save profile still closes only with complete validated continuation of every admitted owner, and P13 fork still needs reconstructible causal history. See [the 2026-10-03 Master handoff](architecture/P12_CAPABILITY_DAG_MASTER_HANDOFF.md) for the time-stamped ready set, product decisions and shared hotspots; re-evaluate it against current States and code on each run.
+
 On each run start and after canonical/architecture/roadmap changes: verify branch and local/remote SHA; load current architecture, roadmap, Briefs, States, and relevant code; derive the checkpoint DAG; evaluate gates and technical design; classify READY work; assess semantic and file/hotspot interference; schedule a safe set; repeat after promotion. Stop rather than inventing missing checkpoint contracts. Record the baseline and dependency evidence used for each dispatched track.
 
 ## Context, parallelism, and blockers
