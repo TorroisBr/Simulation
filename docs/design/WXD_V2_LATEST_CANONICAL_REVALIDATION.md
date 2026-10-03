@@ -1,12 +1,6 @@
-# WX-D revalidation on the latest Phase 12 canonical
+# WX-D revalidation before solo-travel promotion (historical)
 
-**Current Simulation canonical:** `origin/codex/phase12/canonical` at
-`e76e50bfefc68b827d54ceb74e0b25293e0ad7b8`.
-
-**Promoted P12-B Event-counter code:**
-`a573e5120951f8ac10c2da5b6ad79e066991a57a`, tree
-`8e3e2966601d834c2c23429e253d02a9d1a7bb8c`. The latest canonical tip also
-contains its review, validation, promotion, and State evidence.
+This record describes the pre-integration P12 canonical at `e76e50bfefc68b827d54ceb74e0b25293e0ad7b8`. It remains valid for that baseline and is superseded as the current integration baseline by [WXD_V2_POST_SOLO_TRAVEL_INTEGRATION.md](WXD_V2_POST_SOLO_TRAVEL_INTEGRATION.md).
 
 ## Impact
 

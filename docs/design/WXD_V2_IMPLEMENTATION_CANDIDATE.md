@@ -1,7 +1,8 @@
 # WX-D v2 implementation candidate evidence
 
-**Status:** Candidate assembled and revalidated on the current Phase 12
-canonical. Independent exact-tip implementation review is pending.
+**Current integration status:** The reviewed WX-D code patch has been recomposed on P12 canonical after solo-travel promotion. Drift classification, current-base validation, and the fresh integration review are recorded in [WXD_V2_POST_SOLO_TRAVEL_INTEGRATION.md](WXD_V2_POST_SOLO_TRAVEL_INTEGRATION.md). Current-base integration review is pending.
+
+The immutable identity and validation sections below describe the original WX-D code commit `bc3d4a31e45549fd91cd22a88022c93d39f2707f` / tree `088f383db5b4b5fc51e8db0f8687c413709a5796` on base `e76e50bfefc68b827d54ceb74e0b25293e0ad7b8`; they are retained as historical source-candidate evidence.
 
 ## Immutable candidate identity
 

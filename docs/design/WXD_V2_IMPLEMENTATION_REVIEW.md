@@ -1,6 +1,8 @@
 # WX-D v2 implementation candidate review
 
-**Result: `VALIDATED_CANDIDATE`**
+**Historical result: `VALIDATED_CANDIDATE`**
+
+This independent review applies to code `bc3d4a31e45549fd91cd22a88022c93d39f2707f` / tree `088f383db5b4b5fc51e8db0f8687c413709a5796`, based on canonical `e76e50bfefc68b827d54ceb74e0b25293e0ad7b8`, with candidate documentation tip `3641e20b9ae92580febd56fa9cabab631fc75eee`. It is retained as exact source-candidate evidence. The later P12 solo-travel canonical advancement creates a different combined tree; the current-base review is recorded separately in [WXD_V2_POST_SOLO_TRAVEL_INTEGRATION.md](WXD_V2_POST_SOLO_TRAVEL_INTEGRATION.md).
 
 ## Candidate identity and current canonical
 
