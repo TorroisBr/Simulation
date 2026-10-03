@@ -1183,3 +1183,46 @@ The preflight confirmed that canonical still equaled the reviewed base, the cand
 The promoted addition is the immutable `simulation.faction-truth/v1` reader and its narrow registration through `SimulationRuntime`, with corresponding bootstrap coverage. Facts are copied and deterministically ordered; active and ended affiliation handling, Person endpoints, logical-boundary/revision checks, and fail-closed diagnostics follow the reviewed contract. Knowledge, support, and direct mutable Store exposure remain excluded.
 
 The numbered-phase DAG was refreshed after promotion. FR-C promotion does not complete P12-B or change checkpoint readiness: P12-A remains `WAIT_DEPENDENCY`; P12-B remains `INCOMPLETE`; P12-C through P12-G remain blocked by their documented prerequisites; P13 remains blocked; Phase 12 remains open. No new numbered-phase implementation checkpoint became READY. Continue the independent P12-B owner/operation coverage work against the new canonical tip. This promotion does not claim broader FactualRead completeness, save/load, capture eligibility, P12-A or P13 readiness, World Exchange production, or External collection coverage.
+
+
+## P12-B bounded `TravelPartySystem.AdvanceParties` operation/invalidation promotion — 2026-10-02
+
+With explicit approval, `codex/phase12/canonical` was fast-forwarded from
+`6b30d86c3214a98603bea809154e2dc06047d6a3` to
+`4a9a6977d7b0a2b4a7258559fe127946337d17fc`. The exact reviewed code tip is
+`ac0bcffe4d345c81d77bfa56b19e3591a9ebb46c` (tree
+`14e2f4e485a83791af43b781546bd6f90b3913f5`); the promoted tip adds the
+candidate/review evidence only after that code. Independent exact-tip review
+PASS is recorded in
+`docs/design/PHASE12_P12B_TRAVEL_PARTY_ADVANCE_IMPLEMENTATION_REVIEW.md`.
+
+The bounded selected-daily-profile operation wraps the existing
+`TravelPartySystem.AdvanceParties` call inside `runtime.advance-day`. It
+accounts for the reviewed TravelParty store, per-NPC travel progress, City
+presence, SpatialKnowledge, and record-sequence commits as one nested
+invalidation boundary, preserving the existing arrival order, partial
+progress, and event-failure behavior. It adds no P18 path or gameplay rule.
+
+Retained exact-code validation passed all 9 focused suites, ALL EditMode
+2200/2200, official Smoke 5/5, and `git diff --check`; artifact paths and
+hashes are recorded in
+`docs/design/PHASE12_P12B_TRAVEL_PARTY_ADVANCE_CANDIDATE.md`. The reviewed code
+tree is unchanged by the promotion record, so tests were not rerun for
+documentation-only bookkeeping.
+
+The refreshed owner/operation/epoch matrix is in
+`docs/design/PHASE12_B_BLOCKER_RESOLUTION.md`. The next supported high-impact
+gap is the selected allocator's Event counter: its passive witness exists but
+successful `AllocateEventId()` writes are not yet connected to the partial
+shared epoch. This is a bounded invalidation target, not a global allocator
+coverage claim. The solo travel-start outer operation remains a subsequent
+candidate after that owner hook is reviewed and integrated.
+
+This promotion does not establish P12-B completion, complete owner or
+operation coverage, complete shared-epoch coverage, global quiescence, capture
+eligibility, export, hydration, P12-A readiness, or P13 readiness. The
+numbered-phase DAG was refreshed: P12-A remains `WAIT_DEPENDENCY`, P12-B
+remains `INCOMPLETE`, P12-C remains blocked on P12-B, P12-D/E on P12-B and
+P12-C, P12-F on P12-C/D/E, P12-G on P12-B through P12-F plus a validated live
+profile inventory, and P13 remains blocked on continuation plus recoverable
+causal inputs. Phase 12 remains open.

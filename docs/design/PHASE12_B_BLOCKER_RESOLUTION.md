@@ -936,3 +936,26 @@ and remains source-valid because the promoted code delta does not touch its
 system or owner mutators; recheck the call path at the implementation boundary.
 The next design is an operation-coverage proposal only, not an implementation
 candidate or readiness claim.
+
+
+## Current P12-B owner/operation/epoch matrix — 2026-10-02 post TravelParty advance promotion
+
+This refresh uses canonical tip `4a9a6977d7b0a2b4a7258559fe127946337d17fc`,
+which follows `6b30d86c3214a98603bea809154e2dc06047d6a3` by a clean approved
+fast-forward. Exact reviewed code is `ac0bcffe4d345c81d77bfa56b19e3591a9ebb46c`
+(tree `14e2f4e485a83791af43b781546bd6f90b3913f5`). The candidate's exact-tip
+implementation review and retained validation are documented in
+`PHASE12_P12B_TRAVEL_PARTY_ADVANCE_IMPLEMENTATION_REVIEW.md` and
+`PHASE12_P12B_TRAVEL_PARTY_ADVANCE_CANDIDATE.md`.
+
+| Writer/owner family | Current canonical coverage | Remaining boundary |
+|---|---|---|
+| `TravelPartySystem.AdvanceParties` | Promoted as a nested `runtime.travel-party.advance` operation inside `runtime.advance-day`. The exact party store, per-NPC travel progress, arrival City-presence projection, per-NPC SpatialKnowledge, and record-sequence changes are deduplicated and validated as one bounded changed-section set. Existing partial progress and event-failure behavior are preserved. | Covers this selected daily path only. It does not imply all allocator counter families, all travel starts/reconciliation, or global operation/epoch coverage. |
+| Runtime ID Event counter | The passive `p12c.runtime-id-allocator.events` witness reports the exact allocator owner, cardinality one, and local revision (`nextEventSequence - 1`). The P12 runtime protocol does not register this section or bind mutation callbacks for `AllocateEventId()`. `DomainEventRecorder.Record` consumes an EventId before constructing/storing the event, so successful allocation remains a committed owner write even if later event construction or storage fails. | Highest-value next bounded invalidation target: register and bind only this exact Event counter for the selected profile; preflight its existing baseline and report the successful allocation after its counter advances. Respect existing nested TravelParty/Merchant batching where those contexts are active. Failed/exhausted allocation does not advance or notify. Other thirteen allocator counters remain outside this slice. |
+| Solo travel start | Current source path remains `TravelActionProvider` → `TravelSystem.TryStartTravel` → travel charge → `NpcRuntime.StartTravel`/City presence → origin/route SpatialKnowledge → `NpcTravelStartedEvent` and record sequence. Existing hooks cover several owners, but no named outer `runtime.travel.start` P12 operation exists and Event counter invalidation is still absent. | Re-audit after the Event counter hook. If source assumptions still hold, design the smallest selected-profile nested operation with exact owner preflight and changed-section batching; preserve compensation, event-failure, and normal travel semantics. |
+| Downstream readiness | P12-B is still a partial foundation; P12-A remains `WAIT_DEPENDENCY`; P12-C through P12-G retain their documented edges; P13 remains blocked. | This promotion changes no readiness edge. No complete owner census, operation or shared-epoch coverage, global quiescence, capture eligibility, export, or hydration follows. |
+
+The Event counter target is within the previously accepted P12-B prerequisite
+capability authorization. It is not a new checkpoint ID or architecture
+decision. Review and implementation must remain limited to the existing
+selected-profile Event counter witness and successful allocator writes.
