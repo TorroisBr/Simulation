@@ -3,14 +3,18 @@
 **Verdict: `PASS` — implementation may proceed within accepted P12-B prerequisite authorization.**
 
 - Canonical base reviewed: `54fc23b89cb13598dd184a2b5b6bacf9dc23b0a7`.
-- Exact design tip reviewed: `57978ab3b229db901152ccf686651d119c2d65d9`.
+- Exact design tip reviewed: `d9228b1ce8c63a0480e46b00648564516d383601`.
 - Candidate branch: `codex/phase12/P12BScheduledDirectiveInvalidationDesign`.
-- Independent reviewers: `/root/allocator_census_design_review` and `/root/actor_choice_design_review`; neither made candidate edits.
-- The initial review of `28529ba` identified false-success propagation and batch epoch-accounting gaps. The exact revised design tip above resolves both.
+- Independent exact-tip reviewers: `/root/allocator_census_design_review` and `/root/actor_choice_design_review`; both passed the final design tip `d9228b1ce8c63a0480e46b00648564516d383601` and made no candidate edits.
+- The initial review of `28529ba` identified false-success propagation and batch epoch-accounting gaps. Those were corrected at `57978ab`; this exact-tip review also covers the final optional-owner clarification at `d9228b1`.
 
 The design reuses the already composed `ScheduledDirectiveStore` and its exact
-`p12f.scheduled-directives` schema-v1 census provider. It covers the existing
-store Add commit and stored-row terminal transitions, including
+`p12f.scheduled-directives` schema-v1 census provider. The published
+`UnityBootstrap-Daily-v1` composition requires the exact owner and rejects a
+missing or mismatched runtime owner; standalone `SimulationRuntime`
+compositions may omit the optional system and make no ScheduledDirective
+coverage claim. It covers the existing store Add commit and stored-row
+terminal transitions, including
 `PrepareDay` duplicate/unresolved skips and actor-turn outcomes. Genesis Adds
 remain part of the initial selected-profile baseline; transient `TryTake` and
 queries remain outside the witness.
