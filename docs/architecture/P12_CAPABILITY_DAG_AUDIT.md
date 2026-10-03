@@ -8,6 +8,13 @@
 
 The accepted `UnityBootstrap-Daily-v1` profile is a versioned, selected Unity bootstrap configuration, compatible build/current-host numeric behavior, and successfully completed daily boundaries. P12 closure still requires complete exact state and deterministic continuation for **every owner actually included in that admitted profile**. A newly delivered capability does not silently expand this profile or P12-A. If newly configured or composed in the selected profile, its authoritative state must be included exactly or admission must reject; no owner may be hidden behind a default, empty array, diagnostic snapshot, or an unsupported label. A later profile/version may integrate additional capability with its own exact continuation adapter and compatibility rules. This is a scope boundary, not a partial-save exception.
 
+P12-B admission is not yet complete. Before a new domain checkpoint is
+promoted, its owner must be excluded from the selected composition by
+construction, or the implementation must add a verified fail-closed
+admission/inventory hook and negative rejection validation. The latter
+integrates serially with P12-B. A design promise to reject is insufficient
+when the selected bootstrap can actually compose the owner.
+
 ## Dependency classification
 
 Here `specific` means a named state/continuation capability for the *chosen supported world/profile*, not a generic promise that P12 will eventually save it. No numbered phase has an unconditional hard dependency on the administrative `P12 CLOSED` marker. Actual P13 fork delivery has the strongest specific dependency: complete, validated continuation for the forked world/profile and recoverable causal history. For the first accepted daily profile, that entails P12's relevant B–G/A capability and parity evidence; a closure label alone is insufficient.

@@ -5529,7 +5529,7 @@ Participação não pode existir apenas numa lista transitória de NPCs carregad
 
 ## 91A. Identidade durável do mundo
 
-**DECIDIDO — DIREÇÃO ARQUITETURAL; WI-A COM DESIGN TÉCNICO READY_FOR_IMPLEMENTATION; CAPACIDADE NÃO IMPLEMENTADA**
+**DECIDIDO — DIREÇÃO ARQUITETURAL; WI-A ENTREGUE EM RECORTE DELIMITADO; SAVE/FORK AINDA NÃO ENTREGUES**
 
 `WorldId` identifica uma continuação causal independente do mundo. Uma nova
 identidade é publicada com o World Truth inicial completo e validado, antes da
@@ -5553,12 +5553,13 @@ branch e a proveniência registra sua origem. A representação e alocação do
 primeiro WorldId estão no design técnico WI-A promovido; compatibilidade com
 mundos antigos, gatilho de ramificação de saves copiados e conciliação dos
 IDs/receipts P18 herdados no fork permanecem design técnico ou
-decisão de produto específica. O `worldId` atualmente injetado em P18 não
-constitui, por si, implementação desta identidade durável.
+decisão de produto específica. O `worldId` que P18 já injetava, isoladamente,
+não constituía implementação desta identidade durável; a entrega delimitada
+de WI-A está registrada no State e código canônicos.
 
 ## 91B. Projeção factual read-only
 
-**DECIDIDO — DIREÇÃO ARQUITETURAL; FR-B COM DESIGN TÉCNICO READY_FOR_IMPLEMENTATION; CAPACIDADE NÃO IMPLEMENTADA**
+**DECIDIDO — DIREÇÃO ARQUITETURAL; FR-B/FR-C E WX-D ENTREGUES EM RECORTES DELIMITADOS**
 
 Consumidores de fatos aprovados usarão readers por capacidade com registros
 imutáveis, IDs semânticos e origem de autoridade declarada. A superfície não
@@ -5594,14 +5595,14 @@ promovidos em
 [`design/WORLD_IDENTITY_FOUNDATION_DESIGN.md`](design/WORLD_IDENTITY_FOUNDATION_DESIGN.md)
 e
 [`design/FACTUAL_READ_SURFACE_FOUNDATION_DESIGN.md`](design/FACTUAL_READ_SURFACE_FOUNDATION_DESIGN.md)
-tornam WI-A e FR-B
-`READY_FOR_IMPLEMENTATION` no planejamento, independentemente um do outro.
-FR-C aguarda FR-B promovido como capacidade; WX-D aguarda WI-A, FR-C e
-contrato externo de cobertura de coleções. A aprovação de design não afirma
-que qualquer dessas capacidades já exista em código. O recorte coerente
-inicial de FR-B é explicitamente `UnityBootstrapDailyV1` e exige admissão de
-todos os escritores Faction/Person relevantes. A ambiguidade entre coleção
-vazia e conceito não suportado em World Exchange pertence ao contrato externo.
+estabeleceram WI-A e FR-B como checkpoints independentemente executáveis no
+planejamento de 2026-10-01. Desde então, WI-A, FR-B, FR-C e o produtor WX-D
+foram promovidos em recortes delimitados, com evidência no State/código
+canônicos; Simulation-External v2 fornece o contrato de cobertura de coleções.
+Essa entrega não afirma captura P12, save/load, fork P13 ou projeção de todo o
+mundo. O recorte coerente inicial de FR-B é `UnityBootstrapDailyV1` e admite
+todos os escritores Faction/Person relevantes ao recorte. A distinção entre
+coleção vazia e conceito não suportado permanece no contrato externo.
 
 ---
 
@@ -5682,6 +5683,13 @@ rejeitar essa composição até integração explícita ou uso de outro perfil
 compatível; ela não pode omitir estado silenciosamente. Um perfil futuro pode
 incluir a capacidade por versão/adaptador próprio. Essa fronteira de escopo não
 redefine save parcial como save válido.
+
+Enquanto P12-B ainda não prova admissão completa, um novo owner deve ficar
+fora da composição selecionada por construção, ou integrar um mecanismo de
+admissão que falhe fechado para esse owner e provar a rejeição em validação
+negativa antes da promoção do checkpoint de domínio. A integração com o
+hotspot P12-B é serial. Uma intenção documental de rejeitar não substitui
+essa evidência quando o owner pode ser composto.
 
 Não há milestone global `PHASE 12 FOUNDATION READY`: P12-B/C são capacidades
 específicas do perfil e não são pré-requisitos gerais da autoridade de novos

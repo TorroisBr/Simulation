@@ -26,6 +26,8 @@ Runtime World Expansion remains a future consumer without an assigned dedicated 
 
 The [P12 capability DAG audit](architecture/P12_CAPABILITY_DAG_AUDIT.md) separates the accepted `UnityBootstrap-Daily-v1` continuation profile from entry of new authoritative domain capabilities. P12-B is still incomplete on `origin/codex/phase12/canonical` at `54fc23b`; P12-C–G and P12-A retain their accepted chain. Full P12 closure still means exact, validated deterministic continuation for every admitted owner. A newly composed unsupported owner causes profile admission to reject, never silent omission or automatic P12 scope growth. No global `PHASE 12 FOUNDATION READY` milestone is introduced. Each new owner instead passes the architecture §92A continuation-aware entry gate before its bounded checkpoint can be implemented.
 
+While P12-B admission is incomplete, a new owner must either stay outside the selected composition by construction or prove a fail-closed admission hook and negative rejection test before its domain checkpoint is promoted. The latter is a serial P12-B integration, not an independent edit to that hotspot.
+
 | Phase / track | P12 relationship | Next gate |
 |---|---|---|
 | P10 | Pre-start authoring independent; later saved generated profile is a specific P12 integration. | P10-A promoted; any next content slice is `READY_FOR_PRODUCT_SCOPE_DECISION`. |
@@ -55,11 +57,11 @@ WI-A, FR-B and FR-C integrations and the bounded WX-D World Exchange v2 producer
 The approved architecture study is
 [`design/WORLD_IDENTITY_AND_PROJECTION_SURFACE_STUDY.md`](design/WORLD_IDENTITY_AND_PROJECTION_SURFACE_STUDY.md).
 Architecture §§91A–91B establish durable WorldId semantics for one causal
-continuation branch and a bounded read-only factual projection surface. That
-architecture approval alone left the individual capabilities **DESIGN
-PROPOSED**. The independently reviewed WI-A and FR-B technical contracts are
-now promoted as **READY_FOR_IMPLEMENTATION** planning entries below; no
-runtime capability or Phase delivery is implied.
+continuation branch and a bounded read-only factual projection surface. At
+the architecture approval, individual capabilities were **DESIGN PROPOSED**;
+the subsequent 2026-10-01 design promotion made WI-A and FR-B
+**READY_FOR_IMPLEMENTATION**. The bounded implementations have since been
+promoted as recorded in the 2026-10-03 refresh above and owning States.
 No new numbered phase is assigned: identity belongs at successful world composition, factual
 readers are a later bounded cross-domain capability, and the first World
 Exchange producer is a later adapter integration. Mod-defined projection
@@ -85,15 +87,16 @@ was fast-forwarded into this architecture branch. It refines the approved
 direction into **WI-A World Identity Foundation**,
 **FR-B Factual Read Surface Foundation**, **FR-C Faction Factual Reader**,
 and **WX-D First World Exchange Producer**. These are cross-phase
-checkpoint labels, not new numbered Phases or delivered capabilities. The
+checkpoint labels, not new numbered Phases; design promotion alone did not
+deliver capabilities. The
 bounded designs are [WI-A](design/WORLD_IDENTITY_FOUNDATION_DESIGN.md),
 [FR-B](design/FACTUAL_READ_SURFACE_FOUNDATION_DESIGN.md),
 [FR-C](design/FACTION_FACTUAL_READER_DESIGN.md), and
 [WX-D](design/WORLD_EXCHANGE_FIRST_PRODUCER_DESIGN.md). Independent review of
 the technical design at `9606263` is recorded in
 [the review record](design/WORLD_PROJECTION_CHECKPOINTS_DESIGN_REVIEW.md).
-The reviewed checkpoint contracts are now canonical planning authority. Their
-readiness does not assert delivered implementation or authorize a broader scope.
+The reviewed checkpoint contracts are canonical planning authority. Their
+then-current readiness did not assert delivered implementation or authorize a broader scope.
 
 ```text
 approved architecture f27954a + promoted checkpoint contracts bd0d797
@@ -103,16 +106,16 @@ approved architecture f27954a + promoted checkpoint contracts bd0d797
                          External coverage contract
 ```
 
-WI-A and FR-B may be implemented independently in isolated worktrees, with
-serial integration at shared P12-B hotspots. They meet semantically at WX-D.
-FR-C implementation requires promoted FR-B. WX-D
-requires WI-A, FR-C, and an External-owned portable collection-coverage
-contract. World Exchange v1 requires all nine arrays and cannot distinguish
-unsupported from known-empty, so `World + Factions` padded with unsupported
-empty arrays is not yet an honest first artifact. The External repository owns
-that contract decision; this promotion changes no External files.
+At design promotion, WI-A and FR-B could be implemented independently in
+isolated worktrees with serial integration at shared P12-B hotspots. FR-C
+required promoted FR-B; WX-D required WI-A, FR-C and an External-owned
+collection-coverage contract. World Exchange v1's mandatory arrays could not
+distinguish unsupported from known-empty, so an honest bounded producer
+awaited that External contract. Simulation-External v2 subsequently supplied
+it, and bounded WX-D was promoted; this architecture branch changes no
+External files.
 
-| Checkpoint | Owner / canonical planning readiness | Hard prerequisites | Current implementation hotspot |
+| Checkpoint | Owner / planning readiness on 2026-10-01 | Hard prerequisites then | Then-current implementation hotspot |
 |---|---|---|---|
 | WI-A | Cross-phase world composition / READY_FOR_IMPLEMENTATION | Approved WorldId semantics | `TesteSimulacao` private-draft/publication gate, `SimulationRuntime`, P18 profile handoff; reconcile and serialize integration with active P12-B bootstrap scope. |
 | FR-B | Cross-domain factual read infrastructure / READY_FOR_IMPLEMENTATION | Approved projection semantics; explicit `UnityBootstrapDailyV1` owner-thread boundary | `SimulationRuntime` read admission plus Faction/Person Store writer guards; serialize runtime integration with active P12-B writer. |
