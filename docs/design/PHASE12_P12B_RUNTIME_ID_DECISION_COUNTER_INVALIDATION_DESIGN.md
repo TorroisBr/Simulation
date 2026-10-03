@@ -1,6 +1,6 @@
 # P12-B selected-profile RuntimeIdAllocator Decision-counter invalidation design
 
-**Status:** bounded technical design prepared; independent technical review pending. No implementation or canonical promotion is claimed.
+**Status:** bounded technical design independently reviewed PASS; implementation may proceed within accepted P12-B prerequisite authorization. No implementation or canonical promotion is claimed.
 
 **Canonical base:** `codex/phase12/canonical` at `22525cb5f96eb9eed2e168b7e6a23fdc1e420304`, after the approved solo-travel and WX-D integrations and the current P12 State/matrix refresh.
 
