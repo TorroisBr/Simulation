@@ -1,7 +1,8 @@
 # P12-B ActorChoice P11 invalidation candidate
 
-**Status:** Implementation candidate; independent exact-tip code review
-required before promotion.
+**Status:** Independent exact-tip implementation review PASS; bounded
+promotion preflight pending. See
+[`PHASE12_P12B_ACTOR_CHOICE_INVALIDATION_IMPLEMENTATION_REVIEW.md`](PHASE12_P12B_ACTOR_CHOICE_INVALIDATION_IMPLEMENTATION_REVIEW.md).
 
 **Canonical base:** `f1ec63ea7fa0592b3a280e138a80023e3cacc6b7`.
 
