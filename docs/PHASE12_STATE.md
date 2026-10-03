@@ -1374,6 +1374,10 @@ register/bind this owner section. The next task is that missing live
 owner-invalidation boundary, not a census-only delivery; preserve the
 existing owner witness rather than rebuilding it.
 
+This State and the corrected blocker matrix are current through canonical
+docs-only tip `a6470ad1fea3134d08219c43b41fac6ebf0a44ab`; the ActorChoice
+implementation promotion itself remains at `3b25852`.
+
 ### Numbered-phase DAG refresh
 
 No dependency edge or readiness label changes: P12-A remains

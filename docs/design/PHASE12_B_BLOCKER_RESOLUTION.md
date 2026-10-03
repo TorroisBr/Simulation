@@ -1039,9 +1039,12 @@ specific missing evidence rather than proposing broad owner registration.
 
 ## Current P12-B owner/operation/epoch refresh — 2026-10-03 post ActorChoice invalidation
 
-P12 canonical is `3b25852bfc678095dd97327aecfaa2559b151bc1`, a clean
-fast-forward from `f1ec63ea7fa0592b3a280e138a80023e3cacc6b7`. ActorChoice
-implementation code is `0bb87c89662397857c7e55267bbc60f32ce0676a`, tree
+The ActorChoice implementation was promoted at
+`3b25852bfc678095dd97327aecfaa2559b151bc1` by clean fast-forward from
+`f1ec63ea7fa0592b3a280e138a80023e3cacc6b7`; the current canonical tip is
+`a6470ad1fea3134d08219c43b41fac6ebf0a44ab`, which adds only the State/matrix
+evidence correction. ActorChoice implementation code is
+`0bb87c89662397857c7e55267bbc60f32ce0676a`, tree
 `aa570c943299eafe52c9a5a9b05a9487bdfd5add`; exact-tip review and validation
 are recorded in the Phase 12 State and linked candidate/review evidence.
 
