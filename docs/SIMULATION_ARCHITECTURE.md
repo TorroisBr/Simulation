@@ -5652,6 +5652,47 @@ retroativamente históricos executados no perfil diário. Instalação/retrofit 
 mod que altera estado após o início participa da história na sua fronteira;
 não reexecuta gênese nem recebe existência ou efeitos anteriores à instalação.
 
+## 92A. Entrada de estado autoritativo antes de Save completo
+
+**INVARIANTE ARQUITETURAL; NÃO É CAPACIDADE DE SAVE ENTREGUE**
+
+Uma nova capacidade pode estabelecer World Truth e evoluir durante a história
+simulada antes do fechamento da Phase 12. Ela não depende, por esse motivo
+isolado, da implementação de save/load ou de fork. Seu contrato deve nascer
+apto à continuação e à reconstrução: identidade semântica estável, um owner
+autoritativo, fronteira lógica de mutação confirmada, ordem causal
+determinística, distinção entre estado retido e derivado, relações por IDs,
+configuração/conteúdo e aleatoriedade efetivos quando causais, e inputs
+externos com payload, authority, fronteira e ordenação preservados. A criação,
+alteração e destruição em runtime devem ter consequências reconstruíveis na
+fronteira em que ocorreram. Caches e objetos Unity não são a única verdade.
+
+O owner precisa oferecer um limite semântico de estado que permita futura
+exportação exata, hidratação em composição privada e validação de relações
+antes da publicação. Isso não obriga o checkpoint de domínio a implementar
+agora DTOs P12, armazenamento, loader ou replay. Tampouco permite presumir
+que um adaptador futuro recuperará causalidade descartada na execução.
+
+O perfil `UnityBootstrap-Daily-v1` de P12 permanece o recorte explicitamente
+aceito. Seu fechamento exige continuação determinística completa para todos
+os owners autoritativos **efetivamente incluídos no perfil admitido**. Uma
+capacidade nova não amplia automaticamente esse perfil. Se uma composição
+selecionada passar a incluir novo estado sem cobertura exata, a admissão deve
+rejeitar essa composição até integração explícita ou uso de outro perfil
+compatível; ela não pode omitir estado silenciosamente. Um perfil futuro pode
+incluir a capacidade por versão/adaptador próprio. Essa fronteira de escopo não
+redefine save parcial como save válido.
+
+Não há milestone global `PHASE 12 FOUNDATION READY`: P12-B/C são capacidades
+específicas do perfil e não são pré-requisitos gerais da autoridade de novos
+domínios. O gate de entrada é o contrato de continuação/reconstrução de cada
+novo owner. P13 pode desenhar retenção, checkpoints e modelo de inputs antes
+do fechamento P12, mas a entrega de fork para uma fronteira exige continuação
+exata do mundo/perfil escolhido e recuperação histórica de estado inicial,
+mutações, inputs e semânticas compatíveis. O marcador administrativo
+`P12 CLOSED`, isoladamente, não comprova história reconstruível; P12 completo para
+o perfil escolhido, isoladamente, também não comprova fork histórico.
+
 ---
 
 # Parte XXIII — Anti-patterns e abstrações proibidas prematuramente

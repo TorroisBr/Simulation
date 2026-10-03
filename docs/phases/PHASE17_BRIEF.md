@@ -2,6 +2,8 @@
 
 **Authority:** planning entry subordinate to `../SIMULATION_ARCHITECTURE.md`. **Readiness:** `DEFERRED`; no implementation checkpoint is schedulable.
 
+**Dependency clarification (2026-10-03):** deferral is due to P16 operational facts and unresolved strategic/territorial/political product semantics, not full P12 closure. A future bounded War owner must meet architecture §92A and a supported save/fork profile must integrate its state explicitly; neither creates a P12 prerequisite for War entry design.
+
 ## Objective and closure
 
 War progresses through explicit strategic decisions, pressure and consequences without collapsing Battle result, hostility, control, occupation and War termination into one event. Its concrete v1 closure requires later entry design.

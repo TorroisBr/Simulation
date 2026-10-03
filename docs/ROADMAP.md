@@ -22,6 +22,34 @@ Phases 5–7 are closed within their documented scopes. P8-A/B/C/D/E are canonic
 
 Runtime World Expansion remains a future consumer without an assigned dedicated phase. Its absence from this sequence does not forbid a later insertion or assign it to Phase 15 by implication.
 
+## P12 capability-level dependency refresh — 2026-10-03
+
+The [P12 capability DAG audit](architecture/P12_CAPABILITY_DAG_AUDIT.md) separates the accepted `UnityBootstrap-Daily-v1` continuation profile from entry of new authoritative domain capabilities. P12-B is still incomplete on `origin/codex/phase12/canonical` at `54fc23b`; P12-C–G and P12-A retain their accepted chain. Full P12 closure still means exact, validated deterministic continuation for every admitted owner. A newly composed unsupported owner causes profile admission to reject, never silent omission or automatic P12 scope growth. No global `PHASE 12 FOUNDATION READY` milestone is introduced. Each new owner instead passes the architecture §92A continuation-aware entry gate before its bounded checkpoint can be implemented.
+
+| Phase / track | P12 relationship | Next gate |
+|---|---|---|
+| P10 | Pre-start authoring independent; later saved generated profile is a specific P12 integration. | P10-A promoted; any next content slice is `READY_FOR_PRODUCT_SCOPE_DECISION`. |
+| P13 | Strategy and causal-input design independent; actual fork needs complete continuation of its chosen world/profile plus recoverable history. | Design may proceed; reconstruction/fork implementation `WAIT_DEPENDENCY`. |
+| P14 | Domain work continuation-aware, not blocked by P12. | P14-A promoted; any follow-on is `READY_FOR_PRODUCT_SCOPE_DECISION`. |
+| P15 | Domain work continuation-aware, not blocked by P12 closure. | First founding/construction consumer and actor authority are `READY_FOR_PRODUCT_SCOPE_DECISION`; no checkpoint implementation yet. |
+| P16 | Domain work continuation-aware, not blocked by P12 closure. | First movement/logistics/command scope is `READY_FOR_PRODUCT_SCOPE_DECISION`; P7/P8/P14 and conditional P18 capability gates remain. |
+| P17 | Deferred by strategic/domain/product prerequisites, not P12. | P16, territory/political authority and War semantics; no implementation checkpoint. |
+| P18 | Bounded A–D scope closed; a future intraday save profile requires specific temporal-state coverage. | No reopening for P12. |
+| P19 | Public-surface design may use real consumers; durable mod-state support needs specific P12/P13 integration. | Loader scope and checkpoint design remain deferred; no blanket P12 gate. |
+| P20 | P20-A promoted; future saved shared activity requires specific temporal/participant-state coverage. | Further consumer is `READY_FOR_PRODUCT_SCOPE_DECISION`. |
+
+```text
+canonical semantics + per-owner continuation-aware gate
+  → bounded P15/P16 and other runtime designs (after their own product scope)
+P12-B → C → D/E → F → G → P12-A parity → P12 CLOSED for accepted profile
+complete continuation of chosen world/profile + causal history + compatible execution
+  → P13 authoritative reconstruction and independent fork
+```
+
+P13 retention/checkpoint and causal-input design is ready as isolated architecture work; P15/P16 could be designed and implemented before P12 closure **after** their actual product, technical-review and promoted-capability gates. No new P15/P16 implementation checkpoint is approved here. P10/P14/P20 follow-ons similarly await bounded product scope. The Master may run these tracks in separate worktrees while P12-B continues, serializing shared `SimulationRuntime`, spatial/domain owner and persistence-composition hotspots at integration. Existing candidate impact is targeted; no closed phase is reopened by this dependency clarification.
+
+WI-A, FR-B and FR-C integrations and the bounded WX-D World Exchange v2 producer have since been promoted/handed off through P12 canonical. Simulation-External `main` at `0ce8403` owns the v2 `collectionCoverage` contract. These delivered cross-cutting slices do not supply P12 capture, save/load or P13 fork. The checkpoint table below records **their planning readiness when its 2026-10-01 design was promoted**, not current delivery; use current owning States and code for delivery.
+
 ## World identity and factual projection — approved direction
 
 The approved architecture study is

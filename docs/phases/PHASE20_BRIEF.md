@@ -1,9 +1,14 @@
 # Phase 20 — Multi-participant Activities v1
 
 **Authority:** planning scope under `../SIMULATION_ARCHITECTURE.md` §§11–12,
-91–93. **Readiness:** `ENTRY_ARCHITECTURE_READY` for bounded decomposition/design;
-implementation `WAIT_DEPENDENCY` on relevant P18 capabilities and reviewed
-technical design. No P20 implementation or checkpoint IDs are approved.
+91–93. **Readiness:** P20-A synthetic operation is `PROMOTED` in the owning
+State; broader Phase 20 work is `READY_FOR_PRODUCT_SCOPE_DECISION`. No further
+implementation checkpoint is approved.
+
+**P12 dependency clarification (2026-10-03):** P20-A did not require P12 Save.
+A future supported shared-activity save/fork profile needs exact participant,
+commitment, lifecycle and temporal-input state, but P12's accepted daily
+profile does not include P20. No broader P20 consumer is unlocked here.
 
 ## Objective and closure
 

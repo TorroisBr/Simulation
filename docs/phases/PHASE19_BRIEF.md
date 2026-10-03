@@ -4,6 +4,8 @@
 12, 91–93. **Readiness:** `DEFERRED` for platform implementation; existing
 phases must preserve the principles now. No P19 checkpoint IDs are approved.
 
+**Dependency clarification (2026-10-03):** public-surface architecture may study selected real P9/P10/P18/P20 consumers before P12 closes. A loader checkpoint still needs bounded product scope and reviewed design. Stateless/new-world-only extensions need no general P12 capability; a claim to save mod-owned state or fork a retrofitted world needs exact compatible owner state, code/content and causal history for that supported profile. No mod loader implementation is unlocked here.
+
 ## Objective and closure
 
 A later bounded public API/loader permits player-selected real code to add

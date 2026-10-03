@@ -8,6 +8,8 @@ For supported compatible versions/profiles, continuing from boundary T and savin
 
 **Accepted checkpoints:** P12-A — `UnityBootstrap-Daily-v1` remains the bounded profile integration scope. P12-B through P12-G are its accepted prerequisite capability checkpoints, recorded in `../design/PHASE12_CAPABILITY_CHECKPOINT_DECOMPOSITION.md`; their scopes and prerequisite implementation authorization were accepted on 2026-09-27 after exact-tip independent review. This authorizes only prerequisite capability work. P12-A remains `WAIT_DEPENDENCY` until all included owners have exact export/staged hydration, the live profile inventory is validated, and its separate implementation authorization is recorded. Acceptance is not delivery or canonical promotion.
 
+**Scope and dependency clarification (2026-10-03):** architecture §92A and [the capability DAG audit](../architecture/P12_CAPABILITY_DAG_AUDIT.md) do not change B–G/A closure. `UnityBootstrap-Daily-v1` admits only its explicitly supported composition; any newly composed authoritative owner without exact coverage rejects admission. New domain checkpoints do not silently enlarge P12-A, and no `PHASE 12 FOUNDATION READY` milestone is inserted after B/C. New domain work can proceed with continuation-aware seams before P12 closure; it is not a partial save claim. The active P12-B owner/invalidation work and its current integration window remain intact.
+
 | ID | Closure boundary | Dependencies |
 |---|---|---|
 | P12-B — Profile admission and completed-boundary lifecycle | Exact profile/provider admission and capture eligibility only at a successful completed daily boundary. | Accepted P12-A profile semantics; bounded technical design and independent review. |

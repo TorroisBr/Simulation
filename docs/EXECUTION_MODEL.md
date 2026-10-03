@@ -27,6 +27,7 @@ Planning readiness vocabulary for a Phase or checkpoint entry:
 | `DEFERRED` | No current entry work should be scheduled. |
 | `WAIT_DEPENDENCY` | A named contract, capability, or gate is missing. |
 | `ENTRY_ARCHITECTURE_READY` | Entry questions may be resolved; no implementation contract is implied. |
+| `READY_FOR_PRODUCT_SCOPE_DECISION` | Semantic prerequisites permit a bounded slice, but the user must choose its product scope before checkpoint design or implementation readiness is claimed. This is not an implementation checkpoint. |
 | `READY_FOR_TECHNICAL_DESIGN` | Architecture, scope, and closure are sufficient for bounded technical design; implementation is not ready. |
 | `TECHNICAL_DESIGN_IN_PROGRESS` | Bounded design/review is under way. |
 | `READY_FOR_IMPLEMENTATION` | Required technical review and implementation dependencies passed. |
@@ -78,6 +79,10 @@ After canonical advancement, classify each active candidate with orchestrator/re
 ## Reconstruction-sensitive gate and stop conditions
 
 Each checkpoint introducing authoritative mutable state or external causal input must answer: **what must future reconstruction recover to reproduce this causality?** Consider stable IDs, factual state and commitments, payload/authority/logical boundary/ordering of commands, effective content/configuration and calendar, random context, and causally relevant provenance. Put the declaration in the Brief/checkpoint contract, verify it in technical and candidate review, and record actual delivery in State. This gate does not require early save/replay implementation. Diagnostics, events, and selective History are not primary truth.
+
+For a new authoritative owner, apply architecture §92A before implementation review. The reviewed contract identifies one authority and stable IDs, committed mutation and deterministic causal order, retained versus derived state, ID-based links, exact semantic export and private staged-hydration/validation seams, effective random/configuration context, and captured external inputs. The reviewer checks that an unsupported P12 profile rejects a composition containing that owner; the domain checkpoint need not implement P12 storage. A later continuation adapter cannot supply historical causality that the checkpoint discarded. Do not treat P12-B/C completion or a proposed `PHASE 12 FOUNDATION READY` marker as a global prerequisite. For supported save/fork claims, require the actual profile-specific continuation and historical capabilities.
+
+After a dependency refresh, schedule independently reviewed bounded domain checkpoints against their real promoted prerequisites, using separate worktrees and serial integration at shared runtime/store hotspots. `READY_FOR_PRODUCT_SCOPE_DECISION` permits preparation and a precise user decision request, not implementation dispatch. P12's accepted profile and own B–G/A chain remain intact; new domain delivery neither silently enlarges it nor bypasses admission rejection for unhandled composed state. See [the P12 capability DAG audit](architecture/P12_CAPABILITY_DAG_AUDIT.md) for the 2026-10-03 phase classification and current candidate impact.
 
 Stop a run when all safe READY work is exhausted; only human/architecture gates remain; canonical promotion or phase closure awaits required approval; an active semantic conflict cannot be isolated; validation cannot be resolved in scope; canonical changed unexpectedly and impact cannot yet be classified; or resource/context limits require a resumable handoff. Do not promise background execution absent an actual scheduled/run mechanism, wait indefinitely inside a worker for a human decision, or start speculative distant phases to keep agents busy.
 

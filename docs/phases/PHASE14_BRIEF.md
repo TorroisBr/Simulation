@@ -2,6 +2,8 @@
 
 **Authority:** planning entry subordinate to `../SIMULATION_ARCHITECTURE.md`. **Readiness:** P14-A is `PROMOTED`; Phase 14 remains open for any separately scoped follow-on checkpoint. The approved scope remains limited to the profile below. The overlapping P9-A bootstrap/genesis integration is promoted.
 
+**P12 dependency clarification (2026-10-03):** P14-A and a separately approved domain follow-on do not require P12 closure. New authoritative material state must pass architecture §92A; a save profile composing it must include exact owner state or reject admission. Additional sources, transport and crew work remain `READY_FOR_PRODUCT_SCOPE_DECISION`, not implementation-ready by this audit.
+
 ## Objective and closure
 
 Establish a bounded, factual account of productive sources and material movement with explicit ownership/custody and source/sink semantics. The selected first slice is one authored City, one configured exogenous daily source for one item, free same-City population consumption of that item, and closure at the closing aggregate market balance. Its approved implementation contract is `../design/PHASE14A_LOCAL_DAILY_MATERIAL_FLOW_CHECKPOINT.md`.

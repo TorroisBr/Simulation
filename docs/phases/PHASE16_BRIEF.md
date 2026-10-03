@@ -1,6 +1,6 @@
 # Phase 16 — Military Movement & Logistics v1
 
-**Authority:** planning entry subordinate to `../SIMULATION_ARCHITECTURE.md`. **Readiness:** `WAIT_DEPENDENCY`; no implementation checkpoint is schedulable.
+**Authority:** planning entry subordinate to `../SIMULATION_ARCHITECTURE.md`. **Readiness:** `READY_FOR_PRODUCT_SCOPE_DECISION` for the first bounded operational slice; no implementation checkpoint is schedulable.
 
 ## Objective and closure
 
@@ -18,6 +18,7 @@ Armed Forces can occupy and change factual position under military movement sema
 - **Product gate:** scope of military logistics and allowable command authority requires approval at entry.
 - **Exclusions:** strategic War completion, automatic territorial control, full occupation and treating forces as ordinary Persons/travel parties.
 - **Replay/fork sensitivity:** orders, force position/progress, passage/knowledge, supply state, casualties/consumption and authoritative commands.
+- **Continuation-aware entry:** the bounded checkpoint must declare stable force/order identities, force-owned committed position/progress and supply state, logical movement boundary and deterministic ordering, causal commands/randomness, retained versus derived state, ID relationships, exact-state export and staged-hydration/validation seams, and profile admission or rejection. This does not require P12 serialization code or full P12 closure; duration-based execution still consumes relevant promoted P18 capability.
 - **Hotspots/parallelism:** `ArmedForceSpatialPosition`, spatial traversal, military stores, Battle validation, runtime/diagnostics; movement and material work may be isolated after shared contracts stabilize.
 - **Downstream unlocks:** operational facts and pressure inputs for P17 strategic War.
 - **Deferred:** exact pathfinding, movement formula, weather/scouting catalog and full occupation policy.
