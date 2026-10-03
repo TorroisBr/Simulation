@@ -1,8 +1,9 @@
 # P12-B selected-profile RuntimeIdAllocator Event-counter invalidation candidate
 
-**Status:** implementation and required validation passed; independent exact-tip
-code review is pending. This candidate is not promoted and does not complete
-P12-B.
+**Status:** implementation and required validation passed. Independent exact-tip
+review PASS is recorded in
+`PHASE12_P12B_RUNTIME_ID_EVENT_COUNTER_INVALIDATION_IMPLEMENTATION_REVIEW.md`.
+This candidate is not promoted and does not complete P12-B.
 
 ## Candidate identity
 
