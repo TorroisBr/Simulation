@@ -1,5 +1,11 @@
 {
   "dependencies": {
+    "com.simulation.world-exchange-producer": {
+      "version": "file:com.simulation.world-exchange-producer",
+      "depth": 0,
+      "source": "embedded",
+      "dependencies": {}
+    },
     "com.unity.2d.animation": {
       "version": "13.0.4",
       "depth": 0,

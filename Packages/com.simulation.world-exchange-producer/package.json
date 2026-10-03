@@ -1,0 +1,7 @@
+{
+  "name": "com.simulation.world-exchange-producer",
+  "version": "1.0.0",
+  "displayName": "Simulation World Exchange Producer",
+  "description": "Portable World Exchange v2 projection types and deterministic publisher.",
+  "unity": "6000.0"
+}
