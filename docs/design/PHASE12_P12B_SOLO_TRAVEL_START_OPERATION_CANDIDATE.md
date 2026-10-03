@@ -112,6 +112,8 @@ The scheduled-request contract test records the current API boundary: `Scheduled
 
 Every XML below reports Passed with zero failures and zero skips. All listed files are retained under `Library/ValidationResults/P12BSoloTravelStartRevision2/` and correspond to the corrected code tree above.
 
+An earlier focused attempt in the same results folder is recorded, not counted as passing evidence: `EditMode-20261003-180437-607cb2241a7b4ffb8d34fc8569ed7f2b.xml` (SHA-256 `60B1D1DEB70D365BCDE3099CD9C6BCF471F2168C481C652C41261E7B61CADC0E`) and its log `EditMode-20261003-180437-607cb2241a7b4ffb8d34fc8569ed7f2b.log` (SHA-256 `1F11095BFCFA68AFF5A67C905257DCBBBAC44123A93408485136140910E15CBD`) report 10/11. The sole failure was the new stale-City test's success assertion: its fixture had removed the NPC from the source City, which also clears `CurrentLocation`, before injecting the stale `CurrentCity` pointer. The fixture now restores `CurrentLocation` before setting that stale pointer; the corrected focused run listed below is 11/11. The earlier attempt is superseded and was caused by test setup, not by a nondeterministic result.
+
 | Gate | Result | XML / SHA-256 | Log / SHA-256 |
 |---|---:|---|---|
 | P12SoloTravelStartOperationTests | 11/11 | `EditMode-20261003-180617-e341e843df994c49b05a73574ea00249.xml` / `C224C81CC64116EDC3D053EF7D7D8EA4F0690A9FF68226CF786F0DB29DE47698` | `EditMode-20261003-180617-e341e843df994c49b05a73574ea00249.log` / `E83BDE7CE306E50A329B2F198A5A79C6CBDEB1289EF42D07260CD6A2BABF374C` |
