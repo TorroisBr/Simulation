@@ -16,6 +16,11 @@ public class TravelActionProvider : INpcActionProvider
         return action != null && action.actionType == NpcActionType.Travel;
     }
 
+    internal bool IsBoundTo(TravelSystem candidate)
+    {
+        return ReferenceEquals(travelSystem, candidate);
+    }
+
     public NpcActionRuntime CreateAction(NpcRuntime npcRuntime, NpcActionData action, ref float utility)
     {
         if (npcRuntime == null || npcRuntime.CurrentCity == null || travelSystem == null)
