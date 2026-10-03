@@ -2509,7 +2509,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
 
             List<CityRuntime> changedCities = new List<CityRuntime>();
             CityRuntime sourceCity = npc.CurrentCity;
-            if (sourceCity != null)
+            if (sourceCity != null && sourceCity.ContainsImportantNpc(npc))
             {
                 if (!cities.Contains(sourceCity)
                     || !cityNpcPresenceSectionIdsByOwner.TryGetValue(sourceCity, out string citySectionId)

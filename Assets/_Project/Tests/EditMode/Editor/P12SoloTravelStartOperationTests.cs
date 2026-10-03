@@ -141,90 +141,42 @@ public sealed class P12SoloTravelStartOperationTests
     }
 
     [Test]
-    public void SoloTravelOperation_DeduplicatesDebitAndCompensationOwnerWrites()
+    public void FailedTravelStartAfterCharge_CompensatesWithinSingleSoloOperation()
     {
-        ActorFixture fixture = CreateFixture();
+        ActorFixture fixture = CreateFixture(
+            recordDecision: false,
+            travelStateRevision: long.MaxValue);
         ContinuationCensusProtocol protocol = GetProtocol(fixture.Runtime);
         List<int> operationDepths = new List<int>();
         WrapAccountCommitted(fixture.Npc.MoneyAccount,
             () => operationDepths.Add(ReadActiveOperationCount(protocol)));
         Assert.That(fixture.Runtime.TryReadNpcRosterCensusMutationEpoch(
             out long before, out ContinuationCensusFailure beforeFailure), Is.True, beforeFailure.ToString());
-        Assert.That(fixture.Runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure preflightAssessment),
-            Is.True, preflightAssessment.ToString());
-        string[] operationSections =
+        MethodInfo execute = typeof(SimulationRuntime).GetMethod("TryExecuteAction", PrivateInstance);
+        Assert.That(execute, Is.Not.Null);
+        NpcActionResult result = (NpcActionResult)execute.Invoke(fixture.Runtime, new object[]
         {
-            NpcMoneyAccountCensusProvider.SectionPrefix + fixture.Npc.RuntimeId,
-            NpcTravelStateCensusProvider.SectionIdFor(fixture.Npc.RuntimeId),
-            CityNpcPresenceCensusProvider.SectionIdFor(fixture.World.A.RuntimeId),
-            NpcPlanCensusProvider.TravelPlanSectionPrefix + fixture.Npc.RuntimeId,
-            SpatialKnowledgeCensusProvider.LocationsSectionPrefix + fixture.Npc.RuntimeId,
-            SpatialKnowledgeCensusProvider.RoutesSectionPrefix + fixture.Npc.RuntimeId,
-            RuntimeIdAllocatorCensusProvider.EventsSectionId,
-            SimulationRecordSequenceCensusProvider.SectionId
-        };
-        Assert.That(protocol.TryValidateUnchangedSections(operationSections, out ContinuationCensusFailure sectionFailure),
-            Is.True, sectionFailure.ToString());
-        Assert.That(protocol.TryValidateMutationEpochCapacity(out ContinuationCensusFailure epochFailure),
-            Is.True, epochFailure.ToString());
-        HashSet<string> expectedOperations = (HashSet<string>)typeof(ContinuationCensusProtocol)
-            .GetField("expectedOperations", PrivateInstance)
-            .GetValue(protocol);
-        Assert.That(expectedOperations, Does.Contain("runtime.travel.start"));
-        Assert.That(fixture.Runtime.IsRuntimeAdmissionOwnerThreadCurrent(), Is.True);
-        Assert.That(fixture.Provider.IsBoundTo(fixture.Travel), Is.True);
-        object[] accountResolution = { fixture.Npc, null };
-        MethodInfo resolveAccount = typeof(SimulationRuntime).GetMethod(
-            "TryResolveNpcMoneyAccountSection", PrivateInstance);
-        Assert.That((bool)resolveAccount.Invoke(fixture.Runtime, accountResolution), Is.True);
-        Assert.That(accountResolution[1], Is.EqualTo(
-            NpcMoneyAccountCensusProvider.SectionPrefix + fixture.Npc.RuntimeId));
-        System.Collections.IDictionary travelStateBindings = (System.Collections.IDictionary)typeof(SimulationRuntime)
-            .GetField("npcTravelStateMutationBindings", PrivateInstance)
-            .GetValue(fixture.Runtime);
-        System.Collections.IDictionary travelPlanBindings = (System.Collections.IDictionary)typeof(SimulationRuntime)
-            .GetField("npcTravelPlanMutationBindings", PrivateInstance)
-            .GetValue(fixture.Runtime);
-        System.Collections.IDictionary spatialBindings = (System.Collections.IDictionary)typeof(SimulationRuntime)
-            .GetField("npcSpatialKnowledgeMutationBindings", PrivateInstance)
-            .GetValue(fixture.Runtime);
-        MethodInfo currentBinding = typeof(SimulationRuntime).GetMethod(
-            "IsCurrentP12MerchantOwnerBinding", PrivateInstance);
-        Assert.That(currentBinding.Invoke(fixture.Runtime,
-            new[] { travelPlanBindings[fixture.Npc.TravelPlan] }), Is.EqualTo(true));
-        Assert.That(currentBinding.Invoke(fixture.Runtime,
-            new[] { spatialBindings[fixture.Npc.SpatialKnowledge] }), Is.EqualTo(true));
-        MethodInfo travelSections = typeof(SimulationRuntime).GetMethod(
-            "GetP12TravelMutationSectionIds", PrivateInstance);
-        object stateSections = travelSections.Invoke(fixture.Runtime, new object[]
-        {
-            travelStateBindings[fixture.Npc],
-            true,
-            new[] { fixture.World.A }
+            fixture.Npc,
+            new NpcActionRuntime(
+                fixture.Action,
+                fixture.World.B,
+                null,
+                NpcTravelReason.Trade,
+                2f,
+                0f),
+            fixture.Action
         });
-        Assert.That(stateSections, Is.Not.Null);
-        MethodInfo enter = typeof(SimulationRuntime).GetMethod(
-            "TryEnterRuntimeAdmissionOperation", PrivateInstance);
-        object[] operationArguments = { "runtime.travel.start", null };
-        Assert.That((bool)enter.Invoke(fixture.Runtime, operationArguments), Is.True);
-        ((IDisposable)operationArguments[1]).Dispose();
 
-        MethodInfo begin = typeof(SimulationRuntime).GetMethod(
-            "TryBeginP12SoloTravelStartOperation", PrivateInstance);
-        Assert.That(begin, Is.Not.Null);
-        object[] arguments = { fixture.Npc, fixture.Provider, null };
-        Assert.That((bool)begin.Invoke(fixture.Runtime, arguments), Is.True);
-        IDisposable scope = (IDisposable)arguments[2];
-        Assert.That(scope, Is.Not.Null);
-        using (scope)
-        {
-            Assert.That(fixture.Npc.MoneyAccount.TryDebit(2f), Is.True);
-            Assert.That(fixture.Npc.MoneyAccount.TryCredit(2f), Is.True);
-        }
-
+        Assert.That(result.Success, Is.False,
+            "travel-state revision saturation rejects StartTravel after TravelSystem's committed charge, then existing compensation restores it");
         Assert.That(fixture.Npc.Money, Is.EqualTo(100f));
         Assert.That(fixture.Npc.MoneyAccount.Revision, Is.EqualTo(2));
-        Assert.That(operationDepths, Is.EqualTo(new[] { 1, 1 }));
+        Assert.That(fixture.Npc.CurrentCity, Is.SameAs(fixture.World.A));
+        Assert.That(fixture.Npc.IsTraveling, Is.False);
+        Assert.That(fixture.Npc.TravelPlan.IsActive, Is.True);
+        Assert.That(fixture.Records.Events.Events, Is.Empty);
+        Assert.That(operationDepths, Is.EqualTo(new[] { 1, 1 }),
+            "both account writes use the real travel charge/restore path under one operation");
         Assert.That(fixture.Runtime.TryReadNpcRosterCensusMutationEpoch(
             out long after, out ContinuationCensusFailure afterFailure), Is.True, afterFailure.ToString());
         Assert.That(after, Is.EqualTo(before + 1),
@@ -359,6 +311,85 @@ public sealed class P12SoloTravelStartOperationTests
     }
 
     [Test]
+    public void SelectedTravelWithUnprojectedCurrentCity_DoesNotPreflightOrReportCitySection()
+    {
+        ActorFixture fixture = CreateFixture(recordDecision: false);
+        fixture.World.A.RemoveImportantNpc(fixture.Npc);
+        Assert.That(fixture.Npc.CurrentCity, Is.Null);
+        Assert.That(fixture.World.A.ImportantNpcs, Has.No.Member(fixture.Npc));
+        SetPrivateField(fixture.Npc, "currentLocation", fixture.World.A.Location);
+        SetPrivateField(fixture.Npc, "currentCity", fixture.World.A);
+
+        // A changed but unrelated projection must not become an operation
+        // precondition when the actor is not a member and travel will not
+        // mutate that City section.
+        SetPrivateField(
+            fixture.World.A,
+            "importantNpcRevision",
+            fixture.World.A.ImportantNpcRevision + 1L);
+
+        List<string> sectionsAtTravelMutation = new List<string>();
+        WrapTravelPlanCommitted(fixture.Npc.TravelPlan, () =>
+        {
+            object context = typeof(SimulationRuntime)
+                .GetField("activeP12SoloTravelStartOperationContext", PrivateInstance)
+                .GetValue(fixture.Runtime);
+            FieldInfo changedIds = context.GetType().GetField(
+                "ChangedSectionIds",
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            sectionsAtTravelMutation.AddRange((HashSet<string>)changedIds.GetValue(context));
+        });
+
+        Assert.That(fixture.Runtime.TryReadNpcRosterCensusMutationEpoch(
+            out long before, out ContinuationCensusFailure beforeFailure), Is.True, beforeFailure.ToString());
+        MethodInfo execute = typeof(SimulationRuntime).GetMethod("TryExecuteAction", PrivateInstance);
+        NpcActionResult result = (NpcActionResult)execute.Invoke(fixture.Runtime, new object[]
+        {
+            fixture.Npc,
+            new NpcActionRuntime(
+                fixture.Action,
+                fixture.World.B,
+                null,
+                NpcTravelReason.Trade,
+                2f,
+                0f),
+            fixture.Action
+        });
+
+        Assert.That(result.Success, Is.True,
+            "a stale revision for a non-member City section is outside this operation's owner preflight");
+        Assert.That(fixture.Npc.CurrentCity, Is.Null);
+        Assert.That(fixture.Npc.IsTraveling, Is.True);
+        Assert.That(fixture.Npc.Money, Is.EqualTo(98f));
+        Assert.That(fixture.World.A.ImportantNpcs, Has.No.Member(fixture.Npc));
+        Assert.That(fixture.World.B.ImportantNpcs, Has.No.Member(fixture.Npc));
+        Assert.That(sectionsAtTravelMutation, Does.Not.Contain(
+            CityNpcPresenceCensusProvider.SectionIdFor(fixture.World.A.RuntimeId)));
+        Assert.That(sectionsAtTravelMutation, Does.Not.Contain(
+            CityNpcPresenceCensusProvider.SectionIdFor(fixture.World.B.RuntimeId)));
+        Assert.That(fixture.Runtime.TryReadNpcRosterCensusMutationEpoch(
+            out long after, out ContinuationCensusFailure afterFailure), Is.True, afterFailure.ToString());
+        Assert.That(after, Is.EqualTo(before + 1));
+    }
+
+    [Test]
+    public void ScheduledRequestActionContract_DoesNotAcceptTravelAsEscapeDirective()
+    {
+        NpcActionData travelAction = SimulationTestFactory.CreateAction(
+            "p12-scheduled-travel-action",
+            NpcActionType.Travel,
+            NpcActionCategory.Travel);
+
+        Assert.Throws<ArgumentException>(() => new ScheduledDirective(
+            "p12-scheduled-travel-directive",
+            1L,
+            ScheduledDirectiveMode.RequestAction,
+            ScheduledDirectiveOperation.EscapePrison,
+            "p12-scheduled-travel-actor",
+            travelAction));
+    }
+
+    [Test]
     public void LegacyTravelExecution_RemainsOutsideP12OperationAdmission()
     {
         ActorFixture fixture = CreateFixture(admitted: false);
@@ -382,7 +413,8 @@ public sealed class P12SoloTravelStartOperationTests
         bool admitted = true,
         bool recordDecision = true,
         bool bindProviderToSelectedSystem = true,
-        long? sequenceNextValue = null)
+        long? sequenceNextValue = null,
+        long? travelStateRevision = null)
     {
         ThreeCityFixture world = new ThreeCityFixture(false, routeABTravelDays: 2);
         RecordFixture records = SimulationTestFactory.CreateRecordFixture();
@@ -393,6 +425,8 @@ public sealed class P12SoloTravelStartOperationTests
             SimulationTestFactory.CreateNpc("p12-solo-travel-actor"),
             world.A,
             balance);
+        if (travelStateRevision.HasValue)
+            SetPrivateField(npc, "travelStateRevision", travelStateRevision.Value);
         npc.TravelPlan.Set(world.B, NpcTravelReason.Trade, 100f, 2f, "solo-travel-plan");
         NpcActionData action = SimulationTestFactory.CreateAction(
             "p12-solo-travel-action",
