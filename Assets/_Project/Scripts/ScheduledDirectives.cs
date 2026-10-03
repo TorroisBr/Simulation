@@ -162,6 +162,8 @@ public sealed class ScheduledDirectiveStore : IAuthoritativeMutationGuardBindabl
     private readonly SimulationTime simulationTime;
     private readonly SimulationLogger logger;
     private long revision;
+    [NonSerialized] private Func<bool> p12MutationAdmission;
+    [NonSerialized] private Action p12MutationCommitted;
 
     public IReadOnlyList<ScheduledDirective> Directives => readOnlyDirectives;
 
@@ -208,6 +210,8 @@ public sealed class ScheduledDirectiveStore : IAuthoritativeMutationGuardBindabl
 
             if (revision == long.MaxValue) return false;
 
+            RequireP12MutationAdmission();
+
             if (mutationGuardBinding.BoundGuard != null
                 && directive.TryBindMutationGuard(mutationGuardBinding.BoundGuard) == false)
             {
@@ -230,6 +234,7 @@ public sealed class ScheduledDirectiveStore : IAuthoritativeMutationGuardBindabl
             }
 
             revision++;
+            p12MutationCommitted?.Invoke();
             return true;
         }
     }
@@ -253,9 +258,36 @@ public sealed class ScheduledDirectiveStore : IAuthoritativeMutationGuardBindabl
                 return false;
             }
 
+            RequireP12MutationAdmission();
+
             if (!directive.ApplyProcessedState(finalState, currentDay, reason)) return false;
             revision++;
+            p12MutationCommitted?.Invoke();
             return true;
+        }
+    }
+
+    internal void BindP12MutationBoundary(Func<bool> admission, Action committed)
+    {
+        if (admission == null) throw new ArgumentNullException(nameof(admission));
+        if (committed == null) throw new ArgumentNullException(nameof(committed));
+
+        lock (ownerMonitor)
+        {
+            if (p12MutationAdmission != null || p12MutationCommitted != null)
+                throw new InvalidOperationException("The ScheduledDirective store already has a P12 mutation boundary.");
+
+            p12MutationAdmission = admission;
+            p12MutationCommitted = committed;
+        }
+    }
+
+    private void RequireP12MutationAdmission()
+    {
+        if (p12MutationAdmission != null && !p12MutationAdmission())
+        {
+            throw new InvalidOperationException(
+                "The ScheduledDirective mutation was rejected by the selected P12 census protocol.");
         }
     }
 
@@ -345,6 +377,8 @@ public sealed class ScheduledDirectiveSystem : IAuthoritativeMutationGuardBindab
     private readonly SimulationLogger logger;
     private readonly Dictionary<string, ScheduledDirective> directivesByActorForCurrentDay = new Dictionary<string, ScheduledDirective>(StringComparer.Ordinal);
     private long lastPreparedAbsoluteDay = -1L;
+
+    internal ScheduledDirectiveStore Store => directiveStore;
 
     internal bool HasPendingDirectives
     {

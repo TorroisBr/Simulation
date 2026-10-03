@@ -337,6 +337,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
     private readonly RuntimeIdAllocator runtimeIdAllocator;
     private readonly IOwnerSectionCensusProvider runtimeIdAllocatorEventCounterCensusProvider;
     private readonly IOwnerSectionCensusProvider runtimeIdAllocatorDecisionCounterCensusProvider;
+    private ScheduledDirectiveCensusProvider scheduledDirectiveCensusProvider;
     private ActorChoiceP11CensusProvider actorChoiceP11CensusProvider;
     private readonly FactualReadCoordinator factualReadCoordinator;
     private volatile bool factualReadWorldPublished;
@@ -1277,6 +1278,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                 && !TryRegisterRuntimeIdAllocatorEventCounterCensusProvider(protocol))
             || (runtimeAdmissionContext != null && runtimeIdAllocator != null
                 && !TryRegisterRuntimeIdAllocatorDecisionCounterCensusProvider(protocol))
+            || (runtimeAdmissionContext != null && scheduledDirectiveSystem != null
+                && !TryRegisterScheduledDirectiveCensusProvider(protocol))
             || (runtimeAdmissionContext != null
                 && !TryRegisterActorChoiceP11CensusProvider(protocol))
             || (runtimeAdmissionContext != null
@@ -1369,6 +1372,13 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                     runtimeIdAllocator.BindP12DecisionIdMutationBoundary(
                         CanCommitP12RuntimeIdDecisionCounterMutation,
                         NotifyP12RuntimeIdDecisionCounterMutation);
+                }
+
+                if (scheduledDirectiveCensusProvider != null)
+                {
+                    scheduledDirectiveSystem.Store.BindP12MutationBoundary(
+                        CanCommitP12ScheduledDirectiveMutation,
+                        NotifyP12ScheduledDirectiveMutation);
                 }
 
                 if (actorChoiceP11CensusProvider != null)
@@ -1595,6 +1605,53 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                 return false;
             }
 
+            return true;
+        }
+        catch
+        {
+            protocol.FaultClosed();
+            return false;
+        }
+    }
+
+    private bool TryRegisterScheduledDirectiveCensusProvider(ContinuationCensusProtocol protocol)
+    {
+        ScheduledDirectiveStore store = scheduledDirectiveSystem?.Store;
+        if (protocol == null || store == null)
+        {
+            protocol?.FaultClosed();
+            return false;
+        }
+
+        try
+        {
+            ScheduledDirectiveCensusProvider provider = new ScheduledDirectiveCensusProvider(store);
+            OwnerSectionCensusWitness witness = provider.GetCurrentCensus();
+            if (witness == null
+                || !string.Equals(
+                    witness.SectionId,
+                    ScheduledDirectiveCensusProvider.SectionId,
+                    StringComparison.Ordinal)
+                || witness.SchemaVersion != ScheduledDirectiveCensusProvider.SchemaVersion
+                || witness.Cardinality < 0
+                || !ReferenceEquals(witness.OwnerInstanceIdentity, store)
+                || witness.Revision != store.Revision
+                || !protocol.RegisterExpectedSection(
+                    new OwnerSectionContract(
+                        ScheduledDirectiveCensusProvider.SectionId,
+                        ScheduledDirectiveCensusProvider.SchemaVersion,
+                        OwnerSectionRole.Required),
+                    out _)
+                || !protocol.RegisterCensusProvider(
+                    ScheduledDirectiveCensusProvider.SectionId,
+                    provider,
+                    out _))
+            {
+                protocol.FaultClosed();
+                return false;
+            }
+
+            scheduledDirectiveCensusProvider = provider;
             return true;
         }
         catch
@@ -3095,6 +3152,38 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         }
     }
 
+    internal bool HasSameScheduledDirectiveOwner(IOwnerSectionCensusProvider otherProvider)
+    {
+        if (runtimeAdmissionContext == null) return true;
+        if (scheduledDirectiveCensusProvider == null || otherProvider == null) return false;
+
+        try
+        {
+            OwnerSectionCensusWitness runtimeWitness = scheduledDirectiveCensusProvider.GetCurrentCensus();
+            OwnerSectionCensusWitness otherWitness = otherProvider.GetCurrentCensus();
+            ScheduledDirectiveStore installedStore = scheduledDirectiveSystem?.Store;
+            return runtimeWitness != null
+                && otherWitness != null
+                && installedStore != null
+                && string.Equals(
+                    runtimeWitness.SectionId,
+                    ScheduledDirectiveCensusProvider.SectionId,
+                    StringComparison.Ordinal)
+                && string.Equals(otherWitness.SectionId, runtimeWitness.SectionId, StringComparison.Ordinal)
+                && runtimeWitness.SchemaVersion == ScheduledDirectiveCensusProvider.SchemaVersion
+                && otherWitness.SchemaVersion == runtimeWitness.SchemaVersion
+                && runtimeWitness.Cardinality >= 0
+                && otherWitness.Cardinality == runtimeWitness.Cardinality
+                && ReferenceEquals(runtimeWitness.OwnerInstanceIdentity, installedStore)
+                && ReferenceEquals(otherWitness.OwnerInstanceIdentity, runtimeWitness.OwnerInstanceIdentity)
+                && otherWitness.Revision == runtimeWitness.Revision;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     internal bool HasSameRuntimeIdAllocatorEventCounterOwner(IOwnerSectionCensusProvider otherProvider)
     {
         if (runtimeAdmissionContext == null) return true;
@@ -3291,6 +3380,88 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         }
 
         return true;
+    }
+
+    private bool CanCommitP12ScheduledDirectiveMutation()
+    {
+        if (runtimeAdmissionContext == null) return true;
+        if (!IsRuntimeAdmissionOwnerThreadCurrent()
+            || npcRosterCensusProtocol == null
+            || scheduledDirectiveSystem?.Store == null
+            || scheduledDirectiveCensusProvider == null
+            || !IsCurrentP12ScheduledDirectiveOwner()
+            || !CanCommitP12MutationSections(
+                new[] { ScheduledDirectiveCensusProvider.SectionId }))
+        {
+            FaultRuntimeAdmission();
+            return false;
+        }
+
+        bool hasReservedBatchEpoch = activeP12TravelPartyAdvanceOperationContext != null
+            || activeP12MerchantOperationContext != null
+            || activeP12SoloTravelStartOperationContext != null;
+        if (!hasReservedBatchEpoch
+            && !npcRosterCensusProtocol.TryValidateMutationEpochCapacity(out _))
+        {
+            FaultRuntimeAdmission();
+            return false;
+        }
+
+        return true;
+    }
+
+    private bool IsCurrentP12ScheduledDirectiveOwner()
+    {
+        ScheduledDirectiveStore store = scheduledDirectiveSystem?.Store;
+        if (store == null || scheduledDirectiveCensusProvider == null) return false;
+
+        try
+        {
+            OwnerSectionCensusWitness witness = scheduledDirectiveCensusProvider.GetCurrentCensus();
+            return witness != null
+                && string.Equals(
+                    witness.SectionId,
+                    ScheduledDirectiveCensusProvider.SectionId,
+                    StringComparison.Ordinal)
+                && witness.SchemaVersion == ScheduledDirectiveCensusProvider.SchemaVersion
+                && witness.Cardinality >= 0
+                && ReferenceEquals(witness.OwnerInstanceIdentity, store)
+                && witness.Revision == store.Revision;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private void NotifyP12ScheduledDirectiveMutation()
+    {
+        if (runtimeAdmissionContext == null) return;
+        try
+        {
+            if (!IsRuntimeAdmissionOwnerThreadCurrent()
+                || npcRosterCensusProtocol == null
+                || !IsCurrentP12ScheduledDirectiveOwner()
+                || !NotifyP12MutationSections(
+                    new[] { ScheduledDirectiveCensusProvider.SectionId }))
+            {
+                FaultRuntimeAdmission();
+                throw new InvalidOperationException(
+                    "The committed P12 ScheduledDirective mutation could not advance its census epoch.");
+            }
+        }
+        catch (InvalidOperationException)
+        {
+            FaultRuntimeAdmission();
+            throw;
+        }
+        catch (Exception exception)
+        {
+            FaultRuntimeAdmission();
+            throw new InvalidOperationException(
+                "The committed P12 ScheduledDirective mutation could not be reported to its census protocol.",
+                exception);
+        }
     }
 
     private bool CanCommitP12ActorChoiceMutation()

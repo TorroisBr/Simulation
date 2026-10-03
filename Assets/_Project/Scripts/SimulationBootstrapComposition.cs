@@ -49,7 +49,16 @@ public sealed class SimulationBootstrapComposition
         DomainEventStore = events;
         History = history;
         ScheduledDirectives = directives;
-        ScheduledDirectiveCensusProvider = new ScheduledDirectiveCensusProvider(directives);
+        IOwnerSectionCensusProvider scheduledDirectiveCensusProvider =
+            new ScheduledDirectiveCensusProvider(directives);
+        if (!runtime.HasSameScheduledDirectiveOwner(scheduledDirectiveCensusProvider))
+        {
+            runtime.FaultRuntimeAdmission();
+            throw new ArgumentException(
+                "The selected P12 runtime and bootstrap must expose the exact same ScheduledDirective owner witness.",
+                nameof(directives));
+        }
+        ScheduledDirectiveCensusProvider = scheduledDirectiveCensusProvider;
         Decisions = decisions;
         this.decisionRecorder = decisionRecorder ?? throw new System.ArgumentNullException(nameof(decisionRecorder));
         SimulationRecordSequenceCensusProvider sequenceCensusProvider =
