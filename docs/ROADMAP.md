@@ -22,6 +22,28 @@ Phases 5–7 are closed within their documented scopes. P8-A/B/C/D/E are canonic
 
 Runtime World Expansion remains a future consumer without an assigned dedicated phase. Its absence from this sequence does not forbid a later insertion or assign it to Phase 15 by implication.
 
+## Bounded next-slice candidate — 2026-10-03
+
+The user selected P15-A, one runtime structure at an existing canonical Location, and P16-A, one existing ArmedForce crossing one valid passage with finite carried supply. Their [P15-A](design/PHASE15A_RUNTIME_STRUCTURE_CHECKPOINT.md) and [P16-A](design/PHASE16A_SINGLE_PASSAGE_MOVEMENT_CHECKPOINT.md) contracts are candidate planning/technical-design records for independent review and architecture promotion. They do not expand `UnityBootstrap-Daily-v1` or authorize implementation before that review and promotion. P15-A uses a synthetic inert proving structure without material debit because P14-A supplies no applicable generic construction-cost transaction; P16-A extends the existing military position owner with carried supply and must fail closed under the P12 profile admission rule.
+
+The [P13 retention/causal-input design](design/PHASE13_RETENTION_CAUSAL_INPUT_DESIGN.md) and [P19 public-extension-surface design](design/PHASE19_PUBLIC_EXTENSION_SURFACE_DESIGN.md) may advance independently. P13 reconstruction/fork implementation still waits on exact continuation of the chosen world/profile and recoverable causal history. P19 loader implementation remains deferred. The [P10/P14/P20 decision packet](architecture/P10_P14_P20_NEXT_SCOPE_DECISIONS.md) recommends options but selects no follow-on gameplay scope.
+
+```text
+P8-A Location/anchor + runtime guard → P15-A bounded structure creation
+  P14 material-cost capability → later cost-bearing construction only
+P7 force/position + P8-A/B passage + P14-compatible finite-item semantics
+  → P16-A one-hop military movement and carried-supply debit
+P18 timed execution → later timed construction/military movement only
+P12 selected-profile admission/exclusion → P15-A/P16-A domain promotion gate
+P12 exact chosen-profile continuation + recoverable history + compatible execution
+  → P13 authoritative reconstruction/fork implementation
+P9 ordered genesis seam → bounded P19 public-generation-contract design
+  P19 loader and durable mod state remain separate future gates
+P10-A / P14-A / P20-A → respective next-slice product choices
+```
+
+`SimulationRuntime` and P12-B composition/admission are serial integration hotspots. P15-A owns a new structure store and reads spatial truth. P16-A changes `ArmedForceSpatialStateStore` and reads spatial/passage truth; its P12 census interaction needs a negative admission test. Neither track may edit the active P12-B candidate in parallel. Existing closed phases stay closed; downstream P17 waits for broader military/territorial/War semantics, and the P15/P16 slices make no P18 or P20 capability claim.
+
 ## P12 capability-level dependency refresh — 2026-10-03
 
 The [P12 capability DAG audit](architecture/P12_CAPABILITY_DAG_AUDIT.md) separates the accepted `UnityBootstrap-Daily-v1` continuation profile from entry of new authoritative domain capabilities. P12-B is still incomplete on `origin/codex/phase12/canonical` at `54fc23b`; P12-C–G and P12-A retain their accepted chain. Full P12 closure still means exact, validated deterministic continuation for every admitted owner. A newly composed unsupported owner causes profile admission to reject, never silent omission or automatic P12 scope growth. No global `PHASE 12 FOUNDATION READY` milestone is introduced. Each new owner instead passes the architecture §92A continuation-aware entry gate before its bounded checkpoint can be implemented.

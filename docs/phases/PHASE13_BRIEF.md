@@ -4,6 +4,8 @@
 
 **Design-entry clarification (2026-10-03):** retention/checkpoint strategy and causal-input model work may proceed before P12 closure. `WAIT_DEPENDENCY` above applies to authoritative reconstruction/fork implementation, not to isolated design.
 
+The bounded candidate [retention and causal-input design](../design/PHASE13_RETENTION_CAUSAL_INPUT_DESIGN.md) records the strategy and exact implementation prerequisites. It is design evidence, not a P13 reconstruction/fork checkpoint or a claim that current P12 continuation is complete.
+
 ## Objective and closure
 
 Reconstruct the authoritative state at any actually simulated boundary from the first onward, then independently continue a fork from it under compatible semantics. The guarantee does not extend inside generated pre-simulation backstory.

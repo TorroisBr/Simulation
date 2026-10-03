@@ -6,6 +6,8 @@ phases must preserve the principles now. No P19 checkpoint IDs are approved.
 
 **Dependency clarification (2026-10-03):** public-surface architecture may study selected real P9/P10/P18/P20 consumers before P12 closes. A loader checkpoint still needs bounded product scope and reviewed design. Stateless/new-world-only extensions need no general P12 capability; a claim to save mod-owned state or fork a retrofitted world needs exact compatible owner state, code/content and causal history for that supported profile. No mod loader implementation is unlocked here.
 
+The bounded candidate [public-extension-surface design](../design/PHASE19_PUBLIC_EXTENSION_SURFACE_DESIGN.md) identifies current real seams and their conditional capability gates. It approves no loader, general hook API or saved-mod-state profile.
+
 ## Objective and closure
 
 A later bounded public API/loader permits player-selected real code to add

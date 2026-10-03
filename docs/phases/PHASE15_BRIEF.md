@@ -1,12 +1,12 @@
 # Phase 15 — Runtime Construction & Founding v1
 
-**Authority:** planning entry subordinate to `../SIMULATION_ARCHITECTURE.md`. **Readiness:** `READY_FOR_PRODUCT_SCOPE_DECISION` for the first bounded consumer; no implementation checkpoint is schedulable.
+**Authority:** planning entry subordinate to `../SIMULATION_ARCHITECTURE.md`. **Readiness:** first product scope approved; P15-A technical design is a reviewed candidate pending canonical promotion. No implementation is authorized by this Brief alone.
 
 ## Objective and closure
 
 Create and change relevant structures or settlements during actually simulated history through normal runtime authority, with stable identity and causal consequences. A generated or authored origin must not confer permanent special mutation authority.
 
-**Checkpoints:** to be defined at architecture/technical entry; no P15 checkpoint IDs are approved.
+**Checkpoints:** P15-A — One Runtime Structure at an Existing Location. The user approved this bounded scope on 2026-10-03. The candidate operation, owner, profile safety and validation contract are in [`PHASE15A_RUNTIME_STRUCTURE_CHECKPOINT.md`](../design/PHASE15A_RUNTIME_STRUCTURE_CHECKPOINT.md). No further P15 checkpoint is approved.
 
 ## Dependencies and gates
 
@@ -15,7 +15,7 @@ Create and change relevant structures or settlements during actually simulated h
 - **Integration dependency:** construction must update owning domain and spatial facts coherently at one logical boundary.
 - **Soft ordering:** P10 pre-start authoring can share definitions, but is not post-start authority; P13 implementation is not required to design reconstructible mutations.
 - **Architecture gate:** define the first construction/founding consumer, identity continuity and atomic cross-domain consequences.
-- **Product gate:** what may be founded and by whom needs user choice when the first scope is fixed.
+- **Product gate:** resolved for P15-A only: one inert synthetic proving structure at an existing Location, created through a controlled runtime fixture. Future gameplay construction/founding and actor authority require separate scope.
 - **Exclusions:** general world expansion, automatic founding everywhere, generator-only mutation paths and universal construction engine.
 - **Replay/fork sensitivity:** created IDs, structures/settlements, material transfers, placement, authority and logical mutation boundary must be historically recoverable.
 - **Continuation-aware entry:** the first checkpoint must identify stable IDs, one domain owner, coherent spatial/domain commit and deterministic order, retained versus derived state, ID relationships, exact-state export and private staged-hydration/validation seams, causal inputs/randomness, and explicit profile admission or rejection. Before domain promotion, prove the new owner is outside the selected P12 composition or integrate a fail-closed admission hook with negative validation serially with P12-B. This is not P12 serialization implementation. P12-B/C/full closure and P13 implementation are not prerequisites for a bounded factual creation slice.

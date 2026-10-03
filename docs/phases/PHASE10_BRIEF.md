@@ -10,6 +10,8 @@ The approved first profile composes exactly one `ExplorableSiteKind.Ruin` at an 
 
 **P12 dependency clarification (2026-10-03):** P10-A's pre-start world composition did not require Save. A future supported profile that includes additional generated facts must preserve their exact initial state and compatible provenance, but full P12 closure is not a prerequisite to author a separately scoped P10 contribution. Its product scope remains open.
 
+The [next-scope product decision packet](../architecture/P10_P14_P20_NEXT_SCOPE_DECISIONS.md) compares bounded P10 follow-ons. Its recommendation is advisory; no next checkpoint is approved.
+
 ## Dependencies and gates
 
 - **Hard semantic contracts:** relevant P9 genesis/provenance contract and P8 Location/LocalTopology/anchor contract.

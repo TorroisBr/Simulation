@@ -10,6 +10,8 @@ A future supported shared-activity save/fork profile needs exact participant,
 commitment, lifecycle and temporal-input state, but P12's accepted daily
 profile does not include P20. No broader P20 consumer is unlocked here.
 
+The [next-scope product decision packet](../architecture/P10_P14_P20_NEXT_SCOPE_DECISIONS.md) compares real shared-activity consumers. Its recommendation is advisory; no next checkpoint is approved.
+
 ## Objective and closure
 
 A temporary activity instance can involve individual actors without requiring
