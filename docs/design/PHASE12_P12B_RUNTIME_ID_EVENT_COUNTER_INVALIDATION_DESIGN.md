@@ -1,7 +1,9 @@
 # P12-B selected-profile RuntimeIdAllocator Event-counter invalidation design
 
-**Status:** technical design submitted for independent review. No implementation
-or promotion is claimed.
+**Status:** independent technical review PASS; sufficient for implementation
+within the accepted P12-B capability authorization. No implementation or
+promotion is yet claimed. Review identity and findings are recorded in
+`PHASE12_P12B_RUNTIME_ID_EVENT_COUNTER_INVALIDATION_DESIGN_REVIEW.md`.
 
 **Canonical base:** `codex/phase12/canonical` at
 `aa8f0305bea9f10c15045e07400d8785c2bd9e23`. This base adds only the
