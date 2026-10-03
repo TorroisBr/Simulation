@@ -8,6 +8,8 @@ using UnityEngine;
 public class CityRuntime
 {
     [NonSerialized] private MutationGuardBinding runtimeMutationGuardBinding = new MutationGuardBinding();
+    [NonSerialized] private Func<bool> p12PresenceMutationAdmission;
+    [NonSerialized] private Action p12PresenceMutationCommitted;
     [SerializeField] private string runtimeId;
     [SerializeField] private CityData cityData;
     [NonSerialized] private SettlementPopulationRuntime population;
@@ -552,11 +554,12 @@ public class CityRuntime
 
     public void RemoveImportantNpc(NpcRuntime npcRuntime)
     {
-        if (npcRuntime == null)
+        if (npcRuntime == null || !ContainsImportantNpc(npcRuntime))
         {
             return;
         }
 
+        if (!CanCommitP12PresenceMutation()) return;
         if (!TryRemoveImportantNpcMembership(npcRuntime))
         {
             return;
@@ -566,6 +569,8 @@ public class CityRuntime
         {
             npcRuntime.ClearCurrentPresenceFromCity(this);
         }
+
+        NotifyP12PresenceMutationCommitted();
     }
 
     internal bool ContainsImportantNpc(NpcRuntime npcRuntime)
@@ -647,6 +652,39 @@ public class CityRuntime
         }
 
         return importantNpcs;
+    }
+
+    internal void BindP12PresenceMutationBoundary(Func<bool> admission, Action committed)
+    {
+        if (admission == null) throw new ArgumentNullException(nameof(admission));
+        if (committed == null) throw new ArgumentNullException(nameof(committed));
+        if (p12PresenceMutationAdmission != null || p12PresenceMutationCommitted != null)
+            throw new InvalidOperationException("CityRuntime is already bound to a P12 NPC-presence mutation boundary.");
+        p12PresenceMutationAdmission = admission;
+        p12PresenceMutationCommitted = committed;
+    }
+
+    internal bool UnbindP12PresenceMutationBoundary(Func<bool> admission, Action committed)
+    {
+        if (!ReferenceEquals(p12PresenceMutationAdmission, admission)
+            || !ReferenceEquals(p12PresenceMutationCommitted, committed)) return false;
+        p12PresenceMutationAdmission = null;
+        p12PresenceMutationCommitted = null;
+        return true;
+    }
+
+    private bool CanCommitP12PresenceMutation()
+    {
+        if (p12PresenceMutationAdmission == null) return true;
+        try { return p12PresenceMutationAdmission(); }
+        catch { return false; }
+    }
+
+    private void NotifyP12PresenceMutationCommitted()
+    {
+        if (p12PresenceMutationCommitted == null) return;
+        try { p12PresenceMutationCommitted(); }
+        catch { }
     }
 
     internal bool CanBindRuntimeMutationGuard(AuthoritativeMutationGuard guard)

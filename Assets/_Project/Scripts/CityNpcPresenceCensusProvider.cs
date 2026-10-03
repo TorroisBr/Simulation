@@ -20,7 +20,7 @@ public static class CityNpcPresenceCensusProvider
                 ?? throw new ArgumentNullException(nameof(installedNpcRoster));
             if (string.IsNullOrWhiteSpace(owner.RuntimeId))
                 throw new ArgumentException("City presence census requires a City RuntimeId.", nameof(owner));
-            sectionId = SectionIdPrefix + owner.RuntimeId;
+            sectionId = SectionIdFor(owner.RuntimeId);
         }
 
         public OwnerSectionCensusWitness GetCurrentCensus()
@@ -76,6 +76,13 @@ public static class CityNpcPresenceCensusProvider
                 }
             }
         }
+    }
+
+    public static string SectionIdFor(string cityRuntimeId)
+    {
+        if (string.IsNullOrWhiteSpace(cityRuntimeId))
+            throw new ArgumentException("City presence section requires a City RuntimeId.", nameof(cityRuntimeId));
+        return SectionIdPrefix + cityRuntimeId;
     }
 
     /// <summary>Creates one stable, ordinally ordered section for each installed City.</summary>

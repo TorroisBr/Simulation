@@ -206,6 +206,8 @@ public sealed class TravelPartyStore : IAuthoritativeMutationGuardBindable
 {
     private readonly object mutationSync = new object();
     private long revision;
+    [NonSerialized] private Func<bool> p12MutationAdmission;
+    [NonSerialized] private Action p12MutationCommitted;
     private readonly List<TravelPartyRuntime> activeParties = new List<TravelPartyRuntime>();
     private readonly Dictionary<string, TravelPartyRuntime> partiesById = new Dictionary<string, TravelPartyRuntime>(StringComparer.Ordinal);
     private readonly IReadOnlyList<TravelPartyRuntime> readOnlyActiveParties;
@@ -249,10 +251,12 @@ public sealed class TravelPartyStore : IAuthoritativeMutationGuardBindable
         }
 
         if (!CanCommitMutations(1)) return false;
+        if (!CanCommitP12Mutation()) return false;
 
         partiesById.Add(party.TravelPartyId, party);
         activeParties.Add(party);
         revision++;
+        NotifyP12MutationCommitted();
         return true;
         }
     }
@@ -313,11 +317,13 @@ public sealed class TravelPartyStore : IAuthoritativeMutationGuardBindable
         }
 
         if (!CanCommitMutations(1)) return false;
+        if (!CanCommitP12Mutation()) return false;
 
         party.MarkCompleted();
         partiesById.Remove(travelPartyId);
         activeParties.Remove(party);
         revision++;
+        NotifyP12MutationCommitted();
         return true;
         }
     }
@@ -339,10 +345,12 @@ public sealed class TravelPartyStore : IAuthoritativeMutationGuardBindable
         }
 
         if (!CanCommitMutations(1)) return false;
+        if (!CanCommitP12Mutation()) return false;
 
         partiesById.Remove(travelPartyId);
         activeParties.Remove(party);
         revision++;
+        NotifyP12MutationCommitted();
         return true;
         }
     }
@@ -356,6 +364,39 @@ public sealed class TravelPartyStore : IAuthoritativeMutationGuardBindable
     internal bool CanCommitMutations(int count)
     {
         return count >= 0 && revision <= long.MaxValue - count;
+    }
+
+    internal void BindP12MutationBoundary(Func<bool> admission, Action committed)
+    {
+        if (admission == null) throw new ArgumentNullException(nameof(admission));
+        if (committed == null) throw new ArgumentNullException(nameof(committed));
+        if (p12MutationAdmission != null || p12MutationCommitted != null)
+            throw new InvalidOperationException("TravelPartyStore is already bound to a P12 mutation boundary.");
+        p12MutationAdmission = admission;
+        p12MutationCommitted = committed;
+    }
+
+    internal bool UnbindP12MutationBoundary(Func<bool> admission, Action committed)
+    {
+        if (!ReferenceEquals(p12MutationAdmission, admission)
+            || !ReferenceEquals(p12MutationCommitted, committed)) return false;
+        p12MutationAdmission = null;
+        p12MutationCommitted = null;
+        return true;
+    }
+
+    private bool CanCommitP12Mutation()
+    {
+        if (p12MutationAdmission == null) return true;
+        try { return p12MutationAdmission(); }
+        catch { return false; }
+    }
+
+    private void NotifyP12MutationCommitted()
+    {
+        if (p12MutationCommitted == null) return;
+        try { p12MutationCommitted(); }
+        catch { }
     }
 
     private sealed class MutationWindow : IDisposable
@@ -548,7 +589,9 @@ public sealed class TravelPartySystem : IAuthoritativeMutationGuardBindable
 
         foreach (NpcRuntime member in preparation.Members)
         {
-            member.SetActiveTravelPartyId(createdParty.TravelPartyId);
+            if (!member.SetActiveTravelPartyId(createdParty.TravelPartyId))
+                throw new InvalidOperationException(
+                    "A preflighted TravelParty member could not commit its active party identity.");
         }
 
         bool eventRecorded = domainEventRecorder == null || domainEventRecorder.Record((eventId, absoluteDay, sequence) => new TravelPartyStartedEvent(
@@ -568,10 +611,14 @@ public sealed class TravelPartySystem : IAuthoritativeMutationGuardBindable
         {
             foreach (NpcRuntime member in preparation.Members)
             {
-                member.SetActiveTravelPartyId(null);
+                if (!member.SetActiveTravelPartyId(null))
+                    throw new InvalidOperationException(
+                        "A preflighted TravelParty member could not clear its active party identity during compensation.");
             }
 
-            partyStore.Remove(createdParty.TravelPartyId);
+            if (!partyStore.Remove(createdParty.TravelPartyId))
+                throw new InvalidOperationException(
+                    "A preflighted TravelParty store could not remove a failed start.");
             Rollback(
                 startedMembers,
                 paidCosts,
@@ -631,9 +678,16 @@ public sealed class TravelPartySystem : IAuthoritativeMutationGuardBindable
 
             if (startedToday == true)
             {
+                bool revisionsAvailable = true;
+                foreach (NpcRuntime member in members)
+                    revisionsAvailable &= member.CanApplyTravelStateRevisionIncrements(1L);
+                if (!revisionsAvailable) continue;
+
                 foreach (NpcRuntime member in members)
                 {
-                    member.ClearTravelStartedToday();
+                    if (!member.ClearTravelStartedToday())
+                        throw new InvalidOperationException(
+                            "A preflighted TravelParty member could not clear its travel-start flag.");
                 }
 
                 continue;
@@ -644,6 +698,12 @@ public sealed class TravelPartySystem : IAuthoritativeMutationGuardBindable
             {
                 continue;
             }
+
+            long requiredTravelRevisions = members[0].TravelDaysRemaining <= 1 ? 2L : 1L;
+            bool travelRevisionsAvailable = true;
+            foreach (NpcRuntime member in members)
+                travelRevisionsAvailable &= member.CanApplyTravelStateRevisionIncrements(requiredTravelRevisions);
+            if (!travelRevisionsAvailable) continue;
 
             bool allArrived = true;
 
@@ -680,11 +740,15 @@ public sealed class TravelPartySystem : IAuthoritativeMutationGuardBindable
 
             foreach (NpcRuntime member in members)
             {
-                member.SetActiveTravelPartyId(null);
+                if (!member.SetActiveTravelPartyId(null))
+                    throw new InvalidOperationException(
+                        "A preflighted arrived TravelParty member could not clear its active party identity.");
                 arrivals.Add(member);
             }
 
-            partyStore.Complete(party.TravelPartyId);
+            if (!partyStore.Complete(party.TravelPartyId))
+                throw new InvalidOperationException(
+                    "A preflighted TravelParty arrival could not commit its party-store completion.");
 
             if (eventRecorded == false)
             {
@@ -896,6 +960,7 @@ public sealed class TravelPartySystem : IAuthoritativeMutationGuardBindable
         foreach (NpcRuntime member in preparation.Members)
         {
             if (member == null) return false;
+            if (!member.CanPreflightTravelStateMutations(4L)) return false;
 
             CityRuntime currentCity = member.CurrentCity;
             if (currentCity != null && currentCity.ContainsImportantNpc(member))

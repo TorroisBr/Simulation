@@ -120,6 +120,15 @@ public sealed class ContinuationCensusProtocol
         }
     }
 
+    private sealed class NpcTravelStateCandidate
+    {
+        public string SectionId;
+        public OwnerSectionContract Contract;
+        public IOwnerSectionCensusProvider Provider;
+        public NpcRuntime NpcOwner;
+        public OwnerSectionCensusWitness Witness;
+    }
+
     private sealed class NpcKnowledgeCandidate
     {
         public string SectionId; public OwnerSectionContract Contract; public IOwnerSectionCensusProvider Provider;
@@ -148,6 +157,12 @@ public sealed class ContinuationCensusProtocol
         new Dictionary<string, NpcRuntime>(StringComparer.Ordinal);
     private IReadOnlyList<NpcRuntime> spatialKnowledgeRoster;
     private IReadOnlyList<IOwnerSectionCensusProvider> spatialKnowledgeFamilyProviders =
+        Array.AsReadOnly(new IOwnerSectionCensusProvider[0]);
+    private HashSet<string> npcTravelStateSectionIds = new HashSet<string>(StringComparer.Ordinal);
+    private Dictionary<string, NpcRuntime> npcTravelStateNpcOwnersBySection =
+        new Dictionary<string, NpcRuntime>(StringComparer.Ordinal);
+    private IReadOnlyList<NpcRuntime> npcTravelStateRoster;
+    private IReadOnlyList<IOwnerSectionCensusProvider> npcTravelStateFamilyProviders =
         Array.AsReadOnly(new IOwnerSectionCensusProvider[0]);
     private HashSet<string> inventorySectionIds = new HashSet<string>(StringComparer.Ordinal);
     private Dictionary<string, NpcRuntime> inventoryNpcOwnersBySection = new Dictionary<string, NpcRuntime>(StringComparer.Ordinal);
@@ -341,6 +356,52 @@ public sealed class ContinuationCensusProtocol
     /// <summary>Latest reconciled per-NPC provider snapshot for the declared family.</summary>
     public IReadOnlyList<IOwnerSectionCensusProvider> SpatialKnowledgeFamilyProviders =>
         spatialKnowledgeFamilyProviders;
+
+    public bool RegisterNpcTravelStateRosterFamily(
+        IReadOnlyList<NpcRuntime> roster,
+        out ContinuationCensusFailure failure)
+    {
+        if (IsFaulted()) { failure = ContinuationCensusFailure.ProtocolFaulted; return false; }
+        if (IsOwnerThreadBound()) { Fault(); failure = ContinuationCensusFailure.ProtocolFaulted; return false; }
+        if (roster == null || expectedSectionsSealed || providersSealed || npcTravelStateRoster != null)
+        { failure = ContinuationCensusFailure.OwnerCoverageIncomplete; return false; }
+        if (!TryBuildNpcTravelStateFamily(roster, out List<NpcTravelStateCandidate> candidates, out failure))
+        { Fault(); return false; }
+
+        Dictionary<string, OwnerSectionContract> stagedExpected =
+            new Dictionary<string, OwnerSectionContract>(expectedSections, StringComparer.Ordinal);
+        Dictionary<string, RegisteredSection> stagedRegistered =
+            new Dictionary<string, RegisteredSection>(registeredSections, StringComparer.Ordinal);
+        HashSet<string> ids = new HashSet<string>(StringComparer.Ordinal);
+        Dictionary<string, NpcRuntime> owners = new Dictionary<string, NpcRuntime>(StringComparer.Ordinal);
+        IOwnerSectionCensusProvider[] providers = new IOwnerSectionCensusProvider[candidates.Count];
+        for (int i = 0; i < candidates.Count; i++)
+        {
+            NpcTravelStateCandidate candidate = candidates[i];
+            if (!ids.Add(candidate.SectionId)
+                || stagedExpected.ContainsKey(candidate.SectionId)
+                || stagedRegistered.ContainsKey(candidate.SectionId))
+            { Fault(); failure = ContinuationCensusFailure.OwnerCoverageIncomplete; return false; }
+            stagedExpected.Add(candidate.SectionId, candidate.Contract);
+            RegisteredSection registered = new RegisteredSection(candidate.Contract, candidate.Provider);
+            SetBaseline(registered, candidate.Witness);
+            stagedRegistered.Add(candidate.SectionId, registered);
+            owners.Add(candidate.SectionId, candidate.NpcOwner);
+            providers[i] = candidate.Provider;
+        }
+
+        expectedSections = stagedExpected;
+        registeredSections = stagedRegistered;
+        npcTravelStateSectionIds = ids;
+        npcTravelStateNpcOwnersBySection = owners;
+        npcTravelStateRoster = roster;
+        npcTravelStateFamilyProviders = Array.AsReadOnly(providers);
+        failure = ContinuationCensusFailure.None;
+        return true;
+    }
+
+    public IReadOnlyList<IOwnerSectionCensusProvider> NpcTravelStateFamilyProviders =>
+        npcTravelStateFamilyProviders;
 
     public bool RegisterInventoryRosterFamily(IReadOnlyList<NpcRuntime> roster, out ContinuationCensusFailure failure)
     {
@@ -804,6 +865,8 @@ public sealed class ContinuationCensusProtocol
         if (registeredSections.Count != expectedSections.Count
             || (spatialKnowledgeRoster != null
                 && !TryValidateSpatialKnowledgeFamilyMatchesRoster(out failure))
+            || (npcTravelStateRoster != null
+                && !TryValidateNpcTravelStateFamilyMatchesRoster(out failure))
             || (inventoryRoster != null && !TryValidateInventoryFamilyMatchesRoster(out failure))
             || (moneyAccountRoster != null && !TryValidateMoneyAccountFamilyMatchesRoster(out failure))
             || (npcKnowledgeRoster != null && !TryValidateNpcKnowledgeFamilyMatchesRoster(out failure))
@@ -1030,6 +1093,7 @@ public sealed class ContinuationCensusProtocol
                     || spatialKnowledgeSectionIds.Contains(sectionId)
                     || inventorySectionIds.Contains(sectionId)
                     || moneyAccountSectionIds.Contains(sectionId)
+                    || npcTravelStateSectionIds.Contains(sectionId)
                     || npcKnowledgeSectionIds.Contains(sectionId)
                     || npcPlanSectionIds.Contains(sectionId)
                     || !registeredSections.ContainsKey(sectionId)
@@ -1054,6 +1118,11 @@ public sealed class ContinuationCensusProtocol
             Fault();
             return false;
         }
+        List<NpcTravelStateCandidate> npcTravelStateCandidates = new List<NpcTravelStateCandidate>();
+        if (npcTravelStateRoster != null
+            && !TryBuildNpcTravelStateFamily(npcTravelStateRoster,
+                out npcTravelStateCandidates, out failure))
+        { Fault(); return false; }
         List<InventoryCandidate> inventoryCandidates = new List<InventoryCandidate>();
         if (inventoryRoster != null
             && !TryBuildInventoryFamily(inventoryRoster, out inventoryCandidates, out failure))
@@ -1087,6 +1156,7 @@ public sealed class ContinuationCensusProtocol
             if (spatialKnowledgeSectionIds.Contains(pair.Key)
                 || inventorySectionIds.Contains(pair.Key)
                 || moneyAccountSectionIds.Contains(pair.Key)
+                || npcTravelStateSectionIds.Contains(pair.Key)
                 || npcKnowledgeSectionIds.Contains(pair.Key)
                 || npcPlanSectionIds.Contains(pair.Key)) continue;
             if (!registeredSections.TryGetValue(pair.Key, out RegisteredSection current))
@@ -1219,6 +1289,47 @@ public sealed class ContinuationCensusProtocol
         {
             if (!stagedDynamicIds.Contains(oldSectionId)) familyChanged = true;
         }
+
+        HashSet<string> stagedTravelStateIds = new HashSet<string>(StringComparer.Ordinal);
+        Dictionary<string, NpcRuntime> stagedTravelStateOwners =
+            new Dictionary<string, NpcRuntime>(StringComparer.Ordinal);
+        IOwnerSectionCensusProvider[] stagedTravelStateProviders =
+            new IOwnerSectionCensusProvider[npcTravelStateCandidates.Count];
+        bool travelStateChanged = npcTravelStateCandidates.Count != npcTravelStateSectionIds.Count;
+        for (int i = 0; i < npcTravelStateCandidates.Count; i++)
+        {
+            NpcTravelStateCandidate candidate = npcTravelStateCandidates[i];
+            if (!stagedTravelStateIds.Add(candidate.SectionId)
+                || stagedExpected.ContainsKey(candidate.SectionId))
+            { Fault(); failure = ContinuationCensusFailure.OwnerCoverageIncomplete; return false; }
+
+            bool existed = registeredSections.TryGetValue(candidate.SectionId, out RegisteredSection prior);
+            bool sameNpc = existed
+                && npcTravelStateNpcOwnersBySection.TryGetValue(candidate.SectionId, out NpcRuntime oldNpc)
+                && ReferenceEquals(oldNpc, candidate.NpcOwner);
+            bool sameOwner = existed && ReferenceEquals(prior.OwnerInstanceIdentity, candidate.NpcOwner);
+            if (sameNpc && sameOwner)
+            {
+                if (!TryReadAndValidate(prior, allowRevisionAdvance: false, out _, out failure))
+                { Fault(); return false; }
+                stagedRegistered.Add(candidate.SectionId, prior);
+                stagedExpected.Add(candidate.SectionId, prior.Contract);
+                stagedTravelStateProviders[i] = prior.Provider;
+            }
+            else
+            {
+                travelStateChanged = true;
+                RegisteredSection replacement = new RegisteredSection(candidate.Contract, candidate.Provider);
+                SetBaseline(replacement, candidate.Witness);
+                stagedRegistered.Add(candidate.SectionId, replacement);
+                stagedExpected.Add(candidate.SectionId, candidate.Contract);
+                stagedTravelStateProviders[i] = candidate.Provider;
+            }
+            if (!existed) travelStateChanged = true;
+            stagedTravelStateOwners.Add(candidate.SectionId, candidate.NpcOwner);
+        }
+        foreach (string oldId in npcTravelStateSectionIds)
+            if (!stagedTravelStateIds.Contains(oldId)) travelStateChanged = true;
 
         HashSet<string> stagedInventoryIds = new HashSet<string>(StringComparer.Ordinal);
         Dictionary<string, NpcRuntime> stagedInventoryOwners = new Dictionary<string, NpcRuntime>(StringComparer.Ordinal);
@@ -1388,7 +1499,7 @@ public sealed class ContinuationCensusProtocol
             return false;
         }
 
-        if ((fixedSectionsChanged || familyChanged || inventoryChanged || moneyAccountChanged || knowledgeChanged || plansChanged)
+        if ((fixedSectionsChanged || familyChanged || travelStateChanged || inventoryChanged || moneyAccountChanged || knowledgeChanged || plansChanged)
             && mutationEpoch == long.MaxValue)
         {
             Fault();
@@ -1400,6 +1511,8 @@ public sealed class ContinuationCensusProtocol
         registeredSections = stagedRegistered;
         spatialKnowledgeSectionIds = stagedDynamicIds;
         spatialKnowledgeNpcOwnersBySection = stagedDynamicNpcOwners;
+        npcTravelStateSectionIds = stagedTravelStateIds;
+        npcTravelStateNpcOwnersBySection = stagedTravelStateOwners;
         inventorySectionIds = stagedInventoryIds;
         inventoryNpcOwnersBySection = stagedInventoryOwners;
         moneyAccountSectionIds = stagedMoneyAccountIds;
@@ -1410,11 +1523,13 @@ public sealed class ContinuationCensusProtocol
         npcPlanNpcOwnersBySection = stagedPlanNpcOwners;
         if (familyChanged)
             spatialKnowledgeFamilyProviders = Array.AsReadOnly(stagedFamilyProviders);
+        if (travelStateChanged)
+            npcTravelStateFamilyProviders = Array.AsReadOnly(stagedTravelStateProviders);
         if (inventoryChanged) inventoryFamilyProviders = Array.AsReadOnly(stagedInventoryProviders);
         if (moneyAccountChanged) moneyAccountFamilyProviders = Array.AsReadOnly(stagedMoneyAccountProviders);
         if (knowledgeChanged) npcKnowledgeFamilyProviders = Array.AsReadOnly(stagedKnowledgeProviders);
         if (plansChanged) npcPlanFamilyProviders = Array.AsReadOnly(stagedPlanProviders);
-        if (fixedSectionsChanged || familyChanged || inventoryChanged || moneyAccountChanged || knowledgeChanged || plansChanged)
+        if (fixedSectionsChanged || familyChanged || travelStateChanged || inventoryChanged || moneyAccountChanged || knowledgeChanged || plansChanged)
             mutationEpoch++;
         failure = ContinuationCensusFailure.None;
         return true;
@@ -1669,6 +1784,83 @@ public sealed class ContinuationCensusProtocol
             }
         }
 
+        failure = ContinuationCensusFailure.None;
+        return true;
+    }
+
+    private bool TryBuildNpcTravelStateFamily(
+        IReadOnlyList<NpcRuntime> roster,
+        out List<NpcTravelStateCandidate> candidates,
+        out ContinuationCensusFailure failure)
+    {
+        candidates = new List<NpcTravelStateCandidate>();
+        failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+        if (roster == null) return false;
+
+        IReadOnlyList<IOwnerSectionCensusProvider> providers;
+        try { providers = NpcTravelStateCensusProvider.CreateProviders(roster); }
+        catch { return false; }
+
+        HashSet<string> ids = new HashSet<string>(StringComparer.Ordinal);
+        foreach (IOwnerSectionCensusProvider censusProvider in providers)
+        {
+            if (!(censusProvider is NpcTravelStateCensusProvider provider)) return false;
+            OwnerSectionCensusWitness witness;
+            try { witness = provider.GetCurrentCensus(); }
+            catch { return false; }
+
+            string sectionId;
+            OwnerSectionContract contract;
+            try
+            {
+                sectionId = NpcTravelStateCensusProvider.SectionIdFor(provider.RuntimeId);
+                contract = new OwnerSectionContract(
+                    sectionId,
+                    NpcTravelStateCensusProvider.SchemaVersion,
+                    OwnerSectionRole.Required);
+            }
+            catch { return false; }
+
+            if (string.IsNullOrWhiteSpace(provider.RuntimeId)
+                || provider.NpcOwner == null
+                || !ReferenceEquals(provider.NpcOwner, witness.OwnerInstanceIdentity)
+                || !string.Equals(witness.SectionId, sectionId, StringComparison.Ordinal)
+                || witness.Cardinality != 1
+                || witness.Revision != provider.NpcOwner.TravelStateRevision
+                || !ids.Add(sectionId)
+                || !IsWitnessValidForContract(contract, witness))
+                return false;
+
+            candidates.Add(new NpcTravelStateCandidate
+            {
+                SectionId = sectionId,
+                Contract = contract,
+                Provider = censusProvider,
+                NpcOwner = provider.NpcOwner,
+                Witness = witness
+            });
+        }
+
+        if (candidates.Count != roster.Count) return false;
+        failure = ContinuationCensusFailure.None;
+        return true;
+    }
+
+    private bool TryValidateNpcTravelStateFamilyMatchesRoster(out ContinuationCensusFailure failure)
+    {
+        if (!TryBuildNpcTravelStateFamily(npcTravelStateRoster,
+                out List<NpcTravelStateCandidate> candidates, out failure)) return false;
+        if (candidates.Count != npcTravelStateSectionIds.Count)
+        { failure = ContinuationCensusFailure.OwnerCoverageIncomplete; return false; }
+        foreach (NpcTravelStateCandidate candidate in candidates)
+        {
+            if (!npcTravelStateSectionIds.Contains(candidate.SectionId)
+                || !registeredSections.TryGetValue(candidate.SectionId, out RegisteredSection section)
+                || !npcTravelStateNpcOwnersBySection.TryGetValue(candidate.SectionId, out NpcRuntime npc)
+                || !ReferenceEquals(npc, candidate.NpcOwner)
+                || (section.HasBaseline && !ReferenceEquals(section.OwnerInstanceIdentity, candidate.NpcOwner)))
+            { failure = ContinuationCensusFailure.OwnerCoverageIncomplete; return false; }
+        }
         failure = ContinuationCensusFailure.None;
         return true;
     }

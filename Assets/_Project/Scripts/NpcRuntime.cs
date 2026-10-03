@@ -6,6 +6,9 @@ using UnityEngine;
 public class NpcRuntime : ICapabilityConditionSource
 {
     [NonSerialized] private MutationGuardBinding runtimeMutationGuardBinding = new MutationGuardBinding();
+    [NonSerialized] private long travelStateRevision;
+    [NonSerialized] private Func<bool, IReadOnlyList<CityRuntime>, bool> p12TravelStateMutationAdmission;
+    [NonSerialized] private Action<bool, IReadOnlyList<CityRuntime>> p12TravelStateMutationCommitted;
     [SerializeField]private string runtimeId;
     [SerializeField]private string personIdValue;
     [NonSerialized]private PersonId personIdentity;
@@ -86,6 +89,7 @@ public class NpcRuntime : ICapabilityConditionSource
     public bool TravelStartedToday => travelStartedToday;
     public string TravelOriginDecisionId => travelOriginDecisionId;
     public string ActiveTravelPartyId => activeTravelPartyId;
+    public long TravelStateRevision => travelStateRevision;
     public bool IsTraveling => destinationLocation != null && travelDaysRemaining > 0;
     public int HiddenDaysRemaining => hiddenDaysRemaining;
     public bool IsHidden => hiddenDaysRemaining > 0;
@@ -125,6 +129,53 @@ public class NpcRuntime : ICapabilityConditionSource
         {
             runtimeMutationGuardBinding = new MutationGuardBinding();
         }
+    }
+
+    internal void BindP12TravelStateMutationBoundary(
+        Func<bool, IReadOnlyList<CityRuntime>, bool> admission,
+        Action<bool, IReadOnlyList<CityRuntime>> committed)
+    {
+        if (admission == null) throw new ArgumentNullException(nameof(admission));
+        if (committed == null) throw new ArgumentNullException(nameof(committed));
+        if (p12TravelStateMutationAdmission != null || p12TravelStateMutationCommitted != null)
+            throw new InvalidOperationException("NpcRuntime is already bound to a P12 travel-state mutation boundary.");
+        p12TravelStateMutationAdmission = admission;
+        p12TravelStateMutationCommitted = committed;
+    }
+
+    internal bool UnbindP12TravelStateMutationBoundary(
+        Func<bool, IReadOnlyList<CityRuntime>, bool> admission,
+        Action<bool, IReadOnlyList<CityRuntime>> committed)
+    {
+        if (!ReferenceEquals(p12TravelStateMutationAdmission, admission)
+            || !ReferenceEquals(p12TravelStateMutationCommitted, committed)) return false;
+        p12TravelStateMutationAdmission = null;
+        p12TravelStateMutationCommitted = null;
+        return true;
+    }
+
+    private bool CanCommitP12TravelStateMutation(
+        bool travelStateChanged,
+        IReadOnlyList<CityRuntime> changedCities)
+    {
+        if (travelStateChanged && travelStateRevision == long.MaxValue) return false;
+        if (p12TravelStateMutationAdmission == null) return true;
+        bool admitted;
+        try { admitted = p12TravelStateMutationAdmission(travelStateChanged, changedCities); }
+        catch { admitted = false; }
+        if (!admitted)
+            throw new InvalidOperationException(
+                "The committed P12 travel-state or City-presence owner could not admit its mutation.");
+        return true;
+    }
+
+    private void NotifyP12TravelStateMutationCommitted(
+        bool travelStateChanged,
+        IReadOnlyList<CityRuntime> changedCities)
+    {
+        if (p12TravelStateMutationCommitted == null) return;
+        try { p12TravelStateMutationCommitted(travelStateChanged, changedCities); }
+        catch { }
     }
 
 	public NpcRuntime(string runtimeId, NpcData npcData)
@@ -430,6 +481,11 @@ public class NpcRuntime : ICapabilityConditionSource
             return false;
         }
 
+        List<CityRuntime> changedCities = new List<CityRuntime>(2);
+        if (removePreviousMembership) changedCities.Add(previousCity);
+        if (addNewMembership && cityProjection != previousCity) changedCities.Add(cityProjection);
+        if (!CanCommitP12TravelStateMutation(false, changedCities)) return false;
+
         if (removePreviousMembership
             && !previousCity.TryRemoveImportantNpcMembership(this))
         {
@@ -448,6 +504,9 @@ public class NpcRuntime : ICapabilityConditionSource
 
         currentLocation = location;
         currentCity = cityProjection;
+
+        if (changedCities.Count != 0)
+            NotifyP12TravelStateMutationCommitted(false, changedCities);
 
         return true;
     }
@@ -480,10 +539,18 @@ public class NpcRuntime : ICapabilityConditionSource
         }
 
         if (currentCity != null
-            && !currentCity.TryRemoveImportantNpcMembership(this))
+            && !currentCity.CanRemoveImportantNpcMembership(this))
         {
             return false;
         }
+
+        List<CityRuntime> changedCities = currentCity != null
+                && currentCity.ContainsImportantNpc(this)
+            ? new List<CityRuntime> { currentCity }
+            : new List<CityRuntime>();
+        if (!CanCommitP12TravelStateMutation(true, changedCities)) return false;
+
+        if (currentCity != null && !currentCity.TryRemoveImportantNpcMembership(this)) return false;
 
         currentLocation = null;
         currentCity = null;
@@ -495,6 +562,8 @@ public class NpcRuntime : ICapabilityConditionSource
         travelRouteRuntimeId = string.IsNullOrWhiteSpace(routeRuntimeId) == true ? null : routeRuntimeId;
         travelStartedToday = true;
         travelOriginDecisionId = string.IsNullOrWhiteSpace(originDecisionId) == true ? null : originDecisionId;
+        travelStateRevision++;
+        NotifyP12TravelStateMutationCommitted(true, changedCities);
         return true;
     }
 
@@ -505,20 +574,47 @@ public class NpcRuntime : ICapabilityConditionSource
             || currentCity.CanApplyImportantNpcRevisionIncrements(requiredRevisionIncrements);
     }
 
+    internal bool CanApplyTravelStateRevisionIncrements(long increments)
+    {
+        return increments >= 0L
+            && travelStateRevision <= long.MaxValue - increments;
+    }
+
+    internal bool CanPreflightTravelStateMutations(long requiredTravelStateRevisionIncrements)
+    {
+        if (!CanApplyTravelStateRevisionIncrements(requiredTravelStateRevisionIncrements)) return false;
+        List<CityRuntime> changedCities = currentCity != null
+                && currentCity.ContainsImportantNpc(this)
+            ? new List<CityRuntime> { currentCity }
+            : new List<CityRuntime>();
+        return CanCommitP12TravelStateMutation(true, changedCities);
+    }
+
     public bool StartTravel(CityRuntime destination, int travelDays, string originDecisionId = null)
     {
         return destination != null
             && StartTravel(destination.Location, destination, travelDays, originDecisionId);
     }
 
-    public void SetActiveTravelPartyId(string travelPartyId)
+    public bool SetActiveTravelPartyId(string travelPartyId)
     {
-        activeTravelPartyId = string.IsNullOrWhiteSpace(travelPartyId) == true ? null : travelPartyId;
+        string next = string.IsNullOrWhiteSpace(travelPartyId) == true ? null : travelPartyId;
+        if (string.Equals(activeTravelPartyId, next, StringComparison.Ordinal)) return true;
+        if (!CanCommitP12TravelStateMutation(true, Array.Empty<CityRuntime>())) return false;
+        activeTravelPartyId = next;
+        travelStateRevision++;
+        NotifyP12TravelStateMutationCommitted(true, Array.Empty<CityRuntime>());
+        return true;
     }
 
-    public void ClearTravelStartedToday()
+    public bool ClearTravelStartedToday()
     {
+        if (!travelStartedToday) return true;
+        if (!CanCommitP12TravelStateMutation(true, Array.Empty<CityRuntime>())) return false;
         travelStartedToday = false;
+        travelStateRevision++;
+        NotifyP12TravelStateMutationCommitted(true, Array.Empty<CityRuntime>());
+        return true;
     }
 
     public bool AdvanceTravelDay(out CityRuntime arrivedCity)
@@ -530,17 +626,30 @@ public class NpcRuntime : ICapabilityConditionSource
             return false;
         }
 
-        if (travelDaysRemaining <= 1
-            && destinationCity != null
-            && !destinationCity.CanAddImportantNpcMembership(this))
+        bool arriving = travelDaysRemaining <= 1;
+        CityRuntime arrivalCity = arriving ? destinationCity : null;
+        bool addArrivalMembership = arrivalCity != null
+            && !arrivalCity.ContainsImportantNpc(this);
+        List<CityRuntime> changedCities = addArrivalMembership
+            ? new List<CityRuntime> { arrivalCity }
+            : new List<CityRuntime>();
+        if ((arriving && destinationCity != null
+                && !destinationCity.CanAddImportantNpcMembership(this))
+            || !CanCommitP12TravelStateMutation(true, changedCities))
         {
             return false;
         }
+
+        // The preflight above reserves the City revision and validates the owner
+        // baseline before any travel-progress or presence projection writes.
+        if (addArrivalMembership && !arrivalCity.TryAddImportantNpcMembership(this)) return false;
 
         travelDaysRemaining = Mathf.Max(0, travelDaysRemaining - 1);
 
         if (travelDaysRemaining > 0)
         {
+            travelStateRevision++;
+            NotifyP12TravelStateMutationCommitted(true, changedCities);
             return false;
         }
 
@@ -556,13 +665,18 @@ public class NpcRuntime : ICapabilityConditionSource
         {
             if (arrivedCity != null)
             {
-                arrivedCity.AddImportantNpc(this);
+                currentLocation = arrivedLocation;
+                currentCity = arrivedCity;
             }
             else
             {
-                SetCurrentPresence(arrivedLocation);
+                currentLocation = arrivedLocation;
+                currentCity = null;
             }
         }
+
+        travelStateRevision++;
+        NotifyP12TravelStateMutationCommitted(true, changedCities);
 
         return true;
     }
@@ -574,11 +688,19 @@ public class NpcRuntime : ICapabilityConditionSource
             return false;
         }
 
-        if (originCityProjection != null
-            && !originCityProjection.CanAddImportantNpcMembership(this))
+        bool addOriginMembership = originCityProjection != null
+            && !originCityProjection.ContainsImportantNpc(this);
+        List<CityRuntime> changedCities = addOriginMembership
+            ? new List<CityRuntime> { originCityProjection }
+            : new List<CityRuntime>();
+        if ((originCityProjection != null
+                && !originCityProjection.CanAddImportantNpcMembership(this))
+            || !CanCommitP12TravelStateMutation(true, changedCities))
         {
             return false;
         }
+
+        if (addOriginMembership && !originCityProjection.TryAddImportantNpcMembership(this)) return false;
 
         destinationLocation = null;
         destinationCity = null;
@@ -591,12 +713,17 @@ public class NpcRuntime : ICapabilityConditionSource
 
         if (originCityProjection != null)
         {
-            originCityProjection.AddImportantNpc(this);
+            currentLocation = originLocation;
+            currentCity = originCityProjection;
         }
         else
         {
-            SetCurrentPresence(originLocation);
+            currentLocation = originLocation;
+            currentCity = null;
         }
+
+        travelStateRevision++;
+        NotifyP12TravelStateMutationCommitted(true, changedCities);
 
         return true;
     }

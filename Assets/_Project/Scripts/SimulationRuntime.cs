@@ -121,6 +121,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
     private const string NpcMembershipCensusOperationId = "runtime.npc-membership";
     private const string BootstrapPublicationCensusOperationId = "runtime.bootstrap-publication";
     private const string DailyAdvanceCensusOperationId = "runtime.advance-day";
+    private const string TravelPartyAdvanceCensusOperationId = "runtime.travel-party.advance";
     private const string NpcTradeCensusOperationId = "runtime.economy.npc-trade";
     private const string NpcMoneyTransferCensusOperationId = "runtime.economy.money-transfer";
     private const string MarketPurchaseCensusOperationId = "runtime.economy.market-purchase";
@@ -136,6 +137,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         public int NestingDepth;
         public long PersonStoreRevisionDelta;
         public bool RosterChanged;
+        public readonly HashSet<string> ChangedCityPresenceSectionIds = new HashSet<string>(StringComparer.Ordinal);
 
         public NpcMembershipCensusContext(long personStoreRevisionAtStart, Thread ownerThread)
         {
@@ -172,6 +174,18 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             context.RosterChanged = true;
         }
 
+        public void MarkCityPresenceChanged(CityRuntime city)
+        {
+            if (context == null || city == null) return;
+            if (!context.IsOwnedByCurrentThread())
+            {
+                owner.FaultNpcMembershipCensusBoundary();
+                return;
+            }
+            if (owner.cityNpcPresenceSectionIdsByOwner.TryGetValue(city, out string sectionId))
+                context.ChangedCityPresenceSectionIds.Add(sectionId);
+        }
+
         public void Dispose()
         {
             if (disposed) return;
@@ -186,6 +200,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         public readonly string[] SectionIds;
         public Func<bool> Admission;
         public Action Committed;
+        public Func<bool, IReadOnlyList<CityRuntime>, bool> TravelAdmission;
+        public Action<bool, IReadOnlyList<CityRuntime>> TravelCommitted;
 
         public P12NpcOwnerMutationBinding(object owner, string[] sectionIds)
         {
@@ -210,6 +226,46 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
 
         public bool IsOwnedByCurrentThread() => ReferenceEquals(OwnerThread, Thread.CurrentThread)
             && OwnerManagedThreadId == Thread.CurrentThread.ManagedThreadId;
+    }
+
+    private sealed class P12TravelPartyAdvanceOperationContext
+    {
+        public readonly Thread OwnerThread;
+        public readonly int OwnerManagedThreadId;
+        public readonly HashSet<string> ChangedSectionIds = new HashSet<string>(StringComparer.Ordinal);
+        public SimulationOperationScope ProtocolScope;
+
+        public P12TravelPartyAdvanceOperationContext(Thread ownerThread, SimulationOperationScope protocolScope)
+        {
+            OwnerThread = ownerThread ?? throw new ArgumentNullException(nameof(ownerThread));
+            OwnerManagedThreadId = ownerThread.ManagedThreadId;
+            ProtocolScope = protocolScope ?? throw new ArgumentNullException(nameof(protocolScope));
+        }
+
+        public bool IsOwnedByCurrentThread() => ReferenceEquals(OwnerThread, Thread.CurrentThread)
+            && OwnerManagedThreadId == Thread.CurrentThread.ManagedThreadId;
+    }
+
+    private sealed class P12TravelPartyAdvanceOperationScope : IDisposable
+    {
+        private readonly SimulationRuntime owner;
+        private readonly P12TravelPartyAdvanceOperationContext context;
+        private bool disposed;
+
+        public P12TravelPartyAdvanceOperationScope(
+            SimulationRuntime owner,
+            P12TravelPartyAdvanceOperationContext context)
+        {
+            this.owner = owner;
+            this.context = context;
+        }
+
+        public void Dispose()
+        {
+            if (disposed) return;
+            disposed = true;
+            owner?.ExitP12TravelPartyAdvanceOperation(context);
+        }
     }
 
     private sealed class P12MerchantOperationScope : IDisposable
@@ -266,8 +322,17 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         new Dictionary<MerchantTradePlanRuntime, P12NpcOwnerMutationBinding>();
     private readonly Dictionary<NpcTravelPlanRuntime, P12NpcOwnerMutationBinding> npcTravelPlanMutationBindings =
         new Dictionary<NpcTravelPlanRuntime, P12NpcOwnerMutationBinding>();
+    private readonly Dictionary<NpcRuntime, P12NpcOwnerMutationBinding> npcTravelStateMutationBindings =
+        new Dictionary<NpcRuntime, P12NpcOwnerMutationBinding>();
+    private readonly Dictionary<CityRuntime, string> cityNpcPresenceSectionIdsByOwner =
+        new Dictionary<CityRuntime, string>();
+    private IReadOnlyList<IOwnerSectionCensusProvider> cityNpcPresenceCensusProviders =
+        Array.AsReadOnly(new IOwnerSectionCensusProvider[0]);
+    private TravelPartyCensusProvider travelPartyCensusProvider;
+    private P12NpcOwnerMutationBinding travelPartyStoreMutationBinding;
     private volatile NpcMembershipCensusContext activeNpcMembershipCensusContext;
     private volatile P12MerchantOperationContext activeP12MerchantOperationContext;
+    private volatile P12TravelPartyAdvanceOperationContext activeP12TravelPartyAdvanceOperationContext;
     private readonly ActorChoiceStore actorChoiceStore;
     private readonly SpatialAuthorityStore spatialAuthorityStore;
     private readonly LegacySpatialAnchorBindingStore legacySpatialAnchorBindingStore;
@@ -1146,12 +1211,17 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                 personStoreCensusProviders[1],
                 out _)
             || !protocol.RegisterSpatialKnowledgeRosterFamily(npcRuntimeSnapshot, out _)
+            || !protocol.RegisterNpcTravelStateRosterFamily(npcRuntimeSnapshot, out _)
             || !protocol.RegisterInventoryRosterFamily(npcRuntimeSnapshot, out _)
             || !protocol.RegisterMoneyAccountRosterFamily(npcRuntimeSnapshot, out _)
             || !protocol.RegisterNpcKnowledgeRosterFamily(npcRuntimeSnapshot, out _)
             || !protocol.RegisterNpcPlanRosterFamily(npcRuntimeSnapshot, out _)
             || (runtimeAdmissionContext != null
                 && !TryRegisterSimulationRecordSequenceCensusProvider(protocol))
+            || (runtimeAdmissionContext != null
+                && !TryRegisterTravelPartyCensusProvider(protocol))
+            || (runtimeAdmissionContext != null
+                && !TryRegisterCityNpcPresenceCensusProviders(protocol))
             || (runtimeAdmissionContext != null && !TryRegisterCityMarketCensusProviders(protocol))
             || !protocol.SealExpectedSectionInventory(out _)
             || !protocol.SealCensusProviderInventory(out _))
@@ -1171,6 +1241,10 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                 && protocol.RegisterExpectedOperation(
                     DailyAdvanceCensusOperationId,
                     out _)
+                && (travelPartySystem == null
+                    || protocol.RegisterExpectedOperation(
+                        TravelPartyAdvanceCensusOperationId,
+                        out _))
                 && protocol.RegisterExpectedOperation(
                     NpcTradeCensusOperationId,
                     out _)
@@ -1220,6 +1294,27 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
 
                 if (!TryRebindNpcOwnerMutationBoundaries())
                     throw new InvalidOperationException("The P12 NPC owner mutation boundaries could not bind to the accepted owner census.");
+
+                if (travelPartyCensusProvider != null)
+                {
+                    TravelPartyStore store = travelPartySystem?.Store;
+                    travelPartyStoreMutationBinding = new P12NpcOwnerMutationBinding(
+                        store,
+                        new[] { TravelPartyCensusProvider.SectionId });
+                    travelPartyStoreMutationBinding.Admission = CanCommitP12TravelPartyStoreMutation;
+                    travelPartyStoreMutationBinding.Committed = NotifyP12TravelPartyStoreMutation;
+                    store.BindP12MutationBoundary(
+                        travelPartyStoreMutationBinding.Admission,
+                        travelPartyStoreMutationBinding.Committed);
+                }
+
+                foreach (KeyValuePair<CityRuntime, string> pair in cityNpcPresenceSectionIdsByOwner)
+                {
+                    CityRuntime city = pair.Key;
+                    city.BindP12PresenceMutationBoundary(
+                        () => CanCommitP12CityPresenceMutation(city),
+                        () => NotifyP12CityPresenceMutation(city));
+                }
 
                 foreach (KeyValuePair<MarketRuntime, string> pair in marketSectionIdsByOwner)
                 {
@@ -1312,6 +1407,104 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                 marketSectionIdsByOwner.Add(market, witness.SectionId);
             }
 
+            return true;
+        }
+        catch
+        {
+            protocol.FaultClosed();
+            return false;
+        }
+    }
+
+    private bool TryRegisterTravelPartyCensusProvider(ContinuationCensusProtocol protocol)
+    {
+        if (protocol == null) return false;
+        if (travelPartySystem == null) return true;
+        try
+        {
+            TravelPartyStore store = travelPartySystem.Store;
+            TravelPartyCensusProvider provider = new TravelPartyCensusProvider(store);
+            OwnerSectionCensusWitness witness = provider.GetCurrentCensus();
+            if (witness == null
+                || !string.Equals(witness.SectionId, TravelPartyCensusProvider.SectionId, StringComparison.Ordinal)
+                || witness.SchemaVersion != TravelPartyCensusProvider.SchemaVersion
+                || !ReferenceEquals(witness.OwnerInstanceIdentity, store)
+                || witness.Cardinality != store.ActiveParties.Count
+                || witness.Revision != store.Revision
+                || !protocol.RegisterExpectedSection(
+                    new OwnerSectionContract(
+                        TravelPartyCensusProvider.SectionId,
+                        TravelPartyCensusProvider.SchemaVersion,
+                        OwnerSectionRole.Required),
+                    out _)
+                || !protocol.RegisterCensusProvider(
+                    TravelPartyCensusProvider.SectionId,
+                    provider,
+                    out _))
+            {
+                protocol.FaultClosed();
+                return false;
+            }
+
+            travelPartyCensusProvider = provider;
+            return true;
+        }
+        catch
+        {
+            protocol.FaultClosed();
+            return false;
+        }
+    }
+
+    private bool TryRegisterCityNpcPresenceCensusProviders(ContinuationCensusProtocol protocol)
+    {
+        if (protocol == null) return false;
+        try
+        {
+            IReadOnlyList<IOwnerSectionCensusProvider> providers =
+                CityNpcPresenceCensusProvider.CreateProviders(cities, npcRuntimeSnapshot);
+            Dictionary<CityRuntime, string> stagedSections = new Dictionary<CityRuntime, string>();
+            HashSet<string> sectionIds = new HashSet<string>(StringComparer.Ordinal);
+            HashSet<CityRuntime> owners = new HashSet<CityRuntime>();
+            for (int i = 0; i < providers.Count; i++)
+            {
+                IOwnerSectionCensusProvider provider = providers[i];
+                OwnerSectionCensusWitness witness = provider.GetCurrentCensus();
+                if (witness == null
+                    || !(witness.OwnerInstanceIdentity is CityRuntime city)
+                    || !cities.Contains(city)
+                    || !owners.Add(city)
+                    || witness.SchemaVersion != CityNpcPresenceCensusProvider.SchemaVersion
+                    || !string.Equals(
+                        witness.SectionId,
+                        CityNpcPresenceCensusProvider.SectionIdFor(city.RuntimeId),
+                        StringComparison.Ordinal)
+                    || witness.Cardinality != city.ImportantNpcs.Count
+                    || witness.Revision != city.ImportantNpcRevision
+                    || !sectionIds.Add(witness.SectionId)
+                    || !protocol.RegisterExpectedSection(
+                        new OwnerSectionContract(
+                            witness.SectionId,
+                            witness.SchemaVersion,
+                            OwnerSectionRole.Required),
+                        out _)
+                    || !protocol.RegisterCensusProvider(witness.SectionId, provider, out _))
+                {
+                    protocol.FaultClosed();
+                    return false;
+                }
+                stagedSections.Add(city, witness.SectionId);
+            }
+
+            if (providers.Count != cities.Count)
+            {
+                protocol.FaultClosed();
+                return false;
+            }
+            cityNpcPresenceSectionIdsByOwner.Clear();
+            foreach (KeyValuePair<CityRuntime, string> pair in stagedSections)
+                cityNpcPresenceSectionIdsByOwner.Add(pair.Key, pair.Value);
+            cityNpcPresenceCensusProviders = providers;
             return true;
         }
         catch
@@ -1434,6 +1627,33 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                 if (binding.SectionIds.Length != 2)
                     throw new InvalidOperationException("Each SpatialKnowledge owner must bind its location and route sections.");
 
+            List<P12NpcOwnerMutationBinding> travelStateBindings = new List<P12NpcOwnerMutationBinding>();
+            IReadOnlyList<IOwnerSectionCensusProvider> travelStateProviders =
+                npcRosterCensusProtocol.NpcTravelStateFamilyProviders;
+            if (travelStateProviders.Count != npcRuntimes.Count)
+                throw new InvalidOperationException("NPC travel-state census does not match the installed roster.");
+            foreach (IOwnerSectionCensusProvider censusProvider in travelStateProviders)
+            {
+                if (!(censusProvider is NpcTravelStateCensusProvider provider)
+                    || string.IsNullOrWhiteSpace(provider.RuntimeId)
+                    || !npcRegistryById.TryGetValue(provider.RuntimeId, out NpcRuntime registeredNpc)
+                    || !ReferenceEquals(registeredNpc, provider.NpcOwner))
+                    throw new InvalidOperationException("NPC travel-state census identity does not match the installed roster.");
+
+                OwnerSectionCensusWitness witness = censusProvider.GetCurrentCensus();
+                string sectionId = NpcTravelStateCensusProvider.SectionIdFor(provider.RuntimeId);
+                if (!ReferenceEquals(witness.OwnerInstanceIdentity, provider.NpcOwner)
+                    || !string.Equals(witness.SectionId, sectionId, StringComparison.Ordinal)
+                    || witness.SchemaVersion != NpcTravelStateCensusProvider.SchemaVersion
+                    || witness.Cardinality != 1
+                    || witness.Revision != provider.NpcOwner.TravelStateRevision)
+                    throw new InvalidOperationException("NPC travel-state census witness is not an exact current owner witness.");
+
+                travelStateBindings.Add(new P12NpcOwnerMutationBinding(
+                    provider.NpcOwner,
+                    new[] { sectionId }));
+            }
+
             List<P12NpcOwnerMutationBinding> commercialBindings = new List<P12NpcOwnerMutationBinding>();
             IReadOnlyList<IOwnerSectionCensusProvider> knowledgeProviders =
                 NpcKnowledgeCensusProvider.CreateProviders(npcRuntimes);
@@ -1527,6 +1747,18 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                 commercialBindings,
                 merchantPlanBindings,
                 travelPlanBindings);
+
+            foreach (P12NpcOwnerMutationBinding binding in travelStateBindings)
+            {
+                binding.TravelAdmission = (travelChanged, changedCities) =>
+                    CanCommitP12NpcTravelMutation(binding, travelChanged, changedCities);
+                binding.TravelCommitted = (travelChanged, changedCities) =>
+                    NotifyP12NpcTravelMutation(binding, travelChanged, changedCities);
+                ((NpcRuntime)binding.Owner).BindP12TravelStateMutationBoundary(
+                    binding.TravelAdmission,
+                    binding.TravelCommitted);
+                npcTravelStateMutationBindings.Add((NpcRuntime)binding.Owner, binding);
+            }
 
             return true;
         }
@@ -1657,6 +1889,16 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             else
                 succeeded = false;
         }
+        foreach (KeyValuePair<NpcRuntime, P12NpcOwnerMutationBinding> pair in
+            new List<KeyValuePair<NpcRuntime, P12NpcOwnerMutationBinding>>(npcTravelStateMutationBindings))
+        {
+            if (pair.Key.UnbindP12TravelStateMutationBoundary(
+                    pair.Value.TravelAdmission,
+                    pair.Value.TravelCommitted))
+                npcTravelStateMutationBindings.Remove(pair.Key);
+            else
+                succeeded = false;
+        }
         if (!succeeded) FaultRuntimeAdmission();
         return succeeded;
     }
@@ -1750,23 +1992,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             FaultRuntimeAdmission();
             return false;
         }
-
-        P12MerchantOperationContext context = activeP12MerchantOperationContext;
-        if (context != null)
-        {
-            if (!context.IsOwnedByCurrentThread())
-            {
-                FaultRuntimeAdmission();
-                return false;
-            }
-
-            bool alreadyChanged = true;
-            foreach (string sectionId in binding.SectionIds)
-                alreadyChanged &= context.ChangedSectionIds.Contains(sectionId);
-            if (alreadyChanged) return true;
-        }
-
-        if (!npcRosterCensusProtocol.TryValidateUnchangedSections(binding.SectionIds, out _))
+        if (!CanCommitP12MutationSections(binding.SectionIds))
         {
             FaultRuntimeAdmission();
             return false;
@@ -1857,6 +2083,295 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         return true;
     }
 
+    private bool CanCommitP12MutationSections(IEnumerable<string> sectionIds)
+    {
+        if (runtimeAdmissionContext == null) return true;
+        if (!IsRuntimeAdmissionOwnerThreadCurrent() || npcRosterCensusProtocol == null)
+        {
+            FaultRuntimeAdmission();
+            return false;
+        }
+
+        HashSet<string> requested = new HashSet<string>(StringComparer.Ordinal);
+        try
+        {
+            if (sectionIds == null) return false;
+            foreach (string sectionId in sectionIds)
+            {
+                if (string.IsNullOrWhiteSpace(sectionId) || !requested.Add(sectionId))
+                {
+                    FaultRuntimeAdmission();
+                    return false;
+                }
+            }
+        }
+        catch
+        {
+            FaultRuntimeAdmission();
+            return false;
+        }
+        if (requested.Count == 0) return true;
+
+        P12TravelPartyAdvanceOperationContext travelContext =
+            activeP12TravelPartyAdvanceOperationContext;
+        P12MerchantOperationContext merchantContext = activeP12MerchantOperationContext;
+        if (travelContext != null && merchantContext != null)
+        {
+            FaultRuntimeAdmission();
+            return false;
+        }
+
+        NpcMembershipCensusContext membershipContext = activeNpcMembershipCensusContext;
+        if (membershipContext != null)
+        {
+            if (!membershipContext.IsOwnedByCurrentThread())
+            {
+                FaultRuntimeAdmission();
+                return false;
+            }
+            requested.RemoveWhere(membershipContext.ChangedCityPresenceSectionIds.Contains);
+        }
+
+        HashSet<string> alreadyChanged = null;
+        if (travelContext != null)
+        {
+            if (!travelContext.IsOwnedByCurrentThread())
+            {
+                FaultRuntimeAdmission();
+                return false;
+            }
+            alreadyChanged = travelContext.ChangedSectionIds;
+        }
+        else if (merchantContext != null)
+        {
+            if (!merchantContext.IsOwnedByCurrentThread())
+            {
+                FaultRuntimeAdmission();
+                return false;
+            }
+            alreadyChanged = merchantContext.ChangedSectionIds;
+        }
+
+        if (alreadyChanged != null)
+            requested.RemoveWhere(alreadyChanged.Contains);
+        return requested.Count == 0
+            || npcRosterCensusProtocol.TryValidateUnchangedSections(requested, out _);
+    }
+
+    private bool NotifyP12MutationSections(IEnumerable<string> sectionIds)
+    {
+        if (runtimeAdmissionContext == null) return true;
+        if (!IsRuntimeAdmissionOwnerThreadCurrent() || npcRosterCensusProtocol == null)
+        {
+            FaultRuntimeAdmission();
+            return false;
+        }
+
+        HashSet<string> changed = new HashSet<string>(StringComparer.Ordinal);
+        try
+        {
+            if (sectionIds == null) return false;
+            foreach (string sectionId in sectionIds)
+            {
+                if (string.IsNullOrWhiteSpace(sectionId) || !changed.Add(sectionId))
+                {
+                    FaultRuntimeAdmission();
+                    return false;
+                }
+            }
+        }
+        catch
+        {
+            FaultRuntimeAdmission();
+            return false;
+        }
+        if (changed.Count == 0) return true;
+
+        P12TravelPartyAdvanceOperationContext travelContext =
+            activeP12TravelPartyAdvanceOperationContext;
+        P12MerchantOperationContext merchantContext = activeP12MerchantOperationContext;
+        if (travelContext != null && merchantContext != null)
+        {
+            FaultRuntimeAdmission();
+            return false;
+        }
+        if (travelContext != null)
+        {
+            if (!travelContext.IsOwnedByCurrentThread())
+            {
+                FaultRuntimeAdmission();
+                return false;
+            }
+            travelContext.ChangedSectionIds.UnionWith(changed);
+            return true;
+        }
+        if (merchantContext != null)
+        {
+            if (!merchantContext.IsOwnedByCurrentThread())
+            {
+                FaultRuntimeAdmission();
+                return false;
+            }
+            merchantContext.ChangedSectionIds.UnionWith(changed);
+            return true;
+        }
+        return npcRosterCensusProtocol.NotifyCommittedMutations(changed, out _);
+    }
+
+    private string[] GetP12TravelMutationSectionIds(
+        P12NpcOwnerMutationBinding binding,
+        bool travelStateChanged,
+        IReadOnlyList<CityRuntime> changedCities)
+    {
+        if (binding == null || !(binding.Owner is NpcRuntime npc)
+            || !npcTravelStateMutationBindings.TryGetValue(npc, out P12NpcOwnerMutationBinding current)
+            || !ReferenceEquals(current, binding)
+            || binding.SectionIds.Length != 1
+            || !npcRegistryById.TryGetValue(npc.RuntimeId, out NpcRuntime installed)
+            || !ReferenceEquals(installed, npc)
+            || !string.Equals(binding.SectionIds[0],
+                NpcTravelStateCensusProvider.SectionIdFor(npc.RuntimeId),
+                StringComparison.Ordinal))
+            return null;
+
+        List<string> ids = new List<string>();
+        if (travelStateChanged) ids.Add(binding.SectionIds[0]);
+        HashSet<CityRuntime> seenCities = new HashSet<CityRuntime>();
+        if (changedCities != null)
+        {
+            foreach (CityRuntime city in changedCities)
+            {
+                if (city == null || !seenCities.Add(city)
+                    || !cityNpcPresenceSectionIdsByOwner.TryGetValue(city, out string sectionId)
+                    || !cities.Contains(city)) return null;
+                ids.Add(sectionId);
+            }
+        }
+        return ids.ToArray();
+    }
+
+    private bool CanCommitP12NpcTravelMutation(
+        P12NpcOwnerMutationBinding binding,
+        bool travelStateChanged,
+        IReadOnlyList<CityRuntime> changedCities)
+    {
+        if (runtimeAdmissionContext == null) return true;
+        string[] ids = GetP12TravelMutationSectionIds(binding, travelStateChanged, changedCities);
+        if (ids == null)
+        {
+            FaultRuntimeAdmission();
+            return false;
+        }
+        if (ids.Length == 0) return true;
+        if (!CanCommitP12MutationSections(ids))
+        {
+            FaultRuntimeAdmission();
+            return false;
+        }
+        return true;
+    }
+
+    private void NotifyP12NpcTravelMutation(
+        P12NpcOwnerMutationBinding binding,
+        bool travelStateChanged,
+        IReadOnlyList<CityRuntime> changedCities)
+    {
+        if (runtimeAdmissionContext == null) return;
+        NpcMembershipCensusContext membershipContext = activeNpcMembershipCensusContext;
+        if (membershipContext != null)
+        {
+            if (!membershipContext.IsOwnedByCurrentThread() || travelStateChanged)
+            {
+                FaultRuntimeAdmission();
+                return;
+            }
+
+            string[] sectionIds = GetP12TravelMutationSectionIds(binding, false, changedCities);
+            if (sectionIds == null)
+            {
+                FaultRuntimeAdmission();
+                return;
+            }
+            foreach (CityRuntime city in changedCities ?? Array.Empty<CityRuntime>())
+            {
+                if (city == null
+                    || !cityNpcPresenceSectionIdsByOwner.TryGetValue(city, out string sectionId))
+                {
+                    FaultRuntimeAdmission();
+                    return;
+                }
+                membershipContext.ChangedCityPresenceSectionIds.Add(sectionId);
+            }
+            return;
+        }
+
+        string[] ids = GetP12TravelMutationSectionIds(binding, travelStateChanged, changedCities);
+        if (ids == null || !NotifyP12MutationSections(ids))
+            FaultRuntimeAdmission();
+    }
+
+    private bool CanCommitP12TravelPartyStoreMutation()
+    {
+        if (runtimeAdmissionContext == null) return true;
+        if (travelPartyStoreMutationBinding == null
+            || travelPartySystem == null
+            || !ReferenceEquals(travelPartyStoreMutationBinding.Owner, travelPartySystem.Store)
+            || travelPartyCensusProvider == null)
+        {
+            FaultRuntimeAdmission();
+            return false;
+        }
+        return CanCommitP12MutationSections(travelPartyStoreMutationBinding.SectionIds);
+    }
+
+    private void NotifyP12TravelPartyStoreMutation()
+    {
+        if (runtimeAdmissionContext == null) return;
+        if (travelPartyStoreMutationBinding == null
+            || !ReferenceEquals(travelPartyStoreMutationBinding.Owner, travelPartySystem?.Store)
+            || !NotifyP12MutationSections(travelPartyStoreMutationBinding.SectionIds))
+            FaultRuntimeAdmission();
+    }
+
+    private bool CanCommitP12CityPresenceMutation(CityRuntime city)
+    {
+        if (runtimeAdmissionContext == null) return true;
+        if (city == null || !cityNpcPresenceSectionIdsByOwner.TryGetValue(city, out string sectionId)
+            || !cities.Contains(city))
+        {
+            FaultRuntimeAdmission();
+            return false;
+        }
+        return CanCommitP12MutationSections(new[] { sectionId });
+    }
+
+    private void NotifyP12CityPresenceMutation(CityRuntime city)
+    {
+        if (runtimeAdmissionContext == null) return;
+        NpcMembershipCensusContext membershipContext = activeNpcMembershipCensusContext;
+        if (membershipContext != null)
+        {
+            if (!membershipContext.IsOwnedByCurrentThread()
+                || city == null
+                || !cityNpcPresenceSectionIdsByOwner.ContainsKey(city))
+            {
+                FaultRuntimeAdmission();
+                return;
+            }
+            if (!cityNpcPresenceSectionIdsByOwner.TryGetValue(city, out string membershipSectionId))
+            {
+                FaultRuntimeAdmission();
+                return;
+            }
+            membershipContext.ChangedCityPresenceSectionIds.Add(membershipSectionId);
+            return;
+        }
+
+        if (city == null || !cityNpcPresenceSectionIdsByOwner.TryGetValue(city, out string sectionId)
+            || !NotifyP12MutationSections(new[] { sectionId }))
+            FaultRuntimeAdmission();
+    }
+
     private void NotifyP12MerchantOwnerMutation(P12NpcOwnerMutationBinding binding)
     {
         if (runtimeAdmissionContext == null || npcRosterCensusProtocol == null) return;
@@ -1868,25 +2383,144 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                 return;
             }
 
-            P12MerchantOperationContext context = activeP12MerchantOperationContext;
-            if (context != null)
-            {
-                if (!context.IsOwnedByCurrentThread())
-                {
-                    FaultRuntimeAdmission();
-                    return;
-                }
-                foreach (string sectionId in binding.SectionIds)
-                    context.ChangedSectionIds.Add(sectionId);
-                return;
-            }
-
-            if (!npcRosterCensusProtocol.NotifyCommittedMutations(binding.SectionIds, out _))
+            if (!NotifyP12MutationSections(binding.SectionIds))
                 FaultRuntimeAdmission();
         }
         catch
         {
             FaultRuntimeAdmission();
+        }
+    }
+
+    private bool TryBeginP12TravelPartyAdvanceOperation(
+        out P12TravelPartyAdvanceOperationScope scope)
+    {
+        scope = null;
+        if (runtimeAdmissionContext == null || travelPartySystem == null) return false;
+        if (!IsRuntimeAdmissionOwnerThreadCurrent()
+            || npcRosterCensusProtocol == null
+            || activeP12TravelPartyAdvanceOperationContext != null
+            || activeP12MerchantOperationContext != null
+            || travelPartyCensusProvider == null
+            || travelPartyStoreMutationBinding == null
+            || !ReferenceEquals(travelPartyStoreMutationBinding.Owner, travelPartySystem.Store))
+        {
+            FaultRuntimeAdmission();
+            return false;
+        }
+
+        List<string> sectionIds = new List<string>();
+        try
+        {
+            OwnerSectionCensusWitness partyWitness = travelPartyCensusProvider.GetCurrentCensus();
+            if (partyWitness == null
+                || !ReferenceEquals(partyWitness.OwnerInstanceIdentity, travelPartySystem.Store)
+                || partyWitness.Cardinality != travelPartySystem.Store.ActiveParties.Count
+                || partyWitness.Revision != travelPartySystem.Store.Revision)
+            {
+                FaultRuntimeAdmission();
+                return false;
+            }
+            sectionIds.Add(TravelPartyCensusProvider.SectionId);
+
+            if (cityNpcPresenceCensusProviders.Count != cities.Count
+                || cityNpcPresenceSectionIdsByOwner.Count != cities.Count)
+            {
+                FaultRuntimeAdmission();
+                return false;
+            }
+            foreach (IOwnerSectionCensusProvider provider in cityNpcPresenceCensusProviders)
+            {
+                OwnerSectionCensusWitness witness = provider.GetCurrentCensus();
+                if (witness == null
+                    || !(witness.OwnerInstanceIdentity is CityRuntime city)
+                    || !cities.Contains(city)
+                    || !cityNpcPresenceSectionIdsByOwner.TryGetValue(city, out string sectionId)
+                    || !string.Equals(witness.SectionId, sectionId, StringComparison.Ordinal))
+                {
+                    FaultRuntimeAdmission();
+                    return false;
+                }
+                sectionIds.Add(sectionId);
+            }
+
+            IReadOnlyList<IOwnerSectionCensusProvider> travelProviders =
+                npcRosterCensusProtocol.NpcTravelStateFamilyProviders;
+            if (travelProviders.Count != npcRuntimes.Count) throw new InvalidOperationException();
+            foreach (IOwnerSectionCensusProvider provider in travelProviders)
+            {
+                if (!(provider is NpcTravelStateCensusProvider travelProvider)
+                    || !npcRegistryById.TryGetValue(travelProvider.RuntimeId, out NpcRuntime installed)
+                    || !ReferenceEquals(installed, travelProvider.NpcOwner))
+                    throw new InvalidOperationException();
+                sectionIds.Add(travelProvider.SectionId);
+            }
+
+            IReadOnlyList<IOwnerSectionCensusProvider> spatialProviders =
+                npcRosterCensusProtocol.SpatialKnowledgeFamilyProviders;
+            if (spatialProviders.Count != npcRuntimes.Count * 2) throw new InvalidOperationException();
+            foreach (IOwnerSectionCensusProvider provider in spatialProviders)
+            {
+                OwnerSectionCensusWitness witness = provider.GetCurrentCensus();
+                if (witness == null) throw new InvalidOperationException();
+                sectionIds.Add(witness.SectionId);
+            }
+
+            if (simulationRecordSequenceCensusProvider == null)
+                throw new InvalidOperationException();
+            sectionIds.Add(SimulationRecordSequenceCensusProvider.SectionId);
+        }
+        catch
+        {
+            FaultRuntimeAdmission();
+            return false;
+        }
+
+        HashSet<string> distinct = new HashSet<string>(sectionIds, StringComparer.Ordinal);
+        if (distinct.Count != sectionIds.Count
+            || !npcRosterCensusProtocol.TryValidateUnchangedSections(sectionIds, out _)
+            || !TryEnterRuntimeAdmissionOperation(
+                TravelPartyAdvanceCensusOperationId,
+                out SimulationOperationScope protocolScope))
+        {
+            FaultRuntimeAdmission();
+            return false;
+        }
+
+        P12TravelPartyAdvanceOperationContext context =
+            new P12TravelPartyAdvanceOperationContext(Thread.CurrentThread, protocolScope);
+        activeP12TravelPartyAdvanceOperationContext = context;
+        scope = new P12TravelPartyAdvanceOperationScope(this, context);
+        return true;
+    }
+
+    private void ExitP12TravelPartyAdvanceOperation(P12TravelPartyAdvanceOperationContext context)
+    {
+        if (context == null) return;
+        try
+        {
+            if (!ReferenceEquals(activeP12TravelPartyAdvanceOperationContext, context)
+                || !context.IsOwnedByCurrentThread())
+            {
+                FaultRuntimeAdmission();
+                return;
+            }
+
+            if (context.ChangedSectionIds.Count != 0
+                && !npcRosterCensusProtocol.NotifyCommittedMutations(context.ChangedSectionIds, out _))
+                FaultRuntimeAdmission();
+        }
+        catch
+        {
+            FaultRuntimeAdmission();
+        }
+        finally
+        {
+            if (ReferenceEquals(activeP12TravelPartyAdvanceOperationContext, context))
+                activeP12TravelPartyAdvanceOperationContext = null;
+            SimulationOperationScope operation = context.ProtocolScope;
+            context.ProtocolScope = null;
+            operation?.Dispose();
         }
     }
 
@@ -1984,10 +2618,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                     || (binding.Owner is InventoryRuntime inventory
                         && npcInventoryMutationBindings.TryGetValue(inventory, out P12NpcOwnerMutationBinding inventoryBinding)
                         && ReferenceEquals(inventoryBinding, binding)));
-            bool accepted = current && (binding.Owner is InventoryRuntime
-                ? npcRosterCensusProtocol.NotifyCommittedMutations(binding.SectionIds, out _)
-                : binding.SectionIds.Length == 1
-                    && npcRosterCensusProtocol.NotifyCommittedMutation(binding.SectionIds[0], out _));
+            bool accepted = current && NotifyP12MutationSections(binding.SectionIds);
             if (!accepted) npcRosterCensusProtocol.FaultClosed();
         }
         catch
@@ -2052,9 +2683,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         if (!IsRuntimeAdmissionOwnerThreadCurrent()
             || npcRosterCensusProtocol == null
             || simulationRecordSequenceCensusProvider == null
-            || !npcRosterCensusProtocol.TryValidateUnchangedSections(
-                new[] { SimulationRecordSequenceCensusProvider.SectionId },
-                out _))
+            || !CanCommitP12MutationSections(
+                new[] { SimulationRecordSequenceCensusProvider.SectionId }))
         {
             FaultRuntimeAdmission();
             return false;
@@ -2069,9 +2699,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         try
         {
             if (npcRosterCensusProtocol == null
-                || !npcRosterCensusProtocol.NotifyCommittedMutation(
-                    SimulationRecordSequenceCensusProvider.SectionId,
-                    out _))
+                || !NotifyP12MutationSections(
+                    new[] { SimulationRecordSequenceCensusProvider.SectionId }))
             {
                 FaultRuntimeAdmission();
                 throw new InvalidOperationException(
@@ -2516,7 +3145,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         {
             npcRosterCensusProtocol?.FaultClosed();
         }
-        else if (context.RosterChanged || context.PersonStoreRevisionDelta != 0L)
+        else if (context.RosterChanged
+            || context.PersonStoreRevisionDelta != 0L
+            || context.ChangedCityPresenceSectionIds.Count != 0)
         {
             List<string> changedFixedSections = new List<string>();
             if (context.PersonStoreRevisionDelta != 0L)
@@ -2524,6 +3155,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                 changedFixedSections.Add(PersonMembershipCensusProvider.SectionId);
                 changedFixedSections.Add(PersonMaterializationBindingCensusProvider.SectionId);
             }
+            changedFixedSections.AddRange(context.ChangedCityPresenceSectionIds);
 
             if (context.ProtocolScope != null && npcRosterCensusProtocol != null)
             {
@@ -2792,6 +3424,18 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
 
         npcRegistryById.Add(npcRuntime.RuntimeId, npcRuntime);
         npcRuntimes.Add(npcRuntime);
+        if (!isComposingNpcRoster
+            && runtimeAdmissionContext != null
+            && npcRuntime.CurrentCity != null
+            && !cityNpcPresenceSectionIdsByOwner.ContainsKey(npcRuntime.CurrentCity))
+        {
+            npcRegistryById.Remove(npcRuntime.RuntimeId);
+            npcRuntimes.Remove(npcRuntime);
+            failure = WorldNpcRegistryFailure.InvalidNpc;
+            return false;
+        }
+        if (!isComposingNpcRoster && npcRuntime.CurrentCity != null)
+            censusScope.MarkCityPresenceChanged(npcRuntime.CurrentCity);
         censusScope.MarkRosterChanged();
         return true;
     }
@@ -2843,6 +3487,13 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         if (string.IsNullOrWhiteSpace(npcRuntime.ResidenceSettlementRuntimeId) == false)
         {
             failure = WorldNpcRegistryFailure.NpcHasResidence;
+            return false;
+        }
+
+        if (npcRuntime.CurrentCity != null
+            && !npcRuntime.SetCurrentPresence(null, null))
+        {
+            failure = WorldNpcRegistryFailure.RuntimeFaulted;
             return false;
         }
 
@@ -4643,7 +5294,21 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
 
         if (travelPartySystem != null)
         {
-            arrivedNpcs.AddRange(travelPartySystem.AdvanceParties());
+            if (runtimeAdmissionContext == null)
+            {
+                arrivedNpcs.AddRange(travelPartySystem.AdvanceParties());
+            }
+            else if (!TryBeginP12TravelPartyAdvanceOperation(
+                out P12TravelPartyAdvanceOperationScope travelPartyAdvanceScope))
+            {
+                throw new InvalidOperationException(
+                    "The P12 TravelParty advance owner operation could not be admitted.");
+            }
+            else
+            {
+                using (travelPartyAdvanceScope)
+                    arrivedNpcs.AddRange(travelPartySystem.AdvanceParties());
+            }
         }
 
         if (travelSystem != null)
