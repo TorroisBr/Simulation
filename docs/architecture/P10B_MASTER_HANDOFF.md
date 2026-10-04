@@ -1,0 +1,7 @@
+# Master handoff — P10-B deterministic generated local topology
+
+**Status:** `READY_FOR_IMPLEMENTATION_HANDOFF` after independent technical-design PASS. **Architecture base:** `f6924e63d8e5731da1d33021d0361e7defe6dad7`. **Design content:** `a72b90af33759ba26a501571eca50a4d9d1c458e` on `codex/architecture/p10b-technical-design`. Read [the design](P10B_TECHNICAL_DESIGN.md) and [review](P10B_TECHNICAL_REVIEW.md) before dispatch.
+
+Implement one generated Ruin LocalTopology at the existing P9-B canonical Location under an explicit new genesis profile. Use the reviewed deterministic v1 structural algorithm/byte encoding, stable SiteInstanceId separate from archetype and Location, primary site-instance topology lookup, private complete genesis draft and cross-store atomic batch publication. Keep P10-A authored output byte-equivalent through its legacy adapter. Reject the new P10-B profile before construction under selected P12 `UnityBootstrap-Daily-v1`; do not enlarge Save.
+
+Refresh current P8/P9/P10/P12 refs and isolate implementation. Serialize `SimulationGenesisPipeline`, `TesteSimulacao`, site/identity/LocalTopology stores and P12 admission hotspots. Run the reviewed deterministic vectors, graph validity, atomicity, P10-A compatibility, P12 negative admission and affected regressions. Submit a separate implementation candidate for validation and independent exact-tip code review. Canonical promotion remains a human gate.
