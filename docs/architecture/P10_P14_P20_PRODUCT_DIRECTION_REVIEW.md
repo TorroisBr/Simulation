@@ -1,0 +1,9 @@
+# Independent review — P10/P14/P20 product-direction candidate
+
+**Verdict:** `VALIDATED_CANDIDATE` / **PASS**, architecture/planning only. **Canonical base:** `3bf09249b7dd9e255c3493aacfd75c96080a31e3` on `codex/architecture/world-identity-projection`. **Reviewed content tip:** `dbd2354a51e94587bf25ae8c6790612e39145544` on `codex/architecture/p10-p14-p20-product-direction`. **Reviewer:** independent read-only Luna agent, 2026-10-03. Canonical promotion still requires explicit human approval.
+
+The reviewer read the full six-file diff against the exact base, current architecture/Roadmap/Briefs, and owning P10/P14/P20 States and relevant code. No BLOCKER, MAJOR or MINOR finding remained. P10-B uses structural rule-based deterministic choices rather than whole-layout template selection and keeps topology distinct from content. P14-B preserves P14-A's exogenous profile, adds source-specific finite availability, and does not make City the universal economic agent. P20-B separates start validity from participant contribution and treats two travelers as one proving case, not universal cardinality or role semantics. The §92A reconstruction and P12 selected-profile exclusion/rejection gates remain explicit. Promoted P10-A, P14-A and P20-A are not reopened.
+
+**Validation:** documentation/planning diff only; no Unity tests were run or claimed. `git diff --check 3bf0924..dbd2354` passed. This review authorizes no code implementation, Phase closure or canonical promotion by itself. P10-B/P14-B/P20-B need bounded technical designs and subsequent independent review before implementation dispatch. If the semantic contracts change after the reviewed content tip, repeat the affected independent review.
+
+This record adds review evidence without changing the reviewed semantic content.
