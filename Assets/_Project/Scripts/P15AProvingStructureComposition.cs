@@ -48,7 +48,6 @@ public sealed class P15AProvingStructureComposition
     public bool TryCreateStructure(
         StructureId structureId,
         LocationId locationId,
-        long creationOrder,
         out StructureStoreFailure failure) =>
-        Runtime.TryCreateP15AProvingStructure(structureId, locationId, creationOrder, out failure);
+        Runtime.TryCreateP15AProvingStructure(structureId, locationId, out failure);
 }

@@ -497,6 +497,11 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             violations.Add("LegacySpatialAnchorBindings: " + violation);
         foreach (string violation in personSpatialPositionStore.ValidateInvariants().Violations)
             violations.Add("PersonSpatialPositions: " + violation);
+        if (structureStore != null)
+        {
+            foreach (string violation in structureStore.ValidateInvariants(CurrentDay).Violations)
+                violations.Add("Structures: " + violation);
+        }
         if (armedForceSpatialStateStore != null)
         {
             foreach (string violation in armedForceSpatialStateStore.ValidateInvariants().Violations)
@@ -1303,7 +1308,6 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
     public bool TryCreateP15AProvingStructure(
         StructureId structureId,
         LocationId locationId,
-        long creationOrder,
         out StructureStoreFailure failure)
     {
         failure = StructureStoreFailure.None;
@@ -1335,7 +1339,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                 StructureDefinitionReference.P15AProving,
                 locationId,
                 CurrentDay,
-                creationOrder),
+                0L),
             CurrentDay,
             initialPublicationComplete: true,
             out failure);

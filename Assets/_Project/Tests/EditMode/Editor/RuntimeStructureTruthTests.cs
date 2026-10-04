@@ -12,7 +12,7 @@ public sealed class RuntimeStructureTruthTests
         StructureStore store = new StructureStore(spatial);
         StructureRecord laterId = CreateRecord("structure-z", "location-a", 1L, 0L);
 
-        Assert.That(store.TryCreateStructure(laterId, 1L, true, out StructureStoreFailure firstFailure), Is.True, firstFailure.ToString());
+        Assert.That(TryCreateStructure(store, laterId, 1L, true, out StructureStoreFailure firstFailure), Is.True, firstFailure.ToString());
         Assert.That(store.Revision, Is.EqualTo(1L));
         Assert.That(store.Records.Select(value => value.Id.Value), Is.EqualTo(new[] { "structure-z" }));
         Assert.That(store.Records.Single().Definition,
@@ -50,7 +50,7 @@ public sealed class RuntimeStructureTruthTests
     public void RejectsDuplicateIdentityAndSecondCreationWithNoStateChange()
     {
         StructureStore store = new StructureStore(CreateSpatialAuthority());
-        Assert.That(store.TryCreateStructure(CreateRecord("structure-a", "location-a", 1L, 0L), 1L, true, out _), Is.True);
+        Assert.That(TryCreateStructure(store, CreateRecord("structure-a", "location-a", 1L, 0L), 1L, true, out _), Is.True);
 
         AssertRejectedUnchanged(store, CreateRecord("structure-a", "location-a", 1L, 1L), 1L, true,
             StructureStoreFailureCode.DuplicateStructureId);
@@ -86,7 +86,7 @@ public sealed class RuntimeStructureTruthTests
     public void ClonePreservesIdentityDefinitionLocationBoundaryOrderAndRevision()
     {
         StructureStore source = new StructureStore(CreateSpatialAuthority());
-        Assert.That(source.TryCreateStructure(CreateRecord("structure-b", "location-a", 1L, 4L), 1L, true, out _), Is.True);
+        Assert.That(TryCreateStructure(source, CreateRecord("structure-b", "location-a", 1L, 4L), 1L, true, out _), Is.True);
 
         StructureStore clone = source.Clone(CreateSpatialAuthority());
         Assert.That(clone, Is.Not.SameAs(source));
@@ -122,7 +122,7 @@ public sealed class RuntimeStructureTruthTests
 
         SpatialAuthorityStore spatial = CreateSpatialAuthority();
         StructureStore populatedStore = new StructureStore(spatial);
-        Assert.That(populatedStore.TryCreateStructure(
+        Assert.That(TryCreateStructure(populatedStore,
             CreateRecord("unsupported-daily-structure", "location-a", 1L, 0L),
             1L,
             true,
@@ -151,9 +151,12 @@ public sealed class RuntimeStructureTruthTests
         Assert.That(profile.Runtime.StructureStore, Is.SameAs(profile.StructureStore));
         Assert.That(profile.Runtime.Cities, Is.Empty);
         Assert.That(profile.StructureStore.Count, Is.Zero);
+        Assert.That(typeof(StructureStore).GetMethod(
+            "TryCreateStructure", BindingFlags.Instance | BindingFlags.Public), Is.Null,
+            "The owner does not expose a public mutation accepting caller-supplied boundary/publication facts.");
 
         Assert.That(profile.TryCreateStructure(
-            new StructureId("structure-p15a"), new LocationId("location-a"), 0L,
+            new StructureId("structure-p15a"), new LocationId("location-a"),
             out StructureStoreFailure beforeFirstBoundary), Is.False);
         Assert.That(beforeFirstBoundary.Code, Is.EqualTo(StructureStoreFailureCode.InvalidBoundary));
         Assert.That(profile.StructureStore.Revision, Is.Zero);
@@ -161,14 +164,14 @@ public sealed class RuntimeStructureTruthTests
         profile.Runtime.AdvanceDay();
         Assert.That(profile.Runtime.CurrentDay, Is.EqualTo(13L));
         Assert.That(profile.TryCreateStructure(
-            new StructureId("structure-p15a"), new LocationId("location-a"), 0L,
+            new StructureId("structure-p15a"), new LocationId("location-a"),
             out StructureStoreFailure created), Is.True, created.ToString());
         Assert.That(profile.StructureStore.Records.Single().CreatedAtBoundary, Is.EqualTo(13L));
         Assert.That(profile.StructureStore.ValidateInvariants(13L).IsValid, Is.True);
 
         string beforeRepeat = SemanticFingerprint(profile.StructureStore.CaptureSemanticState());
         Assert.That(profile.TryCreateStructure(
-            new StructureId("structure-p15a"), new LocationId("location-a"), 1L,
+            new StructureId("structure-p15a"), new LocationId("location-a"),
             out StructureStoreFailure repeated), Is.False);
         Assert.That(repeated.Code, Is.EqualTo(StructureStoreFailureCode.DuplicateStructureId));
         Assert.That(SemanticFingerprint(profile.StructureStore.CaptureSemanticState()), Is.EqualTo(beforeRepeat));
@@ -188,10 +191,55 @@ public sealed class RuntimeStructureTruthTests
             structureStore: new StructureStore(spatial));
 
         Assert.That(runtime.TryCreateP15AProvingStructure(
-            new StructureId("structure-p15a"), new LocationId("location-a"), 0L,
+            new StructureId("structure-p15a"), new LocationId("location-a"),
             out StructureStoreFailure unpublished), Is.False);
         Assert.That(unpublished.Code, Is.EqualTo(StructureStoreFailureCode.InitialPublicationIncomplete));
         Assert.That(runtime.StructureStore.Count, Is.Zero);
+    }
+
+    [TestCase("missing-location", 13L, "location:structure-p15a")]
+    [TestCase("location-a", 14L, "creation-boundary:structure-p15a")]
+    public void RuntimeSpatialValidationIncludesStructureOwnerInvariants(
+        string locationValue,
+        long createdAtBoundary,
+        string expectedOwnerViolation)
+    {
+        P15AProvingStructureComposition profile = P15AProvingStructureComposition.Compose(
+            new SimulationTime(12L),
+            CreateSpatialAuthority());
+        profile.Runtime.AdvanceDay();
+        Assert.That(profile.TryCreateStructure(
+            new StructureId("structure-p15a"), new LocationId("location-a"), out _), Is.True);
+
+        FieldInfo recordsField = typeof(StructureStore).GetField("recordsById", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(recordsField, Is.Not.Null);
+        System.Collections.IDictionary records =
+            (System.Collections.IDictionary)recordsField.GetValue(profile.StructureStore);
+        records["structure-p15a"] = CreateRecord(
+            "structure-p15a",
+            locationValue,
+            createdAtBoundary,
+            0L);
+
+        SimulationRuntimeSpatialInvariantReport report = profile.Runtime.ValidateSpatialInvariants();
+        Assert.That(report.Violations, Does.Contain("Structures: " + expectedOwnerViolation));
+    }
+
+    private static bool TryCreateStructure(
+        StructureStore store,
+        StructureRecord candidate,
+        long currentBoundary,
+        bool published,
+        out StructureStoreFailure failure)
+    {
+        MethodInfo method = typeof(StructureStore).GetMethod(
+            "TryCreateStructure",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(method, Is.Not.Null);
+        object[] arguments = { candidate, currentBoundary, published, null };
+        bool created = (bool)method.Invoke(store, arguments);
+        failure = (StructureStoreFailure)arguments[3];
+        return created;
     }
 
     private static void AssertRejectedUnchanged(
@@ -202,7 +250,7 @@ public sealed class RuntimeStructureTruthTests
         StructureStoreFailureCode expected)
     {
         string before = SemanticFingerprint(store.CaptureSemanticState());
-        Assert.That(store.TryCreateStructure(candidate, currentBoundary, published, out StructureStoreFailure failure), Is.False);
+        Assert.That(TryCreateStructure(store, candidate, currentBoundary, published, out StructureStoreFailure failure), Is.False);
         Assert.That(failure.Code, Is.EqualTo(expected));
         Assert.That(SemanticFingerprint(store.CaptureSemanticState()), Is.EqualTo(before));
     }

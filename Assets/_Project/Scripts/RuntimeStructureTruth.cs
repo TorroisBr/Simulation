@@ -190,7 +190,7 @@ public sealed class StructureStore : IAuthoritativeMutationGuardBindable
     /// Creates one explicit record at the current completed runtime boundary.
     /// Equal-boundary order is supplied by the caller's serialized causal order.
     /// </summary>
-    public bool TryCreateStructure(
+    internal bool TryCreateStructure(
         StructureRecord candidate,
         long currentBoundary,
         bool initialPublicationComplete,
