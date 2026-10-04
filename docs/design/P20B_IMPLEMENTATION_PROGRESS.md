@@ -1,6 +1,6 @@
 # P20-B joint civil travel — implementation progress
 
-**Status:** focused implementation progress pushed; not a complete integration candidate, not independently reviewed, and not promoted.
+**Status:** validated P20-B implementation candidate at `de24dff356a54a0a4037e16c0ca5dc9ca379bc18`; pending independent exact-tip review. Not promoted.
 
 **Implementation commit:** `e93731c847dfd5e6973d8df0fae78419a46c74ea`
 
@@ -60,3 +60,40 @@ The runtime-owned P18 lifecycle/timeline binding and the `UnityBootstrap-Daily-v
 This restore path matches the P18 instance identity, creation identity, revision, lifecycle state, planned start, and participants through the current P18 snapshot API. Exact reconstruction of both open-ended P18 commitments and the P18/timeline pending-start index remains owned by the combined lifecycle/timeline integration and must be asserted there; this P20-only slice does not claim that broader reconstruction proof.
 
 **Validation:** Unity was not run because P10 owns the serialized validation slot. This continuation is source/test coverage only, is not independently reviewed, and does not complete the P20-B integration candidate or claim P12 admission coverage. Run the focused P20 suite and required affected regressions on the combined integration tree after the hotspot window opens.
+
+## Validated candidate continuation — 2026-10-04
+
+**Candidate branch:** `codex/phase20/P20BCoreContinuation` at
+`de24dff356a54a0a4037e16c0ca5dc9ca379bc18` (code tree
+`62f8f3f3ad803e3f8eca832f7e39cff8196d5b85`), based on the existing isolated
+P20-B continuation candidate at `d14d235c86d8373e5f7e1c2ebf1f0e4507296222`.
+The P20-A canonical fixture composition remains separate and unchanged.
+
+The selected `UnityBootstrap-Daily-v1` census now registers
+`p12f.p20-joint-civil-travel` as an explicitly empty owner section. A P20 owner
+with proposal or later state makes daily runtime census initialization fail
+closed; an absent or empty P20 owner remains admitted. Focused tests cover both
+cases. This does not expand daily-profile state coverage or implement save/load.
+
+Unity validation ran sequentially on the code tree above with Unity
+`6000.3.9f1`; no Unity process remained after each run:
+
+| Gate | Result | XML SHA-256 | Log SHA-256 |
+|---|---:|---|---|
+| `P20JointCivilTravelIntegrationTests` | 8/8 | `9558F095D838321C84A7A691B67D485A93CED3935211E8AFEABB5FAA0790EF12` | `EE0D11F0456426AF1790A3ADCAE02219A99A39DBEFE6772B9FB4BDD1D7D1BEC5` |
+| ALL EditMode | 2273/2273 | `14384311AF626B9692E871EACFCEBFA275949DA48B333FE0D373D155D8D0ECFA` | `0114C7BC79AAB60984E1CEBFF6001764186A93C3AE25BA1E88B7B6F6BD82A705` |
+| Official `-testFilter Smoke` | 5/5 | `FB03F93081542246D9C63E60C864DA9DFA5DB05189D635A2F7D036AED754AEEE` | `A1569A88B9F6E46229264556C31FDE5887F6B165B54278E34BAD0FCEC501E600` |
+| `git diff --check` | PASS | — | — |
+
+The XML and log files are preserved in
+`docs/validation/P20B/P20B-validation-20261004.zip` (SHA-256
+`8316130BF87ACDA926822C6E4060B1CC9E83B37AADE5854EF3A960EA6C7BA56A`). The
+archive contains all six files named by the gates above. The first focused run
+exposed that nonempty P20 state is rejected during runtime census initialization;
+the assertion was corrected to the fail-closed construction behavior, then the
+focused, ALL EditMode, and Smoke runs passed on the final code tree.
+
+No ProjectSettings changes, unrelated `.meta` files, P20-A composition changes,
+or `TesteSimulacao` edits are included. This candidate is not independently
+reviewed, promoted, or a Phase 20 closure claim; an independent exact-tip review
+is the next step.
