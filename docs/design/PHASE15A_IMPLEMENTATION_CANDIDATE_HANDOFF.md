@@ -55,6 +55,30 @@ retained under Library/ValidationResults/P15A-review-fix/.
 git diff --check passed for the candidate code commit. The original
 validation table below is retained as historical evidence for its initial
 code tree and is not used to validate the current candidate.
+## Refreshed architecture compatibility audit
+
+The current architecture branch was refreshed to f6924e63d8e5731da1d33021d0361e7defe6dad7.
+Its current P15-A checkpoint is docs/design/PHASE15A_RUNTIME_STRUCTURE_CHECKPOINT.md.
+The independent reviewer confirmed the P15-A checkpoint text is unchanged by
+this architecture update; the new P10/P14/P20 product-direction clarification
+does not alter P15-A scope or prerequisites.
+
+The checkpoint's deterministic result/receipt requirement is represented by
+the committed StructureRecord keyed by the supplied StructureId. It retains
+the fixed proving definition, requested LocationId, actual runtime
+CurrentDay boundary, and causal order; the operation returns deterministic
+success/failure. Order zero is the causal order for this bounded profile,
+which permits one creation total and adds no global allocator or ordering
+semantics. No second receipt owner is introduced. The P12 daily profile
+remains fail-closed and the synthetic proving fixture is not generalized into
+a building catalog or player-choice surface. The review found no code or
+design mismatch, and no code tree changed, so the current-tree validation
+table above remains valid.
+
+Candidate-to-review-repository path: codex/phase15/P15ARuntimeStructureCurrentBaseIntegration.
+Exact reviewed candidate docs tip: f19a42d3c830a473b0dac8fa4d468a68bfc1b3fd.
+Exact implementation commit/tree: c99541b0292b79c8a89540dafa82348bda99de91 /
+94114a1c4804ddc2f7cc84eff1cbeb876bd4900f.
 ## Original validation on the initial code tree
 
 | Suite | Result | XML | SHA-256 | Log | SHA-256 |
