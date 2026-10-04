@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using NUnit.Framework;
 
 public sealed class P20JointCivilTravelIntegrationTests
@@ -24,6 +25,8 @@ public sealed class P20JointCivilTravelIntegrationTests
             new P20JointCivilTravelAssent("person-b", true, "consent-b")), Is.True);
         Assert.That(owner.TrySchedule(proposal.ActivityInstanceId, new LogicalTick(1), out ActivityFailure scheduleFailure),
             Is.True, scheduleFailure.ToString());
+        Assert.That(composition.Timeline.TrySealInputsThrough(new LogicalTick(1), out TimelineFailure sealFailure), Is.True,
+            sealFailure.ToString());
         Assert.That(composition.Timeline.TryAdvanceTo(new LogicalTick(1), out TimelineFailure startFailure),
             Is.True, startFailure.ToString());
 
@@ -38,7 +41,12 @@ public sealed class P20JointCivilTravelIntegrationTests
         if (abortAfterLeg)
         {
             Assert.That(owner.TryGet(proposal.ActivityInstanceId, out P20JointCivilTravelSnapshot activeOwner), Is.True);
-            Assert.That(owner.TryRequestAbortAfterLeg(proposal.ActivityInstanceId, activeOwner.Revision), Is.True);
+            Assert.That(owner.TryRequestAbortAfterLeg(proposal.ActivityInstanceId, activeOwner.Revision,
+                "abort-input-" + abortAfterLeg), Is.True);
+            Assert.That(owner.TryGet(proposal.ActivityInstanceId, out P20JointCivilTravelSnapshot abortRequested), Is.True);
+            Assert.That(abortRequested.AbortCausalInputIdentity, Is.EqualTo("abort-input-" + abortAfterLeg));
+            Assert.That(abortRequested.AbortAcceptedAt, Is.EqualTo(new LogicalTick(1)));
+            Assert.That(abortRequested.AbortAcceptedOrder, Is.EqualTo(abortRequested.Revision));
         }
 
         Assert.That(fixture.Travel.TryAdvanceSegment(new PersonId("person-a"), TraversalProgress.CompleteProgressTicks,
@@ -65,6 +73,130 @@ public sealed class P20JointCivilTravelIntegrationTests
         Assert.That(completedPlanB.Status, Is.EqualTo(PersonRoutePlanStatus.Completed));
         Assert.That(lifecycle.GetCommitment("person-a"), Is.Null);
         Assert.That(lifecycle.GetCommitment("person-b"), Is.Null);
+        long positionRevisionAfterTerminal = fixture.Positions.Revision;
+        long planRevisionAfterTerminal = fixture.Plans.Revision;
+        int terminalReceiptCount = lifecycle.SnapshotTransitionReceipts()
+            .Count(x => x.ActivityInstanceId == proposal.ActivityInstanceId
+                && (x.Kind == ActivityTransitionKind.Complete || x.Kind == ActivityTransitionKind.Interrupt));
+        Assert.That(owner.TryArrive(proposal.ActivityInstanceId, "person-b", out _), Is.False,
+            "A retry after the terminal commit must not apply final arrival twice.");
+        Assert.That(fixture.Positions.Revision, Is.EqualTo(positionRevisionAfterTerminal));
+        Assert.That(fixture.Plans.Revision, Is.EqualTo(planRevisionAfterTerminal));
+        Assert.That(lifecycle.SnapshotTransitionReceipts()
+            .Count(x => x.ActivityInstanceId == proposal.ActivityInstanceId
+                && (x.Kind == ActivityTransitionKind.Complete || x.Kind == ActivityTransitionKind.Interrupt)),
+            Is.EqualTo(terminalReceiptCount));
+    }
+
+    [Test]
+    public void StalePreparedJointStartCannotInstallEitherParticipantsTravelRoot()
+    {
+        Fixture fixture = new Fixture();
+        P8EJointTravelParticipant[] participants =
+        {
+            new P8EJointTravelParticipant(new PersonId("person-a"), fixture.Contexts["person-a"]),
+            new P8EJointTravelParticipant(new PersonId("person-b"), fixture.Contexts["person-b"])
+        };
+        Assert.That(fixture.Travel.TryPrepareJointCivilLeg(participants, fixture.Segment.StableKey,
+            out PreparedP8EJointCivilLeg prepared, out P8ETravelFailure prepareFailure), Is.True, prepareFailure.Message);
+        Assert.That(prepared.CanInstall, Is.True);
+
+        Assert.That(fixture.Positions.TryBeginTransit(new PersonId("person-a"), fixture.Segment.Option,
+            fixture.Segment.Boundary, new HexId("hex.a"), new HexId("hex.b"),
+            out PersonSpatialPositionFailure mutateFailure), Is.True, mutateFailure.ToString());
+        Assert.That(prepared.CanInstall, Is.False);
+        Assert.That(fixture.Positions.TryGetPosition(new PersonId("person-a"), out PersonSpatialPosition positionA), Is.True);
+        Assert.That(fixture.Positions.TryGetPosition(new PersonId("person-b"), out PersonSpatialPosition positionB), Is.True);
+        Assert.That(positionA.IsInTransit, Is.True, "The intervening valid mutation remains authoritative after the stale prepared write is rejected.");
+        Assert.That(positionB.IsInTransit, Is.False);
+        Assert.That(fixture.Plans.TryGetCurrent(new PersonId("person-a"), out PersonRoutePlan planA), Is.True);
+        Assert.That(fixture.Plans.TryGetCurrent(new PersonId("person-b"), out PersonRoutePlan planB), Is.True);
+        Assert.That(planA.Status, Is.EqualTo(PersonRoutePlanStatus.Accepted));
+        Assert.That(planB.Status, Is.EqualTo(PersonRoutePlanStatus.Accepted));
+    }
+
+    [Test]
+    public void ChangedCurrentPassageFailsBothParticipantsBeforeJointStart()
+    {
+        Fixture fixture = new Fixture();
+        ActivityLifecycleStore lifecycle = new ActivityLifecycleStore("joint-travel-passage-world");
+        ActivityLifecycleComposition composition = new ActivityLifecycleComposition(lifecycle,
+            new SimulationCalendar(new CalendarDefinition(2, 2, 3)), new LogicalTick(0));
+        P20JointCivilTravelOwner owner = new P20JointCivilTravelOwner(composition, fixture.Travel,
+            person => fixture.Contexts[person.Value]);
+        Assert.That(owner.TryCreate(new ActivityDefinition(P20JointCivilTravelOwner.ActivityDefinitionId, "v1"),
+            "joint-closed-current-truth", fixture.Segment.StableKey, new[] { "person-a", "person-b" },
+            out P20JointCivilTravelSnapshot proposal, out ActivityFailure createFailure), Is.True, createFailure.ToString());
+        Assert.That(owner.TryRecordAssent(proposal.ActivityInstanceId,
+            new P20JointCivilTravelAssent("person-a", true, "passage-consent-a")), Is.True);
+        Assert.That(owner.TryRecordAssent(proposal.ActivityInstanceId,
+            new P20JointCivilTravelAssent("person-b", true, "passage-consent-b")), Is.True);
+        Assert.That(owner.TrySchedule(proposal.ActivityInstanceId, new LogicalTick(1), out ActivityFailure scheduleFailure),
+            Is.True, scheduleFailure.ToString());
+        long positionRevision = fixture.Positions.Revision;
+        long planRevision = fixture.Plans.Revision;
+        Assert.That(fixture.Spatial.PassageAuthority.TryChangePassageCondition(fixture.Segment.Boundary,
+            fixture.Segment.Option, PassageCondition.Closed, out SpatialAuthorityFailure passageFailure), Is.True,
+            passageFailure.ToString());
+
+        Assert.That(composition.Timeline.TrySealInputsThrough(new LogicalTick(1), out TimelineFailure sealFailure), Is.True,
+            sealFailure.ToString());
+        Assert.That(composition.Timeline.TryAdvanceTo(new LogicalTick(1), out TimelineFailure advanceFailure), Is.True,
+            advanceFailure.ToString());
+        Assert.That(lifecycle.TryGet(proposal.ActivityInstanceId, out ActivityInstanceSnapshot terminal), Is.True);
+        Assert.That(terminal.State, Is.EqualTo(ActivityLifecycleState.Cancelled));
+        Assert.That(lifecycle.GetCommitment("person-a"), Is.Null);
+        Assert.That(lifecycle.GetCommitment("person-b"), Is.Null);
+        Assert.That(fixture.Positions.Revision, Is.EqualTo(positionRevision));
+        Assert.That(fixture.Plans.Revision, Is.EqualTo(planRevision));
+        Assert.That(fixture.Positions.TryGetPosition(new PersonId("person-a"), out PersonSpatialPosition positionA), Is.True);
+        Assert.That(fixture.Positions.TryGetPosition(new PersonId("person-b"), out PersonSpatialPosition positionB), Is.True);
+        Assert.That(positionA.IsInTransit, Is.False);
+        Assert.That(positionB.IsInTransit, Is.False);
+    }
+
+    [Test]
+    public void StalePreparedTerminalArrivalCannotCommitASecondOwnerRoot()
+    {
+        Fixture fixture = new Fixture();
+        ActivityLifecycleStore lifecycle = new ActivityLifecycleStore("joint-travel-terminal-stale-world");
+        ActivityLifecycleComposition composition = new ActivityLifecycleComposition(lifecycle,
+            new SimulationCalendar(new CalendarDefinition(2, 2, 3)), new LogicalTick(0));
+        P20JointCivilTravelOwner owner = new P20JointCivilTravelOwner(composition, fixture.Travel,
+            person => fixture.Contexts[person.Value]);
+        Assert.That(owner.TryCreate(new ActivityDefinition(P20JointCivilTravelOwner.ActivityDefinitionId, "v1"),
+            "joint-stale-terminal", fixture.Segment.StableKey, new[] { "person-a", "person-b" },
+            out P20JointCivilTravelSnapshot proposal, out ActivityFailure createFailure), Is.True, createFailure.ToString());
+        Assert.That(owner.TryRecordAssent(proposal.ActivityInstanceId,
+            new P20JointCivilTravelAssent("person-a", true, "terminal-consent-a")), Is.True);
+        Assert.That(owner.TryRecordAssent(proposal.ActivityInstanceId,
+            new P20JointCivilTravelAssent("person-b", true, "terminal-consent-b")), Is.True);
+        Assert.That(owner.TrySchedule(proposal.ActivityInstanceId, new LogicalTick(1), out ActivityFailure scheduleFailure),
+            Is.True, scheduleFailure.ToString());
+        Assert.That(composition.Timeline.TrySealInputsThrough(new LogicalTick(1), out TimelineFailure sealFailure), Is.True,
+            sealFailure.ToString());
+        Assert.That(composition.Timeline.TryAdvanceTo(new LogicalTick(1), out TimelineFailure startFailure), Is.True,
+            startFailure.ToString());
+        foreach (string person in new[] { "person-a", "person-b" })
+            Assert.That(fixture.Travel.TryAdvanceSegment(new PersonId(person), TraversalProgress.CompleteProgressTicks,
+                out P8ETravelFailure progressFailure), Is.True, progressFailure.Message);
+
+        Assert.That(fixture.Travel.TryPrepareFinalArrival(new PersonId("person-b"),
+            out PreparedP8EPersonFinalArrival prepared, out P8ETravelFailure arrivalFailure), Is.True,
+            arrivalFailure.Message);
+        long planRevisionBeforeStaleCommit = fixture.Plans.Revision;
+        Assert.That(fixture.Positions.TryArrive(new PersonId("person-b"),
+            StablePositionReference.ForHex(new HexId("hex.b")), out PersonSpatialPositionFailure mutateFailure), Is.True,
+            mutateFailure.ToString());
+        Assert.That(prepared.CanInstall, Is.False);
+        Assert.That(fixture.Positions.TryGetPosition(new PersonId("person-b"), out PersonSpatialPosition arrivedB), Is.True);
+        Assert.That(arrivedB.IsInTransit, Is.False);
+        Assert.That(arrivedB.Position.HexId, Is.EqualTo(new HexId("hex.b")));
+        Assert.That(fixture.Plans.Revision, Is.EqualTo(planRevisionBeforeStaleCommit));
+        Assert.That(fixture.Plans.TryGetCurrent(new PersonId("person-b"), out PersonRoutePlan planB), Is.True);
+        Assert.That(planB.Status, Is.EqualTo(PersonRoutePlanStatus.Active));
+        Assert.That(lifecycle.TryGet(proposal.ActivityInstanceId, out ActivityInstanceSnapshot stillActive), Is.True);
+        Assert.That(stillActive.State, Is.EqualTo(ActivityLifecycleState.Active));
     }
 
     private sealed class Fixture
@@ -73,6 +205,7 @@ public sealed class P20JointCivilTravelIntegrationTests
         private const string Unit = "fixture-units";
         internal readonly PersonSpatialPositionStore Positions;
         internal readonly PersonRoutePlanStore Plans;
+        internal readonly SpatialAuthorityStore Spatial;
         internal readonly P8ETravelTransactionCoordinator Travel;
         internal readonly SpatialRouteSegment Segment;
         internal readonly Dictionary<string, TraversalCostContext> Contexts = new Dictionary<string, TraversalCostContext>
@@ -88,6 +221,7 @@ public sealed class P20JointCivilTravelIntegrationTests
                 Assert.That(people.TryRegister(new PersonRuntime(new PersonId(id)), out PersonStoreFailure personFailure),
                     Is.True, personFailure.ToString());
             SpatialAuthorityStore spatial = BuildSpatial();
+            Spatial = spatial;
             HexId from = new HexId("hex.a"), to = new HexId("hex.b");
             Segment = new SpatialRouteSegment(new HexBoundaryKey(from, to), from, to,
                 TraversalOptionRef.ForConnection(new ConnectionId("connection.ab")));

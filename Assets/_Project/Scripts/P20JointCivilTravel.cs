@@ -13,11 +13,22 @@ public sealed class P20JointCivilTravelAssent
     public string PersonId { get; }
     public bool Accepted { get; }
     public string CausalInputIdentity { get; }
+    public LogicalTick? AcceptedAt { get; }
+    public long AcceptedOrder { get; }
     public P20JointCivilTravelAssent(string personId, bool accepted, string causalInputIdentity)
     {
         if (string.IsNullOrWhiteSpace(personId)) throw new ArgumentException("Person identity is required.", nameof(personId));
         if (string.IsNullOrWhiteSpace(causalInputIdentity)) throw new ArgumentException("Causal input identity is required.", nameof(causalInputIdentity));
         PersonId = personId; Accepted = accepted; CausalInputIdentity = causalInputIdentity;
+    }
+
+    internal P20JointCivilTravelAssent(string personId, bool accepted, string causalInputIdentity,
+        LogicalTick acceptedAt, long acceptedOrder)
+        : this(personId, accepted, causalInputIdentity)
+    {
+        if (acceptedOrder <= 0L) throw new ArgumentOutOfRangeException(nameof(acceptedOrder));
+        AcceptedAt = acceptedAt;
+        AcceptedOrder = acceptedOrder;
     }
 }
 
@@ -29,16 +40,35 @@ public sealed class P20JointCivilTravelSnapshot
     public IReadOnlyList<P20JointCivilTravelAssent> Assents { get; }
     public P20JointCivilTravelState State { get; }
     public bool AbortAfterLegRequested { get; }
+    public string AbortCausalInputIdentity { get; }
+    public LogicalTick? AbortAcceptedAt { get; }
+    public long AbortAcceptedOrder { get; }
     public long Revision { get; }
     public string Disposition { get; }
-    internal P20JointCivilTravelSnapshot(P20JointCivilTravel operation)
+    internal P20JointCivilTravelSnapshot(P20JointCivilTravel operation, ActivityInstanceSnapshot lifecycle,
+        bool failedStart)
     {
         ActivityInstanceId = operation.ActivityInstanceId;
         SharedSegmentStableKey = operation.SharedSegmentStableKey;
         PersonIds = Array.AsReadOnly(operation.PersonIds.ToArray());
         Assents = Array.AsReadOnly(operation.Assents.Values.OrderBy(x => x.PersonId, StringComparer.Ordinal).ToArray());
-        State = operation.State; AbortAfterLegRequested = operation.AbortAfterLegRequested;
-        Revision = operation.Revision; Disposition = operation.Disposition;
+        State = operation.Assents.Values.Any(x => !x.Accepted)
+            && lifecycle.State == ActivityLifecycleState.Proposed
+            ? P20JointCivilTravelState.NotFormed
+            : lifecycle.State == ActivityLifecycleState.Cancelled && failedStart
+                ? P20JointCivilTravelState.FailedToStart
+                : lifecycle.State == ActivityLifecycleState.Proposed ? P20JointCivilTravelState.Proposed
+                : lifecycle.State == ActivityLifecycleState.Scheduled ? P20JointCivilTravelState.Scheduled
+                : lifecycle.State == ActivityLifecycleState.Active ? P20JointCivilTravelState.Active
+                : lifecycle.State == ActivityLifecycleState.Completed ? P20JointCivilTravelState.Completed
+                : lifecycle.State == ActivityLifecycleState.Interrupted ? P20JointCivilTravelState.Interrupted
+                : P20JointCivilTravelState.Cancelled;
+        AbortAfterLegRequested = operation.AbortAfterLegRequested;
+        AbortCausalInputIdentity = operation.AbortCausalInputIdentity;
+        AbortAcceptedAt = operation.AbortAcceptedAt;
+        AbortAcceptedOrder = operation.AbortAcceptedOrder;
+        Revision = operation.Revision;
+        Disposition = State == P20JointCivilTravelState.NotFormed ? "participant-declined" : lifecycle.Disposition;
     }
 }
 
@@ -48,27 +78,35 @@ internal sealed class P20JointCivilTravel
     internal readonly string SharedSegmentStableKey;
     internal readonly string[] PersonIds;
     internal readonly SortedDictionary<string, P20JointCivilTravelAssent> Assents;
-    internal readonly P20JointCivilTravelState State;
     internal readonly bool AbortAfterLegRequested;
+    internal readonly string AbortCausalInputIdentity;
+    internal readonly LogicalTick? AbortAcceptedAt;
+    internal readonly long AbortAcceptedOrder;
     internal readonly long Revision;
     internal readonly long ExpectedLifecycleRevision;
-    internal readonly string Disposition;
     internal P20JointCivilTravel(string id, string sharedSegmentStableKey, IEnumerable<string> people,
-        SortedDictionary<string, P20JointCivilTravelAssent> assents, P20JointCivilTravelState state,
-        bool abortRequested, long revision, long lifecycleRevision, string disposition)
+        SortedDictionary<string, P20JointCivilTravelAssent> assents,
+        bool abortRequested, string abortCausalInputIdentity, LogicalTick? abortAcceptedAt, long abortAcceptedOrder,
+        long revision, long lifecycleRevision)
     {
         ActivityInstanceId = id; SharedSegmentStableKey = sharedSegmentStableKey;
         PersonIds = people.OrderBy(x => x, StringComparer.Ordinal).ToArray();
         Assents = new SortedDictionary<string, P20JointCivilTravelAssent>(assents, StringComparer.Ordinal);
-        State = state; AbortAfterLegRequested = abortRequested; Revision = revision;
-        ExpectedLifecycleRevision = lifecycleRevision; Disposition = disposition ?? string.Empty;
+        AbortAfterLegRequested = abortRequested;
+        AbortCausalInputIdentity = abortCausalInputIdentity ?? string.Empty; Revision = revision;
+        AbortAcceptedAt = abortAcceptedAt; AbortAcceptedOrder = abortAcceptedOrder;
+        ExpectedLifecycleRevision = lifecycleRevision;
     }
     internal P20JointCivilTravel With(SortedDictionary<string, P20JointCivilTravelAssent> assents = null,
-        P20JointCivilTravelState? state = null, bool? abortRequested = null, long? revision = null,
-        long? lifecycleRevision = null, string disposition = null) => new P20JointCivilTravel(ActivityInstanceId,
+        bool? abortRequested = null,
+        string abortCausalInputIdentity = null, LogicalTick? abortAcceptedAt = null, long? abortAcceptedOrder = null,
+        long? revision = null,
+        long? lifecycleRevision = null) => new P20JointCivilTravel(ActivityInstanceId,
             SharedSegmentStableKey,
-            PersonIds, assents ?? Assents, state ?? State, abortRequested ?? AbortAfterLegRequested,
-            revision ?? Revision, lifecycleRevision ?? ExpectedLifecycleRevision, disposition ?? Disposition);
+            PersonIds, assents ?? Assents, abortRequested ?? AbortAfterLegRequested,
+            abortCausalInputIdentity ?? AbortCausalInputIdentity,
+            abortAcceptedAt ?? AbortAcceptedAt, abortAcceptedOrder ?? AbortAcceptedOrder,
+            revision ?? Revision, lifecycleRevision ?? ExpectedLifecycleRevision);
 }
 
 /// <summary>Bounded P20-B shared activity for two Persons and one explicit P8 civil leg.</summary>
@@ -105,78 +143,124 @@ public sealed class P20JointCivilTravelOwner
         string predictedId = composition.Store.NextProposedInstanceId;
         P20JointCivilTravel operation = new P20JointCivilTravel(predictedId, sharedSegmentStableKey, personIds,
             new SortedDictionary<string, P20JointCivilTravelAssent>(StringComparer.Ordinal),
-            P20JointCivilTravelState.Proposed, false, 0L, 0L, string.Empty);
-        P20JointCivilTravelSnapshot stagedSnapshot = new P20JointCivilTravelSnapshot(operation);
+            false, string.Empty, null, 0L, 0L, 0L);
+        P20JointCivilTravelSnapshot stagedSnapshot = null;
         Dictionary<string, P20JointCivilTravel> stagedOperations = new Dictionary<string, P20JointCivilTravel>(operations, StringComparer.Ordinal)
         { [predictedId] = operation };
-        if (!composition.Store.TryPropose(definition, creationIdentity, out ActivityInstanceSnapshot instance, out failure)) return false;
-        if (!string.Equals(instance.Id, predictedId, StringComparison.Ordinal))
-        { snapshot = null; failure = ActivityFailure.InvalidState; return false; }
-        operations = stagedOperations;
+        if (!composition.Store.TryProposeWithParticipant(composition.Timeline, definition, creationIdentity,
+            instance =>
+            {
+                stagedSnapshot = new P20JointCivilTravelSnapshot(operation, instance, false);
+                return () => operations = stagedOperations;
+            }, out _, out failure)) return false;
         snapshot = stagedSnapshot;
         return true;
     }
 
     public bool TryGet(string activityInstanceId, out P20JointCivilTravelSnapshot snapshot)
     {
-        snapshot = operations.TryGetValue(activityInstanceId, out P20JointCivilTravel operation)
-            ? new P20JointCivilTravelSnapshot(operation) : null;
-        return snapshot != null;
+        if (!operations.TryGetValue(activityInstanceId, out P20JointCivilTravel operation)
+            || !composition.Store.TryGet(activityInstanceId, out ActivityInstanceSnapshot instance))
+        { snapshot = null; return false; }
+        bool failedStart = instance.State == ActivityLifecycleState.Cancelled
+            && composition.Store.SnapshotTransitionReceipts().Any(x => x.ActivityInstanceId == activityInstanceId
+                && x.Kind == ActivityTransitionKind.FailedStart);
+        snapshot = new P20JointCivilTravelSnapshot(operation, instance, failedStart);
+        return true;
     }
 
     public bool TryRecordAssent(string activityInstanceId, P20JointCivilTravelAssent assent)
     {
         if (assent == null || !operations.TryGetValue(activityInstanceId, out P20JointCivilTravel current)
-            || current.State != P20JointCivilTravelState.Proposed
+            || !composition.Store.TryGet(activityInstanceId, out ActivityInstanceSnapshot instance)
+            || instance.State != ActivityLifecycleState.Proposed
+            || instance.Revision != current.ExpectedLifecycleRevision
+            || current.Assents.Values.Any(x => !x.Accepted)
             || !current.PersonIds.Contains(assent.PersonId, StringComparer.Ordinal)
+            || current.Assents.Values.Any(x => x.CausalInputIdentity == assent.CausalInputIdentity)
             || current.Assents.ContainsKey(assent.PersonId) || current.Revision == long.MaxValue) return false;
         SortedDictionary<string, P20JointCivilTravelAssent> assents = new SortedDictionary<string, P20JointCivilTravelAssent>(current.Assents, StringComparer.Ordinal)
-        { [assent.PersonId] = assent };
-        operations[activityInstanceId] = current.With(assents: assents, revision: current.Revision + 1L);
-        return true;
+        { [assent.PersonId] = new P20JointCivilTravelAssent(assent.PersonId, assent.Accepted,
+            assent.CausalInputIdentity, composition.Timeline.CurrentInstant, current.Revision + 1L) };
+        P20JointCivilTravel next = current.With(assents: assents,
+            revision: current.Revision + 1L,
+            lifecycleRevision: current.ExpectedLifecycleRevision);
+        Dictionary<string, P20JointCivilTravel> staged = new Dictionary<string, P20JointCivilTravel>(operations, StringComparer.Ordinal)
+        { [activityInstanceId] = next };
+        return composition.Timeline.TryCommitOwnerFacts(Array.Empty<DueWorkReference>(), () =>
+        {
+            if (!operations.TryGetValue(activityInstanceId, out P20JointCivilTravel latest)
+                || !ReferenceEquals(latest, current)
+                || !composition.Store.TryGet(activityInstanceId, out ActivityInstanceSnapshot latestActivity)
+                || latestActivity.State != ActivityLifecycleState.Proposed
+                || latestActivity.Revision != current.ExpectedLifecycleRevision)
+                return TimelineFailure.StaleWork;
+            operations = staged;
+            return TimelineFailure.None;
+        }, out _);
     }
 
     /// <summary>Both independent assents authorize one P18 open-ended commitment reservation.</summary>
     public bool TrySchedule(string activityInstanceId, LogicalTick start, out ActivityFailure failure)
     {
         if (!operations.TryGetValue(activityInstanceId, out P20JointCivilTravel current)
-            || current.State != P20JointCivilTravelState.Proposed
             || current.PersonIds.Any(id => !current.Assents.TryGetValue(id, out P20JointCivilTravelAssent assent) || !assent.Accepted)
             || !composition.Store.TryGet(activityInstanceId, out ActivityInstanceSnapshot instance)
             || instance.State != ActivityLifecycleState.Proposed || instance.Revision != current.ExpectedLifecycleRevision)
         { failure = ActivityFailure.InvalidState; return false; }
-        if (current.Revision > long.MaxValue - 6L || instance.Revision > long.MaxValue - 3L)
+        if (instance.Revision == long.MaxValue)
         { failure = ActivityFailure.RevisionOverflow; return false; }
         long earliest;
         try { earliest = checked(Math.Max(composition.Timeline.CurrentInstant.Value,
             composition.Timeline.InputsSealedThrough?.Value ?? composition.Timeline.CurrentInstant.Value) + 1L); }
         catch (OverflowException) { failure = ActivityFailure.InvalidInterval; return false; }
         if (start.Value < earliest) { failure = ActivityFailure.InvalidInterval; return false; }
-        P20JointCivilTravel scheduled = current.With(state: P20JointCivilTravelState.Scheduled,
-            revision: current.Revision + 1L, lifecycleRevision: instance.Revision + 1L);
+        P20JointCivilTravel scheduled = current.With(lifecycleRevision: instance.Revision + 1L);
         return composition.Store.TrySchedule(composition.Timeline, activityInstanceId,
             composition.Timeline.CurrentInstant, start, null, current.PersonIds, () => operations[activityInstanceId] = scheduled, out failure);
     }
 
-    public bool TryCancel(string activityInstanceId, string disposition, out ActivityFailure failure) =>
-        composition.Store.TryCancel(composition.Timeline, activityInstanceId, disposition, out failure);
+    public bool TryCancel(string activityInstanceId, string disposition, out ActivityFailure failure)
+    {
+        if (!operations.ContainsKey(activityInstanceId))
+        { failure = ActivityFailure.UnknownInstance; return false; }
+        return composition.Store.TryCancel(composition.Timeline, activityInstanceId, disposition, out failure);
+    }
 
-    public bool TryRequestAbortAfterLeg(string activityInstanceId, long expectedRevision)
+    public bool TryRequestAbortAfterLeg(string activityInstanceId, long expectedRevision, string causalInputIdentity)
     {
         if (!operations.TryGetValue(activityInstanceId, out P20JointCivilTravel current)
-            || current.State != P20JointCivilTravelState.Active || current.Revision != expectedRevision
+            || current.Revision != expectedRevision
             || current.AbortAfterLegRequested || current.Revision == long.MaxValue
+            || string.IsNullOrWhiteSpace(causalInputIdentity)
+            || current.Assents.Values.Any(x => x.CausalInputIdentity == causalInputIdentity)
             || !composition.Store.TryGet(activityInstanceId, out ActivityInstanceSnapshot activity)
-            || activity.State != ActivityLifecycleState.Active || activity.Revision != current.ExpectedLifecycleRevision) return false;
-        operations[activityInstanceId] = current.With(abortRequested: true, revision: current.Revision + 1L);
-        return true;
+            || activity.State != ActivityLifecycleState.Active
+            || activity.Revision != current.ExpectedLifecycleRevision) return false;
+        P20JointCivilTravel next = current.With(abortRequested: true,
+            abortCausalInputIdentity: causalInputIdentity,
+            abortAcceptedAt: composition.Timeline.CurrentInstant,
+            abortAcceptedOrder: current.Revision + 1L, revision: current.Revision + 1L);
+        Dictionary<string, P20JointCivilTravel> staged = new Dictionary<string, P20JointCivilTravel>(operations, StringComparer.Ordinal)
+        { [activityInstanceId] = next };
+        return composition.Timeline.TryCommitOwnerFacts(Array.Empty<DueWorkReference>(), () =>
+        {
+            if (!operations.TryGetValue(activityInstanceId, out P20JointCivilTravel latest)
+                || !ReferenceEquals(latest, current)
+                || !composition.Store.TryGet(activityInstanceId, out ActivityInstanceSnapshot latestActivity)
+                || latestActivity.State != ActivityLifecycleState.Active
+                || latestActivity.Revision != current.ExpectedLifecycleRevision)
+                return TimelineFailure.StaleWork;
+            operations = staged;
+            return TimelineFailure.None;
+        }, out _);
     }
 
     /// <summary>Arrival is explicit. The first Person commits independently; the second shares its P8 arrival with P18 terminal facts.</summary>
     public bool TryArrive(string activityInstanceId, string personId, out ActivityFailure failure)
     {
         if (!operations.TryGetValue(activityInstanceId, out P20JointCivilTravel current)
-            || current.State != P20JointCivilTravelState.Active || !current.PersonIds.Contains(personId, StringComparer.Ordinal)
+            || !current.PersonIds.Contains(personId, StringComparer.Ordinal)
             || !composition.Store.TryGet(activityInstanceId, out ActivityInstanceSnapshot activity)
             || activity.State != ActivityLifecycleState.Active || activity.PlannedEnd.HasValue)
         { failure = ActivityFailure.InvalidState; return false; }
@@ -223,16 +307,13 @@ public sealed class P20JointCivilTravelOwner
             failureDisposition = "joint-owner-state-missing";
             return false;
         }
-        if (current.State != P20JointCivilTravelState.Scheduled
-            || current.ExpectedLifecycleRevision != instance.Revision
+        if (current.ExpectedLifecycleRevision != instance.Revision
+            || instance.Revision == long.MaxValue
             || instance.State != ActivityLifecycleState.Scheduled
             || !instance.Participants.SequenceEqual(current.PersonIds, StringComparer.Ordinal)
             || current.PersonIds.Any(id => !current.Assents.TryGetValue(id, out P20JointCivilTravelAssent assent) || !assent.Accepted))
         {
-            P20JointCivilTravel failed = current.With(state: P20JointCivilTravelState.FailedToStart,
-                revision: current.Revision == long.MaxValue ? current.Revision : current.Revision + 1L,
-                lifecycleRevision: instance.Revision + 1L, disposition: "scheduled-instance-stale-or-incomplete");
-            prepared = new JointTransitionCommit(this, current, failed, false, "scheduled-instance-stale-or-incomplete", null, null);
+            prepared = new JointTransitionCommit(this, current, current, false, "scheduled-instance-stale-or-incomplete", null, null);
             failureDisposition = "scheduled-instance-stale-or-incomplete";
             return false;
         }
@@ -243,10 +324,7 @@ public sealed class P20JointCivilTravelOwner
             TraversalCostContext context = movementContext(person);
             if (context == null)
             {
-                P20JointCivilTravel failed = current.With(state: P20JointCivilTravelState.FailedToStart,
-                    revision: current.Revision == long.MaxValue ? current.Revision : current.Revision + 1L,
-                    lifecycleRevision: instance.Revision + 1L, disposition: "movement-context-unavailable");
-                prepared = new JointTransitionCommit(this, current, failed, false, "movement-context-unavailable", null, null);
+                prepared = new JointTransitionCommit(this, current, current, false, "movement-context-unavailable", null, null);
                 failureDisposition = "movement-context-unavailable";
                 return false;
             }
@@ -255,18 +333,12 @@ public sealed class P20JointCivilTravelOwner
         if (!travel.TryPrepareJointCivilLeg(participants, current.SharedSegmentStableKey,
             out PreparedP8EJointCivilLeg preparedLeg, out P8ETravelFailure travelFailure))
         {
-            P20JointCivilTravel failed = current.With(state: P20JointCivilTravelState.FailedToStart,
-                revision: current.Revision == long.MaxValue ? current.Revision : current.Revision + 1L,
-                lifecycleRevision: instance.Revision + 1L, disposition: "joint-travel-precondition-failed");
-            prepared = new JointTransitionCommit(this, current, failed, false, "joint-travel-precondition-failed", null, null);
+            prepared = new JointTransitionCommit(this, current, current, false, "joint-travel-precondition-failed", null, null);
             failureDisposition = "joint-travel-precondition-failed";
             return false;
         }
-        P20JointCivilTravel active = current.With(state: P20JointCivilTravelState.Active,
-            revision: current.Revision + 1L, lifecycleRevision: instance.Revision + 1L, disposition: "started");
-        P20JointCivilTravel failedStart = current.With(state: P20JointCivilTravelState.FailedToStart,
-            revision: current.Revision + 1L, lifecycleRevision: instance.Revision + 1L, disposition: "failed-to-start");
-        prepared = new JointTransitionCommit(this, current, active, true, null, preparedLeg, null, failedStart);
+        P20JointCivilTravel next = current.With(lifecycleRevision: instance.Revision + 1L);
+        prepared = new JointTransitionCommit(this, current, next, true, null, preparedLeg, null);
         failureDisposition = null;
         return true;
     }
@@ -278,31 +350,25 @@ public sealed class P20JointCivilTravelOwner
         prepared = null;
         if (!operations.TryGetValue(instance.Id, out P20JointCivilTravel current))
             return instance.DefinitionId != ActivityDefinitionId;
-        if (current.ExpectedLifecycleRevision != instance.Revision) return false;
+        if (current.ExpectedLifecycleRevision != instance.Revision || instance.Revision == long.MaxValue) return false;
         if (terminal == ActivityLifecycleState.Cancelled
-            && (current.State == P20JointCivilTravelState.Proposed || current.State == P20JointCivilTravelState.Scheduled))
+            && (instance.State == ActivityLifecycleState.Proposed || instance.State == ActivityLifecycleState.Scheduled))
         {
-            if (current.Revision == long.MaxValue) return false;
             prepared = new JointTransitionCommit(this, current,
-                current.With(state: P20JointCivilTravelState.Cancelled, revision: current.Revision + 1L,
-                    lifecycleRevision: instance.Revision + 1L, disposition: disposition ?? "cancelled"), true, null, null, null);
+                current.With(lifecycleRevision: instance.Revision + 1L), true, null, null, null);
             return true;
         }
         if ((terminal != ActivityLifecycleState.Completed && terminal != ActivityLifecycleState.Interrupted)
-            || current.State != P20JointCivilTravelState.Active || terminalArrivalPersonId == null
+            || instance.State != ActivityLifecycleState.Active || terminalArrivalPersonId == null
             || (current.AbortAfterLegRequested != (terminal == ActivityLifecycleState.Interrupted))
             || !current.PersonIds.Contains(terminalArrivalPersonId, StringComparer.Ordinal)
-            || current.Revision == long.MaxValue
             || !travel.TryPrepareFinalArrival(new PersonId(terminalArrivalPersonId), out PreparedP8EPersonFinalArrival arrival, out _))
             return false;
         string otherId = current.PersonIds.Single(id => id != terminalArrivalPersonId);
         if (!travel.TryGetFinalArrival(new PersonId(otherId), out HexId otherDestination)
             || !travel.TryGetPlanDestination(new PersonId(terminalArrivalPersonId), out HexId destination)
             || otherDestination != destination) return false;
-        P20JointCivilTravel next = current.With(state: terminal == ActivityLifecycleState.Completed
-                ? P20JointCivilTravelState.Completed : P20JointCivilTravelState.Interrupted,
-            revision: current.Revision + 1L, lifecycleRevision: instance.Revision + 1L,
-            disposition: disposition ?? string.Empty);
+        P20JointCivilTravel next = current.With(lifecycleRevision: instance.Revision + 1L);
         prepared = new JointTransitionCommit(this, current, next, true, null, null, arrival);
         return true;
     }
@@ -312,7 +378,6 @@ public sealed class P20JointCivilTravelOwner
         private readonly P20JointCivilTravelOwner owner;
         private readonly P20JointCivilTravel expected;
         private readonly P20JointCivilTravel next;
-        private readonly P20JointCivilTravel failed;
         private readonly bool allowed;
         private readonly string failure;
         private readonly PreparedP8EJointCivilLeg jointStart;
@@ -324,13 +389,12 @@ public sealed class P20JointCivilTravelOwner
             && (finalArrival == null || finalArrival.CanInstall);
         internal JointTransitionCommit(P20JointCivilTravelOwner owner, P20JointCivilTravel expected,
             P20JointCivilTravel next, bool allowed, string failure, PreparedP8EJointCivilLeg jointStart,
-            PreparedP8EPersonFinalArrival finalArrival, P20JointCivilTravel failed = null)
+            PreparedP8EPersonFinalArrival finalArrival)
         { this.owner = owner; this.expected = expected; this.next = next; this.allowed = allowed; this.failure = failure;
-            this.jointStart = jointStart; this.finalArrival = finalArrival; this.failed = failed; }
+            this.jointStart = jointStart; this.finalArrival = finalArrival; }
         public void CommitStarted()
         { jointStart.InstallPrepared(); owner.operations[next.ActivityInstanceId] = next; }
-        public void CommitFailedStart()
-        { if (failed != null) owner.operations[failed.ActivityInstanceId] = failed; else owner.operations[next.ActivityInstanceId] = next; }
+        public void CommitFailedStart() { }
         public void CommitTerminal()
         { finalArrival?.InstallPrepared(); owner.operations[next.ActivityInstanceId] = next; }
     }

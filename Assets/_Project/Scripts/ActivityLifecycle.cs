@@ -128,8 +128,8 @@ internal sealed class ActivityInstance
 public sealed class ActivityLifecycleStore : IDueWorkOwner, ITimelineBoundDueWorkOwner
 {
     public const string DueOwnerId = "activity-lifecycle";
-    private readonly Dictionary<string, ActivityInstance> instances = new Dictionary<string, ActivityInstance>(StringComparer.Ordinal);
-    private readonly Dictionary<string, string> creationIds = new Dictionary<string, string>(StringComparer.Ordinal);
+    private Dictionary<string, ActivityInstance> instances = new Dictionary<string, ActivityInstance>(StringComparer.Ordinal);
+    private Dictionary<string, string> creationIds = new Dictionary<string, string>(StringComparer.Ordinal);
     private Dictionary<string, List<ActivityParticipantCommitment>> commitments = new Dictionary<string, List<ActivityParticipantCommitment>>(StringComparer.Ordinal);
     private List<DueWorkReference> pending = new List<DueWorkReference>();
     private readonly string worldId;
@@ -212,6 +212,44 @@ public sealed class ActivityLifecycleStore : IDueWorkOwner, ITimelineBoundDueWor
         ActivityInstance item = new ActivityInstance(id, creationIdentity, definition);
         instances.Add(id, item); creationIds.Add(creationIdentity, id);
         snapshot = new ActivityInstanceSnapshot(item); failure = ActivityFailure.None; return true;
+    }
+
+    /// <summary>Prepares one P18 proposal and a single P20-owned root swap in the same timeline mutation boundary.</summary>
+    internal bool TryProposeWithParticipant(SimulationTimeline timeline, ActivityDefinition definition,
+        string creationIdentity, Func<ActivityInstanceSnapshot, Action> prepareParticipant,
+        out ActivityInstanceSnapshot snapshot, out ActivityFailure failure)
+    {
+        snapshot = null;
+        if (timeline == null) throw new ArgumentNullException(nameof(timeline));
+        if (!ReferenceEquals(authoritativeTimeline, timeline))
+        { failure = ActivityFailure.TimelineMismatch; return false; }
+        if (definition == null || string.IsNullOrWhiteSpace(creationIdentity))
+        { failure = ActivityFailure.InvalidDefinition; return false; }
+        if (creationIds.TryGetValue(creationIdentity, out string existing))
+        { snapshot = new ActivityInstanceSnapshot(instances[existing]); failure = ActivityFailure.DuplicateCreation; return false; }
+        string id = SpatialStableKey.Encode(worldId, nextIdentity.ToString(CultureInfo.InvariantCulture));
+        long next;
+        try { next = checked(nextIdentity + 1L); }
+        catch (OverflowException) { failure = ActivityFailure.RevisionOverflow; return false; }
+        ActivityInstance item = new ActivityInstance(id, creationIdentity, definition);
+        Dictionary<string, ActivityInstance> stagedInstances = new Dictionary<string, ActivityInstance>(instances, StringComparer.Ordinal)
+        { [id] = item };
+        Dictionary<string, string> stagedCreationIds = new Dictionary<string, string>(creationIds, StringComparer.Ordinal)
+        { [creationIdentity] = id };
+        ActivityInstanceSnapshot stagedSnapshot = new ActivityInstanceSnapshot(item);
+        Action commitParticipant = prepareParticipant?.Invoke(stagedSnapshot);
+        bool committed = timeline.TryCommitOwnerFacts(Array.Empty<DueWorkReference>(), () =>
+        {
+            instances = stagedInstances;
+            creationIds = stagedCreationIds;
+            nextIdentity = next;
+            commitParticipant?.Invoke();
+            return TimelineFailure.None;
+        }, out _);
+        if (!committed) { failure = ActivityFailure.TimelinePublicationFailed; return false; }
+        snapshot = stagedSnapshot;
+        failure = ActivityFailure.None;
+        return true;
     }
 
     public bool TryGet(string instanceId, out ActivityInstanceSnapshot snapshot)

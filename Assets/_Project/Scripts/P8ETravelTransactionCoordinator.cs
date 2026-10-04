@@ -173,17 +173,6 @@ public sealed class P8ETravelTransactionCoordinator
             && position.Transit.ToHexId == plan.DestinationHexId && PlanContainsTransit(plan, position.Transit);
     }
 
-    internal bool TryArriveAtFinalDestination(PersonId actor, out P8ETravelFailure failure) =>
-        TryArriveAtFinalDestinationCore(actor, out failure);
-
-    private bool TryArriveAtFinalDestinationCore(PersonId actor, out P8ETravelFailure failure)
-    {
-        if (!TryPrepareFinalArrival(actor, out PreparedP8EPersonFinalArrival prepared, out failure)) return false;
-        if (!prepared.TryInstall()) return Fail("Travel state changed before the atomic commit.", out failure);
-        failure = P8ETravelFailure.None;
-        return true;
-    }
-
     public bool TryAdvanceSegment(PersonId actor, int progressTicks, out P8ETravelFailure failure)
     {
         if (actor == null || !positions.TryGetPosition(actor, out PersonSpatialPosition current) || !current.IsInTransit
