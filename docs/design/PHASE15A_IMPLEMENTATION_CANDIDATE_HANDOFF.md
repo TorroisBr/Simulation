@@ -2,8 +2,10 @@
 
 **Checkpoint:** P15-A, one inert runtime structure at an existing canonical Location.
 **Canonical base:** `a6572ab3d4330d81edb334ae8b4c84ca5e6b173e`.
-**Code commit:** `c42359f3911da612fc6ad81b0733b6bd13508641`.
-**Code tree:** `447e4ea4d10df5e6c984ed825f463b15518e5be1`.
+**Initial code commit:** `c42359f3911da612fc6ad81b0733b6bd13508641`.
+**Initial code tree:** `447e4ea4d10df5e6c984ed825f463b15518e5be1`.
+**Current code commit:** `c99541b0292b79c8a89540dafa82348bda99de91`.
+**Current code tree:** `94114a1c4804ddc2f7cc84eff1cbeb876bd4900f`.
 **Branch:** `codex/phase15/P15ARuntimeStructureCurrentBaseIntegration`.
 
 ## Delivered boundary
@@ -26,7 +28,34 @@ populated unsupported proving store is rejected before daily publication.
 The separate proving profile composes the owner and exercises its first
 post-publication creation.
 
-## Validation on the exact code tree
+## Review remediation and revalidation on the current code tree
+
+The independent review of the initial candidate identified two required fixes.
+The public StructureStore.TryCreateStructure mutation seam is now internal;
+the public P15-A runtime/composition entry point supplies the actual current
+boundary, completed-publication fact, and the bounded causal order. The
+runtime spatial invariant report now includes StructureStore validation at
+CurrentDay. Focused tests prove there is no public store mutation surface,
+the supported pre-boundary entry point leaves the empty owner unchanged, and
+malformed Location/future-boundary records are surfaced by runtime validation.
+
+The current code commit is c99541b0292b79c8a89540dafa82348bda99de91
+(tree 94114a1c4804ddc2f7cc84eff1cbeb876bd4900f). All results below were
+generated after these fixes against that exact code tree. XML and logs are
+retained under Library/ValidationResults/P15A-review-fix/.
+
+| Suite | Result | XML | SHA-256 | Log | SHA-256 |
+|---|---:|---|---|---|---|
+| RuntimeStructureTruthTests | 10/10 | Library/ValidationResults/P15A-review-fix/EditMode-20261004-010946-2c07663ef26c4abd89a81671941e7a96.xml | B9DE293D0D70BB447556C6B3C391C8250D5D8D3B5550CCC86932B6647C981C83 | Library/ValidationResults/P15A-review-fix/EditMode-20261004-010946-2c07663ef26c4abd89a81671941e7a96.log | 39FEC2F3AE4520CB9CB20BF765648EA0121B4E545FA6375A0D337A67B9C9BEAD |
+| SimulationBootstrapCompositionTests | 21/21 | Library/ValidationResults/P15A-review-fix/EditMode-20261004-011024-a7e973e65f0e4f179efaee3b8e52c185.xml | 3DB0B2BA202322B86D5649D86E8DE7EC0547EEA11F8F1AB2EF3E1035CEE9B120 | Library/ValidationResults/P15A-review-fix/EditMode-20261004-011024-a7e973e65f0e4f179efaee3b8e52c185.log | 54F6507C639DB055C4C804C0F015727F3ED4A268996D502AA00DE4A6D40B49EE |
+| SimulationRuntimeOrchestrationTests | 12/12 | Library/ValidationResults/P15A-review-fix/EditMode-20261004-011047-311659e0a2584cc8bf217ddc2202a57f.xml | 4723AF16961808336BCD0DA8C449187420DF9C7134D23D5BF214657DF58FA366 | Library/ValidationResults/P15A-review-fix/EditMode-20261004-011047-311659e0a2584cc8bf217ddc2202a57f.log | CF1D223FB98C638E27241A95C0AE1CA7A128D3642C33B63172EDD2B84F6DE5A4 |
+| ALL EditMode | 2251/2251 | Library/ValidationResults/P15A-review-fix/EditMode-20261004-011108-fac2663e50134309911a7f64bb9f2d17.xml | 161CD7C3240E553A22D180E32431D21929A358BBB1068F8F55FDAE0E3481DE7E | Library/ValidationResults/P15A-review-fix/EditMode-20261004-011108-fac2663e50134309911a7f64bb9f2d17.log | 947A94F690EA72BBD00E63D8C7A888506B18D8DFE38D8205104983FC7B51B6A8 |
+| Official EditMode Smoke | 5/5 | Library/ValidationResults/P15A-review-fix/EditMode-20261004-011206-b97d724d380349a7a4ab0dc44ba36615.xml | 0343C5952CCEBC0E5254106D336D89CCC246E9B87AAB53CC3E9531A134BB0F0C | Library/ValidationResults/P15A-review-fix/EditMode-20261004-011206-b97d724d380349a7a4ab0dc44ba36615.log | 3B9F8662A75494A405088F07BEC86DD31C980BB9BFB31DDE77AD8DE55FBE49F3 |
+
+git diff --check passed for the candidate code commit. The original
+validation table below is retained as historical evidence for its initial
+code tree and is not used to validate the current candidate.
+## Original validation on the initial code tree
 
 | Suite | Result | XML | SHA-256 | Log | SHA-256 |
 |---|---:|---|---|---|---|
