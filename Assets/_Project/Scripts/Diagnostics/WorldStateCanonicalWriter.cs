@@ -861,32 +861,61 @@ public static class WorldStateCanonicalWriter
 
         foreach (WorldStateLocalTopologySnapshot topology in snapshot.LocalTopologies)
         {
-            AppendLine(output, "LOCAL_TOPOLOGY",
-                topology.StableKey,
-                EnumValue(topology.OwnerKind),
-                topology.OwnerRuntimeId,
-                topology.MacroLocationRuntimeId,
-                EnumValue(topology.PublicationState));
+            if (string.IsNullOrWhiteSpace(topology.SemanticOwnerDefinitionId))
+                AppendLine(output, "LOCAL_TOPOLOGY",
+                    topology.StableKey,
+                    EnumValue(topology.OwnerKind),
+                    topology.OwnerRuntimeId,
+                    topology.MacroLocationRuntimeId,
+                    EnumValue(topology.PublicationState));
+            else
+                AppendLine(output, "LOCAL_TOPOLOGY",
+                    topology.StableKey,
+                    EnumValue(topology.OwnerKind),
+                    topology.OwnerRuntimeId,
+                    topology.MacroLocationRuntimeId,
+                    EnumValue(topology.PublicationState),
+                    topology.SemanticOwnerDefinitionId,
+                    topology.SemanticLocationId);
 
             foreach (WorldStateLocalPlaceSnapshot place in topology.Places)
             {
-                AppendLine(output, "LOCAL_PLACE",
-                    topology.StableKey,
-                    place.RuntimeId,
-                    place.DefinitionId,
-                    place.ParentRuntimeId,
-                    BoolValue(place.IsEntryPoint));
+                if (string.IsNullOrWhiteSpace(place.SemanticId))
+                    AppendLine(output, "LOCAL_PLACE",
+                        topology.StableKey,
+                        place.RuntimeId,
+                        place.DefinitionId,
+                        place.ParentRuntimeId,
+                        BoolValue(place.IsEntryPoint));
+                else
+                    AppendLine(output, "LOCAL_PLACE",
+                        topology.StableKey,
+                        place.RuntimeId,
+                        place.DefinitionId,
+                        place.ParentRuntimeId,
+                        BoolValue(place.IsEntryPoint),
+                        place.SemanticId);
             }
 
             foreach (WorldStateLocalConnectionSnapshot connection in topology.Connections)
             {
-                AppendLine(output, "LOCAL_CONNECTION",
-                    topology.StableKey,
-                    connection.RuntimeId,
-                    connection.OriginRuntimeId,
-                    connection.DestinationRuntimeId,
-                    FloatValue(connection.TraversalCost),
-                    connection.ConnectionTypeDefinitionId);
+                if (string.IsNullOrWhiteSpace(connection.SemanticId))
+                    AppendLine(output, "LOCAL_CONNECTION",
+                        topology.StableKey,
+                        connection.RuntimeId,
+                        connection.OriginRuntimeId,
+                        connection.DestinationRuntimeId,
+                        FloatValue(connection.TraversalCost),
+                        connection.ConnectionTypeDefinitionId);
+                else
+                    AppendLine(output, "LOCAL_CONNECTION",
+                        topology.StableKey,
+                        connection.RuntimeId,
+                        connection.OriginRuntimeId,
+                        connection.DestinationRuntimeId,
+                        FloatValue(connection.TraversalCost),
+                        connection.ConnectionTypeDefinitionId,
+                        connection.SemanticId);
             }
         }
 

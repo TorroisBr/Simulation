@@ -776,6 +776,13 @@ public sealed class SpatialAuthorityStore : IAuthoritativeMutationGuardBindable
             return Fail(SpatialAuthorityFailureCode.InvalidTopologyBinding, "A topology binding requires a topology, owner, and LocationId.", out failure);
         }
 
+        if (topology.Owner.SemanticOwner != null
+            && topology.Owner.SemanticOwner.LocationId != locationId)
+        {
+            return Fail(SpatialAuthorityFailureCode.InvalidTopologyBinding,
+                "The semantic topology owner LocationId must match its P8 spatial binding.", out failure);
+        }
+
         if (locationsById.TryGetValue(locationId.Value, out LocationRecord location) == false
             || hexesById.ContainsKey(location.AnchorHexId.Value) == false)
         {
@@ -903,6 +910,13 @@ public sealed class SpatialAuthorityStore : IAuthoritativeMutationGuardBindable
             || topology.Owner.OwnerKind != reference.TopologyOwnerKind.Value)
         {
             return Fail(SpatialAuthorityFailureCode.TopologyNotRegistered, "SubLocation topology is absent from the supplied LocalTopologyStore.", out failure);
+        }
+
+        if (topology.Owner.SemanticOwner != null
+            && topology.Owner.SemanticOwner.LocationId != binding.LocationId)
+        {
+            return Fail(SpatialAuthorityFailureCode.InvalidTopologyBinding,
+                "SubLocation semantic owner does not match its canonical P8 Location binding.", out failure);
         }
 
         if (topology.TryValidate(out string topologyDiagnostic) == false
@@ -1171,6 +1185,12 @@ public sealed class SpatialAuthorityStore : IAuthoritativeMutationGuardBindable
             {
                 violations.Add("Spatial topology binding owner kind does not match LocalTopologyStore: " + binding.StableKey + ".");
                 continue;
+            }
+
+            if (topology.Owner.SemanticOwner != null
+                && topology.Owner.SemanticOwner.LocationId != binding.LocationId)
+            {
+                violations.Add("Spatial topology binding LocationId does not match the semantic owner: " + binding.StableKey + ".");
             }
 
             if (topology.TryValidate(out string diagnostic) == false)

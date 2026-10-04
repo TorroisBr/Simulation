@@ -101,6 +101,7 @@ MonoBehaviour:
   authoredScaleSourceVersion: 1
   authoredDistancePerNeighborStep: 1
   authoredScaleUnit: km
+  authoredP10RuinSite: {fileID: 11400000, guid: 6d33bbcced2e469daead9112c21e8a71, type: 2}
   travelCostPerDay: 10
   logSettings:
     showDay: 1
