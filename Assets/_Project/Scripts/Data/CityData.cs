@@ -12,6 +12,7 @@ public class CityData : ScriptableObject
     public string settlementSemanticId;
     public string materialFlowLocationId;
     public string marketStoreSemanticId;
+    public LocalMaterialFlowProfile materialFlowProfile = LocalMaterialFlowProfile.ExogenousDaily;
     public int initialPopulation = 1000;
     public MarketLiquidityConfig marketLiquidity = new MarketLiquidityConfig();
     public PopulationConsumptionConfig populationConsumption = new PopulationConsumptionConfig();
@@ -59,8 +60,15 @@ public class CityProductionConfig
 {
     public ItemData item;
     public int amountPerDay;
+    public int initialReserve;
     public string productionSourceId;
     public string contentRevision = "1";
+}
+
+public enum LocalMaterialFlowProfile
+{
+    ExogenousDaily,
+    FiniteReserveDaily
 }
 
 [Serializable]

@@ -27,6 +27,7 @@ public class CityRuntime
 
     private const string DailyEconomyVersion = "1";
     [NonSerialized] private LocalDailyMaterialFlowResult lastMaterialFlow;
+    [NonSerialized] private FiniteProductionSourceStore finiteProductionSources;
 
     public string RuntimeId => runtimeId;
     public CityData CityData => cityData;
@@ -88,12 +89,14 @@ public class CityRuntime
     public long ImportantNpcRevision => importantNpcRevision;
     public string CityName => cityData != null ? cityData.cityName : "Cidade desconhecida";
     public bool HasLocalDailyMaterialFlow => cityData != null
-        && (!string.IsNullOrWhiteSpace(cityData.settlementSemanticId)
+        && (cityData.materialFlowProfile != LocalMaterialFlowProfile.ExogenousDaily
+            || !string.IsNullOrWhiteSpace(cityData.settlementSemanticId)
             || !string.IsNullOrWhiteSpace(cityData.materialFlowLocationId)
             || !string.IsNullOrWhiteSpace(cityData.marketStoreSemanticId)
             || (cityData.productionConfigs != null && cityData.productionConfigs.Exists(source =>
-                source != null && !string.IsNullOrWhiteSpace(source.productionSourceId))));
+                source != null && (!string.IsNullOrWhiteSpace(source.productionSourceId) || source.initialReserve != 0))));
     public LocalDailyMaterialFlowResult LastMaterialFlow => lastMaterialFlow;
+    public FiniteProductionSourceStore FiniteProductionSources => finiteProductionSources;
 
     internal void ValidateLocalDailyMaterialFlowAnchor(LegacySpatialAnchorBindingStore bindings, SpatialAuthorityStore spatial)
     {
@@ -103,11 +106,17 @@ public class CityRuntime
             || string.IsNullOrWhiteSpace(cityData.marketStoreSemanticId)
             || cityData.productionConfigs == null || cityData.productionConfigs.Count != 1)
             throw new LocalDailyMaterialFlowRejectedException("P14-A requires settlement, LocationId, market store, and exactly one authored source.");
+        if (!Enum.IsDefined(typeof(LocalMaterialFlowProfile), cityData.materialFlowProfile))
+            throw new LocalDailyMaterialFlowRejectedException("Unsupported P14 local material flow profile.");
         CityProductionConfig source = cityData.productionConfigs[0];
         if (source == null || source.item == null || string.IsNullOrWhiteSpace(source.item.DefinitionId)
             || source.amountPerDay <= 0
             || string.IsNullOrWhiteSpace(source.productionSourceId) || string.IsNullOrWhiteSpace(source.contentRevision))
             throw new LocalDailyMaterialFlowRejectedException("P14-A source identity, item, positive quantity, and content revision are required.");
+        if (cityData.materialFlowProfile == LocalMaterialFlowProfile.ExogenousDaily && source.initialReserve != 0)
+            throw new LocalDailyMaterialFlowRejectedException("Finite reserve data requires the finite-reserve profile.");
+        if (cityData.materialFlowProfile == LocalMaterialFlowProfile.FiniteReserveDaily && source.initialReserve < 0)
+            throw new LocalDailyMaterialFlowRejectedException("Finite source reserve cannot be negative.");
         if (PopulationEconomy.PaymentMode != ConsumptionPaymentMode.Free
             || cityData.marketItems == null || cityData.marketItems.Count != 1
             || cityData.marketItems[0] == null || cityData.marketItems[0].item == null
@@ -129,8 +138,31 @@ public class CityRuntime
             throw new LocalDailyMaterialFlowRejectedException("P14-A requires a market item and free population consumption for the source item.");
 
         int opening = Market.GetAmount(source.item);
-        int applied = Market.AddStock(source.item, source.amountPerDay);
-        string rejection = applied == source.amountPerDay ? string.Empty : "AggregateStockOverflow";
+        int applied;
+        string rejection;
+        if (cityData.materialFlowProfile == LocalMaterialFlowProfile.FiniteReserveDaily)
+        {
+            if (finiteProductionSources == null)
+                throw new LocalDailyMaterialFlowRejectedException("Finite source owner was not constructed for the selected profile.");
+            FiniteSourceProductionResult production = new FiniteSourceProductionService().TryProduceDaily(
+                finiteProductionSources,
+                Market,
+                cityData.settlementSemanticId,
+                cityData.marketStoreSemanticId,
+                source.item,
+                absoluteDay,
+                finiteProductionSources.Source.Revision,
+                Market.Revision);
+            applied = production.Quantity;
+            rejection = production.Status == FiniteSourceProductionStatus.Applied
+                ? string.Empty
+                : production.RejectionReason;
+        }
+        else
+        {
+            applied = Market.AddStock(source.item, source.amountPerDay);
+            rejection = applied == source.amountPerDay ? string.Empty : "AggregateStockOverflow";
+        }
         int requested = Math.Max(0, Mathf.RoundToInt(Population.CurrentPopulation / 1000f * itemConfig.consumptionPer1000Population));
         int actual = Market.RemoveStockUpTo(source.item, requested);
         int closing = Market.GetAmount(source.item);
@@ -420,6 +452,17 @@ public class CityRuntime
         market = cityData != null
             ? new MarketRuntime(cityData.marketItems, this.marketCounterparty)
             : new MarketRuntime(new List<MarketItemConfig>(), this.marketCounterparty);
+        if (cityData != null && cityData.materialFlowProfile == LocalMaterialFlowProfile.FiniteReserveDaily)
+        {
+            if (cityData.productionConfigs == null || cityData.productionConfigs.Count != 1)
+                throw new LocalDailyMaterialFlowRejectedException("Finite-reserve profile requires exactly one authored source.");
+            CityProductionConfig finiteSource = cityData.productionConfigs[0];
+            finiteProductionSources = new FiniteProductionSourceStore(
+                cityData.materialFlowProfile,
+                finiteSource,
+                cityData.settlementSemanticId,
+                cityData.marketStoreSemanticId);
+        }
         populationEconomy = CreateConfiguredPopulationEconomy();
     }
 
