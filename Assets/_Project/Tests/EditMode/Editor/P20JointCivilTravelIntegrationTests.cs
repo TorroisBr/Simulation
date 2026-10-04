@@ -1,0 +1,167 @@
+using System;
+using System.Collections.Generic;
+using NUnit.Framework;
+
+public sealed class P20JointCivilTravelIntegrationTests
+{
+    [TestCase(false, ActivityLifecycleState.Completed, P20JointCivilTravelState.Completed)]
+    [TestCase(true, ActivityLifecycleState.Interrupted, P20JointCivilTravelState.Interrupted)]
+    public void SecondArrivalAtomicallyTerminatesSharedActivityAfterIndividualTravel(
+        bool abortAfterLeg, ActivityLifecycleState expectedLifecycle, P20JointCivilTravelState expectedCoordination)
+    {
+        Fixture fixture = new Fixture();
+        ActivityLifecycleStore lifecycle = new ActivityLifecycleStore("joint-travel-integration-world");
+        ActivityLifecycleComposition composition = new ActivityLifecycleComposition(lifecycle,
+            new SimulationCalendar(new CalendarDefinition(2, 2, 3)), new LogicalTick(0));
+        P20JointCivilTravelOwner owner = new P20JointCivilTravelOwner(composition, fixture.Travel,
+            person => fixture.Contexts[person.Value]);
+        Assert.That(owner.TryCreate(new ActivityDefinition(P20JointCivilTravelOwner.ActivityDefinitionId, "v1"),
+            "joint-integration-" + abortAfterLeg, fixture.Segment.StableKey, new[] { "person-a", "person-b" },
+            out P20JointCivilTravelSnapshot proposal, out ActivityFailure createFailure), Is.True, createFailure.ToString());
+        Assert.That(owner.TryRecordAssent(proposal.ActivityInstanceId,
+            new P20JointCivilTravelAssent("person-a", true, "consent-a")), Is.True);
+        Assert.That(owner.TryRecordAssent(proposal.ActivityInstanceId,
+            new P20JointCivilTravelAssent("person-b", true, "consent-b")), Is.True);
+        Assert.That(owner.TrySchedule(proposal.ActivityInstanceId, new LogicalTick(1), out ActivityFailure scheduleFailure),
+            Is.True, scheduleFailure.ToString());
+        Assert.That(composition.Timeline.TryAdvanceTo(new LogicalTick(1), out TimelineFailure startFailure),
+            Is.True, startFailure.ToString());
+
+        Assert.That(lifecycle.TryGet(proposal.ActivityInstanceId, out ActivityInstanceSnapshot active), Is.True);
+        Assert.That(active.State, Is.EqualTo(ActivityLifecycleState.Active));
+        Assert.That(fixture.Positions.TryGetPosition(new PersonId("person-a"), out PersonSpatialPosition transitA), Is.True);
+        Assert.That(fixture.Positions.TryGetPosition(new PersonId("person-b"), out PersonSpatialPosition transitB), Is.True);
+        Assert.That(transitA.IsInTransit && transitB.IsInTransit, Is.True);
+        Assert.That(fixture.Positions.Revision, Is.EqualTo(3L), "The two departures install one replacement root.");
+        Assert.That(fixture.Plans.Revision, Is.EqualTo(3L), "The two route activations install one replacement root.");
+
+        if (abortAfterLeg)
+        {
+            Assert.That(owner.TryGet(proposal.ActivityInstanceId, out P20JointCivilTravelSnapshot activeOwner), Is.True);
+            Assert.That(owner.TryRequestAbortAfterLeg(proposal.ActivityInstanceId, activeOwner.Revision), Is.True);
+        }
+
+        Assert.That(fixture.Travel.TryAdvanceSegment(new PersonId("person-a"), TraversalProgress.CompleteProgressTicks,
+            out P8ETravelFailure travelFailure), Is.True, travelFailure.Message);
+        Assert.That(owner.TryArrive(proposal.ActivityInstanceId, "person-a", out ActivityFailure firstArrivalFailure),
+            Is.True, firstArrivalFailure.ToString());
+        Assert.That(lifecycle.TryGet(proposal.ActivityInstanceId, out ActivityInstanceSnapshot stillActive), Is.True);
+        Assert.That(stillActive.State, Is.EqualTo(ActivityLifecycleState.Active));
+        Assert.That(lifecycle.GetCommitment("person-a"), Is.Not.Null);
+        Assert.That(lifecycle.GetCommitment("person-b"), Is.Not.Null);
+
+        Assert.That(fixture.Travel.TryAdvanceSegment(new PersonId("person-b"), TraversalProgress.CompleteProgressTicks,
+            out travelFailure), Is.True, travelFailure.Message);
+        Assert.That(owner.TryArrive(proposal.ActivityInstanceId, "person-b", out ActivityFailure secondArrivalFailure),
+            Is.True, secondArrivalFailure.ToString());
+        Assert.That(lifecycle.TryGet(proposal.ActivityInstanceId, out ActivityInstanceSnapshot terminal), Is.True);
+        Assert.That(terminal.State, Is.EqualTo(expectedLifecycle));
+        Assert.That(owner.TryGet(proposal.ActivityInstanceId, out P20JointCivilTravelSnapshot terminalOwner), Is.True);
+        Assert.That(terminalOwner.State, Is.EqualTo(expectedCoordination));
+        Assert.That(fixture.Positions.TryGetPosition(new PersonId("person-b"), out PersonSpatialPosition arrivedB), Is.True);
+        Assert.That(arrivedB.IsInTransit, Is.False);
+        Assert.That(arrivedB.Position.HexId, Is.EqualTo(new HexId("hex.b")));
+        Assert.That(fixture.Plans.TryGetCurrent(new PersonId("person-b"), out PersonRoutePlan completedPlanB), Is.True);
+        Assert.That(completedPlanB.Status, Is.EqualTo(PersonRoutePlanStatus.Completed));
+        Assert.That(lifecycle.GetCommitment("person-a"), Is.Null);
+        Assert.That(lifecycle.GetCommitment("person-b"), Is.Null);
+    }
+
+    private sealed class Fixture
+    {
+        private const string Metric = "joint.route.preference";
+        private const string Unit = "fixture-units";
+        internal readonly PersonSpatialPositionStore Positions;
+        internal readonly PersonRoutePlanStore Plans;
+        internal readonly P8ETravelTransactionCoordinator Travel;
+        internal readonly SpatialRouteSegment Segment;
+        internal readonly Dictionary<string, TraversalCostContext> Contexts = new Dictionary<string, TraversalCostContext>
+        {
+            ["person-a"] = new TraversalCostContext("movement.a", "v1", 1m, 1m, 1m),
+            ["person-b"] = new TraversalCostContext("movement.b", "v1", 1m, 1m, 1m)
+        };
+
+        internal Fixture()
+        {
+            PersonStore people = new PersonStore();
+            foreach (string id in new[] { "person-a", "person-b" })
+                Assert.That(people.TryRegister(new PersonRuntime(new PersonId(id)), out PersonStoreFailure personFailure),
+                    Is.True, personFailure.ToString());
+            SpatialAuthorityStore spatial = BuildSpatial();
+            HexId from = new HexId("hex.a"), to = new HexId("hex.b");
+            Segment = new SpatialRouteSegment(new HexBoundaryKey(from, to), from, to,
+                TraversalOptionRef.ForConnection(new ConnectionId("connection.ab")));
+            SpatialRouteKnowledgeStore knowledge = new SpatialRouteKnowledgeStore(people);
+            SpatialRoutePlanningSystem planner = new SpatialRoutePlanningSystem(people, spatial, knowledge);
+            Plans = new PersonRoutePlanStore(people, knowledge);
+
+            foreach (string id in new[] { "person-a", "person-b" })
+            {
+                PersonId person = new PersonId(id);
+                Record(knowledge, person, new SpatialObservation(SpatialSubject.ForTraversalOption(Segment),
+                    SpatialObservationValue.ForRouteOptionBelief(SpatialRouteOptionBelief.KnownAvailable),
+                    new SpatialObservationProvenance(SpatialObservationSourceKind.ExternalReport, "joint-map", "option." + id),
+                    0L, 0L, 1000, "joint-route-report-v1"));
+                SpatialRoutePlanningRequest request = new SpatialRoutePlanningRequest(person,
+                    StablePositionReference.ForHex(from), StablePositionReference.ForHex(to), 0L);
+                SpatialRouteCandidate candidate = planner.BuildKnownCandidates(request).Candidates[0];
+                Record(knowledge, person, new SpatialObservation(SpatialSubject.ForRouteEstimate(candidate.Id, Metric),
+                    SpatialObservationValue.ForEstimate(1m, Unit),
+                    new SpatialObservationProvenance(SpatialObservationSourceKind.InitialScenarioKnowledge, "joint-world", "estimate." + id),
+                    0L, 0L, 1000, "joint-route-estimate-v1"));
+                SpatialRoutePlanningOutcome selected = planner.SelectKnownRoute(request,
+                    new SpatialRouteSelectionPolicy("joint-policy", "v1", Metric, Unit, false, 0L, true));
+                Assert.That(selected.IsSuccess, Is.True, selected.FailureMessage);
+                Assert.That(Plans.TryAcceptPlan(selected, "route." + id, 0L, 0L, out PersonRoutePlanFailure planFailure),
+                    Is.True, planFailure.ToString());
+            }
+
+            Positions = new PersonSpatialPositionStore(people, spatial, new Resolver(spatial.PassageAuthority));
+            foreach (string id in new[] { "person-a", "person-b" })
+                Assert.That(Positions.TrySetAt(new PersonId(id), StablePositionReference.ForHex(from),
+                    out PersonSpatialPositionFailure positionFailure), Is.True, positionFailure.ToString());
+            Travel = new P8ETravelTransactionCoordinator(Positions, Plans, knowledge,
+                spatial.PassageAuthority, () => 0L);
+        }
+
+        private static SpatialAuthorityStore BuildSpatial()
+        {
+            SpatialAuthorityStore spatial = new SpatialAuthorityStore();
+            HexRecord[] hexes =
+            {
+                new HexRecord(new HexId("hex.a"), new HexCoordinate(0, 0), new TerrainReference(new TerrainDefinitionId("terrain.fixture"), "v1")),
+                new HexRecord(new HexId("hex.b"), new HexCoordinate(1, 0), new TerrainReference(new TerrainDefinitionId("terrain.fixture"), "v1"))
+            };
+            SpatialGeographyDefinition geography = new SpatialGeographyDefinition(
+                new SpatialWorldScaleContext("joint-scale", "fixture", "v1", 1m, "hex-step"), hexes, Array.Empty<LocationRecord>());
+            Assert.That(spatial.TryComposeGeography(geography, out SpatialAuthorityFailure failure), Is.True, failure.ToString());
+            HexId from = new HexId("hex.a"), to = new HexId("hex.b");
+            Assert.That(spatial.PassageAuthority.TryRegisterConnection(new PassageOptionRecord(
+                TraversalOptionRef.ForConnection(new ConnectionId("connection.ab")), new HexBoundaryKey(from, to),
+                "joint-connection", "v1"), PassageCondition.Available, out failure), Is.True, failure.ToString());
+            return spatial;
+        }
+
+        private static void Record(SpatialRouteKnowledgeStore knowledge, PersonId person, SpatialObservation observation)
+        { Assert.That(knowledge.TryRecordObservation(person, observation, 0L, out SpatialKnowledgeFailure failure), Is.True, failure.ToString()); }
+    }
+
+    private sealed class Resolver : ISpatialTraversalOptionResolver
+    {
+        private readonly SpatialPassageAuthority passage;
+        internal Resolver(SpatialPassageAuthority passage) { this.passage = passage; }
+        public bool TryResolveTraversalOption(TraversalOptionRef option, HexBoundaryKey boundary, out string failure)
+        {
+            if (passage.TryGetTraversalOptions(boundary, out IReadOnlyList<TraversalOptionRef> options,
+                out SpatialAuthorityFailure authorityFailure))
+            {
+                foreach (TraversalOptionRef candidate in options)
+                    if (candidate.Equals(option)) { failure = string.Empty; return true; }
+                failure = "Traversal option is not registered for the boundary.";
+                return false;
+            }
+            failure = authorityFailure?.Message ?? "Boundary traversal options could not be read.";
+            return false;
+        }
+    }
+}
