@@ -110,14 +110,88 @@ public sealed class RuntimeStructureTruthTests
     }
 
     [Test]
-    public void UnityDailyProfileCompositionHasNoStructureStoreInjectionSurface()
+    public void UnityDailyProfileProducesNoStoreAndRejectsTheDedicatedInjectionPath()
     {
-        // P12's accepted daily profile is fixed through these three composition
-        // boundaries. The candidate owner is absent from every field, property,
-        // method parameter/return, and constructor boundary on those paths.
-        AssertNoStructureStoreSurface(typeof(SimulationRuntime));
-        AssertNoStructureStoreSurface(typeof(SimulationBootstrapComposition));
+        SimulationRuntime dailyRuntime = new SimulationRuntime(
+            new SimulationTime(0L),
+            cities: null,
+            npcRuntimes: null,
+            economyEnabled: false,
+            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1());
+        Assert.That(dailyRuntime.StructureStore, Is.Null);
+
+        SpatialAuthorityStore spatial = CreateSpatialAuthority();
+        StructureStore populatedStore = new StructureStore(spatial);
+        Assert.That(populatedStore.TryCreateStructure(
+            CreateRecord("unsupported-daily-structure", "location-a", 1L, 0L),
+            1L,
+            true,
+            out StructureStoreFailure populatedFailure), Is.True, populatedFailure.ToString());
+        Assert.Throws<ArgumentException>(() => new SimulationRuntime(
+            new SimulationTime(0L),
+            cities: null,
+            npcRuntimes: null,
+            economyEnabled: false,
+            spatialAuthorityStore: spatial,
+            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            compositionProfile: SimulationRuntimeCompositionProfile.P15AProvingStructure,
+            structureStore: populatedStore));
+
+        // TesteSimulacao remains the normal Unity daily factory and cannot
+        // select or pass the proving owner.
         AssertNoStructureStoreSurface(typeof(TesteSimulacao));
+    }
+
+    [Test]
+    public void SeparateP15ACompositionPublishesEmptyStoreAndAllowsOneStructureAfterFirstBoundary()
+    {
+        P15AProvingStructureComposition profile = P15AProvingStructureComposition.Compose(
+            new SimulationTime(12L),
+            CreateSpatialAuthority());
+        Assert.That(profile.Runtime.StructureStore, Is.SameAs(profile.StructureStore));
+        Assert.That(profile.Runtime.Cities, Is.Empty);
+        Assert.That(profile.StructureStore.Count, Is.Zero);
+
+        Assert.That(profile.TryCreateStructure(
+            new StructureId("structure-p15a"), new LocationId("location-a"), 0L,
+            out StructureStoreFailure beforeFirstBoundary), Is.False);
+        Assert.That(beforeFirstBoundary.Code, Is.EqualTo(StructureStoreFailureCode.InvalidBoundary));
+        Assert.That(profile.StructureStore.Revision, Is.Zero);
+
+        profile.Runtime.AdvanceDay();
+        Assert.That(profile.Runtime.CurrentDay, Is.EqualTo(13L));
+        Assert.That(profile.TryCreateStructure(
+            new StructureId("structure-p15a"), new LocationId("location-a"), 0L,
+            out StructureStoreFailure created), Is.True, created.ToString());
+        Assert.That(profile.StructureStore.Records.Single().CreatedAtBoundary, Is.EqualTo(13L));
+        Assert.That(profile.StructureStore.ValidateInvariants(13L).IsValid, Is.True);
+
+        string beforeRepeat = SemanticFingerprint(profile.StructureStore.CaptureSemanticState());
+        Assert.That(profile.TryCreateStructure(
+            new StructureId("structure-p15a"), new LocationId("location-a"), 1L,
+            out StructureStoreFailure repeated), Is.False);
+        Assert.That(repeated.Code, Is.EqualTo(StructureStoreFailureCode.DuplicateStructureId));
+        Assert.That(SemanticFingerprint(profile.StructureStore.CaptureSemanticState()), Is.EqualTo(beforeRepeat));
+    }
+
+    [Test]
+    public void RuntimeP15ACompositionCannotCreateBeforeItsPublicationMarker()
+    {
+        SpatialAuthorityStore spatial = CreateSpatialAuthority();
+        SimulationRuntime runtime = new SimulationRuntime(
+            new SimulationTime(0L),
+            cities: null,
+            npcRuntimes: null,
+            economyEnabled: false,
+            spatialAuthorityStore: spatial,
+            compositionProfile: SimulationRuntimeCompositionProfile.P15AProvingStructure,
+            structureStore: new StructureStore(spatial));
+
+        Assert.That(runtime.TryCreateP15AProvingStructure(
+            new StructureId("structure-p15a"), new LocationId("location-a"), 0L,
+            out StructureStoreFailure unpublished), Is.False);
+        Assert.That(unpublished.Code, Is.EqualTo(StructureStoreFailureCode.InitialPublicationIncomplete));
+        Assert.That(runtime.StructureStore.Count, Is.Zero);
     }
 
     private static void AssertRejectedUnchanged(

@@ -327,6 +327,8 @@ public sealed class SimulationBootstrapCompositionTests
         });
 
         Assert.That(simulation.Bootstrap, Is.Not.Null);
+        Assert.That(simulation.Runtime.StructureStore, Is.Null,
+            "UnityBootstrap-Daily-v1 does not compose the P15-A proving owner.");
         Assert.That(simulation.Bootstrap.FactualReads, Is.SameAs(draftReads));
         Assert.That(simulation.Bootstrap.WorldId, Is.SameAs(simulation.Runtime.WorldId));
         Assert.That(simulation.Bootstrap.FactualReads.TryCaptureCoherent(

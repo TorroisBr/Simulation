@@ -19,6 +19,13 @@ public enum SimulationRuntimeAdmissionProfile
     UnityBootstrapDailyV1 = 1
 }
 
+/// <summary>Explicit non-P12 domain composition used only by bounded proving profiles.</summary>
+public enum SimulationRuntimeCompositionProfile
+{
+    Standard = 0,
+    P15AProvingStructure = 1
+}
+
 /// <summary>Explicit profile and Unity Start-thread identity for the bounded P12 daily adapter.</summary>
 public sealed class SimulationRuntimeAdmissionContext
 {
@@ -332,6 +339,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
     private readonly AuthoritativeMutationGuard mutationGuard = new AuthoritativeMutationGuard();
     private bool advanceLeaseHeld;
     private readonly SimulationRuntimeAdmissionContext runtimeAdmissionContext;
+    private readonly SimulationRuntimeCompositionProfile compositionProfile;
+    private readonly long initialAbsoluteDay;
+    private bool p15AInitialPublicationComplete;
     private readonly SimulationRecordSequence simulationRecordSequence;
     private readonly SimulationRecordSequenceCensusProvider simulationRecordSequenceCensusProvider;
     private readonly RuntimeIdAllocator runtimeIdAllocator;
@@ -382,6 +392,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
     private volatile P12SoloTravelStartOperationContext activeP12SoloTravelStartOperationContext;
     private readonly ActorChoiceStore actorChoiceStore;
     private readonly SpatialAuthorityStore spatialAuthorityStore;
+    private readonly StructureStore structureStore;
     private readonly LegacySpatialAnchorBindingStore legacySpatialAnchorBindingStore;
     private readonly PersonSpatialPositionStore personSpatialPositionStore;
     private readonly SpatialRouteKnowledgeStore spatialRouteKnowledgeStore;
@@ -465,6 +476,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             : Array.AsReadOnly(new IOwnerSectionCensusProvider[0]);
     public ActorChoiceStore ActorChoiceStore => actorChoiceStore;
     public SpatialAuthorityStore SpatialAuthorityStore => spatialAuthorityStore;
+    /// <summary>Present only in the explicit P15-A proving composition; excluded from P12 daily.</summary>
+    public StructureStore StructureStore => structureStore;
     public LegacySpatialAnchorBindingStore LegacySpatialAnchorBindingStore => legacySpatialAnchorBindingStore;
     public PersonSpatialPositionStore PersonSpatialPositionStore => personSpatialPositionStore;
     public SpatialRouteKnowledgeStore SpatialRouteKnowledgeStore => spatialRouteKnowledgeStore;
@@ -668,9 +681,28 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         SimulationRuntimeAdmissionContext runtimeAdmissionContext = null,
         SimulationRecordSequence recordSequence = null,
         WorldId worldId = null,
-        RuntimeIdAllocator runtimeIdAllocator = null)
+        RuntimeIdAllocator runtimeIdAllocator = null,
+        SimulationRuntimeCompositionProfile compositionProfile = SimulationRuntimeCompositionProfile.Standard,
+        StructureStore structureStore = null)
     {
         WorldId = worldId;
+        if (!Enum.IsDefined(typeof(SimulationRuntimeCompositionProfile), compositionProfile))
+            throw new ArgumentOutOfRangeException(nameof(compositionProfile));
+        if (runtimeAdmissionContext != null
+            && (structureStore != null || compositionProfile != SimulationRuntimeCompositionProfile.Standard))
+        {
+            throw new ArgumentException(
+                "UnityBootstrap-Daily-v1 does not admit the P15-A StructureStore or proving composition.",
+                nameof(structureStore));
+        }
+        if (compositionProfile == SimulationRuntimeCompositionProfile.P15AProvingStructure
+            ? structureStore == null || spatialAuthorityStore == null
+            : structureStore != null)
+        {
+            throw new ArgumentException(
+                "StructureStore is allowed only with an explicit P15AProvingStructure composition and an existing SpatialAuthorityStore.",
+                nameof(structureStore));
+        }
         if (runtimeAdmissionContext != null)
         {
             if (p18dIntradayProfile != null)
@@ -721,6 +753,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             : new List<NpcRuntime>();
 
         this.simulationTime = simulationTime ?? throw new ArgumentNullException(nameof(simulationTime));
+        initialAbsoluteDay = this.simulationTime.AbsoluteDay;
         if (this.simulationTime.CanBindMutationGuard(mutationGuard) == false)
         {
             throw new ArgumentException(
@@ -850,6 +883,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         GenealogyStore resolvedGenealogyStore = genealogyStore ?? new GenealogyStore();
         ValidateGenealogyStore(resolvedPersonStore, resolvedGenealogyStore);
         SpatialAuthorityStore resolvedSpatialAuthorityStore = CloneSpatialAuthorityStore(spatialAuthorityStore);
+        StructureStore resolvedStructureStore = structureStore == null
+            ? null
+            : structureStore.Clone(resolvedSpatialAuthorityStore);
         ISpatialTraversalOptionResolver resolvedTraversalOptionResolver =
             new SpatialPassageTraversalOptionResolver(resolvedSpatialAuthorityStore.PassageAuthority);
         LegacySpatialAnchorBindingStore resolvedLegacySpatialAnchorBindingStore =
@@ -947,6 +983,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         this.personStoreCensusProviders = PersonStoreCensusProvider.CreateProviders(resolvedPersonStore);
         this.actorChoiceStore = resolvedActorChoiceStore;
         this.spatialAuthorityStore = resolvedSpatialAuthorityStore;
+        this.compositionProfile = compositionProfile;
+        this.structureStore = resolvedStructureStore;
         this.legacySpatialAnchorBindingStore = resolvedLegacySpatialAnchorBindingStore;
         this.personSpatialPositionStore = resolvedPersonSpatialPositionStore;
         this.spatialRouteKnowledgeStore = resolvedSpatialRouteKnowledgeStore;
@@ -1241,6 +1279,66 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
 
         factualReadWorldPublished = true;
         return true;
+    }
+
+    internal bool TryCompleteP15AProvingPublication()
+    {
+        if (compositionProfile != SimulationRuntimeCompositionProfile.P15AProvingStructure
+            || structureStore == null
+            || runtimeAdmissionContext != null
+            || p15AInitialPublicationComplete
+            || !mutationGuard.CanMutate
+            || CurrentDay != initialAbsoluteDay
+            || spatialAuthorityStore.LocationCount == 0
+            || !spatialAuthorityStore.ValidateInvariants().IsValid
+            || !structureStore.ValidateInvariants(CurrentDay).IsValid)
+        {
+            return false;
+        }
+
+        p15AInitialPublicationComplete = true;
+        return true;
+    }
+
+    public bool TryCreateP15AProvingStructure(
+        StructureId structureId,
+        LocationId locationId,
+        long creationOrder,
+        out StructureStoreFailure failure)
+    {
+        failure = StructureStoreFailure.None;
+        if (compositionProfile != SimulationRuntimeCompositionProfile.P15AProvingStructure || structureStore == null)
+        {
+            failure = StructureStoreFailure.Create(
+                StructureStoreFailureCode.ProfileNotSelected,
+                "The P15-A proving composition is not selected.");
+            return false;
+        }
+        if (!p15AInitialPublicationComplete)
+        {
+            failure = StructureStoreFailure.Create(
+                StructureStoreFailureCode.InitialPublicationIncomplete,
+                "The P15-A proving composition has not completed initial publication.");
+            return false;
+        }
+        if (CurrentDay <= initialAbsoluteDay)
+        {
+            failure = StructureStoreFailure.Create(
+                StructureStoreFailureCode.InvalidBoundary,
+                "P15-A structure creation requires the first simulated boundary to have completed.");
+            return false;
+        }
+
+        return structureStore.TryCreateStructure(
+            new StructureRecord(
+                structureId,
+                StructureDefinitionReference.P15AProving,
+                locationId,
+                CurrentDay,
+                creationOrder),
+            CurrentDay,
+            initialPublicationComplete: true,
+            out failure);
     }
 
     private void InitializeNpcRosterCensusProtocol()
@@ -4054,6 +4152,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         AddRequiredMutationGuardBinding(authorities, personStore, nameof(PersonStore));
         AddRequiredMutationGuardBinding(authorities, actorChoiceStore, nameof(ActorChoiceStore));
         AddRequiredMutationGuardBinding(authorities, spatialAuthorityStore, nameof(SpatialAuthorityStore));
+        AddRequiredMutationGuardBinding(authorities, structureStore, nameof(StructureStore));
         AddRequiredMutationGuardBinding(authorities, legacySpatialAnchorBindingStore, nameof(LegacySpatialAnchorBindingStore));
         AddRequiredMutationGuardBinding(authorities, personSpatialPositionStore, nameof(PersonSpatialPositionStore));
         AddRequiredMutationGuardBinding(authorities, spatialRouteKnowledgeStore, nameof(SpatialRouteKnowledgeStore));

@@ -96,7 +96,8 @@ public enum StructureStoreFailureCode
     RevisionOverflow = 10,
     InvalidInvariant = 11,
     InvalidSemanticState = 12,
-    StructureLimitReached = 13
+    StructureLimitReached = 13,
+    ProfileNotSelected = 14
 }
 
 public sealed class StructureStoreFailure : IEquatable<StructureStoreFailure>
