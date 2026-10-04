@@ -16,14 +16,14 @@
 
 All validation below ran after the final P16 source/test edits, on executable tree `d4dc93f9a14af1659a891252b0cdfc5034456528`. The exact result XML and log files are retained under `docs/validation/P16A/` and included with this candidate evidence.
 
-| Gate | Result | XML SHA-256 | Log SHA-256 |
-|---|---:|---|---|
-| `P16AMilitaryMovementTests` | 20/20 | `AE50F89F4CDB985CDBC29A9777EDBF23C6C6C57E1E88DA029FA8C0D091FAD892` | `7134737B10D968C1E69D693010E6A51F63C32070EFB1241737E1EBA7F3E8996A` |
-| ALL EditMode | 2271/2271 | `F5AF5345BD8DF80E1C03A245E1092E81F84407CD0BBC8BF60D1049FA2A597F5B` | `2037FDFD01E5B23C61286EE78BE64239E8D21DC54ABF4B8939E73E2C9D21E918` |
-| Official Smoke (`EditMode -TestFilter Smoke`) | 5/5 | `8E555F2E7805BE02092451578A012C2DB3CE426965EFFB94CFD9F911D160C5AD` | `956BADDF9E0C3A0CCE76093EF1CE1252B0CC47FF6C9089E96293610E8FB01E2D` |
+| Gate | Result | Unity-output XML SHA-256 | Git-stored XML blob SHA-256 | Log SHA-256 |
+|---|---:|---|---|---|
+| `P16AMilitaryMovementTests` | 20/20 | `AE50F89F4CDB985CDBC29A9777EDBF23C6C6C57E1E88DA029FA8C0D091FAD892` | `2C5A754D72E1FB5A8A499E80AF06338D96FFFF435DE6A1899EAF8504DAD60805` | `7134737B10D968C1E69D693010E6A51F63C32070EFB1241737E1EBA7F3E8996A` |
+| ALL EditMode | 2271/2271 | `F5AF5345BD8DF80E1C03A245E1092E81F84407CD0BBC8BF60D1049FA2A597F5B` | `DCF5923CCBEA869482B93617B14DAB9C76C803000F74C996ED9A5C7076930FF4` | `2037FDFD01E5B23C61286EE78BE64239E8D21DC54ABF4B8939E73E2C9D21E918` |
+| Official Smoke (`EditMode -TestFilter Smoke`) | 5/5 | `8E555F2E7805BE02092451578A012C2DB3CE426965EFFB94CFD9F911D160C5AD` | `8164DC24AFF81D4823CE0ABF23746DD42DE3C2D4D95BC26E46078E210AEA526E` | `956BADDF9E0C3A0CCE76093EF1CE1252B0CC47FF6C9089E96293610E8FB01E2D` |
 | `git diff --check` | PASS | — | — |
 
-The result artifacts are retained under `docs/validation/P16A/`. The Unity logs are stored together in `P16A-validation-logs-d4dc93f.zip` to avoid committing a 102 MB raw ALL EditMode log. The original uncompressed log SHA-256 values remain in the table; the archive SHA-256 is `58554DE61AC0C6A335419E6CF5CDA4C43E9EEC519013159E5FA5470CFCF11305`.
+The result artifacts are retained under `docs/validation/P16A/`. Git's text normalization changes XML line endings when storing the reports, so the Unity-output XML hashes and Git blob hashes intentionally differ. The raw Unity XML and log pairs are also retained byte-for-byte in `P16A-validation-artifacts-d4dc93f.zip` (SHA-256 `F4807D4E3D3699DD999A9A18CFF42C84C3B3E24A193B11F78992E103F702D9B3`). That archive contains all six files listed below; its extracted XML and log hashes match the Unity-output and log hashes in this table. The older `P16A-validation-logs-d4dc93f.zip` remains historical evidence and contains the three raw logs (SHA-256 `58554DE61AC0C6A335419E6CF5CDA4C43E9EEC519013159E5FA5470CFCF11305`).
 
 - `EditMode-20261004-031836-8df50b8c57a7414097f789197c9a2c5e.xml` — focused P16-A suite.
 - `EditMode-20261004-031859-8b6a796694414fb291cd52cc9b935c27.xml` — ALL EditMode.
