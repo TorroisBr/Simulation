@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 
 /// <summary>
 /// Narrow atomic commit seam for the P8-E civil travel operation. Preparation is
@@ -58,6 +60,126 @@ public sealed class P8ETravelTransactionCoordinator
                 return Fail(planFailure.ToString(), out failure);
         }
         if (!TryCommit(preparedPosition, preparedPlan, null)) return Fail("Travel state changed before the atomic commit.", out failure);
+        failure = P8ETravelFailure.None;
+        return true;
+    }
+
+    /// <summary>Starts exactly two independently validated Person segments under one position/plan root per store.</summary>
+    public bool TryBeginJointCivilLeg(IReadOnlyList<P8EJointTravelParticipant> participants, string sharedSegmentStableKey,
+        out P8ETravelFailure failure)
+    {
+        if (!TryPrepareJointCivilLeg(participants, sharedSegmentStableKey, out PreparedP8EJointCivilLeg prepared, out failure)) return false;
+        if (!prepared.TryInstall()) return Fail("Joint travel state changed before the atomic commit.", out failure);
+        failure = P8ETravelFailure.None;
+        return true;
+    }
+
+    internal bool TryPrepareJointCivilLeg(IReadOnlyList<P8EJointTravelParticipant> participants, string sharedSegmentStableKey,
+        out PreparedP8EJointCivilLeg prepared, out P8ETravelFailure failure)
+    {
+        prepared = null;
+        if (string.IsNullOrWhiteSpace(sharedSegmentStableKey) || participants == null || participants.Count != 2 || participants.Any(x => x == null)
+            || participants.Select(x => x.PersonId?.Value).Distinct(StringComparer.Ordinal).Count() != 2)
+            return Fail("Exactly two distinct Persons with separate movement contexts are required.", out failure);
+
+        long expectedPositionRevision = positions.Revision;
+        long expectedPlanRevision = plans.Revision;
+        List<P8ETransitStart> starts = new List<P8ETransitStart>(2);
+        List<PersonRoutePlanStatusChangeRequest> planChanges = new List<PersonRoutePlanStatusChangeRequest>(2);
+        HexId sharedOrigin = null;
+        HexId sharedDestination = null;
+        foreach (P8EJointTravelParticipant participant in participants.OrderBy(x => x.PersonId.Value, StringComparer.Ordinal))
+        {
+            PersonId actor = participant.PersonId;
+            if (participant.MovementContext == null || !plans.TryGetCurrent(actor, out PersonRoutePlan plan)
+                || (plan.Status != PersonRoutePlanStatus.Accepted && plan.Status != PersonRoutePlanStatus.Active)
+                || !positions.TryGetPosition(actor, out PersonSpatialPosition position) || position.IsInTransit
+                || position.Position?.Kind != StablePositionReferenceKind.Hex
+                || (plan.Status == PersonRoutePlanStatus.Accepted && plan.Candidate.OriginHexId != position.Position.HexId))
+                return Fail("Both Persons need current accepted/active Hex routes from their current positions.", out failure);
+            if (plan.Candidate.Legs.Count != 1 || (sharedDestination != null && plan.DestinationHexId != sharedDestination)
+                || !string.Equals(plan.Candidate.Legs[0].Segment.StableKey, sharedSegmentStableKey, StringComparison.Ordinal))
+                return Fail("Both accepted routes must contain exactly one leg to the same destination.", out failure);
+            if (sharedOrigin != null && position.Position.HexId != sharedOrigin)
+                return Fail("Both Persons must begin the shared civil leg at the same Hex.", out failure);
+            sharedOrigin = position.Position.HexId;
+            sharedDestination = plan.DestinationHexId;
+            SpatialRouteCandidateLeg leg = plan.Candidate.Legs.FirstOrDefault(x => x.Segment.FromHexId == position.Position.HexId);
+            if (leg == null) return Fail("A Person's current position is not a remaining route segment origin.", out failure);
+            if (!passage.TryEvaluatePassage(leg.Segment.FromHexId, leg.Segment.ToHexId,
+                leg.Segment.Option, participant.MovementContext, out PassageEvaluation evaluation, out SpatialAuthorityFailure passageFailure))
+                return Fail(passageFailure?.Message ?? "A Person's current route segment could not be evaluated.", out failure);
+            if (!evaluation.IsAvailable) return Fail("A selected traversal option is currently unavailable.", out failure);
+            starts.Add(new P8ETransitStart(actor, leg.Segment.Option, leg.Segment.Boundary,
+                leg.Segment.FromHexId, leg.Segment.ToHexId));
+            if (plan.Status == PersonRoutePlanStatus.Accepted)
+                planChanges.Add(new PersonRoutePlanStatusChangeRequest(actor, plan.PlanRevision,
+                    PersonRoutePlanStatus.Accepted, PersonRoutePlanStatus.Active));
+        }
+
+        if (!positions.TryPrepareBeginTransitBatch(starts, expectedPositionRevision,
+            out PreparedPersonSpatialPositionChange preparedPositions, out PersonSpatialPositionFailure positionFailure))
+            return Fail(positionFailure.ToString(), out failure);
+        PreparedPersonRoutePlanChange preparedPlans = null;
+        if (planChanges.Count > 0 && !plans.TryPrepareStatusChangeBatch(planChanges, expectedPlanRevision,
+            out preparedPlans, out PersonRoutePlanFailure planFailure))
+            return Fail(planFailure.ToString(), out failure);
+        prepared = new PreparedP8EJointCivilLeg(positions, plans, preparedPositions, preparedPlans);
+        failure = P8ETravelFailure.None;
+        return true;
+    }
+
+    internal bool TryPrepareFinalArrival(PersonId actor, out PreparedP8EPersonFinalArrival prepared,
+        out P8ETravelFailure failure)
+    {
+        prepared = null;
+        if (actor == null || !positions.TryGetPosition(actor, out PersonSpatialPosition current) || !current.IsInTransit
+            || !plans.TryGetCurrent(actor, out PersonRoutePlan plan) || plan.Status != PersonRoutePlanStatus.Active
+            || current.Transit.ProgressTicks != TraversalProgress.CompleteProgressTicks
+            || current.Transit.ToHexId != plan.DestinationHexId || !PlanContainsTransit(plan, current.Transit))
+            return Fail("Completed transit to the active plan destination is required for arrival.", out failure);
+        if (!positions.TryPrepareArrive(actor, StablePositionReference.ForHex(plan.DestinationHexId), positions.Revision,
+            out PreparedPersonSpatialPositionChange preparedPosition, out PersonSpatialPositionFailure positionFailure))
+            return Fail(positionFailure.ToString(), out failure);
+        if (!plans.TryPrepareStatusChange(actor, plans.Revision, plan.PlanRevision, PersonRoutePlanStatus.Active,
+            PersonRoutePlanStatus.Completed, out PreparedPersonRoutePlanChange preparedPlan, out PersonRoutePlanFailure planFailure))
+            return Fail(planFailure.ToString(), out failure);
+        prepared = new PreparedP8EPersonFinalArrival(positions, plans, preparedPosition, preparedPlan);
+        failure = P8ETravelFailure.None;
+        return true;
+    }
+
+    internal bool TryGetFinalArrival(PersonId actor, out HexId destination)
+    {
+        destination = null;
+        return actor != null && positions.TryGetPosition(actor, out PersonSpatialPosition position)
+            && !position.IsInTransit && plans.TryGetCurrent(actor, out PersonRoutePlan plan)
+            && plan.Status == PersonRoutePlanStatus.Completed && position.Position?.Kind == StablePositionReferenceKind.Hex
+            && position.Position.HexId == plan.DestinationHexId && (destination = plan.DestinationHexId) != null;
+    }
+
+    internal bool TryGetPlanDestination(PersonId actor, out HexId destination)
+    {
+        destination = null;
+        return actor != null && plans.TryGetCurrent(actor, out PersonRoutePlan plan)
+            && (destination = plan.DestinationHexId) != null;
+    }
+
+    internal bool IsFinalArrivalReady(PersonId actor)
+    {
+        return actor != null && positions.TryGetPosition(actor, out PersonSpatialPosition position)
+            && position.IsInTransit && position.Transit.ProgressTicks == TraversalProgress.CompleteProgressTicks
+            && plans.TryGetCurrent(actor, out PersonRoutePlan plan) && plan.Status == PersonRoutePlanStatus.Active
+            && position.Transit.ToHexId == plan.DestinationHexId && PlanContainsTransit(plan, position.Transit);
+    }
+
+    internal bool TryArriveAtFinalDestination(PersonId actor, out P8ETravelFailure failure) =>
+        TryArriveAtFinalDestinationCore(actor, out failure);
+
+    private bool TryArriveAtFinalDestinationCore(PersonId actor, out P8ETravelFailure failure)
+    {
+        if (!TryPrepareFinalArrival(actor, out PreparedP8EPersonFinalArrival prepared, out failure)) return false;
+        if (!prepared.TryInstall()) return Fail("Travel state changed before the atomic commit.", out failure);
         failure = P8ETravelFailure.None;
         return true;
     }
@@ -181,6 +303,57 @@ public sealed class P8ETravelTransactionCoordinator
         }
         return false;
     }
+}
+
+internal sealed class PreparedP8EJointCivilLeg
+{
+    private readonly PersonSpatialPositionStore positions;
+    private readonly PersonRoutePlanStore plans;
+    private readonly PreparedPersonSpatialPositionChange preparedPositions;
+    private readonly PreparedPersonRoutePlanChange preparedPlans;
+    internal PreparedP8EJointCivilLeg(PersonSpatialPositionStore positions, PersonRoutePlanStore plans,
+        PreparedPersonSpatialPositionChange preparedPositions, PreparedPersonRoutePlanChange preparedPlans)
+    { this.positions = positions; this.plans = plans; this.preparedPositions = preparedPositions; this.preparedPlans = preparedPlans; }
+    internal bool CanInstall => positions.CanInstall(preparedPositions) && (preparedPlans == null || plans.CanInstall(preparedPlans));
+    internal bool TryInstall()
+    {
+        if (!CanInstall) return false;
+        InstallPrepared();
+        return true;
+    }
+    internal void InstallPrepared()
+    {
+        positions.InstallPrepared(preparedPositions);
+        if (preparedPlans != null) plans.InstallPrepared(preparedPlans);
+    }
+}
+
+internal sealed class PreparedP8EPersonFinalArrival
+{
+    private readonly PersonSpatialPositionStore positions;
+    private readonly PersonRoutePlanStore plans;
+    private readonly PreparedPersonSpatialPositionChange preparedPosition;
+    private readonly PreparedPersonRoutePlanChange preparedPlan;
+    internal PreparedP8EPersonFinalArrival(PersonSpatialPositionStore positions, PersonRoutePlanStore plans,
+        PreparedPersonSpatialPositionChange preparedPosition, PreparedPersonRoutePlanChange preparedPlan)
+    { this.positions = positions; this.plans = plans; this.preparedPosition = preparedPosition; this.preparedPlan = preparedPlan; }
+    internal bool CanInstall => positions.CanInstall(preparedPosition) && plans.CanInstall(preparedPlan);
+    internal bool TryInstall()
+    {
+        if (!CanInstall) return false;
+        InstallPrepared();
+        return true;
+    }
+    internal void InstallPrepared()
+    { positions.InstallPrepared(preparedPosition); plans.InstallPrepared(preparedPlan); }
+}
+
+public sealed class P8EJointTravelParticipant
+{
+    public PersonId PersonId { get; }
+    public TraversalCostContext MovementContext { get; }
+    public P8EJointTravelParticipant(PersonId personId, TraversalCostContext movementContext)
+    { PersonId = personId ?? throw new ArgumentNullException(nameof(personId)); MovementContext = movementContext ?? throw new ArgumentNullException(nameof(movementContext)); }
 }
 
 public sealed class P8ETravelFailure

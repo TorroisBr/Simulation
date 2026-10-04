@@ -26,6 +26,7 @@ internal interface IActivityLifecycleTransitionCommit
 {
     bool StartAllowed { get; }
     string FailureDisposition { get; }
+    bool CanCommit { get; }
     // Implementations must allocate/validate during preparation and publish prebuilt state only here.
     void CommitStarted();
     void CommitFailedStart();
@@ -147,6 +148,7 @@ public sealed class ActivityLifecycleStore : IDueWorkOwner, ITimelineBoundDueWor
     }
 
     public long NextIdentity => nextIdentity;
+    internal string NextProposedInstanceId => SpatialStableKey.Encode(worldId, nextIdentity.ToString(CultureInfo.InvariantCulture));
     public long NextTransitionSequence => nextTransitionSequence;
     public IReadOnlyList<DueWorkReference> PendingWork => pending.AsReadOnly();
 
@@ -331,10 +333,44 @@ public sealed class ActivityLifecycleStore : IDueWorkOwner, ITimelineBoundDueWor
         { failure = ActivityFailure.RevisionOverflow; return false; }
         bool committed = timeline.TryCommitOwnerFacts(Array.Empty<DueWorkReference>(), () =>
         {
+            if (coordinated != null && !coordinated.CanCommit) return TimelineFailure.StaleWork;
             item.Revision = revision; item.State = terminal; item.TerminalInstant = authoritativeInstant; item.Disposition = disposition ?? string.Empty;
             pending = stagedPending; ReleaseCommitments(item); PublishReceipt(receipt); coordinated?.CommitTerminal(); return TimelineFailure.None;
         }, out _);
         failure = committed ? ActivityFailure.None : ActivityFailure.TimelinePublicationFailed; return committed;
+    }
+
+    /// <summary>P20-B-only terminal seam for duration-null, consumer-managed activities.</summary>
+    internal bool TryConsumerManagedTerminal(SimulationTimeline timeline, string id, ActivityLifecycleState terminal,
+        string disposition, out ActivityFailure failure)
+    {
+        if (timeline == null) throw new ArgumentNullException(nameof(timeline));
+        if (!ReferenceEquals(authoritativeTimeline, timeline)) { failure = ActivityFailure.TimelineMismatch; return false; }
+        if (terminal != ActivityLifecycleState.Completed && terminal != ActivityLifecycleState.Interrupted)
+        { failure = ActivityFailure.InvalidState; return false; }
+        if (!instances.TryGetValue(id, out ActivityInstance item)) { failure = ActivityFailure.UnknownInstance; return false; }
+        if (item.State != ActivityLifecycleState.Active || item.PlannedEnd.HasValue || transitionParticipant == null)
+        { failure = ActivityFailure.InvalidState; return false; }
+        LogicalTick instant = timeline.CurrentInstant;
+        ActivityTransitionKind kind = terminal == ActivityLifecycleState.Completed ? ActivityTransitionKind.Complete : ActivityTransitionKind.Interrupt;
+        if (!transitionParticipant.TryPrepareTerminal(new ActivityInstanceSnapshot(item), terminal, kind, instant,
+            disposition, out IActivityLifecycleTransitionCommit coordinated) || coordinated == null)
+        { failure = ActivityFailure.InvalidState; return false; }
+        long revision;
+        try { revision = checked(item.Revision + 1); }
+        catch (OverflowException) { failure = ActivityFailure.RevisionOverflow; return false; }
+        List<DueWorkReference> stagedPending = pending.Where(fact => fact.InstanceId != item.Id).ToList();
+        if (!TryStageReceipt(item, revision, kind, instant, item.Participants, disposition, out ActivityTransitionReceipt receipt))
+        { failure = ActivityFailure.RevisionOverflow; return false; }
+        bool committed = timeline.TryCommitOwnerFacts(Array.Empty<DueWorkReference>(), () =>
+        {
+            if (!coordinated.CanCommit) return TimelineFailure.StaleWork;
+            item.Revision = revision; item.State = terminal; item.TerminalInstant = instant; item.Disposition = disposition ?? string.Empty;
+            pending = stagedPending; ReleaseCommitments(item); PublishReceipt(receipt); coordinated.CommitTerminal();
+            return TimelineFailure.None;
+        }, out _);
+        failure = committed ? ActivityFailure.None : ActivityFailure.TimelinePublicationFailed;
+        return committed;
     }
 
     public ActivityParticipantCommitment GetCommitment(string participantId)
@@ -407,6 +443,7 @@ public sealed class ActivityLifecycleStore : IDueWorkOwner, ITimelineBoundDueWor
         IActivityLifecycleTransitionCommit coordinated, out TimelineFailure failure)
     {
         if (!IsCurrent(reference)) { failure = TimelineFailure.StaleWork; return false; }
+        if (coordinated != null && !coordinated.CanCommit) { failure = TimelineFailure.StaleWork; return false; }
         ActivityInstance item = instances[reference.InstanceId];
         long revision; try { revision = checked(item.Revision + 1); } catch (OverflowException) { failure = TimelineFailure.DispatchFailed; return false; }
         if (kind == ActivityTransitionKind.Start && !startAllowed)

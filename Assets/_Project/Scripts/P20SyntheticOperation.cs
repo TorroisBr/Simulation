@@ -292,6 +292,7 @@ public sealed class P20SyntheticOperationOwner
         private readonly string failure;
         public bool StartAllowed => allowed;
         public string FailureDisposition => failure;
+        public bool CanCommit => true;
 
         public P20TransitionCommit(P20SyntheticOperationOwner owner, P20SyntheticOperation replacement,
             P20SyntheticOperation failedReplacement, bool allowed, string failure)

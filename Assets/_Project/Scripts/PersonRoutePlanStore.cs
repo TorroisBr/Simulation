@@ -131,6 +131,37 @@ public sealed class PersonRoutePlanStore : IAuthoritativeMutationGuardBindable
         return true;
     }
 
+    /// <summary>Prepares one route-plan root for a bounded multi-Person status transition.</summary>
+    internal bool TryPrepareStatusChangeBatch(IReadOnlyList<PersonRoutePlanStatusChangeRequest> changes,
+        long expectedStoreRevision, out PreparedPersonRoutePlanChange prepared, out PersonRoutePlanFailure failure)
+    {
+        prepared = null;
+        if (!mutationGuardBinding.CanMutate)
+            return Fail(PersonRoutePlanFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.", out failure);
+        if (revision != expectedStoreRevision || changes == null || changes.Count == 0
+            || changes.Any(x => x == null) || changes.Select(x => x.Actor?.Value).Distinct(StringComparer.Ordinal).Count() != changes.Count)
+            return Fail(PersonRoutePlanFailureCode.PlanRevisionMismatch, "Route plans changed during travel preparation.", out failure);
+        if (revision == long.MaxValue) return Fail(PersonRoutePlanFailureCode.RevisionOverflow,
+            "Plan store revision cannot advance.", out failure);
+        Dictionary<string, List<PersonRoutePlan>> next = new Dictionary<string, List<PersonRoutePlan>>(plansByActor, StringComparer.Ordinal);
+        foreach (PersonRoutePlanStatusChangeRequest change in changes.OrderBy(x => x.Actor.Value, StringComparer.Ordinal))
+        {
+            if (!TryGetCurrent(change.Actor, out PersonRoutePlan current)
+                || current.PlanRevision != change.ExpectedPlanRevision || current.Status != change.ExpectedStatus
+                || (change.NextStatus != PersonRoutePlanStatus.Active && change.NextStatus != PersonRoutePlanStatus.Completed
+                    && change.NextStatus != PersonRoutePlanStatus.Interrupted))
+                return Fail(PersonRoutePlanFailureCode.PlanRevisionMismatch, "A route plan changed during travel preparation.", out failure);
+            List<PersonRoutePlan> history = new List<PersonRoutePlan>(next[change.Actor.Value]);
+            history[history.Count - 1] = CreatePlan(current.ActorPersonId, current.DestinationHexId, current.Candidate,
+                current.SelectionPolicy, current.KnowledgeBasis, current.DecisionIdentity, current.AcceptedDay,
+                current.PlanRevision, change.NextStatus);
+            next[change.Actor.Value] = history;
+        }
+        prepared = new PreparedPersonRoutePlanChange(this, revision, revision + 1L, next);
+        failure = PersonRoutePlanFailure.None;
+        return true;
+    }
+
     internal bool CanInstall(PreparedPersonRoutePlanChange prepared) => prepared != null
         && ReferenceEquals(prepared.Owner, this) && revision == prepared.ExpectedRevision;
 
@@ -427,4 +458,14 @@ internal sealed class PreparedPersonRoutePlanChange
     internal readonly Dictionary<string, List<PersonRoutePlan>> NextPlans;
     internal PreparedPersonRoutePlanChange(PersonRoutePlanStore owner, long expected, long next, Dictionary<string, List<PersonRoutePlan>> plans)
     { Owner = owner; ExpectedRevision = expected; NextRevision = next; NextPlans = plans; }
+}
+
+internal sealed class PersonRoutePlanStatusChangeRequest
+{
+    internal readonly PersonId Actor;
+    internal readonly long ExpectedPlanRevision;
+    internal readonly PersonRoutePlanStatus ExpectedStatus, NextStatus;
+    internal PersonRoutePlanStatusChangeRequest(PersonId actor, long expectedPlanRevision,
+        PersonRoutePlanStatus expectedStatus, PersonRoutePlanStatus nextStatus)
+    { Actor = actor; ExpectedPlanRevision = expectedPlanRevision; ExpectedStatus = expectedStatus; NextStatus = nextStatus; }
 }

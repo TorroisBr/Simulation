@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Linq;
 
 public enum StablePositionReferenceKind
 {
@@ -117,6 +118,28 @@ public sealed class PersonSpatialPositionStore : IAuthoritativeMutationGuardBind
         HexId from, HexId to, long expectedRevision, out PreparedPersonSpatialPositionChange prepared,
         out PersonSpatialPositionFailure failure) => TryPrepareOperation(id, expectedRevision,
             (PersonSpatialPositionStore copy, out PersonSpatialPositionFailure local) => copy.TryBeginTransit(id, option, boundary, from, to, out local), out prepared, out failure);
+
+    /// <summary>Prepares one replacement root for a bounded multi-Person departure.</summary>
+    internal bool TryPrepareBeginTransitBatch(IReadOnlyList<P8ETransitStart> starts, long expectedRevision,
+        out PreparedPersonSpatialPositionChange prepared, out PersonSpatialPositionFailure failure)
+    {
+        prepared = null;
+        if (!CanMutate(out failure)) return false;
+        if (revision != expectedRevision) return Fail(PersonSpatialPositionFailureCode.RevisionMismatch,
+            "Person position changed during travel preparation.", out failure);
+        if (starts == null || starts.Count < 2 || starts.Any(x => x == null)
+            || starts.Select(x => x.PersonId?.Value).Distinct(StringComparer.Ordinal).Count() != starts.Count)
+            return Fail(PersonSpatialPositionFailureCode.InvalidTransit, "A distinct multi-Person transit batch is required.", out failure);
+        if (revision == long.MaxValue) return Fail(PersonSpatialPositionFailureCode.RevisionOverflow,
+            "Person spatial position revision cannot advance.", out failure);
+        PersonSpatialPositionStore copy = Clone(personStore, spatialAuthorityStore, traversalResolver);
+        foreach (P8ETransitStart start in starts.OrderBy(x => x.PersonId.Value, StringComparer.Ordinal))
+            if (!copy.TryBeginTransit(start.PersonId, start.Option, start.Boundary, start.From, start.To, out failure)) return false;
+        copy.revision = revision + 1L;
+        prepared = new PreparedPersonSpatialPositionChange(this, revision, copy.revision, copy.positions);
+        failure = PersonSpatialPositionFailure.None;
+        return true;
+    }
 
     internal bool TryPrepareAdvanceTransit(PersonId id, int progressTicks, long expectedRevision,
         out PreparedPersonSpatialPositionChange prepared, out PersonSpatialPositionFailure failure) =>
@@ -310,6 +333,17 @@ public sealed class PersonSpatialPositionStore : IAuthoritativeMutationGuardBind
     internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard) => mutationGuardBinding.TryBindTo(guard);
     bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard) => CanBindMutationGuard(guard);
     bool IAuthoritativeMutationGuardBindable.TryBindMutationGuard(AuthoritativeMutationGuard guard) => TryBindMutationGuard(guard);
+}
+
+internal sealed class P8ETransitStart
+{
+    internal readonly PersonId PersonId;
+    internal readonly TraversalOptionRef Option;
+    internal readonly HexBoundaryKey Boundary;
+    internal readonly HexId From;
+    internal readonly HexId To;
+    internal P8ETransitStart(PersonId personId, TraversalOptionRef option, HexBoundaryKey boundary, HexId from, HexId to)
+    { PersonId = personId; Option = option; Boundary = boundary; From = from; To = to; }
 }
 
 internal sealed class PreparedPersonSpatialPositionChange
