@@ -1,0 +1,7 @@
+# Master handoff — P20-B two-Person joint civil travel
+
+**Status:** `READY_FOR_IMPLEMENTATION_HANDOFF` after independent technical-design PASS. **Architecture base:** `f6924e63d8e5731da1d33021d0361e7defe6dad7`. **Design content:** `82063ede428fb53969cd8ca8a1a32cbf8166094f` on `codex/architecture/p20b-technical-design`. Read [the design](P20B_TECHNICAL_DESIGN.md) and [review](P20B_TECHNICAL_REVIEW.md) before dispatch.
+
+Implement one shared activity for exactly two distinct Persons traversing one supported civil leg, with independent assent, P18-owned scheduled commitments/lifecycle, one atomic start coordinating both P8-owned travel transitions, separate Knowledge/identity/outcomes and an explicit second-arrival terminal rule. The fixed active-abort rule completes the already-started leg, then interrupts the P18 activity. This proof does not create Group/Party, a generic role engine, automatic travel progression or a general two-Person limit.
+
+Refresh actual P8/P18/P20 and P12 refs before implementation. Isolate the implementation branch; serialize P18 lifecycle/timeline, P8 route/position/travel, `SimulationRuntime` and P12 admission integration. The selected `UnityBootstrap-Daily-v1` profile must reject unsupported composed intraday/P20 state with a negative test; no P12 Save scope expansion. Follow the reviewed design's atomicity, stale-work, reconstruction and regression plan. Submit code as a separate candidate for validation and independent exact-tip review. Canonical promotion remains a human gate.
