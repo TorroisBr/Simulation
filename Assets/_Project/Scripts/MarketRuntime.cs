@@ -359,6 +359,89 @@ public class MarketRuntime
         return new PreparedMarketState(replacement);
     }
 
+    internal bool TryPrepareFiniteStockIncrease(
+        ItemData item,
+        int quantity,
+        long expectedRevision,
+        out PreparedMarketState replacement,
+        out int stockBefore,
+        out string rejectionReason)
+    {
+        replacement = null;
+        stockBefore = 0;
+        rejectionReason = "InvalidMarketInput";
+        if (item == null || quantity <= 0) return false;
+        if (revision != expectedRevision)
+        {
+            rejectionReason = "StaleMarketRevision";
+            return false;
+        }
+        if (revision == long.MaxValue)
+        {
+            rejectionReason = "MarketRevisionExhausted";
+            return false;
+        }
+        if (!CanCommitP12OwnerMutation())
+        {
+            rejectionReason = "MarketMutationRejected";
+            return false;
+        }
+
+        List<MarketItemRuntime> currentItems = items ?? (items = new List<MarketItemRuntime>());
+        int matchCount = 0;
+        MarketItemRuntime matchingItem = null;
+        foreach (MarketItemRuntime current in currentItems)
+        {
+            if (current == null || current.Item == null
+                || !string.Equals(current.Item.DefinitionId, item.DefinitionId, StringComparison.Ordinal)) continue;
+            matchCount++;
+            matchingItem = current;
+        }
+        if (matchCount != 1)
+        {
+            rejectionReason = "MarketRowCardinality";
+            return false;
+        }
+        if (matchingItem.Amount > int.MaxValue - quantity)
+        {
+            rejectionReason = "MarketStockOverflow";
+            return false;
+        }
+
+        List<MarketItemRuntime> nextItems = new List<MarketItemRuntime>(currentItems.Count);
+        foreach (MarketItemRuntime current in currentItems)
+        {
+            if (ReferenceEquals(current, matchingItem))
+            {
+                MarketItemRuntime increased = new MarketItemRuntime(current);
+                if (!increased.AddAmount(quantity))
+                {
+                    rejectionReason = "MarketStockOverflow";
+                    return false;
+                }
+                increased.UpdatePrice();
+                nextItems.Add(increased);
+            }
+            else
+            {
+                nextItems.Add(current == null ? null : new MarketItemRuntime(current));
+            }
+        }
+
+        stockBefore = matchingItem.Amount;
+        replacement = new PreparedMarketState(nextItems);
+        rejectionReason = string.Empty;
+        return true;
+    }
+
+    internal bool CanInstallFiniteStock(long expectedRevision, PreparedMarketState replacement) =>
+        replacement != null && CanInstall(expectedRevision) && CanCommitP12OwnerMutation();
+
+    internal void InstallFiniteStock(long expectedRevision, PreparedMarketState replacement) =>
+        InstallPrepared(expectedRevision, replacement);
+
+    internal void NotifyFiniteStockInstalled() => NotifyP12OwnerMutation();
+
     private List<MarketItemRuntime> EnsureItems()
     {
         if (items == null) items = new List<MarketItemRuntime>();
