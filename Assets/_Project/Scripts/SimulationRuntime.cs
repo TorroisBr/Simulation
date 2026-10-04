@@ -1391,6 +1391,13 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                 "P16-A movement must run on the SimulationRuntime owner thread.");
             return false;
         }
+        if (CurrentDay != armedForceSpatialStateStore.P16Profile.TargetBoundaryDay)
+        {
+            failure = ArmedForceSpatialFailure.Create(
+                ArmedForceSpatialFailureCode.MovementStateStale,
+                "P16-A movement is accepted only at its prebound logical boundary.");
+            return false;
+        }
         if (!mutationGuard.CanMutate)
         {
             failure = ArmedForceSpatialFailure.Create(
@@ -6113,6 +6120,12 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
     private bool TryAdvanceDayCore(out SimulationRuntimeAdvanceFailure failure)
     {
         failure = SimulationRuntimeAdvanceFailure.None;
+        if (compositionProfile == SimulationRuntimeCompositionProfile.P16AOneHopMilitary
+            && Thread.CurrentThread.ManagedThreadId != p16AOwnerThreadId)
+        {
+            failure = SimulationRuntimeAdvanceFailure.RuntimeFaulted;
+            return false;
+        }
         if (mutationGuard.CanMutate == false)
         {
             failure = SimulationRuntimeAdvanceFailure.RuntimeFaulted;
