@@ -58,6 +58,7 @@
 - City daily-flow dispatch runs finite output before the existing free-consumption sink. P14-A stays on its existing `AddStock` path and retains the existing economy gate and balance projection.
 - Focused coverage includes capped output, already-empty/exhausted reserves, overflow/revision exhaustion, duplicate Market rows, stale revisions, identity mismatch, P12 mutation rejection, notification ordering, same-day duplicate rejection, repeat-input determinism, P14-A exogenous behavior, and material-flow balance.
 
+The current-base cardinality/owner-core tree `e2579dc8e65578b7ed62a3707163c0b728901b72` passed `FiniteSourceProductionTests` 13/13 on 2026-10-04. Raw XML/log hashes and artifacts are recorded in `docs/validation/P14B/P14B-owner-core-focused-20261004.md`. This is focused owner-core evidence only: it does not validate the P10-owned admission call, ALL EditMode, official Smoke, or the assembled current-base candidate.
 ## Validation evidence
 
 The earlier full validation passed on code tree `06217d567edc86ff194f3c0461898ad343a9d87f`: `FiniteSourceProductionTests` 11/11, ALL EditMode 2252/2252 and official EditMode `Smoke` 5/5. Those results are preserved in `docs/validation/P14B/P14B-validation-artifacts-06217d5.zip` (SHA-256 `F6CCF38AF1821B1EE8C617E2D501B30B32582FA3CDB8387E1B3847804F74AEA6`) as prior-candidate evidence; they do not cover the review-fix code below.
