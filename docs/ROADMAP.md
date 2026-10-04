@@ -22,9 +22,9 @@ Phases 5–7 are closed within their documented scopes. P8-A/B/C/D/E are canonic
 
 Runtime World Expansion remains a future consumer without an assigned dedicated phase. Its absence from this sequence does not forbid a later insertion or assign it to Phase 15 by implication.
 
-## P10 / P14 / P20 product-direction candidate — 2026-10-03
+## P10 / P14 / P20 promoted product direction — 2026-10-03
 
-A bounded checkpoint may prove one case without making it the universal model. The revised [product-direction and checkpoint sequence](architecture/P10_P14_P20_NEXT_SCOPE_DECISIONS.md) treats varied local topology, finite/multiple sources and shared-activity consumers as compatible capabilities. It preserves promoted P10-A, P14-A and P20-A within their delivered profiles. The next proposed scopes are `P10-B` deterministic procedural topology for one Ruin instance, `P14-B` finite availability for one source, and `P20-B` joint civil travel by two Persons. All three are `READY_FOR_BOUNDED_CHECKPOINT` **technical design**, not implementation. Later P14-C mixed sources waits on the selected P14-B proof; P14-D inter-City transfer still needs a bounded product/transport contract.
+A bounded checkpoint may prove one case without making it the universal model. The promoted [product-direction and checkpoint sequence](architecture/P10_P14_P20_NEXT_SCOPE_DECISIONS.md) treats varied local topology, finite/multiple sources and shared-activity consumers as compatible capabilities. It preserves promoted P10-A, P14-A and P20-A within their delivered profiles. The next bounded scopes are `P10-B` deterministic procedural topology for one Ruin instance, `P14-B` finite availability for one source, and `P20-B` joint civil travel by two Persons. All three are `READY_FOR_TECHNICAL_DESIGN`, not implementation. Later P14-C mixed sources waits on the selected P14-B proof; P14-D inter-City transfer still needs a bounded product/transport contract.
 
 ```text
 P9 ordered genesis + P8 site/Location + P10-A topology owner
@@ -38,7 +38,7 @@ P18-A/B/C + P20-A + P8-E explicit Person travel
   → P20-B joint-travel technical design
 ```
 
-P10-B needs a compatible site-instance/definition seam because P10-A's single-instance profile uses a definition ID as its site key. P14-B must keep its reserve and market-stock mutation coherent without changing P14-A's exogenous meaning. P20-B must coordinate two individual travel transitions without making a two-person roster, shared role or common duration a universal Activity invariant. Future content, trade AI and other multi-person work remain separately scoped. New authoritative state or selected-profile composition still passes architecture §92A and the P12 exclusion/rejection rule; P12's accepted profile does not grow automatically. No closed phase is reopened by this candidate.
+P10-B needs a compatible site-instance/definition seam because P10-A's single-instance profile uses a definition ID as its site key. P14-B must keep its reserve and market-stock mutation coherent without changing P14-A's exogenous meaning. P20-B must coordinate two individual travel transitions without making a two-person roster, shared role or common duration a universal Activity invariant. Future content, trade AI and other multi-person work remain separately scoped. New authoritative state or selected-profile composition still passes architecture §92A and the P12 exclusion/rejection rule; P12's accepted profile does not grow automatically. No closed phase is reopened by this promotion.
 
 ## Bounded next-slice planning promotion — 2026-10-03
 
@@ -72,15 +72,15 @@ While P12-B admission is incomplete, a new owner must either stay outside the se
 
 | Phase / track | P12 relationship | Next gate |
 |---|---|---|
-| P10 | Pre-start authoring independent; later saved generated profile is a specific P12 integration. | P10-A promoted; P10-B procedural topology is `READY_FOR_BOUNDED_CHECKPOINT` technical design. Local content remains unselected. |
+| P10 | Pre-start authoring independent; later saved generated profile is a specific P12 integration. | P10-A promoted; P10-B procedural topology is `READY_FOR_TECHNICAL_DESIGN`. Local content remains unselected. |
 | P13 | Strategy and causal-input design independent; actual fork needs complete continuation of its chosen world/profile plus recoverable history. | Retention/causal-input design ready; reconstruction/fork implementation `WAIT_DEPENDENCY`. |
-| P14 | Domain work continuation-aware, not blocked by P12. | P14-A promoted; P14-B finite availability is `READY_FOR_BOUNDED_CHECKPOINT` technical design. Mixed sources and transfer follow separate gates. |
+| P14 | Domain work continuation-aware, not blocked by P12. | P14-A promoted; P14-B finite availability is `READY_FOR_TECHNICAL_DESIGN`. Mixed sources and transfer follow separate gates. |
 | P15 | Domain work continuation-aware, not blocked by P12 closure. | P15-A reviewed design promoted; `READY_FOR_MASTER_IMPLEMENTATION_HANDOFF` for one inert structure at an existing Location, with profile-safety gate before domain promotion. Broader founding remains unselected. |
 | P16 | Domain work continuation-aware, not blocked by P12 closure. | P16-A reviewed design promoted; `READY_FOR_MASTER_IMPLEMENTATION_HANDOFF` for one selected force/one passage/finite supply, with profile-safety gate before domain promotion. Broader routes remain unselected. |
 | P17 | Deferred by strategic/domain/product prerequisites, not P12. | P16, territory/political authority and War semantics; no implementation checkpoint. |
 | P18 | Bounded A–D scope closed; a future intraday save profile requires specific temporal-state coverage. | No reopening for P12. |
 | P19 | Public-surface design may use real consumers; durable mod-state support needs specific P12/P13 integration. | Bounded public-extension-surface design ready; loader scope/implementation remain deferred; no blanket P12 gate. |
-| P20 | P20-A promoted; future saved shared activity requires specific temporal/participant-state coverage. | P20-B joint travel is `READY_FOR_BOUNDED_CHECKPOINT` technical design; no universal two-person rule. |
+| P20 | P20-A promoted; future saved shared activity requires specific temporal/participant-state coverage. | P20-B joint travel is `READY_FOR_TECHNICAL_DESIGN`; no universal two-person rule. |
 
 ```text
 canonical semantics + per-owner continuation-aware gate

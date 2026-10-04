@@ -1,6 +1,6 @@
 # Phase 10 — Local Generation & Pre-start Authoring
 
-**Authority:** planning entry subordinate to `../SIMULATION_ARCHITECTURE.md`. **Readiness:** P10-A is `PROMOTED` in the owning State; Phase 10 remains open. P10-B procedural topology is `READY_FOR_BOUNDED_CHECKPOINT` technical design under the 2026-10-03 product direction, not implementation-ready. P9-B is promoted at P9 canonical `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf` and supplies the authored P8 Hex/Location source through the P9 genesis handoff.
+**Authority:** planning entry subordinate to `../SIMULATION_ARCHITECTURE.md`. **Readiness:** P10-A is `PROMOTED` in the owning State; Phase 10 remains open. P10-B procedural topology is `READY_FOR_TECHNICAL_DESIGN` under the promoted 2026-10-03 product direction, not implementation-ready. P9-B is promoted at P9 canonical `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf` and supplies the authored P8 Hex/Location source through the P9 genesis handoff.
 
 ## Objective and closure
 

@@ -2,8 +2,8 @@
 
 **Authority:** planning scope under `../SIMULATION_ARCHITECTURE.md` §§11–12,
 91–93. **Readiness:** P20-A synthetic operation is `PROMOTED` in the owning
-State; P20-B joint civil travel is `READY_FOR_BOUNDED_CHECKPOINT` technical
-design under the 2026-10-03 product direction. No further implementation
+State; P20-B joint civil travel is `READY_FOR_TECHNICAL_DESIGN` under the
+promoted 2026-10-03 product direction. No further implementation
 checkpoint is approved.
 
 **P12 dependency clarification (2026-10-03):** P20-A did not require P12 Save.

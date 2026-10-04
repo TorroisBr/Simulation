@@ -2,7 +2,7 @@
 
 **Authority:** planning entry subordinate to `../SIMULATION_ARCHITECTURE.md`. **Readiness:** P14-A is `PROMOTED`; Phase 14 remains open for any separately scoped follow-on checkpoint. The approved scope remains limited to the profile below. The overlapping P9-A bootstrap/genesis integration is promoted.
 
-**P12 dependency clarification (2026-10-03):** P14-A and a separately approved domain follow-on do not require P12 closure. New authoritative material state must pass architecture §92A; a save profile composing it must include exact owner state or reject admission. P14-B finite availability is `READY_FOR_BOUNDED_CHECKPOINT` technical design under the updated product direction; further sources, transfer and crew work remain separately gated.
+**P12 dependency clarification (2026-10-03):** P14-A and a separately approved domain follow-on do not require P12 closure. New authoritative material state must pass architecture §92A; a save profile composing it must include exact owner state or reject admission. P14-B finite availability is `READY_FOR_TECHNICAL_DESIGN` under the promoted product direction; further sources, transfer and crew work remain separately gated.
 
 The [product-direction and checkpoint record](../architecture/P10_P14_P20_NEXT_SCOPE_DECISIONS.md) treats finite reserve, multiple sources and transfer as compatible pieces of one model, sequenced by actual dependencies.
 

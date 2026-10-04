@@ -1,5 +1,13 @@
 # General Architecture State
 
+## P10-B/P14-B/P20-B product-direction promotion — 2026-10-03
+
+**Status:** `ARCHITECTURE_PROMOTED` for architecture and planning only. **Canonical branch:** `codex/architecture/world-identity-projection`. **Previous architecture SHA:** `3bf09249b7dd9e255c3493aacfd75c96080a31e3`. **Approved candidate and promoted content SHA:** `ad9132ab9d41b0314185709e14b5a09d023094b4` from `codex/architecture/p10-p14-p20-product-direction`.
+
+The user approved that exact candidate. Final preflight confirmed matching canonical local/remote at the previous SHA, unchanged candidate tip, clean fast-forward ancestry, the [independent PASS review](architecture/P10_P14_P20_PRODUCT_DIRECTION_REVIEW.md), a seven-file documentation-only diff and `git diff --check`. The promotion did not edit numbered-phase implementation branches or reopen closed phases. Active P12 work advances independently; these follow-ons do not enlarge its selected continuation profile.
+
+P10-B deterministic generated local topology, P14-B finite source reserve/production and P20-B two-Person joint civil travel are `READY_FOR_TECHNICAL_DESIGN`. Their accepted bounded product directions and exclusions are in the [decision record](architecture/P10_P14_P20_NEXT_SCOPE_DECISIONS.md), the Roadmap and owning Briefs. They require bounded technical designs and independent technical review before any implementation handoff. P10-A, P14-A and P20-A remain promoted only within their delivered profiles. P14-C remains dependent on the selected mixed-source proof; P14-D retains a product/transport scope gate. No runtime implementation is approved by this promotion.
+
 ## P15-A/P16-A bounded planning promotion — 2026-10-03
 
 **Status:** `ARCHITECTURE_PROMOTED` for planning/technical-design contracts only. **Canonical branch:** `codex/architecture/world-identity-projection`. **Previous architecture SHA:** `da34d50bd7831ac3eefab31e925492ede8dded5c`. **Approved candidate and promoted architecture content SHA:** `a2788e6400251b5ce3cf8d2269ea8a5b5fdfd4a8` from `codex/architecture/p15-p16-p13-p19-design`.
