@@ -55,4 +55,3 @@ public sealed class RuinLocalTopologyGenerationTests
         Assert.Throws<EncoderFallbackException>(() => new RuinLocalTopologyGeneration.Request("p9", 0, "bad-\ud800", "def", "loc"));
     }
 }
-
