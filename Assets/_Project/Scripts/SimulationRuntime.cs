@@ -23,7 +23,8 @@ public enum SimulationRuntimeAdmissionProfile
 public enum SimulationRuntimeCompositionProfile
 {
     Standard = 0,
-    P15AProvingStructure = 1
+    P15AProvingStructure = 1,
+    P16AOneHopMilitary = 2
 }
 
 /// <summary>Explicit profile and Unity Start-thread identity for the bounded P12 daily adapter.</summary>
@@ -340,6 +341,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
     private bool advanceLeaseHeld;
     private readonly SimulationRuntimeAdmissionContext runtimeAdmissionContext;
     private readonly SimulationRuntimeCompositionProfile compositionProfile;
+    private readonly int p16AOwnerThreadId;
     private readonly long initialAbsoluteDay;
     private bool p15AInitialPublicationComplete;
     private readonly SimulationRecordSequence simulationRecordSequence;
@@ -693,12 +695,16 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         WorldId = worldId;
         if (!Enum.IsDefined(typeof(SimulationRuntimeCompositionProfile), compositionProfile))
             throw new ArgumentOutOfRangeException(nameof(compositionProfile));
+        bool hasP16AProfileState = armedForceSpatialStateStore?.P16Profile != null;
+        bool p16AComposition = compositionProfile == SimulationRuntimeCompositionProfile.P16AOneHopMilitary;
+        p16AOwnerThreadId = p16AComposition ? Thread.CurrentThread.ManagedThreadId : 0;
         if (runtimeAdmissionContext != null
-            && (structureStore != null || compositionProfile != SimulationRuntimeCompositionProfile.Standard))
+            && (structureStore != null || hasP16AProfileState
+                || compositionProfile != SimulationRuntimeCompositionProfile.Standard))
         {
             throw new ArgumentException(
-                "UnityBootstrap-Daily-v1 does not admit the P15-A StructureStore or proving composition.",
-                nameof(structureStore));
+                "UnityBootstrap-Daily-v1 does not admit P15-A or P16-A proving state/compositions.",
+                nameof(compositionProfile));
         }
         if (compositionProfile == SimulationRuntimeCompositionProfile.P15AProvingStructure
             ? structureStore == null || spatialAuthorityStore == null
@@ -707,6 +713,20 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             throw new ArgumentException(
                 "StructureStore is allowed only with an explicit P15AProvingStructure composition and an existing SpatialAuthorityStore.",
                 nameof(structureStore));
+        }
+        if (p16AComposition
+            ? !hasP16AProfileState || armedForceStore == null || spatialAuthorityStore == null
+            : hasP16AProfileState)
+        {
+            throw new ArgumentException(
+                "P16-A state requires the explicit P16AOneHopMilitary composition and its force/spatial authorities.",
+                nameof(armedForceSpatialStateStore));
+        }
+        if (p16AComposition && p18dIntradayProfile != null)
+        {
+            throw new ArgumentException(
+                "P16-A one-boundary movement does not compose with a P18 intraday profile.",
+                nameof(p18dIntradayProfile));
         }
         if (runtimeAdmissionContext != null)
         {
@@ -1343,6 +1363,70 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             CurrentDay,
             initialPublicationComplete: true,
             out failure);
+    }
+
+    public bool TryExecuteP16AMilitaryCrossing(
+        ArmedForceId forceId,
+        HexId sourceHexId,
+        HexId destinationHexId,
+        TraversalOptionRef option,
+        string operationId,
+        out P16ACrossingReceipt receipt,
+        out ArmedForceSpatialFailure failure)
+    {
+        receipt = null;
+        failure = ArmedForceSpatialFailure.None;
+        if (compositionProfile != SimulationRuntimeCompositionProfile.P16AOneHopMilitary
+            || armedForceSpatialStateStore?.P16Profile == null)
+        {
+            failure = ArmedForceSpatialFailure.Create(
+                ArmedForceSpatialFailureCode.MovementProfileNotConfigured,
+                "The P16-A one-hop military composition is not selected.");
+            return false;
+        }
+        if (Thread.CurrentThread.ManagedThreadId != p16AOwnerThreadId)
+        {
+            failure = ArmedForceSpatialFailure.Create(
+                ArmedForceSpatialFailureCode.RuntimeOperationInProgress,
+                "P16-A movement must run on the SimulationRuntime owner thread.");
+            return false;
+        }
+        if (!mutationGuard.CanMutate)
+        {
+            failure = ArmedForceSpatialFailure.Create(
+                ArmedForceSpatialFailureCode.RuntimeFaulted,
+                "The SimulationRuntime is faulted.");
+            return false;
+        }
+        if (!TryAcquireAdvanceLease(out AdvanceLease lease))
+        {
+            failure = ArmedForceSpatialFailure.Create(
+                ArmedForceSpatialFailureCode.RuntimeOperationInProgress,
+                "Another SimulationRuntime advance/operation is in progress.");
+            return false;
+        }
+
+        using (lease)
+        {
+            TraversalCostContext context = new TraversalCostContext(
+                P16AMilitaryMovementProfile.TraversalContextIdentity,
+                P16AMilitaryMovementProfile.TraversalContextRevision,
+                1m, 1m, 1m);
+            return armedForceSpatialStateStore.TryExecuteP16ACrossing(
+                forceId,
+                sourceHexId,
+                destinationHexId,
+                option,
+                context,
+                operationId,
+                armedForceSpatialStateStore.Revision,
+                armedForceStore.Revision,
+                spatialAuthorityStore.Revision,
+                CurrentDay,
+                0L,
+                out receipt,
+                out failure);
+        }
     }
 
     private void InitializeNpcRosterCensusProtocol()

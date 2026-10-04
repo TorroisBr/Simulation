@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using System.Linq;
 using System.Reflection;
 using NUnit.Framework;
@@ -7,6 +8,129 @@ public sealed class P16AMilitaryMovementTests
 {
     private static readonly TraversalCostContext Context =
         new TraversalCostContext("P16A-MilitaryOneHop", "v1", 1m, 1m, 1m);
+
+    [Test]
+    public void RuntimeOperationPinsCurrentBoundaryAndOrderAndStoreMutationIsNotPublic()
+    {
+        Assert.That(typeof(ArmedForceSpatialStateStore).GetMethod(
+            "TryExecuteP16ACrossing", BindingFlags.Instance | BindingFlags.Public), Is.Null);
+        Fixture fixture = new Fixture(initialStock: 5m, debit: 2m);
+        SimulationRuntime runtime = fixture.CreateRuntime();
+        long boundary = runtime.CurrentDay;
+
+        Assert.That(runtime.TryExecuteP16AMilitaryCrossing(fixture.Selected, fixture.HexA, fixture.HexB,
+            fixture.Option, "p16a.runtime-owned", out P16ACrossingReceipt receipt,
+            out ArmedForceSpatialFailure failure), Is.True, failure.ToString());
+
+        Assert.That(receipt.LogicalBoundary, Is.EqualTo(boundary));
+        Assert.That(receipt.AcceptedOrder, Is.Zero);
+        Assert.That(receipt.TraversalContextIdentity, Is.EqualTo(P16AMilitaryMovementProfile.TraversalContextIdentity));
+        Assert.That(runtime.ArmedForceSpatialStateStore.P16CurrentQuantity, Is.EqualTo(3m));
+    }
+
+    [Test]
+    public void P16OneBoundaryProfileRejectsP18IntradayComposition()
+    {
+        Fixture fixture = new Fixture(initialStock: 5m, debit: 2m);
+        Assert.Throws<ArgumentException>(() => new SimulationRuntime(
+            new SimulationTime(), null, null,
+            armedForceStore: fixture.Forces,
+            spatialAuthorityStore: fixture.Authority,
+            armedForceSpatialStateStore: fixture.Spatial,
+            compositionProfile: SimulationRuntimeCompositionProfile.P16AOneHopMilitary,
+            p18dIntradayProfile: new P18DIntradayProfile("world", "profile", "config", "content")));
+    }
+
+    [Test]
+    public void RuntimeOperationRejectsOffOwnerThreadWithoutOwnerMutation()
+    {
+        Fixture fixture = new Fixture(initialStock: 5m, debit: 2m);
+        SimulationRuntime runtime = fixture.CreateRuntime();
+        bool succeeded = true;
+        P16ACrossingReceipt receipt = null;
+        ArmedForceSpatialFailure failure = ArmedForceSpatialFailure.None;
+        Thread caller = new Thread(() =>
+        {
+            succeeded = runtime.TryExecuteP16AMilitaryCrossing(fixture.Selected, fixture.HexA, fixture.HexB,
+                fixture.Option, "p16a.off-thread", out receipt, out failure);
+        });
+        caller.Start();
+        caller.Join();
+
+        Assert.That(succeeded, Is.False);
+        Assert.That(failure.Code, Is.EqualTo(ArmedForceSpatialFailureCode.RuntimeOperationInProgress));
+        Assert.That(receipt, Is.Null);
+        Assert.That(runtime.ArmedForceSpatialStateStore.TryGetPosition(fixture.Selected, out SpatialReference position), Is.True);
+        Assert.That(position.StableKey, Is.EqualTo("hex:hex-a"));
+        Assert.That(runtime.ArmedForceSpatialStateStore.P16CurrentQuantity, Is.EqualTo(5m));
+        Assert.That(runtime.ArmedForceSpatialStateStore.P16Receipt, Is.Null);
+        Assert.That(runtime.ArmedForceSpatialStateStore.Revision, Is.EqualTo(fixture.Spatial.Revision));
+    }
+
+    [Test]
+    public void RuntimeOperationRejectsWhileAdvanceLeaseHeldWithoutOwnerMutation()
+    {
+        Fixture fixture = new Fixture(initialStock: 5m, debit: 2m);
+        SimulationRuntime runtime = fixture.CreateRuntime();
+        MethodInfo acquireLease = typeof(SimulationRuntime).GetMethod(
+            "TryAcquireAdvanceLease", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(acquireLease, Is.Not.Null);
+        object[] arguments = { null };
+        Assert.That((bool)acquireLease.Invoke(runtime, arguments), Is.True);
+        IDisposable lease = arguments[0] as IDisposable;
+        Assert.That(lease, Is.Not.Null);
+        using (lease)
+        {
+            P16AStateSnapshot before = runtime.ArmedForceSpatialStateStore.CaptureP16AState();
+            long ownerRevision = runtime.ArmedForceSpatialStateStore.Revision;
+            Assert.That(runtime.TryExecuteP16AMilitaryCrossing(fixture.Selected, fixture.HexA, fixture.HexB,
+                fixture.Option, "p16a.lease-rejected", out _, out ArmedForceSpatialFailure failure), Is.False);
+            Assert.That(failure.Code, Is.EqualTo(ArmedForceSpatialFailureCode.RuntimeOperationInProgress));
+            P16AStateSnapshot after = runtime.ArmedForceSpatialStateStore.CaptureP16AState();
+            Assert.That(after.PositionStableKey, Is.EqualTo(before.PositionStableKey));
+            Assert.That(after.CurrentQuantity, Is.EqualTo(before.CurrentQuantity));
+            Assert.That(after.Receipt, Is.SameAs(before.Receipt));
+            Assert.That(runtime.ArmedForceSpatialStateStore.Revision, Is.EqualTo(ownerRevision));
+        }
+    }
+
+    [TestCase(false)]
+    [TestCase(true)]
+    public void DailyProfileRejectsUnmovedAndMovedP16StateBeforeAdmission(bool crossingCommitted)
+    {
+        Fixture fixture = new Fixture(initialStock: 5m, debit: 2m);
+        SimulationRuntime p16Runtime = fixture.CreateRuntime();
+        if (crossingCommitted)
+        {
+            Assert.That(p16Runtime.TryExecuteP16AMilitaryCrossing(fixture.Selected, fixture.HexA, fixture.HexB,
+                fixture.Option, "p16a.before-daily-rejection", out _, out ArmedForceSpatialFailure moveFailure),
+                Is.True, moveFailure.ToString());
+        }
+
+        ArmedForceSpatialStateStore populatedOwner = p16Runtime.ArmedForceSpatialStateStore;
+        P16AStateSnapshot before = populatedOwner.CaptureP16AState();
+        long ownerRevision = populatedOwner.Revision;
+        Assert.Throws<ArgumentException>(() => new SimulationRuntime(
+            new SimulationTime(), null, null,
+            armedForceSpatialStateStore: populatedOwner,
+            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1()));
+
+        P16AStateSnapshot after = populatedOwner.CaptureP16AState();
+        Assert.That(after.PositionStableKey, Is.EqualTo(before.PositionStableKey));
+        Assert.That(after.CurrentQuantity, Is.EqualTo(before.CurrentQuantity));
+        Assert.That(after.Receipt, Is.SameAs(before.Receipt));
+        Assert.That(populatedOwner.Revision, Is.EqualTo(ownerRevision));
+    }
+
+    [Test]
+    public void ZeroP16StateDailyProfileStillComposes()
+    {
+        SimulationRuntime runtime = new SimulationRuntime(
+            new SimulationTime(), null, null,
+            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1());
+
+        Assert.That(runtime.ArmedForceSpatialStateStore.P16Profile, Is.Null);
+    }
 
     [Test]
     public void OnePassageAtomicallyMovesSelectedForceAndDebitsItsOneCompatibleItem()
@@ -99,10 +223,9 @@ public sealed class P16AMilitaryMovementTests
             new HexBoundaryKey(fixture.HexA, fixture.HexB), fixture.Option, PassageCondition.Impaired, out _), Is.True);
         P16AStateSnapshot before = fixture.Spatial.CaptureP16AState();
         long ownerRevision = fixture.Spatial.Revision;
-        Assert.That(fixture.Spatial.TryExecuteP16ACrossing(fixture.Selected, fixture.HexA, fixture.HexB,
-            fixture.Option, Context, "p16a.stale-passage", ownerRevision, fixture.Forces.Revision,
-            stalePassageRevision, 10L, 1L, out _, out ArmedForceSpatialFailure failure), Is.False);
-        Assert.That(failure.Code, Is.EqualTo(ArmedForceSpatialFailureCode.MovementStateStale));
+        Assert.That(fixture.Execute(fixture.Selected, fixture.HexA, fixture.HexB, fixture.Option,
+    Context, "p16a.stale-passage", 10L, 1L, out _, expectedPassageRevision: stalePassageRevision), Is.False);
+        Assert.That(fixture.LastFailure.Code, Is.EqualTo(ArmedForceSpatialFailureCode.MovementStateStale));
         Assert.That(fixture.Spatial.CaptureP16AState().PositionStableKey, Is.EqualTo(before.PositionStableKey));
         Assert.That(fixture.Spatial.P16CurrentQuantity, Is.EqualTo(before.CurrentQuantity));
         Assert.That(fixture.Spatial.Revision, Is.EqualTo(ownerRevision));
@@ -245,13 +368,32 @@ public sealed class P16AMilitaryMovementTests
             Spatial = spatial;
         }
 
+        public SimulationRuntime CreateRuntime()
+        {
+            return new SimulationRuntime(
+                new SimulationTime(), null, null,
+                armedForceStore: Forces,
+                spatialAuthorityStore: Authority,
+                armedForceSpatialStateStore: Spatial,
+                compositionProfile: SimulationRuntimeCompositionProfile.P16AOneHopMilitary);
+        }
+
         public bool Execute(ArmedForceId force, HexId source, HexId destination, TraversalOptionRef option,
             TraversalCostContext context, string operationId, long boundary, long order,
-            out P16ACrossingReceipt receipt, long? expectedOwnerRevision = null)
+            out P16ACrossingReceipt receipt, long? expectedOwnerRevision = null, long? expectedPassageRevision = null)
         {
-            bool result = Spatial.TryExecuteP16ACrossing(force, source, destination, option, context,
-                operationId, expectedOwnerRevision ?? Spatial.Revision, Forces.Revision, Authority.Revision,
-                boundary, order, out receipt, out LastFailure);
+            MethodInfo method = typeof(ArmedForceSpatialStateStore).GetMethod(
+                "TryExecuteP16ACrossing", BindingFlags.Instance | BindingFlags.NonPublic);
+            if (method == null) throw new InvalidOperationException("P16-A owner operation was not found.");
+            object[] arguments =
+            {
+                force, source, destination, option, context, operationId,
+                expectedOwnerRevision ?? Spatial.Revision, Forces.Revision,
+                expectedPassageRevision ?? Authority.Revision, boundary, order, null, null
+            };
+            bool result = (bool)method.Invoke(Spatial, arguments);
+            receipt = arguments[11] as P16ACrossingReceipt;
+            LastFailure = arguments[12] as ArmedForceSpatialFailure;
             return result;
         }
 

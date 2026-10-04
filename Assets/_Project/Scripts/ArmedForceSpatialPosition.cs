@@ -19,7 +19,8 @@ public enum ArmedForceSpatialFailureCode
     InsufficientCarriedSupply = 12,
     CrossingAlreadyCommitted = 13,
     InvalidMovementInput = 14,
-    DirectPositionMutationBlocked = 15
+    DirectPositionMutationBlocked = 15,
+    RuntimeOperationInProgress = 16
 }
 
 public sealed class ArmedForceSpatialFailure : IEquatable<ArmedForceSpatialFailure>
@@ -283,7 +284,7 @@ public sealed class ArmedForceSpatialStateStore : IAuthoritativeMutationGuardBin
     }
 
     /// <summary>Performs the profile's only successful crossing, consuming carried supply atomically.</summary>
-    public bool TryExecuteP16ACrossing(
+    internal bool TryExecuteP16ACrossing(
         ArmedForceId forceId,
         HexId sourceHexId,
         HexId destinationHexId,
