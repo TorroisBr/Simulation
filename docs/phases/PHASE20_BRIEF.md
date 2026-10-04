@@ -2,15 +2,16 @@
 
 **Authority:** planning scope under `../SIMULATION_ARCHITECTURE.md` §§11–12,
 91–93. **Readiness:** P20-A synthetic operation is `PROMOTED` in the owning
-State; broader Phase 20 work is `READY_FOR_PRODUCT_SCOPE_DECISION`. No further
-implementation checkpoint is approved.
+State; P20-B joint civil travel is `READY_FOR_BOUNDED_CHECKPOINT` technical
+design under the 2026-10-03 product direction. No further implementation
+checkpoint is approved.
 
 **P12 dependency clarification (2026-10-03):** P20-A did not require P12 Save.
 A future supported shared-activity save/fork profile needs exact participant,
 commitment, lifecycle and temporal-input state, but P12's accepted daily
 profile does not include P20. No broader P20 consumer is unlocked here.
 
-The [next-scope product decision packet](../architecture/P10_P14_P20_NEXT_SCOPE_DECISIONS.md) compares real shared-activity consumers. Its recommendation is advisory; no next checkpoint is approved.
+The [product-direction and checkpoint record](../architecture/P10_P14_P20_NEXT_SCOPE_DECISIONS.md) recommends joint travel as the first real consumer while preserving work and other activity families as compatible later consumers.
 
 ## Objective and closure
 
@@ -24,6 +25,9 @@ add robbery, gangs, hunting, meals, patrol, rituals, construction or War gamepla
 to demonstrate the generic capability.
 
 ## Semantic boundaries
+
+- **Bounded proof versus model:** P20-A's exactly two Persons are a synthetic fixture rule. P20-B may again use two Persons for a joint travel proof, but neither fixes the universal participant count, roles, effects or interval. Required four-person work, optional helpers and several workers in the same role remain valid future definitions.
+- **Start validity versus contribution:** minimum/maximum headcounts, required/optional roles and current availability decide whether an instance may start. Each participant's effect on duration, output or outcome is a separate domain rule and need not scale linearly. One role can have many participants; an activity can have multiple distinct roles. No universal role catalog or contribution formula is selected now.
 
 - **Definition versus instance:** content/rules define activity and applicable
   role requirements/count bounds; concrete instance owns its stable identity,
@@ -95,3 +99,7 @@ to demonstrate the generic capability.
 - **Hotspots:** temporal/activity/availability authorities, actor decisions,
   domain commit boundaries, commands and diagnostics. Isolate writers and
   review integrations; participant logic must not accumulate in `AdvanceDay`.
+
+## P20-B next consumer — 2026-10-03
+
+Joint travel of two independent Persons over one supported civil leg remains the smallest real consumer recommended for technical design. It consumes promoted P18-A/B/C, P20-A coordination seams and relevant P8-E explicit Person travel/position/passage capability. P8-E has no group travel or automatic intraday execution, so P20-B must design a coherent shared start and individual domain-owned travel transitions, stale/current passage checks, reservations, cancellation and distinct participant effects/Knowledge. P11 is conditional on adding external commands. The v1 traveler requirement may be narrow without making exactly two, one role, one common full-duration interval or travel itself universal Activity semantics. No persistent Group, generic workflow engine, production, mod loader or War scope is approved.

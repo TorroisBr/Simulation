@@ -19,6 +19,8 @@ Os termos abaixo indicam o grau de compromisso:
 
 Quando uma implementação atual for mais estreita que uma direção futura, **não generalizar só para “preparar o futuro”**. Preservar o espaço conceitual e generalizar quando existir uso real.
 
+Um checkpoint delimitado pode provar um caso concreto sem definir esse caso como o modelo universal da capability. O caso de prova não converte uma Ruin em layout universal, uma fonte exógena em toda fonte produtiva, nem duas pessoas viajando juntas em toda atividade coletiva. Generalizar somente os limites semânticos que o próximo consumidor realmente exige.
+
 ### Autoridade documental
 
 1. `SIMULATION_ARCHITECTURE.md` — invariantes conceituais de longo prazo.
@@ -531,6 +533,8 @@ Knowledge, decisões e efeitos potencialmente diferentes. Participar junto não
 cria um NPC sintético, não funde identidades, não compartilha automaticamente
 Knowledge e não obriga outcomes iguais. Efeitos continuam sob as authorities
 dos respectivos domínios, não sob uma authority universal de resultados de Activity.
+
+Requisitos de início e contribuição para o resultado são perguntas separadas. Uma atividade pode exigir um mínimo de participantes para começar; outra pode ser válida com uma pessoa e aceitar colaboradores opcionais. Um papel pode admitir várias pessoas, vários papéis podem coexistir e os limites de cada papel podem diferir. O mínimo/máximo e as demais condições determinam **validade de formação/início**; quantidade, papel e capacidades dos participantes podem afetar duração, produção ou outros efeitos conforme regras do domínio, sem presumir escala linear. Um primeiro consumidor com duas Persons no mesmo papel não fixa a cardinalidade, o conjunto de papéis ou a duração das demais atividades.
 
 Uma atividade que precisa reunir participantes pode possuir proposta/formação
 antes da execução. Cada ator decide individualmente se participa usando sua
@@ -2292,6 +2296,14 @@ Existe source/sink deliberado?
 ```
 
 Um sink abstrato pode existir se for deliberado. Um pedágio com objetivo fiscal deve ter recebedor.
+
+### Fontes produtivas e fluxo material
+
+**DECIDIDO / DIREÇÃO**
+
+Uma fonte produtiva possui identidade própria e uma regra explícita de produção/exposição de material. Disponibilidade ou reserva determina o que ainda pode ser produzido quando aplicável; não se presume reserva finita para toda fonte nem produção exógena ilimitada para todas. Produção altera estoque sob uma autoridade de custódia; titularidade do material é fato distinto. Mercado é local de ofertas, demanda e possível preço, não sinônimo de fonte, reserva, dono ou agente decisor. Uma decisão econômica escolhe consumir, reter, vender ou transportar conforme a perspectiva e capacidade do ator/organização; transporte altera posição/custódia por sua autoridade e fronteira causal próprias.
+
+Múltiplas fontes podem coexistir. Um mundo pode combinar fonte finita, consumo local, excedente, comércio entre lugares e agentes como merchant, guilda, companhia, família, templo ou polity sem fazer da City a autoridade universal de decisão econômica. A City e o mercado agregado do primeiro perfil P14 são um recorte concreto. Fontes, reservas, titularidade/custódia, mercado, decisão e transporte continuam separáveis; uma transação ou mudança de reserva autoritativa deve ser coerente e reconstruível. Esta direção não implementa preços, comércio autônomo ou um engine econômico universal.
 
 ---
 
@@ -4083,6 +4095,10 @@ conexões percorríveis, entry points, publicação e conhecimento topológico. 
 O LocalTopologyStore atual é uma fundação reutilizável/adaptável. Futuramente
 deve aceitar um owner espacial neutro quando necessário, em vez de permanecer
 semanticamente limitado a City e ExplorableSite.
+
+Uma Ruin é um arquétipo/categoria de site, não uma instância única nem um layout obrigatório. Um mundo pode ter várias Ruins; cada instância tem identidade factual própria, distinta da definição/arquetipo e do `LocationId` que a ancora. A topologia de uma instância criada na gênese pode ser gerada deterministicamente a partir de inputs compatíveis do mundo, identidade estável do site, contexto de seed/aleatoriedade e regras/versionamento efetivos. Os mesmos inputs devem reproduzir a mesma topologia; instâncias ou mundos diferentes podem produzir resultados diferentes, sem exigir unicidade artificial. O primeiro perfil P10-A, com uma Ruin autorada e topologia finita, permanece válido como recorte, mas não define o modelo universal de geração.
+
+Geração local futura deve poder ampliar seu espaço de formas por regras de lugares, conexões e estrutura, em vez de escolher apenas entre layouts completos pré-autorados. A topologia semântica de lugares, contenção, entradas e conexões permanece separada de conteúdo, encontros, habitantes, recursos, armadilhas e interpretação por sistema de RPG. Regras temáticas e de conteúdo podem ser camadas futuras; nenhum ruleset OSR, formato de dungeon, catálogo ou engine universal é fixado aqui. Instâncias geradas entram na mesma autoridade de World Truth antes da primeira fronteira simulada; mudanças posteriores usam autoridades de runtime.
 
 ### SpatialReference
 
@@ -6052,6 +6068,8 @@ PERSISTENT GROUP / ORGANIZATION != TEMPORARY MULTI-PARTICIPANT ACTIVITY
 PARTICIPATION != MEMBERSHIP != CONTROL OF OTHER ACTORS
 AGREEMENT / RESERVATION != VALIDATED START
 SHARED CONTEXT != SHARED KNOWLEDGE / IDENTICAL OUTCOME
+ACTIVITY START VALIDITY != PARTICIPANT CONTRIBUTION
+ONE ROLE MAY HAVE MULTIPLE PARTICIPANTS; REQUIRED != OPTIONAL
 SMALL-GROUP EXECUTION != AGGREGATE WARFARE EXECUTION
 
 INITIAL CONFIGURED WORLD → COMPLETE WORLD TRUTH BEFORE FIRST SIMULATED BOUNDARY
@@ -6059,6 +6077,7 @@ GENERATED BACKSTORY != SIMULATED HISTORY
 INITIAL GENERATED STATE != IMMUTABLE WORLD
 INITIAL GENERATION != RUNTIME MUTATION AUTHORITY
 GENESIS = ORDERED DEPENDENCY-AWARE PIPELINE
+SITE ARCHETYPE / DEFINITION != SITE INSTANCE / GENERATED TOPOLOGY
 MOD INSTALLATION != IMPLICIT HISTORICAL REGENERATION
 RUNTIME-CREATED WORLD STRUCTURE = NORMAL WORLD TRUTH
 EVERY SIMULATED HISTORICAL BOUNDARY → RECONSTRUCTABLE AUTHORITATIVE STATE AND INDEPENDENT FORK
@@ -6084,6 +6103,8 @@ PROVIDER REGISTRATION != ENABLEMENT
 ENABLED CAPABILITY WITHOUT HOST SUPPORT → COMPOSITION FAILURE
 SIMULATIONMODULESET LOCAL/LEGACY != CANONICAL ENABLEMENT AUTHORITY
 ECONOMY != MERCHANT != MERCHANT AUTONOMY
+PRODUCTIVE SOURCE != RESERVE != STOCK/CUSTODY != MARKET
+ECONOMIC DECISION != MATERIAL TRANSPORT
 NEW DISCRETIONARY TRADE REPOSITIONING = AUTONOMY
 EXISTING COMMERCIAL COMMITMENT EXECUTION != AUTOMATIC AUTONOMY
 MINIMUM PROFIT THRESHOLD → MERCHANT/JOB CONTENT

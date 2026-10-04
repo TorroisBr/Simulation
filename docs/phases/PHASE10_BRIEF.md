@@ -1,16 +1,16 @@
 # Phase 10 — Local Generation & Pre-start Authoring
 
-**Authority:** planning entry subordinate to `../SIMULATION_ARCHITECTURE.md`. **Readiness:** P10-A is `PROMOTED` in the owning State; Phase 10 remains open. Any further local-generation/authoring slice is `READY_FOR_PRODUCT_SCOPE_DECISION`, not an approved implementation checkpoint. P9-B is promoted at P9 canonical `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf` and supplies the authored P8 Hex/Location source through the P9 genesis handoff.
+**Authority:** planning entry subordinate to `../SIMULATION_ARCHITECTURE.md`. **Readiness:** P10-A is `PROMOTED` in the owning State; Phase 10 remains open. P10-B procedural topology is `READY_FOR_BOUNDED_CHECKPOINT` technical design under the 2026-10-03 product direction, not implementation-ready. P9-B is promoted at P9 canonical `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf` and supplies the authored P8 Hex/Location source through the P9 genesis handoff.
 
 ## Objective and closure
 
 The approved first profile composes exactly one `ExplorableSiteKind.Ruin` at an existing canonical P8 `LocationId`, with the minimum finite local topology needed to represent semantic places, one or more entry points, containment only where needed, and explicit local connections. P9 authored-bootstrap genesis/provenance is consumed; this profile adds no new generated content.
 
-**Checkpoints:** P10-A — Ruin LocalTopology Genesis Composition is promoted within its bounded first profile; see the owning State for exact delivery evidence. No further P10 checkpoint or phase-wide closure contract is approved.
+**Checkpoints:** P10-A — Ruin LocalTopology Genesis Composition is promoted within its bounded first profile; see the owning State for exact delivery evidence. P10-B — Deterministic Local Topology Generation v1 is the proposed next bounded design scope in the [product-direction record](../architecture/P10_P14_P20_NEXT_SCOPE_DECISIONS.md). Its technical design, implementation and phase-wide closure remain unapproved.
 
 **P12 dependency clarification (2026-10-03):** P10-A's pre-start world composition did not require Save. A future supported profile that includes additional generated facts must preserve their exact initial state and compatible provenance, but full P12 closure is not a prerequisite to author a separately scoped P10 contribution. Its product scope remains open.
 
-The [next-scope product decision packet](../architecture/P10_P14_P20_NEXT_SCOPE_DECISIONS.md) compares bounded P10 follow-ons. Its recommendation is advisory; no next checkpoint is approved.
+The [product-direction and checkpoint record](../architecture/P10_P14_P20_NEXT_SCOPE_DECISIONS.md) replaces the earlier mutually exclusive option framing. The next design scope is small procedural generation for one site; future multiple Ruins and content layers remain compatible, not part of P10-A.
 
 ## Dependencies and gates
 
@@ -26,7 +26,13 @@ The [next-scope product decision packet](../architecture/P10_P14_P20_NEXT_SCOPE_
 - **Replay/fork sensitivity:** Ruin/local topology identities, P9 genesis provenance, and initial state must be reconstructible; this profile adds no local randomness.
 - **Hotspots/parallelism:** Location anchors, LocalTopology, City/Site authoring, generator composition and diagnostics; design can be isolated, integration follows stable P8/P9 contracts.
 - **Downstream unlocks:** richer initial world content for later consumers, without granting runtime creation authority.
-- **Deferred:** generated local-content passes, generalized layouts, mod schemas and runtime expansion.
+- **Deferred:** generated local-content passes, multiple-site world composition, broad ruleset/catalog design, mod schemas and runtime expansion.
+
+## P10-B product and architecture boundary — 2026-10-03
+
+`Ruin` is an archetype, not a unique site or universal layout. A site instance needs identity distinct from its definition and a site-scoped deterministic generation context. P10-A's one-instance `DefinitionId` mapping and fixed topology remain a valid historical profile; P10-B's technical design must preserve compatibility while introducing the minimal instance/definition seam. The next proof generates structural places/connections by rules and deterministic choices, not by selecting among preauthored whole layouts. Same compatible world/site/rules/seed inputs reproduce the result; different inputs may yield different topology without a forced uniqueness rule.
+
+P10-B consumes promoted P9 pipeline/provenance, P8 Location/site anchor and P10-A LocalTopology ownership. Its design must close ID migration, random-stream isolation, finite graph validity, stable ordering and all-or-nothing pre-start publication. It does not need a second authored Location for the first published proof; a later multi-Ruin profile does. Topology remains system-neutral and separate from traps, loot, inhabitants, encounters, resources and other content/ruleset layers. No OSR tables, mod loader, retrofit or runtime expansion are approved.
 
 ## Generation extension alignment — 2026-09-26
 

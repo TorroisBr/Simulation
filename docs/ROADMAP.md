@@ -22,11 +22,29 @@ Phases 5–7 are closed within their documented scopes. P8-A/B/C/D/E are canonic
 
 Runtime World Expansion remains a future consumer without an assigned dedicated phase. Its absence from this sequence does not forbid a later insertion or assign it to Phase 15 by implication.
 
+## P10 / P14 / P20 product-direction candidate — 2026-10-03
+
+A bounded checkpoint may prove one case without making it the universal model. The revised [product-direction and checkpoint sequence](architecture/P10_P14_P20_NEXT_SCOPE_DECISIONS.md) treats varied local topology, finite/multiple sources and shared-activity consumers as compatible capabilities. It preserves promoted P10-A, P14-A and P20-A within their delivered profiles. The next proposed scopes are `P10-B` deterministic procedural topology for one Ruin instance, `P14-B` finite availability for one source, and `P20-B` joint civil travel by two Persons. All three are `READY_FOR_BOUNDED_CHECKPOINT` **technical design**, not implementation. Later P14-C mixed sources waits on the selected P14-B proof; P14-D inter-City transfer still needs a bounded product/transport contract.
+
+```text
+P9 ordered genesis + P8 site/Location + P10-A topology owner
+  → P10-B procedural topology (site-instance identity, scoped random context)
+P14-A source/stock + source-owned finite reserve and coherent stock commit
+  → P14-B finite availability
+P14-B + P14-A → P14-C selected mixed finite/exogenous multi-source proof
+second factual City + applicable transport/transaction contract
+  → future P14-D bounded transfer; autonomous trade is later
+P18-A/B/C + P20-A + P8-E explicit Person travel
+  → P20-B joint-travel technical design
+```
+
+P10-B needs a compatible site-instance/definition seam because P10-A's single-instance profile uses a definition ID as its site key. P14-B must keep its reserve and market-stock mutation coherent without changing P14-A's exogenous meaning. P20-B must coordinate two individual travel transitions without making a two-person roster, shared role or common duration a universal Activity invariant. Future content, trade AI and other multi-person work remain separately scoped. New authoritative state or selected-profile composition still passes architecture §92A and the P12 exclusion/rejection rule; P12's accepted profile does not grow automatically. No closed phase is reopened by this candidate.
+
 ## Bounded next-slice planning promotion — 2026-10-03
 
 The user selected P15-A, one runtime structure at an existing canonical Location, and P16-A, one existing ArmedForce crossing one valid passage with finite carried supply. Their [P15-A](design/PHASE15A_RUNTIME_STRUCTURE_CHECKPOINT.md) and [P16-A](design/PHASE16A_SINGLE_PASSAGE_MOVEMENT_CHECKPOINT.md) planning/technical-design contracts were independently reviewed and promoted at architecture content SHA `a2788e6400251b5ce3cf8d2269ea8a5b5fdfd4a8`. They are eligible for the Master implementation workflow, not delivered runtime capabilities. They do not expand `UnityBootstrap-Daily-v1`. P15-A uses a synthetic inert proving structure without material debit because P14-A supplies no applicable generic construction-cost transaction; P16-A extends the existing military position owner with carried supply and must fail closed under the P12 profile admission rule.
 
-The [P13 retention/causal-input design](design/PHASE13_RETENTION_CAUSAL_INPUT_DESIGN.md) and [P19 public-extension-surface design](design/PHASE19_PUBLIC_EXTENSION_SURFACE_DESIGN.md) may advance independently. P13 reconstruction/fork implementation still waits on exact continuation of the chosen world/profile and recoverable causal history. P19 loader implementation remains deferred. The [P10/P14/P20 decision packet](architecture/P10_P14_P20_NEXT_SCOPE_DECISIONS.md) recommends options but selects no follow-on gameplay scope.
+The [P13 retention/causal-input design](design/PHASE13_RETENTION_CAUSAL_INPUT_DESIGN.md) and [P19 public-extension-surface design](design/PHASE19_PUBLIC_EXTENSION_SURFACE_DESIGN.md) may advance independently. P13 reconstruction/fork implementation still waits on exact continuation of the chosen world/profile and recoverable causal history. P19 loader implementation remains deferred. The updated [P10/P14/P20 product direction](architecture/P10_P14_P20_NEXT_SCOPE_DECISIONS.md) defines small next design scopes without implementing them.
 
 ```text
 P8-A Location/anchor + runtime guard → P15-A bounded structure creation
@@ -39,7 +57,7 @@ P12 exact chosen-profile continuation + recoverable history + compatible executi
   → P13 authoritative reconstruction/fork implementation
 P9 ordered genesis seam → bounded P19 public-generation-contract design
   P19 loader and durable mod state remain separate future gates
-P10-A / P14-A / P20-A → respective next-slice product choices
+P10-A / P14-A / P20-A → bounded next-slice technical designs above
 ```
 
 `SimulationRuntime` and P12-B composition/admission are serial integration hotspots. P15-A owns a new structure store and reads spatial truth. P16-A changes `ArmedForceSpatialStateStore` and reads spatial/passage truth; its P12 census interaction needs a negative admission test. Neither track may edit the active P12-B candidate in parallel. Existing closed phases stay closed; downstream P17 waits for broader military/territorial/War semantics, and the P15/P16 slices make no P18 or P20 capability claim.
@@ -54,15 +72,15 @@ While P12-B admission is incomplete, a new owner must either stay outside the se
 
 | Phase / track | P12 relationship | Next gate |
 |---|---|---|
-| P10 | Pre-start authoring independent; later saved generated profile is a specific P12 integration. | P10-A promoted; any next content slice is `READY_FOR_PRODUCT_SCOPE_DECISION`. |
+| P10 | Pre-start authoring independent; later saved generated profile is a specific P12 integration. | P10-A promoted; P10-B procedural topology is `READY_FOR_BOUNDED_CHECKPOINT` technical design. Local content remains unselected. |
 | P13 | Strategy and causal-input design independent; actual fork needs complete continuation of its chosen world/profile plus recoverable history. | Retention/causal-input design ready; reconstruction/fork implementation `WAIT_DEPENDENCY`. |
-| P14 | Domain work continuation-aware, not blocked by P12. | P14-A promoted; any follow-on is `READY_FOR_PRODUCT_SCOPE_DECISION`. |
+| P14 | Domain work continuation-aware, not blocked by P12. | P14-A promoted; P14-B finite availability is `READY_FOR_BOUNDED_CHECKPOINT` technical design. Mixed sources and transfer follow separate gates. |
 | P15 | Domain work continuation-aware, not blocked by P12 closure. | P15-A reviewed design promoted; `READY_FOR_MASTER_IMPLEMENTATION_HANDOFF` for one inert structure at an existing Location, with profile-safety gate before domain promotion. Broader founding remains unselected. |
 | P16 | Domain work continuation-aware, not blocked by P12 closure. | P16-A reviewed design promoted; `READY_FOR_MASTER_IMPLEMENTATION_HANDOFF` for one selected force/one passage/finite supply, with profile-safety gate before domain promotion. Broader routes remain unselected. |
 | P17 | Deferred by strategic/domain/product prerequisites, not P12. | P16, territory/political authority and War semantics; no implementation checkpoint. |
 | P18 | Bounded A–D scope closed; a future intraday save profile requires specific temporal-state coverage. | No reopening for P12. |
 | P19 | Public-surface design may use real consumers; durable mod-state support needs specific P12/P13 integration. | Bounded public-extension-surface design ready; loader scope/implementation remain deferred; no blanket P12 gate. |
-| P20 | P20-A promoted; future saved shared activity requires specific temporal/participant-state coverage. | Further consumer is `READY_FOR_PRODUCT_SCOPE_DECISION`. |
+| P20 | P20-A promoted; future saved shared activity requires specific temporal/participant-state coverage. | P20-B joint travel is `READY_FOR_BOUNDED_CHECKPOINT` technical design; no universal two-person rule. |
 
 ```text
 canonical semantics + per-owner continuation-aware gate
@@ -72,7 +90,7 @@ complete continuation of chosen world/profile + causal history + compatible exec
   → P13 authoritative reconstruction and independent fork
 ```
 
-P13 retention/checkpoint and causal-input design is ready as isolated architecture work; P15-A/P16-A have approved bounded scope and reviewed technical design, so the Master may start isolated implementation workflows before P12 closure after checking current prerequisites. P10/P14/P20 follow-ons still await bounded product scope. The Master may run P15-A/P16-A in separate worktrees while P12-B continues, serializing shared `SimulationRuntime`, spatial/domain owner and persistence-composition hotspots at integration. No closed phase is reopened by this dependency clarification.
+P13 retention/checkpoint and causal-input design is ready as isolated architecture work; P15-A/P16-A have approved bounded scope and reviewed technical design, so the Master may start isolated implementation workflows before P12 closure after checking current prerequisites. P10-B/P14-B/P20-B are bounded design candidates, not implementation-ready capabilities. The Master may run P15-A/P16-A in separate worktrees while P12-B continues, serializing shared `SimulationRuntime`, spatial/domain owner and persistence-composition hotspots at integration. No closed phase is reopened by this dependency clarification.
 
 WI-A, FR-B and FR-C integrations and the bounded WX-D World Exchange v2 producer have since been promoted/handed off through P12 canonical. Simulation-External `main` at `0ce8403` owns the v2 `collectionCoverage` contract. These delivered cross-cutting slices do not supply P12 capture, save/load or P13 fork. The checkpoint table below records **their planning readiness when its 2026-10-01 design was promoted**, not current delivery; use current owning States and code for delivery.
 
