@@ -216,18 +216,26 @@ public sealed class P20JointCivilTravelOwner
                 new SortedDictionary<string, P20JointCivilTravelAssent>(StringComparer.Ordinal);
             HashSet<string> causalIdentities = new HashSet<string>(StringComparer.Ordinal);
             HashSet<long> assentOrders = new HashSet<long>();
-            foreach (P20JointCivilTravelAssent assent in snapshot.Assents)
+            if (snapshot.Assents.Any(x => x == null)) return false;
+            long nextCausalOrder = 1L;
+            LogicalTick? lastAcceptedAt = null;
+            foreach (P20JointCivilTravelAssent assent in snapshot.Assents.OrderBy(x => x.AcceptedOrder))
             {
                 if (assent == null || !snapshot.PersonIds.Contains(assent.PersonId, StringComparer.Ordinal)
                     || !assent.ProposedStart.HasValue || assent.ProposedStart.Value != snapshot.ProposedStart
                     || !assent.AcceptedAt.HasValue || assent.AcceptedOrder <= 0L
                     || assent.AcceptedAt.Value.Value >= snapshot.ProposedStart.Value
+                    || assent.AcceptedAt.Value.Value > composition.Timeline.CurrentInstant.Value
+                    || assent.AcceptedOrder != nextCausalOrder
                     || assent.AcceptedOrder > snapshot.Revision
                     || !causalIdentities.Add(assent.CausalInputIdentity)
                     || !assentOrders.Add(assent.AcceptedOrder)
+                    || (lastAcceptedAt.HasValue && assent.AcceptedAt.Value.Value < lastAcceptedAt.Value.Value)
                     || assents.ContainsKey(assent.PersonId)) return false;
                 assents.Add(assent.PersonId, new P20JointCivilTravelAssent(assent.PersonId, assent.Accepted,
                     assent.CausalInputIdentity, snapshot.ProposedStart, assent.AcceptedAt.Value, assent.AcceptedOrder));
+                nextCausalOrder++;
+                lastAcceptedAt = assent.AcceptedAt.Value;
             }
             if (assents.Values.Any(x => !x.Accepted) && assents.Count != snapshot.PersonIds.Count) return false;
             if (snapshot.AbortAfterLegRequested)
@@ -235,13 +243,17 @@ public sealed class P20JointCivilTravelOwner
                 if (string.IsNullOrWhiteSpace(snapshot.AbortCausalInputIdentity)
                     || !snapshot.AbortAcceptedAt.HasValue || snapshot.AbortAcceptedOrder <= 0L
                     || snapshot.AbortAcceptedAt.Value.Value < snapshot.ProposedStart.Value
+                    || snapshot.AbortAcceptedAt.Value.Value > composition.Timeline.CurrentInstant.Value
+                    || snapshot.AbortAcceptedOrder != nextCausalOrder
                     || snapshot.AbortAcceptedOrder != snapshot.Revision
+                    || (lastAcceptedAt.HasValue && snapshot.AbortAcceptedAt.Value.Value < lastAcceptedAt.Value.Value)
                     || !causalIdentities.Add(snapshot.AbortCausalInputIdentity)
                     || (instance.State != ActivityLifecycleState.Active && instance.State != ActivityLifecycleState.Interrupted))
                     return false;
             }
             else if (!string.IsNullOrEmpty(snapshot.AbortCausalInputIdentity)
                 || snapshot.AbortAcceptedAt.HasValue || snapshot.AbortAcceptedOrder != 0L) return false;
+            if (instance.State == ActivityLifecycleState.Interrupted && !snapshot.AbortAfterLegRequested) return false;
 
             P20JointCivilTravel operation = new P20JointCivilTravel(snapshot.ActivityInstanceId,
                 snapshot.SharedSegmentStableKey, snapshot.ProposedStart, snapshot.PersonIds, assents,

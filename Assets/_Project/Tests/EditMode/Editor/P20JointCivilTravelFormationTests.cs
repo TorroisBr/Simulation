@@ -265,6 +265,92 @@ public sealed class P20JointCivilTravelFormationTests
     }
 
     [Test]
+    public void PartialProposalRestoresAndCanCollectItsRemainingIndependentAssent()
+    {
+        P20JointCivilTravelOwner owner = CreateOwner(out ActivityLifecycleStore lifecycle);
+        Assert.That(owner.TryCreate(Definition(), "joint-partial-restore", "shared-segment",
+            new LogicalTick(1), new[] { "person-a", "person-b" },
+            out P20JointCivilTravelSnapshot proposal, out ActivityFailure createFailure), Is.True, createFailure.ToString());
+        Assert.That(owner.TryRecordAssent(proposal.ActivityInstanceId,
+            new P20JointCivilTravelAssent("person-b", true, "partial-consent-b")), Is.True);
+        IReadOnlyList<P20JointCivilTravelSnapshot> ownerState = owner.SnapshotOwnerState();
+
+        ActivityLifecycleStore restoredLifecycle = lifecycle.Clone();
+        ActivityLifecycleComposition restoredComposition = new ActivityLifecycleComposition(
+            restoredLifecycle, Calendar(), new LogicalTick(0));
+        P20JointCivilTravelOwner restoredOwner = new P20JointCivilTravelOwner(restoredComposition,
+            new SimulationRuntime(new SimulationTime(), null, null, economyEnabled: false)
+                .P8ETravelTransactionCoordinator, _ => null);
+        Assert.That(restoredOwner.TryRestoreOwnerState(ownerState), Is.True);
+        Assert.That(restoredOwner.TryGet(proposal.ActivityInstanceId, out P20JointCivilTravelSnapshot restored), Is.True);
+        Assert.That(restored.State, Is.EqualTo(P20JointCivilTravelState.Proposed));
+        Assert.That(restored.Assents.Select(x => x.PersonId), Is.EqualTo(new[] { "person-b" }));
+        Assert.That(restored.Assents[0].CausalInputIdentity, Is.EqualTo("partial-consent-b"));
+        Assert.That(restored.Assents[0].AcceptedOrder, Is.EqualTo(1L));
+
+        Assert.That(restoredOwner.TryRecordAssent(proposal.ActivityInstanceId,
+            new P20JointCivilTravelAssent("person-a", true, "partial-consent-a")), Is.True);
+        Assert.That(restoredOwner.TrySchedule(proposal.ActivityInstanceId, out ActivityFailure scheduleFailure),
+            Is.True, scheduleFailure.ToString());
+        Assert.That(restoredLifecycle.GetCommitment("person-a").ActivityInstanceId, Is.EqualTo(proposal.ActivityInstanceId));
+        Assert.That(restoredLifecycle.GetCommitment("person-b").ActivityInstanceId, Is.EqualTo(proposal.ActivityInstanceId));
+    }
+
+    [Test]
+    public void DeclinedProposalReconstructionPreservesNotFormedOutcome()
+    {
+        P20JointCivilTravelOwner owner = CreateOwner(out ActivityLifecycleStore lifecycle);
+        Assert.That(owner.TryCreate(Definition(), "joint-declined-restore", "shared-segment",
+            new LogicalTick(1), new[] { "person-a", "person-b" },
+            out P20JointCivilTravelSnapshot proposal, out ActivityFailure createFailure), Is.True, createFailure.ToString());
+        Assert.That(owner.TryRecordAssent(proposal.ActivityInstanceId,
+            new P20JointCivilTravelAssent("person-a", true, "declined-restore-a")), Is.True);
+        Assert.That(owner.TryRecordAssent(proposal.ActivityInstanceId,
+            new P20JointCivilTravelAssent("person-b", false, "declined-restore-b")), Is.True);
+
+        ActivityLifecycleStore restoredLifecycle = lifecycle.Clone();
+        P20JointCivilTravelOwner restoredOwner = new P20JointCivilTravelOwner(
+            new ActivityLifecycleComposition(restoredLifecycle, Calendar(), new LogicalTick(0)),
+            new SimulationRuntime(new SimulationTime(), null, null, economyEnabled: false)
+                .P8ETravelTransactionCoordinator, _ => null);
+        Assert.That(restoredOwner.TryRestoreOwnerState(owner.SnapshotOwnerState()), Is.True);
+        Assert.That(restoredOwner.TryGet(proposal.ActivityInstanceId, out P20JointCivilTravelSnapshot restored), Is.True);
+        Assert.That(restored.State, Is.EqualTo(P20JointCivilTravelState.NotFormed));
+        Assert.That(restored.Disposition, Is.EqualTo("participant-declined"));
+        Assert.That(restored.Assents.Single(x => x.PersonId == "person-b").Accepted, Is.False);
+        Assert.That(restoredOwner.TrySchedule(proposal.ActivityInstanceId, out _), Is.False);
+        Assert.That(restoredLifecycle.GetCommitment("person-a"), Is.Null);
+        Assert.That(restoredLifecycle.GetCommitment("person-b"), Is.Null);
+    }
+
+    [Test]
+    public void OwnerRestoreRejectsP18LifecycleRevisionThatNoLongerMatchesSnapshot()
+    {
+        P20JointCivilTravelOwner owner = CreateOwner(out ActivityLifecycleStore lifecycle);
+        Assert.That(owner.TryCreate(Definition(), "joint-stale-restore", "shared-segment",
+            new LogicalTick(1), new[] { "person-a", "person-b" },
+            out P20JointCivilTravelSnapshot proposal, out ActivityFailure createFailure), Is.True, createFailure.ToString());
+        Assert.That(owner.TryRecordAssent(proposal.ActivityInstanceId,
+            new P20JointCivilTravelAssent("person-a", true, "stale-restore-consent")), Is.True);
+        IReadOnlyList<P20JointCivilTravelSnapshot> ownerState = owner.SnapshotOwnerState();
+
+        ActivityLifecycleStore changedLifecycle = lifecycle.Clone();
+        ActivityLifecycleComposition changedComposition = new ActivityLifecycleComposition(
+            changedLifecycle, Calendar(), new LogicalTick(0));
+        Assert.That(changedLifecycle.TryCancel(changedComposition.Timeline, proposal.ActivityInstanceId,
+            "changed-after-snapshot", out ActivityFailure cancelFailure), Is.True, cancelFailure.ToString());
+        P20JointCivilTravelOwner changedOwner = new P20JointCivilTravelOwner(changedComposition,
+            new SimulationRuntime(new SimulationTime(), null, null, economyEnabled: false)
+                .P8ETravelTransactionCoordinator, _ => null);
+
+        Assert.That(changedOwner.TryRestoreOwnerState(ownerState), Is.False);
+        Assert.That(changedOwner.InstanceCount, Is.Zero);
+        Assert.That(changedOwner.HasOwnerState, Is.False);
+        Assert.That(changedLifecycle.TryGet(proposal.ActivityInstanceId, out ActivityInstanceSnapshot cancelled), Is.True);
+        Assert.That(cancelled.State, Is.EqualTo(ActivityLifecycleState.Cancelled));
+    }
+
+    [Test]
     public void P20BCompositionRejectsTerminalMutationOfAnUnrelatedActivity()
     {
         SimulationRuntime runtime = new SimulationRuntime(new SimulationTime(), null, null, economyEnabled: false);

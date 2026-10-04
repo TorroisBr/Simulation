@@ -45,3 +45,18 @@ The exact-tip implementation review identified three P20-owned gaps that can be 
 - Reconstruction fixtures cover independent assents and proposed time, plus active `AbortAfterLeg` identity, tick, and order after P18 lifecycle cloning.
 
 **Validation:** not run in this follow-up because the P10 Unity validation slot is active. `git diff --check` passes. The follow-up is a source/test slice only; it is not independently reviewed, does not complete P20-B, and does not claim P12 admission coverage. Revalidate the changed fixtures when the serialized Unity slot is available.
+
+## Continuation: bounded P20 reconstruction consistency
+
+The isolated continuation tightens P20 owner restoration without changing the P18, P8, runtime, bootstrap, admission, or P14 hotspots:
+
+- Restored assent events must have contiguous coordination order, nondecreasing accepted logical instants, and no instant later than the restored timeline.
+- A pending `AbortAfterLeg` must follow every assent in coordination order, must not be future-dated, and an interrupted P18 instance must retain the corresponding abort intent.
+- Formation fixtures cover restoring a partially formed proposal and continuing with the remaining independent assent, preserving a decline as `NotFormed`, and rejecting a P20 snapshot when the matching P18 lifecycle revision has changed.
+- Integration fixtures reject a malformed abort fact whose order overlaps assent and an abort timestamp later than the restored timeline.
+
+The runtime-owned P18 lifecycle/timeline binding and the `UnityBootstrap-Daily-v1` negative-admission test remain explicit integration work. They require the reserved P10/P14/P12 hotspot boundary and are not implemented here.
+
+This restore path matches the P18 instance identity, creation identity, revision, lifecycle state, planned start, and participants through the current P18 snapshot API. Exact reconstruction of both open-ended P18 commitments and the P18/timeline pending-start index remains owned by the combined lifecycle/timeline integration and must be asserted there; this P20-only slice does not claim that broader reconstruction proof.
+
+**Validation:** Unity was not run because P10 owns the serialized validation slot. This continuation is source/test coverage only, is not independently reviewed, and does not complete the P20-B integration candidate or claim P12 admission coverage. Run the focused P20 suite and required affected regressions on the combined integration tree after the hotspot window opens.

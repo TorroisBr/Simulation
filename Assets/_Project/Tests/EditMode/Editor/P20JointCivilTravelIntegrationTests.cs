@@ -104,6 +104,73 @@ public sealed class P20JointCivilTravelIntegrationTests
     }
 
     [Test]
+    public void OwnerRestoreRejectsAbortOrderingThatOverlapsConsentOrLiesInTheFuture()
+    {
+        Fixture fixture = new Fixture();
+        ActivityLifecycleStore lifecycle = new ActivityLifecycleStore("joint-travel-restore-order-world");
+        SimulationCalendar calendar = new SimulationCalendar(new CalendarDefinition(2, 2, 3));
+        ActivityLifecycleComposition composition = new ActivityLifecycleComposition(lifecycle, calendar, new LogicalTick(0));
+        P20JointCivilTravelOwner owner = new P20JointCivilTravelOwner(composition, fixture.Travel,
+            person => fixture.Contexts[person.Value]);
+        Assert.That(owner.TryCreate(new ActivityDefinition(P20JointCivilTravelOwner.ActivityDefinitionId, "v1"),
+            "joint-restore-order", fixture.Segment.StableKey, new LogicalTick(1), new[] { "person-a", "person-b" },
+            out P20JointCivilTravelSnapshot proposal, out ActivityFailure createFailure), Is.True, createFailure.ToString());
+        Assert.That(owner.TryRecordAssent(proposal.ActivityInstanceId,
+            new P20JointCivilTravelAssent("person-a", true, "restore-order-consent-a")), Is.True);
+        Assert.That(owner.TryRecordAssent(proposal.ActivityInstanceId,
+            new P20JointCivilTravelAssent("person-b", true, "restore-order-consent-b")), Is.True);
+        Assert.That(owner.TrySchedule(proposal.ActivityInstanceId, out ActivityFailure scheduleFailure),
+            Is.True, scheduleFailure.ToString());
+        Assert.That(composition.Timeline.TrySealInputsThrough(new LogicalTick(1), out TimelineFailure sealFailure), Is.True,
+            sealFailure.ToString());
+        Assert.That(composition.Timeline.TryAdvanceTo(new LogicalTick(1), out TimelineFailure advanceFailure), Is.True,
+            advanceFailure.ToString());
+        Assert.That(owner.TryGet(proposal.ActivityInstanceId, out P20JointCivilTravelSnapshot active), Is.True);
+        Assert.That(owner.TryRequestAbortAfterLeg(proposal.ActivityInstanceId, active.Revision, "restore-order-abort"), Is.True);
+        Assert.That(owner.TryGet(proposal.ActivityInstanceId, out P20JointCivilTravelSnapshot requested), Is.True);
+        Assert.That(lifecycle.TryGet(proposal.ActivityInstanceId, out ActivityInstanceSnapshot activeLifecycle), Is.True);
+
+        SortedDictionary<string, P20JointCivilTravelAssent> overlappingAssents =
+            new SortedDictionary<string, P20JointCivilTravelAssent>(System.StringComparer.Ordinal);
+        foreach (P20JointCivilTravelAssent assent in requested.Assents)
+        {
+            long order = assent.PersonId == "person-a" ? requested.AbortAcceptedOrder : assent.AcceptedOrder;
+            overlappingAssents.Add(assent.PersonId, new P20JointCivilTravelAssent(assent.PersonId,
+                assent.Accepted, assent.CausalInputIdentity, assent.ProposedStart.Value,
+                assent.AcceptedAt.Value, order));
+        }
+        P20JointCivilTravel overlappingOperation = new P20JointCivilTravel(requested.ActivityInstanceId,
+            requested.SharedSegmentStableKey, requested.ProposedStart, requested.PersonIds, overlappingAssents,
+            true, requested.AbortCausalInputIdentity, requested.AbortAcceptedAt,
+            requested.AbortAcceptedOrder, requested.Revision, requested.ExpectedLifecycleRevision);
+        P20JointCivilTravelSnapshot overlappingSnapshot =
+            new P20JointCivilTravelSnapshot(overlappingOperation, activeLifecycle, false);
+        ActivityLifecycleStore overlappingLifecycle = lifecycle.Clone();
+        P20JointCivilTravelOwner overlappingRestorer = new P20JointCivilTravelOwner(
+            new ActivityLifecycleComposition(overlappingLifecycle, calendar, new LogicalTick(1)), fixture.Travel,
+            person => fixture.Contexts[person.Value]);
+        Assert.That(overlappingRestorer.TryRestoreOwnerState(new[] { overlappingSnapshot }), Is.False,
+            "Abort order must follow every assent and use the next coordination revision.");
+
+        SortedDictionary<string, P20JointCivilTravelAssent> futureAssents =
+            new SortedDictionary<string, P20JointCivilTravelAssent>(System.StringComparer.Ordinal);
+        foreach (P20JointCivilTravelAssent assent in requested.Assents)
+            futureAssents.Add(assent.PersonId, new P20JointCivilTravelAssent(assent.PersonId, assent.Accepted,
+                assent.CausalInputIdentity, assent.ProposedStart.Value, assent.AcceptedAt.Value, assent.AcceptedOrder));
+        P20JointCivilTravel futureOperation = new P20JointCivilTravel(requested.ActivityInstanceId,
+            requested.SharedSegmentStableKey, requested.ProposedStart, requested.PersonIds, futureAssents,
+            true, requested.AbortCausalInputIdentity, new LogicalTick(2),
+            requested.AbortAcceptedOrder, requested.Revision, requested.ExpectedLifecycleRevision);
+        P20JointCivilTravelSnapshot futureSnapshot = new P20JointCivilTravelSnapshot(futureOperation, activeLifecycle, false);
+        ActivityLifecycleStore futureLifecycle = lifecycle.Clone();
+        P20JointCivilTravelOwner futureRestorer = new P20JointCivilTravelOwner(
+            new ActivityLifecycleComposition(futureLifecycle, calendar, new LogicalTick(1)), fixture.Travel,
+            person => fixture.Contexts[person.Value]);
+        Assert.That(futureRestorer.TryRestoreOwnerState(new[] { futureSnapshot }), Is.False,
+            "Reconstruction must not install an abort fact later than the restored logical instant.");
+    }
+
+    [Test]
     public void StalePreparedJointStartCannotInstallEitherParticipantsTravelRoot()
     {
         Fixture fixture = new Fixture();
