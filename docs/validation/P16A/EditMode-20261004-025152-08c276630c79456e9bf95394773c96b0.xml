@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="17" result="Passed" total="17" passed="17" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-04 02:52:05Z" end-time="2026-10-04 02:52:05Z" duration="0,1528864">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2268" result="Passed" start-time="2026-10-04 02:52:05Z" end-time="2026-10-04 02:52:05Z" duration="0.152886" total="17" passed="17" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="3463" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p15a-runtime-structure-integration/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2268" result="Passed" start-time="2026-10-04 02:52:05Z" end-time="2026-10-04 02:52:05Z" duration="0.134721" total="17" passed="17" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="61772" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="2459" name="P16AMilitaryMovementTests" fullname="P16AMilitaryMovementTests" classname="P16AMilitaryMovementTests" runstate="Runnable" testcasecount="17" result="Passed" start-time="2026-10-04 02:52:05Z" end-time="2026-10-04 02:52:05Z" duration="0.117815" total="17" passed="17" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-suite type="ParameterizedMethod" id="2466" name="DailyProfileRejectsUnmovedAndMovedP16StateBeforeAdmission" fullname="P16AMilitaryMovementTests.DailyProfileRejectsUnmovedAndMovedP16StateBeforeAdmission" classname="P16AMilitaryMovementTests" runstate="Runnable" testcasecount="2" result="Passed" start-time="2026-10-04 02:52:05Z" end-time="2026-10-04 02:52:05Z" duration="0.080531" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-case id="2464" name="DailyProfileRejectsUnmovedAndMovedP16StateBeforeAdmission(False)" fullname="P16AMilitaryMovementTests.DailyProfileRejectsUnmovedAndMovedP16StateBeforeAdmission(False)" methodname="DailyProfileRejectsUnmovedAndMovedP16StateBeforeAdmission" classname="P16AMilitaryMovementTests" runstate="Runnable" seed="1618236521" result="Passed" start-time="2026-10-04 02:52:05Z" end-time="2026-10-04 02:52:05Z" duration="0.070643" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="2465" name="DailyProfileRejectsUnmovedAndMovedP16StateBeforeAdmission(True)" fullname="P16AMilitaryMovementTests.DailyProfileRejectsUnmovedAndMovedP16StateBeforeAdmission(True)" methodname="DailyProfileRejectsUnmovedAndMovedP16StateBeforeAdmission" classname="P16AMilitaryMovementTests" runstate="Runnable" seed="55888591" result="Passed" start-time="2026-10-04 02:52:05Z" end-time="2026-10-04 02:52:05Z" duration="0.005032" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+        </test-suite>
+        <test-case id="2477" name="DuplicateOrSecondCrossingAndDirectPositionBypassRejectUnchanged" fullname="P16AMilitaryMovementTests.DuplicateOrSecondCrossingAndDirectPositionBypassRejectUnchanged" methodname="DuplicateOrSecondCrossingAndDirectPositionBypassRejectUnchanged" classname="P16AMilitaryMovementTests" runstate="Runnable" seed="125701082" result="Passed" start-time="2026-10-04 02:52:05Z" end-time="2026-10-04 02:52:05Z" duration="0.002793" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2478" name="ExactStateCloneAndStagedRelationshipValidationPreserveCommittedMovement" fullname="P16AMilitaryMovementTests.ExactStateCloneAndStagedRelationshipValidationPreserveCommittedMovement" methodname="ExactStateCloneAndStagedRelationshipValidationPreserveCommittedMovement" classname="P16AMilitaryMovementTests" runstate="Runnable" seed="1396505173" result="Passed" start-time="2026-10-04 02:52:05Z" end-time="2026-10-04 02:52:05Z" duration="0.003882" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2469" name="ImpairedPassageIsAllowedOnlyByP8AvailabilityAndRetainsTheCondition" fullname="P16AMilitaryMovementTests.ImpairedPassageIsAllowedOnlyByP8AvailabilityAndRetainsTheCondition" methodname="ImpairedPassageIsAllowedOnlyByP8AvailabilityAndRetainsTheCondition" classname="P16AMilitaryMovementTests" runstate="Runnable" seed="1785078945" result="Passed" start-time="2026-10-04 02:52:05Z" end-time="2026-10-04 02:52:05Z" duration="0.000378" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2473" name="InsufficientSupplyAndIncompatibleContextRejectWithoutMutation" fullname="P16AMilitaryMovementTests.InsufficientSupplyAndIncompatibleContextRejectWithoutMutation" methodname="InsufficientSupplyAndIncompatibleContextRejectWithoutMutation" classname="P16AMilitaryMovementTests" runstate="Runnable" seed="1298879215" result="Passed" start-time="2026-10-04 02:52:05Z" end-time="2026-10-04 02:52:05Z" duration="0.000263" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2468" name="OnePassageAtomicallyMovesSelectedForceAndDebitsItsOneCompatibleItem" fullname="P16AMilitaryMovementTests.OnePassageAtomicallyMovesSelectedForceAndDebitsItsOneCompatibleItem" methodname="OnePassageAtomicallyMovesSelectedForceAndDebitsItsOneCompatibleItem" classname="P16AMilitaryMovementTests" runstate="Runnable" seed="530028070" result="Passed" start-time="2026-10-04 02:52:05Z" end-time="2026-10-04 02:52:05Z" duration="0.000609" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2461" name="P16OneBoundaryProfileRejectsP18IntradayComposition" fullname="P16AMilitaryMovementTests.P16OneBoundaryProfileRejectsP18IntradayComposition" methodname="P16OneBoundaryProfileRejectsP18IntradayComposition" classname="P16AMilitaryMovementTests" runstate="Runnable" seed="1325350770" result="Passed" start-time="2026-10-04 02:52:05Z" end-time="2026-10-04 02:52:05Z" duration="0.000533" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2475" name="PassageRevisionChangeRejectsOldExpectedContextWithoutMutation" fullname="P16AMilitaryMovementTests.PassageRevisionChangeRejectsOldExpectedContextWithoutMutation" methodname="PassageRevisionChangeRejectsOldExpectedContextWithoutMutation" classname="P16AMilitaryMovementTests" runstate="Runnable" seed="1503541578" result="Passed" start-time="2026-10-04 02:52:05Z" end-time="2026-10-04 02:52:05Z" duration="0.000746" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-suite type="ParameterizedMethod" id="2472" name="RejectedClosedOrBlockedPassageLeavesEveryOwnedFieldAndRevisionUnchanged" fullname="P16AMilitaryMovementTests.RejectedClosedOrBlockedPassageLeavesEveryOwnedFieldAndRevisionUnchanged" classname="P16AMilitaryMovementTests" runstate="Runnable" testcasecount="2" result="Passed" start-time="2026-10-04 02:52:05Z" end-time="2026-10-04 02:52:05Z" duration="0.003877" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-case id="2470" name="RejectedClosedOrBlockedPassageLeavesEveryOwnedFieldAndRevisionUnchanged(Closed)" fullname="P16AMilitaryMovementTests.RejectedClosedOrBlockedPassageLeavesEveryOwnedFieldAndRevisionUnchanged(Closed)" methodname="RejectedClosedOrBlockedPassageLeavesEveryOwnedFieldAndRevisionUnchanged" classname="P16AMilitaryMovementTests" runstate="Runnable" seed="496188477" result="Passed" start-time="2026-10-04 02:52:05Z" end-time="2026-10-04 02:52:05Z" duration="0.000259" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+          <test-case id="2471" name="RejectedClosedOrBlockedPassageLeavesEveryOwnedFieldAndRevisionUnchanged(Available)" fullname="P16AMilitaryMovementTests.RejectedClosedOrBlockedPassageLeavesEveryOwnedFieldAndRevisionUnchanged(Available)" methodname="RejectedClosedOrBlockedPassageLeavesEveryOwnedFieldAndRevisionUnchanged" classname="P16AMilitaryMovementTests" runstate="Runnable" seed="1025109782" result="Passed" start-time="2026-10-04 02:52:05Z" end-time="2026-10-04 02:52:05Z" duration="0.002668" asserts="0">
+            <properties>
+              <property name="retryIteration" value="0" />
+              <property name="repeatIteration" value="0" />
+            </properties>
+          </test-case>
+        </test-suite>
+        <test-case id="2460" name="RuntimeOperationPinsCurrentBoundaryAndOrderAndStoreMutationIsNotPublic" fullname="P16AMilitaryMovementTests.RuntimeOperationPinsCurrentBoundaryAndOrderAndStoreMutationIsNotPublic" methodname="RuntimeOperationPinsCurrentBoundaryAndOrderAndStoreMutationIsNotPublic" classname="P16AMilitaryMovementTests" runstate="Runnable" seed="2136448130" result="Passed" start-time="2026-10-04 02:52:05Z" end-time="2026-10-04 02:52:05Z" duration="0.001264" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2462" name="RuntimeOperationRejectsOffOwnerThreadWithoutOwnerMutation" fullname="P16AMilitaryMovementTests.RuntimeOperationRejectsOffOwnerThreadWithoutOwnerMutation" methodname="RuntimeOperationRejectsOffOwnerThreadWithoutOwnerMutation" classname="P16AMilitaryMovementTests" runstate="Runnable" seed="52667211" result="Passed" start-time="2026-10-04 02:52:05Z" end-time="2026-10-04 02:52:05Z" duration="0.001729" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2463" name="RuntimeOperationRejectsWhileAdvanceLeaseHeldWithoutOwnerMutation" fullname="P16AMilitaryMovementTests.RuntimeOperationRejectsWhileAdvanceLeaseHeldWithoutOwnerMutation" methodname="RuntimeOperationRejectsWhileAdvanceLeaseHeldWithoutOwnerMutation" classname="P16AMilitaryMovementTests" runstate="Runnable" seed="2136608499" result="Passed" start-time="2026-10-04 02:52:05Z" end-time="2026-10-04 02:52:05Z" duration="0.001039" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2474" name="StaleOwnerOrSourceInvalidOptionAndUnselectedForceRejectUnchanged" fullname="P16AMilitaryMovementTests.StaleOwnerOrSourceInvalidOptionAndUnselectedForceRejectUnchanged" methodname="StaleOwnerOrSourceInvalidOptionAndUnselectedForceRejectUnchanged" classname="P16AMilitaryMovementTests" runstate="Runnable" seed="1128189088" result="Passed" start-time="2026-10-04 02:52:05Z" end-time="2026-10-04 02:52:05Z" duration="0.000599" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2476" name="TerminatedForceAndNonNeighborEndpointRejectWithoutChangingP16AState" fullname="P16AMilitaryMovementTests.TerminatedForceAndNonNeighborEndpointRejectWithoutChangingP16AState" methodname="TerminatedForceAndNonNeighborEndpointRejectWithoutChangingP16AState" classname="P16AMilitaryMovementTests" runstate="Runnable" seed="1378338055" result="Passed" start-time="2026-10-04 02:52:05Z" end-time="2026-10-04 02:52:05Z" duration="0.001021" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2467" name="ZeroP16StateDailyProfileStillComposes" fullname="P16AMilitaryMovementTests.ZeroP16StateDailyProfileStillComposes" methodname="ZeroP16StateDailyProfileStillComposes" classname="P16AMilitaryMovementTests" runstate="Runnable" seed="1997120267" result="Passed" start-time="2026-10-04 02:52:05Z" end-time="2026-10-04 02:52:05Z" duration="0.008863" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

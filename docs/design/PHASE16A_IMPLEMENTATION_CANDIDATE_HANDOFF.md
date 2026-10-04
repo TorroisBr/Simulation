@@ -13,20 +13,22 @@
 
 ## Exact-tree validation
 
-All validation below ran after the final P16 source/test edits, on executable tree `0e31475f4944606fbe90a09955057d9b83b9e42f`.
+All validation below ran after the final P16 source/test edits, on executable tree `0e31475f4944606fbe90a09955057d9b83b9e42f`. The exact result XML and log files are retained under `docs/validation/P16A/` and included with this candidate evidence.
 
 | Gate | Result | XML SHA-256 | Log SHA-256 |
 |---|---:|---|---|
-| `P16AMilitaryMovementTests` | 17/17 | `AB7FC56C37BCC8A0CC332D33A77007D654244BF3859B21D8C695DDA0841104FD` | `89BE1434AEF012D027D858C59ADA1CAC5B088ADAE35DCD2220C6C791331BCEE0` |
-| ALL EditMode | 2268/2268 | `13F8ED91EC47CEE85901533A6246A7107003428C0FA523A6058BC1E9710371CF` | `0D50E59155E93D6B1440F2A36D0458F15E4FDDFB1244154C5A34051B328EAA34` |
-| Official Smoke (`EditMode -TestFilter Smoke`) | 5/5 | `534F8BCDB5557CE94744C3C27C9BA530BAF6C3C4C227E09E7D244763BD87F5C6` | `80376041FD2A10CC5E048D37D063F5FF4BFDB9B05B8427A7C1FC8763A8AD1300` |
+| `P16AMilitaryMovementTests` | 17/17 | `F116E91835301AADDE5BBA72C7EBA9BE78AA389CCF6308178DDA59BDB8CA1EE2` | `479D892EEE620949B6338CB075C640785DF91B9BEE622676CB0249AB9D84F00D` |
+| ALL EditMode | 2268/2268 | `3E4D1C20DFE4BB83D66433ED3F68E32EDB62D65DED90C7284B80DA84EC6E3DB2` | `05A53DE8B4CC44FD909FC9ABC0BB2665A18597130DE3F23520CD920461F40B2C` |
+| Official Smoke (`EditMode -TestFilter Smoke`) | 5/5 | `12AA0BA0F7FFA821C41FDDE2639F334A47E8D28BDAC286DBC8E90FD6E54BD64D` | `F07DBFAD8A77F87B40AF4F28369DEAFF7F10E8B6DEA4D02EE113BCFE17F4415B` |
 | `git diff --check` | PASS | — | — |
 
-The corresponding XML/log filenames are retained in this candidate worktree under `Temp/ValidationResults/`:
+The result artifacts are retained under `docs/validation/P16A/`. The Unity logs are stored together in `P16A-validation-logs.zip` to avoid committing a 102 MB raw ALL EditMode log. The original uncompressed log SHA-256 values remain in the table; the archive SHA-256 is `92598C986B963416BD7AC4F7CC2B40237F32DF7CAC39A00C82A0E16931F07096`.
 
-- `EditMode-20261004-024226-724b7728b8ed49e597c211c686162315.xml` and `.log`
-- `EditMode-20261004-024256-0d4e311577db451bb0a9faf4c8e0ad4e.xml` and `.log`
-- `EditMode-20261004-024352-ec4185fb8c7e4890a8982e9549d9b441.xml` and `.log`
+- `EditMode-20261004-025152-08c276630c79456e9bf95394773c96b0.xml` — focused P16-A suite.
+- `EditMode-20261004-025229-0b26922294b84da58071ea458108a52d.xml` — ALL EditMode.
+- `EditMode-20261004-025331-e414b1dd3b794d4db260a4f045444804.xml` — Official Smoke.
+
+Each log is archived under its original filename inside `P16A-validation-logs.zip`; extracting reproduces the exact raw logs represented by the table's hashes.
 
 The full EditMode run includes the affected P7/P8/P12/P15 regressions. No daily-loop behavior changed, so a long-run gate is not implied.
 
