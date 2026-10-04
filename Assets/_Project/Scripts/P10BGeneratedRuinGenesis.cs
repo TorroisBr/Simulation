@@ -18,6 +18,10 @@ public static class P10BGeneratedRuinGenesis
     // Test-only injection seam; production leaves this null. The callback runs after each
     // mutation so every journal boundary can be exercised without changing domain inputs.
     internal static System.Action<PublicationStep> PublicationStepCompletedForTests;
+    internal static System.Action<string> PublicationMutationCompletedForTests;
+
+    internal static void CompletePublicationMutationForTests(string mutation) =>
+        PublicationMutationCompletedForTests?.Invoke(mutation);
     public sealed class PreparedRuin
     {
         public RuinLocalTopologyGeneration.Request Request { get; }
@@ -141,46 +145,62 @@ public static class P10BGeneratedRuinGenesis
             if (!identityRegistry.IsRuntimeIdAvailable(edge.RuntimeId))
             { diagnostic = "Generated LocalConnection ID is no longer globally available: " + edge.RuntimeId; return false; }
 
-        var undo = new Stack<System.Action>();
+        // Allocate the complete cross-store undo journal before the first write. Each
+        // P10-specific store primitive is internally atomic: it either returns with its
+        // full owner write set committed or restores every sub-write before rethrowing.
+        // The outer journal therefore records a store only after its atomic primitive returns.
+        System.Action[] undo =
+        {
+            () => spatialNetwork.RollbackGenesisLocation(prepared.RuntimeLocation),
+            () => identityRegistry.RollbackGenesisExplorableSite(prepared.Site),
+            () => siteStore.RollbackGenesisSite(prepared.Site),
+            () => anchorBindings.RollbackGenesisBinding(prepared.Site.RuntimeId, prepared.Location.Id),
+            () => spatialAuthority.RollbackGenesisTopologyBinding(prepared.Topology.Owner, prepared.Location.Id),
+            () => topologyStore.RollbackGenesisTopology(prepared.Topology)
+        };
+        int undoCount = 0;
+        System.Action<string> mutationCompleted = CompletePublicationMutationForTests;
         try
         {
-            if (!spatialNetwork.RegisterLocation(prepared.RuntimeLocation))
+            if (!spatialNetwork.RegisterLocationForP10Genesis(prepared.RuntimeLocation, mutationCompleted))
                 throw new InvalidOperationException("P10-B could not register the generated Location.");
-            undo.Push(() => spatialNetwork.RollbackGenesisLocation(prepared.RuntimeLocation));
+            undoCount++;
             Complete(PublicationStep.LocationRegistered);
 
-            if (!identityRegistry.RegisterExplorableSite(prepared.Site))
+            if (!identityRegistry.RegisterExplorableSiteForP10Genesis(prepared.Site, mutationCompleted))
                 throw new InvalidOperationException("P10-B could not register the generated Ruin identity.");
-            undo.Push(() => identityRegistry.RollbackGenesisExplorableSite(prepared.Site));
+            undoCount++;
             Complete(PublicationStep.SiteIdentityRegistered);
 
-            if (!siteStore.Add(prepared.Site))
+            if (!siteStore.AddForP10Genesis(prepared.Site, mutationCompleted))
                 throw new InvalidOperationException("P10-B could not add the generated Ruin to its store.");
-            undo.Push(() => siteStore.RollbackGenesisSite(prepared.Site));
+            undoCount++;
             Complete(PublicationStep.SiteStored);
 
-            if (!anchorBindings.TryBindSite(prepared.Site.RuntimeId, prepared.Location.Id, out SpatialAnchorBindingFailure anchorFailure))
+            if (!anchorBindings.TryBindSiteForP10Genesis(prepared.Site.RuntimeId, prepared.Location.Id,
+                mutationCompleted, out SpatialAnchorBindingFailure anchorFailure))
                 throw new InvalidOperationException("P10-B canonical Location anchor binding failed: " + anchorFailure);
-            undo.Push(() => anchorBindings.RollbackGenesisBinding(prepared.Site.RuntimeId, prepared.Location.Id));
+            undoCount++;
             Complete(PublicationStep.AnchorBound);
 
-            if (!spatialAuthority.TryBindLocalTopology(prepared.Topology, prepared.Location.Id, out SpatialAuthorityFailure bindingFailure))
+            if (!spatialAuthority.TryBindLocalTopologyForP10Genesis(prepared.Topology, prepared.Location.Id,
+                mutationCompleted, out SpatialAuthorityFailure bindingFailure))
                 throw new InvalidOperationException("P10-B LocalTopology could not bind to the selected P9 Location: " + bindingFailure);
-            undo.Push(() => spatialAuthority.RollbackGenesisTopologyBinding(prepared.Topology.Owner, prepared.Location.Id));
+            undoCount++;
             Complete(PublicationStep.TopologySpatiallyBound);
 
-            if (!topologyStore.TryAddTopology(prepared.Topology, out diagnostic))
+            if (!topologyStore.TryAddTopologyForP10Genesis(prepared.Topology, mutationCompleted, out diagnostic))
                 throw new InvalidOperationException(diagnostic ?? "P10-B topology store rejected the prepared topology.");
-            undo.Push(() => topologyStore.RollbackGenesisTopology(prepared.Topology));
+            undoCount++;
             Complete(PublicationStep.TopologyStored);
             return true;
         }
         catch (Exception exception)
         {
             var rollbackFailures = new List<string>();
-            while (undo.Count > 0)
+            while (undoCount > 0)
             {
-                try { undo.Pop()(); }
+                try { undo[--undoCount](); }
                 catch (Exception rollbackException)
                 {
                     rollbackFailures.Add(rollbackException.Message);

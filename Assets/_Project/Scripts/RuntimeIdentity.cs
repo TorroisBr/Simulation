@@ -271,6 +271,16 @@ public sealed class RuntimeIdentityRegistry
 
     public bool RegisterLocation(SpatialLocationRuntime location)
     {
+        return RegisterLocationCore(location, null);
+    }
+
+    internal bool RegisterLocationForP10Genesis(SpatialLocationRuntime location, Action<string> completedMutation)
+    {
+        return RegisterLocationCore(location, completedMutation);
+    }
+
+    private bool RegisterLocationCore(SpatialLocationRuntime location, Action<string> completedMutation)
+    {
         if (location == null)
         {
             logger.LogError("Cannot register Location runtime identity: runtime instance is null.");
@@ -294,9 +304,24 @@ public sealed class RuntimeIdentityRegistry
             return false;
         }
 
-        locationsByRuntimeId.Add(location.RuntimeId, location);
-        AdvanceCensusRevision();
-        return true;
+        bool indexAdded = false;
+        bool revisionAdvanced = false;
+        try
+        {
+            locationsByRuntimeId.Add(location.RuntimeId, location);
+            indexAdded = true;
+            completedMutation?.Invoke("RuntimeIdentity.Location.Index");
+            AdvanceCensusRevision();
+            revisionAdvanced = true;
+            completedMutation?.Invoke("RuntimeIdentity.Location.Revision");
+            return true;
+        }
+        catch
+        {
+            if (revisionAdvanced) censusRevision--;
+            if (indexAdded) locationsByRuntimeId.Remove(location.RuntimeId);
+            throw;
+        }
     }
 
     public bool RegisterRoute(SpatialRouteRuntime route)
@@ -331,6 +356,16 @@ public sealed class RuntimeIdentityRegistry
 
     public bool RegisterExplorableSite(ExplorableSiteRuntime site)
     {
+        return RegisterExplorableSiteCore(site, null);
+    }
+
+    internal bool RegisterExplorableSiteForP10Genesis(ExplorableSiteRuntime site, Action<string> completedMutation)
+    {
+        return RegisterExplorableSiteCore(site, completedMutation);
+    }
+
+    private bool RegisterExplorableSiteCore(ExplorableSiteRuntime site, Action<string> completedMutation)
+    {
         if (site == null)
         {
             logger.LogError("Cannot register ExplorableSite runtime identity: runtime instance is null.");
@@ -354,9 +389,24 @@ public sealed class RuntimeIdentityRegistry
             return false;
         }
 
-        explorableSitesByRuntimeId.Add(site.RuntimeId, site);
-        AdvanceCensusRevision();
-        return true;
+        bool indexAdded = false;
+        bool revisionAdvanced = false;
+        try
+        {
+            explorableSitesByRuntimeId.Add(site.RuntimeId, site);
+            indexAdded = true;
+            completedMutation?.Invoke("RuntimeIdentity.ExplorableSite.Index");
+            AdvanceCensusRevision();
+            revisionAdvanced = true;
+            completedMutation?.Invoke("RuntimeIdentity.ExplorableSite.Revision");
+            return true;
+        }
+        catch
+        {
+            if (revisionAdvanced) censusRevision--;
+            if (indexAdded) explorableSitesByRuntimeId.Remove(site.RuntimeId);
+            throw;
+        }
     }
 
     public bool RegisterLocalPlace(LocalPlaceRuntime localPlace)
@@ -454,6 +504,24 @@ public sealed class RuntimeIdentityRegistry
         IReadOnlyList<LocalTopologyConnectionRuntime> localConnections,
         out string diagnostic)
     {
+        return TryRegisterLocalTopologyMembersCore(localPlaces, localConnections, null, out diagnostic);
+    }
+
+    internal bool TryRegisterLocalTopologyMembersForP10Genesis(
+        IReadOnlyList<LocalPlaceRuntime> localPlaces,
+        IReadOnlyList<LocalTopologyConnectionRuntime> localConnections,
+        Action<string> completedMutation,
+        out string diagnostic)
+    {
+        return TryRegisterLocalTopologyMembersCore(localPlaces, localConnections, completedMutation, out diagnostic);
+    }
+
+    private bool TryRegisterLocalTopologyMembersCore(
+        IReadOnlyList<LocalPlaceRuntime> localPlaces,
+        IReadOnlyList<LocalTopologyConnectionRuntime> localConnections,
+        Action<string> completedMutation,
+        out string diagnostic)
+    {
         diagnostic = null;
 
         if (localPlaces == null || localConnections == null)
@@ -524,22 +592,45 @@ public sealed class RuntimeIdentityRegistry
             return false;
         }
 
-        foreach (LocalPlaceRuntime localPlace in localPlaces)
+        int addedPlaces = 0;
+        int addedConnections = 0;
+        bool revisionAdvanced = false;
+        try
         {
-            localPlacesByRuntimeId.Add(localPlace.RuntimeId, localPlace);
-        }
+            for (int i = 0; i < localPlaces.Count; i++)
+            {
+                LocalPlaceRuntime localPlace = localPlaces[i];
+                localPlacesByRuntimeId.Add(localPlace.RuntimeId, localPlace);
+                addedPlaces++;
+                completedMutation?.Invoke("RuntimeIdentity.LocalPlace.Index." + i.ToString(CultureInfo.InvariantCulture));
+            }
 
-        foreach (LocalTopologyConnectionRuntime localConnection in localConnections)
+            for (int i = 0; i < localConnections.Count; i++)
+            {
+                LocalTopologyConnectionRuntime localConnection = localConnections[i];
+                localConnectionsByRuntimeId.Add(localConnection.RuntimeId, localConnection);
+                addedConnections++;
+                completedMutation?.Invoke("RuntimeIdentity.LocalConnection.Index." + i.ToString(CultureInfo.InvariantCulture));
+            }
+
+            if (runtimeIds.Count > 0)
+            {
+                AdvanceCensusRevision();
+                revisionAdvanced = true;
+                completedMutation?.Invoke("RuntimeIdentity.LocalTopology.Revision");
+            }
+
+            return true;
+        }
+        catch
         {
-            localConnectionsByRuntimeId.Add(localConnection.RuntimeId, localConnection);
+            if (revisionAdvanced) censusRevision--;
+            for (int i = addedConnections - 1; i >= 0; i--)
+                localConnectionsByRuntimeId.Remove(localConnections[i].RuntimeId);
+            for (int i = addedPlaces - 1; i >= 0; i--)
+                localPlacesByRuntimeId.Remove(localPlaces[i].RuntimeId);
+            throw;
         }
-
-        if (runtimeIds.Count > 0)
-        {
-            AdvanceCensusRevision();
-        }
-
-        return true;
     }
 
     internal int GetCensusCardinality(RuntimeIdentityCensusIndex index)

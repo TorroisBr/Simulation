@@ -8,11 +8,18 @@ public sealed class P10BGeneratedRuinGenesisTests
     private readonly List<GameObject> simulationObjects = new List<GameObject>();
 
     [SetUp]
-    public void SetUp() => SimulationTestFactory.CleanupDefinitions();
+    public void SetUp()
+    {
+        P10BGeneratedRuinGenesis.PublicationStepCompletedForTests = null;
+        P10BGeneratedRuinGenesis.PublicationMutationCompletedForTests = null;
+        SimulationTestFactory.CleanupDefinitions();
+    }
 
     [TearDown]
     public void TearDown()
     {
+        P10BGeneratedRuinGenesis.PublicationStepCompletedForTests = null;
+        P10BGeneratedRuinGenesis.PublicationMutationCompletedForTests = null;
         foreach (GameObject simulationObject in simulationObjects)
             if (simulationObject != null) Object.DestroyImmediate(simulationObject);
         simulationObjects.Clear();
@@ -153,6 +160,63 @@ public sealed class P10BGeneratedRuinGenesisTests
     }
 
     [Test]
+    public void EveryInternalStoreMutationFailureRollsBackThePartialStoreAndEarlierOwners()
+    {
+        PublicationFixture successful = CreatePublicationFixture();
+        var mutationPoints = new List<string>();
+        P10BGeneratedRuinGenesis.PublicationMutationCompletedForTests = mutationPoints.Add;
+        try
+        {
+            Assert.That(P10BGeneratedRuinGenesis.TryCommitPreparedRuin(
+                successful.Prepared, successful.Identity, successful.Network, successful.Sites,
+                successful.Topologies, successful.Authority, successful.Anchors, out string successDiagnostic),
+                Is.True, successDiagnostic);
+        }
+        finally
+        {
+            P10BGeneratedRuinGenesis.PublicationMutationCompletedForTests = null;
+        }
+        Assert.That(mutationPoints, Is.Not.Empty);
+        Assert.That(new HashSet<string>(mutationPoints, System.StringComparer.Ordinal).Count,
+            Is.EqualTo(mutationPoints.Count), "Each mutation boundary must have a unique stable name.");
+
+        foreach (string failedMutation in mutationPoints)
+        {
+            PublicationFixture fixture = CreatePublicationFixture();
+            long identityRevision = fixture.Identity.CensusRevision;
+            long networkRevision = fixture.Network.Revision;
+            long siteRevision = fixture.Sites.Revision;
+            long anchorRevision = fixture.Anchors.Revision;
+            long authorityRevision = fixture.Authority.Revision;
+            bool injected = false;
+            P10BGeneratedRuinGenesis.PublicationMutationCompletedForTests = mutation =>
+            {
+                if (!injected && string.Equals(mutation, failedMutation, System.StringComparison.Ordinal))
+                {
+                    injected = true;
+                    throw new System.InvalidOperationException("Injected partial store failure at " + failedMutation);
+                }
+            };
+            try
+            {
+                Assert.That(P10BGeneratedRuinGenesis.TryCommitPreparedRuin(
+                    fixture.Prepared, fixture.Identity, fixture.Network, fixture.Sites,
+                    fixture.Topologies, fixture.Authority, fixture.Anchors, out string diagnostic),
+                    Is.False, failedMutation);
+                Assert.That(diagnostic, Does.Contain("atomic publication failed"), failedMutation);
+            }
+            finally
+            {
+                P10BGeneratedRuinGenesis.PublicationMutationCompletedForTests = null;
+            }
+
+            Assert.That(injected, Is.True, failedMutation);
+            AssertPublicationUnchanged(fixture, identityRevision, networkRevision, siteRevision, anchorRevision,
+                authorityRevision, failedMutation);
+        }
+    }
+
+    [Test]
     public void DailyAdmissionRejectsP10BBeforeCreatingRuntimeOrSiteStores()
     {
         SimulationConfigData config = CreateP10BConfig();
@@ -221,6 +285,51 @@ public sealed class P10BGeneratedRuinGenesisTests
             LocalTopologyOwnerKind.ExplorableSite, site.RuntimeId, out SpatialLocalTopologyBinding binding), Is.True);
         Assert.That(binding.LocationId, Is.EqualTo(new LocationId(config.authoredLocationId)));
         Assert.That(simulation.Runtime.SpatialAuthorityStore.ValidateInvariants(simulation.Runtime.LocalTopologyStore).IsValid, Is.True);
+    }
+
+    [Test]
+    public void CaptureP10ALegacyCompatibilityGoldenValues()
+    {
+        SimulationConfigData config = CreateP10BConfig();
+        config.genesisProfileContractIdentity = null;
+        config.p10bStableSiteKey = null;
+        TesteSimulacao simulation = CreateSimulation(config, "p10a-compatibility-golden");
+        MethodInfo initialize = typeof(TesteSimulacao).GetMethod("InitializeSimulation", BindingFlags.Instance | BindingFlags.NonPublic);
+        initialize.Invoke(simulation, new object[] { null });
+
+        SimulationGenesisManifest manifest = simulation.Bootstrap.Manifest;
+        ExplorableSiteRuntime site = null;
+        foreach (ExplorableSiteRuntime candidate in simulation.Bootstrap.ExplorableSites.Sites)
+            if (candidate.DefinitionId == config.authoredP10RuinSite.DefinitionId) site = candidate;
+        Assert.That(site, Is.Not.Null);
+        Assert.That(simulation.Runtime.LocalTopologyStore.TryGetTopologyForSemanticOwner(
+            new LocalTopologySemanticOwnerReference(config.authoredP10RuinSite.DefinitionId,
+                new LocationId(config.authoredLocationId)), out LocalTopologyRuntime topology), Is.True);
+        Assert.That(manifest.ContractIdentity, Is.EqualTo("unity-authored-bootstrap/p10-ruin-local-topology-v1"));
+        Assert.That(manifest.StageOrder, Is.EqualTo(new[]
+        {
+            "p9.genesis.resolve-profile/v1",
+            "p9.genesis.authored-world/v1",
+            "p9.genesis.authored-geography/v1",
+            "p9.genesis.authored-actors/v1",
+            "p10.genesis.ruin-local-topology/v1",
+            "p9.genesis.validate-profile/v1",
+            "p9.genesis.publish/v1"
+        }));
+        Assert.That(manifest.CanonicalProvenanceRecords, Has.Count.EqualTo(70));
+        Assert.That(FingerprintRecords(manifest.CanonicalProvenanceRecords),
+            Is.EqualTo("8a0b535243b0c6e28400e89e9dea920db7c77a9424582adbe6aaa694468cf59a"));
+        Assert.That(manifest.Fingerprint,
+            Is.EqualTo("8a0b535243b0c6e28400e89e9dea920db7c77a9424582adbe6aaa694468cf59a"));
+        Assert.That(site.DefinitionId, Is.EqualTo("p10b-test-ruin"));
+        Assert.That(site.RuntimeId, Is.EqualTo("site-000001"));
+        Assert.That(site.SiteInstanceId, Is.EqualTo("site-p10a-legacy-p10b-test-ruin"));
+        Assert.That(site.Location.RuntimeId, Is.EqualTo("location-000001"));
+        Assert.That(topology.Owner.OwnerRuntimeId, Is.EqualTo("site-000001"));
+        Assert.That(topology.Owner.SemanticOwner.LegacyDefinitionId, Is.EqualTo("p10b-test-ruin"));
+        Assert.That(topology.Owner.SemanticOwner.SiteInstanceId, Is.EqualTo("site-p10a-legacy-p10b-test-ruin"));
+        Assert.That(topology.Owner.SemanticOwner.StableKey,
+            Is.EqualTo("28:local-topology/site-owner/v114:p10b-test-ruin22:p10b-selected-location"));
     }
 
     [Test]
@@ -299,6 +408,27 @@ public sealed class P10BGeneratedRuinGenesisTests
         return SimulationGenesisPipeline.CreateFingerprint(config, effective, calendar, out _);
     }
 
+    private static string FingerprintRecords(System.Collections.Generic.IReadOnlyList<string> records)
+    {
+        var bytes = new System.Collections.Generic.List<byte>();
+        foreach (string record in records)
+        {
+            byte[] value = new System.Text.UTF8Encoding(false, true).GetBytes(record ?? string.Empty);
+            bytes.Add((byte)(value.Length >> 24));
+            bytes.Add((byte)(value.Length >> 16));
+            bytes.Add((byte)(value.Length >> 8));
+            bytes.Add((byte)value.Length);
+            bytes.AddRange(value);
+        }
+        using (System.Security.Cryptography.SHA256 sha = System.Security.Cryptography.SHA256.Create())
+        {
+            byte[] hash = sha.ComputeHash(bytes.ToArray());
+            var hex = new System.Text.StringBuilder(hash.Length * 2);
+            foreach (byte value in hash) hex.Append(value.ToString("x2", System.Globalization.CultureInfo.InvariantCulture));
+            return hex.ToString();
+        }
+    }
+
     private TesteSimulacao CreateSimulation(SimulationConfigData config, string name)
     {
         GameObject gameObject = new GameObject(name);
@@ -318,6 +448,68 @@ public sealed class P10BGeneratedRuinGenesisTests
         }
         Assert.Fail("Runtime identity registry omitted its ExplorableSite census section.");
         return -1;
+    }
+
+    private sealed class PublicationFixture
+    {
+        public SimulationConfigData Config;
+        public SpatialAuthorityStore Authority;
+        public RuntimeIdentityRegistry Identity;
+        public SpatialNetworkRuntime Network;
+        public ExplorableSiteStore Sites;
+        public LocalTopologyStore Topologies;
+        public LegacySpatialAnchorBindingStore Anchors;
+        public P10BGeneratedRuinGenesis.PreparedRuin Prepared;
+    }
+
+    private static PublicationFixture CreatePublicationFixture()
+    {
+        var fixture = new PublicationFixture
+        {
+            Config = CreateP10BConfig(),
+            Authority = null,
+            Identity = new RuntimeIdentityRegistry()
+        };
+        fixture.Authority = ComposeGeography(fixture.Config);
+        fixture.Network = new SpatialNetworkRuntime(fixture.Identity);
+        fixture.Sites = new ExplorableSiteStore();
+        fixture.Topologies = new LocalTopologyStore(fixture.Identity);
+        fixture.Anchors = new LegacySpatialAnchorBindingStore(fixture.Authority);
+        fixture.Prepared = P10BGeneratedRuinGenesis.Prepare(
+            fixture.Config, CreateP9Fingerprint(fixture.Config), fixture.Authority, fixture.Identity,
+            out string prepareDiagnostic);
+        Assert.That(fixture.Prepared, Is.Not.Null, prepareDiagnostic);
+        return fixture;
+    }
+
+    private static void AssertPublicationUnchanged(
+        PublicationFixture fixture,
+        long identityRevision,
+        long networkRevision,
+        long siteRevision,
+        long anchorRevision,
+        long authorityRevision,
+        string context)
+    {
+        Assert.That(fixture.Network.LocationCount, Is.Zero, context);
+        Assert.That(fixture.Network.Revision, Is.EqualTo(networkRevision), context);
+        Assert.That(fixture.Sites.Count, Is.Zero, context);
+        Assert.That(fixture.Sites.Revision, Is.EqualTo(siteRevision), context);
+        Assert.That(fixture.Topologies.Topologies, Is.Empty, context);
+        Assert.That(fixture.Prepared.Topology.IsPublished, Is.False, context);
+        Assert.That(fixture.Identity.CensusRevision, Is.EqualTo(identityRevision), context);
+        Assert.That(GetSiteIdentityCardinality(fixture.Identity), Is.Zero, context);
+        Assert.That(fixture.Identity.TryGetLocation(fixture.Prepared.RuntimeLocation.RuntimeId, out _), Is.False, context);
+        Assert.That(fixture.Identity.TryGetExplorableSite(fixture.Prepared.Site.RuntimeId, out _), Is.False, context);
+        foreach (RuinLocalTopologyGeneration.Place place in fixture.Prepared.GeneratedTopology.Places)
+            Assert.That(fixture.Identity.TryGetLocalPlace(place.RuntimeId, out _), Is.False, context);
+        foreach (RuinLocalTopologyGeneration.Connection connection in fixture.Prepared.GeneratedTopology.Connections)
+            Assert.That(fixture.Identity.TryGetLocalConnection(connection.RuntimeId, out _), Is.False, context);
+        Assert.That(fixture.Anchors.Count, Is.Zero, context);
+        Assert.That(fixture.Anchors.Revision, Is.EqualTo(anchorRevision), context);
+        Assert.That(fixture.Authority.TryGetTopologyBinding(LocalTopologyOwnerKind.ExplorableSite,
+            fixture.Prepared.Site.RuntimeId, out _), Is.False, context);
+        Assert.That(fixture.Authority.Revision, Is.EqualTo(authorityRevision), context);
     }
 
     private static void SetField(object target, string name, object value) =>

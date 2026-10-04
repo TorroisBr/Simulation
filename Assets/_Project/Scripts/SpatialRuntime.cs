@@ -97,6 +97,16 @@ public sealed class SpatialNetworkRuntime
 
     public bool RegisterLocation(SpatialLocationRuntime location)
     {
+        return RegisterLocationCore(location, null);
+    }
+
+    internal bool RegisterLocationForP10Genesis(SpatialLocationRuntime location, Action<string> completedMutation)
+    {
+        return RegisterLocationCore(location, completedMutation);
+    }
+
+    private bool RegisterLocationCore(SpatialLocationRuntime location, Action<string> completedMutation)
+    {
         if (location == null)
         {
             logger.LogError("Cannot register spatial location: runtime instance is null.");
@@ -114,15 +124,41 @@ public sealed class SpatialNetworkRuntime
             return false;
         }
 
-        if (identityRegistry.RegisterLocation(location) == false)
+        bool identityRegistered = false;
+        bool networkLocationAdded = false;
+        bool outgoingRoutesAdded = false;
+        bool revisionAdvanced = false;
+        try
         {
-            return false;
-        }
+            bool identityAdded = completedMutation == null
+                ? identityRegistry.RegisterLocation(location)
+                : identityRegistry.RegisterLocationForP10Genesis(location, completedMutation);
+            if (!identityAdded) return false;
+            identityRegistered = true;
+            completedMutation?.Invoke("SpatialNetwork.Location.IdentityRegistered");
 
-        locations.Add(location);
-        outgoingRoutes.Add(location, new List<SpatialRouteRuntime>());
-        revision++;
-        return true;
+            if (!locations.Add(location))
+                throw new InvalidOperationException("Spatial location became registered during genesis publication.");
+            networkLocationAdded = true;
+            completedMutation?.Invoke("SpatialNetwork.Location.NetworkIndex");
+
+            outgoingRoutes.Add(location, new List<SpatialRouteRuntime>());
+            outgoingRoutesAdded = true;
+            completedMutation?.Invoke("SpatialNetwork.Location.OutgoingIndex");
+
+            revision++;
+            revisionAdvanced = true;
+            completedMutation?.Invoke("SpatialNetwork.Location.Revision");
+            return true;
+        }
+        catch
+        {
+            if (revisionAdvanced) revision--;
+            if (outgoingRoutesAdded) outgoingRoutes.Remove(location);
+            if (networkLocationAdded) locations.Remove(location);
+            if (identityRegistered) identityRegistry.RollbackGenesisLocation(location);
+            throw;
+        }
     }
 
     internal void RollbackGenesisLocation(SpatialLocationRuntime location)

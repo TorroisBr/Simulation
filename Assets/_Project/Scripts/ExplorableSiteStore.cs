@@ -21,6 +21,16 @@ public sealed class ExplorableSiteStore : IAuthoritativeMutationGuardBindable
 
     public bool Add(ExplorableSiteRuntime site)
     {
+        return AddCore(site, null);
+    }
+
+    internal bool AddForP10Genesis(ExplorableSiteRuntime site, Action<string> completedMutation)
+    {
+        return AddCore(site, completedMutation);
+    }
+
+    private bool AddCore(ExplorableSiteRuntime site, Action<string> completedMutation)
+    {
         if (!mutationGuardBinding.CanMutate) return false;
 
         if (site == null
@@ -35,10 +45,31 @@ public sealed class ExplorableSiteStore : IAuthoritativeMutationGuardBindable
             return false;
         }
 
-        sitesByRuntimeId.Add(site.RuntimeId, site);
-        sites.Add(site);
-        revision++;
-        return true;
+        bool indexAdded = false;
+        bool listAdded = false;
+        bool revisionAdvanced = false;
+        try
+        {
+            sitesByRuntimeId.Add(site.RuntimeId, site);
+            indexAdded = true;
+            completedMutation?.Invoke("ExplorableSiteStore.RuntimeIndex");
+
+            sites.Add(site);
+            listAdded = true;
+            completedMutation?.Invoke("ExplorableSiteStore.OrderedSites");
+
+            revision++;
+            revisionAdvanced = true;
+            completedMutation?.Invoke("ExplorableSiteStore.Revision");
+            return true;
+        }
+        catch
+        {
+            if (revisionAdvanced) revision--;
+            if (listAdded) sites.RemoveAt(sites.Count - 1);
+            if (indexAdded) sitesByRuntimeId.Remove(site.RuntimeId);
+            throw;
+        }
     }
 
     internal void RollbackGenesisSite(ExplorableSiteRuntime site)

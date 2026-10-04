@@ -1082,6 +1082,22 @@ public sealed class LocalTopologyStore : IAuthoritativeMutationGuardBindable
 
     public bool TryAddTopology(LocalTopologyRuntime topology, out string diagnostic)
     {
+        return TryAddTopologyCore(topology, null, out diagnostic);
+    }
+
+    internal bool TryAddTopologyForP10Genesis(
+        LocalTopologyRuntime topology,
+        Action<string> completedMutation,
+        out string diagnostic)
+    {
+        return TryAddTopologyCore(topology, completedMutation, out diagnostic);
+    }
+
+    private bool TryAddTopologyCore(
+        LocalTopologyRuntime topology,
+        Action<string> completedMutation,
+        out string diagnostic)
+    {
         diagnostic = null;
 
         if (!mutationGuardBinding.CanMutate)
@@ -1152,21 +1168,63 @@ public sealed class LocalTopologyStore : IAuthoritativeMutationGuardBindable
             return false;
         }
 
-        if (identityRegistry.TryRegisterLocalTopologyMembers(
-            topology.Places,
-            topology.Connections,
-            out diagnostic) == false)
+        var orderedSemanticMemberIds = new List<string>(pendingSemanticMemberIds);
+        orderedSemanticMemberIds.Sort(StringComparer.Ordinal);
+        bool identityMembersRegistered = false;
+        bool ownerIndexAdded = false;
+        bool semanticOwnerIndexAdded = false;
+        int semanticIdsAdded = 0;
+        bool topologyListAdded = false;
+        bool markedPublished = false;
+        try
         {
-            return false;
-        }
+            bool registeredMembers = completedMutation == null
+                ? identityRegistry.TryRegisterLocalTopologyMembers(topology.Places, topology.Connections, out diagnostic)
+                : identityRegistry.TryRegisterLocalTopologyMembersForP10Genesis(
+                    topology.Places, topology.Connections, completedMutation, out diagnostic);
+            if (!registeredMembers) return false;
+            identityMembersRegistered = true;
+            completedMutation?.Invoke("LocalTopologyStore.IdentityMembers");
 
-        topologiesByOwnerRuntimeId.Add(owner.OwnerRuntimeId, topology);
-        if (owner.SemanticOwner != null)
-            topologiesBySiteInstanceId.Add(owner.SemanticOwner.SiteInstanceId, topology);
-        foreach (string semanticMemberId in pendingSemanticMemberIds) semanticMemberIds.Add(semanticMemberId);
-        topologies.Add(topology);
-        topology.MarkPublished();
-        return true;
+            topologiesByOwnerRuntimeId.Add(owner.OwnerRuntimeId, topology);
+            ownerIndexAdded = true;
+            completedMutation?.Invoke("LocalTopologyStore.OwnerRuntimeIndex");
+
+            if (owner.SemanticOwner != null)
+            {
+                topologiesBySiteInstanceId.Add(owner.SemanticOwner.SiteInstanceId, topology);
+                semanticOwnerIndexAdded = true;
+                completedMutation?.Invoke("LocalTopologyStore.SiteInstanceIndex");
+            }
+
+            for (int i = 0; i < orderedSemanticMemberIds.Count; i++)
+            {
+                semanticMemberIds.Add(orderedSemanticMemberIds[i]);
+                semanticIdsAdded++;
+                completedMutation?.Invoke("LocalTopologyStore.SemanticMember." + i.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            }
+
+            topologies.Add(topology);
+            topologyListAdded = true;
+            completedMutation?.Invoke("LocalTopologyStore.TopologyList");
+
+            topology.MarkPublished();
+            markedPublished = true;
+            completedMutation?.Invoke("LocalTopologyStore.PublishedState");
+            return true;
+        }
+        catch
+        {
+            if (markedPublished) topology.MarkDraftAfterGenesisRollback();
+            if (topologyListAdded) topologies.RemoveAt(topologies.Count - 1);
+            for (int i = semanticIdsAdded - 1; i >= 0; i--)
+                semanticMemberIds.Remove(orderedSemanticMemberIds[i]);
+            if (semanticOwnerIndexAdded) topologiesBySiteInstanceId.Remove(owner.SemanticOwner.SiteInstanceId);
+            if (ownerIndexAdded) topologiesByOwnerRuntimeId.Remove(owner.OwnerRuntimeId);
+            if (identityMembersRegistered)
+                identityRegistry.RollbackGenesisLocalTopologyMembers(topology.Places, topology.Connections);
+            throw;
+        }
     }
 
     internal void RollbackGenesisTopology(LocalTopologyRuntime topology)
