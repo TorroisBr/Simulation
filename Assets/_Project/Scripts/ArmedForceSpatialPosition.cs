@@ -11,7 +11,15 @@ public enum ArmedForceSpatialFailureCode
     SpatialReferenceNotRegistered = 4,
     RevisionOverflow = 5,
     InvalidInvariant = 6,
-    RuntimeFaulted = 7
+    RuntimeFaulted = 7,
+    MovementProfileNotConfigured = 8,
+    ForceNotSelected = 9,
+    MovementStateStale = 10,
+    MovementRejected = 11,
+    InsufficientCarriedSupply = 12,
+    CrossingAlreadyCommitted = 13,
+    InvalidMovementInput = 14,
+    DirectPositionMutationBlocked = 15
 }
 
 public sealed class ArmedForceSpatialFailure : IEquatable<ArmedForceSpatialFailure>
@@ -76,6 +84,111 @@ public sealed class ArmedForceSpatialPosition
     public string StableKey => ForceId.Value;
 }
 
+/// <summary>Immutable inputs for the bounded one-force, one-passage P16-A profile.</summary>
+public sealed class P16AMilitaryMovementProfile
+{
+    public const string ProfileIdentity = "P16A-MilitaryOneHop";
+    public const string ProfileRevision = "v1";
+    public const string TraversalContextIdentity = "P16A-MilitaryOneHop";
+    public const string TraversalContextRevision = "v1";
+
+    public ArmedForceId SelectedForceId { get; }
+    public string ItemDefinitionId { get; }
+    public string ItemContentRevision { get; }
+    public decimal InitialQuantity { get; }
+    public decimal QuantityPerCrossing { get; }
+
+    public P16AMilitaryMovementProfile(
+        ArmedForceId selectedForceId,
+        string itemDefinitionId,
+        string itemContentRevision,
+        decimal initialQuantity,
+        decimal quantityPerCrossing)
+    {
+        if (selectedForceId == null) throw new ArgumentNullException(nameof(selectedForceId));
+        if (string.IsNullOrWhiteSpace(itemDefinitionId)) throw new ArgumentException("A compatible ItemData.DefinitionId is required.", nameof(itemDefinitionId));
+        if (string.IsNullOrWhiteSpace(itemContentRevision)) throw new ArgumentException("The item content revision is required.", nameof(itemContentRevision));
+        if (initialQuantity <= 0m) throw new ArgumentOutOfRangeException(nameof(initialQuantity));
+        if (quantityPerCrossing <= 0m) throw new ArgumentOutOfRangeException(nameof(quantityPerCrossing));
+        SelectedForceId = selectedForceId;
+        ItemDefinitionId = itemDefinitionId;
+        ItemContentRevision = itemContentRevision;
+        InitialQuantity = initialQuantity;
+        QuantityPerCrossing = quantityPerCrossing;
+    }
+
+    internal TraversalCostContext CreateTraversalContext() =>
+        new TraversalCostContext(TraversalContextIdentity, TraversalContextRevision, 1m, 1m, 1m);
+}
+
+/// <summary>One retained successful crossing; it is also the one-shot receipt guard.</summary>
+public sealed class P16ACrossingReceipt
+{
+    public string OperationId { get; }
+    public string ForceId { get; }
+    public string SourceHexId { get; }
+    public string DestinationHexId { get; }
+    public TraversalOptionRef Option { get; }
+    public TraversalOptionKind OptionKind { get; }
+    public string OptionIdentity { get; }
+    public string OptionContentIdentity { get; }
+    public string OptionContentRevision { get; }
+    public string TraversalContextIdentity { get; }
+    public string TraversalContextRevision { get; }
+    public PassageCondition PassageCondition { get; }
+    public long PassageAuthorityRevision { get; }
+    public long ForceStoreRevision { get; }
+    public long LogicalBoundary { get; }
+    public long AcceptedOrder { get; }
+    public long OwnerRevision { get; }
+    public decimal SupplyDebited { get; }
+
+    internal P16ACrossingReceipt(string operationId, string forceId, string sourceHexId, string destinationHexId,
+        TraversalOptionRef option, string optionContentIdentity, string optionContentRevision,
+        string contextIdentity, string contextRevision, PassageCondition passageCondition,
+        long passageAuthorityRevision, long forceStoreRevision, long logicalBoundary, long acceptedOrder,
+        long ownerRevision, decimal supplyDebited)
+    {
+        OperationId = operationId; ForceId = forceId; SourceHexId = sourceHexId; DestinationHexId = destinationHexId;
+        Option = option;
+        OptionKind = option.Kind;
+        OptionIdentity = option.Kind == TraversalOptionKind.Connection ? "connection:" + option.ConnectionId.Value
+            : option.Kind == TraversalOptionKind.Crossing ? "crossing:" + option.CrossingId.Value
+            : "wilderness:" + option.RuleIdentity + ":" + option.RuleVersion;
+        OptionContentIdentity = optionContentIdentity; OptionContentRevision = optionContentRevision;
+        TraversalContextIdentity = contextIdentity; TraversalContextRevision = contextRevision;
+        PassageCondition = passageCondition; PassageAuthorityRevision = passageAuthorityRevision;
+        ForceStoreRevision = forceStoreRevision; LogicalBoundary = logicalBoundary; AcceptedOrder = acceptedOrder;
+        OwnerRevision = ownerRevision; SupplyDebited = supplyDebited;
+    }
+}
+
+/// <summary>Exact immutable P16-A semantic-state export and staged-hydration validation input.</summary>
+public sealed class P16AStateSnapshot
+{
+    public string ProfileIdentity => P16AMilitaryMovementProfile.ProfileIdentity;
+    public string ProfileRevision => P16AMilitaryMovementProfile.ProfileRevision;
+    public string ForceId { get; }
+    public string PositionStableKey { get; }
+    public string ItemDefinitionId { get; }
+    public string ItemContentRevision { get; }
+    public decimal InitialQuantity { get; }
+    public decimal QuantityPerCrossing { get; }
+    public decimal CurrentQuantity { get; }
+    public P16ACrossingReceipt Receipt { get; }
+    public long OwnerRevision { get; }
+
+    public P16AStateSnapshot(string forceId, string positionStableKey, string itemDefinitionId,
+        string itemContentRevision, decimal initialQuantity, decimal quantityPerCrossing,
+        decimal currentQuantity, P16ACrossingReceipt receipt, long ownerRevision)
+    {
+        ForceId = forceId; PositionStableKey = positionStableKey; ItemDefinitionId = itemDefinitionId;
+        ItemContentRevision = itemContentRevision; InitialQuantity = initialQuantity;
+        QuantityPerCrossing = quantityPerCrossing; CurrentQuantity = currentQuantity;
+        Receipt = receipt; OwnerRevision = ownerRevision;
+    }
+}
+
 public sealed class ArmedForceSpatialInvariantReport
 {
     public IReadOnlyList<string> Violations { get; }
@@ -95,7 +208,8 @@ public sealed class ArmedForceSpatialInvariantReport
 /// Authoritative optional current physical position for ArmedForce identities.
 /// It is deliberately separate from force identity, hierarchy, detachment,
 /// composition, lifecycle, and the legacy OperationalLocationReference shim.
-/// This store performs no movement, battle, war, or daily processing.
+/// P16-A adds a selected-profile carried item and one atomic single-passage mutation;
+/// ordinary stores preserve their existing initialization/spatial behavior.
 /// </summary>
 public sealed class ArmedForceSpatialStateStore : IAuthoritativeMutationGuardBindable
 {
@@ -103,8 +217,9 @@ public sealed class ArmedForceSpatialStateStore : IAuthoritativeMutationGuardBin
     private readonly ArmedForceStore armedForceStore;
     private readonly SpatialAuthorityStore spatialAuthorityStore;
     private readonly LocalTopologyStore localTopologyStore;
-    private readonly Dictionary<string, SpatialReference> positionsByForceId =
-        new Dictionary<string, SpatialReference>(StringComparer.Ordinal);
+    private readonly Dictionary<string, OperationalRecord> recordsByForceId =
+        new Dictionary<string, OperationalRecord>(StringComparer.Ordinal);
+    private P16AMilitaryMovementProfile p16Profile;
     private long revision;
 
     public ArmedForceSpatialStateStore(
@@ -117,20 +232,244 @@ public sealed class ArmedForceSpatialStateStore : IAuthoritativeMutationGuardBin
         this.localTopologyStore = localTopologyStore;
     }
 
+    /// <summary>
+    /// Creates the separate P16-A proving owner with its authored initial force
+    /// position and carried item before publication into a runtime profile.
+    /// </summary>
+    public static bool TryCreateP16A(
+        ArmedForceStore armedForceStore,
+        SpatialAuthorityStore spatialAuthorityStore,
+        ArmedForceId selectedForceId,
+        HexId initialHexId,
+        string itemDefinitionId,
+        string itemContentRevision,
+        decimal initialQuantity,
+        decimal quantityPerCrossing,
+        out ArmedForceSpatialStateStore store,
+        out ArmedForceSpatialFailure failure)
+    {
+        store = null;
+        if (armedForceStore == null || spatialAuthorityStore == null || selectedForceId == null
+            || initialHexId == null || string.IsNullOrWhiteSpace(itemDefinitionId)
+            || string.IsNullOrWhiteSpace(itemContentRevision) || initialQuantity <= 0m || quantityPerCrossing <= 0m)
+            return Fail(ArmedForceSpatialFailureCode.InvalidMovementInput,
+                "P16-A initial truth requires one active force, registered Hex, compatible item revision, and positive finite stock/debit.", out failure);
+
+        if (!armedForceStore.TryGet(selectedForceId, out ArmedForceRecord force))
+            return Fail(ArmedForceSpatialFailureCode.ForceNotRegistered, "The selected P16-A ArmedForceId is not registered.", out failure);
+        if (!force.IsActive)
+            return Fail(ArmedForceSpatialFailureCode.ForceTerminated, "The selected P16-A ArmedForce must be active.", out failure);
+        if (!spatialAuthorityStore.TryGet(initialHexId, out _))
+            return Fail(ArmedForceSpatialFailureCode.SpatialReferenceNotRegistered,
+                "The P16-A initial Hex is not registered.", out failure);
+
+        P16AMilitaryMovementProfile profile;
+        try
+        {
+            profile = new P16AMilitaryMovementProfile(selectedForceId, itemDefinitionId,
+                itemContentRevision, initialQuantity, quantityPerCrossing);
+        }
+        catch (ArgumentException)
+        {
+            return Fail(ArmedForceSpatialFailureCode.InvalidMovementInput, "The P16-A profile inputs are invalid.", out failure);
+        }
+
+        store = new ArmedForceSpatialStateStore(armedForceStore, spatialAuthorityStore);
+        store.p16Profile = profile;
+        store.recordsByForceId.Add(selectedForceId.Value,
+            new OperationalRecord(SpatialReference.ForHex(initialHexId), initialQuantity, null));
+        failure = ArmedForceSpatialFailure.None;
+        return true;
+    }
+
+    /// <summary>Performs the profile's only successful crossing, consuming carried supply atomically.</summary>
+    public bool TryExecuteP16ACrossing(
+        ArmedForceId forceId,
+        HexId sourceHexId,
+        HexId destinationHexId,
+        TraversalOptionRef option,
+        TraversalCostContext context,
+        string operationId,
+        long expectedOwnerRevision,
+        long expectedForceStoreRevision,
+        long expectedPassageAuthorityRevision,
+        long logicalBoundary,
+        long acceptedOrder,
+        out P16ACrossingReceipt receipt,
+        out ArmedForceSpatialFailure failure)
+    {
+        receipt = null;
+        if (!mutationGuardBinding.CanMutate)
+            return Fail(ArmedForceSpatialFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.", out failure);
+        if (p16Profile == null)
+            return Fail(ArmedForceSpatialFailureCode.MovementProfileNotConfigured, "This owner has no P16-A proving profile.", out failure);
+        if (forceId == null)
+            return Fail(ArmedForceSpatialFailureCode.InvalidMovementInput, "A selected ArmedForceId is required.", out failure);
+        if (!armedForceStore.TryGet(forceId, out _))
+            return Fail(ArmedForceSpatialFailureCode.ForceNotRegistered, "The movement ArmedForceId is not registered.", out failure);
+        if (forceId != p16Profile.SelectedForceId)
+            return Fail(ArmedForceSpatialFailureCode.ForceNotSelected, "The P16-A profile binds exactly one selected ArmedForceId.", out failure);
+        if (TryResolveActiveForce(forceId, out failure) == false) return false;
+        if (string.IsNullOrWhiteSpace(operationId) || sourceHexId == null || destinationHexId == null
+            || option == null || context == null || logicalBoundary < 0 || acceptedOrder < 0
+            || !IsP16AContext(context))
+            return Fail(ArmedForceSpatialFailureCode.InvalidMovementInput,
+                "Movement requires a stable operation, adjacent Hex endpoints, explicit option, fixed P16-A context, and nonnegative boundary/order.", out failure);
+        if (expectedOwnerRevision != revision || expectedForceStoreRevision != armedForceStore.Revision
+            || expectedPassageAuthorityRevision != spatialAuthorityStore.Revision)
+            return Fail(ArmedForceSpatialFailureCode.MovementStateStale,
+                "A force, spatial owner, or passage revision changed before execution.", out failure);
+        if (!recordsByForceId.TryGetValue(forceId.Value, out OperationalRecord current)
+            || current.Position == null || current.Position.Kind != SpatialReferenceKind.Hex
+            || current.Position.HexId != sourceHexId)
+            return Fail(ArmedForceSpatialFailureCode.MovementStateStale,
+                "The selected force is not at the exact expected source Hex.", out failure);
+        if (current.Receipt != null)
+            return Fail(ArmedForceSpatialFailureCode.CrossingAlreadyCommitted,
+                "The selected P16-A profile already committed its one successful crossing.", out failure);
+        if (!spatialAuthorityStore.TryGet(sourceHexId, out _) || !spatialAuthorityStore.TryGet(destinationHexId, out _))
+            return Fail(ArmedForceSpatialFailureCode.SpatialReferenceNotRegistered,
+                "Both P16-A endpoints must be registered Hexes.", out failure);
+
+        HexBoundaryKey boundary = new HexBoundaryKey(sourceHexId, destinationHexId);
+        if (!TryGetPassageOption(boundary, option, out PassageOptionState optionState))
+            return Fail(ArmedForceSpatialFailureCode.MovementRejected,
+                "The selected passage option is not registered on this endpoint boundary.", out failure);
+        if (!spatialAuthorityStore.PassageAuthority.TryEvaluatePassage(sourceHexId, destinationHexId,
+                option, context, out PassageEvaluation evaluation, out SpatialAuthorityFailure passageFailure))
+            return Fail(ArmedForceSpatialFailureCode.MovementRejected,
+                "P8 rejected the passage evaluation.", out failure, passageFailure);
+        if (!evaluation.IsAvailable)
+            return Fail(ArmedForceSpatialFailureCode.MovementRejected,
+                "P8 reports the selected passage blocked or closed.", out failure);
+        if (current.Supply < p16Profile.QuantityPerCrossing)
+            return Fail(ArmedForceSpatialFailureCode.InsufficientCarriedSupply,
+                "The force does not carry enough of its compatible P16-A item.", out failure);
+        if (CanAdvanceRevision(out failure) == false) return false;
+
+        // Revalidate all effective inputs immediately before the single owner replacement.
+        if (expectedOwnerRevision != revision || expectedForceStoreRevision != armedForceStore.Revision
+            || expectedPassageAuthorityRevision != spatialAuthorityStore.Revision
+            || !TryGetPassageOption(boundary, option, out PassageOptionState currentOption)
+            || currentOption.ContentIdentity != optionState.ContentIdentity
+            || currentOption.ContentRevision != optionState.ContentRevision
+            || currentOption.Condition != evaluation.Condition
+            || !spatialAuthorityStore.PassageAuthority.TryEvaluatePassage(sourceHexId, destinationHexId,
+                option, context, out PassageEvaluation confirmed, out _)
+            || !confirmed.IsAvailable)
+            return Fail(ArmedForceSpatialFailureCode.MovementStateStale,
+                "Force, owner, or passage facts changed during movement preparation.", out failure);
+
+        decimal nextQuantity = current.Supply - p16Profile.QuantityPerCrossing;
+        long nextRevision = revision + 1L;
+        P16ACrossingReceipt committed = new P16ACrossingReceipt(operationId, forceId.Value,
+            sourceHexId.Value, destinationHexId.Value, option, optionState.ContentIdentity,
+            optionState.ContentRevision, context.MovementProfileIdentity, context.MovementProfileRevision,
+            evaluation.Condition, expectedPassageAuthorityRevision, expectedForceStoreRevision,
+            logicalBoundary, acceptedOrder, nextRevision, p16Profile.QuantityPerCrossing);
+        recordsByForceId[forceId.Value] = new OperationalRecord(
+            SpatialReference.ForHex(destinationHexId), nextQuantity, committed);
+        revision = nextRevision;
+        receipt = committed;
+        failure = ArmedForceSpatialFailure.None;
+        return true;
+    }
+
+    public P16AStateSnapshot CaptureP16AState()
+    {
+        if (p16Profile == null) return null;
+        recordsByForceId.TryGetValue(p16Profile.SelectedForceId.Value, out OperationalRecord record);
+        if (record == null) return null;
+        return new P16AStateSnapshot(p16Profile.SelectedForceId.Value, record.Position?.StableKey,
+            p16Profile.ItemDefinitionId, p16Profile.ItemContentRevision, p16Profile.InitialQuantity,
+            p16Profile.QuantityPerCrossing, record.Supply, record.Receipt, revision);
+    }
+
+    /// <summary>Pure relationship/invariant seam for future exact staged hydration.</summary>
+    public static bool ValidateP16AStateForHydration(
+        P16AStateSnapshot state,
+        ArmedForceStore armedForceStore,
+        SpatialAuthorityStore spatialAuthorityStore,
+        out string diagnostic)
+    {
+        diagnostic = string.Empty;
+        if (state == null || armedForceStore == null || spatialAuthorityStore == null
+            || string.IsNullOrWhiteSpace(state.ForceId) || string.IsNullOrWhiteSpace(state.ItemDefinitionId)
+            || string.IsNullOrWhiteSpace(state.ItemContentRevision) || state.InitialQuantity <= 0m
+            || state.QuantityPerCrossing <= 0m || state.CurrentQuantity < 0m || state.CurrentQuantity > state.InitialQuantity
+            || state.OwnerRevision < 0)
+        { diagnostic = "P16-A staged state has invalid identities, quantities, or revision."; return false; }
+        if (!armedForceStore.TryGet(new ArmedForceId(state.ForceId), out ArmedForceRecord force) || !force.IsActive)
+        { diagnostic = "P16-A staged state does not resolve to an active ArmedForce."; return false; }
+        if (string.IsNullOrWhiteSpace(state.PositionStableKey) || !state.PositionStableKey.StartsWith("hex:", StringComparison.Ordinal)
+            || !spatialAuthorityStore.TryGet(new HexId(state.PositionStableKey.Substring("hex:".Length)), out _))
+        { diagnostic = "P16-A staged state position does not resolve to a registered Hex."; return false; }
+        if (state.Receipt == null)
+        {
+            if (state.CurrentQuantity != state.InitialQuantity)
+            { diagnostic = "Unmoved P16-A staged state must retain its authored stock."; return false; }
+        }
+        else if (string.IsNullOrWhiteSpace(state.Receipt.OperationId)
+            || state.Receipt.ForceId != state.ForceId || state.Receipt.OwnerRevision <= 0
+            || state.Receipt.OwnerRevision > state.OwnerRevision
+            || state.Receipt.ForceStoreRevision < 0 || state.Receipt.ForceStoreRevision > armedForceStore.Revision
+            || state.Receipt.LogicalBoundary < 0 || state.Receipt.AcceptedOrder < 0
+            || state.Receipt.SupplyDebited != state.QuantityPerCrossing
+            || state.CurrentQuantity != state.InitialQuantity - state.QuantityPerCrossing
+            || state.Receipt.SourceHexId == state.Receipt.DestinationHexId
+            || state.PositionStableKey != "hex:" + state.Receipt.DestinationHexId
+            || state.Receipt.Option == null
+            || !Enum.IsDefined(typeof(TraversalOptionKind), state.Receipt.OptionKind)
+            || state.Receipt.Option.Kind != state.Receipt.OptionKind
+            || state.Receipt.TraversalContextIdentity != P16AMilitaryMovementProfile.TraversalContextIdentity
+            || state.Receipt.TraversalContextRevision != P16AMilitaryMovementProfile.TraversalContextRevision
+            || state.Receipt.PassageAuthorityRevision > spatialAuthorityStore.Revision
+            || !spatialAuthorityStore.TryGetGeometricBoundary(new HexId(state.Receipt.SourceHexId),
+                new HexId(state.Receipt.DestinationHexId), out HexBoundaryKey receiptBoundary, out _)
+            || !HasPassageReceiptRelationship(spatialAuthorityStore, receiptBoundary, state.Receipt)
+            || !spatialAuthorityStore.TryGet(new HexId(state.Receipt.DestinationHexId), out _))
+        { diagnostic = "P16-A staged receipt relationships or committed quantities are inconsistent."; return false; }
+        return true;
+    }
+
     public ArmedForceStore ArmedForceStore => armedForceStore;
     public SpatialAuthorityStore SpatialAuthorityStore => spatialAuthorityStore;
     public LocalTopologyStore LocalTopologyStore => localTopologyStore;
     public long Revision => revision;
-    public int Count => positionsByForceId.Count;
+    public int Count
+    {
+        get { int count = 0; foreach (OperationalRecord record in recordsByForceId.Values) if (record.Position != null) count++; return count; }
+    }
+
+    public P16AMilitaryMovementProfile P16Profile => p16Profile;
+    public decimal? P16CurrentQuantity
+    {
+        get
+        {
+            if (p16Profile == null || !recordsByForceId.TryGetValue(p16Profile.SelectedForceId.Value, out OperationalRecord record))
+                return null;
+            return record.Supply;
+        }
+    }
+    public P16ACrossingReceipt P16Receipt
+    {
+        get
+        {
+            if (p16Profile == null || !recordsByForceId.TryGetValue(p16Profile.SelectedForceId.Value, out OperationalRecord record))
+                return null;
+            return record.Receipt;
+        }
+    }
 
     public IReadOnlyList<ArmedForceSpatialPosition> Positions
     {
         get
         {
             List<ArmedForceSpatialPosition> result = new List<ArmedForceSpatialPosition>();
-            foreach (KeyValuePair<string, SpatialReference> entry in positionsByForceId)
+            foreach (KeyValuePair<string, OperationalRecord> entry in recordsByForceId)
             {
-                result.Add(new ArmedForceSpatialPosition(new ArmedForceId(entry.Key), entry.Value));
+                if (entry.Value.Position != null)
+                    result.Add(new ArmedForceSpatialPosition(new ArmedForceId(entry.Key), entry.Value.Position));
             }
 
             result.Sort((left, right) => StringComparer.Ordinal.Compare(left.StableKey, right.StableKey));
@@ -141,7 +480,9 @@ public sealed class ArmedForceSpatialStateStore : IAuthoritativeMutationGuardBin
     public bool TryGetPosition(ArmedForceId forceId, out SpatialReference position)
     {
         position = null;
-        return forceId != null && positionsByForceId.TryGetValue(forceId.Value, out position);
+        if (forceId != null && recordsByForceId.TryGetValue(forceId.Value, out OperationalRecord record))
+        { position = record.Position; return position != null; }
+        return false;
     }
 
     public bool TrySetPosition(
@@ -162,13 +503,17 @@ public sealed class ArmedForceSpatialStateStore : IAuthoritativeMutationGuardBin
             return false;
         }
 
+        if (p16Profile != null && p16Profile.SelectedForceId == forceId)
+            return Fail(ArmedForceSpatialFailureCode.DirectPositionMutationBlocked,
+                "The selected P16-A force can only relocate through its military crossing authority.", out failure);
+
         if (TryResolvePosition(position, out failure) == false)
         {
             return false;
         }
 
-        if (positionsByForceId.TryGetValue(forceId.Value, out SpatialReference current)
-            && current.Equals(position))
+        if (recordsByForceId.TryGetValue(forceId.Value, out OperationalRecord currentRecord)
+            && currentRecord.Position != null && currentRecord.Position.Equals(position))
         {
             failure = ArmedForceSpatialFailure.None;
             return true;
@@ -179,7 +524,7 @@ public sealed class ArmedForceSpatialStateStore : IAuthoritativeMutationGuardBin
             return false;
         }
 
-        positionsByForceId[forceId.Value] = position;
+        recordsByForceId[forceId.Value] = new OperationalRecord(position, currentRecord?.Supply ?? 0m, currentRecord?.Receipt);
         revision++;
         failure = ArmedForceSpatialFailure.None;
         return true;
@@ -202,7 +547,11 @@ public sealed class ArmedForceSpatialStateStore : IAuthoritativeMutationGuardBin
             return false;
         }
 
-        if (positionsByForceId.ContainsKey(forceId.Value) == false)
+        if (p16Profile != null && p16Profile.SelectedForceId == forceId)
+            return Fail(ArmedForceSpatialFailureCode.DirectPositionMutationBlocked,
+                "The selected P16-A force position is retained by its crossing state.", out failure);
+
+        if (!recordsByForceId.TryGetValue(forceId.Value, out OperationalRecord record) || record.Position == null)
         {
             failure = ArmedForceSpatialFailure.None;
             return true;
@@ -213,7 +562,7 @@ public sealed class ArmedForceSpatialStateStore : IAuthoritativeMutationGuardBin
             return false;
         }
 
-        positionsByForceId.Remove(forceId.Value);
+        recordsByForceId.Remove(forceId.Value);
         revision++;
         failure = ArmedForceSpatialFailure.None;
         return true;
@@ -242,11 +591,13 @@ public sealed class ArmedForceSpatialStateStore : IAuthoritativeMutationGuardBin
             return false;
         }
 
-        if (positionsByForceId.TryGetValue(forceId.Value, out SpatialReference currentPosition) == false)
+        if (!recordsByForceId.TryGetValue(forceId.Value, out OperationalRecord currentRecord)
+            || currentRecord.Position == null)
         {
             failure = ArmedForceSpatialFailure.None;
             return true;
         }
+        SpatialReference currentPosition = currentRecord.Position;
 
         if (TryResolvePosition(currentPosition, out failure, "Current spatial position") == false)
         {
@@ -297,7 +648,7 @@ public sealed class ArmedForceSpatialStateStore : IAuthoritativeMutationGuardBin
     public ArmedForceSpatialInvariantReport ValidateInvariants()
     {
         List<string> violations = new List<string>();
-        foreach (KeyValuePair<string, SpatialReference> entry in positionsByForceId)
+        foreach (KeyValuePair<string, OperationalRecord> entry in recordsByForceId)
         {
             if (string.IsNullOrWhiteSpace(entry.Key))
             {
@@ -311,10 +662,28 @@ public sealed class ArmedForceSpatialStateStore : IAuthoritativeMutationGuardBin
                 violations.Add("ArmedForce spatial position references a missing force: " + entry.Key + ".");
             }
 
-            if (TryResolvePosition(entry.Value, out ArmedForceSpatialFailure failure) == false)
+            if (entry.Value == null)
+            {
+                violations.Add("ArmedForce spatial operational record is null for " + entry.Key + ".");
+                continue;
+            }
+            if (entry.Value.Position != null
+                && TryResolvePosition(entry.Value.Position, out ArmedForceSpatialFailure failure) == false)
             {
                 violations.Add("ArmedForce spatial position is unresolved for " + entry.Key + ": " + failure + ".");
             }
+        }
+
+        if (p16Profile != null)
+        {
+            if (!armedForceStore.TryGet(p16Profile.SelectedForceId, out ArmedForceRecord selected) || !selected.IsActive)
+                violations.Add("P16-A selected force is absent or terminated.");
+            if (!recordsByForceId.TryGetValue(p16Profile.SelectedForceId.Value, out OperationalRecord selectedRecord)
+                || selectedRecord.Position == null || selectedRecord.Position.Kind != SpatialReferenceKind.Hex)
+                violations.Add("P16-A selected force must retain a factual Hex position.");
+            P16AStateSnapshot state = CaptureP16AState();
+            if (!ValidateP16AStateForHydration(state, armedForceStore, spatialAuthorityStore, out string diagnostic))
+                violations.Add("P16-A state is invalid: " + diagnostic);
         }
 
         return new ArmedForceSpatialInvariantReport(violations);
@@ -332,7 +701,8 @@ public sealed class ArmedForceSpatialStateStore : IAuthoritativeMutationGuardBin
             targetArmedForceStore,
             targetSpatialAuthorityStore,
             targetLocalTopologyStore);
-        foreach (KeyValuePair<string, SpatialReference> entry in positionsByForceId)
+        copy.revision = revision;
+        foreach (KeyValuePair<string, OperationalRecord> entry in recordsByForceId)
         {
             if (targetArmedForceStore.TryGet(new ArmedForceId(entry.Key), out _) == false)
             {
@@ -341,21 +711,29 @@ public sealed class ArmedForceSpatialStateStore : IAuthoritativeMutationGuardBin
                     nameof(targetArmedForceStore));
             }
 
-            if (targetSpatialAuthorityStore.TryResolve(
-                    entry.Value,
-                    targetLocalTopologyStore,
-                    out _,
-                    out SpatialAuthorityFailure failure) == false)
+            if (entry.Value.Position != null && targetSpatialAuthorityStore.TryResolve(
+                    entry.Value.Position, targetLocalTopologyStore, out _, out SpatialAuthorityFailure failure) == false)
             {
                 throw new ArgumentException(
                     "The ArmedForce spatial state references an area absent from the target spatial authority: " + failure,
                     nameof(targetSpatialAuthorityStore));
             }
 
-            copy.positionsByForceId.Add(entry.Key, entry.Value);
+            copy.recordsByForceId.Add(entry.Key, new OperationalRecord(
+                entry.Value.Position, entry.Value.Supply, entry.Value.Receipt));
         }
 
-        copy.revision = revision;
+        if (p16Profile != null)
+        {
+            copy.p16Profile = new P16AMilitaryMovementProfile(
+                new ArmedForceId(p16Profile.SelectedForceId.Value), p16Profile.ItemDefinitionId,
+                p16Profile.ItemContentRevision, p16Profile.InitialQuantity, p16Profile.QuantityPerCrossing);
+            if (!ValidateP16AStateForHydration(copy.CaptureP16AState(), targetArmedForceStore,
+                    targetSpatialAuthorityStore, out string diagnostic))
+                throw new ArgumentException("The P16-A state is inconsistent with the target clone graph: " + diagnostic,
+                    nameof(targetArmedForceStore));
+        }
+
         return copy;
     }
 
@@ -381,6 +759,46 @@ public sealed class ArmedForceSpatialStateStore : IAuthoritativeMutationGuardBin
 
         failure = ArmedForceSpatialFailure.None;
         return true;
+    }
+
+    private bool TryGetPassageOption(HexBoundaryKey boundary, TraversalOptionRef option, out PassageOptionState state)
+    {
+        foreach (PassageOptionState candidate in spatialAuthorityStore.PassageAuthority.OptionStates)
+        {
+            if (candidate.Boundary.Equals(boundary) && candidate.Option.Equals(option))
+            { state = candidate; return true; }
+        }
+        state = null;
+        return false;
+    }
+
+    private static bool HasPassageReceiptRelationship(
+        SpatialAuthorityStore authority,
+        HexBoundaryKey boundary,
+        P16ACrossingReceipt receipt)
+    {
+        foreach (PassageOptionState state in authority.PassageAuthority.OptionStates)
+        {
+            if (state.Boundary.Equals(boundary) && state.Option.Equals(receipt.Option))
+                return state.ContentIdentity == receipt.OptionContentIdentity
+                    && state.ContentRevision == receipt.OptionContentRevision;
+        }
+        return false;
+    }
+
+    private static bool IsP16AContext(TraversalCostContext context) =>
+        context.MovementProfileIdentity == P16AMilitaryMovementProfile.TraversalContextIdentity
+        && context.MovementProfileRevision == P16AMilitaryMovementProfile.TraversalContextRevision
+        && context.EffortPerDistanceUnit == 1m && context.TerrainEffortMultiplier == 1m
+        && context.ImpairedPassageEffortMultiplier == 1m;
+
+    private sealed class OperationalRecord
+    {
+        public SpatialReference Position { get; }
+        public decimal Supply { get; }
+        public P16ACrossingReceipt Receipt { get; }
+        public OperationalRecord(SpatialReference position, decimal supply, P16ACrossingReceipt receipt)
+        { Position = position; Supply = supply; Receipt = receipt; }
     }
 
     private bool TryResolvePosition(
