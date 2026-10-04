@@ -246,8 +246,3 @@ public static class RuinLocalTopologyGeneration
     private static string Require(string value, string name)
     { if (string.IsNullOrWhiteSpace(value)) throw new ArgumentException("Value is required.", name); StrictUtf8.GetByteCount(value); return value; }
 }
-
-
-
-
-
