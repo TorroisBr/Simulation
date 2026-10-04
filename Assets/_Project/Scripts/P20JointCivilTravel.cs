@@ -536,3 +536,24 @@ public sealed class P20JointCivilTravelOwner
             owner.TryPrepareTerminal(instance, terminal, kind, instant, disposition, out prepared);
     }
 }
+
+/// <summary>Explicitly inventories P20-B state that the P12 daily profile cannot admit.</summary>
+public sealed class P20JointCivilTravelDailyProfileCensusProvider : IOwnerSectionCensusProvider
+{
+    public const string SectionId = "p12f.p20-joint-civil-travel";
+    public const int SchemaVersion = 1;
+    private static readonly object AbsentOwnerIdentity = new object();
+    private readonly P20JointCivilTravelOwner owner;
+
+    public P20JointCivilTravelDailyProfileCensusProvider(P20JointCivilTravelOwner owner)
+    {
+        this.owner = owner;
+    }
+
+    public OwnerSectionCensusWitness GetCurrentCensus()
+    {
+        int count = owner?.InstanceCount ?? 0;
+        return new OwnerSectionCensusWitness(SectionId, SchemaVersion,
+            (object)owner ?? AbsentOwnerIdentity, count, count);
+    }
+}

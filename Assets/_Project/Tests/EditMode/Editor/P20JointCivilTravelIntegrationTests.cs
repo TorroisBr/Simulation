@@ -5,6 +5,46 @@ using NUnit.Framework;
 
 public sealed class P20JointCivilTravelIntegrationTests
 {
+    [Test]
+    public void DailyProfileExplicitlyAcceptsEmptyP20OwnerInventory()
+    {
+        Fixture fixture = new Fixture();
+        ActivityLifecycleComposition composition = new ActivityLifecycleComposition(
+            new ActivityLifecycleStore("p20-daily-empty-world"),
+            new SimulationCalendar(new CalendarDefinition(2, 2, 3)),
+            new LogicalTick(0));
+        P20JointCivilTravelOwner owner = new P20JointCivilTravelOwner(composition, fixture.Travel,
+            person => fixture.Contexts[person.Value]);
+        SimulationRuntime runtime = new SimulationRuntime(new SimulationTime(), null, null,
+            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            p20JointCivilTravelOwner: owner);
+
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure failure), Is.True,
+            failure.ToString());
+    }
+
+    [Test]
+    public void DailyProfileRejectsNonemptyP20JointTravelOwnerInventory()
+    {
+        Fixture fixture = new Fixture();
+        ActivityLifecycleComposition composition = new ActivityLifecycleComposition(
+            new ActivityLifecycleStore("p20-daily-nonempty-world"),
+            new SimulationCalendar(new CalendarDefinition(2, 2, 3)),
+            new LogicalTick(0));
+        P20JointCivilTravelOwner owner = new P20JointCivilTravelOwner(composition, fixture.Travel,
+            person => fixture.Contexts[person.Value]);
+        Assert.That(owner.TryCreate(new ActivityDefinition(P20JointCivilTravelOwner.ActivityDefinitionId, "v1"),
+            "p20-daily-nonempty-proposal", fixture.Segment.StableKey, new LogicalTick(1),
+            new[] { "person-a", "person-b" }, out _, out ActivityFailure createFailure), Is.True,
+            createFailure.ToString());
+        InvalidOperationException failure = Assert.Throws<InvalidOperationException>(() =>
+            new SimulationRuntime(new SimulationTime(), null, null,
+                runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+                p20JointCivilTravelOwner: owner));
+
+        Assert.That(failure.Message, Does.Contain("could not bind"));
+    }
+
     [TestCase(false, ActivityLifecycleState.Completed, P20JointCivilTravelState.Completed)]
     [TestCase(true, ActivityLifecycleState.Interrupted, P20JointCivilTravelState.Interrupted)]
     public void SecondArrivalAtomicallyTerminatesSharedActivityAfterIndividualTravel(

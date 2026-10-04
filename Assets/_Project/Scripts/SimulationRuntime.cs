@@ -335,6 +335,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
     private readonly SimulationRecordSequence simulationRecordSequence;
     private readonly SimulationRecordSequenceCensusProvider simulationRecordSequenceCensusProvider;
     private readonly RuntimeIdAllocator runtimeIdAllocator;
+    private readonly P20JointCivilTravelOwner p20JointCivilTravelOwner;
     private readonly IOwnerSectionCensusProvider runtimeIdAllocatorEventCounterCensusProvider;
     private readonly IOwnerSectionCensusProvider runtimeIdAllocatorDecisionCounterCensusProvider;
     private ScheduledDirectiveCensusProvider scheduledDirectiveCensusProvider;
@@ -375,6 +376,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
     private IReadOnlyList<IOwnerSectionCensusProvider> cityNpcPresenceCensusProviders =
         Array.AsReadOnly(new IOwnerSectionCensusProvider[0]);
     private TravelPartyCensusProvider travelPartyCensusProvider;
+    private P20JointCivilTravelDailyProfileCensusProvider p20JointCivilTravelDailyProfileCensusProvider;
     private P12NpcOwnerMutationBinding travelPartyStoreMutationBinding;
     private volatile NpcMembershipCensusContext activeNpcMembershipCensusContext;
     private volatile P12MerchantOperationContext activeP12MerchantOperationContext;
@@ -668,9 +670,11 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         SimulationRuntimeAdmissionContext runtimeAdmissionContext = null,
         SimulationRecordSequence recordSequence = null,
         WorldId worldId = null,
-        RuntimeIdAllocator runtimeIdAllocator = null)
+        RuntimeIdAllocator runtimeIdAllocator = null,
+        P20JointCivilTravelOwner p20JointCivilTravelOwner = null)
     {
         WorldId = worldId;
+        this.p20JointCivilTravelOwner = p20JointCivilTravelOwner;
         if (runtimeAdmissionContext != null)
         {
             if (p18dIntradayProfile != null)
@@ -1285,6 +1289,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             || (runtimeAdmissionContext != null
                 && !TryRegisterTravelPartyCensusProvider(protocol))
             || (runtimeAdmissionContext != null
+                && !TryRegisterP20JointCivilTravelCensusProvider(protocol, this.p20JointCivilTravelOwner))
+            || (runtimeAdmissionContext != null
                 && !TryRegisterCityNpcPresenceCensusProviders(protocol))
             || (runtimeAdmissionContext != null && !TryRegisterCityMarketCensusProviders(protocol))
             || !protocol.SealExpectedSectionInventory(out _)
@@ -1729,6 +1735,46 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             }
 
             travelPartyCensusProvider = provider;
+            return true;
+        }
+        catch
+        {
+            protocol.FaultClosed();
+            return false;
+        }
+    }
+
+    private bool TryRegisterP20JointCivilTravelCensusProvider(
+        ContinuationCensusProtocol protocol,
+        P20JointCivilTravelOwner owner)
+    {
+        if (protocol == null) return false;
+        try
+        {
+            P20JointCivilTravelDailyProfileCensusProvider provider =
+                new P20JointCivilTravelDailyProfileCensusProvider(owner);
+            OwnerSectionCensusWitness witness = provider.GetCurrentCensus();
+            if (witness == null
+                || !string.Equals(witness.SectionId, P20JointCivilTravelDailyProfileCensusProvider.SectionId, StringComparison.Ordinal)
+                || witness.SchemaVersion != P20JointCivilTravelDailyProfileCensusProvider.SchemaVersion
+                || witness.Cardinality != (owner?.InstanceCount ?? 0)
+                || witness.Revision != witness.Cardinality
+                || !protocol.RegisterExpectedSection(
+                    new OwnerSectionContract(
+                        P20JointCivilTravelDailyProfileCensusProvider.SectionId,
+                        P20JointCivilTravelDailyProfileCensusProvider.SchemaVersion,
+                        OwnerSectionRole.ExplicitlyEmpty),
+                    out _)
+                || !protocol.RegisterCensusProvider(
+                    P20JointCivilTravelDailyProfileCensusProvider.SectionId,
+                    provider,
+                    out _))
+            {
+                protocol.FaultClosed();
+                return false;
+            }
+
+            p20JointCivilTravelDailyProfileCensusProvider = provider;
             return true;
         }
         catch
