@@ -1,6 +1,6 @@
 # Independent technical review — P20-B Two-Person Joint Civil Travel
 
-**Verdict:** `PASS` / `READY_FOR_IMPLEMENTATION_HANDOFF` for the bounded P20-B design. **Architecture base:** `f6924e63d8e5731da1d33021d0361e7defe6dad7`. **Reviewed design content tip:** `82063ede428fb53969cd8ca8a1a32cbf8166094f` on `codex/architecture/p20b-technical-design`. **Reviewer:** General Architect, independent of the design author, 2026-10-03.
+**Verdict:** `PASS` / `READY_FOR_IMPLEMENTATION_HANDOFF` for the bounded P20-B design. **Architecture base:** `f6924e63d8e5731da1d33021d0361e7defe6dad7`. **Reviewed design content tip:** `8afc463fb71112a0c7b8902e7e5673aee9e31bd9` on `codex/architecture/p20b-technical-design`. **Reviewer:** General Architect, independent of the design author, 2026-10-03.
 
 I read the complete design/diff against the promoted architecture, P18 lifecycle and P20-A synthetic owner at `7a81cc0ecbc511dd36c248ec62c7b20f7e477f53`, and P8-E travel coordinator and Person position owner at `470667d37863384edadb3d93ef64d8004aff46a3`. Initial review found unresolved P18 reservation, completion and active-abort boundaries. The revision closes them: assent is P20-owned proposal data without a time lock; existing P18 `TrySchedule` reserves both Persons together with open-ended commitments; a narrowly extended P18 consumer terminal transition commits with the second individual P8 arrival; active abort is an `AbortAfterLeg` request settled after both complete their already-started leg. There is no remaining BLOCKER or MAJOR design finding.
 
@@ -10,4 +10,6 @@ The two required travelers are a checkpoint rule, not universal Activity cardina
 
 **Non-blocking note:** the owning `PHASE20_STATE.md` is absent from the reviewed checkout; promoted P20-A code, P20 Brief and alignment records supplied the bounded baseline. Master must reconfirm the actual current P20/P18/P8 refs before implementation dispatch. The design's consumer-managed P18 terminal path is a new narrow technical seam; tests must prove ordinary P18 and P20-A behavior remains intact.
 
-This review approves technical-design handoff only, not code, canonical promotion or Phase 20 closure. `git diff --check f6924e6..82063ed` passed; no Unity tests were run for documentation-only work.
+After the initial review record, inspection of `ActivityLifecycleStore.BindTransitionParticipant` found its exact-one binding rule. The author amended the design at `8afc463fb71112a0c7b8902e7e5673aee9e31bd9`: P20-B binds the sole participant in its real-consumer composition; the P20-A synthetic owner remains in a separate fixture composition. I reviewed that exact semantic delta and its positive isolation test. The PASS verdict applies to the amended design; no generic dispatcher is introduced.
+
+This review approves technical-design handoff only, not code, canonical promotion or Phase 20 closure. `git diff --check f6924e6..8afc463` passed; no Unity tests were run for documentation-only work.
