@@ -1,17 +1,21 @@
-# P12-B Expedition owner invalidation — technical design
+# P12-F Expedition owner invalidation — technical design evidence
 
-**Status:** Bounded technical design proposal. Independent technical review is
-required before implementation.
+**Status:** Future P12-F technical-design evidence only. Independent exact-tip
+review of `0fa4c8b` required corrections to the return lock-order audit and the
+P12-F dependency/readiness classification. This revision addresses those
+findings and requires fresh independent review. It is not implementation-ready.
 
-**Accepted scope:** P12-B prerequisite capability work. This adds no checkpoint
-ID, does not broaden P12-A, and does not claim completion of P12-B.
+**Scope:** This proposal concerns the Expedition owner within P12-F's active
+commitment group. P12-F is blocked on canonical P12-C, P12-D, and P12-E. The
+owner-section/runtime-epoch integration described below is therefore **NOT
+READY** and must not be treated as P12-B runtime-admission adapter work.
 
 **Canonical base:** `a6572ab3d4330d81edb334ae8b4c84ca5e6b173e`.
-**Architecture reviewed:** `3bf09249b7dd9e255c3493aacfd75c96080a31e3`.
-The current P12 checkout's architecture blob differs from that architecture
-revision by omitting §§91A, 91B, and 92A; those additions were considered here
-as the requested current architecture authority. This design does not rely on
-or alter those sections.
+**Architecture/matrix baseline:** `f6924e63d8e5731da1d33021d0361e7defe6dad7`.
+The baseline's P12-F design and roadmap mark F `BLOCKED_ON_P12_C_D_E` and place
+travel, party, and expedition commitments in its owner group. This proposal
+does not change the accepted matrix or dependency edges. The P12-B runtime
+admission adapter excludes owner-section registration and shared-epoch wiring.
 
 ## 1. Purpose and boundary
 
@@ -22,7 +26,13 @@ validates exact object/index identity, and increments a local revision at each
 committed owner change. The selected P12 runtime does not register that witness
 or connect those revisions to its partial mutation epoch.
 
-This slice registers and binds the existing Expedition owner section. Each
+This is future P12-F owner-section design evidence only. P12-F owner export,
+hydration, and runtime-epoch integration cannot begin until P12-C/D/E are
+canonical and the live included-owner set is revalidated. It does not implement
+or authorize a P12-B adapter extension.
+
+When P12-F prerequisites clear, the bounded integration would register and
+bind the existing Expedition owner section. Each
 successful `ExpeditionStore` commit preflights the exact owner and current P12
 baseline before mutation, then reports the committed section after its local
 revision advances. Writes in a currently supported outer P12 batch join that
@@ -173,9 +183,10 @@ and event sequence also use their existing owner boundaries. There is no
 current outer P12 Expedition-start collector. Without this design's new
 cross-owner collector, those owner commits remain separate epoch reports.
 
-## 3. Registration and mutation interface
+## 3. Proposed future registration and mutation interface
 
-During selected-profile P12 inventory initialization, obtain the store from
+After P12-C/D/E are canonical and the live owner inventory is revalidated,
+future P12-F implementation could obtain the store from
 the installed `ExpeditionSystem`, construct/reuse the provider for that exact
 store, and validate:
 
@@ -236,17 +247,36 @@ commits also report separately. This preserves the current owner ordering and
 compensation code without claiming a single cross-owner epoch, rollback, or
 atomic start.
 
-Here “nested” describes the synchronous call graph, not nested store locks.
 The current start windows are sequential: `AddAndFence` commits/releases the
 ExpeditionStore monitor; `TryStartTravelParty` enters, mutates, and releases
 the TravelPartyStore window; then `CommitReserved` or `RemoveReserved` enters
-ExpeditionStore again. Return follows the same pattern: the `Returning`
-`CommitReserved` completes/releases before the TravelParty call, and the
-association or cancellation `CommitReserved` follows after that call returns.
-The P12 wrapper must not hold either store monitor across the other owner's
-operation or introduce a nested cross-store lock order. Preserve the current
-owner commit, notification, and compensation order, including partial owner
-commits if a later step fails; this design adds no cross-owner rollback.
+ExpeditionStore again.
+
+Return is different and the source audit must preserve its actual lock order.
+`ExpeditionSystem.TryBeginReturn` enters
+`TravelPartyStore.EnterMutationWindow()` and holds that reentrant window over
+the first Expedition `CommitReserved` transition to Returning, the nested
+`TryStartTravelParty` call, and the second Expedition `CommitReserved` party
+association. Exception/rejection paths call `TryCancelReturnCore` through
+`CommitReserved` before leaving the party window. If association fails after
+party creation, cancellation is attempted and then
+`TravelPartyStore.Remove(party.TravelPartyId)` is attempted as a separate
+compensating owner write while the outer party window remains held. Preserve
+this existing TravelPartyStore → ExpeditionStore order, the current commit
+sequence, cancellation attempt, party-removal compensation, and any partial
+commits if later steps fail. No cross-owner rollback is claimed.
+
+The audited Expedition admission/read callbacks (`TryPrepareStart`,
+`CanReconcile*`, and related store/provider checks) do not acquire a
+TravelPartyStore mutation window while holding the ExpeditionStore monitor;
+the other Expedition read paths query party state outside an Expedition owner
+commit callback. No inverse ExpeditionStore → TravelPartyStore acquisition was
+found in the audited call paths. Future callback/provider changes must preserve
+that property: an Expedition callback running under the ExpeditionStore owner
+monitor must not enter the party mutation window or invoke a party callback
+that can acquire it. Revalidate this lock graph against the exact implementation
+tree before integration. Do not add an outer P12 wrapper that nests a new store
+lock or reverses the observed order.
 
 If later evidence requires exactly one completed-operation epoch for the full
 Expedition start, that work must add a distinct serialized
@@ -256,7 +286,7 @@ sections, and prove reservation/capacity behavior across every early return,
 exception, and compensation path. It must be independently designed and
 reviewed. It is not silently part of this owner-level design.
 
-## 5. Files and implementation order
+## 5. Future gated implementation outline (not ready)
 
 Retained implementation candidate evidence exists on
 `codex/phase12/P12BExpeditionCensusImplementation` at
@@ -265,8 +295,9 @@ Retained implementation candidate evidence exists on
 `ExpeditionExplorationTests`; preserve its branch/worktree without cleanup or
 rebase. Those tests are candidate test assets, not ExpeditionStore runtime
 operation coverage or evidence that the P12 owner invalidation hooks exist.
-When implementation begins, refresh/revalidate this evidence against the
-then-current canonical base and the exact implementation tree; do not infer
+If P12-F implementation is later authorized after C/D/E canonical, refresh and
+revalidate this evidence against the then-current canonical base and exact
+implementation tree; do not infer
 that passing reservation tests establish P12 epoch admission or notification.
 
 Expected implementation changes are limited to:
@@ -288,7 +319,7 @@ do not integrate it concurrently with ScheduledDirective, P15/P16 profile
 admission, or other callback-context changes. Rebase/revalidate against the
 then-current canonical tip before implementation integration.
 
-## 6. Required implementation and validation evidence
+## 6. Evidence required after prerequisites clear
 
 Focused coverage must additionally prove cross-store and unregistered objective-alias mutations are rejected without owner revision/epoch changes, while same-store aliases mutate through one shared store section.
 Focused coverage should prove exact required section/schema/store identity;
@@ -311,8 +342,9 @@ review and validation.
 
 ## 7. Exclusions and readiness
 
-This is selected-profile invalidation of the existing ExpeditionStore owner
-section only. It does not add or batch a new Expedition-start operation; bind
+This future P12-F design concerns selected-profile invalidation of the existing
+ExpeditionStore owner section only. It does not add or batch a new
+Expedition-start operation; bind
 other RuntimeIdAllocator counters; add sequence semantics; close every
 TravelParty, economy, NPC, Knowledge, City, content, Justice, or other owner
 write; or claim the full state of an Expedition's collaborators in this
@@ -322,6 +354,9 @@ shared-epoch coverage, global quiescence, capture eligibility, export,
 hydration, P12-A readiness, P12-B completion, P13 readiness, or Phase 12
 closure.
 
-P12-B remains `INCOMPLETE`; P12-A remains `WAIT_DEPENDENCY`; P13 remains
-blocked. This proposal is ready only for independent technical review; it is
-not implementation authorization or canonical promotion.
+P12-F Expedition owner-section/runtime-epoch integration is **NOT READY** until
+P12-C, P12-D, and P12-E are canonical and the accepted profile's owner inventory
+is refreshed. This proposal does not change the matrix scope or dependency
+edges. P12-B remains incomplete; P12-A remains `WAIT_DEPENDENCY`; P13 remains
+blocked. The document is future technical-design evidence pending fresh
+independent review, not implementation authorization or canonical promotion.
