@@ -1,8 +1,8 @@
 # Phase 10 State — Local Generation & Pre-start Authoring
 
-**Status:** PHASE 10 IN PROGRESS — P10-A is promoted; Phase 10 remains open.
+**Status:** PHASE 10 IN PROGRESS — P10-A is promoted; P10-B has a validated, independently reviewed candidate awaiting its documented canonical gate; Phase 10 remains open.
 
-**Architecture baseline:** `c285466c355103d3637ac165246591b72eb7bda0`.
+**Current architecture baseline:** `f6924e63d8e5731da1d33021d0361e7defe6dad7`. P10-A historical delivery review used then-current baseline `c285466c355103d3637ac165246591b72eb7bda0`.
 
 **Upstream canonical capabilities:** P8 at
 `470667d37863384edadb3d93ef64d8004aff46a3`; P9-B authored-geography code at
@@ -31,6 +31,16 @@ regional routes, Knowledge, activities, loot, encounters, construction, runtime
 expansion, Mod API/loader, retrofit, or other gameplay. Intraday/extensibility
 and multi-participant requirements remain review constraints; the P10 profile
 creates no P18/P20 state or dependency. P19 loader/API work remains deferred.
+
+## P10-B — Deterministic Generated LocalTopology v1
+
+The current architecture handoff `cfaccfa4b0dbd051d66aa29543e18b3661f109fb` contains the independently reviewed P10-B technical design on architecture baseline `f6924e63d8e5731da1d33021d0361e7defe6dad7`. It defines a bounded deterministic Ruin topology profile with typed stage inputs/outputs, explicit dependencies, deterministic structural composition, stable site-instance identity, staged whole-genesis construction and atomic publication. P10-A's authored Ruin output remains byte-equivalent through its compatibility path.
+
+The current-base implementation candidate is `codex/phase10/P10BGeneratedLocalTopology-P12Current` at docs tip `d930852344c92c36b35ffdb1f7f025661e1ddba4`; reviewed code tip `a7a7ec46b226531828625e45056616b45fc75c5c`, executable tree `d12dc8f3a19cec9e50ca15a7bd6b77adb500b48b`. Composition merge `f554cf765c1ac4dfa65deabd026a7d841695b626` has current P12 canonical `a6572ab3d4330d81edb334ae8b4c84ca5e6b173e` as first parent and P10 canonical `252ad6b9a507f1c001c05a1e19c2546ebd0707a2` as second parent.
+
+Independent exact-tip code review PASS is recorded in `docs/design/P10B_GENERATED_LOCAL_TOPOLOGY_IMPLEMENTATION_REVIEW.md`. The reviewer found no actionable defects in deterministic generation/identity, P9 input and provenance linkage, rollback-safe publication/ownership, early P12 Daily profile rejection, P10-A compatibility, or scope. The reviewer did not rerun Unity. Validation on the exact executable tree passed 12 focused suites (227/227), ALL EditMode (2262/2262), official Smoke (5/5), and the implementation diff check. The report and raw XML/log archive are in `docs/validation/P10B/VALIDATION.md` and `P10B-validation-20261004-d12dc8f.zip`; archive SHA-256 is `5CA1BABDA26E6FC812230DF0D173027A5EE4D76FF69BA030548D1E66EC085DED`.
+
+P10-B rejects `UnityBootstrap-Daily-v1` before identity allocation or owner construction and adds no P12 readiness claim. It does not add procedural terrain, settlements, population, generated backstory, runtime expansion, general content passes, a Mod API/loader, or unrelated gameplay. Phase 10 remains open. The P10-B handoff explicitly reserves canonical promotion as a human gate; no canonical ref has moved.
 
 ## Delivery status and next gate
 
