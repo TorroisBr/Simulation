@@ -168,10 +168,29 @@ operations and successful no-ops do not advance the local revision.
 then allocates an ExpeditionId, creates the runtime row, and reserves two
 Expedition owner revisions. It commits `AddAndFence`, calls
 `TryStartTravelParty`, then commits `CommitReserved` with the party ID. A
-throwing or rejected TravelParty start invokes `RemoveReserved`; a failed
-second Expedition commit also attempts `RemoveReserved`. On success, the
-ExpeditionStarted event is recorded after these commits. Existing consumed
-IDs and successful compensating owner commits remain committed according to
+throwing or rejected TravelParty start invokes `RemoveReserved`; a boolean
+failure of the final `CommitReserved` also attempts `RemoveReserved`. The
+catch covers only `TryStartTravelParty`: an exception from the final
+`CommitReserved` bypasses compensation. Callback failure must be distinguished
+from a domain boolean rejection. Admission/preflight callback exceptions occur
+before the owner mutation, so the affected commit has not happened. A committed
+callback/report exception occurs after that commit and does not undo it.
+
+Accordingly, an exception from initial `AddAndFence` preflight leaves the
+Expedition row uncommitted; an exception after its owner commit leaves the
+active Preparing row committed and prevents the TravelParty call. If
+`TryStartTravelParty` returns false or throws, `RemoveReserved` is attempted;
+its successful removal is a separate commit. If this compensation's preflight
+throws, the row remains at its last successful committed state. If its
+post-commit callback throws, removal remains committed despite the exception.
+After a successful TravelParty start, a boolean-false final Expedition commit
+attempts `RemoveReserved`. But a preflight exception from that final commit
+leaves the Expedition at its prior committed Preparing state while the party
+already exists; a post-commit report exception leaves the final Traveling/link
+commit in place and skips the event-recording tail. Neither exception path
+automatically removes the party or retries compensation. On ordinary success,
+the ExpeditionStarted event is recorded after both owner commits. Existing
+consumed IDs and successful compensating owner commits remain committed under
 their current authorities.
 
 `TryStartExpedition` is called by both
@@ -266,6 +285,27 @@ this existing TravelPartyStore → ExpeditionStore order, the current commit
 sequence, cancellation attempt, party-removal compensation, and any partial
 commits if later steps fail. No cross-owner rollback is claimed.
 
+Preserve the source's distinct boolean and exception paths. A boolean-false
+initial transition returns before party creation. An exception from its
+preflight leaves the Expedition unchanged; an exception from its post-commit
+report leaves the Expedition Returning and escapes before party creation or
+cancellation. If party creation returns false, cancellation is attempted; if
+it throws, cancellation is attempted in the catch and the original exception
+is rethrown only if cleanup returns normally. When cancellation preflight
+throws, it has not canceled the Expedition; when its post-commit report throws,
+the cancellation may already be committed. Either callback exception escapes.
+On the boolean-false association path, cancellation is called and its return
+value is ignored before party removal is attempted. If cancellation throws,
+party removal is skipped. For an exception from the final association commit
+(whether preflight before mutation or post-commit report after mutation), the
+method has no surrounding cleanup catch: cancellation and party removal are
+both skipped. Preflight failure leaves the party created and the Expedition
+Returning; post-commit report failure leaves the party created and the
+Expedition association committed. A boolean-false association follows the
+existing cleanup sequence; if cancellation itself returns false, party removal
+still proceeds and the Expedition can remain Returning. No additional wrapper,
+rollback, or cleanup behavior is proposed.
+
 The audited Expedition admission/read callbacks (`TryPrepareStart`,
 `CanReconcile*`, and related store/provider checks) do not acquire a
 TravelPartyStore mutation window while holding the ExpeditionStore monitor;
@@ -330,9 +370,16 @@ ordering; all attached `TryMutate` classes; exact completion/removal; and no
 revision/epoch for reservation-only state, rejected operations, or no-ops.
 Verify stale owner/revision and epoch-capacity denial precedes owner mutation,
 and post-commit report failure faults the runtime while preserving the
-committed owner revision. Verify nested TravelParty start keeps its current
-order and compensation attempts and that the sections report separately (or
-join an already active supported batch without a duplicate increment).
+committed owner revision. Verify start and return boolean-rejection paths
+separately from callback exceptions at each commit: preflight exceptions before
+mutation; post-commit report exceptions after state changes; initial commits;
+second commits; and compensation commits. Assert the exact resulting
+Expedition/TravelParty state and whether compensation/event recording was
+attempted or skipped in each case, including start's final-commit exception,
+return's final-association exception, and return cancellation exception
+skipping party removal. Verify nested TravelParty start keeps its current order
+and compensation attempts and that the sections report separately (or join an
+already active supported batch without a duplicate increment).
 
 Run focused Expedition, TravelParty, runtime admission, and bootstrap suites;
 then required ALL EditMode, official Smoke, and `git diff --check` on the exact
