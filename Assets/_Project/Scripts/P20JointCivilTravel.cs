@@ -13,6 +13,7 @@ public sealed class P20JointCivilTravelAssent
     public string PersonId { get; }
     public bool Accepted { get; }
     public string CausalInputIdentity { get; }
+    public LogicalTick? ProposedStart { get; }
     public LogicalTick? AcceptedAt { get; }
     public long AcceptedOrder { get; }
     public P20JointCivilTravelAssent(string personId, bool accepted, string causalInputIdentity)
@@ -23,10 +24,11 @@ public sealed class P20JointCivilTravelAssent
     }
 
     internal P20JointCivilTravelAssent(string personId, bool accepted, string causalInputIdentity,
-        LogicalTick acceptedAt, long acceptedOrder)
+        LogicalTick proposedStart, LogicalTick acceptedAt, long acceptedOrder)
         : this(personId, accepted, causalInputIdentity)
     {
         if (acceptedOrder <= 0L) throw new ArgumentOutOfRangeException(nameof(acceptedOrder));
+        ProposedStart = proposedStart;
         AcceptedAt = acceptedAt;
         AcceptedOrder = acceptedOrder;
     }
@@ -35,7 +37,9 @@ public sealed class P20JointCivilTravelAssent
 public sealed class P20JointCivilTravelSnapshot
 {
     public string ActivityInstanceId { get; }
+    public string CreationIdentity { get; }
     public string SharedSegmentStableKey { get; }
+    public LogicalTick ProposedStart { get; }
     public IReadOnlyList<string> PersonIds { get; }
     public IReadOnlyList<P20JointCivilTravelAssent> Assents { get; }
     public P20JointCivilTravelState State { get; }
@@ -44,12 +48,15 @@ public sealed class P20JointCivilTravelSnapshot
     public LogicalTick? AbortAcceptedAt { get; }
     public long AbortAcceptedOrder { get; }
     public long Revision { get; }
+    public long ExpectedLifecycleRevision { get; }
     public string Disposition { get; }
     internal P20JointCivilTravelSnapshot(P20JointCivilTravel operation, ActivityInstanceSnapshot lifecycle,
         bool failedStart)
     {
         ActivityInstanceId = operation.ActivityInstanceId;
+        CreationIdentity = lifecycle.CreationIdentity;
         SharedSegmentStableKey = operation.SharedSegmentStableKey;
+        ProposedStart = operation.ProposedStart;
         PersonIds = Array.AsReadOnly(operation.PersonIds.ToArray());
         Assents = Array.AsReadOnly(operation.Assents.Values.OrderBy(x => x.PersonId, StringComparer.Ordinal).ToArray());
         State = operation.Assents.Values.Any(x => !x.Accepted)
@@ -68,6 +75,7 @@ public sealed class P20JointCivilTravelSnapshot
         AbortAcceptedAt = operation.AbortAcceptedAt;
         AbortAcceptedOrder = operation.AbortAcceptedOrder;
         Revision = operation.Revision;
+        ExpectedLifecycleRevision = operation.ExpectedLifecycleRevision;
         Disposition = State == P20JointCivilTravelState.NotFormed ? "participant-declined" : lifecycle.Disposition;
     }
 }
@@ -75,6 +83,7 @@ public sealed class P20JointCivilTravelSnapshot
 internal sealed class P20JointCivilTravel
 {
     internal readonly string ActivityInstanceId;
+    internal readonly LogicalTick ProposedStart;
     internal readonly string SharedSegmentStableKey;
     internal readonly string[] PersonIds;
     internal readonly SortedDictionary<string, P20JointCivilTravelAssent> Assents;
@@ -84,12 +93,13 @@ internal sealed class P20JointCivilTravel
     internal readonly long AbortAcceptedOrder;
     internal readonly long Revision;
     internal readonly long ExpectedLifecycleRevision;
-    internal P20JointCivilTravel(string id, string sharedSegmentStableKey, IEnumerable<string> people,
+    internal P20JointCivilTravel(string id, string sharedSegmentStableKey, LogicalTick proposedStart,
+        IEnumerable<string> people,
         SortedDictionary<string, P20JointCivilTravelAssent> assents,
         bool abortRequested, string abortCausalInputIdentity, LogicalTick? abortAcceptedAt, long abortAcceptedOrder,
         long revision, long lifecycleRevision)
     {
-        ActivityInstanceId = id; SharedSegmentStableKey = sharedSegmentStableKey;
+        ActivityInstanceId = id; SharedSegmentStableKey = sharedSegmentStableKey; ProposedStart = proposedStart;
         PersonIds = people.OrderBy(x => x, StringComparer.Ordinal).ToArray();
         Assents = new SortedDictionary<string, P20JointCivilTravelAssent>(assents, StringComparer.Ordinal);
         AbortAfterLegRequested = abortRequested;
@@ -102,7 +112,7 @@ internal sealed class P20JointCivilTravel
         string abortCausalInputIdentity = null, LogicalTick? abortAcceptedAt = null, long? abortAcceptedOrder = null,
         long? revision = null,
         long? lifecycleRevision = null) => new P20JointCivilTravel(ActivityInstanceId,
-            SharedSegmentStableKey,
+            SharedSegmentStableKey, ProposedStart,
             PersonIds, assents ?? Assents, abortRequested ?? AbortAfterLegRequested,
             abortCausalInputIdentity ?? AbortCausalInputIdentity,
             abortAcceptedAt ?? AbortAcceptedAt, abortAcceptedOrder ?? AbortAcceptedOrder,
@@ -132,7 +142,7 @@ public sealed class P20JointCivilTravelOwner
     public int InstanceCount => operations.Count;
 
     public bool TryCreate(ActivityDefinition definition, string creationIdentity, string sharedSegmentStableKey,
-        IReadOnlyList<string> personIds,
+        LogicalTick proposedStart, IReadOnlyList<string> personIds,
         out P20JointCivilTravelSnapshot snapshot, out ActivityFailure failure)
     {
         snapshot = null;
@@ -140,8 +150,11 @@ public sealed class P20JointCivilTravelOwner
             || personIds == null || personIds.Count != 2 || personIds.Any(string.IsNullOrWhiteSpace)
             || personIds.Distinct(StringComparer.Ordinal).Count() != 2)
         { failure = ActivityFailure.ParticipantConflict; return false; }
+        if (!TryGetEarliestStart(out long earliest) || proposedStart.Value < earliest)
+        { failure = ActivityFailure.InvalidInterval; return false; }
         string predictedId = composition.Store.NextProposedInstanceId;
-        P20JointCivilTravel operation = new P20JointCivilTravel(predictedId, sharedSegmentStableKey, personIds,
+        P20JointCivilTravel operation = new P20JointCivilTravel(predictedId, sharedSegmentStableKey,
+            proposedStart, personIds,
             new SortedDictionary<string, P20JointCivilTravelAssent>(StringComparer.Ordinal),
             false, string.Empty, null, 0L, 0L, 0L);
         P20JointCivilTravelSnapshot stagedSnapshot = null;
@@ -154,6 +167,96 @@ public sealed class P20JointCivilTravelOwner
                 return () => operations = stagedOperations;
             }, out _, out failure)) return false;
         snapshot = stagedSnapshot;
+        return true;
+    }
+
+    /// <summary>Returns reconstruction-ready P20 owner facts in stable activity identity order.</summary>
+    internal IReadOnlyList<P20JointCivilTravelSnapshot> SnapshotOwnerState()
+    {
+        List<P20JointCivilTravelSnapshot> result = new List<P20JointCivilTravelSnapshot>(operations.Count);
+        foreach (string activityId in operations.Keys.OrderBy(x => x, StringComparer.Ordinal))
+        {
+            if (!TryGet(activityId, out P20JointCivilTravelSnapshot snapshot))
+                throw new InvalidOperationException("P20 joint-travel owner references a missing P18 activity instance.");
+            result.Add(snapshot);
+        }
+        return result.AsReadOnly();
+    }
+
+    /// <summary>Restores P20-owned proposal, assent, and abort facts against an already restored P18 activity store.</summary>
+    internal bool TryRestoreOwnerState(IEnumerable<P20JointCivilTravelSnapshot> snapshots)
+    {
+        if (snapshots == null || operations.Count != 0) return false;
+        Dictionary<string, P20JointCivilTravel> staged = new Dictionary<string, P20JointCivilTravel>(StringComparer.Ordinal);
+        foreach (P20JointCivilTravelSnapshot snapshot in snapshots)
+        {
+            if (snapshot == null || string.IsNullOrWhiteSpace(snapshot.ActivityInstanceId)
+                || string.IsNullOrWhiteSpace(snapshot.CreationIdentity)
+                || string.IsNullOrWhiteSpace(snapshot.SharedSegmentStableKey)
+                || snapshot.PersonIds == null || snapshot.PersonIds.Count != 2
+                || snapshot.PersonIds.Any(string.IsNullOrWhiteSpace)
+                || snapshot.PersonIds.Distinct(StringComparer.Ordinal).Count() != 2
+                || snapshot.Assents == null || snapshot.Assents.Count > 2
+                || snapshot.Revision != snapshot.Assents.Count + (snapshot.AbortAfterLegRequested ? 1L : 0L)
+                || snapshot.ExpectedLifecycleRevision < 0L
+                || !composition.Store.TryGet(snapshot.ActivityInstanceId, out ActivityInstanceSnapshot instance)
+                || instance.DefinitionId != ActivityDefinitionId
+                || !string.Equals(instance.CreationIdentity, snapshot.CreationIdentity, StringComparison.Ordinal)
+                || instance.Revision != snapshot.ExpectedLifecycleRevision
+                || !Enum.IsDefined(typeof(P20JointCivilTravelState), snapshot.State)) return false;
+            bool hasP18Schedule = instance.PlannedStart.HasValue;
+            if ((hasP18Schedule && instance.PlannedStart.Value != snapshot.ProposedStart)
+                || (hasP18Schedule && !instance.Participants.SequenceEqual(snapshot.PersonIds, StringComparer.Ordinal))
+                || (!hasP18Schedule && instance.Participants.Count != 0)
+                || (!hasP18Schedule && instance.State != ActivityLifecycleState.Proposed
+                    && instance.State != ActivityLifecycleState.Cancelled)) return false;
+            if (staged.ContainsKey(snapshot.ActivityInstanceId)) return false;
+
+            SortedDictionary<string, P20JointCivilTravelAssent> assents =
+                new SortedDictionary<string, P20JointCivilTravelAssent>(StringComparer.Ordinal);
+            HashSet<string> causalIdentities = new HashSet<string>(StringComparer.Ordinal);
+            HashSet<long> assentOrders = new HashSet<long>();
+            foreach (P20JointCivilTravelAssent assent in snapshot.Assents)
+            {
+                if (assent == null || !snapshot.PersonIds.Contains(assent.PersonId, StringComparer.Ordinal)
+                    || !assent.ProposedStart.HasValue || assent.ProposedStart.Value != snapshot.ProposedStart
+                    || !assent.AcceptedAt.HasValue || assent.AcceptedOrder <= 0L
+                    || assent.AcceptedAt.Value.Value >= snapshot.ProposedStart.Value
+                    || assent.AcceptedOrder > snapshot.Revision
+                    || !causalIdentities.Add(assent.CausalInputIdentity)
+                    || !assentOrders.Add(assent.AcceptedOrder)
+                    || assents.ContainsKey(assent.PersonId)) return false;
+                assents.Add(assent.PersonId, new P20JointCivilTravelAssent(assent.PersonId, assent.Accepted,
+                    assent.CausalInputIdentity, snapshot.ProposedStart, assent.AcceptedAt.Value, assent.AcceptedOrder));
+            }
+            if (assents.Values.Any(x => !x.Accepted) && assents.Count != snapshot.PersonIds.Count) return false;
+            if (snapshot.AbortAfterLegRequested)
+            {
+                if (string.IsNullOrWhiteSpace(snapshot.AbortCausalInputIdentity)
+                    || !snapshot.AbortAcceptedAt.HasValue || snapshot.AbortAcceptedOrder <= 0L
+                    || snapshot.AbortAcceptedAt.Value.Value < snapshot.ProposedStart.Value
+                    || snapshot.AbortAcceptedOrder != snapshot.Revision
+                    || !causalIdentities.Add(snapshot.AbortCausalInputIdentity)
+                    || (instance.State != ActivityLifecycleState.Active && instance.State != ActivityLifecycleState.Interrupted))
+                    return false;
+            }
+            else if (!string.IsNullOrEmpty(snapshot.AbortCausalInputIdentity)
+                || snapshot.AbortAcceptedAt.HasValue || snapshot.AbortAcceptedOrder != 0L) return false;
+
+            P20JointCivilTravel operation = new P20JointCivilTravel(snapshot.ActivityInstanceId,
+                snapshot.SharedSegmentStableKey, snapshot.ProposedStart, snapshot.PersonIds, assents,
+                snapshot.AbortAfterLegRequested, snapshot.AbortCausalInputIdentity,
+                snapshot.AbortAcceptedAt, snapshot.AbortAcceptedOrder, snapshot.Revision,
+                snapshot.ExpectedLifecycleRevision);
+            bool failedStart = instance.State == ActivityLifecycleState.Cancelled
+                && composition.Store.SnapshotTransitionReceipts().Any(x => x.ActivityInstanceId == snapshot.ActivityInstanceId
+                    && x.Kind == ActivityTransitionKind.FailedStart);
+            P20JointCivilTravelSnapshot restored = new P20JointCivilTravelSnapshot(operation, instance, failedStart);
+            if (restored.State != snapshot.State || !string.Equals(restored.Disposition, snapshot.Disposition, StringComparison.Ordinal))
+                return false;
+            staged.Add(snapshot.ActivityInstanceId, operation);
+        }
+        operations = staged;
         return true;
     }
 
@@ -179,9 +282,10 @@ public sealed class P20JointCivilTravelOwner
             || !current.PersonIds.Contains(assent.PersonId, StringComparer.Ordinal)
             || current.Assents.Values.Any(x => x.CausalInputIdentity == assent.CausalInputIdentity)
             || current.Assents.ContainsKey(assent.PersonId) || current.Revision == long.MaxValue) return false;
+        if (!TryGetEarliestStart(out long earliest) || current.ProposedStart.Value < earliest) return false;
         SortedDictionary<string, P20JointCivilTravelAssent> assents = new SortedDictionary<string, P20JointCivilTravelAssent>(current.Assents, StringComparer.Ordinal)
         { [assent.PersonId] = new P20JointCivilTravelAssent(assent.PersonId, assent.Accepted,
-            assent.CausalInputIdentity, composition.Timeline.CurrentInstant, current.Revision + 1L) };
+            assent.CausalInputIdentity, current.ProposedStart, composition.Timeline.CurrentInstant, current.Revision + 1L) };
         P20JointCivilTravel next = current.With(assents: assents,
             revision: current.Revision + 1L,
             lifecycleRevision: current.ExpectedLifecycleRevision);
@@ -201,7 +305,7 @@ public sealed class P20JointCivilTravelOwner
     }
 
     /// <summary>Both independent assents authorize one P18 open-ended commitment reservation.</summary>
-    public bool TrySchedule(string activityInstanceId, LogicalTick start, out ActivityFailure failure)
+    public bool TrySchedule(string activityInstanceId, out ActivityFailure failure)
     {
         if (!operations.TryGetValue(activityInstanceId, out P20JointCivilTravel current)
             || current.PersonIds.Any(id => !current.Assents.TryGetValue(id, out P20JointCivilTravelAssent assent) || !assent.Accepted)
@@ -210,14 +314,20 @@ public sealed class P20JointCivilTravelOwner
         { failure = ActivityFailure.InvalidState; return false; }
         if (instance.Revision == long.MaxValue)
         { failure = ActivityFailure.RevisionOverflow; return false; }
-        long earliest;
-        try { earliest = checked(Math.Max(composition.Timeline.CurrentInstant.Value,
-            composition.Timeline.InputsSealedThrough?.Value ?? composition.Timeline.CurrentInstant.Value) + 1L); }
-        catch (OverflowException) { failure = ActivityFailure.InvalidInterval; return false; }
-        if (start.Value < earliest) { failure = ActivityFailure.InvalidInterval; return false; }
+        if (!TryGetEarliestStart(out long earliest) || current.ProposedStart.Value < earliest)
+        { failure = ActivityFailure.InvalidInterval; return false; }
         P20JointCivilTravel scheduled = current.With(lifecycleRevision: instance.Revision + 1L);
         return composition.Store.TrySchedule(composition.Timeline, activityInstanceId,
-            composition.Timeline.CurrentInstant, start, null, current.PersonIds, () => operations[activityInstanceId] = scheduled, out failure);
+            composition.Timeline.CurrentInstant, current.ProposedStart, null, current.PersonIds,
+            () => operations[activityInstanceId] = scheduled, out failure);
+    }
+
+    private bool TryGetEarliestStart(out long earliest)
+    {
+        long latestClosed = Math.Max(composition.Timeline.CurrentInstant.Value,
+            composition.Timeline.InputsSealedThrough?.Value ?? composition.Timeline.CurrentInstant.Value);
+        try { earliest = checked(latestClosed + 1L); return true; }
+        catch (OverflowException) { earliest = long.MaxValue; return false; }
     }
 
     public bool TryCancel(string activityInstanceId, string disposition, out ActivityFailure failure)

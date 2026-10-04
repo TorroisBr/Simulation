@@ -12,18 +12,19 @@ public sealed class P20JointCivilTravelIntegrationTests
     {
         Fixture fixture = new Fixture();
         ActivityLifecycleStore lifecycle = new ActivityLifecycleStore("joint-travel-integration-world");
+        SimulationCalendar calendar = new SimulationCalendar(new CalendarDefinition(2, 2, 3));
         ActivityLifecycleComposition composition = new ActivityLifecycleComposition(lifecycle,
-            new SimulationCalendar(new CalendarDefinition(2, 2, 3)), new LogicalTick(0));
+            calendar, new LogicalTick(0));
         P20JointCivilTravelOwner owner = new P20JointCivilTravelOwner(composition, fixture.Travel,
             person => fixture.Contexts[person.Value]);
         Assert.That(owner.TryCreate(new ActivityDefinition(P20JointCivilTravelOwner.ActivityDefinitionId, "v1"),
-            "joint-integration-" + abortAfterLeg, fixture.Segment.StableKey, new[] { "person-a", "person-b" },
+            "joint-integration-" + abortAfterLeg, fixture.Segment.StableKey, new LogicalTick(1), new[] { "person-a", "person-b" },
             out P20JointCivilTravelSnapshot proposal, out ActivityFailure createFailure), Is.True, createFailure.ToString());
         Assert.That(owner.TryRecordAssent(proposal.ActivityInstanceId,
             new P20JointCivilTravelAssent("person-a", true, "consent-a")), Is.True);
         Assert.That(owner.TryRecordAssent(proposal.ActivityInstanceId,
             new P20JointCivilTravelAssent("person-b", true, "consent-b")), Is.True);
-        Assert.That(owner.TrySchedule(proposal.ActivityInstanceId, new LogicalTick(1), out ActivityFailure scheduleFailure),
+        Assert.That(owner.TrySchedule(proposal.ActivityInstanceId, out ActivityFailure scheduleFailure),
             Is.True, scheduleFailure.ToString());
         Assert.That(composition.Timeline.TrySealInputsThrough(new LogicalTick(1), out TimelineFailure sealFailure), Is.True,
             sealFailure.ToString());
@@ -47,6 +48,20 @@ public sealed class P20JointCivilTravelIntegrationTests
             Assert.That(abortRequested.AbortCausalInputIdentity, Is.EqualTo("abort-input-" + abortAfterLeg));
             Assert.That(abortRequested.AbortAcceptedAt, Is.EqualTo(new LogicalTick(1)));
             Assert.That(abortRequested.AbortAcceptedOrder, Is.EqualTo(abortRequested.Revision));
+
+            ActivityLifecycleStore restoredLifecycle = lifecycle.Clone();
+            ActivityLifecycleComposition restoredComposition = new ActivityLifecycleComposition(
+                restoredLifecycle, calendar, new LogicalTick(1));
+            P20JointCivilTravelOwner restoredOwner = new P20JointCivilTravelOwner(
+                restoredComposition, fixture.Travel, person => fixture.Contexts[person.Value]);
+            Assert.That(restoredOwner.TryRestoreOwnerState(owner.SnapshotOwnerState()), Is.True);
+            P20JointCivilTravelSnapshot restoredAbort = restoredOwner.SnapshotOwnerState().Single();
+            Assert.That(restoredAbort.State, Is.EqualTo(P20JointCivilTravelState.Active));
+            Assert.That(restoredAbort.ProposedStart, Is.EqualTo(new LogicalTick(1)));
+            Assert.That(restoredAbort.AbortAfterLegRequested, Is.True);
+            Assert.That(restoredAbort.AbortCausalInputIdentity, Is.EqualTo(abortRequested.AbortCausalInputIdentity));
+            Assert.That(restoredAbort.AbortAcceptedAt, Is.EqualTo(abortRequested.AbortAcceptedAt));
+            Assert.That(restoredAbort.AbortAcceptedOrder, Is.EqualTo(abortRequested.AbortAcceptedOrder));
         }
 
         Assert.That(fixture.Travel.TryAdvanceSegment(new PersonId("person-a"), TraversalProgress.CompleteProgressTicks,
@@ -120,18 +135,18 @@ public sealed class P20JointCivilTravelIntegrationTests
     {
         Fixture fixture = new Fixture();
         ActivityLifecycleStore lifecycle = new ActivityLifecycleStore("joint-travel-passage-world");
-        ActivityLifecycleComposition composition = new ActivityLifecycleComposition(lifecycle,
-            new SimulationCalendar(new CalendarDefinition(2, 2, 3)), new LogicalTick(0));
+        SimulationCalendar calendar = new SimulationCalendar(new CalendarDefinition(2, 2, 3));
+        ActivityLifecycleComposition composition = new ActivityLifecycleComposition(lifecycle, calendar, new LogicalTick(0));
         P20JointCivilTravelOwner owner = new P20JointCivilTravelOwner(composition, fixture.Travel,
             person => fixture.Contexts[person.Value]);
         Assert.That(owner.TryCreate(new ActivityDefinition(P20JointCivilTravelOwner.ActivityDefinitionId, "v1"),
-            "joint-closed-current-truth", fixture.Segment.StableKey, new[] { "person-a", "person-b" },
+            "joint-closed-current-truth", fixture.Segment.StableKey, new LogicalTick(1), new[] { "person-a", "person-b" },
             out P20JointCivilTravelSnapshot proposal, out ActivityFailure createFailure), Is.True, createFailure.ToString());
         Assert.That(owner.TryRecordAssent(proposal.ActivityInstanceId,
             new P20JointCivilTravelAssent("person-a", true, "passage-consent-a")), Is.True);
         Assert.That(owner.TryRecordAssent(proposal.ActivityInstanceId,
             new P20JointCivilTravelAssent("person-b", true, "passage-consent-b")), Is.True);
-        Assert.That(owner.TrySchedule(proposal.ActivityInstanceId, new LogicalTick(1), out ActivityFailure scheduleFailure),
+        Assert.That(owner.TrySchedule(proposal.ActivityInstanceId, out ActivityFailure scheduleFailure),
             Is.True, scheduleFailure.ToString());
         long positionRevision = fixture.Positions.Revision;
         long planRevision = fixture.Plans.Revision;
@@ -160,18 +175,18 @@ public sealed class P20JointCivilTravelIntegrationTests
     {
         Fixture fixture = new Fixture();
         ActivityLifecycleStore lifecycle = new ActivityLifecycleStore("joint-travel-terminal-stale-world");
-        ActivityLifecycleComposition composition = new ActivityLifecycleComposition(lifecycle,
-            new SimulationCalendar(new CalendarDefinition(2, 2, 3)), new LogicalTick(0));
+        SimulationCalendar calendar = new SimulationCalendar(new CalendarDefinition(2, 2, 3));
+        ActivityLifecycleComposition composition = new ActivityLifecycleComposition(lifecycle, calendar, new LogicalTick(0));
         P20JointCivilTravelOwner owner = new P20JointCivilTravelOwner(composition, fixture.Travel,
             person => fixture.Contexts[person.Value]);
         Assert.That(owner.TryCreate(new ActivityDefinition(P20JointCivilTravelOwner.ActivityDefinitionId, "v1"),
-            "joint-stale-terminal", fixture.Segment.StableKey, new[] { "person-a", "person-b" },
+            "joint-stale-terminal", fixture.Segment.StableKey, new LogicalTick(1), new[] { "person-a", "person-b" },
             out P20JointCivilTravelSnapshot proposal, out ActivityFailure createFailure), Is.True, createFailure.ToString());
         Assert.That(owner.TryRecordAssent(proposal.ActivityInstanceId,
             new P20JointCivilTravelAssent("person-a", true, "terminal-consent-a")), Is.True);
         Assert.That(owner.TryRecordAssent(proposal.ActivityInstanceId,
             new P20JointCivilTravelAssent("person-b", true, "terminal-consent-b")), Is.True);
-        Assert.That(owner.TrySchedule(proposal.ActivityInstanceId, new LogicalTick(1), out ActivityFailure scheduleFailure),
+        Assert.That(owner.TrySchedule(proposal.ActivityInstanceId, out ActivityFailure scheduleFailure),
             Is.True, scheduleFailure.ToString());
         Assert.That(composition.Timeline.TrySealInputsThrough(new LogicalTick(1), out TimelineFailure sealFailure), Is.True,
             sealFailure.ToString());

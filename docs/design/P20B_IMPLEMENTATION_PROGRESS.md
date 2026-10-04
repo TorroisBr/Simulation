@@ -28,10 +28,20 @@ The initial focused run exposed test-fixture issues: unsealed timeline input win
 | `SpatialRoutePlanningTests` | 21/21 |
 | `git diff --check` | PASS |
 
-Raw Unity XML and log files for the passing runs are archived in `docs/validation/P20B/P20B-focused-20261004-e93731c.zip` (SHA-256 `7F2C43F12B0C80DF216B3B1923A3A00060785BB42B8C51675FA3828FD1181675`). The focused suites ran on the committed executable tree; the later change was documentation-only.
+Raw Unity XML and log files for the passing runs are archived in `docs/validation/P20B/P20B-focused-20261004-e93731c.zip` (SHA-256 `7F2C43F12B0C80DF216B3B1923A3A00060785BB42B8C51675FA3828FD1181675`). They validate code tree `92ba3b27c65d18bb0c5786b8e99860116c94d22b` only; the later isolated time-binding and reconstruction source changes below are not covered by those runs.
 
 ## Remaining boundary
 
 P20-B still requires the selected `UnityBootstrap-Daily-v1` fail-closed admission/inventory hook and its negative test before a complete P20 integration candidate can be claimed. That hook shares the bootstrap/admission hotspot being handled by P10; this progress commit deliberately leaves it untouched pending that integration boundary. ALL EditMode and official Smoke have therefore not been run for this incomplete integration candidate. No P20-B independent exact-tip implementation review or canonical promotion is claimed.
 
 P20-B remains limited to the reviewed two-Person, one supported civil-segment proof and its P18/P8 ownership boundaries. This commit does not add Party/Group semantics, automatic progression, save/load, or broader P12 readiness.
+
+## Follow-up: proposal-time binding and P20 reconstruction facts
+
+The exact-tip implementation review identified three P20-owned gaps that can be handled without the P10 bootstrap/admission hotspot. This follow-up changes only the P20 owner and its formation/integration fixtures:
+
+- Proposal creation now fixes a `ProposedStart` logical tick. Each recorded assent retains that same tick, consent after the target is no longer future is rejected, and scheduling has no later start argument that could substitute another time.
+- `SnapshotOwnerState` enumerates complete P20 proposal/assent/abort facts in stable activity order. `TryRestoreOwnerState` restores them only against matching restored P18 lifecycle identity/revision/participant/start facts and stages replacement state atomically.
+- Reconstruction fixtures cover independent assents and proposed time, plus active `AbortAfterLeg` identity, tick, and order after P18 lifecycle cloning.
+
+**Validation:** not run in this follow-up because the P10 Unity validation slot is active. `git diff --check` passes. The follow-up is a source/test slice only; it is not independently reviewed, does not complete P20-B, and does not claim P12 admission coverage. Revalidate the changed fixtures when the serialized Unity slot is available.
