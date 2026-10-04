@@ -4063,7 +4063,7 @@ public static class WorldStateSnapshotBuilder
                 topology.PublicationState,
                 placeSnapshots,
                 connectionSnapshots,
-                owner.SemanticOwner?.DefinitionId,
+                owner.SemanticOwner?.LegacyDefinitionId ?? owner.SemanticOwner?.SiteInstanceId,
                 owner.SemanticOwner?.LocationId?.Value));
         }
 

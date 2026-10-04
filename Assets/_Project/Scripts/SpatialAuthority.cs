@@ -812,6 +812,18 @@ public sealed class SpatialAuthorityStore : IAuthoritativeMutationGuardBindable
         return true;
     }
 
+    internal void RollbackGenesisTopologyBinding(LocalTopologyOwnerReference owner, LocationId locationId)
+    {
+        if (owner == null || locationId == null || revision <= 0)
+            throw new InvalidOperationException("Cannot roll back the P10-B spatial topology binding.");
+        string key = TopologyKey(owner.OwnerKind, owner.OwnerRuntimeId);
+        if (!topologyBindingsByKey.TryGetValue(key, out SpatialLocalTopologyBinding binding)
+            || binding.LocationId != locationId)
+            throw new InvalidOperationException("Cannot roll back the P10-B spatial topology binding because it changed.");
+        topologyBindingsByKey.Remove(key);
+        revision--;
+    }
+
     public bool TryGet(HexId id, out HexRecord hex)
     {
         if (id != null && hexesById.TryGetValue(id.Value, out hex)) return true;

@@ -574,6 +574,42 @@ public sealed class RuntimeIdentityRegistry
         censusRevision++;
     }
 
+    internal void RollbackGenesisExplorableSite(ExplorableSiteRuntime site)
+    {
+        if (site == null || !explorableSitesByRuntimeId.TryGetValue(site.RuntimeId, out ExplorableSiteRuntime current)
+            || !ReferenceEquals(site, current) || censusRevision <= 0)
+            throw new InvalidOperationException("Cannot roll back the P10-B ExplorableSite identity insertion.");
+        explorableSitesByRuntimeId.Remove(site.RuntimeId);
+        censusRevision--;
+    }
+
+    internal void RollbackGenesisLocation(SpatialLocationRuntime location)
+    {
+        if (location == null || !locationsByRuntimeId.TryGetValue(location.RuntimeId, out SpatialLocationRuntime current)
+            || !ReferenceEquals(location, current) || censusRevision <= 0)
+            throw new InvalidOperationException("Cannot roll back the P10-B Location identity insertion.");
+        locationsByRuntimeId.Remove(location.RuntimeId);
+        censusRevision--;
+    }
+
+    internal void RollbackGenesisLocalTopologyMembers(
+        IReadOnlyList<LocalPlaceRuntime> places, IReadOnlyList<LocalTopologyConnectionRuntime> connections)
+    {
+        if (places == null || connections == null || censusRevision <= 0)
+            throw new InvalidOperationException("Cannot roll back the P10-B LocalTopology identity batch.");
+        foreach (LocalPlaceRuntime place in places)
+            if (place == null || !localPlacesByRuntimeId.TryGetValue(place.RuntimeId, out LocalPlaceRuntime currentPlace)
+                || !ReferenceEquals(place, currentPlace))
+                throw new InvalidOperationException("P10-B LocalPlace identity rollback did not match the inserted object.");
+        foreach (LocalTopologyConnectionRuntime connection in connections)
+            if (connection == null || !localConnectionsByRuntimeId.TryGetValue(connection.RuntimeId, out LocalTopologyConnectionRuntime currentConnection)
+                || !ReferenceEquals(connection, currentConnection))
+                throw new InvalidOperationException("P10-B LocalConnection identity rollback did not match the inserted object.");
+        foreach (LocalPlaceRuntime place in places) localPlacesByRuntimeId.Remove(place.RuntimeId);
+        foreach (LocalTopologyConnectionRuntime connection in connections) localConnectionsByRuntimeId.Remove(connection.RuntimeId);
+        censusRevision--;
+    }
+
     public bool TryGetNpc(string runtimeId, out NpcRuntime npcRuntime)
     {
         if (string.IsNullOrWhiteSpace(runtimeId) == false && npcsByRuntimeId.TryGetValue(runtimeId, out npcRuntime) == true)

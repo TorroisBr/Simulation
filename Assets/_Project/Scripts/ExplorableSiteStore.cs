@@ -41,6 +41,17 @@ public sealed class ExplorableSiteStore : IAuthoritativeMutationGuardBindable
         return true;
     }
 
+    internal void RollbackGenesisSite(ExplorableSiteRuntime site)
+    {
+        if (site == null || !sitesByRuntimeId.TryGetValue(site.RuntimeId, out ExplorableSiteRuntime current)
+            || !ReferenceEquals(site, current) || sites.Count == 0 || revision <= 0
+            || !ReferenceEquals(sites[sites.Count - 1], site))
+            throw new InvalidOperationException("Cannot roll back the P10-B ExplorableSite store insertion.");
+        sitesByRuntimeId.Remove(site.RuntimeId);
+        sites.RemoveAt(sites.Count - 1);
+        revision--;
+    }
+
     public ExplorableSiteRuntime GetByRuntimeId(string runtimeId)
     {
         return string.IsNullOrWhiteSpace(runtimeId) == false

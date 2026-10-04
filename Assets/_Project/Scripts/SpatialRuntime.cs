@@ -125,6 +125,19 @@ public sealed class SpatialNetworkRuntime
         return true;
     }
 
+    internal void RollbackGenesisLocation(SpatialLocationRuntime location)
+    {
+        if (location == null || !locations.Contains(location) || revision <= 0
+            || (outgoingRoutes.TryGetValue(location, out List<SpatialRouteRuntime> outgoing) && outgoing.Count != 0)
+            || !identityRegistry.TryGetLocation(location.RuntimeId, out SpatialLocationRuntime current)
+            || !ReferenceEquals(location, current))
+            throw new InvalidOperationException("Cannot roll back the P10-B spatial Location insertion.");
+        locations.Remove(location);
+        outgoingRoutes.Remove(location);
+        identityRegistry.RollbackGenesisLocation(location);
+        revision--;
+    }
+
     public bool RegisterRoute(SpatialRouteRuntime route)
     {
         if (route == null)

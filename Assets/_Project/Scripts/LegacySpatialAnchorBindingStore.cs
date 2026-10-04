@@ -97,6 +97,20 @@ public sealed class LegacySpatialAnchorBindingStore : IAuthoritativeMutationGuar
         failure = SpatialAnchorBindingFailure.None; return true;
     }
 
+    internal void RollbackGenesisBinding(string siteRuntimeId, LocationId locationId)
+    {
+        var owner = new SpatialAnchorOwnerId(SpatialAnchorOwnerKind.ExplorableSite, siteRuntimeId);
+        if (locationId == null || revision <= 0
+            || !byOwner.TryGetValue(owner.StableKey, out SpatialAnchorBinding binding)
+            || binding.LocationId != locationId
+            || !ownerByLocation.TryGetValue(locationId.Value, out string ownerKey)
+            || !string.Equals(ownerKey, owner.StableKey, StringComparison.Ordinal))
+            throw new InvalidOperationException("Cannot roll back the P10-B spatial anchor binding.");
+        byOwner.Remove(owner.StableKey);
+        ownerByLocation.Remove(locationId.Value);
+        revision--;
+    }
+
     public SpatialAnchorBindingInvariantReport ValidateInvariants()
     {
         List<string> violations = new List<string>();

@@ -18,6 +18,7 @@ public class TesteSimulacao : MonoBehaviour
     private LegacySpatialAnchorBindingStore genesisLegacySpatialAnchorBindingStore;
     private P10RuinLocalTopologyCandidate p10RuinCandidate;
     private ExplorableSiteRuntime p10RuinRuntime;
+    private P10BGeneratedRuinGenesis.PreparedRuin p10BPreparedRuin;
 
     private readonly List<INpcActionProvider> actionProviders = new List<INpcActionProvider>();
     private Dictionary<CityData, List<CityRuntime>> cityRuntimesByDefinition = new Dictionary<CityData, List<CityRuntime>>();
@@ -196,6 +197,10 @@ public class TesteSimulacao : MonoBehaviour
                 switch (stageId)
                 {
                     case "p9.genesis.resolve-profile/v1":
+                        if (SimulationGenesisPipeline.IsP10BGeneratedRuinEnabled(simulationConfig)
+                            && runtimeAdmissionContext != null
+                            && runtimeAdmissionContext.Profile == SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1)
+                            throw new System.InvalidOperationException("P10-B generated Ruin topology is not admitted by the Unity bootstrap daily profile.");
                         SimulationGenesisPipeline.ValidateProfile(simulationConfig);
                         simulationTime = new SimulationTime();
                         authoritativeRandomSource = new DeterministicRandomSource(simulationConfig.useFixedSimulationSeed ? simulationConfig.simulationSeed : 0);
@@ -244,6 +249,18 @@ public class TesteSimulacao : MonoBehaviour
                             out System.Collections.Generic.IReadOnlyList<string> combinedProvenanceRecords);
                         profileProvenanceRecords = combinedProvenanceRecords;
                         break;
+                    case SimulationGenesisPipeline.P10BGeneratedRuinStageId:
+                        p10BPreparedRuin = P10BGeneratedRuinGenesis.Prepare(
+                            simulationConfig, selectedP9ProfileFingerprint, genesisSpatialAuthority,
+                            runtimeIdentityRegistry, out string p10BDiagnostic);
+                        if (p10BPreparedRuin == null)
+                            throw new System.InvalidOperationException("P10-B generated Ruin preparation failed: " + p10BDiagnostic);
+                        genesisLocalTopologyStore = new LocalTopologyStore(runtimeIdentityRegistry);
+                        profileFingerprint = SimulationGenesisPipeline.CreateP10BCombinedFingerprint(
+                            selectedP9ProfileFingerprint, profileProvenanceRecords, p10BPreparedRuin,
+                            out System.Collections.Generic.IReadOnlyList<string> p10BCombinedRecords);
+                        profileProvenanceRecords = p10BCombinedRecords;
+                        break;
                     case "p9.genesis.authored-actors/v1":
                         NpcRuntimeList.Clear();
                         npcRuntimesByDefinition.Clear();
@@ -286,9 +303,19 @@ public class TesteSimulacao : MonoBehaviour
                         ValidateCandidateProfile();
                         break;
                     case "p9.genesis.publish/v1":
+                        if (p10BPreparedRuin != null)
+                        {
+                            if (!P10BGeneratedRuinGenesis.TryCommitPreparedRuin(
+                                    p10BPreparedRuin, runtimeIdentityRegistry, spatialNetwork,
+                                    explorableSiteStore, genesisLocalTopologyStore, simulationRuntime.SpatialAuthorityStore,
+                                    simulationRuntime.LegacySpatialAnchorBindingStore,
+                                    out string p10BCommitDiagnostic))
+                                throw new System.InvalidOperationException("P10-B atomic topology publication failed: " + p10BCommitDiagnostic);
+                            AddExplorableSiteRuntimeByDefinition(p10BPreparedRuin.Site.Definition, p10BPreparedRuin.Site);
+                        }
                         draftComposition = new SimulationBootstrapComposition(
                             unpublishedWorldId,
-                            new SimulationGenesisManifest(simulationConfig, effectiveConfiguration, calendarDefinition, selectedP9ProfileFingerprint, profileFingerprint, profileProvenanceRecords, P10RuinLocalTopologyGenesis.IsEnabled(simulationConfig)), simulationTime, calendarDefinition, spatialNetwork, domainEventStore,
+                            new SimulationGenesisManifest(simulationConfig, effectiveConfiguration, calendarDefinition, selectedP9ProfileFingerprint, profileFingerprint, profileProvenanceRecords, P10RuinLocalTopologyGenesis.IsEnabled(simulationConfig) && !SimulationGenesisPipeline.IsP10BGeneratedRuinEnabled(simulationConfig), SimulationGenesisPipeline.IsP10BGeneratedRuinEnabled(simulationConfig)), simulationTime, calendarDefinition, spatialNetwork, domainEventStore,
                             historyStore, scheduledDirectiveStore, decisionStore, decisionRecorder, recordSequence, economyTransactionService, npcChronicleService,
                             npcChronicleFormatter, travelPartyStore, travelPartySystem, simulationRuntime,
                             runtimeIdentityRegistry,
@@ -299,7 +326,9 @@ public class TesteSimulacao : MonoBehaviour
                         throw new System.InvalidOperationException("Undeclared authored genesis stage: " + stageId);
                 }
                 stageCompleted?.Invoke(stageId);
-            }, simulationConfig != null && simulationConfig.useAuthoredGeographyProfile, P10RuinLocalTopologyGenesis.IsEnabled(simulationConfig));
+            }, simulationConfig != null && simulationConfig.useAuthoredGeographyProfile,
+                P10RuinLocalTopologyGenesis.IsEnabled(simulationConfig) && !SimulationGenesisPipeline.IsP10BGeneratedRuinEnabled(simulationConfig),
+                SimulationGenesisPipeline.IsP10BGeneratedRuinEnabled(simulationConfig));
 
             if (draftComposition == null)
                 throw new System.InvalidOperationException("Simulation genesis returned without creating its private composition draft.");
@@ -396,9 +425,11 @@ public class TesteSimulacao : MonoBehaviour
 
     private void ValidateCandidateProfile()
     {
+        bool p10b = SimulationGenesisPipeline.IsP10BGeneratedRuinEnabled(simulationConfig);
+        int p10SiteCount = P10RuinLocalTopologyGenesis.IsEnabled(simulationConfig) && !p10b ? 1 : 0;
         if (CityRuntimeList.Count != simulationConfig.Cities.Count
             || NpcRuntimeList.Count != simulationConfig.Npcs.Count
-            || explorableSiteStore.Sites.Count != simulationConfig.ExplorableSites.Count
+            || explorableSiteStore.Sites.Count != simulationConfig.ExplorableSites.Count + p10SiteCount
             || scheduledDirectiveStore.Directives.Count != simulationConfig.ScheduledDirectives.Count)
             throw new System.InvalidOperationException("Authored bootstrap output inventory does not match its selected profile.");
 
@@ -520,6 +551,56 @@ public class TesteSimulacao : MonoBehaviour
                 }
             if (record == null || record.Bounty != expectedBounty || record.SentenceDays != expectedSentenceDays)
                 throw new System.InvalidOperationException("Authored warrant owner output is incomplete.");
+        }
+        if (p10SiteCount == 1 && !p10b)
+        {
+            if (p10RuinCandidate == null || p10RuinRuntime == null
+                || p10RuinRuntime.Definition != simulationConfig.authoredP10RuinSite
+                || p10RuinRuntime.Definition.kind != ExplorableSiteKind.Ruin
+                || !simulationRuntime.SpatialAuthorityStore.TryGet(p10RuinCandidate.Location.Id, out LocationRecord selectedLocation)
+                || selectedLocation.AnchorHexId != p10RuinCandidate.Anchor.Id
+                || !simulationRuntime.LegacySpatialAnchorBindingStore.TryGet(
+                    new SpatialAnchorOwnerId(SpatialAnchorOwnerKind.ExplorableSite, p10RuinRuntime.RuntimeId),
+                    out LocationId boundLocation)
+                || boundLocation != p10RuinCandidate.Location.Id)
+                throw new System.InvalidOperationException("P10 Ruin identity or selected P8 Location anchor handoff is incomplete.");
+
+            var semanticOwner = new LocalTopologySemanticOwnerReference(p10RuinRuntime.DefinitionId, p10RuinCandidate.Location.Id);
+            LocalTopologyStore topologyStore = simulationRuntime.LocalTopologyStore;
+            if (topologyStore == null
+                || !topologyStore.TryGetTopologyForSemanticOwner(semanticOwner, out LocalTopologyRuntime topology)
+                || !topologyStore.TryResolveSemanticOwnerRuntimeId(semanticOwner, out string resolvedRuntimeId)
+                || !string.Equals(resolvedRuntimeId, p10RuinRuntime.RuntimeId, System.StringComparison.Ordinal)
+                || topology.Places.Count != 3
+                || topology.EntryPoints.Count != 1
+                || topology.Connections.Count != 2
+                || !simulationRuntime.SpatialAuthorityStore.ValidateInvariants(topologyStore).IsValid)
+                throw new System.InvalidOperationException("P10 Ruin LocalTopology was not completely published through its selected P8 anchor.");
+
+            if (!simulationRuntime.SpatialAuthorityStore.TryResolve(
+                    SpatialReference.ForSubLocation(topology.Owner, topology.EntryPoints[0].RuntimeId),
+                    topologyStore, out SpatialResolution resolution, out SpatialAuthorityFailure failure)
+                || resolution?.Location?.Id != p10RuinCandidate.Location.Id)
+                throw new System.InvalidOperationException("P10 Ruin entry point does not resolve through the canonical P8 Location: " + failure);
+        }
+        if (p10b)
+        {
+            int generatedEntryCount = 0;
+            if (p10BPreparedRuin != null)
+                foreach (RuinLocalTopologyGeneration.Place place in p10BPreparedRuin.GeneratedTopology.Places)
+                    if (place.IsEntry) generatedEntryCount++;
+            if (p10BPreparedRuin == null
+                || p10BPreparedRuin.Site.Definition != simulationConfig.authoredP10RuinSite
+                || p10BPreparedRuin.Site.SiteInstanceId != p10BPreparedRuin.Request.SiteInstanceId
+                || p10BPreparedRuin.GeneratedTopology.Places.Count < 6
+                || p10BPreparedRuin.GeneratedTopology.Places.Count > 10
+                || generatedEntryCount != 1
+                || p10BPreparedRuin.Topology.IsPublished
+                || explorableSiteStore.TryGetByRuntimeId(p10BPreparedRuin.Site.RuntimeId, out _)
+                || genesisLocalTopologyStore == null
+                || genesisLocalTopologyStore.Topologies.Count != 0
+                || !simulationRuntime.SpatialAuthorityStore.ValidateInvariants(genesisLocalTopologyStore).IsValid)
+                throw new System.InvalidOperationException("P10-B prepared topology is invalid or became visible before atomic publication.");
         }
         if (historyStore.HistoricalEvents.Count != 0)
             throw new System.InvalidOperationException("Genesis must not create simulated history before the first boundary.");
@@ -1631,4 +1712,3 @@ public class TesteSimulacao : MonoBehaviour
         return string.IsNullOrEmpty(siteData.id) == false ? siteData.id : siteData.siteName;
     }
 }
-
