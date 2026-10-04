@@ -40,6 +40,40 @@ public sealed class FiniteSourceProductionTests
     }
 
     [Test]
+    public void IdenticalInputsProduceIdenticalFiniteResultsAndZeroReserveIsExhausted()
+    {
+        ItemData firstItem = SimulationTestFactory.CreateItem("p14b-deterministic-item");
+        ItemData secondItem = SimulationTestFactory.CreateItem("p14b-deterministic-item");
+        FiniteProductionSourceStore firstSource = CreateSource(firstItem, 3, 2);
+        FiniteProductionSourceStore secondSource = CreateSource(secondItem, 3, 2);
+        MarketRuntime firstMarket = CreateMarket(firstItem, 4, 10);
+        MarketRuntime secondMarket = CreateMarket(secondItem, 4, 10);
+
+        FiniteSourceProductionResult first = Produce(firstSource, firstMarket, firstItem, 7, 0, 0);
+        FiniteSourceProductionResult second = Produce(secondSource, secondMarket, secondItem, 7, 0, 0);
+
+        Assert.That(first.Status, Is.EqualTo(FiniteSourceProductionStatus.Applied));
+        Assert.That(second.Status, Is.EqualTo(first.Status));
+        Assert.That(second.Quantity, Is.EqualTo(first.Quantity));
+        Assert.That(second.ReserveBefore, Is.EqualTo(first.ReserveBefore));
+        Assert.That(second.ReserveAfter, Is.EqualTo(first.ReserveAfter));
+        Assert.That(second.StockBefore, Is.EqualTo(first.StockBefore));
+        Assert.That(second.StockAfter, Is.EqualTo(first.StockAfter));
+        Assert.That(firstSource.Source.RemainingReserve, Is.EqualTo(secondSource.Source.RemainingReserve));
+        Assert.That(firstMarket.GetAmount(firstItem), Is.EqualTo(secondMarket.GetAmount(secondItem)));
+
+        FiniteProductionSourceStore emptySource = CreateSource(firstItem, 3, 0);
+        MarketRuntime emptyMarket = CreateMarket(firstItem, 4, 10);
+        FiniteSourceProductionResult exhausted = Produce(emptySource, emptyMarket, firstItem, 7, 0, 0);
+
+        Assert.That(exhausted.Status, Is.EqualTo(FiniteSourceProductionStatus.Exhausted));
+        Assert.That(exhausted.Quantity, Is.Zero);
+        Assert.That(emptySource.Source.Revision, Is.Zero);
+        Assert.That(emptyMarket.Revision, Is.Zero);
+        Assert.That(emptyMarket.GetAmount(firstItem), Is.EqualTo(4));
+    }
+
+    [Test]
     public void StockOverflowRejectsWithoutChangingReserveMarketOrRevision()
     {
         ItemData item = SimulationTestFactory.CreateItem("p14b-stock-overflow-item");
@@ -191,8 +225,18 @@ public sealed class FiniteSourceProductionTests
     {
         ItemData item = SimulationTestFactory.CreateItem("p14b-profile-item");
         CityData exogenous = CreateCityData("p14b-exogenous", item, 0);
+        exogenous.marketItems[0].initialAmount = 10;
+        exogenous.marketItems[0].consumptionPer1000Population = 0f;
         CityRuntime exogenousCity = new CityRuntime("runtime.exogenous", exogenous, new SpatialLocationRuntime("legacy-exogenous"));
         Assert.That(exogenousCity.FiniteProductionSources, Is.Null);
+
+        typeof(CityRuntime).GetMethod("SimulateLocalDailyMaterialFlow", BindingFlags.Instance | BindingFlags.NonPublic)
+            .Invoke(exogenousCity, new object[] { 1L, "calendar-v1" });
+
+        Assert.That(exogenousCity.FiniteProductionSources, Is.Null);
+        Assert.That(exogenousCity.LastMaterialFlow.AppliedSourceQuantity, Is.EqualTo(2));
+        Assert.That(exogenousCity.LastMaterialFlow.OpeningStock, Is.EqualTo(10));
+        Assert.That(exogenousCity.LastMaterialFlow.ClosingStock, Is.EqualTo(12));
 
         CityData finite = CreateCityData("p14b-finite", item, 5);
         finite.materialFlowProfile = LocalMaterialFlowProfile.FiniteReserveDaily;
