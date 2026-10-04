@@ -237,7 +237,9 @@ public sealed class P20JointCivilTravelOwner
                 nextCausalOrder++;
                 lastAcceptedAt = assent.AcceptedAt.Value;
             }
-            if (assents.Values.Any(x => !x.Accepted) && assents.Count != snapshot.PersonIds.Count) return false;
+            if (assents.Values.Any(x => !x.Accepted)
+                && (assents.Values.Count(x => !x.Accepted) != 1
+                    || assents.Values.OrderBy(x => x.AcceptedOrder).Last().Accepted)) return false;
             if (snapshot.AbortAfterLegRequested)
             {
                 if (string.IsNullOrWhiteSpace(snapshot.AbortCausalInputIdentity)

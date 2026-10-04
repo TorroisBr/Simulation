@@ -304,8 +304,6 @@ public sealed class P20JointCivilTravelFormationTests
             new LogicalTick(1), new[] { "person-a", "person-b" },
             out P20JointCivilTravelSnapshot proposal, out ActivityFailure createFailure), Is.True, createFailure.ToString());
         Assert.That(owner.TryRecordAssent(proposal.ActivityInstanceId,
-            new P20JointCivilTravelAssent("person-a", true, "declined-restore-a")), Is.True);
-        Assert.That(owner.TryRecordAssent(proposal.ActivityInstanceId,
             new P20JointCivilTravelAssent("person-b", false, "declined-restore-b")), Is.True);
 
         ActivityLifecycleStore restoredLifecycle = lifecycle.Clone();
@@ -317,6 +315,7 @@ public sealed class P20JointCivilTravelFormationTests
         Assert.That(restoredOwner.TryGet(proposal.ActivityInstanceId, out P20JointCivilTravelSnapshot restored), Is.True);
         Assert.That(restored.State, Is.EqualTo(P20JointCivilTravelState.NotFormed));
         Assert.That(restored.Disposition, Is.EqualTo("participant-declined"));
+        Assert.That(restored.Assents, Has.Count.EqualTo(1));
         Assert.That(restored.Assents.Single(x => x.PersonId == "person-b").Accepted, Is.False);
         Assert.That(restoredOwner.TrySchedule(proposal.ActivityInstanceId, out _), Is.False);
         Assert.That(restoredLifecycle.GetCommitment("person-a"), Is.Null);
