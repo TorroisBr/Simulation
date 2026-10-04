@@ -136,6 +136,134 @@ public sealed class CityDailyEconomyContinuationTests
     }
 
     [Test]
+    public void FiniteProductionStepDebitsReserveAndCreditsStockTogetherAndReplaysOnce()
+    {
+        ItemData item = SimulationTestFactory.CreateItem("daily-finite-production");
+        CityData data = CreateFiniteCityData("daily-finite-production-city", item);
+        CityRuntime city = new CityRuntime("city-daily-finite-production", data,
+            new SpatialLocationRuntime("daily-finite-production-location"));
+        BoundaryContinuationManifest manifest = CreateManifest(city, CityDailyEconomyStepKind.Production);
+
+        IBoundaryContinuationStepCommit prepared = Prepare(city, manifest);
+        Assert.That(city.FiniteProductionSources.Source.RemainingReserve, Is.EqualTo(5));
+        Assert.That(city.Market.GetAmount(item), Is.EqualTo(2));
+        Assert.That(prepared.TryCommit(out _), Is.True);
+        Assert.That(city.FiniteProductionSources.Source.RemainingReserve, Is.EqualTo(2));
+        Assert.That(city.FiniteProductionSources.Source.Revision, Is.EqualTo(1));
+        Assert.That(city.FiniteProductionSources.Source.LastProcessedDay, Is.EqualTo(1));
+        Assert.That(city.Market.GetAmount(item), Is.EqualTo(5));
+        Assert.That(city.Market.Revision, Is.EqualTo(1));
+
+        IBoundaryContinuationStepCommit replay = Prepare(city, manifest);
+        Assert.That(replay.TryCommit(out _), Is.True);
+        Assert.That(city.FiniteProductionSources.Source.RemainingReserve, Is.EqualTo(2));
+        Assert.That(city.FiniteProductionSources.Source.Revision, Is.EqualTo(1));
+        Assert.That(city.Market.GetAmount(item), Is.EqualTo(5));
+        Assert.That(city.Market.Revision, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void LegacyProductionEntryRejectsFiniteProfileWithoutChangingEitherOwner()
+    {
+        ItemData item = SimulationTestFactory.CreateItem("daily-finite-legacy-entry");
+        CityData data = CreateFiniteCityData("daily-finite-legacy-city", item);
+        CityRuntime city = new CityRuntime("city-daily-finite-legacy", data,
+            new SpatialLocationRuntime("daily-finite-legacy-location"));
+
+        Assert.Throws<LocalDailyMaterialFlowRejectedException>(() => city.SimulateProductionDay());
+
+        Assert.That(city.FiniteProductionSources.Source.RemainingReserve, Is.EqualTo(5));
+        Assert.That(city.FiniteProductionSources.Source.Revision, Is.Zero);
+        Assert.That(city.Market.GetAmount(item), Is.EqualTo(2));
+        Assert.That(city.Market.Revision, Is.Zero);
+    }
+
+    [Test]
+    public void ExhaustedFiniteProductionRecordsNoOwnerMutation()
+    {
+        ItemData item = SimulationTestFactory.CreateItem("daily-finite-exhausted");
+        CityData data = CreateFiniteCityData("daily-finite-exhausted-city", item);
+        data.productionConfigs[0].initialReserve = 0;
+        CityRuntime city = new CityRuntime("city-daily-finite-exhausted", data,
+            new SpatialLocationRuntime("daily-finite-exhausted-location"));
+        BoundaryContinuationManifest manifest = CreateManifest(city, CityDailyEconomyStepKind.Production);
+
+        Assert.That(Prepare(city, manifest).TryCommit(out _), Is.True);
+
+        Assert.That(city.FiniteProductionSources.Source.RemainingReserve, Is.Zero);
+        Assert.That(city.FiniteProductionSources.Source.Revision, Is.Zero);
+        Assert.That(city.FiniteProductionSources.Source.LastProcessedDay, Is.EqualTo(long.MinValue));
+        Assert.That(city.Market.GetAmount(item), Is.EqualTo(2));
+        Assert.That(city.Market.Revision, Is.Zero);
+    }
+
+    [Test]
+    public void FiniteOwnerCannotBeReinterpretedAsExogenousThroughProductionEntries()
+    {
+        ItemData item = SimulationTestFactory.CreateItem("daily-finite-reinterpreted");
+        CityData data = CreateFiniteCityData("daily-finite-reinterpreted-city", item);
+        CityRuntime city = new CityRuntime("city-daily-finite-reinterpreted", data,
+            new SpatialLocationRuntime("daily-finite-reinterpreted-location"));
+        data.materialFlowProfile = LocalMaterialFlowProfile.ExogenousDaily;
+        BoundaryContinuationManifest manifest = CreateManifest(city, CityDailyEconomyStepKind.Production);
+
+        Assert.That(city.TryPrepareDailyEconomyStep(manifest, manifest.Steps[0], out _, out _), Is.False);
+        Assert.Throws<LocalDailyMaterialFlowRejectedException>(() => city.SimulateProductionDay());
+        Assert.That(city.FiniteProductionSources.Source.RemainingReserve, Is.EqualTo(5));
+        Assert.That(city.Market.GetAmount(item), Is.EqualTo(2));
+    }
+
+    [TestCase("profile")]
+    [TestCase("settlement")]
+    [TestCase("location")]
+    [TestCase("store")]
+    [TestCase("source")]
+    [TestCase("content")]
+    [TestCase("reserve")]
+    public void FiniteAuthoredProfileFieldsParticipateInDailyOwnerRevision(string field)
+    {
+        ItemData item = SimulationTestFactory.CreateItem("daily-finite-stale-" + field);
+        CityData data = CreateFiniteCityData("daily-finite-stale-city-" + field, item);
+        CityRuntime city = new CityRuntime("city-daily-finite-stale-" + field, data,
+            new SpatialLocationRuntime("daily-finite-stale-location-" + field));
+        BoundaryContinuationManifest manifest = CreateManifest(city, CityDailyEconomyStepKind.Production);
+
+        switch (field)
+        {
+            case "profile": data.materialFlowProfile = LocalMaterialFlowProfile.ExogenousDaily; break;
+            case "settlement": data.settlementSemanticId += ".changed"; break;
+            case "location": data.materialFlowLocationId += ".changed"; break;
+            case "store": data.marketStoreSemanticId += ".changed"; break;
+            case "source": data.productionConfigs[0].productionSourceId += ".changed"; break;
+            case "content": data.productionConfigs[0].contentRevision += ".changed"; break;
+            case "reserve": data.productionConfigs[0].initialReserve++; break;
+        }
+
+        Assert.That(city.TryPrepareDailyEconomyStep(manifest, manifest.Steps[0], out _, out _), Is.False);
+        Assert.That(city.FiniteProductionSources.Source.RemainingReserve, Is.EqualTo(5));
+        Assert.That(city.Market.GetAmount(item), Is.EqualTo(2));
+    }
+
+    [Test]
+    public void FinitePreparedProductionRejectsConfigurationChangeBeforeEitherInstall()
+    {
+        ItemData item = SimulationTestFactory.CreateItem("daily-finite-stale-prepared");
+        CityData data = CreateFiniteCityData("daily-finite-stale-prepared-city", item);
+        CityRuntime city = new CityRuntime("city-daily-finite-stale-prepared", data,
+            new SpatialLocationRuntime("daily-finite-stale-prepared-location"));
+        BoundaryContinuationManifest manifest = CreateManifest(city, CityDailyEconomyStepKind.Production);
+        IBoundaryContinuationStepCommit prepared = Prepare(city, manifest);
+
+        data.productionConfigs[0].contentRevision = "content-v2";
+
+        Assert.That(prepared.TryCommit(out _), Is.False);
+        Assert.That(city.FiniteProductionSources.Source.RemainingReserve, Is.EqualTo(5));
+        Assert.That(city.FiniteProductionSources.Source.Revision, Is.Zero);
+        Assert.That(city.Market.GetAmount(item), Is.EqualTo(2));
+        Assert.That(city.Market.Revision, Is.Zero);
+    }
+
+    [Test]
     public void PopulationChangeAfterPreparationRejectsConsumptionBeforeMarketOrAccountInstall()
     {
         ItemData item = SimulationTestFactory.CreateItem("daily-population-stale");
@@ -171,6 +299,25 @@ public sealed class CityDailyEconomyContinuationTests
     {
         Assert.That(city.TryPrepareDailyEconomyStep(manifest, manifest.Steps[0], out IBoundaryContinuationStepCommit prepared, out _), Is.True);
         return prepared;
+    }
+
+    private static CityData CreateFiniteCityData(string id, ItemData item)
+    {
+        CityData data = SimulationTestFactory.CreateCityData(id,
+            SimulationTestFactory.CreateMarketItem(item, 2, 10));
+        data.materialFlowProfile = LocalMaterialFlowProfile.FiniteReserveDaily;
+        data.settlementSemanticId = "settlement." + id;
+        data.materialFlowLocationId = "location." + id;
+        data.marketStoreSemanticId = "store." + id;
+        data.productionConfigs.Add(new CityProductionConfig
+        {
+            item = item,
+            amountPerDay = 3,
+            initialReserve = 5,
+            productionSourceId = "source." + id,
+            contentRevision = "content-v1"
+        });
+        return data;
     }
 
 }
