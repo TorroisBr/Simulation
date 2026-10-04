@@ -560,7 +560,7 @@ public sealed class SimulationBootstrapCompositionTests
 
         simulation.Start();
 
-        Assert.That(simulation.Bootstrap.ProfileContractIdentity, Is.EqualTo(P10RuinLocalTopologyGenesis.ContractIdentity));
+        Assert.That(simulation.Bootstrap.ProfileContractIdentity, Is.EqualTo(SimulationGenesisPipeline.GeographyProfileContractIdentity));
         Assert.That(simulation.Bootstrap.Manifest.StageOrder, Does.Contain(SimulationGenesisPipeline.GeographyStageId));
         Assert.That(simulation.Bootstrap.SpatialAuthority.HexCount, Is.EqualTo(1));
         Assert.That(simulation.Bootstrap.SpatialAuthority.LocationCount, Is.EqualTo(1));
@@ -1117,7 +1117,7 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(scaleCensus.SchemaVersion, Is.EqualTo(SpatialScaleContextCensusProvider.SchemaVersion));
         Assert.That(scaleCensus.OwnerInstanceIdentity, Is.SameAs(authority));
         Assert.That(scaleCensus.Cardinality, Is.EqualTo(1));
-        Assert.That(scaleCensus.Revision, Is.EqualTo(1L));
+        Assert.That(scaleCensus.Revision, Is.EqualTo(2L));
         Assert.That(scaleCensusProvider.GetCurrentCensus().OwnerInstanceIdentity, Is.SameAs(authority));
 
         OwnerSectionCensusWitness occurrenceReceipts = simulation.Bootstrap.GetNpcDecisionOccurrenceReceiptCensus();
