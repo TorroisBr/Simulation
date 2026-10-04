@@ -22,6 +22,8 @@ public static class P10RuinLocalTopologyGenesis
         new P10LocalConnectionInput("courtyard-to-inner-chamber", "courtyard", "inner-chamber", 1f)
     };
 
+    public static string CreateLegacySiteInstanceId(string definitionId) => LocalTopologySemanticOwnerReference.CreateP10ALegacySiteInstanceId(definitionId);
+
     public static string CreatePlaceSemanticId(string definitionId, string fixtureKey)
     {
         return WorldStateSnapshotValue.EncodeStableKey(
@@ -110,7 +112,7 @@ public static class P10RuinLocalTopologyGenesis
         ExplorableSiteRuntime pendingSite;
         try
         {
-            pendingSite = new ExplorableSiteRuntime(idAllocator, candidate.SiteDefinition, legacyLocation);
+            pendingSite = new ExplorableSiteRuntime(idAllocator, candidate.SiteDefinition, legacyLocation, CreateLegacySiteInstanceId(candidate.SiteDefinition.DefinitionId));
         }
         catch (ArgumentException exception)
         {
@@ -138,7 +140,7 @@ public static class P10RuinLocalTopologyGenesis
         }
 
         LocalTopologySemanticOwnerReference semanticOwner =
-            new LocalTopologySemanticOwnerReference(candidate.SiteDefinition.DefinitionId, candidate.Location.Id);
+            LocalTopologySemanticOwnerReference.ForP10ALegacy(candidate.SiteDefinition.DefinitionId, candidate.Location.Id);
         topology = new LocalTopologyRuntime(
             LocalTopologyOwnerReference.ForSemanticExplorableSite(pendingSite, candidate.Location.Id),
             identityRegistry);
@@ -221,7 +223,6 @@ public static class P10RuinLocalTopologyGenesis
         return records.AsReadOnly();
     }
 }
-
 public sealed class P10RuinLocalTopologyCandidate
 {
     public ExplorableSiteData SiteDefinition { get; }

@@ -75,9 +75,9 @@ public sealed class P10RuinLocalTopologyGenesisTests
     {
         ExplorableSiteData definition = SimulationTestFactory.CreateExplorableSite("p10-semantic-site", ExplorableSiteKind.Ruin);
         ExplorableSiteRuntime firstSite = new ExplorableSiteRuntime(
-            "site-runtime-first", definition, new SpatialLocationRuntime("location-runtime-first"));
+            "site-runtime-first", definition, new SpatialLocationRuntime("location-runtime-first"), P10RuinLocalTopologyGenesis.CreateLegacySiteInstanceId(definition.DefinitionId));
         ExplorableSiteRuntime secondSite = new ExplorableSiteRuntime(
-            "site-runtime-second", definition, new SpatialLocationRuntime("location-runtime-second"));
+            "site-runtime-second", definition, new SpatialLocationRuntime("location-runtime-second"), P10RuinLocalTopologyGenesis.CreateLegacySiteInstanceId(definition.DefinitionId));
         LocationId canonicalLocation = new LocationId("p8-location-one");
         LocalTopologyOwnerReference firstOwner = LocalTopologyOwnerReference.ForSemanticExplorableSite(firstSite, canonicalLocation);
         LocalTopologyOwnerReference secondOwner = LocalTopologyOwnerReference.ForSemanticExplorableSite(secondSite, canonicalLocation);
@@ -109,7 +109,7 @@ public sealed class P10RuinLocalTopologyGenesisTests
     {
         ExplorableSiteData definition = SimulationTestFactory.CreateExplorableSite("p10-invalid-semantic-site", ExplorableSiteKind.Ruin);
         ExplorableSiteRuntime site = new ExplorableSiteRuntime(
-            "site-runtime-invalid", definition, new SpatialLocationRuntime("location-runtime-invalid"));
+            "site-runtime-invalid", definition, new SpatialLocationRuntime("location-runtime-invalid"), P10RuinLocalTopologyGenesis.CreateLegacySiteInstanceId(definition.DefinitionId));
         var identity = new RuntimeIdentityRegistry();
         Assert.That(identity.RegisterExplorableSite(site), Is.True);
         LocalTopologyOwnerReference owner = LocalTopologyOwnerReference.ForSemanticExplorableSite(
@@ -155,7 +155,7 @@ public sealed class P10RuinLocalTopologyGenesisTests
     {
         ExplorableSiteData definition = SimulationTestFactory.CreateExplorableSite("p10-published-site", ExplorableSiteKind.Ruin);
         ExplorableSiteRuntime site = new ExplorableSiteRuntime(
-            "site-runtime-published", definition, new SpatialLocationRuntime("location-runtime-published"));
+            "site-runtime-published", definition, new SpatialLocationRuntime("location-runtime-published"), P10RuinLocalTopologyGenesis.CreateLegacySiteInstanceId(definition.DefinitionId));
         var identity = new RuntimeIdentityRegistry();
         Assert.That(identity.RegisterExplorableSite(site), Is.True);
         LocalTopologyOwnerReference owner = LocalTopologyOwnerReference.ForSemanticExplorableSite(

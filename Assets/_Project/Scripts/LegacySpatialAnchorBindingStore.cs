@@ -84,6 +84,27 @@ public sealed class LegacySpatialAnchorBindingStore : IAuthoritativeMutationGuar
 
     public bool TryBind(SpatialAnchorOwnerId owner, LocationId locationId, out SpatialAnchorBindingFailure failure)
     {
+        return TryBindCore(owner, locationId, null, out failure);
+    }
+
+    internal bool TryBindSiteForP10Genesis(
+        string stableSiteId,
+        LocationId locationId,
+        Action<string> completedMutation,
+        out SpatialAnchorBindingFailure failure)
+    {
+        if (string.IsNullOrWhiteSpace(stableSiteId))
+            return Fail(SpatialAnchorBindingFailureCode.InvalidBinding, "Stable domain owner and LocationId are required.", out failure);
+        return TryBindCore(new SpatialAnchorOwnerId(SpatialAnchorOwnerKind.ExplorableSite, stableSiteId),
+            locationId, completedMutation, out failure);
+    }
+
+    private bool TryBindCore(
+        SpatialAnchorOwnerId owner,
+        LocationId locationId,
+        Action<string> completedMutation,
+        out SpatialAnchorBindingFailure failure)
+    {
         if (!mutationGuardBinding.CanMutate) return Fail(SpatialAnchorBindingFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.", out failure);
         if (owner == null || locationId == null) return Fail(SpatialAnchorBindingFailureCode.InvalidBinding, "Stable domain owner and LocationId are required.", out failure);
         if (ownerExists != null && !ownerExists(owner)) return Fail(SpatialAnchorBindingFailureCode.OwnerNotRegistered, "City/Site owner must exist in the composed SimulationRuntime.", out failure);
@@ -93,8 +114,46 @@ public sealed class LegacySpatialAnchorBindingStore : IAuthoritativeMutationGuar
         if (ownerByLocation.ContainsKey(locationId.Value)) return Fail(SpatialAnchorBindingFailureCode.LocationAlreadyBound, "Each Location anchor can map to only one City/Site owner.", out failure);
         if (revision == long.MaxValue) return Fail(SpatialAnchorBindingFailureCode.RevisionOverflow, "Spatial anchor binding revision cannot advance.", out failure);
         SpatialAnchorBinding binding = new SpatialAnchorBinding(new SpatialAnchorOwnerId(owner.Kind, owner.Value), new LocationId(locationId.Value));
-        byOwner.Add(owner.StableKey, binding); ownerByLocation.Add(locationId.Value, owner.StableKey); revision++;
-        failure = SpatialAnchorBindingFailure.None; return true;
+        bool ownerAdded = false;
+        bool locationAdded = false;
+        bool revisionAdvanced = false;
+        try
+        {
+            byOwner.Add(owner.StableKey, binding);
+            ownerAdded = true;
+            completedMutation?.Invoke("LegacySpatialAnchorBindingStore.OwnerIndex");
+
+            ownerByLocation.Add(locationId.Value, owner.StableKey);
+            locationAdded = true;
+            completedMutation?.Invoke("LegacySpatialAnchorBindingStore.LocationIndex");
+
+            revision++;
+            revisionAdvanced = true;
+            completedMutation?.Invoke("LegacySpatialAnchorBindingStore.Revision");
+            failure = SpatialAnchorBindingFailure.None;
+            return true;
+        }
+        catch
+        {
+            if (revisionAdvanced) revision--;
+            if (locationAdded) ownerByLocation.Remove(locationId.Value);
+            if (ownerAdded) byOwner.Remove(owner.StableKey);
+            throw;
+        }
+    }
+
+    internal void RollbackGenesisBinding(string siteRuntimeId, LocationId locationId)
+    {
+        var owner = new SpatialAnchorOwnerId(SpatialAnchorOwnerKind.ExplorableSite, siteRuntimeId);
+        if (locationId == null || revision <= 0
+            || !byOwner.TryGetValue(owner.StableKey, out SpatialAnchorBinding binding)
+            || binding.LocationId != locationId
+            || !ownerByLocation.TryGetValue(locationId.Value, out string ownerKey)
+            || !string.Equals(ownerKey, owner.StableKey, StringComparison.Ordinal))
+            throw new InvalidOperationException("Cannot roll back the P10-B spatial anchor binding.");
+        byOwner.Remove(owner.StableKey);
+        ownerByLocation.Remove(locationId.Value);
+        revision--;
     }
 
     public SpatialAnchorBindingInvariantReport ValidateInvariants()

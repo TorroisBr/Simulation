@@ -31,6 +31,9 @@ public class SimulationConfigData : ScriptableObject
     public string authoredScaleUnit;
     [Header("Local Ruin Topology (P10-A profile)")]
     public ExplorableSiteData authoredP10RuinSite;
+    [Header("Generated Ruin Topology (P10-B profile)")]
+    public string genesisProfileContractIdentity;
+    public string p10bStableSiteKey;
     public float travelCostPerDay = 10f;
     public bool allowMerchantTradeRepositioning;
     public int maxMerchantTradeAmount = 5;
@@ -58,6 +61,12 @@ public class SimulationConfigData : ScriptableObject
     public NpcStatusData arrestedStatus;
     public NpcStatusData hiddenStatus;
 
+    public string GenesisProfileContractIdentity => !string.IsNullOrWhiteSpace(genesisProfileContractIdentity)
+        ? genesisProfileContractIdentity
+        : authoredP10RuinSite != null ? SimulationGenesisPipeline.P10RuinProfileContractIdentity
+        : useAuthoredGeographyProfile ? SimulationGenesisPipeline.GeographyProfileContractIdentity
+        : SimulationGenesisPipeline.ProfileContractIdentity;
+    public string P10BStableSiteKey => p10bStableSiteKey;
     public CalendarDefinition Calendar => calendar;
     public List<SimulationModule> EnabledModules => enabledModules ?? (enabledModules = new List<SimulationModule>());
     public List<CityData> Cities => cities ?? (cities = new List<CityData>());
@@ -127,7 +136,6 @@ public class SimulationConfigData : ScriptableObject
         return EnabledModules.Contains(module);
     }
 }
-
 public enum SimulationModule
 {
     Economy,
