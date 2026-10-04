@@ -276,14 +276,16 @@ Return is different and the source audit must preserve its actual lock order.
 `TravelPartyStore.EnterMutationWindow()` and holds that reentrant window over
 the first Expedition `CommitReserved` transition to Returning, the nested
 `TryStartTravelParty` call, and the second Expedition `CommitReserved` party
-association. Exception/rejection paths call `TryCancelReturnCore` through
-`CommitReserved` before leaving the party window. If association fails after
-party creation, cancellation is attempted and then
-`TravelPartyStore.Remove(party.TravelPartyId)` is attempted as a separate
-compensating owner write while the outer party window remains held. Preserve
-this existing TravelPartyStore → ExpeditionStore order, the current commit
-sequence, cancellation attempt, party-removal compensation, and any partial
-commits if later steps fail. No cross-owner rollback is claimed.
+association. A TravelParty-start exception or a boolean-false result invokes
+`TryCancelReturnCore` through `CommitReserved` before leaving the party window.
+On a boolean-false final association result after party creation, cancellation
+is attempted and then `TravelPartyStore.Remove(party.TravelPartyId)` is
+attempted as a separate compensating owner write while the outer party window
+remains held. A final-association callback exception does not take that cleanup
+path, as detailed below. Preserve this existing TravelPartyStore →
+ExpeditionStore order, the current commit sequence, cancellation attempt,
+party-removal compensation, and any partial commits if later steps fail. No
+cross-owner rollback is claimed.
 
 Preserve the source's distinct boolean and exception paths. A boolean-false
 initial transition returns before party creation. An exception from its
