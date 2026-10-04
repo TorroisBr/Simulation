@@ -1,0 +1,39 @@
+using System.Collections.Generic;
+
+/// <summary>
+/// Pure authored-profile validation that can run before any CityRuntime is constructed.
+/// The caller owns the bootstrap/admission boundary and decides when to invoke it.
+/// </summary>
+public static class FiniteSourceProfileAdmission
+{
+    public static bool TryValidateAuthoredCityCardinality(
+        IReadOnlyList<CityData> authoredCities,
+        out string rejectionReason)
+    {
+        rejectionReason = string.Empty;
+        if (authoredCities == null)
+        {
+            rejectionReason = "MissingAuthoredCities";
+            return false;
+        }
+
+        int finiteProfileCount = 0;
+        for (int i = 0; i < authoredCities.Count; i++)
+        {
+            CityData city = authoredCities[i];
+            if (city != null && city.materialFlowProfile == LocalMaterialFlowProfile.FiniteReserveDaily)
+                finiteProfileCount++;
+        }
+
+        if (finiteProfileCount == 0) return true;
+        if (authoredCities.Count != 1 || finiteProfileCount != 1
+            || authoredCities[0] == null
+            || authoredCities[0].materialFlowProfile != LocalMaterialFlowProfile.FiniteReserveDaily)
+        {
+            rejectionReason = "FiniteReserveProfileRequiresExactlyOneAuthoredCity";
+            return false;
+        }
+
+        return true;
+    }
+}

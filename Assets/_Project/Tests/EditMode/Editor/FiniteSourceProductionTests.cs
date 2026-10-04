@@ -1,10 +1,53 @@
 using System.Reflection;
+using System.Collections.Generic;
 using NUnit.Framework;
 
 public sealed class FiniteSourceProductionTests
 {
     [SetUp] public void SetUp() => SimulationTestFactory.CleanupDefinitions();
     [TearDown] public void TearDown() => SimulationTestFactory.CleanupDefinitions();
+
+    [Test]
+    public void FiniteProfileRejectsAdditionalAuthoredCityBeforeRuntimeConstruction()
+    {
+        CityData finiteCity = SimulationTestFactory.CreateCityData("p14b-single-finite-city");
+        finiteCity.materialFlowProfile = LocalMaterialFlowProfile.FiniteReserveDaily;
+        CityData additionalCity = SimulationTestFactory.CreateCityData("p14b-additional-city");
+
+        Assert.That(FiniteSourceProfileAdmission.TryValidateAuthoredCityCardinality(
+            new List<CityData> { finiteCity }, out string singleCityRejection), Is.True);
+        Assert.That(singleCityRejection, Is.Empty);
+
+        Assert.That(FiniteSourceProfileAdmission.TryValidateAuthoredCityCardinality(
+            new List<CityData> { finiteCity, additionalCity }, out string multipleCityRejection), Is.False);
+        Assert.That(multipleCityRejection,
+            Is.EqualTo("FiniteReserveProfileRequiresExactlyOneAuthoredCity"));
+
+        // Repeating one CityData reference still produces two City instances in the authored list.
+        Assert.That(FiniteSourceProfileAdmission.TryValidateAuthoredCityCardinality(
+            new List<CityData> { finiteCity, finiteCity }, out string repeatedCityRejection), Is.False);
+        Assert.That(repeatedCityRejection,
+            Is.EqualTo("FiniteReserveProfileRequiresExactlyOneAuthoredCity"));
+    }
+
+    [Test]
+    public void P14AExogenousSourceRemainsOutsideFiniteProfileCardinalityGate()
+    {
+        ItemData item = SimulationTestFactory.CreateItem("p14a-exogenous-cardinality-item");
+        CityData city = SimulationTestFactory.CreateCityData("p14a-exogenous-cardinality-city");
+        city.materialFlowProfile = LocalMaterialFlowProfile.ExogenousDaily;
+        city.productionConfigs.Add(new CityProductionConfig
+        {
+            item = item,
+            amountPerDay = 2,
+            productionSourceId = "source.p14a.exogenous",
+            contentRevision = "1"
+        });
+
+        Assert.That(FiniteSourceProfileAdmission.TryValidateAuthoredCityCardinality(
+            new List<CityData> { city }, out string rejection), Is.True);
+        Assert.That(rejection, Is.Empty);
+    }
 
     [Test]
     public void ProductionIsCappedByReserveAndExhaustionDoesNotChangeRevisions()
