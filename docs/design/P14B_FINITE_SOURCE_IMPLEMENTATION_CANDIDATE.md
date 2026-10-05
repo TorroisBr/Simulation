@@ -1,10 +1,10 @@
 # P14-B finite-source implementation candidate
 
-**Status:** exact-tip implementation review and validation passed; checkpoint promotion is pending. Phase 14 remains open. See the authoritative dated run record below; earlier status text is historical.
+**Status:** promoted bounded P14-B checkpoint. Phase 14 remains open. See the authoritative dated run record below; earlier status text is historical.
 
 ## Authoritative current-base run - 2026-10-04
 
-**Status:** exact-tip independent code review and validation passed; checkpoint promotion is pending. Phase 14 remains open. This section supersedes earlier statements in the historical candidate record that validation or P10 admission wiring remained pending.
+**Status:** exact-tip independent code review and validation passed; promoted to `codex/phase14/canonical` at `82b6a8acd8489509b4434b79519a32b815fe8aa7`. Phase 14 remains open. This section supersedes earlier statements in the historical candidate record that validation or P10 admission wiring remained pending.
 
 ### Exact integration and scope
 

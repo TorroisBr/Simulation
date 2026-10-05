@@ -25,4 +25,4 @@ The existing finite-source P14-B behavior remains within scope: exact one-City f
 
 The reviewer confirmed the archived exact-tree results and manifest at `docs/validation/P14B/P14B-current-base-anchor-deferral-validation-5b5b18c.md`; archive SHA-256 is `6FE147E20D38B054AEF4D5EE3792B57F657407977549A736FEA87F7CFA0F3EBB`. Focused suite totals are 13, 37, 13, 19, 21, 6, 10, and 7, all passing; ALL EditMode is 2293/2293, official Smoke is 5/5, and `git diff --check` passes. Review did not rerun tests.
 
-The four unrelated ProjectSettings/`.meta` user files retain their recorded SHA-256 values. P14-B is eligible for bounded checkpoint promotion under the current orchestration policy; the Phase remains open.
+The four unrelated ProjectSettings/`.meta` user files retain their recorded SHA-256 values. After this review, P14 canonical was fast-forwarded from `4caecbbfb0464c965811402b3c11d8717605114a` to `82b6a8acd8489509b4434b79519a32b815fe8aa7`; the Phase remains open.
