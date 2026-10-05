@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 using NUnit.Framework;
@@ -6,6 +7,23 @@ using NUnit.Framework;
 public sealed class P12CrimeSocialAppraisalInvalidationTests
 {
     private const string MembershipOperationId = "runtime.npc-membership";
+
+    private sealed class StaleAfterOwnerWriteProvider : IOwnerSectionCensusProvider
+    {
+        private readonly IOwnerSectionCensusProvider liveProvider;
+        private readonly Func<bool> returnStale;
+        private readonly OwnerSectionCensusWitness emptyBaseline;
+
+        public StaleAfterOwnerWriteProvider(IOwnerSectionCensusProvider liveProvider, Func<bool> returnStale)
+        {
+            this.liveProvider = liveProvider ?? throw new ArgumentNullException(nameof(liveProvider));
+            this.returnStale = returnStale ?? throw new ArgumentNullException(nameof(returnStale));
+            emptyBaseline = liveProvider.GetCurrentCensus();
+        }
+
+        public OwnerSectionCensusWitness GetCurrentCensus() =>
+            returnStale() ? emptyBaseline : liveProvider.GetCurrentCensus();
+    }
 
     [SetUp]
     public void SetUp() => SimulationTestFactory.CleanupDefinitions();
@@ -367,6 +385,54 @@ public sealed class P12CrimeSocialAppraisalInvalidationTests
     }
 
     [Test]
+    public void TheftActionDoesNotReverseCommittedMoneyWhenPostCommitEpochNotificationFails()
+    {
+        PersonStore people = CreatePeople(out PersonId perpetrator, out PersonId victim);
+        SimulationTime time = new SimulationTime();
+        CrimeSystem crime = new CrimeSystem(new JusticeSystem(null, null, null, null), null, null, simulationTime: time);
+        CityRuntime city = SimulationTestFactory.CreateCity("p12-social-notify-failure-city", "p12-social-notify-failure-location");
+        Assert.That(people.TryBindMaterializedNpc(perpetrator, "p12-social-notify-thief", out PersonStoreFailure thiefBindingFailure),
+            Is.True, thiefBindingFailure.ToString());
+        Assert.That(people.TryBindMaterializedNpc(victim, "p12-social-notify-victim", out PersonStoreFailure victimBindingFailure),
+            Is.True, victimBindingFailure.ToString());
+        Assert.That(people.TryGet(perpetrator, out PersonRuntime thiefPerson), Is.True);
+        Assert.That(people.TryGet(victim, out PersonRuntime victimPerson), Is.True);
+        NpcRuntime thief = new NpcRuntime("p12-social-notify-thief", SimulationTestFactory.CreateNpc("p12-social-notify-thief"), city, 0f);
+        NpcRuntime target = new NpcRuntime("p12-social-notify-victim", SimulationTestFactory.CreateNpc("p12-social-notify-victim"), city, 50f);
+        AssignPerson(thief, thiefPerson);
+        AssignPerson(target, victimPerson);
+        SimulationRuntime runtime = new SimulationRuntime(
+            time,
+            new[] { city },
+            new[] { thief, target },
+            crimeSystem: crime,
+            personStore: people,
+            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1());
+        CrimeSocialAppraisalWorldState world = runtime.CrimeSocialAppraisal;
+        ContinuationCensusProtocol protocol = GetProtocol(runtime);
+        IReadOnlyList<IOwnerSectionCensusProvider> providers = P12CrimeSocialAppraisalCensusProvider.CreateProviders(world);
+        ReplaceRegisteredProvider(
+            protocol,
+            P12CrimeSocialAppraisalCensusProvider.OutcomesSectionId,
+            new StaleAfterOwnerWriteProvider(providers[0], () => world.TheftOutcomes.Count > 0));
+
+        NpcActionData action = SimulationTestFactory.CreateAction(
+            "p12-social-notify-failure-theft", NpcActionType.Steal, NpcActionCategory.Crime);
+        action.crimeSettings.amount = 20;
+        NpcActionRuntime attempt = new NpcActionRuntime(action, target, 20);
+        attempt.SetStableOccurrenceKey("p12-social-notify-failure-occurrence");
+
+        Assert.That(crime.TryExecuteAction(thief, attempt).Success, Is.True);
+        Assert.That(thief.Money, Is.EqualTo(20f));
+        Assert.That(target.Money, Is.EqualTo(30f));
+        Assert.That(world.TheftOutcomes.Count, Is.EqualTo(1));
+        Assert.That(world.CrimeKnowledge.Count, Is.EqualTo(1));
+        Assert.That(world.SocialReactions.Count, Is.EqualTo(1));
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure failure), Is.False);
+        Assert.That(failure, Is.EqualTo(ContinuationCensusFailure.ProtocolFaulted));
+    }
+
+    [Test]
     public void SharedEpochSaturationRejectsCompositeBeforeTheFirstCrimeWrite()
     {
         PersonStore people = CreatePeople(out PersonId perpetrator, out PersonId victim);
@@ -444,6 +510,34 @@ public sealed class P12CrimeSocialAppraisalInvalidationTests
         FieldInfo field = typeof(SimulationRuntime).GetField("npcRosterCensusProtocol", BindingFlags.Instance | BindingFlags.NonPublic);
         Assert.That(field, Is.Not.Null);
         return (ContinuationCensusProtocol)field.GetValue(runtime);
+    }
+
+    private static void ReplaceRegisteredProvider(
+        ContinuationCensusProtocol protocol,
+        string sectionId,
+        IOwnerSectionCensusProvider provider)
+    {
+        IDictionary sections = (IDictionary)GetPrivateField(protocol, "registeredSections");
+        object section = sections[sectionId];
+        Assert.That(section, Is.Not.Null);
+        Type sectionType = section.GetType();
+        BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+        FieldInfo contractField = sectionType.GetField("Contract", flags);
+        Assert.That(contractField, Is.Not.Null);
+        ConstructorInfo constructor = sectionType.GetConstructor(
+            flags,
+            null,
+            new[] { typeof(OwnerSectionContract), typeof(IOwnerSectionCensusProvider) },
+            null);
+        Assert.That(constructor, Is.Not.Null);
+        object replacement = constructor.Invoke(new[] { contractField.GetValue(section), provider });
+        foreach (string fieldName in new[] { "OwnerInstanceIdentity", "LastCardinality", "LastRevision", "HasBaseline" })
+        {
+            FieldInfo field = sectionType.GetField(fieldName, flags);
+            Assert.That(field, Is.Not.Null, fieldName);
+            field.SetValue(replacement, field.GetValue(section));
+        }
+        sections[sectionId] = replacement;
     }
 
     private static void SetPrivateField(object owner, string fieldName, object value)

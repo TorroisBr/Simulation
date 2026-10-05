@@ -810,7 +810,7 @@ public sealed class CrimeSocialAppraisalIntegration : ITheftOutcomeSink, IAuthor
             return false;
 
         bool accepted = false;
-        bool scopeClosed = false;
+
         try
         {
             if (outcomeStore.TryRecord(outcome, out _))
@@ -833,10 +833,12 @@ public sealed class CrimeSocialAppraisalIntegration : ITheftOutcomeSink, IAuthor
         }
         finally
         {
-            scopeClosed = EndP12Operation(P12CrimeSocialAppraisalOperation.TheftAcceptance);
+            EndP12Operation(P12CrimeSocialAppraisalOperation.TheftAcceptance);
         }
 
-        return accepted && scopeClosed;
+        // A close/notification fault already faults the runtime. Keep committed
+        // theft accepted so CrimeSystem does not reverse money for stored rows.
+        return accepted;
     }
 
     private bool TryBeginP12Operation(P12CrimeSocialAppraisalOperation operation) =>
@@ -894,17 +896,19 @@ public sealed class CrimeSocialAppraisalIntegration : ITheftOutcomeSink, IAuthor
         }
 
         bool recorded = false;
-        bool scopeClosed = false;
+
         try
         {
             recorded = TryRecordKnowledgeAndAppraiseCore(observation, out failure);
         }
         finally
         {
-            scopeClosed = EndP12Operation(P12CrimeSocialAppraisalOperation.KnowledgeAndAppraisal);
+            EndP12Operation(P12CrimeSocialAppraisalOperation.KnowledgeAndAppraisal);
         }
 
-        return recorded && scopeClosed;
+        // Owner rows already committed. A failed close faults the runtime; do not
+        // report rejection, which could trigger retry or compensation.
+        return recorded;
     }
 
     private bool TryRecordKnowledgeAndAppraiseCore(
