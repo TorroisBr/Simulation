@@ -237,7 +237,8 @@ public sealed partial class SimulationRuntime
                 CanCommitP12PopulationMutation,
                 NotifyP12PopulationMutation);
         }
-        return TryBindP12CrimeJusticeMutationBoundaries();
+        return TryBindP12CrimeJusticeMutationBoundaries()
+            && TryBindP12CrimeSocialAppraisalMutationBoundaries();
     }
 
     private IReadOnlyList<IOwnerSectionCensusProvider> CreateCurrentP12LifecycleProviders()

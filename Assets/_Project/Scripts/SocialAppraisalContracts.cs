@@ -513,10 +513,12 @@ public sealed class SocialReactionStoreFailure
 public sealed class SocialReactionStore : IAuthoritativeMutationGuardBindable
 {
     private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
+    private IP12CrimeSocialAppraisalOwnerMutationBoundary p12MutationBoundary;
     private readonly PersonStore personStore;
     private readonly SimulationTime simulationTime;
     private readonly Dictionary<string, SocialReaction> reactionsById =
         new Dictionary<string, SocialReaction>(StringComparer.Ordinal);
+    private long p12CensusRevision;
 
     public SocialReactionStore(PersonStore personStore = null, SimulationTime simulationTime = null)
     {
@@ -525,6 +527,7 @@ public sealed class SocialReactionStore : IAuthoritativeMutationGuardBindable
     }
 
     public int Count => reactionsById.Count;
+    public long P12CensusRevision => p12CensusRevision;
     public PersonStore PersonStore => personStore;
     public SimulationTime SimulationTime => simulationTime;
 
@@ -637,14 +640,48 @@ public sealed class SocialReactionStore : IAuthoritativeMutationGuardBindable
             return false;
         }
 
+        if (!CanCommitP12Mutation())
+        {
+            failure = SocialReactionStoreFailure.Create(SocialReactionStoreFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.");
+            return false;
+        }
+
         reactionsById.Add(reaction.ReactionId.Value, reaction);
+        NotifyP12MutationCommitted();
         failure = SocialReactionStoreFailure.None;
         return true;
     }
 
     internal bool TryRemove(SocialReactionId reactionId)
     {
-        return reactionId != null && reactionsById.Remove(reactionId.Value);
+        if (reactionId == null || !reactionsById.ContainsKey(reactionId.Value)
+            || !CanCommitP12Mutation()) return false;
+        if (!reactionsById.Remove(reactionId.Value)) return false;
+        NotifyP12MutationCommitted();
+        return true;
+    }
+
+    internal bool TryBindP12MutationBoundary(IP12CrimeSocialAppraisalOwnerMutationBoundary boundary)
+    {
+        if (boundary == null) return false;
+        if (p12MutationBoundary != null) return ReferenceEquals(p12MutationBoundary, boundary);
+        p12MutationBoundary = boundary;
+        return true;
+    }
+
+    private bool CanCommitP12Mutation() => p12MutationBoundary == null
+        || p12MutationBoundary.CanCommit(this);
+
+    private void NotifyP12MutationCommitted()
+    {
+        if (p12MutationBoundary == null) return;
+        if (p12CensusRevision == long.MaxValue)
+        {
+            p12MutationBoundary.Fault();
+            return;
+        }
+        p12CensusRevision++;
+        p12MutationBoundary.Committed(this);
     }
 
     public bool TryRecordAppraisal(

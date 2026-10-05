@@ -133,10 +133,12 @@ public sealed class CrimeOutcomeStoreFailure
 public sealed class TheftOutcomeStore : ITheftOutcomeSink, IAuthoritativeMutationGuardBindable
 {
     private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
+    private IP12CrimeSocialAppraisalOwnerMutationBoundary p12MutationBoundary;
     private readonly PersonStore personStore;
     private readonly SimulationTime simulationTime;
     private readonly Dictionary<string, TheftOutcome> outcomesById =
         new Dictionary<string, TheftOutcome>(StringComparer.Ordinal);
+    private long p12CensusRevision;
 
     public TheftOutcomeStore(PersonStore personStore, SimulationTime simulationTime)
     {
@@ -145,6 +147,7 @@ public sealed class TheftOutcomeStore : ITheftOutcomeSink, IAuthoritativeMutatio
     }
 
     public int Count => outcomesById.Count;
+    public long P12CensusRevision => p12CensusRevision;
     public PersonStore PersonStore => personStore;
     public SimulationTime SimulationTime => simulationTime;
 
@@ -169,7 +172,14 @@ public sealed class TheftOutcomeStore : ITheftOutcomeSink, IAuthoritativeMutatio
             return false;
         }
 
+        if (!CanCommitP12Mutation())
+        {
+            failure = CrimeOutcomeStoreFailure.Create(CrimeOutcomeStoreFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.");
+            return false;
+        }
+
         outcomesById.Add(outcome.OutcomeId.Value, outcome);
+        NotifyP12MutationCommitted();
         failure = CrimeOutcomeStoreFailure.None;
         return true;
     }
@@ -235,7 +245,34 @@ public sealed class TheftOutcomeStore : ITheftOutcomeSink, IAuthoritativeMutatio
 
     internal bool TryRemove(TheftOutcomeId outcomeId)
     {
-        return outcomeId != null && outcomesById.Remove(outcomeId.Value);
+        if (outcomeId == null || !outcomesById.ContainsKey(outcomeId.Value)
+            || !CanCommitP12Mutation()) return false;
+        if (!outcomesById.Remove(outcomeId.Value)) return false;
+        NotifyP12MutationCommitted();
+        return true;
+    }
+
+    internal bool TryBindP12MutationBoundary(IP12CrimeSocialAppraisalOwnerMutationBoundary boundary)
+    {
+        if (boundary == null) return false;
+        if (p12MutationBoundary != null) return ReferenceEquals(p12MutationBoundary, boundary);
+        p12MutationBoundary = boundary;
+        return true;
+    }
+
+    private bool CanCommitP12Mutation() => p12MutationBoundary == null
+        || p12MutationBoundary.CanCommit(this);
+
+    private void NotifyP12MutationCommitted()
+    {
+        if (p12MutationBoundary == null) return;
+        if (p12CensusRevision == long.MaxValue)
+        {
+            p12MutationBoundary.Fault();
+            return;
+        }
+        p12CensusRevision++;
+        p12MutationBoundary.Committed(this);
     }
 
     private static IReadOnlyList<TheftOutcome> SortedSnapshot(IEnumerable<TheftOutcome> source)
@@ -415,12 +452,14 @@ public sealed class CrimeKnowledgeStoreFailure
 public sealed class CrimeKnowledgeStore : IAuthoritativeMutationGuardBindable
 {
     private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
+    private IP12CrimeSocialAppraisalOwnerMutationBoundary p12MutationBoundary;
     private readonly PersonStore personStore;
     private readonly TheftOutcomeStore outcomeStore;
     private readonly SimulationTime simulationTime;
     private readonly InstitutionStore institutionStore;
     private readonly Dictionary<string, CrimeKnowledgeObservation> currentByKey =
         new Dictionary<string, CrimeKnowledgeObservation>(StringComparer.Ordinal);
+    private long p12CensusRevision;
 
     public CrimeKnowledgeStore(
         PersonStore personStore,
@@ -442,6 +481,8 @@ public sealed class CrimeKnowledgeStore : IAuthoritativeMutationGuardBindable
     public PersonStore PersonStore => personStore;
     public TheftOutcomeStore OutcomeStore => outcomeStore;
     public SimulationTime SimulationTime => simulationTime;
+    public int Count => currentByKey.Count;
+    public long P12CensusRevision => p12CensusRevision;
 
     public IReadOnlyList<CrimeKnowledgeObservation> CurrentObservations
     {
@@ -621,16 +662,26 @@ public sealed class CrimeKnowledgeStore : IAuthoritativeMutationGuardBindable
             return false;
         }
 
+        if (!CanCommitP12Mutation())
+        {
+            failure = CrimeKnowledgeStoreFailure.Create(CrimeKnowledgeStoreFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.");
+            return false;
+        }
+
         currentByKey[Key(observation.EvaluatorPersonId, observation.OutcomeId)] = observation;
+        NotifyP12MutationCommitted();
         failure = CrimeKnowledgeStoreFailure.None;
         return true;
     }
 
     internal bool TryRemove(PersonId evaluatorPersonId, TheftOutcomeId outcomeId)
     {
-        return evaluatorPersonId != null
-            && outcomeId != null
-            && currentByKey.Remove(Key(evaluatorPersonId, outcomeId));
+        if (evaluatorPersonId == null || outcomeId == null) return false;
+        string key = Key(evaluatorPersonId, outcomeId);
+        if (!currentByKey.ContainsKey(key) || !CanCommitP12Mutation()) return false;
+        if (!currentByKey.Remove(key)) return false;
+        NotifyP12MutationCommitted();
+        return true;
     }
 
     internal bool TryRestore(CrimeKnowledgeObservation observation)
@@ -640,8 +691,34 @@ public sealed class CrimeKnowledgeStore : IAuthoritativeMutationGuardBindable
             return false;
         }
 
+        if (!CanCommitP12Mutation()) return false;
+
         currentByKey[Key(observation.EvaluatorPersonId, observation.OutcomeId)] = observation;
+        NotifyP12MutationCommitted();
         return true;
+    }
+
+    internal bool TryBindP12MutationBoundary(IP12CrimeSocialAppraisalOwnerMutationBoundary boundary)
+    {
+        if (boundary == null) return false;
+        if (p12MutationBoundary != null) return ReferenceEquals(p12MutationBoundary, boundary);
+        p12MutationBoundary = boundary;
+        return true;
+    }
+
+    private bool CanCommitP12Mutation() => p12MutationBoundary == null
+        || p12MutationBoundary.CanCommit(this);
+
+    private void NotifyP12MutationCommitted()
+    {
+        if (p12MutationBoundary == null) return;
+        if (p12CensusRevision == long.MaxValue)
+        {
+            p12MutationBoundary.Fault();
+            return;
+        }
+        p12CensusRevision++;
+        p12MutationBoundary.Committed(this);
     }
 
     private static string Key(PersonId evaluatorPersonId, TheftOutcomeId outcomeId)
@@ -676,6 +753,7 @@ public sealed class CrimeKnowledgeStore : IAuthoritativeMutationGuardBindable
 public sealed class CrimeSocialAppraisalIntegration : ITheftOutcomeSink, IAuthoritativeMutationGuardBindable
 {
     private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
+    private IP12CrimeSocialAppraisalOperationBoundary p12OperationBoundary;
     private readonly TheftOutcomeStore outcomeStore;
     private readonly CrimeKnowledgeStore knowledgeStore;
     private readonly SocialReactionStore reactionStore;
@@ -728,23 +806,50 @@ public sealed class CrimeSocialAppraisalIntegration : ITheftOutcomeSink, IAuthor
             return false;
         }
 
-        if (outcomeStore.TryRecord(outcome, out _) == false)
-        {
+        if (!TryBeginP12Operation(P12CrimeSocialAppraisalOperation.TheftAcceptance))
             return false;
+
+        bool accepted = false;
+        bool scopeClosed = false;
+        try
+        {
+            if (outcomeStore.TryRecord(outcome, out _))
+            {
+                CrimeKnowledgeObservation victimKnowledge = CrimeKnowledgeObservation.VictimKnowsLoss(
+                    outcome,
+                    new SocialCognitiveBasis(
+                        SocialCognitiveBasisKind.DirectExperience,
+                        "theft-loss"),
+                    outcome.OccurredAbsoluteDay);
+                if (TryRecordKnowledgeAndAppraise(victimKnowledge, out _))
+                {
+                    accepted = true;
+                }
+                else
+                {
+                    outcomeStore.TryRemove(outcome.OutcomeId);
+                }
+            }
+        }
+        finally
+        {
+            scopeClosed = EndP12Operation(P12CrimeSocialAppraisalOperation.TheftAcceptance);
         }
 
-        CrimeKnowledgeObservation victimKnowledge = CrimeKnowledgeObservation.VictimKnowsLoss(
-            outcome,
-            new SocialCognitiveBasis(
-                SocialCognitiveBasisKind.DirectExperience,
-                "theft-loss"),
-            outcome.OccurredAbsoluteDay);
-        if (TryRecordKnowledgeAndAppraise(victimKnowledge, out _) == false)
-        {
-            outcomeStore.TryRemove(outcome.OutcomeId);
-            return false;
-        }
+        return accepted && scopeClosed;
+    }
 
+    private bool TryBeginP12Operation(P12CrimeSocialAppraisalOperation operation) =>
+        p12OperationBoundary == null || p12OperationBoundary.TryBeginOperation(operation);
+
+    private bool EndP12Operation(P12CrimeSocialAppraisalOperation operation) =>
+        p12OperationBoundary == null || p12OperationBoundary.EndOperation(operation);
+
+    internal bool TryBindP12OperationBoundary(IP12CrimeSocialAppraisalOperationBoundary boundary)
+    {
+        if (boundary == null) return false;
+        if (p12OperationBoundary != null) return ReferenceEquals(p12OperationBoundary, boundary);
+        p12OperationBoundary = boundary;
         return true;
     }
 
@@ -781,6 +886,31 @@ public sealed class CrimeSocialAppraisalIntegration : ITheftOutcomeSink, IAuthor
             failure = SocialReactionStoreFailure.Create(SocialReactionStoreFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.");
             return false;
         }
+
+        if (!TryBeginP12Operation(P12CrimeSocialAppraisalOperation.KnowledgeAndAppraisal))
+        {
+            failure = SocialReactionStoreFailure.Create(SocialReactionStoreFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.");
+            return false;
+        }
+
+        bool recorded = false;
+        bool scopeClosed = false;
+        try
+        {
+            recorded = TryRecordKnowledgeAndAppraiseCore(observation, out failure);
+        }
+        finally
+        {
+            scopeClosed = EndP12Operation(P12CrimeSocialAppraisalOperation.KnowledgeAndAppraisal);
+        }
+
+        return recorded && scopeClosed;
+    }
+
+    private bool TryRecordKnowledgeAndAppraiseCore(
+        CrimeKnowledgeObservation observation,
+        out SocialReactionStoreFailure failure)
+    {
 
         if (CanRecordKnowledgeAndAppraise(observation, out failure) == false)
         {
