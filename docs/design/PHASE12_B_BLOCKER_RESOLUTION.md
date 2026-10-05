@@ -1137,3 +1137,17 @@ The earlier “next direct NPC MoneyAccount/Inventory invalidation” entry is s
 | Downstream readiness | P12-B remains `INCOMPLETE`; P12-A remains `WAIT_DEPENDENCY`; P12-C waits on B; P12-D/E wait on B and C; P12-F waits on C/D/E; P12-G waits on B–F and validated live-profile inventory; P13 remains blocked. | This reconciliation and design add no downstream readiness, capture, export, hydration, global-quiescence, or Phase-closure claim. |
 
 This correction supersedes the stale next-task sentence above without rewriting historical promotion records. P12-B remains a partial owner/operation/epoch foundation.
+
+## Current P12-B owner/operation/epoch refresh — 2026-10-05 Crime/Justice same-day actions
+
+Remote P12 canonical remains `39e275f39e1602d3fa109d3a1bb9acd60585a3f2`. The `5d5539d` Crime/Justice design review remains valid for the four legacy calls inside `BeginSimulationDay`, but not for the rest of the selected daily advance. `AdvanceDayAfterClockAdvance` continues the same outer `runtime.advance-day` operation through actor turns and supported directive handling.
+
+| Selected-profile surface | Current evidence | Remaining bounded action |
+|---|---|---|
+| Legacy daily Crime/Justice | Justice `BeginDay`, Crime hidden-day advancement, Justice sentence advancement, and wanted-status synchronization run in order under the single outer daily operation. The 5d review confirmed per-call reservations without nested registered scopes. | Preserve the per-call reserved boundary design, including partial-commit notification and no-op release. |
+| Same-day Crime/Guard and status writes | Normal, ActorChoice, requested-directive, and forced-Escape paths can write the same NPC status/hidden or Justice records before the outer daily operation exits. A one-time action batch would race for epoch capacity with independent owner callbacks. | Current revised design requires action-owner admission scopes and immediate per-leaf baseline/capacity preflight plus exact notification; no action-level epoch reservation or delayed flush. Include failed-Escape penalties and actor/target status effects. Await exact-tip independent design review. |
+| Mutable owner aliases and receipt steps | `GetActiveWarrant(s)` exposes mutable wanted rows; sentence and NPC status/hidden mutators are public; Crime/Justice also expose receipt-backed P18 commits. | Bind row and direct status/Justice mutators to the exact P12 runtime and reject unsupported P12-bound writes before mutation. Keep P18 receipt sections empty by rejecting those commits under the selected Daily profile. |
+| Other Crime-related owners | CrimeSocialAppraisal and its TheftOutcome, CrimeKnowledge, and SocialReaction stores are composed; some actor paths can write them. | Remain uncovered and separately ranked in the owner matrix. This sub-slice does not imply complete Crime/Justice or P12-B coverage. |
+| Readiness | P12-B `INCOMPLETE`; P12-A `WAIT_DEPENDENCY`; P12-C waits on B; P12-D/E wait on B and C; P12-F waits on C/D/E; P12-G waits on B–F plus validated live-profile inventory; P13 remains blocked. | No readiness edge changes until a bounded candidate is implemented, reviewed, and promoted. |
+
+The revised technical design remains within the accepted P12-B capability work. It adds no crime/arrest/escape rule, no general operation framework, and no P12-A, P13, capture, export, hydration, global-quiescence, or Phase-closure claim.
