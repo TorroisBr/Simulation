@@ -396,6 +396,16 @@ public static class PersonDeathLifecycleSystem
         bool applyConflictInjury,
         out PersonDeathLifecycleFailure failure)
     {
+        if (world != null
+            && world.IsP12PopulationRuntime
+            && (transition == null
+                || !string.IsNullOrWhiteSpace(transition.OperationIdentity)
+                || applyConflictInjury))
+        {
+            failure = PersonDeathLifecycleFailure.RuntimeFaulted;
+            return false;
+        }
+
         if (world != null && transition != null
             && !string.IsNullOrWhiteSpace(transition.OperationIdentity))
         {
@@ -530,18 +540,35 @@ public static class PersonDeathLifecycleSystem
         // Every fallible check is complete before either representation mutates.
         if (materializedNpc != null && transition.ExpectsResident)
         {
-            materializedNpc.ApplyPersonBackedResidentDeathAfterPopulationValidation(
+            if (!materializedNpc.ApplyPersonBackedResidentDeathAfterPopulationValidation(
                 applyConflictInjury ? injurySeverity : NpcInjurySeverity.None,
-                transition);
+                transition))
+            {
+                failure = PersonDeathLifecycleFailure.RuntimeFaulted;
+                return false;
+            }
         }
         else
         {
-            transition.ExpectedPerson.RecordDeathAfterValidation(transition.DeathAbsoluteDay);
-            materializedNpc?.ApplyPersonDeathAfterValidation(
-                applyConflictInjury ? injurySeverity : NpcInjurySeverity.None);
+            if (!transition.ExpectedPerson.RecordDeathAfterValidation(transition.DeathAbsoluteDay))
+            {
+                failure = PersonDeathLifecycleFailure.RuntimeFaulted;
+                return false;
+            }
+            if (materializedNpc != null
+                && !materializedNpc.ApplyPersonDeathAfterValidation(
+                    applyConflictInjury ? injurySeverity : NpcInjurySeverity.None))
+            {
+                failure = PersonDeathLifecycleFailure.RuntimeFaulted;
+                return false;
+            }
             if (residentPopulation != null)
             {
-                transition.ExpectedPerson.TrySetResidenceSettlementRuntimeId(null);
+                if (!transition.ExpectedPerson.TrySetResidenceSettlementRuntimeId(null))
+                {
+                    failure = PersonDeathLifecycleFailure.RuntimeFaulted;
+                    return false;
+                }
             }
         }
 

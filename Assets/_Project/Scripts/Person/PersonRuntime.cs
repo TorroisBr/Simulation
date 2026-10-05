@@ -9,6 +9,9 @@ public sealed class PersonRuntime
     private string residenceSettlementRuntimeId;
     private readonly long? birthAbsoluteDay;
     private long? deathAbsoluteDay;
+    private long lifeResidenceRevision;
+    private Func<PersonRuntime, bool> p12LifecycleMutationAdmission;
+    private Action<PersonRuntime> p12LifecycleMutationCommitted;
 
     public PersonId PersonId { get; }
     public long? BirthAbsoluteDay => birthAbsoluteDay;
@@ -17,6 +20,48 @@ public sealed class PersonRuntime
     public string MaterializedNpcRuntimeId => materializedNpcRuntimeId;
     public bool IsMaterialized => string.IsNullOrWhiteSpace(materializedNpcRuntimeId) == false;
     public string ResidenceSettlementRuntimeId => residenceSettlementRuntimeId;
+    internal long LifeResidenceRevision => lifeResidenceRevision;
+
+    internal void BindP12LifecycleMutationBoundary(
+        Func<PersonRuntime, bool> admission,
+        Action<PersonRuntime> committed)
+    {
+        if (admission == null) throw new ArgumentNullException(nameof(admission));
+        if (committed == null) throw new ArgumentNullException(nameof(committed));
+        if (p12LifecycleMutationAdmission != null || p12LifecycleMutationCommitted != null)
+            throw new InvalidOperationException("PersonRuntime is already bound to a P12 lifecycle boundary.");
+        p12LifecycleMutationAdmission = admission;
+        p12LifecycleMutationCommitted = committed;
+    }
+
+    internal bool IsP12LifecycleBound => p12LifecycleMutationAdmission != null;
+
+    internal bool CanAdvanceP12LifeResidenceRevision(int increments = 1)
+    {
+        return increments >= 0
+            && (p12LifecycleMutationAdmission == null
+                || lifeResidenceRevision <= long.MaxValue - increments);
+    }
+
+    internal bool CanCommitP12LifeResidenceMutation()
+    {
+        if (p12LifecycleMutationAdmission == null)
+            return true;
+        if (lifeResidenceRevision == long.MaxValue)
+            return false;
+        try { return p12LifecycleMutationAdmission(this); }
+        catch { return false; }
+    }
+
+    private void NotifyP12LifeResidenceMutationCommitted()
+    {
+        if (lifeResidenceRevision < long.MaxValue)
+            lifeResidenceRevision++;
+        if (p12LifecycleMutationCommitted == null)
+            return;
+        try { p12LifecycleMutationCommitted(this); }
+        catch { }
+    }
 
     public PersonRuntime(PersonId personId)
         : this(personId, null, null)
@@ -74,13 +119,24 @@ public sealed class PersonRuntime
             return false;
         }
 
+        if (!CanCommitP12LifeResidenceMutation())
+            return false;
+
         deathAbsoluteDay = absoluteDay;
+        NotifyP12LifeResidenceMutationCommitted();
         return true;
     }
 
-    internal void RecordDeathAfterValidation(long absoluteDay)
+    internal bool RecordDeathAfterValidation(long absoluteDay)
     {
+        if (absoluteDay < 0L
+            || deathAbsoluteDay.HasValue
+            || (birthAbsoluteDay.HasValue && absoluteDay < birthAbsoluteDay.Value)
+            || !CanCommitP12LifeResidenceMutation())
+            return false;
         deathAbsoluteDay = absoluteDay;
+        NotifyP12LifeResidenceMutationCommitted();
+        return true;
     }
 
     internal bool TryBindMaterializedNpc(string npcRuntimeId)
@@ -111,9 +167,15 @@ public sealed class PersonRuntime
     /// </summary>
     internal bool TrySetResidenceSettlementRuntimeId(string settlementRuntimeId)
     {
-        residenceSettlementRuntimeId = string.IsNullOrWhiteSpace(settlementRuntimeId)
+        string normalized = string.IsNullOrWhiteSpace(settlementRuntimeId)
             ? null
             : settlementRuntimeId;
+        if (string.Equals(residenceSettlementRuntimeId, normalized, StringComparison.Ordinal))
+            return true;
+        if (!CanCommitP12LifeResidenceMutation())
+            return false;
+        residenceSettlementRuntimeId = normalized;
+        NotifyP12LifeResidenceMutationCommitted();
         return true;
     }
 }

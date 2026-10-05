@@ -208,17 +208,27 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         public readonly Thread OwnerThread;
         public readonly int OwnerManagedThreadId;
         public SimulationOperationScope ProtocolScope;
+        public ContinuationMutationEpochReservation EpochReservation;
         public int NestingDepth;
         public long PersonStoreRevisionDelta;
         public bool RosterChanged;
         public readonly HashSet<string> ChangedCityPresenceSectionIds = new HashSet<string>(StringComparer.Ordinal);
+        public readonly HashSet<string> AllowedLifecycleSectionIds = new HashSet<string>(StringComparer.Ordinal);
+        public readonly HashSet<string> ChangedLifecycleSectionIds = new HashSet<string>(StringComparer.Ordinal);
 
-        public NpcMembershipCensusContext(long personStoreRevisionAtStart, Thread ownerThread)
+        public NpcMembershipCensusContext(
+            long personStoreRevisionAtStart,
+            Thread ownerThread,
+            IEnumerable<string> allowedLifecycleSectionIds)
         {
             PersonStoreRevisionAtStart = personStoreRevisionAtStart;
             OwnerThread = ownerThread ?? throw new ArgumentNullException(nameof(ownerThread));
             OwnerManagedThreadId = ownerThread.ManagedThreadId;
             NestingDepth = 1;
+            if (allowedLifecycleSectionIds != null)
+                foreach (string sectionId in allowedLifecycleSectionIds)
+                    if (!string.IsNullOrWhiteSpace(sectionId))
+                        AllowedLifecycleSectionIds.Add(sectionId);
         }
 
         public bool IsOwnedByCurrentThread() => ReferenceEquals(OwnerThread, Thread.CurrentThread)
@@ -236,6 +246,11 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             this.owner = owner;
             this.context = context;
         }
+
+        public bool CanProceed => owner == null
+            || owner.isComposingNpcRoster
+            || owner.runtimeAdmissionContext == null
+            || (context != null && context.ProtocolScope != null && context.EpochReservation != null);
 
         public void MarkRosterChanged()
         {
@@ -1908,6 +1923,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             || (runtimeAdmissionContext != null
                 && !TryRegisterCityNpcPresenceCensusProviders(protocol))
             || (runtimeAdmissionContext != null && !TryRegisterCityMarketCensusProviders(protocol))
+            || (runtimeAdmissionContext != null && !TryRegisterP12PopulationCensusProviders(protocol))
             || !protocol.SealExpectedSectionInventory(out _)
             || !protocol.SealCensusProviderInventory(out _))
         {
@@ -1948,7 +1964,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                     out _)
                 && protocol.RegisterExpectedOperation(
                     MerchantDailyNpcTradeCensusOperationId,
-                    out _);
+                    out _)
+                && TryRegisterP12PopulationLifecycleOperations(protocol);
         }
 
         bool ownerThreadBound = false;
@@ -2011,6 +2028,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
 
                 if (!TryRebindNpcOwnerMutationBoundaries())
                     throw new InvalidOperationException("The P12 NPC owner mutation boundaries could not bind to the accepted owner census.");
+                if (!TryBindP12LifecycleMutationBoundaries())
+                    throw new InvalidOperationException("The P12 population and lifecycle mutation boundaries could not bind to the accepted owner census.");
 
                 if (travelPartyCensusProvider != null)
                 {
@@ -4555,7 +4574,15 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         return false;
     }
 
-    private NpcMembershipCensusScope BeginNpcMembershipCensusScope()
+    private NpcMembershipCensusScope BeginNpcMembershipCensusScope() =>
+        BeginNpcMembershipCensusScopeCore(null);
+
+    private NpcMembershipCensusScope BeginNpcMembershipCensusScopeWithLifecycleSections(
+        IEnumerable<string> allowedLifecycleSectionIds) =>
+        BeginNpcMembershipCensusScopeCore(allowedLifecycleSectionIds);
+
+    private NpcMembershipCensusScope BeginNpcMembershipCensusScopeCore(
+        IEnumerable<string> allowedLifecycleSectionIds)
     {
         NpcMembershipCensusContext activeContext = activeNpcMembershipCensusContext;
         if (activeContext != null)
@@ -4566,20 +4593,47 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                 return new NpcMembershipCensusScope(this, null);
             }
 
+            if (allowedLifecycleSectionIds != null)
+            {
+                foreach (string sectionId in allowedLifecycleSectionIds)
+                {
+                    if (string.IsNullOrWhiteSpace(sectionId)
+                        || !activeContext.AllowedLifecycleSectionIds.Contains(sectionId))
+                    {
+                        FaultNpcMembershipCensusBoundary();
+                        return new NpcMembershipCensusScope(this, null);
+                    }
+                }
+            }
+
             activeContext.NestingDepth++;
             return new NpcMembershipCensusScope(this, activeContext);
         }
 
         NpcMembershipCensusContext context = new NpcMembershipCensusContext(
             personStore.Revision,
-            Thread.CurrentThread);
+            Thread.CurrentThread,
+            allowedLifecycleSectionIds);
         if (npcRosterCensusProtocol != null
+            && TryAssessP12LifecycleOwnerRoster()
             && npcRosterCensusProtocol.TryEnterOperation(
                 NpcMembershipCensusOperationId,
                 out SimulationOperationScope protocolScope,
                 out _))
         {
             context.ProtocolScope = protocolScope;
+            if (!npcRosterCensusProtocol.TryReserveMutationEpochCapacity(
+                    out ContinuationMutationEpochReservation reservation,
+                    out _))
+            {
+                npcRosterCensusProtocol.FaultClosed();
+                context.ProtocolScope.Dispose();
+                context.ProtocolScope = null;
+            }
+            else
+            {
+                context.EpochReservation = reservation;
+            }
         }
         else if (npcRosterCensusProtocol != null)
         {
@@ -4616,10 +4670,13 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         if (!revisionDeltaFits || personStoreRevision != expectedPersonStoreRevision)
         {
             npcRosterCensusProtocol?.FaultClosed();
+            if (context.EpochReservation != null)
+                npcRosterCensusProtocol?.ReleaseMutationEpochReservation(context.EpochReservation);
         }
         else if (context.RosterChanged
             || context.PersonStoreRevisionDelta != 0L
-            || context.ChangedCityPresenceSectionIds.Count != 0)
+            || context.ChangedCityPresenceSectionIds.Count != 0
+            || context.ChangedLifecycleSectionIds.Count != 0)
         {
             List<string> changedFixedSections = new List<string>();
             if (context.PersonStoreRevisionDelta != 0L)
@@ -4628,24 +4685,42 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                 changedFixedSections.Add(PersonMaterializationBindingCensusProvider.SectionId);
             }
             changedFixedSections.AddRange(context.ChangedCityPresenceSectionIds);
+            changedFixedSections.AddRange(context.ChangedLifecycleSectionIds);
 
             if (context.ProtocolScope != null && npcRosterCensusProtocol != null)
             {
+                List<IOwnerSectionCensusProvider> lifecycleProviders = new List<IOwnerSectionCensusProvider>();
+                if (runtimeAdmissionContext != null)
+                {
+                    lifecycleProviders.AddRange(
+                        PersonLifeResidenceCensusProvider.CreateProviders(personStore.Persons));
+                    lifecycleProviders.AddRange(
+                        NpcLifecycleCensusProvider.CreateProviders(npcRuntimeSnapshot));
+                }
                 bool reconciled = npcRosterCensusProtocol.TryReconcileSpatialKnowledgeRosterAndNotifyCommittedMutations(
                     changedFixedSections,
                     context.PersonStoreRevisionAtStart,
+                    lifecycleProviders,
+                    context.EpochReservation,
                     out _);
                 if (!reconciled)
                 {
                     npcRosterCensusProtocol.FaultClosed();
+                    if (context.EpochReservation != null)
+                        npcRosterCensusProtocol.ReleaseMutationEpochReservation(context.EpochReservation);
                 }
-                else if (context.RosterChanged
+                else if ((context.RosterChanged || context.PersonStoreRevisionDelta != 0L)
                     && runtimeAdmissionContext != null
-                    && !TryRebindNpcOwnerMutationBoundaries())
+                    && (!TryRebindNpcOwnerMutationBoundaries()
+                        || !TryBindP12LifecycleMutationBoundaries()))
                 {
                     npcRosterCensusProtocol.FaultClosed();
                 }
             }
+        }
+        else if (context.EpochReservation != null && npcRosterCensusProtocol != null)
+        {
+            npcRosterCensusProtocol.ReleaseMutationEpochReservation(context.EpochReservation);
         }
 
         context.ProtocolScope?.Dispose();
@@ -4834,6 +4909,12 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
     {
         failure = WorldNpcRegistryFailure.None;
 
+        if (censusScope == null || !censusScope.CanProceed)
+        {
+            failure = WorldNpcRegistryFailure.RuntimeFaulted;
+            return false;
+        }
+
         if (mutationGuard.CanMutate == false)
         {
             failure = WorldNpcRegistryFailure.RuntimeFaulted;
@@ -4932,6 +5013,12 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         out WorldNpcRegistryFailure failure)
     {
         failure = WorldNpcRegistryFailure.None;
+
+        if (censusScope == null || !censusScope.CanProceed)
+        {
+            failure = WorldNpcRegistryFailure.RuntimeFaulted;
+            return false;
+        }
 
         if (mutationGuard.CanMutate == false)
         {
@@ -5057,13 +5144,23 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             return false;
         }
 
-        bool registered = personStore.TryRegister(person, out failure);
-        if (registered)
+        using (NpcMembershipCensusScope censusScope = BeginNpcMembershipCensusScope())
         {
-            AdvancePoliticalWorldRevision();
-        }
+            if (!censusScope.CanProceed)
+            {
+                failure = PersonStoreFailure.RuntimeFaulted;
+                return false;
+            }
 
-        return registered;
+            bool registered = personStore.TryRegister(person, out failure);
+            if (registered)
+            {
+                MarkNpcMembershipPersonStoreRevisionCommitted();
+                AdvancePoliticalWorldRevision();
+            }
+
+            return registered;
+        }
     }
 
     public bool TryProposePersonDeath(
@@ -5082,6 +5179,64 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         PersonDeathTransition transition,
         out PersonDeathLifecycleFailure failure)
     {
+        if (runtimeAdmissionContext != null)
+        {
+            if (transition == null || !string.IsNullOrWhiteSpace(transition.OperationIdentity))
+            {
+                failure = PersonDeathLifecycleFailure.RuntimeFaulted;
+                return false;
+            }
+            if (!PersonDeathLifecycleSystem.TryValidateDeath(
+                    this,
+                    transition,
+                    false,
+                    out NpcRuntime materializedNpc,
+                    out failure))
+                return false;
+
+            bool resident = transition.ExpectsResident;
+            CityRuntime settlement = null;
+            if (resident && !TryResolveCityByRuntimeId(
+                    transition.ExpectedResidenceSettlementRuntimeId,
+                    out settlement))
+            {
+                failure = PersonDeathLifecycleFailure.ResidenceSettlementMissing;
+                return false;
+            }
+            if (!TryBuildPersonLifecycleSectionIds(
+                    transition.ExpectedPerson,
+                    resident,
+                    materializedNpc,
+                    settlement,
+                    out List<string> sectionIds))
+            {
+                failure = PersonDeathLifecycleFailure.RuntimeFaulted;
+                return false;
+            }
+
+            int personRevisionIncrements = resident ? 2 : 1;
+            if (!TryBeginP12PopulationOperation(
+                    PersonDeathCensusOperationId,
+                    sectionIds,
+                    () => transition.ExpectedPerson.CanAdvanceP12LifeResidenceRevision(personRevisionIncrements)
+                        && (materializedNpc == null
+                            || materializedNpc.CanAdvanceP12LifecycleRevisions(1, 0))
+                        && (!resident || settlement.Population.CanAdvanceP12AggregateRevision),
+                    out P12PopulationOperationScope p12Scope))
+            {
+                failure = PersonDeathLifecycleFailure.RuntimeFaulted;
+                return false;
+            }
+
+            using (p12Scope)
+            {
+                bool admitted = PersonDeathLifecycleSystem.TryApplyDeath(this, transition, out failure);
+                if (admitted) AdvancePoliticalWorldRevision();
+                p12Scope?.Complete(admitted);
+                return admitted;
+            }
+        }
+
         bool applied = PersonDeathLifecycleSystem.TryApplyDeath(this, transition, out failure);
         if (applied)
         {
@@ -5096,6 +5251,12 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         NpcInjurySeverity injurySeverity,
         out PersonDeathLifecycleFailure failure)
     {
+        if (runtimeAdmissionContext != null)
+        {
+            failure = PersonDeathLifecycleFailure.RuntimeFaulted;
+            return false;
+        }
+
         bool applied = PersonDeathLifecycleSystem.TryApplyDeathWithConflictInjury(
             this,
             transition,
@@ -5114,6 +5275,17 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         out PersonDeathTransition transition,
         out PersonDeathLifecycleFailure failure)
     {
+        if (runtimeAdmissionContext != null)
+        {
+            if (!PersonDeathLifecycleSystem.TryProposeDeath(
+                    this,
+                    personId,
+                    out transition,
+                    out failure))
+                return false;
+            return TryApplyPersonDeath(transition, out failure);
+        }
+
         bool applied = PersonDeathLifecycleSystem.TryApplyDeath(
             this,
             personId,
@@ -6297,8 +6469,17 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         out NpcRuntime npcRuntime,
         out PersonMaterializationFailure failure)
     {
-        using (NpcMembershipCensusScope censusScope = BeginNpcMembershipCensusScope())
+        IReadOnlyList<string> allowedLifecycleIds = personId == null
+            ? Array.Empty<string>()
+            : new[] { PersonLifeResidenceCensusProvider.SectionIdFor(personId) };
+        using (NpcMembershipCensusScope censusScope = BeginNpcMembershipCensusScopeWithLifecycleSections(allowedLifecycleIds))
         {
+            if (!censusScope.CanProceed)
+            {
+                npcRuntime = null;
+                failure = PersonMaterializationFailure.RuntimeFaulted;
+                return false;
+            }
             return PersonMaterializationSystem.TryMaterializePerson(
                 this,
                 personId,
@@ -6316,8 +6497,16 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         string npcRuntimeId,
         out PersonMaterializationFailure failure)
     {
-        using (NpcMembershipCensusScope censusScope = BeginNpcMembershipCensusScope())
+        IReadOnlyList<string> allowedLifecycleIds = personId == null
+            ? Array.Empty<string>()
+            : new[] { PersonLifeResidenceCensusProvider.SectionIdFor(personId) };
+        using (NpcMembershipCensusScope censusScope = BeginNpcMembershipCensusScopeWithLifecycleSections(allowedLifecycleIds))
         {
+            if (!censusScope.CanProceed)
+            {
+                failure = PersonMaterializationFailure.RuntimeFaulted;
+                return false;
+            }
             return PersonMaterializationSystem.TryBindExistingNpcToPerson(
                 this,
                 personId,
@@ -6335,6 +6524,31 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         {
             failure = PersonResidenceMembershipFailure.PersonNotRegistered;
             return false;
+        }
+
+        if (runtimeAdmissionContext != null)
+        {
+            string sectionId = PersonLifeResidenceCensusProvider.SectionIdFor(personId);
+            if (!TryBeginP12PopulationOperation(
+                    PersonResidenceBindCensusOperationId,
+                    new[] { sectionId },
+                    () => person.CanAdvanceP12LifeResidenceRevision(1),
+                    out P12PopulationOperationScope p12Scope))
+            {
+                failure = PersonResidenceMembershipFailure.RuntimeFaulted;
+                return false;
+            }
+
+            using (p12Scope)
+            {
+                bool bound = PersonResidenceMembershipSystem.TryBindExistingResident(
+                    person,
+                    settlement,
+                    this,
+                    out failure);
+                p12Scope?.Complete(bound);
+                return bound;
+            }
         }
 
         return PersonResidenceMembershipSystem.TryBindExistingResident(
@@ -6359,6 +6573,39 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         out NpcPopulationLifecycleTransition transition,
         out NpcPopulationLifecycleFailure failure)
     {
+        if (runtimeAdmissionContext != null
+            && TryBuildP12NpcPopulationOperation(
+                npcRuntime,
+                settlement,
+                residentDeath: false,
+                out List<string> sectionIds,
+                out Func<bool> localRevisionCapacity))
+        {
+            if (!TryBeginP12PopulationOperation(
+                    PopulationImmigrationCensusOperationId,
+                    sectionIds,
+                    localRevisionCapacity,
+                    out P12PopulationOperationScope p12Scope))
+            {
+                transition = null;
+                failure = NpcPopulationLifecycleFailure.RuntimeFaulted;
+                return false;
+            }
+
+            using (p12Scope)
+            {
+                bool admitted = NpcPopulationLifecycleSystem.TryApplyImmigration(
+                    npcRuntime,
+                    settlement,
+                    GetAuthoritativeNpcRoster(),
+                    out transition,
+                    out failure);
+                if (admitted) AdvancePoliticalWorldRevision();
+                p12Scope?.Complete(admitted);
+                return admitted;
+            }
+        }
+
         bool applied = NpcPopulationLifecycleSystem.TryApplyImmigration(
             npcRuntime,
             settlement,
@@ -6379,6 +6626,39 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         out NpcPopulationLifecycleTransition transition,
         out NpcPopulationLifecycleFailure failure)
     {
+        if (runtimeAdmissionContext != null
+            && TryBuildP12NpcPopulationOperation(
+                npcRuntime,
+                settlement,
+                residentDeath: false,
+                out List<string> sectionIds,
+                out Func<bool> localRevisionCapacity))
+        {
+            if (!TryBeginP12PopulationOperation(
+                    PopulationEmigrationCensusOperationId,
+                    sectionIds,
+                    localRevisionCapacity,
+                    out P12PopulationOperationScope p12Scope))
+            {
+                transition = null;
+                failure = NpcPopulationLifecycleFailure.RuntimeFaulted;
+                return false;
+            }
+
+            using (p12Scope)
+            {
+                bool admitted = NpcPopulationLifecycleSystem.TryApplyEmigration(
+                    npcRuntime,
+                    settlement,
+                    GetAuthoritativeNpcRoster(),
+                    out transition,
+                    out failure);
+                if (admitted) AdvancePoliticalWorldRevision();
+                p12Scope?.Complete(admitted);
+                return admitted;
+            }
+        }
+
         bool applied = NpcPopulationLifecycleSystem.TryApplyEmigration(
             npcRuntime,
             settlement,
@@ -6393,12 +6673,108 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         return applied;
     }
 
+    public bool TryApplyResidenceMigration(
+        NpcRuntime npcRuntime,
+        CityRuntime origin,
+        CityRuntime destination,
+        NpcResidenceMigrationTransition transition,
+        out NpcResidenceMigrationFailure failure)
+    {
+        if (runtimeAdmissionContext != null
+            && TryBuildP12ResidenceMigrationOperation(
+                npcRuntime,
+                origin,
+                destination,
+                out List<string> sectionIds,
+                out Func<bool> localRevisionCapacity))
+        {
+            if (!TryBeginP12PopulationOperation(
+                    PopulationResidenceMigrationCensusOperationId,
+                    sectionIds,
+                    localRevisionCapacity,
+                    out P12PopulationOperationScope p12Scope))
+            {
+                failure = NpcResidenceMigrationFailure.RuntimeFaulted;
+                return false;
+            }
+
+            using (p12Scope)
+            {
+                bool admitted = NpcResidenceMigrationSystem.TryApply(
+                    npcRuntime,
+                    origin,
+                    destination,
+                    GetAuthoritativeNpcRoster(),
+                    transition,
+                    out failure);
+                if (admitted) AdvancePoliticalWorldRevision();
+                p12Scope?.Complete(admitted);
+                return admitted;
+            }
+        }
+
+        return NpcResidenceMigrationSystem.TryApply(
+            npcRuntime,
+            origin,
+            destination,
+            GetAuthoritativeNpcRoster(),
+            transition,
+            out failure);
+    }
+
     public bool TryApplyResidentDeath(
         NpcRuntime npcRuntime,
         CityRuntime settlement,
         out NpcPopulationLifecycleTransition transition,
         out NpcPopulationLifecycleFailure failure)
     {
+        if (runtimeAdmissionContext != null
+            && TryBuildP12NpcPopulationOperation(
+                npcRuntime,
+                settlement,
+                residentDeath: true,
+                out List<string> sectionIds,
+                out Func<bool> localRevisionCapacity))
+        {
+            if (!TryBeginP12PopulationOperation(
+                    PopulationResidentDeathCensusOperationId,
+                    sectionIds,
+                    localRevisionCapacity,
+                    out P12PopulationOperationScope p12Scope))
+            {
+                transition = null;
+                failure = NpcPopulationLifecycleFailure.RuntimeFaulted;
+                return false;
+            }
+
+            using (p12Scope)
+            {
+                bool admitted;
+                if (npcRuntime.BoundPersonRuntime != null)
+                {
+                    admitted = NpcPopulationLifecycleSystem.TryApplyResidentPersonDeath(
+                        this,
+                        npcRuntime,
+                        settlement,
+                        GetAuthoritativeNpcRoster(),
+                        out transition,
+                        out failure);
+                }
+                else
+                {
+                    admitted = NpcPopulationLifecycleSystem.TryApplyResidentDeath(
+                        npcRuntime,
+                        settlement,
+                        GetAuthoritativeNpcRoster(),
+                        out transition,
+                        out failure);
+                }
+                if (admitted) AdvancePoliticalWorldRevision();
+                p12Scope?.Complete(admitted);
+                return admitted;
+            }
+        }
+
         if (npcRuntime?.BoundPersonRuntime != null)
         {
             bool applied = NpcPopulationLifecycleSystem.TryApplyResidentPersonDeath(

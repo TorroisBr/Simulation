@@ -19,7 +19,8 @@ public enum NpcPopulationLifecycleFailure
     InvalidInjury = 14,
     PersonDeathAuthorityRequired = 15,
     PersonAlreadyDead = 16,
-    InvalidDeathDay = 17
+    InvalidDeathDay = 17,
+    RuntimeFaulted = 18
 }
 
 /// <summary>
@@ -475,24 +476,38 @@ public static class NpcPopulationLifecycleSystem
 
         if (transition.Operation == NpcPopulationLifecycleOperation.Immigration)
         {
-            npc.SetResidenceSettlementRuntimeId(settlement.RuntimeId);
+            if (!npc.SetResidenceSettlementRuntimeId(settlement.RuntimeId))
+            {
+                failure = NpcPopulationLifecycleFailure.RuntimeFaulted;
+                return false;
+            }
         }
         else if (transition.Operation == NpcPopulationLifecycleOperation.Emigration)
         {
-            npc.SetResidenceSettlementRuntimeId(null);
+            if (!npc.SetResidenceSettlementRuntimeId(null))
+            {
+                failure = NpcPopulationLifecycleFailure.RuntimeFaulted;
+                return false;
+            }
         }
         else
         {
+            bool deathApplied;
             if (npc.BoundPersonRuntime != null)
             {
-                npc.ApplyPersonBackedResidentDeathAfterPopulationValidation(
+                deathApplied = npc.ApplyPersonBackedResidentDeathAfterPopulationValidation(
                     applyConflictInjury ? injurySeverity : NpcInjurySeverity.None,
                     personDeathTransition);
             }
             else
             {
-                npc.ApplyResidentDeathAfterPopulationValidation(
+                deathApplied = npc.ApplyResidentDeathAfterPopulationValidation(
                     applyConflictInjury ? injurySeverity : NpcInjurySeverity.None);
+            }
+            if (!deathApplied)
+            {
+                failure = NpcPopulationLifecycleFailure.RuntimeFaulted;
+                return false;
             }
         }
 

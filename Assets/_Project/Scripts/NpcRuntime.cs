@@ -7,8 +7,12 @@ public class NpcRuntime : ICapabilityConditionSource
 {
     [NonSerialized] private MutationGuardBinding runtimeMutationGuardBinding = new MutationGuardBinding();
     [NonSerialized] private long travelStateRevision;
+    [NonSerialized] private long lifeStateRevision;
+    [NonSerialized] private long residenceRevision;
     [NonSerialized] private Func<bool, IReadOnlyList<CityRuntime>, bool> p12TravelStateMutationAdmission;
     [NonSerialized] private Action<bool, IReadOnlyList<CityRuntime>> p12TravelStateMutationCommitted;
+    [NonSerialized] private Func<NpcRuntime, bool, bool, bool> p12LifecycleMutationAdmission;
+    [NonSerialized] private Action<NpcRuntime, bool, bool> p12LifecycleMutationCommitted;
     [SerializeField]private string runtimeId;
     [SerializeField]private string personIdValue;
     [NonSerialized]private PersonId personIdentity;
@@ -90,6 +94,8 @@ public class NpcRuntime : ICapabilityConditionSource
     public string TravelOriginDecisionId => travelOriginDecisionId;
     public string ActiveTravelPartyId => activeTravelPartyId;
     public long TravelStateRevision => travelStateRevision;
+    internal long LifeStateRevision => lifeStateRevision;
+    internal long ResidenceRevision => residenceRevision;
     public bool IsTraveling => destinationLocation != null && travelDaysRemaining > 0;
     public int HiddenDaysRemaining => hiddenDaysRemaining;
     public bool IsHidden => hiddenDaysRemaining > 0;
@@ -175,6 +181,48 @@ public class NpcRuntime : ICapabilityConditionSource
     {
         if (p12TravelStateMutationCommitted == null) return;
         try { p12TravelStateMutationCommitted(travelStateChanged, changedCities); }
+        catch { }
+    }
+
+    internal void BindP12LifecycleMutationBoundary(
+        Func<NpcRuntime, bool, bool, bool> admission,
+        Action<NpcRuntime, bool, bool> committed)
+    {
+        if (admission == null) throw new ArgumentNullException(nameof(admission));
+        if (committed == null) throw new ArgumentNullException(nameof(committed));
+        if (p12LifecycleMutationAdmission != null || p12LifecycleMutationCommitted != null)
+            throw new InvalidOperationException("NpcRuntime is already bound to a P12 lifecycle boundary.");
+        p12LifecycleMutationAdmission = admission;
+        p12LifecycleMutationCommitted = committed;
+    }
+
+    internal bool IsP12LifecycleBound => p12LifecycleMutationAdmission != null;
+
+    internal bool CanAdvanceP12LifecycleRevisions(int lifeStateIncrements, int residenceIncrements)
+    {
+        return p12LifecycleMutationAdmission == null
+            || (lifeStateIncrements >= 0
+                && residenceIncrements >= 0
+                && lifeStateRevision <= long.MaxValue - lifeStateIncrements
+                && residenceRevision <= long.MaxValue - residenceIncrements);
+    }
+
+    internal bool CanCommitP12LifecycleMutation(bool lifeStateChanged, bool residenceChanged)
+    {
+        if (p12LifecycleMutationAdmission == null)
+            return true;
+        if (!CanAdvanceP12LifecycleRevisions(lifeStateChanged ? 1 : 0, residenceChanged ? 1 : 0))
+            return false;
+        try { return p12LifecycleMutationAdmission(this, lifeStateChanged, residenceChanged); }
+        catch { return false; }
+    }
+
+    private void NotifyP12LifecycleMutationCommitted(bool lifeStateChanged, bool residenceChanged)
+    {
+        if (lifeStateChanged && lifeStateRevision < long.MaxValue) lifeStateRevision++;
+        if (residenceChanged && residenceRevision < long.MaxValue) residenceRevision++;
+        if (p12LifecycleMutationCommitted == null) return;
+        try { p12LifecycleMutationCommitted(this, lifeStateChanged, residenceChanged); }
         catch { }
     }
 
@@ -283,7 +331,8 @@ public class NpcRuntime : ICapabilityConditionSource
 
     public bool TryApplyInjury(NpcInjurySeverity severity)
     {
-        if (IsAlive == false || NpcInjuryRules.IsValid(severity) == false)
+        if (p12LifecycleMutationAdmission != null
+            || IsAlive == false || NpcInjuryRules.IsValid(severity) == false)
         {
             return false;
         }
@@ -300,7 +349,8 @@ public class NpcRuntime : ICapabilityConditionSource
     {
         if (personRuntime != null
             || IsDead == true
-            || string.IsNullOrWhiteSpace(ResidenceSettlementRuntimeId) == false)
+            || string.IsNullOrWhiteSpace(ResidenceSettlementRuntimeId) == false
+            || !CanCommitP12LifecycleMutation(true, false))
         {
             return false;
         }
@@ -308,6 +358,7 @@ public class NpcRuntime : ICapabilityConditionSource
         lifeState = NpcLifeState.Dead;
         currentAction = null;
         currentActionRuntime = null;
+        NotifyP12LifecycleMutationCommitted(true, false);
         return true;
     }
 
@@ -315,16 +366,18 @@ public class NpcRuntime : ICapabilityConditionSource
     /// Mirrors an already-validated factual death from the bound Person. Person
     /// death remains authoritative; this method cannot be called publicly.
     /// </summary>
-    internal void ApplyPersonDeathAfterValidation()
+    internal bool ApplyPersonDeathAfterValidation()
     {
-        ApplyPersonDeathAfterValidation(NpcInjurySeverity.None);
+        return ApplyPersonDeathAfterValidation(NpcInjurySeverity.None);
     }
 
-    internal void ApplyPersonDeathAfterValidation(NpcInjurySeverity severity)
+    internal bool ApplyPersonDeathAfterValidation(NpcInjurySeverity severity)
     {
-        if (NpcInjuryRules.IsValid(severity) == false)
+        if (NpcInjuryRules.IsValid(severity) == false
+            || IsDead
+            || !CanCommitP12LifecycleMutation(true, false))
         {
-            return;
+            return false;
         }
 
         if (severity > injurySeverity)
@@ -335,6 +388,8 @@ public class NpcRuntime : ICapabilityConditionSource
         lifeState = NpcLifeState.Dead;
         currentAction = null;
         currentActionRuntime = null;
+        NotifyP12LifecycleMutationCommitted(true, false);
+        return true;
     }
 
     /// <summary>
@@ -342,20 +397,23 @@ public class NpcRuntime : ICapabilityConditionSource
     /// and applied the matching aggregate transition. The residence is cleared so a
     /// dead NPC remains world-known without remaining a living resident member.
     /// </summary>
-    internal void ApplyResidentDeathAfterPopulationValidation()
+    internal bool ApplyResidentDeathAfterPopulationValidation()
     {
-        ApplyResidentDeathAfterPopulationValidation(NpcInjurySeverity.None);
+        return ApplyResidentDeathAfterPopulationValidation(NpcInjurySeverity.None);
     }
 
     /// <summary>
     /// Commits the already-validated conflict injury together with the resident death.
     /// This is internal so conflict callers cannot bypass the population boundary.
     /// </summary>
-    internal void ApplyResidentDeathAfterPopulationValidation(NpcInjurySeverity severity)
+    internal bool ApplyResidentDeathAfterPopulationValidation(NpcInjurySeverity severity)
     {
-        if (NpcInjuryRules.IsValid(severity) == false)
+        bool residenceChanged = !string.IsNullOrWhiteSpace(residenceSettlementRuntimeId);
+        if (NpcInjuryRules.IsValid(severity) == false
+            || IsDead
+            || !CanCommitP12LifecycleMutation(true, residenceChanged))
         {
-            return;
+            return false;
         }
 
         if (severity > injurySeverity)
@@ -364,21 +422,28 @@ public class NpcRuntime : ICapabilityConditionSource
         }
 
         lifeState = NpcLifeState.Dead;
-        SetResidenceSettlementRuntimeId(null);
+        if (residenceChanged) residenceSettlementRuntimeId = null;
         currentAction = null;
         currentActionRuntime = null;
+        NotifyP12LifecycleMutationCommitted(true, residenceChanged);
+        return true;
     }
 
-    internal void ApplyPersonBackedResidentDeathAfterPopulationValidation(
+    internal bool ApplyPersonBackedResidentDeathAfterPopulationValidation(
         NpcInjurySeverity severity,
         PersonDeathTransition personDeathTransition)
     {
-        if (NpcInjuryRules.IsValid(severity) == false)
+        if (NpcInjuryRules.IsValid(severity) == false
+            || IsDead
+            || personRuntime == null
+            || personDeathTransition == null
+            || !CanCommitP12LifecycleMutation(true, false))
         {
-            return;
+            return false;
         }
 
-        personRuntime.RecordDeathAfterValidation(personDeathTransition.DeathAbsoluteDay);
+        if (!personRuntime.RecordDeathAfterValidation(personDeathTransition.DeathAbsoluteDay))
+            return false;
 
         if (severity > injurySeverity)
         {
@@ -389,6 +454,8 @@ public class NpcRuntime : ICapabilityConditionSource
         SetResidenceSettlementRuntimeId(null);
         currentAction = null;
         currentActionRuntime = null;
+        NotifyP12LifecycleMutationCommitted(true, false);
+        return true;
     }
 
     internal bool CanApplyPersonBackedDeath(long absoluteDay)
@@ -742,17 +809,23 @@ public class NpcRuntime : ICapabilityConditionSource
         }
     }
 
-    internal void SetResidenceSettlementRuntimeId(string settlementRuntimeId)
+    internal bool SetResidenceSettlementRuntimeId(string settlementRuntimeId)
     {
         if (personRuntime != null)
         {
-            personRuntime.TrySetResidenceSettlementRuntimeId(settlementRuntimeId);
-            return;
+            return personRuntime.TrySetResidenceSettlementRuntimeId(settlementRuntimeId);
         }
 
-        residenceSettlementRuntimeId = string.IsNullOrWhiteSpace(settlementRuntimeId) == true
+        string normalized = string.IsNullOrWhiteSpace(settlementRuntimeId) == true
             ? null
             : settlementRuntimeId;
+        if (string.Equals(residenceSettlementRuntimeId, normalized, StringComparison.Ordinal))
+            return true;
+        if (!CanCommitP12LifecycleMutation(false, true))
+            return false;
+        residenceSettlementRuntimeId = normalized;
+        NotifyP12LifecycleMutationCommitted(false, true);
+        return true;
     }
 
     public void SetTravelPlan(CityRuntime targetCity, NpcTravelReason reason, float utility, float expectedCost, string originDecisionId = null)

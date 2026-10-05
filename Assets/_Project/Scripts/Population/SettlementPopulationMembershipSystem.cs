@@ -55,7 +55,8 @@ public enum PopulationMembershipFailure
     InvalidSettlement = 3,
     ResidenceAlreadyAssigned = 4,
     AggregateCapacityExceeded = 5,
-    AuthoritativeRosterRequired = 6
+    AuthoritativeRosterRequired = 6,
+    RuntimeFaulted = 7
 }
 
 /// <summary>
@@ -123,7 +124,12 @@ public static class SettlementPopulationMembershipSystem
             return false;
         }
 
-        npc.SetResidenceSettlementRuntimeId(city.RuntimeId);
+        if (!npc.SetResidenceSettlementRuntimeId(city.RuntimeId))
+        {
+            failure = PopulationMembershipFailure.RuntimeFaulted;
+            return false;
+        }
+
         return true;
     }
 

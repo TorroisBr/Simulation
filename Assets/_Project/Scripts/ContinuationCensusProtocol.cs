@@ -44,6 +44,23 @@ public interface IOwnerSectionCensusProvider
     OwnerSectionCensusWitness GetCurrentCensus();
 }
 
+internal sealed class ContinuationMutationEpochReservation
+{
+    internal readonly ContinuationCensusProtocol Owner;
+    internal readonly object Token;
+    internal readonly Thread OwnerThread;
+
+    internal ContinuationMutationEpochReservation(
+        ContinuationCensusProtocol owner,
+        object token,
+        Thread ownerThread)
+    {
+        Owner = owner;
+        Token = token;
+        OwnerThread = ownerThread;
+    }
+}
+
 /// <summary>
 /// A non-admitting P12-B protocol kernel for owner-section census and operation
 /// accounting. It never issues a capture token and is not wired to a runtime.
@@ -141,6 +158,15 @@ public sealed class ContinuationCensusProtocol
         public NpcRuntime NpcOwner; public object PlanOwner; public int Kind; public OwnerSectionCensusWitness Witness;
     }
 
+    private sealed class LifecycleOwnerCandidate
+    {
+        public string SectionId;
+        public OwnerSectionContract Contract;
+        public IOwnerSectionCensusProvider Provider;
+        public object OwnerIdentity;
+        public OwnerSectionCensusWitness Witness;
+    }
+
     private sealed class MoneyAccountCandidate
     {
         public string SectionId; public OwnerSectionContract Contract; public IOwnerSectionCensusProvider Provider;
@@ -180,6 +206,10 @@ public sealed class ContinuationCensusProtocol
     private Dictionary<string, NpcRuntime> npcPlanNpcOwnersBySection = new Dictionary<string, NpcRuntime>(StringComparer.Ordinal);
     private IReadOnlyList<NpcRuntime> npcPlanRoster;
     private IReadOnlyList<IOwnerSectionCensusProvider> npcPlanFamilyProviders = Array.AsReadOnly(new IOwnerSectionCensusProvider[0]);
+    private HashSet<string> lifecycleSectionIds = new HashSet<string>(StringComparer.Ordinal);
+    private Dictionary<string, object> lifecycleOwnersBySection = new Dictionary<string, object>(StringComparer.Ordinal);
+    private IReadOnlyList<IOwnerSectionCensusProvider> lifecycleFamilyProviders =
+        Array.AsReadOnly(new IOwnerSectionCensusProvider[0]);
 
     private bool expectedSectionsSealed;
     private bool providersSealed;
@@ -187,6 +217,7 @@ public sealed class ContinuationCensusProtocol
     private OwnerThreadBinding ownerThreadBinding;
     private int activeOperationCount;
     private long mutationEpoch;
+    private object activeMutationEpochReservation;
     private int protocolFaulted;
 
     /// <summary>
@@ -218,7 +249,6 @@ public sealed class ContinuationCensusProtocol
             failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
             return false;
         }
-
         expectedSections.Add(contract.SectionId, contract);
         failure = ContinuationCensusFailure.None;
         return true;
@@ -553,6 +583,155 @@ public sealed class ContinuationCensusProtocol
     }
 
     public IReadOnlyList<IOwnerSectionCensusProvider> NpcPlanFamilyProviders => npcPlanFamilyProviders;
+
+    public bool RegisterLifecycleOwnerRosterFamily(
+        IReadOnlyList<IOwnerSectionCensusProvider> providers,
+        out ContinuationCensusFailure failure)
+    {
+        if (IsFaulted()) { failure = ContinuationCensusFailure.ProtocolFaulted; return false; }
+        if (IsOwnerThreadBound()) { Fault(); failure = ContinuationCensusFailure.ProtocolFaulted; return false; }
+        if (providers == null || expectedSectionsSealed || providersSealed || lifecycleSectionIds.Count != 0)
+        { failure = ContinuationCensusFailure.OwnerCoverageIncomplete; return false; }
+        if (!TryBuildLifecycleFamily(providers, out List<LifecycleOwnerCandidate> candidates, out failure))
+        { Fault(); return false; }
+
+        Dictionary<string, OwnerSectionContract> stagedExpected =
+            new Dictionary<string, OwnerSectionContract>(expectedSections, StringComparer.Ordinal);
+        Dictionary<string, RegisteredSection> stagedRegistered =
+            new Dictionary<string, RegisteredSection>(registeredSections, StringComparer.Ordinal);
+        HashSet<string> stagedIds = new HashSet<string>(StringComparer.Ordinal);
+        Dictionary<string, object> stagedOwners = new Dictionary<string, object>(StringComparer.Ordinal);
+        IOwnerSectionCensusProvider[] stagedProviders = new IOwnerSectionCensusProvider[candidates.Count];
+        for (int i = 0; i < candidates.Count; i++)
+        {
+            LifecycleOwnerCandidate candidate = candidates[i];
+            if (!stagedIds.Add(candidate.SectionId)
+                || stagedExpected.ContainsKey(candidate.SectionId)
+                || stagedRegistered.ContainsKey(candidate.SectionId))
+            { Fault(); failure = ContinuationCensusFailure.OwnerCoverageIncomplete; return false; }
+            stagedExpected.Add(candidate.SectionId, candidate.Contract);
+            RegisteredSection section = new RegisteredSection(candidate.Contract, candidate.Provider);
+            SetBaseline(section, candidate.Witness);
+            stagedRegistered.Add(candidate.SectionId, section);
+            stagedOwners.Add(candidate.SectionId, candidate.OwnerIdentity);
+            stagedProviders[i] = candidate.Provider;
+        }
+
+        expectedSections = stagedExpected;
+        registeredSections = stagedRegistered;
+        lifecycleSectionIds = stagedIds;
+        lifecycleOwnersBySection = stagedOwners;
+        lifecycleFamilyProviders = Array.AsReadOnly(stagedProviders);
+        failure = ContinuationCensusFailure.None;
+        return true;
+    }
+
+    public IReadOnlyList<IOwnerSectionCensusProvider> LifecycleOwnerFamilyProviders =>
+        lifecycleFamilyProviders;
+
+    internal bool TryAssessLifecycleOwnerRoster(
+        IReadOnlyList<IOwnerSectionCensusProvider> providers,
+        out ContinuationCensusFailure failure)
+    {
+        if (!TryRequireOwnerThread(out failure)) return false;
+        if (!TryBuildLifecycleFamily(
+                providers,
+                out List<LifecycleOwnerCandidate> candidates,
+                out failure))
+        {
+            Fault();
+            return false;
+        }
+        if (candidates.Count != lifecycleSectionIds.Count)
+        {
+            Fault();
+            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+            return false;
+        }
+
+        HashSet<string> seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (LifecycleOwnerCandidate candidate in candidates)
+        {
+            if (!seen.Add(candidate.SectionId)
+                || !lifecycleSectionIds.Contains(candidate.SectionId)
+                || !lifecycleOwnersBySection.TryGetValue(candidate.SectionId, out object registeredOwner)
+                || !ReferenceEquals(registeredOwner, candidate.OwnerIdentity)
+                || !registeredSections.TryGetValue(candidate.SectionId, out RegisteredSection section)
+                || !TryReadAndValidate(section, allowRevisionAdvance: false, out _, out failure))
+            {
+                Fault();
+                failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+                return false;
+            }
+        }
+        failure = ContinuationCensusFailure.None;
+        return true;
+    }
+
+    private static bool TryBuildLifecycleFamily(
+        IReadOnlyList<IOwnerSectionCensusProvider> providers,
+        out List<LifecycleOwnerCandidate> candidates,
+        out ContinuationCensusFailure failure)
+    {
+        candidates = new List<LifecycleOwnerCandidate>();
+        failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+        if (providers == null) return false;
+        try
+        {
+            HashSet<string> ids = new HashSet<string>(StringComparer.Ordinal);
+            foreach (IOwnerSectionCensusProvider provider in providers)
+            {
+                if (provider == null) return false;
+                OwnerSectionCensusWitness witness = provider.GetCurrentCensus();
+                object ownerIdentity;
+                string sectionId;
+                int schemaVersion;
+                if (provider is PersonLifeResidenceCensusProvider personProvider)
+                {
+                    ownerIdentity = personProvider.PersonOwner;
+                    sectionId = PersonLifeResidenceCensusProvider.SectionIdFor(
+                        personProvider.PersonOwner.PersonId);
+                    schemaVersion = PersonLifeResidenceCensusProvider.SchemaVersion;
+                }
+                else if (provider is NpcLifecycleCensusProvider npcProvider)
+                {
+                    ownerIdentity = npcProvider.NpcOwner;
+                    sectionId = NpcLifecycleCensusProvider.SectionIdFor(
+                        npcProvider.NpcOwner.RuntimeId,
+                        npcProvider.IsResidence);
+                    schemaVersion = NpcLifecycleCensusProvider.SchemaVersion;
+                }
+                else
+                {
+                    return false;
+                }
+
+                if (!ids.Add(sectionId)
+                    || witness == null
+                    || !string.Equals(witness.SectionId, sectionId, StringComparison.Ordinal)
+                    || witness.SchemaVersion != schemaVersion
+                    || !ReferenceEquals(witness.OwnerInstanceIdentity, ownerIdentity)
+                    || witness.Cardinality != 1)
+                    return false;
+
+                candidates.Add(new LifecycleOwnerCandidate
+                {
+                    SectionId = sectionId,
+                    Contract = new OwnerSectionContract(sectionId, schemaVersion, OwnerSectionRole.Required),
+                    Provider = provider,
+                    OwnerIdentity = ownerIdentity,
+                    Witness = witness
+                });
+            }
+        }
+        catch
+        {
+            return false;
+        }
+
+        failure = ContinuationCensusFailure.None;
+        return true;
+    }
 
     private static bool TryBuildNpcPlanFamily(
         IReadOnlyList<NpcRuntime> roster,
@@ -980,6 +1159,18 @@ public sealed class ContinuationCensusProtocol
         IEnumerable<string> sectionIds,
         out ContinuationCensusFailure failure)
     {
+        if (activeMutationEpochReservation != null)
+        {
+            failure = ContinuationCensusFailure.OperationInProgress;
+            return false;
+        }
+        return NotifyCommittedMutationsCore(sectionIds, out failure);
+    }
+
+    private bool NotifyCommittedMutationsCore(
+        IEnumerable<string> sectionIds,
+        out ContinuationCensusFailure failure)
+    {
         if (!TryRequireOwnerThread(out failure)) return false;
         if (mutationEpoch == long.MaxValue)
         {
@@ -1068,6 +1259,21 @@ public sealed class ContinuationCensusProtocol
         long personStoreRevisionAtOperationStart,
         out ContinuationCensusFailure failure)
     {
+        return TryReconcileSpatialKnowledgeRosterAndNotifyCommittedMutations(
+            changedFixedSectionIds,
+            personStoreRevisionAtOperationStart,
+            lifecycleFamilyProviders,
+            null,
+            out failure);
+    }
+
+    internal bool TryReconcileSpatialKnowledgeRosterAndNotifyCommittedMutations(
+        IEnumerable<string> changedFixedSectionIds,
+        long personStoreRevisionAtOperationStart,
+        IReadOnlyList<IOwnerSectionCensusProvider> currentLifecycleProviders,
+        ContinuationMutationEpochReservation epochReservation,
+        out ContinuationCensusFailure failure)
+    {
         if (!TryRequireOwnerThread(out failure)) return false;
         if (spatialKnowledgeRoster == null
             || activeOperationCount == 0
@@ -1075,6 +1281,16 @@ public sealed class ContinuationCensusProtocol
         {
             Fault();
             failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+            return false;
+        }
+        if (epochReservation != null
+            && (!ReferenceEquals(epochReservation.Owner, this)
+                || !ReferenceEquals(epochReservation.Token, activeMutationEpochReservation)
+                || !ReferenceEquals(epochReservation.OwnerThread, Thread.CurrentThread)
+                || epochReservation.OwnerThread.ManagedThreadId != Thread.CurrentThread.ManagedThreadId))
+        {
+            Fault();
+            failure = ContinuationCensusFailure.ProtocolFaulted;
             return false;
         }
 
@@ -1137,6 +1353,11 @@ public sealed class ContinuationCensusProtocol
         List<NpcPlanCandidate> npcPlanCandidates = new List<NpcPlanCandidate>();
         if (npcPlanRoster != null && !TryBuildNpcPlanFamily(npcPlanRoster, out npcPlanCandidates, out failure))
         { Fault(); return false; }
+        if (!TryBuildLifecycleFamily(
+                currentLifecycleProviders,
+                out List<LifecycleOwnerCandidate> lifecycleCandidates,
+                out failure))
+        { Fault(); return false; }
 
         Dictionary<string, RegisteredSection> stagedRegistered =
             new Dictionary<string, RegisteredSection>(StringComparer.Ordinal);
@@ -1158,7 +1379,8 @@ public sealed class ContinuationCensusProtocol
                 || moneyAccountSectionIds.Contains(pair.Key)
                 || npcTravelStateSectionIds.Contains(pair.Key)
                 || npcKnowledgeSectionIds.Contains(pair.Key)
-                || npcPlanSectionIds.Contains(pair.Key)) continue;
+                || npcPlanSectionIds.Contains(pair.Key)
+                || lifecycleSectionIds.Contains(pair.Key)) continue;
             if (!registeredSections.TryGetValue(pair.Key, out RegisteredSection current))
             {
                 Fault();
@@ -1490,6 +1712,86 @@ public sealed class ContinuationCensusProtocol
         foreach (string oldId in npcPlanSectionIds)
             if (!stagedPlanIds.Contains(oldId)) plansChanged = true;
 
+        HashSet<string> stagedLifecycleIds = new HashSet<string>(StringComparer.Ordinal);
+        Dictionary<string, object> stagedLifecycleOwners = new Dictionary<string, object>(StringComparer.Ordinal);
+        IOwnerSectionCensusProvider[] stagedLifecycleProviders =
+            new IOwnerSectionCensusProvider[lifecycleCandidates.Count];
+        bool lifecycleChanged = lifecycleCandidates.Count != lifecycleSectionIds.Count;
+        for (int i = 0; i < lifecycleCandidates.Count; i++)
+        {
+            LifecycleOwnerCandidate candidate = lifecycleCandidates[i];
+            if (!stagedLifecycleIds.Add(candidate.SectionId)
+                || stagedExpected.ContainsKey(candidate.SectionId))
+            {
+                Fault();
+                failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+                return false;
+            }
+
+            bool existed = registeredSections.TryGetValue(candidate.SectionId, out RegisteredSection prior);
+            bool sameOwner = existed
+                && lifecycleOwnersBySection.TryGetValue(candidate.SectionId, out object previousOwner)
+                && ReferenceEquals(previousOwner, candidate.OwnerIdentity);
+            if (sameOwner)
+            {
+                bool notified = changedIds.Contains(candidate.SectionId);
+                if (!TryReadAndValidate(
+                        prior,
+                        allowRevisionAdvance: notified,
+                        out OwnerSectionCensusWitness witness,
+                        out failure))
+                {
+                    Fault();
+                    return false;
+                }
+
+                bool sectionChanged = prior.HasBaseline
+                    && (witness.Revision != prior.LastRevision
+                        || witness.Cardinality != prior.LastCardinality);
+                if (notified != sectionChanged
+                    || (notified && (!prior.HasBaseline || witness.Revision == prior.LastRevision)))
+                {
+                    Fault();
+                    failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+                    return false;
+                }
+
+                if (notified)
+                {
+                    fixedSectionsChanged = true;
+                    RegisteredSection changedSection = CloneRegisteredSection(prior);
+                    SetBaseline(changedSection, witness);
+                    stagedRegistered.Add(candidate.SectionId, changedSection);
+                }
+                else
+                {
+                    stagedRegistered.Add(candidate.SectionId, prior);
+                }
+                stagedExpected.Add(candidate.SectionId, prior.Contract);
+                stagedLifecycleProviders[i] = prior.Provider;
+            }
+            else
+            {
+                if (changedIds.Contains(candidate.SectionId))
+                {
+                    Fault();
+                    failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+                    return false;
+                }
+                lifecycleChanged = true;
+                RegisteredSection replacement = new RegisteredSection(candidate.Contract, candidate.Provider);
+                SetBaseline(replacement, candidate.Witness);
+                stagedRegistered.Add(candidate.SectionId, replacement);
+                stagedExpected.Add(candidate.SectionId, candidate.Contract);
+                stagedLifecycleProviders[i] = candidate.Provider;
+            }
+
+            if (!existed) lifecycleChanged = true;
+            stagedLifecycleOwners.Add(candidate.SectionId, candidate.OwnerIdentity);
+        }
+        foreach (string oldId in lifecycleSectionIds)
+            if (!stagedLifecycleIds.Contains(oldId)) lifecycleChanged = true;
+
         if (personStoreSectionsChanged
             && changedIds.Contains(PersonMembershipCensusProvider.SectionId)
             != changedIds.Contains(PersonMaterializationBindingCensusProvider.SectionId))
@@ -1499,7 +1801,9 @@ public sealed class ContinuationCensusProtocol
             return false;
         }
 
-        if ((fixedSectionsChanged || familyChanged || travelStateChanged || inventoryChanged || moneyAccountChanged || knowledgeChanged || plansChanged)
+        bool anySectionChanged = fixedSectionsChanged || familyChanged || travelStateChanged
+            || inventoryChanged || moneyAccountChanged || knowledgeChanged || plansChanged || lifecycleChanged;
+        if (anySectionChanged
             && mutationEpoch == long.MaxValue)
         {
             Fault();
@@ -1521,6 +1825,8 @@ public sealed class ContinuationCensusProtocol
         npcKnowledgeNpcOwnersBySection = stagedKnowledgeOwners;
         npcPlanSectionIds = stagedPlanIds;
         npcPlanNpcOwnersBySection = stagedPlanNpcOwners;
+        lifecycleSectionIds = stagedLifecycleIds;
+        lifecycleOwnersBySection = stagedLifecycleOwners;
         if (familyChanged)
             spatialKnowledgeFamilyProviders = Array.AsReadOnly(stagedFamilyProviders);
         if (travelStateChanged)
@@ -1529,8 +1835,17 @@ public sealed class ContinuationCensusProtocol
         if (moneyAccountChanged) moneyAccountFamilyProviders = Array.AsReadOnly(stagedMoneyAccountProviders);
         if (knowledgeChanged) npcKnowledgeFamilyProviders = Array.AsReadOnly(stagedKnowledgeProviders);
         if (plansChanged) npcPlanFamilyProviders = Array.AsReadOnly(stagedPlanProviders);
-        if (fixedSectionsChanged || familyChanged || travelStateChanged || inventoryChanged || moneyAccountChanged || knowledgeChanged || plansChanged)
+        if (lifecycleChanged)
+            lifecycleFamilyProviders = Array.AsReadOnly(stagedLifecycleProviders);
+        if (epochReservation != null)
+        {
+            if (!TryCompleteMutationEpochReservation(epochReservation, anySectionChanged, out failure))
+                return false;
+        }
+        else if (anySectionChanged)
+        {
             mutationEpoch++;
+        }
         failure = ContinuationCensusFailure.None;
         return true;
     }
@@ -1546,6 +1861,11 @@ public sealed class ContinuationCensusProtocol
     internal bool TryValidateMutationEpochCapacity(out ContinuationCensusFailure failure)
     {
         if (!TryRequireOwnerThread(out failure)) return false;
+        if (activeMutationEpochReservation != null)
+        {
+            failure = ContinuationCensusFailure.OperationInProgress;
+            return false;
+        }
         if (mutationEpoch == long.MaxValue)
         {
             Fault();
@@ -1553,6 +1873,104 @@ public sealed class ContinuationCensusProtocol
             return false;
         }
 
+        failure = ContinuationCensusFailure.None;
+        return true;
+    }
+
+    internal bool TryReserveMutationEpochCapacity(
+        out ContinuationMutationEpochReservation reservation,
+        out ContinuationCensusFailure failure)
+    {
+        reservation = null;
+        if (!TryRequireOwnerThread(out failure)) return false;
+        if (activeOperationCount != 1 || activeMutationEpochReservation != null)
+        {
+            failure = ContinuationCensusFailure.OperationInProgress;
+            return false;
+        }
+        if (mutationEpoch == long.MaxValue)
+        {
+            Fault();
+            failure = ContinuationCensusFailure.ProtocolFaulted;
+            return false;
+        }
+
+        object token = new object();
+        activeMutationEpochReservation = token;
+        OwnerThreadBinding binding = Volatile.Read(ref ownerThreadBinding);
+        reservation = new ContinuationMutationEpochReservation(this, token, binding.Thread);
+        failure = ContinuationCensusFailure.None;
+        return true;
+    }
+
+    internal bool TryNotifyReservedCommittedMutations(
+        ContinuationMutationEpochReservation reservation,
+        IEnumerable<string> sectionIds,
+        out ContinuationCensusFailure failure)
+    {
+        if (reservation == null
+            || !ReferenceEquals(reservation.Owner, this)
+            || !ReferenceEquals(reservation.Token, activeMutationEpochReservation)
+            || !ReferenceEquals(reservation.OwnerThread, Thread.CurrentThread)
+            || reservation.OwnerThread.ManagedThreadId != Thread.CurrentThread.ManagedThreadId)
+        {
+            Fault();
+            failure = ContinuationCensusFailure.ProtocolFaulted;
+            return false;
+        }
+
+        bool notified = NotifyCommittedMutationsCore(sectionIds, out failure);
+        activeMutationEpochReservation = null;
+        return notified;
+    }
+
+    internal void ReleaseMutationEpochReservation(
+        ContinuationMutationEpochReservation reservation)
+    {
+        if (reservation == null) return;
+        if (!ReferenceEquals(reservation.Owner, this)
+            || !ReferenceEquals(reservation.OwnerThread, Thread.CurrentThread))
+        {
+            Fault();
+            return;
+        }
+        if (activeMutationEpochReservation == null)
+            return;
+        if (!ReferenceEquals(reservation.Token, activeMutationEpochReservation))
+        {
+            Fault();
+            return;
+        }
+        activeMutationEpochReservation = null;
+    }
+
+    internal bool TryCompleteMutationEpochReservation(
+        ContinuationMutationEpochReservation reservation,
+        bool committedMutation,
+        out ContinuationCensusFailure failure)
+    {
+        if (reservation == null
+            || !ReferenceEquals(reservation.Owner, this)
+            || !ReferenceEquals(reservation.Token, activeMutationEpochReservation)
+            || !ReferenceEquals(reservation.OwnerThread, Thread.CurrentThread)
+            || reservation.OwnerThread.ManagedThreadId != Thread.CurrentThread.ManagedThreadId)
+        {
+            Fault();
+            failure = ContinuationCensusFailure.ProtocolFaulted;
+            return false;
+        }
+        if (committedMutation)
+        {
+            if (mutationEpoch == long.MaxValue)
+            {
+                Fault();
+                activeMutationEpochReservation = null;
+                failure = ContinuationCensusFailure.ProtocolFaulted;
+                return false;
+            }
+            mutationEpoch++;
+        }
+        activeMutationEpochReservation = null;
         failure = ContinuationCensusFailure.None;
         return true;
     }
@@ -1565,6 +1983,11 @@ public sealed class ContinuationCensusProtocol
     {
         scope = null;
         if (!TryRequireOwnerThread(out failure)) return false;
+        if (activeMutationEpochReservation != null)
+        {
+            failure = ContinuationCensusFailure.OperationInProgress;
+            return false;
+        }
         if (!operationsSealed)
         {
             failure = ContinuationCensusFailure.OwnerCoverageIncomplete;

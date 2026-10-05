@@ -301,6 +301,12 @@ public static class PersonBirthLifecycleSystem
             return false;
         }
 
+        if (world.IsP12PopulationRuntime)
+        {
+            failure = PersonBirthLifecycleFailure.RuntimeFaulted;
+            return false;
+        }
+
         if (IsValidTransitionShape(transition) == false)
         {
             failure = PersonBirthLifecycleFailure.InvalidTransition;

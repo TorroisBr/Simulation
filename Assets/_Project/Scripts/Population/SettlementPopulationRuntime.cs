@@ -13,6 +13,8 @@ public sealed class SettlementPopulationRuntime : IAuthoritativeMutationGuardBin
     private int currentPopulation;
     private long revision;
     private long operationReceiptRevision;
+    private Func<SettlementPopulationRuntime, bool, bool, bool> p12PopulationMutationAdmission;
+    private Action<SettlementPopulationRuntime, bool, bool> p12PopulationMutationCommitted;
     private Dictionary<string, PopulationOperationReceipt> operationReceipts =
         new Dictionary<string, PopulationOperationReceipt>(StringComparer.Ordinal);
 
@@ -21,6 +23,36 @@ public sealed class SettlementPopulationRuntime : IAuthoritativeMutationGuardBin
     public long Revision => revision;
     internal bool CanMutate => mutationGuardBinding.CanMutate;
     internal AuthoritativeMutationGuard BoundMutationGuard => mutationGuardBinding.BoundGuard;
+    internal bool IsP12PopulationBound => p12PopulationMutationAdmission != null;
+    internal bool CanAdvanceP12AggregateRevision =>
+        p12PopulationMutationAdmission == null || revision < long.MaxValue;
+
+    internal void BindP12PopulationMutationBoundary(
+        Func<SettlementPopulationRuntime, bool, bool, bool> admission,
+        Action<SettlementPopulationRuntime, bool, bool> committed)
+    {
+        if (admission == null) throw new ArgumentNullException(nameof(admission));
+        if (committed == null) throw new ArgumentNullException(nameof(committed));
+        if (p12PopulationMutationAdmission != null || p12PopulationMutationCommitted != null)
+            throw new InvalidOperationException("SettlementPopulationRuntime is already bound to a P12 population boundary.");
+        p12PopulationMutationAdmission = admission;
+        p12PopulationMutationCommitted = committed;
+    }
+
+    private bool CanCommitP12PopulationMutation(bool aggregateChanged, bool receiptChanged)
+    {
+        if (p12PopulationMutationAdmission == null) return true;
+        if (aggregateChanged && revision == long.MaxValue) return false;
+        try { return p12PopulationMutationAdmission(this, aggregateChanged, receiptChanged); }
+        catch { return false; }
+    }
+
+    private void NotifyP12PopulationMutationCommitted(bool aggregateChanged, bool receiptChanged)
+    {
+        if (p12PopulationMutationCommitted == null) return;
+        try { p12PopulationMutationCommitted(this, aggregateChanged, receiptChanged); }
+        catch { }
+    }
 
     internal void RestoreSnapshot(int population, long expectedRevision)
     {
@@ -109,6 +141,12 @@ public sealed class SettlementPopulationRuntime : IAuthoritativeMutationGuardBin
             return false;
         }
 
+        if (!CanCommitP12PopulationMutation(true, true))
+        {
+            failure = PopulationTransitionFailure.RuntimeFaulted;
+            return false;
+        }
+
         lock (operationReceiptGate)
         {
             PopulationOperationReceiptResolution resolution = ResolveOperationReceiptCore(
@@ -141,6 +179,7 @@ public sealed class SettlementPopulationRuntime : IAuthoritativeMutationGuardBin
             revision++;
             operationReceiptRevision++;
             newlyApplied = true;
+            NotifyP12PopulationMutationCommitted(true, true);
             return true;
         }
     }
@@ -182,8 +221,15 @@ public sealed class SettlementPopulationRuntime : IAuthoritativeMutationGuardBin
             return false;
         }
 
+        if (!CanCommitP12PopulationMutation(true, false))
+        {
+            failure = PopulationTransitionFailure.RuntimeFaulted;
+            return false;
+        }
+
         currentPopulation = transition.PopulationAfter;
         revision++;
+        NotifyP12PopulationMutationCommitted(true, false);
         return true;
     }
 
@@ -311,12 +357,26 @@ public sealed class SettlementPopulationRuntime : IAuthoritativeMutationGuardBin
             return false;
         }
 
+        bool hasP12Boundary = origin.p12PopulationMutationAdmission != null
+            || destination.p12PopulationMutationAdmission != null;
+        if (hasP12Boundary
+            && (origin.p12PopulationMutationAdmission == null
+                || destination.p12PopulationMutationAdmission == null
+                || !origin.CanCommitP12PopulationMutation(true, false)
+                || !destination.CanCommitP12PopulationMutation(true, false)))
+        {
+            failure = PopulationTransitionFailure.RuntimeFaulted;
+            return false;
+        }
+
         // This boundary computes the only valid migration delta and commits both sides
         // only after every state, limit, and revision check has passed.
         origin.currentPopulation = originPopulationBefore - 1;
         origin.revision++;
         destination.currentPopulation = destinationPopulationBefore + 1;
         destination.revision++;
+        origin.NotifyP12PopulationMutationCommitted(true, false);
+        destination.NotifyP12PopulationMutationCommitted(true, false);
         return true;
     }
 

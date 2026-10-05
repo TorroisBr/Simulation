@@ -18,7 +18,8 @@ public enum NpcResidenceMigrationFailure
     InvalidTransition = 13,
     AlreadyApplied = 14,
     AuthoritativeRosterRequired = 15,
-    NpcNotInAuthoritativeRoster = 16
+    NpcNotInAuthoritativeRoster = 16,
+    RuntimeFaulted = 17
 }
 
 /// <summary>
@@ -489,7 +490,11 @@ public static class NpcResidenceMigrationSystem
             return false;
         }
 
-        npc.SetResidenceSettlementRuntimeId(destination.SettlementRuntimeId);
+        if (!npc.SetResidenceSettlementRuntimeId(destination.SettlementRuntimeId))
+        {
+            failure = NpcResidenceMigrationFailure.RuntimeFaulted;
+            return false;
+        }
         return true;
     }
 

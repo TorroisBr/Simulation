@@ -94,7 +94,13 @@ public static class PersonResidenceMembershipSystem
             return false;
         }
 
-        return person.TrySetResidenceSettlementRuntimeId(settlement.RuntimeId);
+        if (!person.TrySetResidenceSettlementRuntimeId(settlement.RuntimeId))
+        {
+            failure = PersonResidenceMembershipFailure.RuntimeFaulted;
+            return false;
+        }
+
+        return true;
     }
 
     public static bool TryBindExistingResident(
