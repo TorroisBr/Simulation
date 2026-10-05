@@ -1,7 +1,10 @@
 # P17-A — Explicit Withdrawal Demand and Explicit War Termination
 
-**Status:** technical-design candidate for independent review; no implementation
-authority. **Architecture base:** `ffd75652d89d862b83d634868c560f8540869b89`
+**Status:** independent technical-design review PASS at content tip
+`4088d3485f360144cc60ee301cc4ecb2550ef5bc`; see the
+[review record](PHASE17A_EXPLICIT_WITHDRAWAL_TECHNICAL_DESIGN_REVIEW.md).
+This design does not implement P17-A. **Architecture base:**
+`ffd75652d89d862b83d634868c560f8540869b89`
 on `codex/architecture/world-identity-projection`. **Implementation baseline
 audited:** promoted `codex/phase16/canonical` at
 `75a27d7ac97e66c2762835ccea7950a945c2f20d`. Revalidate the owning
@@ -265,6 +268,8 @@ side, participant withdrawal, diplomacy/treaties, ceasefire/peace,
 capitulation, Campaign, generic goal engine, P20 Activity, new P14 material
 flow, multi-leg military movement, general command journaling, Save and fork.
 
-**Implementation readiness:** pending independent technical review and
-current-base Master scheduling. No new product decision is required by this
-design's selected bounded semantics.
+**Implementation readiness:** `READY_FOR_IMPLEMENTATION` as a reviewed
+technical contract against the audited baseline, subject to Master current-
+base dependency/hotspot preflight and normal candidate validation/promotion.
+No new product decision is required by this design's selected bounded
+semantics.
