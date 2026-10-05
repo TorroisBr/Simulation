@@ -6,6 +6,19 @@ using System.Collections.Generic;
 /// </summary>
 public static class FiniteSourceProfileAdmission
 {
+    public static bool HasFiniteReserveProfile(IReadOnlyList<CityData> authoredCities)
+    {
+        if (authoredCities == null) return false;
+        for (int i = 0; i < authoredCities.Count; i++)
+        {
+            CityData city = authoredCities[i];
+            if (city != null && city.materialFlowProfile == LocalMaterialFlowProfile.FiniteReserveDaily)
+                return true;
+        }
+
+        return false;
+    }
+
     public static bool TryValidateAuthoredCityCardinality(
         IReadOnlyList<CityData> authoredCities,
         out string rejectionReason)

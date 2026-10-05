@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 using System.Threading;
 using NUnit.Framework;
@@ -1281,6 +1282,157 @@ public sealed class SimulationRuntimeAdmissionTests
     }
 
     [Test]
+    public void UnityBootstrapDailyRejectsFiniteSourceBeforeIdentityOrOwnerConstruction()
+    {
+        SimulationConfigData config = CreateP14AdmissionConfig(
+            LocalMaterialFlowProfile.FiniteReserveDaily, 7, out _);
+        GameObject bootstrapObject = new GameObject("P14-B rejected finite Daily profile");
+        try
+        {
+            TesteSimulacao bootstrap = bootstrapObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(bootstrap, config);
+            int worldIdentityAllocations = 0;
+            WritePrivateField(bootstrap, "worldIdentityAllocator", new Func<WorldId>(() =>
+            {
+                worldIdentityAllocations++;
+                return null;
+            }));
+            List<string> completedStages = new List<string>();
+
+            TargetInvocationException thrown = Assert.Throws<TargetInvocationException>(() =>
+                InvokeInitializeSimulation(bootstrap, completedStages.Add));
+
+            Assert.That(thrown.InnerException, Is.TypeOf<InvalidOperationException>());
+            Assert.That(thrown.InnerException.Message, Does.Contain("P14-B"));
+            Assert.That(completedStages, Is.Empty, "resolve-profile fails before its stage completion callback");
+            Assert.That(worldIdentityAllocations, Is.Zero);
+            Assert.That(ReadPrivateField<RuntimeIdAllocator>(bootstrap, "runtimeIdAllocator"), Is.Null);
+            Assert.That(ReadPrivateField<SimulationRuntime>(bootstrap, "simulationRuntime"), Is.Null);
+            Assert.That(ReadPrivateField<SimulationBootstrapComposition>(bootstrap, "draftComposition"), Is.Null);
+            Assert.That(ReadPrivateField<SimulationBootstrapComposition>(bootstrap, "publishedComposition"), Is.Null);
+            Assert.That(ReadPrivateField<List<CityRuntime>>(bootstrap, "cityRuntimeList"), Is.Empty);
+            Assert.That(ReadPrivateField<bool>(bootstrap, "bootstrapFailed"), Is.True);
+            Assert.That(bootstrap.Bootstrap, Is.Null);
+            Assert.That(bootstrap.Runtime, Is.Null);
+            Assert.That(bootstrap.CurrentDay, Is.Zero);
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(bootstrapObject);
+            UnityEngine.Object.DestroyImmediate(config);
+        }
+    }
+
+    [Test]
+    public void UnityBootstrapDailyContinuesToAdmitP14AExogenousMaterialFlow()
+    {
+        SimulationConfigData config = CreateP14AdmissionConfig(
+            LocalMaterialFlowProfile.ExogenousDaily, 0, out ItemData item);
+        GameObject bootstrapObject = new GameObject("P14-A admitted exogenous Daily profile");
+        try
+        {
+            TesteSimulacao bootstrap = bootstrapObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(bootstrap, config);
+
+            InvokeInitializeSimulation(bootstrap, null);
+
+            Assert.That(bootstrap.Bootstrap, Is.Not.Null);
+            Assert.That(bootstrap.Runtime.Cities.Count, Is.EqualTo(1));
+            CityRuntime city = bootstrap.Runtime.Cities[0];
+            Assert.That(bootstrap.Runtime.LegacySpatialAnchorBindingStore.TryGet(
+                new SpatialAnchorOwnerId(SpatialAnchorOwnerKind.City, city.RuntimeId), out LocationId boundLocation), Is.True);
+            Assert.That(boundLocation.Value, Is.EqualTo(config.authoredLocationId));
+            Assert.That(city.FiniteProductionSources, Is.Null);
+            Assert.That(city.Market.GetAmount(item), Is.EqualTo(10));
+
+            Assert.That(bootstrap.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure advanceFailure), Is.True,
+                advanceFailure.ToString());
+
+            Assert.That(city.FiniteProductionSources, Is.Null);
+            Assert.That(city.LastMaterialFlow.AppliedSourceQuantity, Is.EqualTo(5));
+            Assert.That(city.LastMaterialFlow.ActualFreeConsumption, Is.EqualTo(1));
+            Assert.That(city.LastMaterialFlow.ClosingStock, Is.EqualTo(14));
+            Assert.That(bootstrap.CurrentDay, Is.EqualTo(1));
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(bootstrapObject);
+            UnityEngine.Object.DestroyImmediate(config);
+        }
+    }
+
+    [Test]
+    public void FiniteSourceProfileRunsOutsideP12Daily()
+    {
+        SimulationConfigData config = CreateP14AdmissionConfig(
+            LocalMaterialFlowProfile.FiniteReserveDaily, 7, out ItemData item);
+        GameObject bootstrapObject = new GameObject("P14-B finite non-P12 profile");
+        try
+        {
+            TesteSimulacao bootstrap = bootstrapObject.AddComponent<TesteSimulacao>();
+            ConfigureUnscopedBootstrap(bootstrap, config);
+
+            InvokeInitializeSimulation(bootstrap, null);
+
+            Assert.That(bootstrap.Bootstrap, Is.Not.Null);
+            Assert.That(bootstrap.Runtime.Cities.Count, Is.EqualTo(1));
+            CityRuntime city = bootstrap.Runtime.Cities[0];
+            Assert.That(bootstrap.Runtime.LegacySpatialAnchorBindingStore.TryGet(
+                new SpatialAnchorOwnerId(SpatialAnchorOwnerKind.City, city.RuntimeId), out LocationId boundLocation), Is.True);
+            Assert.That(boundLocation.Value, Is.EqualTo(config.authoredLocationId));
+            Assert.That(city.FiniteProductionSources, Is.Not.Null);
+            Assert.That(bootstrap.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure advanceFailure), Is.True,
+                advanceFailure.ToString());
+            Assert.That(city.LastMaterialFlow.AppliedSourceQuantity, Is.EqualTo(5));
+            Assert.That(city.FiniteProductionSources.Source.RemainingReserve, Is.EqualTo(2));
+            Assert.That(city.LastMaterialFlow.ClosingStock, Is.EqualTo(14));
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(bootstrapObject);
+            UnityEngine.Object.DestroyImmediate(config);
+        }
+    }
+
+    [Test]
+    public void FiniteSourceProfileRejectsAdditionalCityBeforeConstruction()
+    {
+        SimulationConfigData config = CreateP14AdmissionConfig(
+            LocalMaterialFlowProfile.FiniteReserveDaily, 7, out _);
+        GameObject bootstrapObject = new GameObject("P14-B multi-City finite profile");
+        try
+        {
+            config.Cities.Add(config.Cities[0]);
+            TesteSimulacao bootstrap = bootstrapObject.AddComponent<TesteSimulacao>();
+            ConfigureUnscopedBootstrap(bootstrap, config);
+            int worldIdentityAllocations = 0;
+            WritePrivateField(bootstrap, "worldIdentityAllocator", new Func<WorldId>(() =>
+            {
+                worldIdentityAllocations++;
+                return null;
+            }));
+            List<string> completedStages = new List<string>();
+
+            TargetInvocationException thrown = Assert.Throws<TargetInvocationException>(() =>
+                InvokeInitializeSimulation(bootstrap, completedStages.Add));
+
+            Assert.That(thrown.InnerException, Is.TypeOf<InvalidOperationException>());
+            Assert.That(thrown.InnerException.Message, Does.Contain("FiniteReserveProfileRequiresExactlyOneAuthoredCity"));
+            Assert.That(completedStages, Is.Empty);
+            Assert.That(worldIdentityAllocations, Is.Zero);
+            Assert.That(ReadPrivateField<List<CityRuntime>>(bootstrap, "cityRuntimeList"), Is.Empty);
+            Assert.That(ReadPrivateField<RuntimeIdAllocator>(bootstrap, "runtimeIdAllocator"), Is.Null);
+            Assert.That(ReadPrivateField<SimulationRuntime>(bootstrap, "simulationRuntime"), Is.Null);
+            Assert.That(bootstrap.Bootstrap, Is.Null);
+            Assert.That(bootstrap.CurrentDay, Is.Zero);
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(bootstrapObject);
+            UnityEngine.Object.DestroyImmediate(config);
+        }
+    }
+    [Test]
     public void BootstrapScopesValidationThroughPublicationAndRevokesFailedPublication()
     {
         SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
@@ -1359,6 +1511,64 @@ public sealed class SimulationRuntimeAdmissionTests
         {
             UnityEngine.Object.DestroyImmediate(bootstrapObject);
         }
+    }
+
+    private static SimulationConfigData CreateP14AdmissionConfig(
+        LocalMaterialFlowProfile profile,
+        int initialReserve,
+        out ItemData item)
+    {
+        SimulationConfigData template = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-GeneralTest.asset");
+        Assert.That(template, Is.Not.Null);
+        SimulationConfigData config = UnityEngine.Object.Instantiate(template);
+        config.simulationName = "P14-B " + profile;
+        config.enabledModules = new List<SimulationModule> { SimulationModule.Economy };
+        config.cities = new List<CityData>();
+        config.npcs = new List<NpcSimulationConfig>();
+        config.explorableSites = new List<ExplorableSiteConfig>();
+        config.initialWarrants = new List<InitialWantedRecordConfig>();
+        config.scheduledDirectives = new List<ScheduledDirectiveConfig>();
+        config.authoredP10RuinSite = null;
+        config.genesisProfileContractIdentity = string.Empty;
+        config.p10bStableSiteKey = string.Empty;
+
+        item = SimulationTestFactory.CreateItem("p14-admission-" + profile);
+        CityData city = SimulationTestFactory.CreateCityData(
+            "city.p14.admission." + profile,
+            new MarketItemConfig
+            {
+                item = item,
+                initialAmount = 10,
+                desiredAmount = 20,
+                consumptionPer1000Population = 1f
+            });
+        city.settlementSemanticId = "settlement.p14.admission";
+        city.materialFlowLocationId = config.authoredLocationId;
+        city.marketStoreSemanticId = "store.p14.admission";
+        city.materialFlowProfile = profile;
+        city.initialPopulation = 1000;
+        city.populationConsumption = new PopulationConsumptionConfig
+        {
+            paymentMode = ConsumptionPaymentMode.Free
+        };
+        city.productionConfigs.Add(new CityProductionConfig
+        {
+            item = item,
+            amountPerDay = 5,
+            initialReserve = initialReserve,
+            productionSourceId = "source.p14.admission",
+            contentRevision = "p14-content-v1"
+        });
+        config.cities.Add(city);
+        return config;
+    }
+
+    private static void ConfigureUnscopedBootstrap(TesteSimulacao bootstrap, SimulationConfigData config)
+    {
+        WritePrivateField(bootstrap, "simulationConfig", config);
+        WritePrivateField(bootstrap, "runtimeAdmissionProfile", SimulationRuntimeAdmissionProfile.None);
+        WritePrivateField<SimulationRuntimeAdmissionContext>(bootstrap, "runtimeAdmissionContext", null);
     }
 
     private static void ConfigureSelectedBootstrap(TesteSimulacao bootstrap, SimulationConfigData config)

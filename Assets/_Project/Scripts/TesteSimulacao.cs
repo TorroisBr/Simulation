@@ -200,6 +200,7 @@ public class TesteSimulacao : MonoBehaviour
                             && runtimeAdmissionContext != null
                             && runtimeAdmissionContext.Profile == SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1)
                             throw new System.InvalidOperationException("P10-B generated Ruin topology is not admitted by the Unity bootstrap daily profile.");
+                        ValidateP14SourceAdmission(simulationConfig, runtimeAdmissionContext);
                         SimulationGenesisPipeline.ValidateProfile(simulationConfig);
                         unpublishedWorldId = worldIdentityAllocator?.Invoke();
                         if (unpublishedWorldId == null)
@@ -434,11 +435,50 @@ public class TesteSimulacao : MonoBehaviour
             new[] { new LocationRecord(new LocationId(input.authoredLocationId), new HexId(input.authoredHexId)) });
         if (!genesisSpatialAuthority.TryComposeGeography(definition, out SpatialAuthorityFailure failure))
             throw new System.InvalidOperationException("Authored geography stage failed atomically: " + failure);
+        BindAuthoredMaterialFlowCityAnchors();
+    }
+
+    private void BindAuthoredMaterialFlowCityAnchors()
+    {
+        foreach (CityRuntime city in CityRuntimeList)
+        {
+            if (city == null || !city.HasLocalDailyMaterialFlow
+                || string.IsNullOrWhiteSpace(city.CityData?.materialFlowLocationId))
+                continue;
+
+            if (genesisLegacySpatialAnchorBindingStore == null)
+                genesisLegacySpatialAnchorBindingStore = new LegacySpatialAnchorBindingStore(genesisSpatialAuthority);
+
+            LocationId locationId = new LocationId(city.CityData.materialFlowLocationId);
+            if (!genesisLegacySpatialAnchorBindingStore.TryBindCity(city.RuntimeId, locationId, out SpatialAnchorBindingFailure failure))
+                throw new System.InvalidOperationException(
+                    "P14 local material-flow City anchor composition failed: " + failure);
+        }
     }
 
     public string GetFullLog()
     {
         return FullLog;
+    }
+
+    private static void ValidateP14SourceAdmission(
+        SimulationConfigData config,
+        SimulationRuntimeAdmissionContext admissionContext)
+    {
+        if (config == null) return;
+
+        if (!FiniteSourceProfileAdmission.TryValidateAuthoredCityCardinality(
+                config.Cities, out string cardinalityRejection))
+            throw new System.InvalidOperationException(
+                "P14-B finite source profile rejected before CityRuntime construction: " + cardinalityRejection);
+
+        if (admissionContext == null
+            || admissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+            || !FiniteSourceProfileAdmission.HasFiniteReserveProfile(config.Cities))
+            return;
+
+        throw new System.InvalidOperationException(
+            "P14-B finite source profile is not admitted by the Unity bootstrap daily profile.");
     }
 
     private void ValidateCandidateProfile()
