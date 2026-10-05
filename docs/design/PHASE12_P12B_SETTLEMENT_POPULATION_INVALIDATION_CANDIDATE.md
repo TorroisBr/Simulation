@@ -1,11 +1,14 @@
 # P12-B Selected-Profile SettlementPopulation Lifecycle Candidate
 
-**Status:** `SUBMITTED` for independent exact-tip implementation review. The
-bounded design review passed and the implementation is authorized under the
-accepted P12-B prerequisite-capability scope.
+**Status:** `VALIDATED_CANDIDATE` — independent exact-tip implementation
+review PASS is recorded in
+[`PHASE12_P12B_SETTLEMENT_POPULATION_INVALIDATION_IMPLEMENTATION_REVIEW.md`](PHASE12_P12B_SETTLEMENT_POPULATION_INVALIDATION_IMPLEMENTATION_REVIEW.md).
+The bounded design review passed and the implementation is authorized under
+the accepted P12-B prerequisite-capability scope.
 
 - **Code commit:** `f6e9b1ca14e9bfbb9e8f19622272610abdf2cc01`
 - **Code tree:** `e1bb56f97b0988247a092f96e9757a8bdd0e8380`
+- **Independent exact-tip code review:** PASS (recorded in the linked review artifact)
 - **Candidate base:** `147cf2b08e8cae2715bded228d953440c2355b22`
 - **P12 canonical at refresh:** `a6572ab3d4330d81edb334ae8b4c84ca5e6b173e`
 - **Current P17 runtime base included by the candidate base:** `b3f26d541fb1a7f7c5c9809877b4c5b937a53aee`
