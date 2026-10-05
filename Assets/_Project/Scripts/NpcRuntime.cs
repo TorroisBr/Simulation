@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using UnityEngine;
 
 [Serializable]
@@ -9,6 +10,10 @@ public class NpcRuntime : ICapabilityConditionSource
     [NonSerialized] private long travelStateRevision;
     [NonSerialized] private long lifeStateRevision;
     [NonSerialized] private long residenceRevision;
+    [NonSerialized] private long p12CrimeJusticeRevision;
+    [NonSerialized] private ReadOnlyCollection<NpcStatusData> currentStatusView;
+    [NonSerialized] private Func<NpcRuntime, bool> p12CrimeJusticeMutationAdmission;
+    [NonSerialized] private Action<NpcRuntime> p12CrimeJusticeMutationCommitted;
     [NonSerialized] private Func<bool, IReadOnlyList<CityRuntime>, bool> p12TravelStateMutationAdmission;
     [NonSerialized] private Action<bool, IReadOnlyList<CityRuntime>> p12TravelStateMutationCommitted;
     [NonSerialized] private Func<NpcRuntime, bool, bool, bool> p12LifecycleMutationAdmission;
@@ -72,7 +77,24 @@ public class NpcRuntime : ICapabilityConditionSource
         ? personRuntime.ResidenceSettlementRuntimeId
         : residenceSettlementRuntimeId;
     internal PersonRuntime BoundPersonRuntime => personRuntime;
-    public List<NpcStatusData> CurrentStatus => currentStatus ?? (currentStatus = new List<NpcStatusData>());
+    public IReadOnlyList<NpcStatusData> CurrentStatus
+    {
+        get
+        {
+            if (currentStatus == null) currentStatus = new List<NpcStatusData>();
+            if (currentStatusView == null) currentStatusView = currentStatus.AsReadOnly();
+            return currentStatusView;
+        }
+    }
+    internal bool TryReserveCurrentStatusCapacity(int additionalCount)
+    {
+        if (additionalCount < 0) return false;
+        if (currentStatus == null) currentStatus = new List<NpcStatusData>();
+        if (additionalCount > int.MaxValue - currentStatus.Count) return false;
+        int required = currentStatus.Count + additionalCount;
+        if (currentStatus.Capacity < required) currentStatus.Capacity = required;
+        return true;
+    }
     public NpcActionData CurrentAction => currentAction;
     public NpcActionRuntime CurrentActionRuntime => currentActionRuntime;
     public NpcLifeState LifeState => lifeState;
@@ -96,6 +118,8 @@ public class NpcRuntime : ICapabilityConditionSource
     public long TravelStateRevision => travelStateRevision;
     internal long LifeStateRevision => lifeStateRevision;
     internal long ResidenceRevision => residenceRevision;
+    internal long P12CrimeJusticeRevision => p12CrimeJusticeRevision;
+    internal bool IsP12CrimeJusticeBound => p12CrimeJusticeMutationAdmission != null;
     public bool IsTraveling => destinationLocation != null && travelDaysRemaining > 0;
     public int HiddenDaysRemaining => hiddenDaysRemaining;
     public bool IsHidden => hiddenDaysRemaining > 0;
@@ -248,7 +272,7 @@ public class NpcRuntime : ICapabilityConditionSource
 
         if (npcData != null && npcData.statusPadrao != null)
         {
-		    CurrentStatus.AddRange(npcData.statusPadrao);
+            currentStatus.AddRange(npcData.statusPadrao);
         }
 
         if (startingCity != null)
@@ -507,20 +531,56 @@ public class NpcRuntime : ICapabilityConditionSource
 
     public void AddStatus(NpcStatusData status)
     {
-        if (status == null)
-        {
-            return;
-        }
-
-        if (CurrentStatus.Contains(status) == false)
-        {
-            CurrentStatus.Add(status);
-        }
+        if (status == null) return;
+        if (currentStatus == null) currentStatus = new List<NpcStatusData>();
+        if (currentStatus.Contains(status)) return;
+        EnsureP12CrimeJusticeMutationAllowed();
+        currentStatus.Add(status);
+        NotifyP12CrimeJusticeMutationCommitted();
     }
 
     public void RemoveStatus(NpcStatusData status)
     {
-        CurrentStatus.Remove(status);
+        if (status == null || currentStatus == null || !currentStatus.Contains(status)) return;
+        EnsureP12CrimeJusticeMutationAllowed();
+        currentStatus.Remove(status);
+        NotifyP12CrimeJusticeMutationCommitted();
+    }
+
+    internal bool TryBindP12CrimeJusticeMutationBoundary(
+        Func<NpcRuntime, bool> admission,
+        Action<NpcRuntime> committed)
+    {
+        if (admission == null || committed == null
+            || p12CrimeJusticeMutationAdmission != null
+            || p12CrimeJusticeMutationCommitted != null)
+            return false;
+        p12CrimeJusticeMutationAdmission = admission;
+        p12CrimeJusticeMutationCommitted = committed;
+        return true;
+    }
+
+    private void EnsureP12CrimeJusticeMutationAllowed()
+    {
+        if (p12CrimeJusticeMutationAdmission == null
+            && p12CrimeJusticeMutationCommitted == null) return;
+        if (p12CrimeJusticeMutationAdmission == null
+            || p12CrimeJusticeMutationCommitted == null
+            || p12CrimeJusticeRevision == long.MaxValue)
+            throw new InvalidOperationException("P12 Crime/Justice mutation is faulted.");
+        bool admitted;
+        try { admitted = p12CrimeJusticeMutationAdmission(this); }
+        catch { admitted = false; }
+        if (!admitted)
+            throw new InvalidOperationException("NPC status or hidden state is outside an admitted P12 Crime/Justice boundary.");
+    }
+
+    private void NotifyP12CrimeJusticeMutationCommitted()
+    {
+        if (p12CrimeJusticeMutationAdmission == null) return;
+        p12CrimeJusticeRevision++;
+        try { p12CrimeJusticeMutationCommitted?.Invoke(this); }
+        catch { }
     }
 
     public bool SetCurrentPresence(SpatialLocationRuntime location, CityRuntime cityProjection = null)
@@ -855,7 +915,11 @@ public class NpcRuntime : ICapabilityConditionSource
     {
         int followingFullDays = Mathf.Max(1, days);
         int durationIncludingCurrentDay = followingFullDays + 1;
-        hiddenDaysRemaining = Mathf.Max(hiddenDaysRemaining, durationIncludingCurrentDay);
+        int next = Mathf.Max(hiddenDaysRemaining, durationIncludingCurrentDay);
+        if (next == hiddenDaysRemaining) return;
+        EnsureP12CrimeJusticeMutationAllowed();
+        hiddenDaysRemaining = next;
+        NotifyP12CrimeJusticeMutationCommitted();
     }
 
     public bool AdvanceHiddenDay()
@@ -865,13 +929,18 @@ public class NpcRuntime : ICapabilityConditionSource
             return false;
         }
 
+        EnsureP12CrimeJusticeMutationAllowed();
         hiddenDaysRemaining = Mathf.Max(0, hiddenDaysRemaining - 1);
+        NotifyP12CrimeJusticeMutationCommitted();
         return hiddenDaysRemaining <= 0;
     }
 
     public void ClearHidden()
     {
+        if (hiddenDaysRemaining == 0) return;
+        EnsureP12CrimeJusticeMutationAllowed();
         hiddenDaysRemaining = 0;
+        NotifyP12CrimeJusticeMutationCommitted();
     }
 
     public void SetMerchantTradePlan(ItemData item, CityRuntime originCity, CityRuntime targetCity, int plannedAmount, float purchasePricePerItem, string originDecisionId = null)

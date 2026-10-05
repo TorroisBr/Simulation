@@ -701,6 +701,13 @@ public sealed class ContinuationCensusProtocol
                         npcProvider.IsResidence);
                     schemaVersion = NpcLifecycleCensusProvider.SchemaVersion;
                 }
+                else if (provider is P12CrimeJusticeCensusProvider.NpcStatusSectionProvider crimeJusticeProvider)
+                {
+                    ownerIdentity = crimeJusticeProvider.NpcOwner;
+                    sectionId = P12CrimeJusticeCensusProvider.NpcStatusSectionIdFor(
+                        crimeJusticeProvider.RuntimeId);
+                    schemaVersion = P12CrimeJusticeCensusProvider.SchemaVersion;
+                }
                 else
                 {
                     return false;

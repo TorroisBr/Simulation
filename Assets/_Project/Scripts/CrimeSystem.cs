@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using UnityEngine;
 
 public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutonomousNpcActionPolicy, IAuthoritativeMutationGuardBindable
@@ -22,6 +23,7 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
     private Dictionary<string, CrimeHiddenStatusReceipt> hiddenStatusStepReceipts =
         new Dictionary<string, CrimeHiddenStatusReceipt>(StringComparer.Ordinal);
     private long hiddenStatusStepRevision;
+    private bool p12DailyProfileReceiptBoundaryBound;
     private SimulationTime simulationTime;
     private ITheftOutcomeSink theftOutcomeSink;
 
@@ -65,6 +67,26 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
 
     public ITheftOutcomeSink TheftOutcomeSink => theftOutcomeSink;
     public SimulationTime SimulationTime => simulationTime;
+    internal JusticeSystem JusticeOwner => justiceSystem;
+    internal long P12P18ReceiptCensusRevision
+    {
+        get
+        {
+            if (hiddenStatusStepReceipts == null || hiddenStatusStepRevision < 0L)
+                throw new InvalidOperationException("Crime P18 receipt state is invalid.");
+            return checked(hiddenStatusStepRevision + hiddenStatusStepReceipts.Count);
+        }
+    }
+
+    internal bool TryBindP12DailyProfileReceiptBoundary()
+    {
+        if (p12DailyProfileReceiptBoundaryBound) return true;
+        if (hiddenStatusStepReceipts == null || hiddenStatusStepRevision != 0L
+            || hiddenStatusStepReceipts.Count != 0)
+            return false;
+        p12DailyProfileReceiptBoundaryBound = true;
+        return true;
+    }
 
     public bool TryBindSimulationTime(SimulationTime worldSimulationTime)
     {
@@ -371,10 +393,10 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
                     continue;
                 }
 
-                List<NpcStatusData> statuses = snapshot.Npc.CurrentStatus;
-                if (statuses.Capacity < statuses.Count + 1)
+                if (!snapshot.Npc.TryReserveCurrentStatusCapacity(1))
                 {
-                    statuses.Capacity = statuses.Count + 1;
+                    failure = TimelineFailure.ContinuationFailed;
+                    return false;
                 }
             }
         }
@@ -409,6 +431,11 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
         out TimelineFailure failure)
     {
         failure = TimelineFailure.ContinuationFailed;
+        if (p12DailyProfileReceiptBoundaryBound)
+        {
+            failure = TimelineFailure.UnsupportedProfile;
+            return false;
+        }
         if (receipt == null)
         {
             return false;

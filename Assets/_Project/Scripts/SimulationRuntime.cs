@@ -4696,6 +4696,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                         PersonLifeResidenceCensusProvider.CreateProviders(personStore.Persons));
                     lifecycleProviders.AddRange(
                         NpcLifecycleCensusProvider.CreateProviders(npcRuntimeSnapshot));
+                    lifecycleProviders.AddRange(
+                        P12CrimeJusticeCensusProvider.CreateNpcStatusProviders(npcRuntimeSnapshot));
                 }
                 bool reconciled = npcRosterCensusProtocol.TryReconcileSpatialKnowledgeRosterAndNotifyCommittedMutations(
                     changedFixedSections,
@@ -8678,23 +8680,24 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
     {
         if (justiceSystem != null)
         {
-            justiceSystem.BeginDay();
+            RunP12CrimeJusticeDailyMutation(justiceSystem.BeginDay);
         }
 
         // Hidden-state expiration is a previously established consequence/timer,
         // not autonomous crime origination. It must continue to advance whenever
         // the composed crime system owns the state, independently of policy that
         // filters new criminal decisions.
-        crimeSystem?.AdvanceHiddenStatuses(npcRuntimes);
+        if (crimeSystem != null)
+            RunP12CrimeJusticeDailyMutation(() => crimeSystem.AdvanceHiddenStatuses(npcRuntimes));
 
         if (justiceSystem != null)
         {
-            justiceSystem.AdvanceSentences(npcRuntimes);
+            RunP12CrimeJusticeDailyMutation(() => justiceSystem.AdvanceSentences(npcRuntimes));
         }
 
         if (justiceSystem != null)
         {
-            justiceSystem.SyncWantedStatuses(npcRuntimes);
+            RunP12CrimeJusticeDailyMutation(() => justiceSystem.SyncWantedStatuses(npcRuntimes));
         }
 
         AdvanceMerchantPlanUrgency();
@@ -8853,7 +8856,16 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
 
         if (actionResult != null && actionResult.Success == true)
         {
-            ApplySuccessStatusChanges(npcRuntime, actionRuntime, action);
+            IReadOnlyList<NpcRuntime> participants = actionRuntime?.TargetNpc == null
+                ? new[] { npcRuntime }
+                : new[] { npcRuntime, actionRuntime.TargetNpc };
+            if (!TryBeginP12CrimeJusticeActionScope(
+                    participants,
+                    includeJustice: false,
+                    out P12CrimeJusticeMutationScope statusScope))
+                throw new InvalidOperationException("P12 action status effects could not be admitted.");
+            using (statusScope)
+                ApplySuccessStatusChanges(npcRuntime, actionRuntime, action);
         }
 
         return actionResult;
@@ -8934,13 +8946,25 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
 
         npcRuntime.SetCurrentActionRuntime(new NpcActionRuntime(directive.Action));
 
-        if (justiceSystem.ApplyEscapeSuccess(npcRuntime, settings.escapeBountyPenalty) == false)
+        if (!TryBeginP12CrimeJusticeActionScope(
+                new[] { npcRuntime },
+                includeJustice: true,
+                out P12CrimeJusticeMutationScope escapeScope))
+            throw new InvalidOperationException("P12 forced Escape could not be admitted.");
+
+        bool escaped;
+        using (escapeScope)
+        {
+            escaped = justiceSystem.ApplyEscapeSuccess(npcRuntime, settings.escapeBountyPenalty);
+            if (escaped)
+                ApplySuccessStatusChanges(npcRuntime, npcRuntime.CurrentActionRuntime, directive.Action);
+        }
+
+        if (!escaped)
         {
             directive.MarkFailed(CurrentDay, "Canonical escape transition rejected the forced outcome.");
             return;
         }
-
-        ApplySuccessStatusChanges(npcRuntime, npcRuntime.CurrentActionRuntime, directive.Action);
         directive.MarkSucceeded(CurrentDay);
     }
 
@@ -8985,7 +9009,25 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         {
             if (actionProvider is INpcActionFailureHandler failureHandler)
             {
-                NpcActionResult failureResult = failureHandler.HandleActionFailure(npcRuntime, actionRuntime);
+                NpcActionResult failureResult;
+                if (runtimeAdmissionContext != null
+                    && (actionProvider is CrimeSystem || actionProvider is GuardSystem))
+                {
+                    IReadOnlyList<NpcRuntime> participants = actionRuntime?.TargetNpc == null
+                        ? new[] { npcRuntime }
+                        : new[] { npcRuntime, actionRuntime.TargetNpc };
+                    if (!TryBeginP12CrimeJusticeActionScope(
+                            participants,
+                            includeJustice: true,
+                            out P12CrimeJusticeMutationScope failureScope))
+                        throw new InvalidOperationException("P12 Crime/Guard failure handling could not be admitted.");
+                    using (failureScope)
+                        failureResult = failureHandler.HandleActionFailure(npcRuntime, actionRuntime);
+                }
+                else
+                {
+                    failureResult = failureHandler.HandleActionFailure(npcRuntime, actionRuntime);
+                }
 
                 if (failureResult != null)
                 {
@@ -9013,6 +9055,21 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
 
             using (travelStartScope)
                 return travelActionProvider.TryExecuteAction(npcRuntime, actionRuntime);
+        }
+
+        if (runtimeAdmissionContext != null
+            && (actionProvider is CrimeSystem || actionProvider is GuardSystem))
+        {
+            IReadOnlyList<NpcRuntime> participants = actionRuntime?.TargetNpc == null
+                ? new[] { npcRuntime }
+                : new[] { npcRuntime, actionRuntime.TargetNpc };
+            if (!TryBeginP12CrimeJusticeActionScope(
+                    participants,
+                    includeJustice: true,
+                    out P12CrimeJusticeMutationScope crimeJusticeScope))
+                throw new InvalidOperationException("P12 Crime/Guard action could not be admitted.");
+            using (crimeJusticeScope)
+                return actionProvider.TryExecuteAction(npcRuntime, actionRuntime);
         }
 
         return actionProvider.TryExecuteAction(npcRuntime, actionRuntime);

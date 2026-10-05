@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 public class NpcDecisionSystem : IAuthoritativeMutationGuardBindable
@@ -266,7 +267,7 @@ public class NpcDecisionSystem : IAuthoritativeMutationGuardBindable
         return TryBindMutationGuard(guard);
     }
 
-    private List<NpcActionData> GetAllValidActions(List<NpcStatusData> npcCurrentStatus, List<NpcActionData> availableActions)
+    private List<NpcActionData> GetAllValidActions(IReadOnlyList<NpcStatusData> npcCurrentStatus, List<NpcActionData> availableActions)
     {
         List<NpcActionData> validActions = new List<NpcActionData>();
 
@@ -289,7 +290,7 @@ public class NpcDecisionSystem : IAuthoritativeMutationGuardBindable
         return validActions;
     }
 
-    private bool HasAllRequiredStatus(NpcActionData action, List<NpcStatusData> npcCurrentStatus)
+    private bool HasAllRequiredStatus(NpcActionData action, IReadOnlyList<NpcStatusData> npcCurrentStatus)
     {
         if (action.statusNecessariosParaFazerAcao == null)
         {

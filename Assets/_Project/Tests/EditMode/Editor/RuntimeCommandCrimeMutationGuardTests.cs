@@ -521,13 +521,10 @@ public sealed class JusticeAdvanceSentencesBoundaryOwnerTests
         Assert.That(justice.Arrest(guard, target, city), Is.True);
         target.HideForDays(3);
         target.AddStatus(hidden);
-        for (int i = 0; i < 4; i++)
-        {
-            target.CurrentStatus.Add(wanted);
-        }
+        NpcStatusTestRows.AppendStatusRows(target, wanted, 4);
 
         NpcRuntime orphan = CreateActor("justice-advance-orphan");
-        orphan.CurrentStatus.Add(arrested);
+        orphan.AddStatus(arrested);
         orphan.HideForDays(2);
         orphan.AddStatus(hidden);
         List<NpcRuntime> roster = new List<NpcRuntime> { target, null, orphan, target };
@@ -795,7 +792,7 @@ public sealed class JusticeSyncWantedStatusesBoundaryOwnerTests
         NpcRuntime target = CreateActor("justice-sync-target");
         WantedRecordRuntime record = justice.CreateOrIncreaseWarrant(target, city, 5f, 1);
         Assert.That(justice.Arrest(guard, target, city), Is.True);
-        for (int i = 0; i < 8; i++) target.CurrentStatus.Add(wanted);
+        NpcStatusTestRows.AppendStatusRows(target, wanted, 8);
         List<NpcRuntime> roster = new List<NpcRuntime> { target, null, target };
         DailyBoundaryOperation operation = new DailyBoundaryOperation("world", "intraday", 31L);
         Assert.That(justice.TryCreateAdvanceSentencesStep(operation, roster, 0, out BoundaryContinuationStep sentenceStep, out _), Is.True);
@@ -817,7 +814,7 @@ public sealed class JusticeSyncWantedStatusesBoundaryOwnerTests
         Assert.That(justice.TryResolveSyncWantedStatusesReceipt(manifest, syncStep, out JusticeSyncWantedStatusesReceipt receipt, out failure), Is.True);
         Assert.That(receipt.OwnerRevisionAfter, Is.EqualTo(receipt.OwnerRevisionBefore + 1));
 
-        target.CurrentStatus.Add(wanted);
+        target.AddStatus(wanted);
         int markerCountBeforeReplay = CountStatusReference(target, wanted);
         Assert.That(justice.TryPrepareSyncWantedStatusesStep(manifest, syncStep, roster, out IBoundaryContinuationStepCommit replay, out failure), Is.True);
         Assert.That(replay.TryCommit(out failure), Is.True);
@@ -875,7 +872,7 @@ public sealed class JusticeSyncWantedStatusesBoundaryOwnerTests
         NpcRuntime target = CreateActor("justice-sync-late-target");
         justice.CreateOrIncreaseWarrant(target, city, 4f, 1);
         Assert.That(justice.Arrest(guard, target, city), Is.True);
-        target.CurrentStatus.Add(wanted);
+        target.AddStatus(wanted);
         List<NpcRuntime> roster = new List<NpcRuntime> { target };
         DailyBoundaryOperation operation = new DailyBoundaryOperation("world", "intraday", 33L);
         Assert.That(justice.TryCreateAdvanceSentencesStep(operation, roster, 0, out BoundaryContinuationStep sentenceStep, out _), Is.True);
@@ -1099,7 +1096,7 @@ public sealed class CrimeHiddenStatusBoundaryOwnerTests
         BoundaryContinuationManifest markerManifest = CreateManifest(markerOperation, markerStep);
         Assert.That(crime.TryPrepareAdvanceHiddenStatusesStep(
             markerManifest, markerStep, roster, out IBoundaryContinuationStepCommit markerPrepared, out _), Is.True);
-        second.CurrentStatus.Add(hidden);
+        second.AddStatus(hidden);
         Assert.That(markerPrepared.TryCommit(out TimelineFailure markerFailure), Is.False);
         Assert.That(markerFailure, Is.EqualTo(TimelineFailure.ContinuationFailed));
         Assert.That(first.HiddenDaysRemaining, Is.EqualTo(3));
@@ -1129,8 +1126,7 @@ public sealed class CrimeHiddenStatusBoundaryOwnerTests
         Assert.That(CountStatusReference(hiddenNpc, hidden), Is.Zero);
 
         NpcRuntime visibleNpc = CreateActor("crime-boundary-duplicate-marker");
-        visibleNpc.CurrentStatus.Add(hidden);
-        visibleNpc.CurrentStatus.Add(hidden);
+        NpcStatusTestRows.AppendStatusRows(visibleNpc, hidden, 2);
         List<NpcRuntime> visibleRoster = new List<NpcRuntime> { visibleNpc };
         DailyBoundaryOperation nextOperation = new DailyBoundaryOperation("world", "intraday", 2L);
         Assert.That(crime.TryCreateAdvanceHiddenStatusesStep(
@@ -1195,5 +1191,16 @@ public sealed class CrimeHiddenStatusBoundaryOwnerTests
             "configuration",
             steps,
             "content");
+    }
+}
+
+internal static class NpcStatusTestRows
+{
+    public static void AppendStatusRows(NpcRuntime npc, NpcStatusData status, int count)
+    {
+        List<NpcStatusData> rows = (List<NpcStatusData>)typeof(NpcRuntime)
+            .GetField("currentStatus", BindingFlags.Instance | BindingFlags.NonPublic)
+            .GetValue(npc);
+        for (int i = 0; i < count; i++) rows.Add(status);
     }
 }

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using UnityEngine;
 
 public class JusticeSystem : IAuthoritativeMutationGuardBindable
@@ -21,6 +22,10 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
     private const string SyncWantedStatusesOperationVersion = "1";
     private const string SyncWantedStatusesSnapshotVersion = "justice-sync-wanted-statuses-owner-v1";
     private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
+    private Func<JusticeSystem, bool> p12CrimeJusticeMutationAdmission;
+    private Action<JusticeSystem> p12CrimeJusticeMutationCommitted;
+    private long p12CrimeJusticeRevision;
+    private bool p12DailyProfileReceiptBoundaryBound;
     private readonly List<WantedRecordRuntime> wantedRecords = new List<WantedRecordRuntime>();
     private readonly List<PrisonSentenceRuntime> prisonSentences = new List<PrisonSentenceRuntime>();
     private Dictionary<string, JusticeBeginDayReceipt> beginDayStepReceipts =
@@ -38,6 +43,24 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
     private readonly NpcStatusData hiddenStatus;
     private readonly DomainEventRecorder domainEventRecorder;
     private readonly SimulationLogger logger;
+
+    internal long P12CrimeJusticeRevision => p12CrimeJusticeRevision;
+    internal int P12WantedRecordCount => wantedRecords?.Count ?? -1;
+    internal int P12PrisonSentenceCount => prisonSentences?.Count ?? -1;
+    internal long P12P18ReceiptCensusRevision
+    {
+        get
+        {
+            if (beginDayStepReceipts == null || advanceSentencesStepReceipts == null
+                || syncWantedStatusesStepReceipts == null
+                || beginDayStepRevision < 0L || advanceSentencesStepRevision < 0L
+                || syncWantedStatusesStepRevision < 0L)
+                throw new InvalidOperationException("Justice P18 receipt state is invalid.");
+            return checked(checked(beginDayStepRevision + beginDayStepReceipts.Count)
+                + checked(advanceSentencesStepRevision + advanceSentencesStepReceipts.Count)
+                + checked(syncWantedStatusesStepRevision + syncWantedStatusesStepReceipts.Count));
+        }
+    }
 
     public JusticeSystem(
         NpcStatusData freeStatus,
@@ -515,6 +538,11 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
         out TimelineFailure failure)
     {
         failure = TimelineFailure.ContinuationFailed;
+        if (p12DailyProfileReceiptBoundaryBound)
+        {
+            failure = TimelineFailure.UnsupportedProfile;
+            return false;
+        }
         if (receipt == null)
         {
             return false;
@@ -588,6 +616,11 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
         out TimelineFailure failure)
     {
         failure = TimelineFailure.ContinuationFailed;
+        if (p12DailyProfileReceiptBoundaryBound)
+        {
+            failure = TimelineFailure.UnsupportedProfile;
+            return false;
+        }
         if (receipt == null || expectedSentences == null)
         {
             return false;
@@ -651,6 +684,11 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
         out TimelineFailure failure)
     {
         failure = TimelineFailure.ContinuationFailed;
+        if (p12DailyProfileReceiptBoundaryBound)
+        {
+            failure = TimelineFailure.UnsupportedProfile;
+            return false;
+        }
         if (receipt == null)
         {
             return false;
@@ -817,17 +855,12 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
 
         foreach (KeyValuePair<NpcRuntime, int> item in additions)
         {
-            List<NpcStatusData> statuses = item.Key.CurrentStatus;
+            IReadOnlyList<NpcStatusData> statuses = item.Key.CurrentStatus;
             if (item.Value > int.MaxValue - statuses.Count)
             {
                 return false;
             }
-
-            int capacity = statuses.Count + item.Value;
-            if (statuses.Capacity < capacity)
-            {
-                statuses.Capacity = capacity;
-            }
+            if (!item.Key.TryReserveCurrentStatusCapacity(item.Value)) return false;
         }
 
         return true;
@@ -1204,19 +1237,13 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
             return true;
         }
 
-        List<NpcStatusData> statuses = npc.CurrentStatus;
+        IReadOnlyList<NpcStatusData> statuses = npc.CurrentStatus;
         if (statuses.Count > int.MaxValue - 2)
         {
             return false;
         }
 
-        int requiredCapacity = statuses.Count + 2;
-        if (statuses.Capacity < requiredCapacity)
-        {
-            statuses.Capacity = requiredCapacity;
-        }
-
-        return true;
+        return npc.TryReserveCurrentStatusCapacity(2);
     }
 
     private static bool TryGetAdvanceSentencesDiagnosticCapacity(
@@ -1590,8 +1617,11 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
             {
                 return null;
             }
-
+            if (p12CrimeJusticeMutationAdmission != null && !BindP12WantedRecord(record))
+                return null;
+            EnsureP12CrimeJusticeMutationAllowed();
             wantedRecords.Add(record);
+            NotifyP12CrimeJusticeMutationCommitted();
         }
         else
         {
@@ -1635,8 +1665,11 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
         {
             return false;
         }
-
+        if (p12CrimeJusticeMutationAdmission != null && !BindP12PrisonSentence(sentence))
+            return false;
+        EnsureP12CrimeJusticeMutationAllowed();
         prisonSentences.Add(sentence);
+        NotifyP12CrimeJusticeMutationCommitted();
         targetRuntime.ClearHidden();
         targetRuntime.RemoveStatus(hiddenStatus);
         targetRuntime.RemoveStatus(freeStatus);
@@ -1672,14 +1705,14 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
 
             if (sentence == null || sentence.Target == null)
             {
-                prisonSentences.RemoveAt(i);
+                RemoveP12PrisonSentenceAt(i);
                 continue;
             }
 
             if (sentence.Warrant == null || sentence.Warrant.IsActive == false)
             {
                 ReleasePrisoner(sentence.Target);
-                prisonSentences.RemoveAt(i);
+                RemoveP12PrisonSentenceAt(i);
                 if (notices == null)
                 {
                     logger.Log(SimulationLogCategory.Justice,
@@ -1694,7 +1727,7 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
 
             if (IsArrested(sentence.Target) == false)
             {
-                prisonSentences.RemoveAt(i);
+                RemoveP12PrisonSentenceAt(i);
                 SyncWantedStatus(sentence.Target);
                 continue;
             }
@@ -1708,7 +1741,7 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
 
             ResolveWarrant(sentence.Warrant);
             ReleasePrisoner(sentence.Target);
-            prisonSentences.RemoveAt(i);
+            RemoveP12PrisonSentenceAt(i);
             if (notices == null)
             {
                 logger.Log(SimulationLogCategory.Justice,
@@ -1792,7 +1825,7 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
             sentence.Warrant.AddPenalty(escapeBountyPenalty, 0);
         }
 
-        prisonSentences.Remove(sentence);
+        RemoveP12PrisonSentence(sentence);
         targetRuntime.RemoveStatus(arrestedStatus);
         targetRuntime.AddStatus(freeStatus);
         SyncWantedStatus(targetRuntime);
@@ -1936,6 +1969,128 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
         }
 
         return records;
+    }
+
+    internal bool TryReadP12CrimeJusticeCensus(
+        Func<NpcRuntime, bool> isNpcInstalled,
+        Func<CityRuntime, bool> isCityInstalled,
+        out int wantedCount,
+        out int sentenceCount,
+        out long revision)
+    {
+        wantedCount = 0;
+        sentenceCount = 0;
+        revision = p12CrimeJusticeRevision;
+        if (isNpcInstalled == null || isCityInstalled == null
+            || wantedRecords == null || prisonSentences == null
+            || revision < 0L)
+            return false;
+
+        HashSet<WantedRecordRuntime> wantedRows = new HashSet<WantedRecordRuntime>();
+        foreach (WantedRecordRuntime record in wantedRecords)
+        {
+            if (record == null || record.Target == null || record.City == null
+                || !isNpcInstalled(record.Target) || !isCityInstalled(record.City)
+                || !wantedRows.Add(record))
+                return false;
+        }
+        HashSet<PrisonSentenceRuntime> sentenceRows = new HashSet<PrisonSentenceRuntime>();
+        foreach (PrisonSentenceRuntime sentence in prisonSentences)
+        {
+            if (sentence == null || sentence.Target == null || sentence.City == null
+                || sentence.Warrant == null || !wantedRows.Contains(sentence.Warrant)
+                || !sentenceRows.Add(sentence)
+                || !ReferenceEquals(sentence.Target, sentence.Warrant.Target)
+                || !ReferenceEquals(sentence.City, sentence.Warrant.City)
+                || !isNpcInstalled(sentence.Target) || !isCityInstalled(sentence.City))
+                return false;
+        }
+
+        wantedCount = wantedRecords.Count;
+        sentenceCount = prisonSentences.Count;
+        return true;
+    }
+
+    internal bool TryBindP12CrimeJusticeMutationBoundary(
+        Func<JusticeSystem, bool> admission,
+        Action<JusticeSystem> committed)
+    {
+        if (admission == null || committed == null) return false;
+        if (p12CrimeJusticeMutationAdmission != null || p12CrimeJusticeMutationCommitted != null)
+            return false;
+        if (P12P18ReceiptCensusRevision != 0L) return false;
+
+        p12CrimeJusticeMutationAdmission = admission;
+        p12CrimeJusticeMutationCommitted = committed;
+        foreach (WantedRecordRuntime record in wantedRecords)
+            if (record == null || !BindP12WantedRecord(record)) return false;
+        foreach (PrisonSentenceRuntime sentence in prisonSentences)
+            if (sentence == null || !BindP12PrisonSentence(sentence)) return false;
+        return true;
+    }
+
+    internal bool TryBindP12DailyProfileReceiptBoundary()
+    {
+        if (p12DailyProfileReceiptBoundaryBound) return true;
+        if (P12P18ReceiptCensusRevision != 0L) return false;
+        p12DailyProfileReceiptBoundaryBound = true;
+        return true;
+    }
+
+    private bool CanCommitP12CrimeJusticeMutation()
+    {
+        if (p12CrimeJusticeMutationAdmission == null
+            && p12CrimeJusticeMutationCommitted == null) return true;
+        if (p12CrimeJusticeMutationAdmission == null
+            || p12CrimeJusticeMutationCommitted == null
+            || p12CrimeJusticeRevision == long.MaxValue) return false;
+        try { return p12CrimeJusticeMutationAdmission(this); }
+        catch { return false; }
+    }
+
+    private void EnsureP12CrimeJusticeMutationAllowed()
+    {
+        if (!CanCommitP12CrimeJusticeMutation())
+            throw new InvalidOperationException("Justice records are outside an admitted P12 Crime/Justice boundary.");
+    }
+
+    private void NotifyP12CrimeJusticeMutationCommitted()
+    {
+        if (p12CrimeJusticeMutationAdmission == null) return;
+        p12CrimeJusticeRevision++;
+        try { p12CrimeJusticeMutationCommitted?.Invoke(this); }
+        catch { }
+    }
+
+    private bool BindP12WantedRecord(WantedRecordRuntime record)
+    {
+        return record != null
+            && record.TryBindP12MutationBoundary(
+                () => wantedRecords.Contains(record) && CanCommitP12CrimeJusticeMutation(),
+                () => NotifyP12CrimeJusticeMutationCommitted());
+    }
+
+    private bool BindP12PrisonSentence(PrisonSentenceRuntime sentence)
+    {
+        return sentence != null
+            && sentence.TryBindP12MutationBoundary(
+                () => prisonSentences.Contains(sentence) && CanCommitP12CrimeJusticeMutation(),
+                () => NotifyP12CrimeJusticeMutationCommitted());
+    }
+
+    private bool RemoveP12PrisonSentenceAt(int index)
+    {
+        if (index < 0 || index >= prisonSentences.Count) return false;
+        EnsureP12CrimeJusticeMutationAllowed();
+        prisonSentences.RemoveAt(index);
+        NotifyP12CrimeJusticeMutationCommitted();
+        return true;
+    }
+
+    private bool RemoveP12PrisonSentence(PrisonSentenceRuntime sentence)
+    {
+        int index = prisonSentences.IndexOf(sentence);
+        return index >= 0 && RemoveP12PrisonSentenceAt(index);
     }
 
     internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard)
@@ -2576,6 +2731,8 @@ internal sealed class JusticeAdvanceSentencesCommit : IBoundaryContinuationStepC
 public class WantedRecordRuntime : IAuthoritativeMutationGuardBindable
 {
     private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
+    [NonSerialized] private Func<bool> p12MutationAdmission;
+    [NonSerialized] private Action p12MutationCommitted;
     [NonSerialized] private NpcRuntime target;
     [NonSerialized] private CityRuntime city;
     [SerializeField] private float bounty;
@@ -2599,17 +2756,48 @@ public class WantedRecordRuntime : IAuthoritativeMutationGuardBindable
     public void AddPenalty(float additionalBounty, int additionalSentenceDays)
     {
         ThrowIfFaulted();
-
-        bounty += Mathf.Max(0f, additionalBounty);
-        sentenceDays += Mathf.Max(0, additionalSentenceDays);
-        sentenceDays = Mathf.Max(1, sentenceDays);
+        float nextBounty = bounty + Mathf.Max(0f, additionalBounty);
+        int nextSentenceDays = Mathf.Max(1, sentenceDays + Mathf.Max(0, additionalSentenceDays));
+        if (nextBounty == bounty && nextSentenceDays == sentenceDays) return;
+        EnsureP12MutationAllowed();
+        bounty = nextBounty;
+        sentenceDays = nextSentenceDays;
+        NotifyP12MutationCommitted();
     }
 
     public void Resolve()
     {
         ThrowIfFaulted();
 
+        if (resolved) return;
+        EnsureP12MutationAllowed();
         resolved = true;
+        NotifyP12MutationCommitted();
+    }
+
+    internal bool TryBindP12MutationBoundary(Func<bool> admission, Action committed)
+    {
+        if (admission == null || committed == null
+            || p12MutationAdmission != null || p12MutationCommitted != null)
+            return false;
+        p12MutationAdmission = admission;
+        p12MutationCommitted = committed;
+        return true;
+    }
+
+    private void EnsureP12MutationAllowed()
+    {
+        if (p12MutationAdmission == null && p12MutationCommitted == null) return;
+        bool allowed = false;
+        try { allowed = p12MutationAdmission != null && p12MutationCommitted != null && p12MutationAdmission(); }
+        catch { }
+        if (!allowed) throw new InvalidOperationException("Wanted record is outside an admitted P12 Justice boundary.");
+    }
+
+    private void NotifyP12MutationCommitted()
+    {
+        try { p12MutationCommitted?.Invoke(); }
+        catch { }
     }
 
     internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard) => mutationGuardBinding.CanBindTo(guard);
@@ -2631,6 +2819,8 @@ public class WantedRecordRuntime : IAuthoritativeMutationGuardBindable
 public class PrisonSentenceRuntime : IAuthoritativeMutationGuardBindable
 {
     private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
+    [NonSerialized] private Func<bool> p12MutationAdmission;
+    [NonSerialized] private Action p12MutationCommitted;
     [NonSerialized] private NpcRuntime target;
     [NonSerialized] private CityRuntime city;
     [NonSerialized] private WantedRecordRuntime warrant;
@@ -2658,23 +2848,56 @@ public class PrisonSentenceRuntime : IAuthoritativeMutationGuardBindable
     public void AdvanceDay()
     {
         ThrowIfFaulted();
-
-        remainingDays = Mathf.Max(0, remainingDays - 1);
+        int next = Mathf.Max(0, remainingDays - 1);
+        if (next == remainingDays) return;
+        EnsureP12MutationAllowed();
+        remainingDays = next;
+        NotifyP12MutationCommitted();
     }
 
     public void RegisterFailedEscape(int additionalSentenceDays)
     {
         ThrowIfFaulted();
 
+        EnsureP12MutationAllowed();
         failedEscapeAttempts++;
         remainingDays += Mathf.Max(0, additionalSentenceDays);
+        NotifyP12MutationCommitted();
     }
 
     public void ClearArrestedToday()
     {
         ThrowIfFaulted();
 
+        if (!wasArrestedToday) return;
+        EnsureP12MutationAllowed();
         wasArrestedToday = false;
+        NotifyP12MutationCommitted();
+    }
+
+    internal bool TryBindP12MutationBoundary(Func<bool> admission, Action committed)
+    {
+        if (admission == null || committed == null
+            || p12MutationAdmission != null || p12MutationCommitted != null)
+            return false;
+        p12MutationAdmission = admission;
+        p12MutationCommitted = committed;
+        return true;
+    }
+
+    private void EnsureP12MutationAllowed()
+    {
+        if (p12MutationAdmission == null && p12MutationCommitted == null) return;
+        bool allowed = false;
+        try { allowed = p12MutationAdmission != null && p12MutationCommitted != null && p12MutationAdmission(); }
+        catch { }
+        if (!allowed) throw new InvalidOperationException("Prison sentence is outside an admitted P12 Justice boundary.");
+    }
+
+    private void NotifyP12MutationCommitted()
+    {
+        try { p12MutationCommitted?.Invoke(); }
+        catch { }
     }
 
     internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard) => mutationGuardBinding.CanBindTo(guard);

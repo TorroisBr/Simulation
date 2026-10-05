@@ -162,6 +162,10 @@ public sealed partial class SimulationRuntime
                 PersonLifeResidenceCensusProvider.CreateProviders(personStore.Persons));
             lifecycleProviders.AddRange(
                 NpcLifecycleCensusProvider.CreateProviders(npcRuntimeSnapshot));
+            lifecycleProviders.AddRange(
+                P12CrimeJusticeCensusProvider.CreateNpcStatusProviders(npcRuntimeSnapshot));
+            if (!TryRegisterP12CrimeJusticeOwnerSections(protocol))
+                return false;
             return protocol.RegisterLifecycleOwnerRosterFamily(lifecycleProviders, out _);
         }
         catch
@@ -233,7 +237,7 @@ public sealed partial class SimulationRuntime
                 CanCommitP12PopulationMutation,
                 NotifyP12PopulationMutation);
         }
-        return true;
+        return TryBindP12CrimeJusticeMutationBoundaries();
     }
 
     private IReadOnlyList<IOwnerSectionCensusProvider> CreateCurrentP12LifecycleProviders()
@@ -243,6 +247,7 @@ public sealed partial class SimulationRuntime
         List<IOwnerSectionCensusProvider> providers = new List<IOwnerSectionCensusProvider>();
         providers.AddRange(PersonLifeResidenceCensusProvider.CreateProviders(personStore.Persons));
         providers.AddRange(NpcLifecycleCensusProvider.CreateProviders(npcRuntimeSnapshot));
+        providers.AddRange(P12CrimeJusticeCensusProvider.CreateNpcStatusProviders(npcRuntimeSnapshot));
         return providers.AsReadOnly();
     }
 
