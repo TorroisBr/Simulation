@@ -186,6 +186,124 @@ public sealed class WarParticipantBindingId : IEquatable<WarParticipantBindingId
     public static bool operator !=(WarParticipantBindingId left, WarParticipantBindingId right) => (left == right) == false;
 }
 
+public sealed class WarStrategicParticipantId : IEquatable<WarStrategicParticipantId>
+{
+    public string Value { get; }
+    public WarStrategicParticipantId(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) throw new ArgumentException("WarStrategicParticipantId requires a non-empty value.", nameof(value));
+        Value = value;
+    }
+    public bool Equals(WarStrategicParticipantId other) => other != null && string.Equals(Value, other.Value, StringComparison.Ordinal);
+    public override bool Equals(object obj) => Equals(obj as WarStrategicParticipantId);
+    public override int GetHashCode() => StringComparer.Ordinal.GetHashCode(Value);
+    public override string ToString() => Value;
+    public static bool operator ==(WarStrategicParticipantId left, WarStrategicParticipantId right) => ReferenceEquals(left, right) || (!ReferenceEquals(left, null) && !ReferenceEquals(right, null) && left.Equals(right));
+    public static bool operator !=(WarStrategicParticipantId left, WarStrategicParticipantId right) => !(left == right);
+}
+
+public sealed class WarActualGoalId : IEquatable<WarActualGoalId>
+{
+    public string Value { get; }
+    public WarActualGoalId(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) throw new ArgumentException("WarActualGoalId requires a non-empty value.", nameof(value));
+        Value = value;
+    }
+    public bool Equals(WarActualGoalId other) => other != null && string.Equals(Value, other.Value, StringComparison.Ordinal);
+    public override bool Equals(object obj) => Equals(obj as WarActualGoalId);
+    public override int GetHashCode() => StringComparer.Ordinal.GetHashCode(Value);
+    public override string ToString() => Value;
+    public static bool operator ==(WarActualGoalId left, WarActualGoalId right) => ReferenceEquals(left, right) || (!ReferenceEquals(left, null) && !ReferenceEquals(right, null) && left.Equals(right));
+    public static bool operator !=(WarActualGoalId left, WarActualGoalId right) => !(left == right);
+}
+
+public sealed class WarStrategicParticipant
+{
+    public WarStrategicParticipantId Id { get; }
+    public WarId WarId { get; }
+    public FactionId FactionId { get; }
+    public WarSideId SideId { get; }
+    public WarStrategicParticipant(WarStrategicParticipantId id, WarId warId, FactionId factionId, WarSideId sideId)
+    {
+        Id = id ?? throw new ArgumentNullException(nameof(id));
+        WarId = warId ?? throw new ArgumentNullException(nameof(warId));
+        FactionId = factionId ?? throw new ArgumentNullException(nameof(factionId));
+        SideId = sideId ?? throw new ArgumentNullException(nameof(sideId));
+    }
+}
+
+public sealed class WarWithdrawalDemand
+{
+    public WarActualGoalId Id { get; }
+    public WarId WarId { get; }
+    public WarStrategicParticipantId OwnerParticipantId { get; }
+    public WarStrategicParticipantId TargetParticipantId { get; }
+    public WarParticipantBindingId TargetBindingId { get; }
+    public HexId SourceHexId { get; }
+    public long ActivatedAbsoluteDay { get; }
+    public WarWithdrawalDemand(WarActualGoalId id, WarId warId, WarStrategicParticipantId ownerParticipantId,
+        WarStrategicParticipantId targetParticipantId, WarParticipantBindingId targetBindingId, HexId sourceHexId,
+        long activatedAbsoluteDay)
+    {
+        Id = id ?? throw new ArgumentNullException(nameof(id));
+        WarId = warId ?? throw new ArgumentNullException(nameof(warId));
+        OwnerParticipantId = ownerParticipantId ?? throw new ArgumentNullException(nameof(ownerParticipantId));
+        TargetParticipantId = targetParticipantId ?? throw new ArgumentNullException(nameof(targetParticipantId));
+        TargetBindingId = targetBindingId ?? throw new ArgumentNullException(nameof(targetBindingId));
+        SourceHexId = sourceHexId ?? throw new ArgumentNullException(nameof(sourceHexId));
+        if (activatedAbsoluteDay < 0L) throw new ArgumentOutOfRangeException(nameof(activatedAbsoluteDay));
+        ActivatedAbsoluteDay = activatedAbsoluteDay;
+    }
+}
+
+public enum WarConcessionReason { Concession = 0 }
+
+public sealed class WarTerminalConcession
+{
+    public string OperationId { get; }
+    public WarStrategicParticipantId ConcedingParticipantId { get; }
+    public WarConcessionReason Reason { get; }
+    public WorldCommandOrigin AcceptedOrigin { get; }
+    public string AuthorityId { get; }
+    public long AcceptedAbsoluteDay { get; }
+    public long AcceptedOrder { get; }
+    public WarTerminalConcession(string operationId, WarStrategicParticipantId concedingParticipantId,
+        WarConcessionReason reason, WorldCommandOrigin acceptedOrigin, string authorityId, long acceptedAbsoluteDay, long acceptedOrder)
+    {
+        if (string.IsNullOrWhiteSpace(operationId)) throw new ArgumentException("A stable concession operation ID is required.", nameof(operationId));
+        if (string.IsNullOrWhiteSpace(authorityId)) throw new ArgumentException("Accepted concession authority is required.", nameof(authorityId));
+        if (concedingParticipantId == null) throw new ArgumentNullException(nameof(concedingParticipantId));
+        if (!Enum.IsDefined(typeof(WarConcessionReason), reason)) throw new ArgumentOutOfRangeException(nameof(reason));
+        if (acceptedAbsoluteDay < 0L || acceptedOrder < 0L) throw new ArgumentOutOfRangeException(nameof(acceptedAbsoluteDay));
+        if (!Enum.IsDefined(typeof(WorldCommandOrigin), acceptedOrigin)) throw new ArgumentOutOfRangeException(nameof(acceptedOrigin));
+        OperationId = operationId; ConcedingParticipantId = concedingParticipantId; Reason = reason;
+        AcceptedOrigin = acceptedOrigin; AuthorityId = authorityId; AcceptedAbsoluteDay = acceptedAbsoluteDay; AcceptedOrder = acceptedOrder;
+    }
+}
+
+public sealed class P17AWarStrategicSection
+{
+    public string ScenarioAuthorityId { get; }
+    public IReadOnlyList<WarStrategicParticipant> Participants { get; }
+    public WarWithdrawalDemand WithdrawalDemand { get; }
+    public WarTerminalConcession TerminalConcession { get; }
+    public P17AWarStrategicSection(string scenarioAuthorityId, IEnumerable<WarStrategicParticipant> participants,
+        WarWithdrawalDemand withdrawalDemand, WarTerminalConcession terminalConcession = null)
+    {
+        if (string.IsNullOrWhiteSpace(scenarioAuthorityId)) throw new ArgumentException("A stable scenario/GM authority ID is required.", nameof(scenarioAuthorityId));
+        if (withdrawalDemand == null) throw new ArgumentNullException(nameof(withdrawalDemand));
+        List<WarStrategicParticipant> values = participants == null ? new List<WarStrategicParticipant>() : new List<WarStrategicParticipant>(participants);
+        values.Sort((left, right) => StringComparer.Ordinal.Compare(left?.Id?.Value, right?.Id?.Value));
+        ScenarioAuthorityId = scenarioAuthorityId;
+        Participants = new ReadOnlyCollection<WarStrategicParticipant>(values);
+        WithdrawalDemand = withdrawalDemand;
+        TerminalConcession = terminalConcession;
+    }
+    internal P17AWarStrategicSection WithTerminalConcession(WarTerminalConcession concession) =>
+        new P17AWarStrategicSection(ScenarioAuthorityId, Participants, WithdrawalDemand, concession);
+}
+
 public sealed class BattleParticipantBindingId : IEquatable<BattleParticipantBindingId>
 {
     public string Value { get; }
@@ -416,6 +534,7 @@ public sealed class PersistentWarRecord
     public ConflictId ConflictId { get; }
     public IReadOnlyList<WarStateSide> Sides { get; }
     public IReadOnlyList<WarParticipantBinding> ParticipantBindings { get; }
+    public P17AWarStrategicSection P17A { get; }
     public bool IsActive => LifecycleState == WarLifecycleState.Active;
 
     public PersistentWarRecord(
@@ -425,7 +544,8 @@ public sealed class PersistentWarRecord
         WarLifecycleState lifecycleState = WarLifecycleState.Active,
         long? endedAbsoluteDay = null,
         IEnumerable<WarStateSide> sides = null,
-        IEnumerable<WarParticipantBinding> participantBindings = null)
+        IEnumerable<WarParticipantBinding> participantBindings = null,
+        P17AWarStrategicSection p17A = null)
     {
         Id = id ?? throw new ArgumentNullException(nameof(id));
         ValidateLifecycleArguments(createdAbsoluteDay, lifecycleState, endedAbsoluteDay);
@@ -437,12 +557,13 @@ public sealed class PersistentWarRecord
         ParticipantBindings = SortedCopy(
             participantBindings,
             (left, right) => StringComparer.Ordinal.Compare(left?.BindingId?.Value, right?.BindingId?.Value));
+        P17A = p17A;
     }
 
     internal PersistentWarRecord WithParticipantBinding(WarParticipantBinding binding)
     {
         List<WarParticipantBinding> values = new List<WarParticipantBinding>(ParticipantBindings) { binding };
-        return new PersistentWarRecord(Id, CreatedAbsoluteDay, ConflictId, LifecycleState, EndedAbsoluteDay, Sides, values);
+        return new PersistentWarRecord(Id, CreatedAbsoluteDay, ConflictId, LifecycleState, EndedAbsoluteDay, Sides, values, P17A);
     }
 
     internal PersistentWarRecord WithEnded(long endedAbsoluteDay)
@@ -454,8 +575,15 @@ public sealed class PersistentWarRecord
             WarLifecycleState.Ended,
             endedAbsoluteDay,
             Sides,
-            ParticipantBindings);
+            ParticipantBindings,
+            P17A);
     }
+
+    internal PersistentWarRecord WithP17A(P17AWarStrategicSection value) =>
+        new PersistentWarRecord(Id, CreatedAbsoluteDay, ConflictId, LifecycleState, EndedAbsoluteDay, Sides, ParticipantBindings, value);
+
+    internal PersistentWarRecord WithP17AEnded(long endedAbsoluteDay, P17AWarStrategicSection value) =>
+        new PersistentWarRecord(Id, CreatedAbsoluteDay, ConflictId, WarLifecycleState.Ended, endedAbsoluteDay, Sides, ParticipantBindings, value);
 
     private static void ValidateLifecycleArguments(
         long createdAbsoluteDay,
@@ -485,6 +613,20 @@ public sealed class PersistentWarRecord
         List<T> values = source == null ? new List<T>() : new List<T>(source);
         values.Sort(comparison);
         return new ReadOnlyCollection<T>(values);
+    }
+}
+
+public sealed class PersistentWarStoreSnapshot
+{
+    public long Revision { get; }
+    public IReadOnlyList<PersistentWarRecord> Records { get; }
+    public PersistentWarStoreSnapshot(long revision, IEnumerable<PersistentWarRecord> records)
+    {
+        if (revision < 0L) throw new ArgumentOutOfRangeException(nameof(revision));
+        List<PersistentWarRecord> values = records == null ? new List<PersistentWarRecord>() : new List<PersistentWarRecord>(records);
+        values.Sort((left, right) => StringComparer.Ordinal.Compare(left?.Id?.Value, right?.Id?.Value));
+        Revision = revision;
+        Records = new ReadOnlyCollection<PersistentWarRecord>(values);
     }
 }
 

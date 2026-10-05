@@ -5,6 +5,82 @@ using NUnit.Framework;
 public sealed class PersistentConflictWarBattleStateTests
 {
     [Test]
+    public void P17A_WarOwnerConfigurationFreezesBindingsAndCommitsOnlyReasonedConcession()
+    {
+        ArmedForceStore forces = CreateForces("p17-force-a", "p17-force-b");
+        SpatialAuthorityStore spatial = new SpatialAuthorityStore();
+        HexId source = new HexId("p17-source");
+        Assert.That(spatial.TryRegisterHex(new HexRecord(source), out _), Is.True);
+        Assert.That(spatial.TryRegisterHex(new HexRecord(new HexId("p17-destination")), out _), Is.True);
+        Assert.That(ArmedForceSpatialStateStore.TryCreateP16A(forces, spatial,
+            new ArmedForceId("p17-force-b"), source, "ration", "r1", 5m, 1m, 1L,
+            out ArmedForceSpatialStateStore p16, out _), Is.True);
+        Assert.That(p16.ConfigureP17AProvenance("scenario-gm-main"), Is.True);
+        FactionStore factions = new FactionStore(new PersonStore());
+        FactionId factionA = new FactionId("p17-faction-a");
+        FactionId factionB = new FactionId("p17-faction-b");
+        Assert.That(factions.TryRegister(new FactionRecord(factionA, "A", 0L), out _), Is.True);
+        Assert.That(factions.TryRegister(new FactionRecord(factionB, "B", 0L), out _), Is.True);
+        PersistentConflictStore conflicts = new PersistentConflictStore(forces);
+        PersistentWarStore wars = new PersistentWarStore(forces, conflicts, factions, spatial, p16);
+        WarId warId = new WarId("p17-war");
+        WarSideId sideA = new WarSideId("side-a");
+        WarSideId sideB = new WarSideId("side-b");
+        WarParticipantBinding bindingA = new WarParticipantBinding(new WarParticipantBindingId("binding-a"), warId, sideA, new ArmedForceId("p17-force-a"));
+        WarParticipantBinding bindingB = new WarParticipantBinding(new WarParticipantBindingId("binding-b"), warId, sideB, new ArmedForceId("p17-force-b"));
+        Assert.That(wars.TryRegister(new PersistentWarRecord(warId, 0L,
+            sides: new[] { new WarStateSide(warId, sideA), new WarStateSide(warId, sideB) },
+            participantBindings: new[] { bindingA, bindingB }), out _), Is.True);
+        WarStrategicParticipantId participantAId = new WarStrategicParticipantId("strategic-a");
+        WarStrategicParticipantId participantBId = new WarStrategicParticipantId("strategic-b");
+        WarStrategicParticipant participantA = new WarStrategicParticipant(participantAId, warId, factionA, sideA);
+        WarStrategicParticipant participantB = new WarStrategicParticipant(participantBId, warId, factionB, sideB);
+        WarWithdrawalDemand demand = new WarWithdrawalDemand(new WarActualGoalId("leave-source"), warId,
+            participantAId, participantBId, bindingB.BindingId, source, 0L);
+        P17AWarStrategicSection section = new P17AWarStrategicSection("scenario-gm-main",
+            new[] { participantB, participantA }, demand);
+
+        long beforeConfigure = wars.Revision;
+        WarWithdrawalDemand invalidDemand = new WarWithdrawalDemand(new WarActualGoalId("leave-missing-source"), warId,
+            participantAId, participantBId, bindingB.BindingId, new HexId("missing-hex"), 0L);
+        P17AWarStrategicSection invalidSection = new P17AWarStrategicSection("scenario-gm-main",
+            new[] { participantA, participantB }, invalidDemand);
+        Assert.That(wars.TryConfigureP17A(warId, invalidSection, out _), Is.False);
+        Assert.That(wars.Revision, Is.EqualTo(beforeConfigure));
+        Assert.That(wars.TryGet(warId, out PersistentWarRecord untouched), Is.True);
+        Assert.That(untouched.P17A, Is.Null);
+        Assert.That(wars.TryConfigureP17A(warId, section, out PersistentStateFailure configureFailure), Is.True, configureFailure.ToString());
+        Assert.That(wars.Revision, Is.EqualTo(beforeConfigure + 1L));
+        Assert.That(wars.TryAddParticipantBinding(warId,
+            new WarParticipantBinding(new WarParticipantBindingId("late-binding"), warId, sideA, new ArmedForceId("p17-force-a")),
+            out _), Is.False);
+        long beforeRawEnd = wars.Revision;
+        Assert.That(wars.TryEnd(warId, 2L, out _), Is.False);
+        Assert.That(wars.Revision, Is.EqualTo(beforeRawEnd));
+
+        PersistentWarStoreSnapshot captured = wars.CaptureState();
+        Assert.That(captured.Revision, Is.EqualTo(wars.Revision));
+        Assert.That(captured.Records, Has.Count.EqualTo(1));
+        Assert.That(captured.Records[0].ParticipantBindings, Has.Count.EqualTo(2));
+        Assert.That(captured.Records[0].P17A.Participants[0].Id.Value, Is.EqualTo("strategic-a"));
+
+        WarTerminalConcession concession = new WarTerminalConcession("concede-op-1", participantBId,
+            WarConcessionReason.Concession, WorldCommandOrigin.Scenario, "scenario-gm-main", 2L, 0L);
+        long beforeInvalidConcession = wars.Revision;
+        WarTerminalConcession untrustedConcession = new WarTerminalConcession("concede-op-bad", participantBId,
+            WarConcessionReason.Concession, WorldCommandOrigin.LocalPlayer, "scenario-gm-main", 2L, 0L);
+        Assert.That(wars.TryConcedeP17A(warId, wars.Revision, 2L, untrustedConcession, out _), Is.False);
+        Assert.That(wars.Revision, Is.EqualTo(beforeInvalidConcession));
+        Assert.That(wars.TryConcedeP17A(warId, wars.Revision, 2L, concession, out PersistentStateFailure concessionFailure),
+            Is.True, concessionFailure.ToString());
+        Assert.That(wars.TryGet(warId, out PersistentWarRecord ended), Is.True);
+        Assert.That(ended.LifecycleState, Is.EqualTo(WarLifecycleState.Ended));
+        Assert.That(ended.EndedAbsoluteDay, Is.EqualTo(2L));
+        Assert.That(ended.P17A.TerminalConcession.AuthorityId, Is.EqualTo("scenario-gm-main"));
+        Assert.That(wars.ValidateInvariants().IsValid, Is.True);
+    }
+
+    [Test]
     public void TypedIdentities_AreStableDistinctAndLookupDoesNotReuseIds()
     {
         Assert.That(new ConflictId("same").Equals(new ConflictId("same")), Is.True);
