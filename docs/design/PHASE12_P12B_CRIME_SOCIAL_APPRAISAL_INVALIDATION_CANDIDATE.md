@@ -1,6 +1,6 @@
 # P12-B Crime/Social Appraisal Invalidation Implementation Candidate
 
-**Status:** implementation candidate; independent exact-tip code review is in progress. This is not canonical promotion or P12-B completion.
+**Status:** initial code review returned NEEDS_CHANGES; see [implementation review](PHASE12_P12B_CRIME_SOCIAL_APPRAISAL_INVALIDATION_IMPLEMENTATION_REVIEW.md). The fix and fresh exact-tip review are pending. This is not canonical promotion or P12-B completion.
 
 ## Boundary and source
 
