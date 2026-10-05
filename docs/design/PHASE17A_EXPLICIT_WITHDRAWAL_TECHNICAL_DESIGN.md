@@ -44,6 +44,11 @@ The selected profile admits one P17-A War. Other P7 Wars may coexist only if
 they preserve their legacy behavior and are not presented as P17-A participants
 or goals. The profile restriction is an admission rule for this proof, not a
 general War cardinality rule.
+Any War carrying the P17-A section is admissible **only** under
+`P17AWithdrawalWar`, even without P12 admission. Conversely, that profile
+requires exactly one P17-A War, its matched P16-A selected owner/profile and
+the trusted scenario/GM authority binding; missing or additional mismatched
+profile state rejects construction before runtime publication.
 
 ## Owner state and identities
 
@@ -187,12 +192,18 @@ proves Achieved while War may still be Active. At a fork after concession,
 the War is Ended with reason and authority. This design supplies semantic
 boundaries, not P12 save/load or P13 fork implementation.
 
-The War Store must expose an exact immutable P17-A state capture and a private
-staged hydration/relational validator covering IDs, lifecycle/terminal
-consistency, participant/goal/force/Hex references, ordering and revision.
-Do not publish a partially validated draft. Clone preserves the optional
-strategic section and validates it against the cloned Faction/P16/spatial
-owners. P16's existing exact state capture/hydration validator must include
+The War Store must expose exact immutable capture of the **entire** P17-A War
+record and owner revision, not just the new strategic section: existing P7
+`WarId`, creation day, optional `ConflictId`, lifecycle/end day, all sides and
+operational force bindings, plus strategic participants, actual goal and
+terminal concession metadata. A private staged hydration/relational validator
+checks the whole draft against P7 Conflict/ArmedForce references and the P17-A
+Faction/P16/spatial references, ID uniqueness, lifecycle/terminal consistency,
+accepted ordering and revision before publication. Do not publish a partially
+validated draft or treat the passive census as semantic export. Clone
+preserves the full record and validates it against the cloned Conflict,
+ArmedForce, Faction, P16 and spatial owners. P16's existing exact state
+capture/hydration validator must include
 the new provenance fields and reject missing P17-A provenance when that
 composition is selected. P12's passive War census continues to witness count
 and revision, but is not exact state coverage.
