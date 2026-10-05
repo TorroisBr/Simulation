@@ -30,7 +30,7 @@ public sealed class ExplorableSiteCensusTests
     }
 
     [Test]
-    public void SelectedAuthoredProfileHasAnExactZeroWitnessForItsPublishedSiteOwner()
+    public void SelectedP10AProfileHasAnExactWitnessForItsPublishedSiteOwner()
     {
         SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
             "Assets/_Project/Data/Simulations/Simulation-GeneralTest.asset");
@@ -52,8 +52,8 @@ public sealed class ExplorableSiteCensusTests
         Assert.That(first.SectionId, Is.EqualTo(ExplorableSiteCensusProvider.SectionId));
         Assert.That(first.SchemaVersion, Is.EqualTo(ExplorableSiteCensusProvider.SchemaVersion));
         Assert.That(first.OwnerInstanceIdentity, Is.SameAs(owner));
-        Assert.That(first.Cardinality, Is.Zero);
-        Assert.That(first.Revision, Is.Zero);
+        Assert.That(first.Cardinality, Is.EqualTo(1));
+        Assert.That(first.Revision, Is.EqualTo(1L));
         Assert.That(second.OwnerInstanceIdentity, Is.SameAs(first.OwnerInstanceIdentity));
         Assert.That(second.Cardinality, Is.EqualTo(first.Cardinality));
         Assert.That(second.Revision, Is.EqualTo(first.Revision));

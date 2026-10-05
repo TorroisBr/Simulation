@@ -2236,11 +2236,16 @@ public sealed class WorldStateLocalTopologySnapshot
     public LocalTopologyOwnerKind OwnerKind { get; }
     public string OwnerRuntimeId { get; }
     public string MacroLocationRuntimeId { get; }
+    public string SemanticOwnerDefinitionId { get; }
+    public string SemanticLocationId { get; }
     public LocalTopologyPublicationState PublicationState { get; }
     public IReadOnlyList<WorldStateLocalPlaceSnapshot> Places { get; }
     public IReadOnlyList<WorldStateLocalConnectionSnapshot> Connections { get; }
 
-    public string StableKey => WorldStateSnapshotValue.OwnerKey(OwnerKind, OwnerRuntimeId);
+    public string StableKey => string.IsNullOrWhiteSpace(SemanticOwnerDefinitionId) == false
+        && string.IsNullOrWhiteSpace(SemanticLocationId) == false
+        ? WorldStateSnapshotValue.EncodeStableKey("local-topology/site-owner/v1", SemanticOwnerDefinitionId, SemanticLocationId)
+        : WorldStateSnapshotValue.OwnerKey(OwnerKind, OwnerRuntimeId);
 
     public WorldStateLocalTopologySnapshot(
         LocalTopologyOwnerKind ownerKind,
@@ -2248,11 +2253,15 @@ public sealed class WorldStateLocalTopologySnapshot
         string macroLocationRuntimeId,
         LocalTopologyPublicationState publicationState,
         IEnumerable<WorldStateLocalPlaceSnapshot> places,
-        IEnumerable<WorldStateLocalConnectionSnapshot> connections)
+        IEnumerable<WorldStateLocalConnectionSnapshot> connections,
+        string semanticOwnerDefinitionId = null,
+        string semanticLocationId = null)
     {
         OwnerKind = ownerKind;
         OwnerRuntimeId = ownerRuntimeId;
         MacroLocationRuntimeId = macroLocationRuntimeId;
+        SemanticOwnerDefinitionId = semanticOwnerDefinitionId;
+        SemanticLocationId = semanticLocationId;
         PublicationState = publicationState;
         Places = SnapshotCollections.CopySorted(places, place => place?.RuntimeId);
         Connections = SnapshotCollections.CopySorted(connections, connection => connection?.RuntimeId);
@@ -2263,13 +2272,20 @@ public sealed class WorldStateLocalPlaceSnapshot
 {
     public string RuntimeId { get; }
     public string DefinitionId { get; }
+    public string SemanticId { get; }
     public string ParentRuntimeId { get; }
     public bool IsEntryPoint { get; }
 
-    public WorldStateLocalPlaceSnapshot(string runtimeId, string definitionId, string parentRuntimeId, bool isEntryPoint)
+    public WorldStateLocalPlaceSnapshot(
+        string runtimeId,
+        string definitionId,
+        string parentRuntimeId,
+        bool isEntryPoint,
+        string semanticId = null)
     {
         RuntimeId = runtimeId;
         DefinitionId = definitionId;
+        SemanticId = semanticId;
         ParentRuntimeId = parentRuntimeId;
         IsEntryPoint = isEntryPoint;
     }
@@ -2278,6 +2294,7 @@ public sealed class WorldStateLocalPlaceSnapshot
 public sealed class WorldStateLocalConnectionSnapshot
 {
     public string RuntimeId { get; }
+    public string SemanticId { get; }
     public string OriginRuntimeId { get; }
     public string DestinationRuntimeId { get; }
     public float TraversalCost { get; }
@@ -2288,9 +2305,11 @@ public sealed class WorldStateLocalConnectionSnapshot
         string originRuntimeId,
         string destinationRuntimeId,
         float traversalCost,
-        string connectionTypeDefinitionId)
+        string connectionTypeDefinitionId,
+        string semanticId = null)
     {
         RuntimeId = runtimeId;
+        SemanticId = semanticId;
         OriginRuntimeId = originRuntimeId;
         DestinationRuntimeId = destinationRuntimeId;
         TraversalCost = traversalCost;
@@ -3999,8 +4018,10 @@ public static class WorldStateSnapshotBuilder
             : new List<LocalTopologyRuntime>(store.Topologies);
         topologies.RemoveAll(topology => topology == null || topology.Owner == null);
         topologies.Sort((left, right) => StringComparer.Ordinal.Compare(
-            WorldStateSnapshotValue.OwnerKey(left.Owner.OwnerKind, left.Owner.OwnerRuntimeId),
-            WorldStateSnapshotValue.OwnerKey(right.Owner.OwnerKind, right.Owner.OwnerRuntimeId)));
+            left.Owner.SemanticOwner?.StableKey
+                ?? WorldStateSnapshotValue.OwnerKey(left.Owner.OwnerKind, left.Owner.OwnerRuntimeId),
+            right.Owner.SemanticOwner?.StableKey
+                ?? WorldStateSnapshotValue.OwnerKey(right.Owner.OwnerKind, right.Owner.OwnerRuntimeId)));
 
         List<WorldStateLocalTopologySnapshot> result = new List<WorldStateLocalTopologySnapshot>();
         foreach (LocalTopologyRuntime topology in topologies)
@@ -4016,7 +4037,8 @@ public static class WorldStateSnapshotBuilder
                     place.RuntimeId,
                     place.TypeDefinitionId,
                     place.Parent?.RuntimeId,
-                    topology.IsEntryPoint(place)));
+                    topology.IsEntryPoint(place),
+                    place.SemanticId));
             }
 
             List<LocalTopologyConnectionRuntime> connections = new List<LocalTopologyConnectionRuntime>(topology.Connections);
@@ -4030,7 +4052,8 @@ public static class WorldStateSnapshotBuilder
                     connection.Origin?.RuntimeId,
                     connection.Destination?.RuntimeId,
                     connection.TraversalCost,
-                    connection.TypeDefinitionId));
+                    connection.TypeDefinitionId,
+                    connection.SemanticId));
             }
 
             result.Add(new WorldStateLocalTopologySnapshot(
@@ -4039,7 +4062,9 @@ public static class WorldStateSnapshotBuilder
                 owner.MacroLocationRuntimeId,
                 topology.PublicationState,
                 placeSnapshots,
-                connectionSnapshots));
+                connectionSnapshots,
+                owner.SemanticOwner?.LegacyDefinitionId ?? owner.SemanticOwner?.SiteInstanceId,
+                owner.SemanticOwner?.LocationId?.Value));
         }
 
         return result;
