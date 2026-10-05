@@ -133,7 +133,9 @@ P14-B promoted (satisfied) + coherent reserve/stock read + non-Unity execution
 P10-B/P15-A/P16-A promoted (satisfied) + appropriate read/execution path
         → their optional/required scenario per reviewed checkpoint gate
 P20-A promoted synthetic behavior (satisfied) + applicable read/execution path
-        → possible shared-activity demo; joint travel is separate
+        → possible shared-activity demo
+P20-B label/scope mismatch across architecture Roadmap and Phase 20 State
+        → reconcile before attaching a P20-B Lab scenario
 P12/P13 selected capability + appropriate read
         → corresponding optional/required scenario per reviewed checkpoint gate
 P19 loader                               no dependency for Lab foundation
@@ -142,10 +144,16 @@ full P12/P13                             no blanket dependency for Lab
 
 The policy addition is forward-looking. Closed phases and delivered P8/P9/P11/
 P14-A/P18/P20-A, bounded WI-A/FR-B/FR-C/WX-D, and now promoted
-P10-B/P14-B/P15-A/P16-A/P20-B do not need reopening or revalidation merely
-because they lacked a human demo. P20-B's delivered scope is only Daily-profile
-empty-owner admission/census; P20-A is the promoted synthetic shared-activity
-behavior, and joint civil travel remains a separate consumer. Active P12-B and
+P10-B/P14-B/P15-A/P16-A and the bounded P20-B implementation do not need
+reopening or revalidation merely because they lacked a human demo. The
+architecture Roadmap at this base names P20-B as joint civil travel, while the
+current Phase 20 State names its promoted P20-B as Daily-profile empty-owner
+admission/census for that travel owner. This is an unresolved checkpoint
+identity/scope discrepancy, not a delivered joint-travel scenario or a license
+to relabel either contract here. P20-A is the promoted synthetic shared-activity
+behavior and can be evaluated independently for a Lab scenario. Planning a
+P20-B Lab scenario waits for the owning architecture/State reconciliation.
+Active P12-B and
 other current Master candidates are not interrupted or invalidated; classify
 each such candidate against its actual owning branch when architecture is
 promoted. Subsequent checkpoint designs or formal Phase closure proposals

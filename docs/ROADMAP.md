@@ -49,7 +49,7 @@ attach only after their own capabilities and readable facts exist:
 | P14 material flow | Reserve, production, stock and exhaustion. | P14-B is promoted; Lab still needs coherent reserve/stock observation and non-Unity execution. |
 | P15 construction | Structure absent before, present after the approved runtime mutation. | P15-A is promoted; Lab still needs a supported non-Unity operation and factual structure read. |
 | P16 movement | Force position and carried supply before/after one passage. | P16-A is promoted; Lab still needs a supported non-Unity operation and factual military/spatial reads. |
-| P20 shared activity | Independent decisions, coordinated start/lifecycle and individual effects. | P20-A synthetic shared behavior is promoted; Lab still needs a non-Unity execution/observation path. Joint civil travel remains a separate consumer; promoted P20-B supplies only Daily-profile empty-owner admission/census. |
+| P20 shared activity | Independent decisions, coordinated start/lifecycle and individual effects. | P20-A synthetic shared behavior is promoted; Lab still needs a non-Unity execution/observation path. P20-B planning is held for the checkpoint-identity reconciliation below. |
 | P12 continuation | Save, advance, restore and compare a supported profile. | The specific P12 save/load continuation capability and its exact owner coverage. |
 | P13 historical fork | Inspect a simulated boundary and compare source/fork continuations. | Actual P13 reconstruction/fork capability, recoverable causal history and provenance. |
 
@@ -64,9 +64,19 @@ candidates retain their existing gates and status. Demonstration classification
 for any subsequent checkpoint follows `EXECUTION_MODEL.md`; a scenario is not
 silently added to an in-flight implementation contract.
 
+**Existing P20-B record conflict:** this Roadmap's 2026-10-03 product direction
+names P20-B as joint civil travel, while current `PHASE20_STATE.md` on
+`codex/phase20/canonical` names promoted P20-B as Daily-profile empty-owner
+admission/census for that travel owner. The latter does not establish a human
+joint-travel demonstration. This candidate does not reassign the checkpoint ID
+or decide whether a travel slice has another ID. Resolve the owning planning/
+State discrepancy before attaching a P20-B Lab scenario or changing P20-B
+readiness. P20-A's promoted synthetic operation remains an independently
+identifiable possible Lab consumer.
+
 ## P10 / P14 / P20 promoted product direction — 2026-10-03
 
-A bounded checkpoint may prove one case without making it the universal model. The promoted [product-direction and checkpoint sequence](architecture/P10_P14_P20_NEXT_SCOPE_DECISIONS.md) treats varied local topology, finite/multiple sources and shared-activity consumers as compatible capabilities. It preserves promoted P10-A, P14-A and P20-A within their delivered profiles. The next bounded scopes are `P10-B` deterministic procedural topology for one Ruin instance, `P14-B` finite availability for one source, and `P20-B` joint civil travel by two Persons. All three are `READY_FOR_TECHNICAL_DESIGN`, not implementation. Later P14-C mixed sources waits on the selected P14-B proof; P14-D inter-City transfer still needs a bounded product/transport contract.
+A bounded checkpoint may prove one case without making it the universal model. The promoted [product-direction and checkpoint sequence](architecture/P10_P14_P20_NEXT_SCOPE_DECISIONS.md) treats varied local topology, finite/multiple sources and shared-activity consumers as compatible capabilities. It preserves promoted P10-A, P14-A and P20-A within their delivered profiles. At this **2026-10-03 planning decision**, the next bounded scopes were `P10-B` deterministic procedural topology for one Ruin instance, `P14-B` finite availability for one source, and `P20-B` joint civil travel by two Persons; all three were then `READY_FOR_TECHNICAL_DESIGN`, not implementation. The status is historical: current owning Phase States record P10-B and P14-B promoted, while the P20-B identity/scope discrepancy is recorded above and remains unresolved here. Later P14-C mixed sources waits on the selected P14-B proof; P14-D inter-City transfer still needs a bounded product/transport contract.
 
 ```text
 P9 ordered genesis + P8 site/Location + P10-A topology owner
