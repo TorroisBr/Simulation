@@ -1,5 +1,33 @@
 # General Architecture State
 
+## P17 strategic War direction promotion — 2026-10-05
+
+**Status:** `ARCHITECTURE_PROMOTED` for architecture/planning only.
+**Canonical branch:** `codex/architecture/world-identity-projection`.
+**Previous architecture SHA:** `cddedfa41e72d9205d92411b5bedebf11ac0b16a`.
+**Approved candidate and promoted architecture content SHA:**
+`6a1b3ef4d0ea32c109fcfb434d3ee00d05cf589a` from
+`codex/architecture/p17-strategic-war-direction`.
+
+The user approved this exact candidate. Final preflight confirmed unchanged
+local/remote canonical and candidate tips, clean fast-forward ancestry, an
+unchanged documentation-only candidate, applicable [independent PASS
+review](architecture/P17_STRATEGIC_WAR_DIRECTION_REVIEW.md), and
+`git diff --check`. The promotion did not edit active Master worktrees or
+implement P17.
+
+Architecture §68, the [P17 direction](architecture/P17_STRATEGIC_WAR_DIRECTION.md),
+Roadmap and Phase 17 Brief now establish territorial, attritional/capability
+and coercive goals as compatible War families. P17-A — Explicit Withdrawal
+Demand and Explicit War Termination — selects one bounded coercive proof. It
+is `READY_FOR_TECHNICAL_DESIGN`, not implementation-ready. Its technical design
+must close participant and goal identity, target force/Hex and receipt
+evaluation, stale rejection, explicit concession and reasoned terminal commit,
+deterministic ordering/provenance, P12 selected-profile admission and future
+Lab observation. A separate independent technical review and durable Master
+handoff are required before implementation scheduling. No closed Phase is
+reopened; full P12, P19 and P20 remain outside P17-A's hard prerequisites.
+
 ## Simulation Lab direction promotion — 2026-10-05
 
 **Status:** `ARCHITECTURE_PROMOTED` for architecture/planning only.
