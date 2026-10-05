@@ -29,7 +29,6 @@ non-territorial/coercive War goals in one persistent strategic model. They are
 not competing definitions of War. The [P17 architecture and technical-entry
 record](architecture/P17_STRATEGIC_WAR_DIRECTION.md) proposes P17-A — One
 Coercive Withdrawal Goal and Explicit War End — as the smallest first proof.
-Its architecture-entry classification is `READY_FOR_BOUNDED_CHECKPOINT`;
 P17-A is `READY_FOR_TECHNICAL_DESIGN`, not implementation. This candidate
 requires independent review and architecture promotion before it becomes
 canonical planning authority.

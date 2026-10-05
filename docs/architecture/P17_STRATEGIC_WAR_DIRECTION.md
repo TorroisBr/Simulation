@@ -1,11 +1,11 @@
 # Phase 17 — Strategic War direction and P17-A entry
 
-**Status:** reviewed architecture/planning candidate; not canonical until
-promotion. **Base:** `cddedfa41e72d9205d92411b5bedebf11ac0b16a` on
-`codex/architecture/world-identity-projection`. **Classification proposed:**
-`READY_FOR_BOUNDED_CHECKPOINT` for P17-A scope, followed by bounded technical
-design and independent design review before implementation. This record changes
-no executable code and creates no Phase 17 implementation authority.
+**Status:** architecture/planning candidate; not canonical until promotion.
+**Base:** `cddedfa41e72d9205d92411b5bedebf11ac0b16a` on
+`codex/architecture/world-identity-projection`. **Checkpoint readiness:**
+`READY_FOR_TECHNICAL_DESIGN` for P17-A, followed by bounded technical design
+and independent design review before implementation. This record changes no
+executable code and creates no Phase 17 implementation authority.
 
 ## Product model
 
