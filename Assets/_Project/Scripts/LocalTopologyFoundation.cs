@@ -6,28 +6,89 @@ public enum LocalTopologyOwnerKind
     City,
     ExplorableSite
 }
-
 public enum LocalTopologyPublicationState
 {
     Draft,
     Published
 }
 
+/// <summary>
+/// Stable semantic identity for a site-owned local topology. Runtime handles
+/// are deliberately absent so the same owner survives different allocation
+/// orders.
+/// </summary>
+[Serializable]
+public sealed class LocalTopologySemanticOwnerReference : IEquatable<LocalTopologySemanticOwnerReference>
+{
+    public string SiteInstanceId { get; }
+    public string LegacyDefinitionId { get; }
+    public LocationId LocationId { get; }
+    public string StableKey => WorldStateSnapshotValue.EncodeStableKey(
+        "local-topology/site-owner/v1", LegacyDefinitionId ?? SiteInstanceId, LocationId?.Value);
+
+    /// <summary>Compatibility constructor: a DefinitionId is mapped through the one-instance P10-A adapter.</summary>
+    public LocalTopologySemanticOwnerReference(string legacyDefinitionId, LocationId locationId)
+        : this(CreateP10ALegacySiteInstanceId(legacyDefinitionId), locationId, legacyDefinitionId)
+    {
+    }
+
+    private LocalTopologySemanticOwnerReference(string siteInstanceId, LocationId locationId, string legacyDefinitionId)
+    {
+        if (string.IsNullOrWhiteSpace(siteInstanceId))
+            throw new ArgumentException("A semantic local-topology owner requires a stable SiteInstanceId.", nameof(siteInstanceId));
+        if (locationId == null || string.IsNullOrWhiteSpace(locationId.Value))
+            throw new ArgumentException("A semantic local-topology owner requires a canonical LocationId.", nameof(locationId));
+        SiteInstanceId = siteInstanceId;
+        LegacyDefinitionId = legacyDefinitionId;
+        LocationId = new LocationId(locationId.Value);
+    }
+
+    public static LocalTopologySemanticOwnerReference ForSiteInstanceId(string siteInstanceId, LocationId locationId) =>
+        new LocalTopologySemanticOwnerReference(siteInstanceId, locationId, null);
+
+    public static LocalTopologySemanticOwnerReference ForP10ALegacy(string definitionId, LocationId locationId) =>
+        new LocalTopologySemanticOwnerReference(definitionId, locationId);
+
+    public static string CreateP10ALegacySiteInstanceId(string definitionId)
+    {
+        if (string.IsNullOrWhiteSpace(definitionId))
+            throw new ArgumentException("P10-A compatibility requires a stable DefinitionId.", nameof(definitionId));
+        return "site-p10a-legacy-" + definitionId;
+    }
+
+    public bool Equals(LocalTopologySemanticOwnerReference other) => other != null
+        && string.Equals(SiteInstanceId, other.SiteInstanceId, StringComparison.Ordinal)
+        && LocationId == other.LocationId;
+    public override bool Equals(object obj) => Equals(obj as LocalTopologySemanticOwnerReference);
+    public override int GetHashCode() => (StringComparer.Ordinal.GetHashCode(SiteInstanceId) * 397)
+        ^ (LocationId?.GetHashCode() ?? 0);
+}
 [Serializable]
 public sealed class LocalTopologyOwnerReference
 {
     private readonly string ownerRuntimeId;
     private readonly LocalTopologyOwnerKind ownerKind;
     private readonly string macroLocationRuntimeId;
+    private readonly LocalTopologySemanticOwnerReference semanticOwner;
 
     public string OwnerRuntimeId => ownerRuntimeId;
     public LocalTopologyOwnerKind OwnerKind => ownerKind;
     public string MacroLocationRuntimeId => macroLocationRuntimeId;
+    public LocalTopologySemanticOwnerReference SemanticOwner => semanticOwner;
 
     public LocalTopologyOwnerReference(
         string ownerRuntimeId,
         LocalTopologyOwnerKind ownerKind,
         string macroLocationRuntimeId)
+        : this(ownerRuntimeId, ownerKind, macroLocationRuntimeId, null)
+    {
+    }
+
+    public LocalTopologyOwnerReference(
+        string ownerRuntimeId,
+        LocalTopologyOwnerKind ownerKind,
+        string macroLocationRuntimeId,
+        LocalTopologySemanticOwnerReference semanticOwner)
     {
         if (string.IsNullOrWhiteSpace(ownerRuntimeId) == true)
         {
@@ -47,6 +108,9 @@ public sealed class LocalTopologyOwnerReference
         this.ownerRuntimeId = ownerRuntimeId;
         this.ownerKind = ownerKind;
         this.macroLocationRuntimeId = macroLocationRuntimeId;
+        if (semanticOwner != null && ownerKind != LocalTopologyOwnerKind.ExplorableSite)
+            throw new ArgumentException("Only an ExplorableSite topology can carry a semantic site owner.", nameof(semanticOwner));
+        this.semanticOwner = semanticOwner;
     }
 
     public static LocalTopologyOwnerReference ForCity(CityRuntime cityRuntime)
@@ -74,6 +138,20 @@ public sealed class LocalTopologyOwnerReference
             LocalTopologyOwnerKind.ExplorableSite,
             siteRuntime.Location?.RuntimeId);
     }
+
+    public static LocalTopologyOwnerReference ForSemanticExplorableSite(
+        ExplorableSiteRuntime siteRuntime,
+        LocationId canonicalLocationId)
+    {
+        if (siteRuntime == null) throw new ArgumentNullException(nameof(siteRuntime));
+        return new LocalTopologyOwnerReference(
+            siteRuntime.RuntimeId,
+            LocalTopologyOwnerKind.ExplorableSite,
+            siteRuntime.Location?.RuntimeId,
+            siteRuntime.SiteInstanceId == LocalTopologySemanticOwnerReference.CreateP10ALegacySiteInstanceId(siteRuntime.DefinitionId)
+                ? LocalTopologySemanticOwnerReference.ForP10ALegacy(siteRuntime.DefinitionId, canonicalLocationId)
+                : LocalTopologySemanticOwnerReference.ForSiteInstanceId(siteRuntime.SiteInstanceId, canonicalLocationId));
+    }
 }
 
 [Serializable]
@@ -82,6 +160,7 @@ public sealed class LocalPlaceRuntime
     private readonly string runtimeId;
     private readonly string displayName;
     private readonly LocalPlaceTypeData typeDefinition;
+    private readonly string semanticId;
     private LocalTopologyRuntime owningTopology;
     private LocalPlaceRuntime parent;
 
@@ -89,13 +168,15 @@ public sealed class LocalPlaceRuntime
     public string DisplayName => displayName;
     public LocalPlaceTypeData TypeDefinition => typeDefinition;
     public string TypeDefinitionId => typeDefinition != null ? typeDefinition.DefinitionId : string.Empty;
+    public string SemanticId => semanticId;
     public LocalPlaceRuntime Parent => parent;
     public LocalTopologyRuntime OwningTopology => owningTopology;
 
     public LocalPlaceRuntime(
         string runtimeId,
         string displayName = null,
-        LocalPlaceTypeData typeDefinition = null)
+        LocalPlaceTypeData typeDefinition = null,
+        string semanticId = null)
     {
         if (string.IsNullOrWhiteSpace(runtimeId) == true)
         {
@@ -105,16 +186,19 @@ public sealed class LocalPlaceRuntime
         this.runtimeId = runtimeId;
         this.displayName = displayName ?? string.Empty;
         this.typeDefinition = typeDefinition;
+        this.semanticId = semanticId;
     }
 
     public LocalPlaceRuntime(
         RuntimeIdAllocator idAllocator,
         string displayName = null,
-        LocalPlaceTypeData typeDefinition = null)
+        LocalPlaceTypeData typeDefinition = null,
+        string semanticId = null)
         : this(
             (idAllocator ?? throw new ArgumentNullException(nameof(idAllocator))).AllocateLocalPlaceId(),
             displayName,
-            typeDefinition)
+            typeDefinition,
+            semanticId)
     {
     }
 
@@ -143,6 +227,7 @@ public sealed class LocalTopologyConnectionRuntime
     private readonly LocalPlaceRuntime destination;
     private readonly float traversalCost;
     private readonly LocalConnectionTypeData typeDefinition;
+    private readonly string semanticId;
     private LocalTopologyRuntime owningTopology;
 
     public string RuntimeId => runtimeId;
@@ -151,6 +236,7 @@ public sealed class LocalTopologyConnectionRuntime
     public float TraversalCost => traversalCost;
     public LocalConnectionTypeData TypeDefinition => typeDefinition;
     public string TypeDefinitionId => typeDefinition != null ? typeDefinition.DefinitionId : string.Empty;
+    public string SemanticId => semanticId;
     public LocalTopologyRuntime OwningTopology => owningTopology;
 
     public LocalTopologyConnectionRuntime(
@@ -158,7 +244,8 @@ public sealed class LocalTopologyConnectionRuntime
         LocalPlaceRuntime origin,
         LocalPlaceRuntime destination,
         float traversalCost,
-        LocalConnectionTypeData typeDefinition = null)
+        LocalConnectionTypeData typeDefinition = null,
+        string semanticId = null)
     {
         if (string.IsNullOrWhiteSpace(runtimeId) == true)
         {
@@ -190,6 +277,7 @@ public sealed class LocalTopologyConnectionRuntime
         this.destination = destination;
         this.traversalCost = traversalCost;
         this.typeDefinition = typeDefinition;
+        this.semanticId = semanticId;
     }
 
     public LocalTopologyConnectionRuntime(
@@ -197,13 +285,15 @@ public sealed class LocalTopologyConnectionRuntime
         LocalPlaceRuntime origin,
         LocalPlaceRuntime destination,
         float traversalCost,
-        LocalConnectionTypeData typeDefinition = null)
+        LocalConnectionTypeData typeDefinition = null,
+        string semanticId = null)
         : this(
             (idAllocator ?? throw new ArgumentNullException(nameof(idAllocator))).AllocateLocalConnectionId(),
             origin,
             destination,
             traversalCost,
-            typeDefinition)
+            typeDefinition,
+            semanticId)
     {
     }
 
@@ -269,6 +359,12 @@ public sealed class LocalTopologyRuntime
     internal void MarkPublished()
     {
         publicationState = LocalTopologyPublicationState.Published;
+    }
+
+    internal void MarkDraftAfterGenesisRollback()
+    {
+        if (!IsPublished) throw new InvalidOperationException("Only a published topology can be returned to draft after rollback.");
+        publicationState = LocalTopologyPublicationState.Draft;
     }
 
     public LocalTopologyRuntime(
@@ -765,6 +861,16 @@ public sealed class LocalTopologyRuntime
 
     public bool TryValidate(out string diagnostic)
     {
+        return TryValidate(validateRegisteredOwner: true, out diagnostic);
+    }
+
+    internal bool TryValidateStructure(out string diagnostic)
+    {
+        return TryValidate(validateRegisteredOwner: false, out diagnostic);
+    }
+
+    private bool TryValidate(bool validateRegisteredOwner, out string diagnostic)
+    {
         diagnostic = null;
 
         if (owner == null
@@ -776,12 +882,13 @@ public sealed class LocalTopologyRuntime
             return false;
         }
 
-        if (identityRegistry != null && IsOwnerReferenceConsistent(out diagnostic) == false)
+        if (validateRegisteredOwner && identityRegistry != null && IsOwnerReferenceConsistent(out diagnostic) == false)
         {
             return false;
         }
 
         HashSet<string> placeIds = new HashSet<string>(StringComparer.Ordinal);
+        HashSet<string> semanticIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (LocalPlaceRuntime place in places)
         {
             if (place == null
@@ -792,6 +899,14 @@ public sealed class LocalTopologyRuntime
                 || mappedPlace != place)
             {
                 diagnostic = "Local topology contains an invalid or duplicate LocalPlace.";
+                return false;
+            }
+
+            if (owner.SemanticOwner != null
+                && (string.IsNullOrWhiteSpace(place.SemanticId)
+                    || !semanticIds.Add(place.SemanticId)))
+            {
+                diagnostic = "Semantic local topology requires unique stable IDs for every LocalPlace.";
                 return false;
             }
 
@@ -822,6 +937,14 @@ public sealed class LocalTopologyRuntime
                 || LocalTopologyConnectionRuntime.IsValidTraversalCost(connection.TraversalCost) == false)
             {
                 diagnostic = "Local topology contains an invalid connection.";
+                return false;
+            }
+
+            if (owner.SemanticOwner != null
+                && (string.IsNullOrWhiteSpace(connection.SemanticId)
+                    || !semanticIds.Add(connection.SemanticId)))
+            {
+                diagnostic = "Semantic local topology requires unique stable IDs for every LocalConnection.";
                 return false;
             }
         }
@@ -917,6 +1040,13 @@ public sealed class LocalTopologyRuntime
                 return false;
             }
 
+            if (owner.SemanticOwner != null
+                && !string.Equals(site.SiteInstanceId, owner.SemanticOwner.SiteInstanceId, StringComparison.Ordinal))
+            {
+                diagnostic = "Local topology semantic owner DefinitionId does not match its composed ExplorableSite.";
+                return false;
+            }
+
             return true;
         }
 
@@ -924,7 +1054,6 @@ public sealed class LocalTopologyRuntime
         return false;
     }
 }
-
 public sealed class LocalTopologyStore : IAuthoritativeMutationGuardBindable
 {
     private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
@@ -932,9 +1061,13 @@ public sealed class LocalTopologyStore : IAuthoritativeMutationGuardBindable
     private readonly List<LocalTopologyRuntime> topologies = new List<LocalTopologyRuntime>();
     private readonly Dictionary<string, LocalTopologyRuntime> topologiesByOwnerRuntimeId =
         new Dictionary<string, LocalTopologyRuntime>(StringComparer.Ordinal);
+    private readonly Dictionary<string, LocalTopologyRuntime> topologiesBySiteInstanceId =
+        new Dictionary<string, LocalTopologyRuntime>(StringComparer.Ordinal);
+    private readonly HashSet<string> semanticMemberIds = new HashSet<string>(StringComparer.Ordinal);
     private readonly IReadOnlyList<LocalTopologyRuntime> readOnlyTopologies;
 
     public IReadOnlyList<LocalTopologyRuntime> Topologies => readOnlyTopologies;
+    internal bool UsesIdentityRegistry(RuntimeIdentityRegistry candidate) => ReferenceEquals(identityRegistry, candidate);
 
     public LocalTopologyStore(RuntimeIdentityRegistry identityRegistry)
     {
@@ -948,6 +1081,22 @@ public sealed class LocalTopologyStore : IAuthoritativeMutationGuardBindable
     }
 
     public bool TryAddTopology(LocalTopologyRuntime topology, out string diagnostic)
+    {
+        return TryAddTopologyCore(topology, null, out diagnostic);
+    }
+
+    internal bool TryAddTopologyForP10Genesis(
+        LocalTopologyRuntime topology,
+        Action<string> completedMutation,
+        out string diagnostic)
+    {
+        return TryAddTopologyCore(topology, completedMutation, out diagnostic);
+    }
+
+    private bool TryAddTopologyCore(
+        LocalTopologyRuntime topology,
+        Action<string> completedMutation,
+        out string diagnostic)
     {
         diagnostic = null;
 
@@ -987,23 +1136,117 @@ public sealed class LocalTopologyStore : IAuthoritativeMutationGuardBindable
             return false;
         }
 
+        if (owner.SemanticOwner != null
+            && topologiesBySiteInstanceId.ContainsKey(owner.SemanticOwner.SiteInstanceId))
+        {
+            diagnostic = "A semantic SiteInstanceId can own only one LocalTopology.";
+            return false;
+        }
+
+        HashSet<string> pendingSemanticMemberIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (LocalPlaceRuntime place in topology.Places)
+        {
+            if (string.IsNullOrWhiteSpace(place?.SemanticId)) continue;
+            if (!pendingSemanticMemberIds.Add(place.SemanticId) || semanticMemberIds.Contains(place.SemanticId))
+            {
+                diagnostic = "Local topology contains a duplicate stable semantic member ID.";
+                return false;
+            }
+        }
+        foreach (LocalTopologyConnectionRuntime connection in topology.Connections)
+        {
+            if (string.IsNullOrWhiteSpace(connection?.SemanticId)) continue;
+            if (!pendingSemanticMemberIds.Add(connection.SemanticId) || semanticMemberIds.Contains(connection.SemanticId))
+            {
+                diagnostic = "Local topology contains a duplicate stable semantic member ID.";
+                return false;
+            }
+        }
+
         if (IsOwnerReferenceConsistent(owner, out diagnostic) == false)
         {
             return false;
         }
 
-        if (identityRegistry.TryRegisterLocalTopologyMembers(
-            topology.Places,
-            topology.Connections,
-            out diagnostic) == false)
+        var orderedSemanticMemberIds = new List<string>(pendingSemanticMemberIds);
+        orderedSemanticMemberIds.Sort(StringComparer.Ordinal);
+        bool identityMembersRegistered = false;
+        bool ownerIndexAdded = false;
+        bool semanticOwnerIndexAdded = false;
+        int semanticIdsAdded = 0;
+        bool topologyListAdded = false;
+        bool markedPublished = false;
+        try
         {
-            return false;
-        }
+            bool registeredMembers = completedMutation == null
+                ? identityRegistry.TryRegisterLocalTopologyMembers(topology.Places, topology.Connections, out diagnostic)
+                : identityRegistry.TryRegisterLocalTopologyMembersForP10Genesis(
+                    topology.Places, topology.Connections, completedMutation, out diagnostic);
+            if (!registeredMembers) return false;
+            identityMembersRegistered = true;
+            completedMutation?.Invoke("LocalTopologyStore.IdentityMembers");
 
-        topologiesByOwnerRuntimeId.Add(owner.OwnerRuntimeId, topology);
-        topologies.Add(topology);
-        topology.MarkPublished();
-        return true;
+            topologiesByOwnerRuntimeId.Add(owner.OwnerRuntimeId, topology);
+            ownerIndexAdded = true;
+            completedMutation?.Invoke("LocalTopologyStore.OwnerRuntimeIndex");
+
+            if (owner.SemanticOwner != null)
+            {
+                topologiesBySiteInstanceId.Add(owner.SemanticOwner.SiteInstanceId, topology);
+                semanticOwnerIndexAdded = true;
+                completedMutation?.Invoke("LocalTopologyStore.SiteInstanceIndex");
+            }
+
+            for (int i = 0; i < orderedSemanticMemberIds.Count; i++)
+            {
+                semanticMemberIds.Add(orderedSemanticMemberIds[i]);
+                semanticIdsAdded++;
+                completedMutation?.Invoke("LocalTopologyStore.SemanticMember." + i.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            }
+
+            topologies.Add(topology);
+            topologyListAdded = true;
+            completedMutation?.Invoke("LocalTopologyStore.TopologyList");
+
+            topology.MarkPublished();
+            markedPublished = true;
+            completedMutation?.Invoke("LocalTopologyStore.PublishedState");
+            return true;
+        }
+        catch
+        {
+            if (markedPublished) topology.MarkDraftAfterGenesisRollback();
+            if (topologyListAdded) topologies.RemoveAt(topologies.Count - 1);
+            for (int i = semanticIdsAdded - 1; i >= 0; i--)
+                semanticMemberIds.Remove(orderedSemanticMemberIds[i]);
+            if (semanticOwnerIndexAdded) topologiesBySiteInstanceId.Remove(owner.SemanticOwner.SiteInstanceId);
+            if (ownerIndexAdded) topologiesByOwnerRuntimeId.Remove(owner.OwnerRuntimeId);
+            if (identityMembersRegistered)
+                identityRegistry.RollbackGenesisLocalTopologyMembers(topology.Places, topology.Connections);
+            throw;
+        }
+    }
+
+    internal void RollbackGenesisTopology(LocalTopologyRuntime topology)
+    {
+        if (topology == null || !topology.IsPublished
+            || !topologiesByOwnerRuntimeId.TryGetValue(topology.Owner.OwnerRuntimeId, out LocalTopologyRuntime current)
+            || !ReferenceEquals(topology, current)
+            || (topology.Owner.SemanticOwner != null
+                && (!topologiesBySiteInstanceId.TryGetValue(topology.Owner.SemanticOwner.SiteInstanceId, out current)
+                    || !ReferenceEquals(topology, current)))
+            || topologies.Count == 0 || !ReferenceEquals(topologies[topologies.Count - 1], topology))
+            throw new InvalidOperationException("Cannot roll back the P10-B LocalTopology publication.");
+        topologiesByOwnerRuntimeId.Remove(topology.Owner.OwnerRuntimeId);
+        if (topology.Owner.SemanticOwner != null)
+            topologiesBySiteInstanceId.Remove(topology.Owner.SemanticOwner.SiteInstanceId);
+        foreach (LocalPlaceRuntime place in topology.Places)
+            if (!string.IsNullOrWhiteSpace(place.SemanticId)) semanticMemberIds.Remove(place.SemanticId);
+        foreach (LocalTopologyConnectionRuntime connection in topology.Connections)
+            if (!string.IsNullOrWhiteSpace(connection.SemanticId)) semanticMemberIds.Remove(connection.SemanticId);
+        identityRegistry.RollbackGenesisLocalTopologyMembers(topology.Places, topology.Connections);
+        topologies.RemoveAt(topologies.Count - 1);
+        topology.MarkDraftAfterGenesisRollback();
     }
 
     public bool TryAddPlace(
@@ -1057,6 +1300,11 @@ public sealed class LocalTopologyStore : IAuthoritativeMutationGuardBindable
             return false;
         }
 
+        if (!CanAddSemanticMember(topology, place?.SemanticId, out diagnostic))
+        {
+            return false;
+        }
+
         if (identityRegistry.IsRuntimeIdAvailable(place.RuntimeId) == false)
         {
             diagnostic = $"LocalPlace RuntimeId '{place.RuntimeId}' is already registered.";
@@ -1070,6 +1318,7 @@ public sealed class LocalTopologyStore : IAuthoritativeMutationGuardBindable
         }
 
         topology.AddPlaceFromValidatedMutation(place, parent, isEntryPoint);
+        if (!string.IsNullOrWhiteSpace(place.SemanticId)) semanticMemberIds.Add(place.SemanticId);
         return true;
     }
 
@@ -1096,6 +1345,11 @@ public sealed class LocalTopologyStore : IAuthoritativeMutationGuardBindable
             return false;
         }
 
+        if (!CanAddSemanticMember(topology, connection?.SemanticId, out diagnostic))
+        {
+            return false;
+        }
+
         if (identityRegistry.IsRuntimeIdAvailable(connection.RuntimeId) == false)
         {
             diagnostic = $"LocalConnection RuntimeId '{connection.RuntimeId}' is already registered.";
@@ -1109,6 +1363,24 @@ public sealed class LocalTopologyStore : IAuthoritativeMutationGuardBindable
         }
 
         topology.AddConnectionFromValidatedMutation(connection);
+        if (!string.IsNullOrWhiteSpace(connection.SemanticId)) semanticMemberIds.Add(connection.SemanticId);
+        return true;
+    }
+
+    private bool CanAddSemanticMember(LocalTopologyRuntime topology, string semanticId, out string diagnostic)
+    {
+        diagnostic = null;
+        if (topology.Owner.SemanticOwner != null && string.IsNullOrWhiteSpace(semanticId))
+        {
+            diagnostic = "Semantic local topology requires a stable ID for every published member.";
+            return false;
+        }
+        if (string.IsNullOrWhiteSpace(semanticId)) return true;
+        if (semanticMemberIds.Contains(semanticId))
+        {
+            diagnostic = "Local topology contains a duplicate stable semantic member ID.";
+            return false;
+        }
         return true;
     }
 
@@ -1128,6 +1400,43 @@ public sealed class LocalTopologyStore : IAuthoritativeMutationGuardBindable
 
         topology = null;
         return false;
+    }
+
+    public bool TryGetTopologyForSemanticOwner(
+        LocalTopologySemanticOwnerReference semanticOwner,
+        out LocalTopologyRuntime topology)
+    {
+        if (semanticOwner != null
+            && topologiesBySiteInstanceId.TryGetValue(semanticOwner.SiteInstanceId, out topology)
+            && semanticOwner.Equals(topology.Owner.SemanticOwner))
+            return true;
+        topology = null;
+        return false;
+    }
+
+    public bool TryResolveSemanticOwnerRuntimeId(
+        LocalTopologySemanticOwnerReference semanticOwner,
+        out string ownerRuntimeId)
+    {
+        ownerRuntimeId = null;
+        if (!TryResolveSemanticOwner(semanticOwner, out ExplorableSiteRuntime site)) return false;
+        ownerRuntimeId = site.RuntimeId;
+        return true;
+    }
+
+    public bool TryResolveSemanticOwner(
+        LocalTopologySemanticOwnerReference semanticOwner,
+        out ExplorableSiteRuntime site)
+    {
+        site = null;
+        if (!TryGetTopologyForSemanticOwner(semanticOwner, out LocalTopologyRuntime topology)) return false;
+        if (!identityRegistry.TryGetExplorableSiteWithoutLogging(topology.Owner.OwnerRuntimeId, out site)
+            || !string.Equals(site.SiteInstanceId, semanticOwner.SiteInstanceId, StringComparison.Ordinal))
+        {
+            site = null;
+            return false;
+        }
+        return true;
     }
 
     public bool TryGetLocalPlace(string runtimeId, out LocalPlaceRuntime place)
@@ -1225,6 +1534,13 @@ public sealed class LocalTopologyStore : IAuthoritativeMutationGuardBindable
                 || string.Equals(site.Location.RuntimeId, owner.MacroLocationRuntimeId, StringComparison.Ordinal) == false)
             {
                 diagnostic = $"Local topology owner '{owner.OwnerRuntimeId}' does not match its ExplorableSite macro location.";
+                return false;
+            }
+
+            if (owner.SemanticOwner != null
+                && !string.Equals(site.SiteInstanceId, owner.SemanticOwner.SiteInstanceId, StringComparison.Ordinal))
+            {
+                diagnostic = "Local topology semantic owner DefinitionId does not match its composed ExplorableSite.";
                 return false;
             }
 

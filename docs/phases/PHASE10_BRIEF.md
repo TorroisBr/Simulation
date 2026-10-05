@@ -1,12 +1,12 @@
 # Phase 10 — Local Generation & Pre-start Authoring
 
-**Authority:** planning entry subordinate to `../SIMULATION_ARCHITECTURE.md`. **Readiness:** user-approved first-profile scope; technical design is `TECHNICAL_DESIGN_IN_PROGRESS` pending independent review and a durable checkpoint record. P9-B is promoted at P9 canonical `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf` and supplies the selected profile's authored P8 Hex/Location source through the P9 genesis handoff. No product choice is open; implementation is not ready until technical review and checkpoint recording pass.
+**Authority:** planning entry subordinate to `../SIMULATION_ARCHITECTURE.md`. **Readiness:** P10-A's user-approved bounded scope and refreshed technical design/checkpoint record passed independent review at `345dcbc8f05e0d64fed1b058d30f08ad0be8937d`; its implementation candidate passed independent review, validation and promotion preflight, then was user-approved and promoted at code tip `9501bf076d506fb64d6ee3e6d178574fff36e153` (State record `9e79b58`). P9-B's geography capability is promoted at code tip `d9a62d7c6bea242653c2d68cc0a70911bb5ed1bf`; the current P9 canonical closure/State tip is `82396ae7ffaf407fda278928da456b06dc5394d4`. P10-A is delivered; Phase 10 remains open for its broader objective and any separately accepted mandatory checkpoints.
 
 ## Objective and closure
 
 The approved first profile composes exactly one `ExplorableSiteKind.Ruin` at an existing canonical P8 `LocationId`, with the minimum finite local topology needed to represent semantic places, one or more entry points, containment only where needed, and explicit local connections. P9 authored-bootstrap genesis/provenance is consumed; this profile adds no new generated content.
 
-**Checkpoints:** no P10 checkpoint ID or closure contract is approved. The technical design may propose one bounded checkpoint for review; that proposal does not authorize implementation.
+**Checkpoint:** P10-A — Ruin LocalTopology Genesis Composition. The user approved its scope; its durable record and technical design passed independent review. The bounded Ruin/LocalTopology capability is promoted on `codex/phase10/canonical`; this checkpoint promotion does not close Phase 10.
 
 ## Dependencies and gates
 
@@ -15,7 +15,7 @@ The approved first profile composes exactly one `ExplorableSiteKind.Ruin` at an 
 - **Promoted P9-B source:** the selected geography-enabled P9 profile supplies exactly one authored Hex and one Location anchored to it, with the accepted P8-A coordinate, terrain-reference and scale provenance inputs. P9 composes these through `SpatialAuthorityStore.TryComposeGeography` before validation/publication and exposes the same P8 authority and profile manifest through `SimulationBootstrapComposition`. P10 must resolve the actual selected-profile LocationId and anchor from that handoff; it cannot mint/adapt a Location, substitute a test-fixture ID, or infer geography from legacy runtime locations.
 - **Integration dependency:** the Ruin's stable identity and Location binding resolve through one factual Location/local-topology model.
 - **Soft ordering:** broader Phase 8 civil-travel validation is not needed for this profile.
-- **Architecture boundary:** the technical design specifies local containment/entry and the pre-start versus post-start mutation boundary; independent review is pending.
+- **Architecture boundary:** the technical design specifies local containment/entry and the pre-start versus post-start mutation boundary; independent review passed for the recorded P10-A checkpoint candidate.
 - **Product gate:** resolved only for the bounded Ruin profile above. No City, Market, population/NPC/economy, Passage/Route, Knowledge, activity, loot, encounter, construction, or other gameplay content is in scope.
 - **P10-A implementation scope:** implement the minimal stable-owner/LocationId-neutral LocalTopology ownership/migration seam needed to publish the Ruin through normal authorities. P8-C's promoted `ExplorableSite` anchor contract is consumed; its current runtime owner resolution and LocalTopology owner references retain runtime-ID assumptions. Preserve existing City/Site consumers, and do not expand P8-C or generalize the adapter beyond this profile.
 - **Exclusions:** runtime construction/founding, automatic world expansion, renderer authority, and a universal WorldEntity.

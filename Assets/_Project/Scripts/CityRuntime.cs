@@ -27,6 +27,7 @@ public class CityRuntime
 
     private const string DailyEconomyVersion = "1";
     [NonSerialized] private LocalDailyMaterialFlowResult lastMaterialFlow;
+    [NonSerialized] private FiniteProductionSourceStore finiteProductionSources;
 
     public string RuntimeId => runtimeId;
     public CityData CityData => cityData;
@@ -88,12 +89,15 @@ public class CityRuntime
     public long ImportantNpcRevision => importantNpcRevision;
     public string CityName => cityData != null ? cityData.cityName : "Cidade desconhecida";
     public bool HasLocalDailyMaterialFlow => cityData != null
-        && (!string.IsNullOrWhiteSpace(cityData.settlementSemanticId)
+        && (finiteProductionSources != null
+            || cityData.materialFlowProfile != LocalMaterialFlowProfile.ExogenousDaily
+            || !string.IsNullOrWhiteSpace(cityData.settlementSemanticId)
             || !string.IsNullOrWhiteSpace(cityData.materialFlowLocationId)
             || !string.IsNullOrWhiteSpace(cityData.marketStoreSemanticId)
             || (cityData.productionConfigs != null && cityData.productionConfigs.Exists(source =>
-                source != null && !string.IsNullOrWhiteSpace(source.productionSourceId))));
+                source != null && (!string.IsNullOrWhiteSpace(source.productionSourceId) || source.initialReserve != 0))));
     public LocalDailyMaterialFlowResult LastMaterialFlow => lastMaterialFlow;
+    public FiniteProductionSourceStore FiniteProductionSources => finiteProductionSources;
 
     internal void ValidateLocalDailyMaterialFlowAnchor(LegacySpatialAnchorBindingStore bindings, SpatialAuthorityStore spatial)
     {
@@ -103,11 +107,17 @@ public class CityRuntime
             || string.IsNullOrWhiteSpace(cityData.marketStoreSemanticId)
             || cityData.productionConfigs == null || cityData.productionConfigs.Count != 1)
             throw new LocalDailyMaterialFlowRejectedException("P14-A requires settlement, LocationId, market store, and exactly one authored source.");
+        if (!Enum.IsDefined(typeof(LocalMaterialFlowProfile), cityData.materialFlowProfile))
+            throw new LocalDailyMaterialFlowRejectedException("Unsupported P14 local material flow profile.");
         CityProductionConfig source = cityData.productionConfigs[0];
         if (source == null || source.item == null || string.IsNullOrWhiteSpace(source.item.DefinitionId)
             || source.amountPerDay <= 0
             || string.IsNullOrWhiteSpace(source.productionSourceId) || string.IsNullOrWhiteSpace(source.contentRevision))
             throw new LocalDailyMaterialFlowRejectedException("P14-A source identity, item, positive quantity, and content revision are required.");
+        if (cityData.materialFlowProfile == LocalMaterialFlowProfile.ExogenousDaily && source.initialReserve != 0)
+            throw new LocalDailyMaterialFlowRejectedException("Finite reserve data requires the finite-reserve profile.");
+        if (cityData.materialFlowProfile == LocalMaterialFlowProfile.FiniteReserveDaily && source.initialReserve < 0)
+            throw new LocalDailyMaterialFlowRejectedException("Finite source reserve cannot be negative.");
         if (PopulationEconomy.PaymentMode != ConsumptionPaymentMode.Free
             || cityData.marketItems == null || cityData.marketItems.Count != 1
             || cityData.marketItems[0] == null || cityData.marketItems[0].item == null
@@ -122,6 +132,16 @@ public class CityRuntime
 
     internal void SimulateLocalDailyMaterialFlow(long absoluteDay, string calendarVersion)
     {
+        if (cityData != null && cityData.materialFlowProfile == LocalMaterialFlowProfile.ExogenousDaily
+            && HasAuthoredFiniteReserve())
+            throw new LocalDailyMaterialFlowRejectedException("Finite reserve data requires the finite-reserve profile.");
+        if (finiteProductionSources != null || (cityData != null
+            && cityData.materialFlowProfile == LocalMaterialFlowProfile.FiniteReserveDaily))
+        {
+            if (!IsFiniteSourceConfigurationCurrent())
+                throw new LocalDailyMaterialFlowRejectedException("Finite source configuration must match its constructed source owner.");
+        }
+
         CityProductionConfig source = cityData.productionConfigs[0];
         MarketItemConfig itemConfig = cityData.marketItems?.Find(candidate => candidate != null
             && candidate.item != null && string.Equals(candidate.item.DefinitionId, source.item.DefinitionId, StringComparison.Ordinal));
@@ -129,8 +149,31 @@ public class CityRuntime
             throw new LocalDailyMaterialFlowRejectedException("P14-A requires a market item and free population consumption for the source item.");
 
         int opening = Market.GetAmount(source.item);
-        int applied = Market.AddStock(source.item, source.amountPerDay);
-        string rejection = applied == source.amountPerDay ? string.Empty : "AggregateStockOverflow";
+        int applied;
+        string rejection;
+        if (cityData.materialFlowProfile == LocalMaterialFlowProfile.FiniteReserveDaily)
+        {
+            if (finiteProductionSources == null)
+                throw new LocalDailyMaterialFlowRejectedException("Finite source owner was not constructed for the selected profile.");
+            FiniteSourceProductionResult production = new FiniteSourceProductionService().TryProduceDaily(
+                finiteProductionSources,
+                Market,
+                cityData.settlementSemanticId,
+                cityData.marketStoreSemanticId,
+                source.item,
+                absoluteDay,
+                finiteProductionSources.Source.Revision,
+                Market.Revision);
+            applied = production.Quantity;
+            rejection = production.Status == FiniteSourceProductionStatus.Applied
+                ? string.Empty
+                : production.RejectionReason;
+        }
+        else
+        {
+            applied = Market.AddStock(source.item, source.amountPerDay);
+            rejection = applied == source.amountPerDay ? string.Empty : "AggregateStockOverflow";
+        }
         int requested = Math.Max(0, Mathf.RoundToInt(Population.CurrentPopulation / 1000f * itemConfig.consumptionPer1000Population));
         int actual = Market.RemoveStockUpTo(source.item, requested);
         int closing = Market.GetAmount(source.item);
@@ -180,7 +223,7 @@ public class CityRuntime
             if (previous.Fingerprint != fingerprint) return false;
             prepared = new CityDailyEconomyCommit(this, previous, null, 0, 0,
                 null, 0, 0, 0f, null, 0, 0, 0f, null, dailyEconomyReceiptRevision, true,
-                step.OwnerRevision, -1L, -1, fingerprint);
+                step.OwnerRevision, -1L, -1, fingerprint, null);
             failure = TimelineFailure.None;
             return true;
         }
@@ -203,17 +246,59 @@ public class CityRuntime
         float settlementBalance = settlementAccount != null ? settlementAccount.Balance : 0f;
         List<CityProductionResult> productionResults = new List<CityProductionResult>();
         List<CityConsumptionResult> consumptionResults = new List<CityConsumptionResult>();
+        FiniteSourceProductionPreparation finiteProductionPreparation = null;
         if (kind == CityDailyEconomyStepKind.Production)
         {
-            foreach (CityProductionConfig row in cityData != null ? cityData.productionConfigs ?? new List<CityProductionConfig>() : new List<CityProductionConfig>())
+            if (cityData != null && cityData.materialFlowProfile == LocalMaterialFlowProfile.ExogenousDaily
+                && HasAuthoredFiniteReserve())
+                return false;
+            bool finiteProfile = cityData != null
+                && (cityData.materialFlowProfile == LocalMaterialFlowProfile.FiniteReserveDaily
+                    || finiteProductionSources != null);
+            if (finiteProfile)
             {
-                if (row?.item == null || row.amountPerDay <= 0) continue;
-                MarketItemRuntime item = FindPreparedItem(marketState, row.item);
-                if (item != null && !item.AddAmount(row.amountPerDay)) continue;
-                if (item == null) marketState.Items.Add(new MarketItemRuntime(row.item, row.amountPerDay, 100));
-                if (item != null) item.UpdatePrice();
-                marketIncrements++;
-                productionResults.Add(new CityProductionResult(RuntimeId, row.item.DefinitionId, row.amountPerDay, Market.StockOwnerRuntimeId));
+                if (!IsFiniteSourceConfigurationCurrent())
+                    return false;
+
+                CityProductionConfig sourceConfig = cityData.productionConfigs[0];
+                FiniteProductionSourceState sourceState = finiteProductionSources.Source;
+                if (sourceConfig?.item == null || sourceState == null)
+                    return false;
+
+                if (!new FiniteSourceProductionService().TryPrepareDaily(
+                        finiteProductionSources, Market, cityData.settlementSemanticId,
+                        cityData.marketStoreSemanticId, sourceConfig.productionSourceId,
+                        sourceConfig.contentRevision, sourceConfig.item, manifest.AbsoluteDay,
+                        sourceState.Revision, marketRevision,
+                        out finiteProductionPreparation, out _))
+                    return false;
+
+                if (finiteProductionPreparation.Quantity > 0)
+                {
+                    marketState = finiteProductionPreparation.MarketState;
+                    marketIncrements = 1;
+                    productionResults.Add(new CityProductionResult(
+                        RuntimeId, sourceConfig.item.DefinitionId,
+                        finiteProductionPreparation.Quantity, Market.StockOwnerRuntimeId));
+                }
+                else
+                {
+                    finiteProductionPreparation = null;
+                    marketState = null;
+                }
+            }
+            else
+            {
+                foreach (CityProductionConfig row in cityData != null ? cityData.productionConfigs ?? new List<CityProductionConfig>() : new List<CityProductionConfig>())
+                {
+                    if (row?.item == null || row.amountPerDay <= 0) continue;
+                    MarketItemRuntime item = FindPreparedItem(marketState, row.item);
+                    if (item != null && !item.AddAmount(row.amountPerDay)) continue;
+                    if (item == null) marketState.Items.Add(new MarketItemRuntime(row.item, row.amountPerDay, 100));
+                    if (item != null) item.UpdatePrice();
+                    marketIncrements++;
+                    productionResults.Add(new CityProductionResult(RuntimeId, row.item.DefinitionId, row.amountPerDay, Market.StockOwnerRuntimeId));
+                }
             }
         }
         else if (kind == CityDailyEconomyStepKind.Consumption)
@@ -295,7 +380,8 @@ public class CityRuntime
             populationAccount, populationRevision, populationIncrements, populationBalance,
             settlementAccount, settlementRevision, settlementIncrements, settlementBalance,
             nextReceipts, dailyEconomyReceiptRevision, false, step.OwnerRevision,
-            preparedPopulationRevision, preparedPopulation, fingerprint);
+            preparedPopulationRevision, preparedPopulation, fingerprint,
+            finiteProductionPreparation);
         failure = TimelineFailure.None;
         return true;
     }
@@ -335,10 +421,20 @@ public class CityRuntime
                 && (Population.Revision != commit.ExpectedPopulationRevision
                     || Population.CurrentPopulation != commit.ExpectedPopulation))
             || dailyEconomyReceipts == null || dailyEconomyReceipts.ContainsKey(commit.Receipt.Identity)
-            || !Market.CanInstall(commit.MarketRevision, commit.MarketIncrements)
+            || (commit.FiniteSource == null
+                ? !Market.CanInstall(commit.MarketRevision, commit.MarketIncrements)
+                : (!ReferenceEquals(commit.MarketState, commit.FiniteSource.MarketState)
+                    || !commit.FiniteSource.CanInstall()))
             || (commit.PopulationAccount != null && !commit.PopulationAccount.CanInstall(commit.PopulationRevision, commit.PopulationIncrements, commit.PopulationBalance))
             || (commit.SettlementAccount != null && !commit.SettlementAccount.CanInstall(commit.SettlementRevision, commit.SettlementIncrements, commit.SettlementBalance))) return false;
-        Market.InstallPrepared(commit.MarketRevision, commit.MarketIncrements, commit.MarketState);
+        if (commit.FiniteSource != null)
+        {
+            if (!commit.FiniteSource.Install()) return false;
+        }
+        else if (commit.MarketState != null)
+        {
+            Market.InstallPrepared(commit.MarketRevision, commit.MarketIncrements, commit.MarketState);
+        }
         if (commit.PopulationAccount != null) commit.PopulationAccount.InstallPrepared(commit.PopulationRevision, commit.PopulationIncrements, commit.PopulationBalance);
         if (commit.SettlementAccount != null) commit.SettlementAccount.InstallPrepared(commit.SettlementRevision, commit.SettlementIncrements, commit.SettlementBalance);
         dailyEconomyReceipts = commit.NextReceipts;
@@ -373,6 +469,10 @@ public class CityRuntime
         MarketLiquidityConfig liquidity = cityData != null ? cityData.MarketLiquidity : null;
         PopulationConsumptionConfig consumption = cityData != null ? cityData.PopulationConsumption : null;
         List<string> parts = new List<string> { RuntimeId, DefinitionId,
+            cityData != null ? cityData.materialFlowProfile.ToString() : LocalMaterialFlowProfile.ExogenousDaily.ToString(),
+            cityData != null ? cityData.settlementSemanticId ?? string.Empty : string.Empty,
+            cityData != null ? cityData.materialFlowLocationId ?? string.Empty : string.Empty,
+            cityData != null ? cityData.marketStoreSemanticId ?? string.Empty : string.Empty,
             cityData != null ? cityData.initialPopulation.ToString(CultureInfo.InvariantCulture) : "0",
             PopulationEconomy.PaymentMode.ToString(),
             liquidity != null ? liquidity.liquidityMode.ToString() : "Open",
@@ -380,11 +480,38 @@ public class CityRuntime
             consumption != null ? consumption.paymentMode.ToString() : "Free",
             consumption != null ? consumption.initialPurchasingPower.ToString("R", CultureInfo.InvariantCulture) : "0" };
         foreach (CityProductionConfig row in cityData != null ? cityData.productionConfigs ?? new List<CityProductionConfig>() : new List<CityProductionConfig>())
-        { parts.Add("p"); AddItemIdentity(parts, row?.item); parts.Add(row != null ? row.amountPerDay.ToString(CultureInfo.InvariantCulture) : "null"); }
+        {
+            parts.Add("p"); AddItemIdentity(parts, row?.item);
+            parts.Add(row != null ? row.amountPerDay.ToString(CultureInfo.InvariantCulture) : "null");
+            parts.Add(row != null ? row.initialReserve.ToString(CultureInfo.InvariantCulture) : "null");
+            parts.Add(row != null ? row.productionSourceId ?? string.Empty : "null");
+            parts.Add(row != null ? row.contentRevision ?? string.Empty : "null");
+        }
         foreach (MarketItemConfig row in cityData != null ? cityData.marketItems ?? new List<MarketItemConfig>() : new List<MarketItemConfig>())
         { parts.Add("c"); AddItemIdentity(parts, row?.item); parts.Add(row != null ? row.initialAmount.ToString(CultureInfo.InvariantCulture) : "null"); parts.Add(row != null ? row.desiredAmount.ToString(CultureInfo.InvariantCulture) : "null"); parts.Add(row != null ? row.consumptionPer1000Population.ToString("R", CultureInfo.InvariantCulture) : "null"); }
         return SpatialStableKey.Encode(parts.ToArray());
     }
+
+    private bool IsFiniteSourceConfigurationCurrent()
+    {
+        if (cityData == null || cityData.materialFlowProfile != LocalMaterialFlowProfile.FiniteReserveDaily
+            || finiteProductionSources == null || cityData.productionConfigs == null
+            || cityData.productionConfigs.Count != 1) return false;
+        CityProductionConfig configuredSource = cityData.productionConfigs[0];
+        FiniteProductionSourceState source = finiteProductionSources.Source;
+        return configuredSource?.item != null && source != null
+            && configuredSource.amountPerDay == source.DailyOutputLimit
+            && configuredSource.initialReserve == source.InitialReserve
+            && string.Equals(configuredSource.productionSourceId, source.ProductionSourceId, StringComparison.Ordinal)
+            && string.Equals(configuredSource.contentRevision, source.ContentRevision, StringComparison.Ordinal)
+            && string.Equals(configuredSource.item.DefinitionId, source.ItemDefinitionId, StringComparison.Ordinal)
+            && string.Equals(cityData.settlementSemanticId, source.SettlementSemanticId, StringComparison.Ordinal)
+            && string.Equals(cityData.marketStoreSemanticId, source.MarketStoreSemanticId, StringComparison.Ordinal);
+    }
+
+    private bool HasAuthoredFiniteReserve() => cityData != null
+        && cityData.productionConfigs != null
+        && cityData.productionConfigs.Exists(row => row != null && row.initialReserve != 0);
 
     private static void AddItemIdentity(List<string> parts, ItemData item)
     { parts.Add(item != null ? item.DefinitionId : ""); parts.Add(item != null ? item.itemName : ""); parts.Add(item != null ? item.basePrice.ToString("R", CultureInfo.InvariantCulture) : ""); }
@@ -420,12 +547,29 @@ public class CityRuntime
         market = cityData != null
             ? new MarketRuntime(cityData.marketItems, this.marketCounterparty)
             : new MarketRuntime(new List<MarketItemConfig>(), this.marketCounterparty);
+        if (cityData != null && (cityData.materialFlowProfile == LocalMaterialFlowProfile.FiniteReserveDaily
+            || finiteProductionSources != null || HasAuthoredFiniteReserve()))
+        {
+            if (cityData.productionConfigs == null || cityData.productionConfigs.Count != 1)
+                throw new LocalDailyMaterialFlowRejectedException("Finite-reserve profile requires exactly one authored source.");
+            CityProductionConfig finiteSource = cityData.productionConfigs[0];
+            finiteProductionSources = new FiniteProductionSourceStore(
+                cityData.materialFlowProfile,
+                finiteSource,
+                cityData.settlementSemanticId,
+                cityData.marketStoreSemanticId);
+        }
         populationEconomy = CreateConfiguredPopulationEconomy();
     }
 
     public IReadOnlyList<CityProductionResult> SimulateProductionDay()
     {
         List<CityProductionResult> results = new List<CityProductionResult>();
+
+        if (cityData != null && (cityData.materialFlowProfile == LocalMaterialFlowProfile.FiniteReserveDaily
+            || finiteProductionSources != null || HasAuthoredFiniteReserve()))
+            throw new LocalDailyMaterialFlowRejectedException(
+                "Finite-reserve production requires a boundary-aware prepared daily economy operation.");
 
         if (cityData == null || cityData.productionConfigs == null)
         {
@@ -808,6 +952,7 @@ internal sealed class CityDailyEconomyCommit : IBoundaryContinuationStepCommit
     internal readonly long ExpectedPopulationRevision;
     internal readonly int ExpectedPopulation;
     internal readonly string Fingerprint;
+    internal readonly FiniteSourceProductionPreparation FiniteSource;
     internal bool Completed;
     public IReadOnlyList<DueWorkReference> RetainedTimelineFacts => Array.Empty<DueWorkReference>();
     public IReadOnlyList<string> RetainedSourceSignals => Array.Empty<string>();
@@ -816,7 +961,8 @@ internal sealed class CityDailyEconomyCommit : IBoundaryContinuationStepCommit
         MoneyAccountRuntime populationAccount, long populationRevision, long populationIncrements, float populationBalance,
         MoneyAccountRuntime settlementAccount, long settlementRevision, long settlementIncrements, float settlementBalance,
         Dictionary<string, CityDailyEconomyReceipt> nextReceipts, long expectedReceiptRevision, bool replay,
-        string expectedOwnerRevision, long expectedPopulationRevision, int expectedPopulation, string fingerprint)
+        string expectedOwnerRevision, long expectedPopulationRevision, int expectedPopulation, string fingerprint,
+        FiniteSourceProductionPreparation finiteSource)
     {
         this.owner = owner; Receipt = receipt; MarketState = marketState; MarketRevision = marketRevision;
         MarketIncrements = marketIncrements; PopulationAccount = populationAccount; PopulationRevision = populationRevision;
@@ -824,7 +970,7 @@ internal sealed class CityDailyEconomyCommit : IBoundaryContinuationStepCommit
         SettlementRevision = settlementRevision; SettlementIncrements = settlementIncrements; SettlementBalance = settlementBalance;
         NextReceipts = nextReceipts; ExpectedReceiptRevision = expectedReceiptRevision; Replay = replay;
         ExpectedOwnerRevision = expectedOwnerRevision; ExpectedPopulationRevision = expectedPopulationRevision;
-        ExpectedPopulation = expectedPopulation; Fingerprint = fingerprint;
+        ExpectedPopulation = expectedPopulation; Fingerprint = fingerprint; FiniteSource = finiteSource;
     }
     public bool TryCommit(out TimelineFailure failure)
     {
