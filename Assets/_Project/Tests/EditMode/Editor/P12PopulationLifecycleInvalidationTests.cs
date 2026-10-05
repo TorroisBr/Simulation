@@ -45,6 +45,22 @@ public sealed class P12PopulationLifecycleInvalidationTests
     }
 
     [Test]
+    public void P12BoundRuntimeRejectsUnwitnessedNpcInjuryWithoutMutation()
+    {
+        CityRuntime city = CreateCity("p12-unwitnessed-injury-city", 10);
+        NpcRuntime npc = CreateNpc("p12-unwitnessed-injury-npc");
+        SimulationRuntime runtime = CreateP12Runtime(new[] { city }, new[] { npc });
+
+        Assert.That(npc.TryApplyInjury(NpcInjurySeverity.SeriouslyInjured), Is.False,
+            "The selected P12 profile has no owner section or operation for injury severity.");
+        Assert.That(npc.InjurySeverity, Is.EqualTo(NpcInjurySeverity.None));
+        AssertNpcRevision(runtime, npc.RuntimeId, residence: false, expected: 0L);
+        AssertNpcRevision(runtime, npc.RuntimeId, residence: true, expected: 0L);
+        AssertEpoch(runtime, 0L);
+        AssertCensus(runtime);
+    }
+
+    [Test]
     public void SelectedDailyProfileTracksImmigrationEmigrationAndResidentDeathOnceEach()
     {
         CityRuntime city = CreateCity("p12-population-lifecycle-city", 10);

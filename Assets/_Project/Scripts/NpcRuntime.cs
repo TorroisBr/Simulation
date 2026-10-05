@@ -331,6 +331,8 @@ public class NpcRuntime : ICapabilityConditionSource
 
     public bool TryApplyInjury(NpcInjurySeverity severity)
     {
+        // Injury severity has no owner section or operation in this bounded P12 profile.
+        // Fail closed before mutation while bound; unbound runtimes retain normal injury behavior.
         if (p12LifecycleMutationAdmission != null
             || IsAlive == false || NpcInjuryRules.IsValid(severity) == false)
         {
