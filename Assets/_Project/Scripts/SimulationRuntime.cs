@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using UnityEngine;
 
@@ -24,7 +25,71 @@ public enum SimulationRuntimeCompositionProfile
 {
     Standard = 0,
     P15AProvingStructure = 1,
-    P16AOneHopMilitary = 2
+    P16AOneHopMilitary = 2,
+    P17AWithdrawalWar = 3
+}
+
+/// <summary>Stable host-supplied identity used by the bounded P17-A trusted scenario input path.</summary>
+public sealed class P17AScenarioAuthorityCapability
+{
+    public string AuthorityId { get; }
+
+    public P17AScenarioAuthorityCapability(string authorityId)
+    {
+        if (string.IsNullOrWhiteSpace(authorityId))
+            throw new ArgumentException("P17-A requires a stable scenario/GM authority ID.", nameof(authorityId));
+        AuthorityId = authorityId;
+    }
+}
+
+public enum P17AWithdrawalGoalStatus
+{
+    Pending = 0,
+    Achieved = 1
+}
+
+/// <summary>Immutable coherent runtime view of the bounded P17-A War and its P16-A proof.</summary>
+public sealed class P17AWarObservation
+{
+    private readonly IReadOnlyList<WarStrategicParticipant> participants;
+
+    public WarId WarId { get; }
+    public long WarStoreRevision { get; }
+    public WarLifecycleState LifecycleState { get; }
+    public long? EndedAbsoluteDay { get; }
+    public IReadOnlyList<WarStrategicParticipant> Participants => participants;
+    public WarWithdrawalDemand WithdrawalDemand { get; }
+    public string ScenarioAuthorityId { get; }
+    public long P16TargetBoundaryDay { get; }
+    public string TargetForceId { get; }
+    public P17AWithdrawalGoalStatus GoalStatus { get; }
+    public P16ACrossingReceipt GoalEvidence { get; }
+    public WarTerminalConcession TerminalConcession { get; }
+    public string P16PositionStableKey { get; }
+    public decimal P16CurrentSupply { get; }
+    public long P16OwnerRevision { get; }
+
+    internal P17AWarObservation(PersistentWarRecord war, long warStoreRevision,
+        WarParticipantBinding targetBinding, P17AWithdrawalGoalStatus goalStatus,
+        P16AStateSnapshot p16State)
+    {
+        WarId = war.Id;
+        WarStoreRevision = warStoreRevision;
+        LifecycleState = war.LifecycleState;
+        EndedAbsoluteDay = war.EndedAbsoluteDay;
+        participants = new System.Collections.ObjectModel.ReadOnlyCollection<WarStrategicParticipant>(
+            new List<WarStrategicParticipant>(war.P17A.Participants));
+        WithdrawalDemand = war.P17A.WithdrawalDemand;
+        ScenarioAuthorityId = war.P17A.ScenarioAuthorityId;
+        P16TargetBoundaryDay = p16State.TargetBoundaryDay;
+        TargetForceId = targetBinding.ArmedForceId.Value;
+        GoalStatus = goalStatus;
+        GoalEvidence = goalStatus == P17AWithdrawalGoalStatus.Achieved ? p16State.Receipt : null;
+        TerminalConcession = war.P17A.TerminalConcession;
+        P16PositionStableKey = p16State.PositionStableKey;
+        P16CurrentSupply = p16State.CurrentQuantity;
+        P16OwnerRevision = p16State.OwnerRevision;
+    }
 }
 
 /// <summary>Explicit profile and Unity Start-thread identity for the bounded P12 daily adapter.</summary>
@@ -342,6 +407,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
     private readonly SimulationRuntimeAdmissionContext runtimeAdmissionContext;
     private readonly SimulationRuntimeCompositionProfile compositionProfile;
     private readonly int p16AOwnerThreadId;
+    private readonly P17AScenarioAuthorityCapability p17AScenarioAuthorityCapability;
     private readonly long initialAbsoluteDay;
     private bool p15AInitialPublicationComplete;
     private readonly SimulationRecordSequence simulationRecordSequence;
@@ -690,14 +756,20 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         WorldId worldId = null,
         RuntimeIdAllocator runtimeIdAllocator = null,
         SimulationRuntimeCompositionProfile compositionProfile = SimulationRuntimeCompositionProfile.Standard,
-        StructureStore structureStore = null)
+        StructureStore structureStore = null,
+        P17AScenarioAuthorityCapability p17AScenarioAuthorityCapability = null)
     {
         WorldId = worldId;
         if (!Enum.IsDefined(typeof(SimulationRuntimeCompositionProfile), compositionProfile))
             throw new ArgumentOutOfRangeException(nameof(compositionProfile));
         bool hasP16AProfileState = armedForceSpatialStateStore?.P16Profile != null;
         bool p16AComposition = compositionProfile == SimulationRuntimeCompositionProfile.P16AOneHopMilitary;
-        p16AOwnerThreadId = p16AComposition ? Thread.CurrentThread.ManagedThreadId : 0;
+        bool p17AComposition = compositionProfile == SimulationRuntimeCompositionProfile.P17AWithdrawalWar;
+        bool hasP17AState = warStore?.Records.Any(record => record?.P17A != null) == true;
+        p16AOwnerThreadId = p16AComposition || p17AComposition
+            ? Thread.CurrentThread.ManagedThreadId
+            : 0;
+        this.p17AScenarioAuthorityCapability = p17AScenarioAuthorityCapability;
         if (runtimeAdmissionContext != null
             && (structureStore != null || hasP16AProfileState
                 || compositionProfile != SimulationRuntimeCompositionProfile.Standard))
@@ -716,16 +788,45 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         }
         if (p16AComposition
             ? !hasP16AProfileState || armedForceStore == null || spatialAuthorityStore == null
-            : hasP16AProfileState)
+            : (!p17AComposition && hasP16AProfileState))
         {
             throw new ArgumentException(
                 "P16-A state requires the explicit P16AOneHopMilitary composition and its force/spatial authorities.",
                 nameof(armedForceSpatialStateStore));
         }
-        if (p16AComposition && p18dIntradayProfile != null)
+        if (hasP17AState && !p17AComposition)
         {
             throw new ArgumentException(
-                "P16-A one-boundary movement does not compose with a P18 intraday profile.",
+                "P17-A War state requires the explicit P17AWithdrawalWar composition.",
+                nameof(warStore));
+        }
+        if (p17AComposition)
+        {
+            PersistentWarRecord[] p17AWars = warStore?.Records
+                .Where(record => record?.P17A != null)
+                .ToArray() ?? Array.Empty<PersistentWarRecord>();
+            if (!hasP16AProfileState || armedForceStore == null || spatialAuthorityStore == null
+                || factionStore == null || p17AWars.Length != 1
+                || p17AScenarioAuthorityCapability == null
+                || p17AWars[0].P17A.ScenarioAuthorityId != p17AScenarioAuthorityCapability.AuthorityId
+                || armedForceSpatialStateStore.CaptureP16AState()?.RequiresP17AProvenance != true
+                || armedForceSpatialStateStore.CaptureP16AState()?.TrustedAuthorityId != p17AScenarioAuthorityCapability.AuthorityId)
+            {
+                throw new ArgumentException(
+                    "P17-A composition requires one fully configured P17-A War, its matching P16 provenance profile and host authority capability.",
+                    nameof(compositionProfile));
+            }
+        }
+        else if (p17AScenarioAuthorityCapability != null)
+        {
+            throw new ArgumentException(
+                "A P17-A scenario authority capability is allowed only in the P17AWithdrawalWar composition.",
+                nameof(p17AScenarioAuthorityCapability));
+        }
+        if ((p16AComposition || p17AComposition) && p18dIntradayProfile != null)
+        {
+            throw new ArgumentException(
+                "P16-A one-boundary movement and P17-A War do not compose with a P18 intraday profile.",
                 nameof(p18dIntradayProfile));
         }
         if (runtimeAdmissionContext != null)
@@ -959,6 +1060,10 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             estateStore,
             resolvedPersonStore,
             simulationTime.AbsoluteDay);
+        FactionStore resolvedFactionStore = CloneFactionStore(
+            factionStore,
+            resolvedPersonStore,
+            simulationTime.AbsoluteDay);
         ArmedForceStore resolvedArmedForceStore = CloneArmedForceStore(
             armedForceStore,
             resolvedPersonStore);
@@ -991,7 +1096,10 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         PersistentWarStore resolvedWarStore = CloneWarStore(
             warStore,
             resolvedArmedForceStore,
-            resolvedConflictStore);
+            resolvedConflictStore,
+            resolvedFactionStore,
+            resolvedSpatialAuthorityStore,
+            resolvedArmedForceSpatialStateStore);
         PersistentBattleStore resolvedBattleStore = CloneBattleStore(
             battleStore,
             resolvedArmedForceStore,
@@ -1053,10 +1161,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             resolvedOfficeStore,
             resolvedPropertyOwnershipStore,
             simulationTime.AbsoluteDay);
-        this.factionStore = CloneFactionStore(
-            factionStore,
-            resolvedPersonStore,
-            simulationTime.AbsoluteDay);
+        this.factionStore = resolvedFactionStore;
         this.politicalSupportStore = ClonePoliticalSupportStore(
             politicalSupportStore,
             resolvedPersonStore,
@@ -1434,6 +1539,322 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                 out receipt,
                 out failure);
         }
+    }
+
+    /// <summary>Executes the one P16 crossing that can satisfy the configured P17-A withdrawal demand.</summary>
+    public bool TryExecuteP17AWithdrawalCrossing(
+        WarId warId,
+        ArmedForceId forceId,
+        HexId sourceHexId,
+        HexId destinationHexId,
+        TraversalOptionRef option,
+        string operationId,
+        WorldCommandOrigin acceptedOrigin,
+        P17AScenarioAuthorityCapability capability,
+        out P16ACrossingReceipt receipt,
+        out ArmedForceSpatialFailure failure)
+    {
+        receipt = null;
+        failure = ArmedForceSpatialFailure.None;
+        if (compositionProfile != SimulationRuntimeCompositionProfile.P17AWithdrawalWar
+            || armedForceSpatialStateStore?.P16Profile == null)
+        {
+            failure = ArmedForceSpatialFailure.Create(
+                ArmedForceSpatialFailureCode.MovementProfileNotConfigured,
+                "The P17-A withdrawal War composition is not selected.");
+            return false;
+        }
+        if (Thread.CurrentThread.ManagedThreadId != p16AOwnerThreadId)
+        {
+            failure = ArmedForceSpatialFailure.Create(
+                ArmedForceSpatialFailureCode.RuntimeOperationInProgress,
+                "P17-A commands must run on the SimulationRuntime owner thread.");
+            return false;
+        }
+        if (!IsP17ACommandCapabilityValid(acceptedOrigin, capability))
+        {
+            failure = ArmedForceSpatialFailure.Create(
+                ArmedForceSpatialFailureCode.InvalidMovementInput,
+                "P17-A commands require the composed scenario/GM capability and its accepted origin.");
+            return false;
+        }
+        if (warId == null || !warStore.TryGet(warId, out PersistentWarRecord war)
+            || war.P17A == null || !war.IsActive)
+        {
+            failure = ArmedForceSpatialFailure.Create(
+                ArmedForceSpatialFailureCode.InvalidMovementInput,
+                "The requested War is not the active P17-A withdrawal War.");
+            return false;
+        }
+        WarWithdrawalDemand demand = war.P17A.WithdrawalDemand;
+        WarParticipantBinding targetBinding = null;
+        foreach (WarParticipantBinding binding in war.ParticipantBindings)
+        {
+            if (binding?.BindingId == demand.TargetBindingId)
+            {
+                targetBinding = binding;
+                break;
+            }
+        }
+        if (targetBinding == null || forceId != targetBinding.ArmedForceId
+            || sourceHexId != demand.SourceHexId || destinationHexId == null
+            || destinationHexId == demand.SourceHexId)
+        {
+            failure = ArmedForceSpatialFailure.Create(
+                ArmedForceSpatialFailureCode.InvalidMovementInput,
+                "The P17-A crossing must move the demanded selected force out of its specified source Hex.");
+            return false;
+        }
+        if (CurrentDay != armedForceSpatialStateStore.P16Profile.TargetBoundaryDay)
+        {
+            failure = ArmedForceSpatialFailure.Create(
+                ArmedForceSpatialFailureCode.MovementStateStale,
+                "P17-A movement is accepted only at its prebound P16 logical boundary.");
+            return false;
+        }
+        if (!mutationGuard.CanMutate)
+        {
+            failure = ArmedForceSpatialFailure.Create(
+                ArmedForceSpatialFailureCode.RuntimeFaulted,
+                "The SimulationRuntime is faulted.");
+            return false;
+        }
+        if (!TryAcquireAdvanceLease(out AdvanceLease lease))
+        {
+            failure = ArmedForceSpatialFailure.Create(
+                ArmedForceSpatialFailureCode.RuntimeOperationInProgress,
+                "Another SimulationRuntime advance/operation is in progress.");
+            return false;
+        }
+
+        using (lease)
+        {
+            TraversalCostContext context = new TraversalCostContext(
+                P16AMilitaryMovementProfile.TraversalContextIdentity,
+                P16AMilitaryMovementProfile.TraversalContextRevision,
+                1m, 1m, 1m);
+            return armedForceSpatialStateStore.TryExecuteP17ACrossing(
+                forceId,
+                sourceHexId,
+                destinationHexId,
+                option,
+                context,
+                operationId,
+                armedForceSpatialStateStore.Revision,
+                armedForceStore.Revision,
+                spatialAuthorityStore.Revision,
+                CurrentDay,
+                0L,
+                acceptedOrigin,
+                p17AScenarioAuthorityCapability.AuthorityId,
+                out receipt,
+                out failure);
+        }
+    }
+
+    /// <summary>Captures the current P17-A War and P16 crossing proof under the runtime's serialized owner window.</summary>
+    public bool TryCaptureP17AWarObservation(
+        WarId warId,
+        out P17AWarObservation observation,
+        out PersistentStateFailure failure)
+    {
+        observation = null;
+        failure = PersistentStateFailure.None;
+        if (compositionProfile != SimulationRuntimeCompositionProfile.P17AWithdrawalWar)
+        {
+            failure = PersistentStateFailure.Create(
+                PersistentStateFailureCode.InvalidLifecycle,
+                "The P17-A withdrawal War composition is not selected.");
+            return false;
+        }
+        if (Thread.CurrentThread.ManagedThreadId != p16AOwnerThreadId)
+        {
+            failure = PersistentStateFailure.Create(
+                PersistentStateFailureCode.InvalidLifecycle,
+                "P17-A observations must run on the SimulationRuntime owner thread.");
+            return false;
+        }
+        if (!TryAcquireAdvanceLease(out AdvanceLease lease))
+        {
+            failure = PersistentStateFailure.Create(
+                PersistentStateFailureCode.InvalidLifecycle,
+                "Another SimulationRuntime advance/operation is in progress.");
+            return false;
+        }
+
+        using (lease)
+        {
+            if (warId == null || !warStore.TryGet(warId, out PersistentWarRecord war) || war.P17A == null)
+            {
+                failure = PersistentStateFailure.Create(
+                    PersistentStateFailureCode.NotRegistered,
+                    "The requested War is not configured for P17-A.");
+                return false;
+            }
+
+            WarWithdrawalDemand demand = war.P17A.WithdrawalDemand;
+            WarParticipantBinding targetBinding = null;
+            foreach (WarParticipantBinding binding in war.ParticipantBindings)
+            {
+                if (binding?.BindingId == demand.TargetBindingId)
+                {
+                    targetBinding = binding;
+                    break;
+                }
+            }
+            if (targetBinding == null)
+            {
+                failure = PersistentStateFailure.Create(
+                    PersistentStateFailureCode.InvalidRecord,
+                    "The P17-A demand no longer resolves to its target force binding.");
+                return false;
+            }
+
+            PersistentWarStoreSnapshot warSnapshot = warStore.CaptureState();
+            PersistentWarRecord capturedWar = warSnapshot.Records.FirstOrDefault(record => record?.Id == warId);
+            P16AStateSnapshot p16State = armedForceSpatialStateStore.CaptureP16AState();
+            if (capturedWar == null || p16State == null)
+            {
+                failure = PersistentStateFailure.Create(
+                    PersistentStateFailureCode.InvalidRecord,
+                    "P17-A owner state could not be captured coherently.");
+                return false;
+            }
+
+            P16ACrossingReceipt receipt = p16State.Receipt;
+            bool achieved = receipt != null
+                && receipt.ForceId == targetBinding.ArmedForceId.Value
+                && receipt.ForceId == p16State.ForceId
+                && receipt.SourceHexId == demand.SourceHexId.Value
+                && receipt.DestinationHexId != demand.SourceHexId.Value
+                && p16State.PositionStableKey == "hex:" + receipt.DestinationHexId
+                && receipt.LogicalBoundary > demand.ActivatedAbsoluteDay
+                && receipt.LogicalBoundary == armedForceSpatialStateStore.P16Profile.TargetBoundaryDay
+                && receipt.AcceptedOrder == 0L
+                && receipt.OwnerRevision == p16State.OwnerRevision
+                && receipt.SupplyDebited == armedForceSpatialStateStore.P16Profile.QuantityPerCrossing
+                && p16State.CurrentQuantity
+                    == p16State.InitialQuantity - armedForceSpatialStateStore.P16Profile.QuantityPerCrossing
+                && receipt.AcceptedOrigin.HasValue
+                && (receipt.AcceptedOrigin.Value == WorldCommandOrigin.GM
+                    || receipt.AcceptedOrigin.Value == WorldCommandOrigin.Scenario)
+                && receipt.AuthorityId == p17AScenarioAuthorityCapability.AuthorityId
+                && p16State.RequiresP17AProvenance
+                && p16State.TrustedAuthorityId == p17AScenarioAuthorityCapability.AuthorityId;
+            observation = new P17AWarObservation(
+                capturedWar,
+                warSnapshot.Revision,
+                targetBinding,
+                achieved ? P17AWithdrawalGoalStatus.Achieved : P17AWithdrawalGoalStatus.Pending,
+                p16State);
+            return true;
+        }
+    }
+
+    /// <summary>Ends the bounded P17-A War only through participant B's explicit concession.</summary>
+    public bool TryConcedeP17AWar(
+        WarId warId,
+        WarStrategicParticipantId concedingParticipantId,
+        string operationId,
+        WorldCommandOrigin acceptedOrigin,
+        P17AScenarioAuthorityCapability capability,
+        out PersistentStateFailure failure)
+    {
+        failure = PersistentStateFailure.None;
+        if (compositionProfile != SimulationRuntimeCompositionProfile.P17AWithdrawalWar
+            || armedForceSpatialStateStore?.P16Profile == null)
+        {
+            failure = PersistentStateFailure.Create(
+                PersistentStateFailureCode.InvalidLifecycle,
+                "The P17-A withdrawal War composition is not selected.");
+            return false;
+        }
+        if (Thread.CurrentThread.ManagedThreadId != p16AOwnerThreadId)
+        {
+            failure = PersistentStateFailure.Create(
+                PersistentStateFailureCode.InvalidLifecycle,
+                "P17-A commands must run on the SimulationRuntime owner thread.");
+            return false;
+        }
+        if (!IsP17ACommandCapabilityValid(acceptedOrigin, capability))
+        {
+            failure = PersistentStateFailure.Create(
+                PersistentStateFailureCode.InvalidRecord,
+                "P17-A commands require the composed scenario/GM capability and its accepted origin.");
+            return false;
+        }
+        long expectedWarRevision = warStore.Revision;
+        long acceptedDay = CurrentDay;
+        if (warId == null || !warStore.TryGet(warId, out PersistentWarRecord war) || war.P17A == null)
+        {
+            failure = PersistentStateFailure.Create(
+                PersistentStateFailureCode.NotRegistered,
+                "The requested War is not configured for P17-A.");
+            return false;
+        }
+        if (concedingParticipantId != war.P17A.WithdrawalDemand.TargetParticipantId)
+        {
+            failure = PersistentStateFailure.Create(
+                PersistentStateFailureCode.InvalidRecord,
+                "Only the target participant may issue the bounded P17-A concession.");
+            return false;
+        }
+        if (acceptedDay <= armedForceSpatialStateStore.P16Profile.TargetBoundaryDay)
+        {
+            failure = PersistentStateFailure.Create(
+                PersistentStateFailureCode.InvalidDay,
+                "P17-A concession is accepted only after the P16 crossing boundary has passed.");
+            return false;
+        }
+        if (!mutationGuard.CanMutate)
+        {
+            failure = PersistentStateFailure.Create(
+                PersistentStateFailureCode.RuntimeFaulted,
+                "The SimulationRuntime is faulted.");
+            return false;
+        }
+        if (!TryAcquireAdvanceLease(out AdvanceLease lease))
+        {
+            failure = PersistentStateFailure.Create(
+                PersistentStateFailureCode.InvalidLifecycle,
+                "Another SimulationRuntime advance/operation is in progress.");
+            return false;
+        }
+
+        using (lease)
+        {
+            if (warStore.Revision != expectedWarRevision || CurrentDay != acceptedDay)
+            {
+                failure = PersistentStateFailure.Create(
+                    PersistentStateFailureCode.InvalidRecord,
+                    "The P17-A War or logical day changed before concession commit.");
+                return false;
+            }
+            WarTerminalConcession concession = new WarTerminalConcession(
+                operationId,
+                concedingParticipantId,
+                WarConcessionReason.Concession,
+                acceptedOrigin,
+                p17AScenarioAuthorityCapability.AuthorityId,
+                acceptedDay,
+                0L);
+            return warStore.TryConcedeP17A(
+                warId,
+                expectedWarRevision,
+                acceptedDay,
+                concession,
+                out failure);
+        }
+    }
+
+    private bool IsP17ACommandCapabilityValid(
+        WorldCommandOrigin acceptedOrigin,
+        P17AScenarioAuthorityCapability capability)
+    {
+        return capability != null
+            && ReferenceEquals(capability, p17AScenarioAuthorityCapability)
+            && capability.AuthorityId == p17AScenarioAuthorityCapability.AuthorityId
+            && (acceptedOrigin == WorldCommandOrigin.GM || acceptedOrigin == WorldCommandOrigin.Scenario);
     }
 
     private void InitializeNpcRosterCensusProtocol()
@@ -6120,7 +6541,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
     private bool TryAdvanceDayCore(out SimulationRuntimeAdvanceFailure failure)
     {
         failure = SimulationRuntimeAdvanceFailure.None;
-        if (compositionProfile == SimulationRuntimeCompositionProfile.P16AOneHopMilitary
+        if ((compositionProfile == SimulationRuntimeCompositionProfile.P16AOneHopMilitary
+                || compositionProfile == SimulationRuntimeCompositionProfile.P17AWithdrawalWar)
             && Thread.CurrentThread.ManagedThreadId != p16AOwnerThreadId)
         {
             failure = SimulationRuntimeAdvanceFailure.RuntimeFaulted;
@@ -7014,7 +7436,10 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
     private static PersistentWarStore CloneWarStore(
         PersistentWarStore source,
         ArmedForceStore armedForceStore,
-        PersistentConflictStore conflictStore)
+        PersistentConflictStore conflictStore,
+        FactionStore factionStore,
+        SpatialAuthorityStore spatialAuthorityStore,
+        ArmedForceSpatialStateStore p16StateStore)
     {
         if (source == null)
         {
@@ -7030,7 +7455,12 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                 nameof(source));
         }
 
-        return source.Clone(armedForceStore, conflictStore);
+        return source.Clone(
+            armedForceStore,
+            conflictStore,
+            factionStore,
+            spatialAuthorityStore,
+            p16StateStore);
     }
 
     private static PersistentBattleStore CloneBattleStore(

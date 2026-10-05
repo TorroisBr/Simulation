@@ -450,7 +450,7 @@ public sealed class PersistentWarStore : IAuthoritativeMutationGuardBindable
         return true;
     }
 
-    public bool TryConcedeP17A(WarId warId, long expectedRevision, long acceptedAbsoluteDay,
+    internal bool TryConcedeP17A(WarId warId, long expectedRevision, long acceptedAbsoluteDay,
         WarTerminalConcession concession, out PersistentStateFailure failure)
     {
         if (!mutationGuardBinding.CanMutate) return Fail(PersistentStateFailureCode.RuntimeFaulted, "The SimulationRuntime is faulted.", out failure);
