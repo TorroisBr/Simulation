@@ -316,6 +316,72 @@ public sealed class P16AMilitaryMovementTests
     }
 
     [Test]
+    public void P17ACrossingRetainsTrustedProvenanceAndRejectsUnboundProvenanceAtomically()
+    {
+        Fixture fixture = new Fixture(initialStock: 5m, debit: 2m);
+        Assert.That(fixture.Spatial.ConfigureP17AProvenance("scenario-war-alpha"), Is.True);
+        P16AStateSnapshot initial = fixture.Spatial.CaptureP16AState();
+        Assert.That(initial.RequiresP17AProvenance, Is.True);
+        Assert.That(initial.TrustedAuthorityId, Is.EqualTo("scenario-war-alpha"));
+        Assert.That(ArmedForceSpatialStateStore.ValidateP16AStateForHydration(
+            initial, fixture.Forces, fixture.Authority, out string initialDiagnostic), Is.True, initialDiagnostic);
+
+        P16AStateSnapshot before = fixture.Spatial.CaptureP16AState();
+        long beforeRevision = fixture.Spatial.Revision;
+        Assert.That(fixture.ExecuteP17(WorldCommandOrigin.GM, "scenario-war-other", out _), Is.False);
+        Assert.That(fixture.LastFailure.Code, Is.EqualTo(ArmedForceSpatialFailureCode.InvalidMovementInput));
+        AssertP16Unchanged(fixture, before, beforeRevision);
+
+        Assert.That(fixture.ExecuteP17(WorldCommandOrigin.LocalPlayer, "scenario-war-alpha", out _), Is.False);
+        Assert.That(fixture.LastFailure.Code, Is.EqualTo(ArmedForceSpatialFailureCode.InvalidMovementInput));
+        AssertP16Unchanged(fixture, before, beforeRevision);
+
+        Assert.That(fixture.ExecuteP17(WorldCommandOrigin.GM, "scenario-war-alpha", out P16ACrossingReceipt receipt), Is.True,
+            fixture.LastFailure.ToString());
+        Assert.That(receipt.AcceptedOrigin, Is.EqualTo(WorldCommandOrigin.GM));
+        Assert.That(receipt.AuthorityId, Is.EqualTo("scenario-war-alpha"));
+        P16AStateSnapshot committed = fixture.Spatial.CaptureP16AState();
+        Assert.That(ArmedForceSpatialStateStore.ValidateP16AStateForHydration(
+            committed, fixture.Forces, fixture.Authority, out string committedDiagnostic), Is.True, committedDiagnostic);
+
+        P16AStateSnapshot missingProvenance = new P16AStateSnapshot(committed.ForceId, committed.PositionStableKey,
+            committed.ItemDefinitionId, committed.ItemContentRevision, committed.InitialQuantity,
+            committed.QuantityPerCrossing, committed.TargetBoundaryDay, committed.CurrentQuantity,
+            new P16ACrossingReceipt(committed.Receipt.OperationId, committed.Receipt.ForceId,
+                committed.Receipt.SourceHexId, committed.Receipt.DestinationHexId, committed.Receipt.Option,
+                committed.Receipt.OptionContentIdentity, committed.Receipt.OptionContentRevision,
+                committed.Receipt.TraversalContextIdentity, committed.Receipt.TraversalContextRevision,
+                committed.Receipt.PassageCondition, committed.Receipt.PassageAuthorityRevision,
+                committed.Receipt.ForceStoreRevision, committed.Receipt.LogicalBoundary,
+                committed.Receipt.AcceptedOrder, committed.Receipt.OwnerRevision, committed.Receipt.SupplyDebited),
+            committed.OwnerRevision, requiresP17AProvenance: true, trustedAuthorityId: "scenario-war-alpha");
+        Assert.That(ArmedForceSpatialStateStore.ValidateP16AStateForHydration(
+            missingProvenance, fixture.Forces, fixture.Authority, out _), Is.False);
+
+        Fixture cloneTarget = new Fixture(initialStock: 5m, debit: 2m);
+        MethodInfo cloneMethod = typeof(ArmedForceSpatialStateStore).GetMethod("Clone",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        ArmedForceSpatialStateStore clone = (ArmedForceSpatialStateStore)cloneMethod.Invoke(
+            fixture.Spatial, new object[] { cloneTarget.Forces, cloneTarget.Authority, null });
+        P16AStateSnapshot cloned = clone.CaptureP16AState();
+        Assert.That(cloned.RequiresP17AProvenance, Is.True);
+        Assert.That(cloned.TrustedAuthorityId, Is.EqualTo("scenario-war-alpha"));
+        Assert.That(cloned.Receipt.AcceptedOrigin, Is.EqualTo(WorldCommandOrigin.GM));
+        Assert.That(cloned.Receipt.AuthorityId, Is.EqualTo("scenario-war-alpha"));
+        Assert.That(ArmedForceSpatialStateStore.ValidateP16AStateForHydration(
+            cloned, cloneTarget.Forces, cloneTarget.Authority, out string cloneDiagnostic), Is.True, cloneDiagnostic);
+    }
+
+    private static void AssertP16Unchanged(Fixture fixture, P16AStateSnapshot before, long beforeRevision)
+    {
+        P16AStateSnapshot after = fixture.Spatial.CaptureP16AState();
+        Assert.That(after.PositionStableKey, Is.EqualTo(before.PositionStableKey));
+        Assert.That(after.CurrentQuantity, Is.EqualTo(before.CurrentQuantity));
+        Assert.That(after.Receipt, Is.SameAs(before.Receipt));
+        Assert.That(fixture.Spatial.Revision, Is.EqualTo(beforeRevision));
+    }
+
+    [Test]
     public void TerminatedForceAndNonNeighborEndpointRejectWithoutChangingP16AState()
     {
         Fixture terminated = new Fixture(initialStock: 5m, debit: 2m);
@@ -483,6 +549,21 @@ public sealed class P16AMilitaryMovementTests
             bool result = (bool)method.Invoke(Spatial, arguments);
             receipt = arguments[11] as P16ACrossingReceipt;
             LastFailure = arguments[12] as ArmedForceSpatialFailure;
+            return result;
+        }
+
+        public bool ExecuteP17(WorldCommandOrigin origin, string authorityId, out P16ACrossingReceipt receipt)
+        {
+            MethodInfo method = typeof(ArmedForceSpatialStateStore).GetMethod(
+                "TryExecuteP17ACrossing", BindingFlags.Instance | BindingFlags.NonPublic);
+            object[] arguments =
+            {
+                Selected, HexA, HexB, Option, Context, "p17a.runtime-owned", Spatial.Revision,
+                Forces.Revision, Authority.Revision, TargetBoundaryDay, 0L, origin, authorityId, null, null
+            };
+            bool result = (bool)method.Invoke(Spatial, arguments);
+            receipt = arguments[13] as P16ACrossingReceipt;
+            LastFailure = arguments[14] as ArmedForceSpatialFailure;
             return result;
         }
 
