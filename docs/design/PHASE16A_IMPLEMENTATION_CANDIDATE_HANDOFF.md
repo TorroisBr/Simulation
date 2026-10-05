@@ -1,6 +1,23 @@
 # P16-A current-base implementation candidate handoff
 
-**Checkpoint:** P16-A, One Passage Military Movement with Finite Supply. **Status:** implementation candidate pending fresh exact-tip review; prior review at `6ae5cc3` found three contract gaps, corrected in code commit `d31d91a6ee44d2b678fcf393db57c315ec284746`. **Architecture authority:** `f6924e63d8e5731da1d33021d0361e7defe6dad7` (read from the canonical architecture ref; its documentation branch is not an ancestor of this code branch). **Current code commit:** `d31d91a6ee44d2b678fcf393db57c315ec284746`; executable code tree: `d4dc93f9a14af1659a891252b0cdfc5034456528`. **Integrated code base:** P15 canonical `5054211ad883d14fc6727416c313f1f1824679f4`, including P12 canonical `a6572ab3d4330d81edb334ae8b4c84ca5e6b173e` and the promoted P14-A/P8 authorities. The earlier owner-only implementation `d2276ae` was recomposed here without rewriting its published history.
+**Checkpoint:** P16-A, One Passage Military Movement with Finite Supply. **Status:** current-base recomposed implementation candidate; full validation passed and fresh exact-tip review is pending. The earlier P16-only candidate `d31d91a6ee44d2b678fcf393db57c315ec284746` (tree `d4dc93f9a14af1659a891252b0cdfc5034456528`) was integrated against the new P14 canonical tip. **Current integrated code commit:** `98f80648a226212cd13c37bce34d0e2d6c68574a`; executable code tree: `1abb2f83817659fa9bce8e66826f79fde34765b8`. **Integrated authorities:** P15 canonical `5054211ad883d14fc6727416c313f1f1824679f4`, P14 canonical `06e9c30101a74bd618d3651885c489c79fe866bb`, P10 canonical `e53252de5277fd5af46bbacb8eda5ee6e74aff08`, and P12 canonical `a6572ab3d4330d81edb334ae8b4c84ca5e6b173e`. **Architecture authority:** `f6924e63d8e5731da1d33021d0361e7defe6dad7`.
+
+## Current-base revalidation after P14-B promotion
+
+The P16-A branch was recomposed with the current P14 canonical tip after P14-B promotion. The merge base was P12 canonical `a6572ab3d4330d81edb334ae8b4c84ca5e6b173e`; the P14/P10 updates merged cleanly into the P15/P16 candidate. The changed production files are disjoint; `SimulationBootstrapCompositionTests.cs` was the only shared source file and merged automatically. Classification: **BASE_DRIFT_ONLY**. Focused admission/bootstrap suites then revalidated the P16 negative-profile contract alongside P14/P10 admission behavior. No P14 City/P10 Ruin combined proving profile was introduced; that profile remains rejected before allocation/publication.
+
+Validation ran on code commit `98f80648a226212cd13c37bce34d0e2d6c68574a`, tree `1abb2f83817659fa9bce8e66826f79fde34765b8`, with Unity `6000.3.9f1`:
+
+| Suite | Result |
+|---|---:|
+| `P16AMilitaryMovementTests` | 20/20 PASS |
+| `SimulationRuntimeAdmissionTests` | 37/37 PASS |
+| `SimulationBootstrapCompositionTests` | 21/21 PASS |
+| ALL EditMode | 2323/2323 PASS |
+| Official Smoke | 5/5 PASS |
+| `git diff --check` | PASS |
+
+Raw XML/log hashes and the exact-tree archive are recorded in `docs/validation/P16A/P16A-current-base-revalidation-1abb2f8.md`; archive SHA-256 is `5C7C6D878EB880A5879A558AD52370144C782413F05E8F3904097E6FCDD09BFE`. Independent review of this recomposed code tree remains pending. The earlier review and result table below apply only to the previous P16-only tree.
 
 ## Delivered boundary
 
@@ -12,9 +29,9 @@
 - `UnityBootstrap-Daily-v1` rejects both unmoved populated P16 state and state after a committed crossing before P12 admission can publish it. Tests assert the exact position, quantity, receipt reference, and owner revision remain unchanged; the empty daily P16 profile still composes.
 - P16-A is not wired into a production Unity bootstrap/gameplay world. No new content, order UI, route planning, replenishment, automatic travel, Battle/War/occupation effects, or P12 serialization is included.
 
-## Exact-tree validation
+## Previous P16-only exact-tree validation (historical)
 
-All validation below ran after the final P16 source/test edits, on executable tree `d4dc93f9a14af1659a891252b0cdfc5034456528`. The exact result XML and log files are retained under `docs/validation/P16A/` and included with this candidate evidence.
+The following results ran after the final P16 source/test edits, on the prior P16-only tree `d4dc93f9a14af1659a891252b0cdfc5034456528`. They are retained as historical evidence and are superseded for current-base integration by the full revalidation above.
 
 | Gate | Result | Unity-output XML SHA-256 | Git-stored XML blob SHA-256 | Log SHA-256 |
 |---|---:|---|---|---|
@@ -37,4 +54,4 @@ The full EditMode run includes the affected P7/P8/P12/P15 regressions. No daily-
 
 This candidate does not claim P12-B completion, complete owner or shared-epoch coverage, global quiescence, capture eligibility, export/hydration, P12-A readiness, or P13 readiness. P12-B remains incomplete, P12-A remains `WAIT_DEPENDENCY`, and P13 remains blocked. P16 remains open after P16-A until its Phase objective and any later checkpoints are handled separately.
 
-The latest code candidate is not yet independently reviewed or canonical. Fresh review must cover the complete exact-tip diff against the current P15/P12 base, P16-A scope, the prebound target day/order, zero-stock state, owner-thread day advancement, the P18 temporal exclusion, P12 fail-closed admission, exact unchanged-state rejection, and all three final validation artifact pairs. The earlier failed review is retained as remediation history; canonical promotion and a formal State record remain separate gates under the repository Execution Model.
+The latest recomposed code candidate (`98f8064`, tree `1abb2f8`) is not yet independently reviewed or canonical. Fresh review must cover the P16-A scope, the prebound target day/order, zero-stock state, owner-thread day advancement, the P18 temporal exclusion, P12 fail-closed admission after P14-B/P10-B recomposition, exact unchanged-state rejection, and all five current validation artifact pairs. The earlier failed review is retained as remediation history. The standing bounded-promotion authority applies to P16-A once current-base exact-tip review passes; no Phase 16 closure is claimed.
