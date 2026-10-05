@@ -1,12 +1,12 @@
 # P20-B joint civil travel — implementation progress
 
-**Status:** validated P20-B implementation candidate at `de24dff356a54a0a4037e16c0ca5dc9ca379bc18`; pending independent exact-tip review. Not promoted.
+**Status:** P20-B promoted to `codex/phase20/canonical` at `142672b9eddd23013ff83b7b176979dd4cc9e3b6`; Phase 20 remains open.
 
-**Implementation commit:** `e93731c847dfd5e6973d8df0fae78419a46c74ea`
+**Implementation commit:** `de24dff356a54a0a4037e16c0ca5dc9ca379bc18`
 
-**Code tree:** `92ba3b27c65d18bb0c5786b8e99860116c94d22b`
+**Code tree:** `62f8f3f3ad803e3f8eca832f7e39cff8196d5b85`
 
-**Parent candidate:** `b2ca724c2da2bb89b943f6caf9c141bdee843718`
+**Parent candidate:** `d14d235c86d8373e5f7e1c2ebf1f0e4507296222`
 
 **P20 design handoff:** `d80ec06f48500a0ee80d6e05136ad50a6978a670`
 
@@ -94,6 +94,8 @@ the assertion was corrected to the fail-closed construction behavior, then the
 focused, ALL EditMode, and Smoke runs passed on the final code tree.
 
 No ProjectSettings changes, unrelated `.meta` files, P20-A composition changes,
-or `TesteSimulacao` edits are included. This candidate is not independently
-reviewed, promoted, or a Phase 20 closure claim; an independent exact-tip review
-is the next step.
+or `TesteSimulacao` edits are included. At the time this historical entry was written, independent review and promotion remained pending. The final review and promotion outcome appears below; Phase 20 closure was not claimed.
+
+## Independent review and promotion outcome — 2026-10-04
+
+Independent exact-tip review passed with no actionable findings for code `de24dff356a54a0a4037e16c0ca5dc9ca379bc18` / tree `62f8f3f3ad803e3f8eca832f7e39cff8196d5b85`; see `docs/design/PHASE20_P20B_IMPLEMENTATION_REVIEW.md`. The docs/evidence tip `142672b9eddd23013ff83b7b176979dd4cc9e3b6` contains no later `Assets` changes. The approved fast-forward advanced P20 canonical from `7a81cc0ecbc511dd36c248ec62c7b20f7e477f53` to `142672b9eddd23013ff83b7b176979dd4cc9e3b6`. P20-B remains bounded to explicitly-empty Daily census admission; Phase 20 remains open.
