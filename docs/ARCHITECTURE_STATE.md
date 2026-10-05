@@ -1,5 +1,40 @@
 # General Architecture State
 
+## Simulation Lab direction promotion — 2026-10-05
+
+**Status:** `ARCHITECTURE_PROMOTED` for architecture/planning only.
+**Canonical branch:** `codex/architecture/world-identity-projection`.
+**Previous architecture SHA:** `f6924e63d8e5731da1d33021d0361e7defe6dad7`.
+**Approved candidate and promoted architecture content SHA:**
+`6f568d037a566e10402f06aa979b0a4cfa5c9c61` from
+`codex/architecture/simulation-lab-direction`.
+
+The user approved this exact candidate. Final preflight confirmed unchanged
+local/remote canonical and candidate SHAs, clean fast-forward ancestry, an
+unchanged five-file documentation-only diff, applicable [independent PASS
+review](architecture/SIMULATION_LAB_DIRECTION_REVIEW.md) of the content tip,
+and `git diff --check`. Promotion did not touch numbered-phase implementation
+worktrees, implement the Lab, or reopen closed phases.
+
+Architecture §85A, the [Lab direction](architecture/SIMULATION_LAB_DIRECTION.md),
+Roadmap and Execution Model now make human demonstrability a forward-looking
+checkpoint assessment. The unnumbered Simulation Lab foundation is
+`READY_FOR_TECHNICAL_DESIGN` as a supporting consumer, not
+`IMPLEMENTATION_READY`: its first design must prove a bounded non-Unity
+application/composition/read path using real Simulation behavior. P14-B's
+promoted finite-source capability is the recommended first demonstration;
+the human scenario is not yet delivered. P19 loader, full P12 and P13 are not
+blanket dependencies. Implementation scheduling waits for a reviewed technical
+boundary and a safe Master hotspot window; current Master work is unaffected.
+When a demonstration exists, its handoff should include `HOW TO TRY IT` beside
+automated validation evidence.
+
+The P20-B label/scope discrepancy between the architecture Roadmap and the
+current Phase 20 State remains a separate reconciliation task. No P20-B Lab
+scenario is planned under that ambiguous label. P20-A synthetic shared behavior
+may be assessed independently. No new Lab product choice is required by this
+promotion.
+
 ## P10-B/P14-B/P20-B product-direction promotion — 2026-10-03
 
 **Status:** `ARCHITECTURE_PROMOTED` for architecture and planning only. **Canonical branch:** `codex/architecture/world-identity-projection`. **Previous architecture SHA:** `3bf09249b7dd9e255c3493aacfd75c96080a31e3`. **Approved candidate and promoted content SHA:** `ad9132ab9d41b0314185709e14b5a09d023094b4` from `codex/architecture/p10-p14-p20-product-direction`.
