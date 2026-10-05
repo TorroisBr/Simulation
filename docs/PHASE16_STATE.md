@@ -1,6 +1,8 @@
 # Phase 16 State — Military Movement & Logistics v1
 
-**Status:** PHASE 16 IN PROGRESS. P16-A is an independently reviewed and validated implementation candidate; this candidate State does not claim canonical delivery or Phase closure.
+**Status:** PHASE 16 IN PROGRESS. P16-A is PROMOTED; Phase 16 remains open.
+
+**Canonical branch:** `codex/phase16/canonical`. **P16-A promotion commit:** `bbf3e49b160ca5ce42bde43e76f1f93aab7585e9`, created as a clean branch from the exact reviewed and validated candidate. This State-only update follows that promotion.
 
 **Architecture baseline:** `f6924e63d8e5731da1d33021d0361e7defe6dad7`. The accepted P16-A scope and technical design were promoted in architecture at `a2788e6400251b5ce3cf8d2269ea8a5b5fdfd4a8`; the current architecture tip descends from that promotion. The P16 Brief marks P16-A `READY_FOR_MASTER_IMPLEMENTATION_HANDOFF`.
 
@@ -8,7 +10,7 @@
 
 | Checkpoint | Status | Evidence / boundary |
 |---|---|---|
-| P16-A — One Passage Military Movement with Finite Supply | VALIDATED CANDIDATE; pending final canonical preflight | Integrated code commit `98f80648a226212cd13c37bce34d0e2d6c68574a`, executable tree `1abb2f83817659fa9bce8e66826f79fde34765b8`; candidate evidence branch `codex/phase16/P16AAfterP14B`. Independent exact-tip implementation review PASS is recorded in `docs/design/PHASE16A_IMPLEMENTATION_REVIEW.md`. |
+| P16-A — One Passage Military Movement with Finite Supply | PROMOTED | Promotion commit `bbf3e49b160ca5ce42bde43e76f1f93aab7585e9`; integrated code commit `98f80648a226212cd13c37bce34d0e2d6c68574a`, executable tree `1abb2f83817659fa9bce8e66826f79fde34765b8`. Independent exact-tip implementation review PASS is recorded in `docs/design/PHASE16A_IMPLEMENTATION_REVIEW.md`. |
 
 ## Integrated prerequisites and validation
 
