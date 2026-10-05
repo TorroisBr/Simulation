@@ -794,6 +794,13 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                 "P16-A state requires the explicit P16AOneHopMilitary composition and its force/spatial authorities.",
                 nameof(armedForceSpatialStateStore));
         }
+        if (p16AComposition
+            && armedForceSpatialStateStore.CaptureP16AState()?.RequiresP17AProvenance == true)
+        {
+            throw new ArgumentException(
+                "P16-A standalone composition cannot admit P17-A-provenance movement state.",
+                nameof(armedForceSpatialStateStore));
+        }
         if (hasP17AState && !p17AComposition)
         {
             throw new ArgumentException(
