@@ -1,7 +1,8 @@
 # Simulation Lab — human demonstrability and Unity independence
 
-**Candidate status:** architecture/planning proposal for independent review;
-not canonical until promotion. **Architecture base:**
+**Status:** canonical architecture/planning direction; unnumbered Lab foundation
+`READY_FOR_TECHNICAL_DESIGN`, not `IMPLEMENTATION_READY`.
+**Reviewed architecture base:**
 `f6924e63d8e5731da1d33021d0361e7defe6dad7` on
 `codex/architecture/world-identity-projection`. **Scope:** documentation only;
 no Lab, UI, runtime API, checkpoint implementation or Phase closure is approved
@@ -163,8 +164,9 @@ Lab host may later collide with `SimulationRuntime`, bootstrap/genesis, P12
 admission, command registration or readers; its actual implementation must
 serialize those hotspots with whatever implementation front is then active.
 
-No new product choice is needed to approve this direction. The first Lab
+No new product choice is needed for this direction. The first Lab
 technical design must still select one supported scenario/profile and prove a
 viable non-Unity boundary; any scope that changes gameplay, public API or
 checkpoint obligations beyond this record requires its own review. Normal
-architecture-canonical promotion remains a separate human gate.
+architecture-canonical promotion is recorded in `../ARCHITECTURE_STATE.md`;
+future Lab technical design and implementation retain their own gates.

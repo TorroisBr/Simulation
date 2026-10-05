@@ -22,13 +22,13 @@ Phases 5–7 are closed within their documented scopes. P8-A/B/C/D/E are canonic
 
 Runtime World Expansion remains a future consumer without an assigned dedicated phase. Its absence from this sequence does not forbid a later insertion or assign it to Phase 15 by implication.
 
-## Simulation Lab and human demonstrability — proposed supporting direction
+## Simulation Lab and human demonstrability — approved supporting direction
 
 The [Simulation Lab direction and dependency assessment](architecture/SIMULATION_LAB_DIRECTION.md)
 adds a cross-cutting demonstrability check to **future** bounded checkpoint
-designs. It proposes one cumulative, Unity-independent scenario host as an
-unnumbered supporting workstream, currently `DESIGN PROPOSED`, not an approved
-implementation checkpoint or new numbered Phase. The host consumes existing
+designs. It establishes one cumulative, Unity-independent scenario host as an
+unnumbered supporting workstream, now `READY_FOR_TECHNICAL_DESIGN`, not
+`IMPLEMENTATION_READY` or a new numbered Phase. The host consumes existing
 Simulation authorities and read capabilities; its first executable technical
 scope requires separate design, review and implementation authorization. It
 does not make a production UI, P19 loader, whole-World exporter or full P12

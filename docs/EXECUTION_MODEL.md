@@ -102,8 +102,10 @@ record the exact seam and a bounded follow-up rather than exposing mutable
 Stores, copying domain rules, or silently expanding the domain checkpoint.
 This policy applies to subsequent design/review work; it neither reopens closed
 phases nor interrupts already active candidates. The unnumbered Simulation Lab
-foundation remains a separate, design-proposed supporting workstream until
-reviewed technical scope and implementation authority exist.
+foundation remains a separate, technical-design-ready supporting workstream;
+implementation awaits reviewed technical scope and a safe scheduling boundary.
+When a demonstration exists, the handoff reports `HOW TO TRY IT` alongside
+automated validation evidence, with the exact supported profile and scenario.
 
 ## Reconstruction-sensitive gate and stop conditions
 
