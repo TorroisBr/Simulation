@@ -2,12 +2,12 @@
 
 **Result:** PASS — `READY_FOR_IMPLEMENTATION` under the previously accepted P12-B prerequisite-capability authority.
 
-**Exact design candidate:** `452426687a57c1cfebb3f007511c5e23a21273a2`  
-**Exact candidate tree:** `e970567ae059dc8c537739469cfff65c0d67fa6b`  
-**Candidate base / current P12 canonical:** `39e275f39e1602d3fa109d3a1bb9acd60585a3f2`  
-**Architecture:** `ffd75652d89d862b83d634868c560f8540869b89`  
-**Intraday/extensibility alignment:** `4b6dd1d38cffeaf3cc1ac3effea0f8ede8771194`  
-**Multi-participant activity alignment:** `c285466c355103d3637ac165246591b72eb7bda0`  
+**Exact design candidate:** `452426687a57c1cfebb3f007511c5e23a21273a2`
+**Exact candidate tree:** `e970567ae059dc8c537739469cfff65c0d67fa6b`
+**Candidate base / current P12 canonical:** `39e275f39e1602d3fa109d3a1bb9acd60585a3f2`
+**Architecture:** `ffd75652d89d862b83d634868c560f8540869b89`
+**Intraday/extensibility alignment:** `4b6dd1d38cffeaf3cc1ac3effea0f8ede8771194`
+**Multi-participant activity alignment:** `c285466c355103d3637ac165246591b72eb7bda0`
 **P19 proposal consulted:** `686a23cbdf4d8e78ba4d4f76c3e6b62fc08f4df2`
 
 The independent reviewer verified the exact candidate branch and tree, the documentation-only diff from current P12 canonical, and `git diff --check`. The review traced the daily path through the single outer `runtime.advance-day` operation, including the later actor turns. The four legacy daily calls retain sequential per-call epoch reservations. Crime/Guard action leaves, failed-Escape handling, successful actor/target status effects, and forced Escape use immediate per-leaf capacity/baseline checks and notifications; they do not hold an epoch reservation or defer notifications across unrelated owner callbacks.
