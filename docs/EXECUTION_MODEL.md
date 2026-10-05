@@ -78,6 +78,33 @@ Canonical promotion initially requires human approval. A later policy may explic
 
 After canonical advancement, classify each active candidate with orchestrator/reviewer evidence: `UPSTREAM_IRRELEVANT` (continue, still validate at integration), `REVALIDATE` (rerun affected review/tests), `REINTEGRATE` (refresh composition without discarding work), or `INVALIDATED` (return to design/work). A worker alone cannot declare a semantic change irrelevant. Failed tests should be diagnosed in-track; failed review returns for changes; merge conflicts require inspection of both semantics. Preserve a recoverable candidate record rather than restarting or deleting blindly.
 
+## Demonstrability assessment for future checkpoints
+
+For each new bounded checkpoint design, record a short assessment of: the
+behavior a person should be able to observe; the smallest executable scenario;
+whether it can run outside Unity; the approved application/read surfaces it
+would use; any Unity coupling the attempt exposes; and whether an existing Lab
+surface can be extended. Keep human demonstration distinct from automated
+correctness/regression validation. Choose exactly one planning classification:
+
+| Classification | Gate |
+|---|---|
+| `REQUIRED_FOR_CHECKPOINT` | The selected behavior and a small human-executable scenario are jointly part of the reviewed checkpoint closure. Validate both before its code promotion. A text/CLI scenario may suffice. |
+| `FOLLOW-UP_DEMONSTRATION` | The domain checkpoint can be reviewed and promoted independently; record a concrete demonstration follow-up and its dependencies. For user-observable behavior, prefer completing it before formal Phase closure when practical. It is not a hidden prerequisite for the domain implementation. |
+| `NOT_MEANINGFUL_FOR_THIS_CHECKPOINT` | Explain why the checkpoint is infrastructure, contract, or otherwise lacks a useful standalone human behavior. Keep its automated/review gates. |
+
+Classify against the selected checkpoint scope and current executable
+capabilities, not an imagined full product UI. A non-Unity demonstration must
+exercise the actual Simulation authority and approved factual/actor-perspective
+reads; replaying a parallel Lab model or inspecting a static export alone does
+not prove execution independence. If Unity coupling blocks the chosen scenario,
+record the exact seam and a bounded follow-up rather than exposing mutable
+Stores, copying domain rules, or silently expanding the domain checkpoint.
+This policy applies to subsequent design/review work; it neither reopens closed
+phases nor interrupts already active candidates. The unnumbered Simulation Lab
+foundation remains a separate, design-proposed supporting workstream until
+reviewed technical scope and implementation authority exist.
+
 ## Reconstruction-sensitive gate and stop conditions
 
 Each checkpoint introducing authoritative mutable state or external causal input must answer: **what must future reconstruction recover to reproduce this causality?** Consider stable IDs, factual state and commitments, payload/authority/logical boundary/ordering of commands, effective content/configuration and calendar, random context, and causally relevant provenance. Put the declaration in the Brief/checkpoint contract, verify it in technical and candidate review, and record actual delivery in State. This gate does not require early save/replay implementation. Diagnostics, events, and selective History are not primary truth.

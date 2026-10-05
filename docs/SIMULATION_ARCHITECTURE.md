@@ -5344,6 +5344,57 @@ aleatoriedade autoritativa.
 
 ---
 
+## 85A. Demonstração humana e independência de Unity
+
+**DECIDIDO — DIREÇÃO ARQUITETURAL; LAB AINDA NÃO IMPLEMENTADO**
+
+Validação automatizada prova propriedades e regressões; demonstração humana
+permite executar um cenário pequeno e observar uma capacidade real. Checkpoints
+futuros de comportamento substancial avaliam ambas separadamente. A forma de
+demonstração acompanha o comportamento: texto ou tabela bastam para estados e
+transições simples; grafo ou linha do tempo só quando melhoram a compreensão.
+Não há obrigação geral de GUI nem requisito retroativo para fases encerradas.
+
+O Simulation Lab é um consumidor incremental de capacidades reais, não uma
+autoridade de mundo. Seu host de cenários prefere operar fora de Unity: prepara
+um mundo por uma composição/gênese aprovada, envia inputs pela autoridade de
+aplicação apropriada (incluindo `WorldCommand` quando cabível), avança pela
+autoridade temporal da Simulation e observa resultados por readers factuais ou
+outras consultas de capacidade aprovadas. O Lab não reimplementa regras,
+mantém Store paralelo, escreve diretamente em Stores ou usa snapshot P12,
+diagnóstico ou World Exchange como API mutável. Leituras usadas para afirmar
+World Truth precisam do corte coerente exigido em §91B; Knowledge individual
+permanece uma perspectiva distinta. Erros/rejeições devem permanecer visíveis.
+
+A direção de portabilidade é domínio e aplicação com semântica independente de
+`UnityEngine`, `MonoBehaviour`, `GameObject`, cenas, UI e lifecycle de Unity.
+Unity pode continuar como host e apresentação, mas o seu ciclo de vida não
+define causalidade do mundo. Uma demonstração que hoje só funciona dentro de
+Unity revela uma dependência a separar no recorte consumido; não autoriza
+duplicação das regras no Lab nem uma extração indiscriminada do projeto. Um
+host não Unity deve provar que invoca a mesma implementação autoritativa, não
+apenas que exibe dados exportados ou reexecuta um modelo simplificado.
+
+Simulation-External/World Explorer consome projeção factual portátil e pode
+apresentar artefatos do Lab quando o contrato de leitura for adequado. Sua
+projeção read-only não equivale a um host de execução interativa, transporte de
+comandos, save ou replay. O Lab não depende do loader P19; um futuro contrato
+público ou ferramenta externa pode reutilizar superfícies de aplicação
+estabilizadas por consumidores reais, sob revisão própria. Não se fixa agora
+protocolo, UI, formato de cenário, assembly ou API geral de extensões.
+
+O primeiro fundamento técnico será delimitado por um consumidor real: um host
+pequeno e reutilizável que execute um cenário, aplique/avance por autoridades
+existentes e exponha observação suficiente para esse cenário. Sua escolha de
+host, composição e extração de dependências exige design e revisão próprios.
+Novos consumidores ampliam a mesma base apenas quando necessários. A avaliação
+de demonstrabilidade em `EXECUTION_MODEL.md` determina se a demonstração entra
+no checkpoint, segue como entrega posterior antes do fechamento da fase quando
+prático, ou não tem significado para o checkpoint. Isso não altera a entrega
+ou o status de checkpoints passados.
+
+---
+
 ## 86. IA/NLP é tradutor, não autor automático do mundo
 
 **DECIDIDO**

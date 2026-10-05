@@ -22,6 +22,48 @@ Phases 5–7 are closed within their documented scopes. P8-A/B/C/D/E are canonic
 
 Runtime World Expansion remains a future consumer without an assigned dedicated phase. Its absence from this sequence does not forbid a later insertion or assign it to Phase 15 by implication.
 
+## Simulation Lab and human demonstrability — proposed supporting direction
+
+The [Simulation Lab direction and dependency assessment](architecture/SIMULATION_LAB_DIRECTION.md)
+adds a cross-cutting demonstrability check to **future** bounded checkpoint
+designs. It proposes one cumulative, Unity-independent scenario host as an
+unnumbered supporting workstream, currently `DESIGN PROPOSED`, not an approved
+implementation checkpoint or new numbered Phase. The host consumes existing
+Simulation authorities and read capabilities; its first executable technical
+scope requires separate design, review and implementation authorization. It
+does not make a production UI, P19 loader, whole-World exporter or full P12
+save profile a common prerequisite.
+
+The recommended first useful scenario is P14-B finite-source depletion: run a
+small world, advance it and observe source reserve, produced stock and the
+exhaustion boundary. This is conditional on a promoted P14-B capability and a
+reviewed non-Unity composition/read path. It is a proposed Lab consumer, not a
+new requirement for P14-B's current implementation or promotion. A smaller
+already delivered capability may be used to prove host startup and authority
+reuse without falsely demonstrating finite depletion. Subsequent consumers
+attach only after their own capabilities and readable facts exist:
+
+| Future consumer | Human observation | Specific gate; no automatic Phase dependency |
+|---|---|---|
+| P10 generated topology | Seeded site topology and stable site identity, preferably as a graph. | Selected generation profile plus a supported topology read; authored Unity assets may require a bounded non-Unity adapter. |
+| P14 material flow | Reserve, production, stock and exhaustion. | P14-B truth and coherent reserve/stock observation. |
+| P15 construction | Structure absent before, present after the approved runtime mutation. | Promoted construction slice and factual structure read. |
+| P16 movement | Force position and carried supply before/after one passage. | Promoted movement slice and applicable factual military/spatial reads. |
+| P20 shared activity | Two individual decisions, coordinated start/lifecycle and individual effects. | Promoted shared-activity consumer and participant-perspective reads. |
+| P12 continuation | Save, advance, restore and compare a supported profile. | The specific P12 save/load continuation capability and its exact owner coverage. |
+| P13 historical fork | Inspect a simulated boundary and compare source/fork continuations. | Actual P13 reconstruction/fork capability, recoverable causal history and provenance. |
+
+`Simulation-External` World Explorer can display an approved exported factual
+artifact, including one produced during a Lab run, but its World Exchange
+projection is read-only and does not provide interactive command execution.
+The Lab application host therefore remains Simulation-side; sharing a
+presentation contract is optional and does not merge execution and projection
+ownership. P19 may later consume useful stable contracts, but its general
+loader and mod lifecycle remain deferred. Closed phases and active Master
+candidates retain their existing gates and status. Demonstration classification
+for any subsequent checkpoint follows `EXECUTION_MODEL.md`; a scenario is not
+silently added to an in-flight implementation contract.
+
 ## P10 / P14 / P20 promoted product direction — 2026-10-03
 
 A bounded checkpoint may prove one case without making it the universal model. The promoted [product-direction and checkpoint sequence](architecture/P10_P14_P20_NEXT_SCOPE_DECISIONS.md) treats varied local topology, finite/multiple sources and shared-activity consumers as compatible capabilities. It preserves promoted P10-A, P14-A and P20-A within their delivered profiles. The next bounded scopes are `P10-B` deterministic procedural topology for one Ruin instance, `P14-B` finite availability for one source, and `P20-B` joint civil travel by two Persons. All three are `READY_FOR_TECHNICAL_DESIGN`, not implementation. Later P14-C mixed sources waits on the selected P14-B proof; P14-D inter-City transfer still needs a bounded product/transport contract.
