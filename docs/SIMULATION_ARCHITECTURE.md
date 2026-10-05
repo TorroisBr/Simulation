@@ -3935,6 +3935,46 @@ por goals alcançados ou falhos, mudanças de controle, casualties, surrender,
 saídas e consequências políticas. O Conflict mais amplo pode sobreviver ao
 fim da War.
 
+### P17 — direção estratégica e primeiro recorte
+
+**DECIDIDO — DIREÇÃO DE PRODUTO; P17-A AINDA NÃO IMPLEMENTADO**
+
+War é um contexto estratégico persistente com participantes identificados que
+podem perseguir objetivos próprios. Uma War pode combinar disputa territorial,
+desgaste de capacidades e coerção sem conquista; nenhuma dessas famílias
+define sozinha o conceito. Um participante pode possuir vários objetivos,
+objetivos diferentes podem conflitar, e atingir um deles não termina a War.
+Objetivo real, objetivo declarado/publicamente conhecido e crença de outro
+ator sobre o objetivo permanecem fatos/perspectivas distintos.
+
+Participante estratégico, `WarSideId` e vínculo operacional de `ArmedForce`
+não são a mesma identidade. O `PersistentWarStore` de P7 continua sendo a
+authority de lifecycle e relações da War; sua evolução deve alojar os novos
+fatos estratégicos sem criar outro War owner. Vínculo de força com lado não
+concede automaticamente a uma Faction comando, lealdade ou título político.
+Contribuições e decisões de cada participante exigem associações e authorities
+explícitas no recorte que as consumir. War pode avaliar Battle, posição,
+suprimento, perdas ou controle factual, mas não se apropria das mutações desses
+domínios. Resultados de Battle e presença militar não alteram controle,
+jurisdição, soberania, propriedade, metas ou lifecycle da War por inferência.
+
+O primeiro recorte P17-A usa uma exigência coerciva não territorial: uma das
+duas Factions participantes quer que uma força explicitamente vinculada ao
+oponente deixe um Hex por uma travessia P16-A validada. É uma condição de
+retirada operacional, sem afirmar controle ou anexação do Hex. O cumprimento
+desse objetivo é avaliado pelo recibo autoritativo da travessia em fronteira
+concluída; não exige contador de pressão nem cópia da posição na War. A War
+permanece ativa após a travessia e só termina por uma transição explícita com
+motivo e causalidade registrados. Dois participantes, um objetivo e um salto
+são limites da prova, não cardinalidades universais.
+
+O [registro P17 de direção e entrada técnica](architecture/P17_STRATEGIC_WAR_DIRECTION.md)
+fixa o recorte, ownership, dependências, exclusões, preservação para
+reconstrução e avaliação de demonstrabilidade. O modelo de controle militar,
+ocupação, attrition/pressure composta, objetivos políticos e participação de
+mais atores permanece para checkpoints próprios. P17-A não cria War AI,
+tratados, governo, Campaign nem um `War.Winner` autoritativo.
+
 Campaign permanece **DEFERRED**. Não deve ser criada apenas porque uma guerra
 pode conter várias operações; ela será reavaliada quando existir um consumidor
 real que precise agrupar operações sob um objetivo operacional comum.
@@ -6001,8 +6041,9 @@ Estas perguntas não devem receber resposta implícita sem nova definição:
 7. **Governança genérica** — não criar engine universal antes de casos concretos de líder/conselho/voto.
 8. **Guerra estratégica completa** — a semântica constitucional de conflito,
    forças, batalha, controle, occupation, goals e término está definida acima;
-   a implementação integrada e seus consumidores concretos permanecem
-   deferidos até existir uma Phase própria.
+   P17-A delimita apenas a primeira exigência coerciva. Controle territorial,
+   desgaste composto, participação/decisão ampla e os demais consumidores
+   integrados permanecem para checkpoints próprios.
 9. **Government/constitution framework** — não generalizar a partir da política de sucessão apenas.
 10. **Título/social status** — contratos finais dependem de use cases.
 11. **Mecânica restante de WorldId e projeção** — a direção semântica é

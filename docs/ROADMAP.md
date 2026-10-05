@@ -22,6 +22,54 @@ Phases 5–7 are closed within their documented scopes. P8-A/B/C/D/E are canonic
 
 Runtime World Expansion remains a future consumer without an assigned dedicated phase. Its absence from this sequence does not forbid a later insertion or assign it to Phase 15 by implication.
 
+## P17 strategic War direction and first bounded proof — proposed 2026-10-05
+
+The accepted product direction includes territorial, attrition/capability and
+non-territorial/coercive War goals in one persistent strategic model. They are
+not competing definitions of War. The [P17 architecture and technical-entry
+record](architecture/P17_STRATEGIC_WAR_DIRECTION.md) proposes P17-A — One
+Coercive Withdrawal Goal and Explicit War End — as the smallest first proof.
+Its architecture-entry classification is `READY_FOR_BOUNDED_CHECKPOINT`;
+P17-A is `READY_FOR_TECHNICAL_DESIGN`, not implementation. This candidate
+requires independent review and architecture promotion before it becomes
+canonical planning authority.
+
+P17-A starts with an existing two-sided P7 War, two Faction participants and
+one ArmedForce bound to each side. Faction A's one actual goal is for B's
+selected force to leave a specified Hex through P16-A's one validated passage
+crossing. The committed P16 receipt supplies the operational evidence. Goal
+satisfaction does not end War; a separate explicit concession input ends this
+bounded two-participant War with a recorded reason. No control, occupation,
+sovereignty, jurisdiction or ownership changes follow from the crossing or a
+Battle. The two participants and one goal are fixture limits only.
+
+```text
+P7 persistent War/force bindings + Faction identity + P8 passage truth
+  + promoted P16-A one-hop movement/receipt
+  → P17-A bounded technical design → reviewed implementation candidate
+P17-A War state + §92A owner entry + P12 selected-profile exclusion/rejection
+  → P17-A domain promotion gate (no full-P12 prerequisite)
+P17-A + explicit military-control/occupation authority
+  → later territorial War goal consumer
+P17-A + P7/P14/P16 capability facts + participant Knowledge/decisions
+  → later bounded attrition/capability consumer
+P12 exact chosen-profile continuation + recoverable War/P16 inputs
+  → supported P13 historical reconstruction/fork for that profile
+P19 loader and P20 small-group Activity → no P17-A dependency
+```
+
+P7 `PersistentWarStore` remains the only War authority; Battle, movement,
+supply and political/territorial facts remain with their own owners.
+P17-A introduces no universal War winner, exhaustion meter, diplomacy,
+government, Campaign or War AI. Its demonstrability classification is
+`FOLLOW-UP_DEMONSTRATION`: a later Lab scenario should show the goal before and
+after the real crossing, War continuing after fulfillment, then ending for an
+explicit reason. The Lab path is not a hidden gate on the domain checkpoint;
+prefer the human scenario before formal Phase 17 closure when practical.
+Implementation must serialize War/runtime/P16/P12 hotspots with active Master
+work. The earlier P17 `DEFERRED` entries below describe their dated planning
+snapshots and are superseded by this proposal only after canonical promotion.
+
 ## Simulation Lab and human demonstrability — approved supporting direction
 
 The [Simulation Lab direction and dependency assessment](architecture/SIMULATION_LAB_DIRECTION.md)
