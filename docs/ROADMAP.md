@@ -34,22 +34,22 @@ scope requires separate design, review and implementation authorization. It
 does not make a production UI, P19 loader, whole-World exporter or full P12
 save profile a common prerequisite.
 
-The recommended first useful scenario is P14-B finite-source depletion: run a
-small world, advance it and observe source reserve, produced stock and the
-exhaustion boundary. This is conditional on a promoted P14-B capability and a
-reviewed non-Unity composition/read path. It is a proposed Lab consumer, not a
-new requirement for P14-B's current implementation or promotion. A smaller
-already delivered capability may be used to prove host startup and authority
+The recommended first useful scenario consumes the already promoted P14-B
+finite-source capability: run a small world, advance it and observe source
+reserve, produced stock and the exhaustion boundary. The Lab scenario still
+needs a reviewed non-Unity composition/read path and is not delivered by the
+domain promotion. It adds no retroactive requirement to P14-B. A smaller
+delivered capability may be used to prove host startup and authority
 reuse without falsely demonstrating finite depletion. Subsequent consumers
 attach only after their own capabilities and readable facts exist:
 
-| Future consumer | Human observation | Specific gate; no automatic Phase dependency |
+| Lab consumer | Human observation | Specific gate; no automatic Phase dependency |
 |---|---|---|
-| P10 generated topology | Seeded site topology and stable site identity, preferably as a graph. | Selected generation profile plus a supported topology read; authored Unity assets may require a bounded non-Unity adapter. |
-| P14 material flow | Reserve, production, stock and exhaustion. | P14-B truth and coherent reserve/stock observation. |
-| P15 construction | Structure absent before, present after the approved runtime mutation. | Promoted construction slice and factual structure read. |
-| P16 movement | Force position and carried supply before/after one passage. | Promoted movement slice and applicable factual military/spatial reads. |
-| P20 shared activity | Two individual decisions, coordinated start/lifecycle and individual effects. | Promoted shared-activity consumer and participant-perspective reads. |
+| P10 generated topology | Seeded site topology and stable site identity, preferably as a graph. | P10-B is promoted; Lab still needs non-Unity composition and a supported topology read. |
+| P14 material flow | Reserve, production, stock and exhaustion. | P14-B is promoted; Lab still needs coherent reserve/stock observation and non-Unity execution. |
+| P15 construction | Structure absent before, present after the approved runtime mutation. | P15-A is promoted; Lab still needs a supported non-Unity operation and factual structure read. |
+| P16 movement | Force position and carried supply before/after one passage. | P16-A is promoted; Lab still needs a supported non-Unity operation and factual military/spatial reads. |
+| P20 shared activity | Independent decisions, coordinated start/lifecycle and individual effects. | P20-A synthetic shared behavior is promoted; Lab still needs a non-Unity execution/observation path. Joint civil travel remains a separate consumer; promoted P20-B supplies only Daily-profile empty-owner admission/census. |
 | P12 continuation | Save, advance, restore and compare a supported profile. | The specific P12 save/load continuation capability and its exact owner coverage. |
 | P13 historical fork | Inspect a simulated boundary and compare source/fork continuations. | Actual P13 reconstruction/fork capability, recoverable causal history and provenance. |
 

@@ -102,13 +102,14 @@ instead of cloning a parallel simulation or creating one disposable runner per
 checkpoint. There is no generic Lab menu or domain-wide inspection API in the
 foundation.
 
-**Recommended first useful demonstration:** finite-source depletion when
-P14-B is promoted. One small selected world shows the source's starting
-reserve and stock, advances through production, shows reserve decreasing and
-stock increasing, then shows no further output at exhaustion. A readable
-reserve/stock capability and non-Unity composition are prerequisites for the
-Lab scenario; they are not silently added to P14-B's current implementation
-contract. An already delivered simpler operation may serve as the initial host
+**Recommended first useful demonstration:** finite-source depletion using the
+already promoted P14-B domain capability. One small selected world shows the
+source's starting reserve and stock, advances through production, shows reserve
+decreasing and stock increasing, then shows no further output at exhaustion.
+A readable reserve/stock capability and non-Unity composition remain
+prerequisites for the Lab scenario; the domain promotion did not deliver that
+scenario or create a retroactive demonstration gate. A simpler delivered
+operation may serve as the initial host
 smoke test, but it must be labeled with the behavior it actually proves.
 
 The roadmap lists incremental P10/P14/P15/P16/P20/P12/P13 consumers and their
@@ -127,21 +128,29 @@ Architecture §§85, 85A, 91B and selected real domain capability
         → Lab foundation implementation/review (separate future authorization)
         → one scenario consumer at a time
 
-P14-B promoted + coherent reserve/stock read → recommended finite-source demo
-P10/P15/P16/P20/P12/P13 selected capability + appropriate read
+P14-B promoted (satisfied) + coherent reserve/stock read + non-Unity execution
+        → recommended finite-source demo
+P10-B/P15-A/P16-A promoted (satisfied) + appropriate read/execution path
+        → their optional/required scenario per reviewed checkpoint gate
+P20-A promoted synthetic behavior (satisfied) + applicable read/execution path
+        → possible shared-activity demo; joint travel is separate
+P12/P13 selected capability + appropriate read
         → corresponding optional/required scenario per reviewed checkpoint gate
 P19 loader                               no dependency for Lab foundation
 full P12/P13                             no blanket dependency for Lab
 ```
 
 The policy addition is forward-looking. Closed phases and delivered P8/P9/P11/
-P14-A/P18/P20-A and bounded WI-A/FR-B/FR-C/WX-D remain
-`UPSTREAM_IRRELEVANT` for delivery: no reopening or revalidation merely because
-they lacked a human demo. Active P12-B and P10-B/P14-B/P15-A/P16-A/P20-B
-candidates likewise are not invalidated or interrupted; their current reviewed
-contracts and hotspot ownership remain intact. Their **subsequent** designs or
-formal closure proposals should assess demonstrability when they reach that
-gate. There is no reintegration request for the active Master. The proposed
+P14-A/P18/P20-A, bounded WI-A/FR-B/FR-C/WX-D, and now promoted
+P10-B/P14-B/P15-A/P16-A/P20-B do not need reopening or revalidation merely
+because they lacked a human demo. P20-B's delivered scope is only Daily-profile
+empty-owner admission/census; P20-A is the promoted synthetic shared-activity
+behavior, and joint civil travel remains a separate consumer. Active P12-B and
+other current Master candidates are not interrupted or invalidated; classify
+each such candidate against its actual owning branch when architecture is
+promoted. Subsequent checkpoint designs or formal Phase closure proposals
+should assess demonstrability at their own gate. There is no reintegration
+request for the active Master. The proposed
 Lab host may later collide with `SimulationRuntime`, bootstrap/genesis, P12
 admission, command registration or readers; its actual implementation must
 serialize those hotspots with whatever implementation front is then active.
