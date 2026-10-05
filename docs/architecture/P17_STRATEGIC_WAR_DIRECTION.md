@@ -1,7 +1,8 @@
 # Phase 17 — Strategic War direction and P17-A entry
 
-**Status:** architecture/planning candidate; not canonical until promotion.
-**Base:** `cddedfa41e72d9205d92411b5bedebf11ac0b16a` on
+**Status:** architecture/planning direction promoted at
+`6a1b3ef4d0ea32c109fcfb434d3ee00d05cf589a`. **Base:**
+`cddedfa41e72d9205d92411b5bedebf11ac0b16a` on
 `codex/architecture/world-identity-projection`. **Checkpoint readiness:**
 `READY_FOR_TECHNICAL_DESIGN` for P17-A, followed by bounded technical design
 and independent design review before implementation. This record changes no
@@ -79,7 +80,7 @@ force outside the reviewed scenario. Later multi-participant/coalition work
 needs an explicit attribution contract rather than inferring command from a
 shared side.
 
-## P17-A — one coercive withdrawal goal and explicit War end
+## P17-A — Explicit Withdrawal Demand and Explicit War Termination
 
 **Selected proving case:** two existing Factions, two P7 War sides, one
 existing ArmedForce bound to each side, one existing P8 passage from Hex H to
@@ -160,7 +161,7 @@ ceasefire/peace diplomacy, government/Polity framework, Campaign, paid forces,
 new P14 economy, logistics beyond P16-A, multi-leg movement, generalized
 war-goal engine, public/rumored goals, multi-Faction coalitions, participant
 withdrawal/re-entry, War-wide winner, P20 Activity execution and full P12/P13
-implementation. No P17 code is approved by this direction candidate.
+implementation. No P17 code is approved by this direction promotion.
 
 ## Continuation, validation and demonstrability
 
@@ -239,5 +240,5 @@ includes `HOW TO TRY IT` when the demonstration exists.
 
 No further human product selection is needed to choose the P17-A first
 scenario. A bounded technical design and independent design review remain
-before implementation. Architecture-canonical promotion remains a separate
-human gate.
+before implementation. The direction's architecture-canonical promotion was
+approved separately from implementation.

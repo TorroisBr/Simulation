@@ -11,7 +11,7 @@ definition of War. P7's `PersistentWarStore` remains the single War authority.
 
 **Historical dependency clarification (2026-10-03):** deferral then reflected
 P16 operational facts and unresolved strategic/territorial/political product
-semantics, not full P12 closure. P16-A is now promoted and this candidate
+semantics, not full P12 closure. P16-A is now promoted and this direction
 selects the first non-territorial scope without deciding later control or
 political domains. The existing War owner must meet architecture §92A when
 extended; supported save/fork still needs exact War state and causal inputs.
@@ -20,10 +20,10 @@ extended; supported save/fork still needs exact War state and causal inputs.
 
 War progresses through explicit strategic decisions, pressure and consequences without collapsing Battle result, hostility, control, occupation and War termination into one event. Its broader Phase closure still requires later bounded entry decisions and delivered capabilities beyond the first proof.
 
-**First checkpoint:** P17-A — One Coercive Withdrawal Goal and Explicit War End.
-The reviewed architecture/planning candidate proposes this bounded scope for
+**First checkpoint:** P17-A — Explicit Withdrawal Demand and Explicit War
+Termination. The promoted architecture establishes this bounded scope for
 technical design; implementation awaits its separately reviewed technical
-contract and the normal canonical gate.
+contract and the normal Master checkpoint gate.
 
 ## Dependencies and gates
 

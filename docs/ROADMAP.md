@@ -27,11 +27,10 @@ Runtime World Expansion remains a future consumer without an assigned dedicated 
 The accepted product direction includes territorial, attrition/capability and
 non-territorial/coercive War goals in one persistent strategic model. They are
 not competing definitions of War. The [P17 architecture and technical-entry
-record](architecture/P17_STRATEGIC_WAR_DIRECTION.md) proposes P17-A — One
-Coercive Withdrawal Goal and Explicit War End — as the smallest first proof.
-P17-A is `READY_FOR_TECHNICAL_DESIGN`, not implementation. This candidate
-requires independent review and architecture promotion before it becomes
-canonical planning authority.
+record](architecture/P17_STRATEGIC_WAR_DIRECTION.md) establishes P17-A —
+Explicit Withdrawal Demand and Explicit War Termination — as the smallest
+first proof. P17-A is `READY_FOR_TECHNICAL_DESIGN`, not implementation. The
+direction was independently reviewed and promoted at `6a1b3ef4d0ea32c109fcfb434d3ee00d05cf589a`.
 
 P17-A starts with an existing two-sided P7 War, two Faction participants and
 one ArmedForce bound to each side. Faction A's one actual goal is for B's
@@ -67,7 +66,7 @@ explicit reason. The Lab path is not a hidden gate on the domain checkpoint;
 prefer the human scenario before formal Phase 17 closure when practical.
 Implementation must serialize War/runtime/P16/P12 hotspots with active Master
 work. The earlier P17 `DEFERRED` entries below describe their dated planning
-snapshots and are superseded by this proposal only after canonical promotion.
+snapshots and are superseded by this promoted direction.
 
 ## Simulation Lab and human demonstrability — approved supporting direction
 
