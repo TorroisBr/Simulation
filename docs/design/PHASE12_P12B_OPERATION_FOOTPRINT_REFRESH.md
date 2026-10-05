@@ -106,3 +106,15 @@ canonical tip.
 P12-B remains incomplete and P12-A remains `WAIT_DEPENDENCY`. Nothing here
 infers complete census coverage, shared-epoch coverage, capture eligibility,
 export/hydration, or a new gameplay behavior.
+
+## Current runtime-registration delta after P12 Crime/Social promotion — 2026-10-05
+
+Remote P12 canonical is `1a073df83050da9bed5f7e3e48a27b9952cf62eb`. The current `SimulationRuntime` global operation registration is membership, bootstrap publication, daily advance, solo travel start, TravelParty advance, NPC trade and money transfer, Market purchase and sale, Merchant daily trade, plus six bounded population/person lifecycle IDs. The newly promoted Crime/Social Appraisal coordinator registers no general runtime operation IDs: its internal operation boundary is only TheftAcceptance and KnowledgeAndAppraisal. The owner sections and successful reviewed changes join the existing protocol witness/epoch as documented in the P12 candidate and State.
+
+The old outer-operation table remains a source-audit record, not a current authorization list. It predates Crime/Social and later lifecycle integration, groups possible mutation families that have different admission and commit semantics, and includes Expedition/P12-F rows. Its explicit warning remains in force: do not add a runtime callback or operation ID from the old matrix alone. The current code operation lists above do not prove all Daily-v1 owners or writers are covered.
+
+The next evidence boundary is a current-canonical `UnityBootstrap-Daily-v1` delta mapping of effective owners, temporal identity/cardinality, supported commit ingress, and existing changed-section/epoch notifications. Mark each already-promoted slice closed only within its exact reviewed boundary; exclude P12-F Expedition. Choose another bounded implementation only if the reconciled source proves an exact supported gap and the accepted P12-B capability authority covers it. P12-B remains incomplete and P12-A remains `WAIT_DEPENDENCY`.
+
+### Source-audit disposition — individual daily travel commits
+
+`SimulationRuntime.AdvanceDayAfterClockAdvance` invokes `TravelSystem.AdvanceTravels` on the selected daily path. `AdvanceTravels` commits travel progress through `NpcRuntime.ClearTravelStartedToday` and `NpcRuntime.AdvanceTravelDay`; those mutators use the already-bound per-NPC P12 travel-state boundary. The runtime checks exact NPC travel-section identity and affected City-presence sections before each mutation and notifies the shared protocol after each committed leaf. TravelParty advance is separately admitted through its reserved outer-operation context. Therefore absence of a distinct `runtime.travel.advance-individual` ID in the current registration list is not, by itself, an uncovered P12-B writer for these paths. Broader travel APIs remain bounded by their own reviewed contracts; this finding does not claim complete travel or P12-B coverage.

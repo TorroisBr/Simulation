@@ -1445,3 +1445,23 @@ The refreshed next P12-B source target is the already-composed `CrimeSocialAppra
 ## CrimeSocialAppraisal live-writer correction — 2026-10-05
 
 A follow-up source audit found that `SimulationRuntime.TryRegisterPerson` supports a live PersonStore registration through the existing P12 membership path. Thus the accepted profile's initial empty PersonStore and PersonId-free authored NPCs do not make the three composed CrimeSocialAppraisal stores immutable-empty after publication. The previously recorded “verify explicit-empty only” option is superseded; do not fence these owners permanently empty or assume PersonStore cardinality stays zero. The bounded design now targets dynamic row census and mutation invalidation for the exact singleton TheftOutcome, CrimeKnowledge, and SocialReaction stores, including the existing multi-store compensation paths. The design is `docs/design/PHASE12_P12B_CRIME_SOCIAL_APPRAISAL_INVALIDATION_DESIGN.md`, reviewed at exact design tip `7770119d7ae4dd69186ff6394946168db1473527` on P12 source base `a00cba49f642c9b3203df838f9ba27d675f560b2`; independent design review PASS is recorded in `docs/design/PHASE12_P12B_CRIME_SOCIAL_APPRAISAL_INVALIDATION_DESIGN_REVIEW.md`. Under the previously accepted P12-B capability authorization, implementation may proceed within that bounded design. No P12-B completion, P12-A readiness, or downstream readiness follows.
+
+## P12-B selected-profile Crime/Social Appraisal invalidation promotion — 2026-10-05
+
+Remote `codex/phase12/canonical` advanced by the already authorized clean fast-forward from `a00cba49f642c9b3203df838f9ba27d675f560b2` to `1a073df83050da9bed5f7e3e48a27b9952cf62eb`. The promoted code is `ec956c7247c39f8984f7c5a6bca3d813091a0047`, tree `61956354146f3437396d93d91c4df246da8df89d`. The exact-tip independent implementation review PASS is `docs/design/PHASE12_P12B_CRIME_SOCIAL_APPRAISAL_INVALIDATION_IMPLEMENTATION_REVIEW_R1.md`; candidate and validation evidence are recorded in `docs/design/PHASE12_P12B_CRIME_SOCIAL_APPRAISAL_INVALIDATION_CANDIDATE.md`. The corrected source tree did not change after review or validation; promotion added only documentation and retained evidence.
+
+For the selected `UnityBootstrap-Daily-v1` profile, the bounded adapter registers the exact singleton TheftOutcome, CrimeKnowledge, and SocialReaction owners, tracks local cardinality/revision, and connects the reviewed direct and composite mutation paths to P12's shared epoch. Nested Knowledge/Appraisal is included in TheftAcceptance. The correction preserves a committed theft result when the post-commit epoch notification faults, so CrimeSystem does not reverse money while leaving outcome/knowledge/reaction rows committed.
+
+Exact-tree evidence for `61956354146f3437396d93d91c4df246da8df89d`: focused `P12CrimeSocialAppraisalInvalidationTests` 11/11; ALL EditMode 2367/2367; official Smoke 5/5; `git diff --check` PASS. The retained validation archive SHA-256 is `7c13183315486d6753879b36002f42ffa962fea15e6c651ccb94f0e8f35e253f`; exact XML/log hashes are in the candidate manifest and R1 review.
+
+This promotes only those three Crime/Social owners and reviewed writes. It adds no gameplay behavior and does not establish complete P12-B owner/operation/shared-epoch coverage, global quiescence, capture eligibility, export, hydration, P12-A readiness, P13 readiness, or Phase closure. P12-B remains `INCOMPLETE`; P12-A remains `WAIT_DEPENDENCY`; P13 remains blocked; Phase 12 remains open.
+
+### Current dependency state
+
+P12-B → P12-C → P12-D/P12-E → P12-F; P12-G still requires B through F plus a validated live-profile inventory; P12-A remains blocked until complete included-owner export and staged hydration, inventory validation, and its separate implementation authorization. P13 remains blocked on the required P12 continuation and recoverable causal history. This promotion changes no edge. The approved P10 Ruin and P14 City bootstrap profiles remain separate under P8's one-top-level-owner-per-Location invariant.
+
+The current architecture baseline remains `ffd75652d89d862b83d634868c560f8540869b89`; the intraday/extensibility and multi-participant alignment records remain `4b6dd1d38cffeaf3cc1ac3effea0f8ede8771194` and `c285466c355103d3637ac165246591b72eb7bda0` respectively.
+
+### Promotion-policy record
+
+The current `docs/EXECUTION_MODEL.md` still contains legacy wording that routine canonical promotion requires explicit human approval. The user's standing authorization for this run permits bounded numbered-phase promotions after all documented review, validation, ancestry, and exact-tree checks pass. This State follows that authorization; it makes no architecture-policy change.

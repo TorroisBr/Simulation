@@ -982,3 +982,13 @@ writers remain uncovered. The allocator still has no exact immutable
 continuation export or staged hydration contract. This does not establish
 complete C-root coverage, complete shared-epoch coverage, P12-B readiness, or
 capture eligibility.
+
+### Current Daily-v1 delta — canonical `1a073df` (2026-10-05)
+
+The inventory below is cumulative historical evidence; older entries are not a substitute for this current-base reconciliation. P12 canonical now promotes the selected-profile Crime/Justice writer slice, Crime/Social Appraisal's exact singleton TheftOutcome/CrimeKnowledge/SocialReaction owners, and SettlementPopulation/Person/NPC lifecycle hooks in addition to the earlier runtime, travel, and economy boundaries. Their exact limitations and evidence are summarized in `PHASE12_STATE.md` and `PHASE12_B_BLOCKER_RESOLUTION.md`.
+
+Current runtime operation registration in `SimulationRuntime.cs` includes `runtime.npc-membership`, `runtime.bootstrap-publication`, `runtime.advance-day`, `runtime.travel.start`, `runtime.travel-party.advance`, `runtime.economy.npc-trade`, `runtime.economy.money-transfer`, `runtime.economy.market-purchase`, `runtime.economy.market-sale`, and `runtime.merchant.advance-npc-trade-state`. `P12PopulationLifecycleCensus.cs` adds immigration, emigration, resident-death, residence-migration, person-death, and person-residence-bind IDs. The Crime/Social Appraisal coordinator has two bounded local operations, TheftAcceptance and KnowledgeAndAppraisal, and joins its reviewed mutations to the existing protocol epoch. These inventories are explicit implementation facts, not a complete list of all supported production writers.
+
+The existing operation-footprint refresh at `4f12586` predates these promotions, and includes candidate rows for direct travel, political/conflict/battle paths, and P12-F Expedition consumers. Those rows remain audit leads only. In particular, no Expedition operation or P12-F capability is implied by this current P12-B inventory. Do not add another global runtime callback/operation ID until an exact current-base Daily-v1 audit establishes its owner identity/cardinality, effective profile reachability, all supported commit paths, existing epoch notices, and path-specific failure/compensation boundary.
+
+**Current result:** Crime/Social Appraisal is promoted; no next P12-B implementation surface has yet passed this current-base owner/operation/epoch readiness audit. The next task is evidence reconciliation limited to supported `UnityBootstrap-Daily-v1` paths. P12-B remains incomplete, P12-A remains `WAIT_DEPENDENCY`, and P13 remains blocked.
