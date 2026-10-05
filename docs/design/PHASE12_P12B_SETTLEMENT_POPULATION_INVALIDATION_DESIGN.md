@@ -1,6 +1,6 @@
 # P12-B Selected-Profile SettlementPopulation Invalidation Design
 
-**Status:** Independent exact-tip technical-design review PASS. This bounded P12-B sub-slice is **READY_FOR_IMPLEMENTATION** under the accepted P12-B prerequisite-capability authorization; no implementation has yet been delivered. It is not a new numbered checkpoint.
+**Status:** Independent exact-tip technical-design review PASS. This bounded P12-B sub-slice was **READY_FOR_IMPLEMENTATION** under the accepted P12-B prerequisite-capability authorization; the submitted implementation is recorded in [`PHASE12_P12B_SETTLEMENT_POPULATION_INVALIDATION_CANDIDATE.md`](PHASE12_P12B_SETTLEMENT_POPULATION_INVALIDATION_CANDIDATE.md). It is not a new numbered checkpoint.
 
 **P12 canonical base:** `a6572ab3d4330d81edb334ae8b4c84ca5e6b173e` (`origin/codex/phase12/canonical`).
 
