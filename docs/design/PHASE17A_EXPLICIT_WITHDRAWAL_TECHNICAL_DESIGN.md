@@ -38,7 +38,10 @@ Its effective initial configuration includes one stable scenario/GM authority
 ID. The runtime binds an opaque capability for that authority to its composing
 host; a request's caller-supplied string alone never proves authority. The
 stable authority ID is retained in accepted command provenance and exact
-profile state. This is a bounded scenario trust contract, not a public
+profile state. The immutable P17-A composition/configuration capture includes
+that authority ID even before any crossing or concession has occurred, so a
+continuation at the initial boundary can reconstruct the same trusted-input
+contract. This is a bounded scenario trust contract, not a public
 player/mod authorization framework.
 The selected profile admits one P17-A War. Other P7 Wars may coexist only if
 they preserve their legacy behavior and are not presented as P17-A participants
