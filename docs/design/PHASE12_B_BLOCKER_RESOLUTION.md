@@ -1122,3 +1122,18 @@ P12 canonical is `16d09ece1958c73152bf3f04c82ac4a0d177bfbe`. The selected-profil
 | Readiness | P12-B `INCOMPLETE`; P12-A `WAIT_DEPENDENCY`; P12-C waits on B; P12-D/E wait on B+C; P12-F waits on C/D/E; P12-G waits on B–F plus validated live-profile inventory; P13 blocked. | Population promotion changes no downstream readiness edge. |
 
 The existing direct NPC owner candidate is retained, not restarted or promoted from its old base. The design's exact-tip PASS remains useful as design evidence, but its old-base code has not been validated against canonical `16d09ec`; it is not a current validated candidate. No Unity validation is being inferred from the branch tip. The next executable work is the bounded revalidation/recomposition described above, subject to the refreshed design review confirming that its current owner and transaction boundaries remain compatible.
+
+## Current P12-B owner/operation/epoch refresh — 2026-10-05 after Population and source reconciliation
+
+The refreshed remote P12 canonical is `39e275f39e1602d3fa109d3a1bb9acd60585a3f2`. It includes the selected-profile SettlementPopulation/person/NPC lifecycle invalidation promotion (`f6e9b1ca14e9bfbb9e8f19622272610abdf2cc01`, tree `e1bb56f97b0988247a092f96e9757a8bdd0e8380`) and subsequent documentation-only evidence. The root checkout and existing P12 worktrees contain unrelated user edits and validation artifacts; they were left untouched.
+
+The earlier “next direct NPC MoneyAccount/Inventory invalidation” entry is stale. Direct-owner code commit `c49f957e45c3059231e9ec66e4010a7c3a389988` is an ancestor of this canonical and provides the committed owner hooks. The old implementation ref `766137aea8535c1d8f6e5529856228db6890e718` has the same tree, `627af2fbd7f93e0025106ee5ba87e72bae6c4ed2`; preserve that ref as historical evidence, but do not repeat its implementation.
+
+| Selected-profile surface | Current evidence | Remaining boundary |
+|---|---|---|
+| NPC MoneyAccount/Inventory direct writes | Exact per-NPC sections and direct committed-write hooks are present in current canonical source; the former stale candidate is tree-identical to the delivered code. | No new work remains for this exact direct-owner slice. Other economy paths remain individually bounded. |
+| Legacy daily Crime/Justice path | GeneralTest composes Crime and GuardCrime. The normal day path calls Justice BeginDay, Crime hidden-status advancement, sentence advancement, and wanted-status synchronization in that order. P12 Daily does not use the separate P18 receipt-backed step commits. | Exact P12 owner revisions/census and operation changed-set notifications are not yet connected to these legacy calls. The design at `docs/design/PHASE12_P12B_CRIME_JUSTICE_INVALIDATION_DESIGN.md` proposes the smallest daily slice; it is pending independent technical review and is not READY_FOR_IMPLEMENTATION yet. |
+| Other Crime/Justice writers | Theft, arrest, escape, failed escape, generic status changes, and CrimeSocialAppraisal stores have distinct mutation paths. | They remain outside the daily slice and need a later source-specific operation map. No complete Crime/Justice coverage follows. |
+| Downstream readiness | P12-B remains `INCOMPLETE`; P12-A remains `WAIT_DEPENDENCY`; P12-C waits on B; P12-D/E wait on B and C; P12-F waits on C/D/E; P12-G waits on B–F and validated live-profile inventory; P13 remains blocked. | This reconciliation and design add no downstream readiness, capture, export, hydration, global-quiescence, or Phase-closure claim. |
+
+This correction supersedes the stale next-task sentence above without rewriting historical promotion records. P12-B remains a partial owner/operation/epoch foundation.

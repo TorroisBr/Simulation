@@ -1414,3 +1414,13 @@ Retained exact-tree validation passed `P12PopulationLifecycleInvalidationTests` 
 ### Readiness after promotion
 
 P12-B remains `INCOMPLETE`; P12-A remains `WAIT_DEPENDENCY`; P12-C waits on B; P12-D and P12-E wait on B and C; P12-F waits on C/D/E; P12-G waits on B through F and validated live-profile inventory; P13 remains blocked on P12 continuation and recoverable causal inputs/history. The promoted slice changes no checkpoint dependency edge. The latest blocker matrix is appended to `docs/design/PHASE12_B_BLOCKER_RESOLUTION.md`; it identifies direct NPC MoneyAccount/Inventory committed-write invalidation as the next bounded revalidation target, not as completed coverage.
+
+## Current canonical and blocker refresh — 2026-10-05
+
+Remote `codex/phase12/canonical` is `39e275f39e1602d3fa109d3a1bb9acd60585a3f2`. The selected-profile Population lifecycle invalidation code is `f6e9b1ca14e9bfbb9e8f19622272610abdf2cc01`, tree `e1bb56f97b0988247a092f96e9757a8bdd0e8380`; its exact-tip review and validation remain retained in the prior promotion record. Direct NPC MoneyAccount/Inventory invalidation code `c49f957e45c3059231e9ec66e4010a7c3a389988` is also already in current canonical. The old State sentence immediately above is preserved as a historical record; the current blocker matrix records its correction and the matching tree evidence.
+
+The next P12-B technical design is the existing selected-profile legacy Crime/Justice daily mutation path, as recorded in `docs/design/PHASE12_P12B_CRIME_JUSTICE_INVALIDATION_DESIGN.md`. The design is pending independent review. No implementation is started or claimed by this State refresh.
+
+The current architecture authority remains `codex/architecture/world-identity-projection` at `ffd75652d89d862b83d634868c560f8540869b89`, including the intraday/extensibility and multi-participant alignment records. The approved bounded P10 Ruin and P14 City profiles remain separate because P8 retains one top-level owner per Location; no combined bootstrap profile is implied.
+
+P12-B remains `INCOMPLETE`; P12-A remains `WAIT_DEPENDENCY`; P12-C waits on B; P12-D/E wait on B and C; P12-F waits on C/D/E; P12-G waits on B through F plus validated live-profile inventory; P13 remains blocked on continuation and recoverable causal inputs. No complete owner/operation/shared-epoch coverage, global quiescence, capture eligibility, export, hydration, downstream readiness, or Phase closure is claimed.
