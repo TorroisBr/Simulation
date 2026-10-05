@@ -1,6 +1,6 @@
 # P12-B CrimeSocialAppraisal selected-profile mutation invalidation
 
-**Status:** Revised bounded technical design; fresh independent review required after the prior review returned NEEDS_CHANGES.
+**Status:** Independent exact-tip design review PASS at `7770119d7ae4dd69186ff6394946168db1473527` (tree `0cc85e95776512a35edee114f51709af23a5180d`); READY_FOR_IMPLEMENTATION under the previously accepted P12-B capability authorization.
 **Checkpoint:** Existing accepted P12-B prerequisite-capability work; no new checkpoint ID.
 **P12 canonical base:** `a00cba49f642c9b3203df838f9ba27d675f560b2`.
 **Architecture:** `ffd75652d89d862b83d634868c560f8540869b89`.
