@@ -6,6 +6,24 @@ using System.Collections.Generic;
 /// </summary>
 public static class FiniteSourceProfileAdmission
 {
+    public static bool HasAuthoredMaterialFlowCity(IReadOnlyList<CityData> authoredCities)
+    {
+        if (authoredCities == null) return false;
+        for (int i = 0; i < authoredCities.Count; i++)
+        {
+            CityData city = authoredCities[i];
+            if (city == null) continue;
+            if (city.materialFlowProfile != LocalMaterialFlowProfile.ExogenousDaily
+                || !string.IsNullOrWhiteSpace(city.settlementSemanticId)
+                || !string.IsNullOrWhiteSpace(city.materialFlowLocationId)
+                || !string.IsNullOrWhiteSpace(city.marketStoreSemanticId)
+                || (city.productionConfigs != null && city.productionConfigs.Exists(source =>
+                    source != null && (!string.IsNullOrWhiteSpace(source.productionSourceId) || source.initialReserve != 0))))
+                return true;
+        }
+
+        return false;
+    }
     public static bool HasFiniteReserveProfile(IReadOnlyList<CityData> authoredCities)
     {
         if (authoredCities == null) return false;

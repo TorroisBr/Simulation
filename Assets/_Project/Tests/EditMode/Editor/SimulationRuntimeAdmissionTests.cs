@@ -1395,6 +1395,17 @@ public sealed class SimulationRuntimeAdmissionTests
     }
 
     [Test]
+    public void FiniteSourceProfileWithP10AIsDeferredBeforeIdentityOrOwnerConstruction()
+    {
+        AssertP14FiniteProfileWithP10Rejected(generated: false);
+    }
+
+    [Test]
+    public void FiniteSourceProfileWithP10BIsDeferredBeforeIdentityOrOwnerConstruction()
+    {
+        AssertP14FiniteProfileWithP10Rejected(generated: true);
+    }
+    [Test]
     public void FiniteSourceProfileRejectsAdditionalCityBeforeConstruction()
     {
         SimulationConfigData config = CreateP14AdmissionConfig(
@@ -1513,6 +1524,59 @@ public sealed class SimulationRuntimeAdmissionTests
         }
     }
 
+    private static void AssertP14FiniteProfileWithP10Rejected(bool generated)
+    {
+        SimulationConfigData config = CreateP14AdmissionConfig(
+            LocalMaterialFlowProfile.FiniteReserveDaily, 7, out _);
+        ExplorableSiteData ruin = SimulationTestFactory.CreateExplorableSite(
+            generated ? "p14-p10b-deferred-ruin" : "p14-p10a-deferred-ruin", ExplorableSiteKind.Ruin);
+        config.authoredP10RuinSite = ruin;
+        if (generated)
+        {
+            config.genesisProfileContractIdentity = SimulationGenesisPipeline.P10BGeneratedRuinProfileContractIdentity;
+            config.p10bStableSiteKey = "p14/test/ruin/one";
+        }
+        else
+        {
+            config.genesisProfileContractIdentity = P10RuinLocalTopologyGenesis.ContractIdentity;
+        }
+
+        GameObject bootstrapObject = new GameObject(generated
+            ? "P14 with P10-B profile deferred"
+            : "P14 with P10-A profile deferred");
+        try
+        {
+            TesteSimulacao bootstrap = bootstrapObject.AddComponent<TesteSimulacao>();
+            ConfigureUnscopedBootstrap(bootstrap, config);
+            int worldIdentityAllocations = 0;
+            WritePrivateField(bootstrap, "worldIdentityAllocator", new Func<WorldId>(() =>
+            {
+                worldIdentityAllocations++;
+                return null;
+            }));
+            List<string> completedStages = new List<string>();
+
+            TargetInvocationException thrown = Assert.Throws<TargetInvocationException>(() =>
+                InvokeInitializeSimulation(bootstrap, completedStages.Add));
+
+            Assert.That(thrown.InnerException, Is.TypeOf<InvalidOperationException>());
+            Assert.That(thrown.InnerException.Message, Does.Contain("P14/P10 combined bootstrap profile is deferred"));
+            Assert.That(completedStages, Is.Empty);
+            Assert.That(worldIdentityAllocations, Is.Zero);
+            Assert.That(ReadPrivateField<RuntimeIdAllocator>(bootstrap, "runtimeIdAllocator"), Is.Null);
+            Assert.That(ReadPrivateField<SimulationRuntime>(bootstrap, "simulationRuntime"), Is.Null);
+            Assert.That(ReadPrivateField<List<CityRuntime>>(bootstrap, "cityRuntimeList"), Is.Empty);
+            Assert.That(bootstrap.Bootstrap, Is.Null);
+            Assert.That(bootstrap.Runtime, Is.Null);
+            Assert.That(bootstrap.CurrentDay, Is.Zero);
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(bootstrapObject);
+            UnityEngine.Object.DestroyImmediate(config);
+            UnityEngine.Object.DestroyImmediate(ruin);
+        }
+    }
     private static SimulationConfigData CreateP14AdmissionConfig(
         LocalMaterialFlowProfile profile,
         int initialReserve,

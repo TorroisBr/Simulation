@@ -467,6 +467,11 @@ public class TesteSimulacao : MonoBehaviour
     {
         if (config == null) return;
 
+        if (P10RuinLocalTopologyGenesis.IsEnabled(config)
+            && FiniteSourceProfileAdmission.HasAuthoredMaterialFlowCity(config.Cities))
+            throw new System.InvalidOperationException(
+                "P14/P10 combined bootstrap profile is deferred until it can assign distinct canonical P8 Location anchors to the City and Ruin.");
+
         if (!FiniteSourceProfileAdmission.TryValidateAuthoredCityCardinality(
                 config.Cities, out string cardinalityRejection))
             throw new System.InvalidOperationException(
