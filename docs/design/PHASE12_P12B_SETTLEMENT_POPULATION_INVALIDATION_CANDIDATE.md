@@ -4,8 +4,8 @@
 bounded design review passed and the implementation is authorized under the
 accepted P12-B prerequisite-capability scope.
 
-- **Code commit:** `78a43fcca1d2a96e95f45a2909945882c7be7487`
-- **Code tree:** `e7335734cc72274a2f9da208517de40333f4c00d`
+- **Code commit:** `f6e9b1ca14e9bfbb9e8f19622272610abdf2cc01`
+- **Code tree:** `e1bb56f97b0988247a092f96e9757a8bdd0e8380`
 - **Candidate base:** `147cf2b08e8cae2715bded228d953440c2355b22`
 - **P12 canonical at refresh:** `a6572ab3d4330d81edb334ae8b4c84ca5e6b173e`
 - **Current P17 runtime base included by the candidate base:** `b3f26d541fb1a7f7c5c9809877b4c5b937a53aee`
@@ -41,29 +41,27 @@ This is a bounded owner/operation invalidation capability only. It does not
 complete P12-B or claim complete owner/shared-epoch coverage, global
 quiescence, capture eligibility, P12-A readiness, P13 readiness, export, or
 hydration. Named birth remains deferred to its P12-D owner contract. Receipt-
-bearing Person death, conflict injury, enabled daily demographic writers,
-restore compensation, and unclassified external writers remain outside this
-slice. Phase 12 remains open.
+bearing Person death, all NPC injury-severity writes while P12-bound (including
+conflict injury), enabled daily demographic writers, restore compensation, and
+unclassified external writers remain outside this slice.
 
-## Exact-tree validation
+While bound, `NpcRuntime.TryApplyInjury` returns `false` before mutation because
+no injury owner section or operation is registered; unbound runtimes keep the
+existing behavior. Phase 12 remains open.
 
-All validation below ran against code tree
-`e7335734cc72274a2f9da208517de40333f4c00d` with Unity `6000.3.9f1` and the
-repository `Tools/UnityValidation/Invoke-UnityValidation.ps1` harness.
+## Review correction and exact-tree validation
+
+The first independent code review requested an explicit boundary and regression for injury writes. This candidate now states that every NPC injury-severity write fails closed while its NPC is bound to the selected P12 profile, and proves the injury value, NPC life/residence revisions, and mutation epoch remain unchanged. No injury owner or operation was added.
+
+All validation below ran against code tree `e1bb56f97b0988247a092f96e9757a8bdd0e8380` with Unity `6000.3.9f1` and the repository `Tools/UnityValidation/Invoke-UnityValidation.ps1` harness.
 
 | Gate | Result | XML SHA-256 | Log SHA-256 |
 |---|---:|---|---|
-| `P12PopulationLifecycleInvalidationTests` | 8/8 | `BB6C3419F4371CD4F35C36A50B57F5B8222F34988FAF80751645DD483BFB7807` | `FE8EF4D4A32586AF33F88D60C9F54BD89D6A890162792A9179D977787029396F` |
-| ALL EditMode | 2343/2343 | `B6A3B5C8FB287C524E5AD3B5D632652B3ACF18A652788269E20DE38CD5B2936C` | `F9075FAE241C7C0B9583BFADD53CDE2BC896857470D114A2722C1E9833F20D3A` |
-| Official Smoke (`EditMode -TestFilter Smoke`) | 5/5 | `98C9A89A75479087499282EAF2E4EAE7FCC2D4AFCCA10A22220A8D2D2DB905B6` | `15DBC99CD4BA71D0FA19163CF8F4F434BE809BD907AF86CD3A98595EC6916112` |
-| `git diff --check` | PASS | — | — |
+| `P12PopulationLifecycleInvalidationTests` | 9/9 | `3E5F08AC5819453E092DE0AFB09C5DF6B0757A559E493A777787321EEEFDE901` | `38ABCDBDB3A5B4DF130894EE16703003961959128CAA83917AC372746404F65F` |
+| ALL EditMode | 2344/2344 | `8C08EDCBCD85DD948B864D78C0A9464F17AD73A425265696F9D0BA65EC0798F3` | `B56847243BD70948A422F28B9691CEABB615357412BCC97F059C933551FFB223` |
+| Official Smoke (`EditMode -TestFilter Smoke`) | 5/5 | `AB021BE2B16357F3CCBB33E55ABBBCEC7103C9F1779AE033799EBA48130B77EB` | `1E382A7607AFA57F02539C5068000BE456BA6334A5BEE8C0B858E491B48094E0` |
+| `git diff --check 147cf2b..f6e9b1c` | PASS | — | — |
 
-The matching artifacts are retained at:
-
-- `docs/validation/P12B/population-lifecycle-20261005/focused-after-direct-gates/`
-- `docs/validation/P12B/population-lifecycle-20261005/all-final/`
-- `docs/validation/P12B/population-lifecycle-20261005/smoke-final/`
-- Original Unity logs are stored in `docs/validation/P12B/population-lifecycle-20261005/logs-final.zip` (SHA-256 `AAD357900B7736BA24912995601F81829EE47D18A29C3912B4AE848D2CF47306`); the table records each extracted log's SHA-256.
-
+XML results remain under `docs/validation/P12B/population-lifecycle-20261005/{injury-review-fix-focused,all-after-injury-fix,smoke-after-injury-fix}/`. The three original logs are retained in `docs/validation/P12B/population-lifecycle-20261005/injury-review-fix-logs.zip` (SHA-256 `DA297F05207F0366717B57EBA73C87A3F5DFB6090E7490CB9D86EC1E5956427F`); the table records each extracted log hash.
 The unrelated ProjectSettings edits and pre-existing untracked `.meta` files
 were excluded from the candidate.
