@@ -5,7 +5,7 @@
 **Canonical implementation base:** `codex/phase8/canonical` at
 `470667d37863384edadb3d93ef64d8004aff46a3`.
 
-**Architecture baseline:** `c285466c355103d3637ac165246591b72eb7bda0`, including
+**Architecture baseline:** `f6924e63d8e5731da1d33021d0361e7defe6dad7`, including
 `docs/architecture/INTRADAY_EXTENSIBILITY_ALIGNMENT.md` and
 `docs/architecture/MULTIPARTICIPANT_ACTIVITY_ALIGNMENT.md`.
 
@@ -24,6 +24,7 @@ Phase 14 remains open; this promotion does not close the Phase.
 | Checkpoint | Status | Scope / evidence |
 |---|---|---|
 | P14-A — Local Daily Material Flow v1 | PROMOTED | Approved scope: one authored City, one exogenous daily source for one item, that City's free population consumption, and closing stock `opening + applied source − actual free consumption`. The source has no inputs, reserves, depletion, or transformation. Settlement owns the material; the market is custodian. Contract: `docs/design/PHASE14A_LOCAL_DAILY_MATERIAL_FLOW_CHECKPOINT.md`. |
+| P14-B - Finite Reserve Daily Source v1 | VALIDATED CANDIDATE; REVIEW PENDING | Current-base implementation 0b445691acf137f2de8933bc3dedb2ede0ec4a52, tree a602c4d39d22e86a63ff2d92654f4936e1085dda; exact focused/full validation recorded in the candidate report. Not promoted. |
 
 The user approved this bounded profile and current-base independent review
 passed for checkpoint content `7a9e8d71ed7a53578b7dc36ef1cafd03b856b0f0` with
@@ -32,6 +33,10 @@ canonical `470667d` and architecture `c285466`, including both alignment
 records. The user approved promotion; the capability is canonical at
 `c44904b`, recorded in State at `f8a61fe`. Any future P14 checkpoint and its
 canonical promotion remain separately scoped and gated.
+
+### Current P14-B candidate (2026-10-04)
+
+P14-B is an implementation candidate on codex/phase14/P14BCurrentBaseIntegration. Its source/test commit is 0b445691acf137f2de8933bc3dedb2ede0ec4a52 (tree a602c4d39d22e86a63ff2d92654f4936e1085dda), based on integration commit 1ba58eeda6296be349b0a1def6d1d08a1fb1258f. It includes the current P10 canonical dependency e53252de5277fd5af46bbacb8eda5ee6e74aff08 and P12 canonical dependency a6572ab3d4330d81edb334ae8b4c84ca5e6b173e. Focused validation, ALL EditMode 2291/2291, official Smoke 5/5, and implementation diff-check pass; evidence archive: docs/validation/P14B/P14B-current-base-validation-a602c4d.zip (SHA-256 536E2C0D6AF64FBE37FC2AA0E670FB54FA5C12E1AF354C44C6FF43B76886A759). Exact-tip independent code review is pending. This does not claim P12 or P13 readiness, export/hydration, capture eligibility, or Phase 14 closure.
 
 ## Dependency and impact record
 

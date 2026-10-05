@@ -1,6 +1,40 @@
 # P14-B finite-source implementation candidate
 
-**Status:** current-base P14-owned implementation candidate; no Unity validation was run on this branch because P10 owns the serialized shared bootstrap boundary and the Phase Master reserved the validation slot. Earlier focused evidence is retained below against its exact prior code tree; the new cardinality validator/tests and current-base candidate still need focused validation after P10 releases the shared boundary. This candidate is not promoted and does not close Phase 14.
+**Status:** validated current-base P14-B implementation candidate; exact-tip independent code review is pending. Phase 14 remains open and the candidate is not promoted. See the authoritative dated run record below; earlier status text is historical.
+
+## Authoritative current-base run - 2026-10-04
+
+**Status:** validated implementation candidate; exact-tip independent code review is pending. Phase 14 remains open and this candidate is not promoted. This section supersedes earlier statements in the historical candidate record that validation or P10 admission wiring remained pending.
+
+### Exact integration and scope
+
+- Candidate branch: codex/phase14/P14BCurrentBaseIntegration.
+- Integrated base: 1ba58eeda6296be349b0a1def6d1d08a1fb1258f, combining P14 canonical 4caecbbfb0464c965811402b3c11d8717605114a with P10 canonical e53252de5277fd5af46bbacb8eda5ee6e74aff08; P12 canonical a6572ab3d4330d81edb334ae8b4c84ca5e6b173e is included.
+- Architecture baseline: f6924e63d8e5731da1d33021d0361e7defe6dad7.
+- Implementation commit: 0b445691acf137f2de8933bc3dedb2ede0ec4a52; exact implementation tree: a602c4d39d22e86a63ff2d92654f4936e1085dda.
+- P14-B enforces the reviewed one-City finite-reserve cardinality before City/runtime owner construction, rejects that finite profile during P12 UnityBootstrap-Daily-v1 profile resolution before world identity allocation, preserves P14-A ExogenousDaily admission, and allows the bounded finite profile outside the selected P12 profile.
+- Bootstrap composition now binds each authored local-material-flow City to its stable P8 LocationId through the existing LegacySpatialAnchorBindingStore after geography is composed. This closes the observed P14-A and P14-B bootstrap gap while reusing the existing P8 anchor authority.
+- The daily source/Market prepared install, reserve debit, stock credit, local source revision, and exclusions remain within the previously reviewed P14-B contract. No P12 readiness, capture eligibility, export/hydration, P13 readiness, or Phase 14 closure is claimed.
+
+### Exact-tree validation
+
+All results below are from implementation commit 0b445691acf137f2de8933bc3dedb2ede0ec4a52 and tree a602c4d39d22e86a63ff2d92654f4936e1085dda.
+
+| Suite | Result |
+|---|---:|
+| FiniteSourceProductionTests | 13/13 PASS |
+| SimulationRuntimeAdmissionTests | 35/35 PASS |
+| LocalDailyMaterialFlowTests | 13/13 PASS |
+| CityDailyEconomyContinuationTests | 19/19 PASS |
+| SimulationBootstrapCompositionTests | 21/21 PASS |
+| P10BGeneratedRuinGenesisTests | 10/10 PASS |
+| SimulationRuntimeLongRunTests | 7/7 PASS |
+| ALL EditMode | 2291/2291 PASS |
+| Official Smoke | 5/5 PASS |
+
+git diff --check passed for the implementation commit. The raw NUnit XML and Unity logs are archived in docs/validation/P14B/P14B-current-base-validation-a602c4d.zip (SHA-256 536E2C0D6AF64FBE37FC2AA0E670FB54FA5C12E1AF354C44C6FF43B76886A759).
+
+The unrelated ProjectSettings edits and untracked ArmedForceSpatialPosition .meta files were not staged or modified; their SHA-256 values were checked before and after validation.
 
 ## Ancestry and exact candidate
 
