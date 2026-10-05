@@ -8,7 +8,7 @@ The P16 implementation candidate was built on P15 canonical `5054211ad883d14fc67
 
 At review time, the relevant promoted authorities were P10 canonical `e53252de5277fd5af46bbacb8eda5ee6e74aff08`, P12 canonical `a6572ab3d4330d81edb334ae8b4c84ca5e6b173e`, P14 canonical `06e9c30101a74bd618d3651885c489c79fe866bb`, P15 canonical `5054211ad883d14fc6727416c313f1f1824679f4`, and architecture canonical `f6924e63d8e5731da1d33021d0361e7defe6dad7` on `codex/architecture/world-identity-projection`.
 
-The independently reviewed P15/P16 architecture-planning candidate remains separate at `a2788e6400251b5ce3cf8d2269ea8a5b5fdfd4a8` on `codex/architecture/p15-p16-p13-p19-design`. Its durable planning review identifies canonical architecture promotion as the next human gate. This implementation review does not promote that planning candidate or change the P16 Phase readiness contract.
+The P15/P16 architecture-planning candidate at `a2788e6400251b5ce3cf8d2269ea8a5b5fdfd4a8` was promoted into `codex/architecture/world-identity-projection`; current architecture canonical `f6924e63d8e5731da1d33021d0361e7defe6dad7` descends from that promotion. The current Phase 16 Brief records P16-A as `READY_FOR_MASTER_IMPLEMENTATION_HANDOFF`. The planning promotion is durable and is not an outstanding gate.
 
 ## Review outcome
 
@@ -42,6 +42,6 @@ Every suite had zero failed, skipped, or inconclusive tests. The manifest record
 
 ## Readiness and integration constraints
 
-This is an independently validated implementation candidate, not a P16 canonical promotion or Phase closure. The P15/P16 planning handoff at the architecture candidate branch says these implementation tracks become ready for Master handoff only after that architecture candidate is canonically promoted; its review record names that promotion as a human gate. Until that architecture gate is resolved, retain this candidate unchanged and do not treat it as canonical or as evidence that Phase 16 is closed.
+This is an independently validated implementation candidate, not a P16 canonical promotion or Phase closure. P16-A's accepted planning and technical design are canonical under architecture tip `f6924e63d8e5731da1d33021d0361e7defe6dad7`. The named P16 canonical branch does not yet exist. Run the current-ref bounded-promotion preflight before creating it; no additional product or architecture decision is outstanding for this slice.
 
 After any architecture-planning promotion, refresh all refs and reclassify this candidate. If its approved P16-A contract and prerequisites are canonical and the reviewed executable tree is still unchanged, the standing bounded checkpoint-promotion policy applies after required exact-base integration checks. Preserve P12-B incomplete, P12-A `WAIT_DEPENDENCY`, and P13 blocked; this slice establishes no complete census/shared-epoch coverage, global quiescence, capture eligibility, export, or hydration.
