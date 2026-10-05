@@ -11,28 +11,30 @@
 - Candidate branch: codex/phase14/P14BCurrentBaseIntegration.
 - Integrated base: 1ba58eeda6296be349b0a1def6d1d08a1fb1258f, combining P14 canonical 4caecbbfb0464c965811402b3c11d8717605114a with P10 canonical e53252de5277fd5af46bbacb8eda5ee6e74aff08; P12 canonical a6572ab3d4330d81edb334ae8b4c84ca5e6b173e is included.
 - Architecture baseline: f6924e63d8e5731da1d33021d0361e7defe6dad7.
-- Implementation commit: 0b445691acf137f2de8933bc3dedb2ede0ec4a52; exact implementation tree: a602c4d39d22e86a63ff2d92654f4936e1085dda.
+- Implementation commit: 709bf0ec198da5c64c276ba4ab6084faccba87ff; exact implementation tree: 5b5b18cb652d383e9ae9202066a95766c9097c20.
 - P14-B enforces the reviewed one-City finite-reserve cardinality before City/runtime owner construction, rejects that finite profile during P12 UnityBootstrap-Daily-v1 profile resolution before world identity allocation, preserves P14-A ExogenousDaily admission, and allows the bounded finite profile outside the selected P12 profile.
 - Bootstrap composition now binds each authored local-material-flow City to its stable P8 LocationId through the existing LegacySpatialAnchorBindingStore after geography is composed. This closes the observed P14-A and P14-B bootstrap gap while reusing the existing P8 anchor authority.
+- Current P14/P10 bootstrap composition is deliberately deferred. P8's one-owner-per-Location invariant and both accepted proving scopes remain unchanged. Since the authored P14 City and P10 Ruin would claim the sole P8 Location, admission rejects the combined profile before world identity or runtime-owner allocation and publication. This checkpoint does not mint a City Location from P10. Future combined worlds require distinct factual Locations from the geography/genesis layer. City-to-ruins historical succession and Ruin-as-local/site content remain possible future representations, not claims or implementation in this slice.
 - The daily source/Market prepared install, reserve debit, stock credit, local source revision, and exclusions remain within the previously reviewed P14-B contract. No P12 readiness, capture eligibility, export/hydration, P13 readiness, or Phase 14 closure is claimed.
 
 ### Exact-tree validation
 
-All results below are from implementation commit 0b445691acf137f2de8933bc3dedb2ede0ec4a52 and tree a602c4d39d22e86a63ff2d92654f4936e1085dda.
+All results below are from implementation commit 709bf0ec198da5c64c276ba4ab6084faccba87ff and tree 5b5b18cb652d383e9ae9202066a95766c9097c20.
 
 | Suite | Result |
 |---|---:|
 | FiniteSourceProductionTests | 13/13 PASS |
-| SimulationRuntimeAdmissionTests | 35/35 PASS |
+| SimulationRuntimeAdmissionTests | 37/37 PASS |
 | LocalDailyMaterialFlowTests | 13/13 PASS |
 | CityDailyEconomyContinuationTests | 19/19 PASS |
 | SimulationBootstrapCompositionTests | 21/21 PASS |
+| P10RuinLocalTopologyGenesisTests | 6/6 PASS |
 | P10BGeneratedRuinGenesisTests | 10/10 PASS |
 | SimulationRuntimeLongRunTests | 7/7 PASS |
-| ALL EditMode | 2291/2291 PASS |
+| ALL EditMode | 2293/2293 PASS |
 | Official Smoke | 5/5 PASS |
 
-git diff --check passed for the implementation commit. The raw NUnit XML and Unity logs are archived in docs/validation/P14B/P14B-current-base-validation-a602c4d.zip (SHA-256 536E2C0D6AF64FBE37FC2AA0E670FB54FA5C12E1AF354C44C6FF43B76886A759).
+git diff --check passed for the implementation commit. The raw NUnit XML and Unity logs are archived in docs/validation/P14B/P14B-current-base-anchor-deferral-validation-5b5b18c.zip (SHA-256 6FE147E20D38B054AEF4D5EE3792B57F657407977549A736FEA87F7CFA0F3EBB). Exact XML/log hashes and confirmation that unrelated user-file hashes remained unchanged are in `docs/validation/P14B/P14B-current-base-anchor-deferral-validation-5b5b18c.md`.
 
 The unrelated ProjectSettings edits and untracked ArmedForceSpatialPosition .meta files were not staged or modified; their SHA-256 values were checked before and after validation.
 
@@ -92,7 +94,7 @@ The unrelated ProjectSettings edits and untracked ArmedForceSpatialPosition .met
 - City daily-flow dispatch runs finite output before the existing free-consumption sink. P14-A stays on its existing `AddStock` path and retains the existing economy gate and balance projection.
 - Focused coverage includes capped output, already-empty/exhausted reserves, overflow/revision exhaustion, duplicate Market rows, stale revisions, identity mismatch, P12 mutation rejection, notification ordering, same-day duplicate rejection, repeat-input determinism, P14-A exogenous behavior, and material-flow balance.
 
-The current-base cardinality/owner-core tree `e2579dc8e65578b7ed62a3707163c0b728901b72` passed `FiniteSourceProductionTests` 13/13 on 2026-10-04. Raw XML/log hashes and artifacts are recorded in `docs/validation/P14B/P14B-owner-core-focused-20261004.md`. This is focused owner-core evidence only: it does not validate the P10-owned admission call, ALL EditMode, official Smoke, or the assembled current-base candidate.
+The earlier current-base cardinality/owner-core tree `e2579dc8e65578b7ed62a3707163c0b728901b72` passed `FiniteSourceProductionTests` 13/13 on 2026-10-04. Raw XML/log hashes and artifacts are recorded in `docs/validation/P14B/P14B-owner-core-focused-20261004.md`. That historical run was focused owner-core evidence only; the assembled current-base admission integration is covered by the exact-tree validation above.
 ## Validation evidence
 
 The earlier full validation passed on code tree `06217d567edc86ff194f3c0461898ad343a9d87f`: `FiniteSourceProductionTests` 11/11, ALL EditMode 2252/2252 and official EditMode `Smoke` 5/5. Those results are preserved in `docs/validation/P14B/P14B-validation-artifacts-06217d5.zip` (SHA-256 `F6CCF38AF1821B1EE8C617E2D501B30B32582FA3CDB8387E1B3847804F74AEA6`) as prior-candidate evidence; they do not cover the review-fix code below.
@@ -113,7 +115,7 @@ The focused raw XML/log files are archived in `docs/validation/P14B/P14B-review-
 
 ## Integration boundary and limitations
 
-- Exact deferred P10 shared-boundary changes: at `TesteSimulacao.InitializeSimulation`, during `p9.genesis.resolve-profile/v1` and before `SimulationGenesisPipeline.ValidateProfile` or any `CityRuntime`/Market/source owner construction, invoke `FiniteSourceProfileAdmission.TryValidateAuthoredCityCardinality(simulationConfig.Cities, out reason)` and reject a selected finite profile when `runtimeAdmissionContext.Profile == UnityBootstrapDailyV1`. Keep P14-owned validation separate from the P12 admission decision. Add paired `SimulationRuntimeAdmissionTests`: (1) P12 daily profile plus one finite City fails at resolve-profile before any world owner is built/published, leaves Bootstrap/published composition null and prevents day advancement; (2) the same P12 profile plus the existing P14-A exogenous City remains admitted and its daily flow still applies. Also prove the finite profile is allowed for the bounded non-P12 profile with exactly one City, and rejected for multiple authored Cities before construction. These edits/tests are deferred until P10 releases `TesteSimulacao`, genesis pipeline and shared admission ownership. This candidate does not modify those files, `SimulationRuntime`, P12 admission or P10 topology.
+- The current-base candidate owns the admission integration at `TesteSimulacao.InitializeSimulation`, during `p9.genesis.resolve-profile/v1`, before `SimulationGenesisPipeline.ValidateProfile` or any `CityRuntime`/Market/source owner construction. It invokes P14 authored-profile admission after P10 profile resolution. The selected P12 Daily profile rejects the finite-source profile; P14-A ExogenousDaily remains admitted. The accepted user boundary additionally rejects a simultaneous P14 City plus P10 Ruin profile at the same early stage, before world identity or owners are allocated. `SimulationRuntimeAdmissionTests` verifies these early exits and the standalone profile cases. P8 anchor ownership and P10 topology semantics are not changed.
 - The P12-selected profile must continue rejecting this owner until a supported profile explicitly inventories it. No P12-B completion, P12-A readiness, capture eligibility, export/hydration, P13 readiness, or Phase 14 closure is claimed.
 - No multi-source, multi-item, multi-City, conversion, trade, transport, price decision, labor, timed production, P20 coordination or mod-loader scope was added. Intraday/extensibility and multi-participant alignment requirements do not add a dependency to this passive daily finite-source slice.
 - Canonical promotion is a separate gate; this report records only a validated candidate awaiting exact-tip independent code review and serialized admission integration.

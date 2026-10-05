@@ -24,7 +24,7 @@ Phase 14 remains open; this promotion does not close the Phase.
 | Checkpoint | Status | Scope / evidence |
 |---|---|---|
 | P14-A — Local Daily Material Flow v1 | PROMOTED | Approved scope: one authored City, one exogenous daily source for one item, that City's free population consumption, and closing stock `opening + applied source − actual free consumption`. The source has no inputs, reserves, depletion, or transformation. Settlement owns the material; the market is custodian. Contract: `docs/design/PHASE14A_LOCAL_DAILY_MATERIAL_FLOW_CHECKPOINT.md`. |
-| P14-B - Finite Reserve Daily Source v1 | VALIDATED CANDIDATE; REVIEW PENDING | Current-base implementation 0b445691acf137f2de8933bc3dedb2ede0ec4a52, tree a602c4d39d22e86a63ff2d92654f4936e1085dda; exact focused/full validation recorded in the candidate report. Not promoted. |
+| P14-B - Finite Reserve Daily Source v1 | VALIDATED CANDIDATE; REVIEW PENDING | Current-base implementation 709bf0ec198da5c64c276ba4ab6084faccba87ff, tree 5b5b18cb652d383e9ae9202066a95766c9097c20; exact focused/full validation archived and recorded below. Not promoted. |
 
 The user approved this bounded profile and current-base independent review
 passed for checkpoint content `7a9e8d71ed7a53578b7dc36ef1cafd03b856b0f0` with
@@ -36,7 +36,11 @@ canonical promotion remain separately scoped and gated.
 
 ### Current P14-B candidate (2026-10-04)
 
-P14-B is an implementation candidate on codex/phase14/P14BCurrentBaseIntegration. Its source/test commit is 0b445691acf137f2de8933bc3dedb2ede0ec4a52 (tree a602c4d39d22e86a63ff2d92654f4936e1085dda), based on integration commit 1ba58eeda6296be349b0a1def6d1d08a1fb1258f. It includes the current P10 canonical dependency e53252de5277fd5af46bbacb8eda5ee6e74aff08 and P12 canonical dependency a6572ab3d4330d81edb334ae8b4c84ca5e6b173e. Focused validation, ALL EditMode 2291/2291, official Smoke 5/5, and implementation diff-check pass; evidence archive: docs/validation/P14B/P14B-current-base-validation-a602c4d.zip (SHA-256 536E2C0D6AF64FBE37FC2AA0E670FB54FA5C12E1AF354C44C6FF43B76886A759). Exact-tip independent code review is pending. This does not claim P12 or P13 readiness, export/hydration, capture eligibility, or Phase 14 closure.
+P14-B is an implementation candidate on codex/phase14/P14BCurrentBaseIntegration. Its source/test commit is 709bf0ec198da5c64c276ba4ab6084faccba87ff (tree 5b5b18cb652d383e9ae9202066a95766c9097c20), based on integration commit 1ba58eeda6296be349b0a1def6d1d08a1fb1258f. It includes P10 canonical e53252de5277fd5af46bbacb8eda5ee6e74aff08 and P12 canonical a6572ab3d4330d81edb334ae8b4c84ca5e6b173e. Focused validation, ALL EditMode 2293/2293, official Smoke 5/5, and implementation diff-check pass; exact-tree evidence archive: docs/validation/P14B/P14B-current-base-anchor-deferral-validation-5b5b18c.zip (SHA-256 6FE147E20D38B054AEF4D5EE3792B57F657407977549A736FEA87F7CFA0F3EBB). Exact-tip independent code review is pending. This does not claim P12 or P13 readiness, export/hydration, capture eligibility, or Phase 14 closure.
+
+#### P10/P14 bootstrap composition boundary
+
+The accepted proving profiles remain separate. P8 retains its one-owner-per-Location invariant; this P14 checkpoint does not relax it, and P10 does not create another City Location to make a combined bootstrap pass. Because the currently authored P14 City and P10 Ruin would both claim the sole P8 Location, the combined P14/P10 profile is rejected during profile admission before world identity, runtime owners, or publication are allocated. P14-A and P14-B standalone profile behavior and the P10 profiles remain independently supported within their existing scopes. A future combined world needs distinct factual Locations from the appropriate geography/genesis layer. Historical succession from a City to ruins remains a possible future representation, as does a ruin represented as local/site content inside a living City; neither representation is decided or implemented by this checkpoint. This decision defers only the current combined bootstrap profile and does not claim that Cities and Ruins can never be historically related.
 
 ## Dependency and impact record
 
