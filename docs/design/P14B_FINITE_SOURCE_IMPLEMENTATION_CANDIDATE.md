@@ -1,10 +1,10 @@
 # P14-B finite-source implementation candidate
 
-**Status:** validated current-base P14-B implementation candidate; exact-tip independent code review is pending. Phase 14 remains open and the candidate is not promoted. See the authoritative dated run record below; earlier status text is historical.
+**Status:** exact-tip implementation review and validation passed; checkpoint promotion is pending. Phase 14 remains open. See the authoritative dated run record below; earlier status text is historical.
 
 ## Authoritative current-base run - 2026-10-04
 
-**Status:** validated implementation candidate; exact-tip independent code review is pending. Phase 14 remains open and this candidate is not promoted. This section supersedes earlier statements in the historical candidate record that validation or P10 admission wiring remained pending.
+**Status:** exact-tip independent code review and validation passed; checkpoint promotion is pending. Phase 14 remains open. This section supersedes earlier statements in the historical candidate record that validation or P10 admission wiring remained pending.
 
 ### Exact integration and scope
 
@@ -34,7 +34,7 @@ All results below are from implementation commit 709bf0ec198da5c64c276ba4ab6084f
 | ALL EditMode | 2293/2293 PASS |
 | Official Smoke | 5/5 PASS |
 
-git diff --check passed for the implementation commit. The raw NUnit XML and Unity logs are archived in docs/validation/P14B/P14B-current-base-anchor-deferral-validation-5b5b18c.zip (SHA-256 6FE147E20D38B054AEF4D5EE3792B57F657407977549A736FEA87F7CFA0F3EBB). Exact XML/log hashes and confirmation that unrelated user-file hashes remained unchanged are in `docs/validation/P14B/P14B-current-base-anchor-deferral-validation-5b5b18c.md`.
+git diff --check and fresh exact-tip independent implementation review passed. The raw NUnit XML and Unity logs are archived in docs/validation/P14B/P14B-current-base-anchor-deferral-validation-5b5b18c.zip (SHA-256 6FE147E20D38B054AEF4D5EE3792B57F657407977549A736FEA87F7CFA0F3EBB). Exact XML/log hashes, unchanged user-file hashes, and review details are recorded in `docs/validation/P14B/P14B-current-base-anchor-deferral-validation-5b5b18c.md` and `docs/design/P14B_FINITE_SOURCE_IMPLEMENTATION_REVIEW.md`.
 
 The unrelated ProjectSettings edits and untracked ArmedForceSpatialPosition .meta files were not staged or modified; their SHA-256 values were checked before and after validation.
 
