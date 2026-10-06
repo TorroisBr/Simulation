@@ -1378,3 +1378,17 @@ existing runtime commit boundaries. Reuse the accepted P12-E census contracts;
 do not add transfer, succession, or estate gameplay. Implementation proceeds
 only after the design confirms the current selected-profile path set and its
 preflight, failure, and post-commit notification behavior.
+
+## P12-B owner/operation/epoch refresh — after Property/Estate promotion — 2026-10-06
+
+P12 canonical is 0c05223079a2036ba3b87ea19194efd1be25e7c9; the promoted Property/Estate implementation is code 167a488c09fc7a2dc51517e1886250c43303bc20, tree 7527439309841a8f68302e7c7630ddcecbc36b21. Exact-tip review PASS is ad097b1b1f088ffaf17272669ab709a12e63c6f9; validation is retained under docs/validation/P12BPropertyEstateEpoch/.
+
+| Daily-v1 owner or write boundary | Current evidence | Remaining boundary |
+|---|---|---|
+| Property ownership and transfer history | Three Required sections bind to the exact installed PropertyOwnershipStore/EstateStore identities and local revision sources. The bounded operation covers existing property registration/transfer and succession's nested property transfer; successful commits invalidate the affected ownership/history sections once. | Only the enumerated runtime facade paths are covered. Direct external store/system mutation remains outside this facade contract. |
+| Estate records | The Required Estate section binds to the installed EstateStore; explicit opening is preflighted and successful commits invalidate the Estate section. | No automatic estate creation or new gameplay path was added. |
+| Initial admission | Daily-v1 rejects prepopulated Property ownership/transfer history and pre-existing Estate before runtime publication. The verified selected profile now has 242 sections. | This is exact-zero admission for these three sections, not an evolved-owner/export contract. |
+| Runtime identity and spatial witnesses | Bootstrap separately publishes eight identity registries (NPC, City, Location, Route, ExplorableSite, LocalPlace, LocalConnection, NotableItem) and two SpatialNetwork witnesses (Location, Route). They are not part of the sealed 242-section protocol. | Reconcile exact identity/revision/cardinality and decide supported selected-profile reachability for post-genesis RegisterLocation, RegisterRoute, and ExplorableSites.Add. Do not infer supported or excluded behavior from public visibility alone. |
+| Readiness | P12-B remains INCOMPLETE; P12-A remains WAIT_DEPENDENCY; P13 remains blocked. P12-C waits on B; P12-D/E wait on B and C; P12-F waits on C/D/E; P12-G waits on B-F plus validated live-profile inventory. | No complete owner/epoch coverage, global quiescence, capture eligibility, export, hydration, downstream readiness, or Phase closure follows. Expedition remains assigned to P12-F. |
+
+The next task is source-level reachability and ownership reconciliation for the ten identity/spatial witnesses and their post-publication mutation APIs. Classify only call paths supported by the current Daily-v1 contract; if an uncovered normal commit remains, produce a bounded contract and independent review before implementation. Do not add a passive registration merely to increase the section count.
