@@ -452,6 +452,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
     private volatile bool factualReadWorldPublished;
     private readonly SimulationTime simulationTime;
     private readonly List<CityRuntime> cities;
+    private readonly IReadOnlyList<CityRuntime> cityRuntimeSnapshot;
     private readonly List<NpcRuntime> npcRuntimes;
     private readonly IReadOnlyList<NpcRuntime> npcRuntimeSnapshot;
     private readonly Dictionary<string, NpcRuntime> npcRegistryById;
@@ -556,7 +557,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
     public long CurrentDay => p18dTimeline != null
         ? p18dTimeline.CurrentInstant.AbsoluteDay
         : simulationTime.AbsoluteDay;
-    public IReadOnlyList<CityRuntime> Cities => cities;
+    public IReadOnlyList<CityRuntime> Cities => cityRuntimeSnapshot;
     public EffectiveSimulationConfiguration Configuration => configuration;
     public SimulationCalendar Calendar => calendar;
     public DailyDemographyReport LastDailyDemographyReport => lastDailyDemographyReport;
@@ -1289,6 +1290,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                 nameof(crimeSystem));
         }
         this.cities = resolvedCities;
+        this.cityRuntimeSnapshot = this.cities.AsReadOnly();
         List<CityRuntime> materialFlowCities = resolvedCities.FindAll(city => city != null && city.HasLocalDailyMaterialFlow);
         if (materialFlowCities.Count > 1)
             throw new LocalDailyMaterialFlowRejectedException("P14-A supports exactly one authored settlement per composed world.");

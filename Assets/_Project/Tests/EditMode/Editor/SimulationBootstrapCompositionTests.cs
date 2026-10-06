@@ -642,6 +642,26 @@ public sealed class SimulationBootstrapCompositionTests
         }
 
         SimulationRuntime runtime = simulation.Bootstrap.Runtime;
+        CityRuntime[] expectedCityRoster = runtime.Cities.ToArray();
+        Assert.That(expectedCityRoster.Length, Is.EqualTo(2));
+        Assert.That(runtime.Cities, Is.SameAs(runtime.Cities));
+        Assert.That(runtime.Cities, Is.Not.InstanceOf<List<CityRuntime>>());
+        IList<CityRuntime> cityRosterView = runtime.Cities as IList<CityRuntime>;
+        Assert.That(cityRosterView, Is.Not.Null);
+        Assert.That(cityRosterView.IsReadOnly, Is.True);
+        Assert.Throws<System.NotSupportedException>(() => cityRosterView.Add(expectedCityRoster[0]));
+        Assert.Throws<System.NotSupportedException>(() => cityRosterView[0] = expectedCityRoster[1]);
+        Assert.Throws<System.NotSupportedException>(() => cityRosterView.Clear());
+        Assert.That(runtime.Cities.Count, Is.EqualTo(expectedCityRoster.Length));
+        for (int i = 0; i < expectedCityRoster.Length; i++)
+            Assert.That(runtime.Cities[i], Is.SameAs(expectedCityRoster[i]));
+
+        OwnerSectionCensusWitness initialCityIdentityWitness = runtimeIdentityProviders[1].GetCurrentCensus();
+        Assert.That(initialCityIdentityWitness.SectionId,
+            Is.EqualTo(RuntimeIdentityRegistryCensusProvider.CitiesSectionId));
+        Assert.That(initialCityIdentityWitness.Cardinality, Is.EqualTo(expectedCityRoster.Length));
+        Assert.That(initialCityIdentityWitness.Revision, Is.EqualTo(16L));
+
         IReadOnlyList<IOwnerSectionCensusProvider> spatialNetworkProviders =
             simulation.Bootstrap.SpatialNetworkCensusProviders;
         string[] spatialNetworkSectionIds =
@@ -675,6 +695,14 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(spatialKnowledgeProviders.Count, Is.EqualTo(20));
         Assert.That(spatialKnowledgeProviders.Select(provider => provider.GetCurrentCensus().SectionId),
             Is.EqualTo(expectedSpatialKnowledgeSectionIds));
+        OwnerSectionCensusWitness cityIdentityWitnessAfterMutationAttempts =
+            runtimeIdentityProviders[1].GetCurrentCensus();
+        Assert.That(cityIdentityWitnessAfterMutationAttempts.OwnerInstanceIdentity,
+            Is.SameAs(initialCityIdentityWitness.OwnerInstanceIdentity));
+        Assert.That(cityIdentityWitnessAfterMutationAttempts.Cardinality,
+            Is.EqualTo(initialCityIdentityWitness.Cardinality));
+        Assert.That(cityIdentityWitnessAfterMutationAttempts.Revision,
+            Is.EqualTo(initialCityIdentityWitness.Revision));
         Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure npcCensusFailure), Is.True,
             npcCensusFailure.ToString());
         ContinuationCensusProtocol censusProtocol = (ContinuationCensusProtocol)typeof(SimulationRuntime)
