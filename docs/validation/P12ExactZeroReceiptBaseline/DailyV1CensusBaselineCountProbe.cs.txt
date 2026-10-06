@@ -1,0 +1,9 @@
+SimulationRuntime censusRuntime = simulation.Bootstrap.Runtime;
+        ContinuationCensusProtocol censusProtocol = (ContinuationCensusProtocol)typeof(SimulationRuntime)
+            .GetField("npcRosterCensusProtocol", BindingFlags.Instance | BindingFlags.NonPublic)
+            .GetValue(censusRuntime);
+        System.Collections.IDictionary expectedSections = (System.Collections.IDictionary)typeof(ContinuationCensusProtocol)
+            .GetField("expectedSections", BindingFlags.Instance | BindingFlags.NonPublic)
+            .GetValue(censusProtocol);
+        Assert.That(expectedSections.Count, Is.EqualTo(233),
+            "Exact canonical ea4dec baseline Daily-v1 section inventory before P12 exact-zero receipt additions.");

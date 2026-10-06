@@ -7,7 +7,7 @@ This evidence establishes the registered owner-section count on the exact P12 ca
 - Profile: `UnityBootstrap-Daily-v1`, loaded from `Assets/_Project/Data/Simulations/Simulation-DailyV1.asset`; test asserts the authored P10 Ruin is null.
 - Test: `SimulationBootstrapCompositionTests.SelectedDailyV1ProfileBootstrapsItsAuthoredP8GeographyBeforeDayOne`
 - Temporary probe: after the normal `simulation.Start()`, reflect the sealed runtime `ContinuationCensusProtocol.expectedSections` and assert `Count == 233`.
-- Probe patch: `DailyV1CensusBaselineCountProbe.patch` (SHA-256 `566792AA2153972E04E436777E3FB4F3840112E52877383B5C51DF3343B83FA3`). It modifies only the test file in a detached temporary worktree; no product code or canonical history changed.
+- Probe source snippet: `DailyV1CensusBaselineCountProbe.cs.txt` (SHA-256 `E8FF6C1BBCB5D413062ABA8366880918ACC0A87EFB8EE87DB7A015F1BA61172A`). The snippet was inserted after `simulation.Start()` in the named test inside a detached temporary worktree; no product code or canonical history changed.
 - Unity: `6000.3.9f1`, batchmode EditMode, exact single-test filter above.
 - Result: 1 test, 1 passed, 0 failed. The assertion observed 233 registered sections.
 - XML: `Canonical-ea4dec-DailyV1-CensusCount.xml` (SHA-256 `F393F4E9448D5E2300E632F1CA0442D5CB947F5628ED8158D7190EA16F6E9ADE`).
