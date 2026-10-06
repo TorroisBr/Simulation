@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Reflection;
 using System.Threading.Tasks;
@@ -22,7 +23,7 @@ public sealed class PropertyEstateMutationEpochTests
         foreach (GameObject simulationObject in simulationObjects)
         {
             if (simulationObject != null)
-                Object.DestroyImmediate(simulationObject);
+                UnityEngine.Object.DestroyImmediate(simulationObject);
         }
         simulationObjects.Clear();
         SimulationTestFactory.CleanupDefinitions();
@@ -223,7 +224,84 @@ public sealed class PropertyEstateMutationEpochTests
         Assert.That(ReadActiveOperationCount(GetProtocol(runtime)), Is.Zero);
     }
 
+    [Test]
+    public void DailyV1AdmissionRejectsInitiallyPopulatedPropertyOwnershipAndHistoryBeforePublication()
+    {
+        PropertyOwnershipStore suppliedProperties = null;
+        EstateStore suppliedEstates = null;
+        SimulationRuntime publishedRuntime = null;
+
+        InvalidOperationException failure = Assert.Throws<InvalidOperationException>(() =>
+            publishedRuntime = CreateDailyRuntime((persons, properties, estates) =>
+            {
+                PersonId firstOwner = new PersonId("p12-property-estate-first-owner");
+                PersonId secondOwner = new PersonId("p12-property-estate-second-owner");
+                PropertyId propertyId = new PropertyId("p12-property-estate-initial-property");
+                Assert.That(properties.TryRegister(
+                    new PropertyOwnershipRecord(propertyId, firstOwner),
+                    out PropertyFoundationFailure registerFailure), Is.True, registerFailure.ToString());
+                Assert.That(PropertyTransferSystem.TryTransfer(
+                    persons,
+                    properties,
+                    propertyId,
+                    secondOwner,
+                    50000L,
+                    out _,
+                    out PropertyTransferFailure transferFailure), Is.True, transferFailure.ToString());
+                suppliedProperties = properties;
+                suppliedEstates = estates;
+            }));
+
+        Assert.That(failure.Message, Does.Contain("P12 runtime-admission adapter"));
+        Assert.That(publishedRuntime, Is.Null,
+            "A Daily-v1 runtime with initial Property truth must not reach bootstrap publication.");
+        Assert.That(suppliedProperties, Is.Not.Null);
+        Assert.That(suppliedProperties.Count, Is.EqualTo(1));
+        Assert.That(suppliedProperties.TransferHistory, Has.Count.EqualTo(1));
+        Assert.That(suppliedEstates, Is.Not.Null);
+        Assert.That(suppliedEstates.Count, Is.Zero);
+    }
+
+    [Test]
+    public void DailyV1AdmissionRejectsInitiallyPopulatedEstateBeforePublication()
+    {
+        PropertyOwnershipStore suppliedProperties = null;
+        EstateStore suppliedEstates = null;
+        SimulationRuntime publishedRuntime = null;
+
+        InvalidOperationException failure = Assert.Throws<InvalidOperationException>(() =>
+            publishedRuntime = CreateDailyRuntime((persons, properties, estates) =>
+            {
+                PersonId deceased = new PersonId("p12-property-estate-deceased");
+                EstateId estateId = new EstateId("p12-property-estate-initial-estate");
+                Assert.That(EstateOpeningSystem.TryOpenEstate(
+                    persons,
+                    estates,
+                    estateId,
+                    deceased,
+                    50000L,
+                    out _,
+                    out EstateFoundationFailure openFailure), Is.True, openFailure.ToString());
+                suppliedProperties = properties;
+                suppliedEstates = estates;
+            }));
+
+        Assert.That(failure.Message, Does.Contain("P12 runtime-admission adapter"));
+        Assert.That(publishedRuntime, Is.Null,
+            "A Daily-v1 runtime with initial Estate truth must not reach bootstrap publication.");
+        Assert.That(suppliedProperties, Is.Not.Null);
+        Assert.That(suppliedProperties.Count, Is.Zero);
+        Assert.That(suppliedEstates, Is.Not.Null);
+        Assert.That(suppliedEstates.Count, Is.EqualTo(1));
+    }
+
     private static SimulationRuntime CreateDailyRuntime()
+    {
+        return CreateDailyRuntime(null);
+    }
+
+    private static SimulationRuntime CreateDailyRuntime(
+        System.Action<PersonStore, PropertyOwnershipStore, EstateStore> prepareInitialOwners)
     {
         long day = 50000L;
         PersonStore persons = new PersonStore();
@@ -239,6 +317,9 @@ public sealed class PropertyEstateMutationEpochTests
         GenealogyStore genealogy = new GenealogyStore();
         Assert.That(genealogy.TryAddParentage(deceased, heir, out GenealogyFailure genealogyFailure),
             Is.True, genealogyFailure.ToString());
+        PropertyOwnershipStore properties = new PropertyOwnershipStore(persons);
+        EstateStore estates = new EstateStore(persons);
+        prepareInitialOwners?.Invoke(persons, properties, estates);
 
         return new SimulationRuntime(
             simulationTime: new SimulationTime(day),
@@ -247,8 +328,8 @@ public sealed class PropertyEstateMutationEpochTests
             economyEnabled: false,
             personStore: persons,
             genealogyStore: genealogy,
-            propertyOwnershipStore: new PropertyOwnershipStore(),
-            estateStore: new EstateStore(persons),
+            propertyOwnershipStore: properties,
+            estateStore: estates,
             runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1());
     }
 
