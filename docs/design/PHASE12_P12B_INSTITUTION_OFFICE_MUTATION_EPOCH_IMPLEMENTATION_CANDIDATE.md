@@ -52,12 +52,9 @@ registration or wire unrelated political mutation paths.
 
 ## Exact-tree evidence
 
-The focused owner/operation suite passed 4/4, ALL EditMode passed 2410/2410,
-the official Smoke filter passed 5/5, and `git diff --check` passed. The exact
-XML/log names, SHA-256 hashes, Unity version, selected-profile inventory
-assertions, and source-file hashes are recorded in the validation report. The
-all-tests XML confirms the selected Daily-v1 composition case and all four
-Institution/Office census tests passed on the validated source hashes.
+The corrected implementation source commit `95fac36e02299e7683d9bcb33bccf581c1429e5d` uses the accepted `p12.institution-office.owner-commit` protocol ID. Its focused owner/operation suite passed 4/4, ALL EditMode passed 2410/2410, official Smoke passed 5/5, and `git diff --check` passed. The full-suite run confirms the selected Daily-v1 composition test checks the protocol ID and 239-section owner inventory. Exact XML/log hashes and source-file hashes are recorded in the validation report.
+
+The initial validation evidence for implementation commit `1048073d03fd92767d0ae135800073da8bd60053` is retained as historical evidence only; that code used an operation ID inconsistent with the accepted design and its results are superseded by the corrected-tree runs.
 
 ## Scope limits
 

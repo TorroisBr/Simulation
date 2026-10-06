@@ -57,3 +57,26 @@ This is a bounded P12-B Institution/Office mutation-invalidation slice. It
 does not establish complete owner coverage, complete shared-epoch coverage,
 global quiescence, capture eligibility, export, hydration, P12-A readiness,
 P13 readiness, P12-B completion, or Phase 12 closure.
+
+## Corrected operation-contract validation
+
+Status: **PASS** on implementation source commit `95fac36e02299e7683d9bcb33bccf581c1429e5d`, based on canonical `0daa72addc1f186d23713adf75f6c2f83a5aff9b`. Its Git tree is `abf39bd55d22dc4f52fda26e79d44ea732b84804`. Unity version: `6000.3.9f1`.
+
+The corrected tree uses the accepted `p12.institution-office.owner-commit` identifier. The selected Daily-v1 composition test asserts that the sealed protocol contains this identifier and excludes the mismatched `runtime.institution-office.owner-commit`. It also passes the 239-section owner inventory check. `Simulation-DailyV1.asset` has no P10 Ruin; `Simulation-GeneralTest.asset` retains its authored P10 Ruin.
+
+| Run | Result | XML SHA-256 | Log SHA-256 |
+| --- | --- | --- | --- |
+| `InstitutionOfficeCensusTests` | 4/4 passed | `CCC35707FECBBB67579070ADF488C7B1DE5C9D069F5D531ECC3E671836634562` | `09E9CC4574325B9DB435C42D38CA1D15D9BFC2BBED7B0B826B36126CE375D0E8` |
+| ALL EditMode | 2410/2410 passed | `58A28908ECE8554D3E540FFAD3D92A3CBDAD0ED3CE9D38CC3F0ACCEB0DB5D228` | `8E522F818A89ABDBF72D3B32E6E4831D1B0640ADD6A8667A1259F7C084E2A965` |
+| Official Smoke (`-TestFilter Smoke`) | 5/5 passed | `203E3AC617FE2930D01FEF323B0ADE42B8135549AF7E02AE2D29C7CE2488923B` | `CB23BD66263211EB84584F00909A44A54FA5874734886769286A7BB432379AD8` |
+
+The ALL EditMode XML confirms `SimulationBootstrapCompositionTests.SelectedDailyV1ProfileBootstrapsItsAuthoredP8GeographyBeforeDayOne` passed. It also confirms all four Institution/Office tests passed. `git diff --check` passed after the corrected source and evidence update.
+
+The corrected source hashes are:
+
+| File | SHA-256 |
+| --- | --- |
+| `Assets/_Project/Scripts/SimulationRuntime.cs` | `51EE84AF510720773B5FD567C9C4B32A76B9ADB93427109A007E56CC02D41AFE` |
+| `Assets/_Project/Tests/EditMode/Editor/SimulationBootstrapCompositionTests.cs` | `229D4A8EBA1998A695B298937B0C8177AB77F1A122E1FA7AC8DED3A7382927E7` |
+
+XML is retained under `CorrectedTree/Focused/`, `CorrectedTree/AllEditMode/`, and `CorrectedTree/OfficialSmoke/`. The three raw logs are retained in `CorrectedTree/P12BInstitutionOfficeEpoch-corrected-tree-logs.zip` (SHA-256 `FEF06B0E9F1FA5F57076E25A5DD72820A5313770AD50D5C73F14DB0C5B188F36`). The preceding test table documents commit `1048073d03fd92767d0ae135800073da8bd60053`, whose operation identifier did not match the accepted design; those historical results do not replace this corrected-tree validation.
