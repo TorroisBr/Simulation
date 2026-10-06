@@ -1265,3 +1265,38 @@ test nor the current Daily-v1 scene and is superseded here.
 The profile identity/composition choice is the current gate for the complete
 live-profile inventory. P12-F Expedition remains deferred to its documented
 P12-C/D/E dependencies.
+
+## P12-B Daily-v1 profile and current-action refresh — 2026-10-06
+
+The refreshed remote P12 canonical is `1b7ae19a9400fb34cb44e763191531fc72d79d79`.
+The P9-B-only `UnityBootstrap-Daily-v1` profile correction is canonical and
+revalidated: runtime admission/live owner inventory 37/37 and bootstrap
+composition plus Daily-v1/P10-A separation 22/22. `SampleScene.unity` selects
+`Simulation-DailyV1.asset`; `Simulation-GeneralTest.asset` remains the separate
+P10-A Ruin/LocalTopology profile and is rejected by Daily-v1 before owner
+publication. This resolves the former profile-identity blocker without
+admitting P10-A to P12.
+
+P12 canonical also includes the exact-tip reviewed CurrentAction slice:
+implementation `f4a235c17d65841585ae9f6c56f65ca8eb310ca6`, tree
+`92a59220bdefc8e17e7fea6490f87f15646b9d6f`, review and validation records at
+the promoted tip `1b7ae19a9400fb34cb44e763191531fc72d79d79`. The witness tracks
+each rostered NPC's exact current-action owner, 0/1 cardinality, and local
+revision. Covered installed-action and lifecycle commits update the partial
+shared epoch. This is one bounded owner family, not completion of the profile
+census or shared-epoch map.
+
+| Obligation | Refreshed evidence | Remaining boundary |
+|---|---|---|
+| Effective profile | Daily-v1 now selects the P9-B-only asset; P10-A remains a separate proving profile. | The current live census is still partial and day-zero. It does not establish every supported evolved owner instance or export/hydration. |
+| Current action | Exact owner identity, roster cardinality, local revision, admitted successful writes, and covered Person/population/NPC action clearing are implemented and reviewed. | Only the recorded mutators and operation boundaries are covered. Other public writers still need a source-to-commit-to-notification map. |
+| NPC MoneyAccount / Inventory direct leaves | Passive census exists; a bounded direct-write invalidation design was reviewed against canonical `b77e154`, and an implementation candidate exists at `codex/phase12/P12BDirectNpcOwnerInvalidationImplementation` (`766137aea8535c1d8f6e5529856228db6890e718`). | Classify this as `REINTEGRATE`: its code base is `2f7c742`, before the Daily-v1 profile correction and later CurrentAction/lifecycle changes. Refresh the design against current architecture and `1b7ae19`, recompose rather than fast-forward the stale tip, then run the design-specified regression/full validation and obtain exact-tip independent review. In particular preserve exact owners, admitted transaction semantics, Inventory alias fanout, no duplicate transaction notices, and the separately bounded Expedition consumer behavior. |
+| Other effective owners and writes | Existing promoted census and operation slices remain valid within their individual reviewed owner sets. | Continue the current-source delta audit across effective-profile owners, roster changes, public aliases, successful commit boundaries, owner-thread scopes, and shared-epoch notification. A passive witness is not a write hook; day-zero zero is not proof of permanent absence. |
+| P12 readiness | P12-B remains `INCOMPLETE`; P12-A remains `WAIT_DEPENDENCY`; P13 remains blocked. P12-C waits on B; P12-D/E wait on B and C; P12-F waits on C/D/E; P12-G waits on B–F plus validated inventory. | No complete owner or epoch coverage, runtime-wide quiescence, capture eligibility, export, hydration, downstream readiness, or Phase closure is implied. Keep Expedition-specific work assigned to P12-F. |
+
+The next bounded P12-B task is current-base refresh and reintegration of the
+existing MoneyAccount/Inventory direct-write candidate, which addresses a
+known committed-write gap rather than adding another passive census. Do not
+reuse its old review or validation as current-base evidence if the recompose
+changes the code tree. Preserve all unrelated ProjectSettings edits, `.meta`
+files, and local validation artifacts.

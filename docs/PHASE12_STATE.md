@@ -1597,3 +1597,44 @@ composition has P10 LocalTopology absent. It does not change the P12-A
 exclusion of P10-A in the Brief or widen P12 scope. P12-B remains
 INCOMPLETE; P12-A remains WAIT_DEPENDENCY; P13 remains BLOCKED. The P12
 TravelParty-start promotion remains valid within its exact reviewed owner set.
+
+## P12-B current-action owner/invalidation promotion — 2026-10-06
+
+P12 canonical advanced by clean fast-forward from
+`90a8a2aef212bec2c68d7224739ce512d44c9fe3` to
+`1b7ae19a9400fb34cb44e763191531fc72d79d79`. The promoted code commit is
+`f4a235c17d65841585ae9f6c56f65ca8eb310ca6`, tree
+`92a59220bdefc8e17e7fea6490f87f15646b9d6f`; exact-tip independent review and
+validation evidence are retained in
+`docs/design/PHASE12_P12B_CURRENT_ACTION_INVALIDATION_REVIEW.md` and
+`docs/design/PHASE12_P12B_CURRENT_ACTION_INVALIDATION_CANDIDATE.md`. Local and
+remote `codex/phase12/canonical` were synchronized at the promoted review
+record tip before this State update.
+
+The slice adds a per-rostered-NPC current-action section (cardinality 0/1,
+exact owner identity and non-serialized local revision), admitted installed
+action writes, shared-epoch notifications for covered successful changes, and
+action clearing inside the covered Person/population/NPC lifecycle paths. The
+exact P9-B-only `UnityBootstrap-Daily-v1` profile was revalidated: runtime
+admission/owner inventory 37/37 and bootstrap composition/profile separation
+22/22. Focused current-action/lifecycle/ActorChoice 20/20, Crime/Justice 12/12,
+solo travel 11/11, ALL EditMode 2395/2395, Official Smoke 5/5, and
+`git diff --check` passed on the reviewed code tree. Raw logs and hashes are
+retained in the candidate evidence and its validation archive.
+
+This is a bounded owner/invalidation slice only. It does not complete the
+Daily-v1 owner census, all supported committed-write/shared-epoch coverage,
+global owner-thread quiescence, capture eligibility, export, or hydration.
+P12-B remains INCOMPLETE; P12-A remains WAIT_DEPENDENCY; P13 remains BLOCKED.
+P10-A Ruin/LocalTopology remains a separate proving profile and is excluded
+from Daily-v1. P12-F Expedition remains deferred to P12-C/D/E.
+
+The architecture reference for this refresh is
+`codex/architecture/world-identity-projection` at
+`e16796014d348e3b59da7ed848101c4c03926ba5`; the intraday/extensibility and
+multi-participant activity alignment records remain
+`4b6dd1d38cffeaf3cc1ac3effea0f8ede8771194` and
+`c285466c355103d3637ac165246591b72eb7bda0`, respectively. The current
+Daily-v1 profile correction and its 37/37 admission and 22/22 composition
+evidence supersede the historical P10-A mismatch section above without
+changing the accepted P12 scope.
