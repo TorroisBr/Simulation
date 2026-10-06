@@ -876,6 +876,11 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                 RuntimeIdAllocatorCensusProvider.CreateEventCounterProvider(runtimeIdAllocator);
             runtimeIdAllocatorDecisionCounterCensusProvider =
                 RuntimeIdAllocatorCensusProvider.CreateDecisionCounterProvider(runtimeIdAllocator);
+            if (travelPartySystem != null)
+            {
+                runtimeIdAllocatorTravelPartyCounterCensusProvider =
+                    RuntimeIdAllocatorCensusProvider.CreateTravelPartyCounterProvider(runtimeIdAllocator);
+            }
         }
         if (runtimeAdmissionContext != null)
         {
@@ -1914,6 +1919,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                 && !TryRegisterRuntimeIdAllocatorEventCounterCensusProvider(protocol))
             || (runtimeAdmissionContext != null && runtimeIdAllocator != null
                 && !TryRegisterRuntimeIdAllocatorDecisionCounterCensusProvider(protocol))
+            || (runtimeAdmissionContext != null && runtimeIdAllocator != null
+                && travelPartySystem != null
+                && !TryRegisterRuntimeIdAllocatorTravelPartyCounterCensusProvider(protocol))
             || (runtimeAdmissionContext != null && scheduledDirectiveSystem != null
                 && !TryRegisterScheduledDirectiveCensusProvider(protocol))
             || (runtimeAdmissionContext != null
@@ -1943,6 +1951,10 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                 && protocol.RegisterExpectedOperation(
                     DailyAdvanceCensusOperationId,
                     out _)
+                && (travelPartySystem == null
+                    || protocol.RegisterExpectedOperation(
+                        TravelPartyStartCensusOperationId,
+                        out _))
                 && (travelPartySystem == null
                     || protocol.RegisterExpectedOperation(
                         TravelPartyAdvanceCensusOperationId,
@@ -2013,6 +2025,13 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                         NotifyP12RuntimeIdDecisionCounterMutation);
                 }
 
+                if (runtimeIdAllocatorTravelPartyCounterCensusProvider != null)
+                {
+                    runtimeIdAllocator.BindP12TravelPartyIdMutationBoundary(
+                        CanCommitP12RuntimeIdTravelPartyCounterMutation,
+                        NotifyP12RuntimeIdTravelPartyCounterMutation);
+                }
+
                 if (scheduledDirectiveCensusProvider != null)
                 {
                     scheduledDirectiveSystem.Store.BindP12MutationBoundary(
@@ -2043,6 +2062,14 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                     store.BindP12MutationBoundary(
                         travelPartyStoreMutationBinding.Admission,
                         travelPartyStoreMutationBinding.Committed);
+                }
+
+                if (travelPartySystem != null
+                    && !travelPartySystem.BindP12StartOperationAdmission(
+                        TryAdmitP12TravelPartyStartPreparation))
+                {
+                    throw new InvalidOperationException(
+                        "The selected TravelPartySystem could not bind its P12 start-operation admission boundary.");
                 }
 
                 foreach (KeyValuePair<CityRuntime, string> pair in cityNpcPresenceSectionIdsByOwner)
@@ -3040,9 +3067,12 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         P12MerchantOperationContext merchantContext = activeP12MerchantOperationContext;
         P12SoloTravelStartOperationContext soloTravelContext =
             activeP12SoloTravelStartOperationContext;
+        P12TravelPartyStartOperationContext travelPartyStartContext =
+            activeP12TravelPartyStartOperationContext;
         int activeBatchContexts = (travelContext != null ? 1 : 0)
             + (merchantContext != null ? 1 : 0)
-            + (soloTravelContext != null ? 1 : 0);
+            + (soloTravelContext != null ? 1 : 0)
+            + (travelPartyStartContext != null ? 1 : 0);
         if (activeBatchContexts > 1)
         {
             FaultRuntimeAdmission();
@@ -3088,6 +3118,15 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             }
             alreadyChanged = soloTravelContext.ChangedSectionIds;
         }
+        else if (travelPartyStartContext != null)
+        {
+            if (!travelPartyStartContext.IsOwnedByCurrentThread())
+            {
+                FaultRuntimeAdmission();
+                return false;
+            }
+            alreadyChanged = travelPartyStartContext.ChangedSectionIds;
+        }
 
         if (alreadyChanged != null)
             requested.RemoveWhere(alreadyChanged.Contains);
@@ -3129,9 +3168,12 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         P12MerchantOperationContext merchantContext = activeP12MerchantOperationContext;
         P12SoloTravelStartOperationContext soloTravelContext =
             activeP12SoloTravelStartOperationContext;
+        P12TravelPartyStartOperationContext travelPartyStartContext =
+            activeP12TravelPartyStartOperationContext;
         int activeBatchContexts = (travelContext != null ? 1 : 0)
             + (merchantContext != null ? 1 : 0)
-            + (soloTravelContext != null ? 1 : 0);
+            + (soloTravelContext != null ? 1 : 0)
+            + (travelPartyStartContext != null ? 1 : 0);
         if (activeBatchContexts > 1)
         {
             FaultRuntimeAdmission();
@@ -3165,6 +3207,16 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                 return false;
             }
             soloTravelContext.ChangedSectionIds.UnionWith(changed);
+            return true;
+        }
+        if (travelPartyStartContext != null)
+        {
+            if (!travelPartyStartContext.IsOwnedByCurrentThread())
+            {
+                FaultRuntimeAdmission();
+                return false;
+            }
+            travelPartyStartContext.ChangedSectionIds.UnionWith(changed);
             return true;
         }
         return npcRosterCensusProtocol.NotifyCommittedMutations(changed, out _);
@@ -6838,7 +6890,10 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             }
         }
 
-        return travelPartySystem != null && travelPartySystem.TryStartTravelParty(context);
+        if (travelPartySystem == null) return false;
+        return runtimeAdmissionContext == null
+            ? travelPartySystem.TryStartTravelParty(context)
+            : TryStartP12TravelParty(context);
     }
 
     public void AdvanceDay()

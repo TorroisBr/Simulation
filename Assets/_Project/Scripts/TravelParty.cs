@@ -453,8 +453,27 @@ public sealed class TravelPartySystem : IAuthoritativeMutationGuardBindable
     private readonly SimulationLogger logger;
     private readonly EconomyTransactionService transactionService;
     private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
+    [NonSerialized] private Func<TravelPartyStartPreparation, bool> p12StartOperationAdmission;
 
     public TravelPartyStore Store => partyStore;
+    internal RuntimeIdAllocator IdAllocator => idAllocator;
+    internal bool HasDomainEventRecorder => domainEventRecorder != null;
+
+    internal bool UsesP12IdentityOwners(RuntimeIdAllocator allocator, SimulationRecordSequence sequence)
+    {
+        return ReferenceEquals(idAllocator, allocator)
+            && ReferenceEquals(recordSequence, sequence)
+            && (domainEventRecorder == null || domainEventRecorder.UsesIdentityOwners(allocator, sequence));
+    }
+
+    internal bool BindP12StartOperationAdmission(Func<TravelPartyStartPreparation, bool> admission)
+    {
+        if (admission == null) return false;
+        if (p12StartOperationAdmission != null)
+            return p12StartOperationAdmission.Equals(admission);
+        p12StartOperationAdmission = admission;
+        return true;
+    }
 
     public TravelPartySystem(
         TravelPartyStore partyStore,
@@ -514,6 +533,25 @@ public sealed class TravelPartySystem : IAuthoritativeMutationGuardBindable
         if (TryPrepareTravel(context, false, out TravelPreparation preparation, out _) == false)
         {
             return false;
+        }
+
+        if (p12StartOperationAdmission != null)
+        {
+            bool admitted;
+            try
+            {
+                admitted = p12StartOperationAdmission(new TravelPartyStartPreparation(
+                    preparation.OriginLocation,
+                    preparation.OriginCity,
+                    preparation.Route,
+                    preparation.Members,
+                    preparation.Costs));
+            }
+            catch
+            {
+                admitted = false;
+            }
+            if (!admitted) return false;
         }
 
         string partyId;
@@ -1132,5 +1170,28 @@ public sealed class TravelPartySystem : IAuthoritativeMutationGuardBindable
             MemberById = memberById;
             Costs = costs;
         }
+    }
+}
+
+internal sealed class TravelPartyStartPreparation
+{
+    public SpatialLocationRuntime OriginLocation { get; }
+    public CityRuntime OriginCity { get; }
+    public SpatialRouteRuntime Route { get; }
+    public IReadOnlyList<NpcRuntime> Members { get; }
+    public IReadOnlyList<TravelPartyMemberCost> Costs { get; }
+
+    public TravelPartyStartPreparation(
+        SpatialLocationRuntime originLocation,
+        CityRuntime originCity,
+        SpatialRouteRuntime route,
+        IReadOnlyList<NpcRuntime> members,
+        IReadOnlyList<TravelPartyMemberCost> costs)
+    {
+        OriginLocation = originLocation;
+        OriginCity = originCity;
+        Route = route;
+        Members = members;
+        Costs = costs;
     }
 }

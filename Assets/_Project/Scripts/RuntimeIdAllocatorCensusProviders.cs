@@ -97,4 +97,10 @@ public static class RuntimeIdAllocatorCensusProvider
         if (owner == null) throw new ArgumentNullException(nameof(owner));
         return new CounterProvider(owner, RuntimeIdAllocatorCensusCounter.Decisions, DecisionsSectionId);
     }
+
+    public static IOwnerSectionCensusProvider CreateTravelPartyCounterProvider(RuntimeIdAllocator owner)
+    {
+        if (owner == null) throw new ArgumentNullException(nameof(owner));
+        return new CounterProvider(owner, RuntimeIdAllocatorCensusCounter.TravelParties, TravelPartiesSectionId);
+    }
 }

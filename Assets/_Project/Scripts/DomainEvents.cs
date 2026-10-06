@@ -967,6 +967,12 @@ public sealed class DomainEventRecorder : IDomainEventRecorder
     private readonly DomainEventStore eventStore;
     private readonly SimulationLogger logger;
 
+    internal bool UsesIdentityOwners(RuntimeIdAllocator allocator, SimulationRecordSequence sequence)
+    {
+        return ReferenceEquals(eventIdAllocator, allocator)
+            && ReferenceEquals(recordSequence, sequence);
+    }
+
     public DomainEventRecorder(
         RuntimeIdAllocator eventIdAllocator,
         SimulationTime simulationTime,

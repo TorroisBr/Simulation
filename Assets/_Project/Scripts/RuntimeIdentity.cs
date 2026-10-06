@@ -23,6 +23,8 @@ public sealed class RuntimeIdAllocator
     private Action p12EventIdMutationCommitted;
     private Func<bool> p12DecisionIdMutationAdmission;
     private Action p12DecisionIdMutationCommitted;
+    private Func<bool> p12TravelPartyIdMutationAdmission;
+    private Action p12TravelPartyIdMutationCommitted;
 
     internal object CensusOwnerIdentity => censusOwnerIdentity;
 
@@ -143,7 +145,36 @@ public sealed class RuntimeIdAllocator
 
     public string AllocateTravelPartyId()
     {
-        return Allocate("travel-party", ref nextTravelPartySequence);
+        if (nextTravelPartySequence == long.MaxValue)
+        {
+            throw new InvalidOperationException("RuntimeId sequence exhausted for type 'travel-party'.");
+        }
+
+        if (p12TravelPartyIdMutationAdmission != null && !CanCommitP12TravelPartyIdMutation())
+        {
+            throw new InvalidOperationException("The P12 TravelParty-ID mutation was rejected before allocation.");
+        }
+
+        string runtimeId = "travel-party-" + nextTravelPartySequence.ToString("D6", CultureInfo.InvariantCulture);
+        nextTravelPartySequence++;
+        p12TravelPartyIdMutationCommitted?.Invoke();
+        return runtimeId;
+    }
+
+    internal void BindP12TravelPartyIdMutationBoundary(Func<bool> admission, Action committed)
+    {
+        if (admission == null) throw new ArgumentNullException(nameof(admission));
+        if (committed == null) throw new ArgumentNullException(nameof(committed));
+        if (p12TravelPartyIdMutationAdmission != null || p12TravelPartyIdMutationCommitted != null)
+            throw new InvalidOperationException("RuntimeIdAllocator TravelParty IDs are already bound to a P12 mutation boundary.");
+        p12TravelPartyIdMutationAdmission = admission;
+        p12TravelPartyIdMutationCommitted = committed;
+    }
+
+    private bool CanCommitP12TravelPartyIdMutation()
+    {
+        try { return p12TravelPartyIdMutationAdmission(); }
+        catch { return false; }
     }
 
     public string AllocateOrganizationId()
