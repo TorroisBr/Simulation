@@ -527,6 +527,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
     private readonly ExpeditionSystem expeditionSystem;
     private readonly PlaceContentStore placeContentStore;
     private readonly NpcDecisionRecorder decisionRecorder;
+    private readonly EconomyTransactionService economyTransactionService;
+    private readonly bool requireP12ReceiptCensusOwners;
     private readonly AdventureExpeditionAutonomySystem adventureExpeditionAutonomySystem;
     private readonly SimulationLogger logger;
 
@@ -772,7 +774,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         RuntimeIdAllocator runtimeIdAllocator = null,
         SimulationRuntimeCompositionProfile compositionProfile = SimulationRuntimeCompositionProfile.Standard,
         StructureStore structureStore = null,
-        P17AScenarioAuthorityCapability p17AScenarioAuthorityCapability = null)
+        P17AScenarioAuthorityCapability p17AScenarioAuthorityCapability = null,
+        EconomyTransactionService economyTransactionService = null,
+        bool requireP12ReceiptCensusOwners = false)
     {
         WorldId = worldId;
         if (!Enum.IsDefined(typeof(SimulationRuntimeCompositionProfile), compositionProfile))
@@ -868,8 +872,19 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             }
         }
 
+        if (requireP12ReceiptCensusOwners
+            && (runtimeAdmissionContext == null
+                || runtimeAdmissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1))
+        {
+            throw new ArgumentException(
+                "The full P12 receipt-owner inventory is valid only for the selected UnityBootstrap-Daily-v1 profile.",
+                nameof(requireP12ReceiptCensusOwners));
+        }
+
         this.runtimeAdmissionContext = runtimeAdmissionContext;
         this.runtimeIdAllocator = runtimeIdAllocator;
+        this.economyTransactionService = economyTransactionService;
+        this.requireP12ReceiptCensusOwners = requireP12ReceiptCensusOwners;
         if (runtimeAdmissionContext != null && runtimeIdAllocator != null)
         {
             runtimeIdAllocatorEventCounterCensusProvider =
@@ -1933,6 +1948,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             || (runtimeAdmissionContext != null && !TryRegisterCityMarketCensusProviders(protocol))
             || (runtimeAdmissionContext != null && !TryRegisterP12PopulationCensusProviders(protocol))
             || (runtimeAdmissionContext != null && !TryRegisterP12CrimeSocialAppraisalOwnerSections(protocol))
+            || (requireP12ReceiptCensusOwners && !TryRegisterP12ExactZeroReceiptOwners(protocol))
             || !protocol.SealExpectedSectionInventory(out _)
             || !protocol.SealCensusProviderInventory(out _))
         {
@@ -2364,6 +2380,78 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             protocol.FaultClosed();
             return false;
         }
+    }
+
+    private bool TryRegisterP12ExactZeroReceiptOwners(ContinuationCensusProtocol protocol)
+    {
+        if (protocol == null
+            || decisionRecorder == null
+            || economyTransactionService == null)
+        {
+            protocol?.FaultClosed();
+            return false;
+        }
+
+        return TryRegisterP12ExplicitlyEmptyReceiptOwner(
+                protocol,
+                decisionRecorder,
+                NpcDecisionRecorder.OccurrenceReceiptSectionId,
+                NpcDecisionRecorder.OccurrenceReceiptSectionSchemaVersion)
+            && TryRegisterP12ExplicitlyEmptyReceiptOwner(
+                protocol,
+                economyTransactionService,
+                EconomyTransactionService.KeyedSaleReceiptSectionId,
+                EconomyTransactionService.KeyedSaleReceiptSectionSchemaVersion);
+    }
+
+    private static bool TryRegisterP12ExplicitlyEmptyReceiptOwner(
+        ContinuationCensusProtocol protocol,
+        IOwnerSectionCensusProvider provider,
+        string expectedSectionId,
+        int expectedSchemaVersion)
+    {
+        if (protocol == null) return false;
+
+        try
+        {
+            OwnerSectionContract contract = new OwnerSectionContract(
+                expectedSectionId,
+                expectedSchemaVersion,
+                OwnerSectionRole.ExplicitlyEmpty);
+            OwnerSectionCensusWitness first = provider?.GetCurrentCensus();
+            OwnerSectionCensusWitness second = provider?.GetCurrentCensus();
+            if (!IsValidP12ExplicitlyEmptyReceiptWitness(contract, first)
+                || !IsValidP12ExplicitlyEmptyReceiptWitness(contract, second)
+                || !ReferenceEquals(first.OwnerInstanceIdentity, second.OwnerInstanceIdentity)
+                || first.Cardinality != second.Cardinality
+                || first.Revision != second.Revision
+                || !protocol.RegisterExpectedSection(contract, out _)
+                || !protocol.RegisterCensusProvider(expectedSectionId, provider, out _))
+            {
+                protocol.FaultClosed();
+                return false;
+            }
+
+            return true;
+        }
+        catch
+        {
+            protocol.FaultClosed();
+            return false;
+        }
+    }
+
+    private static bool IsValidP12ExplicitlyEmptyReceiptWitness(
+        OwnerSectionContract contract,
+        OwnerSectionCensusWitness witness)
+    {
+        return contract != null
+            && witness != null
+            && string.Equals(witness.SectionId, contract.SectionId, StringComparison.Ordinal)
+            && witness.SchemaVersion == contract.SchemaVersion
+            && witness.OwnerInstanceIdentity != null
+            && witness.Cardinality == 0
+            && witness.Revision >= 0L;
     }
 
     private bool TryRegisterTravelPartyCensusProvider(ContinuationCensusProtocol protocol)

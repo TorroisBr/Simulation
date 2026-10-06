@@ -69,6 +69,194 @@ public sealed class SimulationRuntimeAdmissionTests
             afterBatch.ToString());
     }
 
+    [TestCase(false, true)]
+    [TestCase(true, false)]
+    public void FullDailyProfileReceiptInventoryFailsClosedWhenEitherOwnerIsMissing(
+        bool includeDecisionRecorder,
+        bool includeEconomyTransactionService)
+    {
+        RecordFixture records = SimulationTestFactory.CreateRecordFixture();
+
+        Assert.Throws<System.InvalidOperationException>(() => new SimulationRuntime(
+            records.Time,
+            null,
+            null,
+            decisionRecorder: includeDecisionRecorder ? records.DecisionRecorder : null,
+            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            recordSequence: records.Sequence,
+            runtimeIdAllocator: records.Allocator,
+            economyTransactionService: includeEconomyTransactionService
+                ? new EconomyTransactionService()
+                : null,
+            requireP12ReceiptCensusOwners: true));
+    }
+
+    [TestCase("decision")]
+    [TestCase("economy")]
+    public void FullDailyProfileReceiptInventoryFailsClosedWhenReceiptOwnerStartsPopulated(string receiptOwner)
+    {
+        RecordFixture records = SimulationTestFactory.CreateRecordFixture();
+        EconomyTransactionService economyTransactionService = new EconomyTransactionService();
+        object owner = receiptOwner == "decision"
+            ? (object)records.DecisionRecorder
+            : economyTransactionService;
+        string stateField = receiptOwner == "decision" ? "occurrenceReceipts" : "keyedSaleReceipts";
+        object collection = owner.GetType()
+            .GetField(stateField, BindingFlags.Instance | BindingFlags.NonPublic)
+            .GetValue(owner);
+        if (collection is System.Collections.IDictionary dictionary)
+            dictionary.Add("p12-exact-zero-receipt-test", null);
+        else
+            ((System.Collections.IList)collection).Add(null);
+
+        Assert.Throws<System.InvalidOperationException>(() => new SimulationRuntime(
+            records.Time,
+            null,
+            null,
+            decisionRecorder: records.DecisionRecorder,
+            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            recordSequence: records.Sequence,
+            runtimeIdAllocator: records.Allocator,
+            economyTransactionService: economyTransactionService,
+            requireP12ReceiptCensusOwners: true));
+    }
+
+    [TestCase("decision", "revision")]
+    [TestCase("economy", "revision")]
+    [TestCase("decision", "cardinality")]
+    [TestCase("economy", "cardinality")]
+    public void ExactZeroReceiptEvidenceDriftFailsRuntimeCensusAssessment(
+        string receiptOwner,
+        string driftKind)
+    {
+        RecordFixture records = SimulationTestFactory.CreateRecordFixture();
+        EconomyTransactionService economyTransactionService = new EconomyTransactionService();
+        SimulationRuntime runtime = new SimulationRuntime(
+            records.Time,
+            null,
+            null,
+            decisionRecorder: records.DecisionRecorder,
+            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            recordSequence: records.Sequence,
+            runtimeIdAllocator: records.Allocator,
+            economyTransactionService: economyTransactionService,
+            requireP12ReceiptCensusOwners: true);
+
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure initialFailure), Is.True,
+            initialFailure.ToString());
+
+        object owner = receiptOwner == "decision"
+            ? (object)records.DecisionRecorder
+            : economyTransactionService;
+        string stateField = receiptOwner == "decision"
+            ? "occurrenceReceipts"
+            : "keyedSaleReceipts";
+        string revisionField = receiptOwner == "decision"
+            ? "occurrenceReceiptsRevision"
+            : "keyedSaleReceiptsRevision";
+        if (driftKind == "revision")
+        {
+            FieldInfo revision = owner.GetType().GetField(
+                revisionField,
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(revision, Is.Not.Null);
+            revision.SetValue(owner, (long)revision.GetValue(owner) + 1L);
+        }
+        else
+        {
+            FieldInfo state = owner.GetType().GetField(
+                stateField,
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(state, Is.Not.Null);
+            object collection = state.GetValue(owner);
+            if (collection is System.Collections.IDictionary dictionary)
+                dictionary.Add("p12-exact-zero-receipt-test", null);
+            else
+                ((System.Collections.IList)collection).Add(null);
+        }
+
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure driftFailure), Is.False);
+        Assert.That(driftFailure, Is.EqualTo(ContinuationCensusFailure.OwnerCoverageIncomplete));
+    }
+
+    [TestCase("wrong-section")]
+    [TestCase("wrong-schema")]
+    [TestCase("unstable-owner")]
+    [TestCase("populated")]
+    [TestCase("missing-witness")]
+    public void ExactZeroReceiptRegistrationRejectsMalformedProviders(string defect)
+    {
+        string sectionId = NpcDecisionRecorder.OccurrenceReceiptSectionId;
+        int schemaVersion = NpcDecisionRecorder.OccurrenceReceiptSectionSchemaVersion;
+        object firstOwner = new object();
+        OwnerSectionCensusWitness first = CreateReceiptWitness(sectionId, schemaVersion, firstOwner, 0, 0L);
+        OwnerSectionCensusWitness second = first;
+        if (defect == "wrong-section")
+            first = second = CreateReceiptWitness(sectionId + "/unexpected", schemaVersion, firstOwner, 0, 0L);
+        else if (defect == "wrong-schema")
+            first = second = CreateReceiptWitness(sectionId, schemaVersion + 1, firstOwner, 0, 0L);
+        else if (defect == "unstable-owner")
+            second = CreateReceiptWitness(sectionId, schemaVersion, new object(), 0, 0L);
+        else if (defect == "populated")
+            first = second = CreateReceiptWitness(sectionId, schemaVersion, firstOwner, 1, 0L);
+        else if (defect == "missing-witness")
+            first = second = null;
+
+        ReceiptCensusProviderStub provider = new ReceiptCensusProviderStub(first, second);
+        ContinuationCensusProtocol protocol = new ContinuationCensusProtocol();
+        MethodInfo register = typeof(SimulationRuntime).GetMethod(
+            "TryRegisterP12ExplicitlyEmptyReceiptOwner",
+            BindingFlags.Static | BindingFlags.NonPublic);
+        Assert.That(register, Is.Not.Null);
+
+        object registered = register.Invoke(null, new object[] { protocol, provider, sectionId, schemaVersion });
+
+        Assert.That(registered, Is.EqualTo(false));
+    }
+
+    private static OwnerSectionCensusWitness CreateReceiptWitness(
+        string sectionId,
+        int schemaVersion,
+        object ownerIdentity,
+        int cardinality,
+        long revision)
+    {
+        ConstructorInfo constructor = typeof(OwnerSectionCensusWitness).GetConstructor(
+            BindingFlags.Instance | BindingFlags.NonPublic,
+            null,
+            new[] { typeof(string), typeof(int), typeof(object), typeof(int), typeof(long) },
+            null);
+        Assert.That(constructor, Is.Not.Null);
+        return (OwnerSectionCensusWitness)constructor.Invoke(new object[]
+        {
+            sectionId,
+            schemaVersion,
+            ownerIdentity,
+            cardinality,
+            revision
+        });
+    }
+
+    private sealed class ReceiptCensusProviderStub : IOwnerSectionCensusProvider
+    {
+        private readonly OwnerSectionCensusWitness first;
+        private readonly OwnerSectionCensusWitness second;
+        private int reads;
+
+        public ReceiptCensusProviderStub(
+            OwnerSectionCensusWitness first,
+            OwnerSectionCensusWitness second)
+        {
+            this.first = first;
+            this.second = second;
+        }
+
+        public OwnerSectionCensusWitness GetCurrentCensus()
+        {
+            return reads++ == 0 ? first : second;
+        }
+    }
+
     [Test]
     public void DailyKnowledgeWritersRefreshOwnerBaselinesBeforeMerchantRosterCall()
     {

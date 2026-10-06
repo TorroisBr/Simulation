@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -676,6 +677,20 @@ public sealed class SimulationBootstrapCompositionTests
             Is.EqualTo(expectedSpatialKnowledgeSectionIds));
         Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure npcCensusFailure), Is.True,
             npcCensusFailure.ToString());
+        ContinuationCensusProtocol censusProtocol = (ContinuationCensusProtocol)typeof(SimulationRuntime)
+            .GetField("npcRosterCensusProtocol", BindingFlags.Instance | BindingFlags.NonPublic)
+            .GetValue(runtime);
+        IDictionary expectedCensusSections = (IDictionary)typeof(ContinuationCensusProtocol)
+            .GetField("expectedSections", BindingFlags.Instance | BindingFlags.NonPublic)
+            .GetValue(censusProtocol);
+        Assert.That(expectedCensusSections.Count, Is.EqualTo(235),
+            "The current selected ten-NPC/two-City Daily-v1 composition has 233 sections before its two exact-zero receipt owners.");
+        Assert.That(expectedCensusSections.Contains(NpcDecisionRecorder.OccurrenceReceiptSectionId), Is.True);
+        Assert.That(expectedCensusSections.Contains(EconomyTransactionService.KeyedSaleReceiptSectionId), Is.True);
+        Assert.That(((OwnerSectionContract)expectedCensusSections[NpcDecisionRecorder.OccurrenceReceiptSectionId]).Role,
+            Is.EqualTo(OwnerSectionRole.ExplicitlyEmpty));
+        Assert.That(((OwnerSectionContract)expectedCensusSections[EconomyTransactionService.KeyedSaleReceiptSectionId]).Role,
+            Is.EqualTo(OwnerSectionRole.ExplicitlyEmpty));
         Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
             out long npcCensusEpoch, out ContinuationCensusFailure npcEpochFailure), Is.True,
             npcEpochFailure.ToString());
