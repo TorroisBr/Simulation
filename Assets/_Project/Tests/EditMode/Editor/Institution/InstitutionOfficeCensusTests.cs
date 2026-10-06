@@ -289,6 +289,7 @@ public sealed class InstitutionOfficeCensusTests
         epoch++;
         AssertMutationEpoch(runtime, epoch);
         AssertWitnesses(providers, runtime, 1, 2, 1, 3, 1L, 7L);
+        AssertRegisteredOperationTrackerIsIdle(runtime);
     }
 
     [Test]
@@ -343,6 +344,8 @@ public sealed class InstitutionOfficeCensusTests
         Assert.That(offices.TenureCount, Is.EqualTo(tenureCount));
         Assert.That(offices.Revision, Is.EqualTo(officeRevision));
         Assert.That(ReadProtocolMutationEpoch(runtime), Is.EqualTo(epoch));
+        Assert.That(ReadActiveOperationCount(runtime), Is.Zero,
+            "Off-owner-thread admission must not leave an active operation scope.");
     }
 
     [Test]
@@ -491,12 +494,37 @@ public sealed class InstitutionOfficeCensusTests
 
     private static long ReadProtocolMutationEpoch(SimulationRuntime runtime)
     {
-        ContinuationCensusProtocol protocol = (ContinuationCensusProtocol)typeof(SimulationRuntime)
-            .GetField("npcRosterCensusProtocol", BindingFlags.Instance | BindingFlags.NonPublic)
-            .GetValue(runtime);
+        ContinuationCensusProtocol protocol = GetCensusProtocol(runtime);
         return (long)typeof(ContinuationCensusProtocol)
             .GetField("mutationEpoch", BindingFlags.Instance | BindingFlags.NonPublic)
             .GetValue(protocol);
+    }
+
+    private static int ReadActiveOperationCount(SimulationRuntime runtime)
+    {
+        ContinuationCensusProtocol protocol = GetCensusProtocol(runtime);
+        return (int)typeof(ContinuationCensusProtocol)
+            .GetField("activeOperationCount", BindingFlags.Instance | BindingFlags.NonPublic)
+            .GetValue(protocol);
+    }
+
+    private static void AssertRegisteredOperationTrackerIsIdle(SimulationRuntime runtime)
+    {
+        ContinuationCensusProtocol protocol = GetCensusProtocol(runtime);
+        Assert.That(protocol.TryReadActiveOperationCount(
+            out int activeOperationCount, out ContinuationCensusFailure readFailure),
+            Is.True, readFailure.ToString());
+        Assert.That(activeOperationCount, Is.Zero);
+        Assert.That(protocol.TryAssessRegisteredOperationQuiescence(
+            out ContinuationCensusFailure quiescenceFailure),
+            Is.True, quiescenceFailure.ToString());
+    }
+
+    private static ContinuationCensusProtocol GetCensusProtocol(SimulationRuntime runtime)
+    {
+        return (ContinuationCensusProtocol)typeof(SimulationRuntime)
+            .GetField("npcRosterCensusProtocol", BindingFlags.Instance | BindingFlags.NonPublic)
+            .GetValue(runtime);
     }
 
     private static PersonRuntime RegisterPerson(PersonStore people, string id)
