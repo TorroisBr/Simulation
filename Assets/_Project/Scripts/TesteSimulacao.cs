@@ -200,6 +200,11 @@ public class TesteSimulacao : MonoBehaviour
                             && runtimeAdmissionContext != null
                             && runtimeAdmissionContext.Profile == SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1)
                             throw new System.InvalidOperationException("P10-B generated Ruin topology is not admitted by the Unity bootstrap daily profile.");
+                        if (P10RuinLocalTopologyGenesis.IsEnabled(simulationConfig)
+                            && !SimulationGenesisPipeline.IsP10BGeneratedRuinEnabled(simulationConfig)
+                            && runtimeAdmissionContext != null
+                            && runtimeAdmissionContext.Profile == SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1)
+                            throw new System.InvalidOperationException("P10-A Ruin/LocalTopology is not admitted by the Unity bootstrap daily profile.");
                         ValidateP14SourceAdmission(simulationConfig, runtimeAdmissionContext);
                         SimulationGenesisPipeline.ValidateProfile(simulationConfig);
                         unpublishedWorldId = worldIdentityAllocator?.Invoke();

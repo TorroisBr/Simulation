@@ -1,0 +1,119 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3474883101d4499e9e45247304cbd4c5, type: 3}
+  m_Name: Simulation-DailyV1
+  m_EditorClassIdentifier: Assembly-CSharp::SimulationConfigData
+  simulationName: Daily v1
+  enabledModules: 00000000010000000300000002000000
+  cities:
+  - {fileID: 11400000, guid: eabd01569d86fa84bb8117495a6dfb5e, type: 2}
+  - {fileID: 11400000, guid: ca4ded573f6d79a4b8bc96de1114b659, type: 2}
+  npcs:
+  - npc: {fileID: 11400000, guid: 80a4772466a41c741ab4002313a098e5, type: 2}
+    startingCity: {fileID: 11400000, guid: eabd01569d86fa84bb8117495a6dfb5e, type: 2}
+    initialMoney: 220
+    initialInventory: []
+  - npc: {fileID: 11400000, guid: 326cc127c63c9d2469f09266bf08609b, type: 2}
+    startingCity: {fileID: 11400000, guid: ca4ded573f6d79a4b8bc96de1114b659, type: 2}
+    initialMoney: 180
+    initialInventory: []
+  - npc: {fileID: 11400000, guid: 375c3ae665c32434d81309a840d6bfc9, type: 2}
+    startingCity: {fileID: 11400000, guid: ca4ded573f6d79a4b8bc96de1114b659, type: 2}
+    initialMoney: 170
+    initialInventory: []
+  - npc: {fileID: 11400000, guid: b82af365521fdd842a2fd4fffe367488, type: 2}
+    startingCity: {fileID: 11400000, guid: eabd01569d86fa84bb8117495a6dfb5e, type: 2}
+    initialMoney: 220
+    initialInventory:
+    - item: {fileID: 11400000, guid: 5e654620f3ce5484aba6c031af300e2c, type: 2}
+      amount: 4
+      averageUnitCost: 6
+  - npc: {fileID: 11400000, guid: 028efee088fe4124e8348f07c404102d, type: 2}
+    startingCity: {fileID: 11400000, guid: ca4ded573f6d79a4b8bc96de1114b659, type: 2}
+    initialMoney: 220
+    initialInventory:
+    - item: {fileID: 11400000, guid: 64cef03f3b8e1c1419c490e6711ba665, type: 2}
+      amount: 4
+      averageUnitCost: 8
+  - npc: {fileID: 11400000, guid: 90c1203295614d02841133d25b2db0ab, type: 2}
+    startingCity: {fileID: 11400000, guid: eabd01569d86fa84bb8117495a6dfb5e, type: 2}
+    initialMoney: 20
+    initialInventory: []
+  - npc: {fileID: 11400000, guid: 9c5bd532534338e4e953dcafc2d2b277, type: 2}
+    startingCity: {fileID: 11400000, guid: ca4ded573f6d79a4b8bc96de1114b659, type: 2}
+    initialMoney: 20
+    initialInventory: []
+  - npc: {fileID: 11400000, guid: 6a0d3bb70f1f27647a263088c511fbf7, type: 2}
+    startingCity: {fileID: 11400000, guid: eabd01569d86fa84bb8117495a6dfb5e, type: 2}
+    initialMoney: 35
+    initialInventory: []
+  - npc: {fileID: 11400000, guid: 8f001db37be773846b264fe37b87313f, type: 2}
+    startingCity: {fileID: 11400000, guid: ca4ded573f6d79a4b8bc96de1114b659, type: 2}
+    initialMoney: 80
+    initialInventory: []
+  - npc: {fileID: 11400000, guid: 83769c4f88895c549b821b2c0d496def, type: 2}
+    startingCity: {fileID: 11400000, guid: eabd01569d86fa84bb8117495a6dfb5e, type: 2}
+    initialMoney: 65
+    initialInventory: []
+  actions:
+  - {fileID: 11400000, guid: 2fd0b05dba9748444891d218e424fc1c, type: 2}
+  - {fileID: 11400000, guid: 5041bea373640e64b817c6d64f4dd131, type: 2}
+  - {fileID: 11400000, guid: 5865aac66a0f87344bf73e5d71f94fdb, type: 2}
+  - {fileID: 11400000, guid: 4a0d889e89c7410a9853697fccc549f6, type: 2}
+  - {fileID: 11400000, guid: 4d17b6150dbe4b3884146c663a64e14c, type: 2}
+  - {fileID: 11400000, guid: e78bf19140194bb1969ba878ddec8a86, type: 2}
+  - {fileID: 11400000, guid: 1e4507e7ee6cc804ea0be9238c0784f0, type: 2}
+  - {fileID: 11400000, guid: ce9236aab15e40c79d18e7cfc7cac14b, type: 2}
+  - {fileID: 11400000, guid: 1cd32fa5fdbb46fcaf34ff0a6f390eaf, type: 2}
+  - {fileID: 11400000, guid: 3a34fd972a2f4ca68cf1e82ecc01b126, type: 2}
+  - {fileID: 11400000, guid: ac62c1a5cea3459899bfd31f38bea7f0, type: 2}
+  - {fileID: 11400000, guid: 2eec4d75bb73446fba3e6204519585bc, type: 2}
+  statuses:
+  - {fileID: 11400000, guid: 922e799608934f4469cb8c77bfc6c32e, type: 2}
+  - {fileID: 11400000, guid: fd104bc4e7844760bfea57b9522141cd, type: 2}
+  - {fileID: 11400000, guid: 39ec54928a091684d8daf631dfe56d67, type: 2}
+  - {fileID: 11400000, guid: 02f011b05cde418e83eef2af611b5e7f, type: 2}
+  jobs:
+  - {fileID: 11400000, guid: 14afa0c3d8c0b594da66d52015932182, type: 2}
+  - {fileID: 11400000, guid: f5fc0d76533440245a4d0fc05ec39fd6, type: 2}
+  - {fileID: 11400000, guid: c3c420f2e047fc046bc5a3e1b59785c4, type: 2}
+  - {fileID: 11400000, guid: 3b65695fde8eb5b4aaa3942aeb26d625, type: 2}
+  - {fileID: 11400000, guid: 6e6fe1f0766480141bc9187ff8175e29, type: 2}
+  initialWarrants: []
+  useAuthoredGeographyProfile: 1
+  authoredHexId: hex/sample-origin
+  authoredHexQ: 0
+  authoredHexR: 0
+  authoredTerrainDefinitionId: terrain/sample-plains
+  authoredTerrainRevisionToken: sample-world-v1
+  authoredLocationId: location/sample-origin
+  authoredScaleConventionId: world-scale/Simulation-DailyV1/v1
+  authoredScaleSourceIdentity: profile/Simulation-DailyV1
+  authoredScaleSourceVersion: 1
+  authoredDistancePerNeighborStep: 1
+  authoredScaleUnit: km
+  authoredP10RuinSite: {fileID: 0}
+  travelCostPerDay: 10
+  logSettings:
+    showDay: 1
+    npcActions: 1
+    trade: 1
+    travel: 1
+    crime: 1
+    justice: 1
+    economyProduction: 0
+    economyConsumption: 0
+    market: 0
+  freeStatus: {fileID: 11400000, guid: 922e799608934f4469cb8c77bfc6c32e, type: 2}
+  wantedStatus: {fileID: 11400000, guid: fd104bc4e7844760bfea57b9522141cd, type: 2}
+  arrestedStatus: {fileID: 11400000, guid: 39ec54928a091684d8daf631dfe56d67, type: 2}
+  hiddenStatus: {fileID: 11400000, guid: 02f011b05cde418e83eef2af611b5e7f, type: 2}

@@ -248,7 +248,7 @@ public sealed class P10BGeneratedRuinGenesisTests
     }
 
     [Test]
-    public void DailyAdmissionContinuesToAcceptTheP10ACompatibilityProfile()
+    public void DailyAdmissionRejectsTheSeparateP10ACompatibilityProfileBeforePublication()
     {
         SimulationConfigData config = CreateP10BConfig();
         config.genesisProfileContractIdentity = null;
@@ -258,13 +258,26 @@ public sealed class P10BGeneratedRuinGenesisTests
         TesteSimulacao simulation = gameObject.AddComponent<TesteSimulacao>();
         SetField(simulation, "simulationConfig", config);
         SetField(simulation, "runtimeAdmissionProfile", SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1);
+        int worldIdentityAllocations = 0;
+        SetField(simulation, "worldIdentityAllocator", (System.Func<WorldId>)(() =>
+        {
+            worldIdentityAllocations++;
+            return new WorldId(new System.Guid("12345678-1234-5678-9abc-def012345678"));
+        }));
 
-        simulation.Start();
+        Assert.Throws<System.InvalidOperationException>(() => simulation.Start());
 
-        Assert.That(simulation.Bootstrap, Is.Not.Null);
-        Assert.That(simulation.Bootstrap.ProfileContractIdentity,
-            Is.EqualTo(SimulationGenesisPipeline.P10RuinProfileContractIdentity));
-        Assert.That(simulation.Runtime.LocalTopologyStore.Topologies, Has.Count.EqualTo(1));
+        Assert.That(worldIdentityAllocations, Is.Zero, "P10-A admission must reject before WorldId allocation.");
+        Assert.That(simulation.Bootstrap, Is.Null);
+        Assert.That(simulation.Runtime, Is.Null);
+        Assert.That(ReadField(simulation, "unpublishedWorldId"), Is.Null);
+        Assert.That(ReadField(simulation, "draftComposition"), Is.Null);
+        Assert.That(ReadField(simulation, "runtimeIdAllocator"), Is.Null);
+        Assert.That(ReadField(simulation, "explorableSiteStore"), Is.Null);
+        Assert.That(ReadField(simulation, "runtimeIdentityRegistry"), Is.Null);
+        Assert.That(ReadField(simulation, "genesisSpatialAuthority"), Is.Null);
+        Assert.That(ReadField(simulation, "spatialNetwork"), Is.Null);
+        Assert.That(ReadField(simulation, "p10BPreparedRuin"), Is.Null);
     }
 
     [Test]

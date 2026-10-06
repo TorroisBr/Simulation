@@ -581,17 +581,19 @@ public sealed class SimulationBootstrapCompositionTests
     }
 
     [Test]
-    public void SelectedSampleSceneProfileBootstrapsItsAuthoredP8GeographyBeforeDayOne()
+    public void SelectedDailyV1ProfileBootstrapsItsAuthoredP8GeographyBeforeDayOne()
     {
         SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
-            "Assets/_Project/Data/Simulations/Simulation-GeneralTest.asset");
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
         Assert.That(config, Is.Not.Null);
         Assert.That(config.useAuthoredGeographyProfile, Is.True);
-        Assert.That(config.authoredP10RuinSite, Is.Not.Null);
+        Assert.That(config.authoredP10RuinSite, Is.Null);
         GameObject simulationObject = new GameObject("selected-sample-profile-p9b-test");
         simulationObjects.Add(simulationObject);
         TesteSimulacao simulation = simulationObject.AddComponent<TesteSimulacao>();
         typeof(TesteSimulacao).GetField("simulationConfig", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(simulation, config);
+        typeof(TesteSimulacao).GetField("runtimeAdmissionProfile", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(simulation, SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1);
 
         simulation.Start();
 
@@ -608,7 +610,7 @@ public sealed class SimulationBootstrapCompositionTests
             RuntimeIdentityRegistryCensusProvider.LocalConnectionsSectionId,
             RuntimeIdentityRegistryCensusProvider.NotableItemsSectionId
         };
-        int[] expectedRuntimeIdentityCardinalities = { 10, 2, 3, 2, 1, 3, 2, 0 };
+        int[] expectedRuntimeIdentityCardinalities = { 10, 2, 2, 2, 0, 0, 0, 0 };
         Assert.That(runtimeIdentityProviders.Count, Is.EqualTo(runtimeIdentitySectionIds.Length));
         object runtimeIdentityOwner = null;
         for (int i = 0; i < runtimeIdentityProviders.Count; i++)
@@ -617,7 +619,7 @@ public sealed class SimulationBootstrapCompositionTests
             Assert.That(witness.SectionId, Is.EqualTo(runtimeIdentitySectionIds[i]));
             Assert.That(witness.SchemaVersion, Is.EqualTo(RuntimeIdentityRegistryCensusProvider.SchemaVersion));
             Assert.That(witness.Cardinality, Is.EqualTo(expectedRuntimeIdentityCardinalities[i]));
-            Assert.That(witness.Revision, Is.EqualTo(19L));
+            Assert.That(witness.Revision, Is.EqualTo(16L));
             if (i == 0)
             {
                 runtimeIdentityOwner = witness.OwnerInstanceIdentity;
@@ -635,7 +637,7 @@ public sealed class SimulationBootstrapCompositionTests
         {
             Assert.That(repeatedIdentityWitnesses[i].OwnerInstanceIdentity, Is.SameAs(runtimeIdentityOwner));
             Assert.That(repeatedIdentityWitnesses[i].Cardinality, Is.EqualTo(expectedRuntimeIdentityCardinalities[i]));
-            Assert.That(repeatedIdentityWitnesses[i].Revision, Is.EqualTo(19L));
+            Assert.That(repeatedIdentityWitnesses[i].Revision, Is.EqualTo(16L));
         }
 
         SimulationRuntime runtime = simulation.Bootstrap.Runtime;
@@ -646,7 +648,7 @@ public sealed class SimulationBootstrapCompositionTests
             SpatialNetworkCensusProvider.LocationsSectionId,
             SpatialNetworkCensusProvider.RoutesSectionId
         };
-        int[] expectedSpatialNetworkCardinalities = { 3, 2 };
+        int[] expectedSpatialNetworkCardinalities = { 2, 2 };
         Assert.That(spatialNetworkProviders.Count, Is.EqualTo(spatialNetworkSectionIds.Length));
         for (int i = 0; i < spatialNetworkProviders.Count; i++)
         {
@@ -656,7 +658,7 @@ public sealed class SimulationBootstrapCompositionTests
             Assert.That(witness.OwnerInstanceIdentity, Is.SameAs(simulation.Bootstrap.SpatialNetwork));
             Assert.That(witness.OwnerInstanceIdentity, Is.Not.SameAs(runtimeIdentityOwner));
             Assert.That(witness.Cardinality, Is.EqualTo(expectedSpatialNetworkCardinalities[i]));
-            Assert.That(witness.Revision, Is.EqualTo(5L));
+            Assert.That(witness.Revision, Is.EqualTo(4L));
         }
 
         IReadOnlyList<IOwnerSectionCensusProvider> spatialKnowledgeProviders =
@@ -881,7 +883,7 @@ public sealed class SimulationBootstrapCompositionTests
             RuntimeIdAllocatorCensusProvider.LocalConnectionsSectionId,
             RuntimeIdAllocatorCensusProvider.NotableItemsSectionId
         };
-        long[] expectedRuntimeIdAllocatorRevisions = { 10L, 2L, 3L, 2L, 0L, 0L, 0L, 0L, 0L, 1L, 0L, 3L, 2L, 0L };
+        long[] expectedRuntimeIdAllocatorRevisions = { 10L, 2L, 2L, 2L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L };
         Assert.That(runtimeIdAllocatorProviders.Count, Is.EqualTo(runtimeIdAllocatorSectionIds.Length));
         object runtimeIdAllocatorOwner = null;
         for (int i = 0; i < runtimeIdAllocatorProviders.Count; i++)
@@ -1101,7 +1103,7 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(hexCensus.SchemaVersion, Is.EqualTo(SpatialHexCensusProvider.SchemaVersion));
         Assert.That(hexCensus.OwnerInstanceIdentity, Is.SameAs(authority));
         Assert.That(hexCensus.Cardinality, Is.EqualTo(1));
-        Assert.That(hexCensus.Revision, Is.EqualTo(2L));
+        Assert.That(hexCensus.Revision, Is.EqualTo(1L));
         Assert.That(hexCensusProvider.GetCurrentCensus().OwnerInstanceIdentity, Is.SameAs(authority));
 
         SpatialLocationCensusProvider locationCensusProvider = new SpatialLocationCensusProvider(authority);
@@ -1110,7 +1112,7 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(locationCensus.SchemaVersion, Is.EqualTo(SpatialLocationCensusProvider.SchemaVersion));
         Assert.That(locationCensus.OwnerInstanceIdentity, Is.SameAs(authority));
         Assert.That(locationCensus.Cardinality, Is.EqualTo(1));
-        Assert.That(locationCensus.Revision, Is.EqualTo(2L));
+        Assert.That(locationCensus.Revision, Is.EqualTo(1L));
         Assert.That(locationCensusProvider.GetCurrentCensus().OwnerInstanceIdentity, Is.SameAs(authority));
 
         SpatialScaleContextCensusProvider scaleCensusProvider = new SpatialScaleContextCensusProvider(authority);
@@ -1119,7 +1121,7 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(scaleCensus.SchemaVersion, Is.EqualTo(SpatialScaleContextCensusProvider.SchemaVersion));
         Assert.That(scaleCensus.OwnerInstanceIdentity, Is.SameAs(authority));
         Assert.That(scaleCensus.Cardinality, Is.EqualTo(1));
-        Assert.That(scaleCensus.Revision, Is.EqualTo(2L));
+        Assert.That(scaleCensus.Revision, Is.EqualTo(1L));
         Assert.That(scaleCensusProvider.GetCurrentCensus().OwnerInstanceIdentity, Is.SameAs(authority));
 
         OwnerSectionCensusWitness occurrenceReceipts = simulation.Bootstrap.GetNpcDecisionOccurrenceReceiptCensus();
@@ -1143,19 +1145,18 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(simulation.Runtime.ActorChoiceStore, Is.Not.Null,
             "The promoted P9-B bootstrap must retain the P11 actor-choice authority in the composed runtime.");
 
-        Assert.That(simulation.Bootstrap.ProfileContractIdentity, Is.EqualTo(P10RuinLocalTopologyGenesis.ContractIdentity));
+        Assert.That(simulation.Bootstrap.ProfileContractIdentity, Is.EqualTo(SimulationGenesisPipeline.GeographyProfileContractIdentity));
         Assert.That(simulation.Bootstrap.Manifest.SelectedP9ContractIdentity, Is.EqualTo(SimulationGenesisPipeline.GeographyProfileContractIdentity));
         Assert.That(simulation.Bootstrap.Manifest.SelectedP9SchemaVersion, Is.EqualTo(2));
         Assert.That(simulation.Bootstrap.Manifest.SelectedP9ProfileFingerprint, Is.Not.Empty);
-        Assert.That(simulation.Bootstrap.Manifest.Fingerprint, Is.Not.EqualTo(simulation.Bootstrap.Manifest.SelectedP9ProfileFingerprint));
-        Assert.That(simulation.Bootstrap.Manifest.SchemaVersion, Is.EqualTo(P10RuinLocalTopologyGenesis.ContractSchemaVersion));
+        Assert.That(simulation.Bootstrap.Manifest.Fingerprint, Is.EqualTo(simulation.Bootstrap.Manifest.SelectedP9ProfileFingerprint));
+        Assert.That(simulation.Bootstrap.Manifest.SchemaVersion, Is.EqualTo(2));
         Assert.That(simulation.Bootstrap.Manifest.StageOrder, Is.EqualTo(new[]
         {
             "p9.genesis.resolve-profile/v1",
             "p9.genesis.authored-world/v1",
             SimulationGenesisPipeline.GeographyStageId,
             "p9.genesis.authored-actors/v1",
-            P10RuinLocalTopologyGenesis.StageId,
             "p9.genesis.validate-profile/v1",
             "p9.genesis.publish/v1"
         }));
@@ -1167,19 +1168,42 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(hex.AuthoredRevisionToken, Is.EqualTo("sample-world-v1"));
         Assert.That(authority.TryGet(new LocationId("location/sample-origin"), out LocationRecord location), Is.True);
         Assert.That(location.AnchorHexId.Value, Is.EqualTo("hex/sample-origin"));
-        Assert.That(authority.ScaleContext.ResolvedConventionId, Is.EqualTo("world-scale/Simulation-GeneralTest/v1"));
-        Assert.That(authority.ScaleContext.SourceIdentity, Is.EqualTo("profile/Simulation-GeneralTest"));
+        Assert.That(authority.ScaleContext.ResolvedConventionId, Is.EqualTo("world-scale/Simulation-DailyV1/v1"));
+        Assert.That(authority.ScaleContext.SourceIdentity, Is.EqualTo("profile/Simulation-DailyV1"));
         Assert.That(authority.ScaleContext.SourceVersion, Is.EqualTo("1"));
         Assert.That(authority.ScaleContext.DistancePerNeighborStep, Is.EqualTo(1m));
         Assert.That(authority.ScaleContext.Unit, Is.EqualTo("km"));
         Assert.That(runtime.Cities, Has.Count.EqualTo(2));
         Assert.That(runtime.NpcRuntimes, Has.Count.EqualTo(10));
+        IReadOnlyList<IOwnerSectionCensusProvider> personProviders =
+            simulation.Bootstrap.PersonStoreCensusProviders;
+        Assert.That(personProviders, Has.Count.EqualTo(2));
+        OwnerSectionCensusWitness personMembership = personProviders[0].GetCurrentCensus();
+        OwnerSectionCensusWitness personBindings = personProviders[1].GetCurrentCensus();
+        Assert.That(personMembership.SectionId, Is.EqualTo(PersonMembershipCensusProvider.SectionId));
+        Assert.That(personBindings.SectionId, Is.EqualTo(PersonMaterializationBindingCensusProvider.SectionId));
+        Assert.That(personMembership.OwnerInstanceIdentity, Is.SameAs(runtime.PersonStore));
+        Assert.That(personBindings.OwnerInstanceIdentity, Is.SameAs(runtime.PersonStore));
+        Assert.That(personMembership.Cardinality, Is.Zero);
+        Assert.That(personBindings.Cardinality, Is.Zero);
+        Assert.That(personMembership.Revision, Is.Zero);
+        Assert.That(personBindings.Revision, Is.Zero);
+
         IReadOnlyList<IOwnerSectionCensusProvider> cityPresenceProviders =
             simulation.Bootstrap.CityNpcPresenceCensusProviders;
+        IReadOnlyList<IOwnerSectionCensusProvider> cityMarketProviders =
+            simulation.Bootstrap.CityMarketCensusProviders;
+        IReadOnlyList<IOwnerSectionCensusProvider> populationProviders =
+            simulation.Bootstrap.SettlementPopulationCensusProviders;
         Assert.That(cityPresenceProviders, Has.Count.EqualTo(runtime.Cities.Count));
+        Assert.That(cityMarketProviders, Has.Count.EqualTo(runtime.Cities.Count));
+        Assert.That(populationProviders, Has.Count.EqualTo(runtime.Cities.Count * 2));
+        CityRuntime[] orderedProfileCities = runtime.Cities
+            .OrderBy(city => city.RuntimeId, System.StringComparer.Ordinal)
+            .ToArray();
         for (int i = 0; i < runtime.Cities.Count; i++)
         {
-            CityRuntime city = runtime.Cities[i];
+            CityRuntime city = orderedProfileCities[i];
             OwnerSectionCensusWitness witness = cityPresenceProviders[i].GetCurrentCensus();
             Assert.That(witness.SectionId, Is.EqualTo(
                 CityNpcPresenceCensusProvider.SectionIdPrefix + city.RuntimeId));
@@ -1194,6 +1218,34 @@ public sealed class SimulationBootstrapCompositionTests
                 && runtime.NpcRuntimes.Contains(npc)), Is.True);
             Assert.That(runtime.NpcRuntimes.Count(npc => npc.CurrentCity == city),
                 Is.EqualTo(city.ImportantNpcs.Count));
+
+            OwnerSectionCensusWitness marketWitness = cityMarketProviders[i].GetCurrentCensus();
+            Assert.That(marketWitness.SectionId, Is.EqualTo(CityMarketCensusProvider.SectionIdPrefix
+                + city.RuntimeId.Length.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                + ":" + city.RuntimeId));
+            Assert.That(marketWitness.SchemaVersion, Is.EqualTo(CityMarketCensusProvider.SchemaVersion));
+            Assert.That(marketWitness.OwnerInstanceIdentity, Is.SameAs(city.Market));
+            Assert.That(marketWitness.Cardinality, Is.EqualTo(city.Market.Items.Count));
+            Assert.That(marketWitness.Cardinality, Is.EqualTo(5));
+            Assert.That(marketWitness.Revision, Is.EqualTo(city.Market.Revision));
+            Assert.That(marketWitness.Revision, Is.Zero);
+
+            OwnerSectionCensusWitness population = populationProviders[i * 2].GetCurrentCensus();
+            OwnerSectionCensusWitness receipts = populationProviders[i * 2 + 1].GetCurrentCensus();
+            string encodedCityId = city.RuntimeId.Length.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                + ":" + city.RuntimeId;
+            Assert.That(population.SectionId,
+                Is.EqualTo(SettlementPopulationCensusProvider.AggregateSectionPrefix + encodedCityId));
+            Assert.That(receipts.SectionId,
+                Is.EqualTo(SettlementPopulationCensusProvider.OperationReceiptsSectionPrefix + encodedCityId));
+            Assert.That(population.SchemaVersion, Is.EqualTo(SettlementPopulationCensusProvider.SchemaVersion));
+            Assert.That(receipts.SchemaVersion, Is.EqualTo(SettlementPopulationCensusProvider.SchemaVersion));
+            Assert.That(population.OwnerInstanceIdentity, Is.SameAs(city.Population));
+            Assert.That(receipts.OwnerInstanceIdentity, Is.SameAs(city.Population));
+            Assert.That(population.Cardinality, Is.EqualTo(1));
+            Assert.That(receipts.Cardinality, Is.Zero);
+            Assert.That(population.Revision, Is.EqualTo(city.Population.Revision));
+            Assert.That(receipts.Revision, Is.Zero);
         }
         Assert.That(runtime.PersonStore.Persons, Is.Empty);
         Assert.That(runtime.GenealogyRecords, Is.Empty);
@@ -1235,15 +1287,15 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(simulation.Bootstrap.ExpeditionSystem.Store, Is.SameAs(simulation.Bootstrap.Expeditions));
         Assert.That(expeditionWitness.Cardinality, Is.EqualTo(simulation.Bootstrap.Expeditions.ActiveExpeditions.Count));
         Assert.That(expeditionWitness.Revision, Is.Zero);
-        Assert.That(simulation.Bootstrap.ExplorableSites.Sites, Has.Count.EqualTo(1));
+        Assert.That(simulation.Bootstrap.ExplorableSites.Sites, Is.Empty);
         OwnerSectionCensusWitness explorableSiteWitness =
             simulation.Bootstrap.ExplorableSiteCensusProvider.GetCurrentCensus();
         Assert.That(explorableSiteWitness.SectionId, Is.EqualTo(ExplorableSiteCensusProvider.SectionId));
         Assert.That(explorableSiteWitness.SchemaVersion, Is.EqualTo(ExplorableSiteCensusProvider.SchemaVersion));
         Assert.That(explorableSiteWitness.OwnerInstanceIdentity, Is.SameAs(simulation.Bootstrap.ExplorableSites));
-        Assert.That(explorableSiteWitness.Cardinality, Is.EqualTo(1));
+        Assert.That(explorableSiteWitness.Cardinality, Is.Zero);
         Assert.That(explorableSiteWitness.Cardinality, Is.EqualTo(simulation.Bootstrap.ExplorableSites.Count));
-        Assert.That(explorableSiteWitness.Revision, Is.EqualTo(1L));
+        Assert.That(explorableSiteWitness.Revision, Is.Zero);
         Assert.That(explorableSiteWitness.Revision, Is.EqualTo(simulation.Bootstrap.ExplorableSites.Revision));
         OwnerSectionCensusWitness repeatedExplorableSiteWitness =
             simulation.Bootstrap.ExplorableSiteCensusProvider.GetCurrentCensus();
@@ -1251,10 +1303,8 @@ public sealed class SimulationBootstrapCompositionTests
             Is.SameAs(explorableSiteWitness.OwnerInstanceIdentity));
         Assert.That(repeatedExplorableSiteWitness.Cardinality, Is.EqualTo(explorableSiteWitness.Cardinality));
         Assert.That(repeatedExplorableSiteWitness.Revision, Is.EqualTo(explorableSiteWitness.Revision));
-        Assert.That(runtime.LocalTopologyStore, Is.Not.Null);
-        Assert.That(runtime.LocalTopologyStore.Topologies, Has.Count.EqualTo(1));
-        Assert.That(authority.Revision, Is.EqualTo(2),
-            "P10-A adds one semantic topology binding after the P8 geography commit.");
+        Assert.That(runtime.LocalTopologyStore, Is.Null);
+        Assert.That(authority.Revision, Is.EqualTo(1));
         Assert.That(authority.CrossingCount, Is.Zero);
         Assert.That(authority.PassageAuthority.Options, Is.Empty);
         Assert.That(authority.PassageAuthority.Barriers, Is.Empty);
@@ -1267,7 +1317,7 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(passageState.SchemaVersion, Is.EqualTo(SpatialPassageStateCensusProvider.SchemaVersion));
         Assert.That(passageState.OwnerInstanceIdentity, Is.SameAs(authority.PassageAuthority));
         Assert.That(passageState.Cardinality, Is.Zero);
-        Assert.That(passageState.Revision, Is.EqualTo(2));
+        Assert.That(passageState.Revision, Is.EqualTo(1));
         Assert.That(passageStateProvider.GetCurrentCensus().OwnerInstanceIdentity,
             Is.SameAs(passageState.OwnerInstanceIdentity));
         SpatialCrossingCensusProvider crossingProvider = new SpatialCrossingCensusProvider(authority);
@@ -1276,20 +1326,20 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(crossings.SchemaVersion, Is.EqualTo(SpatialCrossingCensusProvider.SchemaVersion));
         Assert.That(crossings.OwnerInstanceIdentity, Is.SameAs(authority));
         Assert.That(crossings.Cardinality, Is.Zero);
-        Assert.That(crossings.Revision, Is.EqualTo(2));
+        Assert.That(crossings.Revision, Is.EqualTo(1));
         Assert.That(crossingProvider.GetCurrentCensus().OwnerInstanceIdentity,
             Is.SameAs(crossings.OwnerInstanceIdentity));
         Assert.That(authority.ValidateInvariants().IsValid, Is.True);
-        Assert.That(runtime.LegacySpatialAnchorBindingStore.Count, Is.EqualTo(1));
-        Assert.That(runtime.LegacySpatialAnchorBindingStore.Revision, Is.EqualTo(1));
+        Assert.That(runtime.LegacySpatialAnchorBindingStore.Count, Is.Zero);
+        Assert.That(runtime.LegacySpatialAnchorBindingStore.Revision, Is.Zero);
         LegacySpatialAnchorBindingCensusProvider anchorBindingsProvider =
             new LegacySpatialAnchorBindingCensusProvider(runtime.LegacySpatialAnchorBindingStore);
         OwnerSectionCensusWitness anchorBindings = anchorBindingsProvider.GetCurrentCensus();
         Assert.That(anchorBindings.SectionId, Is.EqualTo(LegacySpatialAnchorBindingCensusProvider.SectionId));
         Assert.That(anchorBindings.SchemaVersion, Is.EqualTo(LegacySpatialAnchorBindingCensusProvider.SchemaVersion));
         Assert.That(anchorBindings.OwnerInstanceIdentity, Is.SameAs(runtime.LegacySpatialAnchorBindingStore));
-        Assert.That(anchorBindings.Cardinality, Is.EqualTo(1));
-        Assert.That(anchorBindings.Revision, Is.EqualTo(1));
+        Assert.That(anchorBindings.Cardinality, Is.Zero);
+        Assert.That(anchorBindings.Revision, Is.Zero);
         Assert.That(anchorBindingsProvider.GetCurrentCensus().OwnerInstanceIdentity,
             Is.SameAs(anchorBindings.OwnerInstanceIdentity));
         Assert.That(runtime.PersonSpatialPositionStore.Count, Is.Zero);
@@ -1333,53 +1383,38 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(simulation.CurrentDay, Is.Zero);
         Assert.That(simulation.History.HistoricalEvents, Is.Empty);
 
-        ExplorableSiteRuntime ruin = simulation.ExplorableSites.Sites.Single(site => site.Definition == config.authoredP10RuinSite);
-        Assert.That(ruin.Definition.kind, Is.EqualTo(ExplorableSiteKind.Ruin));
-        Assert.That(simulation.ExplorableSites.Sites.Count, Is.EqualTo(config.ExplorableSites.Count + 1));
-        Assert.That(simulation.Runtime.LegacySpatialAnchorBindingStore.TryGet(
-            new SpatialAnchorOwnerId(SpatialAnchorOwnerKind.ExplorableSite, ruin.RuntimeId), out LocationId siteLocation), Is.True);
-        Assert.That(siteLocation.Value, Is.EqualTo("location/sample-origin"));
-        Assert.That(simulation.ExplorableSites.TryGetByRuntimeId(ruin.RuntimeId, out ExplorableSiteRuntime resolvedRuin), Is.True);
-        Assert.That(resolvedRuin, Is.SameAs(ruin));
-
-        LocalTopologySemanticOwnerReference owner = new LocalTopologySemanticOwnerReference(ruin.DefinitionId, siteLocation);
-        LocalTopologyStore topologyStore = simulation.Runtime.LocalTopologyStore;
-        Assert.That(topologyStore.TryGetTopologyForSemanticOwner(owner, out LocalTopologyRuntime topology), Is.True);
-        Assert.That(topology.Owner.SemanticOwner.StableKey, Is.EqualTo(owner.StableKey));
-        Assert.That(topology.Owner.OwnerRuntimeId, Is.EqualTo(ruin.RuntimeId));
-        Assert.That(topologyStore.TryResolveSemanticOwnerRuntimeId(owner, out string resolvedRuntimeId), Is.True);
-        Assert.That(resolvedRuntimeId, Is.EqualTo(ruin.RuntimeId));
-        Assert.That(topologyStore.TryResolveSemanticOwner(owner, out ExplorableSiteRuntime resolvedSemanticSite), Is.True);
-        Assert.That(resolvedSemanticSite, Is.SameAs(ruin));
-        Assert.That(topology.Places.Select(place => place.DisplayName), Is.EqualTo(new[] { "Entrance", "Courtyard", "Inner Chamber" }));
-        Assert.That(topology.Places.Select(place => place.SemanticId), Is.EqualTo(new[]
-        {
-            P10RuinLocalTopologyGenesis.CreatePlaceSemanticId(ruin.DefinitionId, "entrance"),
-            P10RuinLocalTopologyGenesis.CreatePlaceSemanticId(ruin.DefinitionId, "courtyard"),
-            P10RuinLocalTopologyGenesis.CreatePlaceSemanticId(ruin.DefinitionId, "inner-chamber")
-        }));
-        Assert.That(topology.EntryPoints.Select(place => place.DisplayName), Is.EqualTo(new[] { "Entrance" }));
-        Assert.That(topology.Connections.Select(connection => connection.SemanticId), Is.EqualTo(new[]
-        {
-            P10RuinLocalTopologyGenesis.CreateConnectionSemanticId(ruin.DefinitionId, "entrance-to-courtyard"),
-            P10RuinLocalTopologyGenesis.CreateConnectionSemanticId(ruin.DefinitionId, "courtyard-to-inner-chamber")
-        }));
-        Assert.That(authority.ValidateInvariants(topologyStore).IsValid, Is.True);
-        Assert.That(authority.TryResolve(
-            SpatialReference.ForSubLocation(topology.Owner, topology.EntryPoints[0].RuntimeId),
-            topologyStore,
-            out SpatialResolution entryResolution,
-            out SpatialAuthorityFailure entryFailure), Is.True, entryFailure.ToString());
-        Assert.That(entryResolution.Location.Id.Value, Is.EqualTo("location/sample-origin"));
+        Assert.That(simulation.ExplorableSites.Sites, Is.Empty);
+        Assert.That(runtime.LocalTopologyStore, Is.Null);
+        Assert.That(authority.ValidateInvariants().IsValid, Is.True);
         Assert.That(simulation.Bootstrap.Manifest.CanonicalProvenanceRecords,
-            Has.Some.Contains("selected-p9-profile-fingerprint"));
+            Has.Some.Contains("authored-geography-stage"));
         Assert.That(simulation.Bootstrap.Manifest.CanonicalProvenanceRecords,
-            Has.Some.Contains("combined-stage-order"));
+            Does.Not.Contain("combined-stage-order"));
 
         int expectedP9RouteCount = config.Cities.Sum(city => city.connections.Count)
             + config.ExplorableSites.Count * 2;
         Assert.That(simulation.SpatialNetwork.Routes.Count, Is.EqualTo(expectedP9RouteCount),
-            "P10 adds no regional travel route for the Ruin profile.");
+            "The selected P9-B-only profile adds no P10-A topology or routes.");
+    }
+
+    [Test]
+    public void GeneralTestRemainsASeparateP10RuinProvingProfile()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-GeneralTest.asset");
+        Assert.That(config, Is.Not.Null);
+        Assert.That(config.useAuthoredGeographyProfile, Is.True);
+        Assert.That(config.authoredP10RuinSite, Is.Not.Null);
+        Assert.That(config.GenesisProfileContractIdentity, Is.EqualTo(P10RuinLocalTopologyGenesis.ContractIdentity));
+        Assert.That(P10RuinLocalTopologyGenesis.IsEnabled(config), Is.True);
+        Assert.That(SimulationGenesisPipeline.ResolveStageOrder(config.useAuthoredGeographyProfile,
+            P10RuinLocalTopologyGenesis.IsEnabled(config)), Does.Contain(P10RuinLocalTopologyGenesis.StageId));
+
+        string dailyConfigGuid = AssetDatabase.AssetPathToGUID(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        string sampleScene = System.IO.File.ReadAllText("Assets/Scenes/SampleScene.unity");
+        Assert.That(dailyConfigGuid, Is.Not.Empty);
+        Assert.That(sampleScene, Does.Contain("simulationConfig: {fileID: 11400000, guid: " + dailyConfigGuid));
     }
 
     [Test]

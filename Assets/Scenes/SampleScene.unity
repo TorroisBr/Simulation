@@ -384,7 +384,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 233a8c96efd43654083bec207c819665, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TesteSimulacao
-  simulationConfig: {fileID: 11400000, guid: ba87bf49ee034da6bda3daeef8e40c3f, type: 2}
+  simulationConfig: {fileID: 11400000, guid: 629f53cb3f2547efac2685370c3617e5, type: 2}
   runtimeAdmissionProfile: 1
   daysToSimulate: 8
   maxMerchantTradeAmount: 5

@@ -1405,6 +1405,7 @@ public sealed class SimulationRuntimeAdmissionTests
     {
         AssertP14FiniteProfileWithP10Rejected(generated: true);
     }
+
     [Test]
     public void FiniteSourceProfileRejectsAdditionalCityBeforeConstruction()
     {
@@ -1447,7 +1448,7 @@ public sealed class SimulationRuntimeAdmissionTests
     public void BootstrapScopesValidationThroughPublicationAndRevokesFailedPublication()
     {
         SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
-            "Assets/_Project/Data/Simulations/Simulation-GeneralTest.asset");
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
         Assert.That(config, Is.Not.Null);
 
         GameObject successfulObject = new GameObject("P12 bootstrap admission success");
@@ -1500,7 +1501,7 @@ public sealed class SimulationRuntimeAdmissionTests
     public void StartCapturesAndPassesTheSelectedProfileOwnerThread()
     {
         SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
-            "Assets/_Project/Data/Simulations/Simulation-GeneralTest.asset");
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
         Assert.That(config, Is.Not.Null);
 
         GameObject bootstrapObject = new GameObject("P12 Start owner binding");
