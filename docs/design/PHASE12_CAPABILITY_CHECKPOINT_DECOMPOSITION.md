@@ -33,14 +33,27 @@ authorization.
 ## Boundary and decomposition rule
 
 The sole profile is the accepted `UnityBootstrap-Daily-v1`: the
-SampleScene-selected `Simulation-GeneralTest.asset` through the validated
+SampleScene-selected `Simulation-DailyV1.asset` through the validated
 `TesteSimulacao.InitializeSimulation` path, one compatible build/runtime and
 current-host numeric profile, built-in providers selected by effective
 configuration, and capture only after a successful completed daily advance.
-The selected profile includes P9-B authored geography and exactly the P8-A
-Hex/anchored-Location/scale facts described in the accepted contract. It has
-no external `WorldCommand` service or queue. Preserve P11 `ActorChoiceStore`
-terminal causal history where that store is composed.
+This is the dedicated P9-B authored-geography continuation profile.
+`Simulation-GeneralTest.asset` remains the separate P10-A Ruin/LocalTopology
+proving profile and is rejected before identity allocation when submitted to
+Daily-v1. P10-A is not weakened or redefined as unsupported for future save
+profiles; a later explicitly composed continuation profile may admit its
+owners, provenance and topology under a separately validated contract.
+
+The selected profile includes its P9-B authored geography and exactly the
+P8-A Hex, anchored `LocationId`, and scale-context facts described in the
+accepted contract. These P8-A facts are distinct from the legacy runtime-ID
+Locations and Routes emitted by authored genesis and covered by P12-D. P8-B
+passages/crossings, P8-C City/Site bindings and Person positions, and P8-D
+route observations/plans remain empty in this profile; unsupported or
+partially populated state must fail profile assessment. P8-E has no retained
+owner section of its own. The profile has no external `WorldCommand` service
+or queue. Preserve P11 `ActorChoiceStore` terminal causal history where that
+store is composed.
 
 The groups below follow shared owner dependencies and the accepted restore
 order. A section is complete only when its domain authority can export exact
