@@ -1,15 +1,17 @@
 # P12-B Daily-v1 exact-zero receipt design review
 
-**Verdict:** PASS — `READY_FOR_IMPLEMENTATION` within the previously accepted P12-B owner/cardinality capability scope.
+**Current verdict:** PASS — `READY_FOR_IMPLEMENTATION` within the previously accepted P12-B owner/cardinality capability scope.
 
-- **P12 canonical base:** `ea4decdaffa26e80e76ee72135ead0a7d673f358`.
+- **P12 canonical base:** `ea4decdaffa26e80e76ee72135ead0a7d673f358` (tree `9241cfbb3d9aaae9b72e05a66cd12c0969db2d45`).
 - **Architecture baseline:** `e16796014d348e3b59da7ed848101c4c03926ba5`.
-- **Reviewed design commit:** `30339a32d9802e64f48e2dc8ce085808f956c32e`.
-- **Reviewed design tree:** `f58e0f8e33c27aa1020b664c44fc2cdc39b8d771`.
+- **Current reviewed design commit:** `4abe19c947e0da5bc23ac57f50ca856f1930c3b3` (tree `404fe3dceef4b64f05a73964f505eeb93324717b`).
 - **Independent exact-tip technical review:** PASS; no remaining actionable findings.
+- **Baseline evidence:** `docs/validation/P12ExactZeroReceiptBaseline/BASELINE.md`; the exact-base Daily-v1 bootstrap probe observes 233 registered sections before this slice. The two unique receipt section IDs raise the count to 235. The manifest records probe snippet, test XML, raw-log bundle and SHA-256 hashes.
 
-The review confirms that the authored Daily-v1 composition already has 144 registered sections before this slice (142 Person/NPC and two per-City Market sections), and the two fixed receipt sections make that inventory 146. It confirms that the same precomposed `EconomyTransactionService` must be passed into `SimulationRuntime` before `InitializeNpcRosterCensusProtocol` seals its provider inventory, while the existing later bind remains responsible for current Market callback wiring. The actual `TesteSimulacao` Daily-v1 bootstrap sets the full-profile requirement flag; missing receipt owners then fail before publication. Adapter-only partial census fixtures remain explicitly partial.
+The earlier review at `30339a32d9802e64f48e2dc8ce085808f956c32e` incorrectly reported 144/146. A follow-up review of the first correction requested reproducible evidence; the exact-base probe above resolves that finding. The corrected count does not change implementation scope or interfaces.
 
-Source review confirms both receipts are exact-zero for this selected profile: the P18-D receipt writers are excluded, and `OwnerSectionRole.ExplicitlyEmpty` rejects nonzero cardinality, owner/schema/section mismatch, invalid revision, or changed revision during later assessment. The proposed work remains limited to passive exact-zero census registration and assessment. It adds no P18-D writer, anti-tamper behavior, export/hydration, capture token, complete-owner claim, or P12 readiness.
+The current review confirms that the selected `UnityBootstrap-Daily-v1` composition is the P9-B-only profile and excludes the P10-A Ruin proving profile. It verifies that the precomposed `EconomyTransactionService` must be passed into `SimulationRuntime` before `InitializeNpcRosterCensusProtocol` seals its provider inventory, while the later existing bind remains responsible for Market and transaction callback wiring. The actual Daily-v1 bootstrap sets the full-profile requirement flag; missing receipt owners fail before publication. Adapter-only partial census fixtures remain explicitly partial.
 
-Implementation may proceed against the stated base under existing P12-B capability authorization. Focused/full validation and a separate exact-tip implementation review are still required before any bounded canonical promotion. P12-B remains `INCOMPLETE`; P12-A remains `WAIT_DEPENDENCY`; P13 remains blocked.
+Both receipt owners are fixed `ExplicitlyEmpty` sections in this profile. Missing providers, section/schema/owner mismatch, invalid or nonzero baseline, and later population or unnotified revision/cardinality drift fail closed through existing census admission/assessment behavior.
+
+The reviewed design adds no P18-D writer, receipt mutation callback, anti-tamper behavior, export/hydration, capture token, complete-owner claim, P12 readiness, P13 readiness, or Phase 12 closure. Implementation may proceed under the existing accepted P12-B capability authorization. Focused/full validation and a separate exact-tip implementation review are required before any bounded canonical promotion.
