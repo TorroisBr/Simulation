@@ -52,9 +52,11 @@ registration or wire unrelated political mutation paths.
 
 ## Exact-tree evidence
 
-The corrected implementation source commit `95fac36e02299e7683d9bcb33bccf581c1429e5d` uses the accepted `p12.institution-office.owner-commit` protocol ID. Its focused owner/operation suite passed 4/4, ALL EditMode passed 2410/2410, official Smoke passed 5/5, and `git diff --check` passed. The full-suite run confirms the selected Daily-v1 composition test checks the protocol ID and 239-section owner inventory. Exact XML/log hashes and source-file hashes are recorded in the validation report.
+The final validated candidate code tip is `13a4ff503d336d34ed008f27571cce82c019dfe4` (tree `85ad013074b727ffe8727c2d90b079a45e0ca5c0`), based on canonical `0daa72addc1f186d23713adf75f6c2f83a5aff9b`. The runtime operation identifier matches the accepted design, and the selected Daily-v1 test asserts that exact ID is sealed while the former `runtime.*` ID is absent. The Institution/Office sequence test asserts the registered operation tracker returns to zero after successful and rejected commits; the off-thread refusal also leaves the count at zero.
 
-The initial validation evidence for implementation commit `1048073d03fd92767d0ae135800073da8bd60053` is retained as historical evidence only; that code used an operation ID inconsistent with the accepted design and its results are superseded by the corrected-tree runs.
+Focused owner/operation tests passed 4/4, ALL EditMode passed 2410/2410, official Smoke passed 5/5, and `git diff --check` passed on the final code tip. Exact XML/log hashes and source hashes are recorded in the validation report. These bounded tracker checks do not claim global quiescence.
+
+The preceding implementation commits `1048073d03fd92767d0ae135800073da8bd60053` and `95fac36e02299e7683d9bcb33bccf581c1429e5d` remain in history as respectively the initial candidate and the operation-ID correction. The final validation at `13a4ff5` adds the missing scope-lifecycle proof and supersedes their earlier test runs.
 
 ## Scope limits
 

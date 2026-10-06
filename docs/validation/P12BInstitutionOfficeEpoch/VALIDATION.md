@@ -80,3 +80,27 @@ The corrected source hashes are:
 | `Assets/_Project/Tests/EditMode/Editor/SimulationBootstrapCompositionTests.cs` | `229D4A8EBA1998A695B298937B0C8177AB77F1A122E1FA7AC8DED3A7382927E7` |
 
 XML is retained under `CorrectedTree/Focused/`, `CorrectedTree/AllEditMode/`, and `CorrectedTree/OfficialSmoke/`. The three raw logs are retained in `CorrectedTree/P12BInstitutionOfficeEpoch-corrected-tree-logs.zip` (SHA-256 `FEF06B0E9F1FA5F57076E25A5DD72820A5313770AD50D5C73F14DB0C5B188F36`). The preceding test table documents commit `1048073d03fd92767d0ae135800073da8bd60053`, whose operation identifier did not match the accepted design; those historical results do not replace this corrected-tree validation.
+
+## Final scope-idle revalidation
+
+Status: **PASS** on code commit `13a4ff503d336d34ed008f27571cce82c019dfe4` (Git tree `85ad013074b727ffe8727c2d90b079a45e0ca5c0`), based on canonical `0daa72addc1f186d23713adf75f6c2f83a5aff9b`. This test-only commit adds the required operation-scope lifecycle assertions to the already corrected implementation. Unity version: `6000.3.9f1`.
+
+The selected Daily-v1 operation sequence reads the registered operation count as zero after successful and rejected owner mutations, then passes `TryAssessRegisteredOperationQuiescence`. The off-owner-thread refusal leaves the active count at zero. These checks cover the explicitly registered tracker and do not claim global/runtime-wide quiescence.
+
+| Run | Result | XML SHA-256 | Log SHA-256 |
+| --- | --- | --- | --- |
+| `InstitutionOfficeCensusTests` | 4/4 passed | `E2FEFAEB96BB4C5C91B6314974C0DC66EFB7BDD53F631ED20C248324EC9FD8BB` | `053EDF76B1F3C7FEA1B1FE39A87D6EC66AE1C6977AD113B168D4A1B2EB3A31FF` |
+| ALL EditMode | 2410/2410 passed | `A08CEC174C18A9931D6A3D22BACFBFD97566AD1DDA023426D41AA2C467CA5CEC` | `DA751444F5B86FC9AF6E23B6C9BEE6065A76FE3A62F29D888C8E0508D26CBF85` |
+| Official Smoke (`-TestFilter Smoke`) | 5/5 passed | `58019511F077BBD51FF8F951C03951A8C49C9B20E953F025194409CEDAD8CD59` | `0B08E550F6E980F90E11141C897DC6D61A39E49F5E518EF59C8F2517B49EDF87` |
+
+The ALL EditMode XML confirms these exact cases passed: `InstitutionOfficeCensusTests.SelectedDailyV1InstitutionOfficeCommitsAdvanceOneSharedEpoch`, `InstitutionOfficeCensusTests.SelectedDailyV1OffOwnerThreadVacancyApplyIsRejectedBeforeStoreMutation`, and `SimulationBootstrapCompositionTests.SelectedDailyV1ProfileBootstrapsItsAuthoredP8GeographyBeforeDayOne`. The last case verifies the accepted Daily-v1 profile and owner inventory. `git diff --check` passed after the final evidence update.
+
+Final source hashes:
+
+| File | SHA-256 |
+| --- | --- |
+| `Assets/_Project/Scripts/SimulationRuntime.cs` | `51EE84AF510720773B5FD567C9C4B32A76B9ADB93427109A007E56CC02D41AFE` |
+| `Assets/_Project/Tests/EditMode/Editor/Institution/InstitutionOfficeCensusTests.cs` | `851A49CE18D8961A97917744A6B46F8300419530800E9CDDB29C54B926EF9B93` |
+| `Assets/_Project/Tests/EditMode/Editor/SimulationBootstrapCompositionTests.cs` | `229D4A8EBA1998A695B298937B0C8177AB77F1A122E1FA7AC8DED3A7382927E7` |
+
+XML is retained under `CorrectedTree/ScopeIdle/Focused/`, `CorrectedTree/ScopeIdle/AllEditMode/`, and `CorrectedTree/ScopeIdle/OfficialSmoke/`. The three raw logs are retained in `CorrectedTree/ScopeIdle/P12BInstitutionOfficeEpoch-scope-idle-logs.zip` (SHA-256 `3D50D0F802C06FB7F8058B77E9216902BE33FB1CBE4A502AB3B481C6895B5ECC`).

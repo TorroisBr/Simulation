@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="5" result="Passed" total="5" passed="5" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-06 18:29:06Z" end-time="2026-10-06 18:29:06Z" duration="0,4410421">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2410" result="Passed" start-time="2026-10-06 18:29:06Z" end-time="2026-10-06 18:29:06Z" duration="0.441042" total="5" passed="5" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="3620" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12b-institution-office-scope-smoke/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2410" result="Passed" start-time="2026-10-06 18:29:06Z" end-time="2026-10-06 18:29:06Z" duration="0.377566" total="5" passed="5" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="64436" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="2005" name="GMConsolePlayModeSmokeTests" fullname="GMConsolePlayModeSmokeTests" classname="GMConsolePlayModeSmokeTests" runstate="Runnable" testcasecount="2" result="Passed" start-time="2026-10-06 18:29:03Z" end-time="2026-10-06 18:29:03Z" duration="0.382334" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="2006" name="GmConsoleCanPreviewApplyAndRefreshObserver" fullname="GMConsolePlayModeSmokeTests.GmConsoleCanPreviewApplyAndRefreshObserver" methodname="GmConsoleCanPreviewApplyAndRefreshObserver" classname="GMConsolePlayModeSmokeTests" runstate="Runnable" seed="893610954" result="Passed" start-time="2026-10-06 18:28:56Z" end-time="2026-10-06 18:29:00Z" duration="3.488064" asserts="0">
+          <properties>
+            <property name="_JOINTYPE" value="UnityCombinatorial" />
+          </properties>
+        </test-case>
+        <test-case id="2007" name="GmConsoleNaturalLanguageCanTranslatePreviewApplyAndRefreshObserver" fullname="GMConsolePlayModeSmokeTests.GmConsoleNaturalLanguageCanTranslatePreviewApplyAndRefreshObserver" methodname="GmConsoleNaturalLanguageCanTranslatePreviewApplyAndRefreshObserver" classname="GMConsolePlayModeSmokeTests" runstate="Runnable" seed="11808824" result="Passed" start-time="2026-10-06 18:29:00Z" end-time="2026-10-06 18:29:03Z" duration="3.554166" asserts="0">
+          <properties>
+            <property name="_JOINTYPE" value="UnityCombinatorial" />
+          </properties>
+        </test-case>
+      </test-suite>
+      <test-suite type="TestFixture" id="3507" name="WorldObserverPlayModeSmokeTests" fullname="WorldObserverPlayModeSmokeTests" classname="WorldObserverPlayModeSmokeTests" runstate="Runnable" testcasecount="1" result="Passed" start-time="2026-10-06 18:29:06Z" end-time="2026-10-06 18:29:06Z" duration="0.337874" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="3508" name="ObserverSceneCanRenderAndSelectNode" fullname="WorldObserverPlayModeSmokeTests.ObserverSceneCanRenderAndSelectNode" methodname="ObserverSceneCanRenderAndSelectNode" classname="WorldObserverPlayModeSmokeTests" runstate="Runnable" seed="89634861" result="Passed" start-time="2026-10-06 18:29:03Z" end-time="2026-10-06 18:29:06Z" duration="3.226332" asserts="0">
+          <properties>
+            <property name="_JOINTYPE" value="UnityCombinatorial" />
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+      </test-suite>
+      <test-suite type="TestFixture" id="3509" name="WorldObserverReadModelTests" fullname="WorldObserverReadModelTests" classname="WorldObserverReadModelTests" runstate="Runnable" testcasecount="28" result="Passed" start-time="2026-10-06 18:29:06Z" end-time="2026-10-06 18:29:06Z" duration="0.018685" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="3536" name="ObserverPrefabSmokeInitializesWithoutMissingReference" fullname="WorldObserverReadModelTests.ObserverPrefabSmokeInitializesWithoutMissingReference" methodname="ObserverPrefabSmokeInitializesWithoutMissingReference" classname="WorldObserverReadModelTests" runstate="Runnable" seed="1952144006" result="Passed" start-time="2026-10-06 18:29:06Z" end-time="2026-10-06 18:29:06Z" duration="0.017048" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+      </test-suite>
+      <test-suite type="TestFixture" id="3538" name="WorldObserverVisualTests" fullname="WorldObserverVisualTests" classname="WorldObserverVisualTests" runstate="Runnable" testcasecount="22" result="Passed" start-time="2026-10-06 18:29:06Z" end-time="2026-10-06 18:29:06Z" duration="0.002141" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="3559" name="ObserverPrefabSmokeHasNoMissingSerializedReferences" fullname="WorldObserverVisualTests.ObserverPrefabSmokeHasNoMissingSerializedReferences" methodname="ObserverPrefabSmokeHasNoMissingSerializedReferences" classname="WorldObserverVisualTests" runstate="Runnable" seed="1782686272" result="Passed" start-time="2026-10-06 18:29:06Z" end-time="2026-10-06 18:29:06Z" duration="0.000809" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>
