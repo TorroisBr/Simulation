@@ -1650,3 +1650,54 @@ The exact-base Daily-v1 baseline count probe passed 1/1. Profile/configuration a
 This promotes only exact-zero receipt-owner admission for the selected partial census. It does not enable P18-D receipt writers or establish complete owner coverage, complete shared-epoch coverage, global quiescence, capture eligibility, export, hydration, P12-A readiness, P13 readiness, or Phase 12 closure. P12-B remains `INCOMPLETE`; P12-A remains `WAIT_DEPENDENCY`; P13 remains blocked. The dependency edges are unchanged: P12-C waits on B; P12-D/E wait on B and C; P12-F waits on C/D/E; P12-G waits on B–F plus validated live-profile inventory. Expedition remains deferred to P12-F.
 
 The blocker matrix in `docs/design/PHASE12_B_BLOCKER_RESOLUTION.md` now records this owner-family promotion. Continue the current-source Daily-v1 owner/operation/epoch delta audit and choose the highest-impact remaining supported committed-write gap; this promotion does not itself make another checkpoint READY.
+
+## P12-B recovery and current-source audit — 2026-10-06
+
+At the start of this audit, refreshed remote `codex/phase12/canonical` was
+`bba9f89b6a95c01ec71db47d498c65dddbe9d99f`. The dedicated Daily-v1 profile
+correction at code `75ca59af90d54f3fb307382740ce0ba3fa4e00fa`, tree
+`e3fbbd53689a4dd582e086e8c1677935d21ef78f`, and its promotion record remain
+in canonical history. The later exact-zero receipt implementation at code
+`c8f1689d195218351cca0b45ef431883860b3d7d`, tree
+`078ca8a17ea095895c897638178262ca8bb932b6`, is the current executable tree;
+subsequent canonical commits add review, validation, and State evidence only.
+
+The requested profile revalidation is retained on these exact trees. The
+profile-separation validation records the selected Daily-v1 owner/cardinality
+inventory 1/1, ALL EditMode 2384/2384, and official Smoke 5/5 on the profile
+correction. The later receipt candidate reran the selected profile inventory
+1/1 on the updated tree and verified all 235 registered sections; its ALL
+EditMode result is 2408/2408 and official Smoke is 5/5. The live profile is
+the dedicated P9-B `Simulation-DailyV1.asset` with 10 NPCs, 2 Cities, 2
+Locations, 2 Routes, one P8-A Hex, one anchored Location, and one scale
+context; ExplorableSite, LocalPlace, LocalConnection, and NotableItem
+cardinalities are zero. `Simulation-GeneralTest.asset` remains the separate
+P10-A Ruin/LocalTopology proving profile. No executable change after the
+reviewed receipt tree requires another rerun for this profile question.
+
+A current-source Daily-v1 delta review after the receipt promotion found no
+additional normal supported committed-write path with a source-proven owner
+gap suitable for a new bounded implementation slice. The traced
+`TravelSystem.AdvanceTravels` leaves already notify the exact per-NPC travel
+owner and applicable City presence; theft remains its existing sequence of
+independently admitted economy, Crime/Social, and Justice commits, with no
+evidence for a theft-wide operation; `NpcDecisionStore` is a read model while
+`SimulationRecordSequence` is the causal owner. No P12-F Expedition operation
+is pulled forward.
+
+This is a negative delta finding, not a completion proof. The 235-section
+test checks the section set currently registered by the selected runtime; it
+does not prove that the set exhausts every authoritative owner in the
+effective object graph. Complete owner-set reconciliation, full supported
+commit-to-epoch coverage, runtime-wide owner-thread/quiescence proof, and
+capture eligibility remain open. P12-B remains `INCOMPLETE`; P12-A remains
+`WAIT_DEPENDENCY`; P13 remains blocked; P12-F remains dependency-gated on
+P12-C/D/E.
+
+The next P12-B evidence task is to reconcile each owner in the current
+Daily-v1 runtime graph against its exact registered section family, identity,
+schema, cardinality/revision source, and supported mutation operations. A new
+implementation slice is justified only by a concrete unmatched owner or
+normal supported commit boundary from that reconciliation. This preserves the
+accepted profile scope and avoids repeating already-promoted census and
+invalidation work.

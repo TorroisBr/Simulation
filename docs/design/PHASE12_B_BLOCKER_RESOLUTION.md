@@ -1301,3 +1301,16 @@ committed writer that still lacks a precise owner/operation/epoch boundary.
 The prior direct MoneyAccount/Inventory target was already delivered; do not
 repeat it. Preserve all unrelated ProjectSettings edits, `.meta` files, and
 local validation artifacts.
+
+## Current Daily-v1 owner and writer delta — after exact-zero receipt promotion — 2026-10-06
+
+**Audit baseline:** remote and local P12 canonical matched `bba9f89b6a95c01ec71db47d498c65dddbe9d99f`; current executable tree remains code `c8f1689d195218351cca0b45ef431883860b3d7d` / tree `078ca8a17ea095895c897638178262ca8bb932b6`. The code-bearing profile correction `75ca59a` and its review/promotion evidence are ancestors of this tree. The selected-profile inventory and 2408/2408 full suite were run after the profile correction on the later exact code tree; see `docs/validation/P12DailyProfileSeparation/VALIDATION.md` and `docs/validation/P12DailyProfileRevalidation/final/VALIDATION.md`.
+
+| Obligation | Current evidence | Disposition |
+|---|---|---|
+| P9-B-only Daily-v1 profile identity | `SampleScene.unity` selects `Simulation-DailyV1.asset`; P10-A `Simulation-GeneralTest.asset` remains separate and is rejected by Daily-v1 before identity/owner publication. The live runtime inventory is 10 NPCs, 2 Cities, 2 Locations, 2 Routes, and zero P10 site/topology/notable-item facts, with one P8-A Hex, anchor, and scale context. | Resolved for the selected day-zero composition. Do not admit P10-A to this profile or weaken the one-owner-per-Location rule. |
+| Registered owner-section inventory | The exact later profile test verifies 235 registered sections, including the two fixed exact-zero receipt sections, with exact owners/cardinalities/revisions for the providers it observes. | Still partial: the count and provider checks do not independently prove that every authoritative owner in the effective runtime graph is represented. |
+| Supported Daily-v1 writer delta | Current-source review found no additional supported committed writer with a precisely evidenced missing owner notification after the already-promoted owner/operation slices. Existing TravelSystem leaves and the separate theft subcommits retain their reviewed boundaries; no new operation ID is justified. | No new implementation candidate is READY from this delta. Continue owner-to-section reconciliation; do not repeat existing work. |
+| P12-B readiness | Owner-set completeness, complete shared-epoch coverage, runtime-wide owner-thread/quiescence, and capture eligibility remain unproven. | P12-B stays `INCOMPLETE`; P12-A stays `WAIT_DEPENDENCY`; P13 remains blocked. P12-F Expedition remains assigned to P12-C/D/E. |
+
+The remaining blocker-resolution task is a source-linked reconciliation of each effective Daily-v1 owner to its registered section family, exact identity/schema/cardinality/revision, and supported mutation operations. Do not add a broad runtime/capture adapter until that reconciliation identifies the exact uncovered owner or supported commit boundary; preserve P12-F dependency gating.
