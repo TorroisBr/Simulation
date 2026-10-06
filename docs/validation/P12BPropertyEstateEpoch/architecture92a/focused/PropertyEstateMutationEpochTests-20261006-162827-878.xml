@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="5" result="Passed" total="5" passed="5" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-06 19:28:39Z" end-time="2026-10-06 19:28:39Z" duration="0,1764833">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2415" result="Passed" start-time="2026-10-06 19:28:39Z" end-time="2026-10-06 19:28:39Z" duration="0.176483" total="5" passed="5" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="3626" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12b-institution-office-epoch-design/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2415" result="Passed" start-time="2026-10-06 19:28:39Z" end-time="2026-10-06 19:28:39Z" duration="0.162957" total="5" passed="5" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="76940" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="3084" name="PropertyEstateMutationEpochTests" fullname="PropertyEstateMutationEpochTests" classname="PropertyEstateMutationEpochTests" runstate="Runnable" testcasecount="5" result="Passed" start-time="2026-10-06 19:28:39Z" end-time="2026-10-06 19:28:39Z" duration="0.149159" total="5" passed="5" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="3086" name="DailyAdmissionRegistersExactOwnersAndTracksBoundedPropertyEstateCommits" fullname="PropertyEstateMutationEpochTests.DailyAdmissionRegistersExactOwnersAndTracksBoundedPropertyEstateCommits" methodname="DailyAdmissionRegistersExactOwnersAndTracksBoundedPropertyEstateCommits" classname="PropertyEstateMutationEpochTests" runstate="Runnable" seed="773329581" result="Passed" start-time="2026-10-06 19:28:39Z" end-time="2026-10-06 19:28:39Z" duration="0.066241" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3089" name="DailyV1AdmissionRejectsInitiallyPopulatedEstateBeforePublication" fullname="PropertyEstateMutationEpochTests.DailyV1AdmissionRejectsInitiallyPopulatedEstateBeforePublication" methodname="DailyV1AdmissionRejectsInitiallyPopulatedEstateBeforePublication" classname="PropertyEstateMutationEpochTests" runstate="Runnable" seed="357173081" result="Passed" start-time="2026-10-06 19:28:39Z" end-time="2026-10-06 19:28:39Z" duration="0.002527" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3088" name="DailyV1AdmissionRejectsInitiallyPopulatedPropertyOwnershipAndHistoryBeforePublication" fullname="PropertyEstateMutationEpochTests.DailyV1AdmissionRejectsInitiallyPopulatedPropertyOwnershipAndHistoryBeforePublication" methodname="DailyV1AdmissionRejectsInitiallyPopulatedPropertyOwnershipAndHistoryBeforePublication" classname="PropertyEstateMutationEpochTests" runstate="Runnable" seed="1220442400" result="Passed" start-time="2026-10-06 19:28:39Z" end-time="2026-10-06 19:28:39Z" duration="0.000858" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3085" name="DailyV1ProfileAddsOnlyTheThreePropertyEstateSections" fullname="PropertyEstateMutationEpochTests.DailyV1ProfileAddsOnlyTheThreePropertyEstateSections" methodname="DailyV1ProfileAddsOnlyTheThreePropertyEstateSections" classname="PropertyEstateMutationEpochTests" runstate="Runnable" seed="1382538271" result="Passed" start-time="2026-10-06 19:28:39Z" end-time="2026-10-06 19:28:39Z" duration="0.069351" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3087" name="OffOwnerThreadEstateSuccessionRefusalPrecedesAnyOwnerCommit" fullname="PropertyEstateMutationEpochTests.OffOwnerThreadEstateSuccessionRefusalPrecedesAnyOwnerCommit" methodname="OffOwnerThreadEstateSuccessionRefusalPrecedesAnyOwnerCommit" classname="PropertyEstateMutationEpochTests" runstate="Runnable" seed="1660981899" result="Passed" start-time="2026-10-06 19:28:39Z" end-time="2026-10-06 19:28:39Z" duration="0.000996" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

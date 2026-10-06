@@ -1,8 +1,35 @@
 # P12-B Property/Estate mutation-epoch validation
 
-Validation target: code commit `955dc087e931d9204f6fca33b8beb5fb45f7e211`, tree `ca2c6bd5ccf44a0441f9b31391eb9bb82a97524d`, based on P12 canonical `82735cb0ac7878fda0efd7d9e6a3029fe8a501f7`. Unity Editor: `6000.3.9f1`.
+Latest validation target: code commit `167a488c09fc7a2dc51517e1886250c43303bc20`, tree `7527439309841a8f68302e7c7630ddcecbc36b21`, based on P12 canonical `82735cb0ac7878fda0efd7d9e6a3029fe8a501f7`. Unity Editor: `6000.3.9f1`.
 
-## Results
+## Architecture §92A revalidation — 2026-10-06
+
+The current Architecture branch is `codex/architecture/world-identity-projection` at `e16796014d348e3b59da7ed848101c4c03926ba5`. Its §92A requires a composable owner in an incomplete P12-B profile either to remain outside the selected composition by construction or to fail closed, with negative validation proving that rejection before promotion.
+
+This candidate includes the existing Property ownership, transfer-history, and Estate owners in the selected Daily-v1 census and rejects any nonzero initial cardinality while registering those Required sections. Two new negative tests construct the selected Daily-v1 `SimulationRuntime` with prepopulated initial state: one has a Property row plus transfer history, and one has an Estate row. In both cases construction throws at the P12 runtime-admission bind because census initialization fails; no runtime is returned for bootstrap publication, and the supplied source owner contents remain unchanged. The tests do not add or alter domain behavior.
+
+The latest Architecture §2 development-artifact boundary supports keeping `Simulation-DailyV1.asset` separate from the P10-A `Simulation-GeneralTest.asset`. The reviewed Property/Estate semantics and operation boundary remain unchanged. Other §91A/B, P17–P20, economy, and Ruin changes do not apply to this slice. Exact-tip implementation review was refreshed after these tests were added.
+
+## Current results — code tip `167a488`
+
+| Suite | Result | XML | XML SHA-256 | Log member in `architecture92a/raw-logs.zip` | Log SHA-256 |
+| --- | ---: | --- | --- | --- | --- |
+| `PropertyEstateMutationEpochTests` | 5/5 | `architecture92a/focused/PropertyEstateMutationEpochTests-20261006-162827-878.xml` | `FA4153A0D1CEDED769835B8DC69750AA01DF063CB7AE4B95EEE700EBA678065F` | `focused/PropertyEstateMutationEpochTests-20261006-162827-878.log` | `52613A80789D3C4AB55F49B2119931E542F4F36878E41BBC455FB5780E6DAE16` |
+| `PropertyOwnershipCensusTests` | 2/2 | `architecture92a/focused/PropertyOwnershipCensusTests-20261006-162851-423.xml` | `22801CAA026713D04EBF4ABEE5E77203084F9C71AC73AB063B3646A08BEFB207` | `focused/PropertyOwnershipCensusTests-20261006-162851-423.log` | `152642BF94D067B4E15A4ED066FE8FCC84C6FCFECEBBD9DF6759AE8129A7D64B` |
+| `EstateCensusTests` | 1/1 | `architecture92a/focused/EstateCensusTests-20261006-162901-304.xml` | `B3F68314D03028907F745B04EB53ECD1AB39AA6C06AFB82069C42A7F3EDEB843` | `focused/EstateCensusTests-20261006-162901-304.log` | `BA755E34012DA95BB08712B7A218A7034AE42F1FF7F2EB80002436A3B684728B` |
+| `SuccessionIntegrationTests` | 21/21 | `architecture92a/focused/SuccessionIntegrationTests-20261006-162911-518.xml` | `E46D449A642EFD49939F1276B19C1EE2223C03BBD1176405DFDCD0F5ACA28BAB` | `focused/SuccessionIntegrationTests-20261006-162911-518.log` | `CA082875FE749EB54F80614B92E1A60C3C2D80DCE58F22CADEF228B4C304FA28` |
+| `SimulationBootstrapCompositionTests` | 22/22 | `architecture92a/focused/SimulationBootstrapCompositionTests-20261006-162921-224.xml` | `81A3EB38D1388A795A5309F4D5EDDB648FD8FEC9B48C042C101603CA412A2137` | `focused/SimulationBootstrapCompositionTests-20261006-162921-224.log` | `806B00796B4DCF93D58F48F1DAF79A5F5147AA716C06BCD5302AD20798337DF8` |
+| **Focused total** | **51/51** | — | — | — | — |
+| ALL EditMode | 2415/2415 | `architecture92a/all-editmode/EditMode-20261006-162941-518.xml` | `135802605AC04F5B2977C7A142BAEE8EA74F3B51289893C8F4767275FB6B86EF` | `all-editmode/EditMode-20261006-162941-518.log` | `E628AA0024CBB2BA8811054A5418ADF0A68D64FC61640EBA4120A6F781C50365` |
+| Official Smoke (`-testFilter Smoke`) | 5/5 | `architecture92a/official-smoke/EditMode-Smoke-20261006-163018-327.xml` | `D98640E4FD095B2FBDE4DED454166DFA57E803B7B682D55DE93DF83F356DC180` | `official-smoke/EditMode-Smoke-20261006-163018-327.log` | `44B899EBD9CA83612F8CF2E72BFB565EC52DFFC0FD04121E00E77A4351A607E8` |
+
+`git diff --check` passed on the final code candidate. The hash of `architecture92a/raw-logs.zip` is `C16D87F4F46F04F198EB3B2CE04E9A1E80849621CAAC9447ABBEA26FF6C5A7A7`; it contains exactly the seven successful logs listed above. The exact XML files and archive members were checked against the recorded SHA-256 values.
+
+## Initial implementation validation — code tip `955dc08`
+
+The following results are retained as historical evidence for the original implementation tree. They are superseded by the §92A revalidation above for promotion.
+
+### Original results
 
 | Suite | Result | XML | XML SHA-256 | Log | Log SHA-256 |
 | --- | ---: | --- | --- | --- | --- |
@@ -20,9 +47,9 @@ The original raw Unity logs listed above are bundled unchanged in `raw-logs.zip`
 
 ## Source SHA-256
 
-These hashes are computed over the exact Git blob bytes at code commit
-`955dc087e931d9204f6fca33b8beb5fb45f7e211` (tree
-`ca2c6bd5ccf44a0441f9b31391eb9bb82a97524d`), so checkout line-ending
+These latest source hashes are computed over the exact Git blob bytes at code commit
+`167a488c09fc7a2dc51517e1886250c43303bc20` (tree
+`7527439309841a8f68302e7c7630ddcecbc36b21`), so checkout line-ending
 conversion does not affect the source identity.
 
 | File | SHA-256 |
@@ -30,4 +57,4 @@ conversion does not affect the source identity.
 | `Assets/_Project/Scripts/SimulationRuntime.cs` | `5EC58A518740FCBE0D5ABDFEAC2ADEA7253F82202F12FFB5D7786E69A40CF0D8` |
 | `Assets/_Project/Scripts/Succession/SuccessionIntegrationContracts.cs` | `C9E17CE40F3E425ECBEAA6129BF3727C61CE28949BEFE8869D1EE13972E5378C` |
 | `Assets/_Project/Tests/EditMode/Editor/SimulationBootstrapCompositionTests.cs` | `62DAAD83BAD3940905561BD49ECC6FB512D672AB53B33F49D8B263035603EB2C` |
-| `Assets/_Project/Tests/EditMode/Editor/PropertyEstateMutationEpochTests.cs` | `69032463BB8A78AD755A4BA557EF2E3EF6C6D2CDD32DFFB9EBF6DAF758A1DD7F` |
+| `Assets/_Project/Tests/EditMode/Editor/PropertyEstateMutationEpochTests.cs` | `E648EC1D9BCBC339259819011771DA3F625E90AB3B01D12377CED2CEF0BA2148` |
