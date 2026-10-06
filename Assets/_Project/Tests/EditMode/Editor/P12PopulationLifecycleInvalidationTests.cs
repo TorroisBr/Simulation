@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 using NUnit.Framework;
@@ -189,6 +190,128 @@ public sealed class P12PopulationLifecycleInvalidationTests
         Assert.That(city.CurrentPopulation, Is.EqualTo(4));
         Assert.That(city.Population.Revision, Is.EqualTo(1L));
         AssertPersonRevision(runtime, person.PersonId, expected: 3L);
+        AssertCensus(runtime);
+    }
+
+    [Test]
+    public void DirectPersonDeathClearsPopulatedAndPreservesEmptyCurrentActionOwners()
+    {
+        foreach (bool installAction in new[] { false, true })
+        {
+            CityRuntime city = CreateCity("p12-direct-person-death-city-" + installAction, 5);
+            PersonStore people = new PersonStore();
+            SimulationRuntime runtime = CreateP12Runtime(new[] { city }, null, people);
+            PersonRuntime person = new PersonRuntime(
+                new PersonId("p12-direct-person-death-person-" + installAction), 0L);
+            Assert.That(runtime.TryRegisterPerson(person, out PersonStoreFailure registerFailure),
+                Is.True, registerFailure.ToString());
+            Assert.That(runtime.TryMaterializePerson(
+                person.PersonId,
+                SimulationTestFactory.CreateNpc("p12-direct-person-death-definition-" + installAction),
+                "p12-direct-person-death-npc-" + installAction,
+                null,
+                0f,
+                out NpcRuntime npc,
+                out PersonMaterializationFailure materializeFailure), Is.True, materializeFailure.ToString());
+            NpcCurrentActionCensusProvider actionProvider = new NpcCurrentActionCensusProvider(npc);
+            if (installAction)
+            {
+                using (EnterDailyAdvanceOperation(runtime))
+                {
+                    npc.SetCurrentActionRuntime(new NpcActionRuntime(
+                        SimulationTestFactory.CreateAction(
+                            "p12-direct-person-death-action", NpcActionType.Normal)));
+                }
+            }
+
+            long epochBeforeDeath = ReadEpoch(runtime);
+            long actionRevisionBeforeDeath = actionProvider.GetCurrentCensus().Revision;
+            Assert.That(runtime.TryApplyPersonDeath(
+                person.PersonId, out _, out PersonDeathLifecycleFailure deathFailure),
+                Is.True, deathFailure.ToString());
+
+            Assert.That(person.DeathAbsoluteDay, Is.EqualTo(runtime.CurrentDay));
+            Assert.That(npc.IsDead, Is.True);
+            Assert.That(npc.CurrentActionRuntime, Is.Null);
+            Assert.That(actionProvider.GetCurrentCensus().Cardinality, Is.Zero);
+            Assert.That(actionProvider.GetCurrentCensus().Revision,
+                Is.EqualTo(actionRevisionBeforeDeath + (installAction ? 1L : 0L)));
+            Assert.That(ReadEpoch(runtime), Is.EqualTo(epochBeforeDeath + 1L));
+            AssertCensus(runtime);
+        }
+    }
+
+    [Test]
+    public void DirectPersonDeathRejectsSaturatedCurrentActionBeforeAnyLifecycleWrite()
+    {
+        CityRuntime city = CreateCity("p12-direct-person-death-saturated-city", 5);
+        PersonStore people = new PersonStore();
+        SimulationRuntime runtime = CreateP12Runtime(new[] { city }, null, people);
+        PersonRuntime person = new PersonRuntime(new PersonId("p12-direct-person-death-saturated-person"), 0L);
+        Assert.That(runtime.TryRegisterPerson(person, out PersonStoreFailure registerFailure),
+            Is.True, registerFailure.ToString());
+        Assert.That(runtime.TryMaterializePerson(
+            person.PersonId,
+            SimulationTestFactory.CreateNpc("p12-direct-person-death-saturated-definition"),
+            "p12-direct-person-death-saturated-npc",
+            null,
+            0f,
+            out NpcRuntime npc,
+            out PersonMaterializationFailure materializeFailure), Is.True, materializeFailure.ToString());
+        NpcActionRuntime action = new NpcActionRuntime(
+            SimulationTestFactory.CreateAction("p12-direct-person-death-saturated-action", NpcActionType.Normal));
+        using (EnterDailyAdvanceOperation(runtime))
+        {
+            npc.SetCurrentActionRuntime(action);
+        }
+        SetNpcCurrentActionRevisionAndBaseline(runtime, npc, long.MaxValue);
+        AssertCensus(runtime);
+        long epochBeforeDeath = ReadEpoch(runtime);
+        long personRevisionBeforeDeath = ReadPersonLifecycleRevision(runtime, person.PersonId);
+
+        Assert.That(runtime.TryApplyPersonDeath(
+            person.PersonId, out _, out PersonDeathLifecycleFailure deathFailure), Is.False);
+        Assert.That(deathFailure, Is.EqualTo(PersonDeathLifecycleFailure.RuntimeFaulted));
+        Assert.That(person.DeathAbsoluteDay, Is.Null);
+        Assert.That(person.ResidenceSettlementRuntimeId, Is.Null);
+        Assert.That(npc.IsAlive, Is.True);
+        Assert.That(npc.CurrentActionRuntime, Is.SameAs(action));
+        Assert.That(new NpcCurrentActionCensusProvider(npc).GetCurrentCensus().Revision, Is.EqualTo(long.MaxValue));
+        Assert.That(ReadNpcLifecycleRevision(runtime, npc.RuntimeId, residence: false), Is.Zero);
+        Assert.That(ReadPersonLifecycleRevision(runtime, person.PersonId), Is.EqualTo(personRevisionBeforeDeath));
+        Assert.That(city.CurrentPopulation, Is.EqualTo(5));
+        Assert.That(city.Population.Revision, Is.Zero);
+        Assert.That(ReadEpoch(runtime), Is.EqualTo(epochBeforeDeath));
+        AssertCensus(runtime);
+    }
+
+    [Test]
+    public void LegacyResidentDeathWithEmptyActionKeepsEmptyOwnerAndPublishesOneEpoch()
+    {
+        CityRuntime city = CreateCity("p12-legacy-empty-death-city", 5);
+        NpcRuntime npc = CreateNpc("p12-legacy-empty-death-npc");
+        NpcRuntime[] roster = { npc };
+        Assert.That(SettlementPopulationMembershipSystem.TryBindExistingResident(
+            city, npc, SimulationTestFactory.CreateAuthoritativeNpcRoster(roster),
+            out PopulationMembershipFailure bindFailure), Is.True, bindFailure.ToString());
+        SimulationRuntime runtime = CreateP12Runtime(new[] { city }, roster);
+        NpcCurrentActionCensusProvider actionProvider = new NpcCurrentActionCensusProvider(npc);
+        long lifeRevisionBefore = ReadNpcLifecycleRevision(runtime, npc.RuntimeId, residence: false);
+        long residenceRevisionBefore = ReadNpcLifecycleRevision(runtime, npc.RuntimeId, residence: true);
+
+        Assert.That(actionProvider.GetCurrentCensus().Cardinality, Is.Zero);
+        Assert.That(runtime.TryApplyResidentDeath(
+            npc, city, out _, out NpcPopulationLifecycleFailure deathFailure), Is.True, deathFailure.ToString());
+
+        Assert.That(npc.IsDead, Is.True);
+        Assert.That(npc.CurrentActionRuntime, Is.Null);
+        Assert.That(actionProvider.GetCurrentCensus().Cardinality, Is.Zero);
+        Assert.That(actionProvider.GetCurrentCensus().Revision, Is.Zero);
+        Assert.That(ReadNpcLifecycleRevision(runtime, npc.RuntimeId, residence: false), Is.EqualTo(lifeRevisionBefore + 1L));
+        Assert.That(ReadNpcLifecycleRevision(runtime, npc.RuntimeId, residence: true), Is.EqualTo(residenceRevisionBefore + 1L));
+        Assert.That(city.CurrentPopulation, Is.EqualTo(4));
+        Assert.That(city.Population.Revision, Is.EqualTo(1L));
+        AssertEpoch(runtime, 1L);
         AssertCensus(runtime);
     }
 
@@ -411,6 +534,11 @@ public sealed class P12PopulationLifecycleInvalidationTests
             SimulationTestFactory.CreateAction("p12-current-action-death-saturated", NpcActionType.Normal)));
         SetNpcCurrentActionRevision(saturatedActor, long.MaxValue);
         SimulationRuntime saturatedRuntime = CreateP12Runtime(new[] { saturatedCity }, saturatedRoster);
+        long saturatedLifeRevision = ReadNpcLifecycleRevision(
+            saturatedRuntime, saturatedActor.RuntimeId, residence: false);
+        long saturatedResidenceRevision = ReadNpcLifecycleRevision(
+            saturatedRuntime, saturatedActor.RuntimeId, residence: true);
+        long saturatedPopulationRevision = saturatedCity.Population.Revision;
 
         Assert.That(saturatedRuntime.TryApplyResidentDeath(
             saturatedActor, saturatedCity, out _, out NpcPopulationLifecycleFailure saturatedFailure), Is.False);
@@ -419,6 +547,13 @@ public sealed class P12PopulationLifecycleInvalidationTests
         Assert.That(saturatedActor.CurrentActionRuntime, Is.Not.Null);
         Assert.That(saturatedActor.ResidenceSettlementRuntimeId, Is.EqualTo(saturatedCity.RuntimeId));
         Assert.That(saturatedCity.CurrentPopulation, Is.EqualTo(5));
+        Assert.That(saturatedCity.Population.Revision, Is.EqualTo(saturatedPopulationRevision));
+        Assert.That(ReadNpcLifecycleRevision(
+            saturatedRuntime, saturatedActor.RuntimeId, residence: false), Is.EqualTo(saturatedLifeRevision));
+        Assert.That(ReadNpcLifecycleRevision(
+            saturatedRuntime, saturatedActor.RuntimeId, residence: true), Is.EqualTo(saturatedResidenceRevision));
+        Assert.That(new NpcCurrentActionCensusProvider(saturatedActor).GetCurrentCensus().Revision,
+            Is.EqualTo(long.MaxValue));
         AssertEpoch(saturatedRuntime, 0L);
         AssertCensus(saturatedRuntime);
     }
@@ -473,6 +608,130 @@ public sealed class P12PopulationLifecycleInvalidationTests
         AssertPersonRevision(runtime, person.PersonId, expected: 3L);
         AssertNpcRevision(runtime, npc.RuntimeId, residence: false, expected: 1L);
         AssertCensus(runtime);
+    }
+
+    [Test]
+    public void PersonBackedResidentDeathWithEmptyActionKeepsEmptyOwnerAndPublishesOneEpoch()
+    {
+        (SimulationRuntime runtime, CityRuntime city, PersonRuntime person, NpcRuntime npc) =
+            CreateMaterializedResidentFixture("p12-person-backed-empty-death");
+        NpcCurrentActionCensusProvider actionProvider = new NpcCurrentActionCensusProvider(npc);
+        long epochBeforeDeath = ReadEpoch(runtime);
+        long personRevisionBefore = ReadPersonLifecycleRevision(runtime, person.PersonId);
+        long lifeRevisionBefore = ReadNpcLifecycleRevision(runtime, npc.RuntimeId, residence: false);
+
+        Assert.That(actionProvider.GetCurrentCensus().Cardinality, Is.Zero);
+        Assert.That(runtime.TryApplyResidentDeath(
+            npc, city, out _, out NpcPopulationLifecycleFailure deathFailure), Is.True, deathFailure.ToString());
+
+        Assert.That(person.DeathAbsoluteDay, Is.EqualTo(runtime.CurrentDay));
+        Assert.That(person.ResidenceSettlementRuntimeId, Is.Null);
+        Assert.That(npc.IsDead, Is.True);
+        Assert.That(npc.CurrentActionRuntime, Is.Null);
+        Assert.That(actionProvider.GetCurrentCensus().Cardinality, Is.Zero);
+        Assert.That(actionProvider.GetCurrentCensus().Revision, Is.Zero);
+        Assert.That(ReadPersonLifecycleRevision(runtime, person.PersonId), Is.EqualTo(personRevisionBefore + 2L));
+        Assert.That(ReadNpcLifecycleRevision(runtime, npc.RuntimeId, residence: false), Is.EqualTo(lifeRevisionBefore + 1L));
+        Assert.That(city.CurrentPopulation, Is.EqualTo(4));
+        Assert.That(city.Population.Revision, Is.EqualTo(1L));
+        Assert.That(ReadEpoch(runtime), Is.EqualTo(epochBeforeDeath + 1L));
+        AssertCensus(runtime);
+    }
+
+    [Test]
+    public void PersonBackedResidentDeathRejectsSaturatedCurrentActionBeforeAnyLifecycleWrite()
+    {
+        (SimulationRuntime runtime, CityRuntime city, PersonRuntime person, NpcRuntime npc) =
+            CreateMaterializedResidentFixture("p12-person-backed-saturated-death");
+        NpcActionRuntime action = new NpcActionRuntime(
+            SimulationTestFactory.CreateAction("p12-person-backed-saturated-death-action", NpcActionType.Normal));
+        using (EnterDailyAdvanceOperation(runtime))
+        {
+            npc.SetCurrentActionRuntime(action);
+        }
+        SetNpcCurrentActionRevisionAndBaseline(runtime, npc, long.MaxValue);
+        AssertCensus(runtime);
+        long epochBeforeDeath = ReadEpoch(runtime);
+        long personRevisionBefore = ReadPersonLifecycleRevision(runtime, person.PersonId);
+        long lifeRevisionBefore = ReadNpcLifecycleRevision(runtime, npc.RuntimeId, residence: false);
+        long populationRevisionBefore = city.Population.Revision;
+
+        Assert.That(runtime.TryApplyResidentDeath(
+            npc, city, out _, out NpcPopulationLifecycleFailure deathFailure), Is.False);
+        Assert.That(deathFailure, Is.EqualTo(NpcPopulationLifecycleFailure.RuntimeFaulted));
+        Assert.That(person.DeathAbsoluteDay, Is.Null);
+        Assert.That(person.ResidenceSettlementRuntimeId, Is.EqualTo(city.RuntimeId));
+        Assert.That(npc.IsAlive, Is.True);
+        Assert.That(npc.CurrentActionRuntime, Is.SameAs(action));
+        Assert.That(city.CurrentPopulation, Is.EqualTo(5));
+        Assert.That(city.Population.Revision, Is.EqualTo(populationRevisionBefore));
+        Assert.That(ReadPersonLifecycleRevision(runtime, person.PersonId), Is.EqualTo(personRevisionBefore));
+        Assert.That(ReadNpcLifecycleRevision(runtime, npc.RuntimeId, residence: false), Is.EqualTo(lifeRevisionBefore));
+        Assert.That(new NpcCurrentActionCensusProvider(npc).GetCurrentCensus().Revision, Is.EqualTo(long.MaxValue));
+        Assert.That(ReadEpoch(runtime), Is.EqualTo(epochBeforeDeath));
+        AssertCensus(runtime);
+    }
+
+    [Test]
+    public void LivePersonBindAndMaterializeActorChoicesRespectP12CurrentActionOwner()
+    {
+        P12ActorChoiceFixture bound = CreateP12ActorChoiceFixture(
+            "p12-actor-choice-bound", preexistingActor: true, atCityLocation: true, inventoryAmount: 10);
+        NpcCurrentActionCensusProvider boundActionProvider = new NpcCurrentActionCensusProvider(bound.Actor);
+        string boundSectionId = boundActionProvider.GetCurrentCensus().SectionId;
+        Assert.That(bound.Runtime.TryBindExistingNpcToPerson(
+            bound.Person.PersonId, bound.Actor.RuntimeId, out PersonMaterializationFailure bindFailure),
+            Is.True, bindFailure.ToString());
+        Assert.That(boundActionProvider.GetCurrentCensus().SectionId, Is.EqualTo(boundSectionId));
+        Assert.That(boundActionProvider.GetCurrentCensus().OwnerInstanceIdentity, Is.SameAs(bound.Actor));
+        InstallPriorAction(bound.Runtime, bound.Actor, "p12-actor-choice-bound-prior");
+        long boundRevisionBeforeChoice = boundActionProvider.GetCurrentCensus().Revision;
+        CaptureP12ActorChoice(bound.Runtime, bound.Person.PersonId, bound.SellAction.DefinitionId,
+            "p12-actor-choice-bound-input");
+
+        bound.Runtime.AdvanceDay();
+
+        Assert.That(bound.Runtime.ActorChoiceStore.Inputs, Has.Count.EqualTo(1));
+        ActorChoiceInput accepted = bound.Runtime.ActorChoiceStore.Inputs[0];
+        Assert.That(accepted.Status, Is.EqualTo(ActorChoiceInputStatus.AttemptReturned));
+        Assert.That(accepted.Dispositions, Has.Count.EqualTo(2));
+        Assert.That(accepted.Dispositions[0].Kind, Is.EqualTo(ActorChoiceDispositionKind.DispatchStarted));
+        Assert.That(accepted.Dispositions[1].AttemptOutcome, Is.EqualTo(ActorChoiceAttemptOutcome.Succeeded));
+        Assert.That(bound.Actor.CurrentActionRuntime, Is.Not.Null);
+        Assert.That(bound.Actor.CurrentActionRuntime.Action, Is.SameAs(bound.SellAction));
+        Assert.That(boundActionProvider.GetCurrentCensus().Cardinality, Is.EqualTo(1));
+        Assert.That(boundActionProvider.GetCurrentCensus().Revision, Is.GreaterThan(boundRevisionBeforeChoice));
+        AssertCensus(bound.Runtime);
+
+        P12ActorChoiceFixture materialized = CreateP12ActorChoiceFixture(
+            "p12-actor-choice-materialized", preexistingActor: false, atCityLocation: false, inventoryAmount: 0);
+        Assert.That(materialized.Runtime.TryMaterializePerson(
+            materialized.Person.PersonId,
+            SimulationTestFactory.CreateNpc("p12-actor-choice-materialized-definition", NpcJobType.Merchant, MerchantBehavior.Local),
+            "p12-actor-choice-materialized-npc",
+            null,
+            0f,
+            out NpcRuntime materializedActor,
+            out PersonMaterializationFailure materializeFailure), Is.True, materializeFailure.ToString());
+        NpcCurrentActionCensusProvider materializedActionProvider =
+            new NpcCurrentActionCensusProvider(materializedActor);
+        Assert.That(materializedActionProvider.GetCurrentCensus().OwnerInstanceIdentity, Is.SameAs(materializedActor));
+        InstallPriorAction(materialized.Runtime, materializedActor, "p12-actor-choice-materialized-prior");
+        CaptureP12ActorChoice(materialized.Runtime, materialized.Person.PersonId,
+            materialized.SellAction.DefinitionId, "p12-actor-choice-materialized-input");
+
+        materialized.Runtime.AdvanceDay();
+
+        Assert.That(materialized.Runtime.ActorChoiceStore.Inputs, Has.Count.EqualTo(1));
+        ActorChoiceInput rejected = materialized.Runtime.ActorChoiceStore.Inputs[0];
+        Assert.That(rejected.Status, Is.EqualTo(ActorChoiceInputStatus.Rejected));
+        Assert.That(rejected.Dispositions, Has.Count.EqualTo(1));
+        Assert.That(rejected.Dispositions[0].Failure, Is.EqualTo(ActorChoiceFailure.ActionUnavailable));
+        Assert.That(materializedActor.CurrentActionRuntime, Is.Null,
+            "the supported choice clears the old slot before recording its current-truth rejection");
+        Assert.That(materializedActionProvider.GetCurrentCensus().Cardinality, Is.Zero);
+        Assert.That(materializedActionProvider.GetCurrentCensus().Revision, Is.EqualTo(2L));
+        AssertCensus(materialized.Runtime);
     }
 
     [Test]
@@ -603,6 +862,138 @@ public sealed class P12PopulationLifecycleInvalidationTests
             configuration: configuration,
             personStore: people,
             runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1());
+    }
+
+    private static (SimulationRuntime Runtime, CityRuntime City, PersonRuntime Person, NpcRuntime Npc)
+        CreateMaterializedResidentFixture(string prefix)
+    {
+        CityRuntime city = CreateCity(prefix + "-city", 5);
+        PersonStore people = new PersonStore();
+        SimulationRuntime runtime = CreateP12Runtime(new[] { city }, null, people);
+        PersonRuntime person = new PersonRuntime(new PersonId(prefix + "-person"), 0L);
+        Assert.That(runtime.TryRegisterPerson(person, out PersonStoreFailure registerFailure),
+            Is.True, registerFailure.ToString());
+        AssertCensus(runtime);
+        Assert.That(runtime.TryBindExistingPersonResident(
+            person.PersonId, city, out PersonResidenceMembershipFailure bindFailure),
+            Is.True, bindFailure.ToString());
+        AssertCensus(runtime);
+        Assert.That(runtime.TryMaterializePerson(
+            person.PersonId,
+            SimulationTestFactory.CreateNpc(prefix + "-definition"),
+            prefix + "-npc",
+            null,
+            0f,
+            out NpcRuntime npc,
+            out PersonMaterializationFailure materializeFailure), Is.True, materializeFailure.ToString());
+        AssertCensus(runtime);
+        return (runtime, city, person, npc);
+    }
+
+    private static P12ActorChoiceFixture CreateP12ActorChoiceFixture(
+        string prefix,
+        bool preexistingActor,
+        bool atCityLocation,
+        int inventoryAmount)
+    {
+        RecordFixture records = SimulationTestFactory.CreateRecordFixture();
+        ItemData item = SimulationTestFactory.CreateItem(prefix + "-item", 10f);
+        CityRuntime city = SimulationTestFactory.CreateAccountBackedCity(
+            prefix + "-city",
+            prefix + "-location",
+            1000f,
+            SimulationTestFactory.CreateMarketItem(item, 100, 100));
+        NpcActionData sellAction = SimulationTestFactory.CreateAction(
+            prefix + "-sell-goods", NpcActionType.SellGoods, NpcActionCategory.Commerce);
+        MerchantSystem merchantSystem = SimulationTestFactory.CreateMerchantSystem(
+            null, records.Time, records.DecisionRecorder, maxTradeAmount: 5);
+        NpcDecisionSystem decisionSystem = new NpcDecisionSystem(
+            new List<INpcActionProvider> { merchantSystem });
+        EffectiveSimulationConfiguration configuration = SimulationConfigurationResolver.ResolveOrThrow(
+            contentOverrides: new SimulationConfigurationOverrides(
+                economy: new EconomyConfigurationOverrides(false),
+                merchantTrade: new MerchantTradeConfigurationOverrides(enabled: true)));
+
+        PersonStore people = new PersonStore();
+        PersonId personId = new PersonId(prefix + "-person");
+        PersonRuntime person = new PersonRuntime(personId);
+        Assert.That(people.TryRegister(person, out PersonStoreFailure personFailure),
+            Is.True, personFailure.ToString());
+
+        SpatialAuthorityStore spatial = new SpatialAuthorityStore();
+        LocationId locationId = new LocationId(city.Location.RuntimeId);
+        HexId anchorHexId = new HexId(prefix + "-anchor");
+        Assert.That(spatial.TryRegisterHex(
+            new HexRecord(anchorHexId), out SpatialAuthorityFailure hexFailure), Is.True, hexFailure?.ToString());
+        Assert.That(spatial.TryRegisterLocation(
+            new LocationRecord(locationId, anchorHexId), out SpatialAuthorityFailure locationFailure),
+            Is.True, locationFailure?.ToString());
+        LegacySpatialAnchorBindingStore anchorBindings = new LegacySpatialAnchorBindingStore(spatial);
+        Assert.That(anchorBindings.TryBindCity(city.RuntimeId, locationId, out SpatialAnchorBindingFailure anchorFailure),
+            Is.True, anchorFailure?.ToString());
+        PersonSpatialPositionStore positions = new PersonSpatialPositionStore(
+            people,
+            spatial,
+            new SpatialPassageTraversalOptionResolver(spatial.PassageAuthority));
+        StablePositionReference position = atCityLocation
+            ? StablePositionReference.ForLocation(locationId)
+            : StablePositionReference.ForHex(anchorHexId);
+        Assert.That(positions.TrySetAt(personId, position, out PersonSpatialPositionFailure positionFailure),
+            Is.True, positionFailure?.ToString());
+
+        NpcRuntime actor = null;
+        if (preexistingActor)
+        {
+            actor = new NpcRuntime(
+                prefix + "-npc",
+                SimulationTestFactory.CreateNpc(prefix + "-merchant-definition", NpcJobType.Merchant, MerchantBehavior.Local),
+                city,
+                0f);
+            if (inventoryAmount > 0)
+                actor.Inventory.AddItem(item, inventoryAmount, 1f);
+        }
+
+        SimulationRuntime runtime = new SimulationRuntime(
+            records.Time,
+            new[] { city },
+            actor == null ? null : new[] { actor },
+            configuredActions: new[] { sellAction },
+            npcDecisionSystem: decisionSystem,
+            decisionRecorder: records.DecisionRecorder,
+            merchantSystem: merchantSystem,
+            configuration: configuration,
+            personStore: people,
+            spatialAuthorityStore: spatial,
+            legacySpatialAnchorBindingStore: anchorBindings,
+            personSpatialPositionStore: positions,
+            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1());
+        return new P12ActorChoiceFixture(runtime, records, city, person, actor, item, sellAction);
+    }
+
+    private static void InstallPriorAction(SimulationRuntime runtime, NpcRuntime npc, string definitionId)
+    {
+        using (EnterDailyAdvanceOperation(runtime))
+        {
+            npc.SetCurrentActionRuntime(new NpcActionRuntime(
+                SimulationTestFactory.CreateAction(definitionId, NpcActionType.Normal)));
+        }
+    }
+
+    private static void CaptureP12ActorChoice(
+        SimulationRuntime runtime,
+        PersonId personId,
+        string actionDefinitionId,
+        string commandId)
+    {
+        Assert.That(runtime.ActorChoiceStore.TryCapture(
+            commandId,
+            personId,
+            actionDefinitionId,
+            WorldCommandOrigin.LocalPlayer,
+            WorldCommandAuthorityMode.Request,
+            runtime.CurrentDay,
+            out _,
+            out ActorChoiceStoreFailureCode failure), Is.True, failure.ToString());
     }
 
     private static EffectiveSimulationConfiguration CreateP12Configuration(
@@ -761,6 +1152,56 @@ public sealed class P12PopulationLifecycleInvalidationTests
         revision.SetValue(npc, value);
     }
 
+    private static void SetNpcCurrentActionRevisionAndBaseline(
+        SimulationRuntime runtime,
+        NpcRuntime npc,
+        long value)
+    {
+        SetNpcCurrentActionRevision(npc, value);
+        FieldInfo protocolField = typeof(SimulationRuntime).GetField(
+            "npcRosterCensusProtocol", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(protocolField, Is.Not.Null);
+        ContinuationCensusProtocol protocol = (ContinuationCensusProtocol)protocolField.GetValue(runtime);
+        FieldInfo sectionsField = typeof(ContinuationCensusProtocol).GetField(
+            "registeredSections", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(sectionsField, Is.Not.Null);
+        IDictionary sections = sectionsField.GetValue(protocol) as IDictionary;
+        Assert.That(sections, Is.Not.Null);
+        string sectionId = NpcCurrentActionCensusProvider.SectionIdFor(npc.RuntimeId);
+        Assert.That(sections.Contains(sectionId), Is.True);
+        object section = sections[sectionId];
+        FieldInfo baselineRevision = section.GetType().GetField("LastRevision", BindingFlags.Instance | BindingFlags.Public);
+        Assert.That(baselineRevision, Is.Not.Null);
+        baselineRevision.SetValue(section, value);
+    }
+
+    private static long ReadNpcLifecycleRevision(
+        SimulationRuntime runtime,
+        string runtimeId,
+        bool residence)
+    {
+        string sectionId = NpcLifecycleCensusProvider.SectionIdFor(runtimeId, residence);
+        foreach (IOwnerSectionCensusProvider provider in NpcLifecycleCensusProvider.CreateProviders(runtime.NpcRuntimes))
+        {
+            OwnerSectionCensusWitness witness = provider.GetCurrentCensus();
+            if (witness.SectionId == sectionId) return witness.Revision;
+        }
+        Assert.Fail("Expected NPC lifecycle provider was not present: " + sectionId);
+        return -1L;
+    }
+
+    private static long ReadPersonLifecycleRevision(SimulationRuntime runtime, PersonId personId)
+    {
+        string sectionId = PersonLifeResidenceCensusProvider.SectionIdFor(personId);
+        foreach (IOwnerSectionCensusProvider provider in PersonLifeResidenceCensusProvider.CreateProviders(runtime.PersonStore.Persons))
+        {
+            OwnerSectionCensusWitness witness = provider.GetCurrentCensus();
+            if (witness.SectionId == sectionId) return witness.Revision;
+        }
+        Assert.Fail("Expected Person lifecycle provider was not present: " + sectionId);
+        return -1L;
+    }
+
     private static IDisposable EnterDailyAdvanceOperation(SimulationRuntime runtime)
     {
         MethodInfo begin = typeof(SimulationRuntime).GetMethod(
@@ -771,5 +1212,34 @@ public sealed class P12PopulationLifecycleInvalidationTests
         IDisposable scope = arguments[1] as IDisposable;
         Assert.That(scope, Is.Not.Null);
         return scope;
+    }
+
+    private sealed class P12ActorChoiceFixture
+    {
+        public SimulationRuntime Runtime { get; }
+        public RecordFixture Records { get; }
+        public CityRuntime City { get; }
+        public PersonRuntime Person { get; }
+        public NpcRuntime Actor { get; }
+        public ItemData Item { get; }
+        public NpcActionData SellAction { get; }
+
+        public P12ActorChoiceFixture(
+            SimulationRuntime runtime,
+            RecordFixture records,
+            CityRuntime city,
+            PersonRuntime person,
+            NpcRuntime actor,
+            ItemData item,
+            NpcActionData sellAction)
+        {
+            Runtime = runtime;
+            Records = records;
+            City = city;
+            Person = person;
+            Actor = actor;
+            Item = item;
+            SellAction = sellAction;
+        }
     }
 }
