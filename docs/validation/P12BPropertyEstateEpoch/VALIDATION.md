@@ -20,9 +20,14 @@ The original raw Unity logs listed above are bundled unchanged in `raw-logs.zip`
 
 ## Source SHA-256
 
+These hashes are computed over the exact Git blob bytes at code commit
+`955dc087e931d9204f6fca33b8beb5fb45f7e211` (tree
+`ca2c6bd5ccf44a0441f9b31391eb9bb82a97524d`), so checkout line-ending
+conversion does not affect the source identity.
+
 | File | SHA-256 |
 | --- | --- |
-| `Assets/_Project/Scripts/SimulationRuntime.cs` | `4ECB91BF1D4E7FE6FD3C11B3EB5BCB4A2F8E0D5145B7CB623F0643695F38711B` |
-| `Assets/_Project/Scripts/Succession/SuccessionIntegrationContracts.cs` | `F6BB386F68C6980F2E89629F34EE8DBE730D386C71F8B2D9CDFEA15C84B9F17C` |
-| `Assets/_Project/Tests/EditMode/Editor/SimulationBootstrapCompositionTests.cs` | `BA7392A6920E90437CC1A0680EE389376FF294D94124927F7565B80FC72B7148` |
+| `Assets/_Project/Scripts/SimulationRuntime.cs` | `5EC58A518740FCBE0D5ABDFEAC2ADEA7253F82202F12FFB5D7786E69A40CF0D8` |
+| `Assets/_Project/Scripts/Succession/SuccessionIntegrationContracts.cs` | `C9E17CE40F3E425ECBEAA6129BF3727C61CE28949BEFE8869D1EE13972E5378C` |
+| `Assets/_Project/Tests/EditMode/Editor/SimulationBootstrapCompositionTests.cs` | `62DAAD83BAD3940905561BD49ECC6FB512D672AB53B33F49D8B263035603EB2C` |
 | `Assets/_Project/Tests/EditMode/Editor/PropertyEstateMutationEpochTests.cs` | `69032463BB8A78AD755A4BA557EF2E3EF6C6D2CDD32DFFB9EBF6DAF758A1DD7F` |
