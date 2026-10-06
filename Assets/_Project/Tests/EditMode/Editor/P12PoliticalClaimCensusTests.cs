@@ -63,6 +63,18 @@ public sealed class P12PoliticalClaimCensusTests
             Is.True, recognitionFailure.ToString());
         AssertRuntimeState(runtime, providers, 1, 1, 2L, 3L);
 
+        Assert.That(runtime.TryProposePoliticalClaimRecognition(
+            claim.ClaimId,
+            institutionId,
+            PoliticalClaimRecognitionState.Contested,
+            "replacement fixture",
+            out PoliticalClaimRecognitionTransition replacement,
+            out PoliticalClaimFailure replacementProposalFailure), Is.True,
+            replacementProposalFailure.ToString());
+        Assert.That(runtime.TryApplyPoliticalClaimRecognition(replacement, out PoliticalClaimFailure replacementFailure),
+            Is.True, replacementFailure.ToString());
+        AssertRuntimeState(runtime, providers, 1, 1, 3L, 4L);
+
         Assert.That(runtime.TryProposePoliticalClaimResolution(
             claim.ClaimId,
             PoliticalClaimStatus.Resolved,
@@ -71,12 +83,12 @@ public sealed class P12PoliticalClaimCensusTests
             resolutionProposalFailure.ToString());
         Assert.That(runtime.TryApplyPoliticalClaimResolution(resolution, out PoliticalClaimFailure resolutionFailure),
             Is.True, resolutionFailure.ToString());
-        AssertRuntimeState(runtime, providers, 1, 1, 3L, 4L);
+        AssertRuntimeState(runtime, providers, 1, 1, 4L, 5L);
 
         Assert.That(runtime.TryApplyPoliticalClaimResolution(resolution, out PoliticalClaimFailure staleResolutionFailure),
             Is.False);
         Assert.That(staleResolutionFailure.Code, Is.EqualTo(PoliticalClaimFailureCode.StaleClaim));
-        AssertRuntimeState(runtime, providers, 1, 1, 3L, 4L);
+        AssertRuntimeState(runtime, providers, 1, 1, 4L, 5L);
     }
 
     [Test]
