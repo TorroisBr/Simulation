@@ -1,8 +1,12 @@
 # P12-A owner coverage inventory — evidence only
 
-**Profile:** `UnityBootstrap-Daily-v1` (the bounded SampleScene
-`Simulation-GeneralTest.asset` → `TesteSimulacao.InitializeSimulation` daily
-profile). **Reviewed source baseline:** this P12 revalidation candidate starts
+**Current profile (2026-10-06):** `UnityBootstrap-Daily-v1` uses the bounded
+SampleScene `Simulation-DailyV1.asset` → `TesteSimulacao.InitializeSimulation`
+daily profile. `Simulation-GeneralTest.asset` remains the separate P10-A
+Ruin/LocalTopology proving profile. Historical sections below that cite the
+former SampleScene/GeneralTest configuration describe the earlier profile and
+are superseded by the current live-profile correction recorded at the end of
+this inventory. **Reviewed source baseline:** this P12 revalidation candidate starts
 at `4a1d36407487e3d342785d4d895993044d610cf4`. Following `git fetch --all`
 on 2026-09-28, exact upstream tips checked:
 architecture `c285466c355103d3637ac165246591b72eb7bda0` and both alignment
@@ -992,3 +996,51 @@ Current runtime operation registration in `SimulationRuntime.cs` includes `runti
 The existing operation-footprint refresh at `4f12586` predates these promotions, and includes candidate rows for direct travel, political/conflict/battle paths, and P12-F Expedition consumers. Those rows remain audit leads only. In particular, no Expedition operation or P12-F capability is implied by this current P12-B inventory. Do not add another global runtime callback/operation ID until an exact current-base Daily-v1 audit establishes its owner identity/cardinality, effective profile reachability, all supported commit paths, existing epoch notices, and path-specific failure/compensation boundary.
 
 **Current result:** Crime/Social Appraisal is promoted; no next P12-B implementation surface has yet passed this current-base owner/operation/epoch readiness audit. The next task is evidence reconciliation limited to supported `UnityBootstrap-Daily-v1` paths. P12-B remains incomplete, P12-A remains `WAIT_DEPENDENCY`, and P13 remains blocked.
+
+### Daily-v1 profile separation and day-zero census — 2026-10-06
+
+The profile mismatch recorded above is resolved within the accepted scope.
+`SampleScene.unity` selects `Simulation-DailyV1.asset`, a dedicated P9-B
+authored-geography profile with the prior selected City/NPC inputs and no
+P10-A Ruin. `Simulation-GeneralTest.asset` remains intact as the separate
+P10-A Ruin/LocalTopology proving profile. Submitting that profile to the
+Daily-v1 admission path is rejected before WorldId allocation and publication.
+This does not exclude Ruins from future deliberately composed continuation
+profiles.
+
+The exact Daily-v1 composition test now sets the `UnityBootstrap-Daily-v1`
+admission context and checks the effective day-zero owner/cardinality evidence:
+
+- RuntimeIdentityRegistry has 10 NPCs, 2 Cities, 2 Locations, 2 Routes, and
+  zero ExplorableSites, LocalPlaces, LocalConnections, and NotableItems; its
+  eight sections bind to one registry owner at revision 16.
+- P8 SpatialAuthority has one Hex, one anchored Location, and one scale
+  context. Its separate Passage state and crossing witnesses are empty at
+  revision 1. Legacy SpatialNetwork has two Locations and two Routes at
+  revision 4.
+- Each City has its own Market witness with five stock rows and local revision
+  zero, and its own SettlementPopulation aggregate witness plus empty
+  operation-receipt witness. The two population aggregates are one owner
+  section each; the authored population sum is 1,800.
+- Each City’s NPC-presence witness is bound to that City and matches the
+  reciprocal runtime roster. Person membership and materialization binding
+  both bind to the installed PersonStore and are zero at day zero.
+- The ten NPCs each have an exact MoneyAccount owner/cardinality-one witness,
+  an Inventory witness, two SpatialKnowledge witnesses, and ten typed/local
+  Knowledge witnesses checked against the exact installed owners and their
+  revisions. The selected profile has two inventory rows total and the
+  expected initial authored spatial and merchant-Knowledge facts.
+- Fixed day-zero witnesses are also checked for the RuntimeIdAllocator,
+  record sequence, ActorChoice, scheduled directives, TravelParty,
+  Expedition, ExplorableSite, ArmedForce/manpower/position, Conflict/War/
+  Battle, Estate/Property, Institutions/Offices, Genealogy, decision receipts,
+  and keyed-sale receipts. Their exact owner, schema, cardinality, and local
+  revision are checked; excluded/unused sections are zero.
+
+The exact result hashes and Unity suite counts are in
+`docs/validation/P12DailyProfileSeparation/VALIDATION.md`. This closes the
+current profile identity and day-zero inventory question only. It is not a
+complete effective-profile owner census across evolved states or all writer
+paths; it does not establish shared-epoch coverage, quiescence, capture
+eligibility, export, hydration, P12-A readiness, or P13 readiness. P12-B
+remains incomplete, P12-A remains `WAIT_DEPENDENCY`, and P13 remains blocked.

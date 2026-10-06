@@ -1512,6 +1512,45 @@ select another implementation slice only when it identifies the exact owner
 set, cardinality/identity, effective ingress, committed-write boundary, and
 epoch behavior. Expedition work remains deferred to P12-F.
 
+## Daily-v1 profile separation — 2026-10-06
+
+The user resolved the P10-A profile mismatch in favor of preserving the
+accepted P12 scope. `SampleScene.unity` now selects the dedicated
+`Simulation-DailyV1.asset`, which contains the authored P9-B geography and the
+same selected City/NPC inputs but no P10-A Ruin. `Simulation-GeneralTest.asset`
+is unchanged and remains the separate P10-A Ruin/LocalTopology proving
+profile. A Daily-v1 bootstrap now rejects any P10-A authored Ruin before
+WorldId allocation, runtime-owner construction, or genesis publication.
+
+The refreshed selected-profile census runs under
+`UnityBootstrap-Daily-v1` and confirms the profile identity and P9-B
+fingerprint match, P10-A's stage is absent, and the exact runtime-identity
+cardinalities are 10 NPCs, 2 Cities, 2 Locations, 2 Routes, and zero
+ExplorableSites, LocalPlaces, LocalConnections, and NotableItems. The
+SpatialAuthority contains one P8-A Hex, one anchored Location, and one scale
+context. The full inventory test verifies each registered provider against
+its exact owner instance, section, schema, cardinality, and revision. See
+`docs/validation/P12DailyProfileSeparation/VALIDATION.md` for the focused and
+full Unity evidence.
+
+The correction is prepared as P12 candidate
+`75ca59af90d54f3fb307382740ce0ba3fa4e00fa`, based on canonical
+`b9fcb54840ae7c4e68d5f4d1812e5591bb36a948`, with code tree
+`e3fbbd53689a4dd582e086e8c1677935d21ef78f`. Exact-tree validation passed the
+selected-profile inventory test 1/1, ALL EditMode 2384/2384, official Smoke
+5/5, and `git diff --check`; artifacts and hashes are recorded in the linked
+validation manifest. Independent exact-tip review passed for the code commit
+and tree above; the durable review record is
+`docs/validation/P12DailyProfileSeparation/REVIEW.md`. The code candidate is
+validated and awaits canonical promotion preflight.
+
+This resolves only the configuration/profile mismatch and validates the
+current day-zero owner/cardinality inventory. It does not close the
+source-driven P12-B owner/operation/shared-epoch audit, establish complete
+owner or epoch coverage, or provide export/hydration. P12-B remains
+INCOMPLETE; P12-A remains WAIT_DEPENDENCY; P13 remains BLOCKED. P12-F
+Expedition remains deferred until P12-C/D/E.
+
 ## P12 live-profile inventory correction — P10-A authored Ruin — 2026-10-05
 
 The source audit

@@ -29,3 +29,31 @@ Two materially different profile outcomes are possible:
 2. Revise the accepted P12 profile to include P10-A Ruin/LocalTopology identity, genesis provenance, owner inventory, and eventual exact continuation coverage.
 
 The current P12 Brief and the user's separate P10/P14 scope decision support option 1, but the current SampleScene asset references option 2. A scene/config change or P12 scope revision affects the supported world composition, so neither is applied by this audit. The P12 implementation and profile-inventory tracks remain blocked at this boundary pending resolution.
+
+## Resolution and revalidation — 2026-10-06
+
+The user selected option 1: preserve the accepted P12 scope. `SampleScene.unity`
+now references the dedicated `Simulation-DailyV1.asset`, which retains the
+authored P9-B geography and selected City/NPC inputs while omitting P10-A.
+`Simulation-GeneralTest.asset` and its P10-A Ruin/LocalTopology proving
+profile remain intact. The correction does not reject Ruins from future
+continuation profiles that deliberately admit their owners, provenance,
+export, and hydration.
+
+Daily-v1 admission now rejects both P10-A authored Ruin and P10-B generated
+Ruin before identity allocation or publication. The exact selected-profile
+inventory test runs with the Daily-v1 admission context and verifies the P9-B
+profile manifest/stage order, P8 geography, zero P10 site/topology owners, and
+the registered bootstrap owner witnesses. It now includes the City Market,
+SettlementPopulation, and PersonStore witnesses as well as RuntimeIdentity,
+SpatialNetwork, NPC owner families, and the existing promoted passive
+witnesses. Current cardinalities and exact evidence hashes are recorded in
+`../validation/P12DailyProfileSeparation/VALIDATION.md`.
+
+The configuration/profile mismatch is therefore resolved, and the selected
+day-zero inventory evidence is refreshed. The earlier evidence table remains
+the historical finding that motivated the change. This resolution does not
+prove all effective owners or committed writes are covered across a running
+world, nor complete shared-epoch coverage, global quiescence, capture
+eligibility, export, hydration, P12-A readiness, or P13 readiness. P12-B stays
+incomplete, P12-A stays `WAIT_DEPENDENCY`, and P13 stays blocked.

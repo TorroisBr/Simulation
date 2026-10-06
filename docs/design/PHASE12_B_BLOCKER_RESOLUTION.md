@@ -1214,6 +1214,35 @@ effective reachability, exact owner identity/cardinality, successful commit
 boundaries, and which shared epoch changes. This is blocker-resolution work,
 not a new product scope or checkpoint ID.
 
+## Daily-v1 profile mismatch resolved — 2026-10-06
+
+The former P10-A profile mismatch above is resolved by the user's decision to
+preserve the accepted P9-B-only P12 scope. `SampleScene.unity` now selects
+`Simulation-DailyV1.asset`, which retains the selected authored geography and
+City/NPC inputs but clears `authoredP10RuinSite`. The existing
+`Simulation-GeneralTest.asset` remains the separate P10-A proving profile.
+When that P10-A config is submitted with `UnityBootstrap-Daily-v1`, bootstrap
+rejects it during profile resolution before identity allocation or owner
+publication. The general P10-A profile remains valid outside Daily-v1.
+
+The current exact-profile test now sets the Daily-v1 admission context and
+verifies the live owner/cardinality inventory. It reports RuntimeIdentity
+cardinalities `{ NPC: 10, City: 2, Location: 2, Route: 2, ExplorableSite: 0,
+LocalPlace: 0, LocalConnection: 0, NotableItem: 0 }`; P8-A has one Hex, one
+anchored Location, and one scale context. It verifies the manifest is the
+P9-B authored-geography profile, the P10 stage and topology owners are absent,
+and every registered witness matches the exact runtime owner, cardinality,
+and revision. Focused P10-A and P10-B regressions confirm the separate P10
+profiles still pass and are rejected by Daily-v1. Validation is recorded in
+`docs/validation/P12DailyProfileSeparation/VALIDATION.md`.
+
+This removes the profile-identity blocker only. Continue the remaining
+source-driven P12-B census, committed-write invalidation and shared-epoch
+audit against the corrected profile. P12-B remains INCOMPLETE; P12-A remains
+WAIT_DEPENDENCY; P13 remains BLOCKED. No complete owner/epoch coverage,
+quiescence, capture eligibility, export or hydration is claimed. P12-F
+Expedition remains assigned to its documented P12-C/D/E prerequisites.
+
 ## P12-B live-profile inventory blocker — P10-A profile mismatch — 2026-10-05
 
 The Daily-v1 scene/config mismatch is recorded in
