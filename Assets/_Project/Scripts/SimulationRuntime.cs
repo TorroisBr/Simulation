@@ -202,6 +202,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
     private const string MarketSaleCensusOperationId = "runtime.economy.market-sale";
     private const string MerchantDailyNpcTradeCensusOperationId = "runtime.merchant.advance-npc-trade-state";
     private const string InstitutionOfficeOwnerCommitCensusOperationId = "p12.institution-office.owner-commit";
+    private const string FactionStoreOwnerCommitCensusOperationId = "p12.faction.owner-commit";
     private const string PropertyOwnerCommitCensusOperationId = "p12.property.owner-commit";
     private const string EstateOwnerCommitCensusOperationId = "p12.estate.owner-commit";
 
@@ -1984,6 +1985,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                 && !TryRegisterCityNpcPresenceCensusProviders(protocol))
             || (runtimeAdmissionContext != null && !TryRegisterCityMarketCensusProviders(protocol))
             || (runtimeAdmissionContext != null && !TryRegisterInstitutionOfficeCensusProviders(protocol))
+            || (runtimeAdmissionContext != null && !TryRegisterFactionStoreCensusProviders(protocol))
             || (runtimeAdmissionContext != null && !TryRegisterPropertyEstateCensusProviders(protocol))
             || (runtimeAdmissionContext != null && !TryRegisterP12PopulationCensusProviders(protocol))
             || (runtimeAdmissionContext != null && !TryRegisterP12CrimeSocialAppraisalOwnerSections(protocol))
@@ -2037,6 +2039,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                     out _)
                 && protocol.RegisterExpectedOperation(
                     InstitutionOfficeOwnerCommitCensusOperationId,
+                    out _)
+                && protocol.RegisterExpectedOperation(
+                    FactionStoreOwnerCommitCensusOperationId,
                     out _)
                 && protocol.RegisterExpectedOperation(
                     PropertyOwnerCommitCensusOperationId,
@@ -2206,6 +2211,64 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                         new OwnerSectionContract(
                             sectionIds[i],
                             InstitutionOfficeCensusProvider.SchemaVersion,
+                            OwnerSectionRole.Required),
+                        out _)
+                    || !protocol.RegisterCensusProvider(sectionIds[i], provider, out _))
+                {
+                    protocol.FaultClosed();
+                    return false;
+                }
+            }
+
+            return true;
+        }
+        catch
+        {
+            protocol.FaultClosed();
+            return false;
+        }
+    }
+
+    private bool TryRegisterFactionStoreCensusProviders(ContinuationCensusProtocol protocol)
+    {
+        if (protocol == null || factionStore == null)
+        {
+            protocol?.FaultClosed();
+            return false;
+        }
+
+        try
+        {
+            IReadOnlyList<IOwnerSectionCensusProvider> providers =
+                FactionStoreCensusProvider.CreateProviders(factionStore);
+            string[] sectionIds =
+            {
+                FactionStoreCensusProvider.FactionsSectionId,
+                FactionStoreCensusProvider.AffiliationsSectionId
+            };
+            int[] cardinalities = { factionStore.Count, factionStore.AffiliationCount };
+            if (providers == null || providers.Count != sectionIds.Length
+                || cardinalities[0] != 0 || cardinalities[1] != 0)
+            {
+                protocol.FaultClosed();
+                return false;
+            }
+
+            for (int i = 0; i < sectionIds.Length; i++)
+            {
+                IOwnerSectionCensusProvider provider = providers[i];
+                OwnerSectionCensusWitness witness = provider?.GetCurrentCensus();
+                if (witness == null
+                    || !string.Equals(witness.SectionId, sectionIds[i], StringComparison.Ordinal)
+                    || witness.SchemaVersion != FactionStoreCensusProvider.SchemaVersion
+                    || witness.Cardinality != cardinalities[i]
+                    || !ReferenceEquals(witness.OwnerInstanceIdentity, factionStore)
+                    || witness.Revision != factionStore.Revision
+                    || witness.Revision < 0L
+                    || !protocol.RegisterExpectedSection(
+                        new OwnerSectionContract(
+                            sectionIds[i],
+                            FactionStoreCensusProvider.SchemaVersion,
                             OwnerSectionRole.Required),
                         out _)
                     || !protocol.RegisterCensusProvider(sectionIds[i], provider, out _))
@@ -4998,6 +5061,50 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         }
     }
 
+    private bool TryBeginP12FactionStoreOwnerCommit(out SimulationOperationScope scope)
+    {
+        scope = null;
+        if (runtimeAdmissionContext == null) return true;
+
+        string[] sectionIds =
+        {
+            FactionStoreCensusProvider.FactionsSectionId,
+            FactionStoreCensusProvider.AffiliationsSectionId
+        };
+        if (!IsRuntimeAdmissionOwnerThreadCurrent()
+            || npcRosterCensusProtocol == null
+            || !npcRosterCensusProtocol.TryValidateUnchangedSections(sectionIds, out _)
+            || !npcRosterCensusProtocol.TryValidateMutationEpochCapacity(out _)
+            || !TryEnterRuntimeAdmissionOperation(
+                FactionStoreOwnerCommitCensusOperationId,
+                out scope))
+        {
+            FaultRuntimeAdmission();
+            return false;
+        }
+
+        return true;
+    }
+
+    private void NotifyP12FactionStoreOwnerCommit()
+    {
+        if (runtimeAdmissionContext == null) return;
+        try
+        {
+            if (npcRosterCensusProtocol == null
+                || !NotifyP12MutationSections(new[]
+                {
+                    FactionStoreCensusProvider.FactionsSectionId,
+                    FactionStoreCensusProvider.AffiliationsSectionId
+                }))
+                FaultRuntimeAdmission();
+        }
+        catch
+        {
+            FaultRuntimeAdmission();
+        }
+    }
+
     private bool TryEnterRuntimeAdmissionOperation(
         string operationContractId,
         out SimulationOperationScope scope)
@@ -5861,13 +5968,29 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             return false;
         }
 
-        bool registered = factionStore.TryRegister(record, out failure);
-        if (registered)
+        if (!TryBeginP12FactionStoreOwnerCommit(out SimulationOperationScope p12Scope))
         {
-            AdvancePoliticalWorldRevision();
+            failure = FactionFoundationFailure.Create(
+                FactionFoundationFailureCode.RuntimeFaulted,
+                "The P12 FactionStore census operation could not be admitted.");
+            return false;
         }
 
-        return registered;
+        try
+        {
+            bool registered = factionStore.TryRegister(record, out failure);
+            if (registered)
+            {
+                AdvancePoliticalWorldRevision();
+                NotifyP12FactionStoreOwnerCommit();
+            }
+
+            return registered;
+        }
+        finally
+        {
+            p12Scope?.Dispose();
+        }
     }
 
     public bool TryProposeFactionAffiliation(
@@ -5914,13 +6037,29 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             return false;
         }
 
-        bool applied = FactionAffiliationSystem.TryApplyAdd(factionStore, transition, out failure);
-        if (applied)
+        if (!TryBeginP12FactionStoreOwnerCommit(out SimulationOperationScope p12Scope))
         {
-            AdvancePoliticalWorldRevision();
+            failure = FactionFoundationFailure.Create(
+                FactionFoundationFailureCode.RuntimeFaulted,
+                "The P12 FactionStore census operation could not be admitted.");
+            return false;
         }
 
-        return applied;
+        try
+        {
+            bool applied = FactionAffiliationSystem.TryApplyAdd(factionStore, transition, out failure);
+            if (applied)
+            {
+                AdvancePoliticalWorldRevision();
+                NotifyP12FactionStoreOwnerCommit();
+            }
+
+            return applied;
+        }
+        finally
+        {
+            p12Scope?.Dispose();
+        }
     }
 
     public bool TryProposeFactionAffiliationEnd(
@@ -5992,13 +6131,29 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             return false;
         }
 
-        bool applied = FactionAffiliationSystem.TryApplyEnd(factionStore, transition, out failure);
-        if (applied)
+        if (!TryBeginP12FactionStoreOwnerCommit(out SimulationOperationScope p12Scope))
         {
-            AdvancePoliticalWorldRevision();
+            failure = FactionFoundationFailure.Create(
+                FactionFoundationFailureCode.RuntimeFaulted,
+                "The P12 FactionStore census operation could not be admitted.");
+            return false;
         }
 
-        return applied;
+        try
+        {
+            bool applied = FactionAffiliationSystem.TryApplyEnd(factionStore, transition, out failure);
+            if (applied)
+            {
+                AdvancePoliticalWorldRevision();
+                NotifyP12FactionStoreOwnerCommit();
+            }
+
+            return applied;
+        }
+        finally
+        {
+            p12Scope?.Dispose();
+        }
     }
 
     public bool TryRegisterPoliticalClaim(

@@ -39,7 +39,7 @@ public sealed class PropertyEstateMutationEpochTests
             simulation.Bootstrap.PropertyOwnershipCensusProviders;
         IOwnerSectionCensusProvider estateProvider = simulation.Bootstrap.EstateCensusProvider;
 
-        Assert.That(GetExpectedSectionCount(protocol), Is.EqualTo(253));
+        Assert.That(GetExpectedSectionCount(protocol), Is.EqualTo(255));
         Assert.That(propertyProviders, Has.Count.EqualTo(2));
         Assert.That(propertyProviders[0].GetCurrentCensus().OwnerInstanceIdentity,
             Is.SameAs(runtime.PropertyOwnershipStore));

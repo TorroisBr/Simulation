@@ -712,12 +712,13 @@ public sealed class SimulationBootstrapCompositionTests
             .GetField("expectedOperations", BindingFlags.Instance | BindingFlags.NonPublic)
             .GetValue(censusProtocol);
         Assert.That(expectedOperations, Does.Contain("p12.institution-office.owner-commit"));
+        Assert.That(expectedOperations, Does.Contain("p12.faction.owner-commit"));
         Assert.That(expectedOperations, Does.Not.Contain("runtime.institution-office.owner-commit"));
         IDictionary expectedCensusSections = (IDictionary)typeof(ContinuationCensusProtocol)
             .GetField("expectedSections", BindingFlags.Instance | BindingFlags.NonPublic)
             .GetValue(censusProtocol);
-        Assert.That(expectedCensusSections.Count, Is.EqualTo(253),
-            "The selected ten-NPC/two-City Daily-v1 inventory includes the 11 installed identity, legacy spatial-network, and ExplorableSite owner witnesses.");
+        Assert.That(expectedCensusSections.Count, Is.EqualTo(255),
+            "The selected ten-NPC/two-City Daily-v1 inventory includes the installed faction owner witnesses.");
         string[] identitySpatialSectionIds =
         {
             RuntimeIdentityRegistryCensusProvider.NpcsSectionId,
@@ -754,6 +755,29 @@ public sealed class SimulationBootstrapCompositionTests
             Assert.That(expectedCensusSections.Contains(institutionOfficeSectionIds[i]), Is.True);
             Assert.That(((OwnerSectionContract)expectedCensusSections[institutionOfficeSectionIds[i]]).Role,
                 Is.EqualTo(OwnerSectionRole.Required));
+        }
+        string[] factionSectionIds =
+        {
+            FactionStoreCensusProvider.FactionsSectionId,
+            FactionStoreCensusProvider.AffiliationsSectionId
+        };
+        FactionStore factionOwner = (FactionStore)typeof(SimulationRuntime)
+            .GetField("factionStore", BindingFlags.Instance | BindingFlags.NonPublic)
+            .GetValue(runtime);
+        IReadOnlyList<IOwnerSectionCensusProvider> factionProviders =
+            FactionStoreCensusProvider.CreateProviders(factionOwner);
+        Assert.That(factionProviders, Has.Count.EqualTo(factionSectionIds.Length));
+        for (int i = 0; i < factionSectionIds.Length; i++)
+        {
+            Assert.That(expectedCensusSections.Contains(factionSectionIds[i]), Is.True);
+            Assert.That(((OwnerSectionContract)expectedCensusSections[factionSectionIds[i]]).Role,
+                Is.EqualTo(OwnerSectionRole.Required));
+            OwnerSectionCensusWitness witness = factionProviders[i].GetCurrentCensus();
+            Assert.That(witness.SectionId, Is.EqualTo(factionSectionIds[i]));
+            Assert.That(witness.SchemaVersion, Is.EqualTo(FactionStoreCensusProvider.SchemaVersion));
+            Assert.That(witness.Cardinality, Is.Zero);
+            Assert.That(witness.Revision, Is.Zero);
+            Assert.That(witness.OwnerInstanceIdentity, Is.SameAs(factionOwner));
         }
         string[] propertyEstateSectionIds =
         {
