@@ -1,16 +1,19 @@
 # P12-B blocker resolution and dependency plan
 
-**Status:** Static owner/write-map pass complete, with a partial live
-day-zero census through the selected-profile bootstrap test. Current P12
-canonical at the direct-owner candidate base is `2f7c7422812de40aa1223e8310dcbd9f5d8ca474`; it includes the
-previously promoted passive owner witnesses, the reviewed NPC-trade
-invalidation slice, and the promoted Market-operation invalidation bundle.
-The latter's code candidate is `b577312c2edc6d3124c6d2b9dd3a1201dc9055ae`
-(tree `88ec452a979a7439b825858a6b1b271f8bc6c948`) and its exact-tip review
-passed. Complete owner coverage, complete shared-epoch invalidation, runtime
-capture fencing, and P12 readiness are not claimed. This record decomposes
-already accepted P12-B–P12-G scopes. It adds no checkpoint ID, product
-behavior, or implementation authorization.
+**Current canonical/status — 2026-10-06:** P12 canonical is
+`06f7678d167e82b3f476683420db79f87c0bb82b`. The current selected P9-B-only
+Daily-v1 protocol has 253 registered sections, including the eight
+RuntimeIdentityRegistry sections, two legacy SpatialNetwork sections, and
+one ExplorableSiteStore section promoted at this tip. The exact selected
+profile test passed within `SimulationBootstrapCompositionTests` 24/24; ALL
+EditMode passed 2417/2417, including `SimulationRuntimeAdmissionTests` 50/50;
+official Smoke passed 5/5. The separate P10-A Ruin/LocalTopology profile
+remains excluded from Daily-v1. This is still partial live day-zero census
+and bounded invalidation evidence. Complete owner coverage, complete
+shared-epoch invalidation, runtime-wide quiescence, capture eligibility, and
+P12 readiness are not claimed. This record decomposes already accepted
+P12-B–P12-G scopes. It adds no checkpoint ID, product behavior, or
+implementation authorization.
 
 **Evidence baseline:** P12 canonical
 `04105d31e88fca97888dddb8e974236a7f4b6804`; the selected-profile source basis
@@ -1391,4 +1394,54 @@ P12 canonical is 0c05223079a2036ba3b87ea19194efd1be25e7c9; the promoted Property
 | Runtime identity and spatial witnesses | Bootstrap separately publishes eight identity registries (NPC, City, Location, Route, ExplorableSite, LocalPlace, LocalConnection, NotableItem) and two SpatialNetwork witnesses (Location, Route). They are not part of the sealed 242-section protocol. | Reconcile exact identity/revision/cardinality and decide supported selected-profile reachability for post-genesis RegisterLocation, RegisterRoute, and ExplorableSites.Add. Do not infer supported or excluded behavior from public visibility alone. |
 | Readiness | P12-B remains INCOMPLETE; P12-A remains WAIT_DEPENDENCY; P13 remains blocked. P12-C waits on B; P12-D/E wait on B and C; P12-F waits on C/D/E; P12-G waits on B-F plus validated live-profile inventory. | No complete owner/epoch coverage, global quiescence, capture eligibility, export, hydration, downstream readiness, or Phase closure follows. Expedition remains assigned to P12-F. |
 
-The next task is source-level reachability and ownership reconciliation for the ten identity/spatial witnesses and their post-publication mutation APIs. Classify only call paths supported by the current Daily-v1 contract; if an uncovered normal commit remains, produce a bounded contract and independent review before implementation. Do not add a passive registration merely to increase the section count.
+The pre-promotion action from this audit—registering and reconciling the ten identity/spatial witnesses—was completed in the following promotion record. Its source call-graph review found no normal selected-profile post-genesis writer for legacy location/route or ExplorableSite registration; preserve the noted fail-closed baseline assessment and external-caller limitation.
+
+## P12-B RuntimeIdentity/SpatialNetwork protocol integration promotion — 2026-10-06
+
+Canonical advanced from `80d0ec825a9ad8da819cc43f8ac214fb49e27291` to
+`06f7678d167e82b3f476683420db79f87c0bb82b` by a clean fast-forward. The
+reviewed implementation is code `6dbe17744c9cd4670de89624b8a0099e215701bc`,
+tree `30f422f76bfa20bc16661f937dca823cda951819`; exact-tip independent review
+PASS is recorded at `188d1c7bc98708676f3e89d817f2305bd5743133`. Validation
+artifacts and hashes are in `docs/validation/P12BIdentitySpatial/VALIDATION.md`.
+
+The selected Daily-v1 protocol now registers all eight exact-owner
+RuntimeIdentityRegistry sections, both legacy SpatialNetwork sections, and
+the ExplorableSiteStore section. Required cardinalities are 10 NPCs, 2 Cities,
+2 RuntimeIdentity Locations, 2 RuntimeIdentity Routes, 2 legacy Network
+Locations, and 2 legacy Network Routes in the authored proving composition.
+ExplorableSites, LocalPlaces, LocalConnections, and NotableItems are explicitly
+empty; the site-store witness is also exact zero. P10 `LocalTopologyStore` is
+not composed. Profile inventory validation confirms the P9-B Daily asset,
+P10-A rejection, exact installed owner identities, cardinalities, and
+revisions.
+
+The supported post-genesis identity mutation is the already-reviewed
+`runtime.npc-membership` operation: it registers a new NPC only when the exact
+same roster object is already installed in `RuntimeIdentityRegistry`, then
+notifies all eight registry sections in the same operation epoch. The
+bootstrap roster must already be present in that registry; missing identity
+rejects composition without mutating it. Unregister preserves the append-only
+registry mapping and same-object re-registration does not advance its local
+revision. No normal selected-profile post-genesis producer for legacy
+`RegisterLocation`, `RegisterRoute`, or `ExplorableSiteStore.Add` was found in
+the production call graph: in-repository calls are bootstrap/genesis setup or
+other-profile/demo setup. Unexpected changes to their witnessed baselines
+fail closed at protocol assessment. This is a source-reachability finding for
+the current profile, not a claim that arbitrary external callers are fenced.
+
+The focused composition run passed 24/24 and contains the exact
+`SelectedDailyV1ProfileBootstrapsItsAuthoredP8GeographyBeforeDayOne` inventory
+test and missing-registry identity rejection. ALL EditMode passed 2417/2417;
+within it `SimulationRuntimeAdmissionTests` passed 50/50 and
+`P10BGeneratedRuinGenesisTests` passed 10/10, including rejection of the
+separate P10-A profile by Daily-v1. Official Smoke passed 5/5, and
+`git diff --check` passed. P12-B remains INCOMPLETE; P12-A remains
+WAIT_DEPENDENCY; P13 remains BLOCKED. No complete owner/epoch coverage,
+global quiescence, capture eligibility, export, or hydration follows.
+
+The remaining P12-B blocker is complete owner-set and supported-write
+reconciliation across the now-sealed profile, followed by proof of complete
+shared-epoch coverage and runtime-wide owner-thread/quiescence. This promotion
+closes the previously omitted identity/spatial section family only; it does
+not satisfy that full obligation.

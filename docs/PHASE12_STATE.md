@@ -3,6 +3,29 @@
 **Status:** PHASE 12 IN PROGRESS — P12-A WAIT_DEPENDENCY; P12-B INCOMPLETE
 (PARTIAL FOUNDATION PROMOTED).
 
+**Current P12-B canonical refresh — 2026-10-06:** canonical was fast-forwarded
+from `80d0ec825a9ad8da819cc43f8ac214fb49e27291` to the exact reviewed
+candidate `06f7678d167e82b3f476683420db79f87c0bb82b`. The implementation code
+is `6dbe17744c9cd4670de89624b8a0099e215701bc`, tree
+`30f422f76bfa20bc16661f937dca823cda951819`; independent exact-tip review PASS
+is recorded at `188d1c7bc98708676f3e89d817f2305bd5743133`. This registers the
+eight existing RuntimeIdentityRegistry sections, two legacy SpatialNetwork
+sections, and one ExplorableSiteStore section into the selected P9-B-only
+Daily-v1 partial census, increasing it from 242 to 253 registered sections.
+The corrected-tree `SimulationBootstrapCompositionTests` result is 24/24 and
+includes `SelectedDailyV1ProfileBootstrapsItsAuthoredP8GeographyBeforeDayOne`
+and the missing-identity rejection regression; ALL EditMode is 2417/2417,
+including `SimulationRuntimeAdmissionTests` 50/50 and the separate P10-A
+Daily-v1 rejection regression; official Smoke is 5/5. Full artifact hashes
+are in `docs/validation/P12BIdentitySpatial/VALIDATION.md`.
+
+This remains bounded census registration plus the already accepted NPC
+membership invalidation path. Daily-v1 still uses the dedicated P9-B profile;
+P10-A Ruin/LocalTopology and P10-B generated content remain separate. The
+promotion does not establish complete owner coverage, complete shared-epoch
+coverage, global quiescence, capture eligibility, export, hydration, P12-A
+readiness, P12-B completion, or P13 readiness.
+
 **Previously promoted cumulative P12-B owner-witness candidate tip:** passive
 census stack `codex/phase12/P12EPropertyCensus` at
 `b889b4747738d933fe48311ef89fc33a40e3dfa0`, fast-forwarded from canonical

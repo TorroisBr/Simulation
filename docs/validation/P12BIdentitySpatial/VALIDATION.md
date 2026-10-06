@@ -1,6 +1,6 @@
 # P12-B Runtime Identity / Spatial Census Integration Validation
 
-**Status:** corrected code and required validation complete; independent exact-tip code review pending.
+**Status:** corrected code, required validation, and independent exact-tip code review PASS; candidate promoted to `codex/phase12/canonical`.
 
 ## Candidate identity
 
@@ -11,6 +11,8 @@
 - Initial implementation code commit: `791dfd2cb980883207f6fb851ccd3a045e393009`.
 - Corrected implementation code commit: `6dbe17744c9cd4670de89624b8a0099e215701bc`.
 - Corrected implementation code tree: `30f422f76bfa20bc16661f937dca823cda951819`.
+- Exact-tip implementation review PASS: `188d1c7bc98708676f3e89d817f2305bd5743133` on `codex/phase12/P12BIdentitySpatialProtocolIntegrationReview`.
+- Promoted canonical evidence tip: `06f7678d167e82b3f476683420db79f87c0bb82b`.
 
 The selected Daily-v1 census inventory increases from 242 to 253 sections by
 registering the eight existing RuntimeIdentityRegistry sections, two legacy
@@ -40,6 +42,15 @@ These runs validate corrected code commit `6dbe17744c9cd4670de89624b8a0099e21570
 
 `git diff --check` passed for the corrected implementation commit and its full
 candidate diff against canonical base `80d0ec825a9ad8da819cc43f8ac214fb49e27291`.
+The focused 24/24 composition run includes the exact
+`SelectedDailyV1ProfileBootstrapsItsAuthoredP8GeographyBeforeDayOne` owner and
+cardinality inventory test and the missing-identity rejection regression. The
+2417/2417 full EditMode report includes `SimulationRuntimeAdmissionTests`
+50/50 and `P10BGeneratedRuinGenesisTests` 10/10, including rejection of the
+separate P10-A profile from Daily-v1. Thus the current corrected tree was
+revalidated against the accepted P9-B-only Daily-v1 composition after the
+profile/config correction; the separate GeneralTest P10-A proving profile is
+preserved.
 The archive `raw-logs-corrected.zip` contains the four successful logs above
 and the first corrected-test compilation diagnostic for audit; archive
 SHA-256: `5FC15793969F71FA273FE418B23A6C2AE644514EFB188C41D72B339DEBCAF3A5`.
