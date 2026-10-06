@@ -1882,3 +1882,40 @@ its live composed owners are checked. The FactionStore slice added census and
 invalidation for an owner already instantiated inside `SimulationRuntime`; it
 did not add a domain owner or change the profile. This revalidation does not
 merge or promote the separate Architecture branch and changes no Phase scope.
+## P12-B PoliticalClaimStore owner mutation promotion — 2026-10-06
+
+Under the standing `AUTONOMOUS_BOUNDED_PROMOTION` policy, the refreshed
+`codex/phase12/canonical` branch was fast-forwarded from
+`4d015062c28061148eb9926a6d23799681531afe` to the exact-reviewed integration
+bundle `3a0191057bcc600101b55199cbbf9f905610fc5d`. The promoted implementation
+code is `e3ae99b1756227f3af0d8d379f9a0f7778f854e5`, tree
+`2cca4e2d91e18eed50bf08a110db3016ea7a7adf`. Independent exact-tip review PASS
+is recorded in
+[`design/PHASE12_P12B_POLITICAL_CLAIM_OWNER_MUTATION_IMPLEMENTATION_REVIEW.md`](design/PHASE12_P12B_POLITICAL_CLAIM_OWNER_MUTATION_IMPLEMENTATION_REVIEW.md);
+the exact validation artifacts and hashes are in
+[`validation/P12BPoliticalClaimOwnerMutation/VALIDATION.md`](validation/P12BPoliticalClaimOwnerMutation/VALIDATION.md).
+
+This slice adds two Required selected Daily-v1 census sections for separate
+PoliticalClaim and recognition cardinalities on the exact installed
+`PoliticalClaimStore`, both using its shared local revision. The validated
+inventory now contains 257 sections. One `p12.political-claim.owner-commit`
+operation covers only the existing `TryRegisterPoliticalClaim`,
+`TryApplyPoliticalClaimRecognition`, and `TryApplyPoliticalClaimResolution`
+runtime facades; successful commits notify both sections once in one mutation
+epoch and retain the existing PoliticalWorldRevision increment. The review
+and focused tests cover recognition replacement without cardinality change,
+claim resolution, rejected writes, and local revision overflow.
+
+P12-B remains `INCOMPLETE`; P12-A remains `WAIT_DEPENDENCY`; P13 remains
+blocked; Phase 12 remains open. This does not establish complete P12-B owner
+or writer coverage, complete shared-epoch coverage, global quiescence, capture
+eligibility, export, hydration, or P12-A/P13 readiness. Daily-v1 remains the
+P9-B-only profile, and the separate P10-A Ruin/LocalTopology proving profile
+is unchanged.
+
+The numbered-phase DAG is unchanged: P12-C waits on B; P12-D and P12-E wait
+on B and C; P12-F waits on C/D/E; P12-G waits on B through F plus validated
+live-profile inventory; P13 remains blocked on supported continuation and
+recoverable causal history. The separate PoliticalSupportStore owner and its
+existing runtime write paths remain outside this promotion and require their
+own source/contract reconciliation before further P12-B wiring.

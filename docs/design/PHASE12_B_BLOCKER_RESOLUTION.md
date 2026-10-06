@@ -1498,3 +1498,26 @@ new political or gameplay semantics are introduced. Design must establish the
 exact Daily-v1 clone/installation identity, cardinality read surface, the three
 facade success/failure paths, owner-thread and epoch preflight, and tests before
 implementation. No implementation readiness is claimed by this audit alone.
+## P12-B owner/operation/epoch refresh — after PoliticalClaimStore promotion — 2026-10-06
+
+P12 canonical advanced from `4d015062c28061148eb9926a6d23799681531afe` to
+reviewed bundle `3a0191057bcc600101b55199cbbf9f905610fc5d`; the promoted code is
+`e3ae99b1756227f3af0d8d379f9a0f7778f854e5`, tree
+`2cca4e2d91e18eed50bf08a110db3016ea7a7adf`. The State record and exact-tip
+review/validation evidence are in `docs/PHASE12_STATE.md` and
+`docs/design/PHASE12_P12B_POLITICAL_CLAIM_OWNER_MUTATION_IMPLEMENTATION_REVIEW.md`.
+
+| Daily-v1 owner or write boundary | Current evidence | Remaining boundary |
+|---|---|---|
+| PoliticalClaimStore and recognition records | Two Required sections bind separate claim and recognition cardinalities to the exact installed owner and its shared local revision. The `p12.political-claim.owner-commit` operation covers the three existing runtime commit facades; successful commits notify both sections in one epoch. Selected-profile inventory is 257 sections. | Only those two rows/revision witnesses and the three reviewed facades are covered. Other political owners and writers remain separate. |
+| PoliticalSupportStore | Existing store owns relation rows with a local `Count` and `Revision`; runtime exposes registration, addition, and end-transition commits. | Keep this as a separate owner task. Reconcile its exact accepted Daily-v1/P12-E membership, clone identity, supported normal call graph, and mutation/rejection semantics before proposing any census or operation changes. Public visibility alone is not a supported-path finding. |
+| Political Knowledge and decision records | Separate existing owners and P12 capability boundaries. | Remain outside the PoliticalClaim slice; continue only under their accepted owner/checkpoint sequence. |
+| Readiness | P12-B remains `INCOMPLETE`; P12-A remains `WAIT_DEPENDENCY`; P12-C waits on B; P12-D/E wait on B and C; P12-F waits on C/D/E; P12-G waits on B–F plus validated live-profile inventory; P13 remains blocked. | No complete owner/operation/shared-epoch coverage, global quiescence, capture eligibility, export, hydration, downstream readiness, or Phase closure is implied. Expedition remains deferred to P12-F. |
+
+The next blocker-resolution task is a source-driven PoliticalSupportStore
+contract reconciliation, not an assumption that this owner belongs in the
+selected profile. If current P12-E/Brief evidence admits the relation owner
+and its existing supported paths, prepare a separate bounded design and
+independent review. If it does not, keep it outside this profile and advance
+the next documented P12-B obligation. No PoliticalSupportStore implementation
+readiness is claimed by this matrix refresh.
