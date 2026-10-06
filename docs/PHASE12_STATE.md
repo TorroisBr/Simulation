@@ -1542,7 +1542,7 @@ selected-profile inventory test 1/1, ALL EditMode 2384/2384, official Smoke
 validation manifest. Independent exact-tip review passed for the code commit
 and tree above; the durable review record is
 `docs/validation/P12DailyProfileSeparation/REVIEW.md`. The code candidate is
-validated and awaits canonical promotion preflight.
+validated; at the time of this entry, it awaited canonical promotion preflight.
 
 This resolves only the configuration/profile mismatch and validates the
 current day-zero owner/cardinality inventory. It does not close the
@@ -1550,6 +1550,33 @@ source-driven P12-B owner/operation/shared-epoch audit, establish complete
 owner or epoch coverage, or provide export/hydration. P12-B remains
 INCOMPLETE; P12-A remains WAIT_DEPENDENCY; P13 remains BLOCKED. P12-F
 Expedition remains deferred until P12-C/D/E.
+
+## P12 Daily-v1 profile separation promotion — 2026-10-06
+
+The validated profile-correction candidate was fast-forwarded to
+`codex/phase12/canonical` at `eb1f8041d291376744c6bbaf3a9aa235addd3830`,
+from canonical `b9fcb54840ae7c4e68d5f4d1812e5591bb36a948`. The reviewed code
+remains `75ca59af90d54f3fb307382740ce0ba3fa4e00fa`, tree
+`e3fbbd53689a4dd582e086e8c1677935d21ef78f`. Exact-tip independent review
+passed and is recorded in
+`docs/validation/P12DailyProfileSeparation/REVIEW.md`; exact-tree validation
+and hashes are in `VALIDATION.md`, with raw test results in its hash-pinned
+archive. Local and remote `codex/phase12/canonical` are synchronized at the
+promotion SHA.
+
+This promotion makes SampleScene's P9-B-only Daily-v1 profile selection and
+pre-publication rejection of P10-A/P10-B Ruin configurations canonical.
+`Simulation-GeneralTest.asset` remains the independent P10-A
+Ruin/LocalTopology proving profile. The correction does not exclude Ruins from
+future deliberately composed continuation profiles.
+
+The profile mismatch and selected day-zero identity/cardinality question are
+resolved. P12-B remains INCOMPLETE while source-driven owner, committed-write,
+and shared-epoch coverage remains outstanding. P12-A remains
+WAIT_DEPENDENCY; P13 remains BLOCKED. No complete owner or epoch coverage,
+global quiescence, capture eligibility, export, or hydration is implied.
+Continue the P12-B current-profile owner/operation/epoch audit from this
+corrected canonical state.
 
 ## P12 live-profile inventory correction — P10-A authored Ruin — 2026-10-05
 
