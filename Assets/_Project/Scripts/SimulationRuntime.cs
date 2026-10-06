@@ -203,6 +203,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
     private const string MerchantDailyNpcTradeCensusOperationId = "runtime.merchant.advance-npc-trade-state";
     private const string InstitutionOfficeOwnerCommitCensusOperationId = "p12.institution-office.owner-commit";
     private const string FactionStoreOwnerCommitCensusOperationId = "p12.faction.owner-commit";
+    private const string PoliticalClaimOwnerCommitCensusOperationId = "p12.political-claim.owner-commit";
     private const string PropertyOwnerCommitCensusOperationId = "p12.property.owner-commit";
     private const string EstateOwnerCommitCensusOperationId = "p12.estate.owner-commit";
 
@@ -1986,6 +1987,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             || (runtimeAdmissionContext != null && !TryRegisterCityMarketCensusProviders(protocol))
             || (runtimeAdmissionContext != null && !TryRegisterInstitutionOfficeCensusProviders(protocol))
             || (runtimeAdmissionContext != null && !TryRegisterFactionStoreCensusProviders(protocol))
+            || (runtimeAdmissionContext != null && !TryRegisterPoliticalClaimCensusProviders(protocol))
             || (runtimeAdmissionContext != null && !TryRegisterPropertyEstateCensusProviders(protocol))
             || (runtimeAdmissionContext != null && !TryRegisterP12PopulationCensusProviders(protocol))
             || (runtimeAdmissionContext != null && !TryRegisterP12CrimeSocialAppraisalOwnerSections(protocol))
@@ -2042,6 +2044,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                     out _)
                 && protocol.RegisterExpectedOperation(
                     FactionStoreOwnerCommitCensusOperationId,
+                    out _)
+                && protocol.RegisterExpectedOperation(
+                    PoliticalClaimOwnerCommitCensusOperationId,
                     out _)
                 && protocol.RegisterExpectedOperation(
                     PropertyOwnerCommitCensusOperationId,
@@ -2269,6 +2274,61 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                         new OwnerSectionContract(
                             sectionIds[i],
                             FactionStoreCensusProvider.SchemaVersion,
+                            OwnerSectionRole.Required),
+                        out _)
+                    || !protocol.RegisterCensusProvider(sectionIds[i], provider, out _))
+                {
+                    protocol.FaultClosed();
+                    return false;
+                }
+            }
+
+            return true;
+        }
+        catch
+        {
+            protocol.FaultClosed();
+            return false;
+        }
+    }
+
+    private bool TryRegisterPoliticalClaimCensusProviders(ContinuationCensusProtocol protocol)
+    {
+        if (protocol == null || politicalClaimStore == null)
+        {
+            protocol?.FaultClosed();
+            return false;
+        }
+
+        try
+        {
+            IReadOnlyList<IOwnerSectionCensusProvider> providers =
+                PoliticalClaimStoreCensusProvider.CreateProviders(politicalClaimStore);
+            string[] sectionIds =
+            {
+                PoliticalClaimStoreCensusProvider.ClaimsSectionId,
+                PoliticalClaimStoreCensusProvider.RecognitionsSectionId
+            };
+            int[] cardinalities = { politicalClaimStore.Count, politicalClaimStore.RecognitionCount };
+            for (int i = 0; i < sectionIds.Length; i++)
+            {
+                IOwnerSectionCensusProvider provider = providers != null && providers.Count > i
+                    ? providers[i]
+                    : null;
+                OwnerSectionCensusWitness witness = provider?.GetCurrentCensus();
+                if (providers == null || providers.Count != sectionIds.Length
+                    || cardinalities[i] != 0
+                    || witness == null
+                    || !string.Equals(witness.SectionId, sectionIds[i], StringComparison.Ordinal)
+                    || witness.SchemaVersion != PoliticalClaimStoreCensusProvider.SchemaVersion
+                    || witness.Cardinality != cardinalities[i]
+                    || !ReferenceEquals(witness.OwnerInstanceIdentity, politicalClaimStore)
+                    || witness.Revision != politicalClaimStore.Revision
+                    || witness.Revision < 0L
+                    || !protocol.RegisterExpectedSection(
+                        new OwnerSectionContract(
+                            sectionIds[i],
+                            PoliticalClaimStoreCensusProvider.SchemaVersion,
                             OwnerSectionRole.Required),
                         out _)
                     || !protocol.RegisterCensusProvider(sectionIds[i], provider, out _))
@@ -5105,6 +5165,50 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         }
     }
 
+    private bool TryBeginP12PoliticalClaimOwnerCommit(out SimulationOperationScope scope)
+    {
+        scope = null;
+        if (runtimeAdmissionContext == null) return true;
+
+        string[] sectionIds =
+        {
+            PoliticalClaimStoreCensusProvider.ClaimsSectionId,
+            PoliticalClaimStoreCensusProvider.RecognitionsSectionId
+        };
+        if (!IsRuntimeAdmissionOwnerThreadCurrent()
+            || npcRosterCensusProtocol == null
+            || !npcRosterCensusProtocol.TryValidateUnchangedSections(sectionIds, out _)
+            || !npcRosterCensusProtocol.TryValidateMutationEpochCapacity(out _)
+            || !TryEnterRuntimeAdmissionOperation(
+                PoliticalClaimOwnerCommitCensusOperationId,
+                out scope))
+        {
+            FaultRuntimeAdmission();
+            return false;
+        }
+
+        return true;
+    }
+
+    private void NotifyP12PoliticalClaimOwnerCommit()
+    {
+        if (runtimeAdmissionContext == null) return;
+        try
+        {
+            if (npcRosterCensusProtocol == null
+                || !NotifyP12MutationSections(new[]
+                {
+                    PoliticalClaimStoreCensusProvider.ClaimsSectionId,
+                    PoliticalClaimStoreCensusProvider.RecognitionsSectionId
+                }))
+                FaultRuntimeAdmission();
+        }
+        catch
+        {
+            FaultRuntimeAdmission();
+        }
+    }
+
     private bool TryEnterRuntimeAdmissionOperation(
         string operationContractId,
         out SimulationOperationScope scope)
@@ -6199,13 +6303,29 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             return false;
         }
 
-        bool registered = politicalClaimStore.TryRegister(record, out failure);
-        if (registered)
+        if (!TryBeginP12PoliticalClaimOwnerCommit(out SimulationOperationScope p12Scope))
         {
-            AdvancePoliticalWorldRevision();
+            failure = PoliticalClaimFailure.Create(
+                PoliticalClaimFailureCode.RuntimeFaulted,
+                "The runtime admission boundary rejected the political claim commit.");
+            return false;
         }
 
-        return registered;
+        try
+        {
+            bool registered = politicalClaimStore.TryRegister(record, out failure);
+            if (registered)
+            {
+                AdvancePoliticalWorldRevision();
+                NotifyP12PoliticalClaimOwnerCommit();
+            }
+
+            return registered;
+        }
+        finally
+        {
+            p12Scope?.Dispose();
+        }
     }
 
     public bool TryProposePoliticalClaimRecognition(
@@ -6258,16 +6378,32 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             return false;
         }
 
-        bool applied = PoliticalClaimSystem.TryApplyRecognition(
-            politicalClaimStore,
-            transition,
-            out failure);
-        if (applied)
+        if (!TryBeginP12PoliticalClaimOwnerCommit(out SimulationOperationScope p12Scope))
         {
-            AdvancePoliticalWorldRevision();
+            failure = PoliticalClaimFailure.Create(
+                PoliticalClaimFailureCode.RuntimeFaulted,
+                "The runtime admission boundary rejected the political claim recognition commit.");
+            return false;
         }
 
-        return applied;
+        try
+        {
+            bool applied = PoliticalClaimSystem.TryApplyRecognition(
+                politicalClaimStore,
+                transition,
+                out failure);
+            if (applied)
+            {
+                AdvancePoliticalWorldRevision();
+                NotifyP12PoliticalClaimOwnerCommit();
+            }
+
+            return applied;
+        }
+        finally
+        {
+            p12Scope?.Dispose();
+        }
     }
 
     public bool TryProposePoliticalClaimResolution(
@@ -6306,16 +6442,32 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             return false;
         }
 
-        bool applied = PoliticalClaimSystem.TryApplyResolution(
-            politicalClaimStore,
-            transition,
-            out failure);
-        if (applied)
+        if (!TryBeginP12PoliticalClaimOwnerCommit(out SimulationOperationScope p12Scope))
         {
-            AdvancePoliticalWorldRevision();
+            failure = PoliticalClaimFailure.Create(
+                PoliticalClaimFailureCode.RuntimeFaulted,
+                "The runtime admission boundary rejected the political claim resolution commit.");
+            return false;
         }
 
-        return applied;
+        try
+        {
+            bool applied = PoliticalClaimSystem.TryApplyResolution(
+                politicalClaimStore,
+                transition,
+                out failure);
+            if (applied)
+            {
+                AdvancePoliticalWorldRevision();
+                NotifyP12PoliticalClaimOwnerCommit();
+            }
+
+            return applied;
+        }
+        finally
+        {
+            p12Scope?.Dispose();
+        }
     }
 
     /// <summary>

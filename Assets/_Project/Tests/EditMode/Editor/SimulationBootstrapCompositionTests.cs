@@ -713,12 +713,13 @@ public sealed class SimulationBootstrapCompositionTests
             .GetValue(censusProtocol);
         Assert.That(expectedOperations, Does.Contain("p12.institution-office.owner-commit"));
         Assert.That(expectedOperations, Does.Contain("p12.faction.owner-commit"));
+        Assert.That(expectedOperations, Does.Contain("p12.political-claim.owner-commit"));
         Assert.That(expectedOperations, Does.Not.Contain("runtime.institution-office.owner-commit"));
         IDictionary expectedCensusSections = (IDictionary)typeof(ContinuationCensusProtocol)
             .GetField("expectedSections", BindingFlags.Instance | BindingFlags.NonPublic)
             .GetValue(censusProtocol);
-        Assert.That(expectedCensusSections.Count, Is.EqualTo(255),
-            "The selected ten-NPC/two-City Daily-v1 inventory includes the installed faction owner witnesses.");
+        Assert.That(expectedCensusSections.Count, Is.EqualTo(257),
+            "The selected ten-NPC/two-City Daily-v1 inventory includes the installed faction and political-claim owner witnesses.");
         string[] identitySpatialSectionIds =
         {
             RuntimeIdentityRegistryCensusProvider.NpcsSectionId,
@@ -778,6 +779,29 @@ public sealed class SimulationBootstrapCompositionTests
             Assert.That(witness.Cardinality, Is.Zero);
             Assert.That(witness.Revision, Is.Zero);
             Assert.That(witness.OwnerInstanceIdentity, Is.SameAs(factionOwner));
+        }
+        string[] politicalClaimSectionIds =
+        {
+            PoliticalClaimStoreCensusProvider.ClaimsSectionId,
+            PoliticalClaimStoreCensusProvider.RecognitionsSectionId
+        };
+        PoliticalClaimStore politicalClaimOwner = (PoliticalClaimStore)typeof(SimulationRuntime)
+            .GetField("politicalClaimStore", BindingFlags.Instance | BindingFlags.NonPublic)
+            .GetValue(runtime);
+        IReadOnlyList<IOwnerSectionCensusProvider> politicalClaimProviders =
+            PoliticalClaimStoreCensusProvider.CreateProviders(politicalClaimOwner);
+        Assert.That(politicalClaimProviders, Has.Count.EqualTo(politicalClaimSectionIds.Length));
+        for (int i = 0; i < politicalClaimSectionIds.Length; i++)
+        {
+            Assert.That(expectedCensusSections.Contains(politicalClaimSectionIds[i]), Is.True);
+            Assert.That(((OwnerSectionContract)expectedCensusSections[politicalClaimSectionIds[i]]).Role,
+                Is.EqualTo(OwnerSectionRole.Required));
+            OwnerSectionCensusWitness witness = politicalClaimProviders[i].GetCurrentCensus();
+            Assert.That(witness.SectionId, Is.EqualTo(politicalClaimSectionIds[i]));
+            Assert.That(witness.SchemaVersion, Is.EqualTo(PoliticalClaimStoreCensusProvider.SchemaVersion));
+            Assert.That(witness.Cardinality, Is.Zero);
+            Assert.That(witness.Revision, Is.Zero);
+            Assert.That(witness.OwnerInstanceIdentity, Is.SameAs(politicalClaimOwner));
         }
         string[] propertyEstateSectionIds =
         {

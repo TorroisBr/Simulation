@@ -12,6 +12,7 @@ public sealed class PoliticalClaimStore : IAuthoritativeMutationGuardBindable
     private long revision;
 
     public int Count => recordsByClaimId.Count;
+    public int RecognitionCount => recognitionsByKey.Count;
     public long Revision => revision;
 
     public IReadOnlyList<PoliticalClaimRecord> Records
