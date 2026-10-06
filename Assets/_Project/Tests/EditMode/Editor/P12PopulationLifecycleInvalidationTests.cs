@@ -331,8 +331,9 @@ public sealed class P12PopulationLifecycleInvalidationTests
         Assert.That(initial.Cardinality, Is.Zero);
         Assert.That(initial.Revision, Is.Zero);
 
-        NpcActionRuntime first = new NpcActionRuntime(
-            SimulationTestFactory.CreateAction("p12-current-action-first", NpcActionType.Normal));
+        NpcActionData sharedDefinition = SimulationTestFactory.CreateAction(
+            "p12-current-action-first", NpcActionType.Normal);
+        NpcActionRuntime first = new NpcActionRuntime(sharedDefinition);
         actor.SetCurrentActionRuntime(first);
         Assert.That(actor.CurrentActionRuntime, Is.Null,
             "a selected-profile action write outside an admitted runtime operation must stop before commit");
@@ -356,17 +357,25 @@ public sealed class P12PopulationLifecycleInvalidationTests
             AssertEpoch(runtime, 1L);
         }
 
-        first.SetSuccessChanceMultiplier(0.25f);
-        Assert.That(first.SuccessChanceMultiplier, Is.EqualTo(1f),
-            "a bound action runtime rejects writes outside the selected-profile owner boundary");
-        Assert.That(initialProvider.GetCurrentCensus().Revision, Is.EqualTo(1L));
-        AssertEpoch(runtime, 1L);
-
         CommercialDecisionEvidence commercialEvidence = new CommercialDecisionEvidence(
             "p12-item", "p12-location", "p12-origin", "p12-destination", null,
             null, null, 2, 1f, 3f, 4f, 5f, 6f, 7f);
         CommercialScoutingEvidence scoutingEvidence = new CommercialScoutingEvidence(
             "p12-destination", "p12-route", 0, 0, false, 0L, 1f, 1, 2f);
+
+        first.SetSuccessChanceMultiplier(0.25f);
+        first.SetOriginDecisionId("rejected-decision");
+        first.SetStableOccurrenceKey("rejected-occurrence");
+        first.SetCommercialDecisionEvidence(commercialEvidence);
+        first.SetCommercialScoutingEvidence(scoutingEvidence);
+        Assert.That(first.SuccessChanceMultiplier, Is.EqualTo(1f),
+            "a bound action runtime rejects writes outside the selected-profile owner boundary");
+        Assert.That(first.OriginDecisionId, Is.Null);
+        Assert.That(first.StableOccurrenceKey, Is.Null);
+        Assert.That(first.CommercialDecisionEvidence, Is.Null);
+        Assert.That(first.CommercialScoutingEvidence, Is.Null);
+        Assert.That(initialProvider.GetCurrentCensus().Revision, Is.EqualTo(1L));
+        AssertEpoch(runtime, 1L);
 
         using (EnterDailyAdvanceOperation(runtime))
         {
@@ -397,13 +406,15 @@ public sealed class P12PopulationLifecycleInvalidationTests
             "no-op action owner setters do not advance the local revision");
         AssertEpoch(runtime, 6L);
 
-        NpcActionRuntime replacement = new NpcActionRuntime(
-            SimulationTestFactory.CreateAction("p12-current-action-replacement", NpcActionType.Normal));
+        NpcActionRuntime replacement = new NpcActionRuntime(sharedDefinition);
         using (EnterDailyAdvanceOperation(runtime))
         {
             actor.SetCurrentActionRuntime(replacement);
         }
         Assert.That(actor.CurrentActionRuntime, Is.SameAs(replacement));
+        Assert.That(replacement, Is.Not.SameAs(first));
+        Assert.That(replacement.Action, Is.SameAs(sharedDefinition),
+            "replacing the mutable runtime preserves the exact shared immutable action definition");
         Assert.That(initialProvider.GetCurrentCensus().Cardinality, Is.EqualTo(1));
         Assert.That(initialProvider.GetCurrentCensus().Revision, Is.EqualTo(7L));
         AssertEpoch(runtime, 7L);
@@ -430,6 +441,63 @@ public sealed class P12PopulationLifecycleInvalidationTests
         Assert.That(actor.CurrentActionRuntime, Is.Null,
             "local revision exhaustion rejects before changing the action slot");
         AssertEpoch(runtime, 8L);
+    }
+
+    [Test]
+    public void CurrentActionRosterRemovalAndReusedRuntimeIdDoNotRebindPriorOwner()
+    {
+        CityRuntime city = CreateCity("p12-current-action-roster-city", 10);
+        NpcRuntime originalNpc = CreateNpc("p12-current-action-reused-id");
+        SimulationRuntime runtime = CreateP12Runtime(new[] { city }, new[] { originalNpc });
+        NpcActionRuntime originalAction = new NpcActionRuntime(
+            SimulationTestFactory.CreateAction("p12-current-action-roster-action", NpcActionType.Normal));
+
+        using (EnterDailyAdvanceOperation(runtime))
+        {
+            originalNpc.SetCurrentActionRuntime(originalAction);
+        }
+
+        string sectionId = NpcCurrentActionCensusProvider.SectionIdFor(originalNpc.RuntimeId);
+        OwnerSectionCensusWitness originalWitness = FindWitness(
+            NpcCurrentActionCensusProvider.CreateProviders(runtime.NpcRuntimes), sectionId);
+        Assert.That(originalWitness.OwnerInstanceIdentity, Is.SameAs(originalNpc));
+        Assert.That(originalWitness.Cardinality, Is.EqualTo(1));
+        Assert.That(originalWitness.Revision, Is.EqualTo(1L));
+        AssertEpoch(runtime, 1L);
+
+        Assert.That(runtime.TryUnregisterNpc(originalNpc.RuntimeId, out WorldNpcRegistryFailure unregisterFailure),
+            Is.True, unregisterFailure.ToString());
+        Assert.That(runtime.NpcRuntimes, Is.Empty);
+        Assert.That(NpcCurrentActionCensusProvider.CreateProviders(runtime.NpcRuntimes), Is.Empty,
+            "roster removal withdraws the old current-action section");
+        Assert.That(originalNpc.CurrentActionRuntime, Is.SameAs(originalAction));
+        AssertEpoch(runtime, 2L);
+        AssertCensus(runtime);
+
+        NpcRuntime replacementNpc = CreateNpc(originalNpc.RuntimeId);
+        Assert.That(runtime.TryRegisterNpc(replacementNpc, out WorldNpcRegistryFailure registerFailure),
+            Is.True, registerFailure.ToString());
+
+        OwnerSectionCensusWitness replacementWitness = FindWitness(
+            NpcCurrentActionCensusProvider.CreateProviders(runtime.NpcRuntimes), sectionId);
+        Assert.That(replacementWitness.OwnerInstanceIdentity, Is.SameAs(replacementNpc),
+            "a reused RuntimeId receives a witness for the new exact NPC instance");
+        Assert.That(replacementWitness.OwnerInstanceIdentity, Is.Not.SameAs(originalNpc));
+        Assert.That(replacementWitness.Cardinality, Is.Zero);
+        Assert.That(replacementWitness.Revision, Is.Zero);
+        Assert.That(replacementNpc.CurrentActionRuntime, Is.Null,
+            "the new NPC does not inherit the removed NPC's mutable action runtime");
+        AssertEpoch(runtime, 3L);
+
+        originalAction.SetOriginDecisionId("detached-old-owner-write");
+        Assert.That(originalNpc.CurrentActionRuntime, Is.SameAs(originalAction));
+        Assert.That(replacementNpc.CurrentActionRuntime, Is.Null);
+        Assert.That(FindWitness(
+            NpcCurrentActionCensusProvider.CreateProviders(runtime.NpcRuntimes), sectionId).Revision,
+            Is.Zero,
+            "a stale action reference cannot mutate the new owner witness after same-id registration");
+        AssertEpoch(runtime, 3L);
+        AssertCensus(runtime);
     }
 
     [Test]
