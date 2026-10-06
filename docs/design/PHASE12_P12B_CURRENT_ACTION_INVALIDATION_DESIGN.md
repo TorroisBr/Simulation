@@ -64,7 +64,9 @@ operation, remains authoritative for when supported writes happen.
 - The section cardinality is `0` when both `CurrentAction` and
   `CurrentActionRuntime` are null, and `1` when they are consistent. Any split
   pair, duplicate roster RuntimeId, duplicate NPC instance, or action object
-  installed as the current action of more than one NPC fails the census.
+  installed as the current action of more than one NPC fails the census. A
+  shared immutable `NpcActionData` definition is allowed; only the mutable
+  `NpcActionRuntime` instance is exclusive to one NPC slot.
 - When present, `CurrentActionRuntime.Action` must be the exact same
   `NpcActionData` object as `NpcRuntime.CurrentAction`. Any target NPC and City
   references must resolve to the exact admitted roster/City instance for their
@@ -98,9 +100,20 @@ operation, remains authoritative for when supported writes happen.
   a detached action cannot advance the current NPC section revision/epoch.
   Binding rejects one mutable action instance being current for two NPCs.
 - NPC death already flows through a registered population/lifecycle mutation.
-  Clearing a present action there advances the same action-section revision
-  while the enclosing lifecycle operation reports its committed sections; it
-  must not create an unscoped second epoch notification.
+  Every supported death path must include action revision capacity in its
+  preflight before the first domain write. `TryBuildPersonLifecycleSectionIds`
+  and `TryBuildP12NpcPopulationOperation` add the NPC's action section when a
+  current action is present; their local-capacity callbacks also reserve one
+  action-revision increment. This applies to direct Person death and both
+  legacy and Person-backed resident death. `NpcRuntime` lifecycle admission
+  also checks action revision capacity immediately before commit. A present
+  action is cleared and advances that revision once; an empty slot does not.
+  The lifecycle notification reports the action section together with the
+  already-changed life/residence sections through the active operation scope,
+  which consumes its existing epoch reservation once. It must not issue an
+  unscoped or second epoch notification. The unsupported direct NPC-death /
+  conflict path remains fail-closed on this profile when no admitted operation
+  contains the required sections.
 - Existing P12 operation contracts remain authoritative: normal autonomous,
   scheduled-directive, and supported Person-backed ActorChoice assignments run
   within the registered daily-advance operation. Person materialization runs
@@ -135,12 +148,19 @@ competing action writer nor claims that the remaining NPC state is covered.
    assess, bind, unbind, and refresh exactly one current-action section per
    installed NPC, including `TryMaterializePerson` and
    `TryBindExistingNpcToPerson`. Verify exact owner instance, RuntimeId mapping,
-   paired action references, and single-owner action references at every
-   read/write boundary.
+   paired action references, and single-owner mutable action-runtime
+   references at every read/write boundary. Shared `NpcActionData` definitions
+   remain valid.
 3. Add pointer-bound mutation admission/commit hooks to `NpcRuntime` and
    `NpcActionRuntime`, including current-action replacement, clearing,
-   in-place mutators, and lifecycle clearing. Keep all domain action choice and
-   execution behavior unchanged.
+   in-place mutators, and lifecycle clearing. Extend lifecycle preflight and
+   commit callbacks to include whether the action slot changes. For direct
+   Person death and resident death, include a present action section in the
+   operation's expected changed-section set and its local revision-capacity
+   check before any Person, population, or NPC writes. The commit callback adds
+   that section to the same population-operation changed set and uses the
+   already-reserved epoch once. Keep all domain action choice and execution
+   behavior unchanged.
 4. Reuse the existing DailyAdvance and population-lifecycle operation
    protocols and shared epoch. Do not modify intraday P18 state, `CurrentAction`
    definition semantics, or any P12 export/hydration path.
@@ -163,8 +183,15 @@ competing action writer nor claims that the remaining NPC state is covered.
   while an accepted SellGoods attempt preserves its existing returned/thrown
   disposition and leaves the resulting action slot exactly as current runtime
   behavior specifies. Lifecycle death clearing must likewise retain domain
-  semantics and produce the expected census invalidation. P18 intraday tests
-  remain regression evidence for their own profile, outside Daily-v1 readiness.
+  semantics and produce the expected census invalidation. Cover direct Person
+  death and both resident-death variants with a present and empty action slot;
+  verify preflight includes the action section/revision capacity when needed,
+  one shared epoch is published for the complete commit, and no second
+  notification is attempted. Saturate the action revision immediately before
+  each admitted death shape and prove rejection happens before any Person,
+  population, NPC lifecycle, or action write. The unsupported direct NPC-death
+  path must remain fail-closed on a P12-bound runtime. P18 intraday tests remain
+  regression evidence for their own profile, outside Daily-v1 readiness.
 - A roster add/remove temporal-identity test proving section identity and
   cardinality are updated at the registered membership boundary and do not
   silently rebind an old NPC/action reference.
