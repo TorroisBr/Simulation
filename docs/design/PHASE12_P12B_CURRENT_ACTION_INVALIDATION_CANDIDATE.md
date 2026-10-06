@@ -8,14 +8,14 @@ slice does not promote code or change Phase readiness.
 
 - P12 canonical base: `90a8a2aef212bec2c68d7224739ce512d44c9fe3`
 - Implementation branch: `codex/phase12/P12BCurrentActionInvalidationImplementation`
-- Implementation code commit: `48eef6837e925ed8857e1c13bde285979fc5b179`
-- Implementation code tree: `736a960c3156c18728ac50f94f14ddafa2111aac`
+- Implementation code commit: `f4a235c17d65841585ae9f6c56f65ca8eb310ca6`
+- Implementation code tree: `92a59220bdefc8e17e7fea6490f87f15646b9d6f`
 - Reviewed technical design: `8cf4ba70ef2793deb3a314b70c4c51bcbfdcd675`
 - Exact design review record: `10738e460fa2866339473886f116dd2d1635e08f`
 
 The initial implementation commit is `cbd32dd7186c9d1256f241ce3191f6195c2c200d`;
-the follow-up adds only the review-requested lifecycle and live ActorChoice
-coverage. No production code changed after the initial code review.
+follow-up commits add test coverage only. No production code changed after the
+initial implementation.
 
 ## Bounded behavior
 
@@ -34,29 +34,34 @@ The follow-up tests cover direct Person death with empty/present actions and
 saturated preflight; legacy resident death with empty/present actions and
 saturated preflight; Person-backed resident death with empty/present actions
 and saturated preflight; and live Person bind/materialize followed by accepted
-or truth-rejected SellGoods ActorChoice. Saturation assertions prove Person,
+or truth-rejected SellGoods ActorChoice. Additional tests cover roster removal
+and same-RuntimeId replacement without rebinding the old owner/action; replace
+the mutable action runtime while retaining the exact shared `NpcActionData`
+instance; and prove that all five installed-action mutators reject writes
+outside the admitted boundary without changing owner revision or epoch.
+Saturation assertions prove Person,
 NPC lifecycle, population, action slot, and epoch state remain unchanged on
 rejection. ActorChoice assertions prove accepted disposition and installed
 action identity, and clear-before-reject behavior.
 
-## Validation on code tree `736a960c3156c18728ac50f94f14ddafa2111aac`
+## Validation on code tree `92a59220bdefc8e17e7fea6490f87f15646b9d6f`
 
 Unity version: `6000.3.9f1`. Each retained result has zero failures,
 inconclusive tests, and skipped tests. XML and log SHA-256 values are listed
 below. The seven raw Unity logs are retained in
-`docs/validation/P12CurrentAction/review-gap-validation-logs.zip`
-(SHA-256 `12AD223F433ACAEB22A24138154FA5AE54A0379D2C10655725CA6B1A40C90ADC`);
+`docs/validation/P12CurrentAction/review-gap-coverage-fix-validation-logs.zip`
+(SHA-256 `499B46A5DEB9B96F482A8361CE3B2B4D275082D8F9AC1A46EB3842122204CBBA`);
 archive entries use each log's listed filename.
 
 | Gate | Result | XML | XML SHA-256 | Log | Log SHA-256 |
 |---|---:|---|---|---|---|
-| P12 lifecycle, current-action and ActorChoice focus | 19/19 | `docs/validation/P12CurrentAction/review-gap-focused-final-2/EditMode-20261006-142930-f74794f843624e88a81584d60b7d890a.xml` | `1D546A16C68AE0B3CC5EB7532606D4A4E374811F50E90DC3F130A9F41364BF79` | `docs/validation/P12CurrentAction/review-gap-focused-final-2/EditMode-20261006-142930-f74794f843624e88a81584d60b7d890a.log` | `0EDDFB8627F8510F364C2C11DB3086F90D2A42D9809846DBE026C4594FD7052C` |
-| Daily-v1 runtime admission and owner inventory | 37/37 | `docs/validation/P12CurrentAction/revalidation-admission/EditMode-20261006-143021-0c9a6a63e26d48fca2286a26dcffb665.xml` | `B04E620F44A694D175F43CAED3BAD687965DCB0C89CE3FC7151031A590E5E529` | `docs/validation/P12CurrentAction/revalidation-admission/EditMode-20261006-143021-0c9a6a63e26d48fca2286a26dcffb665.log` | `DD110B0E708A7320EFF3A9AD6BEF0EE1353C5744A77113AEBC9A32AB3606E953` |
-| Bootstrap composition and Daily-v1/P10 separation | 22/22 | `docs/validation/P12CurrentAction/revalidation-composition/EditMode-20261006-143040-00ce3933a78e42368439f4ad41f47458.xml` | `AB217C2F49A292CA829675672946C339072B6B17EE05F563D801D932ACFCC68B` | `docs/validation/P12CurrentAction/revalidation-composition/EditMode-20261006-143040-00ce3933a78e42368439f4ad41f47458.log` | `9E545FD3FD3950433C452D3B4FCE523C5BBF1B8877867FC0D555F38883020F0D` |
-| Crime/Justice regression | 12/12 | `docs/validation/P12CurrentAction/revalidation-crime/EditMode-20261006-143101-7de844a396d84519a739bd07eb8917b5.xml` | `D4C03D027CB5D07248C31AB3076CE9171BEC14B93A2C103DE9C93F359D42C6DA` | `docs/validation/P12CurrentAction/revalidation-crime/EditMode-20261006-143101-7de844a396d84519a739bd07eb8917b5.log` | `912F3DC6E6E86EAD08665B093192E5068530A5C3B657F229FD844DAB34580D93` |
-| Solo travel regression | 11/11 | `docs/validation/P12CurrentAction/revalidation-travel/EditMode-20261006-143118-7451257eb0434e6aa87bad0e190650fc.xml` | `F0CE9C52BB0881EA96DF08EF0EE338B49CDDBB8CBC61AFC3083D0D1F9C0DAB8C` | `docs/validation/P12CurrentAction/revalidation-travel/EditMode-20261006-143118-7451257eb0434e6aa87bad0e190650fc.log` | `C814A1C4611542627F5F0BE9ADAB2867794DDEF383FD648F50A9AFCB9DF2C5CB` |
-| ALL EditMode | 2394/2394 | `docs/validation/P12CurrentAction/revalidation-all-editmode/EditMode-20261006-143138-3615f161c48b4b369b17df662ac56226.xml` | `DF7B40F226161554F20B7C49FC89D6108449A308675F1A3A13F0361529ED5947` | `docs/validation/P12CurrentAction/revalidation-all-editmode/EditMode-20261006-143138-3615f161c48b4b369b17df662ac56226.log` | `05760D31287EAB0F4C84A7106F2DD630D547C144D66AA7F8080B6DC4A32A03FB` |
-| Official Smoke | 5/5 | `docs/validation/P12CurrentAction/revalidation-official-smoke/EditMode-20261006-143217-4d7bdee3e63e4b93a0b63015c2fee75c.xml` | `C2ED883B76E7973966FB6AE920DF632E151DF1A4BC443C291A3FA8D505EED9DA` | `docs/validation/P12CurrentAction/revalidation-official-smoke/EditMode-20261006-143217-4d7bdee3e63e4b93a0b63015c2fee75c.log` | `5CCD94E83BA4DE487D9ED1D6955598773CD604EEEAEAABAF2B3718D8A4147219` |
+| P12 lifecycle, current-action and ActorChoice focus | 20/20 | `docs/validation/P12CurrentAction/review-gap-coverage-fix-focused/EditMode-20261006-144208-aaf295f0b5ce442a989a4f8f90234e17.xml` | `67BC9C882F0B37BF16D04B6D783947735C76D668BDE8129867A10C8BC6E4E703` | `docs/validation/P12CurrentAction/review-gap-coverage-fix-focused/EditMode-20261006-144208-aaf295f0b5ce442a989a4f8f90234e17.log` | `D9C6B092ED2C4B1FB84290ABE550FC764FBA9E5BA550F37A2E418C6D7722910B` |
+| Daily-v1 runtime admission and owner inventory | 37/37 | `docs/validation/P12CurrentAction/review-gap-coverage-fix-admission/EditMode-20261006-144306-66c90f47c477491588437b5699f278e8.xml` | `9AF21E3DDFA5A6B34B00836F35B4FCF81696CFC1AF49280478E71D53EE41B1C2` | `docs/validation/P12CurrentAction/review-gap-coverage-fix-admission/EditMode-20261006-144306-66c90f47c477491588437b5699f278e8.log` | `177C93859B51BC8206E60CAF82C703AE73508AA97F37D79C585FFEA222FC0006` |
+| Bootstrap composition and Daily-v1/P10 separation | 22/22 | `docs/validation/P12CurrentAction/review-gap-coverage-fix-composition/EditMode-20261006-144315-5f3dcd22c22f438a909a423d8c791717.xml` | `9BA7B10D90AC26CC444E84589ECE81674C804DADD4399F484824D6A5D89052BB` | `docs/validation/P12CurrentAction/review-gap-coverage-fix-composition/EditMode-20261006-144315-5f3dcd22c22f438a909a423d8c791717.log` | `312A542895A2AD096501D3D95A59C685AB0B0BE848855A4D7CB01D80456A05CD` |
+| Crime/Justice regression | 12/12 | `docs/validation/P12CurrentAction/review-gap-coverage-fix-crime/EditMode-20261006-144325-b343d2e0753c41c5b33984d6274f6249.xml` | `B511A3A7ED6BFDDFFECA9C03C0078E4A2439F8FE83C1D1466CF222351A4DC041` | `docs/validation/P12CurrentAction/review-gap-coverage-fix-crime/EditMode-20261006-144325-b343d2e0753c41c5b33984d6274f6249.log` | `0D7EED9A812FED0B57FD0F26C68D11AD28F576C1BA8DCF7468F71498F43DC7F9` |
+| Solo travel regression | 11/11 | `docs/validation/P12CurrentAction/review-gap-coverage-fix-travel/EditMode-20261006-144334-8584f18665624111965862be0edea0fc.xml` | `78912067C81BE78ACFC7DBFAAD3A228F8E634525EFFF81D0291F9B3CDA6223DE` | `docs/validation/P12CurrentAction/review-gap-coverage-fix-travel/EditMode-20261006-144334-8584f18665624111965862be0edea0fc.log` | `8A30AC2B6F3EC9A8E662BD45CE9BC1940C0DDC373A682F433483620F4B8DFB96` |
+| ALL EditMode | 2395/2395 | `docs/validation/P12CurrentAction/review-gap-coverage-fix-all-editmode/EditMode-20261006-144343-58181107a62945d39d3a6ea999b22bd5.xml` | `4B8008AF9240EF13F3CF3F07E4FA39C1CC61EA4CECD74B8B929FFA6156E4F46F` | `docs/validation/P12CurrentAction/review-gap-coverage-fix-all-editmode/EditMode-20261006-144343-58181107a62945d39d3a6ea999b22bd5.log` | `675D8CA304CBA59808E7C4A75247C81223C2D3B627080DDDB0D152A99F8B5323` |
+| Official Smoke | 5/5 | `docs/validation/P12CurrentAction/review-gap-coverage-fix-official-smoke/EditMode-20261006-144412-185d0778786b48ada804004c645b33f4.xml` | `219E8283A725B2243D843FABC2F9FE016777A212A82B517E951163E6DDE72FB7` | `docs/validation/P12CurrentAction/review-gap-coverage-fix-official-smoke/EditMode-20261006-144412-185d0778786b48ada804004c645b33f4.log` | `159C076E42EC6EC2A905244D06C67C1C1669977810526BC357EA19D3229FF757` |
 
 `git diff --check` passed after validation. The selected profile is the
 P9-B-only `UnityBootstrap-Daily-v1`; P10-A Ruin/LocalTopology remains outside
