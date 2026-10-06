@@ -40,16 +40,18 @@ public sealed class P12PoliticalClaimCensusTests
         PoliticalClaimStore owner = GetPoliticalClaimStore(runtime);
         IReadOnlyList<IOwnerSectionCensusProvider> providers =
             PoliticalClaimStoreCensusProvider.CreateProviders(owner);
-        AssertRuntimeState(runtime, providers, 0, 0, 0L, 1L);
+        long expectedPoliticalWorldRevision = runtime.PoliticalWorldRevision;
+        AssertRuntimeState(runtime, providers, 0, 0, 0L, 1L, expectedPoliticalWorldRevision);
 
         PoliticalClaimRecord claim = CreateClaim("p12-claim-runtime", claimant.PersonId);
         Assert.That(runtime.TryRegisterPoliticalClaim(claim, out PoliticalClaimFailure registerFailure), Is.True,
             registerFailure.ToString());
-        AssertRuntimeState(runtime, providers, 1, 0, 1L, 2L);
+        expectedPoliticalWorldRevision++;
+        AssertRuntimeState(runtime, providers, 1, 0, 1L, 2L, expectedPoliticalWorldRevision);
 
         Assert.That(runtime.TryRegisterPoliticalClaim(claim, out PoliticalClaimFailure duplicateFailure), Is.False);
         Assert.That(duplicateFailure.Code, Is.EqualTo(PoliticalClaimFailureCode.DuplicateClaimId));
-        AssertRuntimeState(runtime, providers, 1, 0, 1L, 2L);
+        AssertRuntimeState(runtime, providers, 1, 0, 1L, 2L, expectedPoliticalWorldRevision);
 
         Assert.That(runtime.TryProposePoliticalClaimRecognition(
             claim.ClaimId,
@@ -61,7 +63,8 @@ public sealed class P12PoliticalClaimCensusTests
             recognitionProposalFailure.ToString());
         Assert.That(runtime.TryApplyPoliticalClaimRecognition(recognition, out PoliticalClaimFailure recognitionFailure),
             Is.True, recognitionFailure.ToString());
-        AssertRuntimeState(runtime, providers, 1, 1, 2L, 3L);
+        expectedPoliticalWorldRevision++;
+        AssertRuntimeState(runtime, providers, 1, 1, 2L, 3L, expectedPoliticalWorldRevision);
 
         Assert.That(runtime.TryProposePoliticalClaimRecognition(
             claim.ClaimId,
@@ -73,7 +76,8 @@ public sealed class P12PoliticalClaimCensusTests
             replacementProposalFailure.ToString());
         Assert.That(runtime.TryApplyPoliticalClaimRecognition(replacement, out PoliticalClaimFailure replacementFailure),
             Is.True, replacementFailure.ToString());
-        AssertRuntimeState(runtime, providers, 1, 1, 3L, 4L);
+        expectedPoliticalWorldRevision++;
+        AssertRuntimeState(runtime, providers, 1, 1, 3L, 4L, expectedPoliticalWorldRevision);
 
         Assert.That(runtime.TryProposePoliticalClaimResolution(
             claim.ClaimId,
@@ -83,12 +87,13 @@ public sealed class P12PoliticalClaimCensusTests
             resolutionProposalFailure.ToString());
         Assert.That(runtime.TryApplyPoliticalClaimResolution(resolution, out PoliticalClaimFailure resolutionFailure),
             Is.True, resolutionFailure.ToString());
-        AssertRuntimeState(runtime, providers, 1, 1, 4L, 5L);
+        expectedPoliticalWorldRevision++;
+        AssertRuntimeState(runtime, providers, 1, 1, 4L, 5L, expectedPoliticalWorldRevision);
 
         Assert.That(runtime.TryApplyPoliticalClaimResolution(resolution, out PoliticalClaimFailure staleResolutionFailure),
             Is.False);
         Assert.That(staleResolutionFailure.Code, Is.EqualTo(PoliticalClaimFailureCode.StaleClaim));
-        AssertRuntimeState(runtime, providers, 1, 1, 4L, 5L);
+        AssertRuntimeState(runtime, providers, 1, 1, 4L, 5L, expectedPoliticalWorldRevision);
     }
 
     [Test]
@@ -150,6 +155,7 @@ public sealed class P12PoliticalClaimCensusTests
     public void DailyProfileRejectsPoliticalClaimCommitAtLocalRevisionOverflowWithoutEpochAdvance()
     {
         SimulationRuntime runtime = CreateDailyProfileRuntime(out PersonRuntime claimant, out _);
+        long expectedPoliticalWorldRevision = runtime.PoliticalWorldRevision;
         PoliticalClaimStore owner = GetPoliticalClaimStore(runtime);
         SetPoliticalClaimStoreRevision(owner, long.MaxValue);
         SetSectionBaselineRevision(runtime, PoliticalClaimStoreCensusProvider.ClaimsSectionId, long.MaxValue);
@@ -160,7 +166,7 @@ public sealed class P12PoliticalClaimCensusTests
             out PoliticalClaimFailure failure), Is.False);
         Assert.That(failure.Code, Is.EqualTo(PoliticalClaimFailureCode.RevisionOverflow));
         AssertRuntimeState(runtime, PoliticalClaimStoreCensusProvider.CreateProviders(owner),
-            0, 0, long.MaxValue, 1L);
+            0, 0, long.MaxValue, 1L, expectedPoliticalWorldRevision);
     }
 
     private static void AssertWitnesses(
@@ -190,12 +196,14 @@ public sealed class P12PoliticalClaimCensusTests
         int claimCount,
         int recognitionCount,
         long revision,
-        long epoch)
+        long epoch,
+        long politicalWorldRevision)
     {
         AssertWitnesses(providers, GetPoliticalClaimStore(runtime), claimCount, recognitionCount, revision);
         Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
             out long actualEpoch, out ContinuationCensusFailure epochFailure), Is.True, epochFailure.ToString());
         Assert.That(actualEpoch, Is.EqualTo(epoch));
+        Assert.That(runtime.PoliticalWorldRevision, Is.EqualTo(politicalWorldRevision));
         Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure censusFailure),
             Is.True, censusFailure.ToString());
     }
