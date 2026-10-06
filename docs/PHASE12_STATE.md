@@ -1465,3 +1465,49 @@ The current architecture baseline remains `ffd75652d89d862b83d634868c560f8540869
 ### Promotion-policy record
 
 The current `docs/EXECUTION_MODEL.md` still contains legacy wording that routine canonical promotion requires explicit human approval. The user's standing authorization for this run permits bounded numbered-phase promotions after all documented review, validation, ancestry, and exact-tree checks pass. This State follows that authorization; it makes no architecture-policy change.
+
+## P12-B selected-profile TravelParty start operation promotion — 2026-10-05
+
+After refreshed exact-tip preflight, `codex/phase12/canonical` advanced by
+clean fast-forward from `29162cd0cf63e31f9542e612023a7256ac36ca4c` to
+`9395c43e8ad8ae516a2fba554dc8e48d0b5895a5`. The bounded implementation is
+code-bearing commit `2bc6d3264c76347eed21b70dcfcde98533f7aa66`, tree
+`9043a8da8718a364f602eee56aaf48f83f06ad51`. The State update is
+documentation-only and records no additional implementation scope.
+
+Independent exact-tip implementation review passed with no remaining
+actionable findings. The review and candidate evidence are
+[PHASE12_P12B_TRAVEL_PARTY_START_OPERATION_IMPLEMENTATION_REVIEW.md](design/PHASE12_P12B_TRAVEL_PARTY_START_OPERATION_IMPLEMENTATION_REVIEW.md)
+and
+[PHASE12_P12B_TRAVEL_PARTY_START_OPERATION_CANDIDATE.md](design/PHASE12_P12B_TRAVEL_PARTY_START_OPERATION_CANDIDATE.md).
+Exact-tree validation passed P12TravelPartyStartOperationTests 16/16,
+ContinuationCensusProtocolTests 22/22, NpcOwnerCommitInvalidationTests 13/13,
+ALL EditMode 2383/2383, official Smoke 5/5, and `git diff --check`. The
+compact retained archive is
+`docs/validation/P12BTravelPartyStart-notify-fix/P12BTravelPartyStart-final-validation.zip`,
+SHA-256 `F3EF32E29C32B335684F130D60DFD3DC1B1352122B2342008A56EEE39CDF6A65`.
+The earlier pre-fix 15/16 result remains diagnostic only.
+
+The selected-profile normal group-start path now opens
+`runtime.travel-party.start` after preparation and before TravelParty ID
+allocation; it validates the exact TravelParty allocator witness and owner
+revision headroom, batches successful committed-owner notifications into one
+epoch, and closes the operation after a post-commit notification fault.
+P12-bound direct unwrapped starts still reject before domain writes; unbound
+runtime behavior and existing transaction/event/compensation semantics are
+preserved.
+
+This promotion covers only that normal group-start operation. Direct
+Expedition start/return, every TravelParty API, arbitrary standalone writers,
+complete P12-B owner/operation/shared-epoch coverage, global quiescence,
+capture eligibility, export, hydration, P12-A readiness, P13 readiness, and
+Phase 12 closure remain unclaimed. P12-B remains INCOMPLETE; P12-A remains
+WAIT_DEPENDENCY; P13 remains BLOCKED.
+
+The dependency DAG is unchanged. The current P12-B blocker remains the
+source-driven Daily-v1 owner/operation/epoch delta audit across effective
+writers. The promoted group-start path is now closed within its exact
+boundary; the audit must continue over remaining supported paths and may
+select another implementation slice only when it identifies the exact owner
+set, cardinality/identity, effective ingress, committed-write boundary, and
+epoch behavior. Expedition work remains deferred to P12-F.

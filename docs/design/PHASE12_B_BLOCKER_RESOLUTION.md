@@ -1191,3 +1191,25 @@ This refresh supersedes the preceding “CrimeSocialAppraisal is the next audit/
 Current source review traced the selected daily call from `SimulationRuntime.AdvanceDayAfterClockAdvance` to `TravelSystem.AdvanceTravels`. Each committed `ClearTravelStartedToday` or `AdvanceTravelDay` transition reaches the installed NPC's `NpcRuntime` P12 travel-state admission callback. The runtime validates the exact per-NPC travel-state section and any changed City-presence sections before mutation, then publishes the changed sections to the shared protocol after the commit; grouped TravelParty advance has its separate reserved operation scope. This closes the old audit lead for those individual travel-state leaves within this precise path. It does not cover every public travel entry point or all P12 owner/epoch writers, and it does not justify a new `AdvanceTravels` runtime operation ID.
 
 The remaining P12-B task is still a current Daily-v1 owner/operation/epoch inventory across all effective writers. Do not treat the old audit's other leads as implementation-ready until the same identity, cardinality, ingress, and notification mapping is completed for each.
+
+## P12-B owner/operation/epoch refresh — after normal TravelParty start promotion — 2026-10-05
+
+P12 canonical now includes the bounded selected-profile normal
+TravelParty-start operation at `9395c43e8ad8ae516a2fba554dc8e48d0b5895a5`.
+Its executable code is `2bc6d3264c76347eed21b70dcfcde98533f7aa66`, tree
+`9043a8da8718a364f602eee56aaf48f83f06ad51`; exact-tip independent review
+and exact-tree validation are linked from `PHASE12_STATE.md`.
+
+| Daily-v1 surface | Current evidence | Remaining boundary |
+|---|---|---|
+| Normal TravelParty group start | The selected-profile path opens `runtime.travel-party.start` before ID allocation, binds its exact TravelParty allocator witness and required owners, preflights local revision capacity, and batches successful committed writes into one epoch. A post-write notifier fault preserves the committed start, fault-closes the protocol, and exits the owner-thread scope with zero active count. | Direct P12-bound unwrapped group starts reject before domain writes. This does not cover Expedition start/return, every TravelParty API, arbitrary standalone writers, or all supported operation paths. |
+| Individual travel advancement | The prior source audit traces selected-day `TravelSystem.AdvanceTravels` committed leaves through exact per-NPC travel-state admission and required City-presence notifications. | This remains a separate reviewed path; do not infer it is covered by the group-start operation or add a general TravelSystem operation ID from this evidence. |
+| Remaining owner / writer inventory | Existing promoted census and bounded adapters remain valid within their recorded owners and paths. | Continue the Daily-v1 effective-owner/operation/epoch delta audit for all remaining reachable committed writers, direct public mutation paths, and exact cardinality/identity. No additional implementation checkpoint is marked READY by this promotion alone. |
+| P12-F Expedition | Expedition owner/start work remains assigned to accepted P12-F and depends on P12-C, P12-D, and P12-E. | Keep it deferred; do not reclassify it as P12-B implementation readiness. |
+| Readiness | P12-B remains INCOMPLETE; P12-A remains WAIT_DEPENDENCY; P12-C waits on B; P12-D/E wait on B and C; P12-F waits on C/D/E; P12-G waits on B–F plus validated live-profile inventory; P13 remains blocked. | No complete owner census, shared-epoch coverage, global quiescence, capture eligibility, export, hydration, P12-A/P13 readiness, or Phase closure is claimed. |
+
+The next P12-B task remains the source-driven Daily-v1 owner/operation/epoch
+delta audit. Select another bounded implementation only after documenting
+effective reachability, exact owner identity/cardinality, successful commit
+boundaries, and which shared epoch changes. This is blocker-resolution work,
+not a new product scope or checkpoint ID.
