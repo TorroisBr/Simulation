@@ -120,6 +120,32 @@ hospedado em Unity é uma alternativa válida se extração direta do Core ainda
 não for viável. Isso não exige agora extração completa, transporte ou segundo
 renderer. Frames e `Update` do host não definem o tempo ou a causalidade do mundo.
 
+### Artefatos de apresentação e desenvolvimento
+
+**DECIDIDO — NÃO AUTORITATIVOS POR PADRÃO**
+
+Unity Scenes, prefabs, inspectors e assets de configuração de uso geral são
+artefatos de apresentação, bootstrap ou teste por padrão. Sua presença,
+conteúdo ou edição não redefine silenciosamente o escopo de uma Phase, a
+arquitetura, as mecânicas de domínio, a participação em um perfil de
+persistência ou o inventário de owners autoritativos suportados.
+
+Um artefato pode integrar explicitamente um contrato de perfil suportado
+quando esse papel e seus limites forem aprovados e promovidos. Mesmo nesse
+caso, a composição e os inputs efetivos devem cumprir o contrato: mudar uma
+Scene ou um asset não altera por si só a definição do perfil. Fontes de
+authoring continuam sendo resolvidas para os valores e owners efetivos da
+simulação, conforme a seção de configuração; não se tornam uma autoridade
+concorrente de runtime.
+
+Perfis canônicos usam contratos explícitos de composição e, quando útil,
+fixtures ou configuração dedicadas que independem das Scenes mutáveis de
+desenvolvimento. O inventário vivo verifica o que foi realmente composto
+contra o perfil aprovado. Estado autoritativo adicional exige cobertura e
+admissão explícitas ou rejeição, conforme §92A; ele não pode ser omitido por
+ter surgido em um harness de desenvolvimento. Esta regra não exige migrar
+agora os artefatos já selecionados por contratos aprovados.
+
 ### Extensibilidade e mundo pertencente ao jogador
 
 **DECIDIDO**

@@ -4,6 +4,17 @@ This document defines the scheduling and promotion process, not simulation seman
 
 A Phase Brief names objective/closure, approved checkpoint IDs and dependencies, gates, exclusions, reconstruction-sensitive state/inputs, hotspots, downstream unlocks, readiness and deferred questions. It does not carry execution progress. A future Phase without a `PHASE*_STATE.md` has no Phase-specific promotion record yet; do not synthesize delivered status from its Brief or a candidate branch.
 
+Unity Scenes, prefabs, inspectors and general-purpose configuration assets are
+presentation/bootstrap/test harnesses by default, as defined in architecture
+§2. Treat them as profile-contract inputs only where that role was explicitly
+approved and promoted. Their current contents do not amend Phase scope,
+domain semantics, persistence-profile membership or supported owner inventory.
+Use the explicit composition contract and its validation evidence to determine
+scope; check the live composed owners against it. A development edit that adds
+unsupported authoritative state must trigger the applicable admission rejection
+or a separately reviewed contract change. Prefer dedicated profile fixtures or
+configuration when useful, without requiring a retrofit of accepted profiles.
+
 ## Two readiness layers
 
 Architectural readiness does not imply implementation readiness:
