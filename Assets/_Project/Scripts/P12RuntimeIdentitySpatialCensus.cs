@@ -1,0 +1,184 @@
+using System;
+using System.Collections.Generic;
+
+public sealed partial class SimulationRuntime
+{
+    private static readonly string[] P12RuntimeIdentitySectionIds =
+    {
+        RuntimeIdentityRegistryCensusProvider.NpcsSectionId,
+        RuntimeIdentityRegistryCensusProvider.CitiesSectionId,
+        RuntimeIdentityRegistryCensusProvider.LocationsSectionId,
+        RuntimeIdentityRegistryCensusProvider.RoutesSectionId,
+        RuntimeIdentityRegistryCensusProvider.ExplorableSitesSectionId,
+        RuntimeIdentityRegistryCensusProvider.LocalPlacesSectionId,
+        RuntimeIdentityRegistryCensusProvider.LocalConnectionsSectionId,
+        RuntimeIdentityRegistryCensusProvider.NotableItemsSectionId
+    };
+
+    private static readonly string[] P12RuntimeIdentitySpatialSectionIds =
+    {
+        RuntimeIdentityRegistryCensusProvider.NpcsSectionId,
+        RuntimeIdentityRegistryCensusProvider.CitiesSectionId,
+        RuntimeIdentityRegistryCensusProvider.LocationsSectionId,
+        RuntimeIdentityRegistryCensusProvider.RoutesSectionId,
+        RuntimeIdentityRegistryCensusProvider.ExplorableSitesSectionId,
+        RuntimeIdentityRegistryCensusProvider.LocalPlacesSectionId,
+        RuntimeIdentityRegistryCensusProvider.LocalConnectionsSectionId,
+        RuntimeIdentityRegistryCensusProvider.NotableItemsSectionId,
+        SpatialNetworkCensusProvider.LocationsSectionId,
+        SpatialNetworkCensusProvider.RoutesSectionId,
+        ExplorableSiteCensusProvider.SectionId
+    };
+
+    private readonly RuntimeIdentityRegistry p12RuntimeIdentityRegistry;
+    private readonly SpatialNetworkRuntime p12SpatialNetworkRuntime;
+    private readonly bool requireP12RuntimeIdentitySpatialCensusOwners;
+    private IReadOnlyList<IOwnerSectionCensusProvider> p12RuntimeIdentityCensusProviders;
+    private IReadOnlyList<IOwnerSectionCensusProvider> p12SpatialNetworkCensusProviders;
+    private ExplorableSiteCensusProvider p12ExplorableSiteCensusProvider;
+
+    private bool TryRegisterP12RuntimeIdentitySpatialCensusOwners(ContinuationCensusProtocol protocol)
+    {
+        if (!requireP12RuntimeIdentitySpatialCensusOwners)
+            return true;
+        if (protocol == null
+            || p12RuntimeIdentityRegistry == null
+            || p12SpatialNetworkRuntime == null
+            || explorableSiteStore == null
+            || !p12SpatialNetworkRuntime.UsesIdentityRegistry(p12RuntimeIdentityRegistry))
+            return false;
+
+        IReadOnlyList<IOwnerSectionCensusProvider> identityProviders;
+        IReadOnlyList<IOwnerSectionCensusProvider> spatialProviders;
+        ExplorableSiteCensusProvider siteProvider;
+        try
+        {
+            identityProviders = RuntimeIdentityRegistryCensusProvider.CreateProviders(p12RuntimeIdentityRegistry);
+            spatialProviders = SpatialNetworkCensusProvider.CreateProviders(p12SpatialNetworkRuntime);
+            siteProvider = new ExplorableSiteCensusProvider(explorableSiteStore);
+        }
+        catch
+        {
+            return false;
+        }
+
+        OwnerSectionRole[] identityRoles =
+        {
+            OwnerSectionRole.Required,
+            OwnerSectionRole.Required,
+            OwnerSectionRole.Required,
+            OwnerSectionRole.Required,
+            OwnerSectionRole.ExplicitlyEmpty,
+            OwnerSectionRole.ExplicitlyEmpty,
+            OwnerSectionRole.ExplicitlyEmpty,
+            OwnerSectionRole.ExplicitlyEmpty
+        };
+        if (identityProviders.Count != P12RuntimeIdentitySectionIds.Length
+            || spatialProviders.Count != 2)
+            return false;
+
+        for (int i = 0; i < identityProviders.Count; i++)
+        {
+            if (!TryRegisterP12FixedOwnerSection(
+                    protocol,
+                    identityProviders[i],
+                    P12RuntimeIdentitySectionIds[i],
+                    RuntimeIdentityRegistryCensusProvider.SchemaVersion,
+                    identityRoles[i],
+                    p12RuntimeIdentityRegistry))
+                return false;
+        }
+
+        if (!TryRegisterP12FixedOwnerSection(
+                protocol,
+                spatialProviders[0],
+                SpatialNetworkCensusProvider.LocationsSectionId,
+                SpatialNetworkCensusProvider.SchemaVersion,
+                OwnerSectionRole.Required,
+                p12SpatialNetworkRuntime)
+            || !TryRegisterP12FixedOwnerSection(
+                protocol,
+                spatialProviders[1],
+                SpatialNetworkCensusProvider.RoutesSectionId,
+                SpatialNetworkCensusProvider.SchemaVersion,
+                OwnerSectionRole.Required,
+                p12SpatialNetworkRuntime)
+            || !TryRegisterP12FixedOwnerSection(
+                protocol,
+                siteProvider,
+                ExplorableSiteCensusProvider.SectionId,
+                ExplorableSiteCensusProvider.SchemaVersion,
+                OwnerSectionRole.ExplicitlyEmpty,
+                explorableSiteStore))
+            return false;
+
+        p12RuntimeIdentityCensusProviders = identityProviders;
+        p12SpatialNetworkCensusProviders = spatialProviders;
+        p12ExplorableSiteCensusProvider = siteProvider;
+        return true;
+    }
+
+    private static bool TryRegisterP12FixedOwnerSection(
+        ContinuationCensusProtocol protocol,
+        IOwnerSectionCensusProvider provider,
+        string sectionId,
+        int schemaVersion,
+        OwnerSectionRole role,
+        object expectedOwner)
+    {
+        if (protocol == null || provider == null || expectedOwner == null)
+            return false;
+
+        OwnerSectionCensusWitness witness;
+        try
+        {
+            witness = provider.GetCurrentCensus();
+        }
+        catch
+        {
+            return false;
+        }
+
+        if (witness == null
+            || !string.Equals(witness.SectionId, sectionId, StringComparison.Ordinal)
+            || witness.SchemaVersion != schemaVersion
+            || !ReferenceEquals(witness.OwnerInstanceIdentity, expectedOwner)
+            || witness.Cardinality < 0
+            || witness.Revision < 0L
+            || ((role == OwnerSectionRole.ExplicitlyEmpty || role == OwnerSectionRole.Excluded)
+                && witness.Cardinality != 0))
+            return false;
+
+        OwnerSectionContract contract = new OwnerSectionContract(sectionId, schemaVersion, role);
+        return protocol.RegisterExpectedSection(contract, out _)
+            && protocol.RegisterCensusProvider(sectionId, provider, out _);
+    }
+
+    private bool TryValidateP12RuntimeIdentitySpatialOwnerBaselines()
+    {
+        if (!requireP12RuntimeIdentitySpatialCensusOwners)
+            return true;
+        return npcRosterCensusProtocol != null
+            && npcRosterCensusProtocol.TryValidateUnchangedSections(
+                P12RuntimeIdentitySpatialSectionIds,
+                out _);
+    }
+
+    internal bool HasSameP12RuntimeIdentitySpatialOwners(
+        RuntimeIdentityRegistry identityRegistry,
+        SpatialNetworkRuntime spatialNetwork,
+        ExplorableSiteStore siteStore)
+    {
+        if (runtimeAdmissionContext == null)
+            return true;
+        return requireP12RuntimeIdentitySpatialCensusOwners
+            && ReferenceEquals(identityRegistry, p12RuntimeIdentityRegistry)
+            && ReferenceEquals(spatialNetwork, p12SpatialNetworkRuntime)
+            && ReferenceEquals(siteStore, explorableSiteStore)
+            && p12RuntimeIdentityCensusProviders != null
+            && p12RuntimeIdentityCensusProviders.Count == P12RuntimeIdentitySectionIds.Length
+            && p12SpatialNetworkCensusProviders != null
+            && p12SpatialNetworkCensusProviders.Count == 2
+            && p12ExplorableSiteCensusProvider != null;
+    }
+}

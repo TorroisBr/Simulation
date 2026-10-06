@@ -216,6 +216,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         public long PersonStoreRevisionDelta;
         public bool RosterChanged;
         public readonly HashSet<string> ChangedCityPresenceSectionIds = new HashSet<string>(StringComparer.Ordinal);
+        public readonly HashSet<string> ChangedRuntimeIdentitySectionIds = new HashSet<string>(StringComparer.Ordinal);
         public readonly HashSet<string> AllowedLifecycleSectionIds = new HashSet<string>(StringComparer.Ordinal);
         public readonly HashSet<string> ChangedLifecycleSectionIds = new HashSet<string>(StringComparer.Ordinal);
 
@@ -276,6 +277,18 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             }
             if (owner.cityNpcPresenceSectionIdsByOwner.TryGetValue(city, out string sectionId))
                 context.ChangedCityPresenceSectionIds.Add(sectionId);
+        }
+
+        public void MarkRuntimeIdentityChanged()
+        {
+            if (context == null) return;
+            if (!context.IsOwnedByCurrentThread())
+            {
+                owner.FaultNpcMembershipCensusBoundary();
+                return;
+            }
+            foreach (string sectionId in P12RuntimeIdentitySectionIds)
+                context.ChangedRuntimeIdentitySectionIds.Add(sectionId);
         }
 
         public void Dispose()
@@ -779,7 +792,10 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         StructureStore structureStore = null,
         P17AScenarioAuthorityCapability p17AScenarioAuthorityCapability = null,
         EconomyTransactionService economyTransactionService = null,
-        bool requireP12ReceiptCensusOwners = false)
+        bool requireP12ReceiptCensusOwners = false,
+        RuntimeIdentityRegistry runtimeIdentityRegistry = null,
+        SpatialNetworkRuntime spatialNetworkRuntime = null,
+        bool requireP12RuntimeIdentitySpatialCensusOwners = false)
     {
         WorldId = worldId;
         if (!Enum.IsDefined(typeof(SimulationRuntimeCompositionProfile), compositionProfile))
@@ -884,10 +900,26 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                 nameof(requireP12ReceiptCensusOwners));
         }
 
+        if (requireP12RuntimeIdentitySpatialCensusOwners
+            && (runtimeAdmissionContext == null
+                || runtimeAdmissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+                || runtimeIdentityRegistry == null
+                || spatialNetworkRuntime == null
+                || explorableSiteStore == null
+                || !spatialNetworkRuntime.UsesIdentityRegistry(runtimeIdentityRegistry)))
+        {
+            throw new ArgumentException(
+                "The selected UnityBootstrap-Daily-v1 profile requires its exact RuntimeIdentityRegistry, legacy SpatialNetworkRuntime, and ExplorableSiteStore census owners.",
+                nameof(requireP12RuntimeIdentitySpatialCensusOwners));
+        }
+
         this.runtimeAdmissionContext = runtimeAdmissionContext;
         this.runtimeIdAllocator = runtimeIdAllocator;
         this.economyTransactionService = economyTransactionService;
         this.requireP12ReceiptCensusOwners = requireP12ReceiptCensusOwners;
+        p12RuntimeIdentityRegistry = runtimeIdentityRegistry;
+        p12SpatialNetworkRuntime = spatialNetworkRuntime;
+        this.requireP12RuntimeIdentitySpatialCensusOwners = requireP12RuntimeIdentitySpatialCensusOwners;
         if (runtimeAdmissionContext != null && runtimeIdAllocator != null)
         {
             runtimeIdAllocatorEventCounterCensusProvider =
@@ -1953,6 +1985,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             || (runtimeAdmissionContext != null && !TryRegisterPropertyEstateCensusProviders(protocol))
             || (runtimeAdmissionContext != null && !TryRegisterP12PopulationCensusProviders(protocol))
             || (runtimeAdmissionContext != null && !TryRegisterP12CrimeSocialAppraisalOwnerSections(protocol))
+            || (requireP12RuntimeIdentitySpatialCensusOwners
+                && !TryRegisterP12RuntimeIdentitySpatialCensusOwners(protocol))
             || (requireP12ReceiptCensusOwners && !TryRegisterP12ExactZeroReceiptOwners(protocol))
             || !protocol.SealExpectedSectionInventory(out _)
             || !protocol.SealCensusProviderInventory(out _))
@@ -5038,6 +5072,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             allowedLifecycleSectionIds);
         if (npcRosterCensusProtocol != null
             && TryAssessP12LifecycleOwnerRoster()
+            && TryValidateP12RuntimeIdentitySpatialOwnerBaselines()
             && npcRosterCensusProtocol.TryEnterOperation(
                 NpcMembershipCensusOperationId,
                 out SimulationOperationScope protocolScope,
@@ -5098,6 +5133,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         else if (context.RosterChanged
             || context.PersonStoreRevisionDelta != 0L
             || context.ChangedCityPresenceSectionIds.Count != 0
+            || context.ChangedRuntimeIdentitySectionIds.Count != 0
             || context.ChangedLifecycleSectionIds.Count != 0)
         {
             List<string> changedFixedSections = new List<string>();
@@ -5107,6 +5143,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                 changedFixedSections.Add(PersonMaterializationBindingCensusProvider.SectionId);
             }
             changedFixedSections.AddRange(context.ChangedCityPresenceSectionIds);
+            changedFixedSections.AddRange(context.ChangedRuntimeIdentitySectionIds);
             changedFixedSections.AddRange(context.ChangedLifecycleSectionIds);
 
             if (context.ProtocolScope != null && npcRosterCensusProtocol != null)
@@ -5373,6 +5410,40 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             return false;
         }
 
+        bool identityAlreadyRegistered = false;
+        if (requireP12RuntimeIdentitySpatialCensusOwners)
+        {
+            if (p12RuntimeIdentityRegistry.TryGetNpcForMembership(
+                    npcRuntime.RuntimeId,
+                    out NpcRuntime registeredIdentity))
+            {
+                if (!ReferenceEquals(registeredIdentity, npcRuntime))
+                {
+                    failure = WorldNpcRegistryFailure.DuplicateRuntimeId;
+                    return false;
+                }
+                identityAlreadyRegistered = true;
+            }
+            else if (!p12RuntimeIdentityRegistry.CanRegisterNpcForMembership(
+                         npcRuntime,
+                         out bool duplicateIdentity))
+            {
+                failure = duplicateIdentity
+                    ? WorldNpcRegistryFailure.DuplicateRuntimeId
+                    : WorldNpcRegistryFailure.RuntimeFaulted;
+                return false;
+            }
+        }
+
+        if (!isComposingNpcRoster
+            && runtimeAdmissionContext != null
+            && npcRuntime.CurrentCity != null
+            && !cityNpcPresenceSectionIdsByOwner.ContainsKey(npcRuntime.CurrentCity))
+        {
+            failure = WorldNpcRegistryFailure.InvalidNpc;
+            return false;
+        }
+
         if (npcRuntime.PersonId != null
             && (personStore.TryGet(npcRuntime.PersonId, out PersonRuntime person) == false
                 || person.IsMaterialized == false
@@ -5404,18 +5475,19 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             return false;
         }
 
-        npcRegistryById.Add(npcRuntime.RuntimeId, npcRuntime);
-        npcRuntimes.Add(npcRuntime);
-        if (!isComposingNpcRoster
-            && runtimeAdmissionContext != null
-            && npcRuntime.CurrentCity != null
-            && !cityNpcPresenceSectionIdsByOwner.ContainsKey(npcRuntime.CurrentCity))
+        bool insertedIdentity = requireP12RuntimeIdentitySpatialCensusOwners
+            && !identityAlreadyRegistered;
+        if (insertedIdentity && !p12RuntimeIdentityRegistry.RegisterNpc(npcRuntime))
         {
-            npcRegistryById.Remove(npcRuntime.RuntimeId);
-            npcRuntimes.Remove(npcRuntime);
-            failure = WorldNpcRegistryFailure.InvalidNpc;
+            FaultNpcMembershipCensusBoundary();
+            failure = WorldNpcRegistryFailure.RuntimeFaulted;
             return false;
         }
+        if (insertedIdentity)
+            censusScope.MarkRuntimeIdentityChanged();
+
+        npcRegistryById.Add(npcRuntime.RuntimeId, npcRuntime);
+        npcRuntimes.Add(npcRuntime);
         if (!isComposingNpcRoster && npcRuntime.CurrentCity != null)
             censusScope.MarkCityPresenceChanged(npcRuntime.CurrentCity);
         censusScope.MarkRosterChanged();

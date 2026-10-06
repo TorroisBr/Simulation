@@ -95,6 +95,11 @@ public sealed class SpatialNetworkRuntime
         this.logger = logger ?? new SimulationLogger(null);
     }
 
+    internal bool UsesIdentityRegistry(RuntimeIdentityRegistry candidate)
+    {
+        return ReferenceEquals(identityRegistry, candidate);
+    }
+
     public bool RegisterLocation(SpatialLocationRuntime location)
     {
         return RegisterLocationCore(location, null);

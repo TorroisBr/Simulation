@@ -688,8 +688,30 @@ public sealed class SimulationBootstrapCompositionTests
         IDictionary expectedCensusSections = (IDictionary)typeof(ContinuationCensusProtocol)
             .GetField("expectedSections", BindingFlags.Instance | BindingFlags.NonPublic)
             .GetValue(censusProtocol);
-        Assert.That(expectedCensusSections.Count, Is.EqualTo(242),
-            "The selected ten-NPC/two-City Daily-v1 inventory adds the three Required Property/Estate sections to its prior 239-section inventory.");
+        Assert.That(expectedCensusSections.Count, Is.EqualTo(253),
+            "The selected ten-NPC/two-City Daily-v1 inventory includes the 11 installed identity, legacy spatial-network, and ExplorableSite owner witnesses.");
+        string[] identitySpatialSectionIds =
+        {
+            RuntimeIdentityRegistryCensusProvider.NpcsSectionId,
+            RuntimeIdentityRegistryCensusProvider.CitiesSectionId,
+            RuntimeIdentityRegistryCensusProvider.LocationsSectionId,
+            RuntimeIdentityRegistryCensusProvider.RoutesSectionId,
+            RuntimeIdentityRegistryCensusProvider.ExplorableSitesSectionId,
+            RuntimeIdentityRegistryCensusProvider.LocalPlacesSectionId,
+            RuntimeIdentityRegistryCensusProvider.LocalConnectionsSectionId,
+            RuntimeIdentityRegistryCensusProvider.NotableItemsSectionId,
+            SpatialNetworkCensusProvider.LocationsSectionId,
+            SpatialNetworkCensusProvider.RoutesSectionId,
+            ExplorableSiteCensusProvider.SectionId
+        };
+        for (int i = 0; i < identitySpatialSectionIds.Length; i++)
+        {
+            Assert.That(expectedCensusSections.Contains(identitySpatialSectionIds[i]), Is.True);
+            Assert.That(((OwnerSectionContract)expectedCensusSections[identitySpatialSectionIds[i]]).Role,
+                Is.EqualTo(i < 4 || (i >= 8 && i < 10)
+                    ? OwnerSectionRole.Required
+                    : OwnerSectionRole.ExplicitlyEmpty));
+        }
         Assert.That(expectedCensusSections.Contains(NpcDecisionRecorder.OccurrenceReceiptSectionId), Is.True);
         Assert.That(expectedCensusSections.Contains(EconomyTransactionService.KeyedSaleReceiptSectionId), Is.True);
         string[] institutionOfficeSectionIds =
@@ -1466,6 +1488,107 @@ public sealed class SimulationBootstrapCompositionTests
             + config.ExplorableSites.Count * 2;
         Assert.That(simulation.SpatialNetwork.Routes.Count, Is.EqualTo(expectedP9RouteCount),
             "The selected P9-B-only profile adds no P10-A topology or routes.");
+    }
+
+    [Test]
+    public void SelectedDailyV1NpcMembershipCommitsIdentityAndKeepsItAfterUnregister()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject simulationObject = new GameObject("selected-daily-v1-runtime-identity-membership-test");
+        simulationObjects.Add(simulationObject);
+        TesteSimulacao simulation = simulationObject.AddComponent<TesteSimulacao>();
+        typeof(TesteSimulacao).GetField("simulationConfig", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(simulation, config);
+        typeof(TesteSimulacao).GetField("runtimeAdmissionProfile", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(simulation, SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1);
+
+        simulation.Start();
+
+        SimulationRuntime runtime = simulation.Bootstrap.Runtime;
+        IReadOnlyList<IOwnerSectionCensusProvider> identityProviders =
+            simulation.Bootstrap.RuntimeIdentityCensusProviders;
+        OwnerSectionCensusWitness[] before = identityProviders
+            .Select(provider => provider.GetCurrentCensus())
+            .ToArray();
+        Assert.That(before, Has.Length.EqualTo(8));
+        Assert.That(before[0].Cardinality, Is.EqualTo(10));
+        Assert.That(before[0].Revision, Is.EqualTo(16L));
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long initialEpoch, out _), Is.True);
+
+        NpcRuntime added = new NpcRuntime("daily-dynamic-identity-npc", null);
+        Assert.That(runtime.TryRegisterNpc(added, out WorldNpcRegistryFailure addFailure), Is.True,
+            addFailure.ToString());
+        Assert.That(simulation.TryGetNpcRuntime(added.RuntimeId, out NpcRuntime resolvedAdded), Is.True);
+        Assert.That(resolvedAdded, Is.SameAs(added));
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long addedEpoch, out _), Is.True);
+        Assert.That(addedEpoch, Is.EqualTo(initialEpoch + 1L));
+
+        OwnerSectionCensusWitness[] afterAdd = identityProviders
+            .Select(provider => provider.GetCurrentCensus())
+            .ToArray();
+        Assert.That(afterAdd[0].Cardinality, Is.EqualTo(11));
+        Assert.That(afterAdd[0].Revision, Is.EqualTo(17L));
+        for (int i = 0; i < afterAdd.Length; i++)
+        {
+            Assert.That(afterAdd[i].Revision, Is.EqualTo(17L), afterAdd[i].SectionId);
+            Assert.That(afterAdd[i].OwnerInstanceIdentity, Is.SameAs(before[i].OwnerInstanceIdentity));
+        }
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure afterAddFailure), Is.True,
+            afterAddFailure.ToString());
+
+        Assert.That(runtime.TryUnregisterNpc(added.RuntimeId, out WorldNpcRegistryFailure removeFailure), Is.True,
+            removeFailure.ToString());
+        Assert.That(runtime.TryGetNpcRuntime(added.RuntimeId, out _), Is.False);
+        Assert.That(simulation.TryGetNpcRuntime(added.RuntimeId, out NpcRuntime retainedIdentity), Is.True);
+        Assert.That(retainedIdentity, Is.SameAs(added));
+        OwnerSectionCensusWitness[] afterRemove = identityProviders
+            .Select(provider => provider.GetCurrentCensus())
+            .ToArray();
+        Assert.That(afterRemove.Select(witness => witness.Revision), Is.All.EqualTo(17L));
+        Assert.That(afterRemove[0].Cardinality, Is.EqualTo(11));
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long removedEpoch, out _), Is.True);
+        Assert.That(removedEpoch, Is.EqualTo(addedEpoch + 1L));
+
+        NpcRuntime replacement = new NpcRuntime(added.RuntimeId, null);
+        Assert.That(runtime.TryRegisterNpc(replacement, out WorldNpcRegistryFailure replacementFailure), Is.False);
+        Assert.That(replacementFailure, Is.EqualTo(WorldNpcRegistryFailure.DuplicateRuntimeId));
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long rejectedEpoch, out _), Is.True);
+        Assert.That(rejectedEpoch, Is.EqualTo(removedEpoch));
+
+        NpcRuntime cityIdAlias = new NpcRuntime(runtime.Cities[0].RuntimeId, null);
+        Assert.That(runtime.TryRegisterNpc(cityIdAlias, out WorldNpcRegistryFailure aliasFailure), Is.False);
+        Assert.That(aliasFailure, Is.EqualTo(WorldNpcRegistryFailure.DuplicateRuntimeId));
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long aliasRejectedEpoch, out _), Is.True);
+        Assert.That(aliasRejectedEpoch, Is.EqualTo(removedEpoch));
+
+        Assert.That(runtime.TryRegisterNpc(added, out WorldNpcRegistryFailure readdFailure), Is.True,
+            readdFailure.ToString());
+        OwnerSectionCensusWitness[] afterReadd = identityProviders
+            .Select(provider => provider.GetCurrentCensus())
+            .ToArray();
+        Assert.That(afterReadd.Select(witness => witness.Revision), Is.All.EqualTo(17L));
+        Assert.That(afterReadd[0].Cardinality, Is.EqualTo(11));
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long readdedEpoch, out _), Is.True);
+        Assert.That(readdedEpoch, Is.EqualTo(removedEpoch + 1L));
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure finalFailure), Is.True,
+            finalFailure.ToString());
+
+        ContinuationCensusProtocol protocol = (ContinuationCensusProtocol)typeof(SimulationRuntime)
+            .GetField("npcRosterCensusProtocol", BindingFlags.Instance | BindingFlags.NonPublic)
+            .GetValue(runtime);
+        Assert.That(simulation.SpatialNetwork.RegisterLocation(
+            new SpatialLocationRuntime("unsupported-daily-location")), Is.True);
+        MethodInfo validateUnchangedSections = typeof(ContinuationCensusProtocol).GetMethod(
+            "TryValidateUnchangedSections", BindingFlags.Instance | BindingFlags.NonPublic);
+        object[] validationArgs =
+        {
+            new[] { SpatialNetworkCensusProvider.LocationsSectionId },
+            ContinuationCensusFailure.None
+        };
+        Assert.That((bool)validateUnchangedSections.Invoke(protocol, validationArgs), Is.False);
+        Assert.That(validationArgs[1], Is.EqualTo(ContinuationCensusFailure.OwnerCoverageIncomplete));
     }
 
     [Test]

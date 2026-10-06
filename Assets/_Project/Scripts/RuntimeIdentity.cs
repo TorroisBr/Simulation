@@ -270,6 +270,29 @@ public sealed class RuntimeIdentityRegistry
         return true;
     }
 
+    internal bool TryGetNpcForMembership(string runtimeId, out NpcRuntime npcRuntime)
+    {
+        if (!string.IsNullOrWhiteSpace(runtimeId)
+            && npcsByRuntimeId.TryGetValue(runtimeId, out npcRuntime))
+            return true;
+
+        npcRuntime = null;
+        return false;
+    }
+
+    internal bool CanRegisterNpcForMembership(NpcRuntime npcRuntime, out bool duplicateIdentity)
+    {
+        duplicateIdentity = false;
+        if (npcRuntime == null || string.IsNullOrWhiteSpace(npcRuntime.RuntimeId))
+            return false;
+        if (TryGetRegisteredType(npcRuntime.RuntimeId, out _))
+        {
+            duplicateIdentity = true;
+            return false;
+        }
+        return censusRevision < long.MaxValue;
+    }
+
     public bool RegisterCity(CityRuntime cityRuntime)
     {
         if (cityRuntime == null)

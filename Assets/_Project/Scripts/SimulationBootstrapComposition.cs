@@ -99,6 +99,13 @@ public sealed class SimulationBootstrapComposition
         TravelParties = travelParties;
         GroupTravel = groupTravel;
         TravelPartyCensusProvider = new TravelPartyCensusProvider(travelParties);
+        if (!runtime.HasSameP12RuntimeIdentitySpatialOwners(runtimeIdentityRegistry, spatialNetwork, sites))
+        {
+            runtime.FaultRuntimeAdmission();
+            throw new ArgumentException(
+                "The selected P12 runtime and bootstrap must retain the exact same RuntimeIdentityRegistry, legacy SpatialNetworkRuntime, and ExplorableSiteStore owners.",
+                nameof(runtimeIdentityRegistry));
+        }
         Runtime = runtime;
         PersonStoreCensusProviders = PersonStoreCensusProvider.CreateProviders(Runtime.PersonStore);
         CityNpcPresenceCensusProviders = CityNpcPresenceCensusProvider.CreateProviders(

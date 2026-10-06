@@ -305,7 +305,10 @@ public class TesteSimulacao : MonoBehaviour
                             worldId: unpublishedWorldId,
                             runtimeIdAllocator: runtimeIdAllocator,
                             economyTransactionService: economyTransactionService,
-                            requireP12ReceiptCensusOwners: runtimeAdmissionContext != null);
+                            requireP12ReceiptCensusOwners: runtimeAdmissionContext != null,
+                            runtimeIdentityRegistry: runtimeIdentityRegistry,
+                            spatialNetworkRuntime: spatialNetwork,
+                            requireP12RuntimeIdentitySpatialCensusOwners: runtimeAdmissionContext != null);
                         simulationRuntime.BindP12EconomyTransactionService(economyTransactionService);
                         if (runtimeAdmissionContext != null
                             && !simulationRuntime.TryBeginBootstrapPublicationScope(out bootstrapPublicationScope))

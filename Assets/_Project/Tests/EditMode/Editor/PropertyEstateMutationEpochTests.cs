@@ -30,7 +30,7 @@ public sealed class PropertyEstateMutationEpochTests
     }
 
     [Test]
-    public void DailyV1ProfileAddsOnlyTheThreePropertyEstateSections()
+    public void DailyV1ProfileAddsPropertyEstateSectionsAlongsideIdentitySpatialOwners()
     {
         TesteSimulacao simulation = CreateSelectedDailyV1Simulation();
         SimulationRuntime runtime = simulation.Runtime;
@@ -39,7 +39,7 @@ public sealed class PropertyEstateMutationEpochTests
             simulation.Bootstrap.PropertyOwnershipCensusProviders;
         IOwnerSectionCensusProvider estateProvider = simulation.Bootstrap.EstateCensusProvider;
 
-        Assert.That(GetExpectedSectionCount(protocol), Is.EqualTo(242));
+        Assert.That(GetExpectedSectionCount(protocol), Is.EqualTo(253));
         Assert.That(propertyProviders, Has.Count.EqualTo(2));
         Assert.That(propertyProviders[0].GetCurrentCensus().OwnerInstanceIdentity,
             Is.SameAs(runtime.PropertyOwnershipStore));
