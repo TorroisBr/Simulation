@@ -1290,13 +1290,14 @@ census or shared-epoch map.
 |---|---|---|
 | Effective profile | Daily-v1 now selects the P9-B-only asset; P10-A remains a separate proving profile. | The current live census is still partial and day-zero. It does not establish every supported evolved owner instance or export/hydration. |
 | Current action | Exact owner identity, roster cardinality, local revision, admitted successful writes, and covered Person/population/NPC action clearing are implemented and reviewed. | Only the recorded mutators and operation boundaries are covered. Other public writers still need a source-to-commit-to-notification map. |
-| NPC MoneyAccount / Inventory direct leaves | Passive census exists; a bounded direct-write invalidation design was reviewed against canonical `b77e154`, and an implementation candidate exists at `codex/phase12/P12BDirectNpcOwnerInvalidationImplementation` (`766137aea8535c1d8f6e5529856228db6890e718`). | Classify this as `REINTEGRATE`: its code base is `2f7c742`, before the Daily-v1 profile correction and later CurrentAction/lifecycle changes. Refresh the design against current architecture and `1b7ae19`, recompose rather than fast-forward the stale tip, then run the design-specified regression/full validation and obtain exact-tip independent review. In particular preserve exact owners, admitted transaction semantics, Inventory alias fanout, no duplicate transaction notices, and the separately bounded Expedition consumer behavior. |
+| NPC MoneyAccount / Inventory direct leaves | The exact per-NPC account and Inventory owner hooks were already promoted at integration tip `9d1474b4299d8e888dd387e02e9018d9e8627f84`; code is `c49f957e45c3059231e9ec66e4010a7c3a389988`, tree `627af2fbd7f93e0025106ee5ba87e72bae6c4ed2`, with exact-tip review and validation recorded in P12 State. Historical implementation ref `766137aea8535c1d8f6e5529856228db6890e718` is tree-identical to the delivered code. | No new work remains for this exact slice. Retain its recorded boundaries: per-leaf notification, Inventory alias batch, duplicate suppression inside existing scopes, and no general cross-owner transaction coverage. |
+| P12 decision-occurrence and keyed-sale receipts | Promoted at `88f71f7`; the selected `UnityBootstrap-Daily-v1` now binds the exact NpcDecisionRecorder and EconomyTransactionService receipt owners as fixed `ExplicitlyEmpty` sections. The exact base held 233 sections; this adds those two sections, for a tested total of 235. | P18-D receipt writers remain excluded from Daily-v1. This is partial census admission only; no complete owner/epoch, capture, export, hydration, or P12-B readiness claim follows. |
 | Other effective owners and writes | Existing promoted census and operation slices remain valid within their individual reviewed owner sets. | Continue the current-source delta audit across effective-profile owners, roster changes, public aliases, successful commit boundaries, owner-thread scopes, and shared-epoch notification. A passive witness is not a write hook; day-zero zero is not proof of permanent absence. |
 | P12 readiness | P12-B remains `INCOMPLETE`; P12-A remains `WAIT_DEPENDENCY`; P13 remains blocked. P12-C waits on B; P12-D/E wait on B and C; P12-F waits on C/D/E; P12-G waits on B–F plus validated inventory. | No complete owner or epoch coverage, runtime-wide quiescence, capture eligibility, export, hydration, downstream readiness, or Phase closure is implied. Keep Expedition-specific work assigned to P12-F. |
 
-The next bounded P12-B task is current-base refresh and reintegration of the
-existing MoneyAccount/Inventory direct-write candidate, which addresses a
-known committed-write gap rather than adding another passive census. Do not
-reuse its old review or validation as current-base evidence if the recompose
-changes the code tree. Preserve all unrelated ProjectSettings edits, `.meta`
-files, and local validation artifacts.
+The next bounded P12-B task is a current-source delta audit over the remaining
+Daily-v1 execution paths, then selection of the highest-impact supported
+committed writer that still lacks a precise owner/operation/epoch boundary.
+The prior direct MoneyAccount/Inventory target was already delivered; do not
+repeat it. Preserve all unrelated ProjectSettings edits, `.meta` files, and
+local validation artifacts.

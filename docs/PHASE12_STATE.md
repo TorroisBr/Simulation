@@ -1638,3 +1638,15 @@ multi-participant activity alignment records remain
 Daily-v1 profile correction and its 37/37 admission and 22/22 composition
 evidence supersede the historical P10-A mismatch section above without
 changing the accepted P12 scope.
+
+## P12-B Daily-v1 exact-zero receipt owner admission promotion — 2026-10-06
+
+P12 canonical advanced by a clean fast-forward from `ea4decdaffa26e80e76ee72135ead0a7d673f358` to the reviewed candidate `88f71f758673111e1ea67b88947485dd9c5d57b5`; local and remote `codex/phase12/canonical` are synchronized at that promotion tip. The promoted implementation is code commit `c8f1689d195218351cca0b45ef431883860b3d7d`, tree `078ca8a17ea095895c897638178262ca8bb932b6`. Independent exact-tip review is recorded in `docs/design/PHASE12_P12B_DAILY_EXACT_ZERO_RECEIPT_IMPLEMENTATION_REVIEW.md`; the corrected technical design and its independent PASS are recorded in `docs/design/PHASE12_P12B_DAILY_EXACT_ZERO_RECEIPTS_DESIGN_REVIEW.md`.
+
+The selected `UnityBootstrap-Daily-v1` census now binds the existing `NpcDecisionRecorder.OccurrenceReceiptSectionId` and `EconomyTransactionService.KeyedSaleReceiptSectionId` providers as fixed `ExplicitlyEmpty` sections. On the exact base, the actual selected profile had 233 registered sections; adding these two sections yields the verified 235-section composition. The full-profile requirement applies to the real Daily-v1 bootstrap, and missing/malformed/populated providers or later unnotified cardinality/revision changes fail closed through the existing census admission and assessment behavior. The P10-A Ruin remains in its separate `Simulation-GeneralTest.asset` proving profile.
+
+The exact-base Daily-v1 baseline count probe passed 1/1. Profile/configuration and owner-thread admission revalidation each passed 1/1 on source base `ea4dec`. Candidate receipt admission passed 50/50; selected profile/cardinality inventory passed 1/1; ALL EditMode passed 2408/2408; official EditMode Smoke passed 5/5; `git diff --check` passed. XML hashes, raw-log archive hashes, probe source, and baseline evidence are retained under `docs/validation/P12DailyProfileRevalidation/final/` and `docs/validation/P12ExactZeroReceiptBaseline/`.
+
+This promotes only exact-zero receipt-owner admission for the selected partial census. It does not enable P18-D receipt writers or establish complete owner coverage, complete shared-epoch coverage, global quiescence, capture eligibility, export, hydration, P12-A readiness, P13 readiness, or Phase 12 closure. P12-B remains `INCOMPLETE`; P12-A remains `WAIT_DEPENDENCY`; P13 remains blocked. The dependency edges are unchanged: P12-C waits on B; P12-D/E wait on B and C; P12-F waits on C/D/E; P12-G waits on B–F plus validated live-profile inventory. Expedition remains deferred to P12-F.
+
+The blocker matrix in `docs/design/PHASE12_B_BLOCKER_RESOLUTION.md` now records this owner-family promotion. Continue the current-source Daily-v1 owner/operation/epoch delta audit and choose the highest-impact remaining supported committed-write gap; this promotion does not itself make another checkpoint READY.
