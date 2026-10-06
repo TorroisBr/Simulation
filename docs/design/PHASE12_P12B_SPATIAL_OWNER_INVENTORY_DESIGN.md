@@ -79,9 +79,28 @@ continues to be rejected before identity or owner publication.
    existing constructor behavior for non-P12 runtimes.
 3. Under the selected P12 admission context only, register the 20 fixed
    contracts/providers before sealing section/provider inventories. Validate
-   each witness's exact section ID/schema, expected owner instance, valid
-   cardinality/revision, and explicit-empty constraint. Missing or duplicate
-   providers fault closed.
+   each witness's exact section ID/schema, expected owner instance, and
+   nonnegative revision. Also enforce the selected profile's exact initial
+   cardinality before baseline establishment; `Required` means presence, not
+   a positive or profile-correct count. Use this bounded mapping without
+   changing general `OwnerSectionRole` semantics:
+
+   | Section family | Required pre-seal cardinality |
+   |---|---|
+   | P8-A `p8a.hexes`, `p8a.locations`, `p8a.scale-context` | 1 / 1 / 1 |
+   | Runtime identity NPC, City, Location, Route indexes | 10 / 2 / 2 / 2 |
+   | Legacy spatial-network Location and Route indexes | 2 / 2 |
+   | Runtime identity ExplorableSite, LocalPlace, LocalConnection, NotableItem indexes | 0 / 0 / 0 / 0 |
+   | P8-B, P8-C, P8-D, and ExplorableSite sections marked `ExplicitlyEmpty` | 0 for every section |
+
+   For P8-A, compare each provider with the resolved installed spatial owner;
+   for the eight identity indexes, require the one installed registry owner;
+   for legacy-network sections, require the one installed network owner; for
+   child providers, require the exact installed child owner from its accepted
+   authority. A missing, duplicate, misowned, or wrong-cardinality witness
+   faults profile admission before the protocol seals or publishes its
+   baseline. This closes the gap because protocol `Required` validation accepts
+   zero cardinality; tests alone do not enforce runtime admission.
 4. Keep genesis writes before the initial inventory baseline. Preserve the
    normal bootstrap publication operation and final owner-thread census check.
    Other runtime profiles retain existing P8/P9/P10 behavior.
@@ -89,8 +108,12 @@ continues to be rejected before identity or owner publication.
 ## Validation obligations
 
 - Extend the selected Daily-v1 composition/admission proof to assert all 255
-  registered sections, exact owner-instance identity, schema, day-zero
-  cardinality and revision for these 20 sections, and stable repeated reads.
+  registered sections, exact owner-instance identity, schema, pre-seal exact
+  cardinality mapping above, current owner revision, and stable repeated reads.
+- Prove the selected-profile runtime rejects before publication when a
+  Required identity/P8-A/network witness has a wrong cardinality, including
+  zero for a Required section; do not rely only on a test assertion after
+  registration.
 - Prove a nonzero P8-B/C/D or ExplorableSite exact-empty section fails owner
   inventory assessment closed. Do not test or add security behavior for forged
   commands; exercise only existing domain APIs and the profile's declared
