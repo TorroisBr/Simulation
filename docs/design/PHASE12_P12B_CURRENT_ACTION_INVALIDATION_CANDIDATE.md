@@ -1,8 +1,10 @@
 # P12-B CurrentAction invalidation candidate
 
-**Status:** Implementation and required validation complete; fresh exact-tip
-independent implementation review pending. This bounded owner/operation/epoch
-slice does not promote code or change Phase readiness.
+**Status:** `VALIDATED_CANDIDATE`. Exact-tip independent implementation review
+passed and is recorded in
+[`PHASE12_P12B_CURRENT_ACTION_INVALIDATION_REVIEW.md`](PHASE12_P12B_CURRENT_ACTION_INVALIDATION_REVIEW.md).
+This bounded owner/operation/epoch slice does not itself promote code or change
+Phase readiness.
 
 ## Candidate identity
 
@@ -12,6 +14,7 @@ slice does not promote code or change Phase readiness.
 - Implementation code tree: `92a59220bdefc8e17e7fea6490f87f15646b9d6f`
 - Reviewed technical design: `8cf4ba70ef2793deb3a314b70c4c51bcbfdcd675`
 - Exact design review record: `10738e460fa2866339473886f116dd2d1635e08f`
+- Exact-tip implementation review: `PHASE12_P12B_CURRENT_ACTION_INVALIDATION_REVIEW.md`
 
 The initial implementation commit is `cbd32dd7186c9d1256f241ce3191f6195c2c200d`;
 follow-up commits add test coverage only. No production code changed after the
