@@ -146,6 +146,23 @@ public sealed class P12PoliticalClaimCensusTests
         Assert.That(censusFailure, Is.EqualTo(ContinuationCensusFailure.ProtocolFaulted));
     }
 
+    [Test]
+    public void DailyProfileRejectsPoliticalClaimCommitAtLocalRevisionOverflowWithoutEpochAdvance()
+    {
+        SimulationRuntime runtime = CreateDailyProfileRuntime(out PersonRuntime claimant, out _);
+        PoliticalClaimStore owner = GetPoliticalClaimStore(runtime);
+        SetPoliticalClaimStoreRevision(owner, long.MaxValue);
+        SetSectionBaselineRevision(runtime, PoliticalClaimStoreCensusProvider.ClaimsSectionId, long.MaxValue);
+        SetSectionBaselineRevision(runtime, PoliticalClaimStoreCensusProvider.RecognitionsSectionId, long.MaxValue);
+
+        Assert.That(runtime.TryRegisterPoliticalClaim(
+            CreateClaim("p12-claim-revision-full", claimant.PersonId),
+            out PoliticalClaimFailure failure), Is.False);
+        Assert.That(failure.Code, Is.EqualTo(PoliticalClaimFailureCode.RevisionOverflow));
+        AssertRuntimeState(runtime, PoliticalClaimStoreCensusProvider.CreateProviders(owner),
+            0, 0, long.MaxValue, 1L);
+    }
+
     private static void AssertWitnesses(
         IReadOnlyList<IOwnerSectionCensusProvider> providers,
         PoliticalClaimStore expectedOwner,
@@ -235,6 +252,13 @@ public sealed class P12PoliticalClaimCensusTests
             "mutationEpoch", BindingFlags.Instance | BindingFlags.NonPublic);
         Assert.That(field, Is.Not.Null);
         field.SetValue(protocol, epoch);
+    }
+
+    private static void SetPoliticalClaimStoreRevision(PoliticalClaimStore owner, long revision)
+    {
+        FieldInfo field = typeof(PoliticalClaimStore).GetField("revision", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(field, Is.Not.Null);
+        field.SetValue(owner, revision);
     }
 
     private static void SetSectionBaselineRevision(SimulationRuntime runtime, string sectionId, long revision)
