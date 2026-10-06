@@ -683,10 +683,23 @@ public sealed class SimulationBootstrapCompositionTests
         IDictionary expectedCensusSections = (IDictionary)typeof(ContinuationCensusProtocol)
             .GetField("expectedSections", BindingFlags.Instance | BindingFlags.NonPublic)
             .GetValue(censusProtocol);
-        Assert.That(expectedCensusSections.Count, Is.EqualTo(235),
-            "The current selected ten-NPC/two-City Daily-v1 composition has 233 sections before its two exact-zero receipt owners.");
+        Assert.That(expectedCensusSections.Count, Is.EqualTo(239),
+            "The current selected ten-NPC/two-City Daily-v1 composition has 233 sections before its two exact-zero receipt owners and four Institution/Office owner sections.");
         Assert.That(expectedCensusSections.Contains(NpcDecisionRecorder.OccurrenceReceiptSectionId), Is.True);
         Assert.That(expectedCensusSections.Contains(EconomyTransactionService.KeyedSaleReceiptSectionId), Is.True);
+        string[] institutionOfficeSectionIds =
+        {
+            InstitutionOfficeCensusProvider.InstitutionsSectionId,
+            InstitutionOfficeCensusProvider.OfficesSectionId,
+            InstitutionOfficeCensusProvider.IncumbenciesSectionId,
+            InstitutionOfficeCensusProvider.TenuresSectionId
+        };
+        for (int i = 0; i < institutionOfficeSectionIds.Length; i++)
+        {
+            Assert.That(expectedCensusSections.Contains(institutionOfficeSectionIds[i]), Is.True);
+            Assert.That(((OwnerSectionContract)expectedCensusSections[institutionOfficeSectionIds[i]]).Role,
+                Is.EqualTo(OwnerSectionRole.Required));
+        }
         Assert.That(((OwnerSectionContract)expectedCensusSections[NpcDecisionRecorder.OccurrenceReceiptSectionId]).Role,
             Is.EqualTo(OwnerSectionRole.ExplicitlyEmpty));
         Assert.That(((OwnerSectionContract)expectedCensusSections[EconomyTransactionService.KeyedSaleReceiptSectionId]).Role,
@@ -1068,6 +1081,13 @@ public sealed class SimulationBootstrapCompositionTests
         IReadOnlyList<IOwnerSectionCensusProvider> institutionOfficeProviders =
             simulation.Bootstrap.InstitutionOfficeCensusProviders;
         Assert.That(institutionOfficeProviders, Has.Count.EqualTo(4));
+        for (int i = 0; i < institutionOfficeSectionIds.Length; i++)
+        {
+            Assert.That(institutionOfficeProviders[i].GetCurrentCensus().SectionId,
+                Is.EqualTo(institutionOfficeSectionIds[i]));
+            Assert.That(((OwnerSectionContract)expectedCensusSections[institutionOfficeSectionIds[i]]).Role,
+                Is.EqualTo(OwnerSectionRole.Required));
+        }
         OwnerSectionCensusWitness institutionWitness = institutionOfficeProviders[0].GetCurrentCensus();
         OwnerSectionCensusWitness officeWitness = institutionOfficeProviders[1].GetCurrentCensus();
         OwnerSectionCensusWitness incumbencyWitness = institutionOfficeProviders[2].GetCurrentCensus();

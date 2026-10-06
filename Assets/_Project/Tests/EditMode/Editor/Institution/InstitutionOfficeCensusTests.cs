@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Reflection;
+using System.Threading.Tasks;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
@@ -150,6 +151,201 @@ public sealed class InstitutionOfficeCensusTests
     }
 
     [Test]
+    public void SelectedDailyV1InstitutionOfficeCommitsAdvanceOneSharedEpoch()
+    {
+        TesteSimulacao simulation = CreateSelectedDailyV1Simulation();
+        SimulationRuntime runtime = simulation.Runtime;
+        IReadOnlyList<IOwnerSectionCensusProvider> providers = CreateProviders(runtime);
+        PersonId firstPerson = new PersonId("p12-institution-office-first-person");
+        PersonId secondPerson = new PersonId("p12-institution-office-second-person");
+        PersonId thirdPerson = new PersonId("p12-institution-office-third-person");
+        Assert.That(runtime.TryRegisterPerson(
+            new PersonRuntime(firstPerson, 0L), out PersonStoreFailure firstPersonFailure),
+            Is.True, firstPersonFailure.ToString());
+        Assert.That(runtime.TryRegisterPerson(
+            new PersonRuntime(secondPerson, 0L), out PersonStoreFailure secondPersonFailure),
+            Is.True, secondPersonFailure.ToString());
+        Assert.That(runtime.TryRegisterPerson(
+            new PersonRuntime(thirdPerson, 0L), out PersonStoreFailure thirdPersonFailure),
+            Is.True, thirdPersonFailure.ToString());
+
+        Assert.That(ReadMutationEpoch(runtime, out long epoch), Is.True);
+        AssertWitnesses(providers, runtime, 0, 0, 0, 0, 0L, 0L);
+
+        InstitutionId institutionId = new InstitutionId("p12-institution-office-institution");
+        Assert.That(runtime.TryRegisterInstitution(
+            new InstitutionRecord(institutionId), out InstitutionFoundationFailure institutionFailure),
+            Is.True, institutionFailure.ToString());
+        epoch++;
+        AssertMutationEpoch(runtime, epoch);
+        AssertWitnesses(providers, runtime, 1, 0, 0, 0, 1L, 0L);
+
+        Assert.That(runtime.TryRegisterInstitution(
+            new InstitutionRecord(institutionId), out InstitutionFoundationFailure duplicateInstitutionFailure),
+            Is.False);
+        Assert.That(duplicateInstitutionFailure.Code,
+            Is.EqualTo(InstitutionFoundationFailureCode.DuplicateInstitutionId));
+        AssertMutationEpoch(runtime, epoch);
+
+        OfficeId firstOffice = new OfficeId("p12-institution-office-first-office");
+        OfficeId secondOffice = new OfficeId("p12-institution-office-second-office");
+        Assert.That(runtime.TryRegisterOffice(
+            new OfficeRecord(firstOffice, institutionId), out InstitutionFoundationFailure officeFailure),
+            Is.True, officeFailure.ToString());
+        epoch++;
+        AssertMutationEpoch(runtime, epoch);
+        AssertWitnesses(providers, runtime, 1, 1, 0, 0, 1L, 1L);
+
+        Assert.That(runtime.TryRegisterOffice(
+            new OfficeRecord(secondOffice, new InstitutionId("p12-institution-office-missing-parent")),
+            out InstitutionFoundationFailure missingParentFailure), Is.False);
+        Assert.That(missingParentFailure.Code,
+            Is.EqualTo(InstitutionFoundationFailureCode.InstitutionNotFoundForOffice));
+        AssertMutationEpoch(runtime, epoch);
+
+        Assert.That(runtime.TryRegisterOffice(
+            new OfficeRecord(firstOffice, institutionId), out InstitutionFoundationFailure duplicateOfficeFailure),
+            Is.False);
+        Assert.That(duplicateOfficeFailure.Code,
+            Is.EqualTo(InstitutionFoundationFailureCode.DuplicateOfficeId));
+        AssertMutationEpoch(runtime, epoch);
+
+        Assert.That(runtime.TryAssignIncumbent(
+            firstOffice,
+            new PersonId("p12-institution-office-unregistered-person"),
+            0L,
+            out InstitutionFoundationFailure unregisteredFailure), Is.False);
+        Assert.That(unregisteredFailure.Code,
+            Is.EqualTo(InstitutionFoundationFailureCode.PersonNotRegistered));
+        AssertMutationEpoch(runtime, epoch);
+
+        Assert.That(runtime.TryAssignIncumbent(
+            firstOffice, firstPerson, 0L, out InstitutionFoundationFailure firstAssignmentFailure),
+            Is.True, firstAssignmentFailure.ToString());
+        epoch++;
+        AssertMutationEpoch(runtime, epoch);
+        AssertWitnesses(providers, runtime, 1, 1, 1, 1, 1L, 2L);
+
+        Assert.That(runtime.TryRegisterOffice(
+            new OfficeRecord(secondOffice, institutionId), out InstitutionFoundationFailure secondOfficeFailure),
+            Is.True, secondOfficeFailure.ToString());
+        epoch++;
+        AssertMutationEpoch(runtime, epoch);
+        AssertWitnesses(providers, runtime, 1, 2, 1, 1, 1L, 3L);
+
+        Assert.That(runtime.TryAssignIncumbent(
+            secondOffice, secondPerson, out InstitutionFoundationFailure convenienceAssignmentFailure),
+            Is.True, convenienceAssignmentFailure.ToString());
+        epoch++;
+        AssertMutationEpoch(runtime, epoch);
+        AssertWitnesses(providers, runtime, 1, 2, 2, 2, 1L, 4L);
+
+        Assert.That(runtime.TryAssignIncumbent(
+            firstOffice, secondPerson, 0L, out InstitutionFoundationFailure occupiedFailure), Is.False);
+        Assert.That(occupiedFailure.Code,
+            Is.EqualTo(InstitutionFoundationFailureCode.OfficeAlreadyOccupied));
+        AssertMutationEpoch(runtime, epoch);
+
+        Assert.That(runtime.TryProposeInstitutionalVacancyRecognition(
+            firstOffice,
+            InstitutionalVacancyRecognitionReason.ExplicitDecision,
+            out InstitutionalVacancyRecognitionTransition staleTransition,
+            out InstitutionalVacancyRecognitionFailure staleProposalFailure),
+            Is.True, staleProposalFailure.ToString());
+        Assert.That(runtime.TryVacateOffice(
+            firstOffice, out InstitutionFoundationFailure vacancyFailure), Is.True, vacancyFailure.ToString());
+        epoch++;
+        AssertMutationEpoch(runtime, epoch);
+        AssertWitnesses(providers, runtime, 1, 2, 1, 2, 1L, 5L);
+
+        Assert.That(runtime.TryVacateOffice(
+            firstOffice, out InstitutionFoundationFailure alreadyVacantFailure), Is.False);
+        Assert.That(alreadyVacantFailure.Code,
+            Is.EqualTo(InstitutionFoundationFailureCode.OfficeAlreadyVacant));
+        AssertMutationEpoch(runtime, epoch);
+
+        Assert.That(runtime.TryAssignIncumbent(
+            firstOffice, thirdPerson, 0L, out InstitutionFoundationFailure replacementFailure),
+            Is.True, replacementFailure.ToString());
+        epoch++;
+        AssertMutationEpoch(runtime, epoch);
+        AssertWitnesses(providers, runtime, 1, 2, 2, 3, 1L, 6L);
+
+        Assert.That(runtime.TryApplyInstitutionalVacancyRecognition(
+            staleTransition, out InstitutionalVacancyRecognitionFailure staleApplyFailure), Is.False);
+        Assert.That(staleApplyFailure,
+            Is.EqualTo(InstitutionalVacancyRecognitionFailure.StaleIncumbency));
+        AssertMutationEpoch(runtime, epoch);
+
+        Assert.That(runtime.TryProposeInstitutionalVacancyRecognition(
+            secondOffice,
+            InstitutionalVacancyRecognitionReason.ExplicitDecision,
+            out InstitutionalVacancyRecognitionTransition validTransition,
+            out InstitutionalVacancyRecognitionFailure proposalFailure),
+            Is.True, proposalFailure.ToString());
+        Assert.That(runtime.TryApplyInstitutionalVacancyRecognition(
+            validTransition, out InstitutionalVacancyRecognitionFailure applyFailure),
+            Is.True, applyFailure.ToString());
+        epoch++;
+        AssertMutationEpoch(runtime, epoch);
+        AssertWitnesses(providers, runtime, 1, 2, 1, 3, 1L, 7L);
+    }
+
+    [Test]
+    public void SelectedDailyV1OffOwnerThreadVacancyApplyIsRejectedBeforeStoreMutation()
+    {
+        TesteSimulacao simulation = CreateSelectedDailyV1Simulation();
+        SimulationRuntime runtime = simulation.Runtime;
+        InstitutionId institutionId = new InstitutionId("p12-institution-office-thread-institution");
+        OfficeId officeId = new OfficeId("p12-institution-office-thread-office");
+        PersonId personId = new PersonId("p12-institution-office-thread-person");
+        Assert.That(runtime.TryRegisterInstitution(
+            new InstitutionRecord(institutionId), out InstitutionFoundationFailure institutionFailure),
+            Is.True, institutionFailure.ToString());
+        Assert.That(runtime.TryRegisterOffice(
+            new OfficeRecord(officeId, institutionId), out InstitutionFoundationFailure officeFailure),
+            Is.True, officeFailure.ToString());
+        Assert.That(runtime.TryRegisterPerson(
+            new PersonRuntime(personId, 0L), out PersonStoreFailure personFailure),
+            Is.True, personFailure.ToString());
+        Assert.That(runtime.TryAssignIncumbent(
+            officeId, personId, out InstitutionFoundationFailure assignmentFailure),
+            Is.True, assignmentFailure.ToString());
+        Assert.That(runtime.TryProposeInstitutionalVacancyRecognition(
+            officeId,
+            InstitutionalVacancyRecognitionReason.ExplicitDecision,
+            out InstitutionalVacancyRecognitionTransition transition,
+            out InstitutionalVacancyRecognitionFailure proposalFailure),
+            Is.True, proposalFailure.ToString());
+
+        InstitutionStore institutions = GetInstalledOwner<InstitutionStore>(runtime, "institutionStore");
+        OfficeStore offices = GetInstalledOwner<OfficeStore>(runtime, "officeStore");
+        long institutionRevision = institutions.Revision;
+        long officeRevision = offices.Revision;
+        int institutionCount = institutions.Count;
+        int officeCount = offices.Count;
+        int incumbencyCount = offices.IncumbencyCount;
+        int tenureCount = offices.TenureCount;
+        Assert.That(ReadMutationEpoch(runtime, out long epoch), Is.True);
+
+        InstitutionalVacancyRecognitionFailure offThreadFailure =
+            InstitutionalVacancyRecognitionFailure.None;
+        bool applied = Task.Run(() => runtime.TryApplyInstitutionalVacancyRecognition(
+            transition, out offThreadFailure)).GetAwaiter().GetResult();
+
+        Assert.That(applied, Is.False);
+        Assert.That(offThreadFailure,
+            Is.EqualTo(InstitutionalVacancyRecognitionFailure.RuntimeFaulted));
+        Assert.That(institutions.Count, Is.EqualTo(institutionCount));
+        Assert.That(institutions.Revision, Is.EqualTo(institutionRevision));
+        Assert.That(offices.Count, Is.EqualTo(officeCount));
+        Assert.That(offices.IncumbencyCount, Is.EqualTo(incumbencyCount));
+        Assert.That(offices.TenureCount, Is.EqualTo(tenureCount));
+        Assert.That(offices.Revision, Is.EqualTo(officeRevision));
+        Assert.That(ReadProtocolMutationEpoch(runtime), Is.EqualTo(epoch));
+    }
+
+    [Test]
     public void PopulatedRuntimeClonePublishesInstalledOwnersAndPreservesSource()
     {
         PersonStore people = new PersonStore();
@@ -244,6 +440,25 @@ public sealed class InstitutionOfficeCensusTests
         return simulation;
     }
 
+    private TesteSimulacao CreateSelectedDailyV1Simulation()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject simulationObject = new GameObject("p12-institution-office-daily-v1-test");
+        simulationObjects.Add(simulationObject);
+        TesteSimulacao simulation = simulationObject.AddComponent<TesteSimulacao>();
+        typeof(TesteSimulacao).GetField(
+            "simulationConfig",
+            BindingFlags.Instance | BindingFlags.NonPublic).SetValue(simulation, config);
+        typeof(TesteSimulacao).GetField(
+            "runtimeAdmissionProfile",
+            BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(simulation, SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1);
+        simulation.Start();
+        return simulation;
+    }
+
     private static IReadOnlyList<IOwnerSectionCensusProvider> CreateProviders(SimulationRuntime runtime)
     {
         return InstitutionOfficeCensusProvider.CreateProviders(
@@ -261,6 +476,27 @@ public sealed class InstitutionOfficeCensusTests
         T owner = field.GetValue(runtime) as T;
         Assert.That(owner, Is.Not.Null, "Expected runtime owner " + fieldName + ".");
         return owner;
+    }
+
+    private static bool ReadMutationEpoch(SimulationRuntime runtime, out long epoch)
+    {
+        return runtime.TryReadNpcRosterCensusMutationEpoch(out epoch, out _);
+    }
+
+    private static void AssertMutationEpoch(SimulationRuntime runtime, long expected)
+    {
+        Assert.That(ReadMutationEpoch(runtime, out long actual), Is.True);
+        Assert.That(actual, Is.EqualTo(expected));
+    }
+
+    private static long ReadProtocolMutationEpoch(SimulationRuntime runtime)
+    {
+        ContinuationCensusProtocol protocol = (ContinuationCensusProtocol)typeof(SimulationRuntime)
+            .GetField("npcRosterCensusProtocol", BindingFlags.Instance | BindingFlags.NonPublic)
+            .GetValue(runtime);
+        return (long)typeof(ContinuationCensusProtocol)
+            .GetField("mutationEpoch", BindingFlags.Instance | BindingFlags.NonPublic)
+            .GetValue(protocol);
     }
 
     private static PersonRuntime RegisterPerson(PersonStore people, string id)

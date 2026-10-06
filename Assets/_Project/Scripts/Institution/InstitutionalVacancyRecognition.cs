@@ -12,7 +12,8 @@ public enum InstitutionalVacancyRecognitionFailure
     StaleIncumbency = 7,
     IncumbentNotFactuallyDead = 8,
     InvalidTransition = 9,
-    IncumbentNotRegistered = 10
+    IncumbentNotRegistered = 10,
+    RuntimeFaulted = 11
 }
 
 /// <summary>

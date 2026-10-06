@@ -201,6 +201,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
     private const string MarketPurchaseCensusOperationId = "runtime.economy.market-purchase";
     private const string MarketSaleCensusOperationId = "runtime.economy.market-sale";
     private const string MerchantDailyNpcTradeCensusOperationId = "runtime.merchant.advance-npc-trade-state";
+    private const string InstitutionOfficeOwnerCommitCensusOperationId = "runtime.institution-office.owner-commit";
 
     private sealed class NpcMembershipCensusContext
     {
@@ -1946,6 +1947,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             || (runtimeAdmissionContext != null
                 && !TryRegisterCityNpcPresenceCensusProviders(protocol))
             || (runtimeAdmissionContext != null && !TryRegisterCityMarketCensusProviders(protocol))
+            || (runtimeAdmissionContext != null && !TryRegisterInstitutionOfficeCensusProviders(protocol))
             || (runtimeAdmissionContext != null && !TryRegisterP12PopulationCensusProviders(protocol))
             || (runtimeAdmissionContext != null && !TryRegisterP12CrimeSocialAppraisalOwnerSections(protocol))
             || (requireP12ReceiptCensusOwners && !TryRegisterP12ExactZeroReceiptOwners(protocol))
@@ -1993,6 +1995,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                     out _)
                 && protocol.RegisterExpectedOperation(
                     MerchantDailyNpcTradeCensusOperationId,
+                    out _)
+                && protocol.RegisterExpectedOperation(
+                    InstitutionOfficeOwnerCommitCensusOperationId,
                     out _)
                 && TryRegisterP12PopulationLifecycleOperations(protocol);
         }
@@ -2110,6 +2115,67 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                 protocol.FaultClosed();
                 npcRosterCensusProtocol = null;
             }
+        }
+    }
+
+    private bool TryRegisterInstitutionOfficeCensusProviders(ContinuationCensusProtocol protocol)
+    {
+        if (protocol == null || institutionStore == null || officeStore == null
+            || !ReferenceEquals(officeStore.InstitutionStoreForWorldBoundary, institutionStore))
+        {
+            protocol?.FaultClosed();
+            return false;
+        }
+
+        try
+        {
+            IReadOnlyList<IOwnerSectionCensusProvider> providers =
+                InstitutionOfficeCensusProvider.CreateProviders(institutionStore, officeStore);
+            string[] sectionIds =
+            {
+                InstitutionOfficeCensusProvider.InstitutionsSectionId,
+                InstitutionOfficeCensusProvider.OfficesSectionId,
+                InstitutionOfficeCensusProvider.IncumbenciesSectionId,
+                InstitutionOfficeCensusProvider.TenuresSectionId
+            };
+            if (providers == null || providers.Count != sectionIds.Length)
+            {
+                protocol.FaultClosed();
+                return false;
+            }
+
+            for (int i = 0; i < sectionIds.Length; i++)
+            {
+                IOwnerSectionCensusProvider provider = providers[i];
+                OwnerSectionCensusWitness witness = provider?.GetCurrentCensus();
+                object expectedOwner = i == 0 ? institutionStore : officeStore;
+                long expectedRevision = i == 0 ? institutionStore.Revision : officeStore.Revision;
+                if (witness == null
+                    || !string.Equals(witness.SectionId, sectionIds[i], StringComparison.Ordinal)
+                    || witness.SchemaVersion != InstitutionOfficeCensusProvider.SchemaVersion
+                    || witness.Cardinality != 0
+                    || !ReferenceEquals(witness.OwnerInstanceIdentity, expectedOwner)
+                    || witness.Revision != expectedRevision
+                    || witness.Revision < 0L
+                    || !protocol.RegisterExpectedSection(
+                        new OwnerSectionContract(
+                            sectionIds[i],
+                            InstitutionOfficeCensusProvider.SchemaVersion,
+                            OwnerSectionRole.Required),
+                        out _)
+                    || !protocol.RegisterCensusProvider(sectionIds[i], provider, out _))
+                {
+                    protocol.FaultClosed();
+                    return false;
+                }
+            }
+
+            return true;
+        }
+        catch
+        {
+            protocol.FaultClosed();
+            return false;
         }
     }
 
@@ -4733,6 +4799,42 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         npcRosterCensusProtocol?.FaultClosed();
     }
 
+    private bool TryBeginP12InstitutionOfficeOwnerCommit(
+        IEnumerable<string> sectionIds,
+        out SimulationOperationScope scope)
+    {
+        scope = null;
+        if (runtimeAdmissionContext == null) return true;
+
+        if (!IsRuntimeAdmissionOwnerThreadCurrent()
+            || npcRosterCensusProtocol == null
+            || !npcRosterCensusProtocol.TryValidateUnchangedSections(sectionIds, out _)
+            || !npcRosterCensusProtocol.TryValidateMutationEpochCapacity(out _)
+            || !TryEnterRuntimeAdmissionOperation(
+                InstitutionOfficeOwnerCommitCensusOperationId,
+                out scope))
+        {
+            FaultRuntimeAdmission();
+            return false;
+        }
+
+        return true;
+    }
+
+    private void NotifyP12InstitutionOfficeOwnerCommit(IEnumerable<string> sectionIds)
+    {
+        if (runtimeAdmissionContext == null) return;
+        try
+        {
+            if (npcRosterCensusProtocol == null || !NotifyP12MutationSections(sectionIds))
+                FaultRuntimeAdmission();
+        }
+        catch
+        {
+            FaultRuntimeAdmission();
+        }
+    }
+
     private bool TryEnterRuntimeAdmissionOperation(
         string operationContractId,
         out SimulationOperationScope scope)
@@ -5504,13 +5606,33 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         InstitutionRecord record,
         out InstitutionFoundationFailure failure)
     {
-        bool registered = institutionStore.TryRegister(record, out failure);
-        if (registered)
+        SimulationOperationScope p12Scope = null;
+        if (!TryBeginP12InstitutionOfficeOwnerCommit(
+                new[] { InstitutionOfficeCensusProvider.InstitutionsSectionId },
+                out p12Scope))
         {
-            AdvancePoliticalWorldRevision();
+            failure = InstitutionFoundationFailure.Create(
+                InstitutionFoundationFailureCode.RuntimeFaulted,
+                "The P12 Institution census operation could not be admitted.");
+            return false;
         }
 
-        return registered;
+        try
+        {
+            bool registered = institutionStore.TryRegister(record, out failure);
+            if (registered)
+            {
+                AdvancePoliticalWorldRevision();
+                NotifyP12InstitutionOfficeOwnerCommit(
+                    new[] { InstitutionOfficeCensusProvider.InstitutionsSectionId });
+            }
+
+            return registered;
+        }
+        finally
+        {
+            p12Scope?.Dispose();
+        }
     }
 
     public bool TryRegisterFaction(
@@ -6342,13 +6464,31 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         OfficeRecord record,
         out InstitutionFoundationFailure failure)
     {
-        bool registered = officeStore.TryRegister(record, out failure);
-        if (registered)
+        string[] changedSections = GetP12OfficeCensusSectionIds();
+        SimulationOperationScope p12Scope = null;
+        if (!TryBeginP12InstitutionOfficeOwnerCommit(changedSections, out p12Scope))
         {
-            AdvancePoliticalWorldRevision();
+            failure = InstitutionFoundationFailure.Create(
+                InstitutionFoundationFailureCode.RuntimeFaulted,
+                "The P12 Office census operation could not be admitted.");
+            return false;
         }
 
-        return registered;
+        try
+        {
+            bool registered = officeStore.TryRegister(record, out failure);
+            if (registered)
+            {
+                AdvancePoliticalWorldRevision();
+                NotifyP12InstitutionOfficeOwnerCommit(changedSections);
+            }
+
+            return registered;
+        }
+        finally
+        {
+            p12Scope?.Dispose();
+        }
     }
 
     public bool TryGetInstitution(
@@ -6397,37 +6537,55 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         long? startAbsoluteDay,
         out InstitutionFoundationFailure failure)
     {
-        if (officeStore.TryGet(officeId, out _) == false
-            || incumbent == null
-            || (startAbsoluteDay.HasValue && startAbsoluteDay.Value < 0L)
-            || officeStore.TryGetIncumbency(officeId, out _))
+        string[] changedSections = GetP12OfficeCensusSectionIds();
+        SimulationOperationScope p12Scope = null;
+        if (!TryBeginP12InstitutionOfficeOwnerCommit(changedSections, out p12Scope))
         {
-            return officeStore.TryAssignIncumbent(
+            failure = InstitutionFoundationFailure.Create(
+                InstitutionFoundationFailureCode.RuntimeFaulted,
+                "The P12 Office census operation could not be admitted.");
+            return false;
+        }
+
+        try
+        {
+            if (officeStore.TryGet(officeId, out _) == false
+                || incumbent == null
+                || (startAbsoluteDay.HasValue && startAbsoluteDay.Value < 0L)
+                || officeStore.TryGetIncumbency(officeId, out _))
+            {
+                return officeStore.TryAssignIncumbent(
+                    officeId,
+                    incumbent,
+                    startAbsoluteDay,
+                    out failure);
+            }
+
+            if (personStore.TryGet(incumbent, out _) == false)
+            {
+                failure = InstitutionFoundationFailure.Create(
+                    InstitutionFoundationFailureCode.PersonNotRegistered,
+                    "The incumbent PersonId must be registered in this world.");
+                return false;
+            }
+
+            bool assigned = officeStore.TryAssignIncumbent(
                 officeId,
                 incumbent,
                 startAbsoluteDay,
                 out failure);
-        }
+            if (assigned)
+            {
+                AdvancePoliticalWorldRevision();
+                NotifyP12InstitutionOfficeOwnerCommit(changedSections);
+            }
 
-        if (personStore.TryGet(incumbent, out _) == false)
+            return assigned;
+        }
+        finally
         {
-            failure = InstitutionFoundationFailure.Create(
-                InstitutionFoundationFailureCode.PersonNotRegistered,
-                "The incumbent PersonId must be registered in this world.");
-            return false;
+            p12Scope?.Dispose();
         }
-
-        bool assigned = officeStore.TryAssignIncumbent(
-            officeId,
-            incumbent,
-            startAbsoluteDay,
-            out failure);
-        if (assigned)
-        {
-            AdvancePoliticalWorldRevision();
-        }
-
-        return assigned;
     }
 
     public bool TryAssignIncumbent(
@@ -6446,13 +6604,31 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         OfficeId officeId,
         out InstitutionFoundationFailure failure)
     {
-        bool vacated = officeStore.TryVacateOffice(officeId, out failure);
-        if (vacated)
+        string[] changedSections = GetP12OfficeCensusSectionIds();
+        SimulationOperationScope p12Scope = null;
+        if (!TryBeginP12InstitutionOfficeOwnerCommit(changedSections, out p12Scope))
         {
-            AdvancePoliticalWorldRevision();
+            failure = InstitutionFoundationFailure.Create(
+                InstitutionFoundationFailureCode.RuntimeFaulted,
+                "The P12 Office census operation could not be admitted.");
+            return false;
         }
 
-        return vacated;
+        try
+        {
+            bool vacated = officeStore.TryVacateOffice(officeId, out failure);
+            if (vacated)
+            {
+                AdvancePoliticalWorldRevision();
+                NotifyP12InstitutionOfficeOwnerCommit(changedSections);
+            }
+
+            return vacated;
+        }
+        finally
+        {
+            p12Scope?.Dispose();
+        }
     }
 
     public bool TryProposeInstitutionalVacancyRecognition(
@@ -6497,17 +6673,40 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         InstitutionalVacancyRecognitionTransition transition,
         out InstitutionalVacancyRecognitionFailure failure)
     {
-        bool applied = InstitutionalVacancyRecognitionSystem.TryApply(
-            officeStore,
-            transition,
-            out failure);
-        if (applied)
+        string[] changedSections = GetP12OfficeCensusSectionIds();
+        SimulationOperationScope p12Scope = null;
+        if (!TryBeginP12InstitutionOfficeOwnerCommit(changedSections, out p12Scope))
         {
-            AdvancePoliticalWorldRevision();
+            failure = InstitutionalVacancyRecognitionFailure.RuntimeFaulted;
+            return false;
         }
 
-        return applied;
+        try
+        {
+            bool applied = InstitutionalVacancyRecognitionSystem.TryApply(
+                officeStore,
+                transition,
+                out failure);
+            if (applied)
+            {
+                AdvancePoliticalWorldRevision();
+                NotifyP12InstitutionOfficeOwnerCommit(changedSections);
+            }
+
+            return applied;
+        }
+        finally
+        {
+            p12Scope?.Dispose();
+        }
     }
+
+    private static string[] GetP12OfficeCensusSectionIds() => new[]
+    {
+        InstitutionOfficeCensusProvider.OfficesSectionId,
+        InstitutionOfficeCensusProvider.IncumbenciesSectionId,
+        InstitutionOfficeCensusProvider.TenuresSectionId
+    };
 
     public IReadOnlyList<OfficeRecord> GetVacantOffices()
     {
