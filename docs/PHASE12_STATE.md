@@ -1511,3 +1511,23 @@ boundary; the audit must continue over remaining supported paths and may
 select another implementation slice only when it identifies the exact owner
 set, cardinality/identity, effective ingress, committed-write boundary, and
 epoch behavior. Expedition work remains deferred to P12-F.
+
+## P12 live-profile inventory correction — P10-A authored Ruin — 2026-10-05
+
+The source audit
+[PHASE12_DAILY_V1_P10A_PROFILE_RECONCILIATION_AUDIT.md](design/PHASE12_DAILY_V1_P10A_PROFILE_RECONCILIATION_AUDIT.md)
+found a mismatch between the accepted P12 profile description and the actual
+SampleScene configuration. The scene selects
+`UnityBootstrapDailyV1` and the GeneralTest asset; that asset enables the
+P10-A authored Ruin/LocalTopology profile. `SimulationConfigData` resolves
+its P10-A profile identity, and the bootstrap stage composes LocalTopology.
+The P10-B-only Daily admission rejection does not reject this P10-A
+composition. The selected-profile composition test does not set the Daily-v1
+runtime-admission context, so its P10 cardinalities do not prove the P12
+profile boundary.
+
+This supersedes any implication that the actual SampleScene Daily-v1
+composition has P10 LocalTopology absent. It does not change the P12-A
+exclusion of P10-A in the Brief or widen P12 scope. P12-B remains
+INCOMPLETE; P12-A remains WAIT_DEPENDENCY; P13 remains BLOCKED. The P12
+TravelParty-start promotion remains valid within its exact reviewed owner set.

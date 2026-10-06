@@ -1213,3 +1213,26 @@ delta audit. Select another bounded implementation only after documenting
 effective reachability, exact owner identity/cardinality, successful commit
 boundaries, and which shared epoch changes. This is blocker-resolution work,
 not a new product scope or checkpoint ID.
+
+## P12-B live-profile inventory blocker — P10-A profile mismatch — 2026-10-05
+
+The Daily-v1 scene/config mismatch is recorded in
+[PHASE12_DAILY_V1_P10A_PROFILE_RECONCILIATION_AUDIT.md](PHASE12_DAILY_V1_P10A_PROFILE_RECONCILIATION_AUDIT.md).
+The accepted P12 Brief says the profile is P9-B authored geography and
+excludes P10-A Ruin/LocalTopology, while SampleScene selects
+`UnityBootstrapDailyV1` with `Simulation-GeneralTest.asset`, whose authored
+P10 Ruin enables that genesis stage. The existing sample-profile census test
+uses the same asset but no Daily-v1 admission context; it therefore cannot
+close the P12 identity/cardinality question. The earlier “P10
+LocalTopologyStore is not composed” statement describes neither that sample
+test nor the current Daily-v1 scene and is superseded here.
+
+| Surface | Current evidence | Remaining blocker |
+|---|---|---|
+| P10-A in SampleScene Daily-v1 | Scene profile value is 1; the selected asset has a P10-A Ruin, and the normal stage pipeline composes its exact site and LocalTopology facts. The profile fingerprint identifies P10-A. | Decide whether Daily-v1 must use a separate P9-B-only config (preserving accepted P12 scope) or P12 must accept the P10-A profile and include its state in the supported continuation contract. Do not change the scene/config or widen the profile silently. |
+| P12-B census and operation work | TravelParty start remains valid for its exact reviewed owners. | Do not claim the current effective profile inventory is complete; profile identity and included LocalTopology owner set remain unsettled. P12-B stays incomplete. |
+| Downstream readiness | P12-A remains WAIT_DEPENDENCY; P12-C through P12-G retain their documented dependencies; P13 remains blocked. | No downstream readiness, capture, export, hydration, or Phase closure follows. |
+
+The profile identity/composition choice is the current gate for the complete
+live-profile inventory. P12-F Expedition remains deferred to its documented
+P12-C/D/E dependencies.
