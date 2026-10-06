@@ -59,7 +59,11 @@ runtime must verify its bound owner thread, validate the exact affected
 section baselines, validate shared mutation-epoch capacity, and enter that
 registered operation. A failed admission faults the P12 admission path and
 returns the existing domain `RuntimeFaulted` failure without calling the owner
-mutator. Non-P12 runtimes keep their current behavior.
+mutator. `TryApplyInstitutionalVacancyRecognition` has a different public
+failure enum, so append `RuntimeFaulted = 11` to
+`InstitutionalVacancyRecognitionFailure` without renumbering its existing
+values 0 through 10; return that failure only when P12 admission is refused
+before the owner mutator. Non-P12 runtimes keep their current behavior.
 
 After an unsuccessful domain operation, dispose the operation scope without
 notifying a changed section or advancing the shared epoch. After a successful
@@ -96,10 +100,14 @@ unchanged unless exact source review proves a composition change is required.
 Required tests cover: selected Daily-v1 four-section admission at exact zero
 and total 239 sections; exact installed owner identity; one epoch increment for
 each successful public commit; all three Office baselines refreshed together;
-same-count vacancy invalidation; rejected domain operations leaving owner
+same-count vacancy invalidation; both `TryAssignIncumbent` overloads each
+producing exactly one epoch advance; rejected domain operations leaving owner
 counts, revisions, and epoch unchanged; stale vacancy-recognition rejection;
-scope count returning to zero; and non-P12 runtime behavior remaining
-unchanged. Re-run the exact Daily-v1 admission/profile inventory, affected
+and an off-owner-thread apply of an otherwise valid vacancy-recognition
+transition returning the new `RuntimeFaulted` value without changing owner
+state, owner revision, or epoch. Also assert scope count returns to zero and
+non-P12 runtime behavior remains unchanged. Re-run the exact Daily-v1
+admission/profile inventory, affected
 institution/succession and runtime-boundary suites, ALL EditMode, official
 Smoke, and `git diff --check` on the final code tree. Retain result hashes.
 
