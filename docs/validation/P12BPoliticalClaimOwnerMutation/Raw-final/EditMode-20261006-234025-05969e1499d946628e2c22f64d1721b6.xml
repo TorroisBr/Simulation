@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="13" result="Passed" total="13" passed="13" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-06 23:40:33Z" end-time="2026-10-06 23:40:33Z" duration="0,1492311">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2428" result="Passed" start-time="2026-10-06 23:40:33Z" end-time="2026-10-06 23:40:33Z" duration="0.149231" total="13" passed="13" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="3641" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12b-political-claim-implementation/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2428" result="Passed" start-time="2026-10-06 23:40:33Z" end-time="2026-10-06 23:40:33Z" duration="0.137416" total="13" passed="13" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="50640" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="2799" name="PoliticalClaimFoundationTests" fullname="PoliticalClaimFoundationTests" classname="PoliticalClaimFoundationTests" runstate="Runnable" testcasecount="13" result="Passed" start-time="2026-10-06 23:40:33Z" end-time="2026-10-06 23:40:33Z" duration="0.124753" total="13" passed="13" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="2810" name="ClaimKnowledgeKeepsInstitutionRecognitionPerspectivesSeparate" fullname="PoliticalClaimFoundationTests.ClaimKnowledgeKeepsInstitutionRecognitionPerspectivesSeparate" methodname="ClaimKnowledgeKeepsInstitutionRecognitionPerspectivesSeparate" classname="PoliticalClaimFoundationTests" runstate="Runnable" seed="1333175793" result="Passed" start-time="2026-10-06 23:40:33Z" end-time="2026-10-06 23:40:33Z" duration="0.013486" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2801" name="ClaimStoreKeepsClaimsSeparateFromUnderlyingOfficeTruth" fullname="PoliticalClaimFoundationTests.ClaimStoreKeepsClaimsSeparateFromUnderlyingOfficeTruth" methodname="ClaimStoreKeepsClaimsSeparateFromUnderlyingOfficeTruth" classname="PoliticalClaimFoundationTests" runstate="Runnable" seed="715965377" result="Passed" start-time="2026-10-06 23:40:33Z" end-time="2026-10-06 23:40:33Z" duration="0.032193" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2800" name="ClaimTargetFactoriesPreserveTypedTargetIdentity" fullname="PoliticalClaimFoundationTests.ClaimTargetFactoriesPreserveTypedTargetIdentity" methodname="ClaimTargetFactoriesPreserveTypedTargetIdentity" classname="PoliticalClaimFoundationTests" runstate="Runnable" seed="333030593" result="Passed" start-time="2026-10-06 23:40:33Z" end-time="2026-10-06 23:40:33Z" duration="0.000379" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2811" name="DiagnosticsRejectPoliticalClaimTargetOutsideCapturedWorldCatalog" fullname="PoliticalClaimFoundationTests.DiagnosticsRejectPoliticalClaimTargetOutsideCapturedWorldCatalog" methodname="DiagnosticsRejectPoliticalClaimTargetOutsideCapturedWorldCatalog" classname="PoliticalClaimFoundationTests" runstate="Runnable" seed="122632444" result="Passed" start-time="2026-10-06 23:40:33Z" end-time="2026-10-06 23:40:33Z" duration="0.022493" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2808" name="OneClaimCanHaveIndependentInstitutionScopedRecognitionRelations" fullname="PoliticalClaimFoundationTests.OneClaimCanHaveIndependentInstitutionScopedRecognitionRelations" methodname="OneClaimCanHaveIndependentInstitutionScopedRecognitionRelations" classname="PoliticalClaimFoundationTests" runstate="Runnable" seed="1412950250" result="Passed" start-time="2026-10-06 23:40:33Z" end-time="2026-10-06 23:40:33Z" duration="0.002547" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2812" name="PoliticalClaimsParticipateInDeterministicDiagnostics" fullname="PoliticalClaimFoundationTests.PoliticalClaimsParticipateInDeterministicDiagnostics" methodname="PoliticalClaimsParticipateInDeterministicDiagnostics" classname="PoliticalClaimFoundationTests" runstate="Runnable" seed="1891989276" result="Passed" start-time="2026-10-06 23:40:33Z" end-time="2026-10-06 23:40:33Z" duration="0.037653" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2809" name="RecognitionCanWithdrawAndRestoreOneInstitutionWithoutTouchingAnother" fullname="PoliticalClaimFoundationTests.RecognitionCanWithdrawAndRestoreOneInstitutionWithoutTouchingAnother" methodname="RecognitionCanWithdrawAndRestoreOneInstitutionWithoutTouchingAnother" classname="PoliticalClaimFoundationTests" runstate="Runnable" seed="2123170959" result="Passed" start-time="2026-10-06 23:40:33Z" end-time="2026-10-06 23:40:33Z" duration="0.002495" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2805" name="RecognitionIsExplicitInstitutionalStateAndStaleTransitionsAreRejected" fullname="PoliticalClaimFoundationTests.RecognitionIsExplicitInstitutionalStateAndStaleTransitionsAreRejected" methodname="RecognitionIsExplicitInstitutionalStateAndStaleTransitionsAreRejected" classname="PoliticalClaimFoundationTests" runstate="Runnable" seed="1986128255" result="Passed" start-time="2026-10-06 23:40:33Z" end-time="2026-10-06 23:40:33Z" duration="0.001243" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2806" name="RecognitionProposalBecomesStaleWhenWorldDayAdvances" fullname="PoliticalClaimFoundationTests.RecognitionProposalBecomesStaleWhenWorldDayAdvances" methodname="RecognitionProposalBecomesStaleWhenWorldDayAdvances" classname="PoliticalClaimFoundationTests" runstate="Runnable" seed="1406441583" result="Passed" start-time="2026-10-06 23:40:33Z" end-time="2026-10-06 23:40:33Z" duration="0.000303" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2807" name="ResolutionDoesNotRewriteClaimRecognitionOrUnderlyingTruth" fullname="PoliticalClaimFoundationTests.ResolutionDoesNotRewriteClaimRecognitionOrUnderlyingTruth" methodname="ResolutionDoesNotRewriteClaimRecognitionOrUnderlyingTruth" classname="PoliticalClaimFoundationTests" runstate="Runnable" seed="1230257559" result="Passed" start-time="2026-10-06 23:40:33Z" end-time="2026-10-06 23:40:33Z" duration="0.001254" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2804" name="WorldClonesPoliticalClaimsAndDoesNotExposeMutableStoreAuthority" fullname="PoliticalClaimFoundationTests.WorldClonesPoliticalClaimsAndDoesNotExposeMutableStoreAuthority" methodname="WorldClonesPoliticalClaimsAndDoesNotExposeMutableStoreAuthority" classname="PoliticalClaimFoundationTests" runstate="Runnable" seed="696476283" result="Passed" start-time="2026-10-06 23:40:33Z" end-time="2026-10-06 23:40:33Z" duration="0.000436" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2802" name="WorldRejectsClaimantAndTargetOutsideItsWorld" fullname="PoliticalClaimFoundationTests.WorldRejectsClaimantAndTargetOutsideItsWorld" methodname="WorldRejectsClaimantAndTargetOutsideItsWorld" classname="PoliticalClaimFoundationTests" runstate="Runnable" seed="1004172009" result="Passed" start-time="2026-10-06 23:40:33Z" end-time="2026-10-06 23:40:33Z" duration="0.000570" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="2803" name="WorldRejectsTerminalClaimResolvedInTheFuture" fullname="PoliticalClaimFoundationTests.WorldRejectsTerminalClaimResolvedInTheFuture" methodname="WorldRejectsTerminalClaimResolvedInTheFuture" classname="PoliticalClaimFoundationTests" runstate="Runnable" seed="1527386255" result="Passed" start-time="2026-10-06 23:40:33Z" end-time="2026-10-06 23:40:33Z" duration="0.000219" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>
