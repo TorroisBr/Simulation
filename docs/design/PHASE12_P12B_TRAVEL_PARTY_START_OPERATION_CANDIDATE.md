@@ -1,38 +1,44 @@
 # P12-B TravelParty Start Operation Candidate
 
-**Status:** validated implementation candidate; independent exact-tip code review is pending. No canonical promotion has occurred.
-**Implementation branch:** codex/phase12/P12BTravelPartyStartOperationImplementation
-**Exact base / current P12 canonical at implementation:** 29162cd0cf63e31f9542e612023a7256ac36ca4c
-**Code-bearing commit:** d08e1c21ef335c6ef5a7ebbb7cb3d5a42598b91a
-**Code-bearing tree:** a816f186960bb3e4c51df2ee307345cc0d852c79
-**Reviewed design:** codex/phase12/P12BTravelPartyStartOperationDesign at 6709f00c190813858b6e20246e92fbaaab0864dc, tree 3675044588dba2feefd7a0bebf4f8ed01ef26184.
-**Design review:** PASS; durable record is PHASE12_P12B_TRAVEL_PARTY_START_OPERATION_DESIGN_REVIEW.md.
+**Status:** exact-tip independently reviewed and validated; awaiting autonomous canonical promotion preflight. No canonical promotion has occurred.
+**Implementation branch:** `codex/phase12/P12BTravelPartyStartOperationImplementation`
+**Canonical base:** `29162cd0cf63e31f9542e612023a7256ac36ca4c`
+**Code-bearing commit:** `2bc6d3264c76347eed21b70dcfcde98533f7aa66`
+**Code-bearing tree:** `9043a8da8718a364f602eee56aaf48f83f06ad51`
+**Reviewed design:** `codex/phase12/P12BTravelPartyStartOperationDesign` at `6709f00c190813858b6e20246e92fbaaab0864dc`, tree `3675044588dba2feefd7a0bebf4f8ed01ef26184`.
+**Design review:** PASS; durable record is [PHASE12_P12B_TRAVEL_PARTY_START_OPERATION_DESIGN_REVIEW.md](PHASE12_P12B_TRAVEL_PARTY_START_OPERATION_DESIGN_REVIEW.md).
+**Implementation review:** PASS on the exact code commit/tree; durable record is [PHASE12_P12B_TRAVEL_PARTY_START_OPERATION_IMPLEMENTATION_REVIEW.md](PHASE12_P12B_TRAVEL_PARTY_START_OPERATION_IMPLEMENTATION_REVIEW.md).
 
 ## Bounded implementation
 
-The selected-profile runtime path now opens the named operation runtime.travel-party.start after TravelParty preparation and before allocating a TravelParty ID. It registers the exact TravelParty allocator counter witness, checks the prepared owners and local revision headroom, batches committed owner-section notifications into one shared mutation epoch, and closes the operation in a finally path.
+The selected-profile runtime path opens the named operation `runtime.travel-party.start` after TravelParty preparation and before allocating a TravelParty ID. It registers the exact TravelParty allocator counter witness, checks prepared owners and local revision headroom, batches committed owner-section notifications into one shared mutation epoch, and closes the operation on every normal owner-thread exit.
 
-The P12-bound runtime rejects a direct unwrapped TravelPartySystem start before ID allocation or TravelParty, NPC travel, account, Knowledge, Event, or record-sequence writes. The unbound runtime keeps its existing behavior. Existing transaction order, charge/refund behavior, event semantics, compensation order, and Knowledge discovery timing remain unchanged.
+The P12-bound runtime rejects a direct unwrapped TravelParty start before ID allocation or TravelParty, NPC travel, account, Knowledge, Event, or record-sequence writes. The unbound runtime keeps its existing behavior. Existing transaction order, charge/refund behavior, event semantics, compensation order, and Knowledge discovery timing remain unchanged.
 
-Focused coverage includes exact allocator identity/schema/cardinality/revision, successful one-epoch start, direct-entry rejection, unbound behavior, later debit-commit rejection and refund, Event-store rejection compensation, post-allocation exception cleanup, wrong-thread and same-ID replacement failures, and owner-capacity saturation.
+Focused coverage includes exact allocator identity/schema/cardinality/revision, successful one-epoch start, direct-entry rejection, unbound behavior, later debit-commit rejection and refund, Event-store rejection compensation, post-allocation exception cleanup, wrong-thread and same-ID replacement failures, owner-capacity saturation, and post-commit notification failure.
 
-## Validation evidence
+## Review finding and correction
 
-The retained archive is docs/validation/P12BTravelPartyStart/P12BTravelPartyStart-validation.zip. It contains 44 XML/log artifacts from the focused implementation regressions and final gates.
+The first exact-tip review of the earlier candidate found one missing regression: a post-write notification fault needed to prove that the TravelParty start remains committed while the protocol faults closed and the operation scope exits. The added test initially exposed that disposal under a fault latch left the active operation count at one.
 
-Final exact-code-tree evidence for code-bearing commit d08e1c21ef335c6ef5a7ebbb7cb3d5a42598b91a, tree a816f186960bb3e4c51df2ee307345cc0d852c79:
+The candidate now releases the scope count when disposal is on the bound owner thread and the scope owner matches, even when the protocol has already faulted. Wrong-thread disposal still faults the protocol and leaves the active count in place. The regression verifies committed travel state is retained, the shared epoch does not advance on the failed notification, runtime context is cleared, and the active count returns to zero. The reviewer independently confirmed the narrow cleanup behavior and found no further source defect.
+
+## Exact-tree validation evidence
+
+All results below correspond to code-bearing commit `2bc6d3264c76347eed21b70dcfcde98533f7aa66`, tree `9043a8da8718a364f602eee56aaf48f83f06ad51`. The final focused rerun is the passing artifact; the earlier 15/16 pre-fix run is retained only as a diagnostic.
 
 | Gate | Result | XML SHA-256 | Log SHA-256 |
 |---|---:|---|---|
-| P12TravelPartyStartOperationTests | 15/15 PASS | 1E556085A92FF271E5AE0E9A9560F4E7EDCDDC939FD1697830F3BC9AEB5BA4CA | 57FB4B25188CC381A82BD01B0B78927C91E2D9BDB78BE41AF0FC7106B71F1D17 |
-| NpcOwnerCommitInvalidationTests | 13/13 PASS | 6E34E86653B4E5D7DCCD6520F10BC0AE3C3D087CBECFDC7CF54B593766B55A07 | 293B13012098278366738F01D3134C02C180FA05E428CA33B395AC605F07AE54 |
-| ALL EditMode | 2382/2382 PASS | 83F659E49FD2EC7C31A51CAEE089613541E0DF926372B94B5D859A7A6D6794C4 | 234AAF7D1B1B21073F31DECEC6E47F364C6DC3D2692848679E97049566570618 |
-| Official Smoke | 5/5 PASS | 9B9A60F825D7810C382AF454528098610010B841CD89927CE3C323648188F327 | AB7FA595A8C4E51940AEE04B31DC8C36F4D1A20F5F99F8D02E94DAE814C2812A |
-| git diff --check | PASS | — | — |
+| P12TravelPartyStartOperationTests | 16/16 PASS | `47073E18879B0BA8813171607920AC5562A223B4E6118018A619FC87CA4AAE44` | `094DF1E6E37E27AD081907EDB8471D7DB9ED931C2C24699DEF0A28C4B6549575` |
+| ContinuationCensusProtocolTests | 22/22 PASS | `F0D57E829A51573B7B4DEBB468B31B9D8062C20212750CFC67F4407AB000F22B` | `00D6C1EE72D9A463EC17CE00BE93344ADB0984D426C668EA9C286D6127207EE2` |
+| NpcOwnerCommitInvalidationTests | 13/13 PASS | `97DB966D87A12729C820F86274D9621BC91C4CDC44F3979B82A68CB30DAA0913` | `835F208B1B61B31CBDF36CD3304089045C3992845360E8425347861CB8FA0552` |
+| ALL EditMode | 2383/2383 PASS | `F3D51CB609193E5C86A5E350C6BA3BAE625EA3117574554CE60F507F815D62AE` | `D9953066EBEB9ADAB6EBB3344D931370FC103BDCBAF1B282C7D017D6B4E0B2B7` |
+| Official Smoke | 5/5 PASS | `39DADDD986208CADD120EB383BF1115A8585E7EB1A9110A16C77E674767EBFDA` | `D37461042A987534E075D50B01EFE0917ECA8B3D5F6943FE7E39117AC4348D54` |
+| `git diff --check` | PASS | — | — |
 
-The archive SHA-256 is F10E24C833AA4BF62A8C1AC7C385CC261DE3CC432E205EB32101E8AF14D7A60B.
+The compact exact-tree artifacts are archived at [P12BTravelPartyStart-final-validation.zip](../validation/P12BTravelPartyStart-notify-fix/P12BTravelPartyStart-final-validation.zip), SHA-256 `F3EF32E29C32B335684F130D60DFD3DC1B1352122B2342008A56EEE39CDF6A65`. It contains the five final XML/log pairs above. The pre-fix focused diagnostic is retained separately in that directory and is not counted as passing evidence. The earlier broader implementation archive remains [P12BTravelPartyStart-validation.zip](../validation/P12BTravelPartyStart/P12BTravelPartyStart-validation.zip) as historical evidence.
 
-The implementation regression sweep also passed TravelParty census 10/10, GroupTravel 32/32, MoneyAccount 27/27, NPC MoneyAccount census 10/10, NPC Inventory/City-presence 7/7, SpatialKnowledge census 16/16, runtime admission 37/37, runtime orchestration 12/12, bootstrap composition 21/21, TravelParty advance 10/10, solo travel start 11/11, GeneralizedSpatialTravel 18/18, SpatialPassageAuthority 13/13, and SpatialRoutePlanning 21/21. Those focused runs preceded the final test-only debit-refusal case and a formatting-only indentation adjustment; the final exact-tree ALL EditMode run re-executed all tests after both changes.
+The independent reviewer verified the exact code diff, cleanup behavior, all five exact-tree result pairs and hashes, and `git diff --check`. See the implementation review record for the independent assessment.
 
 ## Limits
 
