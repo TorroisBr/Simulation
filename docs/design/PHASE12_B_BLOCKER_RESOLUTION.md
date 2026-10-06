@@ -1354,3 +1354,27 @@ requires these writes, specify their exact section set and successful commit
 boundary; if Daily-v1 excludes them, define the existing profile's fail-closed
 boundary. No new operation ID, implementation candidate, capture eligibility,
 P12-B readiness, or downstream readiness follows from this source finding.
+
+## P12-B owner/operation/epoch refresh - after Institution/Office promotion - 2026-10-06
+
+P12 canonical is now d9aee58065e5bab710bc973617221d45b036e16b; the promoted
+Institution/Office code is 13a4ff503d336d34ed008f27571cce82c019dfe4, tree
+85ad013074b727ffe8727c2d90b079a45e0ca5c0, with exact-tip independent review
+at a85aea5980a578d874227816bc967baeac1eb598. The sealed selected Daily-v1
+inventory increased from 235 to 239 sections. This promotion changes no
+P12-A/B/C-G or P13 readiness label.
+
+| Daily-v1 owner or write boundary | Current evidence | Remaining boundary |
+|---|---|---|
+| Institution and Office | Four existing P12-E sections are now registered against the installed InstitutionStore and OfficeStore. The reviewed p12.institution-office.owner-commit scope covers six existing runtime commit paths; the three Office views share one owner and revision and are notified together. | Only the enumerated runtime paths and exact owners are covered. No complete owner or shared-epoch claim follows. |
+| Property ownership and transfer history | The accepted P12-E census design defines p12e.property.ownership (PropertyOwnershipStore.Count) and p12e.property.transfer-history (TransferHistory.Count), both on the exact installed PropertyOwnershipStore and its single local revision. SimulationBootstrapComposition already creates both providers, but SimulationRuntime.InitializeNpcRosterCensusProtocol does not register them. Successful TryRegisterPropertyOwnership changes ownership only; TryApplyPropertyTransfer / TryTransferProperty atomically change ownership and append transfer history; successful estate succession also delegates to the same property-transfer commit. The current runtime wrappers advance PoliticalWorldRevision, with no P12 shared-epoch notification. | Reconcile the exact supported selected-profile entrypoints and call order, including succession, then design one bounded preflight/commit/notification contract using the existing owner and revision. Preserve the existing property and transfer semantics. |
+| Estate records | The accepted P12-E census design defines p12e.estate.records on the exact installed EstateStore, with Count and local Revision. Bootstrap creates its provider, but the sealed P12 protocol does not register it. TryApplyEstateOpening / TryOpenEstate are the normal runtime write path; the store inserts the EstateId record and deceased-Person index together, then increments its revision once. Successful runtime opening only advances PoliticalWorldRevision. | Add the Estate section and notify after the existing successful opening commit, with the existing domain failures unchanged. No automatic estate creation on death is in scope. |
+| Property/Estate access boundary | The selected profile's P12-E census designs treat the runtime PropertyOwnership and Estate stores as supported core authorities, initially empty. Runtime wrapper call sites use existing domain systems and stores; cloning populates new resolved stores during composition. | Technical design must distinguish live runtime commits from clone construction and enumerate any other normal supported direct writer before implementation. Do not treat mere public visibility as authorization to add gameplay or a new domain route. |
+| Readiness | P12-B remains INCOMPLETE; P12-A remains WAIT_DEPENDENCY; P12-C waits on B; P12-D/E wait on B+C; P12-F waits on C/D/E; P12-G waits on B-F plus validated live-profile inventory; P13 remains blocked. | No complete owner coverage, shared-epoch coverage, global quiescence, capture eligibility, export, hydration, P12-A/P13 readiness, or Phase closure is implied. Keep Expedition work deferred to P12-F. |
+
+The highest-value next P12-B task is a bounded technical design and independent
+review for the three already-defined Property/Estate sections and their
+existing runtime commit boundaries. Reuse the accepted P12-E census contracts;
+do not add transfer, succession, or estate gameplay. Implementation proceeds
+only after the design confirms the current selected-profile path set and its
+preflight, failure, and post-commit notification behavior.

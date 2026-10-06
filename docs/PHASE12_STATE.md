@@ -1709,3 +1709,41 @@ SpatialNetwork witness sections, and public post-genesis site/location
 registration APIs need supported-profile reachability classification. This
 is an owner reconciliation obligation, not a P12-B readiness or implementation
 claim. Daily-v1 remains P9-B-only; P10-A stays in its separate proving profile.
+
+## P12-B Institution/Office mutation invalidation promotion - 2026-10-06
+
+After refreshed exact-tip preflight, codex/phase12/canonical advanced by
+fast-forward from 0daa72addc1f186d23713adf75f6c2f83a5aff9b to
+d9aee58065e5bab710bc973617221d45b036e16b. The implementation code remains
+13a4ff503d336d34ed008f27571cce82c019dfe4, tree
+85ad013074b727ffe8727c2d90b079a45e0ca5c0. The candidate final tree is
+0e8030f11a18acc424f19437d2bb7ad43bf1529d; its docs/evidence commits do not
+change the reviewed code tree. The exact-tip independent implementation
+review is durably recorded at a85aea5980a578d874227816bc967baeac1eb598 on
+codex/phase12/P12BInstitutionOfficeEpochImplementationReview.
+
+The selected P9-B-only UnityBootstrap-Daily-v1 partial protocol now contains
+239 registered sections, including the four existing P12-E Institution and
+Office census sections. The admitted p12.institution-office.owner-commit
+scope covers Institution registration, Office registration, both incumbent
+assignment overloads, explicit vacancy, and institutional vacancy
+recognition. Institution commits notify their one section; Office commits
+notify records, incumbencies, and tenures together because they share one
+OfficeStore revision. The operation tracker returns to zero after successful
+and rejected calls, with selected-profile off-owner-thread rejection before
+mutation. The P10-A Ruin remains separate from Daily-v1.
+
+Exact-tree validation on code 13a4ff5 passed focused
+InstitutionOfficeCensusTests 4/4, ALL EditMode 2410/2410, official Smoke
+5/5, and git diff --check. XML and raw-log archive hashes are recorded in
+docs/validation/P12BInstitutionOfficeEpoch/VALIDATION.md; the independent
+review checked those artifacts against the exact code tree.
+
+This is a bounded Institution/Office invalidation slice. It does not establish
+complete owner coverage, complete shared-epoch coverage, global quiescence,
+capture eligibility, export, hydration, P12-A readiness, P13 readiness, P12-B
+completion, or Phase 12 closure. P12-B remains INCOMPLETE; P12-A remains
+WAIT_DEPENDENCY; P13 remains blocked. The refreshed owner/operation matrix
+records the next source-supported gap in the existing Property/Estate
+authorities; it remains design/audit work until its bounded operation
+contract is independently reviewed.
