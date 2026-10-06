@@ -688,8 +688,8 @@ public sealed class SimulationBootstrapCompositionTests
         IDictionary expectedCensusSections = (IDictionary)typeof(ContinuationCensusProtocol)
             .GetField("expectedSections", BindingFlags.Instance | BindingFlags.NonPublic)
             .GetValue(censusProtocol);
-        Assert.That(expectedCensusSections.Count, Is.EqualTo(239),
-            "The current selected ten-NPC/two-City Daily-v1 composition has 233 sections before its two exact-zero receipt owners and four Institution/Office owner sections.");
+        Assert.That(expectedCensusSections.Count, Is.EqualTo(242),
+            "The selected ten-NPC/two-City Daily-v1 inventory adds the three Required Property/Estate sections to its prior 239-section inventory.");
         Assert.That(expectedCensusSections.Contains(NpcDecisionRecorder.OccurrenceReceiptSectionId), Is.True);
         Assert.That(expectedCensusSections.Contains(EconomyTransactionService.KeyedSaleReceiptSectionId), Is.True);
         string[] institutionOfficeSectionIds =
@@ -704,6 +704,37 @@ public sealed class SimulationBootstrapCompositionTests
             Assert.That(expectedCensusSections.Contains(institutionOfficeSectionIds[i]), Is.True);
             Assert.That(((OwnerSectionContract)expectedCensusSections[institutionOfficeSectionIds[i]]).Role,
                 Is.EqualTo(OwnerSectionRole.Required));
+        }
+        string[] propertyEstateSectionIds =
+        {
+            PropertyOwnershipCensusProvider.OwnershipSectionId,
+            PropertyOwnershipCensusProvider.TransferHistorySectionId,
+            EstateCensusProvider.SectionId
+        };
+        IReadOnlyList<IOwnerSectionCensusProvider> propertyEstateProviders =
+            simulation.Bootstrap.PropertyOwnershipCensusProviders;
+        Assert.That(propertyEstateProviders, Has.Count.EqualTo(2));
+        IOwnerSectionCensusProvider[] propertyEstateOrderedProviders =
+        {
+            propertyEstateProviders[0],
+            propertyEstateProviders[1],
+            simulation.Bootstrap.EstateCensusProvider
+        };
+        for (int i = 0; i < propertyEstateSectionIds.Length; i++)
+        {
+            Assert.That(expectedCensusSections.Contains(propertyEstateSectionIds[i]), Is.True);
+            Assert.That(((OwnerSectionContract)expectedCensusSections[propertyEstateSectionIds[i]]).Role,
+                Is.EqualTo(OwnerSectionRole.Required));
+            OwnerSectionCensusWitness witness = propertyEstateOrderedProviders[i].GetCurrentCensus();
+            Assert.That(witness.SectionId, Is.EqualTo(propertyEstateSectionIds[i]));
+            Assert.That(witness.SchemaVersion, Is.EqualTo(i < 2
+                ? PropertyOwnershipCensusProvider.SchemaVersion
+                : EstateCensusProvider.SchemaVersion));
+            Assert.That(witness.Cardinality, Is.Zero);
+            Assert.That(witness.Revision, Is.Zero);
+            Assert.That(witness.OwnerInstanceIdentity, Is.SameAs(i < 2
+                ? runtime.PropertyOwnershipStore
+                : runtime.EstateStore));
         }
         Assert.That(((OwnerSectionContract)expectedCensusSections[NpcDecisionRecorder.OccurrenceReceiptSectionId]).Role,
             Is.EqualTo(OwnerSectionRole.ExplicitlyEmpty));

@@ -202,6 +202,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
     private const string MarketSaleCensusOperationId = "runtime.economy.market-sale";
     private const string MerchantDailyNpcTradeCensusOperationId = "runtime.merchant.advance-npc-trade-state";
     private const string InstitutionOfficeOwnerCommitCensusOperationId = "p12.institution-office.owner-commit";
+    private const string PropertyOwnerCommitCensusOperationId = "p12.property.owner-commit";
+    private const string EstateOwnerCommitCensusOperationId = "p12.estate.owner-commit";
 
     private sealed class NpcMembershipCensusContext
     {
@@ -1948,6 +1950,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                 && !TryRegisterCityNpcPresenceCensusProviders(protocol))
             || (runtimeAdmissionContext != null && !TryRegisterCityMarketCensusProviders(protocol))
             || (runtimeAdmissionContext != null && !TryRegisterInstitutionOfficeCensusProviders(protocol))
+            || (runtimeAdmissionContext != null && !TryRegisterPropertyEstateCensusProviders(protocol))
             || (runtimeAdmissionContext != null && !TryRegisterP12PopulationCensusProviders(protocol))
             || (runtimeAdmissionContext != null && !TryRegisterP12CrimeSocialAppraisalOwnerSections(protocol))
             || (requireP12ReceiptCensusOwners && !TryRegisterP12ExactZeroReceiptOwners(protocol))
@@ -1998,6 +2001,12 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                     out _)
                 && protocol.RegisterExpectedOperation(
                     InstitutionOfficeOwnerCommitCensusOperationId,
+                    out _)
+                && protocol.RegisterExpectedOperation(
+                    PropertyOwnerCommitCensusOperationId,
+                    out _)
+                && protocol.RegisterExpectedOperation(
+                    EstateOwnerCommitCensusOperationId,
                     out _)
                 && TryRegisterP12PopulationLifecycleOperations(protocol);
         }
@@ -2164,6 +2173,89 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                             OwnerSectionRole.Required),
                         out _)
                     || !protocol.RegisterCensusProvider(sectionIds[i], provider, out _))
+                {
+                    protocol.FaultClosed();
+                    return false;
+                }
+            }
+
+            return true;
+        }
+        catch
+        {
+            protocol.FaultClosed();
+            return false;
+        }
+    }
+
+    private bool TryRegisterPropertyEstateCensusProviders(ContinuationCensusProtocol protocol)
+    {
+        if (protocol == null || propertyOwnershipStore == null || estateStore == null)
+        {
+            protocol?.FaultClosed();
+            return false;
+        }
+
+        try
+        {
+            IReadOnlyList<IOwnerSectionCensusProvider> propertyProviders =
+                PropertyOwnershipCensusProvider.CreateProviders(propertyOwnershipStore);
+            IOwnerSectionCensusProvider estateProvider = new EstateCensusProvider(estateStore);
+            IOwnerSectionCensusProvider[] providers =
+            {
+                propertyProviders != null && propertyProviders.Count > 0 ? propertyProviders[0] : null,
+                propertyProviders != null && propertyProviders.Count > 1 ? propertyProviders[1] : null,
+                estateProvider
+            };
+            string[] sectionIds =
+            {
+                PropertyOwnershipCensusProvider.OwnershipSectionId,
+                PropertyOwnershipCensusProvider.TransferHistorySectionId,
+                EstateCensusProvider.SectionId
+            };
+            object[] expectedOwners = { propertyOwnershipStore, propertyOwnershipStore, estateStore };
+            int[] schemaVersions =
+            {
+                PropertyOwnershipCensusProvider.SchemaVersion,
+                PropertyOwnershipCensusProvider.SchemaVersion,
+                EstateCensusProvider.SchemaVersion
+            };
+            long[] expectedRevisions =
+            {
+                propertyOwnershipStore.Revision,
+                propertyOwnershipStore.Revision,
+                estateStore.Revision
+            };
+
+            if (propertyProviders == null || propertyProviders.Count != 2)
+            {
+                protocol.FaultClosed();
+                return false;
+            }
+
+            for (int i = 0; i < providers.Length; i++)
+            {
+                OwnerSectionCensusWitness witness = providers[i]?.GetCurrentCensus();
+                int expectedCardinality = i == 0
+                    ? propertyOwnershipStore.Count
+                    : i == 1
+                        ? propertyOwnershipStore.TransferHistory.Count
+                        : estateStore.Count;
+                if (witness == null
+                    || !string.Equals(witness.SectionId, sectionIds[i], StringComparison.Ordinal)
+                    || witness.SchemaVersion != schemaVersions[i]
+                    || witness.Cardinality != expectedCardinality
+                    || expectedCardinality != 0
+                    || !ReferenceEquals(witness.OwnerInstanceIdentity, expectedOwners[i])
+                    || witness.Revision != expectedRevisions[i]
+                    || witness.Revision < 0L
+                    || !protocol.RegisterExpectedSection(
+                        new OwnerSectionContract(
+                            sectionIds[i],
+                            schemaVersions[i],
+                            OwnerSectionRole.Required),
+                        out _)
+                    || !protocol.RegisterCensusProvider(sectionIds[i], providers[i], out _))
                 {
                     protocol.FaultClosed();
                     return false;
@@ -4821,6 +4913,41 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         return true;
     }
 
+    private bool TryBeginP12PropertyEstateOwnerCommit(
+        string operationContractId,
+        IEnumerable<string> sectionIds,
+        out SimulationOperationScope scope)
+    {
+        scope = null;
+        if (runtimeAdmissionContext == null) return true;
+
+        if (!IsRuntimeAdmissionOwnerThreadCurrent()
+            || npcRosterCensusProtocol == null
+            || !npcRosterCensusProtocol.TryValidateUnchangedSections(sectionIds, out _)
+            || !npcRosterCensusProtocol.TryValidateMutationEpochCapacity(out _)
+            || !TryEnterRuntimeAdmissionOperation(operationContractId, out scope))
+        {
+            FaultRuntimeAdmission();
+            return false;
+        }
+
+        return true;
+    }
+
+    private void NotifyP12PropertyEstateOwnerCommit(IEnumerable<string> sectionIds)
+    {
+        if (runtimeAdmissionContext == null) return;
+        try
+        {
+            if (npcRosterCensusProtocol == null || !NotifyP12MutationSections(sectionIds))
+                FaultRuntimeAdmission();
+        }
+        catch
+        {
+            FaultRuntimeAdmission();
+        }
+    }
+
     private void NotifyP12InstitutionOfficeOwnerCommit(IEnumerable<string> sectionIds)
     {
         if (runtimeAdmissionContext == null) return;
@@ -6183,13 +6310,38 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             return false;
         }
 
-        bool registered = propertyOwnershipStore.TryRegister(record, out failure);
-        if (registered)
+        string[] changedSections =
         {
-            AdvancePoliticalWorldRevision();
+            PropertyOwnershipCensusProvider.OwnershipSectionId,
+            PropertyOwnershipCensusProvider.TransferHistorySectionId
+        };
+        SimulationOperationScope p12Scope = null;
+        if (!TryBeginP12PropertyEstateOwnerCommit(
+                PropertyOwnerCommitCensusOperationId,
+                changedSections,
+                out p12Scope))
+        {
+            failure = PropertyFoundationFailure.Create(
+                PropertyFoundationFailureCode.RuntimeFaulted,
+                "The P12 property census operation could not be admitted.");
+            return false;
         }
 
-        return registered;
+        try
+        {
+            bool registered = propertyOwnershipStore.TryRegister(record, out failure);
+            if (registered)
+            {
+                AdvancePoliticalWorldRevision();
+                NotifyP12PropertyEstateOwnerCommit(changedSections);
+            }
+
+            return registered;
+        }
+        finally
+        {
+            p12Scope?.Dispose();
+        }
     }
 
     public IReadOnlyList<PropertyOwnershipRecord> GetPropertiesOwnedBy(PersonId ownerPersonId)
@@ -6227,17 +6379,38 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         EstateOpeningTransition transition,
         out EstateFoundationFailure failure)
     {
-        bool applied = EstateOpeningSystem.TryApplyOpening(
-            personStore,
-            estateStore,
-            transition,
-            out failure);
-        if (applied)
+        string[] changedSections = { EstateCensusProvider.SectionId };
+        SimulationOperationScope p12Scope = null;
+        if (!TryBeginP12PropertyEstateOwnerCommit(
+                EstateOwnerCommitCensusOperationId,
+                changedSections,
+                out p12Scope))
         {
-            AdvancePoliticalWorldRevision();
+            failure = EstateFoundationFailure.Create(
+                EstateFoundationFailureCode.RuntimeFaulted,
+                "The P12 estate census operation could not be admitted.");
+            return false;
         }
 
-        return applied;
+        try
+        {
+            bool applied = EstateOpeningSystem.TryApplyOpening(
+                personStore,
+                estateStore,
+                transition,
+                out failure);
+            if (applied)
+            {
+                AdvancePoliticalWorldRevision();
+                NotifyP12PropertyEstateOwnerCommit(changedSections);
+            }
+
+            return applied;
+        }
+        finally
+        {
+            p12Scope?.Dispose();
+        }
     }
 
     public bool TryOpenEstate(
@@ -6329,17 +6502,42 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             return false;
         }
 
-        bool applied = PropertyTransferSystem.TryApplyTransfer(
-            personStore,
-            propertyOwnershipStore,
-            transition,
-            out failure);
-        if (applied)
+        string[] changedSections =
         {
-            AdvancePoliticalWorldRevision();
+            PropertyOwnershipCensusProvider.OwnershipSectionId,
+            PropertyOwnershipCensusProvider.TransferHistorySectionId
+        };
+        SimulationOperationScope p12Scope = null;
+        if (!TryBeginP12PropertyEstateOwnerCommit(
+                PropertyOwnerCommitCensusOperationId,
+                changedSections,
+                out p12Scope))
+        {
+            failure = PropertyTransferFailure.Create(
+                PropertyTransferFailureCode.RuntimeFaulted,
+                "The P12 property census operation could not be admitted.");
+            return false;
         }
 
-        return applied;
+        try
+        {
+            bool applied = PropertyTransferSystem.TryApplyTransfer(
+                personStore,
+                propertyOwnershipStore,
+                transition,
+                out failure);
+            if (applied)
+            {
+                AdvancePoliticalWorldRevision();
+                NotifyP12PropertyEstateOwnerCommit(changedSections);
+            }
+
+            return applied;
+        }
+        finally
+        {
+            p12Scope?.Dispose();
+        }
     }
 
     public bool TryTransferProperty(
@@ -6457,7 +6655,34 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         EstateSuccessionTransition transition,
         out EstateSuccessionFailure failure)
     {
-        return EstateSuccessionSystem.TryApply(this, transition, out failure);
+        string[] changedSections =
+        {
+            PropertyOwnershipCensusProvider.OwnershipSectionId,
+            PropertyOwnershipCensusProvider.TransferHistorySectionId
+        };
+        SimulationOperationScope p12Scope = null;
+        if (!TryBeginP12PropertyEstateOwnerCommit(
+                PropertyOwnerCommitCensusOperationId,
+                changedSections,
+                out p12Scope))
+        {
+            failure = EstateSuccessionFailure.Create(
+                EstateSuccessionFailureCode.RuntimeFaulted,
+                "The P12 property census operation could not be admitted.");
+            return false;
+        }
+
+        try
+        {
+            bool applied = EstateSuccessionSystem.TryApply(this, transition, out failure);
+            if (applied)
+                NotifyP12PropertyEstateOwnerCommit(changedSections);
+            return applied;
+        }
+        finally
+        {
+            p12Scope?.Dispose();
+        }
     }
 
     public bool TryRegisterOffice(

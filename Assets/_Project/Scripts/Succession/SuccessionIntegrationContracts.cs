@@ -155,7 +155,8 @@ public enum EstateSuccessionFailureCode
     StaleEstate = 13,
     StaleCandidateSet = 14,
     CandidateNotRegistered = 15,
-    PropertyTransferFailed = 16
+    PropertyTransferFailed = 16,
+    RuntimeFaulted = 17
 }
 
 public sealed class EstateSuccessionFailure : IEquatable<EstateSuccessionFailure>
