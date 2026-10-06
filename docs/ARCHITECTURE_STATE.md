@@ -1,5 +1,30 @@
 # General Architecture State
 
+## Development/presentation artifact authority promotion — 2026-10-05
+
+**Status:** `ARCHITECTURE_PROMOTED` for documentation/architecture only.
+**Canonical branch:** `codex/architecture/world-identity-projection`.
+**Previous architecture SHA:** `ffd75652d89d862b83d634868c560f8540869b89`.
+**Approved candidate and promoted content SHA:**
+`cef6ee45d4bb4ffb8d87d61bb0367f3332caf498` from
+`codex/architecture/development-artifact-authority`.
+
+The user approved the exact candidate. Final preflight confirmed unchanged
+local/remote canonical and candidate tips, clean fast-forward ancestry,
+applicable independent PASS review of the content and final review-record
+delta, a four-file documentation-only diff and `git diff --check`. Promotion
+changed no active Master implementation checkout, runtime, Scene, prefab or
+configuration asset.
+
+Architecture §2, the Execution Model and P12 Brief now establish development
+and presentation artifacts as non-authoritative by default. Explicit canonical
+composition contracts determine supported profile inputs and scope; live
+runtime validation still verifies actual composition and owner coverage.
+The recorded P12/P10-A LocalTopology divergence remains a configuration/profile
+reconciliation issue in P12's owning workstream. It does not widen the accepted
+P12 profile or prove admission rejection. No DAG edges, checkpoint readiness
+or compatible promoted contracts are changed by this consolidation.
+
 ## P17 strategic War direction promotion — 2026-10-05
 
 **Status:** `ARCHITECTURE_PROMOTED` for architecture/planning only.
