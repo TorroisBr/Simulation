@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="7" result="Passed" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-06 22:57:30Z" end-time="2026-10-06 22:57:30Z" duration="0,0556649">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2422" result="Passed" start-time="2026-10-06 22:57:30Z" end-time="2026-10-06 22:57:30Z" duration="0.055665" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="3634" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12b-faction-owner-implementation/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2422" result="Passed" start-time="2026-10-06 22:57:30Z" end-time="2026-10-06 22:57:30Z" duration="0.046897" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="55440" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="1849" name="FactionFactualReaderTests" fullname="FactionFactualReaderTests" classname="FactionFactualReaderTests" runstate="Runnable" testcasecount="7" result="Passed" start-time="2026-10-06 22:57:30Z" end-time="2026-10-06 22:57:30Z" duration="0.034111" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="1854" name="AffiliationBeforeFactionCreationIsUnavailable" fullname="FactionFactualReaderTests.AffiliationBeforeFactionCreationIsUnavailable" methodname="AffiliationBeforeFactionCreationIsUnavailable" classname="FactionFactualReaderTests" runstate="Runnable" seed="1651739273" result="Passed" start-time="2026-10-06 22:57:30Z" end-time="2026-10-06 22:57:30Z" duration="0.014897" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1853" name="DuplicateActivePairAndMissingFactionEndpointFailClosed" fullname="FactionFactualReaderTests.DuplicateActivePairAndMissingFactionEndpointFailClosed" methodname="DuplicateActivePairAndMissingFactionEndpointFailClosed" classname="FactionFactualReaderTests" runstate="Runnable" seed="129689242" result="Passed" start-time="2026-10-06 22:57:30Z" end-time="2026-10-06 22:57:30Z" duration="0.001811" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1851" name="EmptyFactionOwnerProducesPresentEmptyCollections" fullname="FactionFactualReaderTests.EmptyFactionOwnerProducesPresentEmptyCollections" methodname="EmptyFactionOwnerProducesPresentEmptyCollections" classname="FactionFactualReaderTests" runstate="Runnable" seed="623092676" result="Passed" start-time="2026-10-06 22:57:30Z" end-time="2026-10-06 22:57:30Z" duration="0.001660" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1855" name="EndedAffiliationsStillRequireFactionEndpointAndValidJoinChronology" fullname="FactionFactualReaderTests.EndedAffiliationsStillRequireFactionEndpointAndValidJoinChronology" methodname="EndedAffiliationsStillRequireFactionEndpointAndValidJoinChronology" classname="FactionFactualReaderTests" runstate="Runnable" seed="1834287498" result="Passed" start-time="2026-10-06 22:57:30Z" end-time="2026-10-06 22:57:30Z" duration="0.000342" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1856" name="FutureFactionCreationAndAffiliationDatesAreUnavailable" fullname="FactionFactualReaderTests.FutureFactionCreationAndAffiliationDatesAreUnavailable" methodname="FutureFactionCreationAndAffiliationDatesAreUnavailable" classname="FactionFactualReaderTests" runstate="Runnable" seed="1704178316" result="Passed" start-time="2026-10-06 22:57:30Z" end-time="2026-10-06 22:57:30Z" duration="0.000297" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1852" name="MissingPersonEndpointFailsClosedWithDiagnosticAndNoPartialFacts" fullname="FactionFactualReaderTests.MissingPersonEndpointFailsClosedWithDiagnosticAndNoPartialFacts" methodname="MissingPersonEndpointFailsClosedWithDiagnosticAndNoPartialFacts" classname="FactionFactualReaderTests" runstate="Runnable" seed="873069166" result="Passed" start-time="2026-10-06 22:57:30Z" end-time="2026-10-06 22:57:30Z" duration="0.002130" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1850" name="ReaderCopiesFactionAndActiveAffiliationFactsInOrdinalOrder" fullname="FactionFactualReaderTests.ReaderCopiesFactionAndActiveAffiliationFactsInOrdinalOrder" methodname="ReaderCopiesFactionAndActiveAffiliationFactsInOrdinalOrder" classname="FactionFactualReaderTests" runstate="Runnable" seed="1820179944" result="Passed" start-time="2026-10-06 22:57:30Z" end-time="2026-10-06 22:57:30Z" duration="0.004546" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

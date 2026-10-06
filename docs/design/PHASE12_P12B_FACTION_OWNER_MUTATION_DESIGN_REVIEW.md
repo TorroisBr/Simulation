@@ -1,8 +1,8 @@
 # P12-B Faction owner admission and mutation epoch design review
 
-**Result:** PASS  
-**Reviewed design commit:** `f4c1218a8f9969f186fe32076d1470a8bcfbd246`  
-**Reviewed base:** `54e95a325812baa8db2fe233d3dd566be93f7fa2`  
+**Result:** PASS
+**Reviewed design commit:** `f4c1218a8f9969f186fe32076d1470a8bcfbd246`
+**Reviewed base:** `54e95a325812baa8db2fe233d3dd566be93f7fa2`
 **Review scope:** `docs/design/PHASE12_P12B_FACTION_OWNER_MUTATION_DESIGN.md`
 
 The design is bounded and implementation-ready against the stated canonical

@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="14" result="Passed" total="14" passed="14" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-06 22:57:20Z" end-time="2026-10-06 22:57:20Z" duration="0,1449983">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2422" result="Passed" start-time="2026-10-06 22:57:20Z" end-time="2026-10-06 22:57:20Z" duration="0.144998" total="14" passed="14" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="3634" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12b-faction-owner-implementation/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2422" result="Passed" start-time="2026-10-06 22:57:20Z" end-time="2026-10-06 22:57:20Z" duration="0.136059" total="14" passed="14" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="79328" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="1857" name="FactionFoundationTests" fullname="FactionFoundationTests" classname="FactionFoundationTests" runstate="Runnable" testcasecount="14" result="Passed" start-time="2026-10-06 22:57:20Z" end-time="2026-10-06 22:57:20Z" duration="0.123381" total="14" passed="14" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="1863" name="ActiveFactionAffiliationUniquenessIsEnforcedByStableTenureStore" fullname="FactionFoundationTests.ActiveFactionAffiliationUniquenessIsEnforcedByStableTenureStore" methodname="ActiveFactionAffiliationUniquenessIsEnforcedByStableTenureStore" classname="FactionFoundationTests" runstate="Runnable" seed="773924948" result="Passed" start-time="2026-10-06 22:57:20Z" end-time="2026-10-06 22:57:20Z" duration="0.011338" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1868" name="AffiliationTransitionsRejectStaleStoreAndWorldDayState" fullname="FactionFoundationTests.AffiliationTransitionsRejectStaleStoreAndWorldDayState" methodname="AffiliationTransitionsRejectStaleStoreAndWorldDayState" classname="FactionFoundationTests" runstate="Runnable" seed="1507874080" result="Passed" start-time="2026-10-06 22:57:20Z" end-time="2026-10-06 22:57:20Z" duration="0.030892" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1866" name="CrossWorldAffiliationTransitionsAreRejected" fullname="FactionFoundationTests.CrossWorldAffiliationTransitionsAreRejected" methodname="CrossWorldAffiliationTransitionsAreRejected" classname="FactionFoundationTests" runstate="Runnable" seed="1920713418" result="Passed" start-time="2026-10-06 22:57:20Z" end-time="2026-10-06 22:57:20Z" duration="0.000567" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1862" name="ExpulsionIsAnExplicitPolicyControlledEndReason" fullname="FactionFoundationTests.ExpulsionIsAnExplicitPolicyControlledEndReason" methodname="ExpulsionIsAnExplicitPolicyControlledEndReason" classname="FactionFoundationTests" runstate="Runnable" seed="383979703" result="Passed" start-time="2026-10-06 22:57:20Z" end-time="2026-10-06 22:57:20Z" duration="0.000620" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1858" name="FactionAffiliationsUseFactionIdAndPersonIdAndRemainSeparateFromNpcRuntime" fullname="FactionFoundationTests.FactionAffiliationsUseFactionIdAndPersonIdAndRemainSeparateFromNpcRuntime" methodname="FactionAffiliationsUseFactionIdAndPersonIdAndRemainSeparateFromNpcRuntime" classname="FactionFoundationTests" runstate="Runnable" seed="241825167" result="Passed" start-time="2026-10-06 22:57:20Z" end-time="2026-10-06 22:57:20Z" duration="0.000745" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1871" name="FactionDiagnosticOutputIsIndependentOfRegistrationOrder" fullname="FactionFoundationTests.FactionDiagnosticOutputIsIndependentOfRegistrationOrder" methodname="FactionDiagnosticOutputIsIndependentOfRegistrationOrder" classname="FactionFoundationTests" runstate="Runnable" seed="242301601" result="Passed" start-time="2026-10-06 22:57:20Z" end-time="2026-10-06 22:57:20Z" duration="0.033284" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1870" name="FactionsAndAffiliationsParticipateInDeterministicDiagnostics" fullname="FactionFoundationTests.FactionsAndAffiliationsParticipateInDeterministicDiagnostics" methodname="FactionsAndAffiliationsParticipateInDeterministicDiagnostics" classname="FactionFoundationTests" runstate="Runnable" seed="346162016" result="Passed" start-time="2026-10-06 22:57:20Z" end-time="2026-10-06 22:57:20Z" duration="0.028783" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1867" name="FactionStoreRejectsMalformedDirectAffiliationEndpoints" fullname="FactionFoundationTests.FactionStoreRejectsMalformedDirectAffiliationEndpoints" methodname="FactionStoreRejectsMalformedDirectAffiliationEndpoints" classname="FactionFoundationTests" runstate="Runnable" seed="512364411" result="Passed" start-time="2026-10-06 22:57:20Z" end-time="2026-10-06 22:57:20Z" duration="0.000281" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1859" name="LeaveAndRejoinCreatesDistinctHistoricalTenures" fullname="FactionFoundationTests.LeaveAndRejoinCreatesDistinctHistoricalTenures" methodname="LeaveAndRejoinCreatesDistinctHistoricalTenures" classname="FactionFoundationTests" runstate="Runnable" seed="494764979" result="Passed" start-time="2026-10-06 22:57:20Z" end-time="2026-10-06 22:57:20Z" duration="0.004218" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1861" name="LeaveNoRejoinPolicyRejectsSecondTenureAndCannotLeaveRejectsVoluntaryEnd" fullname="FactionFoundationTests.LeaveNoRejoinPolicyRejectsSecondTenureAndCannotLeaveRejectsVoluntaryEnd" methodname="LeaveNoRejoinPolicyRejectsSecondTenureAndCannotLeaveRejectsVoluntaryEnd" classname="FactionFoundationTests" runstate="Runnable" seed="1859543649" result="Passed" start-time="2026-10-06 22:57:20Z" end-time="2026-10-06 22:57:20Z" duration="0.000625" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1860" name="SameDayLeaveAndRejoinStillGetsDistinctTenureIds" fullname="FactionFoundationTests.SameDayLeaveAndRejoinStillGetsDistinctTenureIds" methodname="SameDayLeaveAndRejoinStillGetsDistinctTenureIds" classname="FactionFoundationTests" runstate="Runnable" seed="1920403670" result="Passed" start-time="2026-10-06 22:57:20Z" end-time="2026-10-06 22:57:20Z" duration="0.000299" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1865" name="WorldClonesFactionStoreAndDoesNotExposeMutableSourceAuthority" fullname="FactionFoundationTests.WorldClonesFactionStoreAndDoesNotExposeMutableSourceAuthority" methodname="WorldClonesFactionStoreAndDoesNotExposeMutableSourceAuthority" classname="FactionFoundationTests" runstate="Runnable" seed="1677536052" result="Passed" start-time="2026-10-06 22:57:20Z" end-time="2026-10-06 22:57:20Z" duration="0.000745" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1864" name="WorldRejectsAffiliationForMissingFactionOrPerson" fullname="FactionFoundationTests.WorldRejectsAffiliationForMissingFactionOrPerson" methodname="WorldRejectsAffiliationForMissingFactionOrPerson" classname="FactionFoundationTests" runstate="Runnable" seed="511282355" result="Passed" start-time="2026-10-06 22:57:20Z" end-time="2026-10-06 22:57:20Z" duration="0.000201" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1869" name="WorldRejectsFutureFactionCreationAndFutureAffiliationClone" fullname="FactionFoundationTests.WorldRejectsFutureFactionCreationAndFutureAffiliationClone" methodname="WorldRejectsFutureFactionCreationAndFutureAffiliationClone" classname="FactionFoundationTests" runstate="Runnable" seed="561929790" result="Passed" start-time="2026-10-06 22:57:20Z" end-time="2026-10-06 22:57:20Z" duration="0.001532" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>
