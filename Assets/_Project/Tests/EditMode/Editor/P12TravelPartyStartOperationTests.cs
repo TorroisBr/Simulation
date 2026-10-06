@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 using System.Threading;
@@ -8,6 +9,23 @@ using UnityEngine.TestTools;
 
 public sealed class P12TravelPartyStartOperationTests
 {
+    private sealed class StaleAfterOwnerWriteProvider : IOwnerSectionCensusProvider
+    {
+        private readonly IOwnerSectionCensusProvider liveProvider;
+        private readonly Func<bool> returnStale;
+        private readonly OwnerSectionCensusWitness baseline;
+
+        public StaleAfterOwnerWriteProvider(IOwnerSectionCensusProvider liveProvider, Func<bool> returnStale)
+        {
+            this.liveProvider = liveProvider ?? throw new ArgumentNullException(nameof(liveProvider));
+            this.returnStale = returnStale ?? throw new ArgumentNullException(nameof(returnStale));
+            baseline = liveProvider.GetCurrentCensus();
+        }
+
+        public OwnerSectionCensusWitness GetCurrentCensus() =>
+            returnStale() ? baseline : liveProvider.GetCurrentCensus();
+    }
+
     [SetUp]
     public void SetUp() => SimulationTestFactory.CleanupDefinitions();
 
@@ -211,6 +229,44 @@ public sealed class P12TravelPartyStartOperationTests
             "a later normal start is not blocked by stale request or operation state");
     }
 
+    [Test]
+    public void PostCommitNotificationFailurePreservesStartAndClosesFaultedOperationScope()
+    {
+        TravelPartyFixture fixture = SimulationTestFactory.CreateTravelPartyFixture();
+        SimulationRuntime runtime = CreateDailyRuntime(fixture);
+        ContinuationCensusProtocol protocol = GetProtocol(runtime);
+        long epochBefore = ReadProtocolEpoch(protocol);
+        long partyRevisionBefore = fixture.Parties.Revision;
+        long eventCountBefore = fixture.Records.Events.Events.Count;
+        long sequenceRevisionBefore = GetSequenceWitness(runtime).Revision;
+
+        ReplaceRegisteredProvider(
+            protocol,
+            TravelPartyCensusProvider.SectionId,
+            new StaleAfterOwnerWriteProvider(
+                new TravelPartyCensusProvider(fixture.Parties),
+                () => fixture.Parties.ActiveParties.Count != 0));
+
+        Assert.That(runtime.TryStartTravelParty(CreateContext(fixture)), Is.True);
+
+        Assert.That(fixture.Parties.ActiveParties, Has.Count.EqualTo(1));
+        Assert.That(fixture.Parties.Revision, Is.EqualTo(partyRevisionBefore + 1));
+        Assert.That(fixture.Members, Has.All.Property(nameof(NpcRuntime.IsTraveling)).True);
+        Assert.That(fixture.Records.Events.Events.Count, Is.EqualTo(eventCountBefore + 1));
+        Assert.That(GetSequenceWitness(runtime).Revision, Is.EqualTo(sequenceRevisionBefore + 1));
+        Assert.That(ReadProtocolEpoch(protocol), Is.EqualTo(epochBefore),
+            "the failed notification must not publish a mutation epoch");
+
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure failure), Is.False);
+        Assert.That(failure, Is.EqualTo(ContinuationCensusFailure.ProtocolFaulted));
+        Assert.That(typeof(SimulationRuntime)
+            .GetField("activeP12TravelPartyStartOperationContext", BindingFlags.Instance | BindingFlags.NonPublic)
+            .GetValue(runtime), Is.Null);
+        Assert.That((int)typeof(ContinuationCensusProtocol)
+            .GetField("activeOperationCount", BindingFlags.Instance | BindingFlags.NonPublic)
+            .GetValue(protocol), Is.Zero, "the finally path must dispose the operation scope after notification failure");
+    }
+
     [TestCase("party-allocator")]
     [TestCase("event-allocator")]
     [TestCase("record-sequence")]
@@ -367,6 +423,36 @@ public sealed class P12TravelPartyStartOperationTests
         return (ContinuationCensusProtocol)typeof(SimulationRuntime)
             .GetField("npcRosterCensusProtocol", BindingFlags.Instance | BindingFlags.NonPublic)
             .GetValue(runtime);
+    }
+
+    private static void ReplaceRegisteredProvider(
+        ContinuationCensusProtocol protocol,
+        string sectionId,
+        IOwnerSectionCensusProvider provider)
+    {
+        IDictionary sections = (IDictionary)typeof(ContinuationCensusProtocol)
+            .GetField("registeredSections", BindingFlags.Instance | BindingFlags.NonPublic)
+            .GetValue(protocol);
+        object section = sections[sectionId];
+        Assert.That(section, Is.Not.Null, sectionId);
+        Type sectionType = section.GetType();
+        BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+        FieldInfo contractField = sectionType.GetField("Contract", flags);
+        Assert.That(contractField, Is.Not.Null);
+        ConstructorInfo constructor = sectionType.GetConstructor(
+            flags,
+            null,
+            new[] { typeof(OwnerSectionContract), typeof(IOwnerSectionCensusProvider) },
+            null);
+        Assert.That(constructor, Is.Not.Null);
+        object replacement = constructor.Invoke(new[] { contractField.GetValue(section), provider });
+        foreach (string fieldName in new[] { "OwnerInstanceIdentity", "LastCardinality", "LastRevision", "HasBaseline" })
+        {
+            FieldInfo field = sectionType.GetField(fieldName, flags);
+            Assert.That(field, Is.Not.Null, fieldName);
+            field.SetValue(replacement, field.GetValue(section));
+        }
+        sections[sectionId] = replacement;
     }
 
     private static OwnerSectionCensusWitness GetWitness(
