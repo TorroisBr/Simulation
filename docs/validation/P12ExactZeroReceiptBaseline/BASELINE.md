@@ -11,6 +11,7 @@ This evidence establishes the registered owner-section count on the exact P12 ca
 - Unity: `6000.3.9f1`, batchmode EditMode, exact single-test filter above.
 - Result: 1 test, 1 passed, 0 failed. The assertion observed 233 registered sections.
 - XML: `Canonical-ea4dec-DailyV1-CensusCount.xml` (SHA-256 `F393F4E9448D5E2300E632F1CA0442D5CB947F5628ED8158D7190EA16F6E9ADE`).
-- Log: `Canonical-ea4dec-DailyV1-CensusCount.log` (SHA-256 `1DAB538E0562F7E57DA9575E162586A32660114EC40CDA262F2E9B0BDBBE3BFE`).
+- Raw log: Canonical-ea4dec-DailyV1-CensusCount.log inside BaselineRun.zip (SHA-256 `1DAB538E0562F7E57DA9575E162586A32660114EC40CDA262F2E9B0BDBBE3BFE`).
+- Compressed log bundle: BaselineRun.zip (SHA-256 `55F3966BDE455D742988AF3A12ED4E02A6A8BEB008EB8E1B8047A8BB128DD3B4`). The bundle preserves the raw Unity output without introducing its generated trailing whitespace into the source diff.
 
 The later selected-profile implementation assertion is 235 (= 233 baseline sections + the two fixed receipt sections). That assertion and its output belong to implementation validation, separately from this exact-base probe.
