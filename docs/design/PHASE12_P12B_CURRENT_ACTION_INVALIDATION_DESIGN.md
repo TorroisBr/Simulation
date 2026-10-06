@@ -39,10 +39,15 @@ section or mutation callback is registered. `NpcRuntime.CurrentActionRuntime`
 is a live mutable object. `SetCurrentAction` and
 `SetCurrentActionRuntime` replace or clear it without a P12 boundary, and its
 public setters can mutate it after installation. The normal Daily-v1 loop installs a chosen action before execution; the
-scheduled-directive path also installs it, and NPC death clears it. The
-actor-choice path exists in code, but selected Daily-v1 has no Person-backed
-NPCs and composes no external `WorldCommand` queue, so actor-choice dispatch is
-not an admitted Daily-v1 action writer. The current loop, not a new gameplay
+scheduled-directive path also installs it, and NPC death clears it. Although
+the selected profile begins with no Person-backed NPCs, its supported
+`TryMaterializePerson` and `TryBindExistingNpcToPerson` operations can create or
+bind them later. The P11 `ActorChoiceStore` is composed, so a supported
+Person-backed SellGoods choice can reach action replacement/rejection inside
+the registered daily-advance operation. A rejected choice clears an existing
+action before domain truth checks; an accepted choice installs and executes
+the action, which remains in the slot after the attempt. The profile still
+composes no external `WorldCommand` queue. The current loop, not a new gameplay
 operation, remains authoritative for when supported writes happen.
 
 ## Bounded contract
@@ -96,11 +101,17 @@ operation, remains authoritative for when supported writes happen.
   Clearing a present action there advances the same action-section revision
   while the enclosing lifecycle operation reports its committed sections; it
   must not create an unscoped second epoch notification.
-- Existing P12 operation contracts remain authoritative: normal autonomous
-  and scheduled-directive assignments run within the registered daily-advance
-  operation; death clearing runs within the existing population-lifecycle
-  operation. Actor-choice dispatch and P18 intraday action writes are outside
-  this selected Daily-v1 profile and must not become readiness evidence here.
+- Existing P12 operation contracts remain authoritative: normal autonomous,
+  scheduled-directive, and supported Person-backed ActorChoice assignments run
+  within the registered daily-advance operation. Person materialization runs
+  within the existing membership operation and adds exactly one action section
+  for a newly installed NPC; binding an existing NPC to a Person keeps that
+  same section identity. Death clearing runs within the existing
+  population-lifecycle operation. Preserve the existing rule that a pending
+  actor choice first clears its prior action, then either rejects on current
+  domain truth or installs the supported requested SellGoods action and
+  records the returned/thrown attempt. P18 intraday action writes remain
+  outside this selected Daily-v1 profile.
   Do not add an operation ID or change action semantics. A P12-bound setter
   invoked outside an admitted operation or from a non-owner thread fails
   before writing. Unbound non-P12 simulations keep their current behavior.
@@ -122,8 +133,10 @@ competing action writer nor claims that the remaining NPC state is covered.
    and the action-section revision.
 2. Extend P12 composition and dynamic roster membership registration to seal,
    assess, bind, unbind, and refresh exactly one current-action section per
-   installed NPC. Verify exact owner instance, RuntimeId mapping, paired action
-   references, and single-owner action references at every read/write boundary.
+   installed NPC, including `TryMaterializePerson` and
+   `TryBindExistingNpcToPerson`. Verify exact owner instance, RuntimeId mapping,
+   paired action references, and single-owner action references at every
+   read/write boundary.
 3. Add pointer-bound mutation admission/commit hooks to `NpcRuntime` and
    `NpcActionRuntime`, including current-action replacement, clearing,
    in-place mutators, and lifecycle clearing. Keep all domain action choice and
@@ -144,10 +157,14 @@ competing action writer nor claims that the remaining NPC state is covered.
   unchanged writes do not claim a changed revision, successful writes advance
   the owner revision and shared epoch, and rejected writes leave action fields
   unchanged.
-- Tests for autonomous and directive assignment, plus lifecycle death clearing;
-  each must retain existing action result semantics and produce only the
-  expected census invalidation. Existing actor-choice/P18 tests remain
-  regression evidence for their own profiles, outside Daily-v1 readiness.
+- Tests for autonomous and directive assignment, plus live Person materialize/
+  bind and ActorChoice action replacement. Verify a current-truth rejection
+  clears a prior action before recording the existing rejection disposition,
+  while an accepted SellGoods attempt preserves its existing returned/thrown
+  disposition and leaves the resulting action slot exactly as current runtime
+  behavior specifies. Lifecycle death clearing must likewise retain domain
+  semantics and produce the expected census invalidation. P18 intraday tests
+  remain regression evidence for their own profile, outside Daily-v1 readiness.
 - A roster add/remove temporal-identity test proving section identity and
   cardinality are updated at the registered membership boundary and do not
   silently rebind an old NPC/action reference.
