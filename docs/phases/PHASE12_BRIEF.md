@@ -38,6 +38,16 @@ For supported compatible versions/profiles, continuing from boundary T and savin
   reject uncovered authoritative state. Dedicated profile fixtures/configuration
   may separate validation from mutable development Scenes; this clarification
   requires no immediate migration or reopening of accepted checkpoints.
+- **Known live-composition divergence (2026-10-05):** the owning P12 State at
+  `b9fcb54840ae7c4e68d5f4d1812e5591bb36a948` records that the actual
+  `SampleScene`/GeneralTest setup enables P10-A authored Ruin/LocalTopology,
+  which remains excluded by the accepted P12-A contract. The P10-B-only
+  admission guard does not reject that P10-A state, and the composition test
+  lacking Daily-v1 admission context does not prove the boundary. This rule
+  does not certify that live composition or implement its rejection. Validated
+  live inventory and fail-closed admission remain P12-B/P12-A work;
+  P12-B is incomplete and P12-A remains `WAIT_DEPENDENCY`. Do not widen the
+  profile from the Scene or invalidate unrelated promoted owner contracts.
 - **P12-A profile assumption:** use the clearly recommended, bounded `UnityBootstrap-Daily-v1` profile: same-build/current-host daily continuation through the normal Unity bootstrap and built-in providers, captured only at a successfully completed daily boundary. This is an orchestrator planning assumption, not an architecture amendment or broader product promise. No P13 history/fork guarantee, cross-host guarantee, loader/module state, generated-world state, or shared-activity state is implied.
 - **P12-A causal-input boundary:** the selected bootstrap has no external `WorldCommand` service/queue composition; adding it is unsupported and must reject profile admission. P11's current canonical `SimulationRuntime` still composes an `ActorChoiceStore` by default: preserve full records/dispositions, duplicate-command idempotency history and sequence; reject `Pending` (including deferred) and `ConsumedAwaitingTerminalAttempt` records. A thrown actor attempt rethrows from its `AdvanceDay`, so it is capturable only at a later successful daily boundary while the runtime remains healthy. The current SampleScene bootstrap creates legacy NPCs without `PersonId` and starts with an empty `PersonStore`; P11 choice execution applies only to Person-backed NPCs. The P9-B/P11 composition proves the choice store and continuation-state owner, not that SampleScene NPCs can execute SellGoods choices. Any future Person-backed actor capability is separate upstream scope; P9-B geography remains unchanged. This does not add a new security boundary; normal domain/action semantics remain authoritative.
 - **Replay/fork sensitivity:** all authoritative truth, plans, Knowledge, IDs/allocators, logical time/calendar, effective config/content and causal randomness needed to continue.

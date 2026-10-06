@@ -145,6 +145,9 @@ contra o perfil aprovado. Estado autoritativo adicional exige cobertura e
 admissão explícitas ou rejeição, conforme §92A; ele não pode ser omitido por
 ter surgido em um harness de desenvolvimento. Esta regra não exige migrar
 agora os artefatos já selecionados por contratos aprovados.
+A consolidação desta regra não certifica conformidade de uma composição
+existente nem entrega seu mecanismo de admissão; divergências observadas
+continuam exigindo validação e correção no workstream responsável.
 
 ### Extensibilidade e mundo pertencente ao jogador
 
