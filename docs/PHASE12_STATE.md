@@ -1835,3 +1835,37 @@ P12-F. The next P12-B work is the source-driven reconciliation of remaining
 supported commits against their exact registered owner sections and shared
 epoch, alongside runtime-wide owner-thread/quiescence evidence. The City-list
 fix does not establish implementation readiness for another owner family.
+
+## P12-B FactionStore owner mutation promotion — 2026-10-06
+
+After refreshed preflight, `codex/phase12/canonical` advanced by fast-forward
+from `54e95a325812baa8db2fe233d3dd566be93f7fa2` to
+`0290aa30b202ed50e67d037ef1db3319403ff982`. The promoted code commit is
+`8bb6c61e8bd636b4b99a85d7bc96ad379f10c04d`, tree
+`286743c7ac4c45fc0cea812749ce5d1e14e0151b`; the promoted tip tree is
+`42b557e7b5bbb45c1f914b5a0a89c7c2992ba995`. Independent exact-tip review
+PASS is recorded in
+[`design/PHASE12_P12B_FACTION_OWNER_MUTATION_IMPLEMENTATION_REVIEW.md`](design/PHASE12_P12B_FACTION_OWNER_MUTATION_IMPLEMENTATION_REVIEW.md).
+Validation artifacts and hashes are retained in
+[`validation/P12BFactionStoreOwnerMutation/VALIDATION.md`](validation/P12BFactionStoreOwnerMutation/VALIDATION.md).
+
+The selected P9-B-only Daily-v1 protocol adds two Required sections, moving
+the tested partial inventory from 253 to 255. They bind separate faction and
+affiliation row counts to the exact installed `FactionStore` and its shared
+local revision. The bounded `p12.faction.owner-commit` wrapper covers only
+`TryRegisterFaction`, `TryApplyFactionAffiliation`, and
+`TryApplyFactionAffiliationEnd`; successful existing commits refresh both
+sections in one mutation epoch. Existing rejection semantics are retained.
+
+Exact-tree validation passed the five focused suites (100/100 total), ALL
+EditMode 2422/2422, official Smoke 5/5, and `git diff --check`. The seven XML
+files and archived logs were verified by the independent reviewer against the
+manifest and exact code tree. The code/tree, review, validation, and remote
+canonical promotion were all confirmed synchronized.
+
+This remains one bounded owner and facade-write slice. P12-B remains
+`INCOMPLETE`; P12-A remains `WAIT_DEPENDENCY`; P13 remains blocked. Do not
+infer complete owner/writer coverage, complete shared-epoch coverage, global
+quiescence, capture eligibility, export, hydration, P12-A/P13 readiness, or
+Phase 12 closure. Daily-v1 remains P9-B-only, and the P10-A proving profile
+remains separate.
