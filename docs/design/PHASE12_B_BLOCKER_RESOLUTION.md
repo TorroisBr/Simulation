@@ -1,19 +1,19 @@
 # P12-B blocker resolution and dependency plan
 
 **Current canonical/status — 2026-10-06:** P12 canonical is
-`06f7678d167e82b3f476683420db79f87c0bb82b`. The current selected P9-B-only
-Daily-v1 protocol has 253 registered sections, including the eight
-RuntimeIdentityRegistry sections, two legacy SpatialNetwork sections, and
-one ExplorableSiteStore section promoted at this tip. The exact selected
-profile test passed within `SimulationBootstrapCompositionTests` 24/24; ALL
-EditMode passed 2417/2417, including `SimulationRuntimeAdmissionTests` 50/50;
-official Smoke passed 5/5. The separate P10-A Ruin/LocalTopology profile
-remains excluded from Daily-v1. This is still partial live day-zero census
-and bounded invalidation evidence. Complete owner coverage, complete
-shared-epoch invalidation, runtime-wide quiescence, capture eligibility, and
-P12 readiness are not claimed. This record decomposes already accepted
-P12-B–P12-G scopes. It adds no checkpoint ID, product behavior, or
-implementation authorization.
+`b0ab1ae2d8dc9205e58c33a8a8c7658de27bbec1`. The selected P9-B-only Daily-v1
+protocol has 253 registered sections. The promoted City-roster correction
+at code `256c443903fd3e33ed05cfe4d86a11b3467176a2` closes the mutable-list
+alias on `SimulationRuntime.Cities`; the read-only API preserves the exact
+sorted roster and RuntimeIdentity witness. Its focused composition result is
+24/24, including the 253-section profile inventory; runtime admission is
+50/50; ALL EditMode is 2417/2417; official Smoke is 5/5. The P10-A
+Ruin/LocalTopology profile remains separate from Daily-v1. This remains
+partial live day-zero census and bounded invalidation evidence. Complete
+owner coverage, complete shared-epoch invalidation, runtime-wide quiescence,
+capture eligibility, and P12 readiness are not claimed. This record
+decomposes already accepted P12-B–P12-G scopes. It adds no checkpoint ID,
+product behavior, or implementation authorization.
 
 **Evidence baseline:** P12 canonical
 `04105d31e88fca97888dddb8e974236a7f4b6804`; the selected-profile source basis
@@ -56,7 +56,7 @@ missing, duplicate, unsupported, or unversioned entries fail closed.
 | P12 owner group | Concrete selected-profile owners to witness | Important exactness / current gap |
 |---|---|---|
 | C — causal roots | `RuntimeIdAllocator` (14 per-kind counters), `RuntimeIdentityRegistry` (8 typed indexes), `SimulationRecordSequence`, concrete deterministic-random provider and use/stream state, P9-B genesis manifest/provenance, P8-A geography facts. | Allocator, registry, and sequence have partial passive census witnesses but no complete export/hydration contract; the selected deterministic provider still needs evidence of retained use/stream state. P8-A has passive local revision/count witnesses but still lacks export/hydration; the composed spatial authority also owns P8-B–E child sections, whose distinct states cannot be inferred from P8-A’s positive cardinality. |
-| D — factual roots | Runtime City and NPC roster/composite state; each City’s Market, accounts, inventories and Population; Person/Genealogy/lifecycle owners; legacy `SpatialNetworkRuntime`, `ExplorableSiteStore`, and their existing runtime-ID location/site links. | City/NPC have no composite revision. `Cities` still exposes its mutable backing list; `ImportantNpcs` is now a City-owned live read-only projection with a local revision and passive reciprocal witness, not a composite City/NPC revision. The legacy network now has exact passive location/route count and revision witnesses, but direct registry writers and shared-epoch invalidation remain outside that local witness. Person/lifecycle commits can span owners without a capture scope. Site identity is a root; exploration progress lives in expedition/Knowledge owners. |
+| D — factual roots | Runtime City and NPC roster/composite state; each City’s Market, accounts, inventories and Population; Person/Genealogy/lifecycle owners; legacy `SpatialNetworkRuntime`, `ExplorableSiteStore`, and their existing runtime-ID location/site links. | The public `Cities` mutable-list alias is closed by the retained read-only view promoted at `b0ab1ae`; this adds no City lifecycle operation or composite revision. City/NPC still have no composite revision. `ImportantNpcs` remains a City-owned live read-only projection with a local revision and passive reciprocal witness. The legacy network now has exact passive location/route count and revision witnesses, but direct registry writers and shared-epoch invalidation remain outside that local witness. Person/lifecycle commits can span owners without a capture scope. Site identity is a root; exploration progress lives in expedition/Knowledge owners. |
 | E — official/core domains | Effective-config-selected City economy, transaction service and child accounts/inventories/markets; Merchant and Commercial Knowledge sharing; Justice/Crime/appraisal; composed political, institution, property/estate, armed-force/manpower/position, conflict/war/battle stores and enabled action providers. | Local guards/revisions are not a global invalidation epoch. Direct child or system mutators bypass coordinator-level evidence. Provider membership must follow resolved effective configuration, not the serialized module list. |
 | F — knowledge/commitments | Political/Crime and per-NPC exploration/adventure Knowledge; directives; default `ActorChoiceStore`; travel and party owners; `ExpeditionStore`/runtime/system. | Several per-NPC Knowledge owners still lack complete revision/export coverage. Directives, travel parties, and expeditions now have owner-local count/revision witnesses, but lack immutable export/staged hydration and shared-epoch invalidation. Expedition collections still expose live runtime objects rather than detached owner values. Actor-choice terminal history and sequence are causal continuation state. |
 | Census-only read models | `DomainEventStore` and `NpcDecisionStore` may be counted/versioned as known read models; History is a selected subset, Chronicle is a derived view. | They are not authoritative owner sections and do not invalidate the world-truth epoch. `SimulationRecordSequence` is a separate causal C root and must be retained exactly. |
@@ -255,7 +255,7 @@ the P12-B invalidation epoch.
 | Owner group | Successful writes that require coverage | Current bypass or witness gap |
 |---|---|---|
 | C roots | All `RuntimeIdAllocator.Allocate*` operations; `RuntimeIdentityRegistry.Register*` and local-topology batch registration; event/decision record allocation through `SimulationRecordSequence.Allocate`; any mutable RNG stream draw retained by the selected provider; P9 genesis publication; P8-A geography and any excluded child-store writes. | Passive allocator, registry, and sequence witnesses now expose selected owner cardinality/revision, but they are not registered in a complete capture inventory and do not provide export/hydration. Direct identity-registry registration remains a P12 epoch path even when it bypasses `SpatialNetworkRuntime`. Keyed RNG calls are pure for fixed seed/key/index, but the provider interface permits mutable streams; admission must bind concrete provider and census retained stream/use state. P8-A’s one revision spans P8-A and excluded children. |
-| D: roster and NPC/City | `TryRegisterNpc`/`TryUnregisterNpc`; City/NPC presence and travel/status/action/life/hidden/plan setters; `AddImportantNpc`/`RemoveImportantNpc`; City production/consumption/price update; direct Market/Inventory/MoneyAccount writes. | `Cities` returns its backing list. `ImportantNpcs` is now a City-owned live read-only view with a City-local revision and passive reciprocal witness, but City/NPC still lack a composite witness; NPC status/child objects and other child owners have separate mutation paths. |
+| D: roster and NPC/City | `TryRegisterNpc`/`TryUnregisterNpc`; City/NPC presence and travel/status/action/life/hidden/plan setters; `AddImportantNpc`/`RemoveImportantNpc`; City production/consumption/price update; direct Market/Inventory/MoneyAccount writes. | The `Cities` alias is closed; the retained view blocks consumer-driven roster add/remove/reorder without a supported lifecycle boundary. `ImportantNpcs` is a City-owned live read-only view with a City-local revision and passive reciprocal witness, but City/NPC still lack a composite witness; NPC status/child objects and other child owners have separate mutation paths. |
 | D: population/identity | Population transitions and paired migration; Person registration/binding/unbinding; genealogy add/remove; named birth; materialization/adoption; residence binding; immigration/emigration/resident death and Person death; NPC residence migration. | Birth/materialization/death/migration can expose an intermediate multi-owner graph before the final leg. Static public lifecycle entrypoints can bypass `SimulationRuntime` wrappers and partial political revision. Rollback is not a committed truth change if complete; failed restoration faults the runtime. |
 | P8-C: canonical spatial presence | `LegacySpatialAnchorBindingStore.TryBindCity`/`TryBindSite`/`TryBind`; `PersonSpatialPositionStore.TrySetAt`, `TryBeginTransit`, `TryAdvanceTransit`, `TryArrive`, and P8-E prepared installs. P8-E outer travel operations may change more than one section and notify once after complete installation. | Both stores expose owner-local count/revision but have no census registration or P12 epoch connection. The class name `LegacySpatialAnchorBindingStore` is historical: P8-C owns its stable City/Site-to-P8-A-Location bridge. |
 | D: legacy spatial/site | `SpatialNetworkRuntime.RegisterLocation`/`RegisterRoute`; `ExplorableSiteStore.Add`; embedded legacy City/NPC runtime-ID location/site links. | `SpatialNetworkRuntime` now returns detached read-only collection views and reports local section counts/revision, but its local revision is not connected to the shared P12 epoch. Direct `RuntimeIdentityRegistry.RegisterLocation/RegisterRoute` writes can bypass the network owner. `ExplorableSiteStore` exposes owner-local `Count`/`Revision`, but has no immutable export/staged hydrator or shared epoch. These links are separate from P8-C's City/Site-to-`LocationId` bridge and Person positions. Exploration progress is covered under F, not site identity. |
@@ -1445,3 +1445,30 @@ reconciliation across the now-sealed profile, followed by proof of complete
 shared-epoch coverage and runtime-wide owner-thread/quiescence. This promotion
 closes the previously omitted identity/spatial section family only; it does
 not satisfy that full obligation.
+
+## P12-B City roster alias closure refresh — 2026-10-06
+
+P12 canonical advanced from `69a5a41ca879fb66ce62efbe0d62e31f7298675b` to
+`b0ab1ae2d8dc9205e58c33a8a8c7658de27bbec1` with the exact-reviewed
+`SimulationRuntime.Cities` read-only-view correction. Code `256c443` stores
+one retained `AsReadOnly()` wrapper over the constructor-owned, sorted City
+list. The exact Daily-v1 regression confirms mutation attempts cannot change
+the two roster references/order or the City RuntimeIdentity witness. It does
+not add a census section, City lifecycle support, revision, or shared-epoch
+operation.
+
+A bounded source scan of the remaining high-level list accessors found the
+rostered NPC list, City `ImportantNpcs`, Market rows, and PersonStore persons
+are already exposed through retained read-only wrappers or immutable
+snapshots. This scan is limited to those accessors; it is not complete owner
+or writer coverage. The next blocker-resolution task remains the accepted
+Daily-v1 operation/epoch crosswalk: map every supported successful commit to
+its exact registered owner sections and shared-epoch notification, then close
+the runtime-wide owner-thread/quiescence proof. Prioritize an uncovered
+multi-owner commit or admission/capture boundary supported by current source;
+do not create another passive census slice from public visibility alone.
+
+The numbered-phase DAG is unchanged: P12-C waits on B; P12-D/E wait on B and
+C; P12-F waits on C/D/E; P12-G waits on B–F plus validated live-profile
+inventory; P13 remains blocked on supported continuation and recoverable
+causal history. P12-B remains incomplete and P12-A remains `WAIT_DEPENDENCY`.

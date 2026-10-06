@@ -4,20 +4,27 @@
 (PARTIAL FOUNDATION PROMOTED).
 
 **Current P12-B canonical refresh — 2026-10-06:** canonical was fast-forwarded
-from `80d0ec825a9ad8da819cc43f8ac214fb49e27291` to the exact reviewed
-candidate `06f7678d167e82b3f476683420db79f87c0bb82b`. The implementation code
-is `6dbe17744c9cd4670de89624b8a0099e215701bc`, tree
-`30f422f76bfa20bc16661f937dca823cda951819`; independent exact-tip review PASS
-is recorded at `188d1c7bc98708676f3e89d817f2305bd5743133`. This registers the
-eight existing RuntimeIdentityRegistry sections, two legacy SpatialNetwork
-sections, and one ExplorableSiteStore section into the selected P9-B-only
-Daily-v1 partial census, increasing it from 242 to 253 registered sections.
-The corrected-tree `SimulationBootstrapCompositionTests` result is 24/24 and
-includes `SelectedDailyV1ProfileBootstrapsItsAuthoredP8GeographyBeforeDayOne`
-and the missing-identity rejection regression; ALL EditMode is 2417/2417,
-including `SimulationRuntimeAdmissionTests` 50/50 and the separate P10-A
-Daily-v1 rejection regression; official Smoke is 5/5. Full artifact hashes
-are in `docs/validation/P12BIdentitySpatial/VALIDATION.md`.
+from `69a5a41ca879fb66ce62efbe0d62e31f7298675b` to
+`b0ab1ae2d8dc9205e58c33a8a8c7658de27bbec1`. The bounded City-roster
+read-only-view implementation is code `256c443903fd3e33ed05cfe4d86a11b3467176a2`,
+tree `42ea8bfda3d95a57965192f550c58be226bf0004`; its independent exact-tip
+review PASS is recorded in
+`docs/design/PHASE12_P12B_CITY_ROSTER_READ_ONLY_VIEW_IMPLEMENTATION_REVIEW.md`.
+The selected P9-B-only Daily-v1 composition continues to register 253
+sections. The focused composition passed 24/24, including the exact
+Daily-v1 253-section owner/cardinality inventory and the new rejected-City-list
+mutation assertions; `SimulationRuntimeAdmissionTests` passed 50/50; ALL
+EditMode passed 2417/2417; official Smoke passed 5/5; and `git diff --check`
+passed. Hashes and both Unity-output/Git-blob evidence are in
+`docs/validation/P12BCityRosterReadOnlyView/VALIDATION.md`.
+
+The change closes an accidental mutable alias through `SimulationRuntime.Cities`:
+the API now returns one retained `AsReadOnly()` view over the privately copied
+and sorted City roster. It introduces no City creation/removal operation,
+revision, or shared-epoch claim. P12-B remains incomplete; P12-A remains
+`WAIT_DEPENDENCY`; P13 remains blocked.
+
+## P12-B Runtime Identity/Spatial Census promotion record — 2026-10-06
 
 This remains bounded census registration plus the already accepted NPC
 membership invalidation path. Daily-v1 still uses the dedicated P9-B profile;
@@ -1784,3 +1791,47 @@ Exact-tree validation on code 167a488 passed five focused suites, 51/51 total (P
 This promotion closes only the listed Property/Estate owner and runtime mutation paths. It does not establish complete owner coverage, complete shared-epoch coverage, global quiescence, capture eligibility, export, hydration, P12-A readiness, P12-B completion, P13 readiness, or Phase 12 closure. P12-B remains INCOMPLETE; P12-A remains WAIT_DEPENDENCY; P13 remains blocked. P12-C waits on B; P12-D/E wait on B and C; P12-F waits on C/D/E; P12-G waits on B-F plus validated live-profile inventory. Daily-v1 remains P9-B-only and P10-A remains a separate proving profile.
 
 The refreshed highest-value P12-B obligation is the current-source owner/protocol crosswalk: reconcile the eight bootstrap-published RuntimeIdentityRegistry witness sections and two SpatialNetworkRuntime witness sections against the now-242-section sealed inventory, then classify supported post-publication reachability of SpatialNetwork.RegisterLocation/RegisterRoute and ExplorableSites.Add. Public visibility alone does not establish that those writes are part of the selected Daily-v1 gameplay contract. No new implementation checkpoint or readiness follows until source evidence identifies the exact supported boundary.
+
+## P12-B City roster read-only view promotion — 2026-10-06
+
+After final preflight, `codex/phase12/canonical` advanced by fast-forward from
+`69a5a41ca879fb66ce62efbe0d62e31f7298675b` to
+`b0ab1ae2d8dc9205e58c33a8a8c7658de27bbec1`. The implementation code is
+`256c443903fd3e33ed05cfe4d86a11b3467176a2`, tree
+`42ea8bfda3d95a57965192f550c58be226bf0004`; its independent exact-tip review
+PASS is recorded in
+`docs/design/PHASE12_P12B_CITY_ROSTER_READ_ONLY_VIEW_IMPLEMENTATION_REVIEW.md`.
+The reviewed design and independent design PASS are retained at
+`24522619b4418b9f506f9a59aec21eb188848560` and
+`a39039eecdc95e4ea9e2160d72dd57df1ab3b3c0`, respectively.
+
+`SimulationRuntime.Cities` now returns one retained `AsReadOnly()` wrapper over
+the runtime's private constructor copy, preserving its sorted order and exact
+City objects while preventing an `IList<CityRuntime>` cast from adding,
+replacing, or clearing roster entries. The selected Daily-v1 test asserts the
+two City owners, rejected mutation attempts, unchanged roster identity/order,
+and unchanged RuntimeIdentity City owner/cardinality/revision. Exact-tree
+validation passed: `SimulationBootstrapCompositionTests` 24/24 (including the
+253-section Daily-v1 inventory), `SimulationRuntimeAdmissionTests` 50/50,
+ALL EditMode 2417/2417, official Smoke 5/5, and `git diff --check`. Artifact
+hashes and the Unity-output/Git-blob distinction are documented in
+`docs/validation/P12BCityRosterReadOnlyView/VALIDATION.md`.
+
+This closes only the accidental mutable roster alias. It adds no City
+creation/removal operation, census section, revision, shared-epoch hook, or
+export/hydration behavior. Daily-v1 remains the P9-B-only profile, and the
+P10-A Ruin/LocalTopology proving profile remains separate. P12-B remains
+`INCOMPLETE`; P12-A remains `WAIT_DEPENDENCY`; P13 remains blocked. No complete
+owner coverage, complete shared-epoch coverage, global quiescence, capture
+eligibility, P12-A/P13 readiness, or Phase 12 closure is claimed.
+
+### Refreshed P12 dependency DAG and next blocker
+
+No numbered-phase dependency edge changes: P12-C waits on B; P12-D and P12-E
+wait on B and C; P12-F waits on C/D/E; P12-G waits on B through F plus a
+validated live-profile inventory; P13 remains blocked on supported P12
+continuation and recoverable causal history. Expedition remains deferred to
+P12-F. The next P12-B work is the source-driven reconciliation of remaining
+supported commits against their exact registered owner sections and shared
+epoch, alongside runtime-wide owner-thread/quiescence evidence. The City-list
+fix does not establish implementation readiness for another owner family.
