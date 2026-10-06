@@ -5424,6 +5424,11 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                 }
                 identityAlreadyRegistered = true;
             }
+            else if (isComposingNpcRoster)
+            {
+                failure = WorldNpcRegistryFailure.RuntimeFaulted;
+                return false;
+            }
             else if (!p12RuntimeIdentityRegistry.CanRegisterNpcForMembership(
                          npcRuntime,
                          out bool duplicateIdentity))

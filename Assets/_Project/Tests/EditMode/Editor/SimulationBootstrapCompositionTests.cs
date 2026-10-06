@@ -1592,6 +1592,35 @@ public sealed class SimulationBootstrapCompositionTests
     }
 
     [Test]
+    public void SelectedDailyProfileCompositionRejectsNpcMissingFromIdentityRegistry()
+    {
+        RuntimeIdentityRegistry identityRegistry = new RuntimeIdentityRegistry();
+        SpatialNetworkRuntime spatialNetwork = new SpatialNetworkRuntime(identityRegistry);
+        ExplorableSiteStore explorableSites = new ExplorableSiteStore();
+        NpcRuntime unregisteredNpc = new NpcRuntime("daily-bootstrap-identity-missing", null);
+
+        System.ArgumentException failure = Assert.Throws<System.ArgumentException>(() => new SimulationRuntime(
+            new SimulationTime(),
+            null,
+            new[] { unregisteredNpc },
+            explorableSiteStore: explorableSites,
+            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            runtimeIdentityRegistry: identityRegistry,
+            spatialNetworkRuntime: spatialNetwork,
+            requireP12RuntimeIdentitySpatialCensusOwners: true));
+
+        Assert.That(failure.Message, Does.Contain("NPC roster is invalid: RuntimeFaulted"));
+        OwnerSectionCensusWitness npcIdentities = RuntimeIdentityRegistryCensusProvider
+            .CreateProviders(identityRegistry)
+            .Select(provider => provider.GetCurrentCensus())
+            .Single(witness => witness.SectionId == RuntimeIdentityRegistryCensusProvider.NpcsSectionId);
+        Assert.That(npcIdentities.Cardinality, Is.Zero,
+            "Daily-v1 composition must reject an NPC absent from its already-published identity owner.");
+        Assert.That(npcIdentities.Revision, Is.Zero,
+            "Rejected composition must not mutate the identity census revision.");
+    }
+
+    [Test]
     public void GeneralTestRemainsASeparateP10RuinProvingProfile()
     {
         SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
