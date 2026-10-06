@@ -1472,3 +1472,29 @@ The numbered-phase DAG is unchanged: P12-C waits on B; P12-D/E wait on B and
 C; P12-F waits on C/D/E; P12-G waits on B–F plus validated live-profile
 inventory; P13 remains blocked on supported continuation and recoverable
 causal history. P12-B remains incomplete and P12-A remains `WAIT_DEPENDENCY`.
+
+## P12-B owner/operation/epoch refresh — after FactionStore promotion — 2026-10-06
+
+**Baseline:** P12 canonical `0290aa30b202ed50e67d037ef1db3319403ff982`
+(code promoted from `54e95a325812baa8db2fe233d3dd566be93f7fa2`). The State
+record is now pushed at `d131a9e1591010c466886b7eee5967e023cb3430`. Latest
+Architecture General documentation available for revalidation is
+`e16796014d348e3b59da7ed848101c4c03926ba5`.
+
+| Owner / write boundary | Current source and evidence | Remaining P12-B work |
+|---|---|---|
+| FactionStore / affiliations | Two Required sections are registered in the selected Daily-v1 protocol against the exact installed store. Faction registration, affiliation add, and affiliation end each commit through an existing `SimulationRuntime` facade and notify both sections in one mutation epoch. The tested inventory is 255 sections. Exact promoted code, review and validation are recorded in `PHASE12_STATE.md`. | Only these two counts, their shared local revision, and the three reviewed facades are covered. Other political owners remain separate. |
+| PoliticalClaimStore / recognition records | `SimulationRuntime` owns a cloned `PoliticalClaimStore`; normal `TesteSimulacao` Daily-v1 construction supplies no source store, so the initial owner is empty. The store exposes claim `Count` and one local `Revision`; recognition records are a distinct collection on that same revision. `TryRegisterPoliticalClaim`, `TryApplyPoliticalClaimRecognition`, and `TryApplyPoliticalClaimResolution` are existing public runtime commits. They currently advance `PoliticalWorldRevision` after success but have no P12 section registration or shared-epoch notification. Current production source has no other call sites into these APIs or their store writes beyond the runtime facade and construction clone. The P12-E accepted contract includes populated claims/recognitions; an empty bootstrap default does not exclude later supported runtime state. | Next bounded technical design: separate Required claim and recognition cardinality sections, exact installed-owner identity and shared local revision, plus one `p12.political-claim.owner-commit` operation over the three existing runtime facades. Recognition replacement and claim resolution must refresh both revision witnesses even when only one row count changes. Preserve existing proposal, validation, revision-overflow, and commit semantics; do not add producers or gameplay. |
+| PoliticalSupportStore | The runtime owner has local `Count`/`Revision`, but no selected Daily-v1 section or P12 operation. Runtime exposes existing registration/add/end commit paths. | Retain as a separate owner/design task after claim integration; do not conflate its relation lifecycle with ClaimStore commits. |
+| Political Knowledge and decision records | Separate existing owners. Knowledge/decision mutation and causal state remain in their own P12 capability boundaries; this Faction/Claim census work does not cover them. | Keep outside the PoliticalClaim design and implementation. Reconcile them only under their accepted owner/checkpoint sequence. |
+| Profile/architecture | Daily-v1 is the explicit P9-B-only profile and remains separate from P10-A. Architecture `e167960` states that development scenes/configs do not redefine profiles and that genuinely new owners require exclusion or fail-closed admission plus negative evidence while P12-B is incomplete. PoliticalClaimStore already exists in the selected runtime; this slice instruments that existing owner and does not add composition. | Revalidate actual selected composition and exact owner during implementation admission tests. No profile widening, admission claim beyond these two sections, or new-owner exception is implied. |
+| Readiness / numbered DAG | P12-B remains `INCOMPLETE`; P12-A `WAIT_DEPENDENCY`; P12-C waits on B; P12-D/E wait on B and C; P12-F waits on C/D/E; P12-G waits on B–F plus validated live-profile inventory; P13 remains blocked. | This owner slice changes no dependency edge and does not establish complete census/epoch coverage, quiescence, capture eligibility, export, hydration, downstream readiness, or Phase closure. P12-F Expedition remains deferred to its documented prerequisites. |
+
+**Disposition:** `PoliticalClaimStore` is the next bounded P12-B design target
+because the accepted P12-E owner set already names claims/recognitions and the
+current runtime exposes successful writes that lack a P12 owner witness and
+invalidation boundary. This is an existing runtime owner and existing API; no
+new political or gameplay semantics are introduced. Design must establish the
+exact Daily-v1 clone/installation identity, cardinality read surface, the three
+facade success/failure paths, owner-thread and epoch preflight, and tests before
+implementation. No implementation readiness is claimed by this audit alone.

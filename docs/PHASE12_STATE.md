@@ -1869,3 +1869,16 @@ infer complete owner/writer coverage, complete shared-epoch coverage, global
 quiescence, capture eligibility, export, hydration, P12-A/P13 readiness, or
 Phase 12 closure. Daily-v1 remains P9-B-only, and the P10-A proving profile
 remains separate.
+## Architecture revalidation after development-artifact authority update — 2026-10-06
+
+The latest Architecture General line available is
+`origin/codex/architecture/world-identity-projection` at
+`e16796014d348e3b59da7ed848101c4c03926ba5`. Its documentation update
+consolidates §2's rule that Unity Scenes and general configuration assets do
+not silently redefine an approved profile, and §92A's fail-closed entry rule
+for a genuinely new owner. It does not invalidate the already approved and
+promoted P9-B-only Daily-v1 profile: the profile contract remains explicit and
+its live composed owners are checked. The FactionStore slice added census and
+invalidation for an owner already instantiated inside `SimulationRuntime`; it
+did not add a domain owner or change the profile. This revalidation does not
+merge or promote the separate Architecture branch and changes no Phase scope.
