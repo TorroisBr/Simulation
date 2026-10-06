@@ -1314,3 +1314,43 @@ local validation artifacts.
 | P12-B readiness | Owner-set completeness, complete shared-epoch coverage, runtime-wide owner-thread/quiescence, and capture eligibility remain unproven. | P12-B stays `INCOMPLETE`; P12-A stays `WAIT_DEPENDENCY`; P13 remains blocked. P12-F Expedition remains assigned to P12-C/D/E. |
 
 The remaining blocker-resolution task is a source-linked reconciliation of each effective Daily-v1 owner to its registered section family, exact identity/schema/cardinality/revision, and supported mutation operations. Do not add a broad runtime/capture adapter until that reconciliation identifies the exact uncovered owner or supported commit boundary; preserve P12-F dependency gating.
+
+## Daily-v1 owner-to-protocol crosswalk — 2026-10-06
+
+The latest source crosswalk distinguishes protocol admission from other
+bootstrap-published passive witnesses. `SimulationRuntime.InitializeNpcRosterCensusProtocol`
+seals the selected Daily-v1 expected-section inventory at 235, built from
+PersonStore, roster-following NPC families, the selected causal/choice/directive/
+travel owners, per-City presence/Market/population, Crime/Social appraisal,
+and the two exact-zero receipt owners. `SimulationBootstrapComposition` also
+constructs eight `RuntimeIdentityRegistry` providers (NPC, City, Location,
+Route, ExplorableSite, LocalPlace, LocalConnection, NotableItem) and two
+`SpatialNetworkRuntime` providers (Location and Route); none are registered
+into that sealed protocol inventory. The selected-profile test separately
+reads those witnesses at 10/2/2/2/0/0/0/0 with registry revision 16, and
+SpatialNetwork at 2/2 with revision 4. These are real owner-backed witnesses,
+but the separate assertions do not establish protocol admission or shared
+epoch coverage. The relevant source is `SimulationRuntime.InitializeNpcRosterCensusProtocol`,
+`SimulationBootstrapComposition` construction, and
+`SimulationBootstrapCompositionTests.SelectedDailyV1ProfileBootstrapsItsAuthoredP8GeographyBeforeDayOne`.
+
+The same crosswalk found that `Bootstrap.SpatialNetwork` exposes public
+`RegisterLocation`/`RegisterRoute`, and `Bootstrap.ExplorableSites` exposes
+public `Add` after genesis. The first mutates both SpatialNetwork and the
+RuntimeIdentityRegistry; the latter has an owner-local revision and runtime
+mutation-guard binding but no selected-profile census/epoch callback. The
+Daily-v1 baseline requires no P10 site/topology facts and exact authored
+geography identity, but this audit has not established whether any such
+post-publication write is part of normal supported Daily-v1 gameplay or is a
+genesis-only API outside the selected profile contract. Do not infer either
+support or exclusion from public visibility alone.
+
+**Disposition:** this is a concrete owner/protocol mismatch to resolve before
+claiming complete owner coverage. It does not by itself authorize a passive
+census-only candidate or a broader P8/P10 integration. Next, classify the
+post-publication writer reachability and expected Daily-v1 behavior for these
+roots alongside the remaining P8-B–E child owners. If the supported contract
+requires these writes, specify their exact section set and successful commit
+boundary; if Daily-v1 excludes them, define the existing profile's fail-closed
+boundary. No new operation ID, implementation candidate, capture eligibility,
+P12-B readiness, or downstream readiness follows from this source finding.

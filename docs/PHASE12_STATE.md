@@ -1701,3 +1701,11 @@ implementation slice is justified only by a concrete unmatched owner or
 normal supported commit boundary from that reconciliation. This preserves the
 accepted profile scope and avoids repeating already-promoted census and
 invalidation work.
+
+The first source crosswalk follow-up is recorded in
+`docs/design/PHASE12_B_BLOCKER_RESOLUTION.md`: the sealed 235-section protocol
+inventory omits ten separate bootstrap-published RuntimeIdentityRegistry and
+SpatialNetwork witness sections, and public post-genesis site/location
+registration APIs need supported-profile reachability classification. This
+is an owner reconciliation obligation, not a P12-B readiness or implementation
+claim. Daily-v1 remains P9-B-only; P10-A stays in its separate proving profile.
