@@ -213,7 +213,10 @@ public sealed class P12CrimeJusticeInvalidationTests
         MethodInfo execute = typeof(SimulationRuntime).GetMethod(
             "TryExecuteCurrentAction", BindingFlags.Instance | BindingFlags.NonPublic);
         Assert.That(execute, Is.Not.Null);
-        target.SetCurrentActionRuntime(new NpcActionRuntime(action));
+        using (EnterDailyAdvanceOperation(runtime))
+        {
+            target.SetCurrentActionRuntime(new NpcActionRuntime(action));
+        }
         Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
             out long before, out ContinuationCensusFailure beforeFailure), Is.True, beforeFailure.ToString());
 
@@ -482,6 +485,18 @@ public sealed class P12CrimeJusticeInvalidationTests
             configuration: configuration ?? SimulationConfigurationDefaults.Create(),
             randomSource: randomSource,
             runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1());
+    }
+
+    private static IDisposable EnterDailyAdvanceOperation(SimulationRuntime runtime)
+    {
+        MethodInfo begin = typeof(SimulationRuntime).GetMethod(
+            "TryEnterRuntimeAdmissionOperation", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(begin, Is.Not.Null);
+        object[] arguments = { "runtime.advance-day", null };
+        Assert.That(begin.Invoke(runtime, arguments), Is.EqualTo(true));
+        IDisposable scope = arguments[1] as IDisposable;
+        Assert.That(scope, Is.Not.Null);
+        return scope;
     }
 
     private static NpcStatusData ReadStatus(string fieldName, JusticeSystem justice)

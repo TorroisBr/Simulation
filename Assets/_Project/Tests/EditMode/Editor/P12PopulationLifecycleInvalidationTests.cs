@@ -193,6 +193,237 @@ public sealed class P12PopulationLifecycleInvalidationTests
     }
 
     [Test]
+    public void CurrentActionSlotAndRuntimeWritesUseExactOwnerAndAdmittedBoundaries()
+    {
+        CityRuntime city = CreateCity("p12-current-action-city", 10);
+        NpcRuntime actor = CreateNpc("p12-current-action-actor");
+        NpcRuntime secondActor = CreateNpc("p12-current-action-second-actor");
+        SimulationRuntime runtime = CreateP12Runtime(new[] { city }, new[] { actor, secondActor });
+
+        NpcCurrentActionCensusProvider initialProvider = new NpcCurrentActionCensusProvider(actor);
+        OwnerSectionCensusWitness initial = initialProvider.GetCurrentCensus();
+        Assert.That(initial.SectionId, Is.EqualTo(NpcCurrentActionCensusProvider.SectionIdFor(actor.RuntimeId)));
+        Assert.That(initial.SchemaVersion, Is.EqualTo(NpcCurrentActionCensusProvider.SchemaVersion));
+        Assert.That(initial.OwnerInstanceIdentity, Is.SameAs(actor));
+        Assert.That(initial.Cardinality, Is.Zero);
+        Assert.That(initial.Revision, Is.Zero);
+
+        NpcActionRuntime first = new NpcActionRuntime(
+            SimulationTestFactory.CreateAction("p12-current-action-first", NpcActionType.Normal));
+        actor.SetCurrentActionRuntime(first);
+        Assert.That(actor.CurrentActionRuntime, Is.Null,
+            "a selected-profile action write outside an admitted runtime operation must stop before commit");
+        AssertEpoch(runtime, 0L);
+
+        using (EnterDailyAdvanceOperation(runtime))
+        {
+            actor.SetCurrentActionRuntime(first);
+            Assert.That(actor.CurrentActionRuntime, Is.SameAs(first));
+            Assert.That(secondActor.CurrentActionRuntime, Is.Null);
+
+            OwnerSectionCensusWitness installed = initialProvider.GetCurrentCensus();
+            Assert.That(installed.Cardinality, Is.EqualTo(1));
+            Assert.That(installed.Revision, Is.EqualTo(1L));
+            AssertEpoch(runtime, 1L);
+
+            secondActor.SetCurrentActionRuntime(first);
+            Assert.That(secondActor.CurrentActionRuntime, Is.Null,
+                "one mutable NpcActionRuntime cannot be installed into two current-action owner slots");
+            Assert.That(initialProvider.GetCurrentCensus().Revision, Is.EqualTo(1L));
+            AssertEpoch(runtime, 1L);
+        }
+
+        first.SetSuccessChanceMultiplier(0.25f);
+        Assert.That(first.SuccessChanceMultiplier, Is.EqualTo(1f),
+            "a bound action runtime rejects writes outside the selected-profile owner boundary");
+        Assert.That(initialProvider.GetCurrentCensus().Revision, Is.EqualTo(1L));
+        AssertEpoch(runtime, 1L);
+
+        CommercialDecisionEvidence commercialEvidence = new CommercialDecisionEvidence(
+            "p12-item", "p12-location", "p12-origin", "p12-destination", null,
+            null, null, 2, 1f, 3f, 4f, 5f, 6f, 7f);
+        CommercialScoutingEvidence scoutingEvidence = new CommercialScoutingEvidence(
+            "p12-destination", "p12-route", 0, 0, false, 0L, 1f, 1, 2f);
+
+        using (EnterDailyAdvanceOperation(runtime))
+        {
+            first.SetSuccessChanceMultiplier(0.25f);
+            first.SetOriginDecisionId("p12-decision");
+            first.SetStableOccurrenceKey("p12-occurrence");
+            first.SetCommercialDecisionEvidence(commercialEvidence);
+            first.SetCommercialScoutingEvidence(scoutingEvidence);
+        }
+
+        Assert.That(first.SuccessChanceMultiplier, Is.EqualTo(0.25f));
+        Assert.That(first.OriginDecisionId, Is.EqualTo("p12-decision"));
+        Assert.That(first.StableOccurrenceKey, Is.EqualTo("p12-occurrence"));
+        Assert.That(first.CommercialDecisionEvidence, Is.SameAs(commercialEvidence));
+        Assert.That(first.CommercialScoutingEvidence, Is.SameAs(scoutingEvidence));
+        Assert.That(initialProvider.GetCurrentCensus().Revision, Is.EqualTo(6L));
+        AssertEpoch(runtime, 6L);
+
+        using (EnterDailyAdvanceOperation(runtime))
+        {
+            first.SetSuccessChanceMultiplier(0.25f);
+            first.SetOriginDecisionId("p12-decision");
+            first.SetStableOccurrenceKey("p12-occurrence");
+            first.SetCommercialDecisionEvidence(commercialEvidence);
+            first.SetCommercialScoutingEvidence(scoutingEvidence);
+        }
+        Assert.That(initialProvider.GetCurrentCensus().Revision, Is.EqualTo(6L),
+            "no-op action owner setters do not advance the local revision");
+        AssertEpoch(runtime, 6L);
+
+        NpcActionRuntime replacement = new NpcActionRuntime(
+            SimulationTestFactory.CreateAction("p12-current-action-replacement", NpcActionType.Normal));
+        using (EnterDailyAdvanceOperation(runtime))
+        {
+            actor.SetCurrentActionRuntime(replacement);
+        }
+        Assert.That(actor.CurrentActionRuntime, Is.SameAs(replacement));
+        Assert.That(initialProvider.GetCurrentCensus().Cardinality, Is.EqualTo(1));
+        Assert.That(initialProvider.GetCurrentCensus().Revision, Is.EqualTo(7L));
+        AssertEpoch(runtime, 7L);
+
+        first.SetOriginDecisionId("detached-action-write");
+        Assert.That(initialProvider.GetCurrentCensus().Revision, Is.EqualTo(7L),
+            "a stale detached action object no longer reports mutations against its former owner");
+        AssertEpoch(runtime, 7L);
+
+        using (EnterDailyAdvanceOperation(runtime))
+        {
+            actor.SetCurrentActionRuntime(null);
+        }
+        Assert.That(initialProvider.GetCurrentCensus().Cardinality, Is.Zero);
+        Assert.That(initialProvider.GetCurrentCensus().Revision, Is.EqualTo(8L));
+        AssertEpoch(runtime, 8L);
+
+        SetNpcCurrentActionRevision(actor, long.MaxValue);
+        using (EnterDailyAdvanceOperation(runtime))
+        {
+            actor.SetCurrentActionRuntime(new NpcActionRuntime(
+                SimulationTestFactory.CreateAction("p12-current-action-saturated", NpcActionType.Normal)));
+        }
+        Assert.That(actor.CurrentActionRuntime, Is.Null,
+            "local revision exhaustion rejects before changing the action slot");
+        AssertEpoch(runtime, 8L);
+    }
+
+    [Test]
+    public void CurrentActionCensusRejectsMismatchedSlotsAndAliasedMutableRuntimes()
+    {
+        NpcActionData action = SimulationTestFactory.CreateAction(
+            "p12-current-action-census", NpcActionType.Normal);
+        NpcActionRuntime shared = new NpcActionRuntime(action);
+        NpcRuntime first = CreateNpc("p12-current-action-census-first");
+        NpcRuntime second = CreateNpc("p12-current-action-census-second");
+        first.SetCurrentActionRuntime(shared);
+        second.SetCurrentActionRuntime(shared);
+
+        Assert.Throws<ArgumentException>(() => NpcCurrentActionCensusProvider.CreateProviders(
+            new[] { first, second }));
+
+        NpcRuntime mismatched = CreateNpc("p12-current-action-census-mismatch");
+        mismatched.SetCurrentActionRuntime(new NpcActionRuntime(action));
+        FieldInfo currentAction = typeof(NpcRuntime).GetField(
+            "currentAction", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(currentAction, Is.Not.Null);
+        currentAction.SetValue(mismatched, SimulationTestFactory.CreateAction(
+            "p12-current-action-census-other", NpcActionType.Normal));
+
+        Assert.Throws<ArgumentException>(() => NpcCurrentActionCensusProvider.CreateProviders(
+            new[] { mismatched }));
+
+        NpcRuntime legacy = CreateNpc("legacy-current-action-replacement");
+        currentAction.SetValue(legacy, action);
+        NpcActionRuntime replacement = new NpcActionRuntime(action);
+        legacy.SetCurrentActionRuntime(replacement);
+        Assert.That(legacy.CurrentActionRuntime, Is.SameAs(replacement),
+            "outside P12, the existing setter keeps its ability to replace and repair serialized slot pairs");
+        Assert.That(legacy.HasConsistentCurrentActionSlot, Is.True);
+    }
+
+    [Test]
+    public void AutonomousDailyDecisionInstallsCurrentActionThroughP12OwnerBoundary()
+    {
+        NpcRuntime actor = CreateNpc("p12-current-action-autonomous-actor");
+        NpcActionData action = SimulationTestFactory.CreateAction(
+            "p12-current-action-autonomous", NpcActionType.Normal);
+        action.baseUtility = 10f;
+        SimulationRuntime runtime = new SimulationRuntime(
+            new SimulationTime(),
+            null,
+            new[] { actor },
+            configuration: CreateP12Configuration(),
+            configuredActions: new[] { action },
+            npcDecisionSystem: new NpcDecisionSystem(new List<INpcActionProvider>()),
+            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1());
+
+        runtime.AdvanceDay();
+
+        Assert.That(runtime.CurrentDay, Is.EqualTo(1L));
+        Assert.That(actor.CurrentActionRuntime, Is.Not.Null);
+        Assert.That(actor.CurrentActionRuntime.Action, Is.SameAs(action));
+        OwnerSectionCensusWitness actionWitness = new NpcCurrentActionCensusProvider(actor).GetCurrentCensus();
+        Assert.That(actionWitness.Cardinality, Is.EqualTo(1));
+        Assert.That(actionWitness.Revision, Is.EqualTo(1L));
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure censusFailure), Is.True,
+            censusFailure.ToString());
+    }
+
+    [Test]
+    public void ResidentDeathClearsCurrentActionAndReservesItsRevisionBeforeMutation()
+    {
+        CityRuntime city = CreateCity("p12-current-action-death-city", 5);
+        NpcRuntime actor = CreateNpc("p12-current-action-death-actor");
+        NpcRuntime[] roster = { actor };
+        Assert.That(SettlementPopulationMembershipSystem.TryBindExistingResident(
+            city, actor, SimulationTestFactory.CreateAuthoritativeNpcRoster(roster),
+            out PopulationMembershipFailure membershipFailure),
+            Is.True, membershipFailure.ToString());
+        actor.SetCurrentActionRuntime(new NpcActionRuntime(
+            SimulationTestFactory.CreateAction("p12-current-action-death", NpcActionType.Normal)));
+        SimulationRuntime runtime = CreateP12Runtime(new[] { city }, roster);
+        NpcCurrentActionCensusProvider provider = new NpcCurrentActionCensusProvider(actor);
+        long epochBefore = ReadEpoch(runtime);
+        long revisionBefore = provider.GetCurrentCensus().Revision;
+
+        Assert.That(runtime.TryApplyResidentDeath(
+            actor, city, out _, out NpcPopulationLifecycleFailure deathFailure),
+            Is.True, deathFailure.ToString());
+
+        Assert.That(actor.IsDead, Is.True);
+        Assert.That(actor.CurrentActionRuntime, Is.Null);
+        Assert.That(provider.GetCurrentCensus().Cardinality, Is.Zero);
+        Assert.That(provider.GetCurrentCensus().Revision, Is.EqualTo(revisionBefore + 1L));
+        Assert.That(ReadEpoch(runtime), Is.EqualTo(epochBefore + 1L),
+            "the resident lifecycle and CurrentAction owner changes share one operation epoch");
+        AssertCensus(runtime);
+
+        CityRuntime saturatedCity = CreateCity("p12-current-action-death-saturated-city", 5);
+        NpcRuntime saturatedActor = CreateNpc("p12-current-action-death-saturated-actor");
+        NpcRuntime[] saturatedRoster = { saturatedActor };
+        Assert.That(SettlementPopulationMembershipSystem.TryBindExistingResident(
+            saturatedCity, saturatedActor, SimulationTestFactory.CreateAuthoritativeNpcRoster(saturatedRoster),
+            out membershipFailure),
+            Is.True, membershipFailure.ToString());
+        saturatedActor.SetCurrentActionRuntime(new NpcActionRuntime(
+            SimulationTestFactory.CreateAction("p12-current-action-death-saturated", NpcActionType.Normal)));
+        SetNpcCurrentActionRevision(saturatedActor, long.MaxValue);
+        SimulationRuntime saturatedRuntime = CreateP12Runtime(new[] { saturatedCity }, saturatedRoster);
+
+        Assert.That(saturatedRuntime.TryApplyResidentDeath(
+            saturatedActor, saturatedCity, out _, out NpcPopulationLifecycleFailure saturatedFailure), Is.False);
+        Assert.That(saturatedFailure, Is.EqualTo(NpcPopulationLifecycleFailure.RuntimeFaulted));
+        Assert.That(saturatedActor.IsAlive, Is.True);
+        Assert.That(saturatedActor.CurrentActionRuntime, Is.Not.Null);
+        Assert.That(saturatedActor.ResidenceSettlementRuntimeId, Is.EqualTo(saturatedCity.RuntimeId));
+        Assert.That(saturatedCity.CurrentPopulation, Is.EqualTo(5));
+        AssertEpoch(saturatedRuntime, 0L);
+        AssertCensus(saturatedRuntime);
+    }
+
+    [Test]
     public void MaterializedResidentDeathReconcilesPersonAndNpcOwnersInOneEpoch()
     {
         CityRuntime city = CreateCity("p12-person-backed-death-city", 5);
@@ -218,6 +449,15 @@ public sealed class P12PopulationLifecycleInvalidationTests
         AssertCensus(runtime);
         Assert.That(ReadEpoch(runtime), Is.EqualTo(epochBeforeMaterialization + 1L));
 
+        NpcActionRuntime currentAction = new NpcActionRuntime(
+            SimulationTestFactory.CreateAction("p12-person-backed-death-current-action", NpcActionType.Normal));
+        using (EnterDailyAdvanceOperation(runtime))
+        {
+            npc.SetCurrentActionRuntime(currentAction);
+        }
+        NpcCurrentActionCensusProvider actionProvider = new NpcCurrentActionCensusProvider(npc);
+        long actionRevisionBeforeDeath = actionProvider.GetCurrentCensus().Revision;
+
         long epochBeforeDeath = ReadEpoch(runtime);
         Assert.That(runtime.TryApplyResidentDeath(
             npc, city, out _, out NpcPopulationLifecycleFailure deathFailure), Is.True, deathFailure.ToString());
@@ -225,6 +465,9 @@ public sealed class P12PopulationLifecycleInvalidationTests
         Assert.That(person.DeathAbsoluteDay, Is.EqualTo(runtime.CurrentDay));
         Assert.That(person.ResidenceSettlementRuntimeId, Is.Null);
         Assert.That(npc.IsDead, Is.True);
+        Assert.That(npc.CurrentActionRuntime, Is.Null);
+        Assert.That(actionProvider.GetCurrentCensus().Cardinality, Is.Zero);
+        Assert.That(actionProvider.GetCurrentCensus().Revision, Is.EqualTo(actionRevisionBeforeDeath + 1L));
         Assert.That(city.CurrentPopulation, Is.EqualTo(4));
         Assert.That(city.Population.Revision, Is.EqualTo(1L));
         AssertPersonRevision(runtime, person.PersonId, expected: 3L);
@@ -508,5 +751,25 @@ public sealed class P12PopulationLifecycleInvalidationTests
             "residenceRevision", BindingFlags.Instance | BindingFlags.NonPublic);
         Assert.That(revision, Is.Not.Null);
         revision.SetValue(npc, value);
+    }
+
+    private static void SetNpcCurrentActionRevision(NpcRuntime npc, long value)
+    {
+        FieldInfo revision = typeof(NpcRuntime).GetField(
+            "currentActionRevision", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(revision, Is.Not.Null);
+        revision.SetValue(npc, value);
+    }
+
+    private static IDisposable EnterDailyAdvanceOperation(SimulationRuntime runtime)
+    {
+        MethodInfo begin = typeof(SimulationRuntime).GetMethod(
+            "TryEnterRuntimeAdmissionOperation", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(begin, Is.Not.Null);
+        object[] arguments = { "runtime.advance-day", null };
+        Assert.That(begin.Invoke(runtime, arguments), Is.EqualTo(true));
+        IDisposable scope = arguments[1] as IDisposable;
+        Assert.That(scope, Is.Not.Null);
+        return scope;
     }
 }

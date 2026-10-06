@@ -73,8 +73,8 @@ public sealed class P12SoloTravelStartOperationTests
             "StartTravel is inside the nested travel operation while TravelStartedToday clearing is only in daily advance");
         Assert.That(sequenceOperationDepths, Does.Contain(2),
             "the travel event sequence allocation is part of the nested travel operation");
-        Assert.That(after, Is.EqualTo(before + 3),
-            "the decision record, bounded travel start, and later start-day clear each publish their own epoch");
+        Assert.That(after, Is.EqualTo(before + 4),
+            "the action-slot installation, decision record, bounded travel start, and later start-day clear each publish their own epoch");
         Assert.That(fixture.Runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure assessment),
             Is.True, assessment.ToString());
     }
@@ -206,8 +206,8 @@ public sealed class P12SoloTravelStartOperationTests
         Assert.That(fixture.Npc.CurrentCity, Is.SameAs(fixture.World.A));
         Assert.That(fixture.Npc.TravelPlan.IsActive, Is.True);
         Assert.That(fixture.Records.Events.Events, Is.Empty);
-        Assert.That(ReadProtocolEpoch(protocol), Is.EqualTo(before + 1),
-            "scope unwinding reports the account commit before daily admission is faulted");
+        Assert.That(ReadProtocolEpoch(protocol), Is.EqualTo(before + 2),
+            "the action-slot installation and scope unwind account commit are both reported before daily admission is faulted");
         Assert.That(fixture.Runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure failure), Is.False);
         Assert.That(failure, Is.EqualTo(ContinuationCensusFailure.ProtocolFaulted));
     }

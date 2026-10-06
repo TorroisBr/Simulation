@@ -8,6 +8,7 @@ public class NpcRuntime : ICapabilityConditionSource
 {
     [NonSerialized] private MutationGuardBinding runtimeMutationGuardBinding = new MutationGuardBinding();
     [NonSerialized] private long travelStateRevision;
+    [NonSerialized] private long currentActionRevision;
     [NonSerialized] private long lifeStateRevision;
     [NonSerialized] private long residenceRevision;
     [NonSerialized] private long p12CrimeJusticeRevision;
@@ -16,8 +17,8 @@ public class NpcRuntime : ICapabilityConditionSource
     [NonSerialized] private Action<NpcRuntime> p12CrimeJusticeMutationCommitted;
     [NonSerialized] private Func<bool, IReadOnlyList<CityRuntime>, bool> p12TravelStateMutationAdmission;
     [NonSerialized] private Action<bool, IReadOnlyList<CityRuntime>> p12TravelStateMutationCommitted;
-    [NonSerialized] private Func<NpcRuntime, bool, bool, bool> p12LifecycleMutationAdmission;
-    [NonSerialized] private Action<NpcRuntime, bool, bool> p12LifecycleMutationCommitted;
+    [NonSerialized] private Func<NpcRuntime, bool, bool, bool, NpcActionRuntime, bool> p12LifecycleMutationAdmission;
+    [NonSerialized] private Action<NpcRuntime, bool, bool, bool> p12LifecycleMutationCommitted;
     [SerializeField]private string runtimeId;
     [SerializeField]private string personIdValue;
     [NonSerialized]private PersonId personIdentity;
@@ -97,6 +98,12 @@ public class NpcRuntime : ICapabilityConditionSource
     }
     public NpcActionData CurrentAction => currentAction;
     public NpcActionRuntime CurrentActionRuntime => currentActionRuntime;
+    internal long CurrentActionRevision => currentActionRevision;
+    internal bool HasConsistentCurrentActionSlot =>
+        (currentAction == null && currentActionRuntime == null)
+        || (currentActionRuntime != null
+            && currentActionRuntime.Action != null
+            && ReferenceEquals(currentActionRuntime.Action, currentAction));
     public NpcLifeState LifeState => lifeState;
     public bool IsAlive => lifeState == NpcLifeState.Alive;
     public bool IsDead => lifeState == NpcLifeState.Dead;
@@ -209,44 +216,76 @@ public class NpcRuntime : ICapabilityConditionSource
     }
 
     internal void BindP12LifecycleMutationBoundary(
-        Func<NpcRuntime, bool, bool, bool> admission,
-        Action<NpcRuntime, bool, bool> committed)
+        Func<NpcRuntime, bool, bool, bool, NpcActionRuntime, bool> admission,
+        Action<NpcRuntime, bool, bool, bool> committed)
     {
         if (admission == null) throw new ArgumentNullException(nameof(admission));
         if (committed == null) throw new ArgumentNullException(nameof(committed));
         if (p12LifecycleMutationAdmission != null || p12LifecycleMutationCommitted != null)
             throw new InvalidOperationException("NpcRuntime is already bound to a P12 lifecycle boundary.");
+        if (currentActionRuntime != null && !currentActionRuntime.CanBindToP12Owner(this))
+            throw new InvalidOperationException("NpcActionRuntime is already installed in another P12 owner slot.");
         p12LifecycleMutationAdmission = admission;
         p12LifecycleMutationCommitted = committed;
+        if (currentActionRuntime != null && !currentActionRuntime.TryBindP12Owner(this))
+        {
+            p12LifecycleMutationAdmission = null;
+            p12LifecycleMutationCommitted = null;
+            throw new InvalidOperationException("NpcActionRuntime could not bind to its exact P12 owner slot.");
+        }
     }
 
     internal bool IsP12LifecycleBound => p12LifecycleMutationAdmission != null;
 
-    internal bool CanAdvanceP12LifecycleRevisions(int lifeStateIncrements, int residenceIncrements)
+    internal bool CanAdvanceP12LifecycleRevisions(
+        int lifeStateIncrements,
+        int residenceIncrements,
+        int currentActionIncrements = 0)
     {
         return p12LifecycleMutationAdmission == null
             || (lifeStateIncrements >= 0
                 && residenceIncrements >= 0
+                && currentActionIncrements >= 0
                 && lifeStateRevision <= long.MaxValue - lifeStateIncrements
-                && residenceRevision <= long.MaxValue - residenceIncrements);
+                && residenceRevision <= long.MaxValue - residenceIncrements
+                && currentActionRevision <= long.MaxValue - currentActionIncrements);
     }
 
-    internal bool CanCommitP12LifecycleMutation(bool lifeStateChanged, bool residenceChanged)
+    internal bool CanCommitP12LifecycleMutation(
+        bool lifeStateChanged,
+        bool residenceChanged,
+        bool currentActionChanged = false,
+        NpcActionRuntime nextActionRuntime = null)
     {
         if (p12LifecycleMutationAdmission == null)
             return true;
-        if (!CanAdvanceP12LifecycleRevisions(lifeStateChanged ? 1 : 0, residenceChanged ? 1 : 0))
+        if (!CanAdvanceP12LifecycleRevisions(
+                lifeStateChanged ? 1 : 0,
+                residenceChanged ? 1 : 0,
+                currentActionChanged ? 1 : 0))
             return false;
-        try { return p12LifecycleMutationAdmission(this, lifeStateChanged, residenceChanged); }
+        try
+        {
+            return p12LifecycleMutationAdmission(
+                this,
+                lifeStateChanged,
+                residenceChanged,
+                currentActionChanged,
+                nextActionRuntime);
+        }
         catch { return false; }
     }
 
-    private void NotifyP12LifecycleMutationCommitted(bool lifeStateChanged, bool residenceChanged)
+    private void NotifyP12LifecycleMutationCommitted(
+        bool lifeStateChanged,
+        bool residenceChanged,
+        bool currentActionChanged = false)
     {
         if (lifeStateChanged && lifeStateRevision < long.MaxValue) lifeStateRevision++;
         if (residenceChanged && residenceRevision < long.MaxValue) residenceRevision++;
+        if (currentActionChanged && currentActionRevision < long.MaxValue) currentActionRevision++;
         if (p12LifecycleMutationCommitted == null) return;
-        try { p12LifecycleMutationCommitted(this, lifeStateChanged, residenceChanged); }
+        try { p12LifecycleMutationCommitted(this, lifeStateChanged, residenceChanged, currentActionChanged); }
         catch { }
     }
 
@@ -337,9 +376,7 @@ public class NpcRuntime : ICapabilityConditionSource
         {
             return;
         }
-
-        currentAction = action;
-        currentActionRuntime = action != null ? new NpcActionRuntime(action) : null;
+        TryInstallCurrentActionRuntime(action != null ? new NpcActionRuntime(action) : null);
     }
 
     public void SetCurrentActionRuntime(NpcActionRuntime actionRuntime)
@@ -349,8 +386,70 @@ public class NpcRuntime : ICapabilityConditionSource
             return;
         }
 
+        TryInstallCurrentActionRuntime(actionRuntime);
+    }
+
+    private bool TryInstallCurrentActionRuntime(NpcActionRuntime actionRuntime)
+    {
+        if (actionRuntime == currentActionRuntime
+            && ReferenceEquals(currentAction, actionRuntime?.Action))
+            return true;
+        bool p12Bound = p12LifecycleMutationAdmission != null;
+        if ((p12Bound && !HasConsistentCurrentActionSlot)
+            || (actionRuntime != null
+                && (actionRuntime.Action == null
+                    || (p12Bound
+                        ? !actionRuntime.CanBindToP12Owner(this)
+                        : actionRuntime.IsP12Bound)))
+            || !CanCommitP12LifecycleMutation(
+                false,
+                false,
+                true,
+                actionRuntime))
+            return false;
+
+        NpcActionRuntime previous = currentActionRuntime;
+        if (p12Bound && actionRuntime != null && !actionRuntime.TryBindP12Owner(this))
+            return false;
+        if (p12Bound && previous != null && !previous.UnbindP12Owner(this))
+        {
+            actionRuntime?.UnbindP12Owner(this);
+            return false;
+        }
+
         currentActionRuntime = actionRuntime;
         currentAction = actionRuntime != null ? actionRuntime.Action : null;
+        NotifyP12LifecycleMutationCommitted(false, false, true);
+        return true;
+    }
+
+    internal bool CanCommitInstalledP12ActionMutation(NpcActionRuntime actionRuntime)
+    {
+        return actionRuntime != null
+            && ReferenceEquals(currentActionRuntime, actionRuntime)
+            && HasConsistentCurrentActionSlot
+            && CanCommitP12LifecycleMutation(
+                false,
+                false,
+                true,
+                actionRuntime);
+    }
+
+    internal void NotifyInstalledP12ActionMutationCommitted(NpcActionRuntime actionRuntime)
+    {
+        if (actionRuntime == null || !ReferenceEquals(currentActionRuntime, actionRuntime))
+        {
+            return;
+        }
+        NotifyP12LifecycleMutationCommitted(false, false, true);
+    }
+
+    private void ClearCurrentActionSlotAfterAdmission()
+    {
+        NpcActionRuntime previous = currentActionRuntime;
+        currentAction = null;
+        currentActionRuntime = null;
+        previous?.UnbindP12Owner(this);
     }
 
     public bool TryApplyInjury(NpcInjurySeverity severity)
@@ -373,18 +472,18 @@ public class NpcRuntime : ICapabilityConditionSource
 
     public bool TryApplyDeath()
     {
+        bool currentActionChanged = currentActionRuntime != null;
         if (personRuntime != null
             || IsDead == true
             || string.IsNullOrWhiteSpace(ResidenceSettlementRuntimeId) == false
-            || !CanCommitP12LifecycleMutation(true, false))
+            || !CanCommitP12LifecycleMutation(true, false, currentActionChanged))
         {
             return false;
         }
 
         lifeState = NpcLifeState.Dead;
-        currentAction = null;
-        currentActionRuntime = null;
-        NotifyP12LifecycleMutationCommitted(true, false);
+        ClearCurrentActionSlotAfterAdmission();
+        NotifyP12LifecycleMutationCommitted(true, false, currentActionChanged);
         return true;
     }
 
@@ -399,9 +498,10 @@ public class NpcRuntime : ICapabilityConditionSource
 
     internal bool ApplyPersonDeathAfterValidation(NpcInjurySeverity severity)
     {
+        bool currentActionChanged = currentActionRuntime != null;
         if (NpcInjuryRules.IsValid(severity) == false
             || IsDead
-            || !CanCommitP12LifecycleMutation(true, false))
+            || !CanCommitP12LifecycleMutation(true, false, currentActionChanged))
         {
             return false;
         }
@@ -412,9 +512,8 @@ public class NpcRuntime : ICapabilityConditionSource
         }
 
         lifeState = NpcLifeState.Dead;
-        currentAction = null;
-        currentActionRuntime = null;
-        NotifyP12LifecycleMutationCommitted(true, false);
+        ClearCurrentActionSlotAfterAdmission();
+        NotifyP12LifecycleMutationCommitted(true, false, currentActionChanged);
         return true;
     }
 
@@ -435,9 +534,10 @@ public class NpcRuntime : ICapabilityConditionSource
     internal bool ApplyResidentDeathAfterPopulationValidation(NpcInjurySeverity severity)
     {
         bool residenceChanged = !string.IsNullOrWhiteSpace(residenceSettlementRuntimeId);
+        bool currentActionChanged = currentActionRuntime != null;
         if (NpcInjuryRules.IsValid(severity) == false
             || IsDead
-            || !CanCommitP12LifecycleMutation(true, residenceChanged))
+            || !CanCommitP12LifecycleMutation(true, residenceChanged, currentActionChanged))
         {
             return false;
         }
@@ -449,9 +549,8 @@ public class NpcRuntime : ICapabilityConditionSource
 
         lifeState = NpcLifeState.Dead;
         if (residenceChanged) residenceSettlementRuntimeId = null;
-        currentAction = null;
-        currentActionRuntime = null;
-        NotifyP12LifecycleMutationCommitted(true, residenceChanged);
+        ClearCurrentActionSlotAfterAdmission();
+        NotifyP12LifecycleMutationCommitted(true, residenceChanged, currentActionChanged);
         return true;
     }
 
@@ -459,11 +558,12 @@ public class NpcRuntime : ICapabilityConditionSource
         NpcInjurySeverity severity,
         PersonDeathTransition personDeathTransition)
     {
+        bool currentActionChanged = currentActionRuntime != null;
         if (NpcInjuryRules.IsValid(severity) == false
             || IsDead
             || personRuntime == null
             || personDeathTransition == null
-            || !CanCommitP12LifecycleMutation(true, false))
+            || !CanCommitP12LifecycleMutation(true, false, currentActionChanged))
         {
             return false;
         }
@@ -478,9 +578,8 @@ public class NpcRuntime : ICapabilityConditionSource
 
         lifeState = NpcLifeState.Dead;
         SetResidenceSettlementRuntimeId(null);
-        currentAction = null;
-        currentActionRuntime = null;
-        NotifyP12LifecycleMutationCommitted(true, false);
+        ClearCurrentActionSlotAfterAdmission();
+        NotifyP12LifecycleMutationCommitted(true, false, currentActionChanged);
         return true;
     }
 

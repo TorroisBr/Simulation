@@ -708,17 +708,28 @@ public sealed class ContinuationCensusProtocol
                         crimeJusticeProvider.RuntimeId);
                     schemaVersion = P12CrimeJusticeCensusProvider.SchemaVersion;
                 }
+                else if (provider is NpcCurrentActionCensusProvider currentActionProvider)
+                {
+                    ownerIdentity = currentActionProvider.NpcOwner;
+                    sectionId = NpcCurrentActionCensusProvider.SectionIdFor(
+                        currentActionProvider.NpcOwner.RuntimeId);
+                    schemaVersion = NpcCurrentActionCensusProvider.SchemaVersion;
+                }
                 else
                 {
                     return false;
                 }
 
+                if (witness == null) return false;
+                bool validCardinality = provider is NpcCurrentActionCensusProvider
+                    ? witness.Cardinality >= 0 && witness.Cardinality <= 1
+                    : witness.Cardinality == 1;
+
                 if (!ids.Add(sectionId)
-                    || witness == null
                     || !string.Equals(witness.SectionId, sectionId, StringComparison.Ordinal)
                     || witness.SchemaVersion != schemaVersion
                     || !ReferenceEquals(witness.OwnerInstanceIdentity, ownerIdentity)
-                    || witness.Cardinality != 1)
+                    || !validCardinality)
                     return false;
 
                 candidates.Add(new LifecycleOwnerCandidate

@@ -3795,6 +3795,58 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
         }
     }
 
+    private bool ValidateP12CurrentActionReferences(NpcRuntime owner, NpcActionRuntime actionRuntime)
+    {
+        if (owner == null
+            || actionRuntime == null
+            || !npcRegistryById.TryGetValue(owner.RuntimeId ?? string.Empty, out NpcRuntime registeredOwner)
+            || !ReferenceEquals(registeredOwner, owner)
+            || actionRuntime.Action == null
+            || string.IsNullOrWhiteSpace(actionRuntime.Action.DefinitionId))
+            return false;
+
+        NpcRuntime targetNpc = actionRuntime.TargetNpc;
+        if (targetNpc != null
+            && (string.IsNullOrWhiteSpace(targetNpc.RuntimeId)
+                || !npcRegistryById.TryGetValue(targetNpc.RuntimeId, out NpcRuntime registeredTarget)
+                || !ReferenceEquals(registeredTarget, targetNpc)))
+            return false;
+
+        CityRuntime targetCity = actionRuntime.TargetCity;
+        if (targetCity != null
+            && (string.IsNullOrWhiteSpace(targetCity.RuntimeId)
+                || !cities.Exists(city => ReferenceEquals(city, targetCity))))
+            return false;
+
+        ItemData targetItem = actionRuntime.TargetItem;
+        if (targetItem == null) return true;
+        string targetItemId = targetItem.DefinitionId;
+        if (string.IsNullOrWhiteSpace(targetItemId)) return false;
+
+        Dictionary<string, ItemData> admittedItems = new Dictionary<string, ItemData>(StringComparer.Ordinal);
+        HashSet<string> ambiguousItemIds = new HashSet<string>(StringComparer.Ordinal);
+        Action<ItemData> includeItem = item =>
+        {
+            if (item == null || string.IsNullOrWhiteSpace(item.DefinitionId)) return;
+            if (admittedItems.TryGetValue(item.DefinitionId, out ItemData existing)
+                && !ReferenceEquals(existing, item))
+                ambiguousItemIds.Add(item.DefinitionId);
+            else
+                admittedItems[item.DefinitionId] = item;
+        };
+
+        foreach (CityRuntime city in cities)
+            foreach (MarketItemRuntime marketItem in city?.Market?.Items ?? Array.Empty<MarketItemRuntime>())
+                includeItem(marketItem?.Item);
+        foreach (NpcRuntime npc in npcRuntimeSnapshot)
+            foreach (InventoryItemRuntime inventoryItem in npc?.ExistingInventory?.Items ?? Array.Empty<InventoryItemRuntime>())
+                includeItem(inventoryItem?.Item);
+
+        return !ambiguousItemIds.Contains(targetItemId)
+            && admittedItems.TryGetValue(targetItemId, out ItemData admittedItem)
+            && ReferenceEquals(admittedItem, targetItem);
+    }
+
     /// <summary>Assesses this partial passive NPC/Person census only.</summary>
     public bool TryAssessNpcRosterCensus(out ContinuationCensusFailure failure)
     {
@@ -4751,6 +4803,10 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
                         NpcLifecycleCensusProvider.CreateProviders(npcRuntimeSnapshot));
                     lifecycleProviders.AddRange(
                         P12CrimeJusticeCensusProvider.CreateNpcStatusProviders(npcRuntimeSnapshot));
+                    lifecycleProviders.AddRange(
+                        NpcCurrentActionCensusProvider.CreateProviders(
+                            npcRuntimeSnapshot,
+                            ValidateP12CurrentActionReferences));
                 }
                 bool reconciled = npcRosterCensusProtocol.TryReconcileSpatialKnowledgeRosterAndNotifyCommittedMutations(
                     changedFixedSections,
@@ -5270,12 +5326,14 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
             }
 
             int personRevisionIncrements = resident ? 2 : 1;
+            bool actionChanged = materializedNpc?.CurrentActionRuntime != null;
             if (!TryBeginP12PopulationOperation(
                     PersonDeathCensusOperationId,
                     sectionIds,
                     () => transition.ExpectedPerson.CanAdvanceP12LifeResidenceRevision(personRevisionIncrements)
                         && (materializedNpc == null
-                            || materializedNpc.CanAdvanceP12LifecycleRevisions(1, 0))
+                            || materializedNpc.CanAdvanceP12LifecycleRevisions(
+                                1, 0, actionChanged ? 1 : 0))
                         && (!resident || settlement.Population.CanAdvanceP12AggregateRevision),
                     out P12PopulationOperationScope p12Scope))
             {

@@ -161,9 +161,11 @@ public sealed partial class SimulationRuntime
             lifecycleProviders.AddRange(
                 PersonLifeResidenceCensusProvider.CreateProviders(personStore.Persons));
             lifecycleProviders.AddRange(
-                NpcLifecycleCensusProvider.CreateProviders(npcRuntimeSnapshot));
+            NpcLifecycleCensusProvider.CreateProviders(npcRuntimeSnapshot));
             lifecycleProviders.AddRange(
                 P12CrimeJusticeCensusProvider.CreateNpcStatusProviders(npcRuntimeSnapshot));
+            lifecycleProviders.AddRange(
+                NpcCurrentActionCensusProvider.CreateProviders(npcRuntimeSnapshot, ValidateP12CurrentActionReferences));
             if (!TryRegisterP12CrimeJusticeOwnerSections(protocol))
                 return false;
             return protocol.RegisterLifecycleOwnerRosterFamily(lifecycleProviders, out _);
@@ -249,6 +251,8 @@ public sealed partial class SimulationRuntime
         providers.AddRange(PersonLifeResidenceCensusProvider.CreateProviders(personStore.Persons));
         providers.AddRange(NpcLifecycleCensusProvider.CreateProviders(npcRuntimeSnapshot));
         providers.AddRange(P12CrimeJusticeCensusProvider.CreateNpcStatusProviders(npcRuntimeSnapshot));
+        providers.AddRange(
+            NpcCurrentActionCensusProvider.CreateProviders(npcRuntimeSnapshot, ValidateP12CurrentActionReferences));
         return providers.AsReadOnly();
     }
 
@@ -399,10 +403,23 @@ public sealed partial class SimulationRuntime
     private bool CanCommitP12NpcLifecycleMutation(
         NpcRuntime npc,
         bool lifeStateChanged,
-        bool residenceChanged)
+        bool residenceChanged,
+        bool currentActionChanged,
+        NpcActionRuntime nextActionRuntime)
     {
         if (runtimeAdmissionContext == null) return true;
-        if (npc == null || !IsRuntimeAdmissionOwnerThreadCurrent()) return false;
+        if (npc == null
+            || !IsRuntimeAdmissionOwnerThreadCurrent()
+            || string.IsNullOrWhiteSpace(npc.RuntimeId)
+            || !npcRegistryById.TryGetValue(npc.RuntimeId, out NpcRuntime registeredNpc)
+            || !ReferenceEquals(registeredNpc, npc))
+            return false;
+
+        string actionSectionId = NpcCurrentActionCensusProvider.SectionIdFor(npc.RuntimeId);
+        if (nextActionRuntime != null
+            && (lifeStateChanged || residenceChanged || !ValidateP12CurrentActionReferences(npc, nextActionRuntime)))
+            return false;
+
         P12PopulationOperationContext populationContext = activeP12PopulationOperationContext;
         NpcMembershipCensusContext membershipContext = activeNpcMembershipCensusContext;
         HashSet<string> allowedSectionIds = populationContext != null && populationContext.IsOwnedByCurrentThread()
@@ -410,14 +427,31 @@ public sealed partial class SimulationRuntime
             : membershipContext != null && membershipContext.IsOwnedByCurrentThread()
                 ? membershipContext.AllowedLifecycleSectionIds
                 : null;
-        if (allowedSectionIds == null) return false;
-        if (lifeStateChanged
-            && !allowedSectionIds.Contains(NpcLifecycleCensusProvider.SectionIdFor(npc.RuntimeId, false)))
-            return false;
-        if (residenceChanged && npc.BoundPersonRuntime == null)
+        if (lifeStateChanged || residenceChanged)
         {
-            string residenceId = NpcLifecycleCensusProvider.SectionIdFor(npc.RuntimeId, true);
-            if (!allowedSectionIds.Contains(residenceId)) return false;
+            if (allowedSectionIds == null
+                || (lifeStateChanged
+                    && !allowedSectionIds.Contains(NpcLifecycleCensusProvider.SectionIdFor(npc.RuntimeId, false))))
+                return false;
+            if (residenceChanged && npc.BoundPersonRuntime == null
+                && !allowedSectionIds.Contains(NpcLifecycleCensusProvider.SectionIdFor(npc.RuntimeId, true)))
+                return false;
+        }
+        if (currentActionChanged && allowedSectionIds != null)
+        {
+            if (!allowedSectionIds.Contains(actionSectionId)) return false;
+        }
+        else if (currentActionChanged)
+        {
+            if (lifeStateChanged || residenceChanged
+                || populationContext != null
+                || membershipContext != null
+                || !npcRosterCensusProtocol.TryReadActiveOperationCount(
+                    out int activeOperationCount,
+                    out _)
+                || activeOperationCount <= 0
+                || !CanCommitP12MutationSections(new[] { actionSectionId }))
+                return false;
         }
         return true;
     }
@@ -425,7 +459,8 @@ public sealed partial class SimulationRuntime
     private void NotifyP12NpcLifecycleMutation(
         NpcRuntime npc,
         bool lifeStateChanged,
-        bool residenceChanged)
+        bool residenceChanged,
+        bool currentActionChanged)
     {
         if (runtimeAdmissionContext == null) return;
         if (lifeStateChanged
@@ -436,6 +471,21 @@ public sealed partial class SimulationRuntime
             && !TryRecordP12LifecycleMutation(
                 NpcLifecycleCensusProvider.SectionIdFor(npc.RuntimeId, true)))
             FaultRuntimeAdmission();
+        if (currentActionChanged)
+        {
+            if (activeP12PopulationOperationContext != null
+                || activeNpcMembershipCensusContext != null)
+            {
+                if (!TryRecordP12LifecycleMutation(
+                        NpcCurrentActionCensusProvider.SectionIdFor(npc.RuntimeId)))
+                    FaultRuntimeAdmission();
+            }
+            else if (!NotifyP12MutationSections(new[]
+                    { NpcCurrentActionCensusProvider.SectionIdFor(npc.RuntimeId) }))
+            {
+                FaultRuntimeAdmission();
+            }
+        }
     }
 
     private bool CanCommitP12PopulationMutation(
@@ -514,7 +564,11 @@ public sealed partial class SimulationRuntime
         if (person == null) return false;
         sectionIds.Add(PersonLifeResidenceCensusProvider.SectionIdFor(person.PersonId));
         if (materializedNpc != null)
+        {
             sectionIds.Add(NpcLifecycleCensusProvider.SectionIdFor(materializedNpc.RuntimeId, false));
+            if (materializedNpc.CurrentActionRuntime != null)
+                sectionIds.Add(NpcCurrentActionCensusProvider.SectionIdFor(materializedNpc.RuntimeId));
+        }
         if (resident)
         {
             if (settlement?.Population == null
@@ -559,17 +613,25 @@ public sealed partial class SimulationRuntime
             sectionIds.Add(PersonLifeResidenceCensusProvider.SectionIdFor(person.PersonId));
             if (residentDeath)
                 sectionIds.Add(NpcLifecycleCensusProvider.SectionIdFor(npc.RuntimeId, false));
+            bool actionChanged = npc.CurrentActionRuntime != null;
+            if (actionChanged)
+                sectionIds.Add(NpcCurrentActionCensusProvider.SectionIdFor(npc.RuntimeId));
             localRevisionCapacity = () => settlement.Population.CanAdvanceP12AggregateRevision
                 && person.CanAdvanceP12LifeResidenceRevision(residentDeath ? 2 : 1)
-                && (!residentDeath || npc.CanAdvanceP12LifecycleRevisions(1, 0));
+                && (!residentDeath || npc.CanAdvanceP12LifecycleRevisions(
+                    1, 0, actionChanged ? 1 : 0));
             return true;
         }
 
         sectionIds.Add(NpcLifecycleCensusProvider.SectionIdFor(npc.RuntimeId, true));
         if (residentDeath)
             sectionIds.Add(NpcLifecycleCensusProvider.SectionIdFor(npc.RuntimeId, false));
+        bool npcActionChanged = npc.CurrentActionRuntime != null;
+        if (npcActionChanged)
+            sectionIds.Add(NpcCurrentActionCensusProvider.SectionIdFor(npc.RuntimeId));
         localRevisionCapacity = () => settlement.Population.CanAdvanceP12AggregateRevision
-            && npc.CanAdvanceP12LifecycleRevisions(residentDeath ? 1 : 0, 1);
+            && npc.CanAdvanceP12LifecycleRevisions(
+                residentDeath ? 1 : 0, 1, npcActionChanged ? 1 : 0);
         return true;
     }
 

@@ -17,6 +17,9 @@ public class NpcActionRuntime
     [SerializeField] private string stableOccurrenceKey;
     [NonSerialized] private CommercialDecisionEvidence commercialDecisionEvidence;
     [NonSerialized] private CommercialScoutingEvidence commercialScoutingEvidence;
+    [NonSerialized] private NpcRuntime p12Owner;
+    [NonSerialized] private Func<bool> p12MutationAdmission;
+    [NonSerialized] private Action p12MutationCommitted;
 
     public NpcActionData Action => action;
     public NpcRuntime TargetNpc => targetNpc;
@@ -62,12 +65,20 @@ public class NpcActionRuntime
 
     public void SetSuccessChanceMultiplier(float multiplier)
     {
-        successChanceMultiplier = Mathf.Max(0f, multiplier);
+        float normalized = Mathf.Max(0f, multiplier);
+        if (successChanceMultiplier.Equals(normalized)) return;
+        if (!CanCommitP12Mutation()) return;
+        successChanceMultiplier = normalized;
+        NotifyP12MutationCommitted();
     }
 
     public void SetOriginDecisionId(string decisionId)
     {
-        originDecisionId = string.IsNullOrWhiteSpace(decisionId) == true ? null : decisionId;
+        string normalized = string.IsNullOrWhiteSpace(decisionId) ? null : decisionId;
+        if (string.Equals(originDecisionId, normalized, StringComparison.Ordinal)) return;
+        if (!CanCommitP12Mutation()) return;
+        originDecisionId = normalized;
+        NotifyP12MutationCommitted();
     }
 
     /// <summary>
@@ -76,19 +87,69 @@ public class NpcActionRuntime
     /// </summary>
     public void SetStableOccurrenceKey(string occurrenceKey)
     {
-        stableOccurrenceKey = string.IsNullOrWhiteSpace(occurrenceKey) == true
+        string normalized = string.IsNullOrWhiteSpace(occurrenceKey) == true
             ? null
             : occurrenceKey;
+        if (string.Equals(stableOccurrenceKey, normalized, StringComparison.Ordinal)) return;
+        if (!CanCommitP12Mutation()) return;
+        stableOccurrenceKey = normalized;
+        NotifyP12MutationCommitted();
     }
 
     public void SetCommercialDecisionEvidence(CommercialDecisionEvidence evidence)
     {
+        if (ReferenceEquals(commercialDecisionEvidence, evidence)) return;
+        if (!CanCommitP12Mutation()) return;
         commercialDecisionEvidence = evidence;
+        NotifyP12MutationCommitted();
     }
 
     public void SetCommercialScoutingEvidence(CommercialScoutingEvidence evidence)
     {
+        if (ReferenceEquals(commercialScoutingEvidence, evidence)) return;
+        if (!CanCommitP12Mutation()) return;
         commercialScoutingEvidence = evidence;
+        NotifyP12MutationCommitted();
+    }
+
+    internal bool IsP12Bound => p12Owner != null;
+
+    internal bool CanBindToP12Owner(NpcRuntime owner) => owner != null
+        && (p12Owner == null || ReferenceEquals(p12Owner, owner));
+
+    internal bool TryBindP12Owner(NpcRuntime owner)
+    {
+        if (owner == null) return false;
+        if (ReferenceEquals(p12Owner, owner)) return true;
+        if (p12Owner != null) return false;
+        p12Owner = owner;
+        p12MutationAdmission = () => owner.CanCommitInstalledP12ActionMutation(this);
+        p12MutationCommitted = () => owner.NotifyInstalledP12ActionMutationCommitted(this);
+        return true;
+    }
+
+    internal bool UnbindP12Owner(NpcRuntime owner)
+    {
+        if (p12Owner == null) return true;
+        if (!ReferenceEquals(p12Owner, owner)) return false;
+        p12Owner = null;
+        p12MutationAdmission = null;
+        p12MutationCommitted = null;
+        return true;
+    }
+
+    private bool CanCommitP12Mutation()
+    {
+        if (p12MutationAdmission == null) return true;
+        try { return p12MutationAdmission(); }
+        catch { return false; }
+    }
+
+    private void NotifyP12MutationCommitted()
+    {
+        if (p12MutationCommitted == null) return;
+        try { p12MutationCommitted(); }
+        catch { }
     }
 
     public NpcActionRuntime(NpcActionData action, CityRuntime targetCity, ItemData targetItem, int amount, float expectedUnitPrice)
