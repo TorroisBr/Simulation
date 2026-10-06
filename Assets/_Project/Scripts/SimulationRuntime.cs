@@ -201,7 +201,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState
     private const string MarketPurchaseCensusOperationId = "runtime.economy.market-purchase";
     private const string MarketSaleCensusOperationId = "runtime.economy.market-sale";
     private const string MerchantDailyNpcTradeCensusOperationId = "runtime.merchant.advance-npc-trade-state";
-    private const string InstitutionOfficeOwnerCommitCensusOperationId = "runtime.institution-office.owner-commit";
+    private const string InstitutionOfficeOwnerCommitCensusOperationId = "p12.institution-office.owner-commit";
 
     private sealed class NpcMembershipCensusContext
     {

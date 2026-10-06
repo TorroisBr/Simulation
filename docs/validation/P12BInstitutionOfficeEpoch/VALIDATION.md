@@ -14,7 +14,7 @@ revision zero. The three Office witnesses share one installed `OfficeStore`
 identity and revision.
 
 The implementation admits the listed runtime Institution/Office commits as
-one `runtime.institution-office.owner-commit` operation. Institution commits
+one `p12.institution-office.owner-commit` operation. Institution commits
 notify their one changed section; Office commits notify records, incumbencies,
 and tenures together because they share the `OfficeStore` revision. A committed
 owner write remains successful if post-commit notification fails; the P12

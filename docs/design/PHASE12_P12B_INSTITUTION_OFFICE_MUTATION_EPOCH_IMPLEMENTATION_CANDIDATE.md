@@ -22,7 +22,7 @@ Office witnesses share their owner identity and revision. The section inventory
 increases from 235 to 239; this is a bounded addition, not a complete owner
 inventory.
 
-The sealed protocol declares `runtime.institution-office.owner-commit`. Before
+The sealed protocol declares `p12.institution-office.owner-commit`. Before
 any covered owner mutator runs, the runtime checks its owner thread, validates
 the exact changed-section baselines, validates mutation-epoch capacity, and
 enters that operation. On success it preserves the existing
