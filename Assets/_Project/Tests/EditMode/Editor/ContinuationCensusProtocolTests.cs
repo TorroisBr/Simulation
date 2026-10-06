@@ -342,6 +342,12 @@ public sealed class ContinuationCensusProtocolTests
 
         Assert.That(protocol.TryAssessRegisteredOperationQuiescence(out ContinuationCensusFailure failure), Is.False);
         Assert.That(failure, Is.EqualTo(ContinuationCensusFailure.ProtocolFaulted));
+        FieldInfo activeOperationCount = typeof(ContinuationCensusProtocol).GetField(
+            "activeOperationCount",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(activeOperationCount, Is.Not.Null);
+        Assert.That((int)activeOperationCount.GetValue(protocol), Is.EqualTo(1),
+            "off-thread disposal must preserve the active count because the owner thread did not close the scope");
     }
 
     [Test]

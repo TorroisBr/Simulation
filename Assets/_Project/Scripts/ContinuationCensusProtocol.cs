@@ -2061,7 +2061,10 @@ public sealed class ContinuationCensusProtocol
 
     internal void ExitOperation(Thread scopeOwnerThread, int scopeOwnerThreadId)
     {
-        if (!TryRequireOwnerThread(out _)
+        OwnerThreadBinding binding = Volatile.Read(ref ownerThreadBinding);
+        if (binding == null
+            || !ReferenceEquals(Thread.CurrentThread, binding.Thread)
+            || Thread.CurrentThread.ManagedThreadId != binding.ManagedThreadId
             || !ReferenceEquals(scopeOwnerThread, Thread.CurrentThread)
             || scopeOwnerThreadId != Thread.CurrentThread.ManagedThreadId
             || activeOperationCount <= 0)
