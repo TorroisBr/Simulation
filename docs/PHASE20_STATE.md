@@ -6,7 +6,7 @@
 
 **P20-A architecture baseline:** `c285466c355103d3637ac165246591b72eb7bda0`. **P20-B checkpoint architecture baseline:** `f6924e63d8e5731da1d33021d0361e7defe6dad7`; the current P20-C identity reconciliation is architecture tip `a29ddd1271fff8fc45abb3270229b43bfe89f2a9`.
 
-**Canonical branch:** `codex/phase20/canonical`; P20-B was promoted at `142672b9eddd23013ff83b7b176979dd4cc9e3b6` from prior canonical `7a81cc0ecbc511dd36c248ec62c7b20f7e477f53`. A documentation-only State/evidence follow-up is recorded below.
+**Canonical branch:** `codex/phase20/canonical`; P20-B was promoted at `142672b9eddd23013ff83b7b176979dd4cc9e3b6` from prior canonical `7a81cc0ecbc511dd36c248ec62c7b20f7e477f53`. P20-C was subsequently promoted at `dc5a1dd9d395f110c7af7e76394938ba9c626c45` from `fe4909a0fc371a2fedb55cb9cef086e5dbf63526`; the current docs-only State follow-up is recorded below.
 
 ## Checkpoint status
 
@@ -40,7 +40,7 @@ This checkpoint adds only the bounded Daily-profile admission/census seam. It do
 
 The user resolved the checkpoint identity conflict: retain P20-A as the synthetic multi-participant operation; retain P20-B as the promoted Daily-v1 empty-owner census/admission checkpoint; assign the bounded Two-Person Joint Civil Travel consumer to P20-C. A search of current P20 canonical content and retained checkpoint history found no earlier P20-C reservation.
 
-The canonical P20-B promotion and its State/review records remain unchanged. The existing P20-B section above remains the complete P20-B scope statement. The joint-travel source commits are already ancestors of the P20-B promotion history, and current P20 canonical Assets tree 8b579d9f61ad3145b535b27cdd71a37d512a32b1 matches the reviewed de24dff Assets tree. Preserve those commits and code; do not rewrite history, remove the consumer, or infer that the P20-B checkpoint has been broadened. The separate P20-C checkpoint requires its own current-base design/code review and status record.
+The canonical P20-B promotion and its State/review records remain unchanged. The existing P20-B section above remains the complete P20-B scope statement. At P20-B promotion, canonical Assets tree `8b579d9f61ad3145b535b27cdd71a37d512a32b1` matched the reviewed `de24dff` Assets tree. The joint-travel source commits were present in that ancestry but were not P20-B delivery. Preserve those commits and code; do not rewrite history, remove the consumer, or infer that the P20-B checkpoint has been broadened. P20-C has its own current-base design/code review and promotion record below.
 
 The historical P20-B joint-travel technical design at `8afc463fb71112a0c7b8902e7e5673aee9e31bd9` remains available for reuse. The current architecture handoff at `a29ddd1271fff8fc45abb3270229b43bfe89f2a9` and its independent design review record `PASS / READY_FOR_IMPLEMENTATION` for P20-C. Current source revalidation against P8 `470667d`, P18 `8ac2d78`, P20 `fe4909a`, and P12 `94551b0` confirms the preserved boundaries: two distinct Persons in the proving fixture only; P18 remains the timeline/lifecycle/commitment authority; P8 owns each Person's travel truth; P20-B/P12 Daily-v1 remains explicitly empty and rejects populated P20 travel state.
 
