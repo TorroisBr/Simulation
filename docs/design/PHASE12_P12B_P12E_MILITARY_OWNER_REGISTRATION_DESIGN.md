@@ -117,5 +117,8 @@ the existing `SimulationRuntime` census hotspot; P12-B remains incomplete.
 **Test-surface addendum:** after the PASS, source inspection found a second
 existing hard-coded `260` selected-profile inventory assertion in
 `PropertyEstateMutationEpochTests`. Updating that assertion to 268 is test-only
-maintenance for the same registration and does not alter the reviewed scope;
-independent confirmation of this design-record addendum is pending.
+maintenance for the same registration and does not alter the reviewed scope.
+The independent reviewer confirmed the addendum at design tip
+`14cfdf0c330579d55e9f1d9f35045d3dfc2711c4`, relative to reviewed design tip
+`897d43e` and canonical `88d476729715aa82578cb2a204e32a69263e6402`; verdict:
+**PASS**, with implementation readiness and all scope limits unchanged.
