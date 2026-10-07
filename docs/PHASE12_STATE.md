@@ -2155,3 +2155,45 @@ This promotion adds census registration and initial cardinality admission only. 
 The P12 dependency edges are unchanged: P12-C waits on B; P12-D/E wait on B and C; P12-F waits on C/D/E; P12-G waits on B–F plus a validated live-profile inventory; P12-A waits on complete included-owner export/staged hydration, validated live inventory, and its separate authorization; P13 remains blocked on supported continuation and recoverable causal history. P12-F Expedition remains deferred until its documented P12-C/D/E prerequisites are met.
 
 The latest source-linked owner/operation/epoch crosswalk predates this promotion and records the earlier 268-section inventory. It does not prove exhaustive successful-write-to-epoch coverage; registration-to-scope consistency is not proof that every supported producer is represented. The refreshed read-only audit did not prove a concrete missing operation/epoch edge. The next bounded task is therefore an evidence-only, current-tip callsite matrix: enumerate the selected Daily-v1 live owners and cardinalities, locate every supported successful commit, map its exact sections/local revision, sealed operation scope and shared-epoch notification, and distinguish production reachability from registered-but-unused operations. Treat any unproven edge as an evidence gap, not as permission to add speculative mutation wiring. Revisit runtime-wide owner-thread/quiescence and completed-boundary lifecycle only after that current matrix is established.
+
+### P8-A/B/C source reconciliation — audited canonical `2d61e19`
+
+The source-linked P8-A/B/C admission and current Daily-v1 callsite delta is
+recorded in [`PHASE12_B_BLOCKER_RESOLUTION.md`](design/PHASE12_B_BLOCKER_RESOLUTION.md)
+and the updated [`PHASE12_OWNER_COVERAGE_INVENTORY.md`](design/PHASE12_OWNER_COVERAGE_INVENTORY.md).
+The 275-section inventory now has exact P8-A `1/1/1` Required counts and
+P8-B/C exact-zero admission against installed owner identity. Authored P8-A
+geography is established before runtime construction and the P12 baseline.
+At this audited canonical, P10 A/B and P14-B are rejected before WorldId;
+P14-A reaches the P8-C exact-zero census rejection before publication. The
+follow-up P12 candidate adds explicit P14-A rejection before WorldId. No
+selected Daily-v1 P8-B/C position/passage/crossing writer was found. The
+P8-specific delta therefore proves no missing operation or shared-
+epoch edge. It adds no operation/callback and makes no broader completeness
+claim.
+
+The remaining matrix is still incomplete across the wider 275-section profile:
+registration-to-operation consistency does not prove every supported ingress
+or successful commit is mapped to its changed sections and shared epoch. The
+read-only source audit found no concrete remaining missing writer/epoch edge,
+so no new implementation checkpoint is justified from this evidence alone.
+Continue the current-tip owner-family and successful-write reconciliation;
+then prove runtime-wide owner-thread/quiescence and revalidate the completed-
+boundary lifecycle against that evidence. Preserve P12-B `INCOMPLETE`, P12-A
+`WAIT_DEPENDENCY`, and P13 `BLOCKED`.
+
+### P14-A Daily-v1 early rejection correction candidate — 2026-10-07
+
+The source audit found that promoted P12 code rejected P14-B finite sources
+before WorldId allocation, but P14-A authored ExogenousDaily material flow
+could pass the same early check and reach City-anchor composition. The existing
+P8-C `ExplicitlyEmpty` witness then rejects it before publication. The accepted
+P12 profile contract keeps P14-A outside selected Daily-v1, so candidate
+`65315888a080d2df3fcddd7f977fe8136566a9bb` adds an early P14-A profile
+rejection before WorldId allocation. Its `Assets` tree is
+`ea356e4e1241b82395cfeb3821705589252d87a4`; the focused and full validation is
+recorded in [`P12DailyP14Admission/VALIDATION.md`](validation/P12DailyP14Admission/VALIDATION.md).
+This remains a candidate pending exact-tip review and canonical integration.
+Standalone unscoped P14-A behavior remains covered. This candidate adds no
+census section, operation, mutation callback, or shared-epoch claim, and it
+does not change P12-B/P12-A/P13 readiness.

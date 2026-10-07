@@ -1071,3 +1071,42 @@ tied to a successful advance sequence. The FR-B current-day read is not such a
 token. This inventory remains partial; P12-B is INCOMPLETE, P12-A is
 WAIT_DEPENDENCY, and P13 is BLOCKED. No export, hydration, capture eligibility,
 or Phase closure is implied.
+
+### P12-B P8-A/B/C admission providers — canonical `2d61e19` (2026-10-07)
+
+The selected Daily-v1 census now contains 275 sections after fast-forwarding
+`14a4465` and recording the promotion State. The reviewed code is
+`c2a21d8`, tree `24f2c317`. This increment registers the seven existing
+spatial providers below against the exact cloned/runtime-installed owners:
+
+| Section | Owner | Role / initial cardinality | Current Daily-v1 writer evidence |
+|---|---|---|---|
+| `p8a.hexes` | `SpatialAuthorityStore` | Required / 1 | Authored by P9 geography before runtime construction and census baseline; no current post-publication Daily writer found. |
+| `p8a.locations` | `SpatialAuthorityStore` | Required / 1 | Authored by P9 geography before runtime construction and census baseline; no current post-publication Daily writer found. |
+| `p8a.scale-context` | `SpatialAuthorityStore` | Required / 1 | Authored in the same pre-runtime P9 geography stage; no current post-publication Daily writer found. |
+| `p8b.passage-option-barrier-state` | installed `SpatialAuthorityStore.PassageAuthority` | ExplicitlyEmpty / 0 | Mutator APIs exist; no current selected Daily production caller found. |
+| `p8b.crossings` | `SpatialAuthorityStore` | ExplicitlyEmpty / 0 | `TryRegisterCrossing` has no current selected Daily production caller. |
+| `p8c.city-site-location-bindings` | `LegacySpatialAnchorBindingStore` | ExplicitlyEmpty / 0 | P10 A/B are rejected before Daily-v1 identity allocation. Promoted code rejects P14-B before WorldId; P14-A is rejected later by the exact-zero P8-C census before publication. The follow-up candidate moves P14-A rejection to the same pre-identity profile boundary. Standalone P14 proving profiles remain outside selected Daily-v1 admission. |
+| `p8c.person-positions` | `PersonSpatialPositionStore` | ExplicitlyEmpty / 0 | P8-E coordinator is composed but not invoked by the selected Daily-v1 production path. |
+
+The exact selected-profile composition asserts section identity, schema, role,
+owner identity, cardinality, revision, stable repeated witnesses, and the 275
+total. Runtime admission rejects missing/wrong Required cardinalities and
+nonzero ExplicitlyEmpty P8-B/C sections. The detailed source and callsite
+delta is in [`PHASE12_B_BLOCKER_RESOLUTION.md`](PHASE12_B_BLOCKER_RESOLUTION.md)
+under “P12-B P8-A/B/C selected-profile source crosswalk — canonical
+`2d61e19`”; exact validation evidence is
+[`P12BSpatialProfileCardinalityAdmission/VALIDATION.md`](../validation/P12BSpatialProfileCardinalityAdmission/VALIDATION.md).
+
+This is an initial selected-profile admission inventory plus a P8-A/B/C
+current-callsite reconciliation. It does not prove all 275 owners or all
+evolved successful-write/epoch paths are exhaustive. No P8-B/C writer,
+operation ID, mutation callback, or shared-epoch claim is added. P12-B remains
+incomplete, P12-A remains `WAIT_DEPENDENCY`, and P13 remains blocked.
+
+The P14-A early Daily-v1 rejection correction is candidate code
+`65315888a080d2df3fcddd7f977fe8136566a9bb` (tree
+`ea356e4e1241b82395cfeb3821705589252d87a4`). It preserves P14-A as an
+unscoped proving profile and leaves P8-C's selected-profile exact-zero role
+unchanged. The selected Daily-v1 owner/cardinality recheck and all required
+validation are recorded in [`P12DailyP14Admission/VALIDATION.md`](../validation/P12DailyP14Admission/VALIDATION.md).

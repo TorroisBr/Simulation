@@ -1737,3 +1737,37 @@ Continue the remaining owner/cardinality and runtime-wide owner-thread/
 quiescence evidence. Then revalidate the completed-boundary design against
 the full exact supported-write matrix before issuing any token. A token
 implementation without those prerequisites would overstate P12-B readiness.
+
+## P12-B P8-A/B/C selected-profile source crosswalk — canonical `2d61e19`
+
+**Audited P12 canonical:** `codex/phase12/canonical` at `2d61e19e8c82bfc729d613d3462a087dfba8ac8f`. The implementation code is `c2a21d8eb544291d3a46ef0d65d4f4c226feefbe`, tree `24f2c317ec28a8123b86d558ae0889505ba1aff6`; the reviewed and validated inventory has 275 sections. This is a source crosswalk for the P8-A/B/C delta, not a claim that all 275 owners or all supported commits are now exhaustively covered.
+
+| Census section | Installed owner | Daily-v1 admission role and initial rows | Selected-profile writer/crosswalk result |
+|---|---|---:|---|
+| `p8a.hexes` | Runtime-cloned `SpatialAuthorityStore` | Required, 1 | The one authored Hex is composed in the P9 geography stage before `SimulationRuntime` construction and before the P12 census baseline. No post-publication Daily-v1 Hex writer is present in the current production call graph. |
+| `p8a.locations` | Same `SpatialAuthorityStore` | Required, 1 | The one authored, Hex-anchored Location is composed with the P9 geography before census baseline. No post-publication Daily-v1 Location writer is present. |
+| `p8a.scale-context` | Same `SpatialAuthorityStore` | Required, 1 | The authored scale context is part of that same pre-runtime geography composition. No post-publication Daily-v1 scale-context writer is present. |
+| `p8b.passage-option-barrier-state` | Runtime-cloned `SpatialAuthorityStore.PassageAuthority` child | ExplicitlyEmpty, 0 | Passage connection/rule/barrier registration and passage/barrier condition mutators exist, but no selected Daily-v1 production callsite was found. They remain possible future consumers, not current Daily-v1 writer evidence. |
+| `p8b.crossings` | Runtime-cloned `SpatialAuthorityStore` | ExplicitlyEmpty, 0 | `TryRegisterCrossing` has no selected Daily-v1 production callsite. |
+| `p8c.city-site-location-bindings` | Runtime-cloned `LegacySpatialAnchorBindingStore` | ExplicitlyEmpty, 0 | Site binding calls belong to P10-A/B, both rejected before Daily-v1 identity allocation. The promoted code rejects P14-B finite sources before WorldId; P14-A authoring reaches the P8-C exact-zero census rejection before publication. This follow-up candidate adds the same early profile boundary for P14-A. Standalone P14 proving profiles remain unscoped and supported. |
+| `p8c.person-positions` | Runtime-cloned `PersonSpatialPositionStore` | ExplicitlyEmpty, 0 | The runtime constructs/exposes the P8-E travel coordinator, but current selected Daily-v1 production code has no call into its position-commit methods. P8-E remains a conditional consumer, not a blanket P12 dependency. |
+
+### Source path and validation evidence
+
+`SimulationRuntime.InitializeNpcRosterCensusProtocol` registers the P8-A/B/C providers through `TryRegisterP12RuntimeIdentitySpatialCensusOwners` before sealing provider inventories and establishing the selected-profile baseline (`SimulationRuntime.cs:1942-2007`; `P12RuntimeIdentitySpatialCensus.cs:48-190`). The composition test binds all seven witnesses to the expected installed owner, checks section/schema/role/cardinality/revision and repeated reads, and asserts 275 total sections (`SimulationBootstrapCompositionTests.cs:724-835`). Admission tests reject missing or wrong Required counts and populated P8-B/C ExplicitlyEmpty sections before publication (`SimulationRuntimeAdmissionTests.cs:82-135`). Exact final test artifacts are in [`P12BSpatialProfileCardinalityAdmission/VALIDATION.md`](../validation/P12BSpatialProfileCardinalityAdmission/VALIDATION.md).
+
+The selected startup composes authored geography at `TesteSimulacao.cs:436-448`; `SimulationRuntime` is constructed later in `p9.genesis.validate-profile/v1`. P10-A/B profile guards reject the Ruin paths at `TesteSimulacao.cs:198-208`. `BindAuthoredMaterialFlowCityAnchors` is conditional on `CityRuntime.HasLocalDailyMaterialFlow` (`TesteSimulacao.cs:451-468`). The promoted code rejected P14-B finite reserves under Daily-v1, but did not reject P14-A ExogenousDaily material-flow authoring at this early boundary; that configuration could proceed to City-anchor composition, where the exact-zero P8-C admission would fail before publication. This candidate adds explicit P14-A rejection in `ValidateP14SourceAdmission` before WorldId allocation and keeps the unscoped P14-A proving profile intact. The selected Daily-v1 asset has no P14 material-flow fields, so its admitted composition remains the P9-B-only profile.
+
+The correction candidate is `65315888a080d2df3fcddd7f977fe8136566a9bb`
+(`Assets` tree `ea356e4e1241b82395cfeb3821705589252d87a4`). Its new admission
+test proves P14-A rejection before identity/owner construction; unscoped P14-A
+still passes. Exact selected-profile, focused, full EditMode, and Smoke results
+are recorded in [`P12DailyP14Admission/VALIDATION.md`](../validation/P12DailyP14Admission/VALIDATION.md).
+
+The passage and crossing mutator symbols currently occur as declarations (and in their own internal implementations/tests), not as callsites from the selected Daily-v1 systems. `PersonSpatialPositionStore` mutation helpers are similarly reached by its prepared-change implementation; the P8-E coordinator is composed at `SimulationRuntime.cs:1206-1208` but is not invoked by the selected daily loop. This is a current repository call-graph result, not a security boundary or a claim that the public APIs cannot be called by future code. A future Daily-v1 consumer must revise the profile and its owner/operation/epoch map before using these writes.
+
+### Operation and epoch disposition
+
+The selected protocol retains its existing 23 registered `ContinuationCensusProtocol` operation IDs: membership, bootstrap publication, daily advance, three travel operations, five economy/merchant operations, six bounded owner-commit operations, and six population/person lifecycle operations. The registration is visible at `SimulationRuntime.cs:2010-2067`, `P12PopulationLifecycleCensus.cs:188-196`, and `P12TravelPartyStartOperation.cs:7,327`. The P8-A/B/C provider addition registers no new operation and changes no commit callback. P8-A is built before the P12 baseline; P8-B/C have no current supported Daily-v1 producer. Therefore this P8-specific delta proves no missing P8 operation/shared-epoch edge. It does not prove the 23-ID list exhausts supported ingress, nor that every other selected owner and successful commit is represented.
+
+**Disposition:** the P8-A/B/C admission and current Daily-v1 writer delta is reconciled. The wider selected-profile owner/cardinality and successful-write/shared-epoch matrix remains open; current evidence does not prove a concrete missing operation/epoch edge. Continue source-linked reconciliation of the remaining owner families and supported ingress. Do not add speculative runtime wiring. Runtime-wide owner-thread/quiescence and the successful-advance boundary token remain separate blockers after that evidence is complete. P12-B remains INCOMPLETE, P12-A remains WAIT_DEPENDENCY, and P13 remains BLOCKED.
