@@ -2295,3 +2295,34 @@ the user's explicit standing authority for bounded promotions after all exact-
 tip review, validation, ancestry, tree, and scope conditions pass; this
 governance wording mismatch does not change technical readiness or authorize
 Phase closure.
+
+## P12-B Daily-v1 source-linked owner/commit ledger — 2026-10-07
+
+The bounded effective-owner and known-commit ledger is recorded in
+[`PHASE12_B_DAILY_V1_EFFECTIVE_OWNER_COMMIT_LEDGER.md`](design/PHASE12_B_DAILY_V1_EFFECTIVE_OWNER_COMMIT_LEDGER.md).
+Candidate `1963cb6a7fab8a874b3c2c55af685cbe0cd4649a` was independently
+reviewed against P12 canonical base `405f70e58a7a1dd8be255798b795faff095f44b4`;
+the candidate tree is `28532e5abeb18f016cfceb890d15b8ff35549b0a`. The exact-tip
+review is recorded in
+[`PHASE12_B_DAILY_V1_EFFECTIVE_OWNER_COMMIT_LEDGER_REVIEW.md`](design/PHASE12_B_DAILY_V1_EFFECTIVE_OWNER_COMMIT_LEDGER_REVIEW.md).
+The documentation-only candidate and review record are promoted together at
+this State's commit; the ledger's reviewed tree is unchanged.
+
+The ledger consolidates the selected-profile `65 + 20*N + U + P` inventory
+(275 rows at the authored baseline) with source-linked owner identity,
+cardinality, local revision, and known successful-commit boundaries. It
+reconciles the 23 registered operation IDs and separately audits the eleven
+unregistered RuntimeIdAllocator counters. It found no concrete new supported
+Daily-v1 writer or missing shared-epoch edge. The ledger explicitly does not
+prove exhaustive reachable-state or supported-ingress coverage; those eleven
+counter kinds remain an open continuation/reconstruction boundary rather than
+being declared irrelevant.
+
+This closes the source-linked ledger evidence task only. The remaining P12-B
+obligations are to resolve the effective-owner/supported-ingress exhaustiveness
+boundary, prove runtime-wide owner-thread and quiescence coverage, and validate
+a completed-boundary token tied to a successful advance sequence. No production
+behavior or census section changes. P12-B remains `INCOMPLETE`; P12-A remains
+`WAIT_DEPENDENCY`; P13 remains `BLOCKED`. No complete owner/shared-epoch
+coverage, global quiescence, capture eligibility, export, hydration, downstream
+readiness, or Phase 12 closure is claimed.
