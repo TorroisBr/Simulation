@@ -3,6 +3,42 @@
 **Status:** PHASE 12 IN PROGRESS — P12-A WAIT_DEPENDENCY; P12-B INCOMPLETE
 (PARTIAL FOUNDATION PROMOTED).
 
+## Current canonical status — P8-D exact-zero admission promoted
+
+The remote `codex/phase12/canonical` branch is at
+`77030ff8cd09d1c7999c63f46e8fea511c60336b` (tree
+`b2404474c4f285511e10a62444c0026efb2c9505`). This is the promoted P8-D
+exact-zero admission candidate, code `7e827b3fe4b8effefd682838c6be575d25eab501`
+(code tree `127edf616d99bca0614041b54f72ae5addeb26b2`). The exact-tip
+implementation review passed and is recorded in
+[`design/PHASE12_P12B_P8D_EXACT_ZERO_REGISTRATION_IMPLEMENTATION_REVIEW.md`](design/PHASE12_P12B_P8D_EXACT_ZERO_REGISTRATION_IMPLEMENTATION_REVIEW.md).
+The accepted slice registers the existing P8-D route-observation and
+route-plan-history owners as explicit-empty schema-v1 sections, bound to the
+exact installed runtime clones. The selected P9-B-only Daily-v1 partial
+inventory is now 260 sections. The focused composition passed 24/24, ALL
+EditMode passed 2434/2434, official Smoke passed 5/5, and `git diff --check`
+passed. The selected Daily-v1 admission/profile-separation revalidation
+passed 1/1 on the pre-implementation canonical code tree; detailed Unity
+outputs, hashes, and the archived first failed plus final passing full-suite
+run are recorded in
+[`validation/P12P8DExactZeroAdmission/VALIDATION.md`](validation/P12P8DExactZeroAdmission/VALIDATION.md).
+
+This is partial census evidence only. It adds no route operation, route
+feature, shared-epoch notification, capture eligibility, export, hydration,
+P12-A readiness, P12-B completion, P13 readiness, or Phase closure. P12-A
+remains `WAIT_DEPENDENCY`; P12-B remains incomplete; P13 remains blocked; and
+P12-F Expedition remains deferred behind P12-C/D/E. The historical P8-D gap
+section and earlier 258-section snapshots below describe their original
+baselines and are superseded for current status by this record.
+
+The current source audit identified the next bounded P12-B inventory gap:
+eight already-composed P12-E ArmedForce/manpower/position/Conflict/War/Battle
+sections have owner-issued providers and selected-profile day-zero evidence,
+but are not yet registered in the sealed protocol. Their integration boundary
+and exclusions are recorded in
+[`design/PHASE12_B_BLOCKER_RESOLUTION.md`](design/PHASE12_B_BLOCKER_RESOLUTION.md).
+No implementation or P12-B readiness change is implied by this audit.
+
 **Current P12-B canonical refresh — 2026-10-06:** canonical was fast-forwarded
 from `69a5a41ca879fb66ce62efbe0d62e31f7298675b` to
 `b0ab1ae2d8dc9205e58c33a8a8c7658de27bbec1`. The bounded City-roster

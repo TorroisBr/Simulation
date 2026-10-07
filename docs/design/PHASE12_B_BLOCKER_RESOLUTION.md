@@ -1639,3 +1639,69 @@ This is a registration-to-entry consistency check only. It does not prove that t
 `ActorActionChoiceWorldCommandHandler` routes non-P18 requests to `SimulationRuntime.TryCaptureActorChoiceInput`, and its existing owner boundary has a precommit owner-thread/revision/epoch check plus post-commit notification. However, `CoreWorldCommandHandlers.RegisterActorActionChoiceHandler` is only a reserved trusted-UI registration hook with no production caller in this repository. More importantly, the accepted P12 Brief explicitly excludes and rejects an external `WorldCommand` service/queue in `UnityBootstrap-Daily-v1`. Therefore this queue is not a supported Daily-v1 command entrypoint and does not justify adding `runtime.actor-choice.capture` to the selected operation inventory. Preserve the ActorChoice owner evidence already present, but leave UI integration for a future profile that explicitly composes the command boundary; do not broaden Daily-v1 or change P11/P18 behavior here.
 
 The next source audit must find whether a supported in-profile entrypoint exists outside the sealed list, then map every reachable successful commit to exact owner sections and epoch notices. If none is supported, keep the 23-ID list and 258-section inventory explicitly partial and continue the remaining owner/evolved-cardinality proof; do not create another operation ID speculatively. The P12 completed-boundary token and eligibility coordinator are design obligations that are not yet implemented. This crosswalk does not establish complete owner coverage, complete shared-epoch coverage, runtime-wide quiescence, capture eligibility, export/hydration, P12-A readiness, P13 readiness, or P12-B completion. Keep P12-F Expedition deferred until P12-C/D/E are satisfied.
+
+## Current P12-B disposition after P8-D promotion
+
+The remote `codex/phase12/canonical` tip is
+`77030ff8cd09d1c7999c63f46e8fea511c60336b`; its code-bearing commit is
+`7e827b3fe4b8effefd682838c6be575d25eab501`, tree
+`127edf616d99bca0614041b54f72ae5addeb26b2`. The exact-tip implementation
+review and validation are recorded in the Phase 12 State and
+`PHASE12_P12B_P8D_EXACT_ZERO_REGISTRATION_IMPLEMENTATION_REVIEW.md`.
+
+The selected profile remains the corrected P9-B-only
+`Simulation-DailyV1.asset`; `Simulation-GeneralTest.asset` remains the
+separate P10-A Ruin/LocalTopology proving profile. The selected Daily-v1
+profile-separation/admission test was rerun against the canonical code before
+this implementation and passed 1/1. The P8-D implementation registers the
+existing route-observation and route-plan-history schema-v1 census providers
+against the exact runtime-installed clones, requires each to remain
+explicit-empty at admission, and increases the selected-profile partial
+inventory from 258 to 260 sections. Focused composition passed 24/24, ALL
+EditMode 2434/2434, official Smoke 5/5, and `git diff --check` passed. Full
+artifacts and hashes are in `docs/validation/P12P8DExactZeroAdmission/`.
+
+This supersedes the preceding `e5405cf` P8-D gap paragraph and all earlier
+258-section current-status statements; those remain historical evidence for
+their audited baselines. It does not add a route feature or operation, connect
+route writes to the shared epoch, establish complete owner or invalidation
+coverage, prove global owner-thread/quiescence, or grant capture eligibility,
+export, hydration, P12-A readiness, P13 readiness, or P12-B completion.
+P12-A remains `WAIT_DEPENDENCY`, P12-B remains `INCOMPLETE`, P13 remains
+blocked, and P12-F remains deferred behind P12-C/D/E.
+
+**Next action:** refresh the source-linked effective-owner and supported-write
+matrix from this code tip. Do not reuse the former 258-section count or stale
+PoliticalClaim/PoliticalSupport “next” ordering. Select another checkpoint
+only if the current accepted Daily-v1 composition and call graph demonstrate
+an uncovered required owner or successful commit with a bounded remedy; keep
+the completed-boundary and runtime-wide quiescence obligations explicit if
+the source audit finds no such commit gap.
+
+## Current source audit after P8-D — P12-E military owner registration
+
+**Audited baseline:** P12 canonical `77030ff8cd09d1c7999c63f46e8fea511c60336b`,
+code `7e827b3fe4b8effefd682838c6be575d25eab501`, tree
+`127edf616d99bca0614041b54f72ae5addeb26b2`. The selected composition remains
+the P9-B-only `Simulation-DailyV1.asset`; the P10-A Ruin/LocalTopology profile
+remains separate.
+
+| Selected Daily-v1 owner | Current source evidence | P12-B census gap / bounded next action |
+|---|---|---|
+| `ArmedForceStore` | `SimulationRuntime` clones and installs one exact store. `SimulationBootstrapComposition` already exposes three schema-v1 providers for force rows, contingent rows, and relevant-Person references. The selected-profile day-zero test checks all three against that exact runtime owner at `Count=0, Revision=0`, including repeat-read identity stability. | None of the three section IDs is registered in `InitializeNpcRosterCensusProtocol`. Register all three as `Required`, using the installed store identity and the existing providers. The sections share one local revision; do not report three separate owner revisions. |
+| `ContingentManpowerStateStore` | Runtime constructs the owner against the installed ArmedForceStore when no source owner is supplied; the bootstrap provider and selected-profile test report exact owner identity, zero state count and revision zero. | `p12e.contingent-manpower.states` is absent from the protocol. Register the existing schema-v1 provider as `Required` against the exact installed store. |
+| `ArmedForceSpatialStateStore` | Runtime constructs and binds this position owner to the installed ArmedForceStore and spatial authority. Its bootstrap provider and selected-profile test report exact identity, zero count and revision zero. It is composed even when the optional P10 `LocalTopologyStore` is absent. | `p12e.armed-force-spatial.positions` is absent from the protocol. Register the existing schema-v1 provider as `Required` against the exact installed owner; do not treat this owner as LocalTopology or as not-composed. |
+| Persistent `ConflictStore`, `WarStore`, and `BattleStore` | All three are constructed as runtime-owned stores and exposed through exact-owner bootstrap providers. The selected-profile test verifies their identities and exact `Count=0, Revision=0` witnesses. Their accepted P12-E inventory entries include these authorities; they are not P17 scenario composition. | `p12e.conflicts`, `p12e.wars`, and `p12e.battles` are absent from the protocol. Register each existing schema-v1 provider as `Required` against its exact installed store. |
+| Supported mutation paths and epoch | These are census-only providers; their presence does not add a runtime producer or alter any existing owner writer. Existing selected-profile source audits do not identify a normal Daily-v1 producer for conflict/war/battle transitions. | Add no operation ID, mutation callback, shared-epoch notification, P17 state, gameplay, or unsupported-caller defense. Baseline mismatch after these sections are admitted remains an incomplete-inventory/drift condition, not evidence of shared-epoch coverage. Reconcile any later supported producer in its own reviewed operation slice. |
+| Profile and readiness | `PHASE12_OWNER_COVERAGE_INVENTORY.md` names these instantiated authorities under accepted P12-E. Existing providers and day-zero checks already exist; the P8-D promotion changed neither their owners nor writers. | Add eight Required sections to the current 260-section partial inventory, then assert the resulting 268-section exact selected-profile inventory and the same owner/cardinality/revision values. This is an owner-inventory slice only: P12-B remains incomplete, P12-A remains `WAIT_DEPENDENCY`, P13 remains blocked, and P12-F remains deferred. |
+
+**Disposition:** this is the next bounded P12-B implementation target because
+the accepted effective profile explicitly composes these eight owners and
+already has reviewed owner-issued witnesses, while the sealed inventory omits
+them. Reuse those providers and existing P12-B fixed-owner registration rules;
+do not add schemas or change P12-E authority semantics. First record the
+registration contract and independently review it against current canonical,
+then implement the eight registrations and exact 268-section admission test.
+This does not deliver any military/conflict/war/battle export or hydration,
+does not claim the owners' writes share the P12 epoch, and does not make the
+profile capture-eligible.
