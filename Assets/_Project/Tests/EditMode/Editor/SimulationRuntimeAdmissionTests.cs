@@ -2052,7 +2052,10 @@ public sealed class SimulationRuntimeAdmissionTests
 
     private static void AssertDailyProfileAdmissionRejected(Action compose)
     {
-        InvalidOperationException failure = Assert.Throws<InvalidOperationException>(compose);
+        InvalidOperationException failure = Assert.Throws<InvalidOperationException>(() =>
+        {
+            compose();
+        });
         Assert.That(failure.Message, Does.Contain("P12 runtime-admission adapter could not bind"));
     }
 
