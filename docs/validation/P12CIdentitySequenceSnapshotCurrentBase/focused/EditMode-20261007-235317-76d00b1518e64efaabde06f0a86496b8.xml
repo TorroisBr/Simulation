@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="9" result="Passed" total="9" passed="9" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-07 23:53:25Z" end-time="2026-10-07 23:53:26Z" duration="0,3299685">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2466" result="Passed" start-time="2026-10-07 23:53:25Z" end-time="2026-10-07 23:53:26Z" duration="0.329969" total="9" passed="9" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="3682" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12b-state-refresh/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2466" result="Passed" start-time="2026-10-07 23:53:25Z" end-time="2026-10-07 23:53:26Z" duration="0.320317" total="9" passed="9" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="53820" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="1038" name="ActorChoiceCensusTests" fullname="ActorChoiceCensusTests" classname="ActorChoiceCensusTests" runstate="Runnable" testcasecount="9" result="Passed" start-time="2026-10-07 23:53:25Z" end-time="2026-10-07 23:53:26Z" duration="0.224804" total="9" passed="9" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="1042" name="ClonePreservesSectionsAndRevisionButCreatesNewOwnerIdentity" fullname="ActorChoiceCensusTests.ClonePreservesSectionsAndRevisionButCreatesNewOwnerIdentity" methodname="ClonePreservesSectionsAndRevisionButCreatesNewOwnerIdentity" classname="ActorChoiceCensusTests" runstate="Runnable" seed="474560750" result="Passed" start-time="2026-10-07 23:53:25Z" end-time="2026-10-07 23:53:25Z" duration="0.015255" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1047" name="DailyProfileRejectsActorChoiceCommitAgainstStaleP11BaselineBeforeMutation" fullname="ActorChoiceCensusTests.DailyProfileRejectsActorChoiceCommitAgainstStaleP11BaselineBeforeMutation" methodname="DailyProfileRejectsActorChoiceCommitAgainstStaleP11BaselineBeforeMutation" classname="ActorChoiceCensusTests" runstate="Runnable" seed="238642081" result="Passed" start-time="2026-10-07 23:53:25Z" end-time="2026-10-07 23:53:26Z" duration="0.046299" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1046" name="DailyProfileRejectsActorChoiceCommitAtEpochCapacityBeforeStoreMutation" fullname="ActorChoiceCensusTests.DailyProfileRejectsActorChoiceCommitAtEpochCapacityBeforeStoreMutation" methodname="DailyProfileRejectsActorChoiceCommitAtEpochCapacityBeforeStoreMutation" classname="ActorChoiceCensusTests" runstate="Runnable" seed="158690233" result="Passed" start-time="2026-10-07 23:53:26Z" end-time="2026-10-07 23:53:26Z" duration="0.001490" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1045" name="DailyProfileRejectsActorChoiceMutationWhenOwnerThreadIsWrong" fullname="ActorChoiceCensusTests.DailyProfileRejectsActorChoiceMutationWhenOwnerThreadIsWrong" methodname="DailyProfileRejectsActorChoiceMutationWhenOwnerThreadIsWrong" classname="ActorChoiceCensusTests" runstate="Runnable" seed="1195021338" result="Passed" start-time="2026-10-07 23:53:26Z" end-time="2026-10-07 23:53:26Z" duration="0.143946" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1044" name="DailyProfileTracksExactActorChoiceP11OwnerAndEveryStandaloneCommit" fullname="ActorChoiceCensusTests.DailyProfileTracksExactActorChoiceP11OwnerAndEveryStandaloneCommit" methodname="DailyProfileTracksExactActorChoiceP11OwnerAndEveryStandaloneCommit" classname="ActorChoiceCensusTests" runstate="Runnable" seed="1196634793" result="Passed" start-time="2026-10-07 23:53:26Z" end-time="2026-10-07 23:53:26Z" duration="0.003934" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1040" name="EverySuccessfulP11CaptureAndDispositionAdvancesOneSharedRevision" fullname="ActorChoiceCensusTests.EverySuccessfulP11CaptureAndDispositionAdvancesOneSharedRevision" methodname="EverySuccessfulP11CaptureAndDispositionAdvancesOneSharedRevision" classname="ActorChoiceCensusTests" runstate="Runnable" seed="152983810" result="Passed" start-time="2026-10-07 23:53:26Z" end-time="2026-10-07 23:53:26Z" duration="0.000440" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1039" name="P11AndTemporalSectionsShareOpaqueIdentityAndSeparateLiveCounts" fullname="ActorChoiceCensusTests.P11AndTemporalSectionsShareOpaqueIdentityAndSeparateLiveCounts" methodname="P11AndTemporalSectionsShareOpaqueIdentityAndSeparateLiveCounts" classname="ActorChoiceCensusTests" runstate="Runnable" seed="97458087" result="Passed" start-time="2026-10-07 23:53:26Z" end-time="2026-10-07 23:53:26Z" duration="0.000423" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1043" name="RevisionExhaustionRejectsCaptureAndDispositionBeforeMutation" fullname="ActorChoiceCensusTests.RevisionExhaustionRejectsCaptureAndDispositionBeforeMutation" methodname="RevisionExhaustionRejectsCaptureAndDispositionBeforeMutation" classname="ActorChoiceCensusTests" runstate="Runnable" seed="214725883" result="Passed" start-time="2026-10-07 23:53:26Z" end-time="2026-10-07 23:53:26Z" duration="0.000955" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1041" name="TemporalCaptureAndAllDispositionKindsAdvanceOnceWhileReplaysDoNot" fullname="ActorChoiceCensusTests.TemporalCaptureAndAllDispositionKindsAdvanceOnceWhileReplaysDoNot" methodname="TemporalCaptureAndAllDispositionKindsAdvanceOnceWhileReplaysDoNot" classname="ActorChoiceCensusTests" runstate="Runnable" seed="634785904" result="Passed" start-time="2026-10-07 23:53:26Z" end-time="2026-10-07 23:53:26Z" duration="0.000872" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

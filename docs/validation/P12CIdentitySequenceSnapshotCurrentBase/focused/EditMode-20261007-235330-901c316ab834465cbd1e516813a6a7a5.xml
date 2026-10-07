@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="11" result="Passed" total="11" passed="11" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-07 23:53:39Z" end-time="2026-10-07 23:53:39Z" duration="0,2780218">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2466" result="Passed" start-time="2026-10-07 23:53:39Z" end-time="2026-10-07 23:53:39Z" duration="0.278022" total="11" passed="11" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="3682" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12b-state-refresh/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2466" result="Passed" start-time="2026-10-07 23:53:39Z" end-time="2026-10-07 23:53:39Z" duration="0.266649" total="11" passed="11" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="82848" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="1053" name="ActorChoiceRuntimeTests" fullname="ActorChoiceRuntimeTests" classname="ActorChoiceRuntimeTests" runstate="Runnable" testcasecount="11" result="Passed" start-time="2026-10-07 23:53:39Z" end-time="2026-10-07 23:53:39Z" duration="0.137561" total="11" passed="11" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="1062" name="AutonomousSellGoodsWithoutPersonPositionPreservesLegacyCurrentCityBehavior" fullname="ActorChoiceRuntimeTests.AutonomousSellGoodsWithoutPersonPositionPreservesLegacyCurrentCityBehavior" methodname="AutonomousSellGoodsWithoutPersonPositionPreservesLegacyCurrentCityBehavior" classname="ActorChoiceRuntimeTests" runstate="Runnable" seed="732096419" result="Passed" start-time="2026-10-07 23:53:39Z" end-time="2026-10-07 23:53:39Z" duration="0.079166" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1054" name="EligibleLocalSellChoiceRunsOnceThroughCurrentCityTruth" fullname="ActorChoiceRuntimeTests.EligibleLocalSellChoiceRunsOnceThroughCurrentCityTruth" methodname="EligibleLocalSellChoiceRunsOnceThroughCurrentCityTruth" classname="ActorChoiceRuntimeTests" runstate="Runnable" seed="981705374" result="Passed" start-time="2026-10-07 23:53:39Z" end-time="2026-10-07 23:53:39Z" duration="0.023379" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[actor-choice-merchant display vendeu 5 actor-choice-item display ao mercado de definition-city-actor-choice display por 10 cada
+Lucro aproximado: 45
+]]></output>
+        </test-case>
+        <test-case id="1060" name="InTransitActorDoesNotExecuteAutonomousSellGoodsAgainstStaleCurrentCity" fullname="ActorChoiceRuntimeTests.InTransitActorDoesNotExecuteAutonomousSellGoodsAgainstStaleCurrentCity" methodname="InTransitActorDoesNotExecuteAutonomousSellGoodsAgainstStaleCurrentCity" classname="ActorChoiceRuntimeTests" runstate="Runnable" seed="1203025798" result="Passed" start-time="2026-10-07 23:53:39Z" end-time="2026-10-07 23:53:39Z" duration="0.009850" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1059" name="InTransitChoiceDefersAtActorTurnBoundaryWithoutAutonomousFallback" fullname="ActorChoiceRuntimeTests.InTransitChoiceDefersAtActorTurnBoundaryWithoutAutonomousFallback" methodname="InTransitChoiceDefersAtActorTurnBoundaryWithoutAutonomousFallback" classname="ActorChoiceRuntimeTests" runstate="Runnable" seed="1103570222" result="Passed" start-time="2026-10-07 23:53:39Z" end-time="2026-10-07 23:53:39Z" duration="0.001415" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1058" name="MatchingAnchorHexDoesNotSubstituteForAtCityLocation" fullname="ActorChoiceRuntimeTests.MatchingAnchorHexDoesNotSubstituteForAtCityLocation" methodname="MatchingAnchorHexDoesNotSubstituteForAtCityLocation" classname="ActorChoiceRuntimeTests" runstate="Runnable" seed="731383931" result="Passed" start-time="2026-10-07 23:53:39Z" end-time="2026-10-07 23:53:39Z" duration="0.000801" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1064" name="MultipleInputsForOnePersonConsumeOnlyTheEarliestPerDailyTurn" fullname="ActorChoiceRuntimeTests.MultipleInputsForOnePersonConsumeOnlyTheEarliestPerDailyTurn" methodname="MultipleInputsForOnePersonConsumeOnlyTheEarliestPerDailyTurn" classname="ActorChoiceRuntimeTests" runstate="Runnable" seed="38387492" result="Passed" start-time="2026-10-07 23:53:39Z" end-time="2026-10-07 23:53:39Z" duration="0.002740" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[actor-choice-merchant display vendeu 5 actor-choice-item display ao mercado de definition-city-actor-choice display por 10 cada
+Lucro aproximado: 45
+actor-choice-merchant display vendeu 5 actor-choice-item display ao mercado de definition-city-actor-choice display por 9,52 cada
+Lucro aproximado: 42,62
+]]></output>
+        </test-case>
+        <test-case id="1063" name="PendingChoiceDoesNotAdvanceAutonomousMerchantPlanBeforeEligibility" fullname="ActorChoiceRuntimeTests.PendingChoiceDoesNotAdvanceAutonomousMerchantPlanBeforeEligibility" methodname="PendingChoiceDoesNotAdvanceAutonomousMerchantPlanBeforeEligibility" classname="ActorChoiceRuntimeTests" runstate="Runnable" seed="868085550" result="Passed" start-time="2026-10-07 23:53:39Z" end-time="2026-10-07 23:53:39Z" duration="0.001010" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1055" name="ReturnedFailureIsTerminalAndDoesNotRunAutonomousFallback" fullname="ActorChoiceRuntimeTests.ReturnedFailureIsTerminalAndDoesNotRunAutonomousFallback" methodname="ReturnedFailureIsTerminalAndDoesNotRunAutonomousFallback" classname="ActorChoiceRuntimeTests" runstate="Runnable" seed="1532880152" result="Passed" start-time="2026-10-07 23:53:39Z" end-time="2026-10-07 23:53:39Z" duration="0.001056" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1061" name="StablePositionAtDifferentLocationDoesNotExecuteAutonomousSellGoods" fullname="ActorChoiceRuntimeTests.StablePositionAtDifferentLocationDoesNotExecuteAutonomousSellGoods" methodname="StablePositionAtDifferentLocationDoesNotExecuteAutonomousSellGoods" classname="ActorChoiceRuntimeTests" runstate="Runnable" seed="95743134" result="Passed" start-time="2026-10-07 23:53:39Z" end-time="2026-10-07 23:53:39Z" duration="0.000552" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1056" name="ThrownAttemptIsRecordedOnceAndDoesNotRunAutonomousFallback" fullname="ActorChoiceRuntimeTests.ThrownAttemptIsRecordedOnceAndDoesNotRunAutonomousFallback" methodname="ThrownAttemptIsRecordedOnceAndDoesNotRunAutonomousFallback" classname="ActorChoiceRuntimeTests" runstate="Runnable" seed="1587124125" result="Passed" start-time="2026-10-07 23:53:39Z" end-time="2026-10-07 23:53:39Z" duration="0.003092" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="1057" name="UnavailableSupportedChoiceDoesNotFallBackToAutonomousAction" fullname="ActorChoiceRuntimeTests.UnavailableSupportedChoiceDoesNotFallBackToAutonomousAction" methodname="UnavailableSupportedChoiceDoesNotFallBackToAutonomousAction" classname="ActorChoiceRuntimeTests" runstate="Runnable" seed="1021788998" result="Passed" start-time="2026-10-07 23:53:39Z" end-time="2026-10-07 23:53:39Z" duration="0.001283" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

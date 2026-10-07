@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="3" result="Passed" total="3" passed="3" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-07 23:50:33Z" end-time="2026-10-07 23:50:33Z" duration="0,1120574">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2466" result="Passed" start-time="2026-10-07 23:50:33Z" end-time="2026-10-07 23:50:33Z" duration="0.112057" total="3" passed="3" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="3682" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12b-state-refresh/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2466" result="Passed" start-time="2026-10-07 23:50:33Z" end-time="2026-10-07 23:50:33Z" duration="0.089383" total="3" passed="3" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="25680" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="3177" name="RuntimeIdAllocatorCensusTests" fullname="RuntimeIdAllocatorCensusTests" classname="RuntimeIdAllocatorCensusTests" runstate="Runnable" testcasecount="3" result="Passed" start-time="2026-10-07 23:50:33Z" end-time="2026-10-07 23:50:33Z" duration="0.032181" total="3" passed="3" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="3179" name="AllocationRemainsConsumedWhenLaterRegistrationFails" fullname="RuntimeIdAllocatorCensusTests.AllocationRemainsConsumedWhenLaterRegistrationFails" methodname="AllocationRemainsConsumedWhenLaterRegistrationFails" classname="RuntimeIdAllocatorCensusTests" runstate="Runnable" seed="735088853" result="Passed" start-time="2026-10-07 23:50:33Z" end-time="2026-10-07 23:50:33Z" duration="0.015752" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Duplicate RuntimeId 'npc-000001' while registering NPC; it is already registered as NPC.
+]]></output>
+        </test-case>
+        <test-case id="3180" name="ExhaustedCounterThrowsWithoutChangingItsRevision" fullname="RuntimeIdAllocatorCensusTests.ExhaustedCounterThrowsWithoutChangingItsRevision" methodname="ExhaustedCounterThrowsWithoutChangingItsRevision" classname="RuntimeIdAllocatorCensusTests" runstate="Runnable" seed="1772084584" result="Passed" start-time="2026-10-07 23:50:33Z" end-time="2026-10-07 23:50:33Z" duration="0.002104" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3178" name="FourteenTypedCounterSectionsShareIdentityAndAdvanceIndependently" fullname="RuntimeIdAllocatorCensusTests.FourteenTypedCounterSectionsShareIdentityAndAdvanceIndependently" methodname="FourteenTypedCounterSectionsShareIdentityAndAdvanceIndependently" classname="RuntimeIdAllocatorCensusTests" runstate="Runnable" seed="757754568" result="Passed" start-time="2026-10-07 23:50:33Z" end-time="2026-10-07 23:50:33Z" duration="0.002990" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

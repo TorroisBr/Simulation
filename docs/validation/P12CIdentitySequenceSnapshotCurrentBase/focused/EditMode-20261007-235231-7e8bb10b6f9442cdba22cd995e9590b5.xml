@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="17" result="Passed" total="17" passed="17" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-10-07 23:52:43Z" end-time="2026-10-07 23:52:43Z" duration="0,150557">
+  <test-suite type="TestSuite" id="1000" name="Simulation" fullname="Simulation" runstate="Runnable" testcasecount="2466" result="Passed" start-time="2026-10-07 23:52:43Z" end-time="2026-10-07 23:52:43Z" duration="0.150557" total="17" passed="17" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="3682" name="Assembly-CSharp-Editor.dll" fullname="E:/GitHub/GeneralSimulation/MainSimulation/.worktrees/p12b-state-refresh/Library/ScriptAssemblies/Assembly-CSharp-Editor.dll" runstate="Runnable" testcasecount="2466" result="Passed" start-time="2026-10-07 23:52:43Z" end-time="2026-10-07 23:52:43Z" duration="0.134789" total="17" passed="17" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="73252" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestFixture" id="3298" name="SimulationRecordSequenceP12InvalidationTests" fullname="SimulationRecordSequenceP12InvalidationTests" classname="SimulationRecordSequenceP12InvalidationTests" runstate="Runnable" testcasecount="17" result="Passed" start-time="2026-10-07 23:52:43Z" end-time="2026-10-07 23:52:43Z" duration="0.120748" total="17" passed="17" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-case id="3300" name="AllocationInsideNestedRegisteredOperationsAdvancesRevisionAndEpochOnce" fullname="SimulationRecordSequenceP12InvalidationTests.AllocationInsideNestedRegisteredOperationsAdvancesRevisionAndEpochOnce" methodname="AllocationInsideNestedRegisteredOperationsAdvancesRevisionAndEpochOnce" classname="SimulationRecordSequenceP12InvalidationTests" runstate="Runnable" seed="24981503" result="Passed" start-time="2026-10-07 23:52:43Z" end-time="2026-10-07 23:52:43Z" duration="0.057475" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3309" name="DecisionAllocationRemainsInvalidatedWhenLaterRecordSequenceAllocationFails" fullname="SimulationRecordSequenceP12InvalidationTests.DecisionAllocationRemainsInvalidatedWhenLaterRecordSequenceAllocationFails" methodname="DecisionAllocationRemainsInvalidatedWhenLaterRecordSequenceAllocationFails" classname="SimulationRecordSequenceP12InvalidationTests" runstate="Runnable" seed="596243432" result="Passed" start-time="2026-10-07 23:52:43Z" end-time="2026-10-07 23:52:43Z" duration="0.003859" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Cannot allocate NPC decision record identity: Simulation record sequence is exhausted.
+]]></output>
+        </test-case>
+        <test-case id="3308" name="DecisionCounterCapacityPreflightRejectsAtMaximumAndAllowsFinalEpochStep" fullname="SimulationRecordSequenceP12InvalidationTests.DecisionCounterCapacityPreflightRejectsAtMaximumAndAllowsFinalEpochStep" methodname="DecisionCounterCapacityPreflightRejectsAtMaximumAndAllowsFinalEpochStep" classname="SimulationRecordSequenceP12InvalidationTests" runstate="Runnable" seed="1044223597" result="Passed" start-time="2026-10-07 23:52:43Z" end-time="2026-10-07 23:52:43Z" duration="0.002972" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3311" name="EventCounterCapacityPreflightRejectsAtMaximumAndAllowsFinalEpochStep" fullname="SimulationRecordSequenceP12InvalidationTests.EventCounterCapacityPreflightRejectsAtMaximumAndAllowsFinalEpochStep" methodname="EventCounterCapacityPreflightRejectsAtMaximumAndAllowsFinalEpochStep" classname="SimulationRecordSequenceP12InvalidationTests" runstate="Runnable" seed="2115444282" result="Passed" start-time="2026-10-07 23:52:43Z" end-time="2026-10-07 23:52:43Z" duration="0.001116" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3312" name="EventCounterInvalidationPrecedesLaterEventFactoryFailure" fullname="SimulationRecordSequenceP12InvalidationTests.EventCounterInvalidationPrecedesLaterEventFactoryFailure" methodname="EventCounterInvalidationPrecedesLaterEventFactoryFailure" classname="SimulationRecordSequenceP12InvalidationTests" runstate="Runnable" seed="999370970" result="Passed" start-time="2026-10-07 23:52:43Z" end-time="2026-10-07 23:52:43Z" duration="0.001048" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Cannot allocate domain EventId: injected event factory failure.
+]]></output>
+        </test-case>
+        <test-case id="3302" name="ExhaustionDoesNotAdvanceSequenceOrEpochWhenItIsTheRegisteredBaseline" fullname="SimulationRecordSequenceP12InvalidationTests.ExhaustionDoesNotAdvanceSequenceOrEpochWhenItIsTheRegisteredBaseline" methodname="ExhaustionDoesNotAdvanceSequenceOrEpochWhenItIsTheRegisteredBaseline" classname="SimulationRecordSequenceP12InvalidationTests" runstate="Runnable" seed="514046381" result="Passed" start-time="2026-10-07 23:52:43Z" end-time="2026-10-07 23:52:43Z" duration="0.000422" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3313" name="NonP12RuntimeIdAllocatorRetainsExistingEventIdOutput" fullname="SimulationRecordSequenceP12InvalidationTests.NonP12RuntimeIdAllocatorRetainsExistingEventIdOutput" methodname="NonP12RuntimeIdAllocatorRetainsExistingEventIdOutput" classname="SimulationRecordSequenceP12InvalidationTests" runstate="Runnable" seed="1995622525" result="Passed" start-time="2026-10-07 23:52:43Z" end-time="2026-10-07 23:52:43Z" duration="0.000225" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3314" name="NotificationFailureRetainsAllocatedSequenceAndRejectsTheFollowingEventWrite" fullname="SimulationRecordSequenceP12InvalidationTests.NotificationFailureRetainsAllocatedSequenceAndRejectsTheFollowingEventWrite" methodname="NotificationFailureRetainsAllocatedSequenceAndRejectsTheFollowingEventWrite" classname="SimulationRecordSequenceP12InvalidationTests" runstate="Runnable" seed="1775092334" result="Passed" start-time="2026-10-07 23:52:43Z" end-time="2026-10-07 23:52:43Z" duration="0.000895" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Cannot allocate domain EventId: The committed P12 record-sequence allocation could not advance the mutation epoch.
+]]></output>
+        </test-case>
+        <test-case id="3307" name="RejectedOrExhaustedDecisionAllocationDoesNotAdvanceCounterOrEpoch" fullname="SimulationRecordSequenceP12InvalidationTests.RejectedOrExhaustedDecisionAllocationDoesNotAdvanceCounterOrEpoch" methodname="RejectedOrExhaustedDecisionAllocationDoesNotAdvanceCounterOrEpoch" classname="SimulationRecordSequenceP12InvalidationTests" runstate="Runnable" seed="1354110576" result="Passed" start-time="2026-10-07 23:52:43Z" end-time="2026-10-07 23:52:43Z" duration="0.001684" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3310" name="RejectedOrExhaustedEventAllocationDoesNotAdvanceCounterOrEpoch" fullname="SimulationRecordSequenceP12InvalidationTests.RejectedOrExhaustedEventAllocationDoesNotAdvanceCounterOrEpoch" methodname="RejectedOrExhaustedEventAllocationDoesNotAdvanceCounterOrEpoch" classname="SimulationRecordSequenceP12InvalidationTests" runstate="Runnable" seed="1328253337" result="Passed" start-time="2026-10-07 23:52:43Z" end-time="2026-10-07 23:52:43Z" duration="0.001224" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3306" name="RestoredDailyIdentityOwnerPreflightRejectsWithoutConsumingCounter" fullname="SimulationRecordSequenceP12InvalidationTests.RestoredDailyIdentityOwnerPreflightRejectsWithoutConsumingCounter" methodname="RestoredDailyIdentityOwnerPreflightRejectsWithoutConsumingCounter" classname="SimulationRecordSequenceP12InvalidationTests" runstate="Runnable" seed="1448337186" result="Passed" start-time="2026-10-07 23:52:43Z" end-time="2026-10-07 23:52:43Z" duration="0.003661" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3299" name="SelectedDailyProfileTracksEachAllocationPathOnceAndIgnoresReceiptReplay" fullname="SimulationRecordSequenceP12InvalidationTests.SelectedDailyProfileTracksEachAllocationPathOnceAndIgnoresReceiptReplay" methodname="SelectedDailyProfileTracksEachAllocationPathOnceAndIgnoresReceiptReplay" classname="SimulationRecordSequenceP12InvalidationTests" runstate="Runnable" seed="814939471" result="Passed" start-time="2026-10-07 23:52:43Z" end-time="2026-10-07 23:52:43Z" duration="0.003148" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3304" name="SelectedDailyProfileTracksExactDecisionCounterOwnerAndSuccessfulAllocation" fullname="SimulationRecordSequenceP12InvalidationTests.SelectedDailyProfileTracksExactDecisionCounterOwnerAndSuccessfulAllocation" methodname="SelectedDailyProfileTracksExactDecisionCounterOwnerAndSuccessfulAllocation" classname="SimulationRecordSequenceP12InvalidationTests" runstate="Runnable" seed="2095969962" result="Passed" start-time="2026-10-07 23:52:43Z" end-time="2026-10-07 23:52:43Z" duration="0.000764" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3303" name="SelectedDailyProfileTracksExactEventCounterOwnerAndSuccessfulAllocation" fullname="SimulationRecordSequenceP12InvalidationTests.SelectedDailyProfileTracksExactEventCounterOwnerAndSuccessfulAllocation" methodname="SelectedDailyProfileTracksExactEventCounterOwnerAndSuccessfulAllocation" classname="SimulationRecordSequenceP12InvalidationTests" runstate="Runnable" seed="1199444043" result="Passed" start-time="2026-10-07 23:52:43Z" end-time="2026-10-07 23:52:43Z" duration="0.000693" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3305" name="SelectedDailyRuntimeRebindsRestoredIdentityOwnersAndPreservesOccurrenceReplay" fullname="SimulationRecordSequenceP12InvalidationTests.SelectedDailyRuntimeRebindsRestoredIdentityOwnersAndPreservesOccurrenceReplay" methodname="SelectedDailyRuntimeRebindsRestoredIdentityOwnersAndPreservesOccurrenceReplay" classname="SimulationRecordSequenceP12InvalidationTests" runstate="Runnable" seed="1468107068" result="Passed" start-time="2026-10-07 23:52:43Z" end-time="2026-10-07 23:52:43Z" duration="0.029133" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3315" name="SelectedRuntimeRejectsASequenceDifferentFromItsDecisionRecorder" fullname="SimulationRecordSequenceP12InvalidationTests.SelectedRuntimeRejectsASequenceDifferentFromItsDecisionRecorder" methodname="SelectedRuntimeRejectsASequenceDifferentFromItsDecisionRecorder" classname="SimulationRecordSequenceP12InvalidationTests" runstate="Runnable" seed="1631041692" result="Passed" start-time="2026-10-07 23:52:43Z" end-time="2026-10-07 23:52:43Z" duration="0.000505" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+        </test-case>
+        <test-case id="3301" name="WrongThreadAndStaleBaselineRejectBeforeConsumingSequence" fullname="SimulationRecordSequenceP12InvalidationTests.WrongThreadAndStaleBaselineRejectBeforeConsumingSequence" methodname="WrongThreadAndStaleBaselineRejectBeforeConsumingSequence" classname="SimulationRecordSequenceP12InvalidationTests" runstate="Runnable" seed="948717858" result="Passed" start-time="2026-10-07 23:52:43Z" end-time="2026-10-07 23:52:43Z" duration="0.001259" asserts="0">
+          <properties>
+            <property name="retryIteration" value="0" />
+            <property name="repeatIteration" value="0" />
+          </properties>
+          <output><![CDATA[Saving results to: C:/Users/Martins/AppData/LocalLow/DefaultCompany/Simulation\TestResults.xml
+]]></output>
+        </test-case>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>
