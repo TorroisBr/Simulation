@@ -137,7 +137,7 @@ public sealed class SimulationRuntimeAdmissionTests
                 boundary,
                 "admission-road",
                 "v1"),
-            PassageCondition.Open,
+            PassageCondition.Available,
             out SpatialAuthorityFailure passageFailure), Is.True, passageFailure?.ToString());
         Assert.That(passageAuthority.TryRegisterCrossing(
             new CrossingRecord(
