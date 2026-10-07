@@ -1754,6 +1754,7 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(before[0].Cardinality, Is.EqualTo(10));
         Assert.That(before[0].Revision, Is.EqualTo(16L));
         Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long initialEpoch, out _), Is.True);
+        AssertSelectedDailyNpcOwnerFamilies(runtime);
 
         NpcRuntime added = new NpcRuntime("daily-dynamic-identity-npc", null);
         Assert.That(runtime.TryRegisterNpc(added, out WorldNpcRegistryFailure addFailure), Is.True,
@@ -1762,6 +1763,7 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(resolvedAdded, Is.SameAs(added));
         Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long addedEpoch, out _), Is.True);
         Assert.That(addedEpoch, Is.EqualTo(initialEpoch + 1L));
+        AssertSelectedDailyNpcOwnerFamilies(runtime);
 
         OwnerSectionCensusWitness[] afterAdd = identityProviders
             .Select(provider => provider.GetCurrentCensus())
@@ -1788,6 +1790,7 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(afterRemove[0].Cardinality, Is.EqualTo(11));
         Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long removedEpoch, out _), Is.True);
         Assert.That(removedEpoch, Is.EqualTo(addedEpoch + 1L));
+        AssertSelectedDailyNpcOwnerFamilies(runtime);
 
         NpcRuntime replacement = new NpcRuntime(added.RuntimeId, null);
         Assert.That(runtime.TryRegisterNpc(replacement, out WorldNpcRegistryFailure replacementFailure), Is.False);
@@ -1810,6 +1813,7 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(afterReadd[0].Cardinality, Is.EqualTo(11));
         Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long readdedEpoch, out _), Is.True);
         Assert.That(readdedEpoch, Is.EqualTo(removedEpoch + 1L));
+        AssertSelectedDailyNpcOwnerFamilies(runtime);
         Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure finalFailure), Is.True,
             finalFailure.ToString());
 
@@ -1827,6 +1831,145 @@ public sealed class SimulationBootstrapCompositionTests
         };
         Assert.That((bool)validateUnchangedSections.Invoke(protocol, validationArgs), Is.False);
         Assert.That(validationArgs[1], Is.EqualTo(ContinuationCensusFailure.OwnerCoverageIncomplete));
+    }
+
+    private static void AssertSelectedDailyNpcOwnerFamilies(SimulationRuntime runtime)
+    {
+        NpcRuntime[] roster = runtime.NpcRuntimes
+            .OrderBy(npc => npc.RuntimeId, System.StringComparer.Ordinal)
+            .ToArray();
+
+        OwnerSectionCensusWitness[] accountWitnesses = runtime.MoneyAccountCensusProviders
+            .Select(provider => provider.GetCurrentCensus())
+            .ToArray();
+        Assert.That(accountWitnesses, Has.Length.EqualTo(roster.Length));
+        foreach (NpcRuntime npc in roster)
+        {
+            OwnerSectionCensusWitness witness = accountWitnesses.Single(candidate =>
+                candidate.SectionId == NpcMoneyAccountCensusProvider.SectionPrefix + npc.RuntimeId);
+            Assert.That(witness.SchemaVersion, Is.EqualTo(NpcMoneyAccountCensusProvider.SchemaVersion));
+            Assert.That(witness.OwnerInstanceIdentity, Is.SameAs(npc.MoneyAccount));
+            Assert.That(witness.Cardinality, Is.EqualTo(1));
+            Assert.That(witness.Revision, Is.EqualTo(npc.MoneyAccount.Revision));
+        }
+
+        OwnerSectionCensusWitness[] inventoryWitnesses = runtime.InventoryCensusProviders
+            .Select(provider => provider.GetCurrentCensus())
+            .ToArray();
+        Assert.That(inventoryWitnesses, Has.Length.EqualTo(roster.Length));
+        foreach (NpcRuntime npc in roster)
+        {
+            OwnerSectionCensusWitness witness = inventoryWitnesses.Single(candidate =>
+                candidate.SectionId == NpcInventoryCensusProvider.SectionPrefix + npc.RuntimeId);
+            Assert.That(witness.SchemaVersion, Is.EqualTo(NpcInventoryCensusProvider.SchemaVersion));
+            Assert.That(witness.OwnerInstanceIdentity, Is.SameAs(npc.Inventory));
+            Assert.That(witness.Cardinality, Is.EqualTo(npc.Inventory.Items.Count));
+            Assert.That(witness.Revision, Is.EqualTo(npc.Inventory.Revision));
+        }
+
+        OwnerSectionCensusWitness[] spatialWitnesses = runtime.SpatialKnowledgeCensusProviders
+            .Select(provider => provider.GetCurrentCensus())
+            .ToArray();
+        Assert.That(spatialWitnesses, Has.Length.EqualTo(roster.Length * 2));
+        foreach (NpcRuntime npc in roster)
+        {
+            OwnerSectionCensusWitness locations = spatialWitnesses.Single(candidate =>
+                candidate.SectionId == SpatialKnowledgeCensusProvider.LocationsSectionPrefix + npc.RuntimeId);
+            OwnerSectionCensusWitness routes = spatialWitnesses.Single(candidate =>
+                candidate.SectionId == SpatialKnowledgeCensusProvider.RoutesSectionPrefix + npc.RuntimeId);
+            Assert.That(locations.SchemaVersion, Is.EqualTo(SpatialKnowledgeCensusProvider.SchemaVersion));
+            Assert.That(routes.SchemaVersion, Is.EqualTo(SpatialKnowledgeCensusProvider.SchemaVersion));
+            Assert.That(locations.OwnerInstanceIdentity, Is.SameAs(npc.SpatialKnowledge));
+            Assert.That(routes.OwnerInstanceIdentity, Is.SameAs(npc.SpatialKnowledge));
+            Assert.That(locations.Cardinality, Is.EqualTo(npc.SpatialKnowledge.KnownLocationCount));
+            Assert.That(routes.Cardinality, Is.EqualTo(npc.SpatialKnowledge.KnownRouteCount));
+            Assert.That(locations.Revision, Is.EqualTo(npc.SpatialKnowledge.Revision));
+            Assert.That(routes.Revision, Is.EqualTo(npc.SpatialKnowledge.Revision));
+        }
+
+        string[] knowledgeSectionPrefixes =
+        {
+            "p12f.explorable-site-knowledge/",
+            "p12f.local-topology-knowledge.places/",
+            "p12f.local-topology-knowledge.connections/",
+            "p12f.adventure-intel.opposition/",
+            "p12f.adventure-intel.notable-items/",
+            "p12f.adventure-intel.common-resources/",
+            "p12f.adventure-intel.access/",
+            "p12f.commercial-knowledge.markets/",
+            "p12f.commercial-knowledge.liquidity/",
+            "p12f.commercial-knowledge.share-receipts/"
+        };
+        OwnerSectionCensusWitness[] knowledgeWitnesses = runtime.NpcKnowledgeCensusProviders
+            .Select(provider => provider.GetCurrentCensus())
+            .ToArray();
+        Assert.That(knowledgeWitnesses, Has.Length.EqualTo(roster.Length * knowledgeSectionPrefixes.Length));
+        foreach (NpcRuntime npc in roster)
+        {
+            ExplorableSiteKnowledgeRuntime explorable =
+                ReadPrivateField<ExplorableSiteKnowledgeRuntime>(npc, "explorableSiteKnowledge");
+            LocalTopologyKnowledgeRuntime local =
+                ReadPrivateField<LocalTopologyKnowledgeRuntime>(npc, "localTopologyKnowledge");
+            AdventureSiteIntelKnowledgeRuntime adventure =
+                ReadPrivateField<AdventureSiteIntelKnowledgeRuntime>(npc, "adventureSiteIntelKnowledge");
+            CommercialKnowledgeRuntime commercial =
+                ReadPrivateField<CommercialKnowledgeRuntime>(npc, "commercialKnowledge");
+            List<CommercialKnowledgeShareReceipt> receipts =
+                ReadPrivateField<List<CommercialKnowledgeShareReceipt>>(commercial, "shareReceipts");
+            int marketCount = commercial.Observations.Count;
+            int liquidityCount = commercial.LiquidityObservations.Count;
+            int receiptCount = receipts.Count;
+            long commercialRevision = commercial.Revision;
+
+            object[] owners =
+            {
+                explorable,
+                local,
+                local,
+                adventure,
+                adventure,
+                adventure,
+                adventure,
+                commercial,
+                commercial,
+                commercial
+            };
+            int[] cardinalities =
+            {
+                explorable.Observations.Count,
+                local.PlaceObservations.Count,
+                local.ConnectionObservations.Count,
+                adventure.OppositionObservations.Count,
+                adventure.NotableItemObservations.Count,
+                adventure.CommonResourceObservations.Count,
+                adventure.AccessObservations.Count,
+                marketCount,
+                liquidityCount,
+                receiptCount
+            };
+            long[] revisions =
+            {
+                explorable.Revision,
+                local.Revision,
+                local.Revision,
+                adventure.Revision,
+                adventure.Revision,
+                adventure.Revision,
+                adventure.Revision,
+                commercialRevision,
+                commercialRevision,
+                commercialRevision
+            };
+            for (int i = 0; i < knowledgeSectionPrefixes.Length; i++)
+            {
+                OwnerSectionCensusWitness witness = knowledgeWitnesses.Single(candidate =>
+                    candidate.SectionId == knowledgeSectionPrefixes[i] + npc.RuntimeId);
+                Assert.That(witness.SchemaVersion, Is.EqualTo(NpcKnowledgeCensusProvider.SchemaVersion));
+                Assert.That(witness.OwnerInstanceIdentity, Is.SameAs(owners[i]));
+                Assert.That(witness.Cardinality, Is.EqualTo(cardinalities[i]));
+                Assert.That(witness.Revision, Is.EqualTo(revisions[i]));
+            }
+        }
     }
 
     [Test]
