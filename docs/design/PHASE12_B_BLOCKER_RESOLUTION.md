@@ -1,7 +1,8 @@
 # P12-B blocker resolution and dependency plan
 
-**Current canonical/status — 2026-10-06:** P12 canonical is
-`b0ab1ae2d8dc9205e58c33a8a8c7658de27bbec1`. The selected P9-B-only Daily-v1
+**Historical status snapshot — 2026-10-06, canonical baseline
+`b0ab1ae2d8dc9205e58c33a8a8c7658de27bbec1`; superseded by the P12-E refresh
+at the end of this document:** the selected P9-B-only Daily-v1
 protocol has 253 registered sections. The promoted City-roster correction
 at code `256c443903fd3e33ed05cfe4d86a11b3467176a2` closes the mutable-list
 alias on `SimulationRuntime.Cities`; the read-only API preserves the exact
