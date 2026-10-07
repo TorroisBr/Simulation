@@ -8,8 +8,9 @@ is claimed.
 
 ## Checkpoint, base, and decision
 
-- **Accepted scope:** prerequisite P12-B profile admission and completed-
-  boundary lifecycle, under the accepted `UnityBootstrap-Daily-v1` profile.
+- **Current P12-B boundary:** profile admission and completed-boundary
+  lifecycle, under the accepted `UnityBootstrap-Daily-v1` profile. This design
+  does not accept or authorize the deferred P12-F implementation scope.
 - **Owner family:** Expedition/active commitments, assigned to P12-F by the
   current canonical capability matrix. P12-F is blocked on C/D/E.
 - **Design base:** P12 canonical
@@ -91,12 +92,14 @@ the writer classification below.
 
 ## Writer inventory and disposition
 
-The accepted technical boundary is one exact `ExpeditionStore` owner section
+The proposed future P12-F owner boundary is one exact `ExpeditionStore`
 (`p12f.expeditions`, schema v1, `ExpeditionCensusProvider`) and its existing
-owner-local monotone revision. The design must attach P12 observation to the
-actual store installed in the published composition, never a reconstructed
-lookalike. The following paths cannot be declared unsupported by documentation
-alone:
+owner-local monotone revision. That section name and protocol registration are
+not present in the current sealed profile: bootstrap exposes the passive
+provider, but does not register it in the protocol. A future implementation
+must attach P12 observation to the actual store installed in the published
+composition, never a reconstructed lookalike. The following paths cannot be
+declared unsupported by documentation alone:
 
 | Source path | Current successful owner writes | Design disposition |
 |---|---|---|
