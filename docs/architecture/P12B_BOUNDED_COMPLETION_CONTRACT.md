@@ -98,12 +98,12 @@ from method visibility or from the formula/registration set itself.
 |---|---|
 | Dedicated Daily-v1 bootstrap/genesis | Synchronous pre-runtime creation establishes initial truth; after the census baseline, validation/publication tail is scoped through callbacks/finalization. Failed genesis never publishes healthy WorldId or runtime. |
 | TesteSimulacao.Start/Update/Simulate and runtime advance APIs | Supported selected-host roots. Direct owned SimulationTime advance dispatches through the same runtime outer operation; no second clock boundary. |
-| Explicit supported runtime facades already in the 23-route contract | Include travel-party and the supported membership, population, money/market, institution/office, Faction, political claim/support, property/estate and domain-operation forms even if the automatic daily loop does not call them. Each variant and its transitive commits must be mapped. |
+| Explicit supported runtime facades already in the 23-route contract | Include solo travel, travel-party and the supported membership, population, money/market, institution/office, Faction, political claim/support, property/estate and domain-operation forms even if the automatic daily loop does not call them. Each variant and its transitive commits must be mapped. |
 | Callbacks/events installed by this profile | Include every synchronously reachable writer, compensation and post-commit notification. A late callback is part of the originating operation until it finishes. No arbitrary new handler/provider is silently admitted. |
 | Raw store methods, retained legacy mutable references | Their normal internal use is included when reachable from a supported root. Arbitrary external mutation through an alias is unsupported out-of-bound behavior per D7G, not promised memory isolation. Public API visibility alone does not add an ingress. |
 | WorldCommand/ActorChoice UI console and new callbacks/providers | The external queue and separate WorldObserver console are not composed. Reserved public declarations do not create a supported root. Preserve existing composed ActorChoice census/history checks; no stale ActorChoice branch replay or new command ingress. |
 | Expedition facade/system | Constructed/exposed but no admitted producer or autonomy root. Prove that from fixed caller/configuration wiring and that supported transitions cannot create Expedition state indirectly; do not activate, register its missing operation or add Knowledge/Expedition export here. It remains P12-F work. |
-| P8 route/travel, P10, P14, military, P18/P20, mods | Preserve current exact-zero/composition rejection. Separate proving profiles or arbitrary external calls are not Daily-v1 roots. Populated unsupported state in an admitted composition must reject, never be omitted. |
+| P8-B/C/E mutators and P8-D observation/history producers; P10 generation; P14-A/B/C source profiles; military; P18/P20 temporal consumers; mods | Preserve exact-zero witnesses for P8-B/C and P8-D observation/history, and no selected producer for P8-E. P10 generated-site and P14-A/B/current P14-C mixed-source configurations reject before WorldId/runtime construction. Admitted legacy solo/party travel, ExogenousDaily economy and merchant writers remain included. Preserve military zero and temporal-profile rejection. Separate proving profiles or arbitrary external calls are not Daily-v1 roots; populated unsupported state rejects, never gets omitted. |
 
 Source reasoning must document exclusions, not merely rename an unaccounted
 supported writer. Existing census detects unexpected changes only to what
@@ -126,8 +126,10 @@ evidence, no extra registration or allocator-state subsystem is justified.
 Runtime-wide means all operations reachable within §3, not all arbitrary code
 that can access the process. Prove:
 
-- The actual Start thread reference AND managed ID bind the runtime, protocol
-  and every admitted synchronous ingress before its first authoritative write.
+- The selected host captures the actual Start thread reference AND managed ID
+  before genesis. Runtime/protocol construction binds to that captured thread;
+  every admitted runtime ingress checks it before its first post-baseline write.
+  Pre-runtime genesis writes stay within the private synchronous genesis graph.
 - Each §2 execution root remains inside the existing operation accounting
   until its complete write set, deferred within-call callbacks, compensation,
   revision notifications and epoch flush finish. Nested scopes compose;
@@ -206,7 +208,12 @@ it adds no temporal profile.
    token/sequence and does not invalidate an older still-valid token, as the
    accepted lifecycle already specifies. Such token remains attributable only
    to its earlier successful call; a failed return carries no new token.
-   Wrong-thread/protocol/guard fault invalidates eligibility regardless.
+   Actual protocol/guard faults invalidate eligibility through health, even
+   before lease admission. At this source, a wrong-thread positive advance
+   calls IsRuntimeAdmissionOwnerThreadCurrent, which faults the census protocol;
+   eligibility therefore fails without writing token fields from that thread.
+   A pure pre-admission rejection with no state/health change preserves the
+   earlier token. A wrong-thread capture check always rejects.
 3. **Accepted positive outer call:** acquire one existing advance lease,
    invalidate previous token, and enter runtime.advance-day. No intermediate
    eligibility is observable. Reentrant advances retain existing rejection.
